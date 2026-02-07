@@ -1,0 +1,8 @@
+run:
+  timeout: 10m
+  skip-dirs:
+    - infra/dr/tests
+
+issues:
+  exclude-dirs:
+    - infra/dr/tests

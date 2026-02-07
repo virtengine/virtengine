@@ -6,6 +6,7 @@
 
 # dev artifacts
 /devdata
+pkg/provider_daemon/data/
 
 # chain data
 *.tsd
@@ -74,3 +75,5 @@ nul
 
 # Task planning files (agent-generated)
 _docs/ralph/tasks/
+.localnet*
+scripts/codex-monitor/logs/*

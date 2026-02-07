@@ -63,7 +63,10 @@ func (m *mockAzureCompute) UpdateVM(_ context.Context, _, vmName string, _ *pd.A
 	return m.vms[vmName], nil
 }
 func (m *mockAzureCompute) GetVMInstanceView(_ context.Context, _, vmName string) (*pd.AzureVMInstanceView, error) {
-	vm := m.vms[vmName]
+	vm, ok := m.vms[vmName]
+	if !ok {
+		return nil, pd.ErrAzureVMNotFound
+	}
 	return &pd.AzureVMInstanceView{PowerState: vm.PowerState}, nil
 }
 func (m *mockAzureCompute) ListVMSizes(_ context.Context, _ pd.AzureRegion) ([]pd.AzureVMSizeInfo, error) {
@@ -85,7 +88,7 @@ func (m *mockAzureCompute) DeleteAvailabilitySet(_ context.Context, _, _ string)
 func (m *mockAzureCompute) ListAvailabilityZones(_ context.Context, _ pd.AzureRegion) ([]string, error) {
 	return []string{"1"}, nil
 }
-func (m *mockAzureCompute) AddVMExtension(_ context.Context, _, _, _ string, _ *pd.AzureVMExtensionSpec) error {
+func (m *mockAzureCompute) AddVMExtension(_ context.Context, _, _ string, _ *pd.AzureVMExtensionSpec) error {
 	return nil
 }
 func (m *mockAzureCompute) RemoveVMExtension(_ context.Context, _, _, _ string) error { return nil }
@@ -173,6 +176,22 @@ func (m *mockAzureStorage) DeleteSnapshot(_ context.Context, _, _ string) error 
 func (m *mockAzureStorage) ListSnapshots(_ context.Context, _ string) ([]pd.AzureSnapshotInfo, error) {
 	return []pd.AzureSnapshotInfo{}, nil
 }
+func (m *mockAzureStorage) CreateDiskFromSnapshot(_ context.Context, _ string, spec *pd.AzureDiskFromSnapshotSpec) (*pd.AzureDiskInfo, error) {
+	return &pd.AzureDiskInfo{Name: spec.Name, SizeGB: spec.SizeGB}, nil
+}
+
+type mockAzureResourceGroup struct{}
+
+func (m *mockAzureResourceGroup) CreateResourceGroup(_ context.Context, name string, region pd.AzureRegion, _ map[string]string) (*pd.AzureResourceGroupInfo, error) {
+	return &pd.AzureResourceGroupInfo{Name: name, Region: region}, nil
+}
+func (m *mockAzureResourceGroup) GetResourceGroup(_ context.Context, name string) (*pd.AzureResourceGroupInfo, error) {
+	return &pd.AzureResourceGroupInfo{Name: name, Region: pd.RegionEastUS}, nil
+}
+func (m *mockAzureResourceGroup) DeleteResourceGroup(_ context.Context, _ string) error { return nil }
+func (m *mockAzureResourceGroup) ListResourceGroups(_ context.Context) ([]pd.AzureResourceGroupInfo, error) {
+	return []pd.AzureResourceGroupInfo{}, nil
+}
 
 func TestAzureAdapterE2E(t *testing.T) {
 	ctx := context.Background()
@@ -198,17 +217,18 @@ func TestAzureAdapterE2E(t *testing.T) {
 
 	compute := newMockAzureCompute()
 	adapter := pd.NewAzureAdapter(pd.AzureAdapterConfig{
-		Compute:       compute,
-		Network:       &mockAzureNetwork{},
-		Storage:       &mockAzureStorage{},
-		ProviderID:    "provider-e2e",
-		DefaultRegion: pd.AzureRegionEastUS,
-		ResourceGroup: "rg-e2e",
+		Compute:              compute,
+		Network:              &mockAzureNetwork{},
+		Storage:              &mockAzureStorage{},
+		ResourceGroup:        &mockAzureResourceGroup{},
+		ProviderID:           "provider-e2e",
+		DefaultRegion:        pd.RegionEastUS,
+		DefaultResourceGroup: "rg-e2e",
 	})
 
 	vm, err := adapter.DeployInstance(ctx, manifest, "deploy-az", "lease-az", pd.AzureDeploymentOptions{AssignPublicIP: true})
 	require.NoError(t, err)
-	require.Equal(t, pd.AzureVMStateRunning, vm.PowerState)
+	require.Equal(t, pd.AzureVMStateRunning, vm.State)
 
 	err = adapter.StopInstance(ctx, vm.ID)
 	require.NoError(t, err)
@@ -219,7 +239,7 @@ func TestAzureAdapterE2E(t *testing.T) {
 	_, err = h.lifecycle.Stop(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
 	require.NoError(t, err)
 
-	err = adapter.DeleteInstance(ctx, vm.ID, true)
+	err = adapter.DeleteInstance(ctx, vm.ID)
 	require.NoError(t, err)
 	_, err = h.lifecycle.Terminate(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
 	require.NoError(t, err)
@@ -227,7 +247,13 @@ func TestAzureAdapterE2E(t *testing.T) {
 	t.Run("InvalidCredentials", func(t *testing.T) {
 		failingCompute := newMockAzureCompute()
 		failingCompute.fail = true
-		failAdapter := pd.NewAzureAdapter(pd.AzureAdapterConfig{Compute: failingCompute, Network: &mockAzureNetwork{}, ProviderID: "provider-e2e", ResourceGroup: "rg"})
+		failAdapter := pd.NewAzureAdapter(pd.AzureAdapterConfig{
+			Compute:              failingCompute,
+			Network:              &mockAzureNetwork{},
+			ResourceGroup:        &mockAzureResourceGroup{},
+			ProviderID:           "provider-e2e",
+			DefaultResourceGroup: "rg",
+		})
 		_, err := failAdapter.DeployInstance(ctx, manifest, "deploy-fail", "lease-fail", pd.AzureDeploymentOptions{})
 		require.Error(t, err)
 	})

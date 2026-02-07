@@ -240,6 +240,70 @@ export type {
 } from "./src/pages/marketplace";
 
 // ============================================================================
+// Landing Page (Portal Entry)
+// ============================================================================
+
+export { LandingPage } from "./src/pages";
+export type { LandingPageProps } from "./src/pages";
+
+export { HeroSection } from "./src/components/hero";
+export type { HeroSectionProps, HeroCTA } from "./src/components/hero";
+
+export { StatsSection } from "./src/components/stats";
+export type { StatsSectionProps } from "./src/components/stats";
+
+export { FeaturedOfferings } from "./src/components/offerings";
+export type { FeaturedOfferingsProps } from "./src/components/offerings";
+
+export { LandingFooter } from "./src/components/footer";
+export type {
+  LandingFooterProps,
+  FooterLinkGroup,
+} from "./src/components/footer";
+// Order Tracking (VE-707)
+// ============================================================================
+
+export {
+  OrderTrackingProvider,
+  useOrderTracking,
+} from "./src/hooks/useOrderTracking";
+export type {
+  OrderTrackingState,
+  OrderConnectionStatus,
+  OrderResourceConnection,
+  OrderCredential,
+  OrderApiEndpoint,
+  OrderResourceAccess,
+  OrderUsageMetric,
+  OrderUsageSample,
+  OrderUsageAlert,
+  OrderUsageSnapshot,
+  OrderArtifact,
+  OrderTrackingOrder,
+  OrderTrackingStateValue,
+  OrderTrackingActions,
+  OrderTrackingContextValue,
+  OrderTrackingProviderProps,
+} from "./src/hooks/useOrderTracking";
+
+export {
+  OrderList,
+  OrderStatus,
+  ResourceAccess,
+  UsageMonitor,
+} from "./src/components/orders";
+export type {
+  OrderListProps,
+  OrderListFilter,
+  OrderStatusProps,
+  ResourceAccessProps,
+  UsageMonitorProps,
+} from "./src/components/orders";
+
+export { OrderTrackingPage } from "./src/pages/orders";
+export type { OrderTrackingPageProps } from "./src/pages/orders";
+
+// ============================================================================
 // Provider Console (VE-704)
 // ============================================================================
 
@@ -269,6 +333,98 @@ export { SettlementView } from "./components/provider/SettlementView";
 export { DomainVerificationPanel } from "./components/provider/DomainVerificationPanel";
 
 // ============================================================================
+// Provider API (VE-29D/29E)
+// ============================================================================
+
+export {
+  ProviderAPIClient,
+  ProviderAPIError,
+  LogStream,
+  ShellConnection,
+} from "./src/provider-api";
+export type {
+  ProviderAPIClientOptions,
+  ProviderHealthStatus,
+  ProviderHealth,
+  LogOptions,
+  DeploymentState,
+  UsageMetric,
+  ResourceMetrics,
+  Deployment,
+  DeploymentStatus,
+  ServiceStatus,
+  DeploymentListResponse,
+  DeploymentAction,
+  ShellSessionResponse,
+  ProviderAPIErrorDetails,
+} from "./src/provider-api";
+
+export { signRequest } from "./src/auth/wallet-sign";
+export type {
+  SignedRequestHeaders,
+  SignRequestOptions,
+} from "./src/auth/wallet-sign";
+
+// Provider API React Hooks (VE-29D AC-5)
+export { useProviderAPI } from "./src/hooks/useProviderAPI";
+export { useDeploymentStatus } from "./src/hooks/useDeploymentStatus";
+export type {
+  UseDeploymentStatusOptions,
+  UseDeploymentStatusResult,
+} from "./src/hooks/useDeploymentStatus";
+export { useDeploymentMetrics } from "./src/hooks/useDeploymentMetrics";
+export type {
+  UseDeploymentMetricsOptions,
+  UseDeploymentMetricsResult,
+} from "./src/hooks/useDeploymentMetrics";
+export { useDeploymentLogs } from "./src/hooks/useDeploymentLogs";
+export type {
+  UseDeploymentLogsOptions,
+  UseDeploymentLogsResult,
+} from "./src/hooks/useDeploymentLogs";
+export { useDeploymentShell } from "./src/hooks/useDeploymentShell";
+export type {
+  UseDeploymentShellOptions,
+  UseDeploymentShellResult,
+} from "./src/hooks/useDeploymentShell";
+
+// ============================================================================
+// Multi-Provider Aggregation (VE-29G)
+// ============================================================================
+
+export {
+  MultiProviderClient,
+  MultiProviderProvider,
+  useMultiProvider,
+} from "./src/multi-provider";
+export type {
+  ProviderRecord,
+  ProviderStatus,
+  DeploymentWithProvider,
+  AggregatedMetrics,
+  MultiProviderWallet,
+  MultiProviderClientOptions,
+  MultiProviderProviderProps,
+} from "./src/multi-provider";
+
+export { useAggregatedDeployments } from "./src/hooks/useAggregatedDeployments";
+export type {
+  AggregatedDeploymentsState,
+  AggregatedDeploymentsActions,
+  UseAggregatedDeploymentsOptions,
+} from "./src/hooks/useAggregatedDeployments";
+
+export { useAggregatedMetrics } from "./src/hooks/useAggregatedMetrics";
+export type {
+  AggregatedMetricsState,
+  AggregatedMetricsActions,
+  UseAggregatedMetricsOptions,
+} from "./src/hooks/useAggregatedMetrics";
+
+export { useDeploymentWithProvider } from "./src/hooks/useDeploymentWithProvider";
+export type { DeploymentWithProviderState } from "./src/hooks/useDeploymentWithProvider";
+
+// ============================================================================
 // HPC / Supercomputer (VE-705)
 // ============================================================================
 
@@ -276,12 +432,25 @@ export { useHPC, HPCProvider } from "./hooks/useHPC";
 export type {
   HPCState,
   WorkloadTemplate,
+  WorkloadCategory,
+  JobResources,
+  JobParameter,
   JobManifest,
   JobSubmission,
+  JobSubmissionState,
+  JobSubmissionStep,
+  JobPriceQuote,
+  JobValidationError,
+  Job,
   JobStatus,
+  JobStatusChange,
   JobEvent,
-  JobOutput,
+  JobEventType,
   JobOutputReference,
+  JobOutputType,
+  JobOutput,
+  HPCError,
+  HPCErrorCode,
 } from "./types/hpc";
 
 export { WorkloadLibrary } from "./components/hpc/WorkloadLibrary";
@@ -441,3 +610,53 @@ export type {
   A11yReport,
   KeyboardNavTestResult,
 } from "./utils/a11y-testing";
+
+// ============================================================================
+// Organization Management (VE-29H)
+// ============================================================================
+
+export { useOrganization, OrganizationProvider } from "./hooks/useOrganization";
+export type {
+  OrganizationState,
+  OrganizationDetailState,
+  OrganizationActions,
+  OrganizationContextValue,
+  OrganizationProviderProps,
+} from "./hooks/useOrganization";
+
+export type {
+  Organization,
+  OrganizationMetadata,
+  OrganizationRole,
+  OrganizationMember,
+  MemberMetadata,
+  OrganizationInvite,
+  InviteStatus,
+  CreateOrganizationRequest,
+  InviteMemberRequest,
+  OrganizationBillingPeriod,
+  OrganizationBillingSummary,
+} from "./types/organization";
+export {
+  ROLE_PERMISSIONS,
+  hasPermission,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+} from "./types/organization";
+
+export { OrganizationList } from "./components/organization/OrganizationList";
+export type { OrganizationListProps } from "./components/organization/OrganizationList";
+export { OrganizationCard } from "./components/organization/OrganizationCard";
+export type { OrganizationCardProps } from "./components/organization/OrganizationCard";
+export { OrganizationDetail } from "./components/organization/OrganizationDetail";
+export type { OrganizationDetailProps } from "./components/organization/OrganizationDetail";
+export { MemberList } from "./components/organization/MemberList";
+export type { MemberListProps } from "./components/organization/MemberList";
+export { InviteMemberDialog } from "./components/organization/InviteMemberDialog";
+export type { InviteMemberDialogProps } from "./components/organization/InviteMemberDialog";
+export { CreateOrganizationDialog } from "./components/organization/CreateOrganizationDialog";
+export type { CreateOrganizationDialogProps } from "./components/organization/CreateOrganizationDialog";
+export { OrganizationSwitcher } from "./components/organization/OrganizationSwitcher";
+export type { OrganizationSwitcherProps } from "./components/organization/OrganizationSwitcher";
+export { OrganizationBilling } from "./components/organization/OrganizationBilling";
+export type { OrganizationBillingProps } from "./components/organization/OrganizationBilling";

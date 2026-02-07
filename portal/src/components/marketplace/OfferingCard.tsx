@@ -28,12 +28,12 @@ export function OfferingCard({ offering }: OfferingCardProps) {
   const categoryLabel = CATEGORY_LABELS[offering.category] || offering.category;
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-border bg-card transition-all hover:border-primary/50 hover:shadow-md">
+    <div className="group relative flex flex-col rounded-lg border border-border bg-card transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.99]">
       {/* Compare checkbox */}
       <button
         type="button"
         onClick={() => toggleCompare(key)}
-        className={`absolute right-3 top-3 z-10 flex h-5 w-5 items-center justify-center rounded border transition-colors ${
+        className={`absolute right-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded border transition-colors sm:h-5 sm:w-5 ${
           isComparing
             ? 'border-primary bg-primary text-primary-foreground'
             : 'border-border bg-background opacity-0 group-hover:opacity-100'
@@ -122,7 +122,7 @@ export function OfferingCard({ offering }: OfferingCardProps) {
 
         {/* Bidding indicator */}
         {offering.allowBidding && (
-          <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">💰 Accepts bids</div>
+          <div className="mt-2 text-xs text-muted-foreground">💰 Bidding available in Phase 3</div>
         )}
       </Link>
     </div>

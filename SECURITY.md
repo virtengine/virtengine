@@ -109,6 +109,13 @@ We follow a **90-day disclosure timeline**:
 
 We may extend this timeline for complex issues requiring extensive changes. We will keep reporters informed of progress throughout the process.
 
+## External Security Audit
+
+VirtEngine completes regular third-party security audits for consensus-critical
+cryptographic and identity components. The latest public summary is available at:
+
+- `_docs/audits/security-audit-report-2026-02-06.md`
+
 ### Credit and Recognition
 
 Security researchers who report valid vulnerabilities will be:

@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useOfferingStore, getOfferingDisplayPrice, formatPriceUSD } from '@/stores/offeringStore';
+import { useOfferingStore, getOfferingDisplayPrice } from '@/stores/offeringStore';
 import { ProviderInfoCard } from '@/components/marketplace';
+import { PriceDisplay } from '@/components/pricing/PriceDisplay';
 import { CATEGORY_LABELS, CATEGORY_ICONS } from '@/types/offerings';
 import type { Provider } from '@/types/offerings';
 
@@ -198,8 +199,7 @@ export default function OfferingDetailClient() {
                     <tr className="border-b border-border text-left">
                       <th className="pb-3 font-medium">Resource</th>
                       <th className="pb-3 font-medium">Unit</th>
-                      <th className="pb-3 text-right font-medium">Price (VE)</th>
-                      <th className="pb-3 text-right font-medium">USD Ref.</th>
+                      <th className="pb-3 text-right font-medium">Price</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -211,10 +211,11 @@ export default function OfferingDetailClient() {
                         <td className="py-3 capitalize">{price.resourceType}</td>
                         <td className="py-3 text-muted-foreground">{price.unit}</td>
                         <td className="py-3 text-right font-mono">
-                          {parseInt(price.price.amount, 10) / 1000000}
-                        </td>
-                        <td className="py-3 text-right text-muted-foreground">
-                          {formatPriceUSD(price.usdReference)}
+                          <PriceDisplay
+                            amount={Number.parseInt(price.price.amount, 10)}
+                            denom={price.price.denom}
+                            showUsd
+                          />
                         </td>
                       </tr>
                     ))}

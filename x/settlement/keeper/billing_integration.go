@@ -161,9 +161,6 @@ func (k Keeper) generateInvoiceForSettlement(
 	generator := billing.NewInvoiceGenerator(config)
 	now := ctx.BlockTime()
 
-	seq := k.billingKeeper.GetInvoiceSequence(ctx)
-	invoiceNumber := billing.NextInvoiceNumber(seq, config.InvoiceNumberPrefix)
-
 	req := billing.InvoiceGenerationRequest{
 		EscrowID:    settlement.EscrowID,
 		OrderID:     settlement.OrderID,
@@ -193,7 +190,6 @@ func (k Keeper) generateInvoiceForSettlement(
 	reconcileInvoiceTotals(invoice, settlement.TotalAmount, "settlement adjustment")
 	recalculateInvoiceTotals(invoice)
 
-	invoice.InvoiceNumber = invoiceNumber
 	invoice.SettlementID = settlement.SettlementID
 
 	record, err := k.billingKeeper.CreateInvoice(ctx, invoice, fmt.Sprintf("invoice-%s", invoice.InvoiceID))

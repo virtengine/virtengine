@@ -181,6 +181,28 @@ services:
                 headers:
                   - x-gateway:virtengine
 
+  - name: ve-portal
+    url: http://portal:3000
+    tags:
+      - system:portal
+    routes:
+      - name: ve-portal
+        paths:
+          - /app
+        strip_path: true
+        tags:
+          - lifecycle:stable
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 600
+              policy: local
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-gateway:virtengine
+
 consumers:
   - username: dev-portal
     keyauth_credentials:

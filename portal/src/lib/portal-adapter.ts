@@ -221,6 +221,46 @@ export {
 } from '../../../lib/portal';
 
 // ============================================================================
+// Order Tracking (VE-707)
+// ============================================================================
+
+export { OrderTrackingProvider, useOrderTracking } from '../../../lib/portal';
+export type {
+  OrderTrackingState,
+  OrderConnectionStatus,
+  OrderResourceConnection,
+  OrderCredential,
+  OrderApiEndpoint,
+  OrderResourceAccess,
+  OrderUsageMetric,
+  OrderUsageSample,
+  OrderUsageAlert,
+  OrderUsageSnapshot,
+  OrderArtifact,
+  OrderTrackingOrder,
+  OrderTrackingStateValue,
+  OrderTrackingActions,
+  OrderTrackingContextValue,
+  OrderTrackingProviderProps,
+} from '../../../lib/portal';
+
+export {
+  OrderList,
+  OrderStatus,
+  ResourceAccess,
+  UsageMonitor,
+  OrderTrackingPage,
+} from '../../../lib/portal';
+export type {
+  OrderListProps,
+  OrderListFilter,
+  OrderStatusProps,
+  ResourceAccessProps,
+  UsageMonitorProps,
+  OrderTrackingPageProps,
+} from '../../../lib/portal';
+
+// ============================================================================
 // Provider Console (VE-704)
 // ============================================================================
 
@@ -252,6 +292,56 @@ export {
 } from '../../../lib/portal';
 
 // ============================================================================
+// Provider API + Multi-Provider (VE-29D/29E/29G)
+// ============================================================================
+
+export {
+  ProviderAPIClient,
+  ProviderAPIError,
+  LogStream,
+  ShellConnection,
+  signRequest,
+  MultiProviderClient,
+  MultiProviderProvider,
+  useMultiProvider,
+  useAggregatedDeployments,
+  useAggregatedMetrics,
+  useDeploymentWithProvider,
+} from '../../../lib/portal';
+export type {
+  ProviderAPIClientOptions,
+  ProviderHealthStatus,
+  ProviderHealth,
+  LogOptions,
+  DeploymentState,
+  UsageMetric,
+  ResourceMetrics,
+  Deployment,
+  DeploymentStatus,
+  ServiceStatus,
+  DeploymentListResponse,
+  DeploymentAction,
+  ShellSessionResponse,
+  ProviderAPIErrorDetails,
+  SignedRequestHeaders,
+  SignRequestOptions,
+  ProviderRecord,
+  ProviderStatus,
+  DeploymentWithProvider,
+  AggregatedMetrics,
+  MultiProviderWallet,
+  MultiProviderClientOptions,
+  MultiProviderProviderProps,
+  AggregatedDeploymentsState,
+  AggregatedDeploymentsActions,
+  UseAggregatedDeploymentsOptions,
+  AggregatedMetricsState,
+  AggregatedMetricsActions,
+  UseAggregatedMetricsOptions,
+  DeploymentWithProviderState,
+} from '../../../lib/portal';
+
+// ============================================================================
 // HPC / Supercomputer (VE-705)
 // ============================================================================
 
@@ -259,12 +349,25 @@ export { useHPC, HPCProvider } from '../../../lib/portal';
 export type {
   HPCState,
   WorkloadTemplate,
+  WorkloadCategory,
+  JobResources,
+  JobParameter,
   JobManifest,
   JobSubmission,
+  JobSubmissionState,
+  JobSubmissionStep,
+  JobPriceQuote,
+  JobValidationError,
+  Job,
   JobStatus,
+  JobStatusChange,
   JobEvent,
-  JobOutput,
+  JobEventType,
   JobOutputReference,
+  JobOutputType,
+  JobOutput,
+  HPCError,
+  HPCErrorCode,
 } from '../../../lib/portal';
 
 export {
@@ -333,4 +436,58 @@ export {
   prefersHighContrast,
   srOnlyStyles,
   focusVisibleStyles,
+} from '../../../lib/portal';
+
+// ============================================================================
+// Organization Management (VE-29H)
+// ============================================================================
+
+export { useOrganization, OrganizationProvider } from '../../../lib/portal';
+export type {
+  OrganizationState,
+  OrganizationDetailState,
+  OrganizationActions,
+  OrganizationContextValue,
+  OrganizationProviderProps,
+} from '../../../lib/portal';
+
+export type {
+  Organization,
+  OrganizationMetadata,
+  OrganizationRole,
+  OrganizationMember,
+  MemberMetadata,
+  OrganizationInvite,
+  InviteStatus,
+  CreateOrganizationRequest,
+  InviteMemberRequest,
+  OrganizationBillingPeriod,
+  OrganizationBillingSummary,
+} from '../../../lib/portal';
+export {
+  ROLE_PERMISSIONS,
+  hasPermission,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+} from '../../../lib/portal';
+
+export {
+  OrganizationList,
+  OrganizationCard,
+  OrganizationDetail,
+  MemberList,
+  InviteMemberDialog,
+  CreateOrganizationDialog,
+  OrganizationSwitcher,
+  OrganizationBilling,
+} from '../../../lib/portal';
+export type {
+  OrganizationListProps,
+  OrganizationCardProps,
+  OrganizationDetailProps,
+  MemberListProps,
+  InviteMemberDialogProps,
+  CreateOrganizationDialogProps,
+  OrganizationSwitcherProps,
+  OrganizationBillingProps,
 } from '../../../lib/portal';

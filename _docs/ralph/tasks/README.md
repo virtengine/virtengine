@@ -59,7 +59,7 @@ Tasks identified from gap analysis against patent specification AU2024203136A1.
 | [30B](./30B-hsm-key-management.md) | HSM Integration for Key Management | P0 | todo | 4400 |
 | [30C](./30C-multi-region-deployment.md) | Multi-Region Deployment + DR | P1 | todo | 4050 |
 | [30D](./30D-tokenomics-simulation.md) | Tokenomics Simulation & Validation | P1 | todo | 6300 |
-| [30E](./30E-security-audit-coordination.md) | Third-Party Security Audit | **BLOCKER** | todo | 2200 |
+| [30E](./30E-security-audit-coordination.md) | Third-Party Security Audit | **BLOCKER** | done | 2200 |
 
 ## Series 30 Dependencies
 

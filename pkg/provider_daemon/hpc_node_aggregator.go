@@ -13,49 +13,94 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 )
 
 // Health status constants
 const (
 	healthStatusHealthy  = "healthy"
 	healthStatusDegraded = "degraded"
+	healthStatusOffline  = "offline"
 )
 
 // HPCNodeAggregatorConfig contains configuration for the HPC node aggregator
 type HPCNodeAggregatorConfig struct {
+	// Enabled toggles the aggregator.
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
 	// ProviderAddress is the provider's blockchain address
-	ProviderAddress string
+	ProviderAddress string `json:"provider_address" yaml:"provider_address"`
 
 	// ProviderID is the provider's public key
-	ProviderID string
+	ProviderID string `json:"provider_id" yaml:"provider_id"`
+
+	// ClusterID is the default cluster ID for registrations
+	ClusterID string `json:"cluster_id" yaml:"cluster_id"`
 
 	// ListenAddr is the HTTP listen address for node heartbeats
-	ListenAddr string
+	ListenAddr string `json:"listen_addr" yaml:"listen_addr"`
 
 	// BatchSubmitInterval is how often to batch submit node metadata updates
-	BatchSubmitInterval time.Duration
+	BatchSubmitInterval time.Duration `json:"batch_submit_interval" yaml:"batch_submit_interval"`
 
 	// MaxBatchSize is the maximum nodes to update in one batch
-	MaxBatchSize int
+	MaxBatchSize int `json:"max_batch_size" yaml:"max_batch_size"`
 
 	// HeartbeatTimeout is when to consider a node stale
-	HeartbeatTimeout time.Duration
+	HeartbeatTimeout time.Duration `json:"heartbeat_timeout" yaml:"heartbeat_timeout"`
 
 	// ChainGRPC is the chain gRPC endpoint for on-chain submissions
-	ChainGRPC string
+	ChainGRPC string `json:"chain_grpc" yaml:"chain_grpc"`
 
 	// AllowedNodePubkeys is the allowlist of node public keys (base64)
-	AllowedNodePubkeys map[string]bool
+	AllowedNodePubkeys map[string]bool `json:"allowed_node_pubkeys" yaml:"allowed_node_pubkeys"`
+
+	// ChainSubmitEnabled toggles on-chain submissions.
+	ChainSubmitEnabled bool `json:"chain_submit_enabled" yaml:"chain_submit_enabled"`
+
+	// CheckpointFile is the path to persist node state.
+	CheckpointFile string `json:"checkpoint_file" yaml:"checkpoint_file"`
+
+	// CheckpointInterval is how often to persist checkpoints.
+	CheckpointInterval time.Duration `json:"checkpoint_interval" yaml:"checkpoint_interval"`
+
+	// MaxSubmitRetries is the number of retries per update.
+	MaxSubmitRetries int `json:"max_submit_retries" yaml:"max_submit_retries"`
+
+	// RetryBackoff is the base backoff between retries.
+	RetryBackoff time.Duration `json:"retry_backoff" yaml:"retry_backoff"`
+
+	// StaleMissThreshold is the consecutive miss count to mark offline.
+	StaleMissThreshold int `json:"stale_miss_threshold" yaml:"stale_miss_threshold"`
+
+	// DefaultRegion is used when heartbeats don't include region.
+	DefaultRegion string `json:"default_region" yaml:"default_region"`
+
+	// DefaultDatacenter is used when heartbeats don't include datacenter.
+	DefaultDatacenter string `json:"default_datacenter" yaml:"default_datacenter"`
+
+	// ChainReporter is the on-chain reporter (optional).
+	ChainReporter HPCNodeChainReporter `json:"-" yaml:"-"`
+
+	// CheckpointStore overrides the checkpoint store (optional).
+	CheckpointStore *HPCNodeCheckpointStore `json:"-" yaml:"-"`
 }
 
 // DefaultHPCNodeAggregatorConfig returns the default configuration
 func DefaultHPCNodeAggregatorConfig() HPCNodeAggregatorConfig {
 	return HPCNodeAggregatorConfig{
+		Enabled:             false,
 		ListenAddr:          ":8081",
 		BatchSubmitInterval: 60 * time.Second,
 		MaxBatchSize:        50,
 		HeartbeatTimeout:    120 * time.Second,
 		AllowedNodePubkeys:  make(map[string]bool),
+		ChainSubmitEnabled:  true,
+		CheckpointInterval:  30 * time.Second,
+		MaxSubmitRetries:    5,
+		RetryBackoff:        5 * time.Second,
+		StaleMissThreshold:  5,
 	}
 }
 
@@ -67,26 +112,54 @@ type HPCNodeAggregator struct {
 	nodes     map[string]*aggregatedNodeState
 	nodesMu   sync.RWMutex
 	pendingMu sync.Mutex
-	pending   []*HPCNodeHeartbeat
+	pending   []*nodeUpdate
 
 	server *http.Server
 	stopCh chan struct{}
 	wg     sync.WaitGroup
+
+	chainReporter   HPCNodeChainReporter
+	checkpointStore *HPCNodeCheckpointStore
 }
 
 // aggregatedNodeState tracks state for a node
 type aggregatedNodeState struct {
-	NodeID             string
-	ClusterID          string
-	PublicKey          ed25519.PublicKey
-	LastHeartbeat      time.Time
-	LastSequence       uint64
-	ConsecutiveMisses  int
-	TotalHeartbeats    uint64
-	Capacity           *HPCNodeCapacity
-	Health             *HPCNodeHealth
-	Latency            *HPCNodeLatency
-	PendingChainUpdate bool
+	NodeID                string
+	ClusterID             string
+	PublicKey             ed25519.PublicKey
+	LastHeartbeat         time.Time
+	LastSequence          uint64
+	ConsecutiveMisses     int
+	TotalHeartbeats       uint64
+	Capacity              *HPCNodeCapacity
+	Health                *HPCNodeHealth
+	Latency               *HPCNodeLatency
+	PendingChainUpdate    bool
+	OnChainRegistered     bool
+	LastSubmittedSequence uint64
+	LastChainUpdate       time.Time
+	LastSubmitError       string
+	RegisteredAt          time.Time
+}
+
+type nodeUpdateType string
+
+const (
+	nodeUpdateRegistration nodeUpdateType = "registration"
+	nodeUpdateHeartbeat    nodeUpdateType = "heartbeat"
+	nodeUpdateOffline      nodeUpdateType = "offline"
+)
+
+type nodeUpdate struct {
+	NodeID         string
+	ClusterID      string
+	UpdateType     nodeUpdateType
+	Heartbeat      *HPCNodeHeartbeat
+	Active         bool
+	SequenceNumber uint64
+	Attempts       int
+	NextAttempt    time.Time
+	EnqueuedAt     time.Time
 }
 
 // HPCNodeHeartbeat is a heartbeat received from a node
@@ -188,19 +261,61 @@ type HPCHeartbeatError struct {
 	Message string `json:"message"`
 }
 
-// NewHPCNodeAggregator creates a new HPC node aggregator
-func NewHPCNodeAggregator(config HPCNodeAggregatorConfig, keyManager *KeyManager) *HPCNodeAggregator {
-	return &HPCNodeAggregator{
-		config:     config,
-		keyManager: keyManager,
-		nodes:      make(map[string]*aggregatedNodeState),
-		pending:    make([]*HPCNodeHeartbeat, 0),
-		stopCh:     make(chan struct{}),
+// NewHPCNodeAggregator creates a new HPC node aggregator.
+func NewHPCNodeAggregator(config HPCNodeAggregatorConfig, keyManager *KeyManager) (*HPCNodeAggregator, error) {
+	if config.AllowedNodePubkeys == nil {
+		config.AllowedNodePubkeys = make(map[string]bool)
 	}
+	if config.BatchSubmitInterval == 0 {
+		config.BatchSubmitInterval = 60 * time.Second
+	}
+	if config.MaxBatchSize == 0 {
+		config.MaxBatchSize = 50
+	}
+	if config.HeartbeatTimeout == 0 {
+		config.HeartbeatTimeout = 120 * time.Second
+	}
+	if config.CheckpointInterval == 0 {
+		config.CheckpointInterval = 30 * time.Second
+	}
+	if config.MaxSubmitRetries == 0 {
+		config.MaxSubmitRetries = 5
+	}
+	if config.RetryBackoff == 0 {
+		config.RetryBackoff = 5 * time.Second
+	}
+	if config.StaleMissThreshold == 0 {
+		config.StaleMissThreshold = 5
+	}
+
+	checkpointStore := config.CheckpointStore
+	if checkpointStore == nil && config.CheckpointFile != "" {
+		store, err := NewHPCNodeCheckpointStore(config.CheckpointFile)
+		if err != nil {
+			return nil, err
+		}
+		checkpointStore = store
+	}
+
+	return &HPCNodeAggregator{
+		config:          config,
+		keyManager:      keyManager,
+		nodes:           make(map[string]*aggregatedNodeState),
+		pending:         make([]*nodeUpdate, 0),
+		stopCh:          make(chan struct{}),
+		chainReporter:   config.ChainReporter,
+		checkpointStore: checkpointStore,
+	}, nil
 }
 
 // Start begins the aggregator
 func (a *HPCNodeAggregator) Start(ctx context.Context) error {
+	if a.checkpointStore != nil {
+		if err := a.loadCheckpoint(); err != nil {
+			return err
+		}
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/hpc/nodes/", a.handleHeartbeat)
 	mux.HandleFunc("/api/v1/hpc/nodes/register", a.handleRegister)
@@ -229,6 +344,9 @@ func (a *HPCNodeAggregator) Stop() {
 		_ = a.server.Shutdown(ctx)
 	}
 	a.wg.Wait()
+	if a.checkpointStore != nil {
+		_ = a.persistCheckpoint()
+	}
 }
 
 //nolint:unparam // ctx kept for future graceful shutdown integration
@@ -249,16 +367,22 @@ func (a *HPCNodeAggregator) runBatchSubmitter(ctx context.Context) {
 
 	ticker := time.NewTicker(a.config.BatchSubmitInterval)
 	defer ticker.Stop()
+	checkpointTicker := time.NewTicker(a.config.CheckpointInterval)
+	defer checkpointTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			_ = a.persistCheckpoint()
 			return
 		case <-a.stopCh:
+			_ = a.persistCheckpoint()
 			return
 		case <-ticker.C:
 			a.submitBatch(ctx)
 			a.checkStaleNodes()
+		case <-checkpointTicker.C:
+			_ = a.persistCheckpoint()
 		}
 	}
 }
@@ -287,33 +411,10 @@ func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Validate provider address
-	if req.ProviderAddress != a.config.ProviderAddress {
-		http.Error(w, "Provider address mismatch", http.StatusForbidden)
+	if err := a.registerNode(req.NodeID, req.ClusterID, req.ProviderAddress, req.AgentPubkey); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	// Decode public key
-	pubkeyBytes, err := base64.StdEncoding.DecodeString(req.AgentPubkey)
-	if err != nil {
-		http.Error(w, "Invalid public key", http.StatusBadRequest)
-		return
-	}
-
-	// Add to allowlist (in production, this would require provider signature)
-	a.config.AllowedNodePubkeys[req.AgentPubkey] = true
-
-	// Create node state
-	a.nodesMu.Lock()
-	a.nodes[req.NodeID] = &aggregatedNodeState{
-		NodeID:        req.NodeID,
-		ClusterID:     req.ClusterID,
-		PublicKey:     ed25519.PublicKey(pubkeyBytes),
-		LastHeartbeat: time.Now(),
-	}
-	a.nodesMu.Unlock()
-
-	fmt.Printf("[HPC-AGGREGATOR] Registered node: %s\n", req.NodeID)
 
 	w.Header().Set("Content-Type", "application/json")
 	//nolint:errchkjson // simple response for HTTP handler
@@ -321,6 +422,62 @@ func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Reques
 		"accepted": true,
 		"node_id":  req.NodeID,
 	})
+}
+
+func (a *HPCNodeAggregator) registerNode(nodeID, clusterID, providerAddress, agentPubkey string) error {
+	if providerAddress != a.config.ProviderAddress {
+		return fmt.Errorf("provider address mismatch")
+	}
+	if nodeID == "" {
+		return fmt.Errorf("node_id required")
+	}
+	if clusterID == "" {
+		clusterID = a.config.ClusterID
+	}
+	if clusterID == "" {
+		return fmt.Errorf("cluster_id required")
+	}
+
+	pubkeyBytes, err := base64.StdEncoding.DecodeString(agentPubkey)
+	if err != nil {
+		return fmt.Errorf("invalid public key")
+	}
+
+	a.config.AllowedNodePubkeys[agentPubkey] = true
+
+	now := time.Now()
+	a.nodesMu.Lock()
+	state, exists := a.nodes[nodeID]
+	if !exists {
+		state = &aggregatedNodeState{
+			NodeID:        nodeID,
+			ClusterID:     clusterID,
+			PublicKey:     ed25519.PublicKey(pubkeyBytes),
+			LastHeartbeat: now,
+			RegisteredAt:  now,
+		}
+		a.nodes[nodeID] = state
+	} else {
+		state.ClusterID = clusterID
+		state.PublicKey = ed25519.PublicKey(pubkeyBytes)
+		state.LastHeartbeat = now
+		if state.RegisteredAt.IsZero() {
+			state.RegisteredAt = now
+		}
+	}
+	state.PendingChainUpdate = true
+	a.nodesMu.Unlock()
+
+	a.enqueueUpdate(&nodeUpdate{
+		NodeID:     nodeID,
+		ClusterID:  clusterID,
+		UpdateType: nodeUpdateRegistration,
+		Active:     false,
+		EnqueuedAt: now,
+	})
+
+	fmt.Printf("[HPC-AGGREGATOR] Registered node: %s\n", nodeID)
+	return nil
 }
 
 func (a *HPCNodeAggregator) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
@@ -366,6 +523,19 @@ func (a *HPCNodeAggregator) processHeartbeat(hb *HPCNodeHeartbeat, auth *HPCHear
 		}
 	}
 
+	if nodeState.ClusterID != "" && hb.ClusterID != nodeState.ClusterID {
+		return &HPCHeartbeatResponse{
+			Accepted:             false,
+			SequenceAck:          hb.SequenceNumber,
+			Timestamp:            time.Now(),
+			NextHeartbeatSeconds: 30,
+			Errors: []HPCHeartbeatError{{
+				Code:    "cluster_mismatch",
+				Message: fmt.Sprintf("cluster %s does not match %s", hb.ClusterID, nodeState.ClusterID),
+			}},
+		}
+	}
+
 	// Verify signature (if we have the public key)
 	if nodeState.PublicKey != nil {
 		if !a.verifySignature(hb, auth, nodeState.PublicKey) {
@@ -405,11 +575,18 @@ func (a *HPCNodeAggregator) processHeartbeat(hb *HPCNodeHeartbeat, auth *HPCHear
 	nodeState.Health = &hb.Health
 	nodeState.Latency = &hb.Latency
 	nodeState.PendingChainUpdate = true
+	nodeState.LastSubmitError = ""
 
 	// Queue for batch submission
-	a.pendingMu.Lock()
-	a.pending = append(a.pending, hb)
-	a.pendingMu.Unlock()
+	a.enqueueUpdate(&nodeUpdate{
+		NodeID:         hb.NodeID,
+		ClusterID:      hb.ClusterID,
+		UpdateType:     nodeUpdateHeartbeat,
+		Heartbeat:      hb,
+		Active:         a.isActiveHealth(hb.Health.Status),
+		SequenceNumber: hb.SequenceNumber,
+		EnqueuedAt:     time.Now(),
+	})
 
 	fmt.Printf("[HPC-AGGREGATOR] Heartbeat accepted: node=%s seq=%d\n", hb.NodeID, hb.SequenceNumber)
 
@@ -444,69 +621,108 @@ func (a *HPCNodeAggregator) verifySignature(hb *HPCNodeHeartbeat, auth *HPCHeart
 }
 
 func (a *HPCNodeAggregator) submitBatch(ctx context.Context) {
-	a.pendingMu.Lock()
-	if len(a.pending) == 0 {
-		a.pendingMu.Unlock()
+	now := time.Now()
+	updates := a.dequeueUpdates(now)
+	if len(updates) == 0 {
 		return
 	}
 
-	// Take up to MaxBatchSize
-	batch := a.pending
-	if len(batch) > a.config.MaxBatchSize {
-		batch = a.pending[:a.config.MaxBatchSize]
-		a.pending = a.pending[a.config.MaxBatchSize:]
-	} else {
-		a.pending = make([]*HPCNodeHeartbeat, 0)
-	}
-	a.pendingMu.Unlock()
+	fmt.Printf("[HPC-AGGREGATOR] Submitting batch of %d node updates\n", len(updates))
 
-	fmt.Printf("[HPC-AGGREGATOR] Submitting batch of %d node updates\n", len(batch))
-
-	// Build MsgUpdateNodeMetadata messages
-	for _, hb := range batch {
-		msg := a.buildNodeMetadataUpdate(hb)
-		if err := a.submitOnChain(ctx, msg); err != nil {
-			fmt.Printf("[HPC-AGGREGATOR] Failed to submit update for node %s: %v\n", hb.NodeID, err)
+	for _, update := range updates {
+		msg := a.buildNodeMetadataUpdate(update)
+		if msg == nil {
+			a.markUpdateFailed(update, fmt.Errorf("failed to build update"))
+			continue
 		}
+
+		if err := a.submitOnChain(ctx, msg); err != nil {
+			a.markUpdateFailed(update, err)
+			continue
+		}
+
+		a.markUpdateSuccess(update)
 	}
 }
 
-func (a *HPCNodeAggregator) buildNodeMetadataUpdate(hb *HPCNodeHeartbeat) map[string]interface{} {
-	latencyMeasurements := make([]map[string]interface{}, 0, len(hb.Latency.Measurements))
-	for _, m := range hb.Latency.Measurements {
-		latencyMeasurements = append(latencyMeasurements, map[string]interface{}{
-			"target_node_id": m.TargetNodeID,
-			"latency_ms":     m.LatencyUs / 1000,
-			"measured_at":    m.MeasuredAt.Format(time.RFC3339),
-		})
-	}
-
-	return map[string]interface{}{
-		"@type":                "/virtengine.hpc.v1.MsgUpdateNodeMetadata",
-		"provider_address":     a.config.ProviderAddress,
-		"node_id":              hb.NodeID,
-		"cluster_id":           hb.ClusterID,
-		"latency_measurements": latencyMeasurements,
-		"resources": map[string]interface{}{
-			"cpu_cores":  hb.Capacity.CPUCoresTotal,
-			"memory_gb":  hb.Capacity.MemoryGBTotal,
-			"gpus":       hb.Capacity.GPUsTotal,
-			"gpu_type":   hb.Capacity.GPUType,
-			"storage_gb": hb.Capacity.StorageGBTotal,
-		},
-		"active": hb.Health.Status == healthStatusHealthy || hb.Health.Status == healthStatusDegraded,
-	}
-}
-
-func (a *HPCNodeAggregator) submitOnChain(ctx context.Context, msg map[string]interface{}) error {
-	if a.config.ChainGRPC == "" {
-		// In demo mode, just log
-		fmt.Printf("[HPC-AGGREGATOR] Would submit: %v\n", msg["node_id"])
+func (a *HPCNodeAggregator) buildNodeMetadataUpdate(update *nodeUpdate) *hpcv1.MsgUpdateNodeMetadata {
+	if update == nil {
 		return nil
 	}
 
-	// In production, this would use cosmos-sdk client to broadcast tx
-	// For now, we'll make an HTTP call to a tx submission endpoint
+	a.nodesMu.RLock()
+	state := a.nodes[update.NodeID]
+	a.nodesMu.RUnlock()
+
+	if state == nil {
+		return nil
+	}
+	if update.UpdateType == nodeUpdateHeartbeat && update.SequenceNumber > 0 &&
+		update.SequenceNumber <= state.LastSubmittedSequence {
+		return nil
+	}
+
+	heartbeat := update.Heartbeat
+	latency := make([]hpcv1.LatencyMeasurement, 0)
+	if heartbeat != nil {
+		latency = make([]hpcv1.LatencyMeasurement, 0, len(heartbeat.Latency.Measurements))
+		for _, m := range heartbeat.Latency.Measurements {
+			latency = append(latency, hpcv1.LatencyMeasurement{
+				TargetNodeId: m.TargetNodeID,
+				LatencyMs:    m.LatencyUs / 1000,
+				MeasuredAt:   m.MeasuredAt,
+			})
+		}
+	} else if state.Latency != nil {
+		latency = make([]hpcv1.LatencyMeasurement, 0, len(state.Latency.Measurements))
+		for _, m := range state.Latency.Measurements {
+			latency = append(latency, hpcv1.LatencyMeasurement{
+				TargetNodeId: m.TargetNodeID,
+				LatencyMs:    m.LatencyUs / 1000,
+				MeasuredAt:   m.MeasuredAt,
+			})
+		}
+	}
+
+	capacity := &HPCNodeCapacity{}
+	if heartbeat != nil {
+		capacity = &heartbeat.Capacity
+	} else if state.Capacity != nil {
+		capacity = state.Capacity
+	}
+
+	return &hpcv1.MsgUpdateNodeMetadata{
+		ProviderAddress:     a.config.ProviderAddress,
+		NodeId:              update.NodeID,
+		ClusterId:           update.ClusterID,
+		Region:              a.config.DefaultRegion,
+		Datacenter:          a.config.DefaultDatacenter,
+		LatencyMeasurements: latency,
+		Resources: &hpcv1.NodeResources{
+			CpuCores:  capacity.CPUCoresTotal,
+			MemoryGb:  capacity.MemoryGBTotal,
+			Gpus:      capacity.GPUsTotal,
+			GpuType:   capacity.GPUType,
+			StorageGb: capacity.StorageGBTotal,
+		},
+		Active: update.Active,
+	}
+}
+
+func (a *HPCNodeAggregator) submitOnChain(ctx context.Context, msg *hpcv1.MsgUpdateNodeMetadata) error {
+	if !a.config.ChainSubmitEnabled {
+		return nil
+	}
+
+	if a.chainReporter != nil {
+		return a.chainReporter.SubmitNodeMetadata(ctx, msg)
+	}
+
+	if a.config.ChainGRPC == "" {
+		fmt.Printf("[HPC-AGGREGATOR] Would submit: %s\n", msg.NodeId)
+		return nil
+	}
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -544,12 +760,277 @@ func (a *HPCNodeAggregator) checkStaleNodes() {
 			fmt.Printf("[HPC-AGGREGATOR] Node %s is stale (missed %d heartbeats)\n",
 				nodeID, state.ConsecutiveMisses)
 
-			// After 5 consecutive misses, consider offline
-			if state.ConsecutiveMisses >= 5 {
+			if state.ConsecutiveMisses >= a.config.StaleMissThreshold {
+				if state.Health == nil {
+					state.Health = &HPCNodeHealth{Status: healthStatusOffline}
+				} else {
+					state.Health.Status = healthStatusOffline
+				}
+				state.PendingChainUpdate = true
+				state.LastSubmitError = ""
+
+				a.enqueueUpdate(&nodeUpdate{
+					NodeID:         nodeID,
+					ClusterID:      state.ClusterID,
+					UpdateType:     nodeUpdateOffline,
+					Active:         false,
+					SequenceNumber: state.LastSequence,
+					EnqueuedAt:     time.Now(),
+				})
+
 				fmt.Printf("[HPC-AGGREGATOR] Node %s marked offline\n", nodeID)
 			}
 		}
 	}
+}
+
+func (a *HPCNodeAggregator) enqueueUpdate(update *nodeUpdate) {
+	if update == nil {
+		return
+	}
+	if update.ClusterID == "" {
+		a.nodesMu.RLock()
+		if state, ok := a.nodes[update.NodeID]; ok {
+			update.ClusterID = state.ClusterID
+		}
+		a.nodesMu.RUnlock()
+		if update.ClusterID == "" {
+			update.ClusterID = a.config.ClusterID
+		}
+	}
+	if update.EnqueuedAt.IsZero() {
+		update.EnqueuedAt = time.Now()
+	}
+
+	a.pendingMu.Lock()
+	a.pending = append(a.pending, update)
+	a.pendingMu.Unlock()
+}
+
+func (a *HPCNodeAggregator) dequeueUpdates(now time.Time) []*nodeUpdate {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+
+	if len(a.pending) == 0 {
+		return nil
+	}
+
+	batchCap := len(a.pending)
+	if a.config.MaxBatchSize > 0 && a.config.MaxBatchSize < batchCap {
+		batchCap = a.config.MaxBatchSize
+	}
+	batch := make([]*nodeUpdate, 0, batchCap)
+	remaining := make([]*nodeUpdate, 0, len(a.pending))
+
+	for i, update := range a.pending {
+		if !update.NextAttempt.IsZero() && update.NextAttempt.After(now) {
+			remaining = append(remaining, update)
+			continue
+		}
+
+		batch = append(batch, update)
+		if a.config.MaxBatchSize > 0 && len(batch) >= a.config.MaxBatchSize {
+			remaining = append(remaining, a.pending[i+1:]...)
+			break
+		}
+	}
+
+	a.pending = remaining
+
+	return batch
+}
+
+func (a *HPCNodeAggregator) markUpdateFailed(update *nodeUpdate, err error) {
+	if update == nil {
+		return
+	}
+
+	update.Attempts++
+	if update.Attempts > a.config.MaxSubmitRetries {
+		a.nodesMu.Lock()
+		if state, ok := a.nodes[update.NodeID]; ok {
+			state.PendingChainUpdate = false
+			if err != nil {
+				state.LastSubmitError = err.Error()
+			}
+		}
+		a.nodesMu.Unlock()
+		return
+	}
+
+	backoff := a.config.RetryBackoff
+	if backoff <= 0 {
+		backoff = 5 * time.Second
+	}
+	delay := backoff * time.Duration(1<<minInt(update.Attempts-1, 5))
+	update.NextAttempt = time.Now().Add(delay)
+
+	if err != nil {
+		a.nodesMu.Lock()
+		if state, ok := a.nodes[update.NodeID]; ok {
+			state.LastSubmitError = err.Error()
+			state.PendingChainUpdate = true
+		}
+		a.nodesMu.Unlock()
+	}
+
+	a.enqueueUpdate(update)
+	fmt.Printf("[HPC-AGGREGATOR] Failed to submit update for node %s: %v\n", update.NodeID, err)
+}
+
+func (a *HPCNodeAggregator) markUpdateSuccess(update *nodeUpdate) {
+	if update == nil {
+		return
+	}
+
+	a.nodesMu.Lock()
+	if state, ok := a.nodes[update.NodeID]; ok {
+		if update.UpdateType == nodeUpdateRegistration {
+			state.OnChainRegistered = true
+		}
+		if update.SequenceNumber > state.LastSubmittedSequence {
+			state.LastSubmittedSequence = update.SequenceNumber
+		}
+		state.LastChainUpdate = time.Now()
+		state.PendingChainUpdate = false
+		state.LastSubmitError = ""
+	}
+	a.nodesMu.Unlock()
+}
+
+func (a *HPCNodeAggregator) isActiveHealth(status string) bool {
+	switch status {
+	case healthStatusHealthy, healthStatusDegraded:
+		return true
+	default:
+		return false
+	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (a *HPCNodeAggregator) loadCheckpoint() error {
+	if a.checkpointStore == nil {
+		return nil
+	}
+
+	state, err := a.checkpointStore.Load()
+	if err != nil {
+		return err
+	}
+
+	a.nodesMu.Lock()
+	a.nodes = make(map[string]*aggregatedNodeState, len(state.Nodes))
+	for _, node := range state.Nodes {
+		var pubkey ed25519.PublicKey
+		if node.PublicKey != "" {
+			if decoded, err := base64.StdEncoding.DecodeString(node.PublicKey); err == nil {
+				pubkey = ed25519.PublicKey(decoded)
+				a.config.AllowedNodePubkeys[node.PublicKey] = true
+			}
+		}
+
+		a.nodes[node.NodeID] = &aggregatedNodeState{
+			NodeID:                node.NodeID,
+			ClusterID:             node.ClusterID,
+			PublicKey:             pubkey,
+			LastHeartbeat:         node.LastHeartbeat,
+			LastSequence:          node.LastSequence,
+			ConsecutiveMisses:     node.ConsecutiveMisses,
+			TotalHeartbeats:       node.TotalHeartbeats,
+			Capacity:              node.Capacity,
+			Health:                node.Health,
+			Latency:               node.Latency,
+			PendingChainUpdate:    node.PendingChainUpdate,
+			OnChainRegistered:     node.OnChainRegistered,
+			LastSubmittedSequence: node.LastSubmittedSequence,
+			LastChainUpdate:       node.LastChainUpdate,
+			LastSubmitError:       node.LastSubmitError,
+			RegisteredAt:          node.RegisteredAt,
+		}
+	}
+	a.nodesMu.Unlock()
+
+	a.pendingMu.Lock()
+	a.pending = make([]*nodeUpdate, 0, len(state.Pending))
+	for _, update := range state.Pending {
+		a.pending = append(a.pending, &nodeUpdate{
+			NodeID:         update.NodeID,
+			ClusterID:      update.ClusterID,
+			UpdateType:     update.UpdateType,
+			Heartbeat:      update.Heartbeat,
+			Active:         update.Active,
+			SequenceNumber: update.SequenceNumber,
+			Attempts:       update.Attempts,
+			NextAttempt:    update.NextAttempt,
+			EnqueuedAt:     update.EnqueuedAt,
+		})
+	}
+	a.pendingMu.Unlock()
+
+	return nil
+}
+
+func (a *HPCNodeAggregator) persistCheckpoint() error {
+	if a.checkpointStore == nil {
+		return nil
+	}
+
+	a.nodesMu.RLock()
+	nodes := make([]HPCNodeCheckpointNode, 0, len(a.nodes))
+	for _, state := range a.nodes {
+		publicKey := ""
+		if state.PublicKey != nil {
+			publicKey = base64.StdEncoding.EncodeToString(state.PublicKey)
+		}
+		nodes = append(nodes, HPCNodeCheckpointNode{
+			NodeID:                state.NodeID,
+			ClusterID:             state.ClusterID,
+			PublicKey:             publicKey,
+			LastHeartbeat:         state.LastHeartbeat,
+			LastSequence:          state.LastSequence,
+			ConsecutiveMisses:     state.ConsecutiveMisses,
+			TotalHeartbeats:       state.TotalHeartbeats,
+			Capacity:              state.Capacity,
+			Health:                state.Health,
+			Latency:               state.Latency,
+			PendingChainUpdate:    state.PendingChainUpdate,
+			OnChainRegistered:     state.OnChainRegistered,
+			LastSubmittedSequence: state.LastSubmittedSequence,
+			LastChainUpdate:       state.LastChainUpdate,
+			LastSubmitError:       state.LastSubmitError,
+			RegisteredAt:          state.RegisteredAt,
+		})
+	}
+	a.nodesMu.RUnlock()
+
+	a.pendingMu.Lock()
+	pending := make([]HPCNodeCheckpointUpdate, 0, len(a.pending))
+	for _, update := range a.pending {
+		pending = append(pending, HPCNodeCheckpointUpdate{
+			NodeID:         update.NodeID,
+			ClusterID:      update.ClusterID,
+			UpdateType:     update.UpdateType,
+			Heartbeat:      update.Heartbeat,
+			Active:         update.Active,
+			SequenceNumber: update.SequenceNumber,
+			Attempts:       update.Attempts,
+			NextAttempt:    update.NextAttempt,
+			EnqueuedAt:     update.EnqueuedAt,
+		})
+	}
+	a.pendingMu.Unlock()
+
+	return a.checkpointStore.Save(&HPCNodeCheckpointState{
+		Version: hpcNodeCheckpointVersion,
+		Nodes:   nodes,
+		Pending: pending,
+	})
 }
 
 func (a *HPCNodeAggregator) writeError(w http.ResponseWriter, code, message string) {
@@ -585,11 +1066,22 @@ func (a *HPCNodeAggregator) GetNodeStats(nodeID string) (map[string]interface{},
 	}
 
 	return map[string]interface{}{
-		"node_id":            state.NodeID,
-		"cluster_id":         state.ClusterID,
-		"last_heartbeat":     state.LastHeartbeat,
-		"last_sequence":      state.LastSequence,
-		"consecutive_misses": state.ConsecutiveMisses,
-		"total_heartbeats":   state.TotalHeartbeats,
+		"node_id":                 state.NodeID,
+		"cluster_id":              state.ClusterID,
+		"last_heartbeat":          state.LastHeartbeat,
+		"last_sequence":           state.LastSequence,
+		"consecutive_misses":      state.ConsecutiveMisses,
+		"total_heartbeats":        state.TotalHeartbeats,
+		"on_chain_registered":     state.OnChainRegistered,
+		"last_submitted_sequence": state.LastSubmittedSequence,
+		"last_chain_update":       state.LastChainUpdate,
+		"last_submit_error":       state.LastSubmitError,
 	}, true
+}
+
+// GetPendingUpdateCount returns the number of queued chain updates.
+func (a *HPCNodeAggregator) GetPendingUpdateCount() int {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	return len(a.pending)
 }

@@ -6,10 +6,16 @@ import (
 	"time"
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	"github.com/cosmos/cosmos-sdk/types/query"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+	defaultHPCJobPollInterval = 10 * time.Second
+	defaultHPCPollPageLimit   = 200
 )
 
 // RPCChainClientConfig configuration for RPC chain client
@@ -121,15 +127,55 @@ func (c *rpcChainClient) Close() error {
 }
 
 // SubscribeToJobRequests subscribes to job requests (noop placeholder).
-func (c *rpcChainClient) SubscribeToJobRequests(ctx context.Context, _ string, _ func(*hpctypes.HPCJob) error) error {
-	<-ctx.Done()
-	return ctx.Err()
+func (c *rpcChainClient) SubscribeToJobRequests(ctx context.Context, clusterID string, handler func(*hpctypes.HPCJob) error) error {
+	if c.grpcConn == nil {
+		return fmt.Errorf("grpc endpoint not configured")
+	}
+	client := hpcv1.NewQueryClient(c.grpcConn)
+	seen := make(map[string]struct{})
+	ticker := time.NewTicker(defaultHPCJobPollInterval)
+	defer ticker.Stop()
+
+	for {
+		if err := c.pollJobRequests(ctx, client, clusterID, seen, handler); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // SubscribeToJobCancellations subscribes to job cancellations (noop placeholder).
-func (c *rpcChainClient) SubscribeToJobCancellations(ctx context.Context, _ string, _ func(string) error) error {
-	<-ctx.Done()
-	return ctx.Err()
+func (c *rpcChainClient) SubscribeToJobCancellations(ctx context.Context, clusterID string, handler func(string) error) error {
+	if c.grpcConn == nil {
+		return fmt.Errorf("grpc endpoint not configured")
+	}
+	client := hpcv1.NewQueryClient(c.grpcConn)
+	seen := make(map[string]struct{})
+	ticker := time.NewTicker(defaultHPCJobPollInterval)
+	defer ticker.Stop()
+
+	for {
+		if err := c.pollJobCancellations(ctx, client, clusterID, seen, handler); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // ReportJobStatus reports job status to chain (best-effort).
@@ -153,6 +199,20 @@ func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusR
 		Signature:       report.Signature,
 		SignedTimestamp: report.Timestamp.Unix(),
 	})
+	return err
+}
+
+// SubmitNodeMetadata submits node metadata updates to chain (best-effort).
+func (c *rpcChainClient) SubmitNodeMetadata(ctx context.Context, msg *hpcv1.MsgUpdateNodeMetadata) error {
+	if msg == nil {
+		return nil
+	}
+	if c.grpcConn == nil {
+		return nil
+	}
+
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+	_, err := msgClient.UpdateNodeMetadata(ctx, msg)
 	return err
 }
 
@@ -227,4 +287,185 @@ func metricsToProto(metrics *HPCSchedulerMetrics) *hpcv1.HPCUsageMetrics {
 		NodeHours:        int64(metrics.NodeHours),
 		NodesUsed:        metrics.NodesUsed,
 	}
+}
+
+func (c *rpcChainClient) pollJobRequests(ctx context.Context, client hpcv1.QueryClient, clusterID string, seen map[string]struct{}, handler func(*hpctypes.HPCJob) error) error {
+	if handler == nil {
+		return fmt.Errorf("job handler is required")
+	}
+
+	nextKey := []byte(nil)
+	for {
+		reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+		resp, err := client.Jobs(reqCtx, &hpcv1.QueryJobsRequest{
+			State:     hpcv1.JobStatePending,
+			ClusterId: clusterID,
+			Pagination: &query.PageRequest{
+				Key:   nextKey,
+				Limit: defaultHPCPollPageLimit,
+			},
+		})
+		cancel()
+		if err != nil {
+			return err
+		}
+
+		for _, job := range resp.Jobs {
+			if job.JobId == "" {
+				continue
+			}
+			if _, exists := seen[job.JobId]; exists {
+				continue
+			}
+			seen[job.JobId] = struct{}{}
+
+			mapped := hpcJobFromProto(&job)
+			if mapped == nil {
+				continue
+			}
+			_ = handler(mapped)
+		}
+
+		if resp.Pagination == nil || len(resp.Pagination.NextKey) == 0 {
+			break
+		}
+		nextKey = resp.Pagination.NextKey
+	}
+
+	return nil
+}
+
+func (c *rpcChainClient) pollJobCancellations(ctx context.Context, client hpcv1.QueryClient, clusterID string, seen map[string]struct{}, handler func(string) error) error {
+	if handler == nil {
+		return fmt.Errorf("cancel handler is required")
+	}
+
+	nextKey := []byte(nil)
+	for {
+		reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+		resp, err := client.Jobs(reqCtx, &hpcv1.QueryJobsRequest{
+			State:     hpcv1.JobStateCancelled,
+			ClusterId: clusterID,
+			Pagination: &query.PageRequest{
+				Key:   nextKey,
+				Limit: defaultHPCPollPageLimit,
+			},
+		})
+		cancel()
+		if err != nil {
+			return err
+		}
+
+		for _, job := range resp.Jobs {
+			if job.JobId == "" {
+				continue
+			}
+			if _, exists := seen[job.JobId]; exists {
+				continue
+			}
+			seen[job.JobId] = struct{}{}
+			_ = handler(job.JobId)
+		}
+
+		if resp.Pagination == nil || len(resp.Pagination.NextKey) == 0 {
+			break
+		}
+		nextKey = resp.Pagination.NextKey
+	}
+
+	return nil
+}
+
+func hpcJobFromProto(job *hpcv1.HPCJob) *hpctypes.HPCJob {
+	if job == nil {
+		return nil
+	}
+	return &hpctypes.HPCJob{
+		JobID:                   job.JobId,
+		OfferingID:              job.OfferingId,
+		ClusterID:               job.ClusterId,
+		ProviderAddress:         job.ProviderAddress,
+		CustomerAddress:         job.CustomerAddress,
+		SLURMJobID:              job.SlurmJobId,
+		State:                   jobStateFromProto(job.State),
+		QueueName:               job.QueueName,
+		WorkloadSpec:            workloadSpecFromProto(job.WorkloadSpec),
+		Resources:               jobResourcesFromProto(job.Resources),
+		DataReferences:          dataReferencesFromProto(job.DataReferences),
+		EncryptedInputsPointer:  job.EncryptedInputsPointer,
+		EncryptedOutputsPointer: job.EncryptedOutputsPointer,
+		MaxRuntimeSeconds:       job.MaxRuntimeSeconds,
+		AgreedPrice:             job.AgreedPrice,
+		EscrowID:                job.EscrowId,
+		SchedulingDecisionID:    job.SchedulingDecisionId,
+		StatusMessage:           job.StatusMessage,
+		ExitCode:                job.ExitCode,
+		CreatedAt:               job.CreatedAt,
+		QueuedAt:                job.QueuedAt,
+		StartedAt:               job.StartedAt,
+		CompletedAt:             job.CompletedAt,
+		BlockHeight:             job.BlockHeight,
+	}
+}
+
+func jobStateFromProto(state hpcv1.JobState) hpctypes.JobState {
+	switch state {
+	case hpcv1.JobStatePending:
+		return hpctypes.JobStatePending
+	case hpcv1.JobStateQueued:
+		return hpctypes.JobStateQueued
+	case hpcv1.JobStateRunning:
+		return hpctypes.JobStateRunning
+	case hpcv1.JobStateCompleted:
+		return hpctypes.JobStateCompleted
+	case hpcv1.JobStateFailed:
+		return hpctypes.JobStateFailed
+	case hpcv1.JobStateCancelled:
+		return hpctypes.JobStateCancelled
+	case hpcv1.JobStateTimeout:
+		return hpctypes.JobStateTimeout
+	default:
+		return hpctypes.JobStatePending
+	}
+}
+
+func workloadSpecFromProto(spec hpcv1.JobWorkloadSpec) hpctypes.JobWorkloadSpec {
+	return hpctypes.JobWorkloadSpec{
+		ContainerImage:          spec.ContainerImage,
+		Command:                 spec.Command,
+		Arguments:               spec.Arguments,
+		Environment:             spec.Environment,
+		WorkingDirectory:        spec.WorkingDirectory,
+		PreconfiguredWorkloadID: spec.PreconfiguredWorkloadId,
+		IsPreconfigured:         spec.IsPreconfigured,
+	}
+}
+
+func jobResourcesFromProto(resources hpcv1.JobResources) hpctypes.JobResources {
+	return hpctypes.JobResources{
+		Nodes:           resources.Nodes,
+		CPUCoresPerNode: resources.CpuCoresPerNode,
+		MemoryGBPerNode: resources.MemoryGbPerNode,
+		GPUsPerNode:     resources.GpusPerNode,
+		StorageGB:       resources.StorageGb,
+		GPUType:         resources.GpuType,
+	}
+}
+
+func dataReferencesFromProto(references []hpcv1.DataReference) []hpctypes.DataReference {
+	if len(references) == 0 {
+		return nil
+	}
+	out := make([]hpctypes.DataReference, 0, len(references))
+	for _, reference := range references {
+		out = append(out, hpctypes.DataReference{
+			ReferenceID: reference.ReferenceId,
+			Type:        reference.Type,
+			URI:         reference.Uri,
+			Encrypted:   reference.Encrypted,
+			Checksum:    reference.Checksum,
+			SizeBytes:   reference.SizeBytes,
+		})
+	}
+	return out
 }

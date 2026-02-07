@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/Badge';
 import { TOTPSetup } from './TOTPSetup';
 import { WebAuthnSetup } from './WebAuthnSetup';
+import { SMSSetup } from './SMSSetup';
+import { EmailSetup } from './EmailSetup';
 import { BackupCodes } from './BackupCodes';
 
 interface MFASetupProps {
@@ -14,7 +16,7 @@ interface MFASetupProps {
   onCancel?: () => void;
 }
 
-type FactorChoice = 'none' | 'totp' | 'webauthn' | 'backup';
+type FactorChoice = 'none' | 'totp' | 'webauthn' | 'sms' | 'email' | 'backup';
 
 /**
  * MFA Setup Component
@@ -40,6 +42,12 @@ export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
     return (
       <WebAuthnSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />
     );
+  }
+  if (choice === 'sms') {
+    return <SMSSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />;
+  }
+  if (choice === 'email') {
+    return <EmailSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />;
   }
   if (choice === 'backup') {
     return (
@@ -67,6 +75,20 @@ export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
           description="FIDO2/WebAuthn hardware key or biometrics"
           badge="Strongest"
           onClick={() => setChoice('webauthn')}
+        />
+        <FactorOption
+          icon="💬"
+          title="SMS Verification"
+          description="Receive a one-time code via text message"
+          badge="Backup"
+          onClick={() => setChoice('sms')}
+        />
+        <FactorOption
+          icon="📧"
+          title="Email Verification"
+          description="Receive one-time codes at your email address"
+          badge="Backup"
+          onClick={() => setChoice('email')}
         />
         <FactorOption
           icon="📋"

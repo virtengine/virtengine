@@ -8,6 +8,7 @@ package fixtures
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"sync"
 	"testing"
@@ -160,9 +161,7 @@ func (f *HPCProviderFixture) Setup() error {
 	}
 
 	// Create default offerings
-	if err := f.createDefaultOfferings(); err != nil {
-		return fmt.Errorf("create offerings: %w", err)
-	}
+	f.createDefaultOfferings()
 
 	return nil
 }
@@ -194,6 +193,10 @@ func (f *HPCProviderFixture) addCleanup(fn func()) {
 // CreateJob creates a test HPC job.
 func (f *HPCProviderFixture) CreateJob(name string, cpuCores int32, memoryMB int64, gpus int32) *hpctypes.HPCJob {
 	jobID := fmt.Sprintf("job-%s-%d", name, time.Now().UnixNano())
+	memoryGB := memoryMB / 1024
+	if memoryGB > math.MaxInt32 {
+		memoryGB = math.MaxInt32
+	}
 
 	job := &hpctypes.HPCJob{
 		JobID:           jobID,
@@ -210,7 +213,7 @@ func (f *HPCProviderFixture) CreateJob(name string, cpuCores int32, memoryMB int
 		Resources: hpctypes.JobResources{
 			Nodes:           1,
 			CPUCoresPerNode: cpuCores,
-			MemoryGBPerNode: int32(memoryMB / 1024),
+			MemoryGBPerNode: int32(memoryGB), // #nosec G115 -- bounded above
 			GPUsPerNode:     gpus,
 			StorageGB:       10,
 		},
@@ -327,9 +330,9 @@ func (f *HPCProviderFixture) CreateInvoice(orderID string, lineItems []MockLineI
 	return invoice
 }
 
-func (f *HPCProviderFixture) createDefaultOfferings() error {
+func (f *HPCProviderFixture) createDefaultOfferings() {
 	if f.Waldur == nil {
-		return nil
+		return
 	}
 
 	offerings := []MockOffering{
@@ -368,8 +371,6 @@ func (f *HPCProviderFixture) createDefaultOfferings() error {
 	for _, o := range offerings[:min(f.Config.NumOfferings, len(offerings))] {
 		f.Waldur.PublishOffering(o)
 	}
-
-	return nil
 }
 
 // GetEnvOrDefault gets an environment variable or returns a default value.
@@ -731,12 +732,25 @@ func (m *MockSettlement) SettleInvoice(invoiceID string) error {
 	invoice.Status = "settled"
 	invoice.SettledAt = &now
 
+	totalAmount, err := sdkmath.LegacyNewDecFromStr(invoice.TotalAmount)
+	if err != nil {
+		return fmt.Errorf("parse invoice total amount: %w", err)
+	}
+
+	feeRate, err := sdkmath.LegacyNewDecFromStr("0.025")
+	if err != nil {
+		return fmt.Errorf("parse fee rate: %w", err)
+	}
+
+	feeAmount := totalAmount.Mul(feeRate)
+	payoutAmount := totalAmount.Sub(feeAmount)
+
 	// Create payout
 	m.payouts[invoiceID] = &MockPayout{
 		PayoutID:  fmt.Sprintf("payout-%s", invoiceID),
 		InvoiceID: invoiceID,
 		Provider:  invoice.ProviderAddr,
-		Amount:    invoice.TotalAmount,
+		Amount:    payoutAmount.String(),
 		Status:    "completed",
 	}
 
@@ -744,7 +758,7 @@ func (m *MockSettlement) SettleInvoice(invoiceID string) error {
 	m.fees[invoiceID] = &MockFee{
 		FeeID:     fmt.Sprintf("fee-%s", invoiceID),
 		InvoiceID: invoiceID,
-		Amount:    "0.025", // 2.5% placeholder
+		Amount:    feeAmount.String(),
 	}
 
 	return nil

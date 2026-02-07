@@ -31,6 +31,11 @@ func GetQueryVEIDCmd() *cobra.Command {
 		GetQueryVEIDConsentSettingsCmd(),
 		GetQueryVEIDApprovedClientsCmd(),
 		GetQueryVEIDParamsCmd(),
+		GetQueryVEIDActiveModelsCmd(),
+		GetQueryVEIDModelVersionCmd(),
+		GetQueryVEIDModelHistoryCmd(),
+		GetQueryVEIDValidatorModelSyncCmd(),
+		GetQueryVEIDModelParamsCmd(),
 	)
 
 	return cmd
@@ -356,6 +361,132 @@ func GetQueryVEIDParamsCmd() *cobra.Command {
 			cl := MustLightClientFromContext(ctx)
 
 			res, err := cl.Query().VEID().Params(ctx, &types.QueryParamsRequest{})
+			if err != nil {
+				return err
+			}
+
+			return cl.ClientContext().PrintProto(res)
+		},
+	}
+
+	cflags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetQueryVEIDActiveModelsCmd returns the command to query all active ML models
+func GetQueryVEIDActiveModelsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "model-hashes",
+		Short:             "Query all active model hashes",
+		Args:              cobra.NoArgs,
+		PersistentPreRunE: QueryPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := cmd.Context()
+			cl := MustLightClientFromContext(ctx)
+
+			res, err := cl.Query().VEID().ActiveModels(ctx, &types.QueryActiveModelsRequest{})
+			if err != nil {
+				return err
+			}
+
+			return cl.ClientContext().PrintProto(res)
+		},
+	}
+
+	cflags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetQueryVEIDModelVersionCmd returns the command to query a specific model version
+func GetQueryVEIDModelVersionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "model-version [model-type]",
+		Short:             "Query active model version by type",
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: QueryPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustLightClientFromContext(ctx)
+
+			res, err := cl.Query().VEID().ModelVersion(ctx, &types.QueryModelVersionRequest{
+				ModelType: args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			return cl.ClientContext().PrintProto(res)
+		},
+	}
+
+	cflags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetQueryVEIDModelHistoryCmd returns the command to query model version history
+func GetQueryVEIDModelHistoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "model-history [model-type]",
+		Short:             "Query model version change history",
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: QueryPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustLightClientFromContext(ctx)
+
+			res, err := cl.Query().VEID().ModelHistory(ctx, &types.QueryModelHistoryRequest{
+				ModelType: args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			return cl.ClientContext().PrintProto(res)
+		},
+	}
+
+	cflags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetQueryVEIDValidatorModelSyncCmd returns the command to query validator model sync status
+func GetQueryVEIDValidatorModelSyncCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "verify-model [validator-address]",
+		Short:             "Query validator model sync status",
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: QueryPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustLightClientFromContext(ctx)
+
+			res, err := cl.Query().VEID().ValidatorModelSync(ctx, &types.QueryValidatorModelSyncRequest{
+				ValidatorAddress: args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			return cl.ClientContext().PrintProto(res)
+		},
+	}
+
+	cflags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetQueryVEIDModelParamsCmd returns the command to query model management parameters
+func GetQueryVEIDModelParamsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "model-params",
+		Short:             "Query model management parameters",
+		Args:              cobra.NoArgs,
+		PersistentPreRunE: QueryPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := cmd.Context()
+			cl := MustLightClientFromContext(ctx)
+
+			res, err := cl.Query().VEID().ModelParams(ctx, &types.QueryModelParamsRequest{})
 			if err != nil {
 				return err
 			}

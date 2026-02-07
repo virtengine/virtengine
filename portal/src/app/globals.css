@@ -226,6 +226,20 @@
     @apply bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent;
   }
 
+  /* Touch-friendly: minimum 44px tap targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Safe area insets for notched devices */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
   /* Scrollbar styling */
   .scrollbar-thin {
     scrollbar-width: thin;

@@ -11,6 +11,7 @@ import type {
   OfferingListResponse,
   OfferingPublication,
   OfferingStats,
+  CreateOfferingRequest,
   SyncStatus,
   UpdatePricingRequest,
 } from '@/types/offering';
@@ -74,6 +75,7 @@ interface UseOfferingSyncState {
 interface UseOfferingSyncActions {
   refresh: () => Promise<void>;
   setFilters: (filters: OfferingFilters) => void;
+  createOffering: (payload: CreateOfferingRequest) => Promise<void>;
   publishOffering: (waldurUuid: string) => Promise<void>;
   pauseOffering: (offeringId: string) => Promise<void>;
   activateOffering: (offeringId: string) => Promise<void>;
@@ -176,6 +178,24 @@ export function useOfferingSync(initialFilters: OfferingFilters = {}): UseOfferi
   }, [state.syncStatus?.isRunning, refresh]);
 
   // Actions
+  const createOffering = useCallback(
+    async (payload: CreateOfferingRequest) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        await apiCall('/offerings', { method: 'POST', body: payload });
+        await refresh();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : 'Failed to create offering',
+          isLoading: false,
+        }));
+        throw err;
+      }
+    },
+    [refresh]
+  );
+
   const publishOffering = useCallback(
     async (waldurUuid: string) => {
       setState((prev) => ({ ...prev, isLoading: true }));
@@ -277,6 +297,7 @@ export function useOfferingSync(initialFilters: OfferingFilters = {}): UseOfferi
     ...state,
     setFilters,
     refresh,
+    createOffering,
     publishOffering,
     pauseOffering,
     activateOffering,

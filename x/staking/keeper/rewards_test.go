@@ -273,11 +273,11 @@ func (s *RewardsTestSuite) TestCalculateEpochRewards() {
 		perf := types.NewValidatorPerformance(validatorAddr, epoch)
 		perf.BlocksProposed = int64(i * 10)
 		perf.BlocksExpected = 30
-	perf.VEIDVerificationsCompleted = int64(i * 2)
-	perf.VEIDVerificationsExpected = 6
-	perf.VEIDVerificationScore = 8000
-	perf.UptimeSeconds = 86400
-	types.ComputeOverallScore(perf)
+		perf.VEIDVerificationsCompleted = int64(i * 2)
+		perf.VEIDVerificationsExpected = 6
+		perf.VEIDVerificationScore = 8000
+		perf.UptimeSeconds = 86400
+		types.ComputeOverallScore(perf)
 		err := s.keeper.SetValidatorPerformance(s.ctx, *perf)
 		s.Require().NoError(err)
 	}

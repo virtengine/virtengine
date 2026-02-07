@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useSupportStore, type SupportTicket } from '@/stores/supportStore';
+import { useSupportStore, type SupportTicket, type SupportSyncStatus } from '@/stores/supportStore';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { formatRelativeTime } from '@/lib/utils';
@@ -39,6 +39,34 @@ function getStatusLabel(status: SupportTicket['status']) {
   return labels[status] || status;
 }
 
+const syncStatusStyles: Record<SupportSyncStatus, string> = {
+  queued: 'bg-slate-100 text-slate-600',
+  submitted: 'bg-blue-100 text-blue-700',
+  confirmed: 'bg-emerald-100 text-emerald-700',
+  synced: 'bg-emerald-100 text-emerald-700',
+  failed: 'bg-rose-100 text-rose-700',
+  not_configured: 'bg-slate-200 text-slate-500',
+};
+
+const formatSyncLabel = (status: SupportSyncStatus) => {
+  switch (status) {
+    case 'queued':
+      return 'queued';
+    case 'submitted':
+      return 'submitted';
+    case 'confirmed':
+      return 'confirmed';
+    case 'synced':
+      return 'synced';
+    case 'failed':
+      return 'failed';
+    case 'not_configured':
+      return 'native';
+    default:
+      return status;
+  }
+};
+
 function TicketRow({ ticket }: { ticket: SupportTicket }) {
   return (
     <div className="flex items-start gap-3 rounded-lg border border-border p-3">
@@ -56,6 +84,19 @@ function TicketRow({ ticket }: { ticket: SupportTicket }) {
           <span>{ticket.category}</span>
           <span>·</span>
           <span>{formatRelativeTime(ticket.updatedAt)}</span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Badge className={syncStatusStyles[ticket.sync.chain.status]} size="sm">
+            Chain {formatSyncLabel(ticket.sync.chain.status)}
+          </Badge>
+          <Badge className={syncStatusStyles[ticket.sync.provider.status]} size="sm">
+            Provider {formatSyncLabel(ticket.sync.provider.status)}
+          </Badge>
+          <Badge className={syncStatusStyles[ticket.sync.waldur.status]} size="sm">
+            {ticket.provider.serviceDesk === 'waldur'
+              ? `Waldur ${formatSyncLabel(ticket.sync.waldur.status)}`
+              : 'Native desk'}
+          </Badge>
         </div>
       </div>
       <div className="text-right">

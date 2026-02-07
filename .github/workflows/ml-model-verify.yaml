@@ -40,7 +40,6 @@ env:
   PYTHON_VERSION: "3.11"
   GOWORK: "off"  # Disable workspace mode for vendor operations
   TF_VERSION: "2.15.0"
-  GOWORK: "off"
 
 permissions:
   contents: read

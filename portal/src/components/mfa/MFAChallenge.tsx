@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMFAStore } from '@/features/mfa';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -56,32 +56,74 @@ export function MFAChallenge({
   onFailure,
   className,
 }: MFAChallengeProps) {
-  const { factors, isMutating, error, verifyChallenge, clearError } = useMFAStore();
+  const {
+    factors,
+    activeChallenge,
+    isMutating,
+    error,
+    verifyChallenge,
+    verifyWebAuthnChallenge,
+    clearChallenge,
+    clearError,
+  } = useMFAStore();
 
   const [selectedFactorId, setSelectedFactorId] = useState<string>('');
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const activeFactors = factors.filter((f) => f.status === 'active');
+  const availableFactors = activeChallenge?.availableFactors?.length
+    ? activeChallenge.availableFactors
+    : factors;
+  const activeFactors = availableFactors.filter((f) => f.status === 'active');
 
-  // Auto-select first factor if none selected
-  if (!selectedFactorId && activeFactors.length > 0) {
-    setSelectedFactorId(activeFactors[0].id);
-  }
+  useEffect(() => {
+    if (!selectedFactorId && activeFactors.length > 0) {
+      setSelectedFactorId(activeFactors[0].id);
+    }
+  }, [selectedFactorId, activeFactors]);
+
+  useEffect(() => {
+    if (!open) {
+      setCode('');
+      setLocalError(null);
+      setSelectedFactorId('');
+    }
+  }, [open]);
 
   const handleCodeChange = (value: string) => {
-    const sanitized = value.replace(/\D/g, '').slice(0, 6);
+    const sanitized = value.replace(/\D/g, '').slice(0, 8);
     setCode(sanitized);
     setLocalError(null);
     clearError();
   };
 
   const handleVerify = useCallback(async () => {
-    if (!selectedFactorId || !code) return;
+    if (!selectedFactorId) return;
     setLocalError(null);
 
     try {
-      const verified = await verifyChallenge(selectedFactorId, code);
+      const selected = activeFactors.find((f) => f.id === selectedFactorId);
+      let verified = false;
+
+      if (selected?.type === 'fido2') {
+        if (!activeChallenge?.fido2Options) {
+          throw new Error('Security key challenge unavailable.');
+        }
+
+        const assertion = (await navigator.credentials.get({
+          publicKey: activeChallenge.fido2Options,
+        })) as PublicKeyCredential | null;
+
+        if (!assertion) {
+          throw new Error('Security key verification was cancelled.');
+        }
+
+        verified = await verifyWebAuthnChallenge(selectedFactorId, assertion);
+      } else {
+        if (!code) return;
+        verified = await verifyChallenge(selectedFactorId, code);
+      }
+
       if (verified) {
         setCode('');
         onSuccess?.();
@@ -94,12 +136,23 @@ export function MFAChallenge({
       setLocalError(errMsg);
       onFailure?.(err instanceof Error ? err : new Error(errMsg));
     }
-  }, [selectedFactorId, code, verifyChallenge, onSuccess, onFailure, onOpenChange]);
+  }, [
+    activeChallenge,
+    activeFactors,
+    code,
+    onFailure,
+    onOpenChange,
+    onSuccess,
+    selectedFactorId,
+    verifyChallenge,
+    verifyWebAuthnChallenge,
+  ]);
 
   const handleCancel = () => {
     setCode('');
     setLocalError(null);
     clearError();
+    clearChallenge();
     onOpenChange(false);
   };
 
@@ -111,7 +164,8 @@ export function MFAChallenge({
         <DialogHeader>
           <DialogTitle>Verification Required</DialogTitle>
           <DialogDescription>
-            {actionDescription ??
+            {actionDescription ||
+              activeChallenge?.transactionSummary ||
               'Please complete two-factor authentication to continue with this action'}
           </DialogDescription>
         </DialogHeader>
@@ -171,18 +225,26 @@ export function MFAChallenge({
                   ? '6-digit code from your authenticator app'
                   : 'Verification code'}
               </Label>
+              {(selectedFactor.type === 'sms' || selectedFactor.type === 'email') && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedFactor.type === 'sms'
+                    ? `We sent a code to ${selectedFactor.metadata?.maskedPhone ?? 'your phone'}.`
+                    : 'We sent a code to your email address.'}
+                </p>
+              )}
               <Input
                 id="mfa-code"
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
-                maxLength={6}
+                maxLength={8}
                 value={code}
                 onChange={(e) => handleCodeChange(e.target.value)}
                 placeholder="000000"
                 className="text-center font-mono text-lg tracking-[0.3em]"
                 error={!!localError}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- MFA code entry benefits from immediate focus for security workflow
                 autoFocus
               />
             </div>
@@ -207,7 +269,7 @@ export function MFAChallenge({
           </Button>
           <Button
             onClick={handleVerify}
-            disabled={selectedFactor?.type === 'fido2' ? false : code.length !== 6}
+            disabled={selectedFactor?.type === 'fido2' ? false : code.length < 6}
             loading={isMutating}
           >
             Verify

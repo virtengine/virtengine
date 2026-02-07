@@ -184,6 +184,14 @@ tests/e2e/
 └── ...
 ```
 
+Golden path marketplace → provision → usage → invoice → payout:
+
+```
+go test -tags="e2e.integration" ./tests/e2e/golden -run TestGoldenPathMarketplaceProvisionUsageInvoicePayout
+```
+
+Failure artifacts are written to `_build/artifacts/e2e` (override with `VE_E2E_ARTIFACTS_DIR`).
+
 ## Excluded Tests
 
 ### Build Tag: `// +build ignore`

@@ -9,11 +9,14 @@ import { useEffect } from 'react';
 import { useProviderStore } from '@/stores/providerStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import OfferingManager from '@/components/provider/OfferingManager';
+import OfferingsOverview from '@/components/provider/OfferingsOverview';
 import RevenueSummary from '@/components/provider/RevenueSummary';
 import CapacityView from '@/components/provider/CapacityView';
 import AllocationTable from '@/components/provider/AllocationTable';
+import PendingBidsTable from '@/components/provider/PendingBidsTable';
 import PayoutHistory from '@/components/provider/PayoutHistory';
 import ProviderTickets from '@/components/provider/ProviderTickets';
+import ProviderSyncStatus from '@/components/provider/ProviderSyncStatus';
 import { formatCurrency } from '@/lib/utils';
 
 function DashboardSkeleton() {
@@ -107,14 +110,18 @@ export default function ProviderDashboardClient() {
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="offerings">Offerings</TabsTrigger>
           <TabsTrigger value="allocations">Allocations</TabsTrigger>
+          <TabsTrigger value="bids">Pending Bids</TabsTrigger>
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
+          <TabsTrigger value="sync">Sync Status</TabsTrigger>
           <TabsTrigger value="payouts">Payouts</TabsTrigger>
           <TabsTrigger value="support">Support</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
           <div className="space-y-6">
+            <OfferingsOverview />
             <OfferingManager />
             <div className="grid gap-6 lg:grid-cols-2">
               <CapacityView />
@@ -123,12 +130,24 @@ export default function ProviderDashboardClient() {
           </div>
         </TabsContent>
 
+        <TabsContent value="offerings">
+          <OfferingsOverview />
+        </TabsContent>
+
         <TabsContent value="allocations">
           <AllocationTable />
         </TabsContent>
 
+        <TabsContent value="bids">
+          <PendingBidsTable />
+        </TabsContent>
+
         <TabsContent value="revenue">
           <RevenueSummary />
+        </TabsContent>
+
+        <TabsContent value="sync">
+          <ProviderSyncStatus />
         </TabsContent>
 
         <TabsContent value="payouts">

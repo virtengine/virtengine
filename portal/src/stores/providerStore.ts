@@ -11,8 +11,11 @@ import type {
   Allocation,
   AllocationStatus,
   CapacityData,
+  PendingBid,
   Payout,
   ProviderDashboardStats,
+  ProviderOfferingSummary,
+  ProviderSyncStatus,
   QueuedAllocation,
   RevenueSummaryData,
 } from '@/types/provider';
@@ -24,6 +27,9 @@ import type {
 export interface ProviderStoreState {
   stats: ProviderDashboardStats;
   allocations: Allocation[];
+  offerings: ProviderOfferingSummary[];
+  pendingBids: PendingBid[];
+  syncStatus: ProviderSyncStatus;
   revenue: RevenueSummaryData;
   capacity: CapacityData;
   payouts: Payout[];
@@ -143,6 +149,103 @@ const MOCK_ALLOCATIONS: Allocation[] = [
   },
 ];
 
+const MOCK_OFFERINGS: ProviderOfferingSummary[] = [
+  {
+    id: 'off-001',
+    name: 'NVIDIA A100 Cluster',
+    category: 'gpu',
+    status: 'published',
+    syncStatus: 'synced',
+    activeOrders: 2,
+    totalOrders: 12,
+    basePrice: 1200,
+    currency: 'USD',
+    updatedAt: '2025-02-05T10:00:00Z',
+    lastSyncedAt: '2025-02-06T12:10:00Z',
+  },
+  {
+    id: 'off-002',
+    name: 'HPC Compute Node',
+    category: 'hpc',
+    status: 'published',
+    syncStatus: 'syncing',
+    activeOrders: 5,
+    totalOrders: 18,
+    basePrice: 850,
+    currency: 'USD',
+    updatedAt: '2025-02-06T08:30:00Z',
+    lastSyncedAt: '2025-02-06T12:05:00Z',
+  },
+  {
+    id: 'off-003',
+    name: 'NVMe Block Storage',
+    category: 'storage',
+    status: 'paused',
+    syncStatus: 'pending',
+    activeOrders: 0,
+    totalOrders: 6,
+    basePrice: 0.12,
+    currency: 'USD',
+    updatedAt: '2025-02-04T16:10:00Z',
+    lastSyncedAt: '2025-02-05T21:45:00Z',
+  },
+  {
+    id: 'off-004',
+    name: 'RTX 4090 GPU Pod',
+    category: 'gpu',
+    status: 'failed',
+    syncStatus: 'failed',
+    activeOrders: 0,
+    totalOrders: 2,
+    basePrice: 1.8,
+    currency: 'USD',
+    updatedAt: '2025-02-06T06:40:00Z',
+    lastSyncedAt: '2025-02-06T06:42:00Z',
+  },
+];
+
+const MOCK_PENDING_BIDS: PendingBid[] = [
+  {
+    id: 'bid-001',
+    offeringName: 'NVIDIA A100 Cluster',
+    customerName: 'Acme Corp',
+    customerAddress: 'virtengine1cust1abc...7h3k',
+    status: 'awaiting_customer',
+    bidAmount: 3600,
+    currency: 'USD',
+    duration: '3 months',
+    createdAt: '2025-02-06T09:20:00Z',
+    expiresAt: '2025-02-07T09:20:00Z',
+    resources: { cpu: 32, memory: 128, storage: 1000, gpu: 4 },
+  },
+  {
+    id: 'bid-002',
+    offeringName: 'HPC Compute Node',
+    customerName: 'ResearchLab',
+    customerAddress: 'virtengine1cust3ghi...2k7n',
+    status: 'awaiting_customer',
+    bidAmount: 1900,
+    currency: 'USD',
+    duration: '1 month',
+    createdAt: '2025-02-06T10:45:00Z',
+    expiresAt: '2025-02-07T10:45:00Z',
+    resources: { cpu: 64, memory: 256, storage: 2000 },
+  },
+  {
+    id: 'bid-003',
+    offeringName: 'NVMe Block Storage',
+    customerName: 'DataLab Inc',
+    customerAddress: 'virtengine1cust2def...9j4m',
+    status: 'awaiting_customer',
+    bidAmount: 640,
+    currency: 'USD',
+    duration: '6 months',
+    createdAt: '2025-02-06T11:05:00Z',
+    expiresAt: '2025-02-07T11:05:00Z',
+    resources: { cpu: 0, memory: 0, storage: 12000 },
+  },
+];
+
 const MOCK_REVENUE: RevenueSummaryData = {
   currentMonth: 12450,
   previousMonth: 10800,
@@ -244,6 +347,36 @@ const MOCK_QUEUE: QueuedAllocation[] = [
   },
 ];
 
+const MOCK_SYNC_STATUS: ProviderSyncStatus = {
+  isRunning: true,
+  lastSyncAt: '2025-02-06T12:10:00Z',
+  nextSyncAt: '2025-02-06T12:15:00Z',
+  errorCount: 1,
+  pendingOfferings: 2,
+  pendingAllocations: 1,
+  waldur: {
+    name: 'Waldur',
+    status: 'syncing',
+    lastSuccessAt: '2025-02-06T11:55:00Z',
+    lagSeconds: 380,
+    message: 'Syncing catalog updates',
+  },
+  chain: {
+    name: 'VirtEngine Chain',
+    status: 'synced',
+    lastSuccessAt: '2025-02-06T12:08:00Z',
+    lagSeconds: 42,
+  },
+  providerDaemon: {
+    name: 'Provider Daemon',
+    status: 'degraded',
+    lastSuccessAt: '2025-02-06T11:50:00Z',
+    lagSeconds: 560,
+    message: 'Awaiting settlement events',
+  },
+  lastError: 'Offering sync failed for RTX 4090 GPU Pod (price mismatch).',
+};
+
 // =============================================================================
 // Store Implementation
 // =============================================================================
@@ -251,6 +384,9 @@ const MOCK_QUEUE: QueuedAllocation[] = [
 const initialState: ProviderStoreState = {
   stats: MOCK_STATS,
   allocations: [],
+  offerings: [],
+  pendingBids: [],
+  syncStatus: MOCK_SYNC_STATUS,
   revenue: MOCK_REVENUE,
   capacity: MOCK_CAPACITY,
   payouts: [],
@@ -282,6 +418,9 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
       set({
         stats: MOCK_STATS,
         allocations: MOCK_ALLOCATIONS,
+        offerings: MOCK_OFFERINGS,
+        pendingBids: MOCK_PENDING_BIDS,
+        syncStatus: MOCK_SYNC_STATUS,
         revenue: MOCK_REVENUE,
         capacity: MOCK_CAPACITY,
         payouts: MOCK_PAYOUTS,

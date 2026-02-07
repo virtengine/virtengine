@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
-# VirtEngine Pre-Push Hook
+# VirtEngine Pre-Push Hook — Smart Quality Gate
 #
-# Prevents pushing code that doesn't pass critical quality gates.
-# Mirrors CI required checks: vet, lint, build, tests.
+# Only runs checks relevant to changed files. Mirrors CI required checks.
 #
-# NOTE: gofmt auto-formatting and go mod tidy/vendor are handled by pre-commit hook.
-# Pre-push validates gofmt/lockfile drift to prevent CI failures.
+# Categories detected:
+#   GO       — .go files outside vendor/tests/scripts
+#   PORTAL   — portal/ and lib/portal/ TypeScript/JS/CSS files
+#   SDK_TS   — sdk/ts/ TypeScript/JS files
+#   DEPS     — go.mod, go.sum, pnpm-lock.yaml, package.json
+#   WORKFLOW — .github/workflows/ YAML files
+#   DOCS     — .md files, _docs/, docs/ (skip all checks)
+#   TERRAFORM — infra/terraform .tf files
 #
-# Bypass:       git push --no-verify
-# Quick mode:   $env:VE_HOOK_QUICK=1; git push     (vet + build only)
+# Bypass:      git push --no-verify
+# Quick mode:  VE_HOOK_QUICK=1 git push     (vet + build only for Go)
 #
 # Skip individual checks:
-#   $env:VE_HOOK_SKIP_VET=1;      Skip go vet
-#   $env:VE_HOOK_SKIP_FMT=1;      Skip gofmt check
-#   $env:VE_HOOK_SKIP_PNPM=1;     Skip pnpm lockfile check
-#   $env:VE_HOOK_SKIP_MOD=1;      Skip go mod tidy/vendor checks
-#   $env:VE_HOOK_SKIP_LINT=1;     Skip golangci-lint
-#   $env:VE_HOOK_SKIP_BUILD=1;    Skip build
-#   $env:VE_HOOK_SKIP_TEST=1;     Skip unit tests
+#   VE_HOOK_SKIP_VET=1       Skip go vet
+#   VE_HOOK_SKIP_FMT=1       Skip gofmt + prettier auto-format
+#   VE_HOOK_SKIP_TF=1        Skip terraform fmt
+#   VE_HOOK_SKIP_PNPM=1      Skip pnpm lockfile check
+#   VE_HOOK_SKIP_MOD=1       Skip go mod tidy/vendor checks
+#   VE_HOOK_SKIP_LINT=1      Skip golangci-lint
+#   VE_HOOK_SKIP_BUILD=1     Skip build
+#   VE_HOOK_SKIP_TEST=1      Skip unit tests (Go + Portal)
+#   VE_HOOK_SKIP_PORTAL=1    Skip ALL portal checks (lint, type-check, tests, build)
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,8 +32,6 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOOK_DIR/common.sh"
 
 # --- Parse push info from stdin ---
-# Git passes: <local ref> <local sha> <remote ref> <remote sha>
-# Skip checks for delete pushes (local sha is all zeros).
 while read -r _local_ref local_sha _remote_ref _remote_sha; do
     if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
         exit 0
@@ -50,22 +55,120 @@ TOTAL_START=$(hook_time_start)
 FAILED=0
 PASSED=0
 SKIPPED=0
-TOTAL_CHECKS=8  # gofmt + prettier + pnpm lockfile checks
+TOTAL_CHECKS=0
 
-# Helper to run a check
+# =========================================================================
+# FILE CHANGE DETECTION
+# =========================================================================
+BASE_BRANCH="origin/main"
+HAS_GO=false
+HAS_PORTAL=false
+HAS_SDK_TS=false
+HAS_DEPS_JS=false
+HAS_DEPS_GO=false
+HAS_ONLY_DOCS=false
+HAS_TERRAFORM=false
+
+CHANGED_FILES=""
+if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+    CHANGED_FILES=$(git diff --name-only "$BASE_BRANCH" 2>/dev/null || echo "")
+fi
+if [ -z "$CHANGED_FILES" ]; then
+    CHANGED_FILES=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
+fi
+
+if [ -z "$CHANGED_FILES" ]; then
+    HAS_GO=true
+    HAS_PORTAL=true
+    HAS_SDK_TS=true
+    HAS_DEPS_JS=true
+    HAS_DEPS_GO=true
+    hook_warn "Could not detect changed files — running all checks"
+else
+    GO_FILES=$(echo "$CHANGED_FILES" | grep -E '\.go$' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' || true)
+    PORTAL_FILES=$(echo "$CHANGED_FILES" | grep -E '^(portal|lib/portal|lib/capture|lib/admin)/' || true)
+    SDK_TS_FILES=$(echo "$CHANGED_FILES" | grep -E '^sdk/ts/' || true)
+    JS_DEP_FILES=$(echo "$CHANGED_FILES" | \
+        grep -E '(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|package-lock\.json)' | \
+        grep -v '^sdk/portal/' || true)
+    GO_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '^go\.(mod|sum|work)$' || true)
+    TF_FILES=$(echo "$CHANGED_FILES" | grep -E '^infra/terraform/.*\.tf$' || true)
+    NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/)' || true)
+
+    [ -n "$GO_FILES" ]     && HAS_GO=true
+    [ -n "$PORTAL_FILES" ] && HAS_PORTAL=true
+    [ -n "$SDK_TS_FILES" ] && HAS_SDK_TS=true
+    [ -n "$JS_DEP_FILES" ] && HAS_DEPS_JS=true
+    [ -n "$GO_DEP_FILES" ] && HAS_DEPS_GO=true
+    [ -n "$TF_FILES" ] && HAS_TERRAFORM=true
+    [ -z "$NON_DOC_FILES" ] && HAS_ONLY_DOCS=true
+
+    hook_info "Changed file categories:"
+    $HAS_GO       && hook_step "Go files: $(echo "$GO_FILES" | wc -l | tr -d ' ') files"
+    $HAS_PORTAL   && hook_step "Portal/Frontend: $(echo "$PORTAL_FILES" | wc -l | tr -d ' ') files"
+    $HAS_SDK_TS   && hook_step "SDK TypeScript: $(echo "$SDK_TS_FILES" | wc -l | tr -d ' ') files"
+    $HAS_DEPS_JS  && hook_step "JS dependencies changed"
+    $HAS_DEPS_GO  && hook_step "Go dependencies changed"
+    $HAS_TERRAFORM && hook_step "Terraform: $(echo "$TF_FILES" | wc -l | tr -d ' ') files"
+    $HAS_ONLY_DOCS && hook_step "Docs/workflows only — skipping code checks"
+    echo ""
+fi
+
+if $HAS_ONLY_DOCS; then
+    hook_header "========================================="
+    hook_pass " No code changes — skipping quality gate"
+    hook_header "========================================="
+    exit 0
+fi
+
+# =========================================================================
+# DETERMINE WHICH CHECKS TO RUN
+# =========================================================================
+RUN_GO_VET=false; RUN_GOFMT=false; RUN_GO_LINT=false
+RUN_GO_BUILD=false; RUN_GO_TEST=false; RUN_MOD_VENDOR=false
+RUN_PRETTIER=false; RUN_PORTAL_LINT=false
+RUN_PORTAL_TYPECHECK=false; RUN_PORTAL_TEST=false; RUN_PORTAL_BUILD=false; RUN_PNPM_LOCK=false
+RUN_TERRAFORM_FMT=false
+
+if $HAS_GO || $HAS_DEPS_GO; then
+    RUN_GO_VET=true; RUN_GOFMT=true; RUN_GO_LINT=true
+    RUN_GO_BUILD=true; RUN_GO_TEST=true
+fi
+$HAS_DEPS_GO && RUN_MOD_VENDOR=true
+
+if $HAS_PORTAL || $HAS_DEPS_JS; then
+    RUN_PRETTIER=true; RUN_PORTAL_LINT=true
+    RUN_PORTAL_TYPECHECK=true; RUN_PORTAL_TEST=true; RUN_PORTAL_BUILD=true
+fi
+$HAS_DEPS_JS && RUN_PNPM_LOCK=true
+$HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
+
+for flag in $RUN_GO_VET $RUN_GOFMT $RUN_GO_LINT $RUN_GO_BUILD $RUN_GO_TEST \
+            $RUN_MOD_VENDOR $RUN_PRETTIER $RUN_PORTAL_LINT $RUN_PORTAL_TYPECHECK \
+            $RUN_PORTAL_TEST $RUN_PORTAL_BUILD $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT; do
+    $flag && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+done
+
+CHECK_NUM=0
+hook_info "Running $TOTAL_CHECKS checks (smart mode)"
+echo ""
+
+# =========================================================================
+# HELPERS
+# =========================================================================
 run_check() {
-    local num=$1
-    local name=$2
-    local skip_var=$3
-    shift 3
+    local name=$1
+    local skip_var=$2
+    shift 2
+    CHECK_NUM=$((CHECK_NUM + 1))
 
     if [ "${!skip_var:-}" = "1" ]; then
-        hook_warn "[$num/$TOTAL_CHECKS] $name (skipped)"
+        hook_warn "[$CHECK_NUM/$TOTAL_CHECKS] $name (skipped via $skip_var)"
         SKIPPED=$((SKIPPED + 1))
         return 0
     fi
 
-    hook_info "[$num/$TOTAL_CHECKS] $name"
+    hook_info "[$CHECK_NUM/$TOTAL_CHECKS] $name"
     local step_start
     step_start=$(hook_time_start)
 
@@ -80,214 +183,71 @@ run_check() {
     fi
 }
 
+ensure_portal_deps() {
+    if [ ! -d "$REPO_ROOT/portal/node_modules" ]; then
+        if command -v pnpm >/dev/null 2>&1; then
+            hook_step "Installing portal dependencies (first run)..."
+            pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
+        else
+            hook_warn "pnpm not available — cannot install portal deps"
+            return 1
+        fi
+    fi
+    return 0
+}
+
 # =========================================================================
-# Check 1: go vet
+# GO CHECKS
 # =========================================================================
 check_vet() {
-    # Optimization: only vet packages with changes since origin/main
-    # Falls back to ./... if no commits yet or on main branch
-    local changed_packages
-    local base_branch="origin/main"
-
-    # Check if we're on main or have no diverged commits
-    if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Exclude vendor/, tests/, and scripts/ as they have build constraints or are tooling
-        # NOTE: sdk/ is now included to catch SDK build errors early
-        # Filter out directories that no longer exist (deleted packages)
-        changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
-            grep -v '^vendor/' | \
-            grep -v '^tests/' | \
-            grep -v '^scripts/' | \
+    local changed_packages=""
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_packages=$(git diff --name-only "$BASE_BRANCH" -- '*.go' 2>/dev/null | \
+            grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")
     fi
-
     if [ -n "${changed_packages:-}" ]; then
-        hook_step "Vetting changed packages only ($(echo "$changed_packages" | wc -w | tr -d ' ') packages)"
+        hook_step "Vetting $(echo "$changed_packages" | wc -w | tr -d ' ') changed packages"
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        # Exclude tests/, scripts/, and local temp/ scratch dirs which may have build constraints
         go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | grep -v '/scripts/' | grep -Ev '/temp($|/)' | head -100) 2>&1
     fi
 }
 
-# =========================================================================
-# Check 2: gofmt (auto-format changed files)
-# =========================================================================
 check_gofmt() {
-    local base_branch="origin/main"
     local changed_files=""
-
-    if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Get changed Go files, filter existing files only
-        changed_files=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_files=$(git diff --name-only "$BASE_BRANCH" -- '*.go' 2>/dev/null | \
             grep -v '^vendor/' | grep -v '^tests/' | \
             while read -r f; do [ -f "$f" ] && echo "$f"; done || true)
     fi
-
     if [ -z "${changed_files:-}" ]; then
         hook_step "No Go files changed"
         return 0
     fi
-
     local unformatted
     # shellcheck disable=SC2086
     unformatted=$(gofmt -l $changed_files 2>/dev/null || true)
-    
     if [ -n "$unformatted" ]; then
         hook_step "Auto-formatting $(echo "$unformatted" | wc -l | tr -d ' ') file(s)..."
-        
-        # Auto-format the files
         for file in $unformatted; do
             [ -f "$file" ] || continue
             gofmt -w "$file"
             hook_step "Formatted: $file"
         done
-        
-        # Stage and amend the commit with formatted files
         # shellcheck disable=SC2086
         git add $unformatted
         git commit --amend --no-edit --no-verify
-        
         hook_pass "Auto-formatted and amended commit"
     fi
     return 0
 }
 
-# =========================================================================
-# Check 2b: prettier (auto-format changed portal files)
-# =========================================================================
-check_prettier() {
-    local base_branch="origin/main"
-    local changed_files=""
-
-    if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Get changed portal files
-        changed_files=$(git diff --name-only "$base_branch" -- \
-            'portal/src/**/*.ts' 'portal/src/**/*.tsx' 'portal/src/**/*.js' 'portal/src/**/*.jsx' \
-            'portal/src/**/*.css' 'portal/src/**/*.json' 'portal/src/**/*.md' \
-            'lib/portal/src/**/*.ts' 'lib/portal/src/**/*.tsx' 2>/dev/null | \
-            while read -r f; do [ -f "$f" ] && echo "$f"; done || true)
-    fi
-
-    if [ -z "${changed_files:-}" ]; then
-        hook_step "No Portal files changed"
-        return 0
-    fi
-
-    # Check if pnpm and prettier are available
-    if ! command -v pnpm >/dev/null 2>&1; then
-        hook_warn "pnpm not available, skipping prettier check"
-        return 0
-    fi
-
-    if [ ! -f "$REPO_ROOT/portal/node_modules/.bin/prettier" ]; then
-        hook_warn "prettier not installed, run 'pnpm install' in portal/"
-        return 0
-    fi
-
-    local unformatted
-    unformatted=""
-    for file in $changed_files; do
-        [ -f "$file" ] || continue
-        if ! pnpm -C portal exec prettier --check "$REPO_ROOT/$file" >/dev/null 2>&1; then
-            unformatted="$unformatted $file"
-        fi
-    done
-    unformatted=$(echo "$unformatted" | xargs)  # trim whitespace
-    
-    if [ -n "$unformatted" ]; then
-        hook_step "Auto-formatting $(echo "$unformatted" | wc -w | tr -d ' ') Portal file(s)..."
-        
-        for file in $unformatted; do
-            [ -f "$file" ] || continue
-            pnpm -C portal exec prettier --write "$REPO_ROOT/$file" >/dev/null 2>&1
-            hook_step "Formatted: $file"
-        done
-        
-        # Stage and amend the commit with formatted files
-        # shellcheck disable=SC2086
-        git add $unformatted
-        git commit --amend --no-edit --no-verify
-        
-        hook_pass "Auto-formatted Portal files and amended commit"
-    fi
-    return 0
-}
-
-# =========================================================================
-# Check 3: pnpm lockfile (when JS deps change)
-# =========================================================================
-check_pnpm_lock() {
-    local base_branch="origin/main"
-    local changed_files=""
-
-    if git rev-parse --verify "$base_branch" &>/dev/null; then
-        changed_files=$(git diff --name-only "$base_branch" -- 'pnpm-lock.yaml' '**/package.json' '**/package-lock.json' 2>/dev/null || true)
-    fi
-
-    if [ -z "${changed_files:-}" ]; then
-        hook_step "No JS dependency files changed"
-        return 0
-    fi
-
-    if ! command -v pnpm >/dev/null 2>&1; then
-        hook_warn "pnpm not found; skipping lockfile check"
-        return 0
-    fi
-
-    hook_step "Validating pnpm lockfile"
-    pnpm install --frozen-lockfile 2>&1
-}
-
-# =========================================================================
-# Check 4: go mod vendor (fast sync - only if needed)
-# =========================================================================
-check_mod_vendor() {
-    # Quick vendor sync - only runs vendor command if vendor is missing or stale.
-    # Full go mod tidy is handled by pre-commit hook when go.mod changes.
-
-    # In workspace mode, use 'go work vendor' instead of 'go mod vendor'
-    local vendor_cmd="go mod vendor"
-    if [ -f "$REPO_ROOT/go.work" ] && [ "${GOWORK:-}" != "off" ]; then
-        vendor_cmd="go work vendor"
-    fi
-
-    # Quick check: if vendor exists and is in sync, skip
-    if [ -f vendor/modules.txt ]; then
-        # In workspace mode, -mod=vendor is not used so just check vendor exists
-        if [ "$vendor_cmd" = "go work vendor" ]; then
-            hook_step "Workspace mode active - vendor sync skipped (not used at runtime)"
-            return 0
-        fi
-        # Use go list to verify vendor consistency (faster than go mod verify)
-        if go list -mod=vendor ./... >/dev/null 2>&1; then
-            hook_step "Vendor directory already in sync"
-            return 0
-        fi
-    fi
-
-    # Vendor is missing or out of sync - run vendor command
-    hook_step "Syncing vendor directory..."
-    if ! $vendor_cmd 2>&1; then
-        hook_fail "$vendor_cmd failed"
-        return 1
-    fi
-
-    hook_step "Vendor directory synced"
-    return 0
-}
-
-# =========================================================================
-# Check 5: golangci-lint
-# =========================================================================
 check_lint() {
-    # Find golangci-lint binary
     local lint_bin=""
-    
-    # Check common locations
     if command -v golangci-lint &>/dev/null; then
         lint_bin="golangci-lint"
     elif [ -x "$REPO_ROOT/.cache/bin/golangci-lint" ]; then
@@ -295,144 +255,262 @@ check_lint() {
     elif [ -x "$HOME/go/bin/golangci-lint" ]; then
         lint_bin="$HOME/go/bin/golangci-lint"
     fi
-    
     if [ -z "$lint_bin" ]; then
-        hook_warn "golangci-lint not found - install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
-        hook_fail "golangci-lint is required for pre-push checks"
+        hook_warn "golangci-lint not found"
+        hook_fail "golangci-lint is required"
         return 1
     fi
-    
-    # Get version to check compatibility
     local lint_version
     lint_version=$($lint_bin version 2>&1 | head -1 || echo "unknown")
     hook_step "Using: $lint_bin ($lint_version)"
-    
-    # Run lint on changed files only (faster) with origin/main as base
-    local base_branch="origin/main"
-    if git rev-parse --verify "$base_branch" &>/dev/null; then
-        hook_step "Linting changes since $base_branch"
-        $lint_bin run --timeout=10m --new-from-rev="$base_branch" 2>&1
+    export GOLANGCI_LINT_CACHE="$REPO_ROOT/.cache/golangci-lint"
+    mkdir -p "$GOLANGCI_LINT_CACHE"
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        hook_step "Linting changes since $BASE_BRANCH"
+        $lint_bin run --timeout=10m --allow-parallel-runners --new-from-rev="$BASE_BRANCH" 2>&1
     else
-        # No base branch - lint all (slower but complete)
-        hook_step "Linting all packages (no base branch found)"
-        $lint_bin run --timeout=10m 2>&1
+        $lint_bin run --timeout=10m --allow-parallel-runners 2>&1
     fi
 }
 
-# =========================================================================
-# Check 6: Build
-# =========================================================================
+check_mod_vendor() {
+    local vendor_cmd="go mod vendor"
+    if [ -f "$REPO_ROOT/go.work" ] && [ "${GOWORK:-}" != "off" ]; then
+        vendor_cmd="go work vendor"
+    fi
+    if [ -f vendor/modules.txt ]; then
+        if [ "$vendor_cmd" = "go work vendor" ]; then
+            hook_step "Workspace mode — vendor sync skipped"
+            return 0
+        fi
+        if go list -mod=vendor ./... >/dev/null 2>&1; then
+            hook_step "Vendor directory already in sync"
+            return 0
+        fi
+    fi
+    hook_step "Syncing vendor directory..."
+    $vendor_cmd 2>&1
+}
+
 check_build() {
-    # Try make first, fall back to direct go build
     if make bins 2>&1; then
         return 0
     fi
     hook_warn "make bins failed, trying direct go build..."
-    # Build cmd/ and sdk/go/ to catch missing types in SDK packages
     go build ./cmd/... ./sdk/go/... 2>&1
 }
 
-# =========================================================================
-# Check 7: Unit tests
-# =========================================================================
-check_test() {
-    # Run tests with robust timeout handling for pre-push hook reliability.
-    # Key optimizations:
-    # - Go's native -timeout flag (more reliable than external timeout)
-    # - Limited parallelism (avoids resource contention)
-    # - Short mode (skips long-running tests)
-    # - Failfast (immediate feedback on first failure)
-    # - Compiled test caching (faster repeated runs)
-    # - Exclude slow/integration test packages
-
-    local go_timeout="180s"    # Per-package timeout (keeper tests need >60s on some machines)
-    local parallel_limit=4     # Limit parallel test execution
-
-    # Packages to exclude from pre-push tests (slow, integration, or special setup)
-    local exclude_patterns=(
-        "tests/e2e"
-        "tests/integration"
-        "tests/chaos"
-        "pkg/chaos"
-    )
-
-    # Optimization: only test changed packages if possible
+check_test_go() {
+    local go_timeout="180s"
+    local parallel_limit=4
     local changed_packages=""
-    local base_branch="origin/main"
-
-    if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Get changed Go files, exclude vendor/tests/scripts, filter to existing dirs
-        # NOTE: sdk/ is now included to catch SDK test failures early
-        changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
-            grep -v '_test\.go$' | \
-            grep -v '^vendor/' | \
-            grep -v '^tests/' | \
-            grep -v '^scripts/' | \
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_packages=$(git diff --name-only "$BASE_BRANCH" -- '*.go' 2>/dev/null | \
+            grep -v '_test\.go$' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")
     fi
-
-    # Build test arguments - rely on Go's internal timeout, not external wrapper
     local test_args="-short -timeout $go_timeout -failfast -p $parallel_limit -count=1"
-
     if [ -n "${changed_packages:-}" ]; then
         local pkg_count
         pkg_count=$(echo "$changed_packages" | wc -w | tr -d ' ')
-        hook_step "Testing changed packages only ($pkg_count packages)"
-
+        hook_step "Testing $pkg_count changed Go packages"
         # shellcheck disable=SC2086
         go test $test_args $changed_packages 2>&1
         return $?
     else
-        # Fallback: run fast unit test packages only
-        # List packages explicitly to avoid slow discovery and exclude problematic dirs
-        hook_step "Testing fast packages (no changed files detected)"
-        
-        # Get list of packages with test files, excluding slow ones
+        hook_step "Testing fast packages (no specific changes detected)"
         local test_packages
         test_packages=$(go list ./x/... ./pkg/... 2>/dev/null | \
-            grep -v '/tests/' | \
-            grep -v '/scripts/' | \
-            grep -v '/e2e' | \
-            grep -v '/integration' | \
-            grep -v '/chaos' | \
-            grep -v '/simulation' | \
-            head -50 || echo "")  # Limit to 50 packages max
-        
+            grep -v '/tests/' | grep -v '/scripts/' | grep -v '/e2e' | \
+            grep -v '/integration' | grep -v '/chaos' | grep -v '/simulation' | \
+            head -50 || echo "")
         if [ -z "$test_packages" ]; then
             hook_step "No testable packages found"
             return 0
         fi
-        
-        local pkg_count
-        pkg_count=$(echo "$test_packages" | wc -l | tr -d ' ')
-        hook_step "Running $pkg_count packages"
-
-        # Run tests with explicit package list (avoids discovery overhead)
         echo "$test_packages" | xargs go test $test_args 2>&1
         return $?
     fi
 }
 
 # =========================================================================
-# Run checks
+# PORTAL / FRONTEND CHECKS
 # =========================================================================
+check_prettier() {
+    local changed_files=""
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_files=$(git diff --name-only "$BASE_BRANCH" -- \
+            'portal/src/**/*.ts' 'portal/src/**/*.tsx' 'portal/src/**/*.js' 'portal/src/**/*.jsx' \
+            'portal/src/**/*.css' 'portal/src/**/*.json' 'portal/src/**/*.md' \
+            'lib/portal/src/**/*.ts' 'lib/portal/src/**/*.tsx' 2>/dev/null | \
+            while read -r f; do [ -f "$f" ] && echo "$f"; done || true)
+    fi
+    if [ -z "${changed_files:-}" ]; then
+        hook_step "No Portal files to format"
+        return 0
+    fi
+    if ! ensure_portal_deps; then
+        hook_fail "Portal dependencies not available — cannot run prettier"
+        return 1
+    fi
+    local unformatted=""
+    for file in $changed_files; do
+        [ -f "$file" ] || continue
+        if ! pnpm -C portal exec prettier --check "$REPO_ROOT/$file" >/dev/null 2>&1; then
+            unformatted="$unformatted $file"
+        fi
+    done
+    unformatted=$(echo "$unformatted" | xargs)
+    if [ -n "$unformatted" ]; then
+        hook_step "Auto-formatting $(echo "$unformatted" | wc -w | tr -d ' ') Portal file(s)..."
+        for file in $unformatted; do
+            [ -f "$file" ] || continue
+            pnpm -C portal exec prettier --write "$REPO_ROOT/$file" >/dev/null 2>&1
+            hook_step "Formatted: $file"
+        done
+        # shellcheck disable=SC2086
+        git add $unformatted
+        git commit --amend --no-edit --no-verify
+        hook_pass "Auto-formatted Portal files and amended commit"
+    fi
+    return 0
+}
 
-# Quick mode: only vet + build
+check_portal_lint() {
+    if ! ensure_portal_deps; then
+        hook_warn "Cannot run portal lint — deps not available"
+        return 1
+    fi
+    hook_step "Running ESLint on portal (next lint)..."
+    (cd "$REPO_ROOT/portal" && pnpm lint -- --max-warnings=0 2>&1)
+}
+
+check_portal_typecheck() {
+    if ! ensure_portal_deps; then
+        hook_warn "Cannot run portal type-check — deps not available"
+        return 1
+    fi
+    hook_step "Running TypeScript type-check (tsc --noEmit)..."
+    (cd "$REPO_ROOT/portal" && pnpm type-check 2>&1)
+}
+
+check_portal_test() {
+    if ! ensure_portal_deps; then
+        hook_warn "Cannot run portal tests — deps not available"
+        return 1
+    fi
+    local exit_code=0
+    if echo "$CHANGED_FILES" | grep -qE '^lib/portal/'; then
+        hook_step "Testing lib/portal..."
+        if ! (cd "$REPO_ROOT/lib/portal" && pnpm test 2>&1); then
+            exit_code=1
+        fi
+    fi
+    if echo "$CHANGED_FILES" | grep -qE '^portal/'; then
+        hook_step "Testing portal app..."
+        if ! (cd "$REPO_ROOT/portal" && pnpm test 2>&1); then
+            exit_code=1
+        fi
+    fi
+    # If only JS deps changed, test both
+    if ! echo "$CHANGED_FILES" | grep -qE '^(portal|lib/portal)/'; then
+        hook_step "JS deps changed — testing portal + lib/portal..."
+        (cd "$REPO_ROOT/lib/portal" && pnpm test 2>&1) || exit_code=1
+        (cd "$REPO_ROOT/portal" && pnpm test 2>&1) || exit_code=1
+    fi
+    return $exit_code
+}
+
+check_portal_build() {
+    if ! ensure_portal_deps; then
+        hook_warn "Cannot run portal build — deps not available"
+        return 1
+    fi
+    hook_step "Running portal build (Next.js)..."
+    (cd "$REPO_ROOT/portal" && pnpm build 2>&1)
+}
+
+check_pnpm_lock() {
+    local changed_files=""
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_files=$(git diff --name-only "$BASE_BRANCH" -- 'pnpm-lock.yaml' '**/package.json' '**/package-lock.json' 2>/dev/null || true)
+    fi
+    if [ -z "${changed_files:-}" ]; then
+        hook_step "No JS dependency files changed"
+        return 0
+    fi
+    if ! command -v pnpm >/dev/null 2>&1; then
+        hook_warn "pnpm not found; skipping lockfile check"
+        return 0
+    fi
+    hook_step "Validating pnpm lockfile"
+    pnpm install --frozen-lockfile 2>&1
+}
+
+# =========================================================================
+# TERRAFORM CHECKS
+# =========================================================================
+check_terraform_fmt() {
+    local changed_files=""
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_files=$(git diff --name-only "$BASE_BRANCH" -- 'infra/terraform/**/*.tf' 2>/dev/null || true)
+    fi
+    if [ -z "${changed_files:-}" ]; then
+        hook_step "No Terraform files to format"
+        return 0
+    fi
+    if ! command -v terraform >/dev/null 2>&1; then
+        hook_fail "terraform not found — install Terraform to auto-format"
+        return 1
+    fi
+
+    local fmt_dirs
+    fmt_dirs=$(echo "$changed_files" | xargs -n1 dirname | sort -u | tr '\n' ' ')
+    hook_step "Formatting Terraform files..."
+    for dir in $fmt_dirs; do
+        [ -d "$dir" ] || continue
+        terraform fmt -recursive "$dir" >/dev/null 2>&1
+    done
+
+    if ! git diff --quiet -- $changed_files 2>/dev/null; then
+        # shellcheck disable=SC2086
+        git add $changed_files
+        git commit --amend --no-edit --no-verify
+        hook_pass "Auto-formatted Terraform files and amended commit"
+    fi
+    return 0
+}
+
+# =========================================================================
+# RUN CHECKS
+# =========================================================================
 if [ "${VE_HOOK_QUICK:-}" = "1" ]; then
-    TOTAL_CHECKS=2
-    run_check 1 "go vet" VE_HOOK_SKIP_VET check_vet || true
-    run_check 2 "Build binaries" VE_HOOK_SKIP_BUILD check_build || true
+    TOTAL_CHECKS=0
+    $RUN_GO_VET && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+    $RUN_GO_BUILD && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+    $RUN_GO_VET && { run_check "go vet" VE_HOOK_SKIP_VET check_vet || true; }
+    $RUN_GO_BUILD && { run_check "Build binaries" VE_HOOK_SKIP_BUILD check_build || true; }
+    [ "$TOTAL_CHECKS" -eq 0 ] && hook_pass "Quick mode: no relevant files changed"
 else
-    run_check 1 "go vet" VE_HOOK_SKIP_VET check_vet || true
-    run_check 2 "gofmt" VE_HOOK_SKIP_FMT check_gofmt || true
-    run_check 3 "prettier" VE_HOOK_SKIP_FMT check_prettier || true
-    run_check 4 "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true
-    run_check 5 "go mod vendor (sync)" VE_HOOK_SKIP_MOD check_mod_vendor || true
-    run_check 6 "golangci-lint" VE_HOOK_SKIP_LINT check_lint || true
-    run_check 7 "Build binaries" VE_HOOK_SKIP_BUILD check_build || true
-    run_check 8 "Unit tests" VE_HOOK_SKIP_TEST check_test || true
+    # === Go checks ===
+    $RUN_GO_VET     && { run_check "go vet" VE_HOOK_SKIP_VET check_vet || true; }
+    $RUN_GOFMT      && { run_check "gofmt" VE_HOOK_SKIP_FMT check_gofmt || true; }
+    $RUN_MOD_VENDOR  && { run_check "go mod vendor" VE_HOOK_SKIP_MOD check_mod_vendor || true; }
+    $RUN_GO_LINT    && { run_check "golangci-lint" VE_HOOK_SKIP_LINT check_lint || true; }
+    $RUN_GO_BUILD   && { run_check "Build binaries" VE_HOOK_SKIP_BUILD check_build || true; }
+    $RUN_GO_TEST    && { run_check "Go unit tests" VE_HOOK_SKIP_TEST check_test_go || true; }
+    # === Portal / Frontend checks ===
+    $RUN_PRETTIER       && { run_check "prettier (portal)" VE_HOOK_SKIP_FMT check_prettier || true; }
+    $RUN_PORTAL_LINT    && { run_check "Portal ESLint" VE_HOOK_SKIP_PORTAL check_portal_lint || true; }
+    $RUN_PORTAL_TYPECHECK && { run_check "Portal TypeScript" VE_HOOK_SKIP_PORTAL check_portal_typecheck || true; }
+    $RUN_PORTAL_TEST    && { run_check "Portal tests" VE_HOOK_SKIP_PORTAL check_portal_test || true; }
+    $RUN_PORTAL_BUILD   && { run_check "Portal build" VE_HOOK_SKIP_PORTAL check_portal_build || true; }
+    # === JS dependency checks ===
+    $RUN_PNPM_LOCK  && { run_check "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true; }
+    # === Terraform formatting ===
+    $RUN_TERRAFORM_FMT && { run_check "terraform fmt" VE_HOOK_SKIP_TF check_terraform_fmt || true; }
 fi
 
 # =========================================================================
@@ -441,25 +519,30 @@ fi
 TOTAL_ELAPSED=$(hook_time_elapsed "$TOTAL_START")
 echo ""
 
+TOTAL_RAN=$((PASSED + FAILED))
+if [ "$TOTAL_RAN" -eq 0 ] && [ "$SKIPPED" -eq 0 ]; then
+    hook_header "========================================="
+    hook_pass " No relevant checks for changed files (${TOTAL_ELAPSED}s)"
+    hook_header "========================================="
+    exit 0
+fi
+
 if [ "$FAILED" -gt 0 ]; then
     hook_header "========================================="
-    hook_fail " $FAILED of $((PASSED + FAILED)) checks FAILED (${TOTAL_ELAPSED}s)"
-    if [ "$SKIPPED" -gt 0 ]; then
-        hook_warn " $SKIPPED checks skipped"
-    fi
+    hook_fail " $FAILED of $TOTAL_RAN checks FAILED (${TOTAL_ELAPSED}s)"
+    [ "$SKIPPED" -gt 0 ] && hook_warn " $SKIPPED checks skipped"
     hook_header "========================================="
     echo ""
     hook_fail "Fix the errors above, then try again."
     hook_info "Bypass:       git push --no-verify"
     hook_info "Quick mode:   VE_HOOK_QUICK=1 git push"
     hook_info "Skip one:     VE_HOOK_SKIP_LINT=1 git push"
+    hook_info "Skip portal:  VE_HOOK_SKIP_PORTAL=1 git push"
     exit 1
 else
     hook_header "========================================="
     hook_pass " All $PASSED checks passed (${TOTAL_ELAPSED}s)"
-    if [ "$SKIPPED" -gt 0 ]; then
-        hook_warn " $SKIPPED checks skipped"
-    fi
+    [ "$SKIPPED" -gt 0 ] && hook_warn " $SKIPPED checks skipped"
     hook_header "========================================="
     exit 0
 fi

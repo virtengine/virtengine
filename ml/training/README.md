@@ -63,6 +63,12 @@ cd ml/training
 pip install -r requirements.txt
 ```
 
+For deterministic, pinned dependencies (recommended for validators), install:
+
+```bash
+pip install -r ../requirements-deterministic.txt
+```
+
 ## Usage
 
 ### Training from Command Line
@@ -82,6 +88,17 @@ python -m ml.training.train \
     --batch-size 32 \
     --learning-rate 0.001
 ```
+
+### Reproducible Training (Recommended)
+
+```bash
+python -m ml.training.run_training \
+    --config configs/trust_score_v1.yaml \
+    --output-dir ./models
+```
+
+This entrypoint configures deterministic execution (fixed seeds, CPU-only, and
+TensorFlow deterministic ops) before importing TensorFlow.
 
 ### Training from Python
 
@@ -179,9 +196,15 @@ exported_models/
     ├── variables/
     │   ├── variables.data-00000-of-00001
     │   └── variables.index
-    ├── metadata.json
-    └── model_hash.txt
+    ├── export_metadata.json
+    ├── model_frozen.pb
+    ├── manifest.json
+    └── metrics.json
 ```
+
+`model_frozen.pb` is a frozen graph used for deterministic hashing. The
+`manifest.json` and `metrics.json` files capture training configuration,
+determinism settings, and evaluation results for governance review.
 
 ### Go Integration
 

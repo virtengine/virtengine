@@ -6,6 +6,7 @@ Computes comprehensive metrics for model performance assessment.
 
 import logging
 import json
+import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
@@ -188,6 +189,47 @@ class ModelEvaluator:
         labels = np.array(labels).flatten()
         
         return self._compute_metrics(predictions, labels)
+
+    def benchmark_latency(
+        self,
+        model: TrustScoreModel,
+        input_dim: int,
+        batch_size: int = 1,
+        warmup_runs: int = 10,
+        timed_runs: int = 50,
+        seed: int = 42,
+    ) -> Dict[str, float]:
+        """
+        Benchmark inference latency for the model.
+        
+        Returns:
+            Dictionary with p50/p95/p99 latency in milliseconds.
+        """
+        if not TF_AVAILABLE:
+            return {}
+        
+        rng = np.random.RandomState(seed)
+        sample = rng.randn(batch_size, input_dim).astype(np.float32)
+        
+        # Warmup
+        for _ in range(warmup_runs):
+            model.predict(sample)
+        
+        # Timed runs
+        durations_ms = []
+        for _ in range(timed_runs):
+            start = time.perf_counter()
+            model.predict(sample)
+            durations_ms.append((time.perf_counter() - start) * 1000.0)
+        
+        if not durations_ms:
+            return {}
+        
+        return {
+            "p50": float(np.percentile(durations_ms, 50)),
+            "p95": float(np.percentile(durations_ms, 95)),
+            "p99": float(np.percentile(durations_ms, 99)),
+        }
     
     def _compute_metrics(
         self,

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -297,19 +298,29 @@ type InvoiceJSONDocument struct {
 
 // ComputeInvoiceHash computes a deterministic hash for an invoice
 func ComputeInvoiceHash(inv *Invoice) (string, error) {
-	// Create a canonical representation for hashing
+	if inv == nil {
+		return "", fmt.Errorf("invoice is nil")
+	}
+
+	lineItems := canonicalLineItems(inv.LineItems)
 	canonical := struct {
-		InvoiceID     string `json:"invoice_id"`
-		InvoiceNumber string `json:"invoice_number"`
-		EscrowID      string `json:"escrow_id"`
-		OrderID       string `json:"order_id"`
-		LeaseID       string `json:"lease_id"`
-		Provider      string `json:"provider"`
-		Customer      string `json:"customer"`
-		Status        string `json:"status"`
-		Currency      string `json:"currency"`
-		Total         string `json:"total"`
-		CreatedAt     int64  `json:"created_at"`
+		InvoiceID     string              `json:"invoice_id"`
+		InvoiceNumber string              `json:"invoice_number"`
+		EscrowID      string              `json:"escrow_id"`
+		OrderID       string              `json:"order_id"`
+		LeaseID       string              `json:"lease_id"`
+		Provider      string              `json:"provider"`
+		Customer      string              `json:"customer"`
+		Status        string              `json:"status"`
+		Currency      string              `json:"currency"`
+		BillingStart  int64               `json:"billing_start"`
+		BillingEnd    int64               `json:"billing_end"`
+		Subtotal      string              `json:"subtotal"`
+		DiscountTotal string              `json:"discount_total"`
+		TaxTotal      string              `json:"tax_total"`
+		Total         string              `json:"total"`
+		LineItems     []canonicalLineItem `json:"line_items"`
+		Metadata      []metadataPair      `json:"metadata"`
 	}{
 		InvoiceID:     inv.InvoiceID,
 		InvoiceNumber: inv.InvoiceNumber,
@@ -320,8 +331,14 @@ func ComputeInvoiceHash(inv *Invoice) (string, error) {
 		Customer:      inv.Customer,
 		Status:        inv.Status.String(),
 		Currency:      inv.Currency,
+		BillingStart:  inv.BillingPeriod.StartTime.Unix(),
+		BillingEnd:    inv.BillingPeriod.EndTime.Unix(),
+		Subtotal:      inv.Subtotal.String(),
+		DiscountTotal: inv.DiscountTotal.String(),
+		TaxTotal:      inv.TaxTotal.String(),
 		Total:         inv.Total.String(),
-		CreatedAt:     inv.CreatedAt.Unix(),
+		LineItems:     lineItems,
+		Metadata:      sortedMetadataPairs(inv.Metadata),
 	}
 
 	data, err := json.Marshal(canonical)
@@ -331,4 +348,46 @@ func ComputeInvoiceHash(inv *Invoice) (string, error) {
 
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:]), nil
+}
+
+type canonicalLineItem struct {
+	LineItemID     string         `json:"line_item_id"`
+	Description    string         `json:"description"`
+	UsageType      string         `json:"usage_type"`
+	Quantity       string         `json:"quantity"`
+	Unit           string         `json:"unit"`
+	UnitPrice      string         `json:"unit_price"`
+	Amount         string         `json:"amount"`
+	UsageRecordIDs []string       `json:"usage_record_ids"`
+	Metadata       []metadataPair `json:"metadata"`
+}
+
+func canonicalLineItems(items []LineItem) []canonicalLineItem {
+	if len(items) == 0 {
+		return nil
+	}
+
+	canonical := make([]canonicalLineItem, 0, len(items))
+	for _, item := range items {
+		canonical = append(canonical, canonicalLineItem{
+			LineItemID:     item.LineItemID,
+			Description:    item.Description,
+			UsageType:      item.UsageType.String(),
+			Quantity:       item.Quantity.String(),
+			Unit:           item.Unit,
+			UnitPrice:      item.UnitPrice.String(),
+			Amount:         item.Amount.String(),
+			UsageRecordIDs: append([]string(nil), item.UsageRecordIDs...),
+			Metadata:       sortedMetadataPairs(item.Metadata),
+		})
+	}
+
+	sort.SliceStable(canonical, func(i, j int) bool {
+		if canonical[i].LineItemID == canonical[j].LineItemID {
+			return canonical[i].Description < canonical[j].Description
+		}
+		return canonical[i].LineItemID < canonical[j].LineItemID
+	})
+
+	return canonical
 }

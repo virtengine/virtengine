@@ -469,6 +469,7 @@ func TestInvoiceGenerator_DeterministicInvoiceID(t *testing.T) {
 
 	now := time.Now().UTC()
 	blockHeight := int64(12345)
+	alternateHeight := int64(99999)
 
 	req := createTestRequest(now)
 
@@ -479,7 +480,7 @@ func TestInvoiceGenerator_DeterministicInvoiceID(t *testing.T) {
 	}
 
 	gen2 := NewInvoiceGenerator(config)
-	invoice2, err := gen2.GenerateInvoice(req, blockHeight, now)
+	invoice2, err := gen2.GenerateInvoice(req, alternateHeight, now.Add(2*time.Minute))
 	if err != nil {
 		t.Fatalf("GenerateInvoice failed: %v", err)
 	}

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useWallet } from '@/lib/portal-adapter';
+import { useWallet, useIdentity } from '@/lib/portal-adapter';
+import { IdentityRequirements } from '@/components/identity';
 import { formatCurrency, formatTokenAmount, generateId, truncateAddress } from '@/lib/utils';
+import { txLink } from '@/lib/explorer';
 import { formatPriceUSD, useOfferingStore } from '@/stores/offeringStore';
 
 const SIGNING_DELAY_MS = 1200;
@@ -36,6 +38,8 @@ export default function OrderCreateClient() {
 
   const { status, accounts, activeAccountIndex } = useWallet();
   const account = accounts[activeAccountIndex];
+  const { actions: identityActions } = useIdentity();
+  const gatingError = identityActions.checkRequirements('place_order');
 
   const {
     selectedOffering: offering,
@@ -222,7 +226,14 @@ export default function OrderCreateClient() {
             </div>
           </div>
 
-          {step === 'configure' && (
+          {step === 'configure' && gatingError && (
+            <IdentityRequirements
+              action="place_order"
+              onStartVerification={() => router.push('/verify')}
+            />
+          )}
+
+          {step === 'configure' && !gatingError && (
             <>
               <div className="rounded-lg border border-border bg-card p-6">
                 <h2 className="text-lg font-semibold">1. Order Configuration</h2>
@@ -469,7 +480,19 @@ export default function OrderCreateClient() {
                 </div>
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Transaction hash</p>
-                  <p className="mt-1 font-mono text-sm">{txHash}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="font-mono text-sm">{txHash}</p>
+                    {txHash && (
+                      <a
+                        className="text-xs font-medium text-primary hover:underline"
+                        href={txLink(txHash)}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        Explorer
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Escrow deposit</p>

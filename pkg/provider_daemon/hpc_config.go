@@ -59,6 +59,12 @@ type HPCConfig struct {
 	// OOD configuration (used when SchedulerType is "ood")
 	OOD ood_adapter.OODConfig `json:"ood" yaml:"ood"`
 
+	// SLURM-on-Kubernetes bootstrap configuration
+	SlurmK8s HPCSlurmK8sConfig `json:"slurm_k8s" yaml:"slurm_k8s"`
+
+	// Node aggregator configuration
+	NodeAggregator HPCNodeAggregatorConfig `json:"node_aggregator" yaml:"node_aggregator"`
+
 	// JobService configuration
 	JobService HPCJobServiceConfig `json:"job_service" yaml:"job_service"`
 
@@ -177,11 +183,13 @@ type HPCRoutingConfig struct {
 // DefaultHPCConfig returns the default HPC configuration
 func DefaultHPCConfig() HPCConfig {
 	return HPCConfig{
-		Enabled:       false,
-		SchedulerType: HPCSchedulerTypeSLURM,
-		SLURM:         slurm_adapter.DefaultSLURMConfig(),
-		MOAB:          moab_adapter.DefaultMOABConfig(),
-		OOD:           ood_adapter.DefaultOODConfig(),
+		Enabled:        false,
+		SchedulerType:  HPCSchedulerTypeSLURM,
+		SLURM:          slurm_adapter.DefaultSLURMConfig(),
+		MOAB:           moab_adapter.DefaultMOABConfig(),
+		OOD:            ood_adapter.DefaultOODConfig(),
+		SlurmK8s:       DefaultHPCSlurmK8sConfig(),
+		NodeAggregator: DefaultHPCNodeAggregatorConfig(),
 		JobService: HPCJobServiceConfig{
 			JobPollInterval:     15 * time.Second,
 			JobTimeoutDefault:   24 * time.Hour,
@@ -258,6 +266,14 @@ func (c *HPCConfig) Validate() error {
 
 	if c.Retry.BackoffMultiplier < 1.0 {
 		return errors.New("backoff_multiplier must be at least 1.0")
+	}
+
+	if err := c.NodeAggregator.Validate(); err != nil {
+		return err
+	}
+
+	if err := c.SlurmK8s.Validate(); err != nil {
+		return err
 	}
 
 	return nil

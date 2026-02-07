@@ -4,7 +4,9 @@ package billing
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -207,11 +209,11 @@ func (g *InvoiceGenerator) GenerateInvoice(
 	}
 
 	// Generate invoice ID deterministically
-	invoiceID := g.generateInvoiceID(req, blockHeight)
+	invoiceID := g.generateInvoiceID(req)
 
 	// Generate invoice number
 	g.sequence++
-	invoiceNumber := NextInvoiceNumber(g.sequence-1, g.config.InvoiceNumberPrefix)
+	invoiceNumber := InvoiceNumberFromID(invoiceID, g.config.InvoiceNumberPrefix)
 
 	// Calculate due date
 	dueDate := now.Add(time.Duration(g.config.DefaultPaymentTermDays) * 24 * time.Hour)
@@ -232,9 +234,10 @@ func (g *InvoiceGenerator) GenerateInvoice(
 		now,
 	)
 
-	// Add line items from usage inputs
-	for i, usage := range req.UsageInputs {
-		lineItem := g.createLineItem(usage, i, req.Currency)
+	// Add line items from usage inputs (deterministic ordering)
+	normalizedInputs := normalizeUsageInputs(req.UsageInputs)
+	for _, usage := range normalizedInputs {
+		lineItem := g.createLineItem(usage, req.Currency)
 		invoice.AddLineItem(lineItem)
 	}
 
@@ -264,30 +267,66 @@ func (g *InvoiceGenerator) GenerateInvoice(
 }
 
 // generateInvoiceID generates a deterministic invoice ID
-func (g *InvoiceGenerator) generateInvoiceID(req InvoiceGenerationRequest, blockHeight int64) string {
-	// Create deterministic input
-	input := fmt.Sprintf(
-		"%s:%s:%s:%s:%d:%d",
-		req.EscrowID,
-		req.OrderID,
-		req.Provider,
-		req.Customer,
-		req.BillingPeriod.StartTime.Unix(),
-		blockHeight,
-	)
+func (g *InvoiceGenerator) generateInvoiceID(req InvoiceGenerationRequest) string {
+	normalizedInputs := normalizeUsageInputs(req.UsageInputs)
+	canonicalInputs := make([]canonicalUsageInput, 0, len(normalizedInputs))
+	for _, input := range normalizedInputs {
+		canonicalInputs = append(canonicalInputs, canonicalUsageInput{
+			UsageRecordID: input.UsageRecordID,
+			UsageType:     input.UsageType.String(),
+			Quantity:      input.Quantity.String(),
+			Unit:          input.Unit,
+			UnitPrice:     input.UnitPrice.String(),
+			Description:   input.Description,
+			PeriodStart:   input.PeriodStart.Unix(),
+			PeriodEnd:     input.PeriodEnd.Unix(),
+			Metadata:      sortedMetadataPairs(input.Metadata),
+		})
+	}
 
-	hash := sha256.Sum256([]byte(input))
+	canonical := struct {
+		EscrowID     string                `json:"escrow_id"`
+		OrderID      string                `json:"order_id"`
+		LeaseID      string                `json:"lease_id"`
+		Provider     string                `json:"provider"`
+		Customer     string                `json:"customer"`
+		Currency     string                `json:"currency"`
+		BillingStart int64                 `json:"billing_start"`
+		BillingEnd   int64                 `json:"billing_end"`
+		BillingType  string                `json:"billing_type"`
+		UsageInputs  []canonicalUsageInput `json:"usage_inputs"`
+		Metadata     []metadataPair        `json:"metadata"`
+	}{
+		EscrowID:     req.EscrowID,
+		OrderID:      req.OrderID,
+		LeaseID:      req.LeaseID,
+		Provider:     req.Provider,
+		Customer:     req.Customer,
+		Currency:     req.Currency,
+		BillingStart: req.BillingPeriod.StartTime.Unix(),
+		BillingEnd:   req.BillingPeriod.EndTime.Unix(),
+		BillingType:  req.BillingPeriod.PeriodType.String(),
+		UsageInputs:  canonicalInputs,
+		Metadata:     sortedMetadataPairs(req.Metadata),
+	}
+
+	bytes, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+
+	hash := sha256.Sum256(bytes)
 	return hex.EncodeToString(hash[:16]) // Use first 16 bytes for ID
 }
 
 // createLineItem creates a line item from usage input
-func (g *InvoiceGenerator) createLineItem(usage UsageInput, index int, currency string) LineItem {
+func (g *InvoiceGenerator) createLineItem(usage UsageInput, currency string) LineItem {
 	// Calculate line item amount with deterministic rounding
 	rawAmount := usage.Quantity.Mul(usage.UnitPrice.Amount)
 	roundedAmount := applyRounding(rawAmount, g.config.RoundingMode)
 
 	return LineItem{
-		LineItemID:     fmt.Sprintf("li-%d", index+1),
+		LineItemID:     lineItemIDFromUsage(usage),
 		Description:    usage.Description,
 		UsageType:      usage.UsageType,
 		Quantity:       usage.Quantity,
@@ -297,6 +336,99 @@ func (g *InvoiceGenerator) createLineItem(usage UsageInput, index int, currency 
 		UsageRecordIDs: []string{usage.UsageRecordID},
 		Metadata:       usage.Metadata,
 	}
+}
+
+type canonicalUsageInput struct {
+	UsageRecordID string         `json:"usage_record_id"`
+	UsageType     string         `json:"usage_type"`
+	Quantity      string         `json:"quantity"`
+	Unit          string         `json:"unit"`
+	UnitPrice     string         `json:"unit_price"`
+	Description   string         `json:"description"`
+	PeriodStart   int64          `json:"period_start"`
+	PeriodEnd     int64          `json:"period_end"`
+	Metadata      []metadataPair `json:"metadata"`
+}
+
+type metadataPair struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func normalizeUsageInputs(inputs []UsageInput) []UsageInput {
+	if len(inputs) == 0 {
+		return inputs
+	}
+
+	normalized := make([]UsageInput, 0, len(inputs))
+	normalized = append(normalized, inputs...)
+
+	sort.SliceStable(normalized, func(i, j int) bool {
+		return usageInputSortKey(normalized[i]) < usageInputSortKey(normalized[j])
+	})
+
+	return normalized
+}
+
+func usageInputSortKey(input UsageInput) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s",
+		input.UsageRecordID,
+		input.UsageType.String(),
+		input.Unit,
+		input.UnitPrice.String(),
+		input.Quantity.String(),
+		input.PeriodStart.UTC().Format(time.RFC3339Nano),
+		input.PeriodEnd.UTC().Format(time.RFC3339Nano),
+	)
+}
+
+func sortedMetadataPairs(metadata map[string]string) []metadataPair {
+	if len(metadata) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	pairs := make([]metadataPair, 0, len(keys))
+	for _, key := range keys {
+		pairs = append(pairs, metadataPair{Key: key, Value: metadata[key]})
+	}
+
+	return pairs
+}
+
+func lineItemIDFromUsage(usage UsageInput) string {
+	canonical := struct {
+		UsageRecordID string         `json:"usage_record_id"`
+		UsageType     string         `json:"usage_type"`
+		Quantity      string         `json:"quantity"`
+		Unit          string         `json:"unit"`
+		UnitPrice     string         `json:"unit_price"`
+		PeriodStart   int64          `json:"period_start"`
+		PeriodEnd     int64          `json:"period_end"`
+		Metadata      []metadataPair `json:"metadata"`
+	}{
+		UsageRecordID: usage.UsageRecordID,
+		UsageType:     usage.UsageType.String(),
+		Quantity:      usage.Quantity.String(),
+		Unit:          usage.Unit,
+		UnitPrice:     usage.UnitPrice.String(),
+		PeriodStart:   usage.PeriodStart.Unix(),
+		PeriodEnd:     usage.PeriodEnd.Unix(),
+		Metadata:      sortedMetadataPairs(usage.Metadata),
+	}
+
+	bytes, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+
+	hash := sha256.Sum256(bytes)
+	return fmt.Sprintf("li-%s", hex.EncodeToString(hash[:6]))
 }
 
 // applyDiscounts applies discount policies to the invoice

@@ -2,10 +2,13 @@ package provider_daemon
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+
+	"github.com/virtengine/virtengine/pkg/usage"
 )
 
 func TestSettlementPipeline_AddPendingUsage(t *testing.T) {
@@ -160,7 +163,7 @@ func TestSettlementPipeline_ProcessUsageToLineItems(t *testing.T) {
 	// Check that line items have correct resource types
 	resourceTypes := make(map[string]bool)
 	for _, item := range lineItems {
-		resourceTypes[item.ResourceType] = true
+		resourceTypes[string(item.ResourceType)] = true
 		if item.TotalCost.IsZero() {
 			t.Errorf("line item %s has zero cost", item.ResourceType)
 		}
@@ -246,29 +249,29 @@ func TestSettlementPipeline_DetectAnomalies(t *testing.T) {
 	}
 }
 
-func TestBillableLineItem_Hash(t *testing.T) {
-	item1 := &BillableLineItem{
+func TestUsageLineItem_Hash(t *testing.T) {
+	item1 := &usage.LineItem{
 		OrderID:      "order-1",
 		LeaseID:      "lease-1",
-		ResourceType: "cpu",
+		ResourceType: usage.ResourceCPU,
 		Quantity:     sdkmath.LegacyNewDec(100),
 		PeriodStart:  time.Unix(1000, 0),
 		PeriodEnd:    time.Unix(2000, 0),
 	}
 
-	item2 := &BillableLineItem{
+	item2 := &usage.LineItem{
 		OrderID:      "order-1",
 		LeaseID:      "lease-1",
-		ResourceType: "cpu",
+		ResourceType: usage.ResourceCPU,
 		Quantity:     sdkmath.LegacyNewDec(100),
 		PeriodStart:  time.Unix(1000, 0),
 		PeriodEnd:    time.Unix(2000, 0),
 	}
 
-	item3 := &BillableLineItem{
+	item3 := &usage.LineItem{
 		OrderID:      "order-2", // Different order
 		LeaseID:      "lease-1",
-		ResourceType: "cpu",
+		ResourceType: usage.ResourceCPU,
 		Quantity:     sdkmath.LegacyNewDec(100),
 		PeriodStart:  time.Unix(1000, 0),
 		PeriodEnd:    time.Unix(2000, 0),
@@ -424,6 +427,31 @@ func (m *mockChainSubmitter) SubmitSettlementRequest(ctx context.Context, orderI
 	return nil
 }
 
+type retryChainSubmitter struct {
+	failUsageAttempts      int
+	failSettlementAttempts int
+	usageCalls             int
+	settlementCalls        int
+	lastSettlementOrder    string
+}
+
+func (r *retryChainSubmitter) SubmitUsageReport(ctx context.Context, report *ChainUsageReport) error {
+	r.usageCalls++
+	if r.usageCalls <= r.failUsageAttempts {
+		return fmt.Errorf("temporary usage failure")
+	}
+	return nil
+}
+
+func (r *retryChainSubmitter) SubmitSettlementRequest(ctx context.Context, orderID string, usageRecordIDs []string, isFinal bool) error {
+	r.settlementCalls++
+	r.lastSettlementOrder = orderID
+	if r.settlementCalls <= r.failSettlementAttempts {
+		return fmt.Errorf("temporary settlement failure")
+	}
+	return nil
+}
+
 func TestSettlementPipeline_SubmitUsageToChain(t *testing.T) {
 	cfg := DefaultSettlementConfig()
 	cfg.ProviderAddress = "provider123"
@@ -461,6 +489,108 @@ func TestSettlementPipeline_SubmitUsageToChain(t *testing.T) {
 	}
 	if submitted.UsageUnits == 0 {
 		t.Error("expected non-zero usage units")
+	}
+}
+
+func TestSettlementPipeline_SubmitUsageToChain_Retry(t *testing.T) {
+	cfg := DefaultSettlementConfig()
+	cfg.RetryAttempts = 3
+	cfg.RetryBackoff = time.Millisecond
+
+	mockSubmitter := &retryChainSubmitter{failUsageAttempts: 2}
+	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+
+	now := time.Now()
+	record := &UsageRecord{
+		ID:           "retry-record-1",
+		DeploymentID: "order-1",
+		LeaseID:      "lease-1",
+		StartTime:    now.Add(-time.Hour),
+		EndTime:      now,
+		Metrics: ResourceMetrics{
+			CPUMilliSeconds: 3600000,
+		},
+		PricingInputs: PricingInputs{
+			AgreedCPURate: "0.01",
+		},
+	}
+
+	if err := pipeline.SubmitUsageToChain(context.Background(), record); err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	if mockSubmitter.usageCalls != 3 {
+		t.Errorf("expected 3 attempts, got %d", mockSubmitter.usageCalls)
+	}
+}
+
+func TestSettlementPipeline_ProcessSettlements_PartialFailures(t *testing.T) {
+	cfg := DefaultSettlementConfig()
+	cfg.RetryAttempts = 1
+
+	mockSubmitter := &retryChainSubmitter{failSettlementAttempts: 1}
+	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+
+	now := time.Now()
+	pipeline.AddPendingUsage(&UsageRecord{ID: "rec-1", DeploymentID: "order-a", LeaseID: "lease-a", StartTime: now.Add(-time.Hour), EndTime: now})
+	pipeline.AddPendingUsage(&UsageRecord{ID: "rec-2", DeploymentID: "order-b", LeaseID: "lease-b", StartTime: now.Add(-time.Hour), EndTime: now})
+
+	pipeline.processSettlements(context.Background())
+
+	if pipeline.GetPendingCount() != 1 {
+		t.Errorf("expected 1 pending record after partial failure, got %d", pipeline.GetPendingCount())
+	}
+}
+
+func TestSettlementPipeline_AddPendingUsage_DuplicateIngestion(t *testing.T) {
+	cfg := DefaultSettlementConfig()
+	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), nil)
+
+	record := &UsageRecord{
+		ID:           "dup-record-1",
+		DeploymentID: "order-1",
+		LeaseID:      "lease-1",
+		Metrics: ResourceMetrics{
+			CPUMilliSeconds: 3600000,
+		},
+	}
+
+	pipeline.AddPendingUsage(record)
+	pipeline.AddPendingUsage(record)
+
+	if pipeline.GetPendingCount() != 1 {
+		t.Errorf("expected 1 pending record after duplicate ingestion, got %d", pipeline.GetPendingCount())
+	}
+}
+
+func TestSettlementPipeline_AddPendingUsage_Conflict(t *testing.T) {
+	cfg := DefaultSettlementConfig()
+	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), nil)
+
+	record1 := &UsageRecord{
+		ID:           "dup-record-2",
+		DeploymentID: "order-1",
+		LeaseID:      "lease-1",
+		Metrics: ResourceMetrics{
+			CPUMilliSeconds: 3600000,
+		},
+	}
+
+	record2 := &UsageRecord{
+		ID:           "dup-record-2",
+		DeploymentID: "order-1",
+		LeaseID:      "lease-1",
+		Metrics: ResourceMetrics{
+			CPUMilliSeconds: 7200000,
+		},
+	}
+
+	pipeline.AddPendingUsage(record1)
+	pipeline.AddPendingUsage(record2)
+
+	anomalies := pipeline.GetUnacknowledgedAnomalies()
+	if len(anomalies) == 0 {
+		t.Error("expected anomaly for duplicate conflict")
 	}
 }
 

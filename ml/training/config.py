@@ -256,6 +256,8 @@ class ExportConfig:
     # SavedModel settings
     include_optimizer: bool = False
     signature_name: str = "serving_default"
+    export_frozen_graph: bool = True
+    frozen_graph_filename: str = "model_frozen.pb"
     
     # Input/output specifications for Go inference
     input_name: str = "features"
