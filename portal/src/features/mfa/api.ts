@@ -15,7 +15,13 @@ import type {
   TrustedBrowser,
   SensitiveTransactionType,
 } from '@/lib/portal-adapter';
-import type { TOTPEnrollmentData, WebAuthnEnrollmentData, BackupCodesData } from './types';
+import type {
+  TOTPEnrollmentData,
+  WebAuthnEnrollmentData,
+  BackupCodesData,
+  SMSEnrollmentData,
+  EmailEnrollmentData,
+} from './types';
 
 const MFA_BASE = '/api/mfa';
 
@@ -54,6 +60,46 @@ export async function verifyTOTPEnrollment(code: string, name?: string): Promise
 /** Start WebAuthn enrollment - returns credential creation options */
 export async function startWebAuthnEnrollment(): Promise<WebAuthnEnrollmentData> {
   return apiClient.post<WebAuthnEnrollmentData>(`${MFA_BASE}/enroll/webauthn`);
+}
+
+/** Start SMS enrollment */
+export async function startSMSEnrollment(phone: string): Promise<SMSEnrollmentData> {
+  return apiClient.post<SMSEnrollmentData>(`${MFA_BASE}/enroll/sms`, {
+    phone,
+  });
+}
+
+/** Verify SMS enrollment with a code */
+export async function verifySMSEnrollment(
+  challengeId: string,
+  code: string,
+  name?: string
+): Promise<MFAFactor> {
+  return apiClient.post<MFAFactor>(`${MFA_BASE}/enroll/sms/verify`, {
+    challengeId,
+    code,
+    name,
+  });
+}
+
+/** Start email enrollment */
+export async function startEmailEnrollment(email: string): Promise<EmailEnrollmentData> {
+  return apiClient.post<EmailEnrollmentData>(`${MFA_BASE}/enroll/email`, {
+    email,
+  });
+}
+
+/** Verify email enrollment with a code */
+export async function verifyEmailEnrollment(
+  challengeId: string,
+  code: string,
+  name?: string
+): Promise<MFAFactor> {
+  return apiClient.post<MFAFactor>(`${MFA_BASE}/enroll/email/verify`, {
+    challengeId,
+    code,
+    name,
+  });
 }
 
 /** Complete WebAuthn enrollment with the attestation result */

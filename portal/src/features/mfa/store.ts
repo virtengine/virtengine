@@ -13,7 +13,13 @@ import type {
   MFAAuditEntry,
   TrustedBrowser,
 } from '@/lib/portal-adapter';
-import type { TOTPEnrollmentData, WebAuthnEnrollmentData, BackupCodesData } from './types';
+import type {
+  TOTPEnrollmentData,
+  WebAuthnEnrollmentData,
+  BackupCodesData,
+  SMSEnrollmentData,
+  EmailEnrollmentData,
+} from './types';
 import * as mfaApi from './api';
 
 export interface MFAStoreState {
@@ -35,6 +41,10 @@ export interface MFAStoreState {
   totpEnrollment: TOTPEnrollmentData | null;
   /** In-flight WebAuthn enrollment data */
   webAuthnEnrollment: WebAuthnEnrollmentData | null;
+  /** In-flight SMS enrollment data */
+  smsEnrollment: SMSEnrollmentData | null;
+  /** In-flight email enrollment data */
+  emailEnrollment: EmailEnrollmentData | null;
   /** Generated backup codes (shown once) */
   backupCodes: BackupCodesData | null;
   /** General error message */
@@ -57,6 +67,14 @@ export interface MFAStoreActions {
     credential: PublicKeyCredential,
     name?: string
   ) => Promise<MFAFactor>;
+  /** Start SMS enrollment */
+  startSMSEnrollment: (phone: string) => Promise<void>;
+  /** Verify SMS enrollment */
+  verifySMSEnrollment: (code: string, name?: string) => Promise<MFAFactor>;
+  /** Start email enrollment */
+  startEmailEnrollment: (email: string) => Promise<void>;
+  /** Verify email enrollment */
+  verifyEmailEnrollment: (code: string, name?: string) => Promise<MFAFactor>;
   /** Generate backup codes */
   generateBackupCodes: () => Promise<void>;
   /** Remove a factor */
@@ -71,10 +89,14 @@ export interface MFAStoreActions {
   ) => Promise<MFAChallenge>;
   /** Verify an MFA challenge with code */
   verifyChallenge: (factorId: string, code: string) => Promise<boolean>;
+  /** Verify a WebAuthn MFA challenge */
+  verifyWebAuthnChallenge: (factorId: string, credential: PublicKeyCredential) => Promise<boolean>;
   /** Revoke a trusted browser */
   revokeTrustedBrowser: (browserId: string) => Promise<void>;
   /** Clear enrollment state */
   clearEnrollment: () => void;
+  /** Clear active challenge */
+  clearChallenge: () => void;
   /** Clear backup codes from memory */
   clearBackupCodes: () => void;
   /** Clear error */
@@ -93,6 +115,8 @@ const initialState: MFAStoreState = {
   activeChallenge: null,
   totpEnrollment: null,
   webAuthnEnrollment: null,
+  smsEnrollment: null,
+  emailEnrollment: null,
   backupCodes: null,
   error: null,
   isMutating: false,
@@ -217,6 +241,80 @@ export const useMFAStore = create<MFAStoreState & MFAStoreActions>((set, get) =>
     }
   },
 
+  startSMSEnrollment: async (phone) => {
+    set({ isMutating: true, error: null, smsEnrollment: null });
+    try {
+      const data = await mfaApi.startSMSEnrollment(phone);
+      set({ isMutating: false, smsEnrollment: data });
+    } catch (err) {
+      set({
+        isMutating: false,
+        error: err instanceof Error ? err.message : 'Failed to start SMS enrollment',
+      });
+      throw err;
+    }
+  },
+
+  verifySMSEnrollment: async (code, name) => {
+    const enrollment = get().smsEnrollment;
+    if (!enrollment) throw new Error('No SMS enrollment in progress');
+
+    set({ isMutating: true, error: null });
+    try {
+      const factor = await mfaApi.verifySMSEnrollment(enrollment.challengeId, code, name);
+      set((s) => ({
+        isMutating: false,
+        smsEnrollment: null,
+        factors: [...s.factors, factor],
+        isEnabled: true,
+      }));
+      return factor;
+    } catch (err) {
+      set({
+        isMutating: false,
+        error: err instanceof Error ? err.message : 'SMS verification failed',
+      });
+      throw err;
+    }
+  },
+
+  startEmailEnrollment: async (email) => {
+    set({ isMutating: true, error: null, emailEnrollment: null });
+    try {
+      const data = await mfaApi.startEmailEnrollment(email);
+      set({ isMutating: false, emailEnrollment: data });
+    } catch (err) {
+      set({
+        isMutating: false,
+        error: err instanceof Error ? err.message : 'Failed to start email enrollment',
+      });
+      throw err;
+    }
+  },
+
+  verifyEmailEnrollment: async (code, name) => {
+    const enrollment = get().emailEnrollment;
+    if (!enrollment) throw new Error('No email enrollment in progress');
+
+    set({ isMutating: true, error: null });
+    try {
+      const factor = await mfaApi.verifyEmailEnrollment(enrollment.challengeId, code, name);
+      set((s) => ({
+        isMutating: false,
+        emailEnrollment: null,
+        factors: [...s.factors, factor],
+        isEnabled: true,
+      }));
+      return factor;
+    } catch (err) {
+      set({
+        isMutating: false,
+        error: err instanceof Error ? err.message : 'Email verification failed',
+      });
+      throw err;
+    }
+  },
+
   generateBackupCodes: async () => {
     set({ isMutating: true, error: null, backupCodes: null });
     try {
@@ -328,6 +426,38 @@ export const useMFAStore = create<MFAStoreState & MFAStoreActions>((set, get) =>
     }
   },
 
+  verifyWebAuthnChallenge: async (factorId, credential) => {
+    const challenge = get().activeChallenge;
+    if (!challenge) throw new Error('No active challenge');
+
+    set({ isMutating: true, error: null });
+    try {
+      const assertionResponse = credential.response as AuthenticatorAssertionResponse;
+      const result = await mfaApi.verifyWebAuthnChallenge(challenge.id, factorId, {
+        id: credential.id,
+        rawId: arrayBufferToBase64(credential.rawId),
+        type: credential.type,
+        response: {
+          authenticatorData: arrayBufferToBase64(assertionResponse.authenticatorData),
+          clientDataJSON: arrayBufferToBase64(assertionResponse.clientDataJSON),
+          signature: arrayBufferToBase64(assertionResponse.signature),
+        },
+      });
+      if (result.verified) {
+        set({ isMutating: false, activeChallenge: null });
+      } else {
+        set({ isMutating: false });
+      }
+      return result.verified;
+    } catch (err) {
+      set({
+        isMutating: false,
+        error: err instanceof Error ? err.message : 'Verification failed',
+      });
+      throw err;
+    }
+  },
+
   revokeTrustedBrowser: async (browserId) => {
     set({ isMutating: true, error: null });
     try {
@@ -346,7 +476,17 @@ export const useMFAStore = create<MFAStoreState & MFAStoreActions>((set, get) =>
   },
 
   clearEnrollment: () => {
-    set({ totpEnrollment: null, webAuthnEnrollment: null, error: null });
+    set({
+      totpEnrollment: null,
+      webAuthnEnrollment: null,
+      smsEnrollment: null,
+      emailEnrollment: null,
+      error: null,
+    });
+  },
+
+  clearChallenge: () => {
+    set({ activeChallenge: null });
   },
 
   clearBackupCodes: () => {

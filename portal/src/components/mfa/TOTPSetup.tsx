@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMFAStore } from '@/features/mfa';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -49,11 +49,11 @@ export function TOTPSetup({ onComplete, onCancel, className }: TOTPSetupProps) {
   }, [startTOTPEnrollment, clearError]);
 
   // Start enrollment automatically when component is first used
-  useState(() => {
+  useEffect(() => {
     if (!totpEnrollment) {
       void handleStart();
     }
-  });
+  }, [totpEnrollment, handleStart]);
 
   const handleCodeChange = (value: string) => {
     // Only allow digits, max 6
