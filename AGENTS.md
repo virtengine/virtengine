@@ -2,6 +2,7 @@
 
 ## CRITICAL
 
+{READ THE FOLLOWING}
 Always work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
 
 ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task is fully completed and ready for merge. This is non negotiable.
@@ -10,6 +11,7 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
+If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
 You might notice that your task instructions might have already been implemented by another agent previously - if this is the case, your goal switches to analyzing if the previous agent has completed the task END TO END sufficiently - and if not, fix any issues or problems the previous agent might have missed.
 
 ### PR Creation & Merge (vibe-kanban automation)
@@ -17,11 +19,14 @@ You might notice that your task instructions might have already been implemented
 If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), you are responsible for **creating the PR** after your push. The **orchestrator handles merges** when CI passes. In this case:
 
 - Focus on code quality, tests, and a clean commit
-- Run `gh pr create` after your push to open the PR
+- After committing, sometimes a precommit will automatically trigger formatting changes (prettier, lint, etc) - please add these files to a secondary commit.
+- Run `gh pr create` after your push to open the PR (do not bypass prepush hooks, if the issue is caused by an upstream branch - fix it)
 - Ensure you consistently merge upstream changes before any git push, and fix conflicts if they exist
 - Do NOT manually run `gh pr merge` (orchestrator merges after CI)
 
-If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you are responsible for creating the PR and monitoring CI/CD yourself — use `gh` CLI to create PRs and merge after CI passes.
+If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
+
+If you are running **inside** vibe-kanban, and your prompt does not contain enough detail - check if the task exists already in \_docs/ralph/tasks folder
 
 You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages (running test on all packages could need more than 20minute timeout, only run tests on modules you actually changed instead), etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks.
 
@@ -29,6 +34,17 @@ You should have all commands as needed available in shell, for example go, gh, p
 
 - **Codex agents:** See `.codex/instructions.md` for Codex-specific tooling, sandbox constraints, and workflow.
 - **Copilot agents:** See `.github/copilot-instructions.md` for VS Code integration, MCP servers, and module patterns.
+
+## MANDATORY Pre-Push Checklist
+
+**Every agent MUST complete the checklist in [.github/AGENT_PREFLIGHT.md](.github/AGENT_PREFLIGHT.md) before committing and pushing.**
+
+Failure to follow this checklist is the #1 cause of failed tasks. The pre-push hooks WILL reject your push if these steps are skipped.
+
+You can also run the automated pre-flight script before pushing:
+
+- **Linux/macOS/WSL:** `./scripts/agent-preflight.sh`
+- **Windows (PowerShell):** `pwsh scripts/agent-preflight.ps1`
 
 ## Pre-commit automation (do this every time)
 
