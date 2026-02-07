@@ -17,6 +17,7 @@ import {
   startTelegramBot,
   stopTelegramBot,
   injectMonitorFunctions,
+  notify,
 } from "./telegram-bot.mjs";
 import {
   execPrimaryPrompt,
@@ -2992,30 +2993,51 @@ async function sendTelegramMessage(text, options = {}) {
   // Always record to history ring buffer (even deduped messages are useful context)
   pushTelegramHistory(String(text || ""));
 
-  const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
-  const payload = {
-    chat_id: targetChatId,
-    text,
-  };
-  if (options.parseMode) {
-    payload.parse_mode = options.parseMode;
+  // Determine priority based on message content
+  const textLower = String(text || "").toLowerCase();
+  let priority = 4; // default: info
+  let category = "general";
+
+  // Priority 1: Critical/Fatal
+  if (textLower.includes("fatal") || textLower.includes("critical") || textLower.includes("🔥")) {
+    priority = 1;
+    category = "critical";
   }
-  if (options.disablePreview) {
-    payload.disable_web_page_preview = true;
+  // Priority 2: Errors
+  else if (
+    textLower.includes("error") ||
+    textLower.includes("failed") ||
+    textLower.includes("❌") ||
+    textLower.includes("auto-fix gave up")
+  ) {
+    priority = 2;
+    category = "error";
   }
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[monitor] telegram send failed: ${res.status} ${body}`);
+  // Priority 3: Warnings
+  else if (textLower.includes("warning") || textLower.includes("⚠️")) {
+    priority = 3;
+    category = "warning";
+  }
+  // Priority 4: Info (default)
+  else {
+    // Categorize info messages
+    if (textLower.includes("pr") || textLower.includes("pull request")) {
+      category = "pr";
+    } else if (textLower.includes("task") || textLower.includes("completed")) {
+      category = "task";
+    } else if (textLower.includes("codex") || textLower.includes("analysis")) {
+      category = "analysis";
+    } else if (textLower.includes("auto-created") || textLower.includes("merged")) {
+      category = "git";
     }
-  } catch (err) {
-    console.warn(`[monitor] telegram send failed: ${err.message || err}`);
   }
+
+  // Route through batching system
+  return notify(text, priority, {
+    category,
+    silent: options.silent,
+    data: { parseMode: options.parseMode, chatId: targetChatId },
+  });
 }
 
 function enqueueTelegramCommand(handler) {
