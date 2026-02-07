@@ -67,6 +67,16 @@ const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
 );
+const plannerPerCapitaThreshold = Number(
+  process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
+);
+const plannerIdleSlotThreshold = Number(
+  process.env.TASK_PLANNER_IDLE_SLOT_THRESHOLD || "1",
+);
+const plannerDedupHours = Number(process.env.TASK_PLANNER_DEDUP_HOURS || "24");
+const plannerDedupMs = Number.isFinite(plannerDedupHours)
+  ? plannerDedupHours * 60 * 60 * 1000
+  : 24 * 60 * 60 * 1000;
 
 let CodexClient = null;
 let codexDisabledReason = "";
@@ -113,7 +123,9 @@ const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
+let idleAgentsNotified = false;
 let plannerTriggered = false;
+const plannerStatePath = resolve(logDir, "task-planner-state.json");
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -217,6 +229,40 @@ function getChangeSummary(repoRootPath, files) {
   } catch {
     return files.join(", ");
   }
+}
+
+function getMaxParallelFromArgs(argsList) {
+  if (!Array.isArray(argsList)) {
+    return null;
+  }
+  for (let i = 0; i < argsList.length; i += 1) {
+    const arg = String(argsList[i] ?? "");
+    const directMatch =
+      arg.match(/^-{1,2}maxparallel(?:=|:)?(\d+)$/i) ||
+      arg.match(/^--max-parallel(?:=|:)?(\d+)$/i);
+    if (directMatch) {
+      const value = Number(directMatch[1]);
+      if (Number.isFinite(value) && value > 0) {
+        return value;
+      }
+    }
+    const normalized = arg.toLowerCase();
+    if (
+      normalized === "-maxparallel" ||
+      normalized === "--maxparallel" ||
+      normalized === "--max-parallel"
+    ) {
+      const next = Number(argsList[i + 1]);
+      if (Number.isFinite(next) && next > 0) {
+        return next;
+      }
+    }
+  }
+  const envValue = Number(process.env.VK_MAX_PARALLEL || process.env.MAX_PARALLEL);
+  if (Number.isFinite(envValue) && envValue > 0) {
+    return envValue;
+  }
+  return null;
 }
 
 function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
@@ -1142,6 +1188,50 @@ async function readStatusSummary() {
   }
 }
 
+async function readPlannerState() {
+  try {
+    const raw = await readFile(plannerStatePath, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function writePlannerState(nextState) {
+  await ensureLogDir();
+  await writeFile(plannerStatePath, JSON.stringify(nextState, null, 2), "utf8");
+}
+
+async function updatePlannerState(patch) {
+  const current = (await readPlannerState()) || {};
+  const merged = { ...current, ...patch };
+  await writePlannerState(merged);
+  return merged;
+}
+
+function isPlannerDeduped(state, now) {
+  if (!state || !state.last_triggered_at) {
+    return false;
+  }
+  const last = Date.parse(state.last_triggered_at);
+  if (!Number.isFinite(last)) {
+    return false;
+  }
+  return now - last < plannerDedupMs;
+}
+
+async function maybeTriggerTaskPlanner(reason, details) {
+  if (!codexEnabled || plannerTriggered) {
+    return;
+  }
+  const now = Date.now();
+  const state = await readPlannerState();
+  if (isPlannerDeduped(state, now)) {
+    return;
+  }
+  await triggerTaskPlanner(reason, details);
+}
+
 async function sendTelegramMessage(text, options = {}) {
   if (!telegramToken || !telegramChatId) {
     return;
@@ -1223,6 +1313,10 @@ async function checkStatusMilestones() {
   const running = counts.running ?? 0;
   const review = counts.review ?? 0;
   const error = counts.error ?? 0;
+  const maxParallel = getMaxParallelFromArgs(scriptArgs) || running || 1;
+  const backlogPerCapita =
+    maxParallel > 0 ? backlogRemaining / maxParallel : backlogRemaining;
+  const idleSlots = Math.max(0, maxParallel - running);
 
   if (
     !allCompleteNotified &&
@@ -1235,23 +1329,71 @@ async function checkStatusMilestones() {
     await sendTelegramMessage(
       "All tasks completed. Orchestrator backlog is empty.",
     );
-    await triggerTaskPlanner();
+    await maybeTriggerTaskPlanner("backlog-empty", {
+      backlogRemaining,
+      backlogPerCapita,
+      running,
+      review,
+      error,
+      idleSlots,
+      maxParallel,
+    });
+    return;
   }
 
-  if (!backlogLowNotified && backlogRemaining > 0 && backlogRemaining < 5) {
+  if (
+    !backlogLowNotified &&
+    backlogRemaining > 0 &&
+    Number.isFinite(backlogPerCapita) &&
+    backlogPerCapita < plannerPerCapitaThreshold
+  ) {
     backlogLowNotified = true;
     await sendTelegramMessage(
-      `Backlog low: ${backlogRemaining} tasks remaining. Triggering task planner.`,
+      `Backlog per-capita low: ${backlogRemaining} tasks for ${maxParallel} slots (${backlogPerCapita.toFixed(
+        2,
+      )} per slot). Triggering task planner.`,
     );
-    await triggerTaskPlanner();
+    await maybeTriggerTaskPlanner("backlog-per-capita", {
+      backlogRemaining,
+      backlogPerCapita,
+      running,
+      review,
+      error,
+      idleSlots,
+      maxParallel,
+      threshold: plannerPerCapitaThreshold,
+    });
+    return;
+  }
+
+  if (!idleAgentsNotified && idleSlots >= plannerIdleSlotThreshold) {
+    idleAgentsNotified = true;
+    await sendTelegramMessage(
+      `Agents idle: ${idleSlots} slot(s) available (running ${running}/${maxParallel}). Triggering task planner.`,
+    );
+    await maybeTriggerTaskPlanner("idle-slots", {
+      backlogRemaining,
+      backlogPerCapita,
+      running,
+      review,
+      error,
+      idleSlots,
+      maxParallel,
+      threshold: plannerIdleSlotThreshold,
+    });
   }
 }
 
-async function triggerTaskPlanner() {
+async function triggerTaskPlanner(reason, details) {
   if (plannerTriggered || !codexEnabled) {
     return;
   }
   plannerTriggered = true;
+  await updatePlannerState({
+    last_triggered_at: new Date().toISOString(),
+    last_trigger_reason: reason || "manual",
+    last_trigger_details: details || null,
+  });
   try {
     notifyCodexTrigger("task planner run");
     if (!CodexClient) {
@@ -1273,12 +1415,18 @@ async function triggerTaskPlanner() {
     const result = await thread.run(prompt);
     const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
     await writeFile(outPath, String(result), "utf8");
+    await updatePlannerState({
+      last_success_at: new Date().toISOString(),
+      last_success_reason: reason || "manual",
+    });
     await sendTelegramMessage(
       "Task planner run completed. Output saved to logs.",
     );
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
     await sendTelegramMessage(`Task planner run failed: ${message}`);
+  } finally {
+    plannerTriggered = false;
   }
 }
 
