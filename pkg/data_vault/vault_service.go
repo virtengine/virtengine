@@ -15,6 +15,7 @@ type VaultConfig struct {
 	Store           *EncryptedBlobStore
 	AccessControl   AccessControl
 	AuditLogger     *AuditLogger
+	AuditOwner      string
 	Metrics         *VaultMetrics
 	AnomalyDetector *AccessAnomalyDetector
 
@@ -40,8 +41,12 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 	if cfg.AccessControl == nil {
 		cfg.AccessControl = OwnerOnlyAccessControl{}
 	}
+	if cfg.AuditOwner == "" {
+		cfg.AuditOwner = "audit-system"
+	}
 	if cfg.AuditLogger == nil {
 		cfg.AuditLogger = NewAuditLogger(DefaultAuditLogConfig(), nil)
+		cfg.AuditLogger.RegisterExporter(NewVaultAuditExporter(cfg.Store, cfg.AuditOwner))
 	}
 	if cfg.Metrics == nil {
 		cfg.Metrics = NewVaultMetrics()

@@ -176,19 +176,18 @@ func (s *PortalAPIServer) handleVaultMetadata(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	metadata, err := s.vault.GetMetadata(r.Context(), data_vault.BlobID(blobID), principal, strings.TrimSpace(r.URL.Query().Get("org_id")))
+	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
+	metadata, err := s.vault.GetMetadata(r.Context(), data_vault.BlobID(blobID), principal, orgID)
 	if err != nil {
+		if errors.Is(err, data_vault.ErrUnauthorized) {
+			writeJSONError(w, http.StatusForbidden, err.Error())
+			return
+		}
 		if errors.Is(err, data_vault.ErrBlobNotFound) {
 			writeJSONError(w, http.StatusNotFound, "blob not found")
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
-	if err := s.authorizeVaultMetadata(r, principal, orgID, metadata); err != nil {
-		writeJSONError(w, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -329,28 +328,6 @@ func parseVaultAuditFilter(r *http.Request) (data_vault.AuditFilter, error) {
 		filter.Limit = limit
 	}
 	return filter, nil
-}
-
-func (s *PortalAPIServer) authorizeVaultMetadata(r *http.Request, principal, orgID string, meta *data_vault.BlobMetadata) error {
-	if meta == nil {
-		return errors.New("metadata unavailable")
-	}
-
-	if principal == meta.Owner {
-		return nil
-	}
-
-	if meta.OrgID == "" {
-		return errors.New("access denied")
-	}
-	if orgID == "" {
-		return errors.New("org_id required")
-	}
-	if orgID != meta.OrgID {
-		return errors.New("organization mismatch")
-	}
-
-	return s.authorizeVaultOrg(r, principal, meta.OrgID)
 }
 
 func (s *PortalAPIServer) authorizeVaultAudit(r *http.Request, principal string, filter data_vault.AuditFilter) error {
