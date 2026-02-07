@@ -86,8 +86,7 @@ const presenceSilent = ["1", "true", "yes"].includes(
 const presenceOnlyOnChange = ["1", "true", "yes"].includes(
   String(process.env.TELEGRAM_PRESENCE_ONLY_ON_CHANGE || "true").toLowerCase(),
 );
-const presenceChatId =
-  process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
+const presenceChatId = process.env.TELEGRAM_PRESENCE_CHAT_ID;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
