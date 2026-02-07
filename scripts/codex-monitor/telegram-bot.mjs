@@ -18,13 +18,14 @@ import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  execCodexPrompt,
-  isCodexBusy,
-  getThreadInfo,
-  resetThread,
-  initCodexShell,
-  steerCodexPrompt,
-} from "./codex-shell.mjs";
+  execPrimaryPrompt,
+  isPrimaryBusy,
+  getPrimaryAgentInfo,
+  resetPrimaryAgent,
+  initPrimaryAgent,
+  steerPrimaryPrompt,
+  getPrimaryAgentName,
+} from "./primary-agent.mjs";
 import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
@@ -808,7 +809,7 @@ async function handleUpdate(update) {
 
   // Free-text agent task runs in a separate queue so polling isn't blocked.
   // If Codex is already busy, handle immediately so follow-ups can be queued.
-  if (isCodexBusy()) {
+  if (isPrimaryBusy()) {
     void handleFreeText(text, chatId);
     return;
   }
@@ -845,8 +846,8 @@ const COMMANDS = {
     handler: cmdCleanupMerged,
     desc: "Alias for /cleanup",
   },
-  "/history": { handler: cmdHistory, desc: "Codex conversation history" },
-  "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
+  "/history": { handler: cmdHistory, desc: "Agent session history" },
+  "/clear": { handler: cmdClear, desc: "Clear agent session context" },
   "/reset_thread": {
     handler: cmdClear,
     desc: "Alias for /clear (reset thread)",
@@ -1143,11 +1144,14 @@ async function loadWorkspaceStatusData(workspacePath) {
 }
 
 async function cmdHelp(chatId) {
-  const lines = ["🤖 VirtEngine Codex Shell Commands:\n"];
+  const lines = ["🤖 VirtEngine Primary Agent Commands:\n"];
   for (const [cmd, { desc }] of Object.entries(COMMANDS)) {
     lines.push(`${cmd} — ${desc}`);
   }
-  lines.push("", "Any other text → sent to Codex AI (full repo + MCP access)");
+  lines.push(
+    "",
+    "Any other text → sent to the primary agent (full repo + MCP access)",
+  );
   await sendReply(chatId, lines.join("\n"));
 }
 
@@ -1547,26 +1551,27 @@ async function cmdCleanupMerged(chatId) {
 }
 
 async function cmdHistory(chatId) {
-  const info = getThreadInfo();
+  const info = getPrimaryAgentInfo();
+  const sessionLabel = info.sessionId || info.threadId || "(none)";
   const lines = [
-    `🧠 Codex Agent Thread`,
+    `🧠 Primary Agent (${info.adapter || getPrimaryAgentName()})`,
     "",
-    `Thread ID: ${info.threadId || "(none)"}`,
+    `Session: ${sessionLabel}`,
     `Turns: ${info.turnCount}`,
     `Active: ${info.isActive ? "yes" : "no"}`,
     `Busy: ${info.isBusy ? "yes" : "no"}`,
     "",
-    "The thread persists across messages.",
-    "Use /clear to start a fresh thread.",
+    "The session persists across messages.",
+    "Use /clear to start a fresh session.",
   ];
   await sendReply(chatId, lines.join("\n"));
 }
 
 async function cmdClear(chatId) {
-  await resetThread();
+  await resetPrimaryAgent();
   await sendReply(
     chatId,
-    "🧹 Agent thread reset. Next message starts a fresh conversation.",
+    "🧹 Agent session reset. Next message starts a fresh conversation.",
   );
 }
 
@@ -2387,13 +2392,13 @@ async function cmdSteer(chatId, steerArgs) {
   }
   const message = steerArgs.trim();
 
-  if (!activeAgentSession || !isCodexBusy()) {
+  if (!activeAgentSession || !isPrimaryBusy()) {
     await sendReply(chatId, "No active agent. Sending as a new task.");
     await handleFreeText(message, chatId);
     return;
   }
 
-  const result = await steerCodexPrompt(message);
+  const result = await steerPrimaryPrompt(message);
   if (result.ok) {
     if (activeAgentSession.actionLog) {
       activeAgentSession.actionLog.push({
@@ -2547,7 +2552,7 @@ function buildStreamMessage({
 async function handleFreeText(text, chatId, options = {}) {
   const backgroundMode = !!options.background;
   // ── Follow-up steering: if agent is busy, queue message as follow-up ──
-  if (isCodexBusy() && activeAgentSession) {
+  if (isPrimaryBusy() && activeAgentSession) {
     if (!activeAgentSession.followUpQueue) {
       activeAgentSession.followUpQueue = [];
     }
@@ -2555,7 +2560,7 @@ async function handleFreeText(text, chatId, options = {}) {
     const qLen = activeAgentSession.followUpQueue.length;
 
     // Try immediate steering so the in-flight run can adapt ASAP.
-    const steerResult = await steerCodexPrompt(text);
+    const steerResult = await steerPrimaryPrompt(text);
     const steerStatus = steerResult.ok ? "ok" : steerResult.reason || "failed";
     const steerNote = steerResult.ok
       ? `Steer ${steerResult.mode}.`
@@ -2584,7 +2589,7 @@ async function handleFreeText(text, chatId, options = {}) {
   }
 
   // ── Block if Codex is busy but no session (shouldn't happen normally) ──
-  if (isCodexBusy()) {
+  if (isPrimaryBusy()) {
     await sendReply(
       chatId,
       "⏳ Agent is executing a task. Please wait for it to finish...",
@@ -2772,7 +2777,7 @@ async function handleFreeText(text, chatId, options = {}) {
   };
 
   try {
-    const result = await execCodexPrompt(text, {
+    const result = await execPrimaryPrompt(text, {
       statusData,
       timeoutMs: CODEX_TIMEOUT_MS,
       onEvent,
@@ -2795,7 +2800,7 @@ async function handleFreeText(text, chatId, options = {}) {
         scheduleEdit();
 
         try {
-          const followUpResult = await execCodexPrompt(followUp, {
+          const followUpResult = await execPrimaryPrompt(followUp, {
             statusData,
             timeoutMs: CODEX_TIMEOUT_MS,
             onEvent,
@@ -2974,8 +2979,8 @@ export async function startTelegramBot() {
     return;
   }
 
-  // Initialize the Codex shell context
-  await initCodexShell();
+  // Initialize the primary agent context
+  await initPrimaryAgent();
 
   // Register bot commands with Telegram (updates the / menu)
   await registerBotCommands();
@@ -3001,7 +3006,7 @@ export async function startTelegramBot() {
   // Send startup notification
   await sendDirect(
     telegramChatId,
-    "🤖 VirtEngine Codex Shell online.\n\nType /help for commands or send any message to chat with Codex.",
+    `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
   );
 
   console.log("[telegram-bot] started — listening for messages");

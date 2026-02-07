@@ -1,6 +1,7 @@
 {
   "$schema": "./codex-monitor.schema.json",
   "projectName": "virtengine",
+  "primaryAgent": "codex-sdk",
   "executors": [
     {
       "name": "copilot-claude",

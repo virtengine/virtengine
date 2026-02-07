@@ -143,6 +143,7 @@ function main() {
   // npm-installed tools (bundled with this package)
   console.log(`  ✅ vibe-kanban (bundled)`);
   console.log(`  ✅ @openai/codex-sdk (bundled)`);
+  console.log(`  ✅ @anthropic-ai/claude-agent-sdk (bundled)`);
 
   // Summary
   console.log("");

@@ -18,7 +18,12 @@ import {
   stopTelegramBot,
   injectMonitorFunctions,
 } from "./telegram-bot.mjs";
-import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
+import {
+  execPrimaryPrompt,
+  isPrimaryBusy,
+  initPrimaryAgent,
+  setPrimaryAgent,
+} from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
@@ -88,6 +93,8 @@ let {
   watchPath: configWatchPath,
   echoLogs,
   autoFixEnabled,
+  primaryAgent,
+  primaryAgentEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -121,11 +128,15 @@ let {
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
+let primaryAgentName = primaryAgent;
+let primaryAgentReady = primaryAgentEnabled;
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
     ? "disabled via CODEX_SDK_DISABLED"
     : "disabled via --no-codex";
+setPrimaryAgent(primaryAgentName);
+void initPrimaryAgent(primaryAgentName);
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
@@ -2164,9 +2175,9 @@ async function smartPRFlow(attemptId, shortId, status) {
       console.log(
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
-      // Ask the agent to commit via Codex shell
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      // Ask the agent to commit via primary agent
+      if (primaryAgentReady && !isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
             `1. Stage all changes: git add -A\n` +
@@ -2222,8 +2233,8 @@ async function smartPRFlow(attemptId, shortId, status) {
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (codexEnabled && !isCodexBusy()) {
-            void execCodexPrompt(
+          if (primaryAgentReady && !isPrimaryBusy()) {
+            void execPrimaryPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
               { timeoutMs: 15 * 60 * 1000 },
@@ -2345,8 +2356,8 @@ async function smartPRFlow(attemptId, shortId, status) {
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      if (primaryAgentReady && !isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -2368,8 +2379,8 @@ async function smartPRFlow(attemptId, shortId, status) {
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      if (primaryAgentReady && !isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -4136,6 +4147,8 @@ function applyConfig(nextConfig, options = {}) {
   const prevWatchPath = watchPath;
   const prevTelegramInterval = telegramIntervalMin;
   const prevCodexEnabled = codexEnabled;
+  const prevPrimaryAgentName = primaryAgentName;
+  const prevPrimaryAgentReady = primaryAgentReady;
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
 
@@ -4182,11 +4195,21 @@ function applyConfig(nextConfig, options = {}) {
   executorScheduler = nextConfig.scheduler;
   envPaths = nextConfig.envPaths;
   codexEnabled = nextConfig.codexEnabled;
+  primaryAgentName = nextConfig.primaryAgent;
+  primaryAgentReady = nextConfig.primaryAgentEnabled;
   codexDisabledReason = codexEnabled
     ? ""
     : process.env.CODEX_SDK_DISABLED === "1"
       ? "disabled via CODEX_SDK_DISABLED"
       : "disabled via --no-codex";
+
+  const primaryAgentChanged = prevPrimaryAgentName !== primaryAgentName;
+  if (primaryAgentChanged) {
+    setPrimaryAgent(primaryAgentName);
+  }
+  if ((primaryAgentChanged && primaryAgentReady) || (!prevPrimaryAgentReady && primaryAgentReady)) {
+    void initPrimaryAgent(primaryAgentName);
+  }
 
   if (prevWatchPath !== watchPath || watchEnabled === false) {
     void startWatcher(true);
@@ -4415,7 +4438,7 @@ if (telegramCommandEnabled) {
 }
 startTelegramNotifier();
 
-// ── Two-way Telegram ↔ Codex shell ──────────────────────────────────────────
+// ── Two-way Telegram ↔ primary agent ──────────────────────────────────────────
 injectMonitorFunctions({
   sendTelegramMessage,
   readStatusData,
