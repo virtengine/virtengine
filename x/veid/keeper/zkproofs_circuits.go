@@ -1,10 +1,13 @@
 package keeper
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -12,105 +15,10 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/virtengine/virtengine/x/veid/zk/circuits"
+	"github.com/virtengine/virtengine/x/veid/zk/params"
 )
-
-// ============================================================================
-// ZK Proof Circuits for Privacy-Preserving Claims
-// ============================================================================
-
-// AgeRangeCircuit defines the circuit for proving age is above a threshold
-// without revealing the actual date of birth.
-//
-// Public inputs: ageThreshold, currentTimestamp
-// Private inputs: dateOfBirth
-// Constraint: (currentTimestamp - dateOfBirth) / 31536000 >= ageThreshold
-type AgeRangeCircuit struct {
-	// Public inputs
-	AgeThreshold     frontend.Variable `gnark:",public"`
-	CurrentTimestamp frontend.Variable `gnark:",public"`
-	CommitmentHash   frontend.Variable `gnark:",public"`
-
-	// Private inputs (witness)
-	DateOfBirth frontend.Variable
-	Salt        frontend.Variable
-}
-
-// Define implements the frontend.Circuit interface for age range proofs
-func (circuit *AgeRangeCircuit) Define(api frontend.API) error {
-	// Seconds in a year (365.25 days average)
-	secondsPerYear := big.NewInt(31557600)
-
-	// Compute age in seconds
-	ageSeconds := api.Sub(circuit.CurrentTimestamp, circuit.DateOfBirth)
-
-	// Compute age in years (integer division)
-	ageYears := api.Div(ageSeconds, secondsPerYear)
-
-	// Assert age >= threshold
-	api.AssertIsLessOrEqual(circuit.AgeThreshold, ageYears)
-
-	// Verify commitment: hash(dateOfBirth || salt) == commitmentHash
-	// For circuit efficiency, we use a simplified hash commitment
-	commitment := api.Add(api.Mul(circuit.DateOfBirth, 1000000), circuit.Salt)
-	api.AssertIsEqual(circuit.CommitmentHash, commitment)
-
-	return nil
-}
-
-// ResidencyCircuit defines the circuit for proving residency in a country
-// without revealing the full address.
-//
-// Public inputs: countryCodeHash, commitmentHash
-// Private inputs: fullAddressHash, salt
-type ResidencyCircuit struct {
-	// Public inputs
-	CountryCodeHash frontend.Variable `gnark:",public"`
-	CommitmentHash  frontend.Variable `gnark:",public"`
-
-	// Private inputs (witness)
-	FullAddressHash frontend.Variable
-	AddressCountry  frontend.Variable
-	Salt            frontend.Variable
-}
-
-// Define implements the frontend.Circuit interface for residency proofs
-func (circuit *ResidencyCircuit) Define(api frontend.API) error {
-	// Assert that the address country matches the claimed country
-	api.AssertIsEqual(circuit.CountryCodeHash, circuit.AddressCountry)
-
-	// Verify commitment: simplified commitment scheme
-	commitment := api.Add(api.Mul(circuit.FullAddressHash, 1000), circuit.Salt)
-	api.AssertIsEqual(circuit.CommitmentHash, commitment)
-
-	return nil
-}
-
-// ScoreRangeCircuit defines the circuit for proving a score exceeds a threshold
-// without revealing the exact score.
-//
-// Public inputs: scoreThreshold, commitmentHash
-// Private inputs: actualScore, salt
-type ScoreRangeCircuit struct {
-	// Public inputs
-	ScoreThreshold frontend.Variable `gnark:",public"`
-	CommitmentHash frontend.Variable `gnark:",public"`
-
-	// Private inputs (witness)
-	ActualScore frontend.Variable
-	Salt        frontend.Variable
-}
-
-// Define implements the frontend.Circuit interface for score range proofs
-func (circuit *ScoreRangeCircuit) Define(api frontend.API) error {
-	// Assert score >= threshold
-	api.AssertIsLessOrEqual(circuit.ScoreThreshold, circuit.ActualScore)
-
-	// Verify commitment: hash(actualScore || salt) == commitmentHash
-	commitment := api.Add(api.Mul(circuit.ActualScore, 1000000), circuit.Salt)
-	api.AssertIsEqual(circuit.CommitmentHash, commitment)
-
-	return nil
-}
 
 // ============================================================================
 // ZK Proof System - Circuit Compilation and Key Generation
@@ -143,7 +51,7 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system := &ZKProofSystem{}
 
 	// Compile age range circuit
-	ageCircuit := &AgeRangeCircuit{}
+	ageCircuit := &circuits.AgeRangeCircuit{}
 	ageCS, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, ageCircuit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile age circuit: %w", err)
@@ -151,16 +59,14 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system.ageCircuit = ageCircuit
 	system.ageConstraints = ageCS
 
-	// Generate age circuit keys
-	agePK, ageVK, err := groth16.Setup(ageCS)
+	ageVK, err := params.GetVerifyingKey("age")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate age circuit keys: %w", err)
+		return nil, fmt.Errorf("failed to load age verifying key: %w", err)
 	}
-	system.ageProvingKey = agePK
 	system.ageVerifyingKey = ageVK
 
 	// Compile residency circuit
-	residencyCircuit := &ResidencyCircuit{}
+	residencyCircuit := &circuits.ResidencyCircuit{}
 	residencyCS, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, residencyCircuit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile residency circuit: %w", err)
@@ -168,16 +74,14 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system.residencyCircuit = residencyCircuit
 	system.residencyConstraints = residencyCS
 
-	// Generate residency circuit keys
-	residencyPK, residencyVK, err := groth16.Setup(residencyCS)
+	residencyVK, err := params.GetVerifyingKey("residency")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate residency circuit keys: %w", err)
+		return nil, fmt.Errorf("failed to load residency verifying key: %w", err)
 	}
-	system.residencyProvingKey = residencyPK
 	system.residencyVerifyingKey = residencyVK
 
 	// Compile score range circuit
-	scoreCircuit := &ScoreRangeCircuit{}
+	scoreCircuit := &circuits.ScoreRangeCircuit{}
 	scoreCS, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, scoreCircuit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile score circuit: %w", err)
@@ -185,13 +89,24 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system.scoreCircuit = scoreCircuit
 	system.scoreConstraints = scoreCS
 
-	// Generate score circuit keys
-	scorePK, scoreVK, err := groth16.Setup(scoreCS)
+	scoreVK, err := params.GetVerifyingKey("score")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate score circuit keys: %w", err)
+		return nil, fmt.Errorf("failed to load score verifying key: %w", err)
 	}
-	system.scoreProvingKey = scorePK
 	system.scoreVerifyingKey = scoreVK
+
+	// Optionally load proving keys for off-chain tooling.
+	if pkDir := os.Getenv("VEID_ZK_PK_DIR"); pkDir != "" {
+		if pk, err := params.LoadProvingKey(filepath.Join(pkDir, "age_pk.bin")); err == nil {
+			system.ageProvingKey = pk
+		}
+		if pk, err := params.LoadProvingKey(filepath.Join(pkDir, "residency_pk.bin")); err == nil {
+			system.residencyProvingKey = pk
+		}
+		if pk, err := params.LoadProvingKey(filepath.Join(pkDir, "score_pk.bin")); err == nil {
+			system.scoreProvingKey = pk
+		}
+	}
 
 	return system, nil
 }
@@ -225,6 +140,9 @@ func (k Keeper) GenerateAgeRangeProofGroth16(
 	if k.zkSystem == nil {
 		return nil, fmt.Errorf("ZK proof system not initialized")
 	}
+	if k.zkSystem.ageProvingKey == nil {
+		return nil, fmt.Errorf("age proving key not available")
+	}
 
 	// Validate salt is provided (must be generated off-chain for consensus safety)
 	if len(salt) != 32 {
@@ -243,7 +161,7 @@ func (k Keeper) GenerateAgeRangeProofGroth16(
 	commitment.Add(commitment, saltBigInt)
 
 	// Create witness
-	witness := &AgeRangeCircuit{
+	witness := &circuits.AgeRangeCircuit{
 		AgeThreshold:     ageThreshold,
 		CurrentTimestamp: currentTimestamp,
 		CommitmentHash:   commitment,
@@ -257,22 +175,21 @@ func (k Keeper) GenerateAgeRangeProofGroth16(
 		return nil, fmt.Errorf("failed to create witness: %w", err)
 	}
 
-	// Generate proof
-	_, err = groth16.Prove(k.zkSystem.ageConstraints, k.zkSystem.ageProvingKey, witnessAssignment)
+	if k.zkSystem.ageProvingKey == nil {
+		return nil, fmt.Errorf("age proving key not available")
+	}
+
+	proof, err := groth16.Prove(k.zkSystem.ageConstraints, k.zkSystem.ageProvingKey, witnessAssignment)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate proof: %w", err)
 	}
 
-	// Serialize proof to bytes using deterministic hash
-	// For consensus safety, we use a deterministic representation
-	h := sha256.New()
-	h.Write([]byte("groth16_age_proof"))
-	fmt.Fprintf(h, "%d", ageThreshold)
-	fmt.Fprintf(h, "%d", currentTimestamp)
-	h.Write(commitment.Bytes())
-	h.Write(nonce)
-	proofBytes := h.Sum(nil)
-	return proofBytes, nil
+	var buf bytes.Buffer
+	if _, err := proof.WriteTo(&buf); err != nil {
+		return nil, fmt.Errorf("failed to serialize proof: %w", err)
+	}
+	_ = nonce
+	return buf.Bytes(), nil
 }
 
 // VerifyAgeRangeProofGroth16 verifies a real Groth16 ZK-SNARK proof for age range
@@ -290,7 +207,7 @@ func (k Keeper) VerifyAgeRangeProofGroth16(
 	commitment := new(big.Int).SetBytes(commitmentHash)
 
 	// Create public witness
-	publicWitness := &AgeRangeCircuit{
+	publicWitness := &circuits.AgeRangeCircuit{
 		AgeThreshold:     ageThreshold,
 		CurrentTimestamp: currentTimestamp,
 		CommitmentHash:   commitment,
@@ -303,12 +220,11 @@ func (k Keeper) VerifyAgeRangeProofGroth16(
 
 	// Deserialize proof
 	proof := groth16.NewProof(ecc.BN254)
-	// Note: MarshalSolidity produces a different format, we'll use a hash-based approach for now
-	// In production, proper serialization format should be used
-
-	// For now, return deterministic verification based on structure
 	if len(proofBytes) == 0 {
 		return false, fmt.Errorf("empty proof")
+	}
+	if _, err := proof.ReadFrom(bytes.NewReader(proofBytes)); err != nil {
+		return false, fmt.Errorf("failed to parse proof: %w", err)
 	}
 
 	// Verify proof
@@ -343,6 +259,9 @@ func (k Keeper) GenerateScoreRangeProofGroth16(
 	if k.zkSystem == nil {
 		return nil, nil, fmt.Errorf("ZK proof system not initialized")
 	}
+	if k.zkSystem.scoreProvingKey == nil {
+		return nil, nil, fmt.Errorf("score proving key not available")
+	}
 
 	// Validate salt is provided (must be generated off-chain for consensus safety)
 	if len(salt) != 32 {
@@ -358,7 +277,7 @@ func (k Keeper) GenerateScoreRangeProofGroth16(
 	commitment.Add(commitment, saltBigInt)
 
 	// Create witness
-	witness := &ScoreRangeCircuit{
+	witness := &circuits.ScoreRangeCircuit{
 		ScoreThreshold: scoreThreshold,
 		CommitmentHash: commitment,
 		ActualScore:    actualScore,
@@ -371,24 +290,23 @@ func (k Keeper) GenerateScoreRangeProofGroth16(
 		return nil, nil, fmt.Errorf("failed to create witness: %w", err)
 	}
 
-	// Generate proof
-	_, err = groth16.Prove(k.zkSystem.scoreConstraints, k.zkSystem.scoreProvingKey, witnessAssignment)
+	if k.zkSystem.scoreProvingKey == nil {
+		return nil, nil, fmt.Errorf("score proving key not available")
+	}
+
+	proof, err := groth16.Prove(k.zkSystem.scoreConstraints, k.zkSystem.scoreProvingKey, witnessAssignment)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate proof: %w", err)
 	}
 
-	// Serialize proof to bytes using deterministic hash
-	// For consensus safety, we use a deterministic representation
-	h := sha256.New()
-	h.Write([]byte("groth16_score_proof"))
-	fmt.Fprintf(h, "%d", scoreThreshold)
-	fmt.Fprintf(h, "%d", actualScore)
-	h.Write(commitment.Bytes())
-	h.Write(nonce)
-	proofBytes := h.Sum(nil)
+	var buf bytes.Buffer
+	if _, err := proof.WriteTo(&buf); err != nil {
+		return nil, nil, fmt.Errorf("failed to serialize proof: %w", err)
+	}
+	_ = nonce
 	commitmentBytes := commitment.Bytes()
 
-	return proofBytes, commitmentBytes, nil
+	return buf.Bytes(), commitmentBytes, nil
 }
 
 // ============================================================================
@@ -488,21 +406,21 @@ func GetZKProofSecurityParams() map[string]interface{} {
 // VerifyCircuitCompilation verifies that all circuits compile correctly
 func VerifyCircuitCompilation() error {
 	// Verify age circuit
-	ageCircuit := &AgeRangeCircuit{}
+	ageCircuit := &circuits.AgeRangeCircuit{}
 	_, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, ageCircuit)
 	if err != nil {
 		return fmt.Errorf("age circuit compilation failed: %w", err)
 	}
 
 	// Verify residency circuit
-	residencyCircuit := &ResidencyCircuit{}
+	residencyCircuit := &circuits.ResidencyCircuit{}
 	_, err = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, residencyCircuit)
 	if err != nil {
 		return fmt.Errorf("residency circuit compilation failed: %w", err)
 	}
 
 	// Verify score circuit
-	scoreCircuit := &ScoreRangeCircuit{}
+	scoreCircuit := &circuits.ScoreRangeCircuit{}
 	_, err = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, scoreCircuit)
 	if err != nil {
 		return fmt.Errorf("score circuit compilation failed: %w", err)
