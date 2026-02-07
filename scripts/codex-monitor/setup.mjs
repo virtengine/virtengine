@@ -514,9 +514,7 @@ async function main() {
     info("Try reinstalling:");
     console.log("  npm uninstall -g @virtengine/codex-monitor");
     console.log("  npm install -g @virtengine/codex-monitor\n");
-    info(
-      "If the problem persists, vibe-kanban should be available via npx:",
-    );
+    info("If the problem persists, vibe-kanban should be available via npx:");
     console.log("  npx vibe-kanban --help\n");
   }
 
@@ -982,7 +980,9 @@ async function main() {
     const configTomlPath = getConfigPath();
 
     if (!existingToml) {
-      info("No Codex CLI config found. Will create one with recommended settings.");
+      info(
+        "No Codex CLI config found. Will create one with recommended settings.",
+      );
     } else {
       info(`Found existing config: ${configTomlPath}`);
     }
@@ -1006,9 +1006,10 @@ async function main() {
     const lowTimeouts = timeouts.filter((t) => t.needsUpdate);
     if (lowTimeouts.length > 0) {
       for (const t of lowTimeouts) {
-        const label = t.currentValue === null
-          ? "not set"
-          : `${(t.currentValue / 1000).toFixed(0)}s`;
+        const label =
+          t.currentValue === null
+            ? "not set"
+            : `${(t.currentValue / 1000).toFixed(0)}s`;
         warn(
           `[${t.provider}] stream_idle_timeout_ms is ${label} — too low for complex reasoning.`,
         );

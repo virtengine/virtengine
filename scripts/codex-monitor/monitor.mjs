@@ -21,6 +21,7 @@ import {
 import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
+import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -4175,6 +4176,25 @@ process.on("unhandledRejection", (reason) => {
 // ── Singleton guard: prevent ghost monitors ─────────────────────────────────
 if (!acquireMonitorLock(config.cacheDir)) {
   process.exit(1);
+}
+
+// ── Codex CLI config.toml: ensure VK MCP + stream timeouts ──────────────────
+try {
+  const vkPort = config.vkRecoveryPort || "54089";
+  const vkBaseUrl = config.vkEndpointUrl || `http://127.0.0.1:${vkPort}`;
+  const tomlResult = ensureCodexConfig({
+    vkBaseUrl,
+    vkPort,
+    vkHost: "127.0.0.1",
+  });
+  if (!tomlResult.noChanges) {
+    console.log("[monitor] updated ~/.codex/config.toml:");
+    printConfigSummary(tomlResult);
+  }
+} catch (err) {
+  console.warn(
+    `[monitor] config.toml check failed (non-fatal): ${err.message}`,
+  );
 }
 
 // ── Startup sweep: kill stale processes, prune worktrees ────────────────────
