@@ -13,6 +13,11 @@ import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
 import {
+  formatBusMessage,
+  getLocalWorkspace,
+  loadWorkspaceRegistry,
+} from "./workspace-registry.mjs";
+import {
   startTelegramBot,
   stopTelegramBot,
   injectMonitorFunctions,
@@ -49,10 +54,13 @@ const vkEnsureIntervalMs = Number(getArg("--vk-ensure-interval", "60000"));
 let codexEnabled =
   !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
 const repoRoot = resolve(__dirname, "..", "..");
+const workspaceRegistryPath =
+  process.env.VE_WORKSPACE_REGISTRY || resolve(__dirname, "workspaces.json");
+const localWorkspaceId = process.env.VE_WORKSPACE_ID || "";
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
-const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
+const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "5");
 const telegramCommandPollTimeoutSec = Math.max(
   5,
   Number(process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20"),
@@ -79,19 +87,24 @@ const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
 );
-const plannerPerCapitaThreshold = Number(
-  process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
+const plannerBacklogPerAgent = Number(
+  process.env.PLANNER_BACKLOG_PER_AGENT || "10",
 );
-const plannerIdleSlotThreshold = Number(
-  process.env.TASK_PLANNER_IDLE_SLOT_THRESHOLD || "1",
+const plannerIdleTriggerMin = Number(
+  process.env.PLANNER_IDLE_TRIGGER_MIN || "15",
 );
-const plannerDedupHours = Number(process.env.TASK_PLANNER_DEDUP_HOURS || "24");
-const plannerDedupMs = Number.isFinite(plannerDedupHours)
-  ? plannerDedupHours * 60 * 60 * 1000
-  : 24 * 60 * 60 * 1000;
+const plannerStalledMin = Number(
+  process.env.PLANNER_STALLED_MIN || "45",
+);
+const plannerCooldownMin = Number(
+  process.env.PLANNER_COOLDOWN_MIN || "60",
+);
+const plannerDedupMs = plannerCooldownMin * 60 * 1000;
 
 let CodexClient = null;
 let codexDisabledReason = "";
+let workspaceRegistryPromise = null;
+let localWorkspaceCache = null;
 
 if (!codexEnabled) {
   codexDisabledReason =
@@ -135,9 +148,9 @@ const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
-let idleAgentsNotified = false;
 let plannerTriggered = false;
 const plannerStatePath = resolve(logDir, "task-planner-state.json");
+let idleDetectedAt = null;
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -154,6 +167,30 @@ function pushTelegramHistory(text) {
   if (telegramHistory.length > TELEGRAM_HISTORY_MAX) {
     telegramHistory.shift();
   }
+}
+
+async function getWorkspaceRegistry() {
+  if (!workspaceRegistryPromise) {
+    workspaceRegistryPromise = loadWorkspaceRegistry({
+      registryPath: workspaceRegistryPath,
+    });
+  }
+  return workspaceRegistryPromise;
+}
+
+async function getLocalWorkspaceContext() {
+  if (localWorkspaceCache) return localWorkspaceCache;
+  const registry = await getWorkspaceRegistry();
+  localWorkspaceCache = getLocalWorkspace(registry, localWorkspaceId);
+  return localWorkspaceCache;
+}
+
+async function formatBusPayload(text, options = {}) {
+  if (!options.bus) return text;
+  const workspace = await getLocalWorkspaceContext();
+  const workspaceId = options.bus.workspaceId || workspace?.id || "unknown";
+  const type = options.bus.type || "info";
+  return formatBusMessage({ workspaceId, type, text });
 }
 
 function recordMonitorFailure() {
@@ -245,40 +282,6 @@ function getChangeSummary(repoRootPath, files) {
   } catch {
     return files.join(", ");
   }
-}
-
-function getMaxParallelFromArgs(argsList) {
-  if (!Array.isArray(argsList)) {
-    return null;
-  }
-  for (let i = 0; i < argsList.length; i += 1) {
-    const arg = String(argsList[i] ?? "");
-    const directMatch =
-      arg.match(/^-{1,2}maxparallel(?:=|:)?(\d+)$/i) ||
-      arg.match(/^--max-parallel(?:=|:)?(\d+)$/i);
-    if (directMatch) {
-      const value = Number(directMatch[1]);
-      if (Number.isFinite(value) && value > 0) {
-        return value;
-      }
-    }
-    const normalized = arg.toLowerCase();
-    if (
-      normalized === "-maxparallel" ||
-      normalized === "--maxparallel" ||
-      normalized === "--max-parallel"
-    ) {
-      const next = Number(argsList[i + 1]);
-      if (Number.isFinite(next) && next > 0) {
-        return next;
-      }
-    }
-  }
-  const envValue = Number(process.env.VK_MAX_PARALLEL || process.env.MAX_PARALLEL);
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return envValue;
-  }
-  return null;
 }
 
 function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
@@ -868,6 +871,54 @@ function scheduleVibeKanbanRestart() {
   setTimeout(() => startVibeKanbanProcess(), delay);
 }
 
+async function fetchVk(path, options = {}) {
+  const method = options.method || "GET";
+  const body = options.body;
+  const timeoutMs = options.timeoutMs || 15_000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${vkEndpointUrl}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[monitor] vk fetch failed ${method} ${path}: ${res.status} ${text}`);
+      return null;
+    }
+    const payload = await res.json().catch(() => null);
+    if (payload && payload.success === false) {
+      console.warn(`[monitor] vk fetch error ${method} ${path}: ${payload.message}`);
+      return null;
+    }
+    return payload?.data ?? payload;
+  } catch (err) {
+    console.warn(
+      `[monitor] vk fetch error ${method} ${path}: ${err.message || err}`,
+    );
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getWorkspaceSummaries() {
+  const summariesRaw = await fetchVk("/api/task-attempts/summary", {
+    method: "POST",
+    body: { archived: false },
+  });
+  if (Array.isArray(summariesRaw?.summaries)) {
+    return summariesRaw.summaries;
+  }
+  if (Array.isArray(summariesRaw)) {
+    return summariesRaw;
+  }
+  return [];
+}
+
 async function isVibeKanbanOnline() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2000);
@@ -1005,7 +1056,7 @@ function notifyMergeFailure(line) {
     `Reason: ${reason}`,
     `${repoUrlBase}/pull/${pr}`,
   ].join("\n");
-  void sendTelegramMessage(message);
+  void sendTelegramMessage(message, { bus: { type: "alert" } });
 }
 
 async function flushMergeNotifications() {
@@ -1021,7 +1072,7 @@ async function flushMergeNotifications() {
     .map((pr) => `#${pr} ${repoUrlBase}/pull/${pr}`)
     .join(", ");
   const message = `Merged PRs: ${formatted}`;
-  await sendTelegramMessage(message);
+  await sendTelegramMessage(message, { bus: { type: "status" } });
 }
 
 async function readStatusData() {
@@ -1057,6 +1108,7 @@ async function readStatusSummary() {
       ? status.copilot_requests
       : [];
     const attempts = status.attempts || {};
+    const backlogRemaining = status.backlog_remaining ?? 0;
     const manualReviewTasks = Array.isArray(status.manual_review_tasks)
       ? status.manual_review_tasks
       : [];
@@ -1115,6 +1167,32 @@ async function readStatusSummary() {
           return `- ${escapeHtml(taskId)}`;
         })
       : ["- none"];
+
+    const workspaceSummaries = await getWorkspaceSummaries();
+    let activeWorkspaces = 0;
+    let idleWorkspaces = 0;
+    let busyWorkspaces = 0;
+    for (const summary of workspaceSummaries) {
+      if (!summary) continue;
+      const statusValue = String(
+        summary.status || summary.latest_process_status || "",
+      ).toLowerCase();
+      const disabled = summary.disabled || statusValue === "disabled";
+      if (disabled) continue;
+      activeWorkspaces++;
+      const runningAttempts =
+        summary.running_attempts ??
+        summary.active_attempts ??
+        summary.running ??
+        (statusValue === "running" ? 1 : 0);
+      if (!runningAttempts || runningAttempts <= 0 || statusValue === "idle") {
+        idleWorkspaces++;
+      } else {
+        busyWorkspaces++;
+      }
+    }
+    const backlogPerCapita =
+      backlogRemaining / Math.max(activeWorkspaces || 1, 1);
 
     const createdLines = recentSubmitted.length
       ? recentSubmitted.map((item) => {
@@ -1180,7 +1258,7 @@ async function readStatusSummary() {
         : "No completed tasks yet";
 
     const message = [
-      "VirtEngine Orchestrator 10-min Update",
+      "VirtEngine Orchestrator Heartbeat",
       `New tasks created (${recentSubmitted.length}):`,
       ...createdLines,
       `Merged tasks (${recentCompleted.length}):`,
@@ -1192,6 +1270,7 @@ async function readStatusSummary() {
       `Manual review (${manualReviewTasks.length}):`,
       ...manualReviewLines,
       `Counts: running=${running}, review=${review}, error=${error}, manual_review=${manualReview}`,
+      `Workspaces: active=${activeWorkspaces}, idle=${idleWorkspaces}, busy=${busyWorkspaces}, backlog/agent=${backlogPerCapita.toFixed(1)}`,
       `Success: ${successLine}`,
     ].join("\n");
 
@@ -1253,7 +1332,8 @@ async function sendTelegramMessage(text, options = {}) {
   if (!telegramToken || !targetChatId) {
     return;
   }
-  const dedupKey = options.dedupKey ?? String(text || "").trim();
+  const formattedText = await formatBusPayload(text, options);
+  const dedupKey = options.dedupKey ?? String(formattedText || "").trim();
   if (dedupKey && !options.skipDedup) {
     const now = Date.now();
     const last = telegramDedup.get(dedupKey) || 0;
@@ -1264,12 +1344,12 @@ async function sendTelegramMessage(text, options = {}) {
   }
 
   // Always record to history ring buffer (even deduped messages are useful context)
-  pushTelegramHistory(String(text || ""));
+  pushTelegramHistory(String(formattedText || ""));
 
   const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
   const payload = {
     chat_id: targetChatId,
-    text,
+    text: formattedText,
   };
   if (options.parseMode) {
     payload.parse_mode = options.parseMode;
@@ -1668,12 +1748,15 @@ function startTelegramNotifier() {
       await sendTelegramMessage(summary.text, {
         parseMode: summary.parseMode,
         disablePreview: true,
+        bus: { type: "heartbeat" },
       });
     }
     await flushMergeNotifications();
     await checkStatusMilestones();
   };
-  void sendTelegramMessage("VirtEngine Orchestrator Notifier started.");
+  void sendTelegramMessage("VirtEngine Orchestrator Notifier started.", {
+    bus: { type: "status" },
+  });
   setTimeout(sendUpdate, intervalMs);
   setInterval(sendUpdate, intervalMs);
 }
@@ -1688,10 +1771,51 @@ async function checkStatusMilestones() {
   const running = counts.running ?? 0;
   const review = counts.review ?? 0;
   const error = counts.error ?? 0;
-  const maxParallel = getMaxParallelFromArgs(scriptArgs) || running || 1;
-  const backlogPerCapita =
-    maxParallel > 0 ? backlogRemaining / maxParallel : backlogRemaining;
-  const idleSlots = Math.max(0, maxParallel - running);
+  const now = Date.now();
+
+  const summaries = await getWorkspaceSummaries();
+  let activeWorkspaces = 0;
+  let idleWorkspaces = 0;
+  for (const summary of summaries) {
+    if (!summary) continue;
+    const statusValue = String(
+      summary.status || summary.latest_process_status || "",
+    ).toLowerCase();
+    const disabled = summary.disabled || statusValue === "disabled";
+    if (disabled) continue;
+    activeWorkspaces++;
+    const runningAttempts =
+      summary.running_attempts ??
+      summary.active_attempts ??
+      summary.running ??
+      (statusValue === "running" ? 1 : 0);
+    if (!runningAttempts || runningAttempts <= 0 || statusValue === "idle") {
+      idleWorkspaces++;
+    }
+  }
+
+  if (idleWorkspaces > 0) {
+    if (!idleDetectedAt) {
+      idleDetectedAt = now;
+    }
+  } else {
+    idleDetectedAt = null;
+  }
+
+  const idleDurationMin = idleDetectedAt
+    ? Math.floor((now - idleDetectedAt) / 60000)
+    : 0;
+
+  const attempts = status.attempts || {};
+  const stalledAttempts = Object.values(attempts).filter((attempt) => {
+    if (!attempt || attempt.status !== "running") return false;
+    const lastStamp =
+      attempt.last_process_completed_at || attempt.updated_at;
+    if (!lastStamp) return false;
+    const ts = Date.parse(lastStamp);
+    if (!Number.isFinite(ts)) return false;
+    return now - ts > plannerStalledMin * 60 * 1000;
+  });
 
   if (
     !allCompleteNotified &&
@@ -1703,64 +1827,64 @@ async function checkStatusMilestones() {
     allCompleteNotified = true;
     await sendTelegramMessage(
       "All tasks completed. Orchestrator backlog is empty.",
+      { bus: { type: "status" } },
     );
-    await maybeTriggerTaskPlanner("backlog-empty", {
-      backlogRemaining,
-      backlogPerCapita,
-      running,
-      review,
-      error,
-      idleSlots,
-      maxParallel,
-    });
+    await maybeTriggerTaskPlanner("backlog-empty", { backlogRemaining });
     return;
   }
+
+  const backlogPerCapita =
+    backlogRemaining / Math.max(activeWorkspaces || 1, 1);
+  const triggerReasons = [];
 
   if (
     !backlogLowNotified &&
     backlogRemaining > 0 &&
-    Number.isFinite(backlogPerCapita) &&
-    backlogPerCapita < plannerPerCapitaThreshold
+    backlogPerCapita > 0 &&
+    backlogPerCapita < plannerBacklogPerAgent
   ) {
     backlogLowNotified = true;
-    await sendTelegramMessage(
-      `Backlog per-capita low: ${backlogRemaining} tasks for ${maxParallel} slots (${backlogPerCapita.toFixed(
-        2,
-      )} per slot). Triggering task planner.`,
+    triggerReasons.push(
+      `backlog per agent below threshold (${backlogPerCapita.toFixed(1)}/${plannerBacklogPerAgent})`,
     );
-    await maybeTriggerTaskPlanner("backlog-per-capita", {
-      backlogRemaining,
-      backlogPerCapita,
-      running,
-      review,
-      error,
-      idleSlots,
-      maxParallel,
-      threshold: plannerPerCapitaThreshold,
-    });
-    return;
   }
 
-  if (!idleAgentsNotified && idleSlots >= plannerIdleSlotThreshold) {
-    idleAgentsNotified = true;
-    await sendTelegramMessage(
-      `Agents idle: ${idleSlots} slot(s) available (running ${running}/${maxParallel}). Triggering task planner.`,
+  if (
+    idleWorkspaces > 0 &&
+    backlogRemaining > 0 &&
+    idleDurationMin >= plannerIdleTriggerMin
+  ) {
+    triggerReasons.push(
+      `idle workspaces detected (${idleWorkspaces}/${activeWorkspaces || 1}) for ${idleDurationMin}m`,
     );
-    await maybeTriggerTaskPlanner("idle-slots", {
+  }
+
+  if (stalledAttempts.length > 0) {
+    triggerReasons.push(
+      `stalled attempts detected (${stalledAttempts.length})`,
+    );
+  }
+
+  if (triggerReasons.length) {
+    const reasonSummary = triggerReasons.join("; ");
+    await sendTelegramMessage(
+      `Planner trigger: ${reasonSummary}. Backlog remaining: ${backlogRemaining}.`,
+      { bus: { type: "alert" } },
+    );
+    await maybeTriggerTaskPlanner("metric-trigger", {
       backlogRemaining,
       backlogPerCapita,
-      running,
-      review,
-      error,
-      idleSlots,
-      maxParallel,
-      threshold: plannerIdleSlotThreshold,
+      idleWorkspaces,
+      activeWorkspaces,
+      idleDurationMin,
+      stalledAttempts: stalledAttempts.map((a) => a.task_id).filter(Boolean),
+      reasons: triggerReasons,
     });
   }
 }
 
-async function triggerTaskPlanner(reason, details) {
-  if (plannerTriggered || !codexEnabled) {
+async function triggerTaskPlanner(reason, details = {}) {
+  if (!codexEnabled || plannerTriggered) {
     return;
   }
   plannerTriggered = true;
@@ -1770,7 +1894,7 @@ async function triggerTaskPlanner(reason, details) {
     last_trigger_details: details || null,
   });
   try {
-    notifyCodexTrigger("task planner run");
+    notifyCodexTrigger(`task planner run (${reason || "unknown"})`);
     if (!CodexClient) {
       CodexClient = await loadCodexSdk();
     }
@@ -1786,7 +1910,7 @@ async function triggerTaskPlanner(reason, details) {
     const agentPrompt = await readFile(agentPath, "utf8");
     const codex = new CodexClient();
     const thread = codex.startThread();
-    const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
+    const prompt = `${agentPrompt}\n\nPlanner trigger reason: ${reason || "unknown"}\n\nMetrics:\n${JSON.stringify(details, null, 2)}\n\nPlease execute the task planning instructions above.`;
     const result = await thread.run(prompt);
     const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
     await writeFile(outPath, String(result), "utf8");
@@ -1796,10 +1920,13 @@ async function triggerTaskPlanner(reason, details) {
     });
     await sendTelegramMessage(
       "Task planner run completed. Output saved to logs.",
+      { bus: { type: "status" } },
     );
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
-    await sendTelegramMessage(`Task planner run failed: ${message}`);
+    await sendTelegramMessage(`Task planner run failed: ${message}`, {
+      bus: { type: "alert" },
+    });
   } finally {
     plannerTriggered = false;
   }
@@ -2137,8 +2264,11 @@ async function startProcess() {
           allCompleteNotified = true;
           void sendTelegramMessage(
             "All tasks completed. Orchestrator backlog is empty.",
+            { bus: { type: "status" } },
           );
-          void triggerTaskPlanner();
+          void maybeTriggerTaskPlanner("orchestrator-log-complete", {
+            source: "orchestrator-log",
+          });
         }
       }
     }

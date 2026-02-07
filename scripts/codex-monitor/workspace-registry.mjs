@@ -1,232 +1,201 @@
-/**
- * workspace-registry.mjs — Workspace registry loader + validation for codex-monitor.
- */
-
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve as resolvePath, isAbsolute } from "node:path";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const DEFAULT_MODEL_PRIORITY = [
-  "gpt-5.2-codex",
-  "gpt-5.1-codex-max",
-  "gpt-5.1-codex-mini",
-  "claude-opus-4.6",
-  "claude-code",
-];
+const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
-const DEFAULT_CAPABILITIES = ["vibe-kanban"];
+const DEFAULT_REGISTRY = {
+  version: 1,
+  default_workspace: "primary",
+  workspaces: [
+    {
+      id: "primary",
+      name: "Primary Coordinator",
+      host: "localhost",
+      role: "coordinator",
+      capabilities: ["planning", "triage", "routing"],
+      model_priorities: ["CODEX:DEFAULT"],
+      vk_workspace_id: "primary",
+      mentions: ["primary", "coord", "coordinator"],
+    },
+  ],
+};
 
-function getDefaultHost() {
+function normalizeId(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeExecutorProfile(profile) {
+  if (!profile) return null;
+  if (typeof profile === "string") {
+    const [executor, variant] = profile.split(":");
+    if (!executor) return null;
+    return {
+      executor: executor.trim().toUpperCase(),
+      variant: (variant || "DEFAULT").trim().toUpperCase(),
+    };
+  }
+  if (profile.executor && profile.variant) {
+    return {
+      executor: String(profile.executor).toUpperCase(),
+      variant: String(profile.variant).toUpperCase(),
+    };
+  }
+  if (profile.executor_profile_id) {
+    return normalizeExecutorProfile(profile.executor_profile_id);
+  }
+  return null;
+}
+
+function normalizeWorkspace(workspace) {
+  if (!workspace) return null;
+  const id = normalizeId(workspace.id);
+  if (!id) return null;
+  const mentions = Array.isArray(workspace.mentions)
+    ? workspace.mentions.map(normalizeId).filter(Boolean)
+    : [];
+  const aliases = Array.isArray(workspace.aliases)
+    ? workspace.aliases.map(normalizeId).filter(Boolean)
+    : [];
+  return {
+    ...workspace,
+    id,
+    mentions,
+    aliases,
+    role: workspace.role || "workspace",
+    model_priorities: Array.isArray(workspace.model_priorities)
+      ? workspace.model_priorities
+      : [],
+  };
+}
+
+export async function loadWorkspaceRegistry(options = {}) {
+  const registryPath = options.registryPath
+    ? resolve(options.registryPath)
+    : resolve(__dirname, "workspaces.json");
+  let registry = null;
+  if (existsSync(registryPath)) {
+    try {
+      const raw = await readFile(registryPath, "utf8");
+      registry = JSON.parse(raw);
+    } catch (err) {
+      console.warn(
+        `[workspace-registry] failed to read ${registryPath}: ${err.message || err}`,
+      );
+    }
+  }
+  if (!registry) {
+    registry = { ...DEFAULT_REGISTRY };
+  }
+
+  const workspaces = Array.isArray(registry.workspaces)
+    ? registry.workspaces.map(normalizeWorkspace).filter(Boolean)
+    : [];
+  const defaultWorkspace =
+    normalizeId(registry.default_workspace) || DEFAULT_REGISTRY.default_workspace;
+
+  return {
+    version: registry.version || DEFAULT_REGISTRY.version,
+    default_workspace: defaultWorkspace,
+    workspaces,
+    registry_path: registryPath,
+  };
+}
+
+export function resolveWorkspace(registry, candidateId) {
+  if (!registry || !Array.isArray(registry.workspaces)) return null;
+  const target = normalizeId(candidateId);
+  if (!target) return null;
   return (
-    process.env.VE_WORKSPACE_DEFAULT_HOST ||
-    process.env.VK_ENDPOINT_URL ||
-    process.env.VK_BASE_URL ||
-    "http://127.0.0.1:54089"
+    registry.workspaces.find((w) => w.id === target) ||
+    registry.workspaces.find((w) => w.aliases?.includes(target)) ||
+    registry.workspaces.find((w) => w.mentions?.includes(target)) ||
+    null
   );
 }
 
-function parseJson(raw, label, errors) {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch (err) {
-    errors.push(`Invalid JSON in ${label}: ${err.message}`);
-    return null;
-  }
+export function getLocalWorkspace(registry, envWorkspaceId) {
+  if (!registry || !Array.isArray(registry.workspaces)) return null;
+  const explicit = normalizeId(envWorkspaceId);
+  const defaultId = registry.default_workspace;
+  const id = explicit || defaultId || "primary";
+  return (
+    resolveWorkspace(registry, id) ||
+    registry.workspaces[0] ||
+    normalizeWorkspace({ id })
+  );
 }
 
-function normalizeRegistry(input, errors, warnings) {
-  const defaultHost = getDefaultHost();
-  const defaults = {
-    role: "primary",
-    host: defaultHost,
-    capabilities: [...DEFAULT_CAPABILITIES],
-    model_priority: [...DEFAULT_MODEL_PRIORITY],
-  };
-
-  const registry = {
-    defaults: { ...defaults },
-    workspaces: [],
-  };
-
-  if (input) {
-    if (Array.isArray(input)) {
-      registry.workspaces = input;
-    } else if (typeof input === "object") {
-      if (input.defaults && typeof input.defaults === "object") {
-        registry.defaults = {
-          ...registry.defaults,
-          ...input.defaults,
-        };
-      }
-      if (Array.isArray(input.workspaces)) {
-        registry.workspaces = input.workspaces;
-      }
-    }
-  }
-
-  if (!Array.isArray(registry.workspaces) || registry.workspaces.length === 0) {
-    warnings.push("No workspaces configured. Using default local workspace.");
-    registry.workspaces = [
-      {
-        id: "local",
-        name: "Local",
-        role: "primary",
-        host: defaultHost,
-        capabilities: [...DEFAULT_CAPABILITIES],
-        model_priority: [...DEFAULT_MODEL_PRIORITY],
-      },
-    ];
-  }
-
-  const seenIds = new Set();
-  const normalized = [];
-
-  for (const [index, ws] of registry.workspaces.entries()) {
-    if (!ws || typeof ws !== "object") {
-      errors.push(`Workspace #${index + 1} is not an object.`);
-      continue;
-    }
-
-    const id = typeof ws.id === "string" ? ws.id.trim() : "";
-    if (!id) {
-      errors.push(`Workspace #${index + 1} is missing required field: id`);
-      continue;
-    }
-    if (seenIds.has(id)) {
-      errors.push(`Duplicate workspace id: ${id}`);
-      continue;
-    }
-    seenIds.add(id);
-
-    const name =
-      typeof ws.name === "string" && ws.name.trim()
-        ? ws.name.trim()
-        : id;
-    const role =
-      typeof ws.role === "string" && ws.role.trim()
-        ? ws.role.trim()
-        : registry.defaults.role;
-    const host =
-      typeof ws.host === "string" && ws.host.trim()
-        ? ws.host.trim()
-        : registry.defaults.host;
-
-    let capabilities = ws.capabilities;
-    if (!Array.isArray(capabilities)) {
-      if (capabilities !== undefined) {
-        errors.push(`Workspace ${id}: capabilities must be an array.`);
-      }
-      capabilities = registry.defaults.capabilities;
-    }
-    capabilities = capabilities.map((c) => String(c)).filter((c) => c.trim());
-
-    let modelPriority = ws.model_priority ?? ws.modelPriority ?? ws.models;
-    if (!Array.isArray(modelPriority)) {
-      if (modelPriority !== undefined) {
-        errors.push(`Workspace ${id}: model_priority must be an array.`);
-      }
-      modelPriority = registry.defaults.model_priority;
-    }
-
-    const normalizedPriority = modelPriority
-      .map((entry) => (typeof entry === "string" ? entry.trim() : entry))
-      .filter((entry) => (typeof entry === "string" ? entry : true));
-
-    if (normalizedPriority.length === 0) {
-      warnings.push(`Workspace ${id}: model_priority empty. Using defaults.`);
-    }
-
-    normalized.push({
-      id,
-      name,
-      role,
-      host,
-      capabilities,
-      model_priority:
-        normalizedPriority.length > 0
-          ? normalizedPriority
-          : [...DEFAULT_MODEL_PRIORITY],
-    });
-  }
-
-  return {
-    registry: {
-      defaults: registry.defaults,
-      workspaces: normalized,
-    },
-    errors,
-    warnings,
-  };
+export function listWorkspaceIds(registry) {
+  if (!registry || !Array.isArray(registry.workspaces)) return [];
+  return registry.workspaces.map((w) => w.id);
 }
 
-function resolveRegistryFilePath(rawPath) {
-  if (!rawPath || typeof rawPath !== "string") return null;
-  if (isAbsolute(rawPath)) return rawPath;
-  return resolvePath(process.cwd(), rawPath);
+export function selectExecutorProfile(workspace, override) {
+  const overrideProfile = normalizeExecutorProfile(override);
+  if (overrideProfile) {
+    return overrideProfile;
+  }
+  if (!workspace) {
+    return { executor: "CODEX", variant: "DEFAULT" };
+  }
+  for (const entry of workspace.model_priorities || []) {
+    const profile = normalizeExecutorProfile(entry);
+    if (profile) return profile;
+  }
+  return { executor: "CODEX", variant: "DEFAULT" };
 }
 
-function mergeRegistry(base, next) {
-  if (!next) return base;
-  const baseObj = base && typeof base === "object" && !Array.isArray(base) ? base : {};
-  if (Array.isArray(next)) {
-    return { ...baseObj, workspaces: next };
-  }
-  if (typeof next === "object") {
-    const merged = { ...baseObj, ...next };
-    if (Array.isArray(next.workspaces)) {
-      merged.workspaces = next.workspaces;
+export function parseWorkspaceMentions(text, registry) {
+  const targets = new Set();
+  const normalizedText = String(text || "");
+  const mentionMatches = normalizedText.matchAll(/@([A-Za-z0-9_-]+)/g);
+  for (const match of mentionMatches) {
+    const id = match[1];
+    if (id && id.toLowerCase() === "all") {
+      return { targets, broadcast: true };
     }
-    return merged;
+    const workspace = resolveWorkspace(registry, id);
+    if (workspace) {
+      targets.add(workspace.id);
+    }
   }
-  return base;
+  const prefixMatches = normalizedText.matchAll(/\[ws:([A-Za-z0-9_-]+)\]/gi);
+  for (const match of prefixMatches) {
+    const id = match[1];
+    if (id && id.toLowerCase() === "all") {
+      return { targets, broadcast: true };
+    }
+    const workspace = resolveWorkspace(registry, id);
+    if (workspace) {
+      targets.add(workspace.id);
+    }
+  }
+  return { targets, broadcast: false };
 }
 
-export async function loadWorkspaceRegistry() {
-  const errors = [];
-  const warnings = [];
-  let merged = null;
-
-  const filePath = resolveRegistryFilePath(process.env.VE_WORKSPACE_REGISTRY_FILE);
-  if (filePath) {
-    try {
-      const raw = await readFile(filePath, "utf8");
-      const parsed = parseJson(raw, `file ${filePath}`, errors);
-      if (parsed) merged = mergeRegistry(merged, parsed);
-    } catch (err) {
-      errors.push(`Failed to read workspace registry file ${filePath}: ${err.message}`);
-    }
+export function stripWorkspaceMentions(text, registry) {
+  const ids = listWorkspaceIds(registry);
+  if (!ids.length) return String(text || "").trim();
+  let result = String(text || "");
+  for (const id of ids) {
+    const mention = new RegExp(`@${id}\\b`, "gi");
+    const prefix = new RegExp(`\\[ws:${id}\\]`, "gi");
+    result = result.replace(mention, "").replace(prefix, "");
   }
-
-  if (process.env.VE_WORKSPACE_REGISTRY) {
-    const parsed = parseJson(
-      process.env.VE_WORKSPACE_REGISTRY,
-      "VE_WORKSPACE_REGISTRY",
-      errors,
-    );
-    if (parsed) merged = mergeRegistry(merged, parsed);
-  }
-
-  return normalizeRegistry(merged, errors, warnings);
+  return result.replace(/\s{2,}/g, " ").trim();
 }
 
-export function formatRegistryDiagnostics(errors, warnings) {
-  const lines = [];
-  if (errors.length > 0) {
-    lines.push("❌ Workspace registry errors:");
-    for (const err of errors) {
-      lines.push(`  - ${err}`);
-    }
+export function formatBusMessage({ workspaceId, type, text }) {
+  const prefixId = workspaceId || "unknown";
+  const typeTag = type ? `[${type}]` : "";
+  const prefix = `[ws:${prefixId}]${typeTag}`;
+  const lines = String(text || "").split(/\r?\n/);
+  if (lines.length === 0) {
+    return `${prefix}`;
   }
-  if (warnings.length > 0) {
-    if (lines.length > 0) lines.push("");
-    lines.push("⚠️ Workspace registry warnings:");
-    for (const warn of warnings) {
-      lines.push(`  - ${warn}`);
-    }
-  }
+  lines[0] = `${prefix} ${lines[0]}`.trim();
   return lines.join("\n");
 }
 
-export function getDefaultModelPriority() {
-  return [...DEFAULT_MODEL_PRIORITY];
-}
