@@ -60,6 +60,12 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *marketplace.MsgCr
 		offering.State = marketplace.OfferingStateActive
 	}
 
+	if offering.State == marketplace.OfferingStateActive {
+		if err := ms.keeper.CheckProviderEligibility(ctx, providerAddr); err != nil {
+			return nil, err
+		}
+	}
+
 	if offering.IdentityRequirement == (marketplace.IdentityRequirement{}) {
 		offering.IdentityRequirement = marketplace.DefaultIdentityRequirement()
 	}
@@ -176,6 +182,12 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *marketplace.MsgUp
 	if updates.State == marketplace.OfferingStateActive && updates.ActivatedAt == nil {
 		activated := now
 		updates.ActivatedAt = &activated
+	}
+
+	if updates.State == marketplace.OfferingStateActive {
+		if err := ms.keeper.CheckProviderEligibility(ctx, providerAddr); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := ms.keeper.UpdateOffering(ctx, &updates); err != nil {

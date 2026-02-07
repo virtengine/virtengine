@@ -44,6 +44,17 @@ func (a marketplaceVEIDAdapter) IsDomainVerified(ctx sdk.Context, address sdk.Ac
 	return hasVerifiedActiveScope(scopes)
 }
 
+func (a marketplaceVEIDAdapter) IsComplianceCleared(ctx sdk.Context, address sdk.AccAddress) (bool, bool) {
+	record, found := a.keeper.GetComplianceRecord(ctx, address.String())
+	if !found {
+		return false, false
+	}
+	if record.IsExpired(ctx.BlockTime().Unix()) {
+		return false, true
+	}
+	return record.Status.AllowsTransactions(), true
+}
+
 func hasVerifiedActiveScope(scopes []veidtypes.IdentityScope) bool {
 	for _, scope := range scopes {
 		if scope.IsVerified() && scope.IsActive() {
