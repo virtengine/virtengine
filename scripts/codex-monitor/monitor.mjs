@@ -167,6 +167,8 @@ console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
 console.log(`[monitor] task planner mode: ${plannerMode}`);
+let primaryAgentName = primaryAgent;
+let primaryAgentReady = primaryAgentEnabled;
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
