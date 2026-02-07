@@ -37,6 +37,8 @@
     "./setup": "./setup.mjs",
     "./autofix": "./autofix.mjs",
     "./codex-shell": "./codex-shell.mjs",
+    "./copilot-shell": "./copilot-shell.mjs",
+    "./primary-agent": "./primary-agent.mjs",
     "./maintenance": "./maintenance.mjs",
     "./telegram-bot": "./telegram-bot.mjs",
     "./workspace-registry": "./workspace-registry.mjs",
@@ -65,6 +67,8 @@
     "utils.mjs",
     "autofix.mjs",
     "codex-shell.mjs",
+    "copilot-shell.mjs",
+    "primary-agent.mjs",
     "maintenance.mjs",
     "telegram-bot.mjs",
     "get-telegram-chat-id.mjs",
@@ -85,6 +89,7 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@github/copilot-sdk": "0.1.19",
     "@openai/codex-sdk": "0.99.0-alpha.6",
     "vibe-kanban": "0.1.6"
   },

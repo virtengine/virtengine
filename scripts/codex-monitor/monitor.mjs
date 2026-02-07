@@ -24,7 +24,11 @@ import {
   injectMonitorFunctions,
   notify,
 } from "./telegram-bot.mjs";
-import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
+import {
+  execPrimaryPrompt,
+  isPrimaryBusy,
+  initPrimaryAgent,
+} from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
@@ -32,6 +36,16 @@ import {
   analyzeMergeStrategy,
   resetMergeStrategyDedup,
 } from "./merge-strategy.mjs";
+import {
+  normalizeDedupKey,
+  stripAnsi,
+  isErrorLine,
+  escapeHtml,
+  formatHtmlLink,
+  getErrorFingerprint,
+  getMaxParallelFromArgs,
+  parsePrNumberFromUrl,
+} from "./utils.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -127,6 +141,8 @@ let {
   scheduler: executorScheduler,
   envPaths,
 } = config;
+
+void initPrimaryAgent(config);
 
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
@@ -226,30 +242,8 @@ const mergeFailureNotified = new Map();
 const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 
-// ── Fuzzy dedup: normalize messages so structural duplicates match ───────────
-// "recovery (count=1)" and "recovery (count=29)" both become "recovery (count=N)"
-function normalizeDedupKey(text) {
-  return (
-    String(text || "")
-      .trim()
-      // Replace numbers (integers and decimals) with N, preserving surrounding text
-      .replaceAll(/\d+(\.\d+)?/g, "N")
-      // Collapse any resulting multi-N sequences (e.g., "N.N" → "N")
-      .replaceAll(/N[.\-/:]N/g, "N")
-      // Collapse whitespace
-      .replaceAll(/\s+/g, " ")
-  );
-}
+// ── Deduplication tracking (utilities imported from utils.mjs) ───────────────
 
-// ── Strip ANSI escape codes from log lines before sending to Telegram ────────
-// PowerShell and colored CLI output includes \x1b[...m sequences that show
-// as garbage in Telegram messages.
-function stripAnsi(text) {
-  // eslint-disable-next-line no-control-regex
-  return String(text || "")
-    .replace(/\x1b\[[0-9;]*m/g, "")
-    .replace(/\[\d+;?\d*m/g, "");
-}
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
 // Detects rapid failure bursts independently of Telegram dedup.
@@ -436,41 +430,6 @@ function getChangeSummary(repoRootPath, files) {
   }
 }
 
-function getMaxParallelFromArgs(argsList) {
-  if (!Array.isArray(argsList)) {
-    return null;
-  }
-  for (let i = 0; i < argsList.length; i += 1) {
-    const arg = String(argsList[i] ?? "");
-    const directMatch =
-      arg.match(/^-{1,2}maxparallel(?:=|:)?(\d+)$/i) ||
-      arg.match(/^--max-parallel(?:=|:)?(\d+)$/i);
-    if (directMatch) {
-      const value = Number(directMatch[1]);
-      if (Number.isFinite(value) && value > 0) {
-        return value;
-      }
-    }
-    const normalized = arg.toLowerCase();
-    if (
-      normalized === "-maxparallel" ||
-      normalized === "--maxparallel" ||
-      normalized === "--max-parallel"
-    ) {
-      const next = Number(argsList[i + 1]);
-      if (Number.isFinite(next) && next > 0) {
-        return next;
-      }
-    }
-  }
-  const envValue = Number(
-    process.env.VK_MAX_PARALLEL || process.env.MAX_PARALLEL,
-  );
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return envValue;
-  }
-  return null;
-}
 
 const monitorFixAttempts = new Map();
 const monitorFixMaxAttempts = 2;
@@ -782,14 +741,6 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 const errorFrequency = new Map();
 let loopFixInProgress = false;
 
-function getErrorFingerprint(line) {
-  // Normalize: strip timestamps, attempt IDs, branch-specific parts
-  return line
-    .replace(/\[\d{2}:\d{2}:\d{2}\]\s*/g, "")
-    .replace(/\b[0-9a-f]{8}\b/gi, "<ID>") // attempt IDs
-    .replace(/ve\/[\w.-]+/g, "ve/<BRANCH>") // branch names
-    .trim();
-}
 
 function trackErrorFrequency(line) {
   const fingerprint = getErrorFingerprint(line);
@@ -901,29 +852,6 @@ const vkErrorPatterns = [
   /Failed to initialize vibe-kanban configuration/i,
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
 ];
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function formatHtmlLink(url, label) {
-  if (!url) {
-    return escapeHtml(label);
-  }
-  return `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
-}
-
-function isErrorLine(line) {
-  if (errorNoisePatterns.some((pattern) => pattern.test(line))) {
-    return false;
-  }
-  return errorPatterns.some((pattern) => pattern.test(line));
-}
 
 function notifyErrorLine(line) {
   if (!telegramToken || !telegramChatId) {
@@ -2136,11 +2064,11 @@ async function reconcileTaskStatuses(reason = "manual") {
 async function runMergeStrategyAnalysis(ctx) {
   const tag = `merge-strategy(${ctx.shortId})`;
   try {
-    if (isCodexBusy()) {
+    if (isPrimaryBusy()) {
       console.log(`[${tag}] Codex busy — deferring analysis`);
       // Retry after 60 seconds if Codex frees up
       setTimeout(() => {
-        if (!isCodexBusy()) void runMergeStrategyAnalysis(ctx);
+        if (!isPrimaryBusy()) void runMergeStrategyAnalysis(ctx);
       }, 60_000);
       return;
     }
@@ -2151,7 +2079,7 @@ async function runMergeStrategyAnalysis(ctx) {
         : null;
 
     const decision = await analyzeMergeStrategy(ctx, {
-      execCodex: execCodexPrompt,
+      execCodex: execPrimaryPrompt,
       timeoutMs:
         parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
       logDir,
@@ -2174,8 +2102,8 @@ async function runMergeStrategyAnalysis(ctx) {
         console.log(
           `[${tag}] → prompt agent: ${(decision.message || "").slice(0, 100)}`,
         );
-        if (codexEnabled && !isCodexBusy() && decision.message) {
-          void execCodexPrompt(
+        if (codexEnabled && !isPrimaryBusy() && decision.message) {
+          void execPrimaryPrompt(
             `The merge strategy reviewer has feedback on your work for task "${ctx.taskTitle || ctx.shortId}":\n\n` +
               decision.message +
               `\n\nPlease address this feedback, commit, and push.`,
@@ -2302,9 +2230,9 @@ async function smartPRFlow(attemptId, shortId, status) {
       console.log(
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
-      // Ask the agent to commit via Codex shell
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      // Ask the agent to commit via primary agent
+      if (!isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
             `1. Stage all changes: git add -A\n` +
@@ -2414,8 +2342,8 @@ Return a short summary of what you did.`;
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (codexEnabled && !isCodexBusy()) {
-            void execCodexPrompt(
+          if (!isPrimaryBusy()) {
+            void execPrimaryPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
               { timeoutMs: 15 * 60 * 1000 },
@@ -2511,7 +2439,7 @@ Return a short summary of what you did.`;
       }
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
-      if (codexAnalyzeMergeStrategy && !isCodexBusy()) {
+      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
@@ -2558,8 +2486,8 @@ Return a short summary of what you did.`;
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      if (!isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -2581,8 +2509,8 @@ Return a short summary of what you did.`;
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      if (!isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -4324,7 +4252,7 @@ async function startProcess() {
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
     for (const line of lines) {
-      if (isErrorLine(line)) {
+      if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
         notifyErrorLine(line);
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
@@ -4855,7 +4783,7 @@ if (telegramCommandEnabled) {
 }
 startTelegramNotifier();
 
-// ── Two-way Telegram ↔ Codex shell ──────────────────────────────────────────
+// ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({
   sendTelegramMessage,
   readStatusData,
