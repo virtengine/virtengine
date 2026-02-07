@@ -16,14 +16,17 @@
  */
 
 import { resolve, dirname } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
-// ── Version ──────────────────────────────────────────────────────────────────
+// ── Version (read from package.json — single source of truth) ────────────────
 
-const VERSION = "0.3.0";
+const VERSION = JSON.parse(
+  readFileSync(resolve(__dirname, "package.json"), "utf8"),
+).version;
 
 // ── Help ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,8 @@ function showHelp() {
     --setup                     Run the interactive setup wizard
     --help                      Show this help
     --version                   Show version
+    --update                    Check for and install latest version
+    --no-update-check           Skip automatic update check on startup
 
   ORCHESTRATOR
     --script <path>             Path to the orchestrator script
@@ -126,6 +131,26 @@ async function main() {
   if (args.includes("--version") || args.includes("-v")) {
     console.log(`codex-monitor v${VERSION}`);
     process.exit(0);
+  }
+
+  // Handle --update (force update)
+  if (args.includes("--update")) {
+    const { forceUpdate } = await import("./update-check.mjs");
+    await forceUpdate(VERSION);
+    process.exit(0);
+  }
+
+  // ── Startup banner with update check ──────────────────────────────────────
+  console.log("");
+  console.log("  ╭──────────────────────────────────────────────────────────╮");
+  console.log(`  │ >_ codex-monitor (v${VERSION})${" ".repeat(Math.max(0, 39 - VERSION.length))}│`);
+  console.log("  ╰──────────────────────────────────────────────────────────╯");
+
+  // Non-blocking update check (don't delay startup)
+  if (!args.includes("--no-update-check")) {
+    import("./update-check.mjs")
+      .then(({ checkForUpdate }) => checkForUpdate(VERSION))
+      .catch(() => {});  // silent — never block startup
   }
 
   // Handle --setup

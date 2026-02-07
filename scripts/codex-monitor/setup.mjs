@@ -492,7 +492,7 @@ async function main() {
     warn(
       "vibe-kanban not found in PATH. It should be bundled — try reinstalling:",
     );
-    console.log("    npm install @virtengine/codex-monitor\n");
+    console.log(" npm install -g @virtengine/codex-monitor\n");
   }
 
   if (!hasNode) {
@@ -723,9 +723,13 @@ async function main() {
     if (wantTelegram) {
       // Step 1: Create bot
       console.log(
-        "\n" + chalk.bold("Step 1: Create Your Bot") + chalk.dim(" (if you haven't already)"),
+        "\n" +
+          chalk.bold("Step 1: Create Your Bot") +
+          chalk.dim(" (if you haven't already)"),
       );
-      console.log("  1. Open Telegram and search for " + chalk.cyan("@BotFather"));
+      console.log(
+        "  1. Open Telegram and search for " + chalk.cyan("@BotFather"),
+      );
       console.log("  2. Send: " + chalk.cyan("/newbot"));
       console.log("  3. Choose a display name (e.g., 'MyProject Monitor')");
       console.log(
@@ -747,11 +751,11 @@ async function main() {
         console.log();
       } else {
         // Step 2: Get bot token
+        console.log("\n" + chalk.bold("Step 2: Enter Your Bot Token"));
         console.log(
-          "\n" + chalk.bold("Step 2: Enter Your Bot Token"),
-        );
-        console.log(
-          chalk.dim("  Looks like: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890"),
+          chalk.dim(
+            "  Looks like: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890",
+          ),
         );
         console.log();
 
@@ -774,12 +778,8 @@ async function main() {
           }
 
           // Step 3: Get chat ID
-          console.log(
-            "\n" + chalk.bold("Step 3: Get Your Chat ID"),
-          );
-          console.log(
-            "  Your chat ID tells the bot where to send messages.",
-          );
+          console.log("\n" + chalk.bold("Step 3: Get Your Chat ID"));
+          console.log("  Your chat ID tells the bot where to send messages.");
           console.log();
 
           const knowsChatId = await prompt.confirm(
@@ -794,13 +794,15 @@ async function main() {
             );
           } else {
             // Guide user to get chat ID
+            console.log("\n" + chalk.cyan("To get your chat ID:") + "\n");
             console.log(
-              "\n" +
-                chalk.cyan("To get your chat ID:") +
-                "\n",
+              "  1. Open Telegram and search for your bot's username",
             );
-            console.log("  1. Open Telegram and search for your bot's username");
-            console.log("  2. Click " + chalk.cyan("START") + " or send any message (e.g., 'Hello')");
+            console.log(
+              "  2. Click " +
+                chalk.cyan("START") +
+                " or send any message (e.g., 'Hello')",
+            );
             console.log("  3. Come back here and we'll detect your chat ID");
             console.log();
 
@@ -828,7 +830,9 @@ async function main() {
                     info(`✓ Found your chat ID: ${chatId}`);
                     console.log();
                   } else {
-                    warn("Couldn't find a chat ID. Make sure you sent a message to your bot.");
+                    warn(
+                      "Couldn't find a chat ID. Make sure you sent a message to your bot.",
+                    );
                     env.TELEGRAM_CHAT_ID = await prompt.ask(
                       "Enter chat ID manually",
                       "",
@@ -864,7 +868,9 @@ async function main() {
               console.log();
               info("No problem! You can get your chat ID later by:");
               console.log(
-                "  • Running: " + chalk.cyan("codex-monitor-chat-id") + " (after starting codex-monitor)",
+                "  • Running: " +
+                  chalk.cyan("codex-monitor-chat-id") +
+                  " (after starting codex-monitor)",
               );
               console.log(
                 "  • Or manually: " +
@@ -872,9 +878,7 @@ async function main() {
                     "curl 'https://api.telegram.org/bot<TOKEN>/getUpdates'",
                   ),
               );
-              console.log(
-                "  Then add TELEGRAM_CHAT_ID to .env",
-              );
+              console.log("  Then add TELEGRAM_CHAT_ID to .env");
               console.log();
             }
           }
@@ -923,7 +927,9 @@ async function main() {
             }
           }
         } else {
-          warn("Bot token is required for Telegram setup. You can add it to .env later.");
+          warn(
+            "Bot token is required for Telegram setup. You can add it to .env later.",
+          );
         }
       }
     }
