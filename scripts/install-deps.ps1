@@ -79,6 +79,7 @@ $packages = @(
     @{Name="git"; DisplayName="Git for Windows"; Required=$true},
     @{Name="golang"; DisplayName="Go Programming Language"; Required=$true; MinVersion="1.21.0"},
     @{Name="nodejs"; DisplayName="Node.js and npm"; Required=$true},
+    @{Name="github-cli"; DisplayName="GitHub CLI (gh)"; Required=$true},
     @{Name="make"; DisplayName="GNU Make"; Required=$true},
     @{Name="jq"; DisplayName="jq (JSON processor)"; Required=$true},
     @{Name="curl"; DisplayName="curl"; Required=$false},

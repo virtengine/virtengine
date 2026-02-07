@@ -1,0 +1,24 @@
+# Runtime / user config
+.env
+codex-monitor.config.json
+workspaces.json
+
+# Logs
+logs/
+
+# Orchestrator scripts (not part of the npm package)
+ve-orchestrator.ps1
+ve-kanban.ps1
+
+# Dev / CI
+node_modules/
+package-lock.json
+.git/
+.github/
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

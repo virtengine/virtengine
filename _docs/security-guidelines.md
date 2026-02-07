@@ -41,12 +41,12 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Threat Model
 
-| Threat Actor | Capabilities | Primary Targets |
-|--------------|--------------|-----------------|
+| Threat Actor        | Capabilities                              | Primary Targets                |
+| ------------------- | ----------------------------------------- | ------------------------------ |
 | Malicious Validator | Full node access, consensus participation | State manipulation, censorship |
-| External Attacker | Network access, API calls | DoS, data exfiltration |
-| Malicious Provider | Infrastructure control | Resource theft, data access |
-| Compromised Client | Signed transactions | Identity fraud, fund theft |
+| External Attacker   | Network access, API calls                 | DoS, data exfiltration         |
+| Malicious Provider  | Infrastructure control                    | Resource theft, data access    |
+| Compromised Client  | Signed transactions                       | Identity fraud, fund theft     |
 
 ---
 
@@ -79,31 +79,31 @@ All sensitive configuration must use environment variables with the `VIRTENGINE_
 
 #### Required Environment Variables
 
-| Variable | Description | Required By |
-|----------|-------------|-------------|
-| `VIRTENGINE_HOME` | Base directory for chain data | All components |
-| `VIRTENGINE_KEYRING_BACKEND` | Keyring type (os, file, test) | CLI, daemon |
-| `VIRTENGINE_NODE` | RPC endpoint URL | CLI, provider |
-| `VIRTENGINE_CHAIN_ID` | Network chain ID | All components |
+| Variable                     | Description                   | Required By    |
+| ---------------------------- | ----------------------------- | -------------- |
+| `VIRTENGINE_HOME`            | Base directory for chain data | All components |
+| `VIRTENGINE_KEYRING_BACKEND` | Keyring type (os, file, test) | CLI, daemon    |
+| `VIRTENGINE_NODE`            | RPC endpoint URL              | CLI, provider  |
+| `VIRTENGINE_CHAIN_ID`        | Network chain ID              | All components |
 
 #### Provider Daemon Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `PROVIDER_KEY_SECRET` | Provider signing key passphrase | Yes |
-| `VAULT_PASSWORD` | Ansible vault password | If using Ansible |
-| `KUBECONFIG` | Kubernetes config path | If using K8s adapter |
-| `AWS_ACCESS_KEY_ID` | AWS credentials | If using AWS adapter |
-| `AWS_SECRET_ACCESS_KEY` | AWS credentials | If using AWS adapter |
-| `AZURE_CLIENT_SECRET` | Azure credentials | If using Azure adapter |
+| Variable                | Description                     | Required               |
+| ----------------------- | ------------------------------- | ---------------------- |
+| `PROVIDER_KEY_SECRET`   | Provider signing key passphrase | Yes                    |
+| `VAULT_PASSWORD`        | Ansible vault password          | If using Ansible       |
+| `KUBECONFIG`            | Kubernetes config path          | If using K8s adapter   |
+| `AWS_ACCESS_KEY_ID`     | AWS credentials                 | If using AWS adapter   |
+| `AWS_SECRET_ACCESS_KEY` | AWS credentials                 | If using AWS adapter   |
+| `AZURE_CLIENT_SECRET`   | Azure credentials               | If using Azure adapter |
 
 #### ML Inference Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TF_CPP_MIN_LOG_LEVEL` | TensorFlow log level | 2 |
-| `TF_DETERMINISTIC_OPS` | Force deterministic ops | 1 |
-| `CUDA_VISIBLE_DEVICES` | GPU device selection | -1 (CPU only) |
+| Variable               | Description             | Default       |
+| ---------------------- | ----------------------- | ------------- |
+| `TF_CPP_MIN_LOG_LEVEL` | TensorFlow log level    | 2             |
+| `TF_DETERMINISTIC_OPS` | Force deterministic ops | 1             |
+| `CUDA_VISIBLE_DEVICES` | GPU device selection    | -1 (CPU only) |
 
 ### Secret Handling in Code
 
@@ -116,7 +116,7 @@ func (k *KeyManager) SignTransaction(tx []byte, passphrase string) ([]byte, erro
             passphrase = passphrase[:i] + "\x00" + passphrase[i+1:]
         }
     }()
-    
+
     // Use passphrase for signing...
 }
 
@@ -150,12 +150,12 @@ func (k Keeper) CreateOrder(ctx sdk.Context, msg *MsgCreateOrder) error {
     if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
         return sdkerrors.ErrInvalidAddress.Wrapf("invalid owner address: %s", err)
     }
-    
+
     // Validate numeric ranges
     if msg.Price.IsNegative() || msg.Price.IsZero() {
         return sdkerrors.ErrInvalidRequest.Wrap("price must be positive")
     }
-    
+
     // Validate string lengths
     if len(msg.Description) > MaxDescriptionLength {
         return sdkerrors.ErrInvalidRequest.Wrapf(
@@ -163,14 +163,14 @@ func (k Keeper) CreateOrder(ctx sdk.Context, msg *MsgCreateOrder) error {
             len(msg.Description), MaxDescriptionLength,
         )
     }
-    
+
     // Validate against allowlist
     if !IsAllowedResourceType(msg.ResourceType) {
         return sdkerrors.ErrInvalidRequest.Wrapf(
             "invalid resource type: %s", msg.ResourceType,
         )
     }
-    
+
     return nil
 }
 ```
@@ -212,12 +212,12 @@ const (
     MaxMemoLength        = 256
     MaxLabelLength       = 64
     MaxLabelsPerResource = 16
-    
+
     // Upload limits
     MaxManifestSize      = 1 << 20  // 1 MB
     MaxImageUploadSize   = 10 << 20 // 10 MB
     MaxBatchSize         = 100
-    
+
     // Query limits
     MaxPageSize          = 100
     DefaultPageSize      = 50
@@ -243,13 +243,13 @@ func (k Keeper) HandleManifest(ctx sdk.Context, manifest []byte) error {
 
 VirtEngine uses the following cryptographic algorithms exclusively:
 
-| Purpose | Algorithm | Library |
-|---------|-----------|---------|
-| Key Exchange | X25519 | `golang.org/x/crypto/curve25519` |
-| Symmetric Encryption | XSalsa20-Poly1305 | `golang.org/x/crypto/nacl/secretbox` |
-| AEAD Encryption | AES-256-GCM | `crypto/aes` + `crypto/cipher` |
-| Hashing | SHA-256 | `crypto/sha256` |
-| Signing | Ed25519, secp256k1 | Cosmos SDK keyring |
+| Purpose              | Algorithm          | Library                              |
+| -------------------- | ------------------ | ------------------------------------ |
+| Key Exchange         | X25519             | `golang.org/x/crypto/curve25519`     |
+| Symmetric Encryption | XSalsa20-Poly1305  | `golang.org/x/crypto/nacl/secretbox` |
+| AEAD Encryption      | AES-256-GCM        | `crypto/aes` + `crypto/cipher`       |
+| Hashing              | SHA-256            | `crypto/sha256`                      |
+| Signing              | Ed25519, secp256k1 | Cosmos SDK keyring                   |
 
 ```go
 // ✅ CORRECT: Use approved algorithms
@@ -258,7 +258,7 @@ import (
     "crypto/cipher"
     "crypto/rand"
     "crypto/sha256"
-    
+
     "golang.org/x/crypto/curve25519"
     "golang.org/x/crypto/nacl/box"
 )
@@ -271,21 +271,21 @@ func EncryptEnvelope(plaintext []byte, recipientPubKey *[32]byte) (*EncryptionEn
         return nil, fmt.Errorf("failed to generate ephemeral key: %w", err)
     }
     curve25519.ScalarBaseMult(&ephemeralPub, &ephemeralPriv)
-    
+
     // Generate nonce
     var nonce [24]byte
     if _, err := rand.Read(nonce[:]); err != nil {
         return nil, fmt.Errorf("failed to generate nonce: %w", err)
     }
-    
+
     // Encrypt using NaCl box
     ciphertext := box.Seal(nil, plaintext, &nonce, recipientPubKey, &ephemeralPriv)
-    
+
     // Clear ephemeral private key
     for i := range ephemeralPriv {
         ephemeralPriv[i] = 0
     }
-    
+
     return &EncryptionEnvelope{
         Algorithm:   "X25519-XSalsa20-Poly1305",
         EphemeralPK: ephemeralPub[:],
@@ -417,14 +417,14 @@ func (k Keeper) AcceptBid(ctx sdk.Context, orderID, bidID uint64) error {
     if !found {
         return types.ErrOrderNotFound.Wrapf("order %d", orderID)
     }
-    
+
     if order.State != OrderStateOpen {
         return types.ErrInvalidBid.Wrapf(
             "order %d is in state %s, expected %s",
             orderID, order.State, OrderStateOpen,
         )
     }
-    
+
     return nil
 }
 ```
@@ -561,7 +561,7 @@ func readConfig(path string) ([]byte, error) {
         return nil, err
     }
     defer f.Close() // Error ignored!
-    
+
     return io.ReadAll(f)
 }
 
@@ -576,7 +576,7 @@ func readConfig(path string) (data []byte, err error) {
             err = fmt.Errorf("close config: %w", cerr)
         }
     }()
-    
+
     data, err = io.ReadAll(f)
     if err != nil {
         return nil, fmt.Errorf("read config: %w", err)
@@ -595,16 +595,16 @@ func writeData(path string, data []byte) (err error) {
             err = fmt.Errorf("close file: %w", cerr)
         }
     }()
-    
+
     if _, err := f.Write(data); err != nil {
         return fmt.Errorf("write data: %w", err)
     }
-    
+
     // Sync to ensure data is flushed to disk
     if err := f.Sync(); err != nil {
         return fmt.Errorf("sync file: %w", err)
     }
-    
+
     return nil
 }
 ```
@@ -643,12 +643,12 @@ func fetchResource(urlStr string) ([]byte, error) {
     if err != nil {
         return nil, fmt.Errorf("invalid URL: %w", err)
     }
-    
+
     // Enforce HTTPS in production
     if os.Getenv("VIRTENGINE_ENV") == "production" && u.Scheme != "https" {
         return nil, errors.New("HTTPS required in production")
     }
-    
+
     client := newSecureClient()
     resp, err := client.Get(urlStr)
     // ...
@@ -656,8 +656,8 @@ func fetchResource(urlStr string) ([]byte, error) {
 
 // ✅ CORRECT: Local development exception (explicit)
 func isLocalDevelopment(host string) bool {
-    return host == "localhost" || 
-           host == "127.0.0.1" || 
+    return host == "localhost" ||
+           host == "127.0.0.1" ||
            strings.HasSuffix(host, ".local")
 }
 ```
@@ -674,11 +674,11 @@ func (k Keeper) ProcessWithTimeout(ctx sdk.Context, data []byte) error {
             return sdkerrors.ErrInvalidRequest.Wrap("insufficient time remaining")
         }
     }
-    
+
     // Create cancellable context for long operations
     processCtx, cancel := context.WithTimeout(ctx.Context(), MaxProcessingTime)
     defer cancel()
-    
+
     select {
     case result := <-k.asyncProcess(processCtx, data):
         return result
@@ -847,7 +847,7 @@ func TestMessageValidation_MaliciousInput(t *testing.T) {
             wantErr: true,
         },
     }
-    
+
     for _, tc := range testCases {
         t.Run(tc.name, func(t *testing.T) {
             err := tc.msg.ValidateBasic()
@@ -864,7 +864,7 @@ func TestMessageValidation_MaliciousInput(t *testing.T) {
 func TestMLScoring_Determinism(t *testing.T) {
     scorer := inference.NewConsensusScorer()
     input := loadTestInput(t)
-    
+
     // Run scoring multiple times
     results := make([]float64, 10)
     for i := 0; i < 10; i++ {
@@ -872,7 +872,7 @@ func TestMLScoring_Determinism(t *testing.T) {
         require.NoError(t, err)
         results[i] = score
     }
-    
+
     // All results must be identical for consensus
     for i := 1; i < len(results); i++ {
         require.Equal(t, results[0], results[i],
@@ -900,11 +900,11 @@ semgrep --config=p/golang ./
 
 ### Internal Documentation
 
-- [Development Environment Setup](./_docs/development-environment.md)
-- [Testing Guide](./_docs/testing-guide.md)
-- [VEID Module Architecture](./x/veid/README.md)
-- [Encryption Module](./x/encryption/README.md)
-- [Provider Daemon Security](./pkg/provider_daemon/SECURITY.md)
+- [Development Environment Setup](development-environment.md)
+- [Testing Guide](testing-guide.md)
+- [VEID Module Architecture](../x/veid/README.md)
+- [Encryption Module](../x/encryption/README.md)
+- [Provider Daemon Security](../pkg/provider_daemon/SECURITY.md)
 
 ### External Resources
 
@@ -926,4 +926,4 @@ Do NOT open public GitHub issues for security vulnerabilities.
 
 ---
 
-*This document is reviewed quarterly. Last security audit: Q4 2024.*
+_This document is reviewed quarterly. Last security audit: Q4 2024._

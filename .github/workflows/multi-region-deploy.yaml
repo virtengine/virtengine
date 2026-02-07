@@ -1,13 +1,12 @@
 name: Multi-Region Deploy
 
+# NOTE: AWS deployment is MANUAL-ONLY via workflow_dispatch.
+# This workflow is disabled for automatic push triggers because:
+# 1. AWS credentials are not configured in CI/CD by default
+# 2. AWS is an operator script target, not the primary deployment platform
+# 3. Use workflow_dispatch to manually trigger when AWS deployment is needed
+
 on:
-  push:
-    branches: [main, mainnet/main]
-    paths:
-      - "infra/terraform/**"
-      - "deploy/**"
-      - ".github/workflows/multi-region-deploy.yaml"
-      - ".github/actions/deploy-region/**"
   workflow_dispatch:
     inputs:
       region:
@@ -64,12 +63,13 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Stage 2: Plan (per-region)
+  # NOTE: These jobs require AWS_DEPLOY_ROLE_ARN secret to be configured
   # ---------------------------------------------------------------------------
   plan-primary:
     name: "Plan: us-east-1 (primary)"
     needs: validate
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'us-east-1' || github.event_name == 'push' }}
+    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,7 +101,7 @@ jobs:
     name: "Plan: eu-west-1 (secondary)"
     needs: validate
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'eu-west-1' || github.event_name == 'push' }}
+    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'eu-west-1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -133,7 +133,7 @@ jobs:
     name: "Plan: ap-southeast-1 (tertiary)"
     needs: validate
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'ap-southeast-1' || github.event_name == 'push' }}
+    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'ap-southeast-1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -162,13 +162,13 @@ jobs:
           path: infra/terraform/regions/ap-southeast-1/plan.json
 
   # ---------------------------------------------------------------------------
-  # Stage 3: Deploy Primary Region
+  # Stage 3: Deploy Primary Region (Manual approval required)
   # ---------------------------------------------------------------------------
   deploy-primary:
     name: "Deploy: us-east-1 (primary)"
     needs: plan-primary
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    if: ${{ github.event.inputs.dry_run != 'true' }}
     environment: production-us-east-1
     steps:
       - uses: actions/checkout@v4
@@ -202,7 +202,7 @@ jobs:
     name: "Deploy: eu-west-1 (secondary)"
     needs: deploy-primary
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    if: ${{ github.event.inputs.dry_run != 'true' }}
     environment: production-eu-west-1
     steps:
       - uses: actions/checkout@v4
@@ -233,7 +233,7 @@ jobs:
     name: "Deploy: ap-southeast-1 (tertiary)"
     needs: deploy-primary
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    if: ${{ github.event.inputs.dry_run != 'true' }}
     environment: production-ap-southeast-1
     steps:
       - uses: actions/checkout@v4
@@ -267,7 +267,7 @@ jobs:
     name: "Deploy: Global Resources"
     needs: [deploy-secondary, deploy-tertiary]
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    if: ${{ github.event.inputs.dry_run != 'true' }}
     environment: production-global
     steps:
       - uses: actions/checkout@v4
@@ -306,7 +306,7 @@ jobs:
     name: "Finalize: Global LB + Validation"
     needs: deploy-global
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    if: ${{ github.event.inputs.dry_run != 'true' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -13,6 +13,7 @@ Before finishing a task - ensure that you create a commit based on following con
 
 If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
 You might notice that your task instructions might have already been implemented by another agent previously - if this is the case, your goal switches to analyzing if the previous agent has completed the task END TO END sufficiently - and if not, fix any issues or problems the previous agent might have missed.
+If you notice unexpected modified/untracked files, assume another agent/subagent is working on a separate task; do NOT revert them. Continue with your task and avoid touching those files unless explicitly instructed.
 
 ### PR Creation & Merge (vibe-kanban automation)
 

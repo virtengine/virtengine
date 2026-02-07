@@ -477,7 +477,7 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Q6: How is data classified and protected?
 
-See [data-classification.md](_docs/data-classification.md) for full classification policy.
+See [data-classification.md](../../_docs/data-classification.md) for full classification policy.
 
 | Classification | Examples                        | Encryption          | Access Control       |
 | -------------- | ------------------------------- | ------------------- | -------------------- |

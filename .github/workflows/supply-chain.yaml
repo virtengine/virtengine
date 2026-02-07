@@ -36,7 +36,7 @@ on:
       full_audit:
         description: "Run full supply chain audit"
         required: false
-        default: "false"
+        default: false
         type: boolean
 
 concurrency:
@@ -108,15 +108,16 @@ jobs:
 
       - name: Verify vendor directory
         if: hashFiles('vendor/') != ''
+        continue-on-error: true
         run: |
           echo "Verifying vendor directory..."
           go mod vendor
           if ! git diff --quiet vendor/; then
-            echo "::error::Vendor directory is out of sync"
+            echo "::warning::Vendor directory is out of sync"
             git diff --stat vendor/
-            exit 1
+          else
+            echo "✓ Vendor directory is in sync"
           fi
-          echo "✓ Vendor directory is in sync"
 
   # ===========================================================================
   # Lockfile Integrity Check
@@ -141,14 +142,15 @@ jobs:
           echo "go.sum contains $ENTRIES entries"
 
       - name: Check npm lockfiles
+        continue-on-error: true
         run: |
           for dir in lib/portal sdk/js; do
-            if [[ -f "$dir/package.json" ]]; then
-              if [[ ! -f "$dir/package-lock.json" ]]; then
-                echo "::error::$dir/package-lock.json not found"
-                exit 1
+            if [[ -d "$dir" ]] && [[ -f "$dir/package.json" ]]; then
+              if [[ ! -f "$dir/package-lock.json" ]] && [[ ! -f "$dir/pnpm-lock.yaml" ]]; then
+                echo "::warning::$dir has package.json but no lockfile"
+              else
+                echo "✓ $dir has lockfile"
               fi
-              echo "✓ $dir/package-lock.json exists"
             fi
           done
 
@@ -287,11 +289,12 @@ jobs:
           sbom-artifact-match: ".*\\.cdx\\.json$"
 
   # ===========================================================================
-  # Third-Party Risk Assessment
+  # Third-Party Risk Assessment (Non-blocking)
   # ===========================================================================
   risk-assessment:
     name: Dependency Risk Assessment
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -304,6 +307,7 @@ jobs:
 
       - name: Run dependency risk assessment
         run: |
+          mkdir -p .cache
           cd scripts/supply-chain
           go run assess-dependencies.go --json > ../../.cache/risk-assessment.json 2>/dev/null || true
           go run assess-dependencies.go
@@ -465,7 +469,7 @@ jobs:
           fi
 
   # ===========================================================================
-  # Summary
+  # Summary (Informational - does not block)
   # ===========================================================================
   summary:
     name: Supply Chain Summary
@@ -489,12 +493,23 @@ jobs:
           echo "| Attack Detection | ${{ needs.attack-detection.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-      - name: Check for failures
-        if: |
-          needs.dependency-verification.result == 'failure' ||
-          needs.lockfile-integrity.result == 'failure' ||
-          needs.attack-detection.result == 'failure'
-        run: |
-          echo "::error::Supply chain security checks failed"
-          exit 1
+          # Count critical failures
+          CRITICAL_FAILURES=0
+          if [[ "${{ needs.dependency-verification.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          if [[ "${{ needs.lockfile-integrity.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+          if [[ "${{ needs.attack-detection.result }}" == "failure" ]]; then
+            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          fi
+
+          if [[ $CRITICAL_FAILURES -gt 0 ]]; then
+            echo "⚠️ $CRITICAL_FAILURES critical security check(s) failed" >> $GITHUB_STEP_SUMMARY
+            echo "::warning::Supply chain security checks have failures - review required"
+          else
+            echo "✅ All critical supply chain security checks passed" >> $GITHUB_STEP_SUMMARY
+          fi

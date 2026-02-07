@@ -29,12 +29,12 @@ VirtEngine supports multiple Trusted Execution Environment (TEE) platforms for s
 
 ### Platform Selection
 
-| Use Case | Recommended Platform | Rationale |
-|----------|---------------------|-----------|
-| Identity Scoring (ML) | AMD SEV-SNP | No memory limits, near-native performance |
-| Key Management | Intel SGX | Smallest TCB, proven sealing |
-| Cloud Deployment | AWS Nitro | Managed infrastructure |
-| Development/Testing | Simulation | No hardware required |
+| Use Case              | Recommended Platform | Rationale                                 |
+| --------------------- | -------------------- | ----------------------------------------- |
+| Identity Scoring (ML) | AMD SEV-SNP          | No memory limits, near-native performance |
+| Key Management        | Intel SGX            | Smallest TCB, proven sealing              |
+| Cloud Deployment      | AWS Nitro            | Managed infrastructure                    |
+| Development/Testing   | Simulation           | No hardware required                      |
 
 ---
 
@@ -42,30 +42,30 @@ VirtEngine supports multiple Trusted Execution Environment (TEE) platforms for s
 
 ### Intel SGX
 
-| Hardware | Requirements |
-|----------|-------------|
-| CPU | Intel Xeon Scalable (3rd Gen+) or Core (10th Gen+) |
-| SGX Version | SGX2 with FLC support preferred |
-| Driver | Intel SGX in-kernel driver (Linux 5.11+) |
-| BIOS | SGX enabled, PRMRR configured |
+| Hardware    | Requirements                                       |
+| ----------- | -------------------------------------------------- |
+| CPU         | Intel Xeon Scalable (3rd Gen+) or Core (10th Gen+) |
+| SGX Version | SGX2 with FLC support preferred                    |
+| Driver      | Intel SGX in-kernel driver (Linux 5.11+)           |
+| BIOS        | SGX enabled, PRMRR configured                      |
 
 ### AMD SEV-SNP
 
-| Hardware | Requirements |
-|----------|-------------|
-| CPU | AMD EPYC Milan (7003) or Genoa (9004) |
-| Kernel | Linux 6.0+ with SNP patches |
-| Hypervisor | KVM with SNP support |
-| Firmware | Latest AMD SEV firmware |
+| Hardware   | Requirements                          |
+| ---------- | ------------------------------------- |
+| CPU        | AMD EPYC Milan (7003) or Genoa (9004) |
+| Kernel     | Linux 6.0+ with SNP patches           |
+| Hypervisor | KVM with SNP support                  |
+| Firmware   | Latest AMD SEV firmware               |
 
 ### AWS Nitro
 
-| Environment | Requirements |
-|-------------|-------------|
+| Environment    | Requirements                             |
+| -------------- | ---------------------------------------- |
 | Instance Types | c5.xlarge+, m5.xlarge+, r5.xlarge+, etc. |
-| AMI | Amazon Linux 2, AL2023, or compatible |
-| Tools | nitro-cli, nitro-enclaves-allocator |
-| Kernel | 5.10+ with Nitro support |
+| AMI            | Amazon Linux 2, AL2023, or compatible    |
+| Tools          | nitro-cli, nitro-enclaves-allocator      |
+| Kernel         | 5.10+ with Nitro support                 |
 
 ---
 
@@ -468,24 +468,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-      
+          go-version: "1.22"
+
       - name: Run TEE tests (simulation)
         run: |
           go test -v ./pkg/enclave_runtime/... -tags=''
-      
+
       # Hardware tests run on self-hosted runners
-  
+
   tee-hardware-tests:
     runs-on: [self-hosted, sgx]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run SGX hardware tests
         run: |
           go test -v ./pkg/enclave_runtime/... -tags='sgx_hardware'
@@ -493,13 +493,13 @@ jobs:
 
 ### Build Tags
 
-| Tag | Description |
-|-----|-------------|
-| (none) | Simulation mode, no hardware required |
-| `sgx_hardware` | Real SGX SDK calls |
-| `sev_hardware` | Real SEV-SNP /dev/sev-guest calls |
-| `nitro_hardware` | Real Nitro CLI calls |
-| `e2e.integration` | E2E tests (all platforms) |
+| Tag               | Description                           |
+| ----------------- | ------------------------------------- |
+| (none)            | Simulation mode, no hardware required |
+| `sgx_hardware`    | Real SGX SDK calls                    |
+| `sev_hardware`    | Real SEV-SNP /dev/sev-guest calls     |
+| `nitro_hardware`  | Real Nitro CLI calls                  |
+| `e2e.integration` | E2E tests (all platforms)             |
 
 ### Test Execution
 
@@ -510,7 +510,7 @@ go test ./pkg/enclave_runtime/...
 # SGX hardware mode
 go test -tags=sgx_hardware ./pkg/enclave_runtime/sgx/...
 
-# SEV hardware mode  
+# SEV hardware mode
 go test -tags=sev_hardware ./pkg/enclave_runtime/sev/...
 
 # All E2E tests
@@ -558,5 +558,5 @@ tee:
 - [Intel SGX DCAP Documentation](https://download.01.org/intel-sgx/)
 - [AMD SEV-SNP ABI Specification](https://www.amd.com/system/files/TechDocs/56860.pdf)
 - [AWS Nitro Enclaves User Guide](https://docs.aws.amazon.com/enclaves/latest/user/)
-- [VirtEngine TEE Architecture](./_docs/tee-integration-architecture.md)
-- [TEE Security Model](./_docs/tee-security-model.md)
+- [VirtEngine TEE Architecture](tee-integration-architecture.md)
+- [TEE Security Model](tee-security-model.md)

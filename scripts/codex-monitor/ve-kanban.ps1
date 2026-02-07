@@ -33,9 +33,6 @@ $script:VK_REPO_ID = $env:VK_REPO_ID ?? ""   # Auto-detected if empty
 $script:GH_OWNER = $env:GH_OWNER ?? "virtengine"
 $script:GH_REPO = $env:GH_REPO ?? "virtengine"
 $script:VK_TARGET_BRANCH = $env:VK_TARGET_BRANCH ?? "origin/main"
-$script:VK_HTTP_TIMEOUT_SEC = [int]($env:VK_HTTP_TIMEOUT_SEC ?? "45")
-$script:VK_HTTP_RETRIES = [int]($env:VK_HTTP_RETRIES ?? "2")
-$script:VK_HTTP_RETRY_DELAY_MS = [int]($env:VK_HTTP_RETRY_DELAY_MS ?? "1500")
 $script:VK_INITIALIZED = $false
 $script:VK_LAST_GH_ERROR = $null
 $script:VK_LAST_GH_ERROR_AT = $null
@@ -63,33 +60,18 @@ function Invoke-VKApi {
     $uri = "$script:VK_BASE_URL$Path"
     $params = @{ Uri = $uri; Method = $Method; ContentType = "application/json"; UseBasicParsing = $true }
     if ($Body) { $params.Body = ($Body | ConvertTo-Json -Depth 10 -Compress) }
-    $timeoutSec = if ($script:VK_HTTP_TIMEOUT_SEC -gt 0) { $script:VK_HTTP_TIMEOUT_SEC } else { 45 }
-    $maxRetries = if ($script:VK_HTTP_RETRIES -ge 0) { $script:VK_HTTP_RETRIES } else { 0 }
-    $delayMs = if ($script:VK_HTTP_RETRY_DELAY_MS -gt 0) { $script:VK_HTTP_RETRY_DELAY_MS } else { 1500 }
-    $attempt = 0
-    while ($true) {
-        $attempt++
-        try {
-            $raw = Invoke-WebRequest @params -TimeoutSec $timeoutSec -ErrorAction Stop
-            $resp = $raw.Content | ConvertFrom-Json -Depth 20
-            if ($resp.success -eq $false) {
-                Write-Warning "API error on $Path : $($resp.message)"
-                return $null
-            }
-            return $resp.data ?? $resp
-        }
-        catch {
-            $msg = $_.Exception?.Message ?? $_.ToString()
-            $isTimeout = $msg -match "Timeout|timed out|request was canceled"
-            $isTransient = $isTimeout -or ($msg -match "connection|connect|refused|reset|NameResolution|No connection|temporarily")
-            if ($attempt -le $maxRetries -and $isTransient) {
-                Write-Warning "HTTP $Method $uri failed (attempt $attempt/$($maxRetries + 1)): $msg"
-                Start-Sleep -Milliseconds ($delayMs * $attempt)
-                continue
-            }
-            Write-Error "HTTP $Method $uri failed: $msg"
+    try {
+        $raw = Invoke-WebRequest @params -ErrorAction Stop
+        $resp = $raw.Content | ConvertFrom-Json -Depth 20
+        if ($resp.success -eq $false) {
+            Write-Warning "API error on $Path : $($resp.message)"
             return $null
         }
+        return $resp.data ?? $resp
+    }
+    catch {
+        Write-Error "HTTP $Method $uri failed: $_"
+        return $null
     }
 }
 
@@ -1168,9 +1150,6 @@ function Show-Usage {
     VK_PROJECT_NAME   Project name to auto-detect (default: virtengine)
     VK_PROJECT_ID     Project UUID (auto-detected if empty)
     VK_REPO_ID        Repository UUID (auto-detected if empty)
-    VK_HTTP_TIMEOUT_SEC   HTTP timeout in seconds (default: 45)
-    VK_HTTP_RETRIES       Retry count for transient VK errors (default: 2)
-    VK_HTTP_RETRY_DELAY_MS Retry backoff base in ms (default: 1500)
     GH_OWNER          GitHub owner (default: virtengine-gh)
     GH_REPO           GitHub repo (default: virtengine)
 

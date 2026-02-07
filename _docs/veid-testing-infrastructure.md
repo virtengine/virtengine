@@ -473,7 +473,7 @@ go test -v -tags="e2e.integration" ./tests/e2e/... -run TestVEIDOnboarding
 
 ## References
 
-- [VEID Flow Specification](_docs/veid-flow-spec.md)
-- [Architecture Overview](_docs/architecture.md)
-- [Testing Guide](_docs/testing-guide.md)
-- [Validator VEID Operations](_docs/training/validator/veid-operations.md)
+- [VEID Flow Specification](veid-flow-spec.md)
+- [Architecture Overview](architecture.md)
+- [Testing Guide](testing-guide.md)
+- [Validator VEID Operations](training/validator/veid-operations.md)

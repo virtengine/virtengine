@@ -915,7 +915,6 @@ function Save-StatusSnapshot {
             status                = $info.status
             updated_at            = (Get-Date).ToString("o")
             last_process_status   = $info.last_process_status
-            last_process_completed_at = $info.last_process_completed_at
             copilot_fix_requested = $info.copilot_fix_requested
             copilot_fix_pr_number = $info.copilot_fix_pr_number
             copilot_fix_merged    = $info.copilot_fix_merged
@@ -2696,7 +2695,8 @@ function Maybe-TriggerCISweep {
     if (Test-GithubCooldown) { return }
 
     $baseBranch = Get-BaseBranchName
-    $mergedCount = Get-MergedPRCountSince -Since $script:LastCISweepAt -BaseBranch $baseBranch -Limit 50
+    $limit = [math]::Max(50, $prThreshold * 2)
+    $mergedCount = Get-MergedPRCountSince -Since $script:LastCISweepAt -BaseBranch $baseBranch -Limit $limit
     if ($mergedCount -lt $prThreshold) { return }
 
     $reason = "pr-backup"

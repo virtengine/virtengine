@@ -13,10 +13,10 @@ If you only need a local dev environment, start with the localnet section below.
 
 ## Quick Links
 
-- Local dev environment: [Development Environment](_docs/development-environment.md)
-- Validator onboarding: [Validator Onboarding](_docs/validator-onboarding.md)
-- Provider onboarding: [Provider Guide](_docs/provider-guide.md)
-- Provider/Waldur integration: [Provider Daemon Waldur Integration](_docs/provider-daemon-waldur-integration.md)
+- Local dev environment: [Development Environment](../../_docs/development-environment.md)
+- Validator onboarding: [Validator Onboarding](../../_docs/validator-onboarding.md)
+- Provider onboarding: [Provider Guide](../../_docs/provider-guide.md)
+- Provider/Waldur integration: [Provider Daemon Waldur Integration](../../_docs/provider-daemon-waldur-integration.md)
 - Provider ops runbook: [Provider Operations](runbooks/PROVIDER_OPERATIONS.md)
 - State sync bootstrap: [state-sync-bootstrap.sh](../../scripts/state-sync-bootstrap.sh)
 - Kubernetes manifests: [deploy/kubernetes/](../../deploy/kubernetes/)
