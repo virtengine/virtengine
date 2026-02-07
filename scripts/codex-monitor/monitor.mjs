@@ -3417,7 +3417,7 @@ function startTelegramCommandListener() {
   });
 }
 
-function startTelegramNotifier() {
+async function startTelegramNotifier() {
   if (telegramNotifierInterval) {
     clearInterval(telegramNotifierInterval);
     telegramNotifierInterval = null;
@@ -3448,7 +3448,23 @@ function startTelegramNotifier() {
     await flushMergeNotifications();
     await checkStatusMilestones();
   };
-  void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
+
+  // Suppress "Notifier started" message on rapid restarts (e.g. code-change restarts).
+  // If the last start was <60s ago, skip the notification — just log locally.
+  const lastStartPath = resolve(repoRoot, ".cache", "ve-last-notifier-start.txt");
+  let suppressStartup = false;
+  try {
+    const prev = await readFile(lastStartPath, "utf8");
+    const elapsed = Date.now() - Number(prev);
+    if (elapsed < 60_000) suppressStartup = true;
+  } catch { /* first start or missing file */ }
+  await writeFile(lastStartPath, String(Date.now())).catch(() => {});
+
+  if (suppressStartup) {
+    console.log(`[monitor] notifier restarted (suppressed telegram notification — rapid restart)`);
+  } else {
+    void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
+  }
   telegramNotifierTimeout = setTimeout(sendUpdate, intervalMs);
   telegramNotifierInterval = setInterval(sendUpdate, intervalMs);
 }
@@ -4606,7 +4622,7 @@ function applyConfig(nextConfig, options = {}) {
   startEnvWatchers();
 
   if (prevTelegramInterval !== telegramIntervalMin) {
-    startTelegramNotifier();
+    void startTelegramNotifier();
   }
   if (!prevTelegramCommandEnabled && telegramCommandEnabled) {
     startTelegramCommandListener();
@@ -4832,7 +4848,7 @@ startProcess();
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
 }
-startTelegramNotifier();
+void startTelegramNotifier();
 
 // ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({
