@@ -27,6 +27,17 @@ pnpm -C scripts/codex-monitor start -- --args "-MaxParallel 6"
 - `--no-codex`: Disable Codex SDK analysis.
 - `--no-watch`: Disable file watching.
 
+### Telegram heartbeat
+
+When the Telegram bot is enabled, it posts a workspace heartbeat every 5 minutes by default.
+
+Environment overrides:
+
+- `TELEGRAM_HEARTBEAT_INTERVAL_MIN` — heartbeat interval in minutes (default: 5).
+- `TELEGRAM_HEARTBEAT_DISABLED` — set to `1` or `true` to disable heartbeat.
+- `TELEGRAM_HEARTBEAT_QUIET_HOURS` — quiet window(s) like `22:00-07:00` or `8-9,18:00-20:00`.
+- `TELEGRAM_HEARTBEAT_TIMEZONE` — optional IANA timezone (e.g., `America/Los_Angeles`).
+
 ## Notes
 
 - The Codex SDK uses environment configuration from your Codex setup (API key, base URL).
