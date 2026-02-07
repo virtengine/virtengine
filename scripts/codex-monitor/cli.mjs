@@ -16,9 +16,10 @@
  */
 
 import { resolve, dirname } from "node:path";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fork } from "node:child_process";
+import os from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -191,6 +192,71 @@ async function main() {
   await runMonitor();
 }
 
+// ── Crash notification (last resort — raw fetch when monitor can't start) ─────
+
+function readEnvCredentials() {
+  const envPath = resolve(__dirname, ".env");
+  if (!existsSync(envPath)) return {};
+  const vars = {};
+  try {
+    const lines = readFileSync(envPath, "utf8").split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (key === "TELEGRAM_BOT_TOKEN" || key === "TELEGRAM_CHAT_ID" || key === "PROJECT_NAME") {
+        vars[key] = val;
+      }
+    }
+  } catch {
+    // best effort
+  }
+  return vars;
+}
+
+async function sendCrashNotification(exitCode, signal) {
+  const env = readEnvCredentials();
+  const token = env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const project = env.PROJECT_NAME || process.env.PROJECT_NAME || "";
+  const host = os.hostname();
+  const tag = project ? `[${project}]` : "";
+  const reason = signal ? `signal ${signal}` : `exit code ${exitCode}`;
+  const text =
+    `🔥 *CRASH* ${tag} codex-monitor v${VERSION} died unexpectedly\n` +
+    `Host: \`${host}\`\n` +
+    `Reason: \`${reason}\`\n` +
+    `Time: ${new Date().toISOString()}\n\n` +
+    `Monitor is no longer running. Manual restart required.`;
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "Markdown",
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    // best effort — if Telegram is unreachable, nothing we can do
+  }
+}
+
 // ── Self-restart exit code (must match monitor.mjs SELF_RESTART_EXIT_CODE) ───
 const SELF_RESTART_EXIT_CODE = 75;
 let monitorChild = null;
@@ -213,23 +279,37 @@ function runMonitor() {
         // Small delay to let file writes settle
         setTimeout(() => resolve(runMonitor()), 1000);
       } else {
-        process.exit(code ?? (signal ? 1 : 0));
+        const exitCode = code ?? (signal ? 1 : 0);
+        if (exitCode !== 0 && !gracefulShutdown) {
+          console.error(
+            `\n  ✖ Monitor crashed (${signal ? `signal ${signal}` : `exit code ${exitCode}`}) — sending crash notification...`,
+          );
+          sendCrashNotification(exitCode, signal).finally(() =>
+            process.exit(exitCode),
+          );
+        } else {
+          process.exit(exitCode);
+        }
       }
     });
 
     monitorChild.on("error", (err) => {
       monitorChild = null;
-      reject(err);
+      console.error(`\n  ✖ Monitor failed to start: ${err.message}`);
+      sendCrashNotification(1, null).finally(() => reject(err));
     });
   });
 }
 
 // Let forked monitor handle signal cleanup — prevent parent from dying first
+let gracefulShutdown = false;
 process.on("SIGINT", () => {
+  gracefulShutdown = true;
   if (!monitorChild) process.exit(0);
   // Child gets SIGINT too via shared terminal — just wait for it to exit
 });
 process.on("SIGTERM", () => {
+  gracefulShutdown = true;
   if (!monitorChild) process.exit(0);
   try {
     monitorChild.kill("SIGTERM");
@@ -238,7 +318,8 @@ process.on("SIGTERM", () => {
   }
 });
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(`codex-monitor failed: ${err.message}`);
+  await sendCrashNotification(1, null).catch(() => {});
   process.exit(1);
 });
