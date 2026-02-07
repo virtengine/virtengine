@@ -6,11 +6,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const isPages = process.env.GITHUB_PAGES === 'true';
 
+const isDocker = process.env.DOCKER_BUILD === 'true';
+
 const nextConfig = {
   reactStrictMode: true,
 
-  // Enable static export for GitHub Pages deployment
-  output: isPages ? 'export' : undefined,
+  // Enable static export for GitHub Pages, standalone for Docker
+  output: isPages ? 'export' : isDocker ? 'standalone' : undefined,
 
   // Use trailing slashes for better GitHub Pages compatibility
   trailingSlash: isPages,
