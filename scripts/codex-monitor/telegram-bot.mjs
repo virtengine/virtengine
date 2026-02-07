@@ -44,12 +44,30 @@ const POLL_TIMEOUT_S = 30; // long-poll timeout
 const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
 const CODEX_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
+const HEARTBEAT_INTERVAL_MIN = Number(
+  process.env.TELEGRAM_HEARTBEAT_INTERVAL_MIN || "5",
+);
+const HEARTBEAT_DISABLED =
+  process.env.TELEGRAM_HEARTBEAT_DISABLED === "1" ||
+  process.env.TELEGRAM_HEARTBEAT_DISABLED === "true";
+const HEARTBEAT_QUIET_HOURS = (
+  process.env.TELEGRAM_HEARTBEAT_QUIET_HOURS ||
+  process.env.TELEGRAM_QUIET_HOURS ||
+  ""
+).trim();
+const HEARTBEAT_TIMEZONE = (
+  process.env.TELEGRAM_HEARTBEAT_TIMEZONE ||
+  process.env.TELEGRAM_QUIET_HOURS_TZ ||
+  ""
+).trim();
 
 // ── State ────────────────────────────────────────────────────────────────────
 
 let lastUpdateId = 0;
 let polling = false;
 let pollAbort = null;
+let heartbeatInterval = null;
+let heartbeatTimeout = null;
 
 // ── Agent session state (for follow-up steering & bottom-pinning) ────────────
 
@@ -599,6 +617,191 @@ function splitMessage(text, maxLen) {
     remaining = remaining.slice(splitIdx);
   }
   return chunks;
+}
+
+// ── Heartbeat helpers ───────────────────────────────────────────────────────
+
+function parseQuietHoursRanges(value) {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const match = item.match(
+        /^(\d{1,2})(?::?(\d{2}))?\s*-\s*(\d{1,2})(?::?(\d{2}))?$/,
+      );
+      if (!match) return null;
+      const startHour = Number(match[1]);
+      const startMin = Number(match[2] || "0");
+      const endHour = Number(match[3]);
+      const endMin = Number(match[4] || "0");
+      if (
+        !Number.isFinite(startHour) ||
+        !Number.isFinite(startMin) ||
+        !Number.isFinite(endHour) ||
+        !Number.isFinite(endMin)
+      ) {
+        return null;
+      }
+      if (
+        startHour < 0 ||
+        startHour > 23 ||
+        startMin < 0 ||
+        startMin > 59 ||
+        endHour < 0 ||
+        endHour > 23 ||
+        endMin < 0 ||
+        endMin > 59
+      ) {
+        return null;
+      }
+      return {
+        start: startHour * 60 + startMin,
+        end: endHour * 60 + endMin,
+      };
+    })
+    .filter(Boolean);
+}
+
+function getMinutesSinceMidnight(timeZone) {
+  const now = new Date();
+  if (!timeZone) {
+    return now.getHours() * 60 + now.getMinutes();
+  }
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const hour = Number(parts.find((p) => p.type === "hour")?.value || "0");
+    const minute = Number(
+      parts.find((p) => p.type === "minute")?.value || "0",
+    );
+    return hour * 60 + minute;
+  } catch (err) {
+    console.warn(
+      `[telegram-bot] invalid heartbeat timezone "${timeZone}": ${err.message}`,
+    );
+    return now.getHours() * 60 + now.getMinutes();
+  }
+}
+
+function isWithinQuietHours(ranges, minutesNow) {
+  if (!ranges.length) return false;
+  return ranges.some((range) => {
+    if (range.start === range.end) return true;
+    if (range.start < range.end) {
+      return minutesNow >= range.start && minutesNow < range.end;
+    }
+    return minutesNow >= range.start || minutesNow < range.end;
+  });
+}
+
+async function drainTelegramUpdates() {
+  if (polling) return;
+  const updates = await pollUpdates();
+  for (const update of updates) {
+    if (typeof update.update_id === "number") {
+      lastUpdateId = Math.max(lastUpdateId, update.update_id);
+    }
+    await handleUpdate(update);
+  }
+}
+
+async function loadWorkspaceSummaries() {
+  const workspaces = [
+    {
+      label: "primary",
+      repoPath: repoRoot,
+    },
+  ];
+
+  const worktreesRoot = resolve(repoRoot, "..", "..");
+  const ids = await listWorkspaceIds(worktreesRoot);
+  for (const id of ids) {
+    const repoPath = findRepoPath(resolve(worktreesRoot, id));
+    if (!repoPath || repoPath === repoRoot) continue;
+    workspaces.push({ label: id, repoPath });
+  }
+
+  const summaries = [];
+  for (const workspace of workspaces) {
+    const status = await loadWorkspaceStatusData(workspace.repoPath);
+    const counts = status?.counts || {};
+    const running = counts.running ?? 0;
+    const review = counts.review ?? 0;
+    const error = counts.error ?? 0;
+    const manualReview = counts.manual_review ?? 0;
+    summaries.push({
+      label: workspace.label,
+      queue: status?.backlog_remaining ?? null,
+      running,
+      review,
+      error,
+      manualReview,
+      active: running + review + manualReview,
+    });
+  }
+
+  return summaries;
+}
+
+async function getModelAvailabilitySummary() {
+  const iconMap = {
+    healthy: "✅",
+    degraded: "⚠️",
+    cooldown: "⏸️",
+    disabled: "❌",
+  };
+  try {
+    const psScript = [
+      `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}';`,
+      "Initialize-ExecutorHealth;",
+      "$out = @();",
+      "foreach ($exec in $script:VK_EXECUTORS) {",
+      "  $p = $exec.provider;",
+      "  $h = $script:ExecutorHealth[$p];",
+      "  $status = Get-ExecutorHealthStatus -Provider $p;",
+      "  $out += @{",
+      "    model = $exec.model;",
+      "    status = $status;",
+      "    active = if ($h) { $h.active_tasks } else { 0 };",
+      "  }",
+      "}",
+      "$out | ConvertTo-Json -Depth 3",
+    ].join(" ");
+
+    const result = runPwsh(psScript, 15000);
+    const executors = JSON.parse(result);
+    const arr = Array.isArray(executors) ? executors : [executors];
+    const pieces = arr.map((item) => {
+      const icon = iconMap[item.status] || "❓";
+      const model = item.model || "model";
+      const active = Number.isFinite(item.active) ? item.active : 0;
+      return `${icon} ${model} (${active})`;
+    });
+    if (!pieces.length) return "Models: unavailable";
+    return `Models: ${pieces.join(" | ")}`;
+  } catch (err) {
+    return `Models: unavailable (${err.message})`;
+  }
+}
+
+async function buildHeartbeatMessage() {
+  const summaries = await loadWorkspaceSummaries();
+  const lines = ["🫀 Workspace heartbeat"];
+  for (const item of summaries) {
+    const queue =
+      item.queue === null || item.queue === undefined ? "?" : item.queue;
+    lines.push(
+      `- ${item.label}: queue=${queue} active=${item.active} running=${item.running} review=${item.review} error=${item.error}`,
+    );
+  }
+  lines.push(await getModelAvailabilitySummary());
+  return lines.join("\n");
 }
 
 // ── Polling ──────────────────────────────────────────────────────────────────
@@ -2550,6 +2753,57 @@ async function pollLoop() {
   }
 }
 
+async function runHeartbeat() {
+  if (!telegramToken || !telegramChatId) return;
+  const quietRanges = parseQuietHoursRanges(HEARTBEAT_QUIET_HOURS);
+  const minutesNow = getMinutesSinceMidnight(HEARTBEAT_TIMEZONE);
+  if (isWithinQuietHours(quietRanges, minutesNow)) {
+    console.log("[telegram-bot] heartbeat skipped (quiet hours)");
+    return;
+  }
+
+  await drainTelegramUpdates();
+
+  try {
+    const message = await buildHeartbeatMessage();
+    await sendDirect(telegramChatId, message, { disablePreview: true });
+  } catch (err) {
+    console.warn(`[telegram-bot] heartbeat failed: ${err.message}`);
+  }
+}
+
+function startHeartbeatLoop() {
+  if (HEARTBEAT_DISABLED) {
+    console.warn(
+      "[telegram-bot] heartbeat disabled (TELEGRAM_HEARTBEAT_DISABLED)",
+    );
+    return;
+  }
+  if (!telegramToken || !telegramChatId) {
+    console.warn(
+      "[telegram-bot] heartbeat disabled (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)",
+    );
+    return;
+  }
+  if (!Number.isFinite(HEARTBEAT_INTERVAL_MIN) || HEARTBEAT_INTERVAL_MIN <= 0) {
+    console.warn("[telegram-bot] heartbeat disabled (invalid interval)");
+    return;
+  }
+  if (heartbeatInterval || heartbeatTimeout) return;
+
+  const intervalMs = HEARTBEAT_INTERVAL_MIN * 60 * 1000;
+  heartbeatTimeout = setTimeout(() => {
+    heartbeatTimeout = null;
+    void runHeartbeat();
+  }, intervalMs);
+  heartbeatInterval = setInterval(() => {
+    void runHeartbeat();
+  }, intervalMs);
+  console.log(
+    `[telegram-bot] heartbeat scheduled every ${HEARTBEAT_INTERVAL_MIN} minutes`,
+  );
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -2595,6 +2849,8 @@ export async function startTelegramBot() {
     console.error(`[telegram-bot] fatal poll loop error: ${err.message}`);
     polling = false;
   });
+
+  startHeartbeatLoop();
 }
 
 /**
@@ -2608,6 +2864,14 @@ export function stopTelegramBot() {
     } catch {
       /* best effort */
     }
+  }
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+  if (heartbeatTimeout) {
+    clearTimeout(heartbeatTimeout);
+    heartbeatTimeout = null;
   }
   console.log("[telegram-bot] stopped");
 }
