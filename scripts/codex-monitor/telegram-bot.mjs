@@ -3799,11 +3799,24 @@ export async function startTelegramBot() {
 
   polling = true;
 
-  // Send startup notification
-  await sendDirect(
-    telegramChatId,
-    `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
-  );
+  // Only send "online" notification on truly fresh starts, not code-change restarts.
+  const botStartPath = resolve(repoRoot, ".cache", "ve-last-bot-start.txt");
+  let suppressOnline = false;
+  try {
+    const prev = await readFile(botStartPath, "utf8");
+    const elapsed = Date.now() - Number(prev);
+    if (elapsed < 60_000) suppressOnline = true;
+  } catch { /* first start or missing file */ }
+  await writeFile(botStartPath, String(Date.now())).catch(() => {});
+
+  if (suppressOnline) {
+    console.log("[telegram-bot] restarted (suppressed online notification — rapid restart)");
+  } else {
+    await sendDirect(
+      telegramChatId,
+      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
+    );
+  }
 
   console.log("[telegram-bot] started — listening for messages");
 
