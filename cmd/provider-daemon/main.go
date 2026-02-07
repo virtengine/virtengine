@@ -24,6 +24,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	rolesv1 "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/virtengine/virtengine/pkg/observability"
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
@@ -718,6 +721,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 	vaultCfg.AnomalyWindow = viper.GetDuration(FlagVaultAnomalyWindow)
 	vaultCfg.AnomalyThreshold = viper.GetInt(FlagVaultAnomalyThreshold)
 	vaultCfg.OrgResolver = provider_daemon.ChainOrgResolver{ChainQuery: chainQuery}
+	vaultCfg.RoleResolver = provider_daemon.ChainRoleResolver{ChainQuery: chainQuery}
+	if grpcEndpoint := viper.GetString(FlagWaldurChainGRPC); grpcEndpoint != "" {
+		roleConn, err := grpc.NewClient(
+			grpcEndpoint,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(observability.GRPCClientStatsHandler()),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to connect role query grpc: %w", err)
+		}
+		defer func() {
+			_ = roleConn.Close()
+		}()
+		vaultCfg.RoleResolver = provider_daemon.NewGRPCRoleResolver(rolesv1.NewQueryClient(roleConn))
+	}
 
 	vaultService, err := provider_daemon.NewVaultService(vaultCfg)
 	if err != nil {

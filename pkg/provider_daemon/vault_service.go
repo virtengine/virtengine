@@ -15,6 +15,7 @@ type VaultServiceConfig struct {
 	Backend          string
 	AuditOwner       string
 	OrgResolver      data_vault.OrgResolver
+	RoleResolver     data_vault.RoleResolver
 	RotateOverlap    time.Duration
 	AnomalyWindow    time.Duration
 	AnomalyThreshold int
@@ -52,11 +53,13 @@ func NewVaultService(cfg VaultServiceConfig) (data_vault.VaultService, error) {
 	metrics := data_vault.NewVaultMetrics()
 
 	accessPolicy := data_vault.DefaultAccessPolicy()
-	for scope, policy := range accessPolicy.ScopePolicies {
-		policy.AllowedRoles = nil
-		accessPolicy.ScopePolicies[scope] = policy
+	if cfg.RoleResolver == nil {
+		for scope, policy := range accessPolicy.ScopePolicies {
+			policy.AllowedRoles = nil
+			accessPolicy.ScopePolicies[scope] = policy
+		}
 	}
-	accessControl := data_vault.NewPolicyAccessControl(accessPolicy, nil, cfg.OrgResolver)
+	accessControl := data_vault.NewPolicyAccessControl(accessPolicy, cfg.RoleResolver, cfg.OrgResolver)
 
 	auditLogger := data_vault.NewAuditLogger(data_vault.DefaultAuditLogConfig(), nil)
 	auditLogger.RegisterExporter(data_vault.NewVaultAuditExporter(store, cfg.AuditOwner))

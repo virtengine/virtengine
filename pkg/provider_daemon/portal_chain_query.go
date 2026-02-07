@@ -37,6 +37,9 @@ type ChainQuery interface {
 	GetDeploymentMetricsHistory(ctx context.Context, deploymentID string, start, end time.Time, interval time.Duration) (*MetricsSeriesResponse, error)
 	GetDeploymentEvents(ctx context.Context, deploymentID string, limit int, cursor string) ([]DeploymentEvent, string, error)
 	GetAggregatedMetrics(ctx context.Context, start, end time.Time, interval time.Duration) (*MetricsSeriesResponse, error)
+
+	// Roles.
+	HasRole(ctx context.Context, address, role string) (bool, error)
 }
 
 // NoopChainQuery is a default implementation that returns empty results.
@@ -135,4 +138,9 @@ func (NoopChainQuery) GetDeploymentEvents(_ context.Context, _ string, _ int, _ 
 // GetAggregatedMetrics returns empty series.
 func (NoopChainQuery) GetAggregatedMetrics(_ context.Context, _ time.Time, _ time.Time, _ time.Duration) (*MetricsSeriesResponse, error) {
 	return &MetricsSeriesResponse{Series: []MetricsPoint{}}, nil
+}
+
+// HasRole returns false in noop implementation.
+func (NoopChainQuery) HasRole(_ context.Context, _ string, _ string) (bool, error) {
+	return false, nil
 }

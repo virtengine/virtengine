@@ -47,3 +47,18 @@ func (c ChainOrgResolver) MemberRole(ctx context.Context, orgID, address string)
 
 var _ data_vault.OrgResolver = ChainOrgResolver{}
 var _ data_vault.OrgRoleResolver = ChainOrgResolver{}
+
+// ChainRoleResolver resolves chain roles using the portal chain query.
+type ChainRoleResolver struct {
+	ChainQuery ChainQuery
+}
+
+// HasRole checks if the address has the specified chain role.
+func (c ChainRoleResolver) HasRole(ctx context.Context, address, role string) (bool, error) {
+	if c.ChainQuery == nil || address == "" || role == "" {
+		return false, nil
+	}
+	return c.ChainQuery.HasRole(ctx, address, role)
+}
+
+var _ data_vault.RoleResolver = ChainRoleResolver{}
