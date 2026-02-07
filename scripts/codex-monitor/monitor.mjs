@@ -1069,11 +1069,18 @@ async function startVibeKanbanProcess() {
     HOST: vkRecoveryHost,
   };
 
+  // Prefer locally-installed vibe-kanban binary (from npm dependency),
+  // fall back to npx for global/remote installs.
+  const vkBin = resolve(__dirname, "node_modules", ".bin", "vibe-kanban");
+  const useLocal = existsSync(vkBin) || existsSync(vkBin + ".cmd");
+  const spawnCmd = useLocal ? (process.platform === "win32" ? vkBin + ".cmd" : vkBin) : "npx";
+  const spawnArgs = useLocal ? [] : ["--yes", "vibe-kanban"];
+
   console.log(
-    `[monitor] starting vibe-kanban via npx (HOST=${vkRecoveryHost} PORT=${vkRecoveryPort}, endpoint=${vkEndpointUrl})`,
+    `[monitor] starting vibe-kanban via ${useLocal ? "local bin" : "npx"} (HOST=${vkRecoveryHost} PORT=${vkRecoveryPort}, endpoint=${vkEndpointUrl})`,
   );
 
-  vibeKanbanProcess = spawn("npx", ["--yes", "vibe-kanban"], {
+  vibeKanbanProcess = spawn(spawnCmd, spawnArgs, {
     env,
     cwd: repoRoot,
     stdio: "ignore",

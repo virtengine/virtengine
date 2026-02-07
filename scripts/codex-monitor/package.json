@@ -49,6 +49,7 @@
     "start": "node cli.mjs",
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
+    "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
   },
   "files": [
@@ -62,12 +63,14 @@
     "get-telegram-chat-id.mjs",
     "setup.mjs",
     "workspace-registry.mjs",
+    "postinstall.mjs",
     ".env.example",
     "README.md",
     "LICENSE"
   ],
   "dependencies": {
-    "@openai/codex-sdk": "0.99.0-alpha.6"
+    "@openai/codex-sdk": "0.99.0-alpha.6",
+    "vibe-kanban": "^0.1.6"
   },
   "engines": {
     "node": ">=18"

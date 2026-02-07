@@ -485,15 +485,14 @@ async function main() {
   const hasVk = check(
     "Vibe-Kanban CLI",
     commandExists("vibe-kanban"),
-    "Required for task management: npm i -g vibe-kanban",
+    "Bundled with codex-monitor — should be available. Try: npm ls vibe-kanban",
   );
 
   if (!hasVk) {
-    console.error(
-      "\n  Vibe-Kanban is required for codex-monitor operations. Please install it:",
+    warn(
+      "vibe-kanban not found in PATH. It should be bundled — try reinstalling:",
     );
-    console.error("    npm install -g vibe-kanban\n");
-    process.exit(1);
+    console.log("    npm install @virtengine/codex-monitor\n");
   }
 
   if (!hasNode) {
