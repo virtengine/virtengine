@@ -28,6 +28,8 @@
       "@/stores/*": ["./src/stores/*"],
       "@/config/*": ["./src/config/*"],
       "@/styles/*": ["./src/styles/*"],
+      "@virtengine/portal": ["./src/types/virtengine-portal.d.ts"],
+      "@virtengine/portal/*": ["./src/types/virtengine-portal.d.ts"],
       "@virtengine/capture": ["./src/types/virtengine-capture.d.ts"],
       "@virtengine/capture/*": ["./src/types/virtengine-capture.d.ts"]
     },
