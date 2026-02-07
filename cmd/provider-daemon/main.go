@@ -191,6 +191,14 @@ const (
 	FlagPortalTokenTTL        = "portal-token-ttl" // #nosec G101 -- flag name, not a credential
 	FlagPortalAuditLogFile    = "portal-audit-log-file"
 
+	// Vault flags
+	FlagVaultEnabled          = "vault-enabled"
+	FlagVaultBackend          = "vault-backend"
+	FlagVaultAuditOwner       = "vault-audit-owner"
+	FlagVaultRotateOverlap    = "vault-rotate-overlap"
+	FlagVaultAnomalyWindow    = "vault-anomaly-window"
+	FlagVaultAnomalyThreshold = "vault-anomaly-threshold"
+
 	// Support service desk flags
 	FlagSupportEnabled             = "support-enabled"
 	FlagSupportWaldurBaseURL       = "support-waldur-base-url"
@@ -295,6 +303,14 @@ func init() {
 	rootCmd.PersistentFlags().Duration(FlagPortalTokenTTL, 5*time.Minute, "Portal session token TTL")
 	rootCmd.PersistentFlags().String(FlagPortalAuditLogFile, "data/portal_audit.log", "Portal audit log file path")
 
+	// Vault flags
+	rootCmd.PersistentFlags().Bool(FlagVaultEnabled, true, "Enable data vault APIs")
+	rootCmd.PersistentFlags().String(FlagVaultBackend, "memory", "Data vault backend (memory)")
+	rootCmd.PersistentFlags().String(FlagVaultAuditOwner, "audit-system", "Vault audit owner account")
+	rootCmd.PersistentFlags().Duration(FlagVaultRotateOverlap, 24*time.Hour, "Vault key rotation overlap window")
+	rootCmd.PersistentFlags().Duration(FlagVaultAnomalyWindow, 10*time.Minute, "Vault access anomaly detection window")
+	rootCmd.PersistentFlags().Int(FlagVaultAnomalyThreshold, 5, "Vault access anomaly threshold")
+
 	// Support service desk flags
 	rootCmd.PersistentFlags().Bool(FlagSupportEnabled, false, "Enable support service desk bridge")
 	rootCmd.PersistentFlags().String(FlagSupportWaldurBaseURL, "", "Support Waldur API base URL")
@@ -369,6 +385,12 @@ func init() {
 	_ = viper.BindPFlag(FlagPortalShellSessionTTL, rootCmd.PersistentFlags().Lookup(FlagPortalShellSessionTTL))
 	_ = viper.BindPFlag(FlagPortalTokenTTL, rootCmd.PersistentFlags().Lookup(FlagPortalTokenTTL))
 	_ = viper.BindPFlag(FlagPortalAuditLogFile, rootCmd.PersistentFlags().Lookup(FlagPortalAuditLogFile))
+	_ = viper.BindPFlag(FlagVaultEnabled, rootCmd.PersistentFlags().Lookup(FlagVaultEnabled))
+	_ = viper.BindPFlag(FlagVaultBackend, rootCmd.PersistentFlags().Lookup(FlagVaultBackend))
+	_ = viper.BindPFlag(FlagVaultAuditOwner, rootCmd.PersistentFlags().Lookup(FlagVaultAuditOwner))
+	_ = viper.BindPFlag(FlagVaultRotateOverlap, rootCmd.PersistentFlags().Lookup(FlagVaultRotateOverlap))
+	_ = viper.BindPFlag(FlagVaultAnomalyWindow, rootCmd.PersistentFlags().Lookup(FlagVaultAnomalyWindow))
+	_ = viper.BindPFlag(FlagVaultAnomalyThreshold, rootCmd.PersistentFlags().Lookup(FlagVaultAnomalyThreshold))
 
 	// Support service desk flags
 	_ = viper.BindPFlag(FlagSupportEnabled, rootCmd.PersistentFlags().Lookup(FlagSupportEnabled))
@@ -686,6 +708,22 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	defer portalAuditLogger.Close()
 
+	chainQuery := provider_daemon.NoopChainQuery{}
+
+	vaultCfg := provider_daemon.DefaultVaultServiceConfig()
+	vaultCfg.Enabled = viper.GetBool(FlagVaultEnabled)
+	vaultCfg.Backend = viper.GetString(FlagVaultBackend)
+	vaultCfg.AuditOwner = viper.GetString(FlagVaultAuditOwner)
+	vaultCfg.RotateOverlap = viper.GetDuration(FlagVaultRotateOverlap)
+	vaultCfg.AnomalyWindow = viper.GetDuration(FlagVaultAnomalyWindow)
+	vaultCfg.AnomalyThreshold = viper.GetInt(FlagVaultAnomalyThreshold)
+	vaultCfg.OrgResolver = provider_daemon.ChainOrgResolver{ChainQuery: chainQuery}
+
+	vaultService, err := provider_daemon.NewVaultService(vaultCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault service: %w", err)
+	}
+
 	portalCfg := provider_daemon.DefaultPortalAPIServerConfig()
 	portalCfg.ListenAddr = viper.GetString(FlagListenAddr)
 	portalCfg.AuthSecret = viper.GetString(FlagPortalAuthSecret)
@@ -696,6 +734,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 	portalCfg.TokenTTL = viper.GetDuration(FlagPortalTokenTTL)
 	portalCfg.AuditLogger = portalAuditLogger
 	portalCfg.WalletAuthChainID = viper.GetString(FlagChainID)
+	portalCfg.ChainQuery = chainQuery
+	portalCfg.VaultService = vaultService
 
 	portalAPI, err := provider_daemon.NewPortalAPIServer(portalCfg)
 	if err != nil {

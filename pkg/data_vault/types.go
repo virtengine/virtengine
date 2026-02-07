@@ -49,6 +49,24 @@ type BlobMetadata struct {
 	// EncryptedSize is the ciphertext size in bytes
 	EncryptedSize int64 `json:"encrypted_size"`
 
+	// ContentAddressHash is the hash used for content addressing (encrypted payload)
+	ContentAddressHash []byte `json:"content_address_hash,omitempty"`
+
+	// ContentAddressSize is the size used for content addressing
+	ContentAddressSize uint64 `json:"content_address_size,omitempty"`
+
+	// ContentAddressAlgorithm identifies the hash algorithm
+	ContentAddressAlgorithm string `json:"content_address_algorithm,omitempty"`
+
+	// ContentAddressVersion is the format version for the content address
+	ContentAddressVersion uint32 `json:"content_address_version,omitempty"`
+
+	// Backend is the storage backend type
+	Backend string `json:"backend,omitempty"`
+
+	// BackendRef is the backend-specific reference
+	BackendRef string `json:"backend_ref,omitempty"`
+
 	// Owner is the wallet address that created this blob
 	Owner string `json:"owner"`
 
@@ -114,6 +132,15 @@ type RetrieveRequest struct {
 
 	// OrgID is the requester's organization ID
 	OrgID string
+
+	// Purpose describes why the data is being accessed
+	Purpose string
+
+	// Reason provides a short justification for auditing
+	Reason string
+
+	// Metadata contains additional request context for auditing
+	Metadata map[string]string
 }
 
 // AuditEvent records a vault access event
@@ -144,6 +171,12 @@ type AuditEvent struct {
 
 	// Timestamp is when the event occurred
 	Timestamp time.Time `json:"timestamp"`
+
+	// PreviousHash links to the previous audit event hash
+	PreviousHash string `json:"previous_hash,omitempty"`
+
+	// Hash is the integrity hash for this event
+	Hash string `json:"hash,omitempty"`
 
 	// Metadata contains additional context
 	Metadata map[string]string `json:"metadata,omitempty"`

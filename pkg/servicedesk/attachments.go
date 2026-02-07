@@ -12,11 +12,13 @@ import (
 	"cosmossdk.io/log"
 
 	"github.com/virtengine/virtengine/pkg/artifact_store"
+	"github.com/virtengine/virtengine/pkg/data_vault"
 )
 
 // AttachmentHandler handles attachment synchronization via the artifact store
 type AttachmentHandler struct {
 	store  artifact_store.ArtifactStore
+	vault  data_vault.VaultService
 	config AttachmentConfig
 	logger log.Logger
 }
@@ -34,6 +36,9 @@ type AttachmentConfig struct {
 
 	// EncryptionRequired requires attachments to be encrypted
 	EncryptionRequired bool `json:"encryption_required"`
+
+	// VaultService enables storing attachments in the data vault when set
+	VaultService data_vault.VaultService `json:"-"`
 }
 
 // DefaultAttachmentConfig returns default attachment configuration
@@ -58,6 +63,7 @@ func DefaultAttachmentConfig() AttachmentConfig {
 func NewAttachmentHandler(store artifact_store.ArtifactStore, config AttachmentConfig, logger log.Logger) *AttachmentHandler {
 	return &AttachmentHandler{
 		store:  store,
+		vault:  config.VaultService,
 		config: config,
 		logger: logger.With("component", "attachments"),
 	}
@@ -78,6 +84,39 @@ func (h *AttachmentHandler) UploadAttachment(ctx context.Context, req *UploadAtt
 	// Check size
 	if int64(len(data)) > h.config.MaxSize {
 		return nil, ErrAttachmentFailed.Wrapf("attachment exceeds max size of %d bytes", h.config.MaxSize)
+	}
+
+	if h.vault != nil {
+		blob, err := h.vault.Upload(ctx, &data_vault.UploadRequest{
+			Scope:     data_vault.ScopeSupport,
+			Plaintext: data,
+			Owner:     req.Owner,
+			OrgID:     req.OrgID,
+			Tags: map[string]string{
+				"ticket_id":    req.TicketID,
+				"file_name":    req.FileName,
+				"content_type": req.ContentType,
+			},
+		})
+		if err != nil {
+			return nil, ErrAttachmentFailed.Wrapf("failed to store attachment in vault: %v", err)
+		}
+
+		accessToken, expiresAt := h.generateAccessToken()
+
+		h.logger.Debug("attachment uploaded via vault",
+			"ticket_id", req.TicketID,
+			"file_name", req.FileName,
+			"size", len(data),
+			"blob_id", blob.Metadata.ID,
+		)
+
+		return &UploadAttachmentResponse{
+			ArtifactAddress: string(blob.Metadata.ID),
+			VaultBlobID:     string(blob.Metadata.ID),
+			AccessToken:     accessToken,
+			ExpiresAt:       expiresAt,
+		}, nil
 	}
 
 	// Compute content hash
@@ -124,6 +163,29 @@ func (h *AttachmentHandler) UploadAttachment(ctx context.Context, req *UploadAtt
 
 // GetAttachment retrieves an attachment from the artifact store
 func (h *AttachmentHandler) GetAttachment(ctx context.Context, req *GetAttachmentRequest) (*GetAttachmentResponse, error) {
+	if h.vault != nil && req.VaultBlobID != "" {
+		data, meta, err := h.vault.Retrieve(ctx, &data_vault.RetrieveRequest{
+			ID:        data_vault.BlobID(req.VaultBlobID),
+			Requester: req.Requester,
+			OrgID:     req.OrgID,
+			Purpose:   "support_attachment",
+			Reason:    "support_ticket_access",
+		})
+		if err != nil {
+			return nil, ErrAttachmentFailed.Wrapf("failed to retrieve attachment from vault: %v", err)
+		}
+
+		h.logger.Debug("attachment retrieved via vault",
+			"blob_id", req.VaultBlobID,
+		)
+
+		return &GetAttachmentResponse{
+			Data:        data,
+			ContentType: meta.Tags["content_type"],
+			VaultBlobID: string(meta.ID),
+		}, nil
+	}
+
 	// Parse content address from hex string
 	hashBytes, err := hex.DecodeString(req.ArtifactAddress)
 	if err != nil {
@@ -146,7 +208,7 @@ func (h *AttachmentHandler) GetAttachment(ctx context.Context, req *GetAttachmen
 	// Retrieve from artifact store
 	getReq := &artifact_store.GetRequest{
 		ContentAddress:    contentAddr,
-		RequestingAccount: req.RequestingAccount,
+		RequestingAccount: req.Requester,
 		AuthToken:         req.AccessToken,
 	}
 
@@ -197,6 +259,16 @@ func (h *AttachmentHandler) SyncAttachmentToExternal(ctx context.Context, req *A
 
 // DeleteAttachment deletes an attachment from the artifact store
 func (h *AttachmentHandler) DeleteAttachment(ctx context.Context, req *DeleteAttachmentRequest) error {
+	if h.vault != nil && req.VaultBlobID != "" {
+		if err := h.vault.Delete(ctx, data_vault.BlobID(req.VaultBlobID), req.Requester); err != nil {
+			return ErrAttachmentFailed.Wrapf("failed to delete vault attachment: %v", err)
+		}
+		h.logger.Debug("attachment deleted via vault",
+			"blob_id", req.VaultBlobID,
+		)
+		return nil
+	}
+
 	// Parse content address from hex string
 	hashBytes, err := hex.DecodeString(req.ArtifactAddress)
 	if err != nil {
@@ -214,7 +286,7 @@ func (h *AttachmentHandler) DeleteAttachment(ctx context.Context, req *DeleteAtt
 	// Delete from artifact store
 	delReq := &artifact_store.DeleteRequest{
 		ContentAddress:    contentAddr,
-		RequestingAccount: req.RequestingAccount,
+		RequestingAccount: req.Requester,
 		Force:             req.Force,
 	}
 
@@ -286,7 +358,7 @@ func (h *AttachmentHandler) validateUpload(req *UploadAttachmentRequest) error {
 	}
 
 	// Check encryption requirement
-	if h.config.EncryptionRequired && req.EncryptionKeyID == "" {
+	if h.config.EncryptionRequired && h.vault == nil && req.EncryptionKeyID == "" {
 		return ErrAttachmentFailed.Wrap("encryption key required")
 	}
 
@@ -322,6 +394,12 @@ type UploadAttachmentRequest struct {
 	// Owner is the account that owns the attachment
 	Owner string
 
+	// Requester is the account uploading the attachment
+	Requester string
+
+	// OrgID is the organization ID for access control
+	OrgID string
+
 	// Reader provides the attachment data
 	Reader io.Reader
 
@@ -333,6 +411,9 @@ type UploadAttachmentRequest struct {
 type UploadAttachmentResponse struct {
 	// ArtifactAddress is the content-addressed reference
 	ArtifactAddress string
+
+	// VaultBlobID is set when stored in the data vault
+	VaultBlobID string `json:"vault_blob_id,omitempty"`
 
 	// AccessToken is a temporary access token
 	AccessToken string
@@ -346,11 +427,17 @@ type GetAttachmentRequest struct {
 	// ArtifactAddress is the content address (hex-encoded hash)
 	ArtifactAddress string
 
+	// VaultBlobID is the data vault blob ID (if stored in vault)
+	VaultBlobID string
+
 	// AccessToken is the access token
 	AccessToken string
 
-	// RequestingAccount is the account requesting access
-	RequestingAccount string
+	// Requester is the account requesting access
+	Requester string
+
+	// OrgID is the organization ID for access control
+	OrgID string
 }
 
 // GetAttachmentResponse contains the retrieved attachment
@@ -360,6 +447,9 @@ type GetAttachmentResponse struct {
 
 	// ContentType is the MIME content type
 	ContentType string
+
+	// VaultBlobID is included when retrieved from vault
+	VaultBlobID string `json:"vault_blob_id,omitempty"`
 }
 
 // DeleteAttachmentRequest contains parameters for deleting an attachment
@@ -367,8 +457,11 @@ type DeleteAttachmentRequest struct {
 	// ArtifactAddress is the content address (hex-encoded hash)
 	ArtifactAddress string
 
-	// RequestingAccount is the account requesting deletion
-	RequestingAccount string
+	// VaultBlobID is the data vault blob ID (if stored in vault)
+	VaultBlobID string
+
+	// Requester is the account requesting deletion
+	Requester string
 
 	// Force forces deletion even if not expired
 	Force bool
