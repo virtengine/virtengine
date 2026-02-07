@@ -42,3 +42,6 @@ export type { UseVeidWizardReturn } from './hooks/useVeidWizard';
 
 export { useVerificationStatus } from './hooks/useVerificationStatus';
 export type { UseVerificationStatusReturn } from './hooks/useVerificationStatus';
+
+export { useVeidPolling } from './hooks/useVeidPolling';
+export type { UseVeidPollingOptions, UseVeidPollingReturn } from './hooks/useVeidPolling';
