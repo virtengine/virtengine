@@ -43,7 +43,7 @@ interface RequestData {
 const textEncoder = new TextEncoder();
 
 const serializeRequestData = (data: RequestData): string => {
-  return `{"method":"${data.method}","path":"${data.path}","timestamp":${data.timestamp},"nonce":"${data.nonce}","body_hash":"${data.body_hash}"}`;
+  return JSON.stringify(data);
 };
 
 const stableStringify = (value: unknown): string => {
