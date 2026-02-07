@@ -81,6 +81,17 @@ function commandExists(cmd) {
   }
 }
 
+/**
+ * Check if a binary exists in the package's own node_modules/.bin/.
+ * When installed globally, npm only symlinks the top-level package's bin
+ * entries to the global path — transitive dependency binaries (like
+ * vibe-kanban) live here instead.
+ */
+function bundledBinExists(cmd) {
+  const base = resolve(__dirname, "node_modules", ".bin", cmd);
+  return existsSync(base) || existsSync(base + ".cmd");
+}
+
 function detectRepoSlug(cwd) {
   try {
     const remote = execSync("git remote get-url origin", {
@@ -484,13 +495,13 @@ async function main() {
   );
   const hasVk = check(
     "Vibe-Kanban CLI",
-    commandExists("vibe-kanban"),
+    commandExists("vibe-kanban") || bundledBinExists("vibe-kanban"),
     "Bundled with codex-monitor — should be available. Try: npm ls vibe-kanban",
   );
 
   if (!hasVk) {
     warn(
-      "vibe-kanban not found in PATH. It should be bundled — try reinstalling:",
+      "vibe-kanban not found. Try reinstalling:",
     );
     console.log(" npm install -g @virtengine/codex-monitor\n");
   }
