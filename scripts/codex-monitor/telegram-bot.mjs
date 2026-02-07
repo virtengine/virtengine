@@ -510,14 +510,22 @@ function getCopilotToolInfo(event) {
 function extractCopilotCommand(input) {
   if (!input) return null;
   if (typeof input === "string") return input;
-  return (
-    input.command ||
-    input.cmd ||
-    input.shell ||
-    input.script ||
-    input.execute ||
-    null
-  );
+  const candidates = [
+    "command",
+    "cmd",
+    "shell",
+    "script",
+    "execute",
+    "args",
+    "run",
+  ];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
 }
 
 function extractCopilotPath(input) {
@@ -1844,8 +1852,9 @@ async function cmdCleanupMerged(chatId) {
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
   const sessionLabel = info.sessionId || info.threadId || "(none)";
+  const agentLabel = info.adapter || info.provider || getPrimaryAgentName();
   const lines = [
-    `🧠 Primary Agent (${info.adapter || getPrimaryAgentName()})`,
+    `🧠 Primary Agent (${agentLabel})`,
     "",
     `Session: ${sessionLabel}`,
     `Turns: ${info.turnCount}`,
