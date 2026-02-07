@@ -2412,6 +2412,7 @@ async function handleFreeText(text, chatId, options = {}) {
           if (followUpResult.finalResponse) {
             result.finalResponse = (result.finalResponse || "") +
               `\n\n📌 Follow-up result:\n${followUpResult.finalResponse}`;
+            suppressSteerFailedLines(actionLog);
           }
         } catch (err) {
           actionLog.push({ icon: "❌", text: `Follow-up error: ${err.message}` });
