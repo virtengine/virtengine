@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -292,16 +293,159 @@ func TestClientAddComment(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	comment, err := client.AddComment(ctx, testIssueKey, &AddCommentRequest{
-		Body: "Test comment",
-	})
+	comment, err := client.AddComment(ctx, testIssueKey, NewCommentRequest("Test comment", false))
 
 	if err != nil {
 		t.Fatalf("failed to add comment: %v", err)
 	}
 
-	if comment.Body != "Test comment" {
-		t.Errorf("expected body 'Test comment', got %s", comment.Body)
+	if comment.Body == nil || comment.Body.PlainText() != "Test comment" {
+		t.Errorf("expected body 'Test comment', got %q", comment.PlainText())
+	}
+}
+
+func TestADFDocumentUnmarshalString(t *testing.T) {
+	var doc ADFDocument
+	if err := json.Unmarshal([]byte("\"hello\\nworld\""), &doc); err != nil {
+		t.Fatalf("failed to unmarshal ADF string: %v", err)
+	}
+	if doc.PlainText() != "hello\nworld" {
+		t.Errorf("expected plain text to preserve newlines, got %q", doc.PlainText())
+	}
+}
+
+func TestClientAddAttachment(t *testing.T) {
+	var server *httptest.Server
+	server = MockJiraServer(t, map[string]http.HandlerFunc{
+		"POST /rest/api/3/issue/TEST-1/attachments": func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Atlassian-Token") != "no-check" {
+				t.Errorf("expected X-Atlassian-Token header")
+			}
+			if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data;") {
+				t.Errorf("expected multipart content type, got %s", r.Header.Get("Content-Type"))
+			}
+			reader, err := r.MultipartReader()
+			if err != nil {
+				t.Fatalf("failed to read multipart: %v", err)
+			}
+			part, err := reader.NextPart()
+			if err != nil {
+				t.Fatalf("failed to read part: %v", err)
+			}
+			data, err := io.ReadAll(part)
+			if err != nil {
+				t.Fatalf("failed to read part data: %v", err)
+			}
+			if part.FileName() != "test.txt" {
+				t.Errorf("expected filename test.txt, got %s", part.FileName())
+			}
+			if string(data) != "hello" {
+				t.Errorf("expected attachment body 'hello', got %s", string(data))
+			}
+
+			_ = json.NewEncoder(w).Encode([]Attachment{{
+				ID:       "att-1",
+				Filename: "test.txt",
+				Size:     5,
+				MimeType: "text/plain",
+				Content:  server.URL + "/secure/attachment/att-1/test.txt",
+			}})
+		},
+	})
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Auth: AuthConfig{
+			Type:     AuthTypeBasic,
+			Username: "test",
+			APIToken: "test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	att, err := client.AddAttachment(ctx, testIssueKey, &AttachmentUploadRequest{
+		Filename:    "test.txt",
+		ContentType: "text/plain",
+		Data:        []byte("hello"),
+	})
+	if err != nil {
+		t.Fatalf("failed to add attachment: %v", err)
+	}
+	if att.Filename != "test.txt" {
+		t.Errorf("expected filename test.txt, got %s", att.Filename)
+	}
+}
+
+func TestClientGetAttachment(t *testing.T) {
+	var server *httptest.Server
+	server = MockJiraServer(t, map[string]http.HandlerFunc{
+		"GET /rest/api/3/attachment/att-1": func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(Attachment{
+				ID:       "att-1",
+				Filename: "test.txt",
+				Content:  server.URL + "/secure/attachment/att-1/test.txt",
+			})
+		},
+	})
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Auth: AuthConfig{
+			Type:     AuthTypeBasic,
+			Username: "test",
+			APIToken: "test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	att, err := client.GetAttachment(ctx, "att-1")
+	if err != nil {
+		t.Fatalf("failed to get attachment: %v", err)
+	}
+	if att.ID != "att-1" {
+		t.Errorf("expected attachment ID att-1, got %s", att.ID)
+	}
+}
+
+func TestClientDownloadAttachment(t *testing.T) {
+	server := MockJiraServer(t, map[string]http.HandlerFunc{
+		"GET /secure/attachment/att-1/test.txt": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("download"))
+		},
+	})
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Auth: AuthConfig{
+			Type:     AuthTypeBasic,
+			Username: "test",
+			APIToken: "test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	data, contentType, err := client.DownloadAttachment(ctx, server.URL+"/secure/attachment/att-1/test.txt")
+	if err != nil {
+		t.Fatalf("failed to download attachment: %v", err)
+	}
+	if string(data) != "download" {
+		t.Errorf("expected download content, got %s", string(data))
+	}
+	if contentType != "text/plain" {
+		t.Errorf("expected content type text/plain, got %s", contentType)
 	}
 }
 
@@ -878,6 +1022,38 @@ func (m *MockClient) GetComments(ctx context.Context, issueKeyOrID string, start
 		Total:      len(comments),
 		Comments:   comments,
 	}, nil
+}
+
+func (m *MockClient) AddAttachment(ctx context.Context, issueKeyOrID string, req *AttachmentUploadRequest) (*Attachment, error) {
+	if _, ok := m.issues[issueKeyOrID]; !ok {
+		return nil, fmt.Errorf("issue not found: %s", issueKeyOrID)
+	}
+	if req == nil {
+		return nil, fmt.Errorf("attachment request is nil")
+	}
+	return &Attachment{
+		ID:       "att-1",
+		Filename: req.Filename,
+		Size:     int64(len(req.Data)),
+	}, nil
+}
+
+func (m *MockClient) GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error) {
+	if attachmentID == "" {
+		return nil, fmt.Errorf("attachment ID is required")
+	}
+	return &Attachment{
+		ID:       attachmentID,
+		Filename: "mock.txt",
+		Content:  "https://example.com/mock.txt",
+	}, nil
+}
+
+func (m *MockClient) DownloadAttachment(ctx context.Context, attachmentURL string) ([]byte, string, error) {
+	if attachmentURL == "" {
+		return nil, "", fmt.Errorf("attachment URL is required")
+	}
+	return []byte("mock"), "text/plain", nil
 }
 
 func (m *MockClient) GetServiceDeskInfo(ctx context.Context) (map[string]interface{}, error) {

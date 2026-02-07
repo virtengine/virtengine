@@ -7,6 +7,7 @@ import (
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/cosmos/cosmos-sdk/types/query"
+	"github.com/virtengine/virtengine/pkg/observability"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
@@ -48,6 +49,7 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 		conn, err := grpc.NewClient(
 			config.GRPCEndpoint,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithStatsHandler(observability.GRPCClientStatsHandler()),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to gRPC endpoint: %w", err)

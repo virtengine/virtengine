@@ -5,6 +5,8 @@ package payment
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -241,6 +243,114 @@ func TestRealAdyenAdapter_WebhookValidation(t *testing.T) {
 
 		err := adapter.ValidateWebhook([]byte("payload"), "signature")
 		assert.NoError(t, err) // Validation is disabled
+	})
+
+	t.Run("valid signature from payload additionalData", func(t *testing.T) {
+		key := []byte("secret-hmac")
+		adapter, _ := NewRealAdyenAdapter(AdyenConfig{
+			APIKey:          "test_api_key",
+			MerchantAccount: "TestMerchant",
+			Environment:     "test",
+			HMACKey:         base64.StdEncoding.EncodeToString(key),
+		})
+
+		item := adyenNotificationRequestItem{
+			EventCode:         "AUTHORISATION",
+			Success:           "true",
+			PSPReference:      "psp123",
+			OriginalReference: "",
+			MerchantAccount:   "TestMerchant",
+			MerchantReference: "order-1",
+		}
+		item.Amount.Value = 1000
+		item.Amount.Currency = "EUR"
+		item.AdditionalData = map[string]interface{}{}
+
+		signature := adyenComputeHmacSignature(key, item)
+		item.AdditionalData["hmacSignature"] = signature
+
+		notification := adyenNotificationRequest{}
+		notification.NotificationItems = append(notification.NotificationItems, struct {
+			NotificationRequestItem adyenNotificationRequestItem `json:"NotificationRequestItem"`
+		}{
+			NotificationRequestItem: item,
+		})
+
+		payload, err := json.Marshal(notification)
+		require.NoError(t, err)
+
+		err = adapter.ValidateWebhook(payload, "")
+		assert.NoError(t, err)
+	})
+
+	t.Run("valid signature from header when additionalData missing", func(t *testing.T) {
+		key := []byte("header-secret")
+		adapter, _ := NewRealAdyenAdapter(AdyenConfig{
+			APIKey:          "test_api_key",
+			MerchantAccount: "TestMerchant",
+			Environment:     "test",
+			HMACKey:         base64.StdEncoding.EncodeToString(key),
+		})
+
+		item := adyenNotificationRequestItem{
+			EventCode:         "REFUND",
+			Success:           "true",
+			PSPReference:      "psp456",
+			OriginalReference: "psp123",
+			MerchantAccount:   "TestMerchant",
+			MerchantReference: "refund-1",
+		}
+		item.Amount.Value = 500
+		item.Amount.Currency = "USD"
+
+		notification := adyenNotificationRequest{}
+		notification.NotificationItems = append(notification.NotificationItems, struct {
+			NotificationRequestItem adyenNotificationRequestItem `json:"NotificationRequestItem"`
+		}{
+			NotificationRequestItem: item,
+		})
+
+		payload, err := json.Marshal(notification)
+		require.NoError(t, err)
+
+		signature := adyenComputeHmacSignature(key, item)
+		err = adapter.ValidateWebhook(payload, signature)
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid signature returns error", func(t *testing.T) {
+		key := []byte("bad-secret")
+		adapter, _ := NewRealAdyenAdapter(AdyenConfig{
+			APIKey:          "test_api_key",
+			MerchantAccount: "TestMerchant",
+			Environment:     "test",
+			HMACKey:         base64.StdEncoding.EncodeToString(key),
+		})
+
+		item := adyenNotificationRequestItem{
+			EventCode:       "AUTHORISATION",
+			Success:         "true",
+			PSPReference:    "psp789",
+			MerchantAccount: "TestMerchant",
+		}
+		item.Amount.Value = 100
+		item.Amount.Currency = "EUR"
+		item.AdditionalData = map[string]interface{}{
+			"hmacSignature": "invalid",
+		}
+
+		notification := adyenNotificationRequest{}
+		notification.NotificationItems = append(notification.NotificationItems, struct {
+			NotificationRequestItem adyenNotificationRequestItem `json:"NotificationRequestItem"`
+		}{
+			NotificationRequestItem: item,
+		})
+
+		payload, err := json.Marshal(notification)
+		require.NoError(t, err)
+
+		err = adapter.ValidateWebhook(payload, "")
+		assert.ErrorIs(t, err, ErrWebhookSignatureInvalid)
 	})
 }
 

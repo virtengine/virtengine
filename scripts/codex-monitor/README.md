@@ -31,3 +31,7 @@ pnpm -C scripts/codex-monitor start -- --args "-MaxParallel 6"
 
 - The Codex SDK uses environment configuration from your Codex setup (API key, base URL).
 - If Codex analysis fails, the error is written next to the log file.
+- Task planner automation env vars:
+  - `TASK_PLANNER_PER_CAPITA_THRESHOLD` (default: 1) triggers when backlog-per-slot falls below threshold.
+  - `TASK_PLANNER_IDLE_SLOT_THRESHOLD` (default: 1) triggers when idle slots meet/exceed threshold.
+  - `TASK_PLANNER_DEDUP_HOURS` (default: 24) prevents repeated planner runs within the window.

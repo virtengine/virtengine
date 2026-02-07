@@ -209,11 +209,9 @@ describe('TemplateBrowser', () => {
 
   it('renders category filters', async () => {
     render(<TemplateBrowser />);
-    await waitFor(() => {
-      expect(screen.getByText('All')).toBeInTheDocument();
-      expect(screen.getByText('Machine Learning')).toBeInTheDocument();
-      expect(screen.getByText('Scientific Computing')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('All')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Machine Learning' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scientific Computing' })).toBeInTheDocument();
   });
 
   it('filters templates by category', async () => {

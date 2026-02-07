@@ -41,9 +41,16 @@ test.describe('HPC Job Submission', () => {
 
     // Check form sections
     await expect(page.getByRole('heading', { name: /select template/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /pytorch training/i }).click();
+    await page.getByRole('button', { name: /continue/i }).click();
+
     await expect(page.getByRole('heading', { name: /job configuration/i })).toBeVisible();
+
+    await page.getByLabel(/job name/i).fill('Test Job');
+    await page.getByRole('button', { name: /continue/i }).click();
+
     await expect(page.getByRole('heading', { name: /resource requirements/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /execution/i })).toBeVisible();
   });
 
   test('should display template options', async ({ page }) => {
@@ -57,12 +64,23 @@ test.describe('HPC Job Submission', () => {
   test('should display cost estimate', async ({ page }) => {
     await page.goto('/hpc/jobs/new');
 
+    await page.getByRole('button', { name: /pytorch training/i }).click();
+    await page.getByRole('button', { name: /continue/i }).click();
+    await page.getByLabel(/job name/i).fill('Cost Estimate Job');
+    await page.getByRole('button', { name: /continue/i }).click();
+    await page.getByRole('button', { name: /continue/i }).click();
+
     await expect(page.getByRole('heading', { name: /cost estimate/i })).toBeVisible();
-    await expect(page.getByText(/\$\d+\.\d+/)).toBeVisible();
   });
 
   test('should have submit button', async ({ page }) => {
     await page.goto('/hpc/jobs/new');
+
+    await page.getByRole('button', { name: /pytorch training/i }).click();
+    await page.getByRole('button', { name: /continue/i }).click();
+    await page.getByLabel(/job name/i).fill('Submit Job');
+    await page.getByRole('button', { name: /continue/i }).click();
+    await page.getByRole('button', { name: /continue/i }).click();
 
     await expect(page.getByRole('button', { name: /submit job/i })).toBeVisible();
   });

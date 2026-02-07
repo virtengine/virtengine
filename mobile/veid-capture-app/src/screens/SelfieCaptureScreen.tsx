@@ -5,7 +5,7 @@ import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { useCaptureStore } from "../state/captureStore";
 
-export function SelfieCaptureScreen() {
+export function SelfieCaptureScreen({ stepIndex = 2 }: { stepIndex?: number }) {
   const { dispatch } = useCaptureStore();
   const [hasCapture, setHasCapture] = useState(false);
 
@@ -13,7 +13,7 @@ export function SelfieCaptureScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Selfie Capture"
-        stepIndex={2}
+        stepIndex={stepIndex}
         subtitle="Ensure your face is centered and well-lit."
       />
       <Text style={styles.guidance}>Remove glasses and keep a neutral expression.</Text>

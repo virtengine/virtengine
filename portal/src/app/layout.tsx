@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Providers } from './providers';
+import { SkipToContent } from '@/components/shared';
 import './globals.css';
 
 const inter = Inter({
@@ -98,13 +99,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen font-sans antialiased`}
       >
-        <a href="#main-content" className="skip-link">
-          Skip to main content
-        </a>
+        <SkipToContent />
         <Providers>{children}</Providers>
       </body>
     </html>

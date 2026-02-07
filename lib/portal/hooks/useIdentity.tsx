@@ -29,6 +29,19 @@ import type {
 import { initialIdentityState, getTierFromScore } from "../types/identity";
 import type { QueryClient } from "../types/chain";
 
+declare global {
+  interface Window {
+    __VE_TEST_IDENTITY__?: Partial<IdentityState>;
+  }
+}
+
+function getTestIdentityOverride(): Partial<IdentityState> | null {
+  if (process.env.NODE_ENV === "production") return null;
+  if (typeof window === "undefined") return null;
+  const override = window.__VE_TEST_IDENTITY__;
+  return override ?? null;
+}
+
 /**
  * Identity context value
  */
@@ -157,6 +170,17 @@ export function IdentityProvider({
    * Fetch identity data from chain
    */
   const fetchIdentityData = useCallback(async () => {
+    const testOverride = getTestIdentityOverride();
+    if (testOverride) {
+      setState({
+        ...initialIdentityState,
+        ...testOverride,
+        isLoading: false,
+        error: null,
+      });
+      return;
+    }
+
     if (!accountAddress) {
       setState(initialIdentityState);
       return;

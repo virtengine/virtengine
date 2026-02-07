@@ -98,7 +98,7 @@ type IssueFields struct {
 	Summary string `json:"summary"`
 
 	// Description is the issue description
-	Description string `json:"description,omitempty"`
+	Description *ADFDocument `json:"description,omitempty"`
 
 	// IssueType is the type of issue
 	IssueType IssueTypeField `json:"issuetype"`
@@ -193,12 +193,20 @@ type Component struct {
 
 // Comment represents a Jira comment
 type Comment struct {
-	ID      string `json:"id,omitempty"`
-	Self    string `json:"self,omitempty"`
-	Author  *User  `json:"author,omitempty"`
-	Body    string `json:"body"`
-	Created string `json:"created,omitempty"`
-	Updated string `json:"updated,omitempty"`
+	ID      string       `json:"id,omitempty"`
+	Self    string       `json:"self,omitempty"`
+	Author  *User        `json:"author,omitempty"`
+	Body    *ADFDocument `json:"body"`
+	Created string       `json:"created,omitempty"`
+	Updated string       `json:"updated,omitempty"`
+	// Properties contain comment metadata (e.g. internal notes flag).
+	Properties []CommentProperty `json:"properties,omitempty"`
+}
+
+// CommentProperty represents a Jira comment property.
+type CommentProperty struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
 }
 
 // CommentResponse represents a paginated comment response
@@ -239,7 +247,7 @@ type CreateIssueRequest struct {
 type CreateIssueFields struct {
 	Project     Project        `json:"project"`
 	Summary     string         `json:"summary"`
-	Description string         `json:"description,omitempty"`
+	Description *ADFDocument   `json:"description,omitempty"`
 	IssueType   IssueTypeField `json:"issuetype"`
 	Priority    *PriorityField `json:"priority,omitempty"`
 	Assignee    *User          `json:"assignee,omitempty"`
@@ -281,7 +289,28 @@ type TransitionID struct {
 
 // AddCommentRequest represents a request to add a comment
 type AddCommentRequest struct {
-	Body string `json:"body"`
+	Body       *ADFDocument      `json:"body"`
+	Properties []CommentProperty `json:"properties,omitempty"`
+}
+
+// Attachment represents a Jira attachment.
+type Attachment struct {
+	ID        string `json:"id,omitempty"`
+	Self      string `json:"self,omitempty"`
+	Filename  string `json:"filename,omitempty"`
+	Author    *User  `json:"author,omitempty"`
+	Created   string `json:"created,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	MimeType  string `json:"mimeType,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Thumbnail string `json:"thumbnail,omitempty"`
+}
+
+// AttachmentUploadRequest represents a request to upload an attachment.
+type AttachmentUploadRequest struct {
+	Filename    string
+	ContentType string
+	Data        []byte
 }
 
 // CreateIssueResponse represents the response from creating an issue

@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useReducer } from "react";
-import type { CaptureSession, DocumentCapture, LivenessResult, OcrResult, SelfieCapture } from "../core/captureModels";
+import type {
+  BiometricCapture,
+  CaptureSession,
+  DocumentCapture,
+  LivenessResult,
+  OcrResult,
+  SelfieCapture
+} from "../core/captureModels";
 import { initializeCaptureSession } from "../core/captureSession";
 
 export type CaptureStep =
@@ -8,6 +15,7 @@ export type CaptureStep =
   | "document_back"
   | "selfie"
   | "liveness"
+  | "biometric"
   | "review"
   | "upload"
   | "complete";
@@ -23,6 +31,7 @@ type CaptureAction =
   | { type: "set_document"; payload: DocumentCapture }
   | { type: "set_selfie"; payload: SelfieCapture }
   | { type: "set_liveness"; payload: LivenessResult }
+  | { type: "set_biometric"; payload: BiometricCapture }
   | { type: "set_ocr"; payload: OcrResult }
   | { type: "next" }
   | { type: "prev" };
@@ -33,6 +42,7 @@ const steps: CaptureStep[] = [
   "document_back",
   "selfie",
   "liveness",
+  "biometric",
   "review",
   "upload",
   "complete"
@@ -67,6 +77,11 @@ function reducer(state: CaptureState, action: CaptureAction): CaptureState {
       return {
         ...state,
         session: { ...state.session, liveness: action.payload }
+      };
+    case "set_biometric":
+      return {
+        ...state,
+        session: { ...state.session, biometric: action.payload }
       };
     case "set_ocr":
       return {

@@ -28,6 +28,8 @@ type VEIDKeeper interface {
 	IsEmailVerified(ctx sdk.Context, address sdk.AccAddress) bool
 	// IsDomainVerified returns whether the account's domain is verified
 	IsDomainVerified(ctx sdk.Context, address sdk.AccAddress) bool
+	// IsComplianceCleared returns whether compliance checks have been cleared.
+	IsComplianceCleared(ctx sdk.Context, address sdk.AccAddress) (bool, bool)
 }
 
 // MFAKeeper defines the interface for the MFA keeper
@@ -66,6 +68,7 @@ type IKeeper interface {
 	WithOfferings(ctx sdk.Context, fn func(marketplace.Offering) bool)
 	GetOfferingsByProvider(ctx sdk.Context, providerAddress string) []marketplace.Offering
 	IsProvider(ctx sdk.Context, address sdk.AccAddress) bool
+	CheckProviderEligibility(ctx sdk.Context, providerAddr sdk.AccAddress) error
 
 	// Orders
 	CreateOrder(ctx sdk.Context, order *marketplace.Order) error

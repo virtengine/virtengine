@@ -115,16 +115,16 @@ func TestKeeper_RegisterEnclaveIdentity(t *testing.T) {
 
 	validatorAddr := newTestAddress("validator-register")
 	identity := types.EnclaveIdentity{
-		ValidatorAddress:        validatorAddr,
-		TeeType:                 types.TEETypeSGX,
-		MeasurementHash:         bytes.Repeat([]byte{0x01}, 32),
-		EncryptionPubKey:        bytes.Repeat([]byte{0x02}, 32),
-		SigningPubKey:           bytes.Repeat([]byte{0x03}, 32),
-		AttestationQuote:        []byte("attestation_quote_data"),
-		ExpiryHeight:            200,
-		RegisteredAt:            env.ctx.BlockTime(),
-		UpdatedAt:               env.ctx.BlockTime(),
-		Status:                  types.EnclaveIdentityStatusActive,
+		ValidatorAddress: validatorAddr,
+		TeeType:          types.TEETypeSGX,
+		MeasurementHash:  bytes.Repeat([]byte{0x01}, 32),
+		EncryptionPubKey: bytes.Repeat([]byte{0x02}, 32),
+		SigningPubKey:    bytes.Repeat([]byte{0x03}, 32),
+		AttestationQuote: []byte("attestation_quote_data"),
+		ExpiryHeight:     200,
+		RegisteredAt:     env.ctx.BlockTime(),
+		UpdatedAt:        env.ctx.BlockTime(),
+		Status:           types.EnclaveIdentityStatusActive,
 	}
 
 	storeEnclaveIdentity(t, env, identity)
@@ -267,10 +267,10 @@ func TestKeeper_KeyRotation(t *testing.T) {
 
 	// Record key rotation
 	rotation := types.KeyRotationRecord{
-		ValidatorAddress: validatorAddr,
-		Epoch:            1,
-		OldKeyFingerprint: "old-fingerprint",
-		NewKeyFingerprint: "new-fingerprint",
+		ValidatorAddress:   validatorAddr,
+		Epoch:              1,
+		OldKeyFingerprint:  "old-fingerprint",
+		NewKeyFingerprint:  "new-fingerprint",
 		OverlapStartHeight: env.ctx.BlockHeight(),
 		OverlapEndHeight:   env.ctx.BlockHeight() + 10,
 	}
@@ -295,17 +295,17 @@ func TestKeeper_AttestedResult(t *testing.T) {
 	env := setupTestEnv(t)
 
 	result := types.AttestedScoringResult{
-		ScopeId:          "scope-123",
-		AccountAddress:   newTestAddress("user-123"),
-		Score:            85,
-		Status:           "verified",
-		ValidatorAddress: newTestAddress("validator-attested"),
+		ScopeId:                "scope-123",
+		AccountAddress:         newTestAddress("user-123"),
+		Score:                  85,
+		Status:                 "verified",
+		ValidatorAddress:       newTestAddress("validator-attested"),
 		EnclaveMeasurementHash: bytes.Repeat([]byte{0x30}, 32),
 		ModelVersionHash:       bytes.Repeat([]byte{0x31}, 32),
 		InputHash:              bytes.Repeat([]byte{0x32}, 32),
-		EnclaveSignature: []byte("enclave_signature"),
-		BlockHeight:      100,
-		Timestamp:        time.Now().UTC(),
+		EnclaveSignature:       []byte("enclave_signature"),
+		BlockHeight:            100,
+		Timestamp:              time.Now().UTC(),
 	}
 
 	storeAttestedResult(t, env, result)

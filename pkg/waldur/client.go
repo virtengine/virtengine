@@ -15,6 +15,7 @@ import (
 	"time"
 
 	client "github.com/waldur/go-client"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Waldur-specific errors
@@ -195,7 +196,8 @@ func NewClient(cfg Config) (*Client, error) {
 
 	// Create HTTP client with timeout
 	httpClient := &http.Client{
-		Timeout: cfg.Timeout,
+		Timeout:   cfg.Timeout,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
 	}
 
 	// Create Waldur API client

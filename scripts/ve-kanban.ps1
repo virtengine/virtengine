@@ -38,611 +38,12 @@ $script:VK_LAST_GH_ERROR = $null
 $script:VK_LAST_GH_ERROR_AT = $null
 $script:VK_CLI_RAW_LINE = $null
 
-# Executor profiles — expanded pool with health tracking and model metadata
-# Each profile: executor (VK executor type), variant (VK variant), tier (primary/backup/fallback),
-#   provider (for grouping rate limits), max_concurrent (per-executor limit),
-#   model (actual model name), region (Azure region), suitability (task fit)
+# Executor profiles (used for 50/50 cycling between Codex and Copilot)
 $script:VK_EXECUTORS = @(
-    # ── Primary tier: Main workhorses ──
-    @{ executor = "CODEX"; variant = "DEFAULT"; tier = "primary"; provider = "azure_codex_52"; max_concurrent = 3;
-        model = "gpt-5.2-codex"; region = "us"; suitability = @("large", "medium", "small") 
-    }
-    @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6"; tier = "primary"; provider = "github_copilot"; max_concurrent = 2;
-        model = "claude-opus-4.6"; region = "global"; suitability = @("large", "medium") 
-    }
-    # ── Backup tier: Azure alternate deployments ──
-    @{ executor = "CODEX"; variant = "GPT51_CODEX_MAX"; tier = "backup"; provider = "azure_codex_51_max"; max_concurrent = 2;
-        model = "gpt-5.1-codex-max"; region = "us"; suitability = @("large", "medium") 
-    }
-    @{ executor = "CODEX"; variant = "GPT51_CODEX_MINI"; tier = "backup"; provider = "azure_codex_51_mini"; max_concurrent = 2;
-        model = "gpt-5.1-codex-mini"; region = "us"; suitability = @("small", "medium") 
-    }
-    # ── Fallback tier: Session-limited CLIs ──
-    @{ executor = "CODEX"; variant = "CHATGPT_AUTH"; tier = "fallback"; provider = "chatgpt_codex"; max_concurrent = 1;
-        model = "gpt-5.2-codex"; region = "global"; suitability = @("medium", "small") 
-    }
-    @{ executor = "CODEX"; variant = "CLAUDE_CODE_CLI"; tier = "fallback"; provider = "claude_code_cli"; max_concurrent = 1;
-        model = "claude-code"; region = "global"; suitability = @("large", "medium") 
-    }
+    @{ executor = "CODEX"; variant = "DEFAULT" }
+    @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" }
 )
 $script:VK_EXECUTOR_INDEX = 0   # Tracks cycling state
-
-# ── Executor Health State ──────────────────────────────────────────────────────
-# Maps provider → { status, degraded_at, cooldown_until, failure_count, total_timeouts,
-#                    total_rate_limits, last_success_at, consecutive_failures }
-$script:ExecutorHealth = @{}
-
-function Initialize-ExecutorHealth {
-    <#
-    .SYNOPSIS Initialize health tracking for all executor providers.
-    #>
-    foreach ($exec in $script:VK_EXECUTORS) {
-        $provider = $exec.provider
-        if (-not $script:ExecutorHealth.ContainsKey($provider)) {
-            $script:ExecutorHealth[$provider] = @{
-                status               = "healthy"      # healthy | degraded | cooldown | disabled
-                degraded_at          = $null
-                cooldown_until       = $null
-                failure_count        = 0               # failures in current window
-                consecutive_failures = 0
-                total_timeouts       = 0
-                total_rate_limits    = 0
-                total_successes      = 0
-                last_success_at      = $null
-                last_failure_at      = $null
-                last_failure_reason  = $null
-                active_tasks         = 0               # currently running tasks on this provider
-            }
-        }
-    }
-}
-
-function Get-ExecutorHealthStatus {
-    <#
-    .SYNOPSIS Get health status for a provider. Returns: healthy, degraded, cooldown, disabled.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Provider)
-    if (-not $script:ExecutorHealth.ContainsKey($Provider)) { return "healthy" }
-    $h = $script:ExecutorHealth[$Provider]
-
-    # Check if cooldown expired
-    if ($h.status -eq "cooldown" -and $h.cooldown_until -and (Get-Date) -gt $h.cooldown_until) {
-        $h.status = "degraded"  # Tentatively lift to degraded (not healthy until success)
-        $h.cooldown_until = $null
-        $h.consecutive_failures = [Math]::Max(0, $h.consecutive_failures - 1)
-    }
-    return $h.status
-}
-
-function Report-ExecutorFailure {
-    <#
-    .SYNOPSIS Report a failure (timeout, rate limit, error) for an executor provider.
-              Automatically transitions: healthy → degraded → cooldown based on severity.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Provider,
-        [ValidateSet("timeout", "rate_limit", "error", "reconnect_loop")]
-        [Parameter(Mandatory)][string]$FailureType,
-        [string]$Detail
-    )
-    Initialize-ExecutorHealth
-    if (-not $script:ExecutorHealth.ContainsKey($Provider)) { return }
-    $h = $script:ExecutorHealth[$Provider]
-
-    $h.failure_count++
-    $h.consecutive_failures++
-    $h.last_failure_at = Get-Date
-    $h.last_failure_reason = "$FailureType : $Detail"
-
-    switch ($FailureType) {
-        "timeout" { $h.total_timeouts++ }
-        "rate_limit" { $h.total_rate_limits++ }
-        "reconnect_loop" { $h.total_timeouts += 3 }  # Reconnect loop counts as severe
-    }
-
-    # Escalation logic
-    $cooldownMinutes = 0
-    if ($h.consecutive_failures -ge 5 -or $FailureType -eq "rate_limit") {
-        # Hard cooldown — too many failures or explicit rate limit
-        $cooldownMinutes = switch ($FailureType) {
-            "rate_limit" { 45 }   # Copilot says "45 minutes" — respect it
-            "reconnect_loop" { 30 }   # Severe connectivity issue
-            default { 15 }   # General failure cooldown
-        }
-        $h.status = "cooldown"
-        $h.cooldown_until = (Get-Date).AddMinutes($cooldownMinutes)
-    }
-    elseif ($h.consecutive_failures -ge 2) {
-        # Degraded — prefer other executors but don't fully block
-        $h.status = "degraded"
-        $h.degraded_at = Get-Date
-    }
-    # Single failure stays "healthy" (transient)
-
-    $statusMsg = "$($h.status)"
-    if ($cooldownMinutes -gt 0) { $statusMsg += " (${cooldownMinutes}m)" }
-    return @{ provider = $Provider; status = $h.status; cooldown_min = $cooldownMinutes; consecutive = $h.consecutive_failures }
-}
-
-function Report-ExecutorSuccess {
-    <#
-    .SYNOPSIS Report a successful task completion for an executor provider.
-              Resets failure counters and promotes back to healthy.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Provider)
-    Initialize-ExecutorHealth
-    if (-not $script:ExecutorHealth.ContainsKey($Provider)) { return }
-    $h = $script:ExecutorHealth[$Provider]
-
-    $h.consecutive_failures = 0
-    $h.failure_count = [Math]::Max(0, $h.failure_count - 1)
-    $h.total_successes++
-    $h.last_success_at = Get-Date
-    if ($h.status -in @("degraded", "cooldown")) {
-        $h.status = "healthy"
-        $h.cooldown_until = $null
-    }
-}
-
-function Get-HealthyExecutorProfile {
-    <#
-    .SYNOPSIS Get the best available executor, preferring healthy primary > healthy backup > degraded > fallback.
-              Skips executors in cooldown or over their max_concurrent limit.
-    #>
-    [CmdletBinding()]
-    param([int]$CurrentActiveTasks = 0)
-    Initialize-ExecutorHealth
-
-    # Build scored list: tier priority + health bonus
-    $tierOrder = @{ "primary" = 0; "backup" = 1; "fallback" = 2 }
-    $healthOrder = @{ "healthy" = 0; "degraded" = 1; "cooldown" = 2; "disabled" = 3 }
-
-    $candidates = @()
-    foreach ($exec in $script:VK_EXECUTORS) {
-        $provider = $exec.provider
-        $health = Get-ExecutorHealthStatus -Provider $provider
-        if ($health -eq "disabled") { continue }
-        if ($health -eq "cooldown") { continue }  # Skip cooldown executors entirely
-
-        $h = $script:ExecutorHealth[$provider]
-        $active = if ($h) { $h.active_tasks } else { 0 }
-        if ($active -ge $exec.max_concurrent) { continue }  # Over capacity
-
-        $tierScore = $tierOrder[$exec.tier] * 10
-        $healthScore = $healthOrder[$health] * 5
-        $loadScore = $active  # Prefer less loaded
-
-        $candidates += @{
-            executor = $exec
-            score    = $tierScore + $healthScore + $loadScore
-            health   = $health
-            active   = $active
-        }
-    }
-
-    if ($candidates.Count -eq 0) {
-        # All executors exhausted — return least-bad option (lowest consecutive failures)
-        $leastBad = $script:VK_EXECUTORS | Sort-Object {
-            $p = $_.provider
-            if ($script:ExecutorHealth.ContainsKey($p)) { $script:ExecutorHealth[$p].consecutive_failures } else { 0 }
-        } | Select-Object -First 1
-        return $leastBad
-    }
-
-    $best = ($candidates | Sort-Object { $_.score } | Select-Object -First 1).executor
-    return $best
-}
-
-function Get-ExecutorProviderForAttempt {
-    <#
-    .SYNOPSIS Look up the provider string for an executor/variant pair.
-    #>
-    [CmdletBinding()]
-    param(
-        [string]$Executor,
-        [string]$Variant
-    )
-    $match = $script:VK_EXECUTORS | Where-Object {
-        $_.executor -eq $Executor -and $_.variant -eq $Variant
-    } | Select-Object -First 1
-    if ($match) { return $match.provider }
-    # Fallback: construct from executor name
-    return "$($Executor)_$($Variant)".ToLower()
-}
-
-function Increment-ExecutorActiveCount {
-    <#
-    .SYNOPSIS Increment active task count for a provider.
-    #>
-    param([Parameter(Mandatory)][string]$Provider)
-    Initialize-ExecutorHealth
-    if ($script:ExecutorHealth.ContainsKey($Provider)) {
-        $script:ExecutorHealth[$Provider].active_tasks++
-    }
-}
-
-function Decrement-ExecutorActiveCount {
-    <#
-    .SYNOPSIS Decrement active task count for a provider.
-    #>
-    param([Parameter(Mandatory)][string]$Provider)
-    Initialize-ExecutorHealth
-    if ($script:ExecutorHealth.ContainsKey($Provider)) {
-        $script:ExecutorHealth[$Provider].active_tasks = [Math]::Max(0, $script:ExecutorHealth[$Provider].active_tasks - 1)
-    }
-}
-
-function Get-ExecutorHealthSummary {
-    <#
-    .SYNOPSIS Get a compact summary of all executor health for logging/status.
-    #>
-    Initialize-ExecutorHealth
-    $parts = @()
-    foreach ($exec in $script:VK_EXECUTORS) {
-        $provider = $exec.provider
-        if ($parts -contains $provider) { continue }  # Dedup
-        $h = $script:ExecutorHealth[$provider]
-        $status = Get-ExecutorHealthStatus -Provider $provider
-        $icon = switch ($status) {
-            "healthy" { "✓" }
-            "degraded" { "⚠" }
-            "cooldown" { "⏸" }
-            "disabled" { "✗" }
-            default { "?" }
-        }
-        $active = if ($h) { $h.active_tasks } else { 0 }
-        $parts += "$icon $($exec.executor)/$($exec.variant)($active)"
-    }
-    return $parts -join " | "
-}
-
-# ─── Executor Cycling ─────────────────────────────────────────────────────────
-
-function Get-NextExecutorProfile {
-    <#
-    .SYNOPSIS Get the next executor profile, preferring healthy executors.
-              Falls back to simple round-robin only if health system has no preference.
-    #>
-    $healthy = Get-HealthyExecutorProfile
-    if ($healthy) {
-        # Advance index past any matching entry to avoid re-selecting
-        for ($i = 0; $i -lt $script:VK_EXECUTORS.Count; $i++) {
-            if ($script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX].provider -eq $healthy.provider) {
-                $script:VK_EXECUTOR_INDEX = ($script:VK_EXECUTOR_INDEX + 1) % $script:VK_EXECUTORS.Count
-                break
-            }
-            $script:VK_EXECUTOR_INDEX = ($script:VK_EXECUTOR_INDEX + 1) % $script:VK_EXECUTORS.Count
-        }
-        return $healthy
-    }
-    # Fallback: simple round-robin (legacy behavior)
-    $profile = $script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX]
-    $script:VK_EXECUTOR_INDEX = ($script:VK_EXECUTOR_INDEX + 1) % $script:VK_EXECUTORS.Count
-    return $profile
-}
-
-function Get-CurrentExecutorProfile {
-    <#
-    .SYNOPSIS Peek at the next executor profile without advancing the cycle.
-              Returns the healthiest available executor.
-    #>
-    $healthy = Get-HealthyExecutorProfile
-    if ($healthy) { return $healthy }
-    return $script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX]
-}
-
-# ─── Azure Region Management ─────────────────────────────────────────────────
-# Manages Codex config.toml switching between US and Sweden Azure regions.
-# Sweden env vars: AZURE_SWEDEN_API_KEY, AZURE_SWEDEN_ENDPOINT
-
-$script:CodexConfigPath = Join-Path $env:USERPROFILE ".codex" "config.toml"
-$script:ActiveRegion = "us"                    # Current active region: us | sweden
-$script:RegionSwitchedAt = $null               # When last region switch happened
-$script:RegionCooldownMinutes = 120            # How long before auto-switching back to US
-$script:RegionOverride = $null                 # Manual override: $null (auto) | "us" | "sweden"
-
-# Original US config values (captured on first load)
-$script:USEndpoint = $null
-$script:USEnvKey = $null
-
-function Get-ActiveCodexRegion {
-    <#
-    .SYNOPSIS Get the currently active Codex region.
-    #>
-    return $script:ActiveRegion
-}
-
-function Initialize-CodexRegionTracking {
-    <#
-    .SYNOPSIS Capture the current US config values for later restoration.
-    #>
-    if ($script:USEndpoint) { return }  # Already initialized
-    if (-not (Test-Path $script:CodexConfigPath)) {
-        Write-Warning "Codex config.toml not found at $($script:CodexConfigPath)"
-        return
-    }
-    $content = Get-Content $script:CodexConfigPath -Raw
-    # Parse base_url from [model_providers.azure]
-    if ($content -match 'base_url\s*=\s*"([^"]+)"') {
-        $script:USEndpoint = $Matches[1]
-    }
-    if ($content -match 'env_key\s*=\s*"([^"]+)"') {
-        $script:USEnvKey = $Matches[1]
-    }
-    $script:ActiveRegion = "us"
-}
-
-function Switch-CodexRegion {
-    <#
-    .SYNOPSIS Switch Codex config.toml between US and Sweden Azure regions.
-    .PARAMETER Region Target region: "us" or "sweden"
-    .PARAMETER Force  Bypass cooldown checks
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][ValidateSet("us", "sweden")][string]$Region,
-        [switch]$Force
-    )
-    Initialize-CodexRegionTracking
-    if ($Region -eq $script:ActiveRegion -and -not $Force) {
-        return @{ changed = $false; region = $Region; reason = "already active" }
-    }
-
-    if (-not (Test-Path $script:CodexConfigPath)) {
-        return @{ changed = $false; region = $script:ActiveRegion; reason = "config.toml not found" }
-    }
-
-    $content = Get-Content $script:CodexConfigPath -Raw
-    $backupPath = "$($script:CodexConfigPath).bak-$($script:ActiveRegion)"
-
-    # Backup current config before switching
-    Copy-Item $script:CodexConfigPath $backupPath -Force -ErrorAction SilentlyContinue
-
-    if ($Region -eq "sweden") {
-        $swedenEndpoint = $env:AZURE_SWEDEN_ENDPOINT
-        $swedenApiKey = $env:AZURE_SWEDEN_API_KEY
-        if (-not $swedenEndpoint -or -not $swedenApiKey) {
-            return @{ changed = $false; region = $script:ActiveRegion; reason = "AZURE_SWEDEN_ENDPOINT or AZURE_SWEDEN_API_KEY not set" }
-        }
-
-        # Ensure endpoint ends with /openai/v1
-        if ($swedenEndpoint -notmatch '/openai/v1$') {
-            $swedenEndpoint = $swedenEndpoint.TrimEnd('/') + '/openai/v1'
-        }
-
-        # Replace base_url  
-        $content = $content -replace '(base_url\s*=\s*")[^"]+(")', "`${1}$swedenEndpoint`${2}"
-        # Replace env_key to use Sweden key  
-        $content = $content -replace '(env_key\s*=\s*")[^"]+(")', '${1}AZURE_SWEDEN_API_KEY${2}'
-
-        Set-Content -Path $script:CodexConfigPath -Value $content -Encoding UTF8 -NoNewline
-        $script:ActiveRegion = "sweden"
-        $script:RegionSwitchedAt = Get-Date
-    }
-    elseif ($Region -eq "us") {
-        if (-not $script:USEndpoint -or -not $script:USEnvKey) {
-            # Try to restore from backup
-            $usBak = "$($script:CodexConfigPath).bak-us"
-            if (Test-Path $usBak) {
-                Copy-Item $usBak $script:CodexConfigPath -Force
-                $script:ActiveRegion = "us"
-                $script:RegionSwitchedAt = Get-Date
-                return @{ changed = $true; region = "us"; reason = "restored from backup" }
-            }
-            return @{ changed = $false; region = $script:ActiveRegion; reason = "US endpoint not captured" }
-        }
-
-        $content = $content -replace '(base_url\s*=\s*")[^"]+(")', "`${1}$($script:USEndpoint)`${2}"
-        $content = $content -replace '(env_key\s*=\s*")[^"]+(")', "`${1}$($script:USEnvKey)`${2}"
-
-        Set-Content -Path $script:CodexConfigPath -Value $content -Encoding UTF8 -NoNewline
-        $script:ActiveRegion = "us"
-        $script:RegionSwitchedAt = Get-Date
-    }
-
-    return @{ changed = $true; region = $Region; reason = "switched" }
-}
-
-function Test-RegionCooldownExpired {
-    <#
-    .SYNOPSIS Check if the Sweden → US cooldown has expired.
-    .DESCRIPTION After switching to Sweden, waits RegionCooldownMinutes before auto-switching back.
-    #>
-    if ($script:ActiveRegion -ne "sweden") { return $false }
-    if (-not $script:RegionSwitchedAt) { return $true }
-    return ((Get-Date) - $script:RegionSwitchedAt).TotalMinutes -ge $script:RegionCooldownMinutes
-}
-
-function Set-RegionOverride {
-    <#
-    .SYNOPSIS Manually override the active region. Set to $null for auto mode.
-    #>
-    param([AllowNull()][string]$Region)
-    $script:RegionOverride = $Region
-    if ($Region) {
-        $result = Switch-CodexRegion -Region $Region -Force
-        return $result
-    }
-    return @{ changed = $false; region = $script:ActiveRegion; reason = "override cleared — auto mode" }
-}
-
-function Get-RegionStatus {
-    <#
-    .SYNOPSIS Get a summary of the current region state.
-    #>
-    $switchedAgo = if ($script:RegionSwitchedAt) {
-        [math]::Round(((Get-Date) - $script:RegionSwitchedAt).TotalMinutes, 1)
-    }
-    else { $null }
-
-    return @{
-        active_region    = $script:ActiveRegion
-        override         = $script:RegionOverride
-        switched_at      = $script:RegionSwitchedAt
-        switched_ago_min = $switchedAgo
-        cooldown_min     = $script:RegionCooldownMinutes
-        cooldown_expired = (Test-RegionCooldownExpired)
-        us_endpoint      = $script:USEndpoint
-        sweden_available = [bool]($env:AZURE_SWEDEN_API_KEY -and $env:AZURE_SWEDEN_ENDPOINT)
-    }
-}
-
-# ─── Task Complexity Classification ──────────────────────────────────────────
-# Classifies tasks as small/medium/large based on title keywords and scope.
-# Used by the orchestrator to route tasks to the best executor.
-
-function Get-TaskComplexity {
-    <#
-    .SYNOPSIS Classify task complexity from its title and description.
-    .DESCRIPTION Returns: "small", "medium", or "large"
-
-    Heuristics:
-      large  → multi-module, architecture, refactor, security audit, full feature
-      medium → single module feature, integration, test suite, API endpoint
-      small  → fix, typo, docs, config, lint, rename, bump, simple test
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Title,
-        [string]$Description = ""
-    )
-    $text = "$Title $Description".ToLower()
-
-    # ── Large patterns ──
-    $largePatterns = @(
-        'refactor',
-        'architect',
-        'redesign',
-        'migration',
-        'multi.?module',
-        'full.?feature',
-        'security.?audit',
-        'e2e.?test',
-        'integration.?test',
-        'cross.?module',
-        'complete.?implement',
-        'overhaul',
-        'rewrite',
-        'major',
-        'provider.?daemon',
-        'marketplace.*escrow',
-        'veid.*encryption',
-        'tee.?integration'
-    )
-    foreach ($p in $largePatterns) {
-        if ($text -match $p) { return "large" }
-    }
-
-    # ── Small patterns ──
-    $smallPatterns = @(
-        'fix\s',
-        'typo',
-        'docs?\s',
-        'documentation',
-        'readme',
-        'changelog',
-        'config',
-        'lint',
-        'format',
-        'rename',
-        'bump',
-        'version',
-        'cleanup',
-        'comment',
-        'annotation',
-        'todo',
-        'nit',
-        'spelling',
-        'label',
-        'badge',
-        'copyright',
-        'license\s',
-        'gitignore',
-        'simple\s',
-        'minor\s',
-        'trivial',
-        'add\s+test\sfor',
-        'update\s+dep'
-    )
-    foreach ($p in $smallPatterns) {
-        if ($text -match $p) { return "small" }
-    }
-
-    # Default: medium
-    return "medium"
-}
-
-function Get-BestExecutorForTask {
-    <#
-    .SYNOPSIS Select the best executor for a task based on complexity and health.
-    .DESCRIPTION
-        Routes tasks to executors based on:
-        1. Task complexity → suitable models
-        2. Executor health → skip degraded/cooldown
-        3. Load balancing → prefer less loaded
-
-    Task routing:
-        large  → Claude 4.6 (supreme) > GPT-5.2-codex (primary) > GPT-5.1-codex-max
-        medium → GPT-5.2-codex (primary) > GPT-5.1-codex-max > Claude 4.6
-        small  → GPT-5.1-codex-mini > GPT-5.2-codex > GPT-5.1-codex-max
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Complexity  # small | medium | large
-    )
-    Initialize-ExecutorHealth
-
-    $tierOrder = @{ "primary" = 0; "backup" = 1; "fallback" = 2 }
-    $healthOrder = @{ "healthy" = 0; "degraded" = 1; "cooldown" = 2; "disabled" = 3 }
-
-    # Model preference by complexity (ordered preference)
-    $preferredModels = switch ($Complexity) {
-        "large" { @("claude-opus-4.6", "gpt-5.2-codex", "gpt-5.1-codex-max", "claude-code") }
-        "medium" { @("gpt-5.2-codex", "gpt-5.1-codex-max", "claude-opus-4.6", "gpt-5.1-codex-mini") }
-        "small" { @("gpt-5.1-codex-mini", "gpt-5.2-codex", "gpt-5.1-codex-max") }
-        default { @("gpt-5.2-codex", "claude-opus-4.6", "gpt-5.1-codex-max", "gpt-5.1-codex-mini") }
-    }
-
-    $candidates = @()
-    foreach ($exec in $script:VK_EXECUTORS) {
-        $provider = $exec.provider
-        $health = Get-ExecutorHealthStatus -Provider $provider
-        if ($health -in @("disabled", "cooldown")) { continue }
-
-        # Check suitability
-        if ($exec.suitability -and $Complexity -notin $exec.suitability) { continue }
-
-        $h = $script:ExecutorHealth[$provider]
-        $active = if ($h) { $h.active_tasks } else { 0 }
-        if ($active -ge $exec.max_concurrent) { continue }
-
-        # Preference score: lower index in preferredModels = better fit
-        $modelPref = $preferredModels.IndexOf($exec.model)
-        if ($modelPref -lt 0) { $modelPref = 99 }  # Model not in preference list
-
-        $healthScore = $healthOrder[$health] * 5
-        $loadScore = $active
-
-        $candidates += @{
-            executor = $exec
-            score    = ($modelPref * 10) + $healthScore + $loadScore
-            health   = $health
-            active   = $active
-            model    = $exec.model
-        }
-    }
-
-    if ($candidates.Count -eq 0) {
-        # Fallback: return whatever Get-HealthyExecutorProfile gives
-        return Get-HealthyExecutorProfile
-    }
-
-    $best = ($candidates | Sort-Object { $_.score } | Select-Object -First 1).executor
-    return $best
-}
 
 # ─── HTTP Helpers ─────────────────────────────────────────────────────────────
 
@@ -654,12 +55,10 @@ function Invoke-VKApi {
     param(
         [Parameter(Mandatory)][string]$Path,
         [string]$Method = "GET",
-        [object]$Body,
-        [int]$TimeoutSec
+        [object]$Body
     )
     $uri = "$script:VK_BASE_URL$Path"
     $params = @{ Uri = $uri; Method = $Method; ContentType = "application/json"; UseBasicParsing = $true }
-    if ($TimeoutSec -gt 0) { $params.TimeoutSec = $TimeoutSec }
     if ($Body) { $params.Body = ($Body | ConvertTo-Json -Depth 10 -Compress) }
     try {
         $raw = Invoke-WebRequest @params -ErrorAction Stop
@@ -671,7 +70,7 @@ function Invoke-VKApi {
         return $resp.data ?? $resp
     }
     catch {
-        Write-Error -Message "HTTP $Method $uri failed: $_" -ErrorAction Continue
+        Write-Error "HTTP $Method $uri failed: $_"
         return $null
     }
 }
@@ -858,37 +257,10 @@ function Get-VKArchivedAttempts {
     return @($attempts | Where-Object { $_.archived })
 }
 
-function Ensure-FreshOriginMain {
-    <#
-    .SYNOPSIS Fetch latest origin/main so new branches are always up-to-date.
-              Prevents stale workspace creation that leads to merge conflicts.
-    #>
-    [CmdletBinding()]
-    param([string]$BaseBranch = "main")
-    try {
-        $fetchOut = git fetch origin $BaseBranch 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  ⚠ git fetch origin $BaseBranch failed: $fetchOut" -ForegroundColor Yellow
-            return $false
-        }
-        # Get the latest commit SHA for reference
-        $latestSha = git rev-parse "origin/$BaseBranch" 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  ✓ origin/$BaseBranch up-to-date at $($latestSha.Substring(0,8))" -ForegroundColor DarkGray
-        }
-        return $true
-    }
-    catch {
-        Write-Host "  ⚠ Ensure-FreshOriginMain failed: $($_.Exception.Message)" -ForegroundColor Yellow
-        return $false
-    }
-}
-
 function Submit-VKTaskAttempt {
     <#
     .SYNOPSIS Submit a task as a new attempt (creates worktree + starts agent).
               Uses the next executor in the Codex/Copilot rotation cycle.
-              Always fetches latest origin/main first to prevent stale workspaces.
     #>
     [CmdletBinding()]
     param(
@@ -897,12 +269,6 @@ function Submit-VKTaskAttempt {
         [hashtable]$ExecutorOverride
     )
     if (-not (Initialize-VKConfig)) { return $null }
-
-    # CRITICAL: Fetch latest origin/main BEFORE creating workspace
-    # This prevents workspaces from being created 100s of commits behind
-    $baseBranchClean = $TargetBranch
-    if ($baseBranchClean -like "origin/*") { $baseBranchClean = $baseBranchClean.Substring(7) }
-    Ensure-FreshOriginMain -BaseBranch $baseBranchClean | Out-Null
 
     # Use override if provided, otherwise cycle to next executor
     $execProfile = if ($ExecutorOverride) { $ExecutorOverride } else { Get-NextExecutorProfile }
@@ -913,7 +279,6 @@ function Submit-VKTaskAttempt {
             @{
                 repo_id       = $script:VK_REPO_ID
                 target_branch = $TargetBranch
-                base_branch   = $baseBranchClean
             }
         )
         executor_profile_id = @{
@@ -922,7 +287,7 @@ function Submit-VKTaskAttempt {
         }
     }
     Write-Host "  Submitting attempt for task $TaskId ($($execProfile.executor)/$($execProfile.variant)) ..." -ForegroundColor Cyan
-    $result = Invoke-VKApi -Path "/api/task-attempts" -Method "POST" -Body $body -TimeoutSec 90
+    $result = Invoke-VKApi -Path "/api/task-attempts" -Method "POST" -Body $body
     if ($result) {
         Write-Host "  ✓ Attempt created: $($result.id) → branch $($result.branch)" -ForegroundColor Green
     }
@@ -1138,10 +503,9 @@ function Get-RequiredChecksForBranch {
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Branch)
-    $encodedBranch = [System.Uri]::EscapeDataString($Branch)
     $result = Invoke-VKGithub -Args @(
         "api",
-        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$encodedBranch/protection/required_status_checks"
+        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$Branch/protection/required_status_checks"
     )
     if (-not $result) { return @() }
     $payload = $result | ConvertFrom-Json
@@ -1194,56 +558,6 @@ function Get-PRRequiredCheckStatus {
         $state = $checksByName[$name]
         if ($state -in @("FAILURE", "ERROR")) { return "failing" }
         if ($state -in @("PENDING", "IN_PROGRESS", "QUEUED")) { $hasPending = $true }
-    }
-
-    if ($hasPending) { return "pending" }
-    return "passing"
-}
-
-function Get-PRSecurityCheckStatus {
-    <#
-    .SYNOPSIS Evaluate security-related checks for a PR.
-    .OUTPUTS "passing", "failing", "pending", or "missing"
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][int]$PRNumber)
-
-    $checks = Get-PRChecksDetail -PRNumber $PRNumber
-    if (-not $checks) { return "missing" }
-
-    $patterns = @(
-        "codeql",
-        "security",
-        "snyk",
-        "semgrep",
-        "trivy",
-        "gitleaks",
-        "secret",
-        "scorecard",
-        "dependabot",
-        "ossf"
-    )
-
-    $securityChecks = @(
-        $checks | Where-Object {
-            $name = if ($_.name) { $_.name.ToString().ToLowerInvariant() } else { "" }
-            foreach ($pattern in $patterns) {
-                if ($name -match $pattern) { return $true }
-            }
-            return $false
-        }
-    )
-
-    if (-not $securityChecks -or $securityChecks.Count -eq 0) {
-        return "missing"
-    }
-
-    $hasPending = $false
-    foreach ($check in $securityChecks) {
-        $state = $check.state
-        if ($state -in @("FAILURE", "ERROR", "CANCELLED")) { return "failing" }
-        if ($state -in @("PENDING", "IN_PROGRESS", "QUEUED")) { $hasPending = $true }
-        if ($state -in @("SKIPPED")) { return "failing" }
     }
 
     if ($hasPending) { return "pending" }
@@ -1325,8 +639,7 @@ function Format-PRCheckFailures {
     .SYNOPSIS Format failing checks into a short markdown list.
     #>
     [CmdletBinding()]
-    param([AllowNull()][object[]]$Checks = @())
-    if ($null -eq $Checks) { $Checks = @() }
+    param([object[]]$Checks = @())
     if (-not $Checks -or $Checks.Count -eq 0) { return "- No failing checks found" }
     $failed = $Checks | Where-Object { $_.state -eq "FAILURE" -or $_.state -eq "ERROR" }
     if (-not $failed -or $failed.Count -eq 0) { return "- No failing checks found" }
@@ -1458,10 +771,9 @@ function Test-RemoteBranchExists {
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Branch)
-    $encodedBranch = [System.Uri]::EscapeDataString($Branch)
     $result = Invoke-VKGithub -Args @(
         "api",
-        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$encodedBranch"
+        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$Branch"
     )
     return ($null -ne $result)
 }
