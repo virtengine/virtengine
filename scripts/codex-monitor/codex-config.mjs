@@ -25,6 +25,29 @@ const MIN_STREAM_IDLE_TIMEOUT_MS = 300_000; // 5 minutes
 /** The recommended (generous) timeout for heavy reasoning models. */
 const RECOMMENDED_STREAM_IDLE_TIMEOUT_MS = 3_600_000; // 60 minutes
 
+// ── Agent SDK Selection (config.toml) ───────────────────────────────────────
+
+const AGENT_SDK_HEADER = "[agent_sdk]";
+const AGENT_SDK_CAPS_HEADER = "[agent_sdk.capabilities]";
+
+const DEFAULT_AGENT_SDK_BLOCK = [
+  "",
+  "# ── Agent SDK selection (added by codex-monitor) ──",
+  AGENT_SDK_HEADER,
+  "# Primary agent SDK used for in-process automation.",
+  '# Supported: "codex", "copilot", "claude"',
+  'primary = "codex"',
+  "",
+  AGENT_SDK_CAPS_HEADER,
+  "# Live steering updates during an active run.",
+  "steering = true",
+  "# Ability to spawn subagents/child tasks.",
+  "subagents = true",
+  "# Access to VS Code tools (Copilot extension).",
+  "vscode_tools = false",
+  "",
+].join("\n");
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -62,6 +85,20 @@ export function hasVibeKanbanMcp(toml) {
  */
 export function hasVibeKanbanEnv(toml) {
   return /^\[mcp_servers\.vibe_kanban\.env\]/m.test(toml);
+}
+
+/**
+ * Check whether the config already has an [agent_sdk] section.
+ */
+export function hasAgentSdkConfig(toml) {
+  return /^\[agent_sdk\]/m.test(toml);
+}
+
+/**
+ * Build the default agent SDK block.
+ */
+export function buildAgentSdkBlock() {
+  return DEFAULT_AGENT_SDK_BLOCK;
 }
 
 /**
@@ -259,6 +296,7 @@ export function ensureCodexConfig({
     created: false,
     vkAdded: false,
     vkEnvUpdated: false,
+    agentSdkAdded: false,
     timeoutsFixed: [],
     retriesAdded: [],
     noChanges: false,
@@ -334,6 +372,13 @@ export function ensureCodexConfig({
     }
   }
 
+  // ── 1b. Ensure agent SDK selection block ──────────────────
+
+  if (!hasAgentSdkConfig(toml)) {
+    toml += buildAgentSdkBlock();
+    result.agentSdkAdded = true;
+  }
+
   // ── 2. Audit and fix stream timeouts ──────────────────────
 
   const timeouts = auditStreamTimeouts(toml);
@@ -397,6 +442,10 @@ export function printConfigSummary(result, log = console.log) {
 
   if (result.vkEnvUpdated) {
     log("  ✅ Updated Vibe-Kanban MCP environment variables");
+  }
+
+  if (result.agentSdkAdded) {
+    log("  ✅ Added agent SDK selection block");
   }
 
   for (const t of result.timeoutsFixed) {
