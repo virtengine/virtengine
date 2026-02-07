@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { WalletButton, WalletModal, useWalletModal } from '@/components/wallet';
 import { LanguageSwitcher, ThemeToggle } from '@/components/shared';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { useTranslation } from 'react-i18next';
 import { MobileDrawer } from './MobileDrawer';
 import { Sidebar } from './Sidebar';
@@ -81,6 +82,7 @@ export function Header() {
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
           <LanguageSwitcher className="hidden md:flex" />
           <ThemeToggle />
+          <NotificationCenter />
           <WalletButton />
         </div>
       </div>
