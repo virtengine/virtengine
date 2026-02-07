@@ -34,7 +34,7 @@ on:
         type: boolean
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.25.5'
   VEID_CONFORMANCE_EVIDENCE_DIR: ${{ github.workspace }}/conformance-evidence
 
 jobs:
