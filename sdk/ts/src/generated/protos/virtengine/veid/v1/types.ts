@@ -32,6 +32,10 @@ export enum ScopeType {
   SCOPE_TYPE_DOMAIN_VERIFY = 8,
   /** SCOPE_TYPE_AD_SSO - SCOPE_TYPE_AD_SSO represents Active Directory SSO verification */
   SCOPE_TYPE_AD_SSO = 9,
+  /** SCOPE_TYPE_BIOMETRIC_HARDWARE - SCOPE_TYPE_BIOMETRIC_HARDWARE represents biometric hardware attestation payloads */
+  SCOPE_TYPE_BIOMETRIC_HARDWARE = 10,
+  /** SCOPE_TYPE_DEVICE_ATTESTATION - SCOPE_TYPE_DEVICE_ATTESTATION represents device integrity attestation payloads */
+  SCOPE_TYPE_DEVICE_ATTESTATION = 11,
   UNRECOGNIZED = -1,
 }
 
@@ -67,6 +71,12 @@ export function scopeTypeFromJSON(object: any): ScopeType {
     case 9:
     case "SCOPE_TYPE_AD_SSO":
       return ScopeType.SCOPE_TYPE_AD_SSO;
+    case 10:
+    case "SCOPE_TYPE_BIOMETRIC_HARDWARE":
+      return ScopeType.SCOPE_TYPE_BIOMETRIC_HARDWARE;
+    case 11:
+    case "SCOPE_TYPE_DEVICE_ATTESTATION":
+      return ScopeType.SCOPE_TYPE_DEVICE_ATTESTATION;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -96,6 +106,10 @@ export function scopeTypeToJSON(object: ScopeType): string {
       return "SCOPE_TYPE_DOMAIN_VERIFY";
     case ScopeType.SCOPE_TYPE_AD_SSO:
       return "SCOPE_TYPE_AD_SSO";
+    case ScopeType.SCOPE_TYPE_BIOMETRIC_HARDWARE:
+      return "SCOPE_TYPE_BIOMETRIC_HARDWARE";
+    case ScopeType.SCOPE_TYPE_DEVICE_ATTESTATION:
+      return "SCOPE_TYPE_DEVICE_ATTESTATION";
     case ScopeType.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";

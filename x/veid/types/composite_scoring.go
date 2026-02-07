@@ -434,11 +434,17 @@ type RiskIndicatorsInput struct {
 	// DeviceFingerprintScore is the device trust score (basis points)
 	DeviceFingerprintScore uint32 `json:"device_fingerprint_score"`
 
+	// DeviceIntegrityScore is the device integrity attestation score (basis points)
+	DeviceIntegrityScore uint32 `json:"device_integrity_score"`
+
 	// IPReputationScore is the IP address reputation score (basis points)
 	IPReputationScore uint32 `json:"ip_reputation_score"`
 
 	// VelocityCheckPassed indicates if velocity checks passed
 	VelocityCheckPassed bool `json:"velocity_check_passed"`
+
+	// DeviceAttestationPassed indicates if device attestation checks passed
+	DeviceAttestationPassed bool `json:"device_attestation_passed"`
 
 	// GeoConsistencyScore is the geographic consistency score (basis points)
 	GeoConsistencyScore uint32 `json:"geo_consistency_score"`
@@ -456,16 +462,21 @@ func (r RiskIndicatorsInput) ComputeScore() uint32 {
 	}
 
 	// Weighted average of risk indicators
-	score := uint64(r.FraudPatternScore)*30 +
-		uint64(r.DeviceFingerprintScore)*25 +
-		uint64(r.IPReputationScore)*20 +
-		uint64(r.GeoConsistencyScore)*25
+	score := uint64(r.FraudPatternScore)*25 +
+		uint64(r.DeviceFingerprintScore)*20 +
+		uint64(r.DeviceIntegrityScore)*20 +
+		uint64(r.IPReputationScore)*15 +
+		uint64(r.GeoConsistencyScore)*20
 
 	score /= 100
 
 	// Penalty if velocity check failed
 	if !r.VelocityCheckPassed {
 		score = (score * 60) / 100 // 40% penalty
+	}
+	// Additional penalty if device attestation failed when present
+	if !r.DeviceAttestationPassed {
+		score = (score * 70) / 100 // 30% penalty
 	}
 
 	if score > uint64(MaxBasisPoints) {
@@ -565,8 +576,10 @@ func (c CompositeScoringInputs) ComputeInputHash() []byte {
 	// Risk Indicators inputs
 	h.Write(encodeUint32(c.RiskIndicators.FraudPatternScore))
 	h.Write(encodeUint32(c.RiskIndicators.DeviceFingerprintScore))
+	h.Write(encodeUint32(c.RiskIndicators.DeviceIntegrityScore))
 	h.Write(encodeUint32(c.RiskIndicators.IPReputationScore))
 	h.Write(encodeBool(c.RiskIndicators.VelocityCheckPassed))
+	h.Write(encodeBool(c.RiskIndicators.DeviceAttestationPassed))
 	h.Write(encodeUint32(c.RiskIndicators.GeoConsistencyScore))
 	h.Write(encodeBool(c.RiskIndicators.Present))
 

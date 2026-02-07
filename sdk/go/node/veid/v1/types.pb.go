@@ -50,32 +50,40 @@ const (
 	ScopeTypeDomainVerify ScopeType = 8
 	// SCOPE_TYPE_AD_SSO represents Active Directory SSO verification
 	ScopeTypeADSSO ScopeType = 9
+	// SCOPE_TYPE_BIOMETRIC_HARDWARE represents biometric hardware attestation payloads
+	ScopeTypeBiometricHardware ScopeType = 10
+	// SCOPE_TYPE_DEVICE_ATTESTATION represents device integrity attestation payloads
+	ScopeTypeDeviceAttestation ScopeType = 11
 )
 
 var ScopeType_name = map[int32]string{
-	0: "SCOPE_TYPE_UNSPECIFIED",
-	1: "SCOPE_TYPE_ID_DOCUMENT",
-	2: "SCOPE_TYPE_SELFIE",
-	3: "SCOPE_TYPE_FACE_VIDEO",
-	4: "SCOPE_TYPE_BIOMETRIC",
-	5: "SCOPE_TYPE_SSO_METADATA",
-	6: "SCOPE_TYPE_EMAIL_PROOF",
-	7: "SCOPE_TYPE_SMS_PROOF",
-	8: "SCOPE_TYPE_DOMAIN_VERIFY",
-	9: "SCOPE_TYPE_AD_SSO",
+	0:  "SCOPE_TYPE_UNSPECIFIED",
+	1:  "SCOPE_TYPE_ID_DOCUMENT",
+	2:  "SCOPE_TYPE_SELFIE",
+	3:  "SCOPE_TYPE_FACE_VIDEO",
+	4:  "SCOPE_TYPE_BIOMETRIC",
+	5:  "SCOPE_TYPE_SSO_METADATA",
+	6:  "SCOPE_TYPE_EMAIL_PROOF",
+	7:  "SCOPE_TYPE_SMS_PROOF",
+	8:  "SCOPE_TYPE_DOMAIN_VERIFY",
+	9:  "SCOPE_TYPE_AD_SSO",
+	10: "SCOPE_TYPE_BIOMETRIC_HARDWARE",
+	11: "SCOPE_TYPE_DEVICE_ATTESTATION",
 }
 
 var ScopeType_value = map[string]int32{
-	"SCOPE_TYPE_UNSPECIFIED":   0,
-	"SCOPE_TYPE_ID_DOCUMENT":   1,
-	"SCOPE_TYPE_SELFIE":        2,
-	"SCOPE_TYPE_FACE_VIDEO":    3,
-	"SCOPE_TYPE_BIOMETRIC":     4,
-	"SCOPE_TYPE_SSO_METADATA":  5,
-	"SCOPE_TYPE_EMAIL_PROOF":   6,
-	"SCOPE_TYPE_SMS_PROOF":     7,
-	"SCOPE_TYPE_DOMAIN_VERIFY": 8,
-	"SCOPE_TYPE_AD_SSO":        9,
+	"SCOPE_TYPE_UNSPECIFIED":        0,
+	"SCOPE_TYPE_ID_DOCUMENT":        1,
+	"SCOPE_TYPE_SELFIE":             2,
+	"SCOPE_TYPE_FACE_VIDEO":         3,
+	"SCOPE_TYPE_BIOMETRIC":          4,
+	"SCOPE_TYPE_SSO_METADATA":       5,
+	"SCOPE_TYPE_EMAIL_PROOF":        6,
+	"SCOPE_TYPE_SMS_PROOF":          7,
+	"SCOPE_TYPE_DOMAIN_VERIFY":      8,
+	"SCOPE_TYPE_AD_SSO":             9,
+	"SCOPE_TYPE_BIOMETRIC_HARDWARE": 10,
+	"SCOPE_TYPE_DEVICE_ATTESTATION": 11,
 }
 
 func (x ScopeType) String() string {
