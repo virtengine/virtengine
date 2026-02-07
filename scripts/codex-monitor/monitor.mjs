@@ -3933,6 +3933,20 @@ async function startProcess() {
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
   const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
 
+  // Guard: verify script exists before spawning to avoid cryptic exit 64
+  if (!existsSync(scriptPath)) {
+    console.error(
+      `[monitor] orchestrator script not found: ${scriptPath}\n` +
+        `  Set ORCHESTRATOR_SCRIPT to an absolute path or fix the relative path in .env`,
+    );
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `❌ Orchestrator script not found: ${scriptPath}\nSet ORCHESTRATOR_SCRIPT to a valid path.`,
+      );
+    }
+    return;
+  }
+
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
   });

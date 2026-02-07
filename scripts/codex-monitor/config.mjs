@@ -598,9 +598,12 @@ export function loadConfig(argv = process.argv, options = {}) {
 
   // ── Orchestrator ─────────────────────────────────────────
   const defaultScript = findOrchestratorScript(configDir, repoRoot);
-  const scriptPath = resolve(
-    cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript,
-  );
+  const rawScript =
+    cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript;
+  // Resolve relative paths against configDir (not cwd) so that
+  // "../ve-orchestrator.ps1" always resolves to scripts/ve-orchestrator.ps1
+  // regardless of what directory the process was started from.
+  const scriptPath = resolve(configDir, rawScript);
   const scriptArgsRaw =
     cli.args || process.env.ORCHESTRATOR_ARGS || "-MaxParallel 6 -WaitForMutex";
   const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
