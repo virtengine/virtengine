@@ -30,65 +30,7 @@
 import { spawn, execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// ── Dev mode detection ──────────────────────────────────────────────────────
-
-/**
- * Detect whether codex-monitor is running from its source repo (dev mode)
- * or from an npm install (npm mode).
- *
- * Dev mode indicators:
- *  - Running from a path that contains the source repo structure
- *  - The parent directory has go.mod, Makefile, etc. (monorepo root)
- *  - AUTOFIX_MODE env var is set to "execute" (explicit override)
- *
- * npm mode indicators:
- *  - Running from node_modules/
- *  - No monorepo markers in parent directories
- *  - AUTOFIX_MODE env var is set to "analyze" (explicit override)
- */
-let _devModeCache = null;
-
-export function isDevMode() {
-  if (_devModeCache !== null) return _devModeCache;
-
-  // Explicit env override
-  const envMode = (process.env.AUTOFIX_MODE || "").toLowerCase();
-  if (envMode === "execute" || envMode === "dev") {
-    _devModeCache = true;
-    return true;
-  }
-  if (envMode === "analyze" || envMode === "npm" || envMode === "suggest") {
-    _devModeCache = false;
-    return false;
-  }
-
-  // Check if we're inside node_modules (npm install)
-  const normalized = __dirname.replace(/\\/g, "/").toLowerCase();
-  if (normalized.includes("/node_modules/")) {
-    _devModeCache = false;
-    return false;
-  }
-
-  // Check for monorepo markers (source repo)
-  const repoRoot = resolve(__dirname, "..", "..");
-  const monoRepoMarkers = ["go.mod", "Makefile", "AGENTS.md", "x"];
-  const isMonoRepo = monoRepoMarkers.some((m) =>
-    existsSync(resolve(repoRoot, m)),
-  );
-
-  _devModeCache = isMonoRepo;
-  return isMonoRepo;
-}
-
-/** Reset dev mode cache (for testing). */
-export function resetDevModeCache() {
-  _devModeCache = null;
-}
+import { resolve } from "node:path";
 
 // ── Error extraction ────────────────────────────────────────────────────────
 
@@ -356,7 +298,7 @@ const fixAttempts = new Map();
 const MAX_FIX_ATTEMPTS = 3;
 // 5 min cooldown prevents rapid-fire crash loop where autofix itself triggers
 // 3 attempts in < 3 minutes and then gets throttled by monitor's circuit breaker.
-const FIX_COOLDOWN_MS = 5 * 60_000;
+const FIX_COOLDOWN_MS = 60_000;
 
 let devModeCache;
 

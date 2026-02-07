@@ -57,7 +57,8 @@
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
     "shared-workspaces": "node shared-workspace-cli.mjs",
-    "test": "vitest run --config vitest.config.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
   },
