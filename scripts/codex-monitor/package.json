@@ -42,18 +42,21 @@
     "./codex-shell": "./codex-shell.mjs",
     "./maintenance": "./maintenance.mjs",
     "./telegram-bot": "./telegram-bot.mjs",
-    "./workspace-registry": "./workspace-registry.mjs"
+    "./workspace-registry": "./workspace-registry.mjs",
+    "./shared-workspace-registry": "./shared-workspace-registry.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
     "codex-monitor-setup": "setup.mjs",
     "codex-monitor-chat-id": "get-telegram-chat-id.mjs",
+    "codex-monitor-shared-workspaces": "shared-workspace-cli.mjs",
     "vibe-kanban": "vibe-kanban-wrapper.mjs"
   },
   "scripts": {
     "start": "node cli.mjs",
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
+    "shared-workspaces": "node shared-workspace-cli.mjs",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
   },
@@ -68,6 +71,9 @@
     "get-telegram-chat-id.mjs",
     "setup.mjs",
     "workspace-registry.mjs",
+    "shared-workspace-registry.mjs",
+    "shared-workspace-cli.mjs",
+    "shared-workspaces.json",
     "codex-config.mjs",
     "vibe-kanban-wrapper.mjs",
     "postinstall.mjs",
