@@ -303,8 +303,9 @@ func (s *CallbackServer) registerJiraHandlers() {
 				ExternalID:      issueKey,
 				OnChainTicketID: ticketID,
 				Changes: map[string]interface{}{
-					"comment_id":   comment.ID,
-					"comment_body": comment.Body, // Note: should be encrypted before storing
+					"comment_id":       comment.ID,
+					"comment_body":     comment.PlainText(), // Note: should be encrypted before storing
+					"comment_internal": comment.IsInternal(),
 				},
 				Timestamp: time.Now(),
 				Nonce:     fmt.Sprintf("jira-comment-%s-%d", comment.ID, time.Now().UnixNano()),

@@ -2,6 +2,7 @@ package servicedesk
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"cosmossdk.io/errors"
@@ -94,11 +95,17 @@ type JiraConfig struct {
 	// BaseURL is the Jira instance URL
 	BaseURL string `json:"base_url"`
 
+	// AuthType selects the authentication method ("basic" or "bearer")
+	AuthType string `json:"auth_type,omitempty"`
+
 	// Username is the Jira username (for basic auth)
 	Username string `json:"username"`
 
 	// APIToken is the API token (CRITICAL: never log)
 	APIToken string `json:"-"`
+
+	// BearerToken is the OAuth2 bearer token (CRITICAL: never log)
+	BearerToken string `json:"-"`
 
 	// ProjectKey is the Jira project key
 	ProjectKey string `json:"project_key"`
@@ -113,16 +120,31 @@ type JiraConfig struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
+const defaultJiraAuthType = "basic"
+
 // Validate validates the Jira configuration
 func (c *JiraConfig) Validate() error {
 	if c.BaseURL == "" {
 		return fmt.Errorf("base_url is required")
 	}
-	if c.Username == "" {
-		return fmt.Errorf("username is required")
+	authType := strings.ToLower(strings.TrimSpace(c.AuthType))
+	if authType == "" {
+		authType = defaultJiraAuthType
 	}
-	if c.APIToken == "" {
-		return fmt.Errorf("api_token is required")
+	switch authType {
+	case defaultJiraAuthType:
+		if c.Username == "" {
+			return fmt.Errorf("username is required")
+		}
+		if c.APIToken == "" {
+			return fmt.Errorf("api_token is required")
+		}
+	case "bearer":
+		if c.BearerToken == "" {
+			return fmt.Errorf("bearer_token is required")
+		}
+	default:
+		return fmt.Errorf("auth_type must be basic or bearer")
 	}
 	if c.ProjectKey == "" {
 		return fmt.Errorf("project_key is required")

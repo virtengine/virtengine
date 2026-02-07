@@ -31,6 +31,9 @@ type ITicketBridge interface {
 	// AddReplyToTicket adds a reply/comment to a Jira issue
 	AddReplyToTicket(ctx context.Context, jiraKey string, message string, isAgent bool) (*Comment, error)
 
+	// AddInternalNoteToTicket adds an internal note to a Jira issue
+	AddInternalNoteToTicket(ctx context.Context, jiraKey string, message string) (*Comment, error)
+
 	// CloseTicket closes a Jira issue
 	CloseTicket(ctx context.Context, jiraKey string, resolution string) error
 
@@ -104,7 +107,7 @@ func (b *TicketBridge) CreateFromSupportRequest(ctx context.Context, req *VirtEn
 				Key: b.config.ProjectKey,
 			},
 			Summary:     fmt.Sprintf("[%s] %s", req.TicketNumber, req.Subject),
-			Description: description,
+			Description: NewADFDocument(description),
 			IssueType: IssueTypeField{
 				Name: string(b.config.DefaultIssueType),
 			},
@@ -184,9 +187,18 @@ func (b *TicketBridge) AddReplyToTicket(ctx context.Context, jiraKey string, mes
 		prefix = "[VirtEngine Customer]\n\n"
 	}
 
-	return b.client.AddComment(ctx, jiraKey, &AddCommentRequest{
-		Body: prefix + message,
-	})
+	return b.client.AddComment(ctx, jiraKey, NewCommentRequest(prefix+message, false))
+}
+
+// AddInternalNoteToTicket adds an internal note to a Jira issue.
+func (b *TicketBridge) AddInternalNoteToTicket(ctx context.Context, jiraKey string, message string) (*Comment, error) {
+	if jiraKey == "" {
+		return nil, fmt.Errorf("jira bridge: jira key is required")
+	}
+	if message == "" {
+		return nil, fmt.Errorf("jira bridge: message is required")
+	}
+	return b.client.AddComment(ctx, jiraKey, NewCommentRequest(message, true))
 }
 
 // CloseTicket closes a Jira issue
@@ -217,9 +229,7 @@ func (b *TicketBridge) CloseTicket(ctx context.Context, jiraKey string, resoluti
 
 	// Add resolution comment
 	if resolution != "" {
-		_, _ = b.client.AddComment(ctx, jiraKey, &AddCommentRequest{
-			Body: fmt.Sprintf("[VirtEngine Resolution]\n\n%s", resolution),
-		})
+		_, _ = b.client.AddComment(ctx, jiraKey, NewCommentRequest(fmt.Sprintf("[VirtEngine Resolution]\n\n%s", resolution), false))
 	}
 
 	// Transition the issue
