@@ -2028,8 +2028,7 @@ async function checkMergedPRsAndUpdateTasks() {
         prInfo = await getPullRequestByNumber(prNumber);
       }
       const isMerged =
-        !!prInfo?.mergedAt ||
-        (!!prInfo?.merged_at && prInfo.merged_at !== null);
+        !!prInfo?.mergedAt || (!!prInfo?.merged_at && prInfo.merged_at !== null);
       const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
 
       // Prefer PR status when available.
