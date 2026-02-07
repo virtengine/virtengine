@@ -77,6 +77,9 @@ function showHelp() {
     --repo-root <path>          Repository root (auto-detected)
     --project-name <name>       Project name for display
     --repo <org/repo>           GitHub repo slug
+    --repo-name <name>          Select repository from multi-repo config
+    --profile <name>            Environment profile selection
+    --mode <name>               Override mode (virtengine/generic)
 
   ENVIRONMENT
     Configuration is loaded from (in priority order):

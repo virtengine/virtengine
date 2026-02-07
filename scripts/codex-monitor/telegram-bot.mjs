@@ -29,6 +29,7 @@ import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
   getDefaultModelPriority,
+  getLocalWorkspace,
 } from "./workspace-registry.mjs";
 import {
   claimSharedWorkspace,
@@ -39,6 +40,15 @@ import {
   resolveSharedWorkspace,
   sweepExpiredLeases as sweepSharedLeases,
 } from "./shared-workspace-registry.mjs";
+import {
+  buildLocalPresence,
+  formatCoordinatorSummary,
+  formatPresenceMessage,
+  formatPresenceSummary,
+  initPresence,
+  notePresence,
+  parsePresenceMessage,
+} from "./presence.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
@@ -58,6 +68,20 @@ const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
 const CODEX_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
 let telegramPollLockHeld = false;
+const presenceIntervalSec = Number(
+  process.env.TELEGRAM_PRESENCE_INTERVAL_SEC || "60",
+);
+const presenceTtlSec = Number(
+  process.env.TELEGRAM_PRESENCE_TTL_SEC || String(presenceIntervalSec * 3),
+);
+const presenceDisabled = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_DISABLED || "").toLowerCase(),
+);
+const presenceChatId =
+  process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
+const presenceTtlMs = Number.isFinite(presenceTtlSec)
+  ? Math.max(0, presenceTtlSec * 1000)
+  : 0;
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -113,6 +137,9 @@ async function releaseTelegramPollLock() {
 let lastUpdateId = 0;
 let polling = false;
 let pollAbort = null;
+let presenceReady = false;
+let workspaceRegistryPromise = null;
+let localWorkspaceCache = null;
 
 // ── Agent session state (for follow-up steering & bottom-pinning) ────────────
 
@@ -142,6 +169,24 @@ function enqueueAgentTask(task) {
   agentQueue = agentQueue.then(task).catch((err) => {
     console.error(`[telegram-bot] agent error: ${err.message || err}`);
   });
+}
+
+async function getWorkspaceRegistryCached() {
+  if (!workspaceRegistryPromise) {
+    workspaceRegistryPromise = loadWorkspaceRegistry();
+  }
+  return workspaceRegistryPromise;
+}
+
+async function getLocalWorkspaceContext() {
+  if (localWorkspaceCache) return localWorkspaceCache;
+  const loaded = await getWorkspaceRegistryCached();
+  const registry = loaded.registry || loaded;
+  localWorkspaceCache = getLocalWorkspace(
+    registry,
+    process.env.VE_WORKSPACE_ID || "",
+  );
+  return localWorkspaceCache;
 }
 
 // ── External refs (injected by monitor.mjs) ──────────────────────────────────
@@ -746,6 +791,19 @@ async function handleUpdate(update) {
     `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
   );
 
+  const presencePayload = parsePresenceMessage(text);
+  if (presencePayload) {
+    await ensurePresenceReady();
+    const receivedAt = Number.isFinite(msg.date)
+      ? new Date(msg.date * 1000).toISOString()
+      : new Date().toISOString();
+    await notePresence(presencePayload, {
+      source: "telegram",
+      receivedAt,
+    });
+    return;
+  }
+
   // Route: slash command or free-text
   if (text.startsWith("/")) {
     const cmd = text.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
@@ -851,6 +909,18 @@ const COMMANDS = {
   "/context": {
     handler: cmdSteer,
     desc: "Alias for /steer — update in-flight agent context",
+  },
+  "/presence": {
+    handler: cmdPresence,
+    desc: "Show active codex-monitor instances",
+  },
+  "/instances": {
+    handler: cmdPresence,
+    desc: "Alias for /presence",
+  },
+  "/coordinator": {
+    handler: cmdCoordinator,
+    desc: "Show current coordinator selection",
   },
 };
 
@@ -1786,6 +1856,30 @@ async function cmdHealth(chatId) {
   } catch (err) {
     await sendReply(chatId, `Error reading health: ${err.message}`);
   }
+}
+
+async function cmdPresence(chatId) {
+  await ensurePresenceReady();
+  const child = _getCurrentChild ? _getCurrentChild() : null;
+  const payload = buildLocalPresence({
+    orchestrator_running: !!child,
+    orchestrator_pid: child?.pid ?? null,
+    vk_url: _getVibeKanbanUrl ? _getVibeKanbanUrl() : null,
+  });
+  await notePresence(payload, {
+    source: "local",
+    receivedAt: payload.updated_at,
+  });
+  const nowMs = Date.now();
+  const summary = formatPresenceSummary({ nowMs, ttlMs: presenceTtlMs });
+  await sendReply(chatId, summary);
+}
+
+async function cmdCoordinator(chatId) {
+  await ensurePresenceReady();
+  const nowMs = Date.now();
+  const summary = formatCoordinatorSummary({ nowMs, ttlMs: presenceTtlMs });
+  await sendReply(chatId, summary);
 }
 
 /** State for model override — write a file that orchestrator reads */
@@ -2951,6 +3045,47 @@ async function pollLoop() {
   }
 }
 
+async function ensurePresenceReady() {
+  if (presenceReady) return;
+  const localWorkspace = await getLocalWorkspaceContext();
+  await initPresence({
+    repoRoot: _getRepoRoot ? _getRepoRoot() : repoRoot,
+    localWorkspace,
+  });
+  presenceReady = true;
+}
+
+function startPresenceLoop() {
+  if (presenceDisabled) return;
+  if (!telegramToken || !presenceChatId) return;
+  if (!Number.isFinite(presenceIntervalSec) || presenceIntervalSec <= 0) {
+    return;
+  }
+  const intervalMs = presenceIntervalSec * 1000;
+  const sendPresence = async () => {
+    try {
+      await ensurePresenceReady();
+      const child = _getCurrentChild ? _getCurrentChild() : null;
+      const payload = buildLocalPresence({
+        orchestrator_running: !!child,
+        orchestrator_pid: child?.pid ?? null,
+        vk_url: _getVibeKanbanUrl ? _getVibeKanbanUrl() : null,
+      });
+      await notePresence(payload, {
+        source: "local",
+        receivedAt: payload.updated_at,
+      });
+      await sendDirect(presenceChatId, formatPresenceMessage(payload));
+    } catch (err) {
+      console.warn(
+        `[telegram-bot] presence heartbeat error: ${err.message || err}`,
+      );
+    }
+  };
+  setTimeout(() => void sendPresence(), intervalMs);
+  setInterval(() => void sendPresence(), intervalMs);
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -2978,6 +3113,9 @@ export async function startTelegramBot() {
 
   // Register bot commands with Telegram (updates the / menu)
   await registerBotCommands();
+
+  // Start presence announcements for multi-workstation discovery
+  startPresenceLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {

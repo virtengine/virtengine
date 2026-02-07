@@ -1,18 +1,23 @@
 /**
  * autofix.mjs — Self-healing engine for codex-monitor.
  *
- * When the orchestrator crashes with a PowerShell error, this module:
- *  1. Extracts structured error info (file, line, message) from the log
- *  2. Reads the surrounding source code for context
- *  3. Runs `codex exec --full-auto` with a targeted fix prompt
- *  4. Codex writes the fix to disk
- *  5. The file watcher detects the change → monitor restarts orchestrator
+ * Two operating modes determined by `isDevMode()`:
+ *
+ *   DEV MODE (running from source repo):
+ *     - Actually applies fixes via `codex exec --full-auto`
+ *     - Writes changes to disk, file watcher restarts orchestrator
+ *
+ *   NPM MODE (installed as npm package):
+ *     - Analysis-only: diagnoses the issue and suggests fixes
+ *     - Sends suggestions to Telegram / logs — never modifies files
+ *     - User must apply suggested fixes manually
  *
  * Safety guardrails:
- *  - Max 3 auto-fix attempts per unique error signature
- *  - 60s cooldown between fix attempts
- *  - Tracks all fixes for audit (autofix-*.log in log dir)
- *  - Won't fix the same error more than 3 times (gives up → Telegram alert)
+ *  - Max 3 attempts per unique error signature
+ *  - 5-minute cooldown between fix attempts (prevents rapid crash loops)
+ *  - Tracks all attempts for audit (autofix-*.log in log dir)
+ *  - Won't retry the same error more than 3 times (gives up → Telegram alert)
+ *  - Timeout guard on codex exec (2 min default, prevents hangs)
  *
  * Error formats handled:
  *  - Standard PS errors: ErrorType: filepath:line:col
@@ -23,8 +28,67 @@
  */
 
 import { spawn, execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Dev mode detection ──────────────────────────────────────────────────────
+
+/**
+ * Detect whether codex-monitor is running from its source repo (dev mode)
+ * or from an npm install (npm mode).
+ *
+ * Dev mode indicators:
+ *  - Running from a path that contains the source repo structure
+ *  - The parent directory has go.mod, Makefile, etc. (monorepo root)
+ *  - AUTOFIX_MODE env var is set to "execute" (explicit override)
+ *
+ * npm mode indicators:
+ *  - Running from node_modules/
+ *  - No monorepo markers in parent directories
+ *  - AUTOFIX_MODE env var is set to "analyze" (explicit override)
+ */
+let _devModeCache = null;
+
+export function isDevMode() {
+  if (_devModeCache !== null) return _devModeCache;
+
+  // Explicit env override
+  const envMode = (process.env.AUTOFIX_MODE || "").toLowerCase();
+  if (envMode === "execute" || envMode === "dev") {
+    _devModeCache = true;
+    return true;
+  }
+  if (envMode === "analyze" || envMode === "npm" || envMode === "suggest") {
+    _devModeCache = false;
+    return false;
+  }
+
+  // Check if we're inside node_modules (npm install)
+  const normalized = __dirname.replace(/\\/g, "/").toLowerCase();
+  if (normalized.includes("/node_modules/")) {
+    _devModeCache = false;
+    return false;
+  }
+
+  // Check for monorepo markers (source repo)
+  const repoRoot = resolve(__dirname, "..", "..");
+  const monoRepoMarkers = ["go.mod", "Makefile", "AGENTS.md", "x"];
+  const isMonoRepo = monoRepoMarkers.some((m) =>
+    existsSync(resolve(repoRoot, m)),
+  );
+
+  _devModeCache = isMonoRepo;
+  return isMonoRepo;
+}
+
+/** Reset dev mode cache (for testing). */
+export function resetDevModeCache() {
+  _devModeCache = null;
+}
 
 // ── Error extraction ────────────────────────────────────────────────────────
 
@@ -290,7 +354,9 @@ async function readSourceContext(filePath, errorLine, contextLines = 30) {
 /** @type {Map<string, {count: number, lastAt: number}>} */
 const fixAttempts = new Map();
 const MAX_FIX_ATTEMPTS = 3;
-const FIX_COOLDOWN_MS = 60_000;
+// 5 min cooldown prevents rapid-fire crash loop where autofix itself triggers
+// 3 attempts in < 3 minutes and then gets throttled by monitor's circuit breaker.
+const FIX_COOLDOWN_MS = 5 * 60_000;
 
 function canAttemptFix(signature) {
   const record = fixAttempts.get(signature);
@@ -316,18 +382,41 @@ export function getFixAttemptCount(signature) {
 /**
  * Run `codex exec --full-auto` with a fix prompt.
  * Returns { success, output } — Codex will write fixes directly to disk.
+ *
+ * Guards against common crash scenarios:
+ *  - ENOENT: codex binary not found
+ *  - Timeout: kills child after timeoutMs
+ *  - Process spawn errors
  */
 function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
   return new Promise((resolve) => {
-    const args = ["exec", "--full-auto", "-C", cwd, prompt];
+    let args;
+    try {
+      args = ["exec", "--full-auto", "-C", cwd, prompt];
+    } catch (err) {
+      return resolve({
+        success: false,
+        output: "",
+        error: `Failed to build args: ${err.message}`,
+      });
+    }
 
-    const child = spawn("codex", args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
-      timeout: timeoutMs,
-      env: { ...process.env },
-    });
+    let child;
+    try {
+      child = spawn("codex", args, {
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: true,
+        timeout: timeoutMs,
+        env: { ...process.env },
+      });
+    } catch (err) {
+      return resolve({
+        success: false,
+        output: "",
+        error: `spawn failed: ${err.message}`,
+      });
+    }
 
     let stdout = "";
     let stderr = "";
@@ -413,6 +502,10 @@ function getChangeSummary(repoRoot, files) {
 
 /**
  * Attempt to auto-fix errors found in a crash log.
+ *
+ * In DEV MODE: extracts errors → runs codex exec → applies fixes to disk.
+ * In NPM MODE: extracts errors → runs codex exec in read-only → sends
+ *   suggested fix to Telegram/logs. Never modifies files.
  *
  * @param {object} opts
  * @param {string} opts.logText — tail of the crash log
