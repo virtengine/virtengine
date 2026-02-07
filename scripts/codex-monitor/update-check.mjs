@@ -14,7 +14,7 @@
  *   - Caches the last check timestamp so we don't query npm too aggressively
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -80,7 +80,7 @@ async function fetchLatestVersion() {
   }
 
   try {
-    const out = execSync(`npm view ${PKG_NAME} version`, {
+    const out = execFileSync("npm", ["view", PKG_NAME, "version"], {
       encoding: "utf8",
       timeout: 15000,
       stdio: ["pipe", "pipe", "ignore"],
@@ -155,7 +155,7 @@ export async function forceUpdate(currentVersion) {
   console.log(`\n  Installing ${PKG_NAME}@${latest}...\n`);
 
   try {
-    execSync(`npm install -g ${PKG_NAME}@${latest}`, {
+    execFileSync("npm", ["install", "-g", `${PKG_NAME}@${latest}`], {
       stdio: "inherit",
       timeout: 120000,
     });
@@ -243,7 +243,7 @@ export function startAutoUpdateLoop(opts = {}) {
       onNotify(msg);
 
       try {
-        execSync(`npm install -g ${PKG_NAME}@${latest}`, {
+        execFileSync("npm", ["install", "-g", `${PKG_NAME}@${latest}`], {
           timeout: 180000,
           stdio: ["pipe", "pipe", "pipe"],
         });
