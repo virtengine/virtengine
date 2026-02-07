@@ -297,7 +297,7 @@ export function IdentityProvider({
    */
   const getRemediationPath = useCallback(
     (gatingError: IdentityGatingError): RemediationPath => {
-      const steps: RemediationStep[] = [];
+      const steps: RemediationPath["steps"] = [];
       let order = 1;
 
       // Add steps for missing scopes
