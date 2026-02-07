@@ -67,6 +67,7 @@ func NewVaultService(cfg VaultServiceConfig) (data_vault.VaultService, error) {
 		Store:              store,
 		AccessControl:      accessControl,
 		AuditLogger:        auditLogger,
+		AuditOwner:         cfg.AuditOwner,
 		Metrics:            metrics,
 		AnomalyDetector:    anomalyDetector,
 		KeyRotationOverlap: cfg.RotateOverlap,

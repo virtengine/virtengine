@@ -27,6 +27,7 @@ The data vault implements secure storage for all sensitive payloads referenced b
 - On-chain references contain only blob IDs + content hashes (SHA-256)
 - Cross-org access strictly denied
 - Every decrypt operation logged with full context
+- Audit events are stored under `ScopeAudit` with hash chaining enabled
 
 ### Encryption
 
@@ -164,17 +165,20 @@ go test -run TestEncryptedBlobStore
 - [x] EncryptedBlobStore basic implementation
 - [x] Key manager tests (8 tests passing)
 
-### TODO (Remaining)
+### Implemented (Phase 2-6)
 
 - [x] Access control integration (wallet auth, org isolation)
-- [x] Audit logging for all decrypt operations
+- [x] Audit logging for decrypt/read operations (hash chained + vault export)
 - [x] Migration helpers for existing plaintext storage
+- [x] HTTP API endpoints + provider daemon integration
+- [x] Metrics and anomaly detection hooks
+
+### Remaining
+
 - [ ] Streaming support for large blobs (>10MB)
-- [x] API endpoints (HTTP)
-- [x] Provider daemon integration
+- [ ] gRPC endpoints for vault APIs
 - [ ] HSM integration for KEK storage (task 30B)
 - [ ] E2E tests
-- [x] Documentation and runbooks
 
 ## Related
 

@@ -28,7 +28,6 @@ func (v *VaultAuditExporter) Export(ctx context.Context, event *AuditEvent) erro
 	if v == nil || v.store == nil || event == nil {
 		return nil
 	}
-
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return err

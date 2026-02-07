@@ -189,6 +189,10 @@ func (p *PolicyAccessControl) Authorize(ctx context.Context, req AccessRequest) 
 		}
 	}
 
+	if len(policy.AllowedRoles) == 0 {
+		return NewVaultError("Authorize", ErrUnauthorized, "insufficient org role")
+	}
+
 	if p.roleChecker == nil {
 		return NewVaultError("Authorize", ErrUnauthorized, "role resolver unavailable")
 	}

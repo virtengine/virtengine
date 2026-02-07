@@ -61,6 +61,8 @@ tags:
     description: Invoices and usage
   - name: Provider
     description: Provider information
+  - name: Vault
+    description: Encrypted data vault operations
 
 paths:
   /health:
@@ -1636,3 +1638,121 @@ components:
         attributes:
           type: object
           additionalProperties: true
+
+    VaultUploadRequest:
+      type: object
+      required:
+        - scope
+        - content_base64
+      properties:
+        scope:
+          type: string
+          enum: [veid, support, market, audit]
+        content_base64:
+          type: string
+          description: Base64-encoded plaintext payload
+        org_id:
+          type: string
+        retention_policy:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    VaultUploadResponse:
+      type: object
+      properties:
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+
+    VaultRetrieveResponse:
+      type: object
+      properties:
+        data_base64:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+
+    VaultBlobMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+        key_id:
+          type: string
+        key_version:
+          type: integer
+          format: int64
+        content_hash:
+          type: string
+        size:
+          type: integer
+          format: int64
+        encrypted_size:
+          type: integer
+          format: int64
+        owner:
+          type: string
+        org_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        retention_policy:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        backend:
+          type: string
+        backend_ref:
+          type: string
+
+    VaultAuditResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaultAuditEvent"
+
+    VaultAuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        event_type:
+          type: string
+        blob_id:
+          type: string
+        scope:
+          type: string
+        requester:
+          type: string
+        org_id:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        previous_hash:
+          type: string
+        hash:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string

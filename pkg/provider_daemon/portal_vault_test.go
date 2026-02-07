@@ -2,105 +2,138 @@ package provider_daemon
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
-	"io"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/virtengine/virtengine/pkg/artifact_store"
 	"github.com/virtengine/virtengine/pkg/data_vault"
+	"github.com/virtengine/virtengine/pkg/data_vault/keys"
+	portalauth "github.com/virtengine/virtengine/pkg/provider_daemon/auth"
 )
 
-type stubVault struct{}
+func TestPortalVaultUploadInvalidBody(t *testing.T) {
+	srv := testPortalServer(t)
 
-func (stubVault) Upload(_ context.Context, req *data_vault.UploadRequest) (*data_vault.EncryptedBlob, error) {
-	return &data_vault.EncryptedBlob{
-		Metadata: data_vault.BlobMetadata{
-			ID:    "blob-1",
-			Scope: req.Scope,
-			Owner: req.Owner,
-			OrgID: req.OrgID,
-		},
-	}, nil
+	req := httptest.NewRequest(http.MethodPost, "/vault/blobs", bytes.NewBufferString("{invalid}"))
+	req = req.WithContext(portalauth.WithAuth(req.Context(), portalauth.AuthContext{Address: "addr1"}))
+	rec := httptest.NewRecorder()
+
+	srv.handleVaultUpload(rec, req)
+
+	if rec.Result().StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Result().StatusCode)
+	}
 }
 
-func (stubVault) Retrieve(_ context.Context, req *data_vault.RetrieveRequest) ([]byte, *data_vault.BlobMetadata, error) {
-	return []byte("secret"), &data_vault.BlobMetadata{ID: req.ID, Scope: data_vault.ScopeSupport}, nil
+func TestPortalVaultRetrieveNotFound(t *testing.T) {
+	srv := testPortalServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/vault/blobs/missing", nil)
+	req = mux.SetURLVars(req, map[string]string{"blobId": "missing"})
+	req = req.WithContext(portalauth.WithAuth(req.Context(), portalauth.AuthContext{Address: "addr1"}))
+	rec := httptest.NewRecorder()
+
+	srv.handleVaultRetrieve(rec, req)
+
+	if rec.Result().StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Result().StatusCode)
+	}
 }
 
-func (stubVault) RetrieveStream(_ context.Context, req *data_vault.RetrieveRequest) (io.ReadCloser, *data_vault.BlobMetadata, error) {
-	return io.NopCloser(bytes.NewReader([]byte("secret"))), &data_vault.BlobMetadata{ID: req.ID}, nil
+func TestPortalVaultAuditRequiresOrg(t *testing.T) {
+	srv := testPortalServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/vault/audit?requester=someone", nil)
+	req = req.WithContext(portalauth.WithAuth(req.Context(), portalauth.AuthContext{Address: "addr1"}))
+	rec := httptest.NewRecorder()
+
+	srv.handleVaultAuditSearch(rec, req)
+
+	if rec.Result().StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Result().StatusCode)
+	}
 }
 
-func (stubVault) GetMetadata(_ context.Context, id data_vault.BlobID, _ string, _ string) (*data_vault.BlobMetadata, error) {
-	return &data_vault.BlobMetadata{ID: id, Scope: data_vault.ScopeSupport}, nil
+func TestPortalVaultUploadAndRetrieve(t *testing.T) {
+	srv := testPortalServer(t)
+
+	payload := []byte("secret")
+	body := map[string]string{
+		"scope":          "support",
+		"content_base64": base64.StdEncoding.EncodeToString(payload),
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/vault/blobs", bytes.NewReader(raw))
+	req = req.WithContext(portalauth.WithAuth(req.Context(), portalauth.AuthContext{Address: "addr1"}))
+	rec := httptest.NewRecorder()
+
+	srv.handleVaultUpload(rec, req)
+	if rec.Result().StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", rec.Result().StatusCode)
+	}
+
+	var uploadResp struct {
+		Metadata struct {
+			ID string `json:"id"`
+		} `json:"metadata"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&uploadResp)
+	if uploadResp.Metadata.ID == "" {
+		t.Fatalf("expected blob id in response")
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/vault/blobs/"+uploadResp.Metadata.ID, nil)
+	getReq = mux.SetURLVars(getReq, map[string]string{"blobId": uploadResp.Metadata.ID})
+	getReq = getReq.WithContext(portalauth.WithAuth(getReq.Context(), portalauth.AuthContext{Address: "addr1"}))
+	getRec := httptest.NewRecorder()
+
+	srv.handleVaultRetrieve(getRec, getReq)
+	if getRec.Result().StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", getRec.Result().StatusCode)
+	}
 }
 
-func (stubVault) Delete(_ context.Context, _ data_vault.BlobID, _ string) error {
-	return nil
-}
-
-func (stubVault) RotateKeys(_ context.Context, _ data_vault.Scope) error {
-	return nil
-}
-
-func (stubVault) GetAuditEvents(_ context.Context, _ data_vault.AuditFilter) ([]*data_vault.AuditEvent, error) {
-	return []*data_vault.AuditEvent{}, nil
-}
-
-func (stubVault) Close() error {
-	return nil
-}
-
-func TestPortalVaultUploadErrors(t *testing.T) {
+func testPortalServer(t *testing.T) *PortalAPIServer {
+	t.Helper()
+	vault, err := newTestVaultService()
+	if err != nil {
+		t.Fatalf("vault service: %v", err)
+	}
 	srv, err := NewPortalAPIServer(PortalAPIServerConfig{
-		AllowInsecure:        true,
-		VaultService:         stubVault{},
-		VaultMaxPayloadBytes: 1024,
+		VaultService: vault,
 	})
 	if err != nil {
-		t.Fatalf("new portal api server: %v", err)
+		t.Fatalf("portal server: %v", err)
 	}
-
-	router := mux.NewRouter()
-	srv.setupRoutes(router)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/vault/blobs", bytes.NewBufferString(`{"scope":"support"}`))
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing payload, got %d: %s", resp.Code, resp.Body.String())
-	}
-
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/vault/blobs", bytes.NewBufferString(`{"scope":"support","payload_base64":"bad@@@"}`))
-	resp = httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid base64, got %d: %s", resp.Code, resp.Body.String())
-	}
+	return srv
 }
 
-func TestPortalVaultUploadSuccess(t *testing.T) {
-	srv, err := NewPortalAPIServer(PortalAPIServerConfig{
-		AllowInsecure:        true,
-		VaultService:         stubVault{},
-		VaultMaxPayloadBytes: 1024,
+func newTestVaultService() (data_vault.VaultService, error) {
+	backend := artifact_store.NewMemoryBackend()
+	keyMgr := keys.NewKeyManager()
+	if err := keyMgr.Initialize(); err != nil {
+		return nil, err
+	}
+	store := data_vault.NewEncryptedBlobStore(backend, keyMgr)
+	auditLogger := data_vault.NewAuditLogger(data_vault.DefaultAuditLogConfig(), nil)
+	auditLogger.RegisterExporter(data_vault.NewVaultAuditExporter(store, "audit-system"))
+	metrics := data_vault.NewVaultMetrics()
+	access := data_vault.NewPolicyAccessControl(data_vault.DefaultAccessPolicy(), nil, data_vault.StaticOrgResolver{})
+
+	return data_vault.NewVaultService(data_vault.VaultConfig{
+		Store:              store,
+		AccessControl:      access,
+		AuditLogger:        auditLogger,
+		AuditOwner:         "audit-system",
+		Metrics:            metrics,
+		KeyRotationOverlap: 24 * time.Hour,
 	})
-	if err != nil {
-		t.Fatalf("new portal api server: %v", err)
-	}
-
-	router := mux.NewRouter()
-	srv.setupRoutes(router)
-
-	payload := base64.StdEncoding.EncodeToString([]byte("hello"))
-	body := `{"scope":"support","payload_base64":"` + payload + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/vault/blobs", bytes.NewBufferString(body))
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-	if resp.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
-	}
 }
