@@ -1051,10 +1051,6 @@ const COMMANDS = {
     handler: cmdBackground,
     desc: "Run a task in background or background the active agent",
   },
-  "/agent": {
-    handler: cmdAgent,
-    desc: "Dispatch a task to a workspace: /agent --workspace <id> --task <prompt>",
-  },
   "/region": {
     handler: cmdRegion,
     desc: "View/switch Codex region: /region [us|sweden|auto]",
