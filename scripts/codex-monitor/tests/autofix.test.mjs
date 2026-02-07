@@ -18,8 +18,13 @@ vi.mock("node:child_process", () => {
   return { spawn, execSync };
 });
 
+let autofixPromise = null;
+
 async function loadAutofix() {
-  return await import("../autofix.mjs");
+  if (!autofixPromise) {
+    autofixPromise = import("../autofix.mjs");
+  }
+  return await autofixPromise;
 }
 
 describe("extractErrors", () => {
@@ -230,7 +235,6 @@ describe("isDevMode + resetDevModeCache", () => {
   });
 
   it("returns true for AUTOFIX_MODE=dev", async () => {
-    vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     process.env.AUTOFIX_MODE = "dev";
     resetDevModeCache();
@@ -239,7 +243,6 @@ describe("isDevMode + resetDevModeCache", () => {
   });
 
   it("returns false for AUTOFIX_MODE=npm (analyze mode)", async () => {
-    vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     process.env.AUTOFIX_MODE = "npm";
     resetDevModeCache();
@@ -248,7 +251,6 @@ describe("isDevMode + resetDevModeCache", () => {
   });
 
   it("returns true for missing mode when inside source repo", async () => {
-    vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     delete process.env.AUTOFIX_MODE;
     resetDevModeCache();
@@ -264,7 +266,6 @@ describe("isDevMode + resetDevModeCache", () => {
   });
 
   it("resets cached value", async () => {
-    vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
 
     process.env.AUTOFIX_MODE = "dev";
@@ -296,7 +297,6 @@ describe("getFixAttemptCount", () => {
   });
 
   it("increments per signature", async () => {
-    vi.resetModules();
     vi.useFakeTimers();
 
     const { getFixAttemptCount, fixLoopingError } = await loadAutofix();
@@ -325,7 +325,6 @@ describe("getFixAttemptCount", () => {
   });
 
   it("keeps counts isolated per signature", async () => {
-    vi.resetModules();
     vi.useFakeTimers();
 
     const { getFixAttemptCount, fixLoopingError } = await loadAutofix();
