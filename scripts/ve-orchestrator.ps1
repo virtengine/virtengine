@@ -1211,7 +1211,7 @@ function Get-TaskRetryKey {
         [string]$Category
     )
     if (-not $TaskId) { return $Category }
-    return "$TaskId:$Category"
+    return "${TaskId}:${Category}"
 }
 
 function Increment-TaskRetryCount {
@@ -2919,7 +2919,7 @@ function Start-Orchestrator {
             # Step 6: Wait before next cycle
             Write-Log "Sleeping ${PollIntervalSec}s until next cycle... (Ctrl+C to stop)" -Level "INFO"
             if (-not (Start-InterruptibleSleep -Seconds $PollIntervalSec -Reason "cycle-wait")) { break }
-
+ 
             Save-StatusSnapshot
 
         } while ($true)
