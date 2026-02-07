@@ -238,24 +238,32 @@ describe("isDevMode + resetDevModeCache", () => {
     expect(isDevMode()).toBe(true);
   });
 
-  it("returns true for AUTOFIX_MODE=npm", async () => {
+  it("returns false for AUTOFIX_MODE=npm (analyze-only)", async () => {
     vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     process.env.AUTOFIX_MODE = "npm";
     resetDevModeCache();
 
-    expect(isDevMode()).toBe(true);
+    expect(isDevMode()).toBe(false);
   });
 
-  it("returns false for missing or other modes", async () => {
+  it("falls back to repo detection when mode is missing", async () => {
     vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     delete process.env.AUTOFIX_MODE;
     resetDevModeCache();
 
+    expect(isDevMode()).toBe(true);
+  });
+
+  it("returns false for explicit analyze-only modes", async () => {
+    vi.resetModules();
+    const { isDevMode, resetDevModeCache } = await loadAutofix();
+    process.env.AUTOFIX_MODE = "analyze";
+    resetDevModeCache();
     expect(isDevMode()).toBe(false);
 
-    process.env.AUTOFIX_MODE = "prod";
+    process.env.AUTOFIX_MODE = "suggest";
     resetDevModeCache();
     expect(isDevMode()).toBe(false);
   });
@@ -268,7 +276,7 @@ describe("isDevMode + resetDevModeCache", () => {
     resetDevModeCache();
     expect(isDevMode()).toBe(true);
 
-    process.env.AUTOFIX_MODE = "prod";
+    process.env.AUTOFIX_MODE = "analyze";
     expect(isDevMode()).toBe(true);
 
     resetDevModeCache();
@@ -308,7 +316,7 @@ describe("getFixAttemptCount", () => {
     });
     expect(getFixAttemptCount(signature)).toBe(1);
 
-    vi.setSystemTime(61_000);
+    vi.setSystemTime(5 * 60_000 + 1);
     await fixLoopingError({
       errorLine: "repeating error",
       repeatCount: 3,
