@@ -164,6 +164,11 @@ let watcherDebounce = null;
 let watchFileName = null;
 let envWatchers = [];
 let envWatcherDebounce = null;
+
+// ── Self-restart: exit code 75 signals cli.mjs to re-fork with fresh ESM cache
+const SELF_RESTART_EXIT_CODE = 75;
+let selfWatcher = null;
+let selfWatcherDebounce = null;
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
@@ -4392,6 +4397,61 @@ function stopWatcher() {
   watchFileName = null;
 }
 
+// ── Self-monitor watcher: restart when own .mjs files change ─────────────────
+function stopSelfWatcher() {
+  if (selfWatcher) {
+    selfWatcher.close();
+    selfWatcher = null;
+  }
+  if (selfWatcherDebounce) {
+    clearTimeout(selfWatcherDebounce);
+    selfWatcherDebounce = null;
+  }
+}
+
+function selfRestartForSourceChange(filename) {
+  console.log(`\n[monitor] source file changed: ${filename}`);
+  console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
+  shuttingDown = true;
+  stopAutoUpdateLoop();
+  stopSelfWatcher();
+  stopWatcher();
+  stopEnvWatchers();
+  if (currentChild) {
+    currentChild.kill("SIGTERM");
+    setTimeout(() => {
+      if (currentChild && !currentChild.killed) {
+        currentChild.kill("SIGKILL");
+      }
+    }, 3000);
+  }
+  void releaseTelegramPollLock();
+  stopTelegramBot();
+  // Exit with special code — cli.mjs re-forks with fresh module cache
+  setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+}
+
+function startSelfWatcher() {
+  stopSelfWatcher();
+  try {
+    selfWatcher = watch(__dirname, { persistent: true }, (_event, filename) => {
+      // Only react to .mjs source files
+      if (!filename || !filename.endsWith(".mjs")) return;
+      // Ignore node_modules and log artifacts
+      if (filename.includes("node_modules")) return;
+      if (selfWatcherDebounce) {
+        clearTimeout(selfWatcherDebounce);
+      }
+      selfWatcherDebounce = setTimeout(() => {
+        selfRestartForSourceChange(filename);
+      }, 3000);
+    });
+    console.log("[monitor] watching own source files for self-restart");
+  } catch (err) {
+    console.warn(`[monitor] self-watcher failed: ${err.message}`);
+  }
+}
+
 async function startWatcher(force = false) {
   if (!watchEnabled) {
     stopWatcher();
@@ -4594,6 +4654,7 @@ async function reloadConfig(reason) {
 process.on("SIGINT", () => {
   shuttingDown = true;
   stopAutoUpdateLoop();
+  stopSelfWatcher();
   stopEnvWatchers();
   if (watcher) {
     watcher.close();
@@ -4614,6 +4675,7 @@ process.on("exit", () => {
 process.on("SIGTERM", () => {
   shuttingDown = true;
   stopAutoUpdateLoop();
+  stopSelfWatcher();
   stopEnvWatchers();
   if (watcher) {
     watcher.close();
@@ -4737,6 +4799,7 @@ startAutoUpdateLoop({
 
 startWatcher();
 startEnvWatchers();
+startSelfWatcher();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }

@@ -18,6 +18,7 @@
 import { resolve, dirname } from "node:path";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { fork } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -185,9 +186,57 @@ async function main() {
     console.log("\n  Setup complete! Starting codex-monitor...\n");
   }
 
-  // Load and start monitor
-  await import("./monitor.mjs");
+  // Fork monitor as a child process — enables self-restart on source changes.
+  // When monitor exits with code 75, cli re-forks with a fresh ESM module cache.
+  await runMonitor();
 }
+
+// ── Self-restart exit code (must match monitor.mjs SELF_RESTART_EXIT_CODE) ───
+const SELF_RESTART_EXIT_CODE = 75;
+let monitorChild = null;
+
+function runMonitor() {
+  return new Promise((resolve, reject) => {
+    const monitorPath = fileURLToPath(
+      new URL("./monitor.mjs", import.meta.url),
+    );
+    monitorChild = fork(monitorPath, process.argv.slice(2), {
+      stdio: "inherit",
+    });
+
+    monitorChild.on("exit", (code, signal) => {
+      monitorChild = null;
+      if (code === SELF_RESTART_EXIT_CODE) {
+        console.log(
+          "\n  \u21BB Monitor source changed \u2014 restarting with fresh modules...\n",
+        );
+        // Small delay to let file writes settle
+        setTimeout(() => resolve(runMonitor()), 1000);
+      } else {
+        process.exit(code ?? (signal ? 1 : 0));
+      }
+    });
+
+    monitorChild.on("error", (err) => {
+      monitorChild = null;
+      reject(err);
+    });
+  });
+}
+
+// Let forked monitor handle signal cleanup — prevent parent from dying first
+process.on("SIGINT", () => {
+  if (!monitorChild) process.exit(0);
+  // Child gets SIGINT too via shared terminal — just wait for it to exit
+});
+process.on("SIGTERM", () => {
+  if (!monitorChild) process.exit(0);
+  try {
+    monitorChild.kill("SIGTERM");
+  } catch {
+    /* best effort */
+  }
+});
 
 main().catch((err) => {
   console.error(`codex-monitor failed: ${err.message}`);
