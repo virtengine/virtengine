@@ -11,6 +11,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useRef, useEffect, useState } from 'react';
 import { useJob, useJobLogs, useJobOutputs, useJobUsage, useJobCancellation } from '@/features/hpc';
 import type { JobStatus } from '@/features/hpc';
+import { txLink } from '@/lib/explorer';
 
 export default function JobDetailClient() {
   const params = useParams();
@@ -244,7 +245,19 @@ export default function JobDetailClient() {
               <InfoRow label="Total Cost" value={`$${job.totalCost}`} />
               <InfoRow label="Deposit" value={`$${job.depositAmount}`} />
               <InfoRow label="Deposit Status" value={job.depositStatus} />
-              <InfoRow label="Tx Hash" value={truncate(job.txHash, 16)} />
+              <InfoRow
+                label="Tx Hash"
+                value={
+                  <a
+                    className="font-medium text-primary hover:underline"
+                    href={txLink(job.txHash)}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {truncate(job.txHash, 16)}
+                  </a>
+                }
+              />
             </div>
           </div>
 
