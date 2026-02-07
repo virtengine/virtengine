@@ -138,6 +138,8 @@ let skipNextRestartCount = false;
 
 // Cached VK repo ID (lazy loaded on first PR/rebase call)
 let cachedRepoId = null;
+// Cached VK project ID (lazy loaded)
+let cachedProjectId = null;
 let watcher = null;
 let watcherDebounce = null;
 let watchFileName = null;
@@ -146,6 +148,7 @@ let envWatcherDebounce = null;
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
+let vkNonJsonNotifiedAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
 let monitorFailureHandling = false;
@@ -1247,6 +1250,26 @@ async function fetchVk(path, opts = {}) {
       );
       return null;
     }
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const text = await res.text().catch(() => "");
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
+      );
+      if (text) {
+        console.warn(
+          `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
+        );
+      }
+      const now = Date.now();
+      if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
+        vkNonJsonNotifiedAt = now;
+        notifyVkError(
+          "Vibe-Kanban API returned HTML/non-JSON. Check VK_BASE_URL/VK_ENDPOINT_URL.",
+        );
+      }
+      return null;
+    }
     return await res.json();
   } catch (err) {
     const msg = err?.message || String(err);
@@ -1270,43 +1293,75 @@ async function fetchBranchStatus(attemptId) {
 }
 
 /**
+ * Find the matching VK project by projectName, with caching.
+ * Falls back to the first project if no name match.
+ */
+async function findVkProjectId() {
+  if (cachedProjectId) return cachedProjectId;
+
+  const projectsRes = await fetchVk("/api/projects");
+  if (!projectsRes?.success || !Array.isArray(projectsRes.data) || projectsRes.data.length === 0) {
+    console.warn("[monitor] Failed to fetch projects from VK API");
+    return null;
+  }
+
+  // Match by projectName (case-insensitive)
+  const match = projectsRes.data.find(
+    (p) => p.name?.toLowerCase() === projectName?.toLowerCase(),
+  );
+  const project = match || projectsRes.data[0];
+  if (!project?.id) {
+    console.warn("[monitor] No projects found in VK API");
+    return null;
+  }
+  if (!match) {
+    console.warn(
+      `[monitor] No VK project matching "${projectName}" — using "${project.name}" as fallback`,
+    );
+  }
+  cachedProjectId = project.id;
+  console.log(`[monitor] Cached project_id: ${cachedProjectId.substring(0, 8)}... (${project.name})`);
+  return cachedProjectId;
+}
+
+/**
  * Fetches and caches the repo_id from VK API.
- * VK API requires repo_id for PR creation and other operations.
+ * Uses the flat /api/repos endpoint and matches by repoRoot path or projectName.
  */
 async function getRepoId() {
   if (cachedRepoId) return cachedRepoId;
 
   try {
-    // Fetch projects to find matching repo
-    const projectsRes = await fetchVk("/api/projects");
-    if (!projectsRes?.success || !Array.isArray(projectsRes.data)) {
-      console.warn("[monitor] Failed to fetch projects from VK API");
+    // Use the flat /api/repos endpoint (not nested under projects)
+    const reposRes = await fetchVk("/api/repos");
+    if (!reposRes?.success || !Array.isArray(reposRes.data) || reposRes.data.length === 0) {
+      console.warn("[monitor] Failed to fetch repos from VK API");
       return null;
     }
 
-    // Find the project (assumes first project or matches repoSlug)
-    const project = projectsRes.data[0];
-    if (!project?.id) {
-      console.warn("[monitor] No projects found in VK API");
-      return null;
+    // Match by repo path (normalized for comparison)
+    const normalPath = (p) => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const targetPath = normalPath(repoRoot);
+
+    let repo = reposRes.data.find((r) => normalPath(r.path) === targetPath);
+
+    // Fallback: match by name / display_name
+    if (!repo) {
+      repo = reposRes.data.find(
+        (r) => (r.name || r.display_name || "").toLowerCase() === projectName?.toLowerCase(),
+      );
     }
 
-    // Fetch repos for the project
-    const reposRes = await fetchVk(`/api/projects/${project.id}/repos`);
-    if (!reposRes?.success || !Array.isArray(reposRes.data)) {
-      console.warn("[monitor] Failed to fetch repos for project");
-      return null;
-    }
-
-    // Find the repo (assumes first repo or matches repoSlug)
-    const repo = reposRes.data[0];
-    if (!repo?.id) {
-      console.warn("[monitor] No repos found for project");
+    if (!repo) {
+      console.warn(
+        `[monitor] No VK repo matching path "${repoRoot}" or name "${projectName}" — ` +
+        `available: ${reposRes.data.map((r) => r.name).join(", ")}`,
+      );
       return null;
     }
 
     cachedRepoId = repo.id;
-    console.log(`[monitor] Cached repo_id: ${cachedRepoId.substring(0, 8)}...`);
+    console.log(`[monitor] Cached repo_id: ${cachedRepoId.substring(0, 8)}... (${repo.name})`);
     return cachedRepoId;
   } catch (err) {
     console.warn(`[monitor] Error fetching repo_id: ${err.message}`);
@@ -1319,9 +1374,14 @@ async function getRepoId() {
  * Rebases the attempt's worktree onto target branch.
  */
 async function rebaseAttempt(attemptId) {
+  const repoId = await getRepoId();
+  if (!repoId) {
+    console.warn("[monitor] Cannot rebase: repo_id not available");
+    return { success: false, message: "repo_id not available" };
+  }
   const res = await fetchVk(`/api/task-attempts/${attemptId}/rebase`, {
     method: "POST",
-    body: {}, // VK API requires at least empty JSON body
+    body: { repo_id: repoId },
     timeoutMs: 60000,
   });
   return res;
@@ -1610,22 +1670,16 @@ async function attemptFreshSessionRetry(reason, logTail) {
  */
 async function fetchTasksByStatus(status) {
   try {
-    // Fetch projects first to get project_id
-    const projectsRes = await fetchVk("/api/projects");
-    if (!projectsRes?.success || !Array.isArray(projectsRes.data)) {
-      console.warn("[monitor] Failed to fetch projects for task query");
+    // Find matching VK project
+    const projectId = await findVkProjectId();
+    if (!projectId) {
+      console.warn("[monitor] No VK project found for task query");
       return [];
     }
 
-    const project = projectsRes.data[0];
-    if (!project?.id) {
-      console.warn("[monitor] No projects found for task query");
-      return [];
-    }
-
-    // Fetch tasks for project with status filter
+    // Use flat /api/tasks endpoint with query params
     const tasksRes = await fetchVk(
-      `/api/projects/${project.id}/tasks?status=${status}`,
+      `/api/tasks?project_id=${projectId}&status=${status}`,
     );
     if (!tasksRes?.success || !Array.isArray(tasksRes.data)) {
       console.warn(`[monitor] Failed to fetch tasks with status=${status}`);
@@ -2352,7 +2406,12 @@ async function maybeTriggerTaskPlanner(reason, details) {
   if (isPlannerDeduped(state, now)) {
     return;
   }
-  await triggerTaskPlanner(reason, details);
+  try {
+    await triggerTaskPlanner(reason, details);
+  } catch (err) {
+    // Auto-triggered planner failures are non-fatal — already logged/notified by triggerTaskPlanner
+    console.warn(`[monitor] auto-triggered planner failed: ${err.message || err}`);
+  }
 }
 
 async function sendTelegramMessage(text, options = {}) {
@@ -2922,6 +2981,7 @@ async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
     await sendTelegramMessage(`Task planner run failed (${plannerMode}): ${message}`);
+    throw err; // re-throw so callers (e.g. /plan command) know it failed
   } finally {
     plannerTriggered = false;
   }
@@ -2933,16 +2993,15 @@ async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
  */
 async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
   const numTasks = taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
-  // Get project ID
-  const projectsRes = await fetchVk("/api/projects");
-  if (!projectsRes?.success || !projectsRes.data?.[0]?.id) {
+  // Get project ID using the name-matched helper
+  const projectId = await findVkProjectId();
+  if (!projectId) {
     throw new Error("Cannot reach VK API or no project found");
   }
-  const projectId = projectsRes.data[0].id;
 
   // Check for existing planner tasks to avoid duplicates
   const existingTasks = await fetchVk(
-    `/api/projects/${projectId}/tasks?status=todo`,
+    `/api/tasks?project_id=${projectId}&status=todo`,
   );
   if (existingTasks?.data?.some((t) =>
     t.title?.toLowerCase().includes("task planner") ||
@@ -2977,9 +3036,10 @@ async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
       "- Each task should be completable by a single agent in 1-4 hours",
     ].join("\n"),
     status: "todo",
+    project_id: projectId,
   };
 
-  const result = await fetchVk(`/api/projects/${projectId}/tasks`, {
+  const result = await fetchVk(`/api/tasks`, {
     method: "POST",
     body: taskBody,
     timeoutMs: 15000,
@@ -3684,6 +3744,9 @@ function applyConfig(nextConfig, options = {}) {
   vkRecoveryHost = nextConfig.vkRecoveryHost;
   vkEndpointUrl = nextConfig.vkEndpointUrl;
   vkPublicUrl = nextConfig.vkPublicUrl;
+  // Invalidate VK caches when endpoint URL changes
+  cachedRepoId = null;
+  cachedProjectId = null;
   vkRecoveryCooldownMin = nextConfig.vkRecoveryCooldownMin;
   vkSpawnEnabled = nextConfig.vkSpawnEnabled;
   vkEnsureIntervalMs = nextConfig.vkEnsureIntervalMs;
