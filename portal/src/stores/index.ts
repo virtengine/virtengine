@@ -44,6 +44,7 @@ export {
   selectActiveCustomerAllocations,
   selectTotalMonthlySpend,
   selectUnreadNotificationCount as selectUnreadDashboardNotificationCount,
+  selectAllocationById,
   type CustomerDashboardStore,
   type CustomerDashboardState,
   type CustomerDashboardActions,

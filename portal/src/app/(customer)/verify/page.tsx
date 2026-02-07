@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { VerificationWizard, VerificationStatus } from '@/components/veid';
+import { useVeidPolling } from '@/features/veid';
 import { ArrowLeft, Shield } from 'lucide-react';
 import Link from 'next/link';
 
@@ -9,6 +10,9 @@ type VerifyStep = 'overview' | 'verifying' | 'complete';
 
 export default function VerifyPage() {
   const [step, setStep] = useState<VerifyStep>('overview');
+
+  // Poll for status updates while verification is processing
+  useVeidPolling({ enabled: step === 'complete' || step === 'overview' });
 
   const handleStartVerification = useCallback(() => {
     setStep('verifying');

@@ -650,6 +650,37 @@ func (s *PrivacyProofsTestSuite) TestCreateAgeProof_Success() {
 	s.Assert().NotNil(proof.Nonce)
 }
 
+func (s *PrivacyProofsTestSuite) TestCreateAgeProof_UsesInjectedRandomness() {
+	s.setupVerifiedIdentity(2)
+	nonce := bytes.Repeat([]byte{0x13}, 32)
+	salt := bytes.Repeat([]byte{0x24}, 32)
+
+	proof, err := s.keeper.CreateAgeProof(
+		s.ctx,
+		s.subjectAddr,
+		18,
+		24*time.Hour,
+		&keeper.RandomnessInputs{
+			Nonce:          nonce,
+			CommitmentSalt: salt,
+		},
+	)
+
+	s.Require().NoError(err)
+	s.Assert().Equal(nonce, proof.Nonce)
+
+	record, found := s.keeper.GetIdentityRecord(s.ctx, s.subjectAddr)
+	s.Require().True(found)
+	deterministicDOB := fmt.Sprintf("DOB_%s_%d", record.AccountAddress, record.CreatedAt.Unix())
+	expectedCommitment, commitErr := types.ComputeCommitmentHash(deterministicDOB, salt)
+	s.Require().NoError(commitErr)
+	s.Assert().Equal(expectedCommitment, proof.CommitmentHash)
+	s.Assert().Equal(
+		types.GenerateProofID(s.subjectAddr.String(), []types.ClaimType{types.ClaimTypeAgeOver18}, nonce),
+		proof.ProofID,
+	)
+}
+
 func (s *PrivacyProofsTestSuite) TestCreateAgeProof_InsufficientVerification() {
 	// Setup identity with low verification level
 	s.setupVerifiedIdentity(1)
@@ -728,6 +759,37 @@ func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_Success() {
 	s.Assert().NotNil(proof.CommitmentHash)
 	s.Assert().NotNil(proof.ProofValue)
 	s.Assert().NotNil(proof.Nonce)
+}
+
+func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_UsesInjectedRandomness() {
+	s.setupVerifiedIdentity(2)
+	nonce := bytes.Repeat([]byte{0x31}, 32)
+	salt := bytes.Repeat([]byte{0x42}, 32)
+
+	proof, err := s.keeper.CreateResidencyProof(
+		s.ctx,
+		s.subjectAddr,
+		"US",
+		24*time.Hour,
+		&keeper.RandomnessInputs{
+			Nonce:          nonce,
+			CommitmentSalt: salt,
+		},
+	)
+
+	s.Require().NoError(err)
+	s.Assert().Equal(nonce, proof.Nonce)
+
+	record, found := s.keeper.GetIdentityRecord(s.ctx, s.subjectAddr)
+	s.Require().True(found)
+	deterministicAddress := fmt.Sprintf("ADDRESS_%s_%s_%d", record.AccountAddress, "US", record.UpdatedAt.Unix())
+	expectedCommitment, commitErr := types.ComputeCommitmentHash(deterministicAddress, salt)
+	s.Require().NoError(commitErr)
+	s.Assert().Equal(expectedCommitment, proof.CommitmentHash)
+	s.Assert().Equal(
+		types.GenerateProofID(s.subjectAddr.String(), []types.ClaimType{types.ClaimTypeCountryResident}, nonce),
+		proof.ProofID,
+	)
 }
 
 func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_InvalidCountryCode() {

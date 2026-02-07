@@ -67,7 +67,7 @@ function generateMockTimeline(orderId: string, status: OrderStatus) {
       id: `${orderId}-evt-2`,
       status: 'matched',
       title: 'Provider Matched',
-      description: 'Order matched with provider bid',
+      description: 'Order matched with provider',
       timestamp: new Date(createdAt.getTime() + 300000).toISOString(),
     },
   ];

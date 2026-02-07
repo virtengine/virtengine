@@ -12,3 +12,4 @@ export { LivenessChallenge } from './LivenessChallenge';
 export { VerificationStatus } from './VerificationStatus';
 export { VerificationWizard } from './VerificationWizard';
 export { TierDisplay } from './TierDisplay';
+export { VEIDScore } from './VEIDScore';

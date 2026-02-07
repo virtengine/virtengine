@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useWallet } from '@/lib/portal-adapter';
+import { useWallet, useIdentity } from '@/lib/portal-adapter';
+import { IdentityRequirements } from '@/components/identity';
 import { formatCurrency, formatTokenAmount, generateId, truncateAddress } from '@/lib/utils';
 import { formatPriceUSD, useOfferingStore } from '@/stores/offeringStore';
 
@@ -36,6 +37,8 @@ export default function OrderCreateClient() {
 
   const { status, accounts, activeAccountIndex } = useWallet();
   const account = accounts[activeAccountIndex];
+  const { actions: identityActions } = useIdentity();
+  const gatingError = identityActions.checkRequirements('place_order');
 
   const {
     selectedOffering: offering,
@@ -222,7 +225,14 @@ export default function OrderCreateClient() {
             </div>
           </div>
 
-          {step === 'configure' && (
+          {step === 'configure' && gatingError && (
+            <IdentityRequirements
+              action="place_order"
+              onStartVerification={() => router.push('/verify')}
+            />
+          )}
+
+          {step === 'configure' && !gatingError && (
             <>
               <div className="rounded-lg border border-border bg-card p-6">
                 <h2 className="text-lg font-semibold">1. Order Configuration</h2>
