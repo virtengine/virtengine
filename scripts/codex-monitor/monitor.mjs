@@ -118,6 +118,8 @@ let {
   primaryAgentEnabled,
   preflightEnabled: configPreflightEnabled,
   preflightRetryMs: configPreflightRetryMs,
+  primaryAgent,
+  primaryAgentEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -162,6 +164,10 @@ setPrimaryAgent(primaryAgentName);
 void initPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
+setPrimaryAgent(primaryAgentName);
+if (primaryAgentReady) {
+  void initPrimaryAgent(config);
+}
 
 // Merge strategy: Codex-powered merge decision analysis
 // Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false

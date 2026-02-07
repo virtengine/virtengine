@@ -1029,11 +1029,11 @@ const COMMANDS = {
   },
   "/history": {
     handler: cmdHistory,
-    desc: "Primary agent conversation history",
+    desc: "Primary agent session history",
   },
   "/clear": {
     handler: cmdClear,
-    desc: "Clear primary agent conversation context",
+    desc: "Clear primary agent session context",
   },
   "/reset_thread": {
     handler: cmdClear,
