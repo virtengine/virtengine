@@ -1323,14 +1323,6 @@ async function findExistingPrForBranchApi(branch) {
   }
 }
 
-function parsePrNumberFromUrl(url) {
-  if (!url) return null;
-  const match = String(url).match(/\/pull\/(\d+)/i);
-  if (!match) return null;
-  const num = Number(match[1]);
-  return Number.isFinite(num) ? num : null;
-}
-
 async function getPullRequestByNumber(prNumber) {
   if (!Number.isFinite(prNumber) || prNumber <= 0) return null;
   if (ghAvailable()) {
