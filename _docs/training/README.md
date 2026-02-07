@@ -186,7 +186,7 @@ Instructor-led sessions are available quarterly:
 
 ### Additional Resources
 
-- [VirtEngine Documentation](_docs/)
+- [VirtEngine Documentation](../)
 - [Runbooks](../runbooks/)
 - [SRE Documentation](../../docs/sre/)
 - [Security Guidelines](../security-guidelines.md)

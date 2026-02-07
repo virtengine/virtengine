@@ -1665,12 +1665,12 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
 
 ## Related Documentation
 
-- [Disaster Recovery Plan](_docs/disaster-recovery.md)
-- [Business Continuity Plan](_docs/business-continuity.md)
-- [Validator Onboarding Guide](_docs/validator-onboarding.md)
-- [State Pruning Package](pkg/pruning/README.md)
-- [Istio Service Mesh](deploy/istio/README.md)
-- [Provider Daemon Architecture](pkg/provider_daemon/doc.go)
+- [Disaster Recovery Plan](disaster-recovery.md)
+- [Business Continuity Plan](business-continuity.md)
+- [Validator Onboarding Guide](validator-onboarding.md)
+- [State Pruning Package](../pkg/pruning/README.md)
+- [Istio Service Mesh](../deploy/istio/README.md)
+- [Provider Daemon Architecture](../pkg/provider_daemon/doc.go)
 
 ---
 

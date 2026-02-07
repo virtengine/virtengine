@@ -1928,13 +1928,13 @@ See `docs/sre/INCIDENT_DRILLS.md` for the full DR drill procedure, integrated wi
 
 ### Related Documentation
 
-- [Horizontal Scaling Guide](_docs/horizontal-scaling-guide.md)
-- [Key Management](_docs/key-management.md)
-- [SLOs and Playbooks](_docs/slos-and-playbooks.md)
-- [Incident Response](docs/sre/INCIDENT_RESPONSE.md)
-- [Incident Drills](docs/sre/INCIDENT_DRILLS.md)
-- [Reliability Testing](docs/sre/RELIABILITY_TESTING.md)
-- [Network Partition Recovery](docs/operations/partition-recovery-runbook.md)
+- [Horizontal Scaling Guide](horizontal-scaling-guide.md)
+- [Key Management](key-management.md)
+- [SLOs and Playbooks](slos-and-playbooks.md)
+- [Incident Response](../docs/sre/INCIDENT_RESPONSE.md)
+- [Incident Drills](../docs/sre/INCIDENT_DRILLS.md)
+- [Reliability Testing](../docs/sre/RELIABILITY_TESTING.md)
+- [Network Partition Recovery](../docs/operations/partition-recovery-runbook.md)
 
 ### Version History
 

@@ -339,7 +339,7 @@ attestation_cache_seconds = 300
 3. [Gramine LibOS](https://gramine.readthedocs.io/)
 4. [Azure Confidential Computing](https://azure.microsoft.com/en-us/solutions/confidential-compute/)
 5. [AWS Nitro Enclaves](https://aws.amazon.com/ec2/nitro/nitro-enclaves/)
-6. [VirtEngine TEE Security Model](_docs/tee-security-model.md)
+6. [VirtEngine TEE Security Model](tee-security-model.md)
 
 ---
 

@@ -633,12 +633,12 @@ Within **30 days**:
 
 ### Related Documents
 
-- [Disaster Recovery Plan](_docs/disaster-recovery.md)
-- [Horizontal Scaling Guide](_docs/horizontal-scaling-guide.md)
-- [Incident Response Process](docs/sre/INCIDENT_RESPONSE.md)
-- [SLOs and Playbooks](_docs/slos-and-playbooks.md)
-- [On-Call Rotation](docs/sre/ON_CALL_ROTATION.md)
-- [Communication Templates](docs/sre/COMMUNICATION_TEMPLATES.md)
+- [Disaster Recovery Plan](disaster-recovery.md)
+- [Horizontal Scaling Guide](horizontal-scaling-guide.md)
+- [Incident Response Process](../docs/sre/INCIDENT_RESPONSE.md)
+- [SLOs and Playbooks](slos-and-playbooks.md)
+- [On-Call Rotation](../docs/sre/ON_CALL_ROTATION.md)
+- [Communication Templates](../docs/sre/COMMUNICATION_TEMPLATES.md)
 
 ### Glossary
 

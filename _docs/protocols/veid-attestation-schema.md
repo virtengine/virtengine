@@ -552,4 +552,4 @@ X-Request-Signature: <ed25519_signature>
 - [W3C Verifiable Credentials Data Model 1.1](https://www.w3.org/TR/vc-data-model/)
 - [RFC 8017 - PKCS #1: RSA Cryptography Specifications](https://tools.ietf.org/html/rfc8017)
 - [RFC 8032 - Edwards-Curve Digital Signature Algorithm (EdDSA)](https://tools.ietf.org/html/rfc8032)
-- [VirtEngine VEID Flow Specification](_docs/veid-flow-spec.md)
+- [VirtEngine VEID Flow Specification](../veid-flow-spec.md)

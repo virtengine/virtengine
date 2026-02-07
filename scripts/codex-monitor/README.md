@@ -63,6 +63,9 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Auto-setup** — First-run wizard configures everything; generates agent templates, wires Vibe-Kanban
 - **Multi-repo support** — Manage separate backend/frontend repos from one monitor instance
 - **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
+- **Hot .env reload** — Changes to `.env` files are detected and applied without restart
+
+See [docs/operations/slopdev-workshop.md](../../docs/operations/slopdev-workshop.md) for detailed setup walkthrough and workshop guide.
 
 ## Configuration
 

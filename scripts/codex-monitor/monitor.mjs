@@ -1376,6 +1376,186 @@ async function archiveAttempt(attemptId) {
   return res;
 }
 
+/**
+ * GET /api/projects/:project_id/tasks?status=<status>
+ * Fetches tasks by status from VK API.
+ * @param {string} status - Task status (e.g., "inreview", "todo", "done")
+ * @returns {Promise<Array>} Array of task objects, or empty array on failure
+ */
+async function fetchTasksByStatus(status) {
+  try {
+    // Fetch projects first to get project_id
+    const projectsRes = await fetchVk("/api/projects");
+    if (!projectsRes?.success || !Array.isArray(projectsRes.data)) {
+      console.warn("[monitor] Failed to fetch projects for task query");
+      return [];
+    }
+
+    const project = projectsRes.data[0];
+    if (!project?.id) {
+      console.warn("[monitor] No projects found for task query");
+      return [];
+    }
+
+    // Fetch tasks for project with status filter
+    const tasksRes = await fetchVk(
+      `/api/projects/${project.id}/tasks?status=${status}`,
+    );
+    if (!tasksRes?.success || !Array.isArray(tasksRes.data)) {
+      console.warn(`[monitor] Failed to fetch tasks with status=${status}`);
+      return [];
+    }
+
+    return tasksRes.data;
+  } catch (err) {
+    console.warn(
+      `[monitor] Error fetching tasks by status: ${err.message || err}`,
+    );
+    return [];
+  }
+}
+
+/**
+ * PATCH /api/tasks/:task_id
+ * Updates task status via VK API.
+ * @param {string} taskId - Task UUID
+ * @param {string} newStatus - New status ("todo", "inprogress", "inreview", "done", "cancelled")
+ * @returns {Promise<boolean>} true if successful, false otherwise
+ */
+async function updateTaskStatus(taskId, newStatus) {
+  const res = await fetchVk(`/api/tasks/${taskId}`, {
+    method: "PATCH",
+    body: { status: newStatus },
+    timeoutMs: 10000,
+  });
+  return res?.success === true;
+}
+
+/**
+ * Checks if a git branch has been merged into the main branch.
+ * Uses git commands to determine if the branch exists and is merged.
+ * @param {string} branch - Branch name (e.g., "ve/1234-feat-auth")
+ * @returns {Promise<boolean>} true if merged, false otherwise
+ */
+async function isBranchMerged(branch) {
+  if (!branch) return false;
+
+  try {
+    const { execSync } = await import("child_process");
+
+    // Check if branch exists in origin
+    const branchExistsCmd = `git ls-remote --heads origin ${branch}`;
+    const branchExists = execSync(branchExistsCmd, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "ignore"],
+    }).trim();
+
+    // If branch doesn't exist on remote, it might have been deleted after merge
+    // Check if it was merged into main
+    if (!branchExists) {
+      // Fetch latest refs
+      execSync("git fetch origin main --quiet", {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+
+      // Check if any commits from the branch are in main
+      // This is a heuristic: if the branch was deleted, it's likely merged
+      // We can't be 100% certain, but deleted branches are usually merged
+      console.log(
+        `[monitor] Branch ${branch} not found on remote (likely merged and deleted)`,
+      );
+      return true;
+    }
+
+    // Branch still exists - check if it's merged into main
+    execSync("git fetch origin main --quiet", { cwd: repoRoot, stdio: "ignore" });
+
+    // Check if the branch is fully merged into origin/main
+    // Returns non-zero exit code if not merged
+    const mergeCheckCmd = `git merge-base --is-ancestor origin/${branch} origin/main`;
+    execSync(mergeCheckCmd, {
+      cwd: repoRoot,
+      stdio: "ignore",
+    });
+
+    // If we get here, the branch is merged
+    return true;
+  } catch (err) {
+    // Non-zero exit code means not merged, or other error
+    return false;
+  }
+}
+
+/**
+ * Periodic check: find tasks in "inreview" status, check if their PRs
+ * have been merged, and automatically move them to "done" status.
+ */
+async function checkMergedPRsAndUpdateTasks() {
+  try {
+    console.log("[monitor] Checking for merged PRs to update task status...");
+
+    // Fetch all tasks in "inreview" status
+    const reviewTasks = await fetchTasksByStatus("inreview");
+    if (reviewTasks.length === 0) {
+      console.log("[monitor] No tasks in review status");
+      return;
+    }
+
+    console.log(`[monitor] Found ${reviewTasks.length} tasks in review`);
+
+    // For each task, get its workspace/branch and check if merged
+    const statusData = await readStatusData();
+    const attempts = statusData?.active_attempts || [];
+
+    let movedCount = 0;
+
+    for (const task of reviewTasks) {
+      // Find the attempt associated with this task
+      const attempt = attempts.find((a) => a.task_id === task.id);
+      if (!attempt || !attempt.branch) {
+        continue;
+      }
+
+      // Check if the branch has been merged
+      const merged = await isBranchMerged(attempt.branch);
+      if (merged) {
+        console.log(
+          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged PR, updating to done`,
+        );
+
+        const success = await updateTaskStatus(task.id, "done");
+        if (success) {
+          movedCount++;
+          console.log(
+            `[monitor] ✅ Moved task "${task.title}" from inreview → done`,
+          );
+
+          // Send Telegram notification
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              `✅ Task completed: "${task.title}" (PR merged)`,
+            );
+          }
+        } else {
+          console.warn(
+            `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
+          );
+        }
+      }
+    }
+
+    if (movedCount > 0) {
+      console.log(`[monitor] Moved ${movedCount} merged tasks to done status`);
+    }
+  } catch (err) {
+    console.warn(
+      `[monitor] Error checking merged PRs: ${err.message || err}`,
+    );
+  }
+}
+
 // ── Smart PR creation flow ──────────────────────────────────────────────────
 
 /**
@@ -2348,6 +2528,14 @@ function startTelegramCommandListener() {
 }
 
 function startTelegramNotifier() {
+  if (telegramNotifierInterval) {
+    clearInterval(telegramNotifierInterval);
+    telegramNotifierInterval = null;
+  }
+  if (telegramNotifierTimeout) {
+    clearTimeout(telegramNotifierTimeout);
+    telegramNotifierTimeout = null;
+  }
   if (!telegramToken || !telegramChatId) {
     console.warn(
       "[monitor] telegram notifier disabled (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)",
@@ -2371,8 +2559,8 @@ function startTelegramNotifier() {
     await checkStatusMilestones();
   };
   void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
-  setTimeout(sendUpdate, intervalMs);
-  setInterval(sendUpdate, intervalMs);
+  telegramNotifierTimeout = setTimeout(sendUpdate, intervalMs);
+  telegramNotifierInterval = setInterval(sendUpdate, intervalMs);
 }
 
 async function checkStatusMilestones() {
@@ -2964,12 +3152,25 @@ function requestRestart(reason) {
   }
 }
 
-async function startWatcher() {
+function stopWatcher() {
+  if (watcher) {
+    watcher.close();
+    watcher = null;
+  }
+  watcherDebounce = null;
+  watchFileName = null;
+}
+
+async function startWatcher(force = false) {
   if (!watchEnabled) {
+    stopWatcher();
     return;
   }
-  if (watcher) {
+  if (watcher && !force) {
     return;
+  }
+  if (watcher && force) {
+    stopWatcher();
   }
   let targetPath = watchPath;
   try {
@@ -2995,8 +3196,154 @@ async function startWatcher() {
   });
 }
 
+function stopEnvWatchers() {
+  for (const w of envWatchers) {
+    try {
+      w.close();
+    } catch {
+      /* best effort */
+    }
+  }
+  envWatchers = [];
+  envWatcherDebounce = null;
+}
+
+function scheduleEnvReload(reason) {
+  if (envWatcherDebounce) {
+    clearTimeout(envWatcherDebounce);
+  }
+  envWatcherDebounce = setTimeout(() => {
+    void reloadConfig(reason || "env-change");
+  }, 400);
+}
+
+function startEnvWatchers() {
+  stopEnvWatchers();
+  if (!envPaths || envPaths.length === 0) {
+    return;
+  }
+  const dirMap = new Map();
+  for (const envPath of envPaths) {
+    const dir = resolve(envPath, "..");
+    const file = envPath.split(/[\\/]/).pop();
+    if (!file) continue;
+    if (!dirMap.has(dir)) {
+      dirMap.set(dir, new Set());
+    }
+    dirMap.get(dir).add(file);
+  }
+  for (const [dir, files] of dirMap.entries()) {
+    try {
+      const w = watch(dir, { persistent: true }, (_event, filename) => {
+        if (!filename) return;
+        if (!files.has(filename)) return;
+        scheduleEnvReload(`env:${filename}`);
+      });
+      envWatchers.push(w);
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
+function applyConfig(nextConfig, options = {}) {
+  const { restartIfChanged = false, reason = "config-change" } = options;
+  const prevScriptPath = scriptPath;
+  const prevArgs = scriptArgs?.join(" ") || "";
+  const prevWatchPath = watchPath;
+  const prevTelegramInterval = telegramIntervalMin;
+  const prevCodexEnabled = codexEnabled;
+
+  config = nextConfig;
+  projectName = nextConfig.projectName;
+  scriptPath = nextConfig.scriptPath;
+  scriptArgs = nextConfig.scriptArgs;
+  restartDelayMs = nextConfig.restartDelayMs;
+  maxRestarts = nextConfig.maxRestarts;
+  logDir = nextConfig.logDir;
+  watchEnabled = nextConfig.watchEnabled;
+  watchPath = resolve(nextConfig.watchPath);
+  echoLogs = nextConfig.echoLogs;
+  autoFixEnabled = nextConfig.autoFixEnabled;
+  repoRoot = nextConfig.repoRoot;
+  statusPath = nextConfig.statusPath;
+  telegramPollLockPath = nextConfig.telegramPollLockPath;
+  telegramToken = nextConfig.telegramToken;
+  telegramChatId = nextConfig.telegramChatId;
+  telegramIntervalMin = nextConfig.telegramIntervalMin;
+  telegramCommandPollTimeoutSec = nextConfig.telegramCommandPollTimeoutSec;
+  telegramCommandConcurrency = nextConfig.telegramCommandConcurrency;
+  telegramCommandMaxBatch = nextConfig.telegramCommandMaxBatch;
+  telegramBotEnabled = nextConfig.telegramBotEnabled;
+  telegramCommandEnabled = nextConfig.telegramCommandEnabled;
+  repoSlug = nextConfig.repoSlug;
+  repoUrlBase = nextConfig.repoUrlBase;
+  vkRecoveryPort = nextConfig.vkRecoveryPort;
+  vkRecoveryHost = nextConfig.vkRecoveryHost;
+  vkEndpointUrl = nextConfig.vkEndpointUrl;
+  vkPublicUrl = nextConfig.vkPublicUrl;
+  vkRecoveryCooldownMin = nextConfig.vkRecoveryCooldownMin;
+  vkSpawnEnabled = nextConfig.vkSpawnEnabled;
+  vkEnsureIntervalMs = nextConfig.vkEnsureIntervalMs;
+  plannerPerCapitaThreshold = nextConfig.plannerPerCapitaThreshold;
+  plannerIdleSlotThreshold = nextConfig.plannerIdleSlotThreshold;
+  plannerDedupMs = nextConfig.plannerDedupMs;
+  agentPrompts = nextConfig.agentPrompts;
+  executorScheduler = nextConfig.scheduler;
+  envPaths = nextConfig.envPaths;
+  codexEnabled = nextConfig.codexEnabled;
+  codexDisabledReason = codexEnabled
+    ? ""
+    : process.env.CODEX_SDK_DISABLED === "1"
+      ? "disabled via CODEX_SDK_DISABLED"
+      : "disabled via --no-codex";
+
+  if (prevWatchPath !== watchPath || watchEnabled === false) {
+    void startWatcher(true);
+  }
+  startEnvWatchers();
+
+  if (prevTelegramInterval !== telegramIntervalMin) {
+    startTelegramNotifier();
+  }
+  if (prevCodexEnabled && !codexEnabled) {
+    console.warn(
+      `[monitor] Codex disabled: ${codexDisabledReason || "disabled"}`,
+    );
+  }
+  if (!prevCodexEnabled && codexEnabled) {
+    void ensureCodexSdkReady();
+  }
+
+  const nextArgs = scriptArgs?.join(" ") || "";
+  const scriptChanged = prevScriptPath !== scriptPath || prevArgs !== nextArgs;
+  if (restartIfChanged && scriptChanged) {
+    requestRestart(`config-change (${reason})`);
+  }
+}
+
+async function reloadConfig(reason) {
+  try {
+    const nextConfig = loadConfig(process.argv, { reloadEnv: true });
+    applyConfig(nextConfig, { restartIfChanged: true, reason });
+    console.log(`[monitor] config reloaded (${reason})`);
+    if (telegramToken && telegramChatId) {
+      try {
+        await sendTelegramMessage(
+          `🔄 .env reloaded (${reason}). Runtime config updated.`,
+          { dedupKey: "env-reload" },
+        );
+      } catch { /* best effort */ }
+    }
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    console.warn(`[monitor] failed to reload config: ${message}`);
+  }
+}
+
 process.on("SIGINT", () => {
   shuttingDown = true;
+  stopEnvWatchers();
   if (watcher) {
     watcher.close();
   }
@@ -3015,6 +3362,7 @@ process.on("exit", () => {
 
 process.on("SIGTERM", () => {
   shuttingDown = true;
+  stopEnvWatchers();
   if (watcher) {
     watcher.close();
   }
@@ -3093,7 +3441,19 @@ setInterval(() => {
   runMaintenanceSweep({ repoRoot, childPid });
 }, maintenanceIntervalMs);
 
+// ── Periodic merged PR check: every 10 min, move merged PRs to done ─────────
+const mergedPRCheckIntervalMs = 10 * 60 * 1000;
+setInterval(() => {
+  void checkMergedPRsAndUpdateTasks();
+}, mergedPRCheckIntervalMs);
+
+// Run once immediately after startup (delayed by 30s to let things settle)
+setTimeout(() => {
+  void checkMergedPRsAndUpdateTasks();
+}, 30 * 1000);
+
 startWatcher();
+startEnvWatchers();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }

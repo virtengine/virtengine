@@ -102,5 +102,5 @@ Rollback procedure:
 
 **Reference Documentation:**
 - [RELEASE.md](../RELEASE.md) - Complete release process
-- [ADR-001: Network Upgrades](../_docs/adr/adr-001-network-upgrades.md) - Upgrade implementation
+- [ADR-001: Network Upgrades](../../_docs/adr/adr-001-network-upgrades.md) - Upgrade implementation
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Commit message format

@@ -386,4 +386,4 @@ go test -bench=. -benchmem -json ./... > new_results.json
 - [VEID Module Architecture](../architecture/veid.md)
 - [Provider Daemon Design](../architecture/provider-daemon.md)
 - [ML Inference Determinism](../architecture/ml-inference.md)
-- [Testing Guide](../_docs/testing-guide.md)
+- [Testing Guide](../../_docs/testing-guide.md)

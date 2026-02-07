@@ -358,7 +358,7 @@ The test suite validates these acceptance criteria:
 
 ## Related Documentation
 
-- [Testing Guide](./_docs/testing-guide.md)
-- [Provider Daemon Waldur Integration](./_docs/provider-daemon-waldur-integration.md)
-- [HPC Billing Rules](./_docs/hpc-billing-rules.md)
-- [Provider Guide](./_docs/provider-guide.md)
+- [Testing Guide](testing-guide.md)
+- [Provider Daemon Waldur Integration](provider-daemon-waldur-integration.md)
+- [HPC Billing Rules](hpc-billing-rules.md)
+- [Provider Guide](provider-guide.md)

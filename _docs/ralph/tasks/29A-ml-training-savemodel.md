@@ -267,9 +267,9 @@ python generate_metrics.py --model ocr_extraction
 
 ## Related Documents
 
-- [_docs/ml-determinism-requirements.md](_docs/ml-determinism-requirements.md) - Determinism specifications
-- [_docs/veid-flow-spec.md](_docs/veid-flow-spec.md) - VEID verification flow
-- [pkg/inference/](pkg/inference/) - Go inference package that will load these models
+- [ML Determinism Requirements](../../ml-determinism-requirements.md) - Determinism specifications
+- [VEID Flow Specification](../../veid-flow-spec.md) - VEID verification flow
+- [pkg/inference/](../../../pkg/inference/) - Go inference package that will load these models
 
 ---
 

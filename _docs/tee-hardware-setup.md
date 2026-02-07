@@ -558,5 +558,5 @@ tee:
 - [Intel SGX DCAP Documentation](https://download.01.org/intel-sgx/)
 - [AMD SEV-SNP ABI Specification](https://www.amd.com/system/files/TechDocs/56860.pdf)
 - [AWS Nitro Enclaves User Guide](https://docs.aws.amazon.com/enclaves/latest/user/)
-- [VirtEngine TEE Architecture](./_docs/tee-integration-architecture.md)
-- [TEE Security Model](./_docs/tee-security-model.md)
+- [VirtEngine TEE Architecture](tee-integration-architecture.md)
+- [TEE Security Model](tee-security-model.md)

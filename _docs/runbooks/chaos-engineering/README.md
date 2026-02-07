@@ -558,4 +558,4 @@ kubectl delete networkchaos,podchaos,stresschaos,timechaos,chaosengine --all -A
 - [Chaos Mesh Documentation](https://chaos-mesh.org/docs/)
 - [LitmusChaos Documentation](https://docs.litmuschaos.io/)
 - [Principles of Chaos Engineering](https://principlesofchaos.org/)
-- [VirtEngine SLOs and Playbooks](_docs/slos-and-playbooks.md)
+- [VirtEngine SLOs and Playbooks](../../slos-and-playbooks.md)

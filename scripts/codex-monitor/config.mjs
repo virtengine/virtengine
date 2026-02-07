@@ -22,7 +22,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── .env loader ──────────────────────────────────────────────────────────────
 
-function loadDotEnv(dir) {
+function loadDotEnv(dir, options = {}) {
+  const { override = false } = options;
   const envPath = resolve(dir, ".env");
   if (!existsSync(envPath)) return;
   const lines = readFileSync(envPath, "utf8").split("\n");
@@ -40,7 +41,7 @@ function loadDotEnv(dir) {
     ) {
       val = val.slice(1, -1);
     }
-    if (!(key in process.env)) {
+    if (override || !(key in process.env)) {
       process.env[key] = val;
     }
   }
@@ -557,7 +558,8 @@ function loadAgentPrompts(configDir, repoRoot) {
  * Load the full codex-monitor configuration.
  * Returns a frozen config object used by all modules.
  */
-export function loadConfig(argv = process.argv) {
+export function loadConfig(argv = process.argv, options = {}) {
+  const { reloadEnv = false } = options;
   const cli = parseArgs(argv);
 
   // Determine config directory (where codex-monitor lives)
@@ -565,14 +567,18 @@ export function loadConfig(argv = process.argv) {
     cli["config-dir"] || process.env.CODEX_MONITOR_DIR || __dirname;
 
   // Load .env from config dir
-  loadDotEnv(configDir);
+  loadDotEnv(configDir, { override: reloadEnv });
 
   // Also load .env from repo root if different
   const repoRoot =
     cli["repo-root"] || process.env.REPO_ROOT || detectRepoRoot();
   if (resolve(repoRoot) !== resolve(configDir)) {
-    loadDotEnv(repoRoot);
+    loadDotEnv(repoRoot, { override: reloadEnv });
   }
+  const envPaths = [
+    resolve(configDir, ".env"),
+    resolve(repoRoot, ".env"),
+  ].filter((p, i, arr) => arr.indexOf(p) === i);
 
   // ── Project identity ─────────────────────────────────────
   const projectName =
@@ -703,6 +709,7 @@ export function loadConfig(argv = process.argv) {
     repoUrlBase,
     repoRoot,
     configDir,
+    envPaths,
 
     // Orchestrator
     scriptPath,

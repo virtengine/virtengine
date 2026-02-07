@@ -900,11 +900,11 @@ semgrep --config=p/golang ./
 
 ### Internal Documentation
 
-- [Development Environment Setup](./_docs/development-environment.md)
-- [Testing Guide](./_docs/testing-guide.md)
-- [VEID Module Architecture](./x/veid/README.md)
-- [Encryption Module](./x/encryption/README.md)
-- [Provider Daemon Security](./pkg/provider_daemon/SECURITY.md)
+- [Development Environment Setup](development-environment.md)
+- [Testing Guide](testing-guide.md)
+- [VEID Module Architecture](../x/veid/README.md)
+- [Encryption Module](../x/encryption/README.md)
+- [Provider Daemon Security](../pkg/provider_daemon/SECURITY.md)
 
 ### External Resources
 

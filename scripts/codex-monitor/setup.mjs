@@ -489,7 +489,9 @@ async function main() {
   );
 
   if (!hasVk) {
-    console.error("\n  Vibe-Kanban is required for codex-monitor operations. Please install it:");
+    console.error(
+      "\n  Vibe-Kanban is required for codex-monitor operations. Please install it:",
+    );
     console.error("    npm install -g vibe-kanban\n");
     process.exit(1);
   }
@@ -749,7 +751,8 @@ async function main() {
     // Check for default scripts in codex-monitor directory
     const defaultOrchestrator = resolve(__dirname, "ve-orchestrator.ps1");
     const defaultKanban = resolve(__dirname, "ve-kanban.ps1");
-    const hasDefaultScripts = existsSync(defaultOrchestrator) && existsSync(defaultKanban);
+    const hasDefaultScripts =
+      existsSync(defaultOrchestrator) && existsSync(defaultKanban);
 
     if (hasDefaultScripts) {
       info(`Found default orchestrator scripts in codex-monitor:`);
@@ -772,7 +775,9 @@ async function main() {
         if (customPath) {
           env.ORCHESTRATOR_SCRIPT = customPath;
         } else {
-          info("No orchestrator script configured. Codex-monitor will manage tasks directly via Vibe-Kanban.");
+          info(
+            "No orchestrator script configured. Codex-monitor will manage tasks directly via Vibe-Kanban.",
+          );
         }
       }
     } else {

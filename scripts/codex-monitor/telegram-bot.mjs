@@ -2023,9 +2023,12 @@ async function cmdSteer(chatId, steerArgs) {
   activeAgentSession.followUpQueue.push(message);
   const qLen = activeAgentSession.followUpQueue.length;
   if (activeAgentSession.actionLog) {
+    const steerStatus = result.reason || "failed";
     activeAgentSession.actionLog.push({
       icon: "🧭",
-      text: `Steering queued (#${qLen})`,
+      text: `Steering queued (#${qLen}; steer failed: ${steerStatus})`,
+      kind: "followup_queued",
+      steerStatus,
     });
     if (activeAgentSession.scheduleEdit) {
       activeAgentSession.scheduleEdit();
@@ -2040,6 +2043,17 @@ async function cmdSteer(chatId, steerArgs) {
  * Build the rolling summary message text from accumulated action log.
  * This is the single message that gets continuously edited in Telegram.
  */
+function suppressSteerFailedLines(actionLog) {
+  if (!Array.isArray(actionLog)) return;
+  for (let i = actionLog.length - 1; i >= 0; i -= 1) {
+    const entry = actionLog[i];
+    if (!entry || entry.kind !== "followup_queued") continue;
+    if (entry.steerStatus && entry.steerStatus !== "ok") {
+      actionLog.splice(i, 1);
+    }
+  }
+}
+
 function buildStreamMessage({
   taskPreview,
   actionLog,
@@ -2057,7 +2071,7 @@ function buildStreamMessage({
   const separator = "────────────────────────────";
 
   // Show last N actions (keep message compact)
-  const MAX_VISIBLE_ACTIONS = 12;
+  const MAX_VISIBLE_ACTIONS = 20;
   const visibleActions = actionLog.slice(-MAX_VISIBLE_ACTIONS);
   const hiddenCount = actionLog.length - visibleActions.length;
 
@@ -2073,6 +2087,31 @@ function buildStreamMessage({
 
   if (currentThought) {
     lines.push("", `💭 ${currentThought}`);
+  }
+
+  if (!finalResponse) {
+    if (filesWritten?.size) {
+      lines.push("", "✍️ Files modified so far:");
+      const recent = Array.from(filesWritten.entries()).slice(-6);
+      for (const [fpath, info] of recent) {
+        const name = shortPath(fpath);
+        if (info.adds || info.dels) {
+          lines.push(`  ✏️ ${name} (+${info.adds} -${info.dels})`);
+        } else {
+          lines.push(`  ✏️ ${name}`);
+        }
+      }
+    }
+    if (filesRead?.size) {
+      lines.push("", "📖 Files read so far:");
+      const recent = Array.from(filesRead.values()).slice(-6);
+      for (const fpath of recent) {
+        lines.push(`  📄 ${shortPath(fpath)}`);
+      }
+    }
+    if (searchesDone) {
+      lines.push("", `🔎 Searches: ${searchesDone}`);
+    }
   }
 
   if (finalResponse) {
@@ -2126,9 +2165,10 @@ async function handleFreeText(text, chatId, options = {}) {
 
     // Try immediate steering so the in-flight run can adapt ASAP.
     const steerResult = await steerCodexPrompt(text);
+    const steerStatus = steerResult.ok ? "ok" : steerResult.reason || "failed";
     const steerNote = steerResult.ok
       ? `Steer ${steerResult.mode}.`
-      : `Steer failed (${steerResult.reason}).`;
+      : `Steer failed (${steerStatus}).`;
 
     // Acknowledge the follow-up in both the user's chat and update the agent message
     await sendDirect(
@@ -2141,6 +2181,8 @@ async function handleFreeText(text, chatId, options = {}) {
       activeAgentSession.actionLog.push({
         icon: "📌",
         text: `Follow-up: "${text.length > 60 ? text.slice(0, 60) + "…" : text}" (${steerNote})`,
+        kind: "followup_queued",
+        steerStatus,
       });
       // Trigger an edit to show the follow-up in the streaming message
       if (activeAgentSession.scheduleEdit) {
@@ -2216,6 +2258,9 @@ async function handleFreeText(text, chatId, options = {}) {
       totalActions,
       phase,
       finalResponse: null,
+      filesRead,
+      filesWritten,
+      searchesDone: searchCount,
     });
     if (messageId) {
       messageId = await editDirect(chatId, messageId, msg);
