@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { createHPCClient } from '../lib/hpc-client';
-import type { Job, WorkloadTemplate, JobStatus } from '../types';
+import type { Job, JobOutput, WorkloadTemplate, JobStatus } from '../types';
 
 /**
  * Hook to fetch and manage workload templates
@@ -242,4 +242,124 @@ export function useJobStatistics() {
   };
 
   return { stats, isLoading, error };
+}
+
+/**
+ * Hook for streaming job logs with auto-refresh
+ */
+export function useJobLogs(jobId: string | null, autoRefresh = true) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!jobId) {
+      setLines([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const client = createHPCClient();
+
+    const fetchLogs = () => {
+      client
+        .getJobLogs(jobId, { tail: 200 })
+        .then((data) => {
+          setLines(data.lines);
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          setError(err as Error);
+          setIsLoading(false);
+        });
+    };
+
+    fetchLogs();
+
+    if (autoRefresh) {
+      const interval = setInterval(fetchLogs, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [jobId, autoRefresh]);
+
+  return { lines, isLoading, error };
+}
+
+/**
+ * Hook for job outputs
+ */
+export function useJobOutputs(jobId: string | null) {
+  const [outputs, setOutputs] = useState<JobOutput[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!jobId) {
+      setOutputs([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const client = createHPCClient();
+
+    client
+      .getJobOutputs(jobId)
+      .then((data) => {
+        setOutputs(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError(err as Error);
+        setIsLoading(false);
+      });
+  }, [jobId]);
+
+  return { outputs, isLoading, error };
+}
+
+/**
+ * Hook for job resource usage with auto-refresh
+ */
+export function useJobUsage(jobId: string | null, autoRefresh = true) {
+  const [usage, setUsage] = useState<{
+    cpuPercent: number;
+    memoryPercent: number;
+    gpuPercent?: number;
+    elapsedSeconds: number;
+    estimatedRemainingSeconds?: number;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!jobId) {
+      setUsage(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const client = createHPCClient();
+
+    const fetchUsage = () => {
+      client
+        .getJobUsage(jobId)
+        .then((data) => {
+          setUsage(data);
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          setError(err as Error);
+          setIsLoading(false);
+        });
+    };
+
+    fetchUsage();
+
+    if (autoRefresh) {
+      const interval = setInterval(fetchUsage, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [jobId, autoRefresh]);
+
+  return { usage, isLoading, error };
 }
