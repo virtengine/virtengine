@@ -1,13 +1,16 @@
 'use client';
 
+import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/Progress';
-import { Badge } from '@/components/ui/Badge';
 import { useAdminStore } from '@/stores/adminStore';
-import { formatTokenAmount } from '@/lib/utils';
+import { formatRelativeTime, formatTokenAmount } from '@/lib/utils';
 
 export default function AdminHealthPage() {
   const health = useAdminStore((s) => s.systemHealth);
+  const resourceUtilization = useAdminStore((s) => s.resourceUtilization);
+  const networkAlerts = useAdminStore((s) => s.networkAlerts);
+  const recentBlocks = useAdminStore((s) => s.recentBlocks);
 
   return (
     <div className="space-y-8">
@@ -104,6 +107,85 @@ export default function AdminHealthPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Resource Utilization</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {resourceUtilization.map((resource) => {
+              const pct = Math.round((resource.usage / resource.capacity) * 100);
+              const variant = pct > 95 ? 'destructive' : pct > 85 ? 'warning' : 'success';
+              return (
+                <div key={resource.category} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{resource.category}</span>
+                    <span className="text-muted-foreground">
+                      {resource.usage}/{resource.capacity} ({pct}%)
+                    </span>
+                  </div>
+                  <Progress value={pct} size="sm" variant={variant} />
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Alerts</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {networkAlerts.map((alert) => (
+              <div key={alert.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{alert.title}</span>
+                  <Badge
+                    variant={
+                      alert.severity === 'critical'
+                        ? 'destructive'
+                        : alert.severity === 'warning'
+                          ? 'warning'
+                          : 'info'
+                    }
+                  >
+                    {alert.severity}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{alert.description}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {formatRelativeTime(alert.createdAt)}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Blocks</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {recentBlocks.map((block) => (
+            <div
+              key={block.height}
+              className="flex items-center justify-between rounded-lg border border-border p-3"
+            >
+              <div>
+                <div className="text-sm font-semibold">#{block.height}</div>
+                <div className="text-xs text-muted-foreground">
+                  {block.proposer} · {block.txCount} txs
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeTime(block.timestamp)}
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

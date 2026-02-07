@@ -33,11 +33,16 @@ export function Sidebar({ variant }: SidebarProps) {
 
   const adminLinks = [
     { name: 'Admin Dashboard', href: '/admin', icon: '🛡️' },
+    { name: 'Users', href: '/admin/users', icon: '👥' },
+    { name: 'Providers', href: '/admin/providers', icon: '🗂️' },
+    { name: 'Escrow', href: '/admin/escrow', icon: '💸' },
+    { name: 'VEID Review', href: '/admin/veid', icon: '🧾' },
+    { name: 'Audit Logs', href: '/admin/audit', icon: '📜' },
+    { name: 'System Config', href: '/admin/system', icon: '🧰' },
     { name: 'Governance', href: '/admin/governance', icon: '🗳️' },
     { name: 'Validators', href: '/admin/validators', icon: '⛓️' },
     { name: 'Support Queue', href: '/admin/support', icon: '🎫' },
     { name: 'System Health', href: '/admin/health', icon: '💓' },
-    { name: 'User Management', href: '/admin/users', icon: '👥' },
   ];
 
   const links =
