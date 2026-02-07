@@ -10,6 +10,7 @@ import { ThemeProvider } from 'next-themes';
 import { PortalProvider } from '@/lib/portal-adapter';
 import { portalConfig, chainConfig, walletConfig } from '@/config';
 import { Toaster } from '@/components/ui/Toaster';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { CosmosKitProvider } from './CosmosKitProvider';
 import { ChainEventProvider } from './ChainEventProvider';
 
@@ -25,13 +26,19 @@ interface AppProvidersProps {
  */
 export function AppProviders({ children }: AppProvidersProps) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <CosmosKitProvider>
-        <PortalProvider config={portalConfig} chainConfig={chainConfig} walletConfig={walletConfig}>
-          <ChainEventProvider>{children}</ChainEventProvider>
-          <Toaster />
-        </PortalProvider>
-      </CosmosKitProvider>
-    </ThemeProvider>
+    <I18nProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <CosmosKitProvider>
+          <PortalProvider
+            config={portalConfig}
+            chainConfig={chainConfig}
+            walletConfig={walletConfig}
+          >
+            <ChainEventProvider>{children}</ChainEventProvider>
+            <Toaster />
+          </PortalProvider>
+        </CosmosKitProvider>
+      </ThemeProvider>
+    </I18nProvider>
   );
 }

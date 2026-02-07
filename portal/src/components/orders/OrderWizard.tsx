@@ -19,6 +19,7 @@ import { ResourceConfigStep } from './ResourceConfig';
 import { PriceCalculator } from './PriceCalculator';
 import { EscrowDeposit } from './EscrowDeposit';
 import { OrderConfirmation } from './OrderConfirmation';
+import { useTranslation } from 'react-i18next';
 
 interface OrderWizardProps {
   offering: Offering;
@@ -39,6 +40,7 @@ export function OrderWizard({
   onComplete,
   onCancel,
 }: OrderWizardProps) {
+  const { t } = useTranslation();
   const handleSubmit = useCallback(
     async (_state: OrderWizardState): Promise<OrderCreateResult> => {
       // In production, this would send MsgCreateOrder to the chain via wallet
@@ -69,7 +71,7 @@ export function OrderWizard({
   return (
     <div className="mx-auto max-w-3xl">
       {/* Step Indicator */}
-      <nav aria-label="Order creation progress" className="mb-8">
+      <nav aria-label={t('Order creation progress')} className="mb-8">
         <ol className="flex items-center">
           {WIZARD_STEPS.map((step, idx) => {
             const isActive = idx === stepIndex;
@@ -116,7 +118,7 @@ export function OrderWizard({
                       isActive ? 'font-medium text-foreground' : 'text-muted-foreground'
                     }`}
                   >
-                    {STEP_LABELS[step]}
+                    {t(STEP_LABELS[step])}
                   </span>
                 </button>
                 {idx < WIZARD_STEPS.length - 1 && (
@@ -130,7 +132,11 @@ export function OrderWizard({
         </ol>
         {/* Mobile step label */}
         <p className="mt-2 text-center text-sm font-medium sm:hidden">
-          Step {stepIndex + 1} of {totalSteps}: {STEP_LABELS[state.currentStep]}
+          {t('Step {{current}} of {{total}}: {{label}}', {
+            current: stepIndex + 1,
+            total: totalSteps,
+            label: t(STEP_LABELS[state.currentStep]),
+          })}
         </p>
       </nav>
 
@@ -175,18 +181,18 @@ export function OrderWizard({
           <div>
             {isFirstStep ? (
               <Button variant="outline" onClick={onCancel}>
-                Cancel
+                {t('Cancel')}
               </Button>
             ) : (
               <Button variant="outline" onClick={wizard.prevStep}>
-                Back
+                {t('Back')}
               </Button>
             )}
           </div>
 
           {state.currentStep !== 'escrow' && (
             <Button onClick={wizard.nextStep} disabled={!canProceed}>
-              Continue
+              {t('Continue')}
             </Button>
           )}
         </div>

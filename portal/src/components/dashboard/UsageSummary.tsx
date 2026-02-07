@@ -8,6 +8,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/Progress';
 import type { UsageSummaryData } from '@/types/customer';
+import { useTranslation } from 'react-i18next';
 
 interface UsageSummaryProps {
   usage: UsageSummaryData;
@@ -31,13 +32,18 @@ function ResourceRow({
   allocated: number;
   unit: string;
 }) {
+  const { t } = useTranslation();
   const pct = allocated > 0 ? Math.round((used / allocated) * 100) : 0;
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">{label}</span>
+        <span className="font-medium">{t(label)}</span>
         <span className="text-muted-foreground">
-          {used} / {allocated} {unit}
+          {t('{{used}} / {{allocated}} {{unit}}', {
+            used,
+            allocated,
+            unit: t(unit),
+          })}
         </span>
       </div>
       <Progress value={pct} size="sm" variant={utilizationVariant(pct)} />
@@ -46,14 +52,15 @@ function ResourceRow({
 }
 
 export function UsageSummary({ usage }: UsageSummaryProps) {
+  const { t } = useTranslation();
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Resource Usage</CardTitle>
+        <CardTitle className="text-base">{t('Resource Usage')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Overall utilization</span>
+          <span className="text-sm text-muted-foreground">{t('Overall utilization')}</span>
           <span className="text-lg font-bold">{usage.overallUtilization}%</span>
         </div>
         {usage.resources.map((r) => (

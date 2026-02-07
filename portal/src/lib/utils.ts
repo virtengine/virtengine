@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import i18n, { DEFAULT_LANGUAGE } from '@/i18n';
 
 /**
  * Merge Tailwind CSS classes with clsx
@@ -18,10 +19,11 @@ export function formatTokenAmount(
 ): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   const adjusted = num / Math.pow(10, decimals);
-  return adjusted.toLocaleString(undefined, {
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: displayDecimals,
     maximumFractionDigits: displayDecimals,
-  });
+  }).format(adjusted);
 }
 
 /**
@@ -39,12 +41,42 @@ export function truncateAddress(address: string, startChars = 10, endChars = 4):
  */
 export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString(undefined, {
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     ...options,
-  });
+  }).format(d);
+}
+
+/**
+ * Format a date/time for display
+ */
+export function formatDateTime(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...options,
+  }).format(d);
+}
+
+/**
+ * Format a time for display
+ */
+export function formatTime(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...options,
+  }).format(d);
 }
 
 /**
@@ -53,29 +85,37 @@ export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOpt
 export function formatRelativeTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const diffSeconds = Math.round((d.getTime() - now.getTime()) / 1000);
+  const absSeconds = Math.abs(diffSeconds);
 
-  if (diffDays > 0) {
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (absSeconds < 60) {
+    return rtf.format(diffSeconds, 'second');
   }
-  if (diffHours > 0) {
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+
+  const diffMinutes = Math.round(diffSeconds / 60);
+  const absMinutes = Math.abs(diffMinutes);
+  if (absMinutes < 60) {
+    return rtf.format(diffMinutes, 'minute');
   }
-  if (diffMins > 0) {
-    return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  const absHours = Math.abs(diffHours);
+  if (absHours < 24) {
+    return rtf.format(diffHours, 'hour');
   }
-  return 'Just now';
+
+  const diffDays = Math.round(diffHours / 24);
+  return rtf.format(diffDays, 'day');
 }
 
 /**
  * Format currency amount
  */
 export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     currencyDisplay: 'symbol',

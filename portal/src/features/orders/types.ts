@@ -4,6 +4,7 @@
  */
 
 import type { Offering, PriceComponent } from '@/types/offerings';
+import i18n, { DEFAULT_LANGUAGE } from '@/i18n';
 
 // =============================================================================
 // Wizard Steps
@@ -160,28 +161,37 @@ export function calculatePriceBreakdown(
     switch (price.resourceType) {
       case 'cpu':
         quantity = resources.cpu * totalHours;
-        label = `CPU (${resources.cpu} vCPU × ${totalHours}h)`;
+        label = i18n.t('CPU ({{count}} vCPU × {{hours}}h)', {
+          count: resources.cpu,
+          hours: totalHours,
+        });
         break;
       case 'ram':
         quantity = resources.memory * totalHours;
-        label = `Memory (${resources.memory} GB × ${totalHours}h)`;
+        label = i18n.t('Memory ({{count}} GB × {{hours}}h)', {
+          count: resources.memory,
+          hours: totalHours,
+        });
         break;
       case 'storage':
         quantity =
           resources.storage *
           (resources.durationUnit === 'months' ? resources.duration : totalHours);
-        label = `Storage (${resources.storage} GB)`;
+        label = i18n.t('Storage ({{count}} GB)', { count: resources.storage });
         break;
       case 'gpu':
         if (resources.gpu > 0) {
           quantity = resources.gpu * totalHours;
-          label = `GPU (${resources.gpu} × ${totalHours}h)`;
+          label = i18n.t('GPU ({{count}} × {{hours}}h)', {
+            count: resources.gpu,
+            hours: totalHours,
+          });
         }
         break;
       case 'network':
         // Network is typically flat-rate or usage-based; estimate based on duration
         quantity = totalHours;
-        label = 'Network';
+        label = i18n.t('Network');
         break;
       default:
         continue;
@@ -223,10 +233,11 @@ export function calculatePriceBreakdown(
  * Format a token amount from micro denomination.
  */
 export function formatTokenAmount(amount: number, decimals: number = 2): string {
-  return amount.toLocaleString('en-US', {
+  const locale = i18n.language?.split('-')[0] || DEFAULT_LANGUAGE;
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  });
+  }).format(amount);
 }
 
 /**
@@ -237,7 +248,10 @@ export function validateResources(resources: ResourceConfig): string[] {
 
   if (resources.cpu < RESOURCE_LIMITS.cpu.min || resources.cpu > RESOURCE_LIMITS.cpu.max) {
     errors.push(
-      `CPU must be between ${RESOURCE_LIMITS.cpu.min} and ${RESOURCE_LIMITS.cpu.max} vCPU`
+      i18n.t('CPU must be between {{min}} and {{max}} vCPU', {
+        min: RESOURCE_LIMITS.cpu.min,
+        max: RESOURCE_LIMITS.cpu.max,
+      })
     );
   }
   if (
@@ -245,7 +259,10 @@ export function validateResources(resources: ResourceConfig): string[] {
     resources.memory > RESOURCE_LIMITS.memory.max
   ) {
     errors.push(
-      `Memory must be between ${RESOURCE_LIMITS.memory.min} and ${RESOURCE_LIMITS.memory.max} GB`
+      i18n.t('Memory must be between {{min}} and {{max}} GB', {
+        min: RESOURCE_LIMITS.memory.min,
+        max: RESOURCE_LIMITS.memory.max,
+      })
     );
   }
   if (
@@ -253,18 +270,29 @@ export function validateResources(resources: ResourceConfig): string[] {
     resources.storage > RESOURCE_LIMITS.storage.max
   ) {
     errors.push(
-      `Storage must be between ${RESOURCE_LIMITS.storage.min} and ${RESOURCE_LIMITS.storage.max} GB`
+      i18n.t('Storage must be between {{min}} and {{max}} GB', {
+        min: RESOURCE_LIMITS.storage.min,
+        max: RESOURCE_LIMITS.storage.max,
+      })
     );
   }
   if (resources.gpu < RESOURCE_LIMITS.gpu.min || resources.gpu > RESOURCE_LIMITS.gpu.max) {
-    errors.push(`GPU must be between ${RESOURCE_LIMITS.gpu.min} and ${RESOURCE_LIMITS.gpu.max}`);
+    errors.push(
+      i18n.t('GPU must be between {{min}} and {{max}}', {
+        min: RESOURCE_LIMITS.gpu.min,
+        max: RESOURCE_LIMITS.gpu.max,
+      })
+    );
   }
   if (
     resources.duration < RESOURCE_LIMITS.duration.min ||
     resources.duration > RESOURCE_LIMITS.duration.max
   ) {
     errors.push(
-      `Duration must be between ${RESOURCE_LIMITS.duration.min} and ${RESOURCE_LIMITS.duration.max}`
+      i18n.t('Duration must be between {{min}} and {{max}}', {
+        min: RESOURCE_LIMITS.duration.min,
+        max: RESOURCE_LIMITS.duration.max,
+      })
     );
   }
 

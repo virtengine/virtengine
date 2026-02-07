@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/Badge';
 import type { OrderCreateResult, PriceBreakdown, ResourceConfig } from '@/features/orders';
 import { formatTokenAmount, durationToHours } from '@/features/orders';
 import { txLink } from '@/lib/explorer';
+import { useTranslation } from 'react-i18next';
+import { formatDate } from '@/lib/utils';
 
 interface OrderConfirmationProps {
   orderResult: OrderCreateResult;
@@ -30,6 +32,7 @@ export function OrderConfirmation({
   priceBreakdown,
   offeringName,
 }: OrderConfirmationProps) {
+  const { t } = useTranslation();
   const totalHours = durationToHours(resources.duration, resources.durationUnit);
   const statusColor =
     orderResult.status === 'matched'
@@ -53,29 +56,29 @@ export function OrderConfirmation({
           </svg>
         </div>
         <h2 className="text-xl font-bold text-green-800 dark:text-green-200">
-          Order Created Successfully
+          {t('Order Created Successfully')}
         </h2>
         <p className="mt-1 text-sm text-green-700 dark:text-green-300">
-          Your order has been submitted to the marketplace
+          {t('Your order has been submitted to the marketplace')}
         </p>
       </div>
 
       {/* Order Details */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Order Details</CardTitle>
-          <CardDescription>Reference information for your order</CardDescription>
+          <CardTitle className="text-lg">{t('Order Details')}</CardTitle>
+          <CardDescription>{t('Reference information for your order')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Order ID</span>
+              <span className="text-muted-foreground">{t('Order ID')}</span>
               <code className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
                 {orderResult.orderId}
               </code>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Transaction Hash</span>
+              <span className="text-muted-foreground">{t('Transaction Hash')}</span>
               <div className="flex items-center gap-2">
                 <code className="max-w-[200px] truncate rounded bg-muted px-2 py-0.5 font-mono text-xs">
                   {orderResult.txHash}
@@ -86,22 +89,28 @@ export function OrderConfirmation({
                   rel="noopener noreferrer"
                   target="_blank"
                 >
-                  View
+                  {t('View')}
                 </a>
               </div>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Status</span>
-              <Badge className={`${statusColor} text-white`}>{orderResult.status}</Badge>
+              <span className="text-muted-foreground">{t('Status')}</span>
+              <Badge className={`${statusColor} text-white`}>{t(orderResult.status)}</Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Offering</span>
+              <span className="text-muted-foreground">{t('Offering')}</span>
               <span className="font-medium">{offeringName}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Created At</span>
+              <span className="text-muted-foreground">{t('Created At')}</span>
               <span className="font-medium">
-                {new Date(orderResult.createdAt).toLocaleString()}
+                {formatDate(orderResult.createdAt, {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </span>
             </div>
           </div>
@@ -111,12 +120,12 @@ export function OrderConfirmation({
       {orderResult.txHash && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Explorer Preview</CardTitle>
-            <CardDescription>View the transaction directly in Ping.pub</CardDescription>
+            <CardTitle className="text-lg">{t('Explorer Preview')}</CardTitle>
+            <CardDescription>{t('View the transaction directly in Ping.pub')}</CardDescription>
           </CardHeader>
           <CardContent>
             <iframe
-              title="Transaction explorer preview"
+              title={t('Transaction explorer preview')}
               src={txLink(orderResult.txHash)}
               className="h-[420px] w-full rounded-lg border border-border"
               loading="lazy"
@@ -128,24 +137,39 @@ export function OrderConfirmation({
       {/* Resource & Cost Summary */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Resource &amp; Cost Summary</CardTitle>
+          <CardTitle className="text-lg">{t('Resource & Cost Summary')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
-            <SummaryItem label="CPU" value={`${resources.cpu} vCPU`} />
-            <SummaryItem label="Memory" value={`${resources.memory} GB`} />
-            <SummaryItem label="Storage" value={`${resources.storage} GB`} />
-            {resources.gpu > 0 && <SummaryItem label="GPU" value={`${resources.gpu} GPU`} />}
+            <SummaryItem label={t('CPU')} value={t('{{count}} vCPU', { count: resources.cpu })} />
             <SummaryItem
-              label="Duration"
-              value={`${resources.duration} ${resources.durationUnit} (${totalHours}h)`}
+              label={t('Memory')}
+              value={t('{{count}} GB', { count: resources.memory })}
             />
-            {resources.region && <SummaryItem label="Region" value={resources.region} />}
+            <SummaryItem
+              label={t('Storage')}
+              value={t('{{count}} GB', { count: resources.storage })}
+            />
+            {resources.gpu > 0 && (
+              <SummaryItem label={t('GPU')} value={t('{{count}} GPU', { count: resources.gpu })} />
+            )}
+            <SummaryItem
+              label={t('Duration')}
+              value={t('{{duration}} {{unit}} ({{hours}}h)', {
+                duration: resources.duration,
+                unit: t(resources.durationUnit),
+                hours: totalHours,
+              })}
+            />
+            {resources.region && <SummaryItem label={t('Region')} value={resources.region} />}
           </div>
           <div className="mt-4 flex items-center justify-between rounded-lg bg-primary/5 p-3">
-            <span className="font-medium">Escrow Deposit</span>
+            <span className="font-medium">{t('Escrow Deposit')}</span>
             <span className="text-lg font-bold text-primary">
-              {formatTokenAmount(priceBreakdown.escrowDeposit)} {priceBreakdown.currency}
+              {t('{{amount}} {{currency}}', {
+                amount: formatTokenAmount(priceBreakdown.escrowDeposit),
+                currency: priceBreakdown.currency,
+              })}
             </span>
           </div>
         </CardContent>
@@ -154,13 +178,13 @@ export function OrderConfirmation({
       {/* Actions */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button asChild className="flex-1">
-          <Link href={`/orders/${orderResult.orderId}`}>View Order Details</Link>
+          <Link href={`/orders/${orderResult.orderId}`}>{t('View Order Details')}</Link>
         </Button>
         <Button variant="outline" asChild className="flex-1">
-          <Link href="/orders">Back to Orders</Link>
+          <Link href="/orders">{t('Back to Orders')}</Link>
         </Button>
         <Button variant="outline" asChild className="flex-1">
-          <Link href="/marketplace">Browse Marketplace</Link>
+          <Link href="/marketplace">{t('Browse Marketplace')}</Link>
         </Button>
       </div>
     </div>

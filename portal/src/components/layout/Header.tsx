@@ -4,7 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { WalletButton, WalletModal, useWalletModal } from '@/components/wallet';
-import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { LanguageSwitcher, ThemeToggle } from '@/components/shared';
+import { useTranslation } from 'react-i18next';
 import { MobileDrawer } from './MobileDrawer';
 import { Sidebar } from './Sidebar';
 
@@ -12,12 +13,13 @@ export function Header() {
   const pathname = usePathname();
   const { isOpen, close } = useWalletModal();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { t } = useTranslation();
 
   const navigation = [
-    { name: 'Marketplace', href: '/marketplace' },
-    { name: 'HPC', href: '/hpc/jobs' },
-    { name: 'Support', href: '/support' },
-    { name: 'Governance', href: '/governance/proposals' },
+    { name: t('Marketplace'), href: '/marketplace' },
+    { name: t('HPC'), href: '/hpc/jobs' },
+    { name: t('Support'), href: '/support' },
+    { name: t('Governance'), href: '/governance/proposals' },
   ];
 
   return (
@@ -28,7 +30,7 @@ export function Header() {
           type="button"
           onClick={() => setDrawerOpen(true)}
           className="mr-2 rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
-          aria-label="Open navigation menu"
+          aria-label={t('Open navigation menu')}
         >
           <svg
             className="h-5 w-5"
@@ -46,14 +48,17 @@ export function Header() {
           </svg>
         </button>
 
-        <Link href="/" className="mr-8 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground">
+        <Link href="/" className="mr-8 flex items-center gap-2" aria-label={t('VirtEngine home')}>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground"
+            aria-hidden="true"
+          >
             V
           </div>
-          <span className="font-semibold">VirtEngine</span>
+          <span className="font-semibold">{t('VirtEngine')}</span>
         </Link>
 
-        <nav className="hidden flex-1 md:flex">
+        <nav className="hidden flex-1 md:flex" aria-label={t('Primary navigation')}>
           <ul className="flex items-center gap-6">
             {navigation.map((item) => (
               <li key={item.name}>
@@ -64,6 +69,7 @@ export function Header() {
                       ? 'font-medium text-foreground'
                       : 'text-muted-foreground'
                   }`}
+                  aria-current={pathname.startsWith(item.href) ? 'page' : undefined}
                 >
                   {item.name}
                 </Link>
@@ -73,13 +79,14 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
+          <LanguageSwitcher className="hidden md:flex" />
           <ThemeToggle />
           <WalletButton />
         </div>
       </div>
 
       {/* Mobile navigation drawer */}
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Menu">
+      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={t('Menu')}>
         <Sidebar variant="customer" />
       </MobileDrawer>
 

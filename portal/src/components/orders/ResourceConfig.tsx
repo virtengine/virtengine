@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import type { Offering } from '@/types/offerings';
 import { type ResourceConfig, RESOURCE_LIMITS } from '@/features/orders';
+import { useTranslation } from 'react-i18next';
 
 interface ResourceConfigStepProps {
   offering: Offering;
@@ -35,6 +36,7 @@ export function ResourceConfigStep({
   validationErrors,
   onChange,
 }: ResourceConfigStepProps) {
+  const { t } = useTranslation();
   const hasGpu = offering.category === 'gpu' || offering.category === 'ml';
   const hasGpuPricing = offering.prices?.some((p) => p.resourceType === 'gpu');
 
@@ -42,18 +44,23 @@ export function ResourceConfigStep({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Compute Resources</CardTitle>
+          <CardTitle className="text-lg">{t('Compute Resources')}</CardTitle>
           <CardDescription>
-            Configure the resources for your deployment on {offering.name}
+            {t('Configure the resources for your deployment on {{offering}}', {
+              offering: offering.name,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* CPU */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="cpu">CPU</Label>
+              <Label htmlFor="cpu">{t('CPU')}</Label>
               <span className="text-sm text-muted-foreground">
-                {resources.cpu} {RESOURCE_LIMITS.cpu.unit}
+                {t('{{count}} {{unit}}', {
+                  count: resources.cpu,
+                  unit: t(RESOURCE_LIMITS.cpu.unit),
+                })}
               </span>
             </div>
             <Input
@@ -67,17 +74,20 @@ export function ResourceConfigStep({
               className="h-2 cursor-pointer"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{RESOURCE_LIMITS.cpu.min} vCPU</span>
-              <span>{RESOURCE_LIMITS.cpu.max} vCPU</span>
+              <span>{t('{{count}} vCPU', { count: RESOURCE_LIMITS.cpu.min })}</span>
+              <span>{t('{{count}} vCPU', { count: RESOURCE_LIMITS.cpu.max })}</span>
             </div>
           </div>
 
           {/* Memory */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="memory">Memory</Label>
+              <Label htmlFor="memory">{t('Memory')}</Label>
               <span className="text-sm text-muted-foreground">
-                {resources.memory} {RESOURCE_LIMITS.memory.unit}
+                {t('{{count}} {{unit}}', {
+                  count: resources.memory,
+                  unit: t(RESOURCE_LIMITS.memory.unit),
+                })}
               </span>
             </div>
             <Input
@@ -91,8 +101,8 @@ export function ResourceConfigStep({
               className="h-2 cursor-pointer"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{RESOURCE_LIMITS.memory.min} GB</span>
-              <span>{RESOURCE_LIMITS.memory.max} GB</span>
+              <span>{t('{{count}} GB', { count: RESOURCE_LIMITS.memory.min })}</span>
+              <span>{t('{{count}} GB', { count: RESOURCE_LIMITS.memory.max })}</span>
             </div>
           </div>
 
@@ -100,9 +110,12 @@ export function ResourceConfigStep({
           {(hasGpu || hasGpuPricing) && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="gpu">GPU</Label>
+                <Label htmlFor="gpu">{t('GPU')}</Label>
                 <span className="text-sm text-muted-foreground">
-                  {resources.gpu} {RESOURCE_LIMITS.gpu.unit}
+                  {t('{{count}} {{unit}}', {
+                    count: resources.gpu,
+                    unit: t(RESOURCE_LIMITS.gpu.unit),
+                  })}
                 </span>
               </div>
               <Input
@@ -117,11 +130,11 @@ export function ResourceConfigStep({
               />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{RESOURCE_LIMITS.gpu.min}</span>
-                <span>{RESOURCE_LIMITS.gpu.max} GPU</span>
+                <span>{t('{{count}} GPU', { count: RESOURCE_LIMITS.gpu.max })}</span>
               </div>
               {offering.specifications?.gpu && (
                 <p className="text-xs text-muted-foreground">
-                  GPU Model: {offering.specifications.gpu}
+                  {t('GPU Model: {{model}}', { model: offering.specifications.gpu })}
                 </p>
               )}
             </div>
@@ -130,9 +143,12 @@ export function ResourceConfigStep({
           {/* Storage */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="storage">Storage</Label>
+              <Label htmlFor="storage">{t('Storage')}</Label>
               <span className="text-sm text-muted-foreground">
-                {resources.storage} {RESOURCE_LIMITS.storage.unit}
+                {t('{{count}} {{unit}}', {
+                  count: resources.storage,
+                  unit: t(RESOURCE_LIMITS.storage.unit),
+                })}
               </span>
             </div>
             <Input
@@ -146,8 +162,8 @@ export function ResourceConfigStep({
               className="h-2 cursor-pointer"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{RESOURCE_LIMITS.storage.min} GB</span>
-              <span>{RESOURCE_LIMITS.storage.max} GB</span>
+              <span>{t('{{count}} GB', { count: RESOURCE_LIMITS.storage.min })}</span>
+              <span>{t('{{count}} GB', { count: RESOURCE_LIMITS.storage.max })}</span>
             </div>
           </div>
         </CardContent>
@@ -155,13 +171,13 @@ export function ResourceConfigStep({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Duration &amp; Region</CardTitle>
+          <CardTitle className="text-lg">{t('Duration & Region')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Duration */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="duration">Duration</Label>
+              <Label htmlFor="duration">{t('Duration')}</Label>
               <Input
                 id="duration"
                 type="number"
@@ -174,7 +190,7 @@ export function ResourceConfigStep({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="duration-unit">Unit</Label>
+              <Label htmlFor="duration-unit">{t('Unit')}</Label>
               <Select
                 value={resources.durationUnit}
                 onValueChange={(value) =>
@@ -185,9 +201,9 @@ export function ResourceConfigStep({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="hours">Hours</SelectItem>
-                  <SelectItem value="days">Days</SelectItem>
-                  <SelectItem value="months">Months</SelectItem>
+                  <SelectItem value="hours">{t('Hours')}</SelectItem>
+                  <SelectItem value="days">{t('Days')}</SelectItem>
+                  <SelectItem value="months">{t('Months')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -196,13 +212,13 @@ export function ResourceConfigStep({
           {/* Region */}
           {offering.regions && offering.regions.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="region">Region</Label>
+              <Label htmlFor="region">{t('Region')}</Label>
               <Select
                 value={resources.region}
                 onValueChange={(value) => onChange({ region: value })}
               >
                 <SelectTrigger id="region">
-                  <SelectValue placeholder="Select a region" />
+                  <SelectValue placeholder={t('Select a region')} />
                 </SelectTrigger>
                 <SelectContent>
                   {offering.regions.map((region) => (
@@ -220,7 +236,7 @@ export function ResourceConfigStep({
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-          <p className="text-sm font-medium text-destructive">Please fix the following:</p>
+          <p className="text-sm font-medium text-destructive">{t('Please fix the following:')}</p>
           <ul className="mt-2 list-inside list-disc text-sm text-destructive">
             {validationErrors.map((err) => (
               <li key={err}>{err}</li>
