@@ -388,7 +388,7 @@ export function getFixAttemptCount(signature) {
  *  - Timeout: kills child after timeoutMs
  *  - Process spawn errors
  */
-function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
+export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
   return new Promise((resolve) => {
     let args;
     try {

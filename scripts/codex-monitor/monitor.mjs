@@ -12,7 +12,7 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
-import { attemptAutoFix, fixLoopingError, isDevMode } from "./autofix.mjs";
+import { attemptAutoFix, fixLoopingError, isDevMode, runCodexExec } from "./autofix.mjs";
 import {
   startTelegramBot,
   stopTelegramBot,
@@ -448,60 +448,6 @@ function getMaxParallelFromArgs(argsList) {
     return envValue;
   }
   return null;
-}
-
-function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
-  return new Promise((resolve) => {
-    const args = ["exec", "--full-auto", "-C", cwd, prompt];
-    const child = spawn("codex", args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
-      timeout: timeoutMs,
-      env: { ...process.env },
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        /* best effort */
-      }
-      resolve({
-        success: false,
-        output: stdout,
-        error: `timeout after ${timeoutMs}ms`,
-      });
-    }, timeoutMs);
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      resolve({
-        success: false,
-        output: stdout,
-        error: err.message,
-      });
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      resolve({
-        success: code === 0,
-        output: stdout + (stderr ? `\n${stderr}` : ""),
-        error: code !== 0 ? `exit code ${code}` : null,
-      });
-    });
-  });
 }
 
 const monitorFixAttempts = new Map();
@@ -1903,7 +1849,7 @@ async function fetchTasksByStatus(status) {
 }
 
 /**
- * PATCH /api/tasks/:task_id
+ * PUT /api/tasks/:task_id
  * Updates task status via VK API.
  * @param {string} taskId - Task UUID
  * @param {string} newStatus - New status ("todo", "inprogress", "inreview", "done", "cancelled")
@@ -1911,7 +1857,7 @@ async function fetchTasksByStatus(status) {
  */
 async function updateTaskStatus(taskId, newStatus) {
   const res = await fetchVk(`/api/tasks/${taskId}`, {
-    method: "PATCH",
+    method: "PUT",
     body: { status: newStatus },
     timeoutMs: 10000,
   });
@@ -3752,44 +3698,85 @@ async function analyzeWithCodex(logPath, logText, reason) {
   if (!codexEnabled) {
     return;
   }
+  notifyCodexTrigger(`orchestrator analysis (${reason})`);
+
+  // ── Build a workspace-aware prompt ────────────────────────────────────
+  // The old approach used CodexClient SDK (chat-only, no file access).
+  // The new approach uses `codex exec` with --full-auto so the agent can
+  // actually read files, inspect git status, and give a real diagnosis.
+  const logTail = logText.slice(-12000);
+  const prompt = `You are diagnosing why the VirtEngine orchestrator exited.
+You have FULL READ ACCESS to the workspace. Use it.
+
+## Context
+- Exit reason: ${reason}
+- Orchestrator script: ${scriptPath}
+- Repository root: ${repoRoot}
+- Active log file: ${logPath}
+- Monitor script: scripts/codex-monitor/monitor.mjs
+- VK endpoint: ${vkEndpointUrl || "(not set)"}
+- Git branch: ${(() => { try { return execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf8" }).trim(); } catch { return "unknown"; } })()}
+
+## Log tail (last ~12k chars)
+\`\`\`
+${logTail}
+\`\`\`
+
+## Instructions
+1. READ the orchestrator script (${scriptPath}) to understand the code flow
+2. READ any relevant source files referenced in the log
+3. Check git status/diff if relevant
+4. Diagnose the ROOT CAUSE — not surface symptoms
+5. Do NOT edit or create any files. Analysis only.
+6. Common issues:
+   - Path errors: worktree paths don't contain the orchestrator script
+   - Mutex contention: multiple instances fighting over named mutex
+   - VK API failures: wrong HTTP method, endpoint down, auth issues
+   - Git rebase conflicts: agent branches conflict with main
+   - Exit 64: pwsh can't find the -File target
+   - SIGKILL: OOM or external termination
+7. Return a SHORT, ACTIONABLE diagnosis with the concrete fix.`;
+
   try {
-    notifyCodexTrigger(`orchestrator analysis (${reason})`);
-    if (!CodexClient) {
-      const ready = await ensureCodexSdkReady();
-      if (!ready) {
-        throw new Error(codexDisabledReason || "Codex SDK not available");
-      }
-    }
-    const codex = new CodexClient();
-    const thread = codex.startThread();
-    const prompt = `You are monitoring a long-running PowerShell orchestration script.
-The script just exited with an error. Analyze the log excerpt and diagnose the root cause.
-Do NOT edit or modify any files. Only provide a diagnosis.
+    // Use runCodexExec from autofix.mjs — gives Codex workspace access
+    const result = await runCodexExec(prompt, repoRoot, 90_000);
 
-Reason: ${reason}
-
-Log excerpt:\n${logText}\n
-Return a short diagnosis and what the concrete fix would be (but do not apply it).`;
-
-    const result = await thread.run(prompt);
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
-    const analysisText = formatCodexResult(result);
+    const analysisText = result.output || result.error || "(no output)";
     await writeFile(analysisPath, analysisText, "utf8");
 
-    // Notify user with Codex analysis outcome
     if (telegramToken && telegramChatId) {
-      // Extract first 500 chars of diagnosis for telegram
       const summary = analysisText.slice(0, 500).replace(/\n{3,}/g, "\n\n");
       void sendTelegramMessage(
         `🔍 Codex Analysis Result (${reason}):\n${summary}${analysisText.length > 500 ? "\n...(truncated)" : ""}`,
       );
     }
   } catch (err) {
-    const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
-    const message = err && err.message ? err.message : String(err);
-    await writeFile(analysisPath, `Codex SDK failed: ${message}\n`, "utf8");
-    if (telegramToken && telegramChatId) {
-      void sendTelegramMessage(`🔍 Codex Analysis Failed: ${message}`);
+    // Fallback: try the SDK chat approach if exec is unavailable
+    try {
+      if (!CodexClient) {
+        const ready = await ensureCodexSdkReady();
+        if (!ready) throw new Error(codexDisabledReason || "Codex SDK N/A");
+      }
+      const codex = new CodexClient();
+      const thread = codex.startThread();
+      const result = await thread.run(prompt);
+      const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
+      const analysisText = formatCodexResult(result);
+      await writeFile(analysisPath, analysisText, "utf8");
+      if (telegramToken && telegramChatId) {
+        const summary = analysisText.slice(0, 500).replace(/\n{3,}/g, "\n\n");
+        void sendTelegramMessage(
+          `🔍 Codex Analysis Result (${reason}):\n${summary}${analysisText.length > 500 ? "\n...(truncated)" : ""}`,
+        );
+      }
+    } catch (fallbackErr) {
+      const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
+      const message = fallbackErr?.message || String(fallbackErr);
+      await writeFile(analysisPath, `Codex analysis failed: ${message}\n`, "utf8");
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(`🔍 Codex Analysis Failed: ${message}`);
+      }
     }
   }
 }
