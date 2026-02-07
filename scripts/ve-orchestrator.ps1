@@ -57,7 +57,53 @@ param(
 )
 
 # ─── Load ve-kanban library ──────────────────────────────────────────────────
-. "$PSScriptRoot/ve-kanban.ps1"
+function Import-VeKanbanLibrary {
+    $candidates = @()
+    if ($PSScriptRoot) {
+        $candidates += (Join-Path $PSScriptRoot "ve-kanban.ps1")
+        $candidates += (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) "ve-kanban.ps1")
+        $candidates += (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) "scripts\\ve-kanban.ps1")
+    }
+    if ($PSCommandPath) {
+        $candidates += (Join-Path (Split-Path -Parent $PSCommandPath) "ve-kanban.ps1")
+    }
+    $candidates += (Join-Path (Get-Location) "ve-kanban.ps1")
+    $candidates = $candidates | Select-Object -Unique
+
+    $loaded = $false
+    foreach ($path in $candidates) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            . $path
+            $loaded = $true
+            break
+        }
+        catch {
+            Write-Error "Failed to load ve-kanban library from '$path': $($_.Exception.Message)"
+        }
+    }
+
+    if (-not $loaded) {
+        throw "ve-kanban library not found. Tried: $($candidates -join ', ')"
+    }
+
+    $requiredFunctions = @(
+        "Initialize-VKConfig",
+        "Get-VKTasks",
+        "Get-VKAttempts",
+        "Get-VKAttemptSummaries",
+        "Get-OpenPullRequests",
+        "Get-VKLastGithubError",
+        "Get-CurrentExecutorProfile",
+        "Get-NextExecutorProfile"
+    )
+    $missingFunctions = $requiredFunctions | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) }
+    if ($missingFunctions.Count -gt 0) {
+        throw "ve-kanban library loaded but missing required functions: $($missingFunctions -join ', ')"
+    }
+}
+
+Import-VeKanbanLibrary
 
 # ─── State tracking ──────────────────────────────────────────────────────────
 $script:CycleCount = 0
@@ -96,9 +142,21 @@ function Write-Log {
     Write-Host "  [$ts] $Message" -ForegroundColor $color
 }
 
+function Format-ShortId {
+    param([string]$Value, [int]$Length = 8)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return "" }
+    if ($Value.Length -le $Length) { return $Value }
+    return $Value.Substring(0, $Length)
+}
+
 function Write-Banner {
-    $nextExec = Get-CurrentExecutorProfile
-    $nextStr = "$($nextExec.executor)/$($nextExec.variant)"
+    if (Get-Command Get-CurrentExecutorProfile -ErrorAction SilentlyContinue) {
+        $nextExec = Get-CurrentExecutorProfile
+        $nextStr = "$($nextExec.executor)/$($nextExec.variant)"
+    }
+    else {
+        $nextStr = "/"
+    }
     Write-Host ""
     Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║          VirtEngine Task Orchestrator                    ║" -ForegroundColor Cyan
@@ -1598,7 +1656,7 @@ function Trigger-CISweep {
         $recentMerged | ForEach-Object {
             $title = if ($_.title) { $_.title } else { "PR #$($_.number)" }
             $url = if ($_.url) { $_.url } else { "" }
-            if ($url) { "- #$($_.number) $title: $url" } else { "- #$($_.number) $title" }
+            if ($url) { "- #$($_.number) ${title}: $url" } else { "- #$($_.number) $title" }
         }
     }
     else { @("- none") }
@@ -1729,12 +1787,19 @@ function Start-Orchestrator {
     }
     Write-Log "GitHub CLI: $($ghVersion | Select-Object -First 1)" -Level "INFO"
 
+    if (-not (Get-Command Initialize-VKConfig -ErrorAction SilentlyContinue)) {
+        Write-Log "ve-kanban library not loaded (Initialize-VKConfig missing). Check scripts/ve-kanban.ps1 path." -Level "ERROR"
+        return
+    }
+
     # Auto-detect project and repo IDs
     if (-not (Initialize-VKConfig)) {
         Write-Log "Failed to initialize vibe-kanban configuration" -Level "ERROR"
         return
     }
-    Write-Log "Project: $($script:VK_PROJECT_ID.Substring(0,8))...  Repo: $($script:VK_REPO_ID.Substring(0,8))..." -Level "OK"
+    $projectShort = Format-ShortId -Value $script:VK_PROJECT_ID
+    $repoShort = Format-ShortId -Value $script:VK_REPO_ID
+    Write-Log "Project: $projectShort...  Repo: $repoShort..." -Level "OK"
 
     # Log executor cycling setup
     Write-Log "Executors: $(($script:VK_EXECUTORS | ForEach-Object { "$($_.executor)/$($_.variant)" }) -join ' ⇄ ')" -Level "INFO"
