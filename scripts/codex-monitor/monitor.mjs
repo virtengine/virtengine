@@ -4667,6 +4667,20 @@ function selfRestartForSourceChange(filename) {
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
 }
 
+function retryDeferredSelfRestart() {
+  if (!pendingSelfRestart) return;
+  if (isPrimaryBusy()) {
+    // Still busy — check again in 5s
+    setTimeout(retryDeferredSelfRestart, 5000);
+    return;
+  }
+  const filename = pendingSelfRestart;
+  console.log(
+    `[monitor] primary agent finished — proceeding with deferred self-restart (${filename})`,
+  );
+  selfRestartForSourceChange(filename);
+}
+
 function startSelfWatcher() {
   stopSelfWatcher();
   try {
@@ -4680,6 +4694,10 @@ function startSelfWatcher() {
       }
       selfWatcherDebounce = setTimeout(() => {
         selfRestartForSourceChange(filename);
+        // If deferred, start polling for agent completion
+        if (pendingSelfRestart) {
+          setTimeout(retryDeferredSelfRestart, 5000);
+        }
       }, 3000);
     });
     console.log("[monitor] watching own source files for self-restart");
