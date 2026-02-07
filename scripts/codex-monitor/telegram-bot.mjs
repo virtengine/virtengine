@@ -1,13 +1,13 @@
 /**
- * telegram-bot.mjs — Two-way Telegram ↔ Codex shell for VirtEngine monitor.
+ * telegram-bot.mjs — Two-way Telegram ↔ primary agent for VirtEngine monitor.
  *
  * Polls Telegram Bot API for incoming messages, routes slash commands to
- * built-in handlers, and forwards free-text to the persistent Codex shell.
+ * built-in handlers, and forwards free-text to the persistent primary agent.
  *
  * Architecture:
  *   Telegram → getUpdates long-poll → handleUpdate()
- *     ├─ /command → built-in handler (fast, no Codex)
- *     └─ free-text → CodexShell.exec() → response back to Telegram
+ *     ├─ /command → built-in handler (fast, no agent)
+ *     └─ free-text → PrimaryAgent.exec() → response back to Telegram
  *
  * Security: Only accepts messages from the configured TELEGRAM_CHAT_ID.
  */
@@ -464,6 +464,101 @@ function extractTarget(cmd) {
   return "";
 }
 
+function normalizeToolName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function extractCopilotCommand(input) {
+  if (!input || typeof input !== "object") return null;
+  const candidates = ["command", "cmd", "shell", "args", "run"];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function extractCopilotPath(input) {
+  if (!input || typeof input !== "object") return null;
+  const candidates = [
+    "path",
+    "file",
+    "filename",
+    "filepath",
+    "filePath",
+    "fullPath",
+    "target",
+  ];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function isCopilotReadTool(name) {
+  const tool = normalizeToolName(name);
+  return /read|open|view|get_file|read_file/.test(tool);
+}
+
+function isCopilotWriteTool(name) {
+  const tool = normalizeToolName(name);
+  return /write|edit|apply|patch|create|update|save/.test(tool);
+}
+
+function isCopilotSearchTool(name) {
+  const tool = normalizeToolName(name);
+  return /search|grep|rg|find|query/.test(tool);
+}
+
+function summarizeCopilotTool(toolName, input) {
+  const tool = normalizeToolName(toolName);
+  const command = extractCopilotCommand(input);
+  const target = extractCopilotPath(input);
+  if (!toolName) return "running tool";
+  if (/command|shell|execute|run/.test(tool)) {
+    return command ? `running ${shortSnippet(command, 80)}` : "running command";
+  }
+  if (isCopilotReadTool(tool)) {
+    return target ? `reading ${shortPath(target)}` : "reading file";
+  }
+  if (isCopilotWriteTool(tool)) {
+    return target ? `updating ${shortPath(target)}` : "updating files";
+  }
+  if (isCopilotSearchTool(tool)) {
+    return target ? `searching ${shortPath(target)}` : "searching";
+  }
+  if (/mcp/.test(tool)) return `MCP tool: ${toolName}`;
+  return `tool: ${toolName}`;
+}
+
+function getCopilotToolInfo(event) {
+  const data = event?.data || {};
+  const toolName =
+    data.toolName ||
+    data.name ||
+    data.tool?.name ||
+    event?.toolName ||
+    event?.tool ||
+    "";
+  const input =
+    data.input ||
+    data.args ||
+    data.parameters ||
+    data.tool?.input ||
+    data.tool?.arguments ||
+    {};
+  const status = data.status || data.result?.status || data.state;
+  return { toolName, input, status };
+}
+
 /**
  * Convert a raw Codex event into a concise human-readable action description.
  * Shows which files are being read/written, line counts for changes, and
@@ -569,6 +664,44 @@ function summarizeAction(event) {
           return null;
       }
     }
+
+    case "assistant.reasoning":
+    case "assistant.reasoning_delta": {
+      const text = event.data?.content || event.data?.deltaContent || "";
+      return text
+        ? { icon: "💭", text: text.slice(0, 200), phase: "thinking" }
+        : null;
+    }
+
+    case "tool.execution_start": {
+      const { toolName, input } = getCopilotToolInfo(event);
+      return {
+        icon: "🛠️",
+        text: summarizeCopilotTool(toolName, input),
+        phase: "running",
+      };
+    }
+
+    case "tool.execution_complete": {
+      const { toolName, input, status } = getCopilotToolInfo(event);
+      const ok =
+        !status ||
+        ["ok", "success", "completed", "done"].includes(
+          String(status).toLowerCase(),
+        );
+      return {
+        icon: ok ? "✅" : "❌",
+        text: summarizeCopilotTool(toolName, input) + (ok ? "" : " (failed)"),
+        phase: "done",
+      };
+    }
+
+    case "session.error":
+      return {
+        icon: "❌",
+        text: `Failed: ${event.data?.message || "unknown"}`,
+        phase: "error",
+      };
 
     case "item.updated": {
       const item = event.item;
@@ -1633,8 +1766,9 @@ async function cmdCleanupMerged(chatId) {
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
   const sessionLabel = info.sessionId || info.threadId || "(none)";
+  const agentLabel = info.adapter || info.provider || getPrimaryAgentName();
   const lines = [
-    `🧠 Primary Agent (${info.adapter || getPrimaryAgentName()})`,
+    `🧠 Primary Agent (${agentLabel})`,
     "",
     `Session: ${sessionLabel}`,
     `Turns: ${info.turnCount}`,
@@ -2885,6 +3019,46 @@ async function handleFreeText(text, chatId, options = {}) {
             dels: c.deletions ?? c.lines_deleted ?? 0,
           });
         }
+      }
+    }
+
+    if (
+      rawEvent.type === "tool.execution_start" ||
+      rawEvent.type === "tool.execution_complete"
+    ) {
+      const { toolName, input } = getCopilotToolInfo(rawEvent);
+      const command = extractCopilotCommand(input);
+      const target = extractCopilotPath(input);
+
+      if (command) {
+        const cmdTarget = extractTarget(command);
+        if (
+          cmdTarget &&
+          (/^(cat|head|tail|type|Get-Content)/i.test(command.trim()) ||
+            /pwsh.*Get-Content/i.test(command))
+        ) {
+          filesRead.add(cmdTarget);
+        }
+        if (
+          /^(grep|findstr|rg|Select-String)/i.test(command.trim()) ||
+          /pwsh.*Select-String/i.test(command)
+        ) {
+          searchCount++;
+        }
+      }
+
+      if (isCopilotReadTool(toolName) && target) {
+        filesRead.add(target);
+      }
+      if (isCopilotSearchTool(toolName)) {
+        searchCount++;
+      }
+      if (isCopilotWriteTool(toolName) && target) {
+        filesWritten.set(target, {
+          kind: "modify",
+          adds: 0,
+          dels: 0,
+        });
       }
     }
 

@@ -274,6 +274,8 @@ function normalizePrimaryAgent(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "codex-sdk";
   if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
+  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
+    return "copilot-sdk";
   if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
     return "claude-sdk";
   return raw;
@@ -922,7 +924,9 @@ export function loadConfig(argv = process.argv, options = {}) {
       ? false
       : primaryAgent === "codex-sdk"
         ? codexEnabled
-        : process.env.CLAUDE_SDK_DISABLED !== "1";
+        : primaryAgent === "copilot-sdk"
+          ? process.env.COPILOT_SDK_DISABLED !== "1"
+          : process.env.CLAUDE_SDK_DISABLED !== "1";
 
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";

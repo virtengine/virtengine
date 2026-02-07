@@ -38,6 +38,7 @@
     "./autofix": "./autofix.mjs",
     "./codex-shell": "./codex-shell.mjs",
     "./claude-shell": "./claude-shell.mjs",
+    "./copilot-shell": "./copilot-shell.mjs",
     "./primary-agent": "./primary-agent.mjs",
     "./maintenance": "./maintenance.mjs",
     "./telegram-bot": "./telegram-bot.mjs",
@@ -68,6 +69,7 @@
     "autofix.mjs",
     "codex-shell.mjs",
     "claude-shell.mjs",
+    "copilot-shell.mjs",
     "primary-agent.mjs",
     "maintenance.mjs",
     "telegram-bot.mjs",
@@ -90,6 +92,7 @@
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.37",
+    "@github/copilot-sdk": "0.1.19",
     "@openai/codex-sdk": "0.99.0-alpha.6",
     "vibe-kanban": "0.1.6"
   },

@@ -46,6 +46,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 │                                                                  │
 │  Integrations:                                                   │
 │    • Vibe-Kanban API (task management, PR creation)              │
+│    • Copilot SDK (primary agent shell)                           │
 │    • Codex SDK (AI analysis, autofix)                            │
 │    • Telegram Bot API (notifications, commands)                  │
 │    • GitHub CLI (PR operations fallback)                         │
@@ -250,6 +251,9 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `ORCHESTRATOR_SCRIPT`   | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
 | `ORCHESTRATOR_ARGS`     | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
 | `OPENAI_API_KEY`        | —                              | API key for Codex analysis                                                                                             |
+| `PRIMARY_AGENT`         | `codex-sdk`                    | Primary agent adapter (`codex-sdk`, `copilot-sdk`, `claude-sdk`)                                                       |
+| `COPILOT_MODEL`         | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
+| `COPILOT_SDK_DISABLED`  | `0`                            | Disable Copilot SDK primary agent                                                                                      |
 | `TELEGRAM_BOT_TOKEN`    | —                              | Telegram bot token from @BotFather                                                                                     |
 | `TELEGRAM_CHAT_ID`      | —                              | Telegram chat ID                                                                                                       |
 | `VK_BASE_URL`           | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
@@ -640,7 +644,8 @@ codex-monitor/
 ├── telegram-bot.mjs             # Interactive Telegram chatbot
 ├── codex-shell.mjs              # Persistent Codex SDK session
 ├── claude-shell.mjs             # Persistent Claude Agent SDK session
-├── primary-agent.mjs            # Primary agent adapter (Codex or Claude)
+├── copilot-shell.mjs            # Persistent Copilot SDK session
+├── primary-agent.mjs            # Primary agent adapter (Codex/Copilot/Claude)
 ├── autofix.mjs                  # Error loop detection + auto-fix
 ├── maintenance.mjs              # Singleton lock, process cleanup
 ├── setup.mjs                    # Interactive setup wizard

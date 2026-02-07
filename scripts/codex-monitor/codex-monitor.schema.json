@@ -20,7 +20,7 @@
     "codexEnabled": { "type": "boolean" },
     "primaryAgent": {
       "type": "string",
-      "enum": ["codex-sdk", "claude-sdk"]
+      "enum": ["codex-sdk", "copilot-sdk", "claude-sdk"]
     },
     "vkSpawnEnabled": { "type": "boolean" },
     "plannerMode": {

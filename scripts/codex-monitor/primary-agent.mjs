@@ -1,7 +1,10 @@
 /**
- * primary-agent.mjs - Unified adapter for Codex or Claude primary agents.
+ * primary-agent.mjs — Adapter that selects the primary agent implementation.
+ *
+ * Supports Codex SDK, Copilot SDK, and Claude SDK.
  */
 
+import { loadConfig } from "./config.mjs";
 import {
   execCodexPrompt,
   steerCodexPrompt,
@@ -11,10 +14,18 @@ import {
   initCodexShell,
 } from "./codex-shell.mjs";
 import {
+  execCopilotPrompt,
+  steerCopilotPrompt,
+  isCopilotBusy,
+  getSessionInfo as getCopilotSessionInfo,
+  resetSession as resetCopilotSession,
+  initCopilotShell,
+} from "./copilot-shell.mjs";
+import {
   execClaudePrompt,
   steerClaudePrompt,
   isClaudeBusy,
-  getSessionInfo,
+  getSessionInfo as getClaudeSessionInfo,
   resetClaudeSession,
   initClaudeShell,
 } from "./claude-shell.mjs";
@@ -22,6 +33,7 @@ import {
 const ADAPTERS = {
   "codex-sdk": {
     name: "codex-sdk",
+    provider: "CODEX",
     exec: execCodexPrompt,
     steer: steerCodexPrompt,
     isBusy: isCodexBusy,
@@ -30,28 +42,88 @@ const ADAPTERS = {
       return { ...info, sessionId: info.threadId };
     },
     reset: resetThread,
-    init: initCodexShell,
+    init: async () => {
+      await initCodexShell();
+      return true;
+    },
+  },
+  "copilot-sdk": {
+    name: "copilot-sdk",
+    provider: "COPILOT",
+    exec: execCopilotPrompt,
+    steer: steerCopilotPrompt,
+    isBusy: isCopilotBusy,
+    getInfo: () => getCopilotSessionInfo(),
+    reset: resetCopilotSession,
+    init: async () => initCopilotShell(),
   },
   "claude-sdk": {
     name: "claude-sdk",
+    provider: "CLAUDE",
     exec: execClaudePrompt,
     steer: steerClaudePrompt,
     isBusy: isClaudeBusy,
-    getInfo: () => getSessionInfo(),
+    getInfo: () => getClaudeSessionInfo(),
     reset: resetClaudeSession,
-    init: initClaudeShell,
+    init: async () => {
+      await initClaudeShell();
+      return true;
+    },
   },
 };
 
 let activeAdapter = ADAPTERS["codex-sdk"];
+let primaryProfile = null;
+let primaryFallbackReason = null;
+let initialized = false;
 
 function normalizePrimaryAgent(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "codex-sdk";
   if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
+  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
+    return "copilot-sdk";
   if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
     return "claude-sdk";
   return raw;
+}
+
+function selectPrimaryExecutor(config) {
+  const executors = config?.executorConfig?.executors || [];
+  if (!executors.length) return null;
+  const primary = executors.find(
+    (e) => (e.role || "").toLowerCase() === "primary",
+  );
+  return primary || executors[0];
+}
+
+function executorToAdapter(executor) {
+  if (!executor) return null;
+  const normalized = String(executor).toUpperCase();
+  if (normalized === "COPILOT") return "copilot-sdk";
+  if (normalized === "CLAUDE") return "claude-sdk";
+  return "codex-sdk";
+}
+
+function resolvePrimaryAgent(nameOrConfig) {
+  if (typeof nameOrConfig === "string" && nameOrConfig.trim()) {
+    return normalizePrimaryAgent(nameOrConfig);
+  }
+  if (nameOrConfig && typeof nameOrConfig === "object") {
+    const direct = normalizePrimaryAgent(nameOrConfig.primaryAgent);
+    if (direct) return direct;
+  }
+  if (process.env.PRIMARY_AGENT || process.env.PRIMARY_AGENT_SDK) {
+    return normalizePrimaryAgent(
+      process.env.PRIMARY_AGENT || process.env.PRIMARY_AGENT_SDK,
+    );
+  }
+  const cfg = loadConfig();
+  const direct = normalizePrimaryAgent(cfg?.primaryAgent || "");
+  if (direct) return direct;
+  primaryProfile = selectPrimaryExecutor(cfg);
+  const mapped = executorToAdapter(primaryProfile?.executor);
+  return mapped || "codex-sdk";
 }
 
 export function setPrimaryAgent(name) {
@@ -64,23 +136,48 @@ export function getPrimaryAgentName() {
   return activeAdapter?.name || "codex-sdk";
 }
 
-export async function initPrimaryAgent(name) {
-  if (name) {
-    setPrimaryAgent(name);
-  } else if (process.env.PRIMARY_AGENT) {
-    setPrimaryAgent(process.env.PRIMARY_AGENT);
+export async function initPrimaryAgent(nameOrConfig = null) {
+  if (initialized) return getPrimaryAgentName();
+  const desired = resolvePrimaryAgent(nameOrConfig);
+  setPrimaryAgent(desired);
+
+  if (activeAdapter.name === "codex-sdk" && process.env.CODEX_SDK_DISABLED === "1") {
+    primaryFallbackReason = "Codex SDK disabled — attempting fallback";
+    if (process.env.COPILOT_SDK_DISABLED !== "1") {
+      setPrimaryAgent("copilot-sdk");
+    } else if (process.env.CLAUDE_SDK_DISABLED !== "1") {
+      setPrimaryAgent("claude-sdk");
+    }
   }
-  if (activeAdapter?.init) {
+
+  if (activeAdapter.name === "claude-sdk" && process.env.CLAUDE_SDK_DISABLED === "1") {
+    primaryFallbackReason = "Claude SDK disabled — falling back to Codex";
+    setPrimaryAgent("codex-sdk");
+  }
+
+  const ok = await activeAdapter.init();
+  if (activeAdapter.name === "copilot-sdk" && ok === false) {
+    primaryFallbackReason = "Copilot SDK unavailable — falling back to Codex";
+    setPrimaryAgent("codex-sdk");
     await activeAdapter.init();
   }
+
+  initialized = true;
+  return getPrimaryAgentName();
 }
 
-export async function execPrimaryPrompt(...args) {
-  return activeAdapter.exec(...args);
+export async function execPrimaryPrompt(userMessage, options = {}) {
+  if (!initialized) {
+    await initPrimaryAgent();
+  }
+  return activeAdapter.exec(userMessage, options);
 }
 
-export async function steerPrimaryPrompt(...args) {
-  return activeAdapter.steer(...args);
+export async function steerPrimaryPrompt(message) {
+  if (!initialized) {
+    await initPrimaryAgent();
+  }
+  return activeAdapter.steer(message);
 }
 
 export function isPrimaryBusy() {
@@ -91,6 +188,9 @@ export function getPrimaryAgentInfo() {
   const info = activeAdapter.getInfo ? activeAdapter.getInfo() : {};
   return {
     adapter: activeAdapter.name,
+    provider: activeAdapter.provider,
+    profile: primaryProfile,
+    fallbackReason: primaryFallbackReason,
     sessionId: info.sessionId || info.threadId || null,
     threadId: info.threadId || null,
     turnCount: info.turnCount || 0,
@@ -100,6 +200,9 @@ export function getPrimaryAgentInfo() {
 }
 
 export async function resetPrimaryAgent() {
+  if (!initialized) {
+    await initPrimaryAgent();
+  }
   if (activeAdapter.reset) {
     await activeAdapter.reset();
   }
