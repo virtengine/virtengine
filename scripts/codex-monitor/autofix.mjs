@@ -317,7 +317,7 @@ export function getFixAttemptCount(signature) {
  * Run `codex exec --full-auto` with a fix prompt.
  * Returns { success, output } — Codex will write fixes directly to disk.
  */
-function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
+export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
   return new Promise((resolve) => {
     const args = ["exec", "--full-auto", "-C", cwd, prompt];
 
