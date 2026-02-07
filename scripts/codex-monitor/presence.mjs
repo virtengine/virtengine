@@ -164,7 +164,17 @@ function normalizePresencePayload(payload) {
 }
 
 export async function initPresence(options = {}) {
-  if (state.initialized) return state;
+  if (state.initialized && !options.force) return state;
+  if (options.force) {
+    state.initialized = false;
+    state.repoRoot = null;
+    state.presencePath = null;
+    state.instanceId = null;
+    state.startedAt = new Date().toISOString();
+    state.localWorkspace = null;
+    state.localMeta = null;
+    state.instances = new Map();
+  }
   state.repoRoot = options.repoRoot || process.cwd();
   state.presencePath =
     options.presencePath ||
@@ -176,7 +186,9 @@ export async function initPresence(options = {}) {
   );
   state.localMeta = buildLocalMeta();
   await ensurePresenceDir(state.repoRoot);
-  await loadPresenceRegistry();
+  if (!options.skipLoad) {
+    await loadPresenceRegistry();
+  }
   state.initialized = true;
   return state;
 }
@@ -234,7 +246,7 @@ export function listActiveInstances({ nowMs, ttlMs } = {}) {
   const instances = [];
   for (const entry of state.instances.values()) {
     const last = Date.parse(entry.last_seen_at || entry.updated_at || "");
-    if (ttl > 0 && (!Number.isFinite(last) || now - last > ttl)) {
+    if (ttl > 0 && (!Number.isFinite(last) || now - last >= ttl)) {
       continue;
     }
     instances.push(entry);

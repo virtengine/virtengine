@@ -30,6 +30,7 @@ import {
   initPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
+import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
 import {
@@ -112,6 +113,8 @@ let {
   watchPath: configWatchPath,
   echoLogs,
   autoFixEnabled,
+  preflightEnabled: configPreflightEnabled,
+  preflightRetryMs: configPreflightRetryMs,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -152,6 +155,8 @@ let codexDisabledReason = codexEnabled
   : process.env.CODEX_SDK_DISABLED === "1"
     ? "disabled via CODEX_SDK_DISABLED"
     : "disabled via --no-codex";
+let preflightEnabled = configPreflightEnabled;
+let preflightRetryMs = configPreflightRetryMs;
 
 // Merge strategy: Codex-powered merge decision analysis
 // Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
@@ -169,6 +174,10 @@ const conflictResolutionTimeoutMs = Number(
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
+let preflightInProgress = false;
+let preflightLastResult = null;
+let preflightLastRunAt = 0;
+let preflightRetryTimer = null;
 
 let CodexClient = null;
 
@@ -243,7 +252,6 @@ const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 
 // ── Deduplication tracking (utilities imported from utils.mjs) ───────────────
-
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
 // Detects rapid failure bursts independently of Telegram dedup.
@@ -359,6 +367,46 @@ function shouldRestartMonitor() {
   return monitorFailureTimestamps.length >= 3;
 }
 
+function schedulePreflightRetry(waitMs) {
+  if (preflightRetryTimer) return;
+  const delay = Math.max(30000, waitMs || preflightRetryMs);
+  preflightRetryTimer = setTimeout(() => {
+    preflightRetryTimer = null;
+    startProcess();
+  }, delay);
+}
+
+async function ensurePreflightReady(reason) {
+  if (!preflightEnabled) return true;
+  if (preflightInProgress) return false;
+  const now = Date.now();
+  if (preflightLastResult && !preflightLastResult.ok) {
+    const elapsed = now - preflightLastRunAt;
+    if (elapsed < preflightRetryMs) {
+      schedulePreflightRetry(preflightRetryMs - elapsed);
+      return false;
+    }
+  }
+  preflightInProgress = true;
+  const result = runPreflightChecks({ repoRoot });
+  preflightInProgress = false;
+  preflightLastResult = result;
+  preflightLastRunAt = Date.now();
+  const report = formatPreflightReport(result, {
+    retryMs: result.ok ? 0 : preflightRetryMs,
+  });
+  if (!result.ok) {
+    console.error(report);
+    console.warn(
+      `[monitor] preflight failed (${reason || "startup"}); blocking orchestrator start.`,
+    );
+    schedulePreflightRetry(preflightRetryMs);
+    return false;
+  }
+  console.log(report);
+  return true;
+}
+
 function restartSelf(reason) {
   if (shuttingDown) return;
   const now = Date.now();
@@ -429,7 +477,6 @@ function getChangeSummary(repoRootPath, files) {
     return files.join(", ");
   }
 }
-
 
 const monitorFixAttempts = new Map();
 const monitorFixMaxAttempts = 2;
@@ -740,7 +787,6 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 /** @type {Map<string, {timestamps: number[], fixTriggeredAt: number}>} */
 const errorFrequency = new Map();
 let loopFixInProgress = false;
-
 
 function trackErrorFrequency(line) {
   const fingerprint = getErrorFingerprint(line);
@@ -2921,27 +2967,41 @@ async function sendTelegramMessage(text, options = {}) {
   let priority = 4; // default: info
   let category = "general";
 
+  // Positive signals override negative keyword matches — a "✅ Task completed"
+  // message should never be classified as an error even when the task title
+  // happens to contain words like "error" or "failed".
+  const isPositive =
+    textLower.includes("✅") ||
+    textLower.includes("task completed") ||
+    textLower.includes("branch merged") ||
+    textLower.includes("pr merged");
+
   // Priority 1: Critical/Fatal
   if (
-    textLower.includes("fatal") ||
-    textLower.includes("critical") ||
-    textLower.includes("🔥")
+    !isPositive &&
+    (textLower.includes("fatal") ||
+      textLower.includes("critical") ||
+      textLower.includes("🔥"))
   ) {
     priority = 1;
     category = "critical";
   }
   // Priority 2: Errors
   else if (
-    textLower.includes("error") ||
-    textLower.includes("failed") ||
-    textLower.includes("❌") ||
-    textLower.includes("auto-fix gave up")
+    !isPositive &&
+    (textLower.includes("error") ||
+      textLower.includes("failed") ||
+      textLower.includes("❌") ||
+      textLower.includes("auto-fix gave up"))
   ) {
     priority = 2;
     category = "error";
   }
   // Priority 3: Warnings
-  else if (textLower.includes("warning") || textLower.includes("⚠️")) {
+  else if (
+    !isPositive &&
+    (textLower.includes("warning") || textLower.includes("⚠️"))
+  ) {
     priority = 3;
     category = "warning";
   }
@@ -3368,7 +3428,7 @@ function startTelegramCommandListener() {
   });
 }
 
-function startTelegramNotifier() {
+async function startTelegramNotifier() {
   if (telegramNotifierInterval) {
     clearInterval(telegramNotifierInterval);
     telegramNotifierInterval = null;
@@ -3399,7 +3459,31 @@ function startTelegramNotifier() {
     await flushMergeNotifications();
     await checkStatusMilestones();
   };
-  void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
+
+  // Suppress "Notifier started" message on rapid restarts (e.g. code-change restarts).
+  // If the last start was <60s ago, skip the notification — just log locally.
+  const lastStartPath = resolve(
+    repoRoot,
+    ".cache",
+    "ve-last-notifier-start.txt",
+  );
+  let suppressStartup = false;
+  try {
+    const prev = await readFile(lastStartPath, "utf8");
+    const elapsed = Date.now() - Number(prev);
+    if (elapsed < 60_000) suppressStartup = true;
+  } catch {
+    /* first start or missing file */
+  }
+  await writeFile(lastStartPath, String(Date.now())).catch(() => {});
+
+  if (suppressStartup) {
+    console.log(
+      `[monitor] notifier restarted (suppressed telegram notification — rapid restart)`,
+    );
+  } else {
+    void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
+  }
   telegramNotifierTimeout = setTimeout(sendUpdate, intervalMs);
   telegramNotifierInterval = setInterval(sendUpdate, intervalMs);
 }
@@ -4198,6 +4282,9 @@ async function startProcess() {
     setTimeout(startProcess, waitSec * 1000);
     return;
   }
+  if (!(await ensurePreflightReady("start"))) {
+    return;
+  }
   await ensureLogDir();
   const activeLogPath = resolve(logDir, "orchestrator-active.log");
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
@@ -4495,6 +4582,7 @@ function applyConfig(nextConfig, options = {}) {
   const prevCodexEnabled = codexEnabled;
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
+  const prevPreflightEnabled = preflightEnabled;
 
   config = nextConfig;
   projectName = nextConfig.projectName;
@@ -4507,6 +4595,8 @@ function applyConfig(nextConfig, options = {}) {
   watchPath = resolve(nextConfig.watchPath);
   echoLogs = nextConfig.echoLogs;
   autoFixEnabled = nextConfig.autoFixEnabled;
+  preflightEnabled = nextConfig.preflightEnabled;
+  preflightRetryMs = nextConfig.preflightRetryMs;
   repoRoot = nextConfig.repoRoot;
   statusPath = nextConfig.statusPath;
   telegramPollLockPath = nextConfig.telegramPollLockPath;
@@ -4551,7 +4641,7 @@ function applyConfig(nextConfig, options = {}) {
   startEnvWatchers();
 
   if (prevTelegramInterval !== telegramIntervalMin) {
-    startTelegramNotifier();
+    void startTelegramNotifier();
   }
   if (!prevTelegramCommandEnabled && telegramCommandEnabled) {
     startTelegramCommandListener();
@@ -4570,6 +4660,10 @@ function applyConfig(nextConfig, options = {}) {
   }
   if (!prevCodexEnabled && codexEnabled) {
     void ensureCodexSdkReady();
+  }
+  if (prevPreflightEnabled && !preflightEnabled && preflightRetryTimer) {
+    clearTimeout(preflightRetryTimer);
+    preflightRetryTimer = null;
   }
 
   const nextArgs = scriptArgs?.join(" ") || "";
@@ -4773,7 +4867,7 @@ startProcess();
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
 }
-startTelegramNotifier();
+void startTelegramNotifier();
 
 // ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({

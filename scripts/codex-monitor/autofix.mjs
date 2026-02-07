@@ -620,7 +620,10 @@ export async function attemptAutoFix(opts) {
         `Crash: ${reason}\n\n` +
         `**Error indicators found:**\n` +
         (fallback.errorLines.length > 0
-          ? fallback.errorLines.slice(0, 10).map((l) => `• ${l}`).join("\n")
+          ? fallback.errorLines
+              .slice(0, 10)
+              .map((l) => `• ${l}`)
+              .join("\n")
           : "(no explicit error lines — possible SIGKILL/OOM)") +
         `\n\n**Suggested action:** Review the error indicators above. ` +
         `The main orchestrator script is \`scripts/ve-orchestrator.ps1\`. ` +

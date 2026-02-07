@@ -10,7 +10,7 @@
 #   DEPS     — go.mod, go.sum, pnpm-lock.yaml, package.json
 #   WORKFLOW — .github/workflows/ YAML files
 #   DOCS     — .md files, _docs/, docs/ (skip all checks)
-#   SCRIPTS  — scripts/codex-monitor/ (independent npm tooling — skip all checks)
+#   CODEX_MONITOR — scripts/codex-monitor/ (run codex-monitor tests)
 #   TERRAFORM — infra/terraform .tf files
 #
 # Bypass:      git push --no-verify
@@ -26,6 +26,7 @@
 #   VE_HOOK_SKIP_BUILD=1     Skip build
 #   VE_HOOK_SKIP_TEST=1      Skip unit tests (Go + Portal)
 #   VE_HOOK_SKIP_PORTAL=1    Skip ALL portal checks (lint, type-check, tests, build)
+#   VE_HOOK_SKIP_CODEX_MONITOR=1  Skip codex-monitor tests
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -78,6 +79,7 @@ HAS_DEPS_JS=false
 HAS_DEPS_GO=false
 HAS_ONLY_DOCS=false
 HAS_TERRAFORM=false
+HAS_CODEX_MONITOR=false
 
 CHANGED_FILES=""
 DIFF_SOURCE=""
@@ -129,7 +131,7 @@ else
     JS_DEP_FILES=$(echo "$JS_DEP_FILES" | sed '/^$/d' || true)
     GO_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '^go\.(mod|sum|work)$' || true)
     TF_FILES=$(echo "$CHANGED_FILES" | grep -E '^infra/terraform/.*\.tf$' || true)
-    NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/|^scripts/codex-monitor/)' || true)
+    NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/)' || true)
     CODEX_MONITOR_FILES=$(echo "$CHANGED_FILES" | grep -E '^scripts/codex-monitor/' || true)
 
     [ -n "$GO_FILES" ]     && HAS_GO=true
@@ -138,7 +140,8 @@ else
     [ -n "$JS_DEP_FILES" ] && HAS_DEPS_JS=true
     [ -n "$GO_DEP_FILES" ] && HAS_DEPS_GO=true
     [ -n "$TF_FILES" ] && HAS_TERRAFORM=true
-    [ -z "$NON_DOC_FILES" ] && HAS_ONLY_DOCS=true
+    [ -n "$CODEX_MONITOR_FILES" ] && HAS_CODEX_MONITOR=true
+    [ -z "$NON_DOC_FILES" ] && [ -z "$CODEX_MONITOR_FILES" ] && HAS_ONLY_DOCS=true
 
     hook_info "Changed file categories (diff: ${DIFF_SOURCE}):"
     $HAS_GO       && hook_step "Go files: $(echo "$GO_FILES" | wc -l | tr -d ' ') files"
@@ -147,7 +150,7 @@ else
     $HAS_DEPS_JS  && hook_step "JS dependencies changed"
     $HAS_DEPS_GO  && hook_step "Go dependencies changed"
     $HAS_TERRAFORM && hook_step "Terraform: $(echo "$TF_FILES" | wc -l | tr -d ' ') files"
-    [ -n "$CODEX_MONITOR_FILES" ] && hook_step "Codex Monitor: $(echo "$CODEX_MONITOR_FILES" | wc -l | tr -d ' ') files (independent tooling — no checks)"
+    [ -n "$CODEX_MONITOR_FILES" ] && hook_step "Codex Monitor: $(echo "$CODEX_MONITOR_FILES" | wc -l | tr -d ' ') files"
     $HAS_ONLY_DOCS && hook_step "Docs/workflows/tooling only — skipping code checks"
     echo ""
 fi
@@ -167,6 +170,7 @@ RUN_GO_BUILD=false; RUN_GO_TEST=false; RUN_MOD_VENDOR=false
 RUN_PRETTIER=false; RUN_PORTAL_LINT=false
 RUN_PORTAL_TYPECHECK=false; RUN_PORTAL_TEST=false; RUN_PORTAL_BUILD=false; RUN_PNPM_LOCK=false
 RUN_TERRAFORM_FMT=false
+RUN_CODEX_MONITOR_TEST=false
 
 if $HAS_GO || $HAS_DEPS_GO; then
     RUN_GO_VET=true; RUN_GOFMT=true; RUN_GO_LINT=true
@@ -180,10 +184,12 @@ if $HAS_PORTAL || $HAS_DEPS_JS; then
 fi
 $HAS_DEPS_JS && RUN_PNPM_LOCK=true
 $HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
+$HAS_CODEX_MONITOR && RUN_CODEX_MONITOR_TEST=true
 
 for flag in $RUN_GO_VET $RUN_GOFMT $RUN_GO_LINT $RUN_GO_BUILD $RUN_GO_TEST \
             $RUN_MOD_VENDOR $RUN_PRETTIER $RUN_PORTAL_LINT $RUN_PORTAL_TYPECHECK \
-            $RUN_PORTAL_TEST $RUN_PORTAL_BUILD $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT; do
+            $RUN_PORTAL_TEST $RUN_PORTAL_BUILD $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT \
+            $RUN_CODEX_MONITOR_TEST; do
     $flag && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 done
 
@@ -232,6 +238,36 @@ ensure_portal_deps() {
         fi
     fi
     return 0
+}
+
+# =========================================================================
+# CODEX MONITOR CHECKS
+# =========================================================================
+ensure_codex_monitor_deps() {
+    local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
+    if [ ! -f "$monitor_dir/package.json" ]; then
+        hook_warn "Codex Monitor package.json not found — skipping tests"
+        return 1
+    fi
+    if [ ! -d "$monitor_dir/node_modules" ]; then
+        if command -v npm >/dev/null 2>&1; then
+            hook_step "Installing codex-monitor dependencies..."
+            (cd "$monitor_dir" && npm install --ignore-scripts 2>&1)
+        else
+            hook_warn "npm not available — cannot install codex-monitor deps"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+check_codex_monitor_test() {
+    if ! ensure_codex_monitor_deps; then
+        hook_warn "Cannot run codex-monitor tests — deps not available"
+        return 1
+    fi
+    hook_step "Running codex-monitor tests (vitest)..."
+    (cd "$REPO_ROOT/scripts/codex-monitor" && npm test 2>&1)
 }
 
 # =========================================================================
@@ -547,6 +583,8 @@ else
     $RUN_PORTAL_BUILD   && { run_check "Portal build" VE_HOOK_SKIP_PORTAL check_portal_build || true; }
     # === JS dependency checks ===
     $RUN_PNPM_LOCK  && { run_check "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true; }
+    # === Codex Monitor checks ===
+    $RUN_CODEX_MONITOR_TEST && { run_check "Codex Monitor tests" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_test || true; }
     # === Terraform formatting ===
     $RUN_TERRAFORM_FMT && { run_check "terraform fmt" VE_HOOK_SKIP_TF check_terraform_fmt || true; }
 fi
