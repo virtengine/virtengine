@@ -455,11 +455,32 @@ Instructions:
   };
 }
 
+// Hard cap: if we hit this many failures in the window, actually exit.
+const MONITOR_FAILURE_HARD_CAP = 30;
+// Minimum interval between handleMonitorFailure executions (prevent Telegram spam).
+const MONITOR_FAILURE_COOLDOWN_MS = 5000;
+let lastMonitorFailureHandledAt = 0;
+
 async function handleMonitorFailure(reason, err) {
   if (monitorFailureHandling) return;
+  const now = Date.now();
+  // Rate-limit: don't re-enter within cooldown
+  if (now - lastMonitorFailureHandledAt < MONITOR_FAILURE_COOLDOWN_MS) return;
   monitorFailureHandling = true;
+  lastMonitorFailureHandledAt = now;
   const failureCount = recordMonitorFailure();
   const message = err && err.message ? err.message : String(err || reason);
+
+  // Hard cap: exit the process to break the loop for good
+  if (failureCount >= MONITOR_FAILURE_HARD_CAP) {
+    const msg = `🛑 codex-monitor hit hard failure cap (${failureCount}). Exiting to break crash loop.`;
+    console.error(`[monitor] ${msg}`);
+    if (telegramToken && telegramChatId) {
+      try { await sendTelegramMessage(msg); } catch { /* best effort */ }
+    }
+    process.exit(1);
+    return;
+  }
 
   try {
     await ensureLogDir();
@@ -477,9 +498,11 @@ async function handleMonitorFailure(reason, err) {
     await writeFile(crashPath, payload, "utf8");
 
     if (telegramToken && telegramChatId) {
-      void sendTelegramMessage(
-        `⚠️ codex-monitor exception (${reason}). Attempting recovery (count=${failureCount}).`,
-      );
+      try {
+        await sendTelegramMessage(
+          `⚠️ codex-monitor exception (${reason}). Attempting recovery (count=${failureCount}).`,
+        );
+      } catch { /* suppress Telegram errors during failure handling */ }
     }
 
     const fixResult = await attemptMonitorFix({
@@ -489,9 +512,11 @@ async function handleMonitorFailure(reason, err) {
 
     if (fixResult.fixed) {
       if (telegramToken && telegramChatId) {
-        void sendTelegramMessage(
-          `🛠️ codex-monitor auto-fix applied. Restarting monitor.\n${fixResult.outcome}`,
-        );
+        try {
+          await sendTelegramMessage(
+            `🛠️ codex-monitor auto-fix applied. Restarting monitor.\n${fixResult.outcome}`,
+          );
+        } catch { /* best effort */ }
       }
       restartSelf("monitor-fix-applied");
       return;
@@ -501,16 +526,21 @@ async function handleMonitorFailure(reason, err) {
       monitorSafeModeUntil = Date.now() + orchestratorPauseMs;
       const pauseMin = Math.round(orchestratorPauseMs / 60000);
       if (telegramToken && telegramChatId) {
-        void sendTelegramMessage(
-          `🛑 codex-monitor entering safe mode after repeated failures (${failureCount} in 10m). Pausing restarts for ${pauseMin} minutes.`,
-        );
+        try {
+          await sendTelegramMessage(
+            `🛑 codex-monitor entering safe mode after repeated failures (${failureCount} in 10m). Pausing restarts for ${pauseMin} minutes.`,
+          );
+        } catch { /* best effort */ }
       }
       return;
     }
   } catch (fatal) {
-    console.warn(
-      `[monitor] failure handler crashed: ${fatal.message || fatal}`,
-    );
+    // Use process.stderr to avoid EPIPE on stdout
+    try {
+      process.stderr.write(
+        `[monitor] failure handler crashed: ${fatal.message || fatal}\n`,
+      );
+    } catch { /* completely give up */ }
   } finally {
     monitorFailureHandling = false;
   }
@@ -2661,10 +2691,12 @@ async function startProcess() {
 
   const append = async (chunk) => {
     if (echoLogs) {
-      process.stdout.write(chunk);
+      try { process.stdout.write(chunk); } catch { /* EPIPE — ignore */ }
     }
     const text = chunk.toString();
-    await writeFile(activeLogPath, text, { flag: "a" });
+    try {
+      await writeFile(activeLogPath, text, { flag: "a" });
+    } catch { /* log file write failed — ignore */ }
     logRemainder += text;
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
@@ -2810,39 +2842,45 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
+// Stream noise patterns that should NEVER trigger recovery —
+// they happen when child processes die or pipes break and are harmless.
+function isStreamNoise(msg) {
+  return (
+    msg.includes("EPIPE") ||
+    msg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+    msg.includes("ERR_STREAM_DESTROYED") ||
+    msg.includes("write after end") ||
+    msg.includes("This socket has been ended") ||
+    msg.includes("Cannot read properties of null") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("socket hang up")
+  );
+}
+
 process.on("uncaughtException", (err) => {
-  // Suppress stream/child-process noise during graceful shutdown
-  if (shuttingDown) {
-    const msg = err?.message || "";
-    const isStreamNoise =
-      msg.includes("EPIPE") ||
-      msg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-      msg.includes("ERR_STREAM_DESTROYED") ||
-      msg.includes("write after end") ||
-      msg.includes("This socket has been ended") ||
-      msg.includes("Cannot read properties of null");
-    if (isStreamNoise) {
-      console.log(`[monitor] suppressed shutdown noise: ${msg}`);
-      return;
-    }
+  const msg = err?.message || "";
+  // Always suppress stream noise — not just during shutdown
+  if (isStreamNoise(msg)) {
+    try {
+      process.stderr.write(`[monitor] suppressed stream noise: ${msg}\n`);
+    } catch { /* even stderr might be broken */ }
+    return;
   }
+  if (shuttingDown) return;
   void handleMonitorFailure("uncaughtException", err);
 });
 
 process.on("unhandledRejection", (reason) => {
-  if (shuttingDown) {
-    const msg = reason?.message || String(reason || "");
-    const isStreamNoise =
-      msg.includes("EPIPE") ||
-      msg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-      msg.includes("ERR_STREAM_DESTROYED") ||
-      msg.includes("write after end") ||
-      msg.includes("This socket has been ended");
-    if (isStreamNoise) {
-      console.log(`[monitor] suppressed shutdown noise: ${msg}`);
-      return;
-    }
+  const msg = reason?.message || String(reason || "");
+  // Always suppress stream noise
+  if (isStreamNoise(msg)) {
+    try {
+      process.stderr.write(`[monitor] suppressed stream noise: ${msg}\n`);
+    } catch { /* even stderr might be broken */ }
+    return;
   }
+  if (shuttingDown) return;
   const err =
     reason instanceof Error ? reason : new Error(String(reason || ""));
   void handleMonitorFailure("unhandledRejection", err);
