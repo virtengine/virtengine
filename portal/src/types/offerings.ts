@@ -86,7 +86,7 @@ export interface Provider {
   totalOrders: number;
   regions?: string[];
   website?: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export type OfferingSortField = 'name' | 'price' | 'reputation' | 'orders' | 'created';
@@ -99,6 +99,9 @@ export interface OfferingFilters {
     max: number;
   } | null;
   minReputation: number;
+  minCpuCores: number;
+  minMemoryGB: number;
+  minGpuCount: number;
   tags: string[];
   search: string;
   state: OfferingState | 'all';
