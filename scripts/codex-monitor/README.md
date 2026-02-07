@@ -232,12 +232,138 @@ codex-monitor [options]
 
 ## Telegram Bot
 
-### Setup
+The Telegram bot provides real-time notifications and interactive control of your orchestrator. It sends alerts for errors, completed tasks, merged PRs, and lets you manage tasks directly from Telegram.
 
-1. Open Telegram → search **@BotFather** → `/newbot` → copy token
-2. Set `TELEGRAM_BOT_TOKEN` in `.env`
-3. Run `codex-monitor-chat-id` → send a message to your bot → copy the chat ID
-4. Set `TELEGRAM_CHAT_ID` in `.env`
+### Setup Guide
+
+#### Step 1: Create Your Bot
+
+1. Open **Telegram** (mobile app or [web.telegram.org](https://web.telegram.org))
+2. Search for **@BotFather** (official Telegram bot for creating bots)
+3. Start a chat and send: `/newbot`
+4. Follow the prompts:
+   - Choose a **display name** (e.g., "MyProject Monitor")
+   - Choose a **username** (must end in 'bot', e.g., "myproject_monitor_bot")
+5. BotFather will reply with your **bot token** - it looks like:
+   ```
+   1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890
+   ```
+6. **Copy this token** - you'll need it in the next step
+
+#### Step 2: Get Your Chat ID
+
+You need your chat ID so the bot knows where to send messages.
+
+**Option A: Using the setup wizard** (Recommended)
+
+Run the setup wizard and it will guide you:
+
+```bash
+codex-monitor --setup
+```
+
+When prompted for Telegram setup, the wizard will:
+
+1. Ask for your bot token
+2. Provide a link to message your bot
+3. Automatically detect your chat ID when you send a message
+
+**Option B: Manual setup**
+
+1. Start a conversation with your bot:
+   - Search for your bot's username in Telegram (e.g., @myproject_monitor_bot)
+   - Click **START** or send any message (e.g., "Hello")
+
+2. Get your chat ID using the helper utility:
+
+   ```bash
+   codex-monitor-chat-id
+   ```
+
+   Or manually via curl:
+
+   ```bash
+   curl -s "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates" | jq '.result[0].message.chat.id'
+   ```
+
+3. Copy the chat ID (it's a number, e.g., `123456789`)
+
+#### Step 3: Configure Environment Variables
+
+Add to your `.env` file (in the codex-monitor directory):
+
+```bash
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890
+TELEGRAM_CHAT_ID=123456789
+
+# Optional: Customize notification interval (default: 5 minutes)
+TELEGRAM_INTERVAL_MIN=5
+```
+
+Or run the setup wizard to configure automatically:
+
+```bash
+codex-monitor --setup
+```
+
+#### Verification
+
+To verify your setup works:
+
+1. Start codex-monitor:
+
+   ```bash
+   codex-monitor
+   ```
+
+2. You should receive a welcome message in Telegram within a few seconds
+
+3. Try sending `/status` to your bot - it should respond with the current orchestrator status
+
+### Troubleshooting
+
+#### "409 Conflict: terminated by other getUpdates request"
+
+Only one process can poll a Telegram bot at a time. This happens if:
+
+- Multiple codex-monitor instances are running
+- You have another tool/script polling the same bot
+
+**Fix:**
+
+1. Ensure only one codex-monitor is running (the singleton lock should prevent this)
+2. Check for other scripts using the same bot token
+3. Wait 30 seconds for the previous connection to timeout
+
+#### Bot not responding to commands
+
+1. Verify your bot token is correct:
+
+   ```bash
+   curl -s "https://api.telegram.org/bot<YOUR_TOKEN>/getMe"
+   ```
+
+   Should return bot info, not `{"ok":false,"error_code":401}`
+
+2. Verify your chat ID is correct:
+
+   ```bash
+   curl -s "https://api.telegram.org/bot<YOUR_TOKEN>/sendMessage?chat_id=<YOUR_CHAT_ID>&text=Test"
+   ```
+
+   Should send "Test" message to your Telegram
+
+3. Check codex-monitor logs for errors:
+   ```bash
+   tail -f logs/monitor-*.log | grep -i telegram
+   ```
+
+#### Not receiving notifications
+
+1. Check that `TELEGRAM_INTERVAL_MIN` is not too high (default is 5 minutes)
+2. Ensure the orchestrator is actually running (check with `/status`)
+3. Verify the monitor process is alive: `ps aux | grep codex-monitor`
 
 ### Commands
 
@@ -351,11 +477,13 @@ These scripts live directly in the `codex-monitor/` directory, making it self-co
 ### Using Default Scripts
 
 The default scripts expect to be run from the repository root and require:
+
 - Vibe-Kanban API running (`vibe-kanban` CLI installed)
 - GitHub CLI (`gh`) for PR operations
 - PowerShell 7+ for cross-platform support
 
 Example invocation:
+
 ```bash
 # Via codex-monitor (recommended)
 codex-monitor --script ./ve-orchestrator.ps1 --args "-MaxParallel 6"

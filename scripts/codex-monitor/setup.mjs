@@ -711,21 +711,221 @@ async function main() {
 
     // ── Telegram ──────────────────────────────────────────
     heading("Telegram Bot");
+    info(
+      "The Telegram bot sends real-time notifications and lets you control the orchestrator",
+    );
+    info("via commands like /status, /tasks, /restart, etc.");
+    console.log();
+
     const wantTelegram = await prompt.confirm(
       "Set up Telegram notifications?",
       true,
     );
     if (wantTelegram) {
-      console.log("  Create a bot via @BotFather on Telegram.\n");
-      env.TELEGRAM_BOT_TOKEN = await prompt.ask(
-        "Bot Token",
-        process.env.TELEGRAM_BOT_TOKEN || "",
+      // Step 1: Create bot
+      console.log(
+        "\n" + chalk.bold("Step 1: Create Your Bot") + chalk.dim(" (if you haven't already)"),
       );
-      if (env.TELEGRAM_BOT_TOKEN) {
-        env.TELEGRAM_CHAT_ID = await prompt.ask(
-          "Chat ID (run `codex-monitor-chat-id` to find it)",
-          process.env.TELEGRAM_CHAT_ID || "",
+      console.log("  1. Open Telegram and search for " + chalk.cyan("@BotFather"));
+      console.log("  2. Send: " + chalk.cyan("/newbot"));
+      console.log("  3. Choose a display name (e.g., 'MyProject Monitor')");
+      console.log(
+        "  4. Choose a username ending in 'bot' (e.g., 'myproject_monitor_bot')",
+      );
+      console.log("  5. Copy the bot token BotFather gives you");
+      console.log();
+
+      const hasBotReady = await prompt.confirm(
+        "Have you created your bot and have the token ready?",
+        false,
+      );
+
+      if (!hasBotReady) {
+        warn("No problem! You can set up Telegram later by:");
+        console.log("  1. Adding TELEGRAM_BOT_TOKEN to .env");
+        console.log("  2. Adding TELEGRAM_CHAT_ID to .env");
+        console.log("  3. Or re-running: codex-monitor --setup");
+        console.log();
+      } else {
+        // Step 2: Get bot token
+        console.log(
+          "\n" + chalk.bold("Step 2: Enter Your Bot Token"),
         );
+        console.log(
+          chalk.dim("  Looks like: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890"),
+        );
+        console.log();
+
+        env.TELEGRAM_BOT_TOKEN = await prompt.ask(
+          "Bot Token",
+          process.env.TELEGRAM_BOT_TOKEN || "",
+        );
+
+        if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_TOKEN.length > 20) {
+          // Validate token format
+          const tokenValid = /^\d+:[A-Za-z0-9_-]+$/.test(
+            env.TELEGRAM_BOT_TOKEN,
+          );
+          if (!tokenValid) {
+            warn(
+              "Token format looks incorrect. Make sure you copied the full token from BotFather.",
+            );
+          } else {
+            info("✓ Token format looks good");
+          }
+
+          // Step 3: Get chat ID
+          console.log(
+            "\n" + chalk.bold("Step 3: Get Your Chat ID"),
+          );
+          console.log(
+            "  Your chat ID tells the bot where to send messages.",
+          );
+          console.log();
+
+          const knowsChatId = await prompt.confirm(
+            "Do you already know your chat ID?",
+            false,
+          );
+
+          if (knowsChatId) {
+            env.TELEGRAM_CHAT_ID = await prompt.ask(
+              "Chat ID (numeric, e.g., 123456789)",
+              process.env.TELEGRAM_CHAT_ID || "",
+            );
+          } else {
+            // Guide user to get chat ID
+            console.log(
+              "\n" +
+                chalk.cyan("To get your chat ID:") +
+                "\n",
+            );
+            console.log("  1. Open Telegram and search for your bot's username");
+            console.log("  2. Click " + chalk.cyan("START") + " or send any message (e.g., 'Hello')");
+            console.log("  3. Come back here and we'll detect your chat ID");
+            console.log();
+
+            const ready = await prompt.confirm(
+              "Ready? (I've messaged my bot)",
+              false,
+            );
+
+            if (ready) {
+              // Try to fetch chat ID from Telegram API
+              info("Fetching your chat ID from Telegram...");
+              try {
+                const response = await fetch(
+                  `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates`,
+                );
+                const data = await response.json();
+
+                if (data.ok && data.result && data.result.length > 0) {
+                  // Find the most recent message
+                  const latestMessage = data.result[data.result.length - 1];
+                  const chatId = latestMessage?.message?.chat?.id;
+
+                  if (chatId) {
+                    env.TELEGRAM_CHAT_ID = String(chatId);
+                    info(`✓ Found your chat ID: ${chatId}`);
+                    console.log();
+                  } else {
+                    warn("Couldn't find a chat ID. Make sure you sent a message to your bot.");
+                    env.TELEGRAM_CHAT_ID = await prompt.ask(
+                      "Enter chat ID manually",
+                      "",
+                    );
+                  }
+                } else {
+                  warn(
+                    "No messages found. Make sure you sent a message to your bot first.",
+                  );
+                  console.log(
+                    chalk.dim(
+                      "  Or run: codex-monitor-chat-id (after starting the bot)",
+                    ),
+                  );
+                  env.TELEGRAM_CHAT_ID = await prompt.ask(
+                    "Enter chat ID manually (or leave empty to set up later)",
+                    "",
+                  );
+                }
+              } catch (err) {
+                warn(`Failed to fetch chat ID: ${err.message}`);
+                console.log(
+                  chalk.dim(
+                    "  You can run: codex-monitor-chat-id (after starting the bot)",
+                  ),
+                );
+                env.TELEGRAM_CHAT_ID = await prompt.ask(
+                  "Enter chat ID manually (or leave empty to set up later)",
+                  "",
+                );
+              }
+            } else {
+              console.log();
+              info("No problem! You can get your chat ID later by:");
+              console.log(
+                "  • Running: " + chalk.cyan("codex-monitor-chat-id") + " (after starting codex-monitor)",
+              );
+              console.log(
+                "  • Or manually: " +
+                  chalk.cyan(
+                    "curl 'https://api.telegram.org/bot<TOKEN>/getUpdates'",
+                  ),
+              );
+              console.log(
+                "  Then add TELEGRAM_CHAT_ID to .env",
+              );
+              console.log();
+            }
+          }
+
+          // Step 4: Verify setup
+          if (env.TELEGRAM_CHAT_ID) {
+            console.log("\n" + chalk.bold("Step 4: Test Your Setup"));
+            const testNow = await prompt.confirm(
+              "Send a test message to verify setup?",
+              true,
+            );
+
+            if (testNow) {
+              info("Sending test message...");
+              try {
+                const testMsg =
+                  "🤖 *Telegram Bot Test*\n\n" +
+                  "Your codex-monitor Telegram bot is configured correctly!\n\n" +
+                  `Project: ${config.projectName || "Unknown"}\n` +
+                  "Try: /status, /tasks, /help";
+
+                const response = await fetch(
+                  `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: env.TELEGRAM_CHAT_ID,
+                      text: testMsg,
+                      parse_mode: "Markdown",
+                    }),
+                  },
+                );
+
+                const result = await response.json();
+                if (result.ok) {
+                  info("✓ Test message sent! Check your Telegram.");
+                } else {
+                  warn(
+                    `Test message failed: ${result.description || "Unknown error"}`,
+                  );
+                }
+              } catch (err) {
+                warn(`Failed to send test message: ${err.message}`);
+              }
+            }
+          }
+        } else {
+          warn("Bot token is required for Telegram setup. You can add it to .env later.");
+        }
       }
     }
 

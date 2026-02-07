@@ -1330,6 +1330,10 @@ async function findVkProjectId() {
  */
 async function getRepoId() {
   if (cachedRepoId) return cachedRepoId;
+  if (process.env.VK_REPO_ID) {
+    cachedRepoId = process.env.VK_REPO_ID;
+    return cachedRepoId;
+  }
 
   try {
     // Use the flat /api/repos endpoint (not nested under projects)
