@@ -1,0 +1,15 @@
+{
+  "version": "dev",
+  "ceremony_hash": "",
+  "contributor_count": 1,
+  "contributors": [
+    "dev-setup"
+  ],
+  "circuit_hashes": {
+    "age": "c0b7bf182f5235a4ecd4e72b2cb51d9f975b71e1be36832f4f90807f1d1ac303",
+    "residency": "2ffb8e2516e99bc550954302ee89a19cc1af0ef9c2b12fbe0b47043aa0aba1b5",
+    "score": "9b8d8bff308526001ce8a8ce6be170bdc3a8763c087892eb651c834b5b2f4f45"
+  },
+  "generated_at": "2026-02-07T16:32:06Z",
+  "notes": "dev setup (single-party)"
+}
