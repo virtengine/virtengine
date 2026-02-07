@@ -110,6 +110,8 @@ let {
   restartDelayMs,
   maxRestarts,
   logDir,
+  logMaxSizeMb,
+  logCleanupIntervalMin,
   watchEnabled,
   watchPath: configWatchPath,
   echoLogs,
@@ -3939,6 +3941,65 @@ async function ensureLogDir() {
   await mkdir(logDir, { recursive: true });
 }
 
+/**
+ * Truncate the log directory to stay within logMaxSizeMb.
+ * Deletes oldest files first until total size is under the limit.
+ * Returns { deletedCount, freedBytes, totalBefore, totalAfter }.
+ */
+async function truncateOldLogs() {
+  if (!logMaxSizeMb || logMaxSizeMb <= 0) return { deletedCount: 0, freedBytes: 0 };
+  const { readdir, stat: fsStat } = await import("node:fs/promises");
+  const maxBytes = logMaxSizeMb * 1024 * 1024;
+  let entries;
+  try {
+    entries = await readdir(logDir);
+  } catch {
+    return { deletedCount: 0, freedBytes: 0 };
+  }
+  // Gather file info
+  const files = [];
+  for (const name of entries) {
+    const filePath = resolve(logDir, name);
+    try {
+      const s = await fsStat(filePath);
+      if (s.isFile()) {
+        files.push({ name, path: filePath, size: s.size, mtimeMs: s.mtimeMs });
+      }
+    } catch {
+      /* skip inaccessible files */
+    }
+  }
+  const totalBefore = files.reduce((sum, f) => sum + f.size, 0);
+  if (totalBefore <= maxBytes) {
+    return { deletedCount: 0, freedBytes: 0, totalBefore, totalAfter: totalBefore };
+  }
+  // Sort oldest first
+  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  let currentSize = totalBefore;
+  let deletedCount = 0;
+  let freedBytes = 0;
+  for (const f of files) {
+    if (currentSize <= maxBytes) break;
+    try {
+      await unlink(f.path);
+      currentSize -= f.size;
+      freedBytes += f.size;
+      deletedCount++;
+    } catch {
+      /* skip locked/active files */
+    }
+  }
+  const totalAfter = currentSize;
+  if (deletedCount > 0) {
+    const mbFreed = (freedBytes / 1024 / 1024).toFixed(1);
+    const mbAfter = (totalAfter / 1024 / 1024).toFixed(1);
+    console.log(
+      `[monitor] log rotation: deleted ${deletedCount} old log files, freed ${mbFreed} MB (${mbAfter} MB / ${logMaxSizeMb} MB limit)`,
+    );
+  }
+  return { deletedCount, freedBytes, totalBefore, totalAfter };
+}
+
 async function finalizeActiveLog(activePath, archivePath) {
   try {
     await rename(activePath, archivePath);
@@ -5041,6 +5102,23 @@ const mergedPRCheckIntervalMs = 10 * 60 * 1000;
 setInterval(() => {
   void checkMergedPRsAndUpdateTasks();
 }, mergedPRCheckIntervalMs);
+
+// ── Log rotation: truncate oldest logs when folder exceeds size limit ───────
+if (logMaxSizeMb > 0) {
+  // Run once at startup (delayed 10s)
+  setTimeout(() => void truncateOldLogs(), 10 * 1000);
+  if (logCleanupIntervalMin > 0) {
+    const logCleanupIntervalMs = logCleanupIntervalMin * 60 * 1000;
+    setInterval(() => void truncateOldLogs(), logCleanupIntervalMs);
+    console.log(
+      `[monitor] log rotation enabled — max ${logMaxSizeMb} MB, checking every ${logCleanupIntervalMin} min`,
+    );
+  } else {
+    console.log(
+      `[monitor] log rotation enabled — max ${logMaxSizeMb} MB (startup check only)`,
+    );
+  }
+}
 
 // Run once immediately after startup (delayed by 30s to let things settle)
 setTimeout(() => {

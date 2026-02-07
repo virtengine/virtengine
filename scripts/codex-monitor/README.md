@@ -305,6 +305,8 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `CODEX_MONITOR_MODE`                  | `virtengine`/`generic`         | Mode override                                                                                                          |
 | `CODEX_MONITOR_PREFLIGHT_DISABLED`    | `0`                            | Disable preflight checks                                                                                               |
 | `CODEX_MONITOR_PREFLIGHT_RETRY_MS`    | `300000`                       | Preflight retry interval (ms)                                                                                          |
+| `LOG_MAX_SIZE_MB`                     | `500`                          | Max total log folder size in MB (0 = unlimited)                                                                        |
+| `LOG_CLEANUP_INTERVAL_MIN`            | `30`                           | How often to check log folder size (0 = startup only)                                                                  |
 
 ### Shared Cloud Workspaces
 
@@ -772,6 +774,100 @@ The Smart PR flow handles this automatically. The monitor detects this log line 
 ### Vibe-Kanban not reachable
 
 The monitor auto-spawns VK if not running. Set `VK_NO_SPAWN=1` to manage VK separately. Verify `VK_BASE_URL` matches your setup.
+
+## Best Practices for Autonomous Agents
+
+When AI agents work autonomously — committing, pushing, and creating PRs without human review — you need guardrails that prevent broken code from shipping. codex-monitor is designed to work with these safety layers:
+
+### 1. Required Status Checks in GitHub
+
+Configure **branch protection rules** on your `main` branch so PRs cannot merge unless CI passes:
+
+```
+Repository Settings → Branches → Branch protection rules → main
+  ✅ Require status checks to pass before merging
+  ✅ Require branches to be up to date before merging
+  Status checks:
+    • lint
+    • typecheck
+    • unit-tests
+    • build
+```
+
+This is your last line of defense. Even if an agent pushes garbage, it cannot merge without green CI. codex-monitor's Smart PR flow creates PRs through VK API — GitHub enforces the merge gate.
+
+### 2. Pre-push and Pre-commit Hooks
+
+Git hooks catch problems *before* code leaves the machine:
+
+```bash
+# .githooks/pre-commit — auto-format + lint staged files
+gofmt, prettier, eslint --fix
+
+# .githooks/pre-push — full quality gate per category
+Go:    go vet → gofmt → golangci-lint → build → unit tests
+Portal: prettier → eslint → typecheck → tests → build
+codex-monitor: node --check (syntax) → vitest
+```
+
+codex-monitor's pre-push hook runs `node --check` on all `.mjs` files before any push. This caught a SyntaxError crash that would have shipped otherwise. The hook is smart — it only runs checks for file categories that actually changed.
+
+**Key principle:** Agents don't get `--no-verify`. The hooks are mandatory.
+
+### 3. Strong Test Suite
+
+Tests are the fastest feedback loop for agents. codex-monitor itself runs:
+
+- **Syntax validation** (`node --check`) — catches parse errors in <3 seconds
+- **Unit tests** (vitest) — 85+ tests covering config, autofix, presence, workspace registry
+- **`pretest` hook** — syntax check runs automatically before every `npm test`
+
+For your project, ensure agents can run tests quickly:
+
+```json
+// package.json — make `npm test` comprehensive
+{
+  "scripts": {
+    "syntax:check": "node --check *.mjs",
+    "pretest": "npm run syntax:check",
+    "test": "vitest run"
+  }
+}
+```
+
+### 4. Error Loop Detection
+
+codex-monitor watches agent output for repeating errors. When it sees the same error 4+ times in 10 minutes, it triggers AI autofix — preventing agents from burning tokens on infinite loops.
+
+### 5. Stale Attempt Cleanup
+
+Agents sometimes crash mid-task, leaving behind worktrees and branches with zero commits. The maintenance sweep detects these (0 commits, far behind main) and archives them automatically.
+
+### 6. Log Rotation
+
+Agent sessions generate substantial log output. codex-monitor supports automatic log folder size limits — when the log directory exceeds `LOG_MAX_SIZE_MB` (default: 500 MB), the oldest log files are deleted until the folder is under the limit. This prevents disk exhaustion during long autonomous runs.
+
+```env
+LOG_MAX_SIZE_MB=500          # Max total log folder size (0 = unlimited)
+LOG_CLEANUP_INTERVAL_MIN=30  # How often to check (default: 30 min)
+```
+
+### 7. Singleton Lock
+
+Only one codex-monitor instance runs per project. The maintenance module acquires a lock file — if another instance is already running, the new one exits immediately. This prevents duplicate agents, PR conflicts, and Telegram polling errors.
+
+### Recommended Stack
+
+| Layer                | Tool                          | Purpose                             |
+| -------------------- | ----------------------------- | ----------------------------------- |
+| Merge gate           | GitHub branch protection      | PRs can't merge without green CI    |
+| Push gate            | Pre-push hooks (`.githooks/`) | Lint, typecheck, test before push   |
+| Commit gate          | Pre-commit hooks              | Auto-format, lint staged files      |
+| Runtime guard        | codex-monitor autofix         | Detect + fix error loops            |
+| Syntax guard         | `node --check` in pre-push    | Catch parse errors in <3s           |
+| Disk guard           | Log rotation                  | Auto-prune oldest logs by size cap  |
+| Process guard        | Singleton lock                | One monitor per project             |
+| Staleness guard      | Maintenance sweep             | Archive dead worktrees/branches     |
 
 ## License
 

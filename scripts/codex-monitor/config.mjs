@@ -887,6 +887,16 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.logDir ||
       resolve(configDir, "logs"),
   );
+  // Max total size of the log directory in MB. 0 = unlimited.
+  const logMaxSizeMb = Number(
+    process.env.LOG_MAX_SIZE_MB ?? configData.logMaxSizeMb ?? 500,
+  );
+  // How often to check log folder size (minutes). 0 = only at startup.
+  const logCleanupIntervalMin = Number(
+    process.env.LOG_CLEANUP_INTERVAL_MIN ??
+      configData.logCleanupIntervalMin ??
+      30,
+  );
 
   // ── Agent SDK Selection ───────────────────────────────────
   const agentSdk = resolveAgentSdkConfig();
@@ -1074,6 +1084,8 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Logging
     logDir,
+    logMaxSizeMb,
+    logCleanupIntervalMin,
 
     // Agent SDK
     agentSdk,
