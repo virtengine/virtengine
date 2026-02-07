@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,12 +52,15 @@ func NewRealAdyenAdapter(config AdyenConfig) (Gateway, error) {
 		return nil, ErrGatewayNotConfigured
 	}
 
-	baseURL := "https://checkout-test.adyen.com/v71"
-	if config.Environment == "live" {
-		if config.LiveEndpointURLPrefix == "" {
-			return nil, fmt.Errorf("live endpoint URL prefix required for live environment: %w", ErrGatewayNotConfigured)
+	baseURL := strings.TrimRight(config.APIPrefix, "/")
+	if baseURL == "" {
+		baseURL = "https://checkout-test.adyen.com/v71"
+		if config.Environment == "live" {
+			if config.LiveEndpointURLPrefix == "" {
+				return nil, fmt.Errorf("live endpoint URL prefix required for live environment: %w", ErrGatewayNotConfigured)
+			}
+			baseURL = fmt.Sprintf("https://%s-checkout-live.adyenpayments.com/checkout/v71", config.LiveEndpointURLPrefix)
 		}
-		baseURL = fmt.Sprintf("https://%s-checkout-live.adyenpayments.com/checkout/v71", config.LiveEndpointURLPrefix)
 	}
 
 	return &RealAdyenAdapter{
@@ -81,7 +85,7 @@ func (a *RealAdyenAdapter) IsHealthy(ctx context.Context) bool {
 		"merchantAccount": a.config.MerchantAccount,
 	}
 
-	_, err := a.doRequest(ctx, "POST", "/paymentMethods", req)
+	_, err := a.doRequest(ctx, "POST", "/paymentMethods", req, "")
 	return err == nil
 }
 
@@ -162,7 +166,7 @@ func (a *RealAdyenAdapter) DetachPaymentMethod(ctx context.Context, paymentMetho
 		"recurringDetailReference": paymentMethodID,
 	}
 
-	_, err := a.doRequest(ctx, "POST", "/disable", reqBody)
+	_, err := a.doRequest(ctx, "POST", "/disable", reqBody, "")
 	return err
 }
 
@@ -174,7 +178,7 @@ func (a *RealAdyenAdapter) ListPaymentMethods(ctx context.Context, customerID st
 		"channel":          "Web",
 	}
 
-	resp, err := a.doRequest(ctx, "POST", "/paymentMethods", reqBody)
+	resp, err := a.doRequest(ctx, "POST", "/paymentMethods", reqBody, "")
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +242,9 @@ func (a *RealAdyenAdapter) CreatePaymentIntent(ctx context.Context, req PaymentI
 		reqBody["shopperInteraction"] = "ContAuth"
 		reqBody["recurringProcessingModel"] = "CardOnFile"
 	}
-	if req.Description != "" {
+	if req.StatementDescriptor != "" {
+		reqBody["shopperStatement"] = req.StatementDescriptor
+	} else if req.Description != "" {
 		reqBody["shopperStatement"] = req.Description
 	}
 	if req.ReturnURL != "" {
@@ -259,7 +265,7 @@ func (a *RealAdyenAdapter) CreatePaymentIntent(ctx context.Context, req PaymentI
 		reqBody["authenticationOnly"] = false
 	}
 
-	resp, err := a.doRequest(ctx, "POST", "/payments", reqBody)
+	resp, err := a.doRequest(ctx, "POST", "/payments", reqBody, req.IdempotencyKey)
 	if err != nil {
 		return PaymentIntent{}, err
 	}
@@ -303,7 +309,7 @@ func (a *RealAdyenAdapter) ConfirmPaymentIntent(ctx context.Context, paymentInte
 		reqBody["storedPaymentMethodId"] = paymentMethodID
 	}
 
-	resp, err := a.doRequest(ctx, "POST", "/payments/details", reqBody)
+	resp, err := a.doRequest(ctx, "POST", "/payments/details", reqBody, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
@@ -328,7 +334,7 @@ func (a *RealAdyenAdapter) CancelPaymentIntent(ctx context.Context, paymentInten
 		reqBody["reference"] = fmt.Sprintf("cancel_%s_%s", paymentIntentID, reason)
 	}
 
-	_, err := a.doRequest(ctx, "POST", "/cancels", reqBody)
+	_, err := a.doRequest(ctx, "POST", "/cancels", reqBody, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
@@ -354,7 +360,7 @@ func (a *RealAdyenAdapter) CapturePaymentIntent(ctx context.Context, paymentInte
 		}
 	}
 
-	_, err := a.doRequest(ctx, "POST", "/captures", reqBody)
+	_, err := a.doRequest(ctx, "POST", "/captures", reqBody, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
@@ -398,7 +404,7 @@ func (a *RealAdyenAdapter) CreateRefund(ctx context.Context, req RefundRequest) 
 		reqBody["metadata"] = req.Metadata
 	}
 
-	resp, err := a.doRequest(ctx, "POST", "/refunds", reqBody)
+	resp, err := a.doRequest(ctx, "POST", "/refunds", reqBody, req.IdempotencyKey)
 	if err != nil {
 		return Refund{}, err
 	}
@@ -446,23 +452,35 @@ func (a *RealAdyenAdapter) ValidateWebhook(payload []byte, signature string) err
 		return nil // HMAC validation disabled
 	}
 
-	// Decode the HMAC key from base64
-	hmacKey, err := base64.StdEncoding.DecodeString(a.config.HMACKey)
+	hmacKey, err := decodeAdyenHmacKey(a.config.HMACKey)
 	if err != nil {
-		// Try hex decoding as fallback
-		hmacKey, err = hex.DecodeString(a.config.HMACKey)
-		if err != nil {
-			return ErrWebhookSignatureInvalid
-		}
+		return ErrWebhookSignatureInvalid
 	}
 
-	// Compute expected signature
-	mac := hmac.New(sha256.New, hmacKey)
-	mac.Write(payload)
-	expectedSig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	var notification adyenNotificationRequest
+	if err := json.Unmarshal(payload, &notification); err != nil {
+		return err
+	}
 
-	if !hmac.Equal([]byte(signature), []byte(expectedSig)) {
+	if len(notification.NotificationItems) == 0 {
 		return ErrWebhookSignatureInvalid
+	}
+
+	normalizedHeaderSig := strings.TrimSpace(signature)
+	for _, item := range notification.NotificationItems {
+		requestItem := item.NotificationRequestItem
+		itemSig := adyenExtractSignature(requestItem.AdditionalData)
+		if itemSig == "" && normalizedHeaderSig != "" && len(notification.NotificationItems) == 1 {
+			itemSig = normalizedHeaderSig
+		}
+		if itemSig == "" {
+			return ErrWebhookSignatureInvalid
+		}
+
+		expected := adyenComputeHmacSignature(hmacKey, requestItem)
+		if !hmac.Equal([]byte(itemSig), []byte(expected)) {
+			return ErrWebhookSignatureInvalid
+		}
 	}
 
 	return nil
@@ -557,7 +575,7 @@ func (a *RealAdyenAdapter) GetDispute(ctx context.Context, disputeID string) (Di
 	// Note: Adyen's Disputes API requires separate enablement and may have different
 	// base URL. This is a simplified implementation using the Checkout API path structure.
 
-	resp, err := a.doRequest(ctx, "GET", fmt.Sprintf("/disputes/%s", disputeID), nil)
+	resp, err := a.doRequest(ctx, "GET", fmt.Sprintf("/disputes/%s", disputeID), nil, "")
 	if err != nil {
 		// If API call fails, return minimal dispute info
 		// In production, this would query a local database populated by webhooks
@@ -584,7 +602,7 @@ func (a *RealAdyenAdapter) ListDisputes(ctx context.Context, paymentIntentID str
 		"paymentPspReference": paymentIntentID,
 	}
 
-	resp, err := a.doRequest(ctx, "POST", "/disputes", reqBody)
+	resp, err := a.doRequest(ctx, "POST", "/disputes", reqBody, "")
 	if err != nil {
 		// Return empty list if API fails
 		return []Dispute{}, nil
@@ -636,7 +654,7 @@ func (a *RealAdyenAdapter) SubmitDisputeEvidence(ctx context.Context, disputeID 
 		reqBody["defenseDocuments"] = defenseDocs
 	}
 
-	_, err := a.doRequest(ctx, "POST", fmt.Sprintf("/disputes/%s/defend", disputeID), reqBody)
+	_, err := a.doRequest(ctx, "POST", fmt.Sprintf("/disputes/%s/defend", disputeID), reqBody, "")
 	if err != nil {
 		return err
 	}
@@ -651,7 +669,7 @@ func (a *RealAdyenAdapter) AcceptDispute(ctx context.Context, disputeID string) 
 		"merchantAccount": a.config.MerchantAccount,
 	}
 
-	_, err := a.doRequest(ctx, "POST", fmt.Sprintf("/disputes/%s/accept", disputeID), reqBody)
+	_, err := a.doRequest(ctx, "POST", fmt.Sprintf("/disputes/%s/accept", disputeID), reqBody, "")
 	if err != nil {
 		return err
 	}
@@ -745,8 +763,99 @@ func mapAdyenDisputeReason(reason string) DisputeReason {
 // Helper Functions
 // ============================================================================
 
+type adyenNotificationRequest struct {
+	NotificationItems []struct {
+		NotificationRequestItem adyenNotificationRequestItem `json:"NotificationRequestItem"`
+	} `json:"notificationItems"`
+}
+
+type adyenNotificationRequestItem struct {
+	EventCode         string `json:"eventCode"`
+	EventDate         string `json:"eventDate"`
+	PSPReference      string `json:"pspReference"`
+	OriginalReference string `json:"originalReference"`
+	MerchantAccount   string `json:"merchantAccount"`
+	MerchantReference string `json:"merchantReference"`
+	Success           string `json:"success"`
+	Amount            struct {
+		Value    int64  `json:"value"`
+		Currency string `json:"currency"`
+	} `json:"amount"`
+	AdditionalData map[string]interface{} `json:"additionalData"`
+}
+
+func decodeAdyenHmacKey(hmacKey string) ([]byte, error) {
+	trimmed := strings.TrimSpace(hmacKey)
+	if trimmed == "" {
+		return nil, ErrWebhookSignatureInvalid
+	}
+
+	if decoded, err := base64.StdEncoding.DecodeString(trimmed); err == nil {
+		return decoded, nil
+	}
+	if decoded, err := hex.DecodeString(trimmed); err == nil {
+		return decoded, nil
+	}
+
+	return nil, ErrWebhookSignatureInvalid
+}
+
+func adyenSignaturePayload(item adyenNotificationRequestItem) string {
+	amountValue := strconv.FormatInt(item.Amount.Value, 10)
+	parts := []string{
+		item.PSPReference,
+		item.OriginalReference,
+		item.MerchantAccount,
+		item.MerchantReference,
+		amountValue,
+		item.Amount.Currency,
+		item.EventCode,
+		item.Success,
+	}
+	return strings.Join(parts, ":")
+}
+
+func adyenComputeHmacSignature(key []byte, item adyenNotificationRequestItem) string {
+	payload := adyenSignaturePayload(item)
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(payload))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func adyenExtractSignature(additionalData map[string]interface{}) string {
+	if len(additionalData) == 0 {
+		return ""
+	}
+	keys := []string{
+		"hmacSignature",
+		"hmac_signature",
+		"HmacSignature",
+		"HMACSignature",
+		"hmacsignature",
+	}
+	for _, key := range keys {
+		if value, ok := additionalData[key]; ok {
+			return strings.TrimSpace(adyenToString(value))
+		}
+	}
+	return ""
+}
+
+func adyenToString(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case json.Number:
+		return v.String()
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return ""
+	}
+}
+
 // doRequest performs an HTTP request to the Adyen API
-func (a *RealAdyenAdapter) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+func (a *RealAdyenAdapter) doRequest(ctx context.Context, method, path string, body interface{}, idempotencyKey string) ([]byte, error) {
 	var reqBody io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -763,6 +872,9 @@ func (a *RealAdyenAdapter) doRequest(ctx context.Context, method, path string, b
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", a.config.APIKey)
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
@@ -820,6 +932,9 @@ func mapAdyenPaymentResponse(resp *adyenPaymentResponse, amount Amount, customer
 		intent.RequiresSCA = true
 		if resp.Action != nil {
 			intent.SCARedirectURL = resp.Action.URL
+			if resp.Action.PaymentData != "" {
+				intent.ClientSecret = resp.Action.PaymentData
+			}
 		}
 	case "Refused":
 		intent.Status = PaymentIntentStatusFailed
