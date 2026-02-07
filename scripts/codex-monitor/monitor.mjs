@@ -12,7 +12,7 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
-import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
+import { attemptAutoFix, fixLoopingError, isDevMode } from "./autofix.mjs";
 import {
   startTelegramBot,
   stopTelegramBot,
@@ -22,6 +22,7 @@ import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
+import { analyzeMergeStrategy, resetMergeStrategyDedup } from "./merge-strategy.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -126,6 +127,12 @@ let codexDisabledReason = codexEnabled
   : process.env.CODEX_SDK_DISABLED === "1"
     ? "disabled via CODEX_SDK_DISABLED"
     : "disabled via --no-codex";
+
+// Merge strategy: Codex-powered merge decision analysis
+// Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
+const codexAnalyzeMergeStrategy =
+  codexEnabled &&
+  (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false";
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
@@ -2114,6 +2121,131 @@ async function reconcileTaskStatuses(reason = "manual") {
   return await checkMergedPRsAndUpdateTasks();
 }
 
+// ── Merge Strategy Analysis ─────────────────────────────────────────────────
+
+/**
+ * Run the Codex-powered merge strategy analysis for a completed task.
+ * This is fire-and-forget (void) — it runs async in the background and
+ * handles its own errors/notifications.
+ *
+ * @param {import("./merge-strategy.mjs").MergeContext} ctx
+ */
+async function runMergeStrategyAnalysis(ctx) {
+  const tag = `merge-strategy(${ctx.shortId})`;
+  try {
+    if (isCodexBusy()) {
+      console.log(`[${tag}] Codex busy — deferring analysis`);
+      // Retry after 60 seconds if Codex frees up
+      setTimeout(() => {
+        if (!isCodexBusy()) void runMergeStrategyAnalysis(ctx);
+      }, 60_000);
+      return;
+    }
+
+    const telegramFn =
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null;
+
+    const decision = await analyzeMergeStrategy(ctx, {
+      execCodex: execCodexPrompt,
+      timeoutMs: parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
+      logDir,
+      onTelegram: telegramFn,
+    });
+
+    if (!decision || !decision.success) {
+      console.warn(
+        `[${tag}] analysis failed — falling back to manual review`,
+      );
+      return;
+    }
+
+    // ── Act on the decision ──────────────────────────────────────
+    switch (decision.action) {
+      case "merge_after_ci_pass":
+        console.log(`[${tag}] → merge_after_ci_pass`);
+        // Nothing extra — the VK cleanup script handles auto-merge after CI
+        break;
+
+      case "prompt":
+        console.log(
+          `[${tag}] → prompt agent: ${(decision.message || "").slice(0, 100)}`,
+        );
+        if (codexEnabled && !isCodexBusy() && decision.message) {
+          void execCodexPrompt(
+            `The merge strategy reviewer has feedback on your work for task "${ctx.taskTitle || ctx.shortId}":\n\n` +
+              decision.message +
+              `\n\nPlease address this feedback, commit, and push.`,
+            { timeoutMs: 15 * 60 * 1000 },
+          );
+        }
+        break;
+
+      case "close_pr":
+        console.log(
+          `[${tag}] → close_pr: ${decision.reason || "no reason"}`,
+        );
+        if (telegramFn) {
+          telegramFn(
+            `🚫 Merge strategy recommends closing PR for ${ctx.shortId}: ${decision.reason || "no reason given"}`,
+          );
+        }
+        // Don't auto-close — just flag for human. Closing could lose work.
+        break;
+
+      case "re_attempt":
+        console.log(
+          `[${tag}] → re_attempt: ${decision.reason || "no reason"}`,
+        );
+        // Trigger a fresh session retry
+        if (typeof attemptFreshSessionRetry === "function") {
+          const freshStarted = await attemptFreshSessionRetry(
+            "merge_strategy_re_attempt",
+            decision.reason || "Merge strategy recommended re-attempt",
+          );
+          if (freshStarted && telegramFn) {
+            telegramFn(
+              `🔄 Merge strategy recommended re-attempt for ${ctx.shortId}. Fresh session started.`,
+            );
+          }
+        }
+        break;
+
+      case "manual_review":
+        console.log(
+          `[${tag}] → manual_review: ${decision.reason || "no reason"}`,
+        );
+        // Already notified via Telegram by analyzeMergeStrategy
+        break;
+
+      case "wait": {
+        const waitSec = decision.seconds || 300;
+        console.log(`[${tag}] → wait ${waitSec}s: ${decision.reason || ""}`);
+        // Re-run analysis after the wait period
+        setTimeout(() => {
+          void runMergeStrategyAnalysis({
+            ...ctx,
+            ciStatus: "re-check",
+          });
+        }, waitSec * 1000);
+        break;
+      }
+
+      case "noop":
+        console.log(`[${tag}] → noop`);
+        break;
+
+      default:
+        console.warn(`[${tag}] unknown action: ${decision.action}`);
+    }
+  } catch (err) {
+    console.warn(
+      `[${tag}] merge strategy analysis error: ${err.message || err}`,
+    );
+  }
+}
+
 // ── Smart PR creation flow ──────────────────────────────────────────────────
 
 /**
@@ -2308,6 +2440,7 @@ async function smartPRFlow(attemptId, shortId, status) {
 
     if (prResult?.success) {
       const prUrl = prResult.data?.url || prResult.data?.html_url || "";
+      const prNum = prResult.data?.number || null;
       console.log(
         `[monitor] ${tag}: PR created successfully${prUrl ? " — " + prUrl : ""}`,
       );
@@ -2316,6 +2449,26 @@ async function smartPRFlow(attemptId, shortId, status) {
           `✅ Auto-created PR for ${shortId}${prUrl ? ": " + prUrl : ""}`,
         );
       }
+
+      // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
+      if (codexAnalyzeMergeStrategy && !isCodexBusy()) {
+        void runMergeStrategyAnalysis({
+          attemptId,
+          shortId,
+          status,
+          prTitle,
+          prNumber: prNum,
+          prUrl,
+          prState: "open",
+          branch: branchName,
+          commitsAhead: branchStatus.commits_ahead,
+          commitsBehind: branchStatus.commits_behind,
+          taskTitle: attempt?.task_title,
+          taskDescription: attempt?.task_description,
+          worktreeDir: attempt?.worktree_dir || attempt?.worktree || null,
+        });
+      }
+
       return;
     }
 

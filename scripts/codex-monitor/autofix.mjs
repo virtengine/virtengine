@@ -566,10 +566,12 @@ export async function attemptAutoFix(opts) {
 
     recordFixAttempt(fallbackSig);
     const attemptNum = getFixAttemptCount(fallbackSig);
+    const devMode = isDevMode();
+    const modeLabel = devMode ? "execute" : "analyze-only";
 
     if (onTelegram) {
       onTelegram(
-        `🔧 Auto-fix starting (raw fallback, attempt #${attemptNum}):\nCrash: ${reason}\nError indicators: ${fallback.errorLines.length} suspicious lines`,
+        `🔧 Auto-fix starting [${modeLabel}] (raw fallback, attempt #${attemptNum}):\nCrash: ${reason}\nError indicators: ${fallback.errorLines.length} suspicious lines`,
       );
     }
 
@@ -584,7 +586,7 @@ export async function attemptAutoFix(opts) {
     await writeFile(
       auditPath,
       [
-        `# Auto-fix FALLBACK attempt #${attemptNum}`,
+        `# Auto-fix FALLBACK attempt #${attemptNum} [${modeLabel}]`,
         `# Reason: ${reason}`,
         `# Error lines found: ${fallback.errorLines.length}`,
         `# Timestamp: ${new Date().toISOString()}`,
@@ -596,6 +598,43 @@ export async function attemptAutoFix(opts) {
       "utf8",
     );
 
+    // ── NPM mode: analyze only, suggest fix to user ──────────────────
+    if (!devMode) {
+      console.log("[autofix] npm mode — skipping execution, sending analysis");
+
+      const suggestion =
+        `📋 *Auto-fix analysis* (raw fallback, attempt #${attemptNum}):\n` +
+        `Crash: ${reason}\n\n` +
+        `**Error indicators found:**\n` +
+        (fallback.errorLines.length > 0
+          ? fallback.errorLines.slice(0, 10).map((l) => `• ${l}`).join("\n")
+          : "(no explicit error lines — possible SIGKILL/OOM)") +
+        `\n\n**Suggested action:** Review the error indicators above. ` +
+        `The main orchestrator script is \`scripts/ve-orchestrator.ps1\`. ` +
+        `Check for PowerShell syntax errors, null references, or infinite retry loops.`;
+
+      await writeFile(
+        auditPath,
+        [
+          "",
+          `## Mode: ANALYZE-ONLY (npm mode)`,
+          `## Suggestion sent to user (no files modified)`,
+          suggestion,
+        ].join("\n"),
+        { flag: "a" },
+      );
+
+      if (onTelegram) onTelegram(suggestion);
+
+      return {
+        fixed: false,
+        errors: [],
+        skipped: [],
+        outcome: suggestion,
+      };
+    }
+
+    // ── DEV mode: execute fix via Codex ──────────────────────────────
     const filesBefore = detectChangedFiles(repoRoot);
     const result = await runCodexExec(prompt, repoRoot);
     const filesAfter = detectChangedFiles(repoRoot);
@@ -608,6 +647,7 @@ export async function attemptAutoFix(opts) {
       auditPath,
       [
         "",
+        `## Mode: EXECUTE (dev mode)`,
         `## Codex result (success=${result.success}):`,
         result.output || "(no output)",
         result.error ? `## Error: ${result.error}` : "",
@@ -648,12 +688,15 @@ export async function attemptAutoFix(opts) {
   // ── Structured errors found ───────────────────────────────────────────
   console.log(`[autofix] found ${errors.length} error(s) in crash log`);
 
+  const devMode = isDevMode();
+  const modeLabel = devMode ? "execute" : "analyze-only";
+
   if (onTelegram) {
     const errorSummary = errors
       .map((e) => `• ${e.errorType}: ${e.file}:${e.line}`)
       .join("\n");
     onTelegram(
-      `🔧 Auto-fix starting:\nFound ${errors.length} error(s):\n${errorSummary}`,
+      `🔧 Auto-fix starting [${modeLabel}]:\nFound ${errors.length} error(s):\n${errorSummary}`,
     );
   }
 
@@ -683,7 +726,7 @@ export async function attemptAutoFix(opts) {
     const attemptNum = getFixAttemptCount(error.signature);
 
     console.log(
-      `[autofix] attempting fix #${attemptNum} for ${error.file}:${error.line} — ${error.errorType}`,
+      `[autofix] attempting fix #${attemptNum} [${modeLabel}] for ${error.file}:${error.line} — ${error.errorType}`,
     );
 
     // Read source context around the error
@@ -704,7 +747,7 @@ export async function attemptAutoFix(opts) {
     await writeFile(
       auditPath,
       [
-        `# Auto-fix attempt #${attemptNum}`,
+        `# Auto-fix attempt #${attemptNum} [${modeLabel}]`,
         `# Error: ${error.errorType} at ${error.file}:${error.line}`,
         `# Message: ${error.message}`,
         `# Reason: ${reason}`,
@@ -716,6 +759,36 @@ export async function attemptAutoFix(opts) {
       ].join("\n"),
       "utf8",
     );
+
+    // ── NPM mode: analyze only, suggest fix to user ──────────────────
+    if (!devMode) {
+      const suggestion =
+        `📋 *Auto-fix analysis* (attempt #${attemptNum}):\n` +
+        `**${error.errorType}** at \`${error.file}:${error.line}\`\n` +
+        `Message: ${error.message}\n` +
+        (error.codeLine ? `Failing code: \`${error.codeLine}\`\n` : "") +
+        `\n**Source context:**\n\`\`\`\n${sourceContext.slice(0, 800)}\n\`\`\`\n` +
+        `\n**Suggested fix:** Check line ${error.line} for the ${error.errorType}. ` +
+        `Common causes: null references, array/object type mismatches, ` +
+        `missing variable declarations, or scope issues.`;
+
+      await writeFile(
+        auditPath,
+        [
+          "",
+          `## Mode: ANALYZE-ONLY (npm mode)`,
+          `## Suggestion sent to user (no files modified)`,
+          suggestion,
+        ].join("\n"),
+        { flag: "a" },
+      );
+
+      outcomes.push(suggestion);
+      if (onTelegram) onTelegram(suggestion);
+      continue;
+    }
+
+    // ── DEV mode: execute fix via Codex ──────────────────────────────
 
     // Snapshot files before
     const filesBefore = detectChangedFiles(repoRoot);
@@ -733,6 +806,7 @@ export async function attemptAutoFix(opts) {
       auditPath,
       [
         "",
+        `## Mode: EXECUTE (dev mode)`,
         `## Codex result (success=${result.success}):`,
         result.output || "(no output)",
         result.error ? `## Error: ${result.error}` : "",
@@ -857,6 +931,9 @@ ${messagesCtx}
  * Unlike attemptAutoFix (which handles crashes), this runs proactively when the
  * monitor detects the same error line appearing repeatedly.
  *
+ * In DEV MODE: applies fix via Codex exec.
+ * In NPM MODE: analyzes and sends fix suggestion to user.
+ *
  * @param {object} opts
  * @param {string} opts.errorLine — the repeating error line
  * @param {number} opts.repeatCount — how many times it has repeated
@@ -888,10 +965,12 @@ export async function fixLoopingError(opts) {
 
   recordFixAttempt(signature);
   const attemptNum = getFixAttemptCount(signature);
+  const devMode = isDevMode();
+  const modeLabel = devMode ? "execute" : "analyze-only";
 
   if (onTelegram) {
     onTelegram(
-      `🔁 Repeating error detected (${repeatCount}x, fix attempt #${attemptNum}):\n"${errorLine.slice(0, 200)}"`,
+      `🔁 Repeating error detected [${modeLabel}] (${repeatCount}x, fix attempt #${attemptNum}):\n"${errorLine.slice(0, 200)}"`,
     );
   }
 
@@ -929,7 +1008,7 @@ ${messagesCtx}
   await writeFile(
     auditPath,
     [
-      `# Loop fix attempt #${attemptNum}`,
+      `# Loop fix attempt #${attemptNum} [${modeLabel}]`,
       `# Error line: ${errorLine}`,
       `# Repeat count: ${repeatCount}`,
       `# Timestamp: ${new Date().toISOString()}`,
@@ -941,6 +1020,37 @@ ${messagesCtx}
     "utf8",
   );
 
+  // ── NPM mode: analyze only, suggest fix to user ──────────────────────
+  if (!devMode) {
+    console.log("[autofix] npm mode — loop fix: analysis only");
+
+    const suggestion =
+      `📋 *Loop fix analysis* (attempt #${attemptNum}):\n` +
+      `**Repeating error** (${repeatCount}x):\n` +
+      `\`${errorLine.slice(0, 300)}\`\n\n` +
+      `**Likely cause:** This error is repeating in a loop, likely because:\n` +
+      `• No break/continue/return after the error condition\n` +
+      `• Status not updated after failure → retries the same operation\n` +
+      `• Missing backoff or give-up logic after repeated failures\n\n` +
+      `**Suggested fix:** Check \`scripts/ve-orchestrator.ps1\` for the code ` +
+      `that produces this error message and add proper exit conditions.`;
+
+    await writeFile(
+      auditPath,
+      [
+        "",
+        `## Mode: ANALYZE-ONLY (npm mode)`,
+        `## Suggestion sent to user (no files modified)`,
+        suggestion,
+      ].join("\n"),
+      { flag: "a" },
+    );
+
+    if (onTelegram) onTelegram(suggestion);
+    return { fixed: false, outcome: suggestion };
+  }
+
+  // ── DEV mode: execute fix via Codex ────────────────────────────────────
   const filesBefore = detectChangedFiles(repoRoot);
   const result = await runCodexExec(prompt, repoRoot);
   const filesAfter = detectChangedFiles(repoRoot);
@@ -951,6 +1061,7 @@ ${messagesCtx}
     auditPath,
     [
       "",
+      `## Mode: EXECUTE (dev mode)`,
       `## Codex result (success=${result.success}):`,
       result.output || "(no output)",
       result.error ? `## Error: ${result.error}` : "",

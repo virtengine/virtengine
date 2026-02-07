@@ -835,7 +835,15 @@ export function loadConfig(argv = process.argv, options = {}) {
   // Resolve relative paths against configDir (not cwd) so that
   // "../ve-orchestrator.ps1" always resolves to scripts/ve-orchestrator.ps1
   // regardless of what directory the process was started from.
-  const scriptPath = resolve(configDir, rawScript);
+  let scriptPath = resolve(configDir, rawScript);
+  // If the resolved path doesn't exist and rawScript is just a filename (no path separators),
+  // fall back to auto-detection to find it in common locations
+  if (!existsSync(scriptPath) && !rawScript.includes("/") && !rawScript.includes("\\")) {
+    const autoDetected = findOrchestratorScript(configDir, repoRoot);
+    if (existsSync(autoDetected)) {
+      scriptPath = autoDetected;
+    }
+  }
   const defaultArgs = mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const scriptArgsRaw =
     cli.args ||
@@ -1012,6 +1020,16 @@ export function loadConfig(argv = process.argv, options = {}) {
     autoFixEnabled,
     codexEnabled,
 
+    // Merge Strategy
+    codexAnalyzeMergeStrategy:
+      codexEnabled &&
+      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false",
+    mergeStrategyTimeoutMs:
+      parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
+
+    // Autofix mode hint (informational — actual detection uses isDevMode())
+    autofixMode: process.env.AUTOFIX_MODE || "auto",
+
     // Vibe-Kanban
     vkRecoveryPort,
     vkRecoveryHost,
@@ -1082,18 +1100,20 @@ function detectProjectName(configDir, repoRoot) {
 function findOrchestratorScript(configDir, repoRoot) {
   // Search for orchestrator scripts in common locations
   const candidates = [
+    // Bundled with codex-monitor (inside codex-monitor dir) - check first
+    resolve(configDir, "ve-orchestrator.ps1"),
+    resolve(configDir, "orchestrator.ps1"),
+    resolve(configDir, "orchestrator.sh"),
     // Sibling to codex-monitor dir (scripts/ve-orchestrator.ps1)
     resolve(configDir, "..", "ve-orchestrator.ps1"),
     resolve(configDir, "..", "orchestrator.ps1"),
     resolve(configDir, "..", "orchestrator.sh"),
-    // Inside codex-monitor dir
-    resolve(configDir, "orchestrator.ps1"),
-    resolve(configDir, "orchestrator.sh"),
     // Repo root scripts dir
     resolve(repoRoot, "scripts", "ve-orchestrator.ps1"),
     resolve(repoRoot, "scripts", "orchestrator.ps1"),
     resolve(repoRoot, "scripts", "orchestrator.sh"),
     // Repo root
+    resolve(repoRoot, "ve-orchestrator.ps1"),
     resolve(repoRoot, "orchestrator.ps1"),
     resolve(repoRoot, "orchestrator.sh"),
     // CWD
@@ -1104,8 +1124,8 @@ function findOrchestratorScript(configDir, repoRoot) {
   for (const p of candidates) {
     if (existsSync(p)) return p;
   }
-  // Default — user will need to configure via --script or ORCHESTRATOR_SCRIPT
-  return resolve(configDir, "orchestrator.ps1");
+  // Default to sibling location (most common for npm-installed codex-monitor)
+  return resolve(configDir, "..", "ve-orchestrator.ps1");
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
