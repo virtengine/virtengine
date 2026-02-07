@@ -14,7 +14,7 @@
 
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -25,19 +25,11 @@ import {
   initCodexShell,
   steerCodexPrompt,
 } from "./codex-shell.mjs";
-import {
-  formatBusMessage,
-  getLocalWorkspace,
-  loadWorkspaceRegistry,
-  parseWorkspaceMentions,
-  resolveWorkspace,
-  selectExecutorProfile,
-  stripWorkspaceMentions,
-} from "./workspace-registry.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
+const telegramPollLockPath = resolve(repoRoot, ".cache", "telegram-getupdates.lock");
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -47,21 +39,62 @@ const POLL_TIMEOUT_S = 30; // long-poll timeout
 const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
 const CODEX_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
-const WORKSPACE_REGISTRY_PATH =
-  process.env.VE_WORKSPACE_REGISTRY || resolve(__dirname, "workspaces.json");
-const LOCAL_WORKSPACE_ID = process.env.VE_WORKSPACE_ID || "";
-const TELEGRAM_DIGEST_MAX = Number(
-  process.env.TELEGRAM_DIGEST_MAX || "40",
-);
+let telegramPollLockHeld = false;
+
+function canSignalProcess(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function acquireTelegramPollLock(owner) {
+  if (telegramPollLockHeld) return true;
+  try {
+    const payload = JSON.stringify(
+      { owner, pid: process.pid, started_at: new Date().toISOString() },
+      null,
+      2,
+    );
+    await writeFile(telegramPollLockPath, payload, { flag: "wx" });
+    telegramPollLockHeld = true;
+    return true;
+  } catch (err) {
+    if (err && err.code === "EEXIST") {
+      try {
+        const raw = await readFile(telegramPollLockPath, "utf8");
+        const data = JSON.parse(raw);
+        const pid = Number(data?.pid);
+        if (!canSignalProcess(pid)) {
+          await unlink(telegramPollLockPath);
+          return await acquireTelegramPollLock(owner);
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+    return false;
+  }
+}
+
+async function releaseTelegramPollLock() {
+  if (!telegramPollLockHeld) return;
+  telegramPollLockHeld = false;
+  try {
+    await unlink(telegramPollLockPath);
+  } catch {
+    /* best effort */
+  }
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 
 let lastUpdateId = 0;
 let polling = false;
 let pollAbort = null;
-let workspaceRegistryPromise = null;
-let localWorkspaceCache = null;
-const digestCache = new Map();
 
 // ── Agent session state (for follow-up steering & bottom-pinning) ────────────
 
@@ -93,91 +126,6 @@ function enqueueAgentTask(task) {
   });
 }
 
-async function getWorkspaceRegistry() {
-  if (!workspaceRegistryPromise) {
-    workspaceRegistryPromise = loadWorkspaceRegistry({
-      registryPath: WORKSPACE_REGISTRY_PATH,
-    });
-  }
-  return workspaceRegistryPromise;
-}
-
-async function getLocalWorkspaceContext() {
-  if (localWorkspaceCache) return localWorkspaceCache;
-  const registry = await getWorkspaceRegistry();
-  localWorkspaceCache = getLocalWorkspace(registry, LOCAL_WORKSPACE_ID);
-  return localWorkspaceCache;
-}
-
-function getWorkspaceDigestPath(workspaceId) {
-  const safeId = String(workspaceId || "unknown");
-  return resolve(repoRoot, ".cache", "codex-monitor", `telegram-digest-${safeId}.json`);
-}
-
-async function loadWorkspaceDigest(workspaceId) {
-  if (digestCache.has(workspaceId)) {
-    return digestCache.get(workspaceId);
-  }
-  const digestPath = getWorkspaceDigestPath(workspaceId);
-  try {
-    const raw = await readFile(digestPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.entries)) {
-      digestCache.set(workspaceId, parsed);
-      return parsed;
-    }
-  } catch {
-    // ignore
-  }
-  const empty = { workspace_id: workspaceId, entries: [] };
-  digestCache.set(workspaceId, empty);
-  return empty;
-}
-
-async function saveWorkspaceDigest(workspaceId, digest) {
-  const digestPath = getWorkspaceDigestPath(workspaceId);
-  await mkdir(resolve(repoRoot, ".cache", "codex-monitor"), { recursive: true });
-  await writeFile(digestPath, JSON.stringify(digest, null, 2), "utf8");
-}
-
-async function appendWorkspaceDigest(workspaceId, entry) {
-  if (!workspaceId) return;
-  const digest = await loadWorkspaceDigest(workspaceId);
-  const updated = {
-    ...digest,
-    entries: [...(digest.entries || []), entry].slice(-TELEGRAM_DIGEST_MAX),
-  };
-  digestCache.set(workspaceId, updated);
-  await saveWorkspaceDigest(workspaceId, updated);
-}
-
-function formatWorkspaceDigest(digest, count) {
-  const entries = Array.isArray(digest?.entries) ? digest.entries : [];
-  const slice = entries.slice(-count);
-  if (slice.length === 0) return "No digest entries yet.";
-  return slice
-    .map((entry) => {
-      const stamp = entry.ts ? entry.ts.slice(11, 19) : "--:--:--";
-      const direction = entry.direction ? entry.direction.toUpperCase() : "LOG";
-      const text = entry.text || "";
-      return `${stamp} ${direction} ${text}`;
-    })
-    .join("\n");
-}
-
-function buildDigestEntry(direction, text, meta = {}) {
-  return {
-    ts: new Date().toISOString(),
-    direction,
-    text: String(text || "").slice(0, 600),
-    ...meta,
-  };
-}
-
-function formatBusText(text, { workspaceId, type }) {
-  return formatBusMessage({ workspaceId, type, text });
-}
-
 // ── External refs (injected by monitor.mjs) ──────────────────────────────────
 
 let _sendTelegramMessage = null; // injected from monitor.mjs
@@ -189,261 +137,6 @@ let _getVibeKanbanUrl = null;
 let _fetchVk = null;
 let _getRepoRoot = null;
 
-function parseAgentCommandArgs(text) {
-  const args = text.split(/\s+/).slice(1);
-  let workspaceId = null;
-  let executorOverride = null;
-  let queue = false;
-  let background = false;
-  const messageParts = [];
-  for (let i = 0; i < args.length; i++) {
-    const token = args[i];
-    if (token === "--workspace" || token === "-w") {
-      workspaceId = args[i + 1];
-      i++;
-      continue;
-    }
-    if (token === "--model" || token === "-m") {
-      executorOverride = args[i + 1];
-      i++;
-      continue;
-    }
-    if (token === "--executor") {
-      executorOverride = args[i + 1];
-      i++;
-      continue;
-    }
-    if (token === "--queue" || token === "--enqueue") {
-      queue = true;
-      continue;
-    }
-    if (token === "--background" || token === "--bg") {
-      background = true;
-      continue;
-    }
-    messageParts.push(token);
-  }
-  return {
-    workspaceId,
-    executorOverride,
-    queue,
-    background,
-    message: messageParts.join(" "),
-  };
-}
-
-function extractWorkspaceArg(text) {
-  const tokens = text.split(/\s+/).filter(Boolean);
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token === "--workspace" || token === "-w") {
-      return tokens[i + 1] || null;
-    }
-  }
-  return null;
-}
-
-async function resolveMessageTargets(text) {
-  const registry = await getWorkspaceRegistry();
-  const argTarget = extractWorkspaceArg(text);
-  const argWorkspace = argTarget ? resolveWorkspace(registry, argTarget) : null;
-  const mentionTargets = parseWorkspaceMentions(text, registry);
-  const targets = new Set(mentionTargets.targets || []);
-  if (argWorkspace) {
-    targets.add(argWorkspace.id);
-  }
-  return {
-    registry,
-    targets,
-    broadcast: mentionTargets.broadcast || argTarget === "all",
-    hasExplicitTarget:
-      mentionTargets.broadcast ||
-      targets.size > 0 ||
-      (argTarget && argTarget.length > 0),
-  };
-}
-
-async function ensureWorkspaceSession(workspace) {
-  if (!_fetchVk || !workspace?.vk_workspace_id) {
-    return null;
-  }
-  const sessionsRaw = await _fetchVk(
-    `/api/sessions?workspace_id=${workspace.vk_workspace_id}`,
-  );
-  const sessions = Array.isArray(sessionsRaw) ? sessionsRaw : [];
-  if (sessions.length) {
-    return sessions.sort((a, b) =>
-      Date.parse(b.updated_at || "") - Date.parse(a.updated_at || ""),
-    )[0];
-  }
-  const created = await _fetchVk("/api/sessions", {
-    method: "POST",
-    body: { workspace_id: workspace.vk_workspace_id },
-  });
-  return created || null;
-}
-
-async function listWorkspaceSummary() {
-  const registry = await getWorkspaceRegistry();
-  const local = await getLocalWorkspaceContext();
-  const lines = ["📡 Workspaces"];
-  for (const ws of registry.workspaces || []) {
-    const role = ws.role || "workspace";
-    const models = (ws.model_priorities || []).join(", ") || "default";
-    const localTag = local && ws.id === local.id ? " (local)" : "";
-    lines.push(
-      `- ${ws.id}: ${ws.name || ws.id} (${role})${localTag} — ${models}`,
-    );
-  }
-  return lines.join("\n");
-}
-
-async function pickHealthiestWorkspace(registry) {
-  if (!registry || !Array.isArray(registry.workspaces)) {
-    return null;
-  }
-  if (!_fetchVk) {
-    return registry.workspaces[0] || null;
-  }
-  const summariesRaw = await _fetchVk("/api/task-attempts/summary", {
-    method: "POST",
-    body: { archived: false },
-  });
-  const summaries = Array.isArray(summariesRaw?.summaries)
-    ? summariesRaw.summaries
-    : Array.isArray(summariesRaw)
-      ? summariesRaw
-      : [];
-  if (!summaries.length) {
-    return registry.workspaces[0] || null;
-  }
-  const summaryMap = new Map();
-  for (const summary of summaries) {
-    if (summary?.workspace_id) {
-      summaryMap.set(String(summary.workspace_id), summary);
-    }
-  }
-  let best = null;
-  let bestScore = -999;
-  for (const ws of registry.workspaces) {
-    const summary = summaryMap.get(ws.vk_workspace_id || ws.id);
-    if (!summary) continue;
-    const status = String(
-      summary.status || summary.latest_process_status || "",
-    ).toLowerCase();
-    const disabled = summary.disabled || status === "disabled";
-    if (disabled) continue;
-    const runningAttempts =
-      summary.running_attempts ??
-      summary.active_attempts ??
-      summary.running ??
-      (status === "running" ? 1 : 0);
-    let score = 0;
-    if (!runningAttempts || runningAttempts <= 0 || status === "idle") {
-      score += 2;
-    } else {
-      score += 1;
-    }
-    if (status === "error" || status === "failed") {
-      score -= 2;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      best = ws;
-    }
-  }
-  return best || registry.workspaces[0] || null;
-}
-
-async function routeToWorkspaces(targets, message, chatId, options = {}) {
-  const registry = await getWorkspaceRegistry();
-  const localWorkspace = await getLocalWorkspaceContext();
-  const sourceWorkspace = options.sourceWorkspace || localWorkspace;
-  const includeLocal = options.includeLocal !== false;
-  const results = [];
-  for (const target of targets) {
-    const workspace = resolveWorkspace(registry, target);
-    if (!workspace) {
-      results.push(`❓ ${target}: unknown workspace`);
-      continue;
-    }
-    const busMessage = formatBusMessage({
-      workspaceId: sourceWorkspace?.id || "bus",
-      type: options.type || "handoff",
-      text: message,
-    });
-    if (includeLocal && localWorkspace && workspace.id === localWorkspace.id) {
-      enqueueAgentTask(() => handleFreeText(busMessage, chatId));
-      results.push(`✅ ${workspace.id}: dispatched locally`);
-      continue;
-    }
-    const result = options.queue
-      ? await enqueueWorkspaceMessage(
-          workspace,
-          busMessage,
-          options.executorOverride,
-        )
-      : await sendWorkspaceFollowUp(
-          workspace,
-          busMessage,
-          options.executorOverride,
-        );
-    if (!result.ok) {
-      results.push(`❌ ${workspace.id}: ${result.error || "failed"}`);
-      continue;
-    }
-    await appendWorkspaceDigest(
-      workspace.id,
-      buildDigestEntry("out", message, { type: options.type || "handoff" }),
-    );
-    results.push(`✅ ${workspace.id}: session ${result.sessionId}`);
-  }
-  if (!options.silent) {
-    await sendReply(
-      chatId,
-      `📨 Routed message to workspaces:\n${results.join("\n")}`,
-      { bus: { type: options.type || "handoff" } },
-    );
-  }
-}
-
-async function sendWorkspaceFollowUp(workspace, message, executorOverride) {
-  if (!_fetchVk || !workspace?.vk_workspace_id) {
-    return { ok: false, error: "vibe-kanban API unavailable" };
-  }
-  const session = await ensureWorkspaceSession(workspace);
-  if (!session) {
-    return { ok: false, error: "failed to create session" };
-  }
-  const profile = selectExecutorProfile(workspace, executorOverride);
-  const result = await _fetchVk(`/api/sessions/${session.id}/follow-up`, {
-    method: "POST",
-    body: {
-      prompt: message,
-      executor_profile_id: profile,
-    },
-  });
-  return { ok: !!result, sessionId: session.id };
-}
-
-async function enqueueWorkspaceMessage(workspace, message, executorOverride) {
-  if (!_fetchVk || !workspace?.vk_workspace_id) {
-    return { ok: false, error: "vibe-kanban API unavailable" };
-  }
-  const session = await ensureWorkspaceSession(workspace);
-  if (!session) {
-    return { ok: false, error: "failed to create session" };
-  }
-  const profile = selectExecutorProfile(workspace, executorOverride);
-  const result = await _fetchVk(`/api/sessions/${session.id}/queue`, {
-    method: "POST",
-    body: {
-      executor_profile_id: profile,
-      message,
-    },
-  });
-  return { ok: !!result, sessionId: session.id };
-}
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
  * Call this BEFORE startTelegramBot().
@@ -509,29 +202,17 @@ async function sendReply(chatId, text, options = {}) {
   // If monitor's sendTelegramMessage is available, use it (handles dedup & history)
   if (_sendTelegramMessage) {
     // Bypass dedup for direct replies
-    const busOptions =
-      options.bus === undefined ? { ...options, bus: { type: "reply" } } : options;
-    await sendDirect(chatId, text, busOptions);
+    await sendDirect(chatId, text, options);
     return;
   }
-  const busOptions =
-    options.bus === undefined ? { ...options, bus: { type: "reply" } } : options;
-  await sendDirect(chatId, text, busOptions);
+  await sendDirect(chatId, text, options);
 }
 
 async function sendDirect(chatId, text, options = {}) {
   if (!telegramToken) return null;
 
   // Split long messages
-  let outgoingText = text;
-  if (options.bus) {
-    const workspace = await getLocalWorkspaceContext();
-    outgoingText = formatBusText(text, {
-      workspaceId: options.bus.workspaceId || workspace?.id,
-      type: options.bus.type || "info",
-    });
-  }
-  const chunks = splitMessage(outgoingText, MAX_MESSAGE_LEN);
+  const chunks = splitMessage(text, MAX_MESSAGE_LEN);
   let lastMessageId = null;
   for (const chunk of chunks) {
     const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
@@ -569,21 +250,6 @@ async function sendDirect(chatId, text, options = {}) {
     } catch (err) {
       console.warn(`[telegram-bot] send error: ${err.message}`);
     }
-  }
-  try {
-    const workspace = await getLocalWorkspaceContext();
-    const workspaceId =
-      options.bus?.workspaceId || options.workspaceId || workspace?.id;
-    if (workspaceId) {
-      await appendWorkspaceDigest(
-        workspaceId,
-        buildDigestEntry("out", outgoingText, {
-          type: options.bus?.type || "message",
-        }),
-      );
-    }
-  } catch {
-    // best effort
   }
   return lastMessageId;
 }
@@ -982,8 +648,8 @@ function splitMessage(text, maxLen) {
 
 // ── Polling ──────────────────────────────────────────────────────────────────
 
-async function pollUpdates() {
-  if (!telegramToken) return [];
+  async function pollUpdates() {
+    if (!telegramToken) return [];
 
   const url = `https://api.telegram.org/bot${telegramToken}/getUpdates`;
   const params = new URLSearchParams({
@@ -998,11 +664,15 @@ async function pollUpdates() {
       signal: pollAbort.signal,
       // No explicit timeout — the Telegram API long-poll handles timing
     });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
-      return [];
-    }
+      if (!res.ok) {
+        const body = await res.text();
+        console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
+        if (res.status === 409) {
+          polling = false;
+          await releaseTelegramPollLock();
+        }
+        return [];
+      }
     const data = await res.json();
     return data.ok ? data.result || [] : [];
   } catch (err) {
@@ -1037,72 +707,14 @@ async function handleUpdate(update) {
     `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
   );
 
-  const localWorkspace = await getLocalWorkspaceContext();
-  const localId = localWorkspace?.id || "primary";
-  const routing = await resolveMessageTargets(text);
-  const isCoordinator = localWorkspace?.role === "coordinator";
-  const isTargetedLocal = routing.targets.has(localId);
-
-  try {
-    if (isTargetedLocal || (!routing.hasExplicitTarget && isCoordinator)) {
-      await appendWorkspaceDigest(
-        localId,
-        buildDigestEntry("in", text, { type: "incoming" }),
-      );
-    }
-  } catch {
-    /* best effort */
-  }
-
   // Route: slash command or free-text
   if (text.startsWith("/")) {
     const cmd = text.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
-    if (routing.hasExplicitTarget && !routing.broadcast && !isTargetedLocal) {
-      if (!(cmd === "/agent" && isCoordinator)) {
-        return;
-      }
-    }
-    if (!routing.hasExplicitTarget && !isCoordinator) {
-      if (cmd === "/agent") {
-        return;
-      }
-      return;
-    }
     if (FAST_COMMANDS.has(cmd)) {
       enqueueFastCommand(() => handleCommand(text, chatId));
       return;
     }
     enqueueCommand(() => handleCommand(text, chatId));
-    return;
-  }
-
-  if (routing.hasExplicitTarget) {
-    const registry = routing.registry;
-    const targets = routing.broadcast
-      ? (registry.workspaces || []).map((w) => w.id)
-      : Array.from(routing.targets);
-    const stripped = stripWorkspaceMentions(text, registry);
-    if (routing.broadcast) {
-      if (isCoordinator && targets.length) {
-        await routeToWorkspaces(targets, stripped, chatId, {
-          sourceWorkspace: localWorkspace,
-          includeLocal: false,
-        });
-      }
-      return;
-    }
-    if (!isTargetedLocal) {
-      if (isCoordinator && targets.length) {
-        await routeToWorkspaces(targets, stripped, chatId, {
-          sourceWorkspace: localWorkspace,
-          includeLocal: false,
-        });
-      }
-      return;
-    }
-  }
-
-  if (!isTargetedLocal && !isCoordinator && !routing.hasExplicitTarget) {
     return;
   }
 
@@ -1145,22 +757,6 @@ const COMMANDS = {
   "/model": {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
-  },
-  "/agent": {
-    handler: cmdAgent,
-    desc: "Route a task to a workspace: /agent [--workspace eng-01] <task>",
-  },
-  "/handoff": {
-    handler: cmdHandoff,
-    desc: "Send a handoff to one or more workspaces",
-  },
-  "/workspaces": {
-    handler: cmdWorkspaces,
-    desc: "List configured workspaces",
-  },
-  "/digest": {
-    handler: cmdDigest,
-    desc: "Show recent telegram digest (optional workspace)",
   },
   "/stop": {
     handler: cmdStop,
@@ -1808,177 +1404,6 @@ async function cmdModel(chatId, modelArg) {
   }
 }
 
-async function cmdWorkspaces(chatId) {
-  const summary = await listWorkspaceSummary();
-  await sendReply(chatId, summary);
-}
-
-async function cmdDigest(chatId, args) {
-  const tokens = (args || "").split(/\s+/).filter(Boolean);
-  let count = 15;
-  let workspaceArg = null;
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token === "--workspace" || token === "-w") {
-      workspaceArg = tokens[i + 1];
-      i++;
-      continue;
-    }
-    if (/^\d+$/.test(token)) {
-      count = parseInt(token, 10);
-      continue;
-    }
-    if (!workspaceArg) {
-      workspaceArg = token;
-    }
-  }
-  const registry = await getWorkspaceRegistry();
-  const local = await getLocalWorkspaceContext();
-  const workspace = workspaceArg
-    ? resolveWorkspace(registry, workspaceArg)
-    : local;
-  if (!workspace) {
-    await sendReply(
-      chatId,
-      `Unknown workspace '${workspaceArg}'. Use /workspaces to list valid IDs.`,
-    );
-    return;
-  }
-  const digest = await loadWorkspaceDigest(workspace.id);
-  await sendReply(
-    chatId,
-    `🧾 Telegram digest (${workspace.id}, last ${count}):\n${formatWorkspaceDigest(digest, count)}`,
-  );
-}
-
-async function cmdAgent(chatId, args) {
-  const registry = await getWorkspaceRegistry();
-  const local = await getLocalWorkspaceContext();
-  if (!args) {
-    await sendReply(
-      chatId,
-      "Usage: /agent [--workspace <id>] [--queue] [--model <id>] <task>\nExample: /agent --workspace eng-01 Investigate CI failures",
-    );
-    return;
-  }
-  const parsed = parseAgentCommandArgs(`/agent ${args}`);
-  const workspaceId =
-    parsed.workspaceId || registry.default_workspace || "primary";
-  let workspace = resolveWorkspace(registry, workspaceId);
-  if (!workspace) {
-    workspace = await pickHealthiestWorkspace(registry);
-  }
-  if (!workspace) {
-    await sendReply(
-      chatId,
-      `Unknown workspace '${workspaceId}'. Use /workspaces to list valid IDs.`,
-    );
-    return;
-  }
-  const message = parsed.message;
-  if (!message) {
-    await sendReply(
-      chatId,
-      "Missing task message. Include the task after the workspace flag.",
-    );
-    return;
-  }
-  const cleaned = stripWorkspaceMentions(message, registry);
-  const sourceLabel = local?.name || local?.id || "telegram";
-  const busMessage = formatBusMessage({
-    workspaceId: local?.id || "bus",
-    type: "assignment",
-    text: `${sourceLabel}: ${cleaned}`,
-  });
-
-  if (local && workspace.id === local.id) {
-    await sendReply(chatId, `✅ Routed locally to ${workspace.id}.`, {
-      bus: { type: "assignment" },
-    });
-    enqueueAgentTask(() =>
-      handleFreeText(busMessage, chatId, {
-        background: parsed.background || parsed.queue,
-      }),
-    );
-    await appendWorkspaceDigest(
-      local.id,
-      buildDigestEntry("out", cleaned, {
-        type: "assignment",
-        target: workspace.id,
-      }),
-    );
-    return;
-  }
-
-  const result = parsed.queue
-    ? await enqueueWorkspaceMessage(workspace, busMessage, parsed.executorOverride)
-    : await sendWorkspaceFollowUp(
-        workspace,
-        busMessage,
-        parsed.executorOverride,
-      );
-  if (!result.ok) {
-    await sendReply(
-      chatId,
-      `Failed to route task to ${workspace.id}: ${result.error || "unknown error"}`,
-    );
-    return;
-  }
-  await appendWorkspaceDigest(
-    local?.id || "primary",
-    buildDigestEntry("out", cleaned, {
-      type: "assignment",
-      target: workspace.id,
-    }),
-  );
-  await sendReply(
-    chatId,
-    `✅ Routed to ${workspace.id} (session ${result.sessionId}).`,
-    { bus: { type: "assignment" } },
-  );
-}
-
-async function cmdHandoff(chatId, args) {
-  const registry = await getWorkspaceRegistry();
-  if (!args) {
-    await sendReply(
-      chatId,
-      "Usage: /handoff @eng-01 <message> or /handoff --workspace eng-01 <message>",
-    );
-    return;
-  }
-  const mentionInfo = parseWorkspaceMentions(args, registry);
-  let targets = mentionInfo.broadcast
-    ? registry.workspaces.map((w) => w.id)
-    : Array.from(mentionInfo.targets);
-  let executorOverride = null;
-  if (targets.length === 0) {
-    const parsed = parseAgentCommandArgs(`/handoff ${args}`);
-    if (parsed.workspaceId) {
-      targets = [parsed.workspaceId];
-    }
-    executorOverride = parsed.executorOverride;
-    args = parsed.message || "";
-  } else {
-    args = stripWorkspaceMentions(args, registry);
-  }
-  if (!targets.length) {
-    await sendReply(
-      chatId,
-      "No workspace specified. Use @workspace or --workspace <id>.",
-    );
-    return;
-  }
-  if (!args.trim()) {
-    await sendReply(chatId, "Missing handoff message.");
-    return;
-  }
-  await routeToWorkspaces(targets, args.trim(), chatId, {
-    type: "handoff",
-    executorOverride,
-  });
-}
-
 // ── /background — run task silently or background active agent ────────────────
 
 async function cmdBackground(chatId, args) {
@@ -2234,17 +1659,6 @@ async function handleFreeText(text, chatId, options = {}) {
       const raw = await readFile(statusPath, "utf8").catch(() => null);
       statusData = raw ? JSON.parse(raw) : null;
     }
-  } catch {
-    /* best effort */
-  }
-  try {
-    const workspace = await getLocalWorkspaceContext();
-    const digest = await loadWorkspaceDigest(workspace?.id || "primary");
-    statusData = {
-      ...(statusData || {}),
-      telegram_digest: (digest?.entries || []).slice(-20),
-      workspace_id: workspace?.id || "primary",
-    };
   } catch {
     /* best effort */
   }
@@ -2528,33 +1942,6 @@ async function pollLoop() {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-function startHeartbeatLoop() {
-  if (_sendTelegramMessage) {
-    // Monitor already emits heartbeat/status updates.
-    return;
-  }
-  if (!Number.isFinite(HEARTBEAT_INTERVAL_MIN) || HEARTBEAT_INTERVAL_MIN <= 0) {
-    return;
-  }
-  const intervalMs = HEARTBEAT_INTERVAL_MIN * 60 * 1000;
-  const sendHeartbeat = async () => {
-    try {
-      const workspace = await getLocalWorkspaceContext();
-      const status = _readStatusSummary ? await _readStatusSummary() : null;
-      const text =
-        status?.text ||
-        `Workspace ${workspace?.id || "primary"} heartbeat — no status file`;
-      await sendDirect(telegramChatId, text, {
-        bus: { type: "heartbeat" },
-      });
-    } catch (err) {
-      console.warn(`[telegram-bot] heartbeat error: ${err.message || err}`);
-    }
-  };
-  setTimeout(() => void sendHeartbeat(), intervalMs);
-  setInterval(() => void sendHeartbeat(), intervalMs);
-}
-
 /**
  * Start the two-way Telegram bot.
  * Call injectMonitorFunctions() first if you want full integration.
@@ -2567,9 +1954,16 @@ export async function startTelegramBot() {
     return;
   }
 
+  const lockOk = await acquireTelegramPollLock("telegram-bot");
+  if (!lockOk) {
+    console.warn(
+      "[telegram-bot] polling disabled (another getUpdates poller is active)",
+    );
+    return;
+  }
+
   // Initialize the Codex shell context
   await initCodexShell();
-  startHeartbeatLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {
@@ -2590,7 +1984,6 @@ export async function startTelegramBot() {
   await sendDirect(
     telegramChatId,
     "🤖 VirtEngine Codex Shell online.\n\nType /help for commands or send any message to chat with Codex.",
-    { bus: { type: "status" } },
   );
 
   console.log("[telegram-bot] started — listening for messages");
@@ -2614,5 +2007,6 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
+  void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
 }

@@ -8,20 +8,17 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
+import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
 import {
-  formatBusMessage,
-  getLocalWorkspace,
-  loadWorkspaceRegistry,
-} from "./workspace-registry.mjs";
-import {
   startTelegramBot,
   stopTelegramBot,
   injectMonitorFunctions,
 } from "./telegram-bot.mjs";
+import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -40,6 +37,55 @@ function getFlag(name) {
   return args.includes(name);
 }
 
+function canSignalProcess(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function acquireTelegramPollLock(owner) {
+  if (telegramPollLockHeld) return true;
+  try {
+    const payload = JSON.stringify(
+      { owner, pid: process.pid, started_at: new Date().toISOString() },
+      null,
+      2,
+    );
+    await writeFile(telegramPollLockPath, payload, { flag: "wx" });
+    telegramPollLockHeld = true;
+    return true;
+  } catch (err) {
+    if (err && err.code === "EEXIST") {
+      try {
+        const raw = await readFile(telegramPollLockPath, "utf8");
+        const data = JSON.parse(raw);
+        const pid = Number(data?.pid);
+        if (!canSignalProcess(pid)) {
+          await unlink(telegramPollLockPath);
+          return await acquireTelegramPollLock(owner);
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+    return false;
+  }
+}
+
+async function releaseTelegramPollLock() {
+  if (!telegramPollLockHeld) return;
+  telegramPollLockHeld = false;
+  try {
+    await unlink(telegramPollLockPath);
+  } catch {
+    /* best effort */
+  }
+}
+
 const scriptPath = resolve(getArg("--script", defaultScript));
 const scriptArgsRaw = getArg("--args", "-MaxParallel 6");
 const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
@@ -51,16 +97,19 @@ const watchPath = resolve(getArg("--watch-path", scriptPath));
 const echoLogs = !getFlag("--no-echo-logs");
 const autoFixEnabled = !getFlag("--no-autofix");
 const vkEnsureIntervalMs = Number(getArg("--vk-ensure-interval", "60000"));
+const vkSpawnEnabled = !getFlag("--no-vk-spawn");
 let codexEnabled =
   !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
 const repoRoot = resolve(__dirname, "..", "..");
-const workspaceRegistryPath =
-  process.env.VE_WORKSPACE_REGISTRY || resolve(__dirname, "workspaces.json");
-const localWorkspaceId = process.env.VE_WORKSPACE_ID || "";
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
+const telegramPollLockPath = resolve(
+  repoRoot,
+  ".cache",
+  "telegram-getupdates.lock",
+);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
-const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "5");
+const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
 const telegramCommandPollTimeoutSec = Math.max(
   5,
   Number(process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20"),
@@ -73,6 +122,13 @@ const telegramCommandMaxBatch = Math.max(
   1,
   Number(process.env.TELEGRAM_COMMAND_MAX_BATCH || "25"),
 );
+const telegramBotEnabled = !getFlag("--no-telegram-bot");
+// When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
+// to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
+let telegramCommandEnabled = getFlag("--telegram-commands")
+  ? !telegramBotEnabled // explicit flag, but still disable if bot active
+  : false; // default OFF — telegram-bot.mjs handles commands
+let telegramPollLockHeld = false;
 const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
@@ -87,24 +143,19 @@ const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
 );
-const plannerBacklogPerAgent = Number(
-  process.env.PLANNER_BACKLOG_PER_AGENT || "10",
+const plannerPerCapitaThreshold = Number(
+  process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
 );
-const plannerIdleTriggerMin = Number(
-  process.env.PLANNER_IDLE_TRIGGER_MIN || "15",
+const plannerIdleSlotThreshold = Number(
+  process.env.TASK_PLANNER_IDLE_SLOT_THRESHOLD || "1",
 );
-const plannerStalledMin = Number(
-  process.env.PLANNER_STALLED_MIN || "45",
-);
-const plannerCooldownMin = Number(
-  process.env.PLANNER_COOLDOWN_MIN || "60",
-);
-const plannerDedupMs = plannerCooldownMin * 60 * 1000;
+const plannerDedupHours = Number(process.env.TASK_PLANNER_DEDUP_HOURS || "24");
+const plannerDedupMs = Number.isFinite(plannerDedupHours)
+  ? plannerDedupHours * 60 * 60 * 1000
+  : 24 * 60 * 60 * 1000;
 
 let CodexClient = null;
 let codexDisabledReason = "";
-let workspaceRegistryPromise = null;
-let localWorkspaceCache = null;
 
 if (!codexEnabled) {
   codexDisabledReason =
@@ -148,9 +199,9 @@ const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
+let idleAgentsNotified = false;
 let plannerTriggered = false;
 const plannerStatePath = resolve(logDir, "task-planner-state.json");
-let idleDetectedAt = null;
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -167,30 +218,6 @@ function pushTelegramHistory(text) {
   if (telegramHistory.length > TELEGRAM_HISTORY_MAX) {
     telegramHistory.shift();
   }
-}
-
-async function getWorkspaceRegistry() {
-  if (!workspaceRegistryPromise) {
-    workspaceRegistryPromise = loadWorkspaceRegistry({
-      registryPath: workspaceRegistryPath,
-    });
-  }
-  return workspaceRegistryPromise;
-}
-
-async function getLocalWorkspaceContext() {
-  if (localWorkspaceCache) return localWorkspaceCache;
-  const registry = await getWorkspaceRegistry();
-  localWorkspaceCache = getLocalWorkspace(registry, localWorkspaceId);
-  return localWorkspaceCache;
-}
-
-async function formatBusPayload(text, options = {}) {
-  if (!options.bus) return text;
-  const workspace = await getLocalWorkspaceContext();
-  const workspaceId = options.bus.workspaceId || workspace?.id || "unknown";
-  const type = options.bus.type || "info";
-  return formatBusMessage({ workspaceId, type, text });
 }
 
 function recordMonitorFailure() {
@@ -282,6 +309,42 @@ function getChangeSummary(repoRootPath, files) {
   } catch {
     return files.join(", ");
   }
+}
+
+function getMaxParallelFromArgs(argsList) {
+  if (!Array.isArray(argsList)) {
+    return null;
+  }
+  for (let i = 0; i < argsList.length; i += 1) {
+    const arg = String(argsList[i] ?? "");
+    const directMatch =
+      arg.match(/^-{1,2}maxparallel(?:=|:)?(\d+)$/i) ||
+      arg.match(/^--max-parallel(?:=|:)?(\d+)$/i);
+    if (directMatch) {
+      const value = Number(directMatch[1]);
+      if (Number.isFinite(value) && value > 0) {
+        return value;
+      }
+    }
+    const normalized = arg.toLowerCase();
+    if (
+      normalized === "-maxparallel" ||
+      normalized === "--maxparallel" ||
+      normalized === "--max-parallel"
+    ) {
+      const next = Number(argsList[i + 1]);
+      if (Number.isFinite(next) && next > 0) {
+        return next;
+      }
+    }
+  }
+  const envValue = Number(
+    process.env.VK_MAX_PARALLEL || process.env.MAX_PARALLEL,
+  );
+  if (Number.isFinite(envValue) && envValue > 0) {
+    return envValue;
+  }
+  return null;
 }
 
 function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
@@ -395,7 +458,10 @@ Instructions:
   const changeSummary = getChangeSummary(repoRoot, newChanges);
 
   const stamp = nowStamp();
-  const auditPath = resolve(logDir, `monitor-fix-${stamp}-attempt${attemptNum}.log`);
+  const auditPath = resolve(
+    logDir,
+    `monitor-fix-${stamp}-attempt${attemptNum}.log`,
+  );
   await writeFile(
     auditPath,
     [
@@ -545,7 +611,10 @@ Constraints:
   const changeSummary = getChangeSummary(repoRoot, newChanges);
 
   const stamp = nowStamp();
-  const auditPath = resolve(logDir, `crash-loop-fix-${stamp}-attempt${attemptNum}.log`);
+  const auditPath = resolve(
+    logDir,
+    `crash-loop-fix-${stamp}-attempt${attemptNum}.log`,
+  );
   await writeFile(
     auditPath,
     [
@@ -689,6 +758,18 @@ const errorNoisePatterns = [
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Auto-merge enable failed:/i,
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Failed to initialize vibe-kanban configuration/i,
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
+  // Stats summary line (contains "Failed" as a counter, not an error)
+  /First-shot:.*Failed:/i,
+  // Box-drawing cycle summary lines
+  /^\s*[│┃|]\s*(Elapsed|Submitted|Tracked|First-shot):/i,
+  /^\s*[─┄╌═]+/,
+  /^\s*[└┗╚][─┄╌═]+/,
+  /^\s*[╔╗╚╝║═]+/,
+  // "No remote branch" is handled by smartPR, not an error
+  /No remote branch for .* — agent must push/i,
+  // Telegram 409 conflicts (harmless, handled by auto-disable)
+  /telegram getUpdates failed: 409/i,
+  /getUpdates failed: 409/i,
 ];
 
 const vkErrorPatterns = [
@@ -806,9 +887,50 @@ let vkRestartCount = 0;
 const vkMaxRestarts = 20;
 const vkRestartDelayMs = 5000;
 
-function startVibeKanbanProcess() {
+async function startVibeKanbanProcess() {
+  if (!vkSpawnEnabled) {
+    return;
+  }
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     return;
+  }
+
+  // ── Guard: if the API is already reachable (e.g. detached from a previous
+  // monitor instance), adopt it instead of spawning a new copy that will
+  // crash with EADDRINUSE/exit-code-1.
+  if (await isVibeKanbanOnline()) {
+    console.log(
+      `[monitor] vibe-kanban already online at ${vkEndpointUrl} — skipping spawn`,
+    );
+    vkRestartCount = 0;
+    return;
+  }
+
+  // ── Kill any stale process holding the port ───────────────────────
+  try {
+    const portCheck = execSync(
+      `netstat -aon | findstr ":${vkRecoveryPort}.*LISTENING"`,
+      { encoding: "utf8", timeout: 5000, stdio: "pipe" },
+    ).trim();
+    const pidMatch = portCheck.match(/(\d+)\s*$/);
+    if (pidMatch) {
+      const stalePid = pidMatch[1];
+      console.log(
+        `[monitor] killing stale process ${stalePid} on port ${vkRecoveryPort}`,
+      );
+      try {
+        execSync(`taskkill /F /PID ${stalePid}`, {
+          timeout: 5000,
+          stdio: "pipe",
+        });
+      } catch {
+        /* best effort */
+      }
+      // Brief delay so the OS releases the port
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  } catch {
+    /* no process on port — fine */
   }
 
   const env = {
@@ -852,6 +974,7 @@ function startVibeKanbanProcess() {
 
 function scheduleVibeKanbanRestart() {
   if (shuttingDown) return;
+  if (!vkSpawnEnabled) return;
   vkRestartCount++;
   if (vkRestartCount > vkMaxRestarts) {
     console.error(
@@ -868,55 +991,25 @@ function scheduleVibeKanbanRestart() {
   console.log(
     `[monitor] restarting vibe-kanban in ${delay}ms (attempt ${vkRestartCount}/${vkMaxRestarts})`,
   );
-  setTimeout(() => startVibeKanbanProcess(), delay);
+  setTimeout(() => void startVibeKanbanProcess(), delay);
 }
 
-async function fetchVk(path, options = {}) {
-  const method = options.method || "GET";
-  const body = options.body;
-  const timeoutMs = options.timeoutMs || 15_000;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${vkEndpointUrl}${path}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn(`[monitor] vk fetch failed ${method} ${path}: ${res.status} ${text}`);
-      return null;
-    }
-    const payload = await res.json().catch(() => null);
-    if (payload && payload.success === false) {
-      console.warn(`[monitor] vk fetch error ${method} ${path}: ${payload.message}`);
-      return null;
-    }
-    return payload?.data ?? payload;
-  } catch (err) {
-    console.warn(
-      `[monitor] vk fetch error ${method} ${path}: ${err.message || err}`,
-    );
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function getWorkspaceSummaries() {
-  const summariesRaw = await fetchVk("/api/task-attempts/summary", {
-    method: "POST",
-    body: { archived: false },
+async function canConnectTcp(host, port, timeoutMs = 1200) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port: Number(port) });
+    const done = (ok) => {
+      try {
+        socket.destroy();
+      } catch {
+        /* best effort */
+      }
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => done(true));
+    socket.once("timeout", () => done(false));
+    socket.once("error", () => done(false));
   });
-  if (Array.isArray(summariesRaw?.summaries)) {
-    return summariesRaw.summaries;
-  }
-  if (Array.isArray(summariesRaw)) {
-    return summariesRaw;
-  }
-  return [];
 }
 
 async function isVibeKanbanOnline() {
@@ -926,15 +1019,19 @@ async function isVibeKanbanOnline() {
     const res = await fetch(`${vkEndpointUrl}/api/projects`, {
       signal: controller.signal,
     });
-    return res.ok;
+    // Any HTTP response means the service is up, even if auth/route fails.
+    return true;
   } catch {
-    return false;
+    return await canConnectTcp(vkRecoveryHost, vkRecoveryPort);
   } finally {
     clearTimeout(timeout);
   }
 }
 
 async function ensureVibeKanbanRunning() {
+  if (!vkSpawnEnabled) {
+    return;
+  }
   if (await isVibeKanbanOnline()) {
     // Reset restart counter on successful health check
     vkRestartCount = 0;
@@ -958,10 +1055,13 @@ async function ensureVibeKanbanRunning() {
     return;
   }
   // No process running — start fresh
-  startVibeKanbanProcess();
+  await startVibeKanbanProcess();
 }
 
 function restartVibeKanbanProcess() {
+  if (!vkSpawnEnabled) {
+    return;
+  }
   // Just kill the process — the exit handler will auto-restart it
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     try {
@@ -970,11 +1070,14 @@ function restartVibeKanbanProcess() {
       /* best effort */
     }
   } else {
-    startVibeKanbanProcess();
+    void startVibeKanbanProcess();
   }
 }
 
 async function triggerVibeKanbanRecovery(reason) {
+  if (!vkSpawnEnabled) {
+    return;
+  }
   const now = Date.now();
   const cooldownMs = vkRecoveryCooldownMin * 60 * 1000;
   if (now - vkRecoveryLastAt < cooldownMs) {
@@ -991,6 +1094,355 @@ async function triggerVibeKanbanRecovery(reason) {
   }
   await runCodexRecovery(reason || "vibe-kanban unreachable");
   restartVibeKanbanProcess();
+}
+
+// ── VK API client ───────────────────────────────────────────────────────────
+
+/**
+ * Generic HTTP client for the Vibe-Kanban REST API.
+ * @param {string} path  - API path (e.g. "/api/projects")
+ * @param {object} [opts] - { method, body, timeoutMs }
+ * @returns {Promise<object|null>} Parsed JSON body, or null on failure.
+ */
+async function fetchVk(path, opts = {}) {
+  const url = `${vkEndpointUrl}${path.startsWith("/") ? path : "/" + path}`;
+  const method = (opts.method || "GET").toUpperCase();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs || 15000);
+  try {
+    const fetchOpts = {
+      method,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+    };
+    if (opts.body && method !== "GET") {
+      fetchOpts.body = JSON.stringify(opts.body);
+    }
+    const res = await fetch(url, fetchOpts);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
+      );
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    const msg = err?.message || String(err);
+    if (!msg.includes("abort")) {
+      console.warn(`[monitor] fetchVk ${method} ${path} error: ${msg}`);
+    }
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * GET /api/task-attempts/:id/branch-status
+ * Returns branch status data for an attempt (commits ahead/behind, conflicts, etc.)
+ */
+async function fetchBranchStatus(attemptId) {
+  const res = await fetchVk(`/api/task-attempts/${attemptId}/branch-status`);
+  if (!res?.success || !Array.isArray(res.data)) return null;
+  return res.data[0] || null;
+}
+
+/**
+ * POST /api/task-attempts/:id/rebase
+ * Rebases the attempt's worktree onto target branch.
+ */
+async function rebaseAttempt(attemptId) {
+  const res = await fetchVk(`/api/task-attempts/${attemptId}/rebase`, {
+    method: "POST",
+    timeoutMs: 60000,
+  });
+  return res;
+}
+
+/**
+ * POST /api/task-attempts/:id/pr
+ * Creates a PR via the VK API (triggers prepush hooks in the worktree).
+ * Can take up to 15 minutes if prepush hooks run lint/test/build.
+ * @param {string} attemptId
+ * @param {object} prOpts - { title, description, draft }
+ */
+async function createPRViaVK(attemptId, prOpts = {}) {
+  const body = {
+    title: prOpts.title || "",
+    description: prOpts.description || "",
+    draft: prOpts.draft ?? true,
+    base: prOpts.base || "origin/main",
+  };
+  const startMs = Date.now();
+  const res = await fetchVk(`/api/task-attempts/${attemptId}/pr`, {
+    method: "POST",
+    body,
+    timeoutMs: 15 * 60 * 1000, // prepush hooks can take up to 15 min
+  });
+  const elapsed = Date.now() - startMs;
+  // Attach timing so callers can distinguish instant vs slow failures
+  if (res) res._elapsedMs = elapsed;
+  return { ...(res || { success: false }), _elapsedMs: elapsed };
+}
+
+/**
+ * POST /api/task-attempts/:id/resolve-conflicts
+ * Auto-resolves merge conflicts after a failed rebase by accepting "ours" changes.
+ */
+async function resolveConflicts(attemptId) {
+  const res = await fetchVk(
+    `/api/task-attempts/${attemptId}/resolve-conflicts`,
+    { method: "POST", timeoutMs: 60000 },
+  );
+  return res;
+}
+
+/**
+ * POST /api/task-attempts/:id/archive
+ * Archives a stale attempt (0 commits, many behind).
+ */
+async function archiveAttempt(attemptId) {
+  const res = await fetchVk(`/api/task-attempts/${attemptId}/archive`, {
+    method: "POST",
+    timeoutMs: 30000,
+  });
+  return res;
+}
+
+// ── Smart PR creation flow ──────────────────────────────────────────────────
+
+/**
+ * Intelligent multi-step PR creation using the VK API:
+ *
+ *   1. Check branch-status → decide action
+ *   2. Stale detection: 0 commits AND far behind → archive + reattempt
+ *   3. Rebase onto main (resolve conflicts automatically if possible)
+ *   4. Create PR via /pr endpoint
+ *   5. Distinguish fast-fail (<2s = worktree issue) vs slow-fail (>30s = prepush)
+ *   6. On prepush failure → prompt agent to fix lint/test issues and push
+ *
+ * @param {string} attemptId - Full attempt UUID
+ * @param {string} shortId   - Short ID for logging (4-8 chars)
+ * @param {string} status    - "completed", "failed", or "no-remote-branch"
+ */
+async function smartPRFlow(attemptId, shortId, status) {
+  const tag = `smartPR(${shortId})`;
+  try {
+    // ── Step 1: Check branch status ─────────────────────────────
+    const branchStatus = await fetchBranchStatus(attemptId);
+    if (!branchStatus) {
+      console.log(`[monitor] ${tag}: cannot fetch branch-status, skipping`);
+      return;
+    }
+
+    const { commits_ahead, commits_behind, has_uncommitted_changes } =
+      branchStatus;
+
+    // ── Step 2: Stale attempt detection ─────────────────────────
+    // 0 commits ahead, 0 uncommitted changes, many behind → dead attempt
+    if (
+      commits_ahead === 0 &&
+      !has_uncommitted_changes &&
+      commits_behind > 10
+    ) {
+      console.warn(
+        `[monitor] ${tag}: stale attempt — 0 commits, ${commits_behind} behind. Archiving.`,
+      );
+      await archiveAttempt(attemptId);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `🗑️ Archived stale attempt ${shortId} (0 commits, ${commits_behind} behind main). Will reattempt.`,
+        );
+      }
+      return;
+    }
+
+    // No commits and no changes → nothing to push
+    if (commits_ahead === 0 && !has_uncommitted_changes) {
+      console.log(`[monitor] ${tag}: no commits ahead, no changes — skipping`);
+      return;
+    }
+
+    // Uncommitted changes but no commits → agent didn't commit
+    if (has_uncommitted_changes && commits_ahead === 0) {
+      console.log(
+        `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
+      );
+      // Ask the agent to commit via Codex shell
+      if (codexEnabled && !isCodexBusy()) {
+        void execCodexPrompt(
+          `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
+            `Please navigate to the worktree for this attempt and:\n` +
+            `1. Stage all changes: git add -A\n` +
+            `2. Create a conventional commit\n` +
+            `3. Push and create a PR`,
+          { timeoutMs: 10 * 60 * 1000 },
+        );
+      }
+      return;
+    }
+
+    // ── Step 3: Rebase onto main ────────────────────────────────
+    console.log(`[monitor] ${tag}: rebasing onto main...`);
+    const rebaseResult = await rebaseAttempt(attemptId);
+
+    if (rebaseResult && !rebaseResult.success) {
+      const errorData = rebaseResult.error_data;
+      // Rebase has conflicts → try auto-resolve
+      if (errorData?.type === "merge_conflicts") {
+        const files = errorData.conflicted_files || [];
+        console.warn(
+          `[monitor] ${tag}: rebase conflicts in ${files.join(", ")} — attempting auto-resolve`,
+        );
+        const resolveResult = await resolveConflicts(attemptId);
+        if (resolveResult?.success) {
+          console.log(`[monitor] ${tag}: conflicts resolved automatically`);
+        } else {
+          // Auto-resolve failed — ask agent to fix
+          console.warn(
+            `[monitor] ${tag}: auto-resolve failed — prompting agent`,
+          );
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
+            );
+          }
+          if (codexEnabled && !isCodexBusy()) {
+            void execCodexPrompt(
+              `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
+                `Please resolve the conflicts, commit, push, and create a PR.`,
+              { timeoutMs: 15 * 60 * 1000 },
+            );
+          }
+          return;
+        }
+      }
+    }
+
+    // ── Step 4: Build PR title ──────────────────────────────────
+    const statusData = await readStatusData();
+    const attempts = statusData?.active_attempts || [];
+    const attempt = attempts.find(
+      (a) => a.id === attemptId || a.id?.startsWith(shortId),
+    );
+    let prTitle = attempt?.task_title || attempt?.branch || shortId;
+    prTitle = prTitle.replace(/\s*\(vibe-kanban\)$/i, "");
+
+    // ── Step 5: Create PR via VK API ────────────────────────────
+    console.log(`[monitor] ${tag}: creating PR "${prTitle}"...`);
+    const prResult = await createPRViaVK(attemptId, {
+      title: prTitle,
+      description: `Auto-created by codex-monitor after ${status} status.`,
+      draft: false,
+    });
+
+    if (prResult?.success) {
+      const prUrl =
+        prResult.data?.url || prResult.data?.html_url || "";
+      console.log(
+        `[monitor] ${tag}: PR created successfully${prUrl ? " — " + prUrl : ""}`,
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `✅ Auto-created PR for ${shortId}${prUrl ? ": " + prUrl : ""}`,
+        );
+      }
+      return;
+    }
+
+    // ── Step 6: Handle PR creation failure ──────────────────────
+    const elapsed = prResult._elapsedMs || 0;
+    const isFastFail = elapsed < 2000; // < 2s = instant (worktree/config issue)
+
+    if (isFastFail) {
+      // Instant failure — worktree issue, ask agent to handle everything
+      console.warn(
+        `[monitor] ${tag}: PR creation fast-failed (${elapsed}ms) — worktree/config issue`,
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
+        );
+      }
+      if (codexEnabled && !isCodexBusy()) {
+        void execCodexPrompt(
+          `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
+            `failed instantly (worktree or config issue).\n` +
+            `Branch: ${attempt?.branch || shortId}\n\n` +
+            `Please:\n` +
+            `1. Navigate to the worktree\n` +
+            `2. Ensure git status is clean and commits exist\n` +
+            `3. Run: git push --set-upstream origin ${attempt?.branch || shortId}\n` +
+            `4. Create a PR targeting main`,
+          { timeoutMs: 15 * 60 * 1000 },
+        );
+      }
+    } else {
+      // Slow failure — prepush hooks failed (lint/test/build)
+      console.warn(
+        `[monitor] ${tag}: PR creation slow-failed (${Math.round(elapsed / 1000)}s) — prepush hook failure`,
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
+        );
+      }
+      if (codexEnabled && !isCodexBusy()) {
+        void execCodexPrompt(
+          `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
+            `when trying to create a PR.\n` +
+            `Branch: ${attempt?.branch || shortId}\n\n` +
+            `Please:\n` +
+            `1. Navigate to the worktree for this branch\n` +
+            `2. Fix any lint, test, or build errors\n` +
+            `3. Commit the fixes\n` +
+            `4. Rebase onto main: git pull --rebase origin main\n` +
+            `5. Push: git push --set-upstream origin ${attempt?.branch || shortId}\n` +
+            `6. Create a PR targeting main`,
+          { timeoutMs: 15 * 60 * 1000 },
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(`[monitor] ${tag}: error — ${err.message || err}`);
+  }
+}
+
+// Tracks attempts we've already tried smartPR for (dedup)
+const smartPRAttempted = new Set();
+
+/**
+ * Resolve a short (4-8 char) attempt ID prefix to the full UUID and trigger
+ * smartPRFlow. De-duplicated so each attempt is only processed once per
+ * monitor lifetime.
+ */
+async function resolveAndTriggerSmartPR(shortId, status) {
+  if (smartPRAttempted.has(shortId)) return;
+  smartPRAttempted.add(shortId);
+
+  try {
+    const statusData = await readStatusData();
+    const attempts = statusData?.active_attempts || [];
+    const match = attempts.find((a) => a.id?.startsWith(shortId));
+    if (!match) {
+      // Try the full list via VK API
+      const allAttempts = await fetchVk("/api/task-attempts?status=review,error");
+      const vkMatch =
+        allAttempts?.data?.find((a) => a.id?.startsWith(shortId)) || null;
+      if (!vkMatch) {
+        console.log(
+          `[monitor] smartPR(${shortId}): attempt not found in status or VK data`,
+        );
+        return;
+      }
+      await smartPRFlow(vkMatch.id, shortId, status);
+      return;
+    }
+    await smartPRFlow(match.id, shortId, status);
+  } catch (err) {
+    console.warn(`[monitor] resolveSmartPR(${shortId}): ${err.message || err}`);
+  }
 }
 
 const errorQueue = [];
@@ -1056,7 +1508,7 @@ function notifyMergeFailure(line) {
     `Reason: ${reason}`,
     `${repoUrlBase}/pull/${pr}`,
   ].join("\n");
-  void sendTelegramMessage(message, { bus: { type: "alert" } });
+  void sendTelegramMessage(message);
 }
 
 async function flushMergeNotifications() {
@@ -1072,7 +1524,7 @@ async function flushMergeNotifications() {
     .map((pr) => `#${pr} ${repoUrlBase}/pull/${pr}`)
     .join(", ");
   const message = `Merged PRs: ${formatted}`;
-  await sendTelegramMessage(message, { bus: { type: "status" } });
+  await sendTelegramMessage(message);
 }
 
 async function readStatusData() {
@@ -1108,7 +1560,6 @@ async function readStatusSummary() {
       ? status.copilot_requests
       : [];
     const attempts = status.attempts || {};
-    const backlogRemaining = status.backlog_remaining ?? 0;
     const manualReviewTasks = Array.isArray(status.manual_review_tasks)
       ? status.manual_review_tasks
       : [];
@@ -1167,32 +1618,6 @@ async function readStatusSummary() {
           return `- ${escapeHtml(taskId)}`;
         })
       : ["- none"];
-
-    const workspaceSummaries = await getWorkspaceSummaries();
-    let activeWorkspaces = 0;
-    let idleWorkspaces = 0;
-    let busyWorkspaces = 0;
-    for (const summary of workspaceSummaries) {
-      if (!summary) continue;
-      const statusValue = String(
-        summary.status || summary.latest_process_status || "",
-      ).toLowerCase();
-      const disabled = summary.disabled || statusValue === "disabled";
-      if (disabled) continue;
-      activeWorkspaces++;
-      const runningAttempts =
-        summary.running_attempts ??
-        summary.active_attempts ??
-        summary.running ??
-        (statusValue === "running" ? 1 : 0);
-      if (!runningAttempts || runningAttempts <= 0 || statusValue === "idle") {
-        idleWorkspaces++;
-      } else {
-        busyWorkspaces++;
-      }
-    }
-    const backlogPerCapita =
-      backlogRemaining / Math.max(activeWorkspaces || 1, 1);
 
     const createdLines = recentSubmitted.length
       ? recentSubmitted.map((item) => {
@@ -1258,7 +1683,7 @@ async function readStatusSummary() {
         : "No completed tasks yet";
 
     const message = [
-      "VirtEngine Orchestrator Heartbeat",
+      "VirtEngine Orchestrator 10-min Update",
       `New tasks created (${recentSubmitted.length}):`,
       ...createdLines,
       `Merged tasks (${recentCompleted.length}):`,
@@ -1270,7 +1695,6 @@ async function readStatusSummary() {
       `Manual review (${manualReviewTasks.length}):`,
       ...manualReviewLines,
       `Counts: running=${running}, review=${review}, error=${error}, manual_review=${manualReview}`,
-      `Workspaces: active=${activeWorkspaces}, idle=${idleWorkspaces}, busy=${busyWorkspaces}, backlog/agent=${backlogPerCapita.toFixed(1)}`,
       `Success: ${successLine}`,
     ].join("\n");
 
@@ -1332,8 +1756,7 @@ async function sendTelegramMessage(text, options = {}) {
   if (!telegramToken || !targetChatId) {
     return;
   }
-  const formattedText = await formatBusPayload(text, options);
-  const dedupKey = options.dedupKey ?? String(formattedText || "").trim();
+  const dedupKey = options.dedupKey ?? String(text || "").trim();
   if (dedupKey && !options.skipDedup) {
     const now = Date.now();
     const last = telegramDedup.get(dedupKey) || 0;
@@ -1344,12 +1767,12 @@ async function sendTelegramMessage(text, options = {}) {
   }
 
   // Always record to history ring buffer (even deduped messages are useful context)
-  pushTelegramHistory(String(formattedText || ""));
+  pushTelegramHistory(String(text || ""));
 
   const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
   const payload = {
     chat_id: targetChatId,
-    text: formattedText,
+    text,
   };
   if (options.parseMode) {
     payload.parse_mode = options.parseMode;
@@ -1458,7 +1881,10 @@ function formatAttemptLine(attempt) {
 async function buildTasksResponse() {
   const status = await readStatusData();
   if (!status) {
-    return { text: "Status unavailable (missing status file).", parseMode: null };
+    return {
+      text: "Status unavailable (missing status file).",
+      parseMode: null,
+    };
   }
 
   const counts = status.counts || {};
@@ -1554,7 +1980,9 @@ async function buildBackgroundResponse() {
       : "normal";
   const message = [
     "VirtEngine Background Status",
-    currentChild ? `Orchestrator: running (pid ${currentChild.pid})` : "Orchestrator: stopped",
+    currentChild
+      ? `Orchestrator: running (pid ${currentChild.pid})`
+      : "Orchestrator: stopped",
     `Monitor state: ${halted}, ${safeMode}`,
     `Vibe-kanban: ${vkOnline ? "online" : "unreachable"}`,
   ].join("\n");
@@ -1662,7 +2090,13 @@ async function fetchTelegramUpdates() {
     });
     if (!res.ok) {
       const body = await res.text();
-      console.warn(`[monitor] telegram getUpdates failed: ${res.status} ${body}`);
+      console.warn(
+        `[monitor] telegram getUpdates failed: ${res.status} ${body}`,
+      );
+      if (res.status === 409) {
+        telegramCommandEnabled = false;
+        await releaseTelegramPollLock();
+      }
       return [];
     }
     const data = await res.json();
@@ -1672,7 +2106,9 @@ async function fetchTelegramUpdates() {
     return data.result;
   } catch (err) {
     if (err?.name !== "AbortError") {
-      console.warn(`[monitor] telegram getUpdates error: ${err?.message || err}`);
+      console.warn(
+        `[monitor] telegram getUpdates error: ${err?.message || err}`,
+      );
     }
     return [];
   } finally {
@@ -1682,6 +2118,10 @@ async function fetchTelegramUpdates() {
 
 async function pollTelegramCommands() {
   if (shuttingDown) {
+    telegramCommandPolling = false;
+    return;
+  }
+  if (!telegramCommandEnabled) {
     telegramCommandPolling = false;
     return;
   }
@@ -1701,10 +2141,10 @@ async function pollTelegramCommands() {
             console.warn(`[monitor] telegram command crashed: ${message}`);
             const chatId = update.message?.chat?.id;
             if (chatId && isAllowedTelegramChat(chatId)) {
-              await sendTelegramMessage(
-                `Command failed: ${message}`,
-                { chatId, skipDedup: true },
-              );
+              await sendTelegramMessage(`Command failed: ${message}`, {
+                chatId,
+                skipDedup: true,
+              });
             }
           }
         });
@@ -1720,14 +2160,20 @@ async function pollTelegramCommands() {
 }
 
 function startTelegramCommandListener() {
-  if (!telegramToken) {
+  if (!telegramToken || !telegramCommandEnabled) {
     return;
   }
   if (telegramCommandPolling) {
     return;
   }
-  telegramCommandPolling = true;
-  void pollTelegramCommands();
+  void acquireTelegramPollLock("monitor").then((ok) => {
+    if (!ok) {
+      telegramCommandEnabled = false;
+      return;
+    }
+    telegramCommandPolling = true;
+    void pollTelegramCommands();
+  });
 }
 
 function startTelegramNotifier() {
@@ -1748,15 +2194,12 @@ function startTelegramNotifier() {
       await sendTelegramMessage(summary.text, {
         parseMode: summary.parseMode,
         disablePreview: true,
-        bus: { type: "heartbeat" },
       });
     }
     await flushMergeNotifications();
     await checkStatusMilestones();
   };
-  void sendTelegramMessage("VirtEngine Orchestrator Notifier started.", {
-    bus: { type: "status" },
-  });
+  void sendTelegramMessage("VirtEngine Orchestrator Notifier started.");
   setTimeout(sendUpdate, intervalMs);
   setInterval(sendUpdate, intervalMs);
 }
@@ -1771,51 +2214,10 @@ async function checkStatusMilestones() {
   const running = counts.running ?? 0;
   const review = counts.review ?? 0;
   const error = counts.error ?? 0;
-  const now = Date.now();
-
-  const summaries = await getWorkspaceSummaries();
-  let activeWorkspaces = 0;
-  let idleWorkspaces = 0;
-  for (const summary of summaries) {
-    if (!summary) continue;
-    const statusValue = String(
-      summary.status || summary.latest_process_status || "",
-    ).toLowerCase();
-    const disabled = summary.disabled || statusValue === "disabled";
-    if (disabled) continue;
-    activeWorkspaces++;
-    const runningAttempts =
-      summary.running_attempts ??
-      summary.active_attempts ??
-      summary.running ??
-      (statusValue === "running" ? 1 : 0);
-    if (!runningAttempts || runningAttempts <= 0 || statusValue === "idle") {
-      idleWorkspaces++;
-    }
-  }
-
-  if (idleWorkspaces > 0) {
-    if (!idleDetectedAt) {
-      idleDetectedAt = now;
-    }
-  } else {
-    idleDetectedAt = null;
-  }
-
-  const idleDurationMin = idleDetectedAt
-    ? Math.floor((now - idleDetectedAt) / 60000)
-    : 0;
-
-  const attempts = status.attempts || {};
-  const stalledAttempts = Object.values(attempts).filter((attempt) => {
-    if (!attempt || attempt.status !== "running") return false;
-    const lastStamp =
-      attempt.last_process_completed_at || attempt.updated_at;
-    if (!lastStamp) return false;
-    const ts = Date.parse(lastStamp);
-    if (!Number.isFinite(ts)) return false;
-    return now - ts > plannerStalledMin * 60 * 1000;
-  });
+  const maxParallel = getMaxParallelFromArgs(scriptArgs) || running || 1;
+  const backlogPerCapita =
+    maxParallel > 0 ? backlogRemaining / maxParallel : backlogRemaining;
+  const idleSlots = Math.max(0, maxParallel - running);
 
   if (
     !allCompleteNotified &&
@@ -1827,64 +2229,64 @@ async function checkStatusMilestones() {
     allCompleteNotified = true;
     await sendTelegramMessage(
       "All tasks completed. Orchestrator backlog is empty.",
-      { bus: { type: "status" } },
     );
-    await maybeTriggerTaskPlanner("backlog-empty", { backlogRemaining });
+    await maybeTriggerTaskPlanner("backlog-empty", {
+      backlogRemaining,
+      backlogPerCapita,
+      running,
+      review,
+      error,
+      idleSlots,
+      maxParallel,
+    });
     return;
   }
-
-  const backlogPerCapita =
-    backlogRemaining / Math.max(activeWorkspaces || 1, 1);
-  const triggerReasons = [];
 
   if (
     !backlogLowNotified &&
     backlogRemaining > 0 &&
-    backlogPerCapita > 0 &&
-    backlogPerCapita < plannerBacklogPerAgent
+    Number.isFinite(backlogPerCapita) &&
+    backlogPerCapita < plannerPerCapitaThreshold
   ) {
     backlogLowNotified = true;
-    triggerReasons.push(
-      `backlog per agent below threshold (${backlogPerCapita.toFixed(1)}/${plannerBacklogPerAgent})`,
-    );
-  }
-
-  if (
-    idleWorkspaces > 0 &&
-    backlogRemaining > 0 &&
-    idleDurationMin >= plannerIdleTriggerMin
-  ) {
-    triggerReasons.push(
-      `idle workspaces detected (${idleWorkspaces}/${activeWorkspaces || 1}) for ${idleDurationMin}m`,
-    );
-  }
-
-  if (stalledAttempts.length > 0) {
-    triggerReasons.push(
-      `stalled attempts detected (${stalledAttempts.length})`,
-    );
-  }
-
-  if (triggerReasons.length) {
-    const reasonSummary = triggerReasons.join("; ");
     await sendTelegramMessage(
-      `Planner trigger: ${reasonSummary}. Backlog remaining: ${backlogRemaining}.`,
-      { bus: { type: "alert" } },
+      `Backlog per-capita low: ${backlogRemaining} tasks for ${maxParallel} slots (${backlogPerCapita.toFixed(
+        2,
+      )} per slot). Triggering task planner.`,
     );
-    await maybeTriggerTaskPlanner("metric-trigger", {
+    await maybeTriggerTaskPlanner("backlog-per-capita", {
       backlogRemaining,
       backlogPerCapita,
-      idleWorkspaces,
-      activeWorkspaces,
-      idleDurationMin,
-      stalledAttempts: stalledAttempts.map((a) => a.task_id).filter(Boolean),
-      reasons: triggerReasons,
+      running,
+      review,
+      error,
+      idleSlots,
+      maxParallel,
+      threshold: plannerPerCapitaThreshold,
+    });
+    return;
+  }
+
+  if (!idleAgentsNotified && idleSlots >= plannerIdleSlotThreshold) {
+    idleAgentsNotified = true;
+    await sendTelegramMessage(
+      `Agents idle: ${idleSlots} slot(s) available (running ${running}/${maxParallel}). Triggering task planner.`,
+    );
+    await maybeTriggerTaskPlanner("idle-slots", {
+      backlogRemaining,
+      backlogPerCapita,
+      running,
+      review,
+      error,
+      idleSlots,
+      maxParallel,
+      threshold: plannerIdleSlotThreshold,
     });
   }
 }
 
-async function triggerTaskPlanner(reason, details = {}) {
-  if (!codexEnabled || plannerTriggered) {
+async function triggerTaskPlanner(reason, details) {
+  if (plannerTriggered || !codexEnabled) {
     return;
   }
   plannerTriggered = true;
@@ -1894,7 +2296,7 @@ async function triggerTaskPlanner(reason, details = {}) {
     last_trigger_details: details || null,
   });
   try {
-    notifyCodexTrigger(`task planner run (${reason || "unknown"})`);
+    notifyCodexTrigger("task planner run");
     if (!CodexClient) {
       CodexClient = await loadCodexSdk();
     }
@@ -1910,7 +2312,7 @@ async function triggerTaskPlanner(reason, details = {}) {
     const agentPrompt = await readFile(agentPath, "utf8");
     const codex = new CodexClient();
     const thread = codex.startThread();
-    const prompt = `${agentPrompt}\n\nPlanner trigger reason: ${reason || "unknown"}\n\nMetrics:\n${JSON.stringify(details, null, 2)}\n\nPlease execute the task planning instructions above.`;
+    const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
     const result = await thread.run(prompt);
     const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
     await writeFile(outPath, String(result), "utf8");
@@ -1920,13 +2322,10 @@ async function triggerTaskPlanner(reason, details = {}) {
     });
     await sendTelegramMessage(
       "Task planner run completed. Output saved to logs.",
-      { bus: { type: "status" } },
     );
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
-    await sendTelegramMessage(`Task planner run failed: ${message}`, {
-      bus: { type: "alert" },
-    });
+    await sendTelegramMessage(`Task planner run failed: ${message}`);
   } finally {
     plannerTriggered = false;
   }
@@ -1972,12 +2371,13 @@ async function analyzeWithCodex(logPath, logText, reason) {
     const codex = new CodexClient();
     const thread = codex.startThread();
     const prompt = `You are monitoring a long-running PowerShell orchestration script.
-The script just exited with an error. Analyze the log excerpt and implement a fix on the file (scripts/ve-orchestrator.ps1).
+The script just exited with an error. Analyze the log excerpt and diagnose the root cause.
+Do NOT edit or modify any files. Only provide a diagnosis.
 
 Reason: ${reason}
 
 Log excerpt:\n${logText}\n
-Return a short diagnosis and a concrete fix.`;
+Return a short diagnosis and what the concrete fix would be (but do not apply it).`;
 
     const result = await thread.run(prompt);
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
@@ -2160,23 +2560,23 @@ async function handleExit(code, signal, logPath) {
   if (isAbnormalExit) {
     const restartCountNow = recordOrchestratorRestart();
     if (restartCountNow >= orchestratorRestartThreshold) {
-        if (Date.now() >= orchestratorHaltedUntil) {
-          orchestratorHaltedUntil = Date.now() + orchestratorPauseMs;
-          const pauseMin = Math.round(orchestratorPauseMs / 60000);
-          console.warn(
-            `[monitor] crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin}m.`,
+      if (Date.now() >= orchestratorHaltedUntil) {
+        orchestratorHaltedUntil = Date.now() + orchestratorPauseMs;
+        const pauseMin = Math.round(orchestratorPauseMs / 60000);
+        console.warn(
+          `[monitor] crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin}m.`,
+        );
+        if (!orchestratorResumeTimer) {
+          orchestratorResumeTimer = setTimeout(() => {
+            orchestratorResumeTimer = null;
+            startProcess();
+          }, orchestratorPauseMs);
+        }
+        if (telegramToken && telegramChatId) {
+          void sendTelegramMessage(
+            `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
           );
-          if (!orchestratorResumeTimer) {
-            orchestratorResumeTimer = setTimeout(() => {
-              orchestratorResumeTimer = null;
-              startProcess();
-            }, orchestratorPauseMs);
-          }
-          if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
-            );
-          }
+        }
         if (!orchestratorLoopFixInProgress) {
           orchestratorLoopFixInProgress = true;
           const fixResult = await attemptCrashLoopFix({
@@ -2210,7 +2610,10 @@ async function handleExit(code, signal, logPath) {
 
   const now = Date.now();
   if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
-    const waitMs = Math.max(orchestratorHaltedUntil - now, monitorSafeModeUntil - now);
+    const waitMs = Math.max(
+      orchestratorHaltedUntil - now,
+      monitorSafeModeUntil - now,
+    );
     const waitSec = Math.max(5, Math.round(waitMs / 1000));
     console.warn(`[monitor] restart paused; retrying in ${waitSec}s`);
     setTimeout(startProcess, waitSec * 1000);
@@ -2224,9 +2627,14 @@ async function handleExit(code, signal, logPath) {
 async function startProcess() {
   const now = Date.now();
   if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
-    const waitMs = Math.max(orchestratorHaltedUntil - now, monitorSafeModeUntil - now);
+    const waitMs = Math.max(
+      orchestratorHaltedUntil - now,
+      monitorSafeModeUntil - now,
+    );
     const waitSec = Math.max(5, Math.round(waitMs / 1000));
-    console.warn(`[monitor] orchestrator start blocked; retrying in ${waitSec}s`);
+    console.warn(
+      `[monitor] orchestrator start blocked; retrying in ${waitSec}s`,
+    );
     setTimeout(startProcess, waitSec * 1000);
     return;
   }
@@ -2259,16 +2667,30 @@ async function startProcess() {
       if (line.includes("Merge notify: PR #")) {
         notifyMergeFailure(line);
       }
+      // ── Smart PR creation: detect completed/failed attempts ──────
+      const prFlowMatch = line.match(
+        /Attempt\s+([0-9a-f]{8})\s+finished\s+\((completed|failed)\)\s*[—–-]\s*marking review/i,
+      );
+      if (prFlowMatch) {
+        const shortId = prFlowMatch[1];
+        const finishStatus = prFlowMatch[2];
+        void resolveAndTriggerSmartPR(shortId, finishStatus);
+      }
+      // ── "No remote branch" → trigger VK-based PR flow ──────────
+      const noBranchMatch = line.match(
+        /No remote branch for (ve\/([0-9a-f]{4})-\S+)/i,
+      );
+      if (noBranchMatch) {
+        const shortId = noBranchMatch[2]; // 4-char prefix
+        void resolveAndTriggerSmartPR(shortId, "no-remote-branch");
+      }
       if (line.includes("ALL TASKS COMPLETE")) {
         if (!allCompleteNotified) {
           allCompleteNotified = true;
           void sendTelegramMessage(
             "All tasks completed. Orchestrator backlog is empty.",
-            { bus: { type: "status" } },
           );
-          void maybeTriggerTaskPlanner("orchestrator-log-complete", {
-            source: "orchestrator-log",
-          });
+          void triggerTaskPlanner();
         }
       }
     }
@@ -2276,6 +2698,9 @@ async function startProcess() {
 
   child.stdout.on("data", (data) => append(data));
   child.stderr.on("data", (data) => append(data));
+  // Prevent stream errors from bubbling up as uncaughtException
+  child.stdout.on("error", () => {});
+  child.stderr.on("error", () => {});
 
   child.on("exit", (code, signal) => {
     if (currentChild === child) {
@@ -2351,7 +2776,14 @@ process.on("SIGINT", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  void releaseTelegramPollLock();
   process.exit(0);
+});
+
+// Windows: closing the terminal window doesn't send SIGINT/SIGTERM reliably.
+process.on("exit", () => {
+  shuttingDown = true;
+  void releaseTelegramPollLock();
 });
 
 process.on("SIGTERM", () => {
@@ -2362,15 +2794,44 @@ process.on("SIGTERM", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  void releaseTelegramPollLock();
   stopTelegramBot();
   process.exit(0);
 });
 
 process.on("uncaughtException", (err) => {
+  // Suppress stream/child-process noise during graceful shutdown
+  if (shuttingDown) {
+    const msg = err?.message || "";
+    const isStreamNoise =
+      msg.includes("EPIPE") ||
+      msg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+      msg.includes("ERR_STREAM_DESTROYED") ||
+      msg.includes("write after end") ||
+      msg.includes("This socket has been ended") ||
+      msg.includes("Cannot read properties of null");
+    if (isStreamNoise) {
+      console.log(`[monitor] suppressed shutdown noise: ${msg}`);
+      return;
+    }
+  }
   void handleMonitorFailure("uncaughtException", err);
 });
 
 process.on("unhandledRejection", (reason) => {
+  if (shuttingDown) {
+    const msg = reason?.message || String(reason || "");
+    const isStreamNoise =
+      msg.includes("EPIPE") ||
+      msg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+      msg.includes("ERR_STREAM_DESTROYED") ||
+      msg.includes("write after end") ||
+      msg.includes("This socket has been ended");
+    if (isStreamNoise) {
+      console.log(`[monitor] suppressed shutdown noise: ${msg}`);
+      return;
+    }
+  }
   const err =
     reason instanceof Error ? reason : new Error(String(reason || ""));
   void handleMonitorFailure("unhandledRejection", err);
@@ -2397,8 +2858,14 @@ setInterval(() => {
 }, maintenanceIntervalMs);
 
 startWatcher();
-void ensureVibeKanbanRunning();
-if (Number.isFinite(vkEnsureIntervalMs) && vkEnsureIntervalMs > 0) {
+if (vkSpawnEnabled) {
+  void ensureVibeKanbanRunning();
+}
+if (
+  vkSpawnEnabled &&
+  Number.isFinite(vkEnsureIntervalMs) &&
+  vkEnsureIntervalMs > 0
+) {
   setInterval(() => {
     void ensureVibeKanbanRunning();
   }, vkEnsureIntervalMs);
@@ -2412,7 +2879,9 @@ void ensureCodexSdkReady().then(() => {
   }
 });
 startProcess();
-startTelegramCommandListener();
+if (telegramCommandEnabled) {
+  startTelegramCommandListener();
+}
 startTelegramNotifier();
 
 // ── Two-way Telegram ↔ Codex shell ──────────────────────────────────────────
@@ -2426,4 +2895,6 @@ injectMonitorFunctions({
   fetchVk,
   getRepoRoot: () => repoRoot,
 });
-void startTelegramBot();
+if (telegramBotEnabled) {
+  void startTelegramBot();
+}

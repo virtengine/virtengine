@@ -29,7 +29,8 @@ VirtEngine Suite is the reference implementation of the VirtEngine Protocol deta
 The Suite is composed of one binary, `virtengine`, which contains a ([tendermint](https://github.com/cometbft/cometbft)-powered) blockchain node that
 implements the decentralized exchange as well as client functionality to access the exchange and network data in general.
 
-The basis of this repository includes some source code derived from the [Akash Protocol](https://akash.network/l/whitepaper)
+The basis of this repository includes some source code derived from the [Akash Network: Decentralized Cloud
+Infrastructure Marketplace](https://ipfs.io/ipfs/QmVwsi5kTrg7UcUEGi5UfdheVLBWoHjze2pHy4tLqYvLYv)
 
 ## Get Started with VirtEngine
 

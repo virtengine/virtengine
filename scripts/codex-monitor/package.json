@@ -1,11 +1,38 @@
 {
   "name": "codex-monitor",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
+  "description": "AI-powered orchestrator supervisor — wraps a task orchestrator, auto-restarts on failure, analyzes crashes with Codex SDK, manages PRs via Vibe-Kanban API, and sends Telegram notifications.",
   "type": "module",
-  "scripts": {
-    "start": "node monitor.mjs"
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "orchestrator",
+    "monitor",
+    "ai",
+    "automation",
+    "vibe-kanban",
+    "telegram",
+    "devops"
+  ],
+  "bin": {
+    "codex-monitor": "./monitor.mjs",
+    "codex-monitor-setup": "./setup.mjs"
   },
+  "scripts": {
+    "start": "node monitor.mjs",
+    "setup": "node setup.mjs"
+  },
+  "files": [
+    "monitor.mjs",
+    "autofix.mjs",
+    "codex-shell.mjs",
+    "maintenance.mjs",
+    "telegram-bot.mjs",
+    "get-telegram-chat-id.mjs",
+    "setup.mjs",
+    ".env.example",
+    "README.md"
+  ],
   "dependencies": {
     "@openai/codex-sdk": "0.99.0-alpha.6"
   },

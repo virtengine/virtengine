@@ -1120,7 +1120,7 @@ function Get-SummaryTextValues {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][object]$Value,
+        [AllowNull()][object]$Value,
         [int]$Depth = 0,
         [int]$MaxDepth = 4
     )
