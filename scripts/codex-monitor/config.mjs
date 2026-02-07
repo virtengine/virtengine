@@ -669,6 +669,9 @@ export function loadConfig(argv = process.argv, options = {}) {
     : false;
 
   // ── Task Planner ─────────────────────────────────────────
+  // Mode: "codex-sdk" (default) runs Codex directly, "kanban" creates a VK
+  // task for a real agent to plan, "disabled" turns off the planner entirely.
+  const plannerMode = (process.env.TASK_PLANNER_MODE || "kanban").toLowerCase();
   const plannerPerCapitaThreshold = Number(
     process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
   );
@@ -749,6 +752,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     telegramCommandEnabled,
 
     // Task Planner
+    plannerMode,
     plannerPerCapitaThreshold,
     plannerIdleSlotThreshold,
     plannerDedupHours,

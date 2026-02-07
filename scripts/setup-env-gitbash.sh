@@ -53,6 +53,16 @@ else
     exit 1
 fi
 
+# GitHub CLI (gh)
+if command_exists gh; then
+    GH_VERSION=$(gh --version | head -n 1)
+    print_status "ok" "GitHub CLI installed: $GH_VERSION"
+else
+    print_status "warn" "GitHub CLI (gh) is not installed"
+    echo "  Install via: winget install --id GitHub.cli -e"
+    echo "  Or via Chocolatey (PowerShell): choco install github-cli -y"
+fi
+
 # Make
 if command_exists make; then
     MAKE_VERSION=$(make --version | head -n 1)

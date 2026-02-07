@@ -109,6 +109,7 @@ let {
   plannerPerCapitaThreshold,
   plannerIdleSlotThreshold,
   plannerDedupMs,
+  plannerMode: configPlannerMode,
   agentPrompts,
   scheduler: executorScheduler,
   envPaths,
@@ -116,6 +117,7 @@ let {
 
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
+let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -181,6 +183,14 @@ function normalizeDedupKey(text) {
       // Collapse whitespace
       .replaceAll(/\s+/g, " ")
   );
+}
+
+// ── Strip ANSI escape codes from log lines before sending to Telegram ────────
+// PowerShell and colored CLI output includes \x1b[...m sequences that show
+// as garbage in Telegram messages.
+function stripAnsi(text) {
+  // eslint-disable-next-line no-control-regex
+  return String(text || "").replace(/\x1b\[[0-9;]*m/g, "").replace(/\[\d+;?\d*m/g, "");
 }
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
@@ -2036,7 +2046,7 @@ async function resolveAndTriggerSmartPR(shortId, status) {
 const errorQueue = [];
 
 function queueErrorMessage(line) {
-  errorQueue.push(line);
+  errorQueue.push(stripAnsi(line));
   if (errorQueue.length >= 3) {
     void flushErrorQueue();
   }
@@ -2328,7 +2338,13 @@ function isPlannerDeduped(state, now) {
 }
 
 async function maybeTriggerTaskPlanner(reason, details) {
-  if (!codexEnabled || plannerTriggered) {
+  if (plannerMode === "disabled") {
+    return;
+  }
+  if (plannerMode === "codex-sdk" && !codexEnabled) {
+    return;
+  }
+  if (plannerTriggered) {
     return;
   }
   const now = Date.now();
@@ -2886,7 +2902,7 @@ async function checkStatusMilestones() {
 }
 
 async function triggerTaskPlanner(reason, details) {
-  if (plannerTriggered || !codexEnabled) {
+  if (plannerTriggered || plannerMode === "disabled") {
     return;
   }
   plannerTriggered = true;
@@ -2894,35 +2910,123 @@ async function triggerTaskPlanner(reason, details) {
     last_triggered_at: new Date().toISOString(),
     last_trigger_reason: reason || "manual",
     last_trigger_details: details || null,
+    last_trigger_mode: plannerMode,
   });
+
   try {
-    notifyCodexTrigger("task planner run");
-    if (!CodexClient) {
-      CodexClient = await loadCodexSdk();
+    if (plannerMode === "kanban") {
+      await triggerTaskPlannerViaKanban(reason);
+    } else {
+      await triggerTaskPlannerViaCodex(reason);
     }
-    if (!CodexClient) {
-      throw new Error("Codex SDK not available");
-    }
-    const agentPrompt = agentPrompts.planner;
-    const codex = new CodexClient();
-    const thread = codex.startThread();
-    const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
-    const result = await thread.run(prompt);
-    const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
-    await writeFile(outPath, formatCodexResult(result), "utf8");
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    await sendTelegramMessage(`Task planner run failed (${plannerMode}): ${message}`);
+  } finally {
+    plannerTriggered = false;
+  }
+}
+
+/**
+ * Trigger the task planner by creating a VK task — a real agent will
+ * pick it up and plan the next phase of work.
+ */
+async function triggerTaskPlannerViaKanban(reason) {
+  // Get project ID
+  const projectsRes = await fetchVk("/api/projects");
+  if (!projectsRes?.success || !projectsRes.data?.[0]?.id) {
+    throw new Error("Cannot reach VK API or no project found");
+  }
+  const projectId = projectsRes.data[0].id;
+
+  // Check for existing planner tasks to avoid duplicates
+  const existingTasks = await fetchVk(
+    `/api/projects/${projectId}/tasks?status=todo`,
+  );
+  if (existingTasks?.data?.some((t) =>
+    t.title?.toLowerCase().includes("task planner") ||
+    t.title?.toLowerCase().includes("plan next phase") ||
+    t.title?.toLowerCase().includes("plan next tasks")
+  )) {
+    console.log("[monitor] task planner VK task already exists in backlog — skipping");
+    await sendTelegramMessage(
+      "📋 Task planner skipped — a planning task already exists in the backlog.",
+    );
+    return;
+  }
+
+  const plannerPrompt = agentPrompts.planner;
+  const taskBody = {
+    title: `Plan next tasks (${reason || "backlog-empty"})`,
+    description: [
+      "## Task Planner — Auto-created by codex-monitor",
+      "",
+      `**Trigger reason:** ${reason || "manual"}`,
+      "",
+      "### Instructions",
+      "",
+      plannerPrompt,
+      "",
+      "### Additional Context",
+      "",
+      "- Review recently merged PRs on GitHub to understand what was completed",
+      "- Check `git log --oneline -20` for the latest changes",
+      "- Look at open issues for inspiration",
+      "- Create 3-5 well-scoped tasks in vibe-kanban",
+      "- Each task should be completable by a single agent in 1-4 hours",
+    ].join("\n"),
+    status: "todo",
+  };
+
+  const result = await fetchVk(`/api/projects/${projectId}/tasks`, {
+    method: "POST",
+    body: taskBody,
+    timeoutMs: 15000,
+  });
+
+  if (result?.success) {
+    console.log(`[monitor] task planner VK task created: ${result.data?.id || "ok"}`);
     await updatePlannerState({
       last_success_at: new Date().toISOString(),
       last_success_reason: reason || "manual",
     });
     await sendTelegramMessage(
-      "Task planner run completed. Output saved to logs.",
+      `📋 Task planner: created VK task for next phase planning (${reason}).`,
     );
-  } catch (err) {
-    const message = err && err.message ? err.message : String(err);
-    await sendTelegramMessage(`Task planner run failed: ${message}`);
-  } finally {
-    plannerTriggered = false;
+  } else {
+    throw new Error("VK task creation failed");
   }
+}
+
+/**
+ * Trigger the task planner via Codex SDK — runs the planner prompt directly
+ * in an in-process Codex thread.
+ */
+async function triggerTaskPlannerViaCodex(reason) {
+  if (!codexEnabled) {
+    throw new Error("Codex SDK disabled — use TASK_PLANNER_MODE=kanban instead");
+  }
+  notifyCodexTrigger("task planner run");
+  if (!CodexClient) {
+    CodexClient = await loadCodexSdk();
+  }
+  if (!CodexClient) {
+    throw new Error("Codex SDK not available");
+  }
+  const agentPrompt = agentPrompts.planner;
+  const codex = new CodexClient();
+  const thread = codex.startThread();
+  const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
+  const result = await thread.run(prompt);
+  const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
+  await writeFile(outPath, formatCodexResult(result), "utf8");
+  await updatePlannerState({
+    last_success_at: new Date().toISOString(),
+    last_success_reason: reason || "manual",
+  });
+  await sendTelegramMessage(
+    "Task planner run completed. Output saved to logs.",
+  );
 }
 
 async function ensureLogDir() {
@@ -3125,6 +3229,7 @@ async function handleExit(code, signal, logPath) {
   const reason = signal ? `signal ${signal}` : `exit ${code}`;
   const isFileChangeRestart = pendingRestart && skipNextAnalyze;
   const isAbnormalExit = Boolean(signal) || code !== 0;
+  const isCleanExit = !isAbnormalExit; // exit code 0, no signal
 
   if (pendingRestart) {
     pendingRestart = false;
@@ -3139,6 +3244,33 @@ async function handleExit(code, signal, logPath) {
       startProcess();
       return;
     }
+  }
+
+  // ── Clean exit: skip autofix/analysis, handle backlog-empty gracefully ──
+  if (isCleanExit) {
+    const isEmptyBacklog =
+      logText.includes("ALL TASKS COMPLETE") ||
+      logText.includes("No more todo tasks in backlog") ||
+      logText.includes("All tasks completed");
+
+    if (isEmptyBacklog) {
+      console.log("[monitor] clean exit with empty backlog — triggering task planner");
+      // Trigger task planner to create more tasks
+      await maybeTriggerTaskPlanner("backlog-empty-exit", {
+        reason: "Orchestrator exited cleanly with empty backlog",
+      });
+      // Wait before restarting so the planner has time to create tasks
+      const plannerWaitMs = 2 * 60 * 1000; // 2 minutes
+      console.log(`[monitor] waiting ${plannerWaitMs / 1000}s for planner before restart`);
+      setTimeout(startProcess, plannerWaitMs);
+      return;
+    }
+
+    // Other clean exits (e.g., Stop-Requested) — just restart normally
+    console.log(`[monitor] clean exit (${reason}) — restarting without analysis`);
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
+    return;
   }
 
   // ── Auto-fix: try to fix the crash automatically ──────────────────────
@@ -3557,6 +3689,7 @@ function applyConfig(nextConfig, options = {}) {
   plannerPerCapitaThreshold = nextConfig.plannerPerCapitaThreshold;
   plannerIdleSlotThreshold = nextConfig.plannerIdleSlotThreshold;
   plannerDedupMs = nextConfig.plannerDedupMs;
+  plannerMode = nextConfig.plannerMode || "kanban";
   agentPrompts = nextConfig.agentPrompts;
   executorScheduler = nextConfig.scheduler;
   envPaths = nextConfig.envPaths;
