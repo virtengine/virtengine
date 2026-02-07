@@ -86,6 +86,8 @@
     "update-check.mjs",
     "merge-strategy.mjs",
     ".env.example",
+    "codex-monitor.config.example.json",
+    "codex-monitor.schema.json",
     "README.md",
     "LICENSE"
   ],

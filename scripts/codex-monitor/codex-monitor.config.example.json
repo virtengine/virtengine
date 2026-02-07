@@ -1,6 +1,6 @@
 {
   "$schema": "./codex-monitor.schema.json",
-  "projectName": "virtengine",
+  "projectName": "my-project",
   "executors": [
     {
       "name": "copilot-claude",
@@ -26,8 +26,8 @@
   "distribution": "weighted",
   "repositories": [
     {
-      "name": "virtengine",
-      "slug": "virtengine/virtengine",
+      "name": "my-project",
+      "slug": "org/my-project",
       "primary": true
     }
   ],

@@ -2117,9 +2117,7 @@ async function checkAndMergeDependabotPRs() {
     return;
   }
 
-  const authorFilter = dependabotAuthors
-    .map((a) => `author:${a}`)
-    .join(" ");
+  const authorFilter = dependabotAuthors.map((a) => `author:${a}`).join(" ");
 
   try {
     // List open PRs by bot authors
@@ -2245,9 +2243,7 @@ async function checkAndMergeDependabotPRs() {
             encoding: "utf8",
             timeout: 30_000,
           });
-          console.log(
-            `[dependabot] ✅ PR #${pr.number} merged: ${pr.title}`,
-          );
+          console.log(`[dependabot] ✅ PR #${pr.number} merged: ${pr.title}`);
           void sendTelegramMessage(
             `✅ Auto-merged bot PR #${pr.number}: ${pr.title}`,
           );
@@ -2273,9 +2269,7 @@ async function checkAndMergeDependabotPRs() {
       }
     }
   } catch (err) {
-    console.warn(
-      `[dependabot] error listing bot PRs: ${err.message || err}`,
-    );
+    console.warn(`[dependabot] error listing bot PRs: ${err.message || err}`);
   }
 }
 

@@ -16,14 +16,14 @@ You have AI coding agents. They can write code, fix bugs, create PRs. But left u
 
 **What changes when you add it:**
 
-| Without codex-monitor | With codex-monitor |
-|---|---|
-| Agent crashes → you notice hours later | Agent crashes → auto-restart + root cause analysis + Telegram alert |
-| Agent loops on same error → burns tokens | Error loop detected in <10 min → AI autofix triggered |
-| PR needs rebase → agent doesn't know how | Auto-rebase, conflict resolution, PR creation — zero human touch |
-| "Is anything happening?" → check terminal | Live Telegram digest updates every few seconds |
-| One agent at a time | N agents with weighted distribution and automatic failover |
-| Manually create tasks | Empty backlog detected → AI task planner auto-generates work |
+| Without codex-monitor                     | With codex-monitor                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| Agent crashes → you notice hours later    | Agent crashes → auto-restart + root cause analysis + Telegram alert |
+| Agent loops on same error → burns tokens  | Error loop detected in <10 min → AI autofix triggered               |
+| PR needs rebase → agent doesn't know how  | Auto-rebase, conflict resolution, PR creation — zero human touch    |
+| "Is anything happening?" → check terminal | Live Telegram digest updates every few seconds                      |
+| One agent at a time                       | N agents with weighted distribution and automatic failover          |
+| Manually create tasks                     | Empty backlog detected → AI task planner auto-generates work        |
 
 ## Install
 
@@ -160,9 +160,9 @@ Executors are the AI agents that work on tasks. Configure as many as you want wi
       "enabled": true
     },
     {
-      "name": "copilot-gpt",
-      "executor": "COPILOT",
-      "variant": "GPT_4_1",
+      "name": "claude-code",
+      "executor": "CLAUDE",
+      "variant": "SONNET_4_5",
       "weight": 25,
       "role": "tertiary",
       "enabled": true
@@ -181,7 +181,7 @@ Executors are the AI agents that work on tasks. Configure as many as you want wi
 Or via environment variable shorthand:
 
 ```env
-EXECUTORS=COPILOT:CLAUDE_OPUS_4_6:40,CODEX:DEFAULT:35,COPILOT:GPT_4_1:25
+EXECUTORS=COPILOT:CLAUDE_OPUS_4_6:40,CODEX:DEFAULT:35,CLAUDE:SONNET_4_5:25
 ```
 
 #### Distribution Modes
@@ -281,27 +281,30 @@ Select a profile via `--profile` or `CODEX_MONITOR_PROFILE`.
 
 See [.env.example](.env.example) for the full reference. Key variables:
 
-| Variable                           | Default                        | Description                                                                                                            |
-| ---------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `PROJECT_NAME`                     | auto-detected                  | Project name for display                                                                                               |
-| `GITHUB_REPO`                      | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
-| `ORCHESTRATOR_SCRIPT`              | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
-| `ORCHESTRATOR_ARGS`                | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
-| `OPENAI_API_KEY`                   | —                              | API key for Codex analysis                                                                                             |
-| `COPILOT_MODEL`                    | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
-| `COPILOT_SDK_DISABLED`             | `0`                            | Disable Copilot SDK primary agent                                                                                      |
-| `TELEGRAM_BOT_TOKEN`               | —                              | Telegram bot token from @BotFather                                                                                     |
-| `TELEGRAM_CHAT_ID`                 | —                              | Telegram chat ID                                                                                                       |
-| `VK_BASE_URL`                      | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
-| `EXECUTORS`                        | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
-| `EXECUTOR_DISTRIBUTION`            | `weighted`                     | Distribution mode                                                                                                      |
-| `FAILOVER_STRATEGY`                | `next-in-line`                 | Failover behavior                                                                                                      |
-| `MAX_PARALLEL`                     | `6`                            | Max concurrent agent slots                                                                                             |
-| `CODEX_MONITOR_REPO`               | —                              | Selected repo name (multi-repo)                                                                                        |
-| `CODEX_MONITOR_PROFILE`            | —                              | Environment profile name                                                                                               |
-| `CODEX_MONITOR_MODE`               | `virtengine`/`generic`         | Mode override                                                                                                          |
-| `CODEX_MONITOR_PREFLIGHT_DISABLED` | `0`                            | Disable preflight checks                                                                                               |
-| `CODEX_MONITOR_PREFLIGHT_RETRY_MS` | `300000`                       | Preflight retry interval (ms)                                                                                          |
+| Variable                              | Default                        | Description                                                                                                            |
+| ------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `PROJECT_NAME`                        | auto-detected                  | Project name for display                                                                                               |
+| `GITHUB_REPO`                         | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
+| `ORCHESTRATOR_SCRIPT`                 | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
+| `ORCHESTRATOR_ARGS`                   | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
+| `OPENAI_API_KEY`                      | —                              | API key for Codex analysis                                                                                             |
+| `COPILOT_MODEL`                       | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
+| `COPILOT_SDK_DISABLED`                | `0`                            | Disable Copilot SDK primary agent                                                                                      |
+| `COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT` | `true`                         | Disable Copilot cloud triggers when a rate-limit comment is detected                                                   |
+| `COPILOT_CLOUD_COOLDOWN_MIN`          | `60`                           | Default Copilot cloud cooldown duration (minutes)                                                                      |
+| `COPILOT_RATE_LIMIT_COOLDOWN_MIN`     | `120`                          | Cooldown duration (minutes) applied specifically after a Copilot rate-limit notice                                     |
+| `TELEGRAM_BOT_TOKEN`                  | —                              | Telegram bot token from @BotFather                                                                                     |
+| `TELEGRAM_CHAT_ID`                    | —                              | Telegram chat ID                                                                                                       |
+| `VK_BASE_URL`                         | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
+| `EXECUTORS`                           | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
+| `EXECUTOR_DISTRIBUTION`               | `weighted`                     | Distribution mode                                                                                                      |
+| `FAILOVER_STRATEGY`                   | `next-in-line`                 | Failover behavior                                                                                                      |
+| `MAX_PARALLEL`                        | `6`                            | Max concurrent agent slots                                                                                             |
+| `CODEX_MONITOR_REPO`                  | —                              | Selected repo name (multi-repo)                                                                                        |
+| `CODEX_MONITOR_PROFILE`               | —                              | Environment profile name                                                                                               |
+| `CODEX_MONITOR_MODE`                  | `virtengine`/`generic`         | Mode override                                                                                                          |
+| `CODEX_MONITOR_PREFLIGHT_DISABLED`    | `0`                            | Disable preflight checks                                                                                               |
+| `CODEX_MONITOR_PREFLIGHT_RETRY_MS`    | `300000`                       | Preflight retry interval (ms)                                                                                          |
 
 ### Shared Cloud Workspaces
 
@@ -536,13 +539,13 @@ TELEGRAM_IMMEDIATE_PRIORITY=1
 
 **Priority levels:**
 
-| Priority | Emoji | Category | Delivery |
-|----------|-------|----------|----------|
-| 1 | 🔴 | Critical — fatal errors, system crashes | Immediate (always) |
-| 2 | ❌ | Error — failed operations, auto-fix failures | Live digest |
-| 3 | ⚠️ | Warning — rebase conflicts, missing branches | Live digest |
-| 4 | ℹ️ | Info — PR created, task completed (default) | Live digest |
-| 5 | 🔹 | Debug — verbose logging | Live digest |
+| Priority | Emoji | Category                                     | Delivery           |
+| -------- | ----- | -------------------------------------------- | ------------------ |
+| 1        | 🔴    | Critical — fatal errors, system crashes      | Immediate (always) |
+| 2        | ❌    | Error — failed operations, auto-fix failures | Live digest        |
+| 3        | ⚠️    | Warning — rebase conflicts, missing branches | Live digest        |
+| 4        | ℹ️    | Info — PR created, task completed (default)  | Live digest        |
+| 5        | 🔹    | Debug — verbose logging                      | Live digest        |
 
 **Example live digest message:**
 
