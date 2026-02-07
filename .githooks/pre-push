@@ -10,6 +10,7 @@
 #   DEPS     — go.mod, go.sum, pnpm-lock.yaml, package.json
 #   WORKFLOW — .github/workflows/ YAML files
 #   DOCS     — .md files, _docs/, docs/ (skip all checks)
+#   SCRIPTS  — scripts/codex-monitor/ (independent npm tooling — skip all checks)
 #   TERRAFORM — infra/terraform .tf files
 #
 # Bypass:      git push --no-verify
@@ -89,11 +90,16 @@ else
     PORTAL_FILES=$(echo "$CHANGED_FILES" | grep -E '^(portal|lib/portal|lib/capture|lib/admin)/' || true)
     SDK_TS_FILES=$(echo "$CHANGED_FILES" | grep -E '^sdk/ts/' || true)
     JS_DEP_FILES=$(echo "$CHANGED_FILES" | \
-        grep -E '(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|package-lock\.json)' | \
-        grep -v '^sdk/portal/' || true)
+        grep -E '(pnpm-lock\.yaml|pnpm-workspace\.yaml|package-lock\.json)' || true)
+    # Only count package.json changes that affect the pnpm workspace (root, portal, lib, sdk/ts)
+    JS_DEP_PKG=$(echo "$CHANGED_FILES" | \
+        grep -E '^(package\.json|portal/package\.json|lib/.*/package\.json|sdk/ts/package\.json)$' || true)
+    [ -n "$JS_DEP_PKG" ] && JS_DEP_FILES=$(printf '%s\n%s' "$JS_DEP_FILES" "$JS_DEP_PKG")
+    JS_DEP_FILES=$(echo "$JS_DEP_FILES" | sed '/^$/d' || true)
     GO_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '^go\.(mod|sum|work)$' || true)
     TF_FILES=$(echo "$CHANGED_FILES" | grep -E '^infra/terraform/.*\.tf$' || true)
-    NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/)' || true)
+    NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/|^scripts/codex-monitor/)' || true)
+    CODEX_MONITOR_FILES=$(echo "$CHANGED_FILES" | grep -E '^scripts/codex-monitor/' || true)
 
     [ -n "$GO_FILES" ]     && HAS_GO=true
     [ -n "$PORTAL_FILES" ] && HAS_PORTAL=true
@@ -110,7 +116,8 @@ else
     $HAS_DEPS_JS  && hook_step "JS dependencies changed"
     $HAS_DEPS_GO  && hook_step "Go dependencies changed"
     $HAS_TERRAFORM && hook_step "Terraform: $(echo "$TF_FILES" | wc -l | tr -d ' ') files"
-    $HAS_ONLY_DOCS && hook_step "Docs/workflows only — skipping code checks"
+    [ -n "$CODEX_MONITOR_FILES" ] && hook_step "Codex Monitor: $(echo "$CODEX_MONITOR_FILES" | wc -l | tr -d ' ') files (independent tooling — no checks)"
+    $HAS_ONLY_DOCS && hook_step "Docs/workflows/tooling only — skipping code checks"
     echo ""
 fi
 
