@@ -2992,6 +2992,40 @@ function Process-StandaloneCopilotPRs {
         if (Test-GithubRateLimit) { return }
         if (-not $details) { continue }
 
+        if (Test-CopilotCloudDisabled) {
+            if ($details.isDraft -or $pr.title -match '^\[WIP\]') {
+                Write-Log "Closing Copilot PR #$($pr.number) while Copilot cloud is disabled" -Level "WARN"
+                if (-not $DryRun) {
+                    $null = Close-PRDeleteBranch -PRNumber $pr.number
+                }
+
+                $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+                $refs = Get-ReferencedPRNumbers -Texts @(
+                    $pr.title,
+                    $details.body,
+                    $details.headRefName,
+                    $pr.headRefName
+                )
+                if (-not $refs -or @($refs).Count -eq 0) {
+                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = $null
+                    }
+                }
+                foreach ($ref in $refs) {
+                    Upsert-CopilotPRState -PRNumber $ref -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = $null
+                    }
+                }
+                continue
+            }
+        }
+
         $rateLimitHit = $null
         if ($script:CopilotCloudDisableOnRateLimit) {
             $rateLimitHit = Test-CopilotRateLimitComment -PRNumber $pr.number
