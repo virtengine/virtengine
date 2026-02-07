@@ -122,6 +122,8 @@ let {
   preflightRetryMs: configPreflightRetryMs,
   primaryAgent,
   primaryAgentEnabled,
+  preflightEnabled: configPreflightEnabled,
+  preflightRetryMs: configPreflightRetryMs,
   repoRoot,
   statusPath,
   telegramPollLockPath,
