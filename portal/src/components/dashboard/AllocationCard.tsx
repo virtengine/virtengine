@@ -40,7 +40,7 @@ function ResourceChip({ label, value, unit }: { label: string; value: number; un
 
 export function AllocationCard({ allocation }: AllocationCardProps) {
   return (
-    <Link href={`/orders/${allocation.orderId}`} className="block">
+    <Link href={`/dashboard/allocations/${allocation.id}`} className="block">
       <Card className="transition-all hover:shadow-md">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">{allocation.offeringName}</CardTitle>
