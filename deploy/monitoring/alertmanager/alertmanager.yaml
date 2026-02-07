@@ -147,6 +147,14 @@ receivers:
     # pagerduty_configs:
     #   - service_key: '{{ PAGERDUTY_SERVICE_KEY }}'
     #     severity: critical
+    # Uncomment for Opsgenie integration
+    # opsgenie_configs:
+    #   - api_key: '{{ OPSGENIE_API_KEY }}'
+    #     api_url: 'https://api.opsgenie.com/'
+    #     responders:
+    #       - name: 'virtengine-oncall'
+    #         type: team
+    #     send_resolved: true
     # Uncomment for Slack integration
     # slack_configs:
     #   - channel: '#alerts-critical'
