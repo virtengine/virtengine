@@ -723,8 +723,9 @@ codex-monitor/
 ├── monitor.mjs                  # Main supervisor (log analysis, PR flow)
 ├── telegram-bot.mjs             # Interactive Telegram chatbot
 ├── codex-shell.mjs              # Persistent Codex SDK session
+├── claude-shell.mjs             # Persistent Claude Agent SDK session
 ├── copilot-shell.mjs            # Persistent Copilot SDK session
-├── primary-agent.mjs            # Primary agent adapter (Copilot/Codex)
+├── primary-agent.mjs            # Primary agent adapter (Codex/Copilot/Claude)
 ├── autofix.mjs                  # Error loop detection + auto-fix
 ├── maintenance.mjs              # Singleton lock, process cleanup
 ├── setup.mjs                    # Interactive setup wizard
