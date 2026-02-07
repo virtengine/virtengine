@@ -29,6 +29,7 @@ import {
   execPrimaryPrompt,
   isPrimaryBusy,
   initPrimaryAgent,
+  setPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -119,6 +120,8 @@ let {
   autoFixEnabled,
   preflightEnabled: configPreflightEnabled,
   preflightRetryMs: configPreflightRetryMs,
+  primaryAgent,
+  primaryAgentEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -161,6 +164,8 @@ let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 console.log(`[monitor] task planner mode: ${plannerMode}`);
+let primaryAgentName = primaryAgent;
+let primaryAgentReady = primaryAgentEnabled;
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -168,6 +173,8 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
+setPrimaryAgent(primaryAgentName);
+void initPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
 
@@ -3169,7 +3176,7 @@ async function smartPRFlow(attemptId, shortId, status) {
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
       // Ask the agent to commit via primary agent
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
@@ -3300,7 +3307,7 @@ Return a short summary of what you did.`;
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (!isPrimaryBusy()) {
+          if (primaryAgentReady && !isPrimaryBusy()) {
             void execPrimaryPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
@@ -3430,7 +3437,7 @@ Return a short summary of what you did.`;
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
@@ -3453,7 +3460,7 @@ Return a short summary of what you did.`;
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
@@ -5615,6 +5622,8 @@ function applyConfig(nextConfig, options = {}) {
   const prevWatchPath = watchPath;
   const prevTelegramInterval = telegramIntervalMin;
   const prevCodexEnabled = codexEnabled;
+  const prevPrimaryAgentName = primaryAgentName;
+  const prevPrimaryAgentReady = primaryAgentReady;
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
   const prevPreflightEnabled = preflightEnabled;
@@ -5665,6 +5674,8 @@ function applyConfig(nextConfig, options = {}) {
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
   codexEnabled = nextConfig.codexEnabled;
+  primaryAgentName = nextConfig.primaryAgent;
+  primaryAgentReady = nextConfig.primaryAgentEnabled;
   codexDisabledReason = codexEnabled
     ? ""
     : process.env.CODEX_SDK_DISABLED === "1"
@@ -5672,6 +5683,14 @@ function applyConfig(nextConfig, options = {}) {
       : agentSdk?.primary && agentSdk.primary !== "codex"
         ? `disabled via agent_sdk.primary=${agentSdk.primary}`
         : "disabled via --no-codex";
+
+  const primaryAgentChanged = prevPrimaryAgentName !== primaryAgentName;
+  if (primaryAgentChanged) {
+    setPrimaryAgent(primaryAgentName);
+  }
+  if ((primaryAgentChanged && primaryAgentReady) || (!prevPrimaryAgentReady && primaryAgentReady)) {
+    void initPrimaryAgent(primaryAgentName);
+  }
 
   if (prevWatchPath !== watchPath || watchEnabled === false) {
     void startWatcher(true);
