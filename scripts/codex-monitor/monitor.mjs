@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { watch } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -48,10 +48,13 @@ const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
 const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
 const vkRecoveryHost = process.env.VK_RECOVERY_HOST || "0.0.0.0";
+const vkBaseUrl =
+  process.env.VK_BASE_URL || `http://127.0.0.1:${vkRecoveryPort}`;
 const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
 );
+const vkAutoInstall = process.env.VK_AUTO_INSTALL === "1";
 
 let CodexClient = null;
 let codexDisabledReason = "";
@@ -172,15 +175,19 @@ function notifyVkError(line) {
     return;
   }
   vkErrorNotified.set(key, now);
+  const vkLink = formatHtmlLink(vkBaseUrl, "VK_BASE_URL");
+  const publicLink = vkPublicUrl
+    ? formatHtmlLink(vkPublicUrl, "Public URL")
+    : null;
   const message = [
     "VirtEngine Orchestrator Warning",
     "Vibe-Kanban API unreachable.",
-    "Check VK_BASE_URL and ensure the service is running.",
-    vkPublicUrl ? `Public URL: ${vkPublicUrl}` : null,
+    `Check ${vkLink} and ensure the service is running.`,
+    publicLink ? `Open ${publicLink}.` : null,
   ]
     .filter(Boolean)
     .join("\n");
-  void sendTelegramMessage(message);
+  void sendTelegramMessage(message, { parseMode: "HTML" });
   triggerVibeKanbanRecovery(line);
 }
 
@@ -224,19 +231,108 @@ function startVibeKanbanProcess() {
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     return;
   }
+  const runner = resolveVibeKanbanRunner();
+  if (!runner) {
+    console.warn("[monitor] vibe-kanban runner unavailable; skipping start");
+    return;
+  }
   const env = {
     ...process.env,
     PORT: vkRecoveryPort,
     HOST: vkRecoveryHost,
   };
-  vibeKanbanProcess = spawn("npx", ["vibe-kanban"], {
+  vibeKanbanProcess = spawn(runner.command, runner.args, {
     env,
     cwd: repoRoot,
     stdio: "ignore",
   });
+  vibeKanbanProcess.on("error", (err) => {
+    vibeKanbanProcess = null;
+    const message = err && err.message ? err.message : String(err);
+    console.warn(`[monitor] vibe-kanban spawn failed: ${message}`);
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `Vibe-kanban spawn failed: ${message}. Check VK_BASE_URL and local npm tooling.`,
+      );
+    }
+  });
   vibeKanbanProcess.on("exit", () => {
     vibeKanbanProcess = null;
   });
+}
+
+function resolveVibeKanbanRunner() {
+  const localBin = resolve(repoRoot, "node_modules", ".bin");
+  const candidates = [
+    resolve(localBin, "vibe-kanban"),
+    resolve(localBin, "vibe-kanban.cmd"),
+  ];
+  const localRunner = candidates.find((candidate) => existsSync(candidate));
+  if (localRunner) {
+    return { command: localRunner, args: [] };
+  }
+
+  const npx = spawnSync("npx", ["--version"], { stdio: "ignore" });
+  if (npx.status === 0) {
+    return { command: "npx", args: ["vibe-kanban"] };
+  }
+
+  if (vkAutoInstall) {
+    const installed = installWorkspaceDependencies();
+    if (installed) {
+      return resolveVibeKanbanRunner();
+    }
+  }
+
+  return null;
+}
+
+function installWorkspaceDependencies() {
+  const pnpm = spawnSync("pnpm", ["--version"], { stdio: "ignore" });
+  if (pnpm.status === 0) {
+    const res = spawnSync("pnpm", ["install"], {
+      cwd: repoRoot,
+      stdio: "inherit",
+    });
+    return res.status === 0;
+  }
+
+  const corepack = spawnSync("corepack", ["--version"], { stdio: "ignore" });
+  if (corepack.status === 0) {
+    const res = spawnSync("corepack", ["pnpm", "install"], {
+      cwd: repoRoot,
+      stdio: "inherit",
+    });
+    return res.status === 0;
+  }
+
+  const npm = spawnSync("npm", ["install"], {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
+  return npm.status === 0;
+}
+
+async function isVibeKanbanOnline() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const res = await fetch(`${vkBaseUrl}/api/projects`, {
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function ensureVibeKanbanRunning() {
+  if (await isVibeKanbanOnline()) {
+    return;
+  }
+  startVibeKanbanProcess();
 }
 
 function restartVibeKanbanProcess() {
@@ -274,10 +370,11 @@ async function triggerVibeKanbanRecovery(reason) {
   vkRecoveryLastAt = now;
 
   if (telegramToken && telegramChatId) {
+    const link = formatHtmlLink(vkBaseUrl, "VK_BASE_URL");
     const notice = codexEnabled
-      ? "Codex recovery triggered: vibe-kanban unreachable. Attempting restart."
-      : "Vibe-kanban recovery triggered (Codex disabled). Attempting restart.";
-    void sendTelegramMessage(notice);
+      ? `Codex recovery triggered: vibe-kanban unreachable. Attempting restart. (${link})`
+      : `Vibe-kanban recovery triggered (Codex disabled). Attempting restart. (${link})`;
+    void sendTelegramMessage(notice, { parseMode: "HTML" });
   }
   await runCodexRecovery(reason || "vibe-kanban unreachable");
   restartVibeKanbanProcess();
@@ -441,7 +538,10 @@ async function readStatusSummary() {
     const manualReviewLines = manualReviewTasks.length
       ? manualReviewTasks.map((taskId) => {
           const attempt = Object.values(attempts).find(
-            (item) => item && item.task_id === taskId && item.status === "manual_review",
+            (item) =>
+              item &&
+              item.task_id === taskId &&
+              item.status === "manual_review",
           );
           if (attempt && attempt.pr_number) {
             const prNumber = `#${attempt.pr_number}`;
@@ -471,7 +571,8 @@ async function readStatusSummary() {
           const link = item.pr_url
             ? formatHtmlLink(item.pr_url, title)
             : escapeHtml(title);
-          const suffix = prNumber && !title.includes(prNumber) ? ` (${prNumber})` : "";
+          const suffix =
+            prNumber && !title.includes(prNumber) ? ` (${prNumber})` : "";
           return `- ${link}${suffix}`;
         })
       : ["- none"];
@@ -772,7 +873,8 @@ async function ensureCodexSdkReady() {
   const client = await loadCodexSdk();
   if (!client) {
     codexEnabled = false;
-    codexDisabledReason = "Codex SDK not available (install failed or module missing)";
+    codexDisabledReason =
+      "Codex SDK not available (install failed or module missing)";
     console.warn(`[monitor] ${codexDisabledReason}`);
     return false;
   }
@@ -962,6 +1064,7 @@ setInterval(() => {
 }, 60 * 1000);
 
 startWatcher();
+void ensureVibeKanbanRunning();
 void ensureCodexSdkReady().then(() => {
   if (!codexEnabled) {
     const reason = codexDisabledReason || "disabled";

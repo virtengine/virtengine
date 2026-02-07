@@ -57,7 +57,31 @@ param(
 )
 
 # ─── Load ve-kanban library ──────────────────────────────────────────────────
-. "$PSScriptRoot/ve-kanban.ps1"
+$script:OrchestratorRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$vkLibraryPath = Join-Path $script:OrchestratorRoot "ve-kanban.ps1"
+if (-not (Test-Path -LiteralPath $vkLibraryPath)) {
+    throw "ve-kanban library not found at '$vkLibraryPath'. Ensure scripts/ve-kanban.ps1 exists."
+}
+try {
+    . $vkLibraryPath
+}
+catch {
+    throw "Failed to load ve-kanban library from '$vkLibraryPath': $($_.Exception.Message)"
+}
+
+$requiredFunctions = @(
+    "Initialize-VKConfig",
+    "Get-VKTasks",
+    "Get-VKAttempts",
+    "Get-VKAttemptSummaries",
+    "Get-OpenPullRequests",
+    "Get-VKLastGithubError",
+    "Get-CurrentExecutorProfile"
+)
+$missingFunctions = $requiredFunctions | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) }
+if ($missingFunctions.Count -gt 0) {
+    throw "ve-kanban library loaded but missing required functions: $($missingFunctions -join ', ')"
+}
 
 # ─── State tracking ──────────────────────────────────────────────────────────
 $script:CycleCount = 0
@@ -1598,7 +1622,7 @@ function Trigger-CISweep {
         $recentMerged | ForEach-Object {
             $title = if ($_.title) { $_.title } else { "PR #$($_.number)" }
             $url = if ($_.url) { $_.url } else { "" }
-            if ($url) { "- #$($_.number) $title: $url" } else { "- #$($_.number) $title" }
+            if ($url) { "- #$($_.number) ${title}: $url" } else { "- #$($_.number) $title" }
         }
     }
     else { @("- none") }
