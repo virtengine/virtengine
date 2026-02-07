@@ -106,11 +106,11 @@ That's it. On first run, the setup wizard walks you through everything: executor
 
 ### Screenshots
 
-**Live Telegram Digest** — Events stream into a single continuously-edited message per digest window. Critical items get ❌, warnings get ⚠️, and info gets ℹ️. When the window expires, the message is sealed and the next event starts a fresh one.
+**Live Telegram Digest** — Events stream into a single continuously-edited message per digest window (default 10 min). Critical items get ❌, warnings get ⚠️, and info gets ℹ️. When the window expires, the message is sealed and the next event starts a fresh one. Digest state persists across restarts — no duplicate messages.
 
 ![Live Telegram Digest](docs/telegram-live-digest.png)
 
-**Kanban Board** — Vibe-Kanban task board showing the full pipeline: To Do → In Progress → In Review → Done. Tasks are auto-claimed by agents, PRs are auto-created, and merged PRs auto-move tasks to Done.
+**Kanban Board** — Vibe-Kanban task board showing the full pipeline: To Do → In Progress → In Review → Done. Agents auto-claim tasks, create PRs, and merged PRs auto-move tasks to Done — fully autonomous.
 
 ![Kanban Board](docs/kanban-board.png)
 
