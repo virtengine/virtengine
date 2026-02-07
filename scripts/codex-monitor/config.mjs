@@ -20,6 +20,12 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const CONFIG_FILES = [
+  "codex-monitor.config.json",
+  ".codex-monitor.json",
+  "codex-monitor.json",
+];
+
 // ── .env loader ──────────────────────────────────────────────────────────────
 
 function loadDotEnv(dir, options = {}) {
@@ -47,6 +53,44 @@ function loadDotEnv(dir, options = {}) {
   }
 }
 
+function loadDotEnvFile(envPath, options = {}) {
+  const { override = false } = options;
+  const resolved = resolve(envPath);
+  if (!existsSync(resolved)) return;
+  const lines = readFileSync(resolved, "utf8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (override || !(key in process.env)) {
+      process.env[key] = val;
+    }
+  }
+}
+
+function loadConfigFile(configDir) {
+  for (const name of CONFIG_FILES) {
+    const p = resolve(configDir, name);
+    if (!existsSync(p)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(p, "utf8"));
+      return { path: p, data: raw };
+    } catch {
+      return { path: p, data: null, error: "invalid-json" };
+    }
+  }
+  return { path: null, data: null };
+}
+
 // ── CLI arg parser ───────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
@@ -66,6 +110,54 @@ function parseArgs(argv) {
     }
   }
   return result;
+}
+
+// ── Config/profile helpers ───────────────────────────────────────────────────
+
+function normalizeKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function applyEnvProfile(profile, options = {}) {
+  if (!profile || typeof profile !== "object") return;
+  const env = profile.env;
+  if (!env || typeof env !== "object") return;
+  const override = profile.envOverride === true || options.override === true;
+  for (const [key, value] of Object.entries(env)) {
+    if (!override && key in process.env) continue;
+    process.env[key] = String(value);
+  }
+}
+
+function applyProfileOverrides(configData, profile) {
+  if (!configData || typeof configData !== "object") {
+    return configData || {};
+  }
+  if (!profile || typeof profile !== "object") {
+    return configData;
+  }
+  const overrides =
+    profile.overrides || profile.config || profile.settings || {};
+  if (!overrides || typeof overrides !== "object") {
+    return configData;
+  }
+  return {
+    ...configData,
+    ...overrides,
+    repositories: overrides.repositories ?? configData.repositories,
+    executors: overrides.executors ?? configData.executors,
+    failover: overrides.failover ?? configData.failover,
+    distribution: overrides.distribution ?? configData.distribution,
+    agentPrompts: overrides.agentPrompts ?? configData.agentPrompts,
+  };
+}
+
+function resolveRepoPath(repoPath, baseDir) {
+  if (!repoPath) return "";
+  if (repoPath.startsWith("~")) {
+    return resolve(process.env.HOME || process.env.USERPROFILE || "", repoPath.slice(1));
+  }
+  return resolve(baseDir, repoPath);
 }
 
 // ── Git helpers ──────────────────────────────────────────────────────────────
@@ -178,25 +270,26 @@ function parseExecutorsFromEnv() {
   return executors.length ? executors : null;
 }
 
-function loadExecutorConfig(configDir) {
+function loadExecutorConfig(configDir, configData) {
   // 1. Try env var
   const fromEnv = parseExecutorsFromEnv();
 
   // 2. Try config file
   let fromFile = null;
-  for (const name of [
-    "codex-monitor.config.json",
-    ".codex-monitor.json",
-    "codex-monitor.json",
-  ]) {
-    const p = resolve(configDir, name);
-    if (existsSync(p)) {
-      try {
-        const raw = JSON.parse(readFileSync(p, "utf8"));
-        fromFile = raw.executors ? raw : null;
-        break;
-      } catch {
-        /* invalid JSON — skip */
+  if (configData && typeof configData === "object") {
+    fromFile = configData.executors ? configData : null;
+  }
+  if (!fromFile) {
+    for (const name of CONFIG_FILES) {
+      const p = resolve(configDir, name);
+      if (existsSync(p)) {
+        try {
+          const raw = JSON.parse(readFileSync(p, "utf8"));
+          fromFile = raw.executors ? raw : null;
+          break;
+        } catch {
+          /* invalid JSON — skip */
+        }
       }
     }
   }
@@ -365,52 +458,100 @@ class ExecutorScheduler {
 // ── Multi-Repo Support ───────────────────────────────────────────────────────
 
 /**
- * Multi-repo config schema:
+ * Multi-repo config schema (supports defaults + selection):
  *
  * {
+ *   "defaultRepository": "backend",
+ *   "repositoryDefaults": {
+ *     "orchestratorScript": "./orchestrator.ps1",
+ *     "orchestratorArgs": "-MaxParallel 6",
+ *     "profile": "local"
+ *   },
  *   "repositories": [
  *     {
  *       "name": "backend",
  *       "path": "/path/to/backend",
  *       "slug": "org/backend",
- *       "orchestratorScript": "./orchestrator.ps1",
  *       "primary": true
  *     },
  *     {
  *       "name": "frontend",
  *       "path": "/path/to/frontend",
- *       "slug": "org/frontend"
+ *       "slug": "org/frontend",
+ *       "profile": "frontend"
  *     }
  *   ]
  * }
  */
 
-function loadRepoConfig(configDir) {
-  // Try config file for multi-repo
-  for (const name of [
-    "codex-monitor.config.json",
-    ".codex-monitor.json",
-    "codex-monitor.json",
-  ]) {
-    const p = resolve(configDir, name);
-    if (existsSync(p)) {
-      try {
-        const raw = JSON.parse(readFileSync(p, "utf8"));
-        if (raw.repositories && Array.isArray(raw.repositories)) {
-          return raw.repositories;
-        }
-      } catch {
-        /* skip */
-      }
-    }
+function normalizeRepoEntry(entry, defaults, baseDir) {
+  if (!entry || typeof entry !== "object") return null;
+  const name = String(entry.name || entry.id || "").trim();
+  if (!name) return null;
+  const repoPath =
+    entry.path ||
+    entry.repoRoot ||
+    defaults.path ||
+    defaults.repoRoot ||
+    "";
+  const resolvedPath = repoPath ? resolveRepoPath(repoPath, baseDir) : "";
+  const slug = entry.slug || entry.repo || defaults.slug || defaults.repo || "";
+  const aliases = Array.isArray(entry.aliases)
+    ? entry.aliases.map(normalizeKey).filter(Boolean)
+    : [];
+  return {
+    ...defaults,
+    ...entry,
+    name,
+    id: normalizeKey(name),
+    path: resolvedPath,
+    slug,
+    aliases,
+    primary: entry.primary === true || defaults.primary === true,
+  };
+}
+
+function resolveRepoSelection(repositories, selection) {
+  if (!repositories || repositories.length === 0) return null;
+  const target = normalizeKey(selection);
+  if (!target) return null;
+  return (
+    repositories.find((repo) => repo.id === target) ||
+    repositories.find((repo) => normalizeKey(repo.name) === target) ||
+    repositories.find((repo) => normalizeKey(repo.slug) === target) ||
+    repositories.find((repo) => repo.aliases?.includes(target)) ||
+    null
+  );
+}
+
+function loadRepoConfig(configDir, configData = {}, options = {}) {
+  const repoRootOverride = options.repoRootOverride || "";
+  const baseDir = configDir || process.cwd();
+  const repoDefaults =
+    configData.repositoryDefaults ||
+    configData.repositories?.defaults ||
+    {};
+  let repoEntries = null;
+  if (Array.isArray(configData.repositories)) {
+    repoEntries = configData.repositories;
+  } else if (Array.isArray(configData.repositories?.items)) {
+    repoEntries = configData.repositories.items;
+  } else if (Array.isArray(configData.repositories?.list)) {
+    repoEntries = configData.repositories.list;
   }
 
-  // Single-repo from env
-  const repoRoot = detectRepoRoot();
+  if (repoEntries && repoEntries.length) {
+    return repoEntries
+      .map((entry) => normalizeRepoEntry(entry, repoDefaults, baseDir))
+      .filter(Boolean);
+  }
+
+  const repoRoot = repoRootOverride || detectRepoRoot();
   const slug = detectRepoSlug();
   return [
     {
       name: basename(repoRoot),
+      id: normalizeKey(basename(repoRoot)),
       path: repoRoot,
       slug: process.env.GITHUB_REPO || slug || "unknown/unknown",
       primary: true,
@@ -481,7 +622,7 @@ You are an autonomous task planner. When the task backlog is low, you analyze th
 - Check for existing similar tasks to avoid duplicates
 `;
 
-function loadAgentPrompts(configDir, repoRoot) {
+function loadAgentPrompts(configDir, repoRoot, configData) {
   const prompts = {
     orchestrator: DEFAULT_AGENT_PROMPT,
     planner: DEFAULT_PLANNER_PROMPT,
@@ -522,30 +663,31 @@ function loadAgentPrompts(configDir, repoRoot) {
   }
 
   // Try config file overrides
-  for (const name of [
-    "codex-monitor.config.json",
-    ".codex-monitor.json",
-    "codex-monitor.json",
-  ]) {
-    const p = resolve(configDir, name);
-    if (existsSync(p)) {
-      try {
-        const raw = JSON.parse(readFileSync(p, "utf8"));
-        if (raw.agentPrompts?.orchestrator) {
-          const opPath = resolve(configDir, raw.agentPrompts.orchestrator);
-          if (existsSync(opPath)) {
-            prompts.orchestrator = readFileSync(opPath, "utf8");
-          }
+  let rawConfig = configData;
+  if (!rawConfig) {
+    for (const name of CONFIG_FILES) {
+      const p = resolve(configDir, name);
+      if (existsSync(p)) {
+        try {
+          rawConfig = JSON.parse(readFileSync(p, "utf8"));
+          break;
+        } catch {
+          /* skip */
         }
-        if (raw.agentPrompts?.planner) {
-          const ppPath = resolve(configDir, raw.agentPrompts.planner);
-          if (existsSync(ppPath)) {
-            prompts.planner = readFileSync(ppPath, "utf8");
-          }
-        }
-      } catch {
-        /* skip */
       }
+    }
+  }
+
+  if (rawConfig?.agentPrompts?.orchestrator) {
+    const opPath = resolve(configDir, rawConfig.agentPrompts.orchestrator);
+    if (existsSync(opPath)) {
+      prompts.orchestrator = readFileSync(opPath, "utf8");
+    }
+  }
+  if (rawConfig?.agentPrompts?.planner) {
+    const ppPath = resolve(configDir, rawConfig.agentPrompts.planner);
+    if (existsSync(ppPath)) {
+      prompts.planner = readFileSync(ppPath, "utf8");
     }
   }
 
@@ -566,15 +708,87 @@ export function loadConfig(argv = process.argv, options = {}) {
   const configDir =
     cli["config-dir"] || process.env.CODEX_MONITOR_DIR || __dirname;
 
+  const configFile = loadConfigFile(configDir);
+  let configData = configFile.data || {};
+
+  const repoRootOverride = cli["repo-root"] || process.env.REPO_ROOT || "";
+  let repositories = loadRepoConfig(configDir, configData, {
+    repoRootOverride,
+  });
+
+  const repoSelection =
+    cli["repo-name"] ||
+    cli.repository ||
+    process.env.CODEX_MONITOR_REPO ||
+    process.env.CODEX_MONITOR_REPO_NAME ||
+    process.env.REPO_NAME ||
+    configData.defaultRepository ||
+    configData.defaultRepo ||
+    configData.repositories?.default ||
+    "";
+
+  let selectedRepository =
+    resolveRepoSelection(repositories, repoSelection) ||
+    repositories.find((repo) => repo.primary) ||
+    repositories[0] ||
+    null;
+
+  let repoRoot =
+    repoRootOverride || selectedRepository?.path || detectRepoRoot();
+
   // Load .env from config dir
   loadDotEnv(configDir, { override: reloadEnv });
 
   // Also load .env from repo root if different
-  const repoRoot =
-    cli["repo-root"] || process.env.REPO_ROOT || detectRepoRoot();
   if (resolve(repoRoot) !== resolve(configDir)) {
     loadDotEnv(repoRoot, { override: reloadEnv });
   }
+
+  const initialRepoRoot = repoRoot;
+
+  const profiles = configData.profiles || configData.envProfiles || {};
+  const defaultProfile =
+    configData.defaultProfile ||
+    configData.defaultEnvProfile ||
+    (profiles.default ? "default" : "");
+  const profileName =
+    cli.profile ||
+    process.env.CODEX_MONITOR_PROFILE ||
+    process.env.CODEX_MONITOR_ENV_PROFILE ||
+    selectedRepository?.profile ||
+    selectedRepository?.envProfile ||
+    defaultProfile ||
+    "";
+  const profile = profileName ? profiles[profileName] : null;
+
+  if (profile?.envFile) {
+    const envFilePath = resolve(configDir, profile.envFile);
+    loadDotEnvFile(envFilePath, { override: profile.envOverride === true });
+  }
+  applyEnvProfile(profile, { override: reloadEnv });
+
+  // Apply profile overrides (executors, repos, etc.)
+  configData = applyProfileOverrides(configData, profile);
+  repositories = loadRepoConfig(configDir, configData, { repoRootOverride });
+  selectedRepository =
+    resolveRepoSelection(
+      repositories,
+      repoSelection ||
+        profile?.repository ||
+        profile?.repo ||
+        profile?.defaultRepository ||
+        "",
+    ) ||
+    repositories.find((repo) => repo.primary) ||
+    repositories[0] ||
+    null;
+  repoRoot =
+    repoRootOverride || selectedRepository?.path || detectRepoRoot();
+
+  if (resolve(repoRoot) !== resolve(initialRepoRoot)) {
+    loadDotEnv(repoRoot, { override: reloadEnv });
+  }
+
   const envPaths = [
     resolve(configDir, ".env"),
     resolve(repoRoot, ".env"),
@@ -585,24 +799,47 @@ export function loadConfig(argv = process.argv, options = {}) {
     cli["project-name"] ||
     process.env.PROJECT_NAME ||
     process.env.VK_PROJECT_NAME ||
+    selectedRepository?.projectName ||
+    configData.projectName ||
     detectProjectName(configDir, repoRoot);
 
   const repoSlug =
     cli["repo"] ||
     process.env.GITHUB_REPO ||
+    selectedRepository?.slug ||
     detectRepoSlug() ||
     "unknown/unknown";
 
   const repoUrlBase =
-    process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
+    process.env.GITHUB_REPO_URL ||
+    selectedRepository?.repoUrlBase ||
+    `https://github.com/${repoSlug}`;
+
+  const mode =
+    (cli.mode ||
+      process.env.CODEX_MONITOR_MODE ||
+      configData.mode ||
+      selectedRepository?.mode ||
+      "").toString().toLowerCase() ||
+    (String(findOrchestratorScript(configDir, repoRoot)).includes("ve-orchestrator")
+      ? "virtengine"
+      : "generic");
 
   // ── Orchestrator ─────────────────────────────────────────
-  const defaultScript = findOrchestratorScript(configDir, repoRoot);
+  const defaultScript =
+    selectedRepository?.orchestratorScript ||
+    configData.orchestratorScript ||
+    findOrchestratorScript(configDir, repoRoot);
   const scriptPath = resolve(
     cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript,
   );
+  const defaultArgs = mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const scriptArgsRaw =
-    cli.args || process.env.ORCHESTRATOR_ARGS || "-MaxParallel 6 -WaitForMutex";
+    cli.args ||
+    process.env.ORCHESTRATOR_ARGS ||
+    selectedRepository?.orchestratorArgs ||
+    configData.orchestratorArgs ||
+    defaultArgs;
   const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
 
   // ── Timing ───────────────────────────────────────────────
@@ -615,19 +852,41 @@ export function loadConfig(argv = process.argv, options = {}) {
 
   // ── Logging ──────────────────────────────────────────────
   const logDir = resolve(
-    cli["log-dir"] || process.env.LOG_DIR || resolve(configDir, "logs"),
+    cli["log-dir"] ||
+      process.env.LOG_DIR ||
+      selectedRepository?.logDir ||
+      configData.logDir ||
+      resolve(configDir, "logs"),
   );
 
   // ── Feature flags ────────────────────────────────────────
   const flags = cli._flags;
-  const watchEnabled = !flags.has("no-watch");
+  const watchEnabled = flags.has("no-watch")
+    ? false
+    : configData.watchEnabled !== undefined
+      ? configData.watchEnabled
+      : true;
   const watchPath = resolve(
-    cli["watch-path"] || process.env.WATCH_PATH || scriptPath,
+    cli["watch-path"] ||
+      process.env.WATCH_PATH ||
+      selectedRepository?.watchPath ||
+      configData.watchPath ||
+      scriptPath,
   );
-  const echoLogs = !flags.has("no-echo-logs");
-  const autoFixEnabled = !flags.has("no-autofix");
+  const echoLogs = flags.has("no-echo-logs")
+    ? false
+    : configData.echoLogs !== undefined
+      ? configData.echoLogs
+      : true;
+  const autoFixEnabled = flags.has("no-autofix")
+    ? false
+    : configData.autoFixEnabled !== undefined
+      ? configData.autoFixEnabled
+      : true;
   const codexEnabled =
-    !flags.has("no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
+    !flags.has("no-codex") &&
+    (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
+    process.env.CODEX_SDK_DISABLED !== "1";
 
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
@@ -642,8 +901,14 @@ export function loadConfig(argv = process.argv, options = {}) {
   const vkRecoveryCooldownMin = Number(
     process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
   );
+  const vkSpawnDefault =
+    configData.vkSpawnEnabled !== undefined
+      ? configData.vkSpawnEnabled
+      : mode !== "generic";
   const vkSpawnEnabled =
-    !flags.has("no-vk-spawn") && process.env.VK_NO_SPAWN !== "1";
+    !flags.has("no-vk-spawn") &&
+    process.env.VK_NO_SPAWN !== "1" &&
+    vkSpawnDefault;
   const vkEnsureIntervalMs = Number(
     cli["vk-ensure-interval"] || process.env.VK_ENSURE_INTERVAL || "60000",
   );
@@ -672,7 +937,11 @@ export function loadConfig(argv = process.argv, options = {}) {
   // ── Task Planner ─────────────────────────────────────────
   // Mode: "codex-sdk" (default) runs Codex directly, "kanban" creates a VK
   // task for a real agent to plan, "disabled" turns off the planner entirely.
-  const plannerMode = (process.env.TASK_PLANNER_MODE || "kanban").toLowerCase();
+  const plannerMode = (
+    process.env.TASK_PLANNER_MODE ||
+    configData.plannerMode ||
+    (mode === "generic" ? "disabled" : "kanban")
+  ).toLowerCase();
   const plannerPerCapitaThreshold = Number(
     process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
   );
@@ -685,31 +954,39 @@ export function loadConfig(argv = process.argv, options = {}) {
     : 24 * 60 * 60 * 1000;
 
   // ── Status file ──────────────────────────────────────────
-  const cacheDir = resolve(repoRoot, ".cache");
+  const cacheDir = resolve(
+    repoRoot,
+    configData.cacheDir || selectedRepository?.cacheDir || ".cache",
+  );
   // Default matches ve-orchestrator.ps1's $script:StatusStatePath
   const statusPath =
-    process.env.STATUS_FILE || resolve(cacheDir, "ve-orchestrator-status.json");
-  const telegramPollLockPath = resolve(cacheDir, "telegram-getupdates.lock");
+    process.env.STATUS_FILE ||
+    configData.statusPath ||
+    selectedRepository?.statusPath ||
+    resolve(cacheDir, "ve-orchestrator-status.json");
+  const lockBase =
+    configData.telegramPollLockPath ||
+    selectedRepository?.telegramPollLockPath ||
+    resolve(cacheDir, "telegram-getupdates.lock");
+  const telegramPollLockPath = lockBase.endsWith(".lock")
+    ? resolve(lockBase)
+    : resolve(lockBase, "telegram-getupdates.lock");
 
   // ── Executors ────────────────────────────────────────────
-  const executorConfig = loadExecutorConfig(configDir);
+  const executorConfig = loadExecutorConfig(configDir, configData);
   const scheduler = new ExecutorScheduler(executorConfig);
 
-  // ── Repos ────────────────────────────────────────────────
-  const repositories = loadRepoConfig(configDir);
-
   // ── Agent prompts ────────────────────────────────────────
-  const agentPrompts = loadAgentPrompts(configDir, repoRoot);
+  const agentPrompts = loadAgentPrompts(configDir, repoRoot, configData);
 
   // ── First-run detection ──────────────────────────────────
   const isFirstRun =
-    !existsSync(resolve(configDir, ".env")) &&
-    !existsSync(resolve(configDir, "codex-monitor.config.json")) &&
-    !existsSync(resolve(configDir, ".codex-monitor.json"));
+    !existsSync(resolve(configDir, ".env")) && !configFile.path;
 
   const config = {
     // Identity
     projectName,
+    mode,
     repoSlug,
     repoUrlBase,
     repoRoot,
@@ -770,6 +1047,7 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Multi-repo
     repositories,
+    selectedRepository,
 
     // Agent prompts
     agentPrompts,

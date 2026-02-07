@@ -170,6 +170,13 @@ For projects with separate repositories (e.g., backend + frontend):
 
 ```json
 {
+  "$schema": "./codex-monitor.schema.json",
+  "defaultRepository": "backend",
+  "repositoryDefaults": {
+    "orchestratorScript": "./orchestrator.ps1",
+    "orchestratorArgs": "-MaxParallel 6",
+    "profile": "local"
+  },
   "repositories": [
     {
       "name": "backend",
@@ -180,11 +187,57 @@ For projects with separate repositories (e.g., backend + frontend):
     {
       "name": "frontend",
       "path": "/path/to/frontend",
-      "slug": "org/frontend"
+      "slug": "org/frontend",
+      "profile": "frontend"
     }
   ]
 }
 ```
+
+The JSON schema lives at `scripts/codex-monitor/codex-monitor.schema.json`.
+
+Repository selection (runtime):
+
+- CLI: `--repo-name backend`
+- Env: `CODEX_MONITOR_REPO=backend` (or `CODEX_MONITOR_REPO_NAME`)
+
+If no selection is provided, the `primary` repo (or first entry) is used.
+
+### Generic Mode (Non-VirtEngine)
+
+When running outside VirtEngine, set `mode` to `generic` (or use `--mode generic`).
+This changes defaults to avoid VirtEngine-specific behavior (e.g., Vibe-Kanban spawn
+is disabled by default, and the default orchestrator args are empty).
+
+### Environment Profiles
+
+Use profiles to switch settings + env without editing `.env` files:
+
+```json
+{
+  "profiles": {
+    "local": {
+      "env": {
+        "TELEGRAM_BOT_TOKEN": "token",
+        "VK_BASE_URL": "http://127.0.0.1:54089"
+      },
+      "overrides": {
+        "plannerMode": "kanban"
+      }
+    },
+    "generic": {
+      "envFile": ".env.generic",
+      "envOverride": true,
+      "overrides": {
+        "mode": "generic",
+        "vkSpawnEnabled": false
+      }
+    }
+  }
+}
+```
+
+Select a profile via `--profile` or `CODEX_MONITOR_PROFILE`.
 
 ### Environment Variables
 
@@ -202,6 +255,9 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `EXECUTOR_DISTRIBUTION` | `weighted`               | Distribution mode                  |
 | `FAILOVER_STRATEGY`     | `next-in-line`           | Failover behavior                  |
 | `MAX_PARALLEL`          | `6`                      | Max concurrent agent slots         |
+| `CODEX_MONITOR_REPO`    | —                        | Selected repo name (multi-repo)    |
+| `CODEX_MONITOR_PROFILE` | —                        | Environment profile name           |
+| `CODEX_MONITOR_MODE`    | `virtengine`/`generic`   | Mode override                      |
 
 ## CLI Reference
 
@@ -229,6 +285,9 @@ codex-monitor [options]
 | `--repo-root <path>`    | Repository root (auto-detected)           |
 | `--project-name <name>` | Project name for display                  |
 | `--repo <org/repo>`     | GitHub repo slug                          |
+| `--repo-name <name>`    | Repository selection (multi-repo)         |
+| `--profile <name>`      | Environment profile selection             |
+| `--mode <name>`         | Mode override (`virtengine`/`generic`)    |
 
 ## Telegram Bot
 
