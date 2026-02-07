@@ -8,7 +8,7 @@ import { Header, Footer, Navigation, Sidebar } from '@/components/layout';
 
 interface AppLayoutProps {
   children: ReactNode;
-  sidebarVariant: 'customer' | 'provider';
+  sidebarVariant: 'customer' | 'provider' | 'admin';
 }
 
 export function AppLayout({ children, sidebarVariant }: AppLayoutProps) {
