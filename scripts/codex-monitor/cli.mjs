@@ -213,7 +213,11 @@ function readEnvCredentials() {
       ) {
         val = val.slice(1, -1);
       }
-      if (key === "TELEGRAM_BOT_TOKEN" || key === "TELEGRAM_CHAT_ID" || key === "PROJECT_NAME") {
+      if (
+        key === "TELEGRAM_BOT_TOKEN" ||
+        key === "TELEGRAM_CHAT_ID" ||
+        key === "PROJECT_NAME"
+      ) {
         vars[key] = val;
       }
     }

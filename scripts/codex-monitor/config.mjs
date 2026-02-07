@@ -115,7 +115,9 @@ function parseArgs(argv) {
 // ── Config/profile helpers ───────────────────────────────────────────────────
 
 function normalizeKey(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function applyEnvProfile(profile, options = {}) {
@@ -155,7 +157,10 @@ function applyProfileOverrides(configData, profile) {
 function resolveRepoPath(repoPath, baseDir) {
   if (!repoPath) return "";
   if (repoPath.startsWith("~")) {
-    return resolve(process.env.HOME || process.env.USERPROFILE || "", repoPath.slice(1));
+    return resolve(
+      process.env.HOME || process.env.USERPROFILE || "",
+      repoPath.slice(1),
+    );
   }
   return resolve(baseDir, repoPath);
 }
@@ -489,11 +494,7 @@ function normalizeRepoEntry(entry, defaults, baseDir) {
   const name = String(entry.name || entry.id || "").trim();
   if (!name) return null;
   const repoPath =
-    entry.path ||
-    entry.repoRoot ||
-    defaults.path ||
-    defaults.repoRoot ||
-    "";
+    entry.path || entry.repoRoot || defaults.path || defaults.repoRoot || "";
   const resolvedPath = repoPath ? resolveRepoPath(repoPath, baseDir) : "";
   const slug = entry.slug || entry.repo || defaults.slug || defaults.repo || "";
   const aliases = Array.isArray(entry.aliases)
@@ -528,9 +529,7 @@ function loadRepoConfig(configDir, configData = {}, options = {}) {
   const repoRootOverride = options.repoRootOverride || "";
   const baseDir = configDir || process.cwd();
   const repoDefaults =
-    configData.repositoryDefaults ||
-    configData.repositories?.defaults ||
-    {};
+    configData.repositoryDefaults || configData.repositories?.defaults || {};
   let repoEntries = null;
   if (Array.isArray(configData.repositories)) {
     repoEntries = configData.repositories;
@@ -782,8 +781,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     repositories.find((repo) => repo.primary) ||
     repositories[0] ||
     null;
-  repoRoot =
-    repoRootOverride || selectedRepository?.path || detectRepoRoot();
+  repoRoot = repoRootOverride || selectedRepository?.path || detectRepoRoot();
 
   if (resolve(repoRoot) !== resolve(initialRepoRoot)) {
     loadDotEnv(repoRoot, { override: reloadEnv });
@@ -816,12 +814,18 @@ export function loadConfig(argv = process.argv, options = {}) {
     `https://github.com/${repoSlug}`;
 
   const mode =
-    (cli.mode ||
+    (
+      cli.mode ||
       process.env.CODEX_MONITOR_MODE ||
       configData.mode ||
       selectedRepository?.mode ||
-      "").toString().toLowerCase() ||
-    (String(findOrchestratorScript(configDir, repoRoot)).includes("ve-orchestrator")
+      ""
+    )
+      .toString()
+      .toLowerCase() ||
+    (String(findOrchestratorScript(configDir, repoRoot)).includes(
+      "ve-orchestrator",
+    )
       ? "virtengine"
       : "generic");
 
@@ -838,13 +842,18 @@ export function loadConfig(argv = process.argv, options = {}) {
   let scriptPath = resolve(configDir, rawScript);
   // If the resolved path doesn't exist and rawScript is just a filename (no path separators),
   // fall back to auto-detection to find it in common locations
-  if (!existsSync(scriptPath) && !rawScript.includes("/") && !rawScript.includes("\\")) {
+  if (
+    !existsSync(scriptPath) &&
+    !rawScript.includes("/") &&
+    !rawScript.includes("\\")
+  ) {
     const autoDetected = findOrchestratorScript(configDir, repoRoot);
     if (existsSync(autoDetected)) {
       scriptPath = autoDetected;
     }
   }
-  const defaultArgs = mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
+  const defaultArgs =
+    mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const scriptArgsRaw =
     cli.args ||
     process.env.ORCHESTRATOR_ARGS ||
@@ -1038,7 +1047,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     // Merge Strategy
     codexAnalyzeMergeStrategy:
       codexEnabled &&
-      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false",
+      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !==
+        "false",
     mergeStrategyTimeoutMs:
       parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
 

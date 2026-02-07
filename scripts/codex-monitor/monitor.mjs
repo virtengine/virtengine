@@ -253,7 +253,6 @@ const telegramDedup = new Map();
 
 // ── Deduplication tracking (utilities imported from utils.mjs) ───────────────
 
-
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
 // Detects rapid failure bursts independently of Telegram dedup.
 // When tripped, kills the orchestrator child and pauses everything.
@@ -478,7 +477,6 @@ function getChangeSummary(repoRootPath, files) {
     return files.join(", ");
   }
 }
-
 
 const monitorFixAttempts = new Map();
 const monitorFixMaxAttempts = 2;
@@ -789,7 +787,6 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 /** @type {Map<string, {timestamps: number[], fixTriggeredAt: number}>} */
 const errorFrequency = new Map();
 let loopFixInProgress = false;
-
 
 function trackErrorFrequency(line) {
   const fingerprint = getErrorFingerprint(line);
@@ -2983,8 +2980,8 @@ async function sendTelegramMessage(text, options = {}) {
   if (
     !isPositive &&
     (textLower.includes("fatal") ||
-    textLower.includes("critical") ||
-    textLower.includes("🔥"))
+      textLower.includes("critical") ||
+      textLower.includes("🔥"))
   ) {
     priority = 1;
     category = "critical";
@@ -2993,9 +2990,9 @@ async function sendTelegramMessage(text, options = {}) {
   else if (
     !isPositive &&
     (textLower.includes("error") ||
-    textLower.includes("failed") ||
-    textLower.includes("❌") ||
-    textLower.includes("auto-fix gave up"))
+      textLower.includes("failed") ||
+      textLower.includes("❌") ||
+      textLower.includes("auto-fix gave up"))
   ) {
     priority = 2;
     category = "error";
@@ -3465,17 +3462,25 @@ async function startTelegramNotifier() {
 
   // Suppress "Notifier started" message on rapid restarts (e.g. code-change restarts).
   // If the last start was <60s ago, skip the notification — just log locally.
-  const lastStartPath = resolve(repoRoot, ".cache", "ve-last-notifier-start.txt");
+  const lastStartPath = resolve(
+    repoRoot,
+    ".cache",
+    "ve-last-notifier-start.txt",
+  );
   let suppressStartup = false;
   try {
     const prev = await readFile(lastStartPath, "utf8");
     const elapsed = Date.now() - Number(prev);
     if (elapsed < 60_000) suppressStartup = true;
-  } catch { /* first start or missing file */ }
+  } catch {
+    /* first start or missing file */
+  }
   await writeFile(lastStartPath, String(Date.now())).catch(() => {});
 
   if (suppressStartup) {
-    console.log(`[monitor] notifier restarted (suppressed telegram notification — rapid restart)`);
+    console.log(
+      `[monitor] notifier restarted (suppressed telegram notification — rapid restart)`,
+    );
   } else {
     void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
   }
@@ -4884,5 +4889,3 @@ injectMonitorFunctions({
 if (telegramBotEnabled) {
   void startTelegramBot();
 }
-
-
