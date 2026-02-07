@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -859,6 +860,9 @@ export function loadConfig(argv = process.argv, options = {}) {
       resolve(configDir, "logs"),
   );
 
+  // ── Agent SDK Selection ───────────────────────────────────
+  const agentSdk = resolveAgentSdkConfig();
+
   // ── Feature flags ────────────────────────────────────────
   const flags = cli._flags;
   const watchEnabled = flags.has("no-watch")
@@ -886,7 +890,8 @@ export function loadConfig(argv = process.argv, options = {}) {
   const codexEnabled =
     !flags.has("no-codex") &&
     (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
-    process.env.CODEX_SDK_DISABLED !== "1";
+    process.env.CODEX_SDK_DISABLED !== "1" &&
+    agentSdk.primary === "codex";
 
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
@@ -1001,6 +1006,9 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Logging
     logDir,
+
+    // Agent SDK
+    agentSdk,
 
     // Feature flags
     watchEnabled,

@@ -15,6 +15,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -32,6 +33,7 @@ let activeThread = null; // Current persistent Thread
 let activeThreadId = null; // Thread ID for resume
 let activeTurn = null; // Whether a turn is in-flight
 let turnCount = 0; // Number of turns in this thread
+let agentSdk = resolveAgentSdkConfig();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +44,13 @@ function timestamp() {
 // ── SDK Loading ──────────────────────────────────────────────────────────────
 
 async function loadCodexSdk() {
+  agentSdk = resolveAgentSdkConfig({ reload: true });
+  if (agentSdk.primary !== "codex") {
+    console.warn(
+      `[codex-shell] agent_sdk.primary=${agentSdk.primary} — Codex SDK disabled`,
+    );
+    return null;
+  }
   if (CodexClass) return CodexClass;
   try {
     const mod = await import("@openai/codex-sdk");
@@ -326,6 +335,15 @@ export async function execCodexPrompt(userMessage, options = {}) {
     abortController = null,
   } = options;
 
+  agentSdk = resolveAgentSdkConfig({ reload: true });
+  if (agentSdk.primary !== "codex") {
+    return {
+      finalResponse: `❌ Agent SDK set to "${agentSdk.primary}" — Codex SDK disabled.`,
+      items: [],
+      usage: null,
+    };
+  }
+
   if (activeTurn) {
     return {
       finalResponse:
@@ -442,6 +460,13 @@ export async function execCodexPrompt(userMessage, options = {}) {
  */
 export async function steerCodexPrompt(message) {
   try {
+    agentSdk = resolveAgentSdkConfig({ reload: true });
+    if (agentSdk.primary !== "codex") {
+      return { ok: false, reason: "agent_sdk_not_codex" };
+    }
+    if (!agentSdk.capabilities?.steering) {
+      return { ok: false, reason: "steering_disabled" };
+    }
     const thread = await getThread();
     const steerFn =
       thread?.steer ||

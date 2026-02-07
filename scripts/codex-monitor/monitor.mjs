@@ -115,6 +115,7 @@ let {
   plannerMode: configPlannerMode,
   agentPrompts,
   scheduler: executorScheduler,
+  agentSdk,
   envPaths,
 } = config;
 
@@ -125,7 +126,9 @@ let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
     ? "disabled via CODEX_SDK_DISABLED"
-    : "disabled via --no-codex";
+    : agentSdk?.primary && agentSdk.primary !== "codex"
+      ? `disabled via agent_sdk.primary=${agentSdk.primary}`
+      : "disabled via --no-codex";
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
@@ -4180,13 +4183,16 @@ function applyConfig(nextConfig, options = {}) {
   plannerMode = nextConfig.plannerMode || "kanban";
   agentPrompts = nextConfig.agentPrompts;
   executorScheduler = nextConfig.scheduler;
+  agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
   codexEnabled = nextConfig.codexEnabled;
   codexDisabledReason = codexEnabled
     ? ""
     : process.env.CODEX_SDK_DISABLED === "1"
       ? "disabled via CODEX_SDK_DISABLED"
-      : "disabled via --no-codex";
+      : agentSdk?.primary && agentSdk.primary !== "codex"
+        ? `disabled via agent_sdk.primary=${agentSdk.primary}`
+        : "disabled via --no-codex";
 
   if (prevWatchPath !== watchPath || watchEnabled === false) {
     void startWatcher(true);

@@ -62,6 +62,7 @@
     "config.mjs",
     "monitor.mjs",
     "autofix.mjs",
+    "agent-sdk.mjs",
     "codex-shell.mjs",
     "maintenance.mjs",
     "telegram-bot.mjs",

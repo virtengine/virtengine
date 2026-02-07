@@ -259,6 +259,23 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `CODEX_MONITOR_PROFILE` | —                        | Environment profile name           |
 | `CODEX_MONITOR_MODE`    | `virtengine`/`generic`   | Mode override                      |
 
+### Agent SDK Selection (config.toml)
+
+codex-monitor reads `~/.codex/config.toml` for the primary agent SDK and
+capability flags. Example:
+
+```toml
+[agent_sdk]
+primary = "codex" # codex | copilot | claude
+
+[agent_sdk.capabilities]
+steering = true
+subagents = true
+vscode_tools = false
+```
+
+When `primary` is not `codex`, Codex SDK automation features are disabled.
+
 ## CLI Reference
 
 ```
