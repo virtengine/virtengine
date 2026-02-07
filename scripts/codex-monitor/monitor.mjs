@@ -159,6 +159,89 @@ const errorNotified = new Map();
 const mergeFailureNotified = new Map();
 const vkErrorNotified = new Map();
 const telegramDedup = new Map();
+
+// ── Fuzzy dedup: normalize messages so structural duplicates match ───────────
+// "recovery (count=1)" and "recovery (count=29)" both become "recovery (count=N)"
+function normalizeDedupKey(text) {
+  return String(text || "")
+    .trim()
+    // Replace numbers (integers and decimals) with N, preserving surrounding text
+    .replaceAll(/\d+(\.\d+)?/g, "N")
+    // Collapse any resulting multi-N sequences (e.g., "N.N" → "N")
+    .replaceAll(/N[.\-/:]N/g, "N")
+    // Collapse whitespace
+    .replaceAll(/\s+/g, " ");
+}
+
+// ── Internal crash loop circuit breaker ──────────────────────────────────────
+// Detects rapid failure bursts independently of Telegram dedup.
+// When tripped, kills the orchestrator child and pauses everything.
+const CIRCUIT_BREAKER_WINDOW_MS = 60_000; // 1 minute
+const CIRCUIT_BREAKER_THRESHOLD = 5;      // 5 failures in window = circuit trips
+const CIRCUIT_BREAKER_PAUSE_MS = 5 * 60_000; // 5-minute hard pause
+let circuitBreakerTripped = false;
+let circuitBreakerResetAt = 0;
+let circuitBreakerNotified = false;
+const circuitBreakerTimestamps = [];
+
+function recordCircuitBreakerEvent() {
+  const now = Date.now();
+  circuitBreakerTimestamps.push(now);
+  // Prune events outside window
+  while (
+    circuitBreakerTimestamps.length &&
+    now - circuitBreakerTimestamps[0] > CIRCUIT_BREAKER_WINDOW_MS
+  ) {
+    circuitBreakerTimestamps.shift();
+  }
+  return circuitBreakerTimestamps.length;
+}
+
+function isCircuitBreakerTripped() {
+  const now = Date.now();
+  // If paused, check if pause expired
+  if (circuitBreakerTripped && now >= circuitBreakerResetAt) {
+    circuitBreakerTripped = false;
+    circuitBreakerNotified = false;
+    circuitBreakerTimestamps.length = 0;
+    console.warn("[monitor] circuit breaker reset — resuming normal operation");
+    return false;
+  }
+  return circuitBreakerTripped;
+}
+
+function tripCircuitBreaker(failureCount) {
+  if (circuitBreakerTripped) return; // already tripped
+  circuitBreakerTripped = true;
+  circuitBreakerResetAt = Date.now() + CIRCUIT_BREAKER_PAUSE_MS;
+  const pauseMin = Math.round(CIRCUIT_BREAKER_PAUSE_MS / 60_000);
+  console.error(
+    `[monitor] 🔌 CIRCUIT BREAKER TRIPPED: ${failureCount} failures in ${Math.round(CIRCUIT_BREAKER_WINDOW_MS / 1000)}s. ` +
+    `Killing orchestrator and pausing all restarts for ${pauseMin} minutes.`
+  );
+
+  // Kill the orchestrator child if running
+  if (currentChild) {
+    try {
+      currentChild.kill("SIGTERM");
+    } catch { /* best effort */ }
+  }
+
+  // Block orchestrator restarts via safe mode
+  monitorSafeModeUntil = circuitBreakerResetAt;
+
+  // Send ONE summary Telegram message (if not already notified)
+  if (!circuitBreakerNotified && telegramToken && telegramChatId) {
+    circuitBreakerNotified = true;
+    const msg =
+      `🔌 Circuit breaker tripped: ${failureCount} failures in ${Math.round(CIRCUIT_BREAKER_WINDOW_MS / 1000)}s.\n` +
+      `Orchestrator killed. All restarts paused for ${pauseMin} minutes.\n` +
+      `Will auto-resume at ${new Date(circuitBreakerResetAt).toLocaleTimeString()}.`;
+    // Fire-and-forget with skipDedup to ensure it gets through
+    sendTelegramMessage(msg, { skipDedup: true }).catch(() => {});
+  }
+}
+
 let allCompleteNotified = false;
 let backlogLowNotified = false;
 let idleAgentsNotified = false;
@@ -464,12 +547,24 @@ let lastMonitorFailureHandledAt = 0;
 async function handleMonitorFailure(reason, err) {
   if (monitorFailureHandling) return;
   const now = Date.now();
+
+  // ── Circuit breaker: if tripped, suppress ALL handling silently ──
+  if (isCircuitBreakerTripped()) return;
+
   // Rate-limit: don't re-enter within cooldown
   if (now - lastMonitorFailureHandledAt < MONITOR_FAILURE_COOLDOWN_MS) return;
   monitorFailureHandling = true;
   lastMonitorFailureHandledAt = now;
   const failureCount = recordMonitorFailure();
   const message = err && err.message ? err.message : String(err || reason);
+
+  // ── Circuit breaker: track rapid failure bursts ──
+  const burstCount = recordCircuitBreakerEvent();
+  if (burstCount >= CIRCUIT_BREAKER_THRESHOLD) {
+    tripCircuitBreaker(burstCount);
+    monitorFailureHandling = false;
+    return; // circuit breaker sends its own summary message
+  }
 
   // Hard cap: exit the process to break the loop for good
   if (failureCount >= MONITOR_FAILURE_HARD_CAP) {
@@ -1749,7 +1844,9 @@ async function sendTelegramMessage(text, options = {}) {
   if (!telegramToken || !targetChatId) {
     return;
   }
-  const dedupKey = options.dedupKey ?? String(text || "").trim();
+  const rawDedupKey = options.dedupKey ?? String(text || "").trim();
+  // Use fuzzy normalization so structural duplicates with different numbers match
+  const dedupKey = options.exactDedup ? rawDedupKey : normalizeDedupKey(rawDedupKey);
   if (dedupKey && !options.skipDedup) {
     const now = Date.now();
     const last = telegramDedup.get(dedupKey) || 0;
