@@ -1072,7 +1072,7 @@ async function flushMergeNotifications() {
     .map((pr) => `#${pr} ${repoUrlBase}/pull/${pr}`)
     .join(", ");
   const message = `Merged PRs: ${formatted}`;
-  await sendTelegramMessage(message);
+  await sendTelegramMessage(message, { bus: { type: "status" } });
 }
 
 async function readStatusData() {

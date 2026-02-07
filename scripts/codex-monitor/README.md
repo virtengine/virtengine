@@ -22,10 +22,18 @@ Workspaces are configured in `scripts/codex-monitor/workspaces.json`.
 The Telegram bot supports:
 
 - `/workspaces` to list workspaces
-- `/agent --workspace <id> <task>` to route tasks
+- `/agent [--workspace <id>] <task>` to route tasks (defaults to the coordinator)
+- `/handoff @workspace <message>` to share context
 - `@workspace` mentions to hand off tasks
 
 See `docs/operations/slopdev-workshop.md` for setup details.
+
+Environment highlights:
+
+- `VE_WORKSPACE_ID` selects the local workspace entry.
+- `VE_WORKSPACE_REGISTRY` overrides the registry path.
+- `TELEGRAM_INTERVAL_MIN` controls heartbeat cadence (monitor).
+- `TELEGRAM_DIGEST_MAX` caps entries per workspace digest file.
 
 ### Options
 
