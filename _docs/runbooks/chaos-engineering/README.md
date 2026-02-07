@@ -110,53 +110,53 @@ kubectl apply -k infra/kubernetes/chaos/litmus/
 
 ### Network Chaos Experiments
 
-| Experiment | Description | Duration | Blast Radius | Risk Level |
-|------------|-------------|----------|--------------|------------|
-| `validator-partition` | Split validators into isolated groups | 5 min | Medium | Medium |
-| `validator-latency` | Inject 500ms latency between validators | 5 min | Low | Low |
-| `validator-packet-loss` | Drop 10% of packets | 5 min | Low | Low |
-| `validator-bandwidth-limit` | Limit to 1 Mbps | 5 min | Low | Low |
-| `provider-isolation` | Isolate provider daemon from network | 2 min | Low | Low |
-| `cross-zone-latency` | Add 100ms cross-zone latency | 10 min | Medium | Low |
+| Experiment                  | Description                             | Duration | Blast Radius | Risk Level |
+| --------------------------- | --------------------------------------- | -------- | ------------ | ---------- |
+| `validator-partition`       | Split validators into isolated groups   | 5 min    | Medium       | Medium     |
+| `validator-latency`         | Inject 500ms latency between validators | 5 min    | Low          | Low        |
+| `validator-packet-loss`     | Drop 10% of packets                     | 5 min    | Low          | Low        |
+| `validator-bandwidth-limit` | Limit to 1 Mbps                         | 5 min    | Low          | Low        |
+| `provider-isolation`        | Isolate provider daemon from network    | 2 min    | Low          | Low        |
+| `cross-zone-latency`        | Add 100ms cross-zone latency            | 10 min   | Medium       | Low        |
 
 ### Pod Chaos Experiments
 
-| Experiment | Description | Duration | Blast Radius | Risk Level |
-|------------|-------------|----------|--------------|------------|
-| `validator-pod-kill` | Kill a single validator pod | Instant | Low | Medium |
-| `validator-pod-failure` | Fail a validator pod | 1 min | Low | Medium |
-| `provider-pod-kill` | Kill provider daemon pod | Instant | Low | Low |
-| `multi-validator-failure` | Kill 2 validators simultaneously | Instant | Medium | High |
-| `rolling-failure` | Sequential 25% pod failures | 5 min | Medium | Medium |
+| Experiment                | Description                      | Duration | Blast Radius | Risk Level |
+| ------------------------- | -------------------------------- | -------- | ------------ | ---------- |
+| `validator-pod-kill`      | Kill a single validator pod      | Instant  | Low          | Medium     |
+| `validator-pod-failure`   | Fail a validator pod             | 1 min    | Low          | Medium     |
+| `provider-pod-kill`       | Kill provider daemon pod         | Instant  | Low          | Low        |
+| `multi-validator-failure` | Kill 2 validators simultaneously | Instant  | Medium       | High       |
+| `rolling-failure`         | Sequential 25% pod failures      | 5 min    | Medium       | Medium     |
 
 ### Stress Chaos Experiments
 
-| Experiment | Description | Duration | Blast Radius | Risk Level |
-|------------|-------------|----------|--------------|------------|
-| `validator-cpu-stress` | 80% CPU load on one validator | 2 min | Low | Low |
-| `validator-memory-stress` | Consume 512MB memory | 2 min | Low | Medium |
-| `provider-cpu-stress` | 90% CPU load on provider | 3 min | Low | Low |
-| `ml-inference-stress` | Stress ML scoring containers | 1 min | Low | Low |
-| `oom-test` | Push memory to trigger OOM | 1 min | Low | High |
+| Experiment                | Description                   | Duration | Blast Radius | Risk Level |
+| ------------------------- | ----------------------------- | -------- | ------------ | ---------- |
+| `validator-cpu-stress`    | 80% CPU load on one validator | 2 min    | Low          | Low        |
+| `validator-memory-stress` | Consume 512MB memory          | 2 min    | Low          | Medium     |
+| `provider-cpu-stress`     | 90% CPU load on provider      | 3 min    | Low          | Low        |
+| `ml-inference-stress`     | Stress ML scoring containers  | 1 min    | Low          | Low        |
+| `oom-test`                | Push memory to trigger OOM    | 1 min    | Low          | High       |
 
 ### Time Chaos Experiments
 
-| Experiment | Description | Duration | Blast Radius | Risk Level |
-|------------|-------------|----------|--------------|------------|
-| `clock-skew-forward` | Advance time by 1 hour | 2 min | Low | Medium |
-| `clock-skew-backward` | Rewind time by 30 min | 2 min | Low | Medium |
-| `clock-drift` | Add 5s drift to all validators | 5 min | Medium | Low |
-| `consensus-time-test` | 10s clock offset for block validation | 1 min | Low | Medium |
+| Experiment            | Description                           | Duration | Blast Radius | Risk Level |
+| --------------------- | ------------------------------------- | -------- | ------------ | ---------- |
+| `clock-skew-forward`  | Advance time by 1 hour                | 2 min    | Low          | Medium     |
+| `clock-skew-backward` | Rewind time by 30 min                 | 2 min    | Low          | Medium     |
+| `clock-drift`         | Add 5s drift to all validators        | 5 min    | Medium       | Low        |
+| `consensus-time-test` | 10s clock offset for block validation | 1 min    | Low          | Medium     |
 
 ### Byzantine Behavior Experiments
 
-| Experiment | Description | Duration | Blast Radius | Risk Level |
-|------------|-------------|----------|--------------|------------|
-| `double-signing-test` | Simulate double-signing attack | 5 min | Low | High |
-| `equivocation-prevote` | Send conflicting prevotes | 5 min | Low | Medium |
-| `equivocation-precommit` | Send conflicting precommits | 5 min | Low | Medium |
-| `invalid-block-malformed` | Propose malformed blocks | 5 min | Low | Medium |
-| `message-tampering` | Corrupt consensus messages | 5 min | Low | Medium |
+| Experiment                | Description                    | Duration | Blast Radius | Risk Level |
+| ------------------------- | ------------------------------ | -------- | ------------ | ---------- |
+| `double-signing-test`     | Simulate double-signing attack | 5 min    | Low          | High       |
+| `equivocation-prevote`    | Send conflicting prevotes      | 5 min    | Low          | Medium     |
+| `equivocation-precommit`  | Send conflicting precommits    | 5 min    | Low          | Medium     |
+| `invalid-block-malformed` | Propose malformed blocks       | 5 min    | Low          | Medium     |
+| `message-tampering`       | Corrupt consensus messages     | 5 min    | Low          | Medium     |
 
 ---
 
@@ -268,7 +268,7 @@ func main() {
         log.Fatal(err)
     }
 
-    log.Printf("Experiment completed: success=%v, duration=%v", 
+    log.Printf("Experiment completed: success=%v, duration=%v",
         results.Success, results.Duration)
 }
 ```
@@ -315,31 +315,34 @@ kubectl delete chaosresult --all -n virtengine
 If automatic recovery fails:
 
 1. **For Pod Failures**:
+
    ```bash
    # Force restart affected pods
    kubectl delete pod -l app.kubernetes.io/component=validator -n virtengine --force
-   
+
    # Verify pod recovery
    kubectl get pods -l app.kubernetes.io/component=validator -n virtengine -w
    ```
 
 2. **For Network Partitions**:
+
    ```bash
    # Check network policies
    kubectl get networkpolicy -n virtengine
-   
+
    # Remove any blocking policies
    kubectl delete networkpolicy chaos-partition -n virtengine --ignore-not-found
-   
+
    # Restart affected pods to clear network state
    kubectl rollout restart statefulset/virtengine-validator -n virtengine
    ```
 
 3. **For Resource Exhaustion**:
+
    ```bash
    # Identify stressed pods
    kubectl top pods -n virtengine
-   
+
    # Restart affected pods
    kubectl delete pod <stressed-pod> -n virtengine
    ```
@@ -350,14 +353,14 @@ If automatic recovery fails:
 
 ### Metrics to Collect
 
-| Metric | Source | Purpose |
-|--------|--------|---------|
-| Block production rate | Prometheus | Measure chain health during experiment |
-| Consensus round duration | Prometheus | Detect consensus slowdown |
-| Message drop rate | Prometheus | Quantify network impact |
-| MTTR (Mean Time To Recovery) | Experiment results | Recovery performance |
-| MTTD (Mean Time To Detect) | Alertmanager | Detection effectiveness |
-| SLO burn rate | Prometheus | Error budget consumption |
+| Metric                       | Source             | Purpose                                |
+| ---------------------------- | ------------------ | -------------------------------------- |
+| Block production rate        | Prometheus         | Measure chain health during experiment |
+| Consensus round duration     | Prometheus         | Detect consensus slowdown              |
+| Message drop rate            | Prometheus         | Quantify network impact                |
+| MTTR (Mean Time To Recovery) | Experiment results | Recovery performance                   |
+| MTTD (Mean Time To Detect)   | Alertmanager       | Detection effectiveness                |
+| SLO burn rate                | Prometheus         | Error budget consumption               |
 
 ### Analysis Checklist
 
@@ -395,11 +398,11 @@ After each experiment:
 
 ## Timeline
 
-| Time | Event |
-|------|-------|
-| T+0 | Experiment started |
-| T+X | [Event] |
-| T+Y | Experiment ended |
+| Time | Event              |
+| ---- | ------------------ |
+| T+0  | Experiment started |
+| T+X  | [Event]            |
+| T+Y  | Experiment ended   |
 
 ## Observations
 
@@ -421,26 +424,26 @@ After each experiment:
 
 ### Target SLOs
 
-| Service | Metric | Target | Error Budget/Month |
-|---------|--------|--------|-------------------|
-| Chain | Availability | 99.9% | 43.2 minutes |
-| Chain | Block time P99 | < 6 seconds | - |
-| VEID Scoring | Processing P95 | < 5 minutes | - |
-| VEID Scoring | Availability | 99.5% | 3.6 hours |
-| Marketplace | Order fulfillment P95 | < 10 minutes | - |
-| Marketplace | Availability | 99.5% | 3.6 hours |
-| HPC | Job scheduling P95 | < 15 minutes | - |
-| HPC | Availability | 99.0% | 7.2 hours |
+| Service      | Metric                | Target       | Error Budget/Month |
+| ------------ | --------------------- | ------------ | ------------------ |
+| Chain        | Availability          | 99.9%        | 43.2 minutes       |
+| Chain        | Block time P99        | < 6 seconds  | -                  |
+| VEID Scoring | Processing P95        | < 5 minutes  | -                  |
+| VEID Scoring | Availability          | 99.5%        | 3.6 hours          |
+| Marketplace  | Order fulfillment P95 | < 10 minutes | -                  |
+| Marketplace  | Availability          | 99.5%        | 3.6 hours          |
+| HPC          | Job scheduling P95    | < 15 minutes | -                  |
+| HPC          | Availability          | 99.0%        | 7.2 hours          |
 
 ### Resilience Baselines
 
-| Baseline | MTTR Target | MTTD Target | Recovery Rate |
-|----------|-------------|-------------|---------------|
-| Chain | 30 seconds | 5 seconds | 99% |
-| VEID Scoring | 2 minutes | 30 seconds | 95% |
-| Marketplace | 5 minutes | 1 minute | 95% |
-| HPC | 10 minutes | 2 minutes | 90% |
-| Provider Daemon | 1 minute | 30 seconds | 95% |
+| Baseline        | MTTR Target | MTTD Target | Recovery Rate |
+| --------------- | ----------- | ----------- | ------------- |
+| Chain           | 30 seconds  | 5 seconds   | 99%           |
+| VEID Scoring    | 2 minutes   | 30 seconds  | 95%           |
+| Marketplace     | 5 minutes   | 1 minute    | 95%           |
+| HPC             | 10 minutes  | 2 minutes   | 90%           |
+| Provider Daemon | 1 minute    | 30 seconds  | 95%           |
 
 ### Prometheus Queries
 
@@ -453,7 +456,7 @@ After each experiment:
 )
 
 # Block time P99
-histogram_quantile(0.99, 
+histogram_quantile(0.99,
   sum(rate(tendermint_consensus_block_time_seconds_bucket[1h])) by (le)
 )
 
@@ -463,7 +466,7 @@ sum(rate(virtengine_chaos_experiments_total{status="success"}[24h]))
 sum(rate(virtengine_chaos_experiments_total[24h]))
 
 # Mean Time To Recovery
-histogram_quantile(0.50, 
+histogram_quantile(0.50,
   sum(rate(virtengine_chaos_mean_time_to_recovery_seconds_bucket[24h])) by (le)
 )
 
@@ -525,12 +528,12 @@ kubectl patch networkchaos <name> -n chaos-testing -p '{"metadata":{"finalizers"
 
 ### Emergency Contacts
 
-| Role | Contact | Escalation Time |
-|------|---------|----------------|
-| On-call | PagerDuty | Immediate |
-| Platform Team Lead | [Name] | 15 minutes |
-| SRE Manager | [Name] | 30 minutes |
-| CTO | [Name] | Critical only |
+| Role               | Contact   | Escalation Time |
+| ------------------ | --------- | --------------- |
+| On-call            | PagerDuty | Immediate       |
+| Platform Team Lead | [Name]    | 15 minutes      |
+| SRE Manager        | [Name]    | 30 minutes      |
+| CTO                | [Name]    | Critical only   |
 
 ---
 

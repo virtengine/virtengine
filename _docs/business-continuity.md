@@ -22,6 +22,7 @@ This Business Continuity Plan (BCP) ensures VirtEngine blockchain services can c
 ### Scope
 
 This plan covers:
+
 - **Blockchain Operations**: Validator consensus, block production, transaction processing
 - **Marketplace Services**: Order placement, bid processing, lease management
 - **Identity Services**: VEID verification, scoring, encryption
@@ -30,12 +31,12 @@ This plan covers:
 
 ### Key Metrics
 
-| Metric | Target | Definition |
-|--------|--------|------------|
-| **Maximum Tolerable Downtime (MTD)** | 4 hours | Maximum time before business impact is severe |
-| **Recovery Time Objective (RTO)** | 30 minutes | Target time to restore critical services |
-| **Recovery Point Objective (RPO)** | 0 (zero data loss) | Target data loss tolerance |
-| **Work Recovery Time (WRT)** | 2 hours | Time to return to full capacity after restoration |
+| Metric                               | Target             | Definition                                        |
+| ------------------------------------ | ------------------ | ------------------------------------------------- |
+| **Maximum Tolerable Downtime (MTD)** | 4 hours            | Maximum time before business impact is severe     |
+| **Recovery Time Objective (RTO)**    | 30 minutes         | Target time to restore critical services          |
+| **Recovery Point Objective (RPO)**   | 0 (zero data loss) | Target data loss tolerance                        |
+| **Work Recovery Time (WRT)**         | 2 hours            | Time to return to full capacity after restoration |
 
 ---
 
@@ -43,26 +44,26 @@ This plan covers:
 
 ### Critical Business Functions
 
-| Function | Priority | MTD | RTO | Dependencies | Impact if Unavailable |
-|----------|----------|-----|-----|--------------|----------------------|
-| Block Production | P0 | 1 hr | 15 min | Validators, consensus | Complete service halt |
-| Transaction Processing | P0 | 1 hr | 15 min | Full nodes, block production | Users cannot transact |
-| API Gateway | P1 | 2 hr | 30 min | Full nodes, load balancers | Client applications fail |
-| Identity Scoring | P1 | 4 hr | 1 hr | ML models, validators | New users cannot verify |
-| Provider Daemon | P1 | 4 hr | 30 min | Kubernetes, chain | New deployments fail |
-| Marketplace | P1 | 4 hr | 30 min | Chain, provider daemon | Orders not fulfilled |
-| Escrow Settlement | P2 | 8 hr | 2 hr | Chain, escrow module | Payment delays |
-| Monitoring | P2 | 8 hr | 1 hr | Prometheus, Grafana | Reduced visibility |
+| Function               | Priority | MTD  | RTO    | Dependencies                 | Impact if Unavailable    |
+| ---------------------- | -------- | ---- | ------ | ---------------------------- | ------------------------ |
+| Block Production       | P0       | 1 hr | 15 min | Validators, consensus        | Complete service halt    |
+| Transaction Processing | P0       | 1 hr | 15 min | Full nodes, block production | Users cannot transact    |
+| API Gateway            | P1       | 2 hr | 30 min | Full nodes, load balancers   | Client applications fail |
+| Identity Scoring       | P1       | 4 hr | 1 hr   | ML models, validators        | New users cannot verify  |
+| Provider Daemon        | P1       | 4 hr | 30 min | Kubernetes, chain            | New deployments fail     |
+| Marketplace            | P1       | 4 hr | 30 min | Chain, provider daemon       | Orders not fulfilled     |
+| Escrow Settlement      | P2       | 8 hr | 2 hr   | Chain, escrow module         | Payment delays           |
+| Monitoring             | P2       | 8 hr | 1 hr   | Prometheus, Grafana          | Reduced visibility       |
 
 ### Impact Assessment Matrix
 
-| Impact Category | Low | Medium | High | Critical |
-|-----------------|-----|--------|------|----------|
-| **Financial** | <$10K | $10K-$100K | $100K-$1M | >$1M |
-| **Reputational** | Minor complaint | Social media attention | Press coverage | Loss of major customers |
-| **Operational** | Single service degraded | Multiple services affected | Core function unavailable | Complete outage |
-| **Regulatory** | Documentation gap | Minor non-compliance | Investigation | Sanctions/penalties |
-| **User Impact** | <1% users | 1-10% users | 10-50% users | >50% users |
+| Impact Category  | Low                     | Medium                     | High                      | Critical                |
+| ---------------- | ----------------------- | -------------------------- | ------------------------- | ----------------------- |
+| **Financial**    | <$10K                   | $10K-$100K                 | $100K-$1M                 | >$1M                    |
+| **Reputational** | Minor complaint         | Social media attention     | Press coverage            | Loss of major customers |
+| **Operational**  | Single service degraded | Multiple services affected | Core function unavailable | Complete outage         |
+| **Regulatory**   | Documentation gap       | Minor non-compliance       | Investigation             | Sanctions/penalties     |
+| **User Impact**  | <1% users               | 1-10% users                | 10-50% users              | >50% users              |
 
 ### Dependency Mapping
 
@@ -111,34 +112,38 @@ This plan covers:
 
 ### Strategy by Service Tier
 
-| Tier | Services | Strategy | Recovery Method |
-|------|----------|----------|-----------------|
-| **Tier 0** | Validators, Consensus | Hot standby | Auto-failover with state sync |
-| **Tier 1** | Full Nodes, API, Provider | Active-active | Multi-region load balancing |
-| **Tier 2** | VEID, Marketplace | Active-passive | Regional failover |
-| **Tier 3** | Monitoring, Logging | Pilot light | Scale from minimal footprint |
+| Tier       | Services                  | Strategy       | Recovery Method               |
+| ---------- | ------------------------- | -------------- | ----------------------------- |
+| **Tier 0** | Validators, Consensus     | Hot standby    | Auto-failover with state sync |
+| **Tier 1** | Full Nodes, API, Provider | Active-active  | Multi-region load balancing   |
+| **Tier 2** | VEID, Marketplace         | Active-passive | Regional failover             |
+| **Tier 3** | Monitoring, Logging       | Pilot light    | Scale from minimal footprint  |
 
 ### Recovery Options
 
 #### Option 1: In-Region Recovery (D1 Events)
+
 - **Trigger**: Single component failure
 - **Strategy**: Automatic replacement via Kubernetes
 - **Timeline**: 5-15 minutes
 - **Cost**: Included in normal operations
 
 #### Option 2: Cross-Zone Recovery (D2 Events)
+
 - **Trigger**: Availability zone failure
 - **Strategy**: Automatic rebalancing to healthy zones
 - **Timeline**: 15-30 minutes
 - **Cost**: Existing infrastructure
 
 #### Option 3: Regional Failover (D3 Events)
+
 - **Trigger**: Region-wide outage
 - **Strategy**: DNS failover to secondary region
 - **Timeline**: 30-60 minutes
 - **Cost**: $X/month for standby infrastructure
 
 #### Option 4: Full Rebuild (Catastrophic)
+
 - **Trigger**: Multiple region failure or data corruption
 - **Strategy**: Rebuild from backups in new infrastructure
 - **Timeline**: 4-8 hours
@@ -170,14 +175,15 @@ This plan covers:
 
 **Severity Assessment Criteria**:
 
-| Severity | Criteria | Response |
-|----------|----------|----------|
-| **SEV-1** | Block production halted OR >50% users affected | All hands, exec notification |
-| **SEV-2** | Critical function degraded OR 10-50% users affected | On-call + SMEs |
-| **SEV-3** | Non-critical function degraded OR <10% users affected | On-call team |
-| **SEV-4** | Minor issue, no immediate user impact | Normal working hours |
+| Severity  | Criteria                                              | Response                     |
+| --------- | ----------------------------------------------------- | ---------------------------- |
+| **SEV-1** | Block production halted OR >50% users affected        | All hands, exec notification |
+| **SEV-2** | Critical function degraded OR 10-50% users affected   | On-call + SMEs               |
+| **SEV-3** | Non-critical function degraded OR <10% users affected | On-call team                 |
+| **SEV-4** | Minor issue, no immediate user impact                 | Normal working hours         |
 
 **Impact Assessment Questions**:
+
 1. Is block production continuing?
 2. Can users submit transactions?
 3. Is the API responding?
@@ -189,14 +195,14 @@ This plan covers:
 
 **Containment Actions by Scenario**:
 
-| Scenario | Primary Action | Secondary Action |
-|----------|---------------|------------------|
-| Node failure | Replace/restart node | Scale up healthy nodes |
-| Zone outage | Drain zone, rebalance | Update DNS weights |
-| Region outage | Execute regional failover | Scale secondary region |
-| Data corruption | Isolate affected component | Restore from backup |
-| Key compromise | Revoke keys immediately | Rotate all related keys |
-| DDoS attack | Enable enhanced WAF rules | Engage DDoS protection |
+| Scenario        | Primary Action             | Secondary Action        |
+| --------------- | -------------------------- | ----------------------- |
+| Node failure    | Replace/restart node       | Scale up healthy nodes  |
+| Zone outage     | Drain zone, rebalance      | Update DNS weights      |
+| Region outage   | Execute regional failover  | Scale secondary region  |
+| Data corruption | Isolate affected component | Restore from backup     |
+| Key compromise  | Revoke keys immediately    | Rotate all related keys |
+| DDoS attack     | Enable enhanced WAF rules  | Engage DDoS protection  |
 
 ### Phase 4: Recovery (Variable)
 
@@ -226,30 +232,35 @@ This plan covers:
 ## Service Restoration Verification
 
 ### Blockchain Services
+
 - [ ] Block production at expected rate
 - [ ] Transaction processing normal
 - [ ] Validator set complete
 - [ ] Consensus messages flowing
 
 ### API Services
+
 - [ ] All endpoints responding
 - [ ] Latency within SLO
 - [ ] Error rate below threshold
 - [ ] Rate limiting functioning
 
 ### Provider Services
+
 - [ ] Provider daemon connected
 - [ ] Bid engine operational
 - [ ] Kubernetes adapters working
 - [ ] Usage metering active
 
 ### Identity Services
+
 - [ ] VEID verification working
 - [ ] ML models loaded
 - [ ] Encryption services available
 - [ ] Score computation functional
 
 ### Monitoring
+
 - [ ] All metrics collecting
 - [ ] Alerts configured correctly
 - [ ] Dashboards loading
@@ -262,14 +273,14 @@ This plan covers:
 
 ### Stakeholder Communication Matrix
 
-| Stakeholder | Channel | Frequency | Owner | Template |
-|-------------|---------|-----------|-------|----------|
-| Engineering Team | Slack #incident | Real-time | Incident Commander | N/A |
-| Leadership | Email + Slack | Every 30 min (SEV-1/2) | Communications Lead | EXEC-UPDATE |
-| Validators | Discord + Email | At incident start, updates | Validator Relations | VALIDATOR-ALERT |
-| Providers | Email | At incident start, resolution | Provider Relations | PROVIDER-NOTICE |
-| Users | Status Page | Real-time | Communications Lead | STATUS-PAGE |
-| Media (if needed) | Press release | As needed | PR Team | MEDIA-STATEMENT |
+| Stakeholder       | Channel         | Frequency                     | Owner               | Template        |
+| ----------------- | --------------- | ----------------------------- | ------------------- | --------------- |
+| Engineering Team  | Slack #incident | Real-time                     | Incident Commander  | N/A             |
+| Leadership        | Email + Slack   | Every 30 min (SEV-1/2)        | Communications Lead | EXEC-UPDATE     |
+| Validators        | Discord + Email | At incident start, updates    | Validator Relations | VALIDATOR-ALERT |
+| Providers         | Email           | At incident start, resolution | Provider Relations  | PROVIDER-NOTICE |
+| Users             | Status Page     | Real-time                     | Communications Lead | STATUS-PAGE     |
+| Media (if needed) | Press release   | As needed                     | PR Team             | MEDIA-STATEMENT |
 
 ### Communication Templates
 
@@ -444,35 +455,35 @@ Contact: [PHONE/SLACK]
 
 ### Business Continuity Team
 
-| Role | Responsibilities | Primary Contact | Backup |
-|------|------------------|-----------------|--------|
-| **BC Manager** | Overall BC program ownership | TBD | TBD |
-| **Incident Commander** | Lead incident response | On-call rotation | SRE Lead |
-| **Technical Lead** | Technical decision-making | On-call rotation | Engineering Lead |
-| **Communications Lead** | Stakeholder communications | DevRel Team | Marketing |
-| **Operations Lead** | Coordinate operational response | SRE Team | Infrastructure Team |
+| Role                    | Responsibilities                | Primary Contact  | Backup              |
+| ----------------------- | ------------------------------- | ---------------- | ------------------- |
+| **BC Manager**          | Overall BC program ownership    | TBD              | TBD                 |
+| **Incident Commander**  | Lead incident response          | On-call rotation | SRE Lead            |
+| **Technical Lead**      | Technical decision-making       | On-call rotation | Engineering Lead    |
+| **Communications Lead** | Stakeholder communications      | DevRel Team      | Marketing           |
+| **Operations Lead**     | Coordinate operational response | SRE Team         | Infrastructure Team |
 
 ### RACI Matrix
 
-| Activity | BC Manager | Incident Commander | Technical Lead | Communications | Operations |
-|----------|------------|-------------------|----------------|----------------|------------|
-| Incident Declaration | I | R/A | C | I | C |
-| Technical Assessment | I | I | R/A | I | C |
-| Recovery Execution | I | A | R | I | C |
-| Status Communication | C | A | C | R | I |
-| Resource Allocation | A | R | C | I | C |
-| Post-Incident Review | R/A | C | C | I | C |
+| Activity             | BC Manager | Incident Commander | Technical Lead | Communications | Operations |
+| -------------------- | ---------- | ------------------ | -------------- | -------------- | ---------- |
+| Incident Declaration | I          | R/A                | C              | I              | C          |
+| Technical Assessment | I          | I                  | R/A            | I              | C          |
+| Recovery Execution   | I          | A                  | R              | I              | C          |
+| Status Communication | C          | A                  | C              | R              | I          |
+| Resource Allocation  | A          | R                  | C              | I              | C          |
+| Post-Incident Review | R/A        | C                  | C              | I              | C          |
 
-*R = Responsible, A = Accountable, C = Consulted, I = Informed*
+_R = Responsible, A = Accountable, C = Consulted, I = Informed_
 
 ### Succession Planning
 
-| Primary Role | First Backup | Second Backup |
-|--------------|--------------|---------------|
-| BC Manager | Infrastructure Lead | CTO |
-| Incident Commander | SRE Lead | Senior SRE |
-| Technical Lead | Engineering Lead | Senior Engineer |
-| Communications Lead | DevRel Lead | Marketing Lead |
+| Primary Role        | First Backup        | Second Backup   |
+| ------------------- | ------------------- | --------------- |
+| BC Manager          | Infrastructure Lead | CTO             |
+| Incident Commander  | SRE Lead            | Senior SRE      |
+| Technical Lead      | Engineering Lead    | Senior Engineer |
+| Communications Lead | DevRel Lead         | Marketing Lead  |
 
 ---
 
@@ -480,32 +491,36 @@ Contact: [PHONE/SLACK]
 
 ### Testing Schedule
 
-| Test Type | Frequency | Participants | Duration | Last Completed |
-|-----------|-----------|--------------|----------|----------------|
-| Plan Review | Quarterly | BC Team | 2 hours | TBD |
-| Tabletop Exercise | Quarterly | All stakeholders | 2 hours | TBD |
-| Component Recovery Test | Monthly | SRE Team | 1 hour | TBD |
-| Full DR Drill | Annually | All teams | 4-8 hours | TBD |
-| Communication Test | Quarterly | Communications Team | 1 hour | TBD |
+| Test Type               | Frequency | Participants        | Duration  | Last Completed |
+| ----------------------- | --------- | ------------------- | --------- | -------------- |
+| Plan Review             | Quarterly | BC Team             | 2 hours   | TBD            |
+| Tabletop Exercise       | Quarterly | All stakeholders    | 2 hours   | TBD            |
+| Component Recovery Test | Monthly   | SRE Team            | 1 hour    | TBD            |
+| Full DR Drill           | Annually  | All teams           | 4-8 hours | TBD            |
+| Communication Test      | Quarterly | Communications Team | 1 hour    | TBD            |
 
 ### Tabletop Exercise Scenarios
 
 **Q1: Database Corruption**
+
 - Primary database shows corruption
 - Backup restoration required
 - Practice data recovery procedures
 
 **Q2: Multi-Region Network Partition**
+
 - Network partition isolates validators
 - Practice consensus recovery
 - Test cross-region communication
 
 **Q3: Security Incident**
+
 - Suspected key compromise
 - Practice security response
 - Test communication procedures
 
 **Q4: Complete Regional Outage**
+
 - Primary region unavailable
 - Practice full regional failover
 - Test stakeholder communication
@@ -513,6 +528,7 @@ Contact: [PHONE/SLACK]
 ### Plan Maintenance
 
 **Triggers for Plan Update**:
+
 - Significant infrastructure changes
 - New critical services added
 - Post-incident learnings
@@ -520,6 +536,7 @@ Contact: [PHONE/SLACK]
 - Annual scheduled review
 
 **Update Process**:
+
 1. Identify change requirement
 2. Draft updates
 3. Review with stakeholders
@@ -538,7 +555,7 @@ The BCP should be activated when:
 
 1. **Automatic Activation (SEV-1)**:
    - Block production halted >5 minutes
-   - >50% of users unable to transact
+   - > 50% of users unable to transact
    - Multiple region outage
    - Confirmed security breach
 
@@ -595,6 +612,7 @@ The BCP should be activated when:
 ### Deactivation Criteria
 
 The BCP can be deactivated when:
+
 - All critical business functions restored
 - Services stable for minimum 1 hour
 - No immediate threat of recurrence
@@ -603,6 +621,7 @@ The BCP can be deactivated when:
 ### Post-Incident Requirements
 
 Within **48 hours**:
+
 - [ ] Complete post-incident review
 - [ ] Update incident timeline
 - [ ] Identify root cause
@@ -610,12 +629,14 @@ Within **48 hours**:
 - [ ] Create action items
 
 Within **1 week**:
+
 - [ ] Publish post-mortem report
 - [ ] Begin action item implementation
 - [ ] Update BCP/DRP if needed
 - [ ] Conduct team debrief
 
 Within **30 days**:
+
 - [ ] Complete all critical action items
 - [ ] Verify preventive measures implemented
 - [ ] Update training materials
@@ -627,9 +648,9 @@ Within **30 days**:
 
 ### Document Control
 
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 1.0.0 | 2026-01-30 | BC Team | Initial version |
+| Version | Date       | Author  | Changes         |
+| ------- | ---------- | ------- | --------------- |
+| 1.0.0   | 2026-01-30 | BC Team | Initial version |
 
 ### Related Documents
 
@@ -642,16 +663,16 @@ Within **30 days**:
 
 ### Glossary
 
-| Term | Definition |
-|------|------------|
-| **BCP** | Business Continuity Plan |
-| **BIA** | Business Impact Analysis |
-| **DRP** | Disaster Recovery Plan |
+| Term    | Definition                 |
+| ------- | -------------------------- |
+| **BCP** | Business Continuity Plan   |
+| **BIA** | Business Impact Analysis   |
+| **DRP** | Disaster Recovery Plan     |
 | **MTD** | Maximum Tolerable Downtime |
-| **RTO** | Recovery Time Objective |
-| **RPO** | Recovery Point Objective |
-| **WRT** | Work Recovery Time |
-| **SEV** | Severity level |
+| **RTO** | Recovery Time Objective    |
+| **RPO** | Recovery Point Objective   |
+| **WRT** | Work Recovery Time         |
+| **SEV** | Severity level             |
 
 ---
 

@@ -6,7 +6,7 @@
 **Wave:** 1 (Parallel with 29C)  
 **Estimated LOC:** ~500  
 **Dependencies:** None  
-**Blocking:** 29B (Model Hash Computation)  
+**Blocking:** 29B (Model Hash Computation)
 
 ---
 
@@ -43,6 +43,7 @@ ml/
 ## Acceptance Criteria
 
 ### AC-1: Facial Verification Model Training
+
 - [ ] Execute `ml/facial_verification/train.py` with deterministic settings
 - [ ] Achieve minimum accuracy threshold (>95% on validation set)
 - [ ] Export model to TensorFlow SavedModel format
@@ -50,6 +51,7 @@ ml/
 - [ ] Generate model metrics JSON with accuracy, F1, AUC, latency
 
 ### AC-2: Liveness Detection Model Training
+
 - [ ] Execute `ml/liveness_detection/train.py` with deterministic settings
 - [ ] Achieve minimum accuracy threshold (>98% for anti-spoofing)
 - [ ] Export model to TensorFlow SavedModel format
@@ -57,6 +59,7 @@ ml/
 - [ ] Generate model metrics JSON
 
 ### AC-3: OCR Extraction Model Training
+
 - [ ] Execute `ml/ocr_extraction/train.py` with deterministic settings
 - [ ] Achieve minimum accuracy threshold (>97% character accuracy)
 - [ ] Export model to TensorFlow SavedModel format
@@ -64,6 +67,7 @@ ml/
 - [ ] Generate model metrics JSON
 
 ### AC-4: Determinism Verification
+
 - [ ] All models trained with `TF_DETERMINISTIC_OPS=1`
 - [ ] Fixed random seed (42) for all operations
 - [ ] CPU-only training (no GPU variance) OR documented GPU determinism
@@ -71,6 +75,7 @@ ml/
 - [ ] Dependencies pinned via `requirements-deterministic.txt`
 
 ### AC-5: Documentation
+
 - [ ] Update `ml/README.md` with training instructions
 - [ ] Document hardware requirements (RAM, disk, GPU optional)
 - [ ] Document training duration estimates
@@ -171,32 +176,35 @@ tf.io.write_graph(
 ## Files to Create/Modify
 
 ### New Files
-| Path | Description |
-|------|-------------|
-| `ml/facial_verification/weights/facial_model/` | SavedModel directory |
-| `ml/facial_verification/weights/facial_model_frozen.pb` | Frozen graph for hashing |
-| `ml/facial_verification/weights/metrics.json` | Training metrics |
-| `ml/liveness_detection/weights/liveness_model/` | SavedModel directory |
-| `ml/liveness_detection/weights/liveness_model_frozen.pb` | Frozen graph |
-| `ml/liveness_detection/weights/metrics.json` | Training metrics |
-| `ml/ocr_extraction/weights/ocr_model/` | SavedModel directory |
-| `ml/ocr_extraction/weights/ocr_model_frozen.pb` | Frozen graph |
-| `ml/ocr_extraction/weights/metrics.json` | Training metrics |
-| `ml/requirements-deterministic.txt` | Pinned dependencies |
+
+| Path                                                     | Description              |
+| -------------------------------------------------------- | ------------------------ |
+| `ml/facial_verification/weights/facial_model/`           | SavedModel directory     |
+| `ml/facial_verification/weights/facial_model_frozen.pb`  | Frozen graph for hashing |
+| `ml/facial_verification/weights/metrics.json`            | Training metrics         |
+| `ml/liveness_detection/weights/liveness_model/`          | SavedModel directory     |
+| `ml/liveness_detection/weights/liveness_model_frozen.pb` | Frozen graph             |
+| `ml/liveness_detection/weights/metrics.json`             | Training metrics         |
+| `ml/ocr_extraction/weights/ocr_model/`                   | SavedModel directory     |
+| `ml/ocr_extraction/weights/ocr_model_frozen.pb`          | Frozen graph             |
+| `ml/ocr_extraction/weights/metrics.json`                 | Training metrics         |
+| `ml/requirements-deterministic.txt`                      | Pinned dependencies      |
 
 ### Files to Modify
-| Path | Changes |
-|------|---------|
+
+| Path                              | Changes                                |
+| --------------------------------- | -------------------------------------- |
 | `ml/facial_verification/train.py` | Add determinism settings, export logic |
-| `ml/liveness_detection/train.py` | Add determinism settings, export logic |
-| `ml/ocr_extraction/train.py` | Add determinism settings, export logic |
-| `ml/README.md` | Training documentation |
+| `ml/liveness_detection/train.py`  | Add determinism settings, export logic |
+| `ml/ocr_extraction/train.py`      | Add determinism settings, export logic |
+| `ml/README.md`                    | Training documentation                 |
 
 ---
 
 ## Implementation Steps
 
 ### Step 1: Prepare Deterministic Environment
+
 ```bash
 cd ml/
 python -m venv .venv
@@ -205,13 +213,16 @@ pip install -r requirements-deterministic.txt
 ```
 
 ### Step 2: Update Training Scripts
+
 Add determinism configuration to each `train.py`:
+
 - Set all random seeds
 - Enable TF_DETERMINISTIC_OPS
 - Configure CPU-only if needed
 - Add SavedModel export at end of training
 
 ### Step 3: Execute Training
+
 ```bash
 # Facial verification (~2-4 hours)
 cd facial_verification
@@ -227,6 +238,7 @@ TF_DETERMINISTIC_OPS=1 python train.py --seed 42 --export-format savedmodel
 ```
 
 ### Step 4: Verify Determinism
+
 ```bash
 # Train again and compare hashes
 sha256sum facial_verification/weights/facial_model_frozen.pb
@@ -234,6 +246,7 @@ sha256sum facial_verification/weights/facial_model_frozen.pb
 ```
 
 ### Step 5: Generate Metrics Reports
+
 ```bash
 python generate_metrics.py --model facial_verification
 python generate_metrics.py --model liveness_detection
@@ -256,12 +269,12 @@ python generate_metrics.py --model ocr_extraction
 
 ## Risk Mitigation
 
-| Risk | Mitigation |
-|------|------------|
+| Risk                        | Mitigation                                                 |
+| --------------------------- | ---------------------------------------------------------- |
 | Training data not available | Use synthetic data or public datasets for initial training |
-| GPU determinism issues | Train CPU-only for consensus requirements |
-| Long training times | Use smaller model architectures or transfer learning |
-| Model accuracy too low | Iterative hyperparameter tuning, data augmentation |
+| GPU determinism issues      | Train CPU-only for consensus requirements                  |
+| Long training times         | Use smaller model architectures or transfer learning       |
+| Model accuracy too low      | Iterative hyperparameter tuning, data augmentation         |
 
 ---
 

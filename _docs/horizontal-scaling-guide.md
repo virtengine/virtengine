@@ -10,15 +10,15 @@
 
 This document accompanies the SCALE-002 implementation which includes:
 
-| Component | File | Description |
-|-----------|------|-------------|
-| Bid Deduplication | `pkg/provider_daemon/scaling.go` | Distributed order partitioning and deduplication |
-| Scaling Metrics | `pkg/provider_daemon/scaling_metrics.go` | Prometheus metrics for scaling observability |
-| Enhanced HPA | `deploy/kubernetes/overlays/prod/hpa-enhanced.yaml` | Custom metrics-based autoscaling |
-| KEDA Scaler | `deploy/kubernetes/overlays/prod/keda-scaledobject.yaml` | Event-driven autoscaling |
-| State Sync Script | `scripts/state-sync-bootstrap.sh` | Fast validator bootstrap |
-| Scaling Alerts | `deploy/monitoring/prometheus/rules/scaling_alerts.yml` | Alerting for scaling issues |
-| Multi-Region Terraform | `infra/terraform/modules/scaling/main.tf` | Global load balancing infrastructure |
+| Component              | File                                                     | Description                                      |
+| ---------------------- | -------------------------------------------------------- | ------------------------------------------------ |
+| Bid Deduplication      | `pkg/provider_daemon/scaling.go`                         | Distributed order partitioning and deduplication |
+| Scaling Metrics        | `pkg/provider_daemon/scaling_metrics.go`                 | Prometheus metrics for scaling observability     |
+| Enhanced HPA           | `deploy/kubernetes/overlays/prod/hpa-enhanced.yaml`      | Custom metrics-based autoscaling                 |
+| KEDA Scaler            | `deploy/kubernetes/overlays/prod/keda-scaledobject.yaml` | Event-driven autoscaling                         |
+| State Sync Script      | `scripts/state-sync-bootstrap.sh`                        | Fast validator bootstrap                         |
+| Scaling Alerts         | `deploy/monitoring/prometheus/rules/scaling_alerts.yml`  | Alerting for scaling issues                      |
+| Multi-Region Terraform | `infra/terraform/modules/scaling/main.tf`                | Global load balancing infrastructure             |
 
 ---
 
@@ -43,23 +43,23 @@ This document defines the horizontal scaling architecture for VirtEngine, enabli
 
 ### Design Principles
 
-| Principle | Description |
-|-----------|-------------|
+| Principle                    | Description                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------- |
 | **Stateless Where Possible** | Components designed to be stateless or externalize state for horizontal scaling |
-| **Graceful Degradation** | System continues operating under partial failures |
-| **Geographic Distribution** | Multi-region deployment for latency and availability |
-| **Automated Scaling** | Kubernetes HPA and custom metrics for demand-responsive scaling |
-| **Observability First** | Comprehensive metrics enable informed scaling decisions |
+| **Graceful Degradation**     | System continues operating under partial failures                               |
+| **Geographic Distribution**  | Multi-region deployment for latency and availability                            |
+| **Automated Scaling**        | Kubernetes HPA and custom metrics for demand-responsive scaling                 |
+| **Observability First**      | Comprehensive metrics enable informed scaling decisions                         |
 
 ### Component Scaling Characteristics
 
-| Component | Scaling Model | State | Coordination Required |
-|-----------|---------------|-------|----------------------|
-| Provider Daemon | Horizontal | External (chain) | Low - bid deduplication |
-| Full Node (RPC) | Horizontal | Local (catch-up) | None - read replicas |
-| Validator | Horizontal | Shared (consensus) | High - BFT coordination |
-| API Gateway | Horizontal | Stateless | None |
-| ML Inference | Horizontal | Model cache | Low - determinism sync |
+| Component       | Scaling Model | State              | Coordination Required   |
+| --------------- | ------------- | ------------------ | ----------------------- |
+| Provider Daemon | Horizontal    | External (chain)   | Low - bid deduplication |
+| Full Node (RPC) | Horizontal    | Local (catch-up)   | None - read replicas    |
+| Validator       | Horizontal    | Shared (consensus) | High - BFT coordination |
+| API Gateway     | Horizontal    | Stateless          | None                    |
+| ML Inference    | Horizontal    | Model cache        | Low - determinism sync  |
 
 ---
 
@@ -295,20 +295,20 @@ func NewBidDeduplicator(redisAddr, instanceID string) *BidDeduplicator {
 // TryClaimOrder attempts to claim exclusive processing rights for an order
 func (bd *BidDeduplicator) TryClaimOrder(ctx context.Context, orderID string) (bool, error) {
     key := fmt.Sprintf("bid:claim:%s", orderID)
-    
+
     // SET NX with TTL - atomic operation
     set, err := bd.redis.SetNX(ctx, key, bd.instance, bd.ttl).Result()
     if err != nil {
         return false, fmt.Errorf("redis setnx failed: %w", err)
     }
-    
+
     return set, nil
 }
 
 // ReleaseClaim releases the claim on an order
 func (bd *BidDeduplicator) ReleaseClaim(ctx context.Context, orderID string) error {
     key := fmt.Sprintf("bid:claim:%s", orderID)
-    
+
     // Only delete if we own the claim (Lua script for atomicity)
     script := redis.NewScript(`
         if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -317,7 +317,7 @@ func (bd *BidDeduplicator) ReleaseClaim(ctx context.Context, orderID string) err
             return 0
         end
     `)
-    
+
     _, err := script.Run(ctx, bd.redis, []string{key}, bd.instance).Result()
     return err
 }
@@ -335,7 +335,7 @@ func (be *BidEngine) processBid(order Order) BidResult {
     if err != nil {
         return BidResult{Error: err}
     }
-    
+
     for _, bid := range existingBids {
         if bid.OrderID == order.OrderID && bid.State == "open" {
             // Already have an active bid - skip
@@ -346,7 +346,7 @@ func (be *BidEngine) processBid(order Order) BidResult {
             }
         }
     }
-    
+
     // Proceed with bid submission
     // ...
 }
@@ -440,7 +440,7 @@ spec:
     tls:
       mode: ISTIO_MUTUAL
     loadBalancer:
-      simple: LEAST_REQUEST  # Prefer least loaded nodes
+      simple: LEAST_REQUEST # Prefer least loaded nodes
     connectionPool:
       tcp:
         maxConnections: 1000
@@ -510,7 +510,7 @@ spec:
         attempts: 3
         perTryTimeout: 10s
         retryOn: gateway-error,connect-failure,refused-stream
-    
+
     # Real-time queries route to pruned nodes
     - match:
         - uri:
@@ -528,7 +528,7 @@ spec:
         attempts: 3
         perTryTimeout: 3s
         retryOn: gateway-error,connect-failure,refused-stream
-    
+
     # Default routing with weighted distribution
     - route:
         - destination:
@@ -681,7 +681,7 @@ resource "aws_lb_target_group" "grpc" {
   vpc_id               = var.vpc_id
   target_type          = "ip"
   deregistration_delay = 30
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -904,15 +904,18 @@ VirtEngine uses CometBFT (Tendermint) consensus which requires all validators to
 ### Available Scaling Approaches
 
 #### 1. Read Replicas (Implemented)
+
 - Multiple full nodes serve RPC queries
 - Validators focus on block production
 - Horizontal scaling of read capacity
 
 #### 2. Workload Partitioning
+
 - Provider daemons partition orders by consistent hashing
 - ML inference distributed across workers
 
 #### 3. Future: IBC-Based Sharding
+
 For future scaling beyond current limits, consider IBC (Inter-Blockchain Communication):
 
 ```
@@ -937,11 +940,11 @@ For future scaling beyond current limits, consider IBC (Inter-Blockchain Communi
 
 #### By Module (Recommended for Future)
 
-| Zone | Modules | Purpose |
-|------|---------|---------|
-| Market Zone | market, escrow | High-throughput order matching |
-| Identity Zone | veid, encryption, mfa | Privacy-sensitive identity ops |
-| Compute Zone | hpc | Resource-intensive compute jobs |
+| Zone          | Modules               | Purpose                         |
+| ------------- | --------------------- | ------------------------------- |
+| Market Zone   | market, escrow        | High-throughput order matching  |
+| Identity Zone | veid, encryption, mfa | Privacy-sensitive identity ops  |
+| Compute Zone  | hpc                   | Resource-intensive compute jobs |
 
 #### By Geography
 
@@ -967,11 +970,11 @@ providers:
 
 Based on the existing disaster recovery architecture:
 
-| Region | Role | Validators | Full Nodes | Provider Daemons | Priority |
-|--------|------|------------|------------|------------------|----------|
-| US-EAST (us-east-1) | Primary | 2 | 4 | 4 | 1 |
-| EU-WEST (eu-west-1) | Secondary | 2 | 3 | 2 | 2 |
-| AP-SOUTH (ap-south-1) | Tertiary | 1 | 2 | 1 | 3 |
+| Region                | Role      | Validators | Full Nodes | Provider Daemons | Priority |
+| --------------------- | --------- | ---------- | ---------- | ---------------- | -------- |
+| US-EAST (us-east-1)   | Primary   | 2          | 4          | 4                | 1        |
+| EU-WEST (eu-west-1)   | Secondary | 2          | 3          | 2                | 2        |
+| AP-SOUTH (ap-south-1) | Tertiary  | 1          | 2          | 1                | 3        |
 
 ### Terraform Multi-Region Setup
 
@@ -980,68 +983,68 @@ Based on the existing disaster recovery architecture:
 
 module "us_east" {
   source = "../../modules/region"
-  
+
   region              = "us-east-1"
   environment         = "production"
   role                = "primary"
-  
+
   validators          = 2
   full_nodes          = 4
   provider_daemons    = 4
-  
+
   instance_types = {
     validator       = "r6i.2xlarge"
     full_node       = "r6i.xlarge"
     provider_daemon = "m6i.xlarge"
   }
-  
+
   vpc_cidr = "10.0.0.0/16"
 }
 
 module "eu_west" {
   source = "../../modules/region"
-  
+
   region              = "eu-west-1"
   environment         = "production"
   role                = "secondary"
-  
+
   validators          = 2
   full_nodes          = 3
   provider_daemons    = 2
-  
+
   instance_types = {
     validator       = "r6i.2xlarge"
     full_node       = "r6i.xlarge"
     provider_daemon = "m6i.xlarge"
   }
-  
+
   vpc_cidr = "10.1.0.0/16"
 }
 
 module "ap_south" {
   source = "../../modules/region"
-  
+
   region              = "ap-south-1"
   environment         = "production"
   role                = "tertiary"
-  
+
   validators          = 1
   full_nodes          = 2
   provider_daemons    = 1
-  
+
   instance_types = {
     validator       = "r6i.2xlarge"
     full_node       = "r6i.xlarge"
     provider_daemon = "m6i.xlarge"
   }
-  
+
   vpc_cidr = "10.2.0.0/16"
 }
 
 # Cross-region VPC peering
 module "vpc_peering" {
   source = "../../modules/vpc-peering"
-  
+
   regions = {
     us_east = module.us_east.vpc_id
     eu_west = module.eu_west.vpc_id
@@ -1059,7 +1062,7 @@ resource "aws_globalaccelerator_accelerator" "virtengine" {
 resource "aws_globalaccelerator_listener" "rpc" {
   accelerator_arn = aws_globalaccelerator_accelerator.virtengine.id
   protocol        = "TCP"
-  
+
   port_range {
     from_port = 443
     to_port   = 443
@@ -1068,13 +1071,13 @@ resource "aws_globalaccelerator_listener" "rpc" {
 
 resource "aws_globalaccelerator_endpoint_group" "us_east" {
   listener_arn = aws_globalaccelerator_listener.rpc.id
-  
+
   endpoint_configuration {
     endpoint_id                    = module.us_east.alb_arn
     weight                         = 40
     client_ip_preservation_enabled = true
   }
-  
+
   health_check_interval_seconds = 10
   health_check_path             = "/health"
   threshold_count               = 3
@@ -1084,13 +1087,13 @@ resource "aws_globalaccelerator_endpoint_group" "us_east" {
 resource "aws_globalaccelerator_endpoint_group" "eu_west" {
   listener_arn          = aws_globalaccelerator_listener.rpc.id
   endpoint_group_region = "eu-west-1"
-  
+
   endpoint_configuration {
     endpoint_id                    = module.eu_west.alb_arn
     weight                         = 35
     client_ip_preservation_enabled = true
   }
-  
+
   health_check_interval_seconds = 10
   health_check_path             = "/health"
   threshold_count               = 3
@@ -1100,13 +1103,13 @@ resource "aws_globalaccelerator_endpoint_group" "eu_west" {
 resource "aws_globalaccelerator_endpoint_group" "ap_south" {
   listener_arn          = aws_globalaccelerator_listener.rpc.id
   endpoint_group_region = "ap-south-1"
-  
+
   endpoint_configuration {
     endpoint_id                    = module.ap_south.alb_arn
     weight                         = 25
     client_ip_preservation_enabled = true
   }
-  
+
   health_check_interval_seconds = 10
   health_check_path             = "/health"
   threshold_count               = 3
@@ -1159,7 +1162,7 @@ resource "aws_route53_record" "rpc_us" {
     zone_id                = module.us_east.alb_zone_id
     evaluate_target_health = true
   }
-  
+
   health_check_id = aws_route53_health_check.us_east.id
 }
 ```
@@ -1197,7 +1200,7 @@ spec:
               provider: 1
   template:
     metadata:
-      name: 'virtengine-{{cluster}}'
+      name: "virtengine-{{cluster}}"
     spec:
       project: virtengine
       source:
@@ -1211,7 +1214,7 @@ spec:
             fullNodeReplicas: {{replicas.fullnode}}
             providerReplicas: {{replicas.provider}}
       destination:
-        server: '{{url}}'
+        server: "{{url}}"
         namespace: virtengine
       syncPolicy:
         automated:
@@ -1244,17 +1247,17 @@ spec:
   jobs:
     # Scale up during business hours (UTC)
     - name: "scale-up-business-hours"
-      schedule: "0 8 * * 1-5"  # 8 AM UTC, Mon-Fri
+      schedule: "0 8 * * 1-5" # 8 AM UTC, Mon-Fri
       targetSize: 6
       runOnce: false
     # Scale down after business hours
     - name: "scale-down-evening"
-      schedule: "0 20 * * 1-5"  # 8 PM UTC, Mon-Fri
+      schedule: "0 20 * * 1-5" # 8 PM UTC, Mon-Fri
       targetSize: 3
       runOnce: false
     # Minimal weekend scaling
     - name: "scale-down-weekend"
-      schedule: "0 0 * * 0,6"  # Midnight Saturday/Sunday
+      schedule: "0 0 * * 0,6" # Midnight Saturday/Sunday
       targetSize: 2
       runOnce: false
 ```
@@ -1286,14 +1289,14 @@ spec:
         metricName: virtengine_open_orders_total
         query: sum(virtengine_open_orders_total{status="pending"})
         threshold: "100"
-    
+
     # Scale based on Redis queue depth
     - type: redis
       metadata:
         address: redis.virtengine:6379
         listName: provider:order:queue
         listLength: "50"
-    
+
     # Scale based on active leases
     - type: prometheus
       metadata:
@@ -1346,7 +1349,7 @@ spec:
           averageValue: "500"
   behavior:
     scaleDown:
-      stabilizationWindowSeconds: 600  # 10 minutes
+      stabilizationWindowSeconds: 600 # 10 minutes
       policies:
         - type: Pods
           value: 1
@@ -1361,14 +1364,14 @@ spec:
 
 ### Capacity Planning Thresholds
 
-| Metric | Warning Threshold | Scale Trigger | Max Capacity |
-|--------|-------------------|---------------|--------------|
-| CPU Utilization | 60% | 70% | 85% |
-| Memory Utilization | 70% | 80% | 90% |
-| Pending Orders | 50/instance | 100/instance | 200/instance |
-| Active Leases | 75/instance | 100/instance | 150/instance |
-| RPC Requests/s | 80/instance | 100/instance | 150/instance |
-| P99 Latency | 150ms | 200ms | 500ms |
+| Metric             | Warning Threshold | Scale Trigger | Max Capacity |
+| ------------------ | ----------------- | ------------- | ------------ |
+| CPU Utilization    | 60%               | 70%           | 85%          |
+| Memory Utilization | 70%               | 80%           | 90%          |
+| Pending Orders     | 50/instance       | 100/instance  | 200/instance |
+| Active Leases      | 75/instance       | 100/instance  | 150/instance |
+| RPC Requests/s     | 80/instance       | 100/instance  | 150/instance |
+| P99 Latency        | 150ms             | 200ms         | 500ms        |
 
 ---
 
@@ -1379,51 +1382,56 @@ spec:
 ```yaml
 # deploy/monitoring/grafana/dashboards/scaling.json (excerpt)
 {
-  "dashboard": {
-    "title": "VirtEngine Horizontal Scaling",
-    "panels": [
-      {
-        "title": "Provider Daemon Replicas",
-        "type": "timeseries",
-        "targets": [
+  "dashboard":
+    {
+      "title": "VirtEngine Horizontal Scaling",
+      "panels":
+        [
           {
-            "expr": "kube_deployment_status_replicas{deployment=\"provider-daemon\"}",
-            "legendFormat": "Current"
+            "title": "Provider Daemon Replicas",
+            "type": "timeseries",
+            "targets":
+              [
+                {
+                  "expr": 'kube_deployment_status_replicas{deployment="provider-daemon"}',
+                  "legendFormat": "Current",
+                },
+                {
+                  "expr": 'kube_deployment_spec_replicas{deployment="provider-daemon"}',
+                  "legendFormat": "Desired",
+                },
+                {
+                  "expr": 'kube_horizontalpodautoscaler_spec_min_replicas{horizontalpodautoscaler="provider-daemon-hpa"}',
+                  "legendFormat": "Min",
+                },
+                {
+                  "expr": 'kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler="provider-daemon-hpa"}',
+                  "legendFormat": "Max",
+                },
+              ],
           },
           {
-            "expr": "kube_deployment_spec_replicas{deployment=\"provider-daemon\"}",
-            "legendFormat": "Desired"
+            "title": "Scaling Events",
+            "type": "logs",
+            "targets":
+              [
+                {
+                  "expr": '{namespace="virtengine"} |= "Scaled" |= "HorizontalPodAutoscaler"',
+                },
+              ],
           },
           {
-            "expr": "kube_horizontalpodautoscaler_spec_min_replicas{horizontalpodautoscaler=\"provider-daemon-hpa\"}",
-            "legendFormat": "Min"
+            "title": "Resource Utilization Heatmap",
+            "type": "heatmap",
+            "targets":
+              [
+                {
+                  "expr": 'sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="virtengine"}[5m])) / sum by (pod) (kube_pod_container_resource_limits{resource="cpu", namespace="virtengine"})',
+                },
+              ],
           },
-          {
-            "expr": "kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler=\"provider-daemon-hpa\"}",
-            "legendFormat": "Max"
-          }
-        ]
-      },
-      {
-        "title": "Scaling Events",
-        "type": "logs",
-        "targets": [
-          {
-            "expr": "{namespace=\"virtengine\"} |= \"Scaled\" |= \"HorizontalPodAutoscaler\""
-          }
-        ]
-      },
-      {
-        "title": "Resource Utilization Heatmap",
-        "type": "heatmap",
-        "targets": [
-          {
-            "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"virtengine\"}[5m])) / sum by (pod) (kube_pod_container_resource_limits{resource=\"cpu\", namespace=\"virtengine\"})"
-          }
-        ]
-      }
-    ]
-  }
+        ],
+    },
 }
 ```
 
@@ -1482,10 +1490,11 @@ groups:
 
 ### Runbook: Manual Scale-Up
 
-```markdown
+````markdown
 ## Manual Provider Daemon Scale-Up
 
 ### When to Use
+
 - Anticipated high-traffic event
 - HPA is at max but more capacity is needed
 - Proactive scaling before maintenance
@@ -1497,19 +1506,23 @@ groups:
    kubectl get hpa provider-daemon-hpa -n virtengine
    kubectl get pods -l app.kubernetes.io/name=provider-daemon -n virtengine
    ```
+````
 
 2. **Increase HPA max if needed**
+
    ```bash
    kubectl patch hpa provider-daemon-hpa -n virtengine \
      --patch '{"spec":{"maxReplicas":25}}'
    ```
 
 3. **Scale deployment directly (if immediate scaling needed)**
+
    ```bash
    kubectl scale deployment provider-daemon -n virtengine --replicas=15
    ```
 
 4. **Verify scaling**
+
    ```bash
    kubectl rollout status deployment/provider-daemon -n virtengine
    kubectl get pods -l app.kubernetes.io/name=provider-daemon -n virtengine
@@ -1521,12 +1534,14 @@ groups:
    ```
 
 ### Rollback
+
 ```bash
 kubectl scale deployment provider-daemon -n virtengine --replicas=4
 kubectl patch hpa provider-daemon-hpa -n virtengine \
   --patch '{"spec":{"maxReplicas":10}}'
 ```
-```
+
+````
 
 ### Runbook: Adding a New Region
 
@@ -1543,7 +1558,7 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
 1. **Create Terraform configuration**
    ```bash
    cd infra/terraform/environments/production
-   
+
    # Add new region module
    cat >> main.tf << 'EOF'
    module "new_region" {
@@ -1554,15 +1569,17 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
      # ... configuration
    }
    EOF
-   ```
+````
 
 2. **Plan and apply infrastructure**
+
    ```bash
    terraform plan -out=new-region.plan
    terraform apply new-region.plan
    ```
 
 3. **Create Kubernetes overlay**
+
    ```bash
    mkdir -p deploy/kubernetes/overlays/sa-east-1
    # Copy and customize from existing region
@@ -1571,6 +1588,7 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
    ```
 
 4. **Add to ArgoCD ApplicationSet**
+
    ```yaml
    # Add to generators.list.elements in multi-region.yaml
    - cluster: sa-east-1
@@ -1582,12 +1600,14 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
    ```
 
 5. **Sync and verify**
+
    ```bash
    argocd app sync virtengine-sa-east-1
    kubectl --context=sa-east-1 get pods -n virtengine
    ```
 
 6. **Update DNS and load balancer**
+
    ```bash
    cd infra/terraform/environments/production
    terraform apply -target=aws_route53_record.rpc_sa
@@ -1597,7 +1617,8 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
    ```bash
    curl https://sa-east-1.rpc.virtengine.network/health
    ```
-```
+
+````
 
 ### Runbook: State Sync Recovery
 
@@ -1614,20 +1635,22 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
 1. **Stop the node**
    ```bash
    systemctl stop virtengine
-   ```
+````
 
 2. **Get trust height and hash**
+
    ```bash
    TRUSTED_RPC="https://rpc.virtengine.network"
    LATEST=$(curl -s ${TRUSTED_RPC}/block | jq -r '.result.block.header.height')
    TRUST_HEIGHT=$((LATEST - 1000))
    TRUST_HASH=$(curl -s "${TRUSTED_RPC}/block?height=${TRUST_HEIGHT}" | jq -r '.result.block_id.hash')
-   
+
    echo "Trust Height: ${TRUST_HEIGHT}"
    echo "Trust Hash: ${TRUST_HASH}"
    ```
 
 3. **Configure state sync**
+
    ```bash
    sed -i.bak \
      -e "s/^enable = false/enable = true/" \
@@ -1638,11 +1661,13 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
    ```
 
 4. **Reset state (keep keys)**
+
    ```bash
    virtengine tendermint unsafe-reset-all --keep-addr-book
    ```
 
 5. **Start node and monitor**
+
    ```bash
    systemctl start virtengine
    journalctl -u virtengine -f | grep -E "(state-sync|Applied snapshot|Completed)"
@@ -1655,10 +1680,12 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
    ```
 
 ### Expected Timeline
+
 - Snapshot discovery: 1-2 minutes
 - Chunk download: 5-15 minutes (depending on state size)
 - Block catch-up: 1-5 minutes
 - Total: ~20 minutes vs hours for full sync
+
 ```
 
 ---
@@ -1674,7 +1701,8 @@ kubectl patch hpa provider-daemon-hpa -n virtengine \
 
 ---
 
-**Document Owner**: Infrastructure Team  
-**Last Updated**: 2026-01-30  
-**Next Review**: 2026-04-30  
+**Document Owner**: Infrastructure Team
+**Last Updated**: 2026-01-30
+**Next Review**: 2026-04-30
 **Classification**: Internal
+```

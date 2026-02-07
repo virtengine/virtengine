@@ -687,8 +687,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const cacheDir = resolve(repoRoot, ".cache");
   // Default matches ve-orchestrator.ps1's $script:StatusStatePath
   const statusPath =
-    process.env.STATUS_FILE ||
-    resolve(cacheDir, "ve-orchestrator-status.json");
+    process.env.STATUS_FILE || resolve(cacheDir, "ve-orchestrator-status.json");
   const telegramPollLockPath = resolve(cacheDir, "telegram-getupdates.lock");
 
   // ── Executors ────────────────────────────────────────────

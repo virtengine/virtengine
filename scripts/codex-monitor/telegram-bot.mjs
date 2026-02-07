@@ -34,7 +34,11 @@ import {
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
-const telegramPollLockPath = resolve(repoRoot, ".cache", "telegram-getupdates.lock");
+const telegramPollLockPath = resolve(
+  repoRoot,
+  ".cache",
+  "telegram-getupdates.lock",
+);
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -191,7 +195,9 @@ export async function bumpAgentMessage() {
   try {
     // Delete the old message
     await deleteDirect(agentChatId, agentMessageId);
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
   // Re-send at bottom
   const session = activeAgentSession;
   const msg = buildStreamMessage({
@@ -346,7 +352,9 @@ async function deleteDirect(chatId, messageId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
     });
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 }
 
 /**
@@ -445,18 +453,11 @@ function summarizeAction(event) {
             const fileDescs = item.changes.map((c) => {
               const name = shortPath(c.path);
               const kind =
-                c.kind === "add"
-                  ? "➕"
-                  : c.kind === "delete"
-                    ? "🗑️"
-                    : "✏️";
+                c.kind === "add" ? "➕" : c.kind === "delete" ? "🗑️" : "✏️";
               // Show line counts if available
               const adds = c.additions ?? c.lines_added ?? 0;
               const dels = c.deletions ?? c.lines_deleted ?? 0;
-              const stats =
-                adds || dels
-                  ? ` (+${adds} -${dels})`
-                  : "";
+              const stats = adds || dels ? ` (+${adds} -${dels})` : "";
               return `${kind} ${name}${stats}`;
             });
             return {
@@ -541,7 +542,9 @@ function summarizeCommand(cmd) {
   // PowerShell / search patterns
   if (/pwsh.*-file/i.test(c)) {
     const target = extractTarget(c);
-    return target ? `running PowerShell file ${target}` : "running PowerShell file";
+    return target
+      ? `running PowerShell file ${target}`
+      : "running PowerShell file";
   }
   if (/pwsh.*Get-Content/i.test(c)) {
     const target = extractTarget(c);
@@ -560,7 +563,8 @@ function summarizeCommand(cmd) {
     return describePowerShell(clean);
 
   // Node/npm/pnpm
-  if (/^node\s+-[ec]/i.test(c)) return `running Node.js script: ${shortSnippet(clean, 60)}`;
+  if (/^node\s+-[ec]/i.test(c))
+    return `running Node.js script: ${shortSnippet(clean, 60)}`;
   if (/^npm\s+/i.test(c)) return `running npm: ${shortSnippet(clean, 60)}`;
   if (/^pnpm\s+/i.test(c)) return `running pnpm: ${shortSnippet(clean, 60)}`;
 
@@ -604,7 +608,8 @@ function summarizeCommand(cmd) {
   if (/^(ls|dir|Get-ChildItem)\s*/i.test(c)) return "listing directory";
 
   // Docker
-  if (/^docker\s+/i.test(c)) return `running docker: ${shortSnippet(clean, 60)}`;
+  if (/^docker\s+/i.test(c))
+    return `running docker: ${shortSnippet(clean, 60)}`;
 
   // Fallback: first word + truncated
   const firstWord = c.split(/\s+/)[0];
@@ -631,7 +636,9 @@ function describePowerShell(command) {
     const inner = cmdMatch[1].replace(/^['"]|['"]$/g, "");
     const target = extractTarget(inner);
     const snippet = shortSnippet(inner, 70);
-    return target ? `running PowerShell: ${snippet} → ${target}` : `running PowerShell: ${snippet}`;
+    return target
+      ? `running PowerShell: ${snippet} → ${target}`
+      : `running PowerShell: ${snippet}`;
   }
   return "running PowerShell command";
 }
@@ -668,8 +675,8 @@ function splitMessage(text, maxLen) {
 
 // ── Polling ──────────────────────────────────────────────────────────────────
 
-  async function pollUpdates() {
-    if (!telegramToken) return [];
+async function pollUpdates() {
+  if (!telegramToken) return [];
 
   const url = `https://api.telegram.org/bot${telegramToken}/getUpdates`;
   const params = new URLSearchParams({
@@ -684,15 +691,15 @@ function splitMessage(text, maxLen) {
       signal: pollAbort.signal,
       // No explicit timeout — the Telegram API long-poll handles timing
     });
-      if (!res.ok) {
-        const body = await res.text();
-        console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
-        if (res.status === 409) {
-          polling = false;
-          await releaseTelegramPollLock();
-        }
-        return [];
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
+      if (res.status === 409) {
+        polling = false;
+        await releaseTelegramPollLock();
       }
+      return [];
+    }
     const data = await res.json();
     return data.ok ? data.result || [] : [];
   } catch (err) {
@@ -752,7 +759,10 @@ async function handleUpdate(update) {
 const COMMANDS = {
   "/help": { handler: cmdHelp, desc: "Show available commands" },
   "/status": { handler: cmdStatus, desc: "Detailed orchestrator status" },
-  "/tasks": { handler: cmdTasks, desc: "Active tasks, workspace metrics & retries" },
+  "/tasks": {
+    handler: cmdTasks,
+    desc: "Active tasks, workspace metrics & retries",
+  },
   "/logs": { handler: cmdLogs, desc: "Recent monitor logs" },
   "/log": { handler: cmdLogs, desc: "Alias for /logs" },
   "/branches": { handler: cmdBranches, desc: "Recent git branches" },
@@ -768,7 +778,10 @@ const COMMANDS = {
   },
   "/history": { handler: cmdHistory, desc: "Codex conversation history" },
   "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
-  "/reset_thread": { handler: cmdClear, desc: "Alias for /clear (reset thread)" },
+  "/reset_thread": {
+    handler: cmdClear,
+    desc: "Alias for /clear (reset thread)",
+  },
   "/git": { handler: cmdGit, desc: "Run a git command: /git log --oneline -5" },
   "/shell": { handler: cmdShell, desc: "Run a shell command: /shell ls -la" },
   "/background": {
@@ -870,9 +883,13 @@ async function registerBotCommands() {
     );
     const data = await res.json();
     if (data.ok) {
-      console.log(`[telegram-bot] registered ${commands.length} commands with Telegram`);
+      console.log(
+        `[telegram-bot] registered ${commands.length} commands with Telegram`,
+      );
     } else {
-      console.warn(`[telegram-bot] setMyCommands failed: ${data.description || JSON.stringify(data)}`);
+      console.warn(
+        `[telegram-bot] setMyCommands failed: ${data.description || JSON.stringify(data)}`,
+      );
     }
   } catch (err) {
     console.warn(`[telegram-bot] setMyCommands error: ${err.message}`);
@@ -1165,7 +1182,8 @@ async function cmdTasks(chatId) {
       lines.push(`   Status: ${status} | Agent: ${executor}`);
 
       // ── Workspace duration ──────────────────────────────────────
-      const started = attempt.started_at || attempt.created_at || attempt.updated_at;
+      const started =
+        attempt.started_at || attempt.created_at || attempt.updated_at;
       if (started) {
         const dur = Date.now() - Date.parse(started);
         const mins = Math.floor(dur / 60000);
@@ -1179,7 +1197,9 @@ async function cmdTasks(chatId) {
       const failKey = attempt.task_id || id;
       const failCount = data.task_failure_counts?.[failKey] || 0;
       if (failCount > 0) {
-        lines.push(`   🔁 Failures: ${failCount}/3${failCount >= 3 ? " → auto-reattempt" : ""}`);
+        lines.push(
+          `   🔁 Failures: ${failCount}/3${failCount >= 3 ? " → auto-reattempt" : ""}`,
+        );
       }
 
       // ── Git diff stats for the branch ──────────────────────────
@@ -1199,19 +1219,27 @@ async function cmdTasks(chatId) {
             const files = filesMatch ? filesMatch[1] : "0";
             lines.push(`   📊 ${files} files | +${ins} -${del}`);
           }
-        } catch { /* git diff not available or branch doesn't exist */ }
+        } catch {
+          /* git diff not available or branch doesn't exist */
+        }
       }
       lines.push(""); // spacing between tasks
     }
 
     // ── Overall workspace summary ────────────────────────────────
-    const running = Object.values(attempts).filter((a) => a?.status === "running").length;
-    const errors = Object.values(attempts).filter((a) => a?.status === "error").length;
+    const running = Object.values(attempts).filter(
+      (a) => a?.status === "running",
+    ).length;
+    const errors = Object.values(attempts).filter(
+      (a) => a?.status === "error",
+    ).length;
     const reviews = Object.values(attempts).filter(
       (a) => a?.status === "review" || a?.status === "manual_review",
     ).length;
     lines.push("────────────────────────────");
-    lines.push(`Total: ${Object.keys(attempts).length} | Running: ${running} | Review: ${reviews} | Error: ${errors}`);
+    lines.push(
+      `Total: ${Object.keys(attempts).length} | Running: ${running} | Review: ${reviews} | Error: ${errors}`,
+    );
 
     await sendReply(chatId, lines.join("\n"));
   } catch (err) {
@@ -1309,7 +1337,10 @@ async function cmdRestart(chatId) {
 
 async function cmdRetry(chatId, args) {
   if (!_attemptFreshSessionRetry) {
-    await sendReply(chatId, "❌ Fresh session retry not available (not injected from monitor).");
+    await sendReply(
+      chatId,
+      "❌ Fresh session retry not available (not injected from monitor).",
+    );
     return;
   }
 
@@ -1319,9 +1350,15 @@ async function cmdRetry(chatId, args) {
   try {
     const started = await _attemptFreshSessionRetry(reason);
     if (started) {
-      await sendReply(chatId, "✅ Fresh session started. New agent will pick up the task.");
+      await sendReply(
+        chatId,
+        "✅ Fresh session started. New agent will pick up the task.",
+      );
     } else {
-      await sendReply(chatId, "⚠️ Fresh session retry failed. Check logs for details (rate limit, no active attempt, or VK endpoint unavailable).");
+      await sendReply(
+        chatId,
+        "⚠️ Fresh session retry failed. Check logs for details (rate limit, no active attempt, or VK endpoint unavailable).",
+      );
     }
   } catch (err) {
     await sendReply(chatId, `❌ Retry error: ${err.message || err}`);
@@ -1330,7 +1367,10 @@ async function cmdRetry(chatId, args) {
 
 async function cmdPlan(chatId, args) {
   if (!_triggerTaskPlanner) {
-    await sendReply(chatId, "❌ Task planner not available (not injected from monitor).");
+    await sendReply(
+      chatId,
+      "❌ Task planner not available (not injected from monitor).",
+    );
     return;
   }
 
@@ -1341,8 +1381,15 @@ async function cmdPlan(chatId, args) {
   await sendReply(chatId, `📋 Triggering task planner (${taskCount} tasks)...`);
 
   try {
-    await _triggerTaskPlanner("manual-telegram", { source: "telegram /plan command" }, { taskCount });
-    await sendReply(chatId, `✅ Task planner triggered for ${taskCount} tasks. Check backlog shortly.`);
+    await _triggerTaskPlanner(
+      "manual-telegram",
+      { source: "telegram /plan command" },
+      { taskCount },
+    );
+    await sendReply(
+      chatId,
+      `✅ Task planner triggered for ${taskCount} tasks. Check backlog shortly.`,
+    );
   } catch (err) {
     await sendReply(chatId, `❌ Task planner error: ${err.message || err}`);
   }
@@ -1455,11 +1502,11 @@ function runPwsh(psScript, timeoutMs = 15000) {
   const isWin = process.platform === "win32";
   const pwsh = isWin ? "powershell.exe" : "pwsh";
   const script = `& { ${psScript} }`;
-  const result = spawnSync(
-    pwsh,
-    ["-NoProfile", "-Command", script],
-    { cwd: repoRoot, encoding: "utf8", timeout: timeoutMs },
-  );
+  const result = spawnSync(pwsh, ["-NoProfile", "-Command", script], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: timeoutMs,
+  });
   if (result.error) {
     throw new Error(result.error.message);
   }
@@ -1696,11 +1743,31 @@ async function cmdModel(chatId, modelArg) {
 // ── /agent — route to workspace registry ────────────────────────────────────
 
 const MODEL_PROFILE_MAP = {
-  "gpt-5.2-codex": { executor: "CODEX", variant: "DEFAULT", model: "gpt-5.2-codex" },
-  "gpt-5.1-codex-max": { executor: "CODEX", variant: "DEFAULT", model: "gpt-5.1-codex-max" },
-  "gpt-5.1-codex-mini": { executor: "CODEX", variant: "DEFAULT", model: "gpt-5.1-codex-mini" },
-  "claude-opus-4.6": { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6", model: "claude-opus-4.6" },
-  "claude-code": { executor: "COPILOT", variant: "CLAUDE_CODE", model: "claude-code" },
+  "gpt-5.2-codex": {
+    executor: "CODEX",
+    variant: "DEFAULT",
+    model: "gpt-5.2-codex",
+  },
+  "gpt-5.1-codex-max": {
+    executor: "CODEX",
+    variant: "DEFAULT",
+    model: "gpt-5.1-codex-max",
+  },
+  "gpt-5.1-codex-mini": {
+    executor: "CODEX",
+    variant: "DEFAULT",
+    model: "gpt-5.1-codex-mini",
+  },
+  "claude-opus-4.6": {
+    executor: "COPILOT",
+    variant: "CLAUDE_OPUS_4_6",
+    model: "claude-opus-4.6",
+  },
+  "claude-code": {
+    executor: "COPILOT",
+    variant: "CLAUDE_CODE",
+    model: "claude-code",
+  },
 };
 
 function normalizeHost(host) {
@@ -1765,7 +1832,9 @@ async function vkRequest(host, path, options = {}) {
     });
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`VK ${res.status}: ${text.slice(0, 200) || res.statusText}`);
+      throw new Error(
+        `VK ${res.status}: ${text.slice(0, 200) || res.statusText}`,
+      );
     }
     let data = null;
     if (text) {
@@ -1796,10 +1865,7 @@ async function getWorkspaceSummaries(host) {
 
 function scoreWorkspace(summary) {
   const status = String(
-    summary?.latest_process_status ??
-      summary?.status ??
-      summary?.state ??
-      "",
+    summary?.latest_process_status ?? summary?.status ?? summary?.state ?? "",
   ).toLowerCase();
   const busy = ["running", "queued", "in_progress", "active"];
   const idle = ["completed", "idle", "success", "done"];
@@ -1872,7 +1938,11 @@ async function getWorkspaceHealth(workspaces) {
 function selectWorkspace(candidates, healthMap, options = {}) {
   const { preferredId } = options;
   const scored = candidates.map((ws) => {
-    const h = healthMap.get(ws.id) || { available: true, score: 1, status: "unknown" };
+    const h = healthMap.get(ws.id) || {
+      available: true,
+      score: 1,
+      status: "unknown",
+    };
     return { ws, health: h };
   });
 
@@ -1954,7 +2024,8 @@ async function dispatchAgentMessage(workspace, message, options = {}) {
 
 async function cmdAgent(chatId, rawArgs) {
   const parsed = parseAgentArgs(rawArgs || "");
-  const { message, workspaceId, role, model, queue, newSession, dryRun } = parsed;
+  const { message, workspaceId, role, model, queue, newSession, dryRun } =
+    parsed;
 
   const { registry, errors, warnings } = await loadWorkspaceRegistry();
   const diagnostics = formatRegistryDiagnostics(errors, warnings);
@@ -1963,7 +2034,9 @@ async function cmdAgent(chatId, rawArgs) {
   }
 
   if (!message) {
-    const list = registry.workspaces.map((ws) => `  - ${ws.id} (${ws.role})`).join("\n");
+    const list = registry.workspaces
+      .map((ws) => `  - ${ws.id} (${ws.role})`)
+      .join("\n");
     const usage = [
       "Usage: /agent --workspace <id> <task>",
       "       /agent --role <role> <task>",
@@ -1990,7 +2063,10 @@ async function cmdAgent(chatId, rawArgs) {
     );
     if (!match) {
       const ids = registry.workspaces.map((ws) => ws.id).join(", ");
-      await sendReply(chatId, `Unknown workspace: ${workspaceId}\nAvailable: ${ids}`);
+      await sendReply(
+        chatId,
+        `Unknown workspace: ${workspaceId}\nAvailable: ${ids}`,
+      );
       return;
     }
     candidates = [match];
@@ -2046,7 +2122,9 @@ async function cmdAgent(chatId, rawArgs) {
       newSession,
     });
     infoLines.push(`Action: ${result.action}`);
-    infoLines.push(`Session: ${result.sessionId}${result.created ? " (new)" : ""}`);
+    infoLines.push(
+      `Session: ${result.sessionId}${result.created ? " (new)" : ""}`,
+    );
     await sendReply(chatId, infoLines.join("\\n"));
   } catch (err) {
     await sendReply(
@@ -2083,7 +2161,9 @@ async function cmdBackground(chatId, args) {
   if (agentMessageId && agentChatId) {
     try {
       await deleteDirect(agentChatId, agentMessageId);
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
   agentMessageId = null;
   if (activeAgentSession) {
@@ -2107,7 +2187,9 @@ async function cmdStop(chatId) {
   if (activeAgentSession.abortController) {
     try {
       activeAgentSession.abortController.abort("user_stop");
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
   if (activeAgentSession.actionLog) {
     activeAgentSession.actionLog.push({
@@ -2530,7 +2612,10 @@ async function handleFreeText(text, chatId, options = {}) {
     const followUps = activeAgentSession?.followUpQueue || [];
     if (followUps.length > 0 && !activeAgentSession?.aborted) {
       for (const followUp of followUps) {
-        actionLog.push({ icon: "📌", text: `Processing follow-up: "${followUp.slice(0, 60)}"` });
+        actionLog.push({
+          icon: "📌",
+          text: `Processing follow-up: "${followUp.slice(0, 60)}"`,
+        });
         phase = "processing follow-up…";
         scheduleEdit();
 
@@ -2544,12 +2629,16 @@ async function handleFreeText(text, chatId, options = {}) {
 
           // Merge follow-up results
           if (followUpResult.finalResponse) {
-            result.finalResponse = (result.finalResponse || "") +
+            result.finalResponse =
+              (result.finalResponse || "") +
               `\n\n📌 Follow-up result:\n${followUpResult.finalResponse}`;
             suppressSteerFailedLines(actionLog);
           }
         } catch (err) {
-          actionLog.push({ icon: "❌", text: `Follow-up error: ${err.message}` });
+          actionLog.push({
+            icon: "❌",
+            text: `Follow-up error: ${err.message}`,
+          });
         }
       }
     }

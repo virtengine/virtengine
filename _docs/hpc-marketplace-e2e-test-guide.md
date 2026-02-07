@@ -29,11 +29,11 @@ tests/e2e/
 
 ### Required Components
 
-| Component | Description | Configuration |
-|-----------|-------------|---------------|
-| Go 1.21+ | Build and test execution | `GO_VERSION` in CI |
-| Docker | Localnet container orchestration | Docker Buildx required |
-| Localnet | Local chain for integration tests | `./scripts/localnet.sh` |
+| Component | Description                       | Configuration           |
+| --------- | --------------------------------- | ----------------------- |
+| Go 1.21+  | Build and test execution          | `GO_VERSION` in CI      |
+| Docker    | Localnet container orchestration  | Docker Buildx required  |
+| Localnet  | Local chain for integration tests | `./scripts/localnet.sh` |
 
 ### Environment Variables
 
@@ -101,6 +101,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestA_StagingEnvironmentSetup()
 ```
 
 Validates:
+
 - Scheduler backend connectivity
 - Provider daemon configuration
 - Waldur bridge configuration
@@ -114,6 +115,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestB_ProviderRegistrationAndOfferings()
 ```
 
 Validates:
+
 - Provider registration on-chain
 - Offering creation (compute, GPU, etc.)
 - Chain-to-Waldur synchronization
@@ -127,6 +129,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestC_OrderCreationAndAllocation()
 ```
 
 Validates:
+
 - Order creation by customer
 - Provider bid placement
 - Bid acceptance and allocation
@@ -141,6 +144,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestD_JobSubmissionAndExecution()
 ```
 
 Validates:
+
 - Job submission to scheduler
 - State transitions (pending → queued → running → completed)
 - Scheduler execution verification
@@ -154,6 +158,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestE_UsageMetricsAndReporting()
 ```
 
 Validates:
+
 - Metrics capture (CPU, memory, GPU, network)
 - Usage record creation
 - On-chain submission
@@ -168,6 +173,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestF_InvoiceAndSettlement()
 ```
 
 Validates:
+
 - Invoice generation from usage
 - Line item calculation
 - Settlement trigger
@@ -183,6 +189,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestG_StateTransitionsAndEvents()
 ```
 
 Validates:
+
 - Valid job state transitions
 - Event emissions
 - Accounting status transitions
@@ -196,6 +203,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestH_NegativeScenarios()
 ```
 
 Validates:
+
 - Failed job handling
 - Partial usage reporting
 - Timeout handling
@@ -213,16 +221,16 @@ import "github.com/virtengine/virtengine/tests/e2e/fixtures"
 func TestMyHPCFlow(t *testing.T) {
     config := fixtures.DefaultFixtureConfig()
     config.NumJobs = 10
-    
+
     fixture := fixtures.NewHPCProviderFixture(t, config)
     require.NoError(t, fixture.Setup())
     defer fixture.Teardown()
-    
+
     // Create and submit a job
     job := fixture.CreateJob("my-test", 4, 8192, 1)
     schedulerJob, err := fixture.SubmitJob(job)
     require.NoError(t, err)
-    
+
     // Create an order and place a bid
     order := fixture.CreateOrder("hpc-compute-medium", "50.0")
     bid, err := fixture.PlaceBid(order.OrderID, "40.0")
@@ -299,12 +307,12 @@ settlement.DisputeInvoice(ctx, invoiceID, reason)
 
 ### Common Issues
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Tests timeout | Chain not ready | Increase localnet wait time |
-| Connection refused | Localnet not running | Run `./scripts/localnet.sh start` |
+| Issue                | Cause                  | Solution                           |
+| -------------------- | ---------------------- | ---------------------------------- |
+| Tests timeout        | Chain not ready        | Increase localnet wait time        |
+| Connection refused   | Localnet not running   | Run `./scripts/localnet.sh start`  |
 | Missing dependencies | Go modules out of sync | Run `go mod tidy && go mod vendor` |
-| Build tag errors | Missing build tag | Use `-tags="e2e.integration"` |
+| Build tag errors     | Missing build tag      | Use `-tags="e2e.integration"`      |
 
 ### Debug Mode
 
@@ -338,7 +346,7 @@ go tool cover -html=e2e-coverage.out -o e2e-coverage.html
 ```go
 func (s *HPCMarketplaceE2ETestSuite) TestX_NewFeature() {
     ctx := context.Background()
-    
+
     s.Run("SubTestCase", func() {
         // Test implementation
         s.Require().NoError(err)
