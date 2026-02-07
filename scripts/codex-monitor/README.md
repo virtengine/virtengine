@@ -247,6 +247,8 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | ----------------------- | ------------------------ | ---------------------------------- |
 | `PROJECT_NAME`          | auto-detected            | Project name for display           |
 | `GITHUB_REPO`           | auto-detected            | GitHub repo slug (`org/repo`)      |
+| `ORCHESTRATOR_SCRIPT`   | auto-detected            | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
+| `ORCHESTRATOR_ARGS`     | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator |
 | `OPENAI_API_KEY`        | —                        | API key for Codex analysis         |
 | `TELEGRAM_BOT_TOKEN`    | —                        | Telegram bot token from @BotFather |
 | `TELEGRAM_CHAT_ID`      | —                        | Telegram chat ID                   |
