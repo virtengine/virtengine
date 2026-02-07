@@ -81,30 +81,30 @@ The core attestation structure that represents a signed verification result.
 
 ### Attestation Types
 
-| Type | Description | Validity Period |
-|------|-------------|-----------------|
-| `facial_verification` | Facial recognition match | 30 days |
-| `liveness_check` | Liveness detection | 30 days |
-| `document_verification` | ID document verification | 1 year |
-| `email_verification` | Email ownership proof | 90 days |
-| `sms_verification` | Phone number verification | 90 days |
-| `domain_verification` | Domain ownership proof | 1 year |
-| `sso_verification` | SSO provider verification | 90 days |
-| `biometric_verification` | Biometric data verification | 30 days |
-| `composite_identity` | Combined identity attestation | 30 days |
+| Type                     | Description                   | Validity Period |
+| ------------------------ | ----------------------------- | --------------- |
+| `facial_verification`    | Facial recognition match      | 30 days         |
+| `liveness_check`         | Liveness detection            | 30 days         |
+| `document_verification`  | ID document verification      | 1 year          |
+| `email_verification`     | Email ownership proof         | 90 days         |
+| `sms_verification`       | Phone number verification     | 90 days         |
+| `domain_verification`    | Domain ownership proof        | 1 year          |
+| `sso_verification`       | SSO provider verification     | 90 days         |
+| `biometric_verification` | Biometric data verification   | 30 days         |
+| `composite_identity`     | Combined identity attestation | 30 days         |
 
 ### Attestation Type to Scope Type Mapping
 
-| Attestation Type | Scope Type |
-|-----------------|------------|
-| `facial_verification` | `selfie` |
-| `liveness_check` | `face_video` |
-| `document_verification` | `id_document` |
-| `email_verification` | `email_proof` |
-| `sms_verification` | `sms_proof` |
-| `domain_verification` | `domain_verify` |
-| `sso_verification` | `sso_metadata` |
-| `biometric_verification` | `biometric` |
+| Attestation Type         | Scope Type      |
+| ------------------------ | --------------- |
+| `facial_verification`    | `selfie`        |
+| `liveness_check`         | `face_video`    |
+| `document_verification`  | `id_document`   |
+| `email_verification`     | `email_proof`   |
+| `sms_verification`       | `sms_proof`     |
+| `domain_verification`    | `domain_verify` |
+| `sso_verification`       | `sso_metadata`  |
+| `biometric_verification` | `biometric`     |
 
 ---
 
@@ -112,11 +112,11 @@ The core attestation structure that represents a signed verification result.
 
 ### Supported Algorithms
 
-| Algorithm | Type Identifier | Key Size | Usage |
-|-----------|-----------------|----------|-------|
-| Ed25519 | `Ed25519Signature2020` | 256 bits | **Recommended** |
-| secp256k1 | `EcdsaSecp256k1Signature2019` | 256 bits | Cosmos compatible |
-| sr25519 | `Sr25519Signature2020` | 256 bits | Substrate compatible |
+| Algorithm | Type Identifier               | Key Size | Usage                |
+| --------- | ----------------------------- | -------- | -------------------- |
+| Ed25519   | `Ed25519Signature2020`        | 256 bits | **Recommended**      |
+| secp256k1 | `EcdsaSecp256k1Signature2019` | 256 bits | Cosmos compatible    |
+| sr25519   | `Sr25519Signature2020`        | 256 bits | Substrate compatible |
 
 ### Proof Structure
 
@@ -191,15 +191,15 @@ To ensure deterministic signing and verification, attestations are serialized us
 
 ### Default Policy Parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `max_key_age_seconds` | 7,776,000 (90 days) | Maximum key lifetime |
-| `rotation_overlap_seconds` | 604,800 (7 days) | Grace period for in-flight attestations |
-| `min_rotation_notice_seconds` | 259,200 (3 days) | Minimum notice before rotation |
-| `max_pending_keys` | 2 | Maximum successor keys |
-| `require_successor_key` | true | Require successor before rotation |
-| `allow_emergency_revocation` | true | Allow immediate revocation |
-| `min_key_strength` | 256 bits | Minimum key strength |
+| Parameter                     | Default             | Description                             |
+| ----------------------------- | ------------------- | --------------------------------------- |
+| `max_key_age_seconds`         | 7,776,000 (90 days) | Maximum key lifetime                    |
+| `rotation_overlap_seconds`    | 604,800 (7 days)    | Grace period for in-flight attestations |
+| `min_rotation_notice_seconds` | 259,200 (3 days)    | Minimum notice before rotation          |
+| `max_pending_keys`            | 2                   | Maximum successor keys                  |
+| `require_successor_key`       | true                | Require successor before rotation       |
+| `allow_emergency_revocation`  | true                | Allow immediate revocation              |
+| `min_key_strength`            | 256 bits            | Minimum key strength                    |
 
 ### Key Lifecycle States
 
@@ -213,23 +213,23 @@ To ensure deterministic signing and verification, attestations are serialized us
                                └─────────┘
 ```
 
-| State | Can Sign | Can Verify | Description |
-|-------|----------|------------|-------------|
-| `pending` | No | No | Awaiting activation |
-| `active` | Yes | Yes | Currently valid |
-| `rotating` | Yes | Yes | Transitioning to new key |
-| `revoked` | No | No | Key has been revoked |
-| `expired` | No | No | Key has expired |
+| State      | Can Sign | Can Verify | Description              |
+| ---------- | -------- | ---------- | ------------------------ |
+| `pending`  | No       | No         | Awaiting activation      |
+| `active`   | Yes      | Yes        | Currently valid          |
+| `rotating` | Yes      | Yes        | Transitioning to new key |
+| `revoked`  | No       | No         | Key has been revoked     |
+| `expired`  | No       | No         | Key has expired          |
 
 ### Revocation Reasons
 
-| Reason | Description | Overlap Period |
-|--------|-------------|----------------|
-| `compromised` | Key was compromised | None (immediate) |
-| `rotation` | Normal key rotation | Full overlap |
-| `decommissioned` | Signer is decommissioned | 7 days |
-| `policy_violation` | Policy violation | None (immediate) |
-| `administrative` | Administrative action | 7 days |
+| Reason             | Description              | Overlap Period   |
+| ------------------ | ------------------------ | ---------------- |
+| `compromised`      | Key was compromised      | None (immediate) |
+| `rotation`         | Normal key rotation      | Full overlap     |
+| `decommissioned`   | Signer is decommissioned | 7 days           |
+| `policy_violation` | Policy violation         | None (immediate) |
+| `administrative`   | Administrative action    | 7 days           |
 
 ### Key Rotation Process
 
@@ -244,20 +244,20 @@ To ensure deterministic signing and verification, attestations are serialized us
 
 ### Nonce Requirements
 
-| Parameter | Value |
-|-----------|-------|
-| Minimum length | 16 bytes |
-| Maximum length | 64 bytes |
-| Default length | 32 bytes |
-| Character encoding | Hex |
+| Parameter          | Value    |
+| ------------------ | -------- |
+| Minimum length     | 16 bytes |
+| Maximum length     | 64 bytes |
+| Default length     | 32 bytes |
+| Character encoding | Hex      |
 
 ### Nonce Validity Window
 
-| Parameter | Default | Range |
-|-----------|---------|-------|
-| Window duration | 1 hour | 5 min - 24 hours |
-| Clock skew tolerance | 5 minutes | ≤ window/2 |
-| Max nonces per issuer | 10,000 | N/A |
+| Parameter             | Default   | Range            |
+| --------------------- | --------- | ---------------- |
+| Window duration       | 1 hour    | 5 min - 24 hours |
+| Clock skew tolerance  | 5 minutes | ≤ window/2       |
+| Max nonces per issuer | 10,000    | N/A              |
 
 ### Nonce Rules
 
@@ -283,17 +283,17 @@ The following nonces are rejected:
 
 ### Store Key Prefixes
 
-| Prefix | Key Format | Value Type |
-|--------|------------|------------|
-| `0x7C` | `attestation_id` | `VerificationAttestation` |
-| `0x7D` | `subject_address \| attestation_id` | `bool` |
-| `0x7E` | `issuer_fingerprint \| attestation_id` | `bool` |
-| `0x7F` | `attestation_type \| attestation_id` | `bool` |
-| `0x80` | `expires_at \| attestation_id` | `bool` |
-| `0x81` | `nonce_hash` | `NonceRecord` |
-| `0x83` | `key_id` | `SignerKeyInfo` |
-| `0x86` | `signer_id` | `SignerRegistryEntry` |
-| `0x87` | `rotation_id` | `KeyRotationRecord` |
+| Prefix | Key Format                             | Value Type                |
+| ------ | -------------------------------------- | ------------------------- |
+| `0x7C` | `attestation_id`                       | `VerificationAttestation` |
+| `0x7D` | `subject_address \| attestation_id`    | `bool`                    |
+| `0x7E` | `issuer_fingerprint \| attestation_id` | `bool`                    |
+| `0x7F` | `attestation_type \| attestation_id`   | `bool`                    |
+| `0x80` | `expires_at \| attestation_id`         | `bool`                    |
+| `0x81` | `nonce_hash`                           | `NonceRecord`             |
+| `0x83` | `key_id`                               | `SignerKeyInfo`           |
+| `0x86` | `signer_id`                            | `SignerRegistryEntry`     |
+| `0x87` | `rotation_id`                          | `KeyRotationRecord`       |
 
 ### Verification Flow
 
@@ -317,17 +317,17 @@ The following nonces are rejected:
 
 ### Event Types
 
-| Event | Description | Emitted When |
-|-------|-------------|--------------|
-| `attestation_created` | New attestation created | Attestation stored |
-| `attestation_revoked` | Attestation revoked | Manual revocation |
-| `attestation_expired` | Attestation expired | Expiry cleanup |
-| `signer_key_registered` | New signer key | Key registration |
-| `signer_key_activated` | Key activated | Key activation |
-| `signer_key_revoked` | Key revoked | Key revocation |
-| `signer_key_rotated` | Key rotation complete | Rotation complete |
-| `nonce_used` | Nonce consumed | Attestation created |
-| `attestation_verified` | Signature verified | Verification complete |
+| Event                   | Description             | Emitted When          |
+| ----------------------- | ----------------------- | --------------------- |
+| `attestation_created`   | New attestation created | Attestation stored    |
+| `attestation_revoked`   | Attestation revoked     | Manual revocation     |
+| `attestation_expired`   | Attestation expired     | Expiry cleanup        |
+| `signer_key_registered` | New signer key          | Key registration      |
+| `signer_key_activated`  | Key activated           | Key activation        |
+| `signer_key_revoked`    | Key revoked             | Key revocation        |
+| `signer_key_rotated`    | Key rotation complete   | Rotation complete     |
+| `nonce_used`            | Nonce consumed          | Attestation created   |
+| `attestation_verified`  | Signature verified      | Verification complete |
 
 ### Event Attributes
 
@@ -399,16 +399,16 @@ X-Request-Signature: <ed25519_signature>
 
 ### Error Codes
 
-| Code | Description |
-|------|-------------|
-| `INVALID_SUBJECT` | Subject address is invalid |
-| `INVALID_TYPE` | Attestation type is invalid |
-| `NONCE_COLLISION` | Nonce already used |
-| `KEY_NOT_FOUND` | Signing key not found |
-| `KEY_REVOKED` | Signing key has been revoked |
-| `KEY_EXPIRED` | Signing key has expired |
-| `SIGNATURE_FAILED` | Signature generation failed |
-| `RATE_LIMITED` | Too many requests |
+| Code               | Description                  |
+| ------------------ | ---------------------------- |
+| `INVALID_SUBJECT`  | Subject address is invalid   |
+| `INVALID_TYPE`     | Attestation type is invalid  |
+| `NONCE_COLLISION`  | Nonce already used           |
+| `KEY_NOT_FOUND`    | Signing key not found        |
+| `KEY_REVOKED`      | Signing key has been revoked |
+| `KEY_EXPIRED`      | Signing key has expired      |
+| `SIGNATURE_FAILED` | Signature generation failed  |
+| `RATE_LIMITED`     | Too many requests            |
 
 ---
 
@@ -552,4 +552,4 @@ X-Request-Signature: <ed25519_signature>
 - [W3C Verifiable Credentials Data Model 1.1](https://www.w3.org/TR/vc-data-model/)
 - [RFC 8017 - PKCS #1: RSA Cryptography Specifications](https://tools.ietf.org/html/rfc8017)
 - [RFC 8032 - Edwards-Curve Digital Signature Algorithm (EdDSA)](https://tools.ietf.org/html/rfc8032)
-- [VirtEngine VEID Flow Specification](_docs/veid-flow-spec.md)
+- [VirtEngine VEID Flow Specification](../veid-flow-spec.md)

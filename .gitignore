@@ -36,6 +36,7 @@ coverage.txt
 dev.env
 .env
 .env.*
+!.env.example
 
 *.exe
 /.testchain

@@ -199,6 +199,16 @@ The codebase depends on shared Go libraries that must exist at:
 
 These contain types for: audit, cert, deployment, escrow, gov, market, provider, staking, take modules.
 
+## Vibe-Kanban Context Recovery (When Env Vars Are Missing)
+
+If `VE_TASK_TITLE` / `VE_TASK_DESCRIPTION` are missing, you are still in a Vibe-Kanban task when any of these are true:
+
+- The repo path is under `.git/worktrees/` (worktree-based task checkout)
+- The current branch matches `ve/<id>-<slug>` or `VE_BRANCH_NAME` is set
+- The orchestrator follow-up includes a Task URL and description
+
+In that case, treat the follow-up message as the authoritative task context and continue work on the same branch (commit, push, PR).
+
 ## Branch Strategy
 
 - `main` - active development (odd minor versions like v0.9.x)

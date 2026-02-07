@@ -62,7 +62,12 @@ jobs:
 
       - name: Fetch base ref for lint diff
         run: |
-          git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
+          # For PRs, use base_ref; for pushes, use main
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+          else
+            git fetch origin main --depth=1 || git fetch origin mainnet/main --depth=1 || true
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -79,7 +84,7 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
-          args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
+          args: --timeout=10m ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
 
       - name: Check formatting
         run: |

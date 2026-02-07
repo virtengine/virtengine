@@ -1,0 +1,153 @@
+# Publish @virtengine/codex-monitor to npm via OIDC Trusted Publishing
+#
+# Triggers:
+#   1. Push to main that changes scripts/codex-monitor/** (auto-publish)
+#   2. Manual dispatch with optional version bump
+#
+# Security:
+#   - Uses npm Trusted Publishing (OIDC) — no long-lived tokens
+#   - Provenance attestation generated automatically
+#   - Version bump detection prevents redundant publishes
+#
+# Prerequisites (one-time on npmjs.com):
+#   1. Navigate to @virtengine/codex-monitor → Settings → Trusted Publisher
+#   2. Select "GitHub Actions"
+#   3. Configure:
+#      - Organization: virtengine
+#      - Repository: virtengine
+#      - Workflow filename: codex-monitor-publish.yaml
+#      - Environment: npm-publish
+#   4. Save
+
+name: "Codex Monitor: Publish"
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - "scripts/codex-monitor/**"
+            - "!scripts/codex-monitor/.env*"
+            - "!scripts/codex-monitor/logs/**"
+            - "!scripts/codex-monitor/*.config.json"
+            - "!scripts/codex-monitor/workspaces.json"
+    workflow_dispatch:
+        inputs:
+            dry-run:
+                description: "Dry run (skip actual publish)"
+                type: boolean
+                default: false
+            force:
+                description: "Force publish even if version unchanged"
+                type: boolean
+                default: false
+
+concurrency:
+    group: codex-monitor-publish
+    cancel-in-progress: false # never cancel an in-flight publish
+
+permissions:
+    contents: read
+    id-token: write # Required for OIDC trusted publishing
+
+jobs:
+    # ─── Gate: only proceed if the package.json version is newer than registry ──
+    check:
+        name: Version Check
+        runs-on: ubuntu-latest
+        outputs:
+            should-publish: ${{ steps.compare.outputs.should-publish }}
+            local-version: ${{ steps.compare.outputs.local-version }}
+            registry-version: ${{ steps.compare.outputs.registry-version }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  sparse-checkout: scripts/codex-monitor
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  registry-url: "https://registry.npmjs.org"
+
+            - name: Compare versions
+              id: compare
+              working-directory: scripts/codex-monitor
+              run: |
+                  LOCAL=$(node -p "require('./package.json').version")
+                  echo "local-version=$LOCAL" >> "$GITHUB_OUTPUT"
+
+                  # Fetch registry version (may 404 if first publish)
+                  REGISTRY=$(npm view @virtengine/codex-monitor version 2>/dev/null || echo "0.0.0")
+                  echo "registry-version=$REGISTRY" >> "$GITHUB_OUTPUT"
+
+                  # Semver comparison via node
+                  DOMINATED=$(node -e "
+                    const [a, b] = ['$LOCAL', '$REGISTRY'].map(v => v.split('.').map(Number));
+                    const newer = a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]) || (a[0] === b[0] && a[1] === b[1] && a[2] > b[2]);
+                    console.log(newer ? 'true' : 'false');
+                  ")
+
+                  FORCE="${{ inputs.force }}"
+                  if [ "$DOMINATED" = "true" ] || [ "$FORCE" = "true" ]; then
+                    echo "should-publish=true" >> "$GITHUB_OUTPUT"
+                    echo "📦 Will publish: $LOCAL (registry: $REGISTRY)"
+                  else
+                    echo "should-publish=false" >> "$GITHUB_OUTPUT"
+                    echo "⏭️ Skipping: $LOCAL is not newer than $REGISTRY"
+                  fi
+
+    # ─── Publish with OIDC ─────────────────────────────────────────────────────
+    publish:
+        name: Publish to npm
+        needs: check
+        if: needs.check.outputs.should-publish == 'true'
+        runs-on: ubuntu-latest
+        environment: npm-publish # matches the environment in trusted publisher config
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  sparse-checkout: scripts/codex-monitor
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  registry-url: "https://registry.npmjs.org"
+
+            - name: Install dependencies
+              working-directory: scripts/codex-monitor
+              run: npm install --ignore-scripts
+
+            - name: Publish
+              if: ${{ !inputs.dry-run }}
+              working-directory: scripts/codex-monitor
+              run: npm publish --access public
+              # No NODE_AUTH_TOKEN needed — OIDC handles auth via trusted publishing
+
+            - name: Publish (dry run)
+              if: ${{ inputs.dry-run }}
+              working-directory: scripts/codex-monitor
+              run: npm publish --access public --dry-run
+
+            - name: Verify publication
+              if: ${{ !inputs.dry-run }}
+              run: |
+                  echo "⏳ Waiting for registry propagation..."
+                  sleep 10
+                  PUBLISHED=$(npm view @virtengine/codex-monitor version 2>/dev/null || echo "NOT_FOUND")
+                  EXPECTED="${{ needs.check.outputs.local-version }}"
+                  if [ "$PUBLISHED" = "$EXPECTED" ]; then
+                    echo "✅ Successfully published @virtengine/codex-monitor@$PUBLISHED"
+                  else
+                    echo "⚠️ Registry shows $PUBLISHED, expected $EXPECTED (may still be propagating)"
+                  fi
+
+            - name: Summary
+              run: |
+                  echo "## 📦 Codex Monitor Publish" >> "$GITHUB_STEP_SUMMARY"
+                  echo "" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Package | \`@virtengine/codex-monitor\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Version | \`${{ needs.check.outputs.local-version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Previous | \`${{ needs.check.outputs.registry-version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Dry Run | \`${{ inputs.dry-run || 'false' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Trigger | \`${{ github.event_name }}\` |" >> "$GITHUB_STEP_SUMMARY"

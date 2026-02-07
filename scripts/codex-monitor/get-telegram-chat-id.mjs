@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {
