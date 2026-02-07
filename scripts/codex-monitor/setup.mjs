@@ -25,6 +25,14 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname, basename, relative } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import {
+  readCodexConfig,
+  getConfigPath,
+  hasVibeKanbanMcp,
+  auditStreamTimeouts,
+  ensureCodexConfig,
+  printConfigSummary,
+} from "./codex-config.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -496,14 +504,20 @@ async function main() {
   const hasVk = check(
     "Vibe-Kanban CLI",
     commandExists("vibe-kanban") || bundledBinExists("vibe-kanban"),
-    "Bundled with codex-monitor — should be available. Try: npm ls vibe-kanban",
+    "Bundled with @virtengine/codex-monitor as a dependency",
   );
 
   if (!hasVk) {
     warn(
-      "vibe-kanban not found. Try reinstalling:",
+      "vibe-kanban not found. This is bundled with codex-monitor, so this is unexpected.",
     );
-    console.log(" npm install -g @virtengine/codex-monitor\n");
+    info("Try reinstalling:");
+    console.log("  npm uninstall -g @virtengine/codex-monitor");
+    console.log("  npm install -g @virtengine/codex-monitor\n");
+    info(
+      "If the problem persists, vibe-kanban should be available via npx:",
+    );
+    console.log("  npx vibe-kanban --help\n");
   }
 
   if (!hasNode) {
@@ -961,6 +975,55 @@ async function main() {
     );
     if (!spawnVk) env.VK_NO_SPAWN = "1";
 
+    // ── Codex CLI Config (config.toml) ─────────────────────
+    heading("Codex CLI Config (~/.codex/config.toml)");
+
+    const existingToml = readCodexConfig();
+    const configTomlPath = getConfigPath();
+
+    if (!existingToml) {
+      info("No Codex CLI config found. Will create one with recommended settings.");
+    } else {
+      info(`Found existing config: ${configTomlPath}`);
+    }
+
+    // Check vibe-kanban MCP
+    if (existingToml && hasVibeKanbanMcp(existingToml)) {
+      info("Vibe-Kanban MCP server already configured in config.toml.");
+      const updateVk = await prompt.confirm(
+        "Update VK env vars to match your setup values?",
+        true,
+      );
+      if (!updateVk) {
+        env._SKIP_VK_TOML = "1";
+      }
+    } else {
+      info("Will add Vibe-Kanban MCP server to Codex config for agent use.");
+    }
+
+    // Check stream timeouts
+    const timeouts = auditStreamTimeouts(existingToml);
+    const lowTimeouts = timeouts.filter((t) => t.needsUpdate);
+    if (lowTimeouts.length > 0) {
+      for (const t of lowTimeouts) {
+        const label = t.currentValue === null
+          ? "not set"
+          : `${(t.currentValue / 1000).toFixed(0)}s`;
+        warn(
+          `[${t.provider}] stream_idle_timeout_ms is ${label} — too low for complex reasoning.`,
+        );
+      }
+      const fixTimeouts = await prompt.confirm(
+        "Set stream timeouts to 60 minutes (recommended for agentic workloads)?",
+        true,
+      );
+      if (!fixTimeouts) {
+        env._SKIP_TIMEOUT_FIX = "1";
+      }
+    } else if (timeouts.length > 0) {
+      success("Stream timeouts look good across all providers.");
+    }
+
     // ── Orchestrator ──────────────────────────────────────
     heading("Orchestrator Script");
 
@@ -1214,6 +1277,21 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   const configPath = resolve(__dirname, "codex-monitor.config.json");
   writeFileSync(configPath, JSON.stringify(configJson, null, 2) + "\n", "utf8");
   success(`Config written to ${relative(repoRoot, configPath)}`);
+
+  // ── Codex CLI config.toml ─────────────────────────────
+  heading("Codex CLI Config");
+
+  const vkPort = env.VK_RECOVERY_PORT || "54089";
+  const vkBaseUrl = env.VK_BASE_URL || `http://127.0.0.1:${vkPort}`;
+  const vkHost = "127.0.0.1";
+
+  const tomlResult = ensureCodexConfig({
+    vkBaseUrl,
+    vkPort,
+    vkHost,
+    dryRun: false,
+  });
+  printConfigSummary(tomlResult, (msg) => console.log(msg));
 
   // ── Install dependencies ───────────────────────────────
   heading("Installing Dependencies");
