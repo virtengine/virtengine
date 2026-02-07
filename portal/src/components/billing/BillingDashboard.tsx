@@ -5,10 +5,12 @@
 
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Alert, AlertDescription } from '@/components/ui/Alert';
 import {
   Table,
   TableBody,
@@ -34,6 +36,8 @@ import { UsageSummaryCard } from './UsageSummaryCard';
 import { CostProjectionCard } from './CostProjectionCard';
 import { CostTrendChart } from './CostTrendChart';
 import { useUsageHistory } from '@virtengine/portal/hooks/useBilling';
+import { MFAChallenge } from '@/components/mfa';
+import { useMFAGate } from '@/features/mfa';
 
 function thirtyDaysAgo(): Date {
   const d = new Date();
@@ -63,6 +67,9 @@ export function BillingDashboard({
   onViewAllInvoices,
   onViewUsage,
 }: BillingDashboardProps) {
+  const [withdrawalNotice, setWithdrawalNotice] = useState(false);
+  const { gateAction, challengeProps } = useMFAGate();
+
   const { data: usage, isLoading: usageLoading } = useCurrentUsage();
   const { data: projection, isLoading: projectionLoading } = useCostProjection();
   const { data: invoices, isLoading: invoicesLoading } = useInvoices({ limit: 5 });
@@ -79,7 +86,28 @@ export function BillingDashboard({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Billing</h1>
+        <Button
+          variant="outline"
+          onClick={() =>
+            gateAction({
+              transactionType: 'withdrawal',
+              actionDescription: 'Request a withdrawal',
+              onAuthorized: () => setWithdrawalNotice(true),
+            })
+          }
+        >
+          Request Withdrawal
+        </Button>
       </div>
+
+      {withdrawalNotice && (
+        <Alert variant="success">
+          <AlertDescription>
+            Withdrawal request submitted. You&apos;ll receive a confirmation once it&apos;s
+            processed.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -198,6 +226,8 @@ export function BillingDashboard({
           )}
         </CardContent>
       </Card>
+
+      <MFAChallenge {...challengeProps} />
     </div>
   );
 }

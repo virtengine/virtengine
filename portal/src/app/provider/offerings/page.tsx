@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   useOfferingSync,
@@ -8,6 +9,8 @@ import {
   getStatusColor,
   getCategoryIcon,
 } from '@/hooks/useOfferingSync';
+import { MFAChallenge } from '@/components/mfa';
+import { useMFAGate } from '@/features/mfa';
 import type {
   OfferingPublication,
   OfferingPublicationStatus,
@@ -19,6 +22,7 @@ import type {
 // =============================================================================
 
 export default function ProviderOfferingsPage() {
+  const router = useRouter();
   const {
     offerings,
     stats,
@@ -39,6 +43,7 @@ export default function ProviderOfferingsPage() {
   const [showDeprecateModal, setShowDeprecateModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OfferingPublicationStatus | ''>('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { gateAction, challengeProps } = useMFAGate();
 
   const handleStatusFilterChange = (status: OfferingPublicationStatus | '') => {
     setStatusFilter(status);
@@ -128,12 +133,19 @@ export default function ProviderOfferingsPage() {
               )}
             </div>
           )}
-          <Link
-            href="/provider/offerings/new"
+          <button
+            type="button"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            onClick={() =>
+              gateAction({
+                transactionType: 'offering_creation',
+                actionDescription: 'Create a new offering',
+                onAuthorized: () => router.push('/provider/offerings/new'),
+              })
+            }
           >
             Create Offering
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -248,6 +260,8 @@ export default function ProviderOfferingsPage() {
           isLoading={actionLoading === selectedOffering.chainOfferingId}
         />
       )}
+
+      <MFAChallenge {...challengeProps} />
     </div>
   );
 }

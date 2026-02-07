@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMFAStore } from '@/features/mfa';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -228,9 +228,9 @@ export function WebAuthnSetup({ onComplete, onCancel, className }: WebAuthnSetup
 
 /** Automatically triggers registration when mounted */
 function AutoRegister({ onRegister }: { onRegister: () => void }) {
-  useState(() => {
-    // Use setTimeout to avoid blocking render
-    setTimeout(onRegister, 100);
-  });
+  useEffect(() => {
+    const timer = setTimeout(onRegister, 100);
+    return () => clearTimeout(timer);
+  }, [onRegister]);
   return null;
 }
