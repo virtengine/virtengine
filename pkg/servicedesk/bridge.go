@@ -3,6 +3,7 @@ package servicedesk
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -182,13 +183,21 @@ func NewBridge(config *Config, logger log.Logger) (*Bridge, error) {
 
 	// Initialize Jira client if configured
 	if config.JiraConfig != nil {
+		authType := strings.ToLower(strings.TrimSpace(config.JiraConfig.AuthType))
+		if authType == "" {
+			authType = "basic"
+		}
+		auth := jira.AuthConfig{Type: jira.AuthType(authType)}
+		switch authType {
+		case "basic":
+			auth.Username = config.JiraConfig.Username
+			auth.APIToken = config.JiraConfig.APIToken
+		case "bearer":
+			auth.BearerToken = config.JiraConfig.BearerToken
+		}
 		jiraClient, err := jira.NewClient(jira.ClientConfig{
 			BaseURL: config.JiraConfig.BaseURL,
-			Auth: jira.AuthConfig{
-				Type:     jira.AuthTypeBasic,
-				Username: config.JiraConfig.Username,
-				APIToken: config.JiraConfig.APIToken,
-			},
+			Auth:    auth,
 			Timeout: config.JiraConfig.Timeout,
 		})
 		if err != nil {

@@ -79,6 +79,9 @@ type IService interface {
 	// AddReply adds a reply to a ticket
 	AddReply(ctx context.Context, ticketID string, message string, isAgent bool) (*Comment, error)
 
+	// AddInternalNote adds an internal note to a ticket
+	AddInternalNote(ctx context.Context, ticketID string, message string) (*Comment, error)
+
 	// CloseTicket closes a ticket
 	CloseTicket(ctx context.Context, ticketID string, resolution string) error
 
@@ -211,6 +214,25 @@ func (s *Service) AddReply(ctx context.Context, ticketID string, message string,
 	// Record first response if this is an agent reply
 	if isAgent {
 		_ = s.slaTracker.RecordFirstResponse(ticketID, time.Now())
+	}
+
+	return comment, nil
+}
+
+// AddInternalNote adds an internal note to a ticket.
+func (s *Service) AddInternalNote(ctx context.Context, ticketID string, message string) (*Comment, error) {
+	issue, err := s.bridge.GetTicketByVirtEngineID(ctx, ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("jira service: failed to find ticket: %w", err)
+	}
+
+	if issue == nil {
+		return nil, fmt.Errorf("jira service: ticket not found: %s", ticketID)
+	}
+
+	comment, err := s.bridge.AddInternalNoteToTicket(ctx, issue.Key, message)
+	if err != nil {
+		return nil, fmt.Errorf("jira service: failed to add internal note: %w", err)
 	}
 
 	return comment, nil

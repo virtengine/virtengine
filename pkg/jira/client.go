@@ -12,7 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"time"
@@ -22,11 +24,13 @@ import (
 
 // API path constants
 const (
-	apiPathIssueCreate     = "/rest/api/3/issue"
-	apiPathIssue           = "/rest/api/3/issue/%s"
-	apiPathIssueTransition = "/rest/api/3/issue/%s/transitions"
-	apiPathIssueComment    = "/rest/api/3/issue/%s/comment"
-	apiPathSearch          = "/rest/api/3/search"
+	apiPathIssueCreate     = "/issue"
+	apiPathIssue           = "/issue/%s"
+	apiPathIssueTransition = "/issue/%s/transitions"
+	apiPathIssueComment    = "/issue/%s/comment"
+	apiPathIssueAttachment = "/issue/%s/attachments"
+	apiPathAttachment      = "/attachment/%s"
+	apiPathSearch          = "/search"
 	apiPathServiceDeskInfo = "/rest/servicedeskapi/info"
 )
 
@@ -43,6 +47,9 @@ type Client struct {
 
 	// userAgent is the User-Agent header
 	userAgent string
+
+	// apiVersion is the Jira REST API version
+	apiVersion int
 }
 
 // AuthConfig holds authentication configuration
@@ -86,13 +93,17 @@ type ClientConfig struct {
 
 	// UserAgent is the User-Agent header
 	UserAgent string
+
+	// APIVersion is the Jira REST API version (defaults to 3)
+	APIVersion int
 }
 
 // DefaultClientConfig returns default client configuration
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		Timeout:   30 * time.Second,
-		UserAgent: "VirtEngine-Jira-Client/1.0",
+		Timeout:    30 * time.Second,
+		UserAgent:  "VirtEngine-Jira-Client/1.0",
+		APIVersion: 3,
 	}
 }
 
@@ -129,11 +140,20 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		userAgent = "VirtEngine-Jira-Client/1.0"
 	}
 
+	apiVersion := cfg.APIVersion
+	if apiVersion == 0 {
+		apiVersion = 3
+	}
+	if apiVersion < 2 {
+		return nil, fmt.Errorf("jira: api version must be >= 2")
+	}
+
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 		auth:       cfg.Auth,
 		userAgent:  userAgent,
+		apiVersion: apiVersion,
 	}, nil
 }
 
@@ -153,6 +173,11 @@ type IClient interface {
 	// Comments
 	AddComment(ctx context.Context, issueKeyOrID string, comment *AddCommentRequest) (*Comment, error)
 	GetComments(ctx context.Context, issueKeyOrID string, startAt, maxResults int) (*CommentResponse, error)
+
+	// Attachments
+	AddAttachment(ctx context.Context, issueKeyOrID string, req *AttachmentUploadRequest) (*Attachment, error)
+	GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error)
+	DownloadAttachment(ctx context.Context, attachmentURL string) ([]byte, string, error)
 
 	// Service Desk specific
 	GetServiceDeskInfo(ctx context.Context) (map[string]interface{}, error)
@@ -185,12 +210,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	// Set auth header
 	// CRITICAL: Auth header is set but never logged
-	switch c.auth.Type {
-	case AuthTypeBasic:
-		req.SetBasicAuth(c.auth.Username, c.auth.APIToken)
-	case AuthTypeBearer:
-		req.Header.Set("Authorization", "Bearer "+c.auth.BearerToken)
-	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -206,9 +226,22 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	return respBody, resp.StatusCode, nil
 }
 
+func (c *Client) applyAuth(req *http.Request) {
+	switch c.auth.Type {
+	case AuthTypeBasic:
+		req.SetBasicAuth(c.auth.Username, c.auth.APIToken)
+	case AuthTypeBearer:
+		req.Header.Set("Authorization", "Bearer "+c.auth.BearerToken)
+	}
+}
+
+func (c *Client) apiPath(path string) string {
+	return fmt.Sprintf("/rest/api/%d%s", c.apiVersion, path)
+}
+
 // CreateIssue creates a new Jira issue
 func (c *Client) CreateIssue(ctx context.Context, req *CreateIssueRequest) (*CreateIssueResponse, error) {
-	respBody, statusCode, err := c.doRequest(ctx, http.MethodPost, apiPathIssueCreate, req)
+	respBody, statusCode, err := c.doRequest(ctx, http.MethodPost, c.apiPath(apiPathIssueCreate), req)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +264,7 @@ func (c *Client) CreateIssue(ctx context.Context, req *CreateIssueRequest) (*Cre
 
 // GetIssue retrieves a Jira issue by key or ID
 func (c *Client) GetIssue(ctx context.Context, issueKeyOrID string) (*Issue, error) {
-	path := fmt.Sprintf(apiPathIssue, url.PathEscape(issueKeyOrID))
+	path := fmt.Sprintf(c.apiPath(apiPathIssue), url.PathEscape(issueKeyOrID))
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -259,7 +292,7 @@ func (c *Client) GetIssue(ctx context.Context, issueKeyOrID string) (*Issue, err
 
 // UpdateIssue updates a Jira issue
 func (c *Client) UpdateIssue(ctx context.Context, issueKeyOrID string, req *UpdateIssueRequest) error {
-	path := fmt.Sprintf(apiPathIssue, url.PathEscape(issueKeyOrID))
+	path := fmt.Sprintf(c.apiPath(apiPathIssue), url.PathEscape(issueKeyOrID))
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodPut, path, req)
 	if err != nil {
 		return err
@@ -278,7 +311,7 @@ func (c *Client) UpdateIssue(ctx context.Context, issueKeyOrID string, req *Upda
 
 // DeleteIssue deletes a Jira issue
 func (c *Client) DeleteIssue(ctx context.Context, issueKeyOrID string) error {
-	path := fmt.Sprintf(apiPathIssue, url.PathEscape(issueKeyOrID))
+	path := fmt.Sprintf(c.apiPath(apiPathIssue), url.PathEscape(issueKeyOrID))
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodDelete, path, nil)
 	if err != nil {
 		return err
@@ -303,7 +336,7 @@ func (c *Client) SearchIssues(ctx context.Context, jql string, startAt, maxResul
 		"maxResults": maxResults,
 	}
 
-	respBody, statusCode, err := c.doRequest(ctx, http.MethodPost, apiPathSearch, searchReq)
+	respBody, statusCode, err := c.doRequest(ctx, http.MethodPost, c.apiPath(apiPathSearch), searchReq)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +359,7 @@ func (c *Client) SearchIssues(ctx context.Context, jql string, startAt, maxResul
 
 // GetTransitions retrieves available transitions for an issue
 func (c *Client) GetTransitions(ctx context.Context, issueKeyOrID string) (*TransitionsResponse, error) {
-	path := fmt.Sprintf(apiPathIssueTransition, url.PathEscape(issueKeyOrID))
+	path := fmt.Sprintf(c.apiPath(apiPathIssueTransition), url.PathEscape(issueKeyOrID))
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -350,7 +383,7 @@ func (c *Client) GetTransitions(ctx context.Context, issueKeyOrID string) (*Tran
 
 // TransitionIssue transitions an issue to a new status
 func (c *Client) TransitionIssue(ctx context.Context, issueKeyOrID string, req *TransitionRequest) error {
-	path := fmt.Sprintf(apiPathIssueTransition, url.PathEscape(issueKeyOrID))
+	path := fmt.Sprintf(c.apiPath(apiPathIssueTransition), url.PathEscape(issueKeyOrID))
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodPost, path, req)
 	if err != nil {
 		return err
@@ -369,7 +402,10 @@ func (c *Client) TransitionIssue(ctx context.Context, issueKeyOrID string, req *
 
 // AddComment adds a comment to an issue
 func (c *Client) AddComment(ctx context.Context, issueKeyOrID string, comment *AddCommentRequest) (*Comment, error) {
-	path := fmt.Sprintf(apiPathIssueComment, url.PathEscape(issueKeyOrID))
+	if comment == nil || comment.Body == nil {
+		return nil, fmt.Errorf("jira: comment body is required")
+	}
+	path := fmt.Sprintf(c.apiPath(apiPathIssueComment), url.PathEscape(issueKeyOrID))
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodPost, path, comment)
 	if err != nil {
 		return nil, err
@@ -393,7 +429,7 @@ func (c *Client) AddComment(ctx context.Context, issueKeyOrID string, comment *A
 
 // GetComments retrieves comments for an issue
 func (c *Client) GetComments(ctx context.Context, issueKeyOrID string, startAt, maxResults int) (*CommentResponse, error) {
-	path := fmt.Sprintf(apiPathIssueComment+"?startAt=%d&maxResults=%d",
+	path := fmt.Sprintf(c.apiPath(apiPathIssueComment)+"?startAt=%d&maxResults=%d",
 		url.PathEscape(issueKeyOrID), startAt, maxResults)
 	respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -434,6 +470,125 @@ func (c *Client) GetServiceDeskInfo(ctx context.Context) (map[string]interface{}
 	}
 
 	return result, nil
+}
+
+// AddAttachment uploads an attachment to an issue.
+func (c *Client) AddAttachment(ctx context.Context, issueKeyOrID string, req *AttachmentUploadRequest) (*Attachment, error) {
+	if req == nil {
+		return nil, fmt.Errorf("jira: attachment request is required")
+	}
+	if issueKeyOrID == "" {
+		return nil, fmt.Errorf("jira: issue key is required")
+	}
+	if req.Filename == "" {
+		return nil, fmt.Errorf("jira: attachment filename is required")
+	}
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	partHeaders := textproto.MIMEHeader{}
+	partHeaders.Set("Content-Disposition", fmt.Sprintf("form-data; name=\"file\"; filename=\"%s\"", req.Filename))
+	if req.ContentType != "" {
+		partHeaders.Set("Content-Type", req.ContentType)
+	}
+	part, err := writer.CreatePart(partHeaders)
+	if err != nil {
+		return nil, fmt.Errorf("jira: failed to create attachment part: %w", err)
+	}
+	if _, err := part.Write(req.Data); err != nil {
+		return nil, fmt.Errorf("jira: failed to write attachment: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("jira: failed to finalize attachment: %w", err)
+	}
+
+	path := fmt.Sprintf(c.apiPath(apiPathIssueAttachment), url.PathEscape(issueKeyOrID))
+	reqURL := c.baseURL + path
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, &buf)
+	if err != nil {
+		return nil, fmt.Errorf("jira: failed to create attachment request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("User-Agent", c.userAgent)
+	httpReq.Header.Set("X-Atlassian-Token", "no-check")
+	c.applyAuth(httpReq)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("jira: attachment upload failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("jira: failed to read attachment response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("jira: attachment upload failed with status %d", resp.StatusCode)
+	}
+
+	var attachments []Attachment
+	if err := json.Unmarshal(respBody, &attachments); err != nil {
+		return nil, fmt.Errorf("jira: failed to parse attachment response: %w", err)
+	}
+	if len(attachments) == 0 {
+		return nil, fmt.Errorf("jira: attachment response empty")
+	}
+
+	return &attachments[0], nil
+}
+
+// GetAttachment retrieves attachment metadata by ID.
+func (c *Client) GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error) {
+	if attachmentID == "" {
+		return nil, fmt.Errorf("jira: attachment ID is required")
+	}
+	path := fmt.Sprintf(c.apiPath(apiPathAttachment), url.PathEscape(attachmentID))
+	respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("jira: get attachment failed with status %d", statusCode)
+	}
+
+	var attachment Attachment
+	if err := json.Unmarshal(respBody, &attachment); err != nil {
+		return nil, fmt.Errorf("jira: failed to parse attachment response: %w", err)
+	}
+
+	return &attachment, nil
+}
+
+// DownloadAttachment downloads attachment content from a URL.
+func (c *Client) DownloadAttachment(ctx context.Context, attachmentURL string) ([]byte, string, error) {
+	if attachmentURL == "" {
+		return nil, "", fmt.Errorf("jira: attachment URL is required")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, attachmentURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("jira: failed to create attachment download request: %w", err)
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	c.applyAuth(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("jira: attachment download failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("jira: attachment download failed with status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("jira: failed to read attachment content: %w", err)
+	}
+	return data, resp.Header.Get("Content-Type"), nil
 }
 
 // FindIssueByVirtEngineTicketID finds a Jira issue by VirtEngine ticket ID
