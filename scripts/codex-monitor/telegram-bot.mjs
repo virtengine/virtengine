@@ -1381,11 +1381,58 @@ async function cmdPlan(chatId, args) {
   await sendReply(chatId, `📋 Triggering task planner (${taskCount} tasks)...`);
 
   try {
-    await _triggerTaskPlanner(
+    const result = await _triggerTaskPlanner(
       "manual-telegram",
       { source: "telegram /plan command" },
-      { taskCount },
+      { taskCount, notify: false },
     );
+    if (result?.status === "skipped") {
+      if (result.reason === "planner_disabled") {
+        await sendReply(
+          chatId,
+          "⚠️ Task planner disabled. Set TASK_PLANNER_MODE=kanban or codex-sdk.",
+        );
+        return;
+      }
+      if (result.reason === "planner_busy") {
+        await sendReply(
+          chatId,
+          "⚠️ Task planner already running. Try again in a moment.",
+        );
+        return;
+      }
+      const lines = [
+        "⚠️ Task planner skipped — a planning task already exists.",
+      ];
+      if (result.taskTitle) {
+        lines.push(`Title: ${result.taskTitle}`);
+      }
+      if (result.taskId) {
+        lines.push(`Task ID: ${result.taskId}`);
+      }
+      if (result.taskUrl) {
+        lines.push(result.taskUrl);
+      }
+      await sendReply(chatId, lines.join("\n"));
+      return;
+    }
+    if (result?.status === "created") {
+      const lines = [
+        "✅ Task planner task created.",
+        result.taskTitle ? `Title: ${result.taskTitle}` : null,
+        result.taskId ? `Task ID: ${result.taskId}` : null,
+        result.taskUrl || null,
+      ].filter(Boolean);
+      await sendReply(chatId, lines.join("\n"));
+      return;
+    }
+    if (result?.status === "completed") {
+      await sendReply(
+        chatId,
+        `✅ Task planner completed. Output saved to ${result.outputPath}`,
+      );
+      return;
+    }
     await sendReply(
       chatId,
       `✅ Task planner triggered for ${taskCount} tasks. Check backlog shortly.`,

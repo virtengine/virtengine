@@ -638,6 +638,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.VK_BASE_URL ||
     `http://127.0.0.1:${vkRecoveryPort}`;
   const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
+  const vkTaskUrlTemplate = process.env.VK_TASK_URL_TEMPLATE || "";
   const vkRecoveryCooldownMin = Number(
     process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
   );
@@ -736,6 +737,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     vkRecoveryHost,
     vkEndpointUrl,
     vkPublicUrl,
+    vkTaskUrlTemplate,
     vkRecoveryCooldownMin,
     vkSpawnEnabled,
     vkEnsureIntervalMs,

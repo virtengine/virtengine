@@ -103,6 +103,7 @@ let {
   vkRecoveryHost,
   vkEndpointUrl,
   vkPublicUrl,
+  vkTaskUrlTemplate,
   vkRecoveryCooldownMin,
   vkSpawnEnabled,
   vkEnsureIntervalMs,
@@ -1890,30 +1891,52 @@ async function checkMergedPRsAndUpdateTasks() {
   try {
     console.log("[monitor] Checking for merged PRs to update task status...");
 
-    // Fetch all tasks in "inreview" status
-    const reviewTasks = await fetchTasksByStatus("inreview");
+    const statuses = ["inreview", "inprogress"];
+    const tasksByStatus = await Promise.all(
+      statuses.map((status) => fetchTasksByStatus(status)),
+    );
+    const taskMap = new Map();
+    statuses.forEach((status, index) => {
+      for (const task of tasksByStatus[index]) {
+        if (task?.id) {
+          taskMap.set(task.id, { task, status });
+        }
+      }
+    });
+    const reviewTasks = Array.from(taskMap.values());
     if (reviewTasks.length === 0) {
-      console.log("[monitor] No tasks in review status");
+      console.log("[monitor] No tasks in review/inprogress status");
       return;
     }
 
-    console.log(`[monitor] Found ${reviewTasks.length} tasks in review`);
+    console.log(
+      `[monitor] Found ${reviewTasks.length} tasks in review/inprogress`,
+    );
 
     // For each task, get its workspace/branch and check if merged
     const statusData = await readStatusData();
-    const attempts = statusData?.active_attempts || [];
+    const attempts = Array.isArray(statusData?.active_attempts)
+      ? statusData.active_attempts
+      : Object.values(statusData?.attempts || {});
 
     let movedCount = 0;
 
-    for (const task of reviewTasks) {
+    for (const entry of reviewTasks) {
+      const task = entry.task;
+      const taskStatus = entry.status;
       // Find the attempt associated with this task
-      const attempt = attempts.find((a) => a.task_id === task.id);
-      if (!attempt || !attempt.branch) {
+      const attempt = attempts.find((a) => a?.task_id === task.id);
+      const branch =
+        attempt?.branch ||
+        task?.branch ||
+        task?.workspace_branch ||
+        task?.git_branch;
+      if (!branch) {
         continue;
       }
 
       // Check if the branch has been merged
-      const merged = await isBranchMerged(attempt.branch);
+      const merged = await isBranchMerged(branch);
       if (merged) {
         console.log(
           `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged PR, updating to done`,
@@ -1923,7 +1946,7 @@ async function checkMergedPRsAndUpdateTasks() {
         if (success) {
           movedCount++;
           console.log(
-            `[monitor] ✅ Moved task "${task.title}" from inreview → done`,
+            `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
 
           // Send Telegram notification
@@ -2675,6 +2698,23 @@ function limitLines(lines, limit = 8) {
   return [...lines.slice(0, limit), `- ...and ${remaining} more`];
 }
 
+function buildVkTaskUrl(taskId, projectId) {
+  if (!taskId) {
+    return null;
+  }
+  const template = String(vkTaskUrlTemplate || "").trim();
+  if (template) {
+    return template
+      .replace("{projectId}", projectId || "")
+      .replace("{taskId}", taskId);
+  }
+  const base = String(vkPublicUrl || vkEndpointUrl || "").replace(/\/+$/, "");
+  if (!base || !projectId) {
+    return null;
+  }
+  return `${base}/projects/${projectId}/tasks/${taskId}`;
+}
+
 function formatTaskLink(item) {
   const title = item.task_title || item.task_id || "(task)";
   if (item.task_url) {
@@ -3116,9 +3156,16 @@ async function checkStatusMilestones() {
   }
 }
 
-async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
-  if (plannerTriggered || plannerMode === "disabled") {
-    return;
+async function triggerTaskPlanner(
+  reason,
+  details,
+  { taskCount, notify = true } = {},
+) {
+  if (plannerMode === "disabled") {
+    return { status: "skipped", reason: "planner_disabled" };
+  }
+  if (plannerTriggered) {
+    return { status: "skipped", reason: "planner_busy" };
   }
   plannerTriggered = true;
   await updatePlannerState({
@@ -3130,15 +3177,16 @@ async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
 
   try {
     if (plannerMode === "kanban") {
-      await triggerTaskPlannerViaKanban(reason, { taskCount });
-    } else {
-      await triggerTaskPlannerViaCodex(reason);
+      return await triggerTaskPlannerViaKanban(reason, { taskCount, notify });
     }
+    return await triggerTaskPlannerViaCodex(reason, { notify });
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
-    await sendTelegramMessage(
-      `Task planner run failed (${plannerMode}): ${message}`,
-    );
+    if (notify) {
+      await sendTelegramMessage(
+        `Task planner run failed (${plannerMode}): ${message}`,
+      );
+    }
     throw err; // re-throw so callers (e.g. /plan command) know it failed
   } finally {
     plannerTriggered = false;
@@ -3149,7 +3197,10 @@ async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
  * Trigger the task planner by creating a VK task — a real agent will
  * pick it up and plan the next phase of work.
  */
-async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
+async function triggerTaskPlannerViaKanban(
+  reason,
+  { taskCount, notify = true } = {},
+) {
   const numTasks =
     taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
   // Get project ID using the name-matched helper
@@ -3162,21 +3213,31 @@ async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
   const existingTasks = await fetchVk(
     `/api/tasks?project_id=${projectId}&status=todo`,
   );
-  if (
-    existingTasks?.data?.some(
-      (t) =>
-        t.title?.toLowerCase().includes("task planner") ||
-        t.title?.toLowerCase().includes("plan next phase") ||
-        t.title?.toLowerCase().includes("plan next tasks"),
-    )
-  ) {
+  const existingPlanner = existingTasks?.data?.find(
+    (t) =>
+      t.title?.toLowerCase().includes("task planner") ||
+      t.title?.toLowerCase().includes("plan next phase") ||
+      t.title?.toLowerCase().includes("plan next tasks"),
+  );
+  if (existingPlanner) {
     console.log(
       "[monitor] task planner VK task already exists in backlog — skipping",
     );
-    await sendTelegramMessage(
-      "📋 Task planner skipped — a planning task already exists in the backlog.",
-    );
-    return;
+    const taskUrl = buildVkTaskUrl(existingPlanner.id, projectId);
+    if (notify) {
+      const suffix = taskUrl ? `\n${taskUrl}` : "";
+      await sendTelegramMessage(
+        `📋 Task planner skipped — existing planning task found (${projectId.substring(0, 8)}...).${suffix}`,
+      );
+    }
+    return {
+      status: "skipped",
+      reason: "existing_planner_task",
+      taskId: existingPlanner.id,
+      taskTitle: existingPlanner.title,
+      taskUrl,
+      projectId,
+    };
   }
 
   const plannerPrompt = agentPrompts.planner;
@@ -3217,19 +3278,30 @@ async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
       last_success_at: new Date().toISOString(),
       last_success_reason: reason || "manual",
     });
-    await sendTelegramMessage(
-      `📋 Task planner: created VK task for next phase planning (${reason}).`,
-    );
-  } else {
-    throw new Error("VK task creation failed");
+    const createdId = result.data?.id || null;
+    const createdUrl = buildVkTaskUrl(createdId, projectId);
+    if (notify) {
+      const suffix = createdUrl ? `\n${createdUrl}` : "";
+      await sendTelegramMessage(
+        `📋 Task planner: created VK task for next phase planning (${reason}).${suffix}`,
+      );
+    }
+    return {
+      status: "created",
+      taskId: createdId,
+      taskTitle: taskBody.title,
+      taskUrl: createdUrl,
+      projectId,
+    };
   }
+  throw new Error("VK task creation failed");
 }
 
 /**
  * Trigger the task planner via Codex SDK — runs the planner prompt directly
  * in an in-process Codex thread.
  */
-async function triggerTaskPlannerViaCodex(reason) {
+async function triggerTaskPlannerViaCodex(reason, { notify = true } = {}) {
   if (!codexEnabled) {
     throw new Error(
       "Codex SDK disabled — use TASK_PLANNER_MODE=kanban instead",
@@ -3255,9 +3327,12 @@ async function triggerTaskPlannerViaCodex(reason) {
     last_success_at: new Date().toISOString(),
     last_success_reason: reason || "manual",
   });
-  await sendTelegramMessage(
-    `📋 Task planner run completed (${reason || "manual"}). Output saved: ${outPath}`,
-  );
+  if (notify) {
+    await sendTelegramMessage(
+      `📋 Task planner run completed (${reason || "manual"}). Output saved: ${outPath}`,
+    );
+  }
+  return { status: "completed", outputPath: outPath };
 }
 
 async function ensureLogDir() {
@@ -3924,6 +3999,7 @@ function applyConfig(nextConfig, options = {}) {
   vkRecoveryHost = nextConfig.vkRecoveryHost;
   vkEndpointUrl = nextConfig.vkEndpointUrl;
   vkPublicUrl = nextConfig.vkPublicUrl;
+  vkTaskUrlTemplate = nextConfig.vkTaskUrlTemplate;
   // Invalidate VK caches when endpoint URL changes
   cachedRepoId = null;
   cachedProjectId = null;
