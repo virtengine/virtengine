@@ -62,6 +62,22 @@ const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
 );
+const telegramCommandsEnabled =
+  process.env.TELEGRAM_COMMANDS_DISABLED !== "1";
+const telegramCommandPollMs = Number(
+  process.env.TELEGRAM_COMMAND_POLL_MS || "5000",
+);
+const telegramCommandTimeoutSec = Number(
+  process.env.TELEGRAM_COMMAND_TIMEOUT_SEC || "20",
+);
+const telegramCommandAllowAnyChat =
+  process.env.TELEGRAM_COMMAND_ALLOW_ANY_CHAT === "1";
+const workspaceRoot =
+  process.env.TELEGRAM_WORKSPACE_ROOT || resolve(repoRoot, "..", "..");
+const repoName =
+  repoRoot.split(/[\\/]/).filter(Boolean).slice(-1)[0] || "repo";
+const primaryWorkspacePath =
+  process.env.TELEGRAM_PRIMARY_WORKSPACE_PATH || repoRoot;
 
 let CodexClient = null;
 let codexDisabledReason = "";
@@ -1180,6 +1196,263 @@ async function sendTelegramMessage(text, options = {}) {
   }
 }
 
+function tokenizeCommandArgs(raw) {
+  if (!raw) return [];
+  const tokens = [];
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = pattern.exec(raw)) !== null) {
+    tokens.push(match[1] ?? match[2] ?? match[3] ?? "");
+  }
+  return tokens.filter(Boolean);
+}
+
+function parseAgentCommand(text) {
+  const match = text.match(/^\/agent(?:@\w+)?\s*(.*)$/i);
+  if (!match) return null;
+  const argsRaw = match[1] || "";
+  const tokens = tokenizeCommandArgs(argsRaw);
+  let workspaceId = null;
+  let taskTokens = [];
+  const remainder = [];
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token === "--workspace" || token === "-w") {
+      if (i + 1 < tokens.length) {
+        workspaceId = tokens[i + 1];
+        i += 1;
+      } else {
+        return { error: "Missing value for --workspace." };
+      }
+      continue;
+    }
+    if (token === "--task" || token === "-t") {
+      taskTokens = tokens.slice(i + 1);
+      break;
+    }
+    remainder.push(token);
+  }
+
+  if (!taskTokens.length && remainder.length) {
+    taskTokens = remainder;
+  }
+
+  const task = taskTokens.join(" ").trim();
+  if (!task) {
+    return {
+      error:
+        "Missing task prompt. Use `/agent --workspace <id> --task <prompt>`.",
+    };
+  }
+
+  return { workspaceId, task };
+}
+
+function resolveWorkspacePath(workspaceId) {
+  if (!workspaceId) {
+    return primaryWorkspacePath;
+  }
+  const trimmed = String(workspaceId).trim();
+  if (!trimmed) {
+    return primaryWorkspacePath;
+  }
+  if (/[\\/]/.test(trimmed) || trimmed.includes(":")) {
+    return resolve(trimmed);
+  }
+  return resolve(workspaceRoot, trimmed, repoName);
+}
+
+async function dispatchAgentCommand({ workspaceId, task, requestId }) {
+  if (!codexEnabled) {
+    return {
+      ok: false,
+      message: codexDisabledReason || "Codex SDK is disabled.",
+    };
+  }
+
+  const workspacePath = resolveWorkspacePath(workspaceId);
+  if (!workspacePath || !existsSync(workspacePath)) {
+    const expected = workspaceId
+      ? workspacePath
+      : resolve(workspaceRoot, "<workspace-id>", repoName);
+    return {
+      ok: false,
+      message:
+        `Workspace not found. Expected path: ${expected}. ` +
+        "Provide `--workspace <id>` or set TELEGRAM_WORKSPACE_ROOT.",
+    };
+  }
+
+  if (!CodexClient) {
+    const ready = await ensureCodexSdkReady();
+    if (!ready) {
+      return {
+        ok: false,
+        message: codexDisabledReason || "Codex SDK not available.",
+      };
+    }
+  }
+
+  const codex = new CodexClient();
+  const thread = codex.startThread({
+    workingDirectory: workspacePath,
+    sandboxMode: "workspace-write",
+    approvalPolicy: "never",
+    networkAccessEnabled: true,
+  });
+
+  try {
+    const result = await thread.run(task);
+    const summary = String(result?.finalResponse || "")
+      .trim()
+      .slice(0, 1500);
+    return {
+      ok: true,
+      threadId: thread.id,
+      summary,
+      workspacePath,
+      requestId,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err?.message || String(err),
+      workspacePath,
+      requestId,
+    };
+  }
+}
+
+async function handleAgentCommand(messageText, _chatId, updateId) {
+  const parsed = parseAgentCommand(messageText);
+  if (!parsed) return false;
+  if (parsed.error) {
+    await sendTelegramMessage(`❌ ${parsed.error}`);
+    return true;
+  }
+
+  const workspaceId = parsed.workspaceId;
+  const workspacePath = resolveWorkspacePath(workspaceId);
+  const label = workspaceId ? workspaceId : "primary coordinator";
+  const requestId = `${updateId}-${Date.now()}`;
+
+  await sendTelegramMessage(
+    `📨 Agent dispatch received.\nRequest: ${requestId}\nWorkspace: ${label}\nTask: ${parsed.task.slice(
+      0,
+      400,
+    )}`,
+  );
+
+  const result = await dispatchAgentCommand({
+    workspaceId,
+    task: parsed.task,
+    requestId,
+  });
+
+  if (!result.ok) {
+    await sendTelegramMessage(
+      `❌ Agent dispatch failed (${label}).\nRequest: ${requestId}\n${result.message}`,
+    );
+    return true;
+  }
+
+  const lines = [
+    `✅ Agent dispatch completed (${label}).`,
+    `Request: ${requestId}`,
+    `Workspace: ${workspacePath}`,
+  ];
+  if (result.threadId) {
+    lines.push(`Thread: ${result.threadId}`);
+  }
+  if (result.summary) {
+    lines.push(`Response: ${result.summary}`);
+  }
+  await sendTelegramMessage(lines.join("\n"));
+  return true;
+}
+
+async function startTelegramCommandListener() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (!telegramCommandsEnabled) {
+    console.warn("[monitor] telegram command listener disabled.");
+    return;
+  }
+  if (!Number.isFinite(telegramCommandPollMs) || telegramCommandPollMs <= 0) {
+    console.warn("[monitor] telegram command listener disabled (invalid poll).");
+    return;
+  }
+
+  let offset = null;
+  let pending = false;
+
+  const poll = async () => {
+    if (pending) return;
+    pending = true;
+    try {
+      const url = new URL(
+        `https://api.telegram.org/bot${telegramToken}/getUpdates`,
+      );
+      url.searchParams.set("timeout", String(telegramCommandTimeoutSec));
+      url.searchParams.set(
+        "allowed_updates",
+        "message,edited_message,channel_post,edited_channel_post",
+      );
+      if (offset !== null) {
+        url.searchParams.set("offset", String(offset));
+      }
+
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        const body = await res.text();
+        console.warn(
+          `[monitor] telegram getUpdates failed: ${res.status} ${body}`,
+        );
+        return;
+      }
+
+      const data = await res.json();
+      const updates = Array.isArray(data.result) ? data.result : [];
+      for (const update of updates) {
+        const updateId = update.update_id;
+        if (typeof updateId === "number") {
+          offset = updateId + 1;
+        }
+
+        const message =
+          update.message ||
+          update.edited_message ||
+          update.channel_post ||
+          update.edited_channel_post;
+        if (!message || !message.text) continue;
+        const chatId = message.chat?.id;
+        if (
+          !telegramCommandAllowAnyChat &&
+          String(chatId) !== String(telegramChatId)
+        ) {
+          continue;
+        }
+        const text = String(message.text || "").trim();
+        if (!text) continue;
+        if (!text.startsWith("/agent")) continue;
+
+        void handleAgentCommand(text, chatId, updateId);
+      }
+    } catch (err) {
+      console.warn(
+        `[monitor] telegram command poll error: ${err.message || err}`,
+      );
+    } finally {
+      pending = false;
+    }
+  };
+
+  await poll();
+  setInterval(poll, telegramCommandPollMs);
+}
+
 function startTelegramNotifier() {
   if (!telegramToken || !telegramChatId) {
     console.warn(
@@ -1754,3 +2027,4 @@ void ensureCodexSdkReady().then(() => {
 });
 startProcess();
 startTelegramNotifier();
+startTelegramCommandListener();
