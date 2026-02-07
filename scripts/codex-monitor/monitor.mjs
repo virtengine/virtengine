@@ -1,5 +1,5 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, watch } from "node:fs";
+import { existsSync, watch, statSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -12,6 +12,14 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
+import {
+  startTelegramBot,
+  stopTelegramBot,
+  injectMonitorFunctions,
+  bumpAgentMessage,
+  isAgentActive,
+} from "./telegram-bot.mjs";
+import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -31,7 +39,7 @@ function getFlag(name) {
 }
 
 const scriptPath = resolve(getArg("--script", defaultScript));
-const scriptArgsRaw = getArg("--args", "-MaxParallel 6");
+  const scriptArgsRaw = getArg("--args", "-MaxParallel 6 -SkipSecurityChecks");
 const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
 const restartDelayMs = Number(getArg("--restart-delay", "10000"));
 const maxRestarts = Number(getArg("--max-restarts", "0"));
@@ -74,14 +82,49 @@ if (!codexEnabled) {
 }
 
 let restartCount = 0;
+
+// ── Codex Shell adapter for autofix ─────────────────────────────────────────
+// Wraps execCodexPrompt (persistent SDK thread with tools) into the
+// {success, output, error} interface that autofix.mjs expects.
+async function execViaCodexShell(prompt, _cwd) {
+  if (isCodexBusy()) {
+    return {
+      success: false,
+      output: "",
+      error: "Codex Shell busy — another turn is in flight",
+    };
+  }
+  try {
+    const res = await execCodexPrompt(prompt, { timeoutMs: 5 * 60 * 1000 });
+    return {
+      success: true,
+      output: res.finalResponse || "",
+      error: null,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      output: "",
+      error: err.message || String(err),
+    };
+  }
+}
+
+// Returns the adapter when Codex Shell is available, null otherwise
+function getExecViaShell() {
+  if (!codexEnabled) return null;
+  return execViaCodexShell;
+}
 let shuttingDown = false;
 let currentChild = null;
 let pendingRestart = false;
 let skipNextAnalyze = false;
 let skipNextRestartCount = false;
+let gracefulKill = false;
 let watcher = null;
 let watcherDebounce = null;
 let watchFileName = null;
+let watchFileMtimeMs = null;
 let vkRecoveryLastAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
@@ -99,6 +142,36 @@ let orchestratorLoopFixInProgress = false;
 let monitorSafeModeUntil = 0;
 let orchestratorResumeTimer = null;
 
+function isOrchestratorProcessRunning() {
+  try {
+    if (process.platform === "win32") {
+      const cmd =
+        "Get-CimInstance Win32_Process -Filter \"Name='pwsh.exe'\" | Select-Object -ExpandProperty CommandLine";
+      const out = execSync(
+        `powershell -NoProfile -Command ${JSON.stringify(cmd)}`,
+        {
+          encoding: "utf8",
+          timeout: 10000,
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      );
+      return out
+        .split(/\r?\n/)
+        .some((line) => line.toLowerCase().includes("ve-orchestrator.ps1"));
+    }
+
+    const out = execSync("ps -eo args 2>/dev/null", {
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    return out
+      .split(/\r?\n/)
+      .some((line) => line.toLowerCase().includes("ve-orchestrator.ps1"));
+  } catch {
+    return false;
+  }
+}
+
 let logRemainder = "";
 const mergeNotified = new Set();
 const pendingMerges = new Set();
@@ -109,6 +182,14 @@ const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
 let plannerTriggered = false;
+
+// ── Per-task failure tracking for auto-reattempt ────────────────────────────
+// Tracks individual task failures. If a task hits 3 singular failures
+// (not caused by shared infrastructure issues), it gets auto-reattempted.
+const taskFailureCounts = new Map(); // taskId → { count, lastFailedAt, lastBranch }
+const REATTEMPT_THRESHOLD = 3;
+const SHARED_FAILURE_WINDOW_MS = 60 * 1000; // If 3+ tasks fail within 60s, it's shared
+const sharedFailureTimestamps = []; // timestamps of all task failures
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -216,11 +297,17 @@ function getChangeSummary(repoRootPath, files) {
 
 function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
   return new Promise((resolve) => {
-    const args = ["exec", "--full-auto", "-C", cwd, prompt];
-    const child = spawn("codex", args, {
+    // On Windows, 'codex' is a .cmd shim — shell: false can't find it.
+    // Use cmd /c to preserve argument boundaries without shell arg-splitting.
+    const isWin = process.platform === "win32";
+    const codexArgs = ["exec", "--full-auto", "-C", cwd, prompt];
+    const spawnCmd = isWin ? "cmd" : "codex";
+    const spawnArgs = isWin ? ["/c", "codex", ...codexArgs] : codexArgs;
+
+    const child = spawn(spawnCmd, spawnArgs, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
+      shell: false,
       timeout: timeoutMs,
       env: { ...process.env },
     });
@@ -319,13 +406,17 @@ Instructions:
 4) Keep behavior stable and production-safe.`;
 
   const filesBefore = detectChangedFiles(repoRoot);
-  const result = await runCodexExec(prompt, repoRoot);
+  const runFix = getExecViaShell() || ((p, cwd) => runCodexExec(p, cwd));
+  const result = await runFix(prompt, repoRoot);
   const filesAfter = detectChangedFiles(repoRoot);
   const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
   const changeSummary = getChangeSummary(repoRoot, newChanges);
 
   const stamp = nowStamp();
-  const auditPath = resolve(logDir, `monitor-fix-${stamp}-attempt${attemptNum}.log`);
+  const auditPath = resolve(
+    logDir,
+    `monitor-fix-${stamp}-attempt${attemptNum}.log`,
+  );
   await writeFile(
     auditPath,
     [
@@ -469,13 +560,18 @@ Constraints:
 4) Prefer small guardrails over big rewrites.`;
 
   const filesBefore = detectChangedFiles(repoRoot);
-  const result = await runCodexExec(prompt, repoRoot, 180_000);
+  const runFix =
+    getExecViaShell() || ((p, cwd) => runCodexExec(p, cwd, 180_000));
+  const result = await runFix(prompt, repoRoot);
   const filesAfter = detectChangedFiles(repoRoot);
   const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
   const changeSummary = getChangeSummary(repoRoot, newChanges);
 
   const stamp = nowStamp();
-  const auditPath = resolve(logDir, `crash-loop-fix-${stamp}-attempt${attemptNum}.log`);
+  const auditPath = resolve(
+    logDir,
+    `crash-loop-fix-${stamp}-attempt${attemptNum}.log`,
+  );
   await writeFile(
     auditPath,
     [
@@ -527,9 +623,29 @@ function getErrorFingerprint(line) {
     .trim();
 }
 
+/** Known Windows crash/exception exit codes that are NOT orchestrator bugs. */
+const WINDOWS_CRASH_CODES = new Set([
+  1073807364, // 0x40010004 — STATUS_LOG_HARD_ERROR (Windows dialog crash)
+  3221226091, // 0xC000027B — STATUS_STOWED_EXCEPTION (COM/WinRT stowed exception)
+  3221225477, // 0xC0000005 — STATUS_ACCESS_VIOLATION
+  3221225725, // 0xC00000FD — STATUS_STACK_OVERFLOW
+  3221225786, // 0xC000013A — STATUS_CONTROL_C_EXIT
+]);
+
 function trackErrorFrequency(line) {
   const fingerprint = getErrorFingerprint(line);
   if (!fingerprint) return;
+
+  // Skip stats/metrics lines that contain error keywords but aren't actual errors.
+  // These slip through isErrorLine() via generic patterns like /\bFailed\b/i.
+  if (/First-shot:.*Failed:/i.test(line)) return;
+  if (/Status:\s*running=\d/i.test(line)) return;
+
+  // Skip orchestrator internal state tracking lines — these are informational
+  // and should not trigger loop detection even if they contain error-like words.
+  if (/Tracking new attempt:/i.test(line)) return;
+  if (/Attempt\s+[0-9a-f]+\s+(finished|stale-running)/i.test(line)) return;
+  if (/marking review|requires agent attention/i.test(line)) return;
 
   const now = Date.now();
   let record = errorFrequency.get(fingerprint);
@@ -573,6 +689,7 @@ async function triggerLoopFix(errorLine, repeatCount) {
       logDir,
       onTelegram: telegramFn,
       recentMessages: getTelegramHistory(),
+      execViaShell: getExecViaShell(),
     });
 
     if (result.fixed) {
@@ -594,6 +711,9 @@ const contextPatterns = [
   "ContextWindowExceeded",
   "context window",
   "ran out of room",
+  "prompt token count",
+  "token limit",
+  "maximum context length",
 ];
 
 const errorPatterns = [
@@ -619,12 +739,166 @@ const errorNoisePatterns = [
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Auto-merge enable failed:/i,
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Failed to initialize vibe-kanban configuration/i,
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
+  // Orchestrator status/stats lines — NOT real errors
+  /First-shot:\s+\d+(\.\d+)?%.*\|\s*Fix:.*\|\s*Failed:/i, // success rate summary
+  /Status:\s+running=\d+,\s*review=\d+,\s*error=\d+/i, // status counts
+  /^\s*[│║╔╚└──┌┐┘┤├]+/, // box-drawing / banner lines
+  /^\s*──\s*Cycle\s+\d+/, // cycle separator
+  /ALL TASKS COMPLETE/i, // completion banner (normal)
+  /^\s*Sleeping\s+\d+s\s+until\s+next\s+cycle/i, // sleep notice
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt\s+[0-9a-f]+\s+stale-running/i, // stale-running log (handled internally)
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Deferring.*no available slots/i, // slot deferral (expected)
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Health:\s+reported\s+/i, // executor health reports (handled by health system)
+  /Reconnecting\.\.\.\s*\d+\/\d+/i, // reconnect loops (handled by degradation detector)
+  /Tracking new attempt:\s+[0-9a-f]+/i, // attempt tracking after VK restart — NOT a real error
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Tracking new attempt:/i, // timestamped variant
+  /Attempt\s+[0-9a-f]+\s+finished\s*\(/i, // attempt finish status (internal orchestrator state)
+  /marking review/i, // internal state transition, not an error
+  /requires agent attention/i, // orchestrator info log, not monitor-actionable
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt\s+[0-9a-f]+\s+(failed|killed|timeout)\s+in workspace/i, // workspace exit status (handled by orchestrator retry logic)
+  /follow-up failed.*An internal error occurred/i, // VK API internal errors on follow-up (transient, not executor degradation)
+  /Follow-up failed for/i, // orchestrator follow-up retry log (handled internally)
 ];
 
 const vkErrorPatterns = [
   /Failed to initialize vibe-kanban configuration/i,
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
 ];
+
+// ─── Executor Degradation Patterns ───────────────────────────────────────────
+// These detect signs that an executor (Codex/Copilot) is degraded, timing out,
+// or being rate-limited — triggering failover notifications.
+
+const degradationPatterns = [
+  {
+    pattern: /Reconnecting\.\.\.\s*(\d+)\/(\d+)/i,
+    type: "reconnect_loop",
+    severity: (match) => {
+      const current = parseInt(match[1], 10);
+      return current >= 5 ? "critical" : "warning";
+    },
+    label: "Reconnection loop",
+  },
+  {
+    pattern: /oops.?you can.?t create more requests/i,
+    type: "rate_limit",
+    severity: () => "critical",
+    label: "Copilot rate limit hit",
+  },
+  {
+    pattern: /rate.?limit|too many requests|\b429\b|quota exceeded/i,
+    type: "rate_limit",
+    severity: () => "critical",
+    label: "API rate limit",
+  },
+  {
+    pattern: /hard timeout|idle timeout|operation timed out|deadline exceeded/i,
+    type: "timeout",
+    severity: () => "critical",
+    label: "Executor timeout",
+  },
+  {
+    pattern: /connection reset|ECONNRESET|ECONNREFUSED|ETIMEDOUT/i,
+    type: "connection_error",
+    severity: () => "warning",
+    label: "Connection error",
+  },
+  {
+    pattern: /capacity|server overloaded|503|502/i,
+    type: "capacity",
+    severity: () => "warning",
+    label: "Executor capacity issue",
+  },
+];
+
+/** Track recent degradation events for cooldown deduplication */
+const degradationNotified = new Map();
+
+function checkDegradationPatterns(line) {
+  for (const deg of degradationPatterns) {
+    const match = line.match(deg.pattern);
+    if (match) {
+      const severity = deg.severity(match);
+      const key = `${deg.type}:${deg.label}`;
+      const now = Date.now();
+      const last = degradationNotified.get(key) || 0;
+      // Deduplicate: critical every 5min, warning every 15min
+      const cooldown = severity === "critical" ? 5 * 60 * 1000 : 15 * 60 * 1000;
+      if (now - last < cooldown) continue;
+      degradationNotified.set(key, now);
+
+      const icon = severity === "critical" ? "\u{1F6A8}" : "\u26A0\uFE0F";
+      const message =
+        `${icon} <b>Executor Degradation</b>\n` +
+        `Type: ${escapeHtml(deg.label)}\n` +
+        `Pattern: <code>${escapeHtml(match[0].substring(0, 100))}</code>\n` +
+        `Severity: ${severity}\n` +
+        `Action: Health system will auto-failover to backup executors`;
+      queueErrorMessage(message);
+      return { type: deg.type, severity, label: deg.label, match: match[0] };
+    }
+  }
+  return null;
+}
+
+// ─── Region Failover Tracking ────────────────────────────────────────────────
+// Tracks sustained critical degradation events. If 3+ critical events happen
+// within 10 minutes, triggers automatic region failover via PowerShell.
+
+const criticalEvents = [];
+const CRITICAL_THRESHOLD = 3;
+const CRITICAL_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+let lastRegionFailoverAt = 0;
+const REGION_FAILOVER_COOLDOWN_MS = 30 * 60 * 1000; // 30 min between failovers
+
+function trackRegionFailover(degradation) {
+  if (!degradation || degradation.severity !== "critical") return;
+
+  const now = Date.now();
+  criticalEvents.push({ at: now, type: degradation.type });
+
+  // Prune old events
+  while (
+    criticalEvents.length > 0 &&
+    now - criticalEvents[0].at > CRITICAL_WINDOW_MS
+  ) {
+    criticalEvents.shift();
+  }
+
+  // Check if threshold reached
+  if (criticalEvents.length >= CRITICAL_THRESHOLD) {
+    if (now - lastRegionFailoverAt < REGION_FAILOVER_COOLDOWN_MS) {
+      console.log(
+        "[monitor] Region failover cooldown active, skipping auto-switch",
+      );
+      return;
+    }
+
+    lastRegionFailoverAt = now;
+    criticalEvents.length = 0; // Reset after triggering
+
+    // Trigger region switch via orchestrator's PowerShell functions
+    const isWin = process.platform === "win32";
+    const pwsh = isWin ? "powershell.exe" : "pwsh";
+    const script = resolve(repoRoot, "scripts", "ve-kanban.ps1");
+    try {
+      const result = execSync(
+        `${pwsh} -NoProfile -Command ". '${script}'; Initialize-CodexRegionTracking; $r = Switch-CodexRegion -Region 'sweden'; Write-Host ($r | ConvertTo-Json -Compress)"`,
+        { cwd: repoRoot, encoding: "utf8", timeout: 15000 },
+      );
+      console.log(`[monitor] Region failover triggered: ${result.trim()}`);
+      const message =
+        `🌍 <b>Auto Region Failover</b>\n` +
+        `${CRITICAL_THRESHOLD} critical degradation events in ${Math.round(CRITICAL_WINDOW_MS / 60000)}min\n` +
+        `Switching Codex: US → Sweden\n` +
+        `Auto-restore to US after cooldown (120min)\n\n` +
+        `Use /region us to switch back manually`;
+      queueErrorMessage(message);
+    } catch (err) {
+      console.error(`[monitor] Region failover failed: ${err.message}`);
+    }
+  }
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -735,11 +1009,30 @@ Reason: ${reason}`;
 let vkRestartCount = 0;
 const vkMaxRestarts = 20;
 const vkRestartDelayMs = 5000;
+let vkExternallyManaged = false; // true when VK is running outside this monitor
+let vkRestartScheduled = false; // prevent overlapping scheduled restarts
 
-function startVibeKanbanProcess() {
+// Determine correct npx binary for the platform (avoids shell:true DEP0190)
+const npxBin = process.platform === "win32" ? "npx.cmd" : "npx";
+
+async function startVibeKanbanProcess() {
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     return;
   }
+
+  // CRITICAL: Check if VK is already reachable before spawning a new instance.
+  // This prevents the restart-death-loop when an external VK is running on the port.
+  if (await isVibeKanbanOnline()) {
+    console.log(
+      `[monitor] vibe-kanban already reachable at ${vkEndpointUrl} — adopting external instance`,
+    );
+    vkExternallyManaged = true;
+    vkRestartCount = 0;
+    vkRestartScheduled = false;
+    return;
+  }
+
+  vkExternallyManaged = false;
 
   const env = {
     ...process.env,
@@ -751,11 +1044,10 @@ function startVibeKanbanProcess() {
     `[monitor] starting vibe-kanban via npx (HOST=${vkRecoveryHost} PORT=${vkRecoveryPort}, endpoint=${vkEndpointUrl})`,
   );
 
-  vibeKanbanProcess = spawn("npx", ["--yes", "vibe-kanban"], {
+  vibeKanbanProcess = spawn(npxBin, ["--yes", "vibe-kanban"], {
     env,
     cwd: repoRoot,
     stdio: "ignore",
-    shell: true,
     detached: true,
   });
   vibeKanbanProcess.unref();
@@ -782,6 +1074,7 @@ function startVibeKanbanProcess() {
 
 function scheduleVibeKanbanRestart() {
   if (shuttingDown) return;
+  if (vkRestartScheduled) return; // prevent overlapping restarts
   vkRestartCount++;
   if (vkRestartCount > vkMaxRestarts) {
     console.error(
@@ -798,7 +1091,11 @@ function scheduleVibeKanbanRestart() {
   console.log(
     `[monitor] restarting vibe-kanban in ${delay}ms (attempt ${vkRestartCount}/${vkMaxRestarts})`,
   );
-  setTimeout(() => startVibeKanbanProcess(), delay);
+  vkRestartScheduled = true;
+  setTimeout(async () => {
+    vkRestartScheduled = false;
+    await startVibeKanbanProcess();
+  }, delay);
 }
 
 async function isVibeKanbanOnline() {
@@ -818,10 +1115,25 @@ async function isVibeKanbanOnline() {
 
 async function ensureVibeKanbanRunning() {
   if (await isVibeKanbanOnline()) {
-    // Reset restart counter on successful health check
+    // VK is responding — reset counters and track as externally managed if needed
+    if (!vibeKanbanProcess || vibeKanbanProcess.killed) {
+      // VK is online but we didn't spawn it — adopt it
+      if (!vkExternallyManaged) {
+        console.log(
+          "[monitor] vibe-kanban is online (external instance) — skipping spawn",
+        );
+        vkExternallyManaged = true;
+      }
+    }
     vkRestartCount = 0;
+    vkRestartScheduled = false;
     return;
   }
+  // VK is offline — if a restart is already scheduled, let it handle things
+  if (vkRestartScheduled) {
+    return;
+  }
+  vkExternallyManaged = false;
   // If process is alive, give it 15s grace to start up
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     const graceMs = 15000;
@@ -840,7 +1152,7 @@ async function ensureVibeKanbanRunning() {
     return;
   }
   // No process running — start fresh
-  startVibeKanbanProcess();
+  await startVibeKanbanProcess();
 }
 
 function restartVibeKanbanProcess() {
@@ -852,7 +1164,7 @@ function restartVibeKanbanProcess() {
       /* best effort */
     }
   } else {
-    startVibeKanbanProcess();
+    void startVibeKanbanProcess();
   }
 }
 
@@ -876,6 +1188,18 @@ async function triggerVibeKanbanRecovery(reason) {
 }
 
 const errorQueue = [];
+const contextOverflowHandled = new Map();
+const contextOverflowCooldownMs = 30 * 60 * 1000;
+const contextOverflowPatterns = [
+  /prompt token count/i,
+  /ContextWindowExceeded/i,
+  /context window/i,
+  /ran out of room/i,
+  /too many tokens/i,
+  /token limit/i,
+  /exceeds the limit/i,
+  /maximum context length/i,
+];
 
 function queueErrorMessage(line) {
   errorQueue.push(line);
@@ -894,6 +1218,220 @@ async function flushErrorQueue() {
   const lines = errorQueue.splice(0, errorQueue.length);
   const message = ["VirtEngine Orchestrator Error", ...lines].join("\n");
   await sendTelegramMessage(message);
+}
+
+function isContextOverflowLine(line) {
+  return contextOverflowPatterns.some((pattern) => pattern.test(line));
+}
+
+function getContextOverflowKey(line) {
+  return line
+    .replace(/\d{4,}/g, "<N>")
+    .replace(/\b[0-9a-f]{8,}\b/gi, "<ID>")
+    .slice(0, 160);
+}
+
+function pickAttemptForContextOverflow(status) {
+  if (!status || !status.attempts) return null;
+  const attempts = Object.values(status.attempts)
+    .filter(Boolean)
+    .filter((a) => a.task_id);
+  if (attempts.length === 0) return null;
+
+  const candidates = attempts.filter((a) => {
+    const lp = (a.last_process_status || "").toLowerCase();
+    const st = (a.status || "").toLowerCase();
+    return (
+      ["failed", "timeout", "killed", "stopped"].includes(lp) ||
+      ["review", "error"].includes(st)
+    );
+  });
+
+  const target = (candidates.length ? candidates : attempts).slice();
+  target.sort((a, b) => {
+    const at = Date.parse(a.updated_at || "") || 0;
+    const bt = Date.parse(b.updated_at || "") || 0;
+    return bt - at;
+  });
+  return target[0] || null;
+}
+
+async function fetchVk(path, options = {}) {
+  const url = `${vkEndpointUrl}${path}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text || null;
+    }
+    return { ok: res.ok, status: res.status, data, raw: text };
+  } catch (err) {
+    return { ok: false, status: 0, data: null, error: err.message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function summarizeTaskWithCodex(task, errorLine) {
+  if (!codexEnabled) {
+    return {
+      summary:
+        "Codex SDK disabled. Manual summary required. Error: " + errorLine,
+      usedCodex: false,
+    };
+  }
+
+  const ready = await ensureCodexSdkReady();
+  if (!ready) {
+    return {
+      summary:
+        "Codex SDK unavailable. Manual summary required. Error: " + errorLine,
+      usedCodex: false,
+    };
+  }
+
+  const title = task?.title || task?.name || "Untitled task";
+  const description = String(task?.description || task?.body || "")
+    .replace(/\r/g, "")
+    .slice(0, 6000);
+  const prompt = `Summarize the following task for a fresh agent in <=10 bullets.
+Focus on: goals, required work areas/files, acceptance criteria, failure modes, tests, and operator docs.
+Mention that the previous attempt failed due to prompt token limit.
+
+Title: ${title}
+Description:
+${description || "(no description)"}
+
+Output format:
+Summary:
+- ...
+Next steps:
+- ...`;
+
+  try {
+    const codex = new CodexClient();
+    const thread = codex.startThread();
+    const result = await thread.run(prompt);
+    const summary = String(result || "").trim();
+    return {
+      summary:
+        summary || "Summary unavailable (Codex returned empty response).",
+      usedCodex: true,
+    };
+  } catch (err) {
+    return {
+      summary: `Codex summary failed: ${err.message || err}`,
+      usedCodex: false,
+    };
+  }
+}
+
+function buildTaskSummaryDescription(original, summary) {
+  const stamp = new Date().toISOString();
+  const header = `AUTO-SUMMARY (${stamp})\n${summary.trim()}\n`;
+  const separator = "\n---\n";
+  const base = original ? String(original) : "";
+  let combined = `${header}${separator}${base}`;
+  const maxLen = 9000;
+  if (combined.length > maxLen) {
+    const trimmed = base.slice(
+      0,
+      Math.max(0, maxLen - header.length - separator.length - 200),
+    );
+    combined = `${header}${separator}${trimmed}\n\n[truncated by codex-monitor]\n`;
+  }
+  return combined;
+}
+
+async function handleContextOverflow(line) {
+  const key = getContextOverflowKey(line);
+  const lastAt = contextOverflowHandled.get(key) || 0;
+  if (Date.now() - lastAt < contextOverflowCooldownMs) {
+    return;
+  }
+  contextOverflowHandled.set(key, Date.now());
+
+  const status = await readStatusData();
+  const attempt = pickAttemptForContextOverflow(status);
+  if (!attempt || !attempt.task_id) {
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `⚠️ Context window error detected but no task attempt found. Line: ${line.slice(0, 200)}`,
+      );
+    }
+    return;
+  }
+
+  const taskId = attempt.task_id;
+  const taskRes = await fetchVk(`/api/tasks/${taskId}`);
+  const task = taskRes.ok ? taskRes.data : null;
+
+  const { summary, usedCodex } = await summarizeTaskWithCodex(task, line);
+  const originalDesc = task?.description || task?.body || "";
+  const newDesc = buildTaskSummaryDescription(originalDesc, summary);
+
+  let updateOk = false;
+  if (taskId) {
+    const updateRes = await fetchVk(`/api/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        status: "todo",
+        description: newDesc,
+      }),
+    });
+    if (updateRes.ok) {
+      updateOk = true;
+    } else {
+      const fallbackRes = await fetchVk(`/api/tasks/${taskId}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "todo" }),
+      });
+      updateOk = fallbackRes.ok;
+    }
+  }
+
+  const logPath = resolve(
+    logDir,
+    `context-overflow-${nowStamp()}-${taskId.slice(0, 8)}.log`,
+  );
+  await writeFile(
+    logPath,
+    [
+      `# Context overflow detected`,
+      `# Task: ${taskId}`,
+      `# Branch: ${attempt.branch || "unknown"}`,
+      `# Updated: ${new Date().toISOString()}`,
+      `# Update OK: ${updateOk}`,
+      `# Codex used: ${usedCodex}`,
+      "",
+      "## Error line",
+      line,
+      "",
+      "## Summary",
+      summary,
+    ].join("\n"),
+    "utf8",
+  );
+
+  if (telegramToken && telegramChatId) {
+    const taskTitle = task?.title || task?.name || taskId;
+    const statusMsg = updateOk ? "re-queued to TODO" : "update failed";
+    void sendTelegramMessage(
+      `🧠 Context limit hit. ${taskTitle} ${statusMsg}.\nSummary saved in logs.\n${summary.slice(0, 500)}`,
+    );
+  }
 }
 
 function notifyMerge(line) {
@@ -1174,6 +1712,14 @@ async function sendTelegramMessage(text, options = {}) {
     if (!res.ok) {
       const body = await res.text();
       console.warn(`[monitor] telegram send failed: ${res.status} ${body}`);
+    } else {
+      // ── Bottom-pinning: bump the active agent message down ──────
+      // If the Telegram bot has an active agent session, re-send its message
+      // so it stays at the bottom of the chat (below this notification).
+      if (isAgentActive()) {
+        // Small delay to ensure Telegram processes the notification first
+        setTimeout(() => void bumpAgentMessage(), 500);
+      }
     }
   } catch (err) {
     console.warn(`[monitor] telegram send failed: ${err.message || err}`);
@@ -1239,6 +1785,171 @@ async function checkStatusMilestones() {
       `Backlog low: ${backlogRemaining} tasks remaining. Triggering task planner.`,
     );
     await triggerTaskPlanner();
+  }
+
+  // ── Auto-reattempt: check for tasks with repeated singular failures ──
+  await checkAutoReattempt(status);
+}
+
+/**
+ * Check for tasks that have hit the reattempt threshold (3 singular failures).
+ * Singular = the failure affects only this specific task, not a shared infrastructure issue.
+ */
+async function checkAutoReattempt(status) {
+  if (!status) return;
+  const attempts = status.attempts || {};
+  const errorTasks = Object.entries(attempts).filter(
+    ([, a]) => a?.status === "error",
+  );
+
+  if (errorTasks.length === 0) return;
+
+  const now = Date.now();
+
+  // ── Shared failure detection ──────────────────────────────────────
+  // If 3+ tasks fail within SHARED_FAILURE_WINDOW_MS, it's a shared issue
+  // (e.g., VK crash, monitor crash, network outage) — don't count these.
+  for (const [, attempt] of errorTasks) {
+    const failTime = Date.parse(attempt.updated_at || "") || now;
+    sharedFailureTimestamps.push(failTime);
+  }
+  // Prune old timestamps
+  while (
+    sharedFailureTimestamps.length > 0 &&
+    now - sharedFailureTimestamps[0] > SHARED_FAILURE_WINDOW_MS
+  ) {
+    sharedFailureTimestamps.shift();
+  }
+  const recentFailures = sharedFailureTimestamps.filter(
+    (ts) => now - ts < SHARED_FAILURE_WINDOW_MS,
+  );
+  const isSharedFailure = recentFailures.length >= 3;
+
+  if (isSharedFailure) {
+    console.log(
+      `[monitor] ${recentFailures.length} tasks failed within ${SHARED_FAILURE_WINDOW_MS / 1000}s — shared failure, skipping auto-reattempt`,
+    );
+    return;
+  }
+
+  // ── Per-task singular failure counting ────────────────────────────
+  for (const [attemptId, attempt] of errorTasks) {
+    const taskId = attempt.task_id || attemptId;
+    const existing = taskFailureCounts.get(taskId) || {
+      count: 0,
+      lastFailedAt: 0,
+      lastBranch: "",
+    };
+
+    // Only increment if this is a new failure (different timestamp)
+    const failTime = Date.parse(attempt.updated_at || "") || now;
+    if (failTime > existing.lastFailedAt) {
+      existing.count += 1;
+      existing.lastFailedAt = failTime;
+      existing.lastBranch = attempt.branch || "";
+      taskFailureCounts.set(taskId, existing);
+
+      console.log(
+        `[monitor] Task ${(attempt.task_title || taskId).slice(0, 40)} failure count: ${existing.count}/${REATTEMPT_THRESHOLD}`,
+      );
+    }
+
+    // ── Trigger auto-reattempt at threshold ──────────────────────
+    if (existing.count >= REATTEMPT_THRESHOLD) {
+      await performAutoReattempt(attemptId, attempt, taskId);
+      // Reset counter after reattempt
+      taskFailureCounts.delete(taskId);
+    }
+  }
+}
+
+/**
+ * Automatically reattempt a task: archive branch, close PR, reset to TODO.
+ */
+async function performAutoReattempt(attemptId, attempt, taskId) {
+  const title = attempt.task_title || taskId;
+  console.log(
+    `[monitor] Auto-reattempting task: ${title} (${REATTEMPT_THRESHOLD} failures)`,
+  );
+
+  const results = [];
+
+  // Step 1: Archive the branch
+  if (attempt.branch) {
+    try {
+      const archiveName = `archive/${attempt.branch}-${Date.now()}`;
+      execSync(`git branch -m ${attempt.branch} ${archiveName}`, {
+        cwd: repoRoot,
+        encoding: "utf8",
+        timeout: 10000,
+        stdio: "pipe",
+      });
+      results.push(`Branch archived: ${attempt.branch}`);
+    } catch {
+      results.push(`Branch ${attempt.branch} not found locally`);
+    }
+  }
+
+  // Step 2: Close PR if exists
+  if (attempt.pr_number) {
+    try {
+      execSync(
+        `gh pr close ${attempt.pr_number} --comment "Auto-reattempt after ${REATTEMPT_THRESHOLD} failures"`,
+        { cwd: repoRoot, encoding: "utf8", timeout: 15000, stdio: "pipe" },
+      );
+      results.push(`PR #${attempt.pr_number} closed`);
+    } catch {
+      results.push(`PR #${attempt.pr_number} could not be closed`);
+    }
+  }
+
+  // Step 3: Reset task to TODO in Vibe Kanban
+  if (taskId) {
+    try {
+      const res = await fetchVk(`/api/tasks/${taskId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: "todo",
+          description:
+            (attempt.original_description || "") +
+            `\n\n---\n⚠️ Auto-reattempt triggered at ${new Date().toISOString()} after ${REATTEMPT_THRESHOLD} consecutive failures.`,
+        }),
+      });
+      if (res.ok) {
+        results.push("Task reset to TODO in Vibe Kanban");
+      } else {
+        results.push(`VK API error: ${res.status}`);
+      }
+    } catch (err) {
+      results.push(`VK API error: ${err.message}`);
+    }
+  }
+
+  // Step 4: Update local status
+  try {
+    const raw = await readFile(statusPath, "utf8");
+    const data = JSON.parse(raw);
+    if (data.attempts && data.attempts[attemptId]) {
+      data.attempts[attemptId].status = "reattempted";
+      data.attempts[attemptId].reattempted_at = new Date().toISOString();
+      data.attempts[attemptId].failure_count = REATTEMPT_THRESHOLD;
+    }
+    // Store failure counts in status for /tasks visibility
+    if (!data.task_failure_counts) data.task_failure_counts = {};
+    data.task_failure_counts[taskId] = REATTEMPT_THRESHOLD;
+    await writeFile(statusPath, JSON.stringify(data, null, 2), "utf8");
+  } catch {
+    /* best effort */
+  }
+
+  // Notify via Telegram
+  if (telegramToken && telegramChatId) {
+    void sendTelegramMessage(
+      `🔄 Auto-reattempt: ${title}\n\n` +
+        `This task failed ${REATTEMPT_THRESHOLD} times consecutively (singular failures, not shared).\n\n` +
+        results.map((r) => `• ${r}`).join("\n") +
+        "\n\nTask will be picked up fresh in the next orchestrator cycle.",
+    );
   }
 }
 
@@ -1316,13 +2027,28 @@ async function analyzeWithCodex(logPath, logText, reason) {
     }
     const codex = new CodexClient();
     const thread = codex.startThread();
-    const prompt = `You are monitoring a long-running PowerShell orchestration script.
-The script just exited with an error. Analyze the log excerpt and implement a fix on the file (scripts/ve-orchestrator.ps1).
+    const prompt = `You are monitoring the VirtEngine task orchestrator (a PowerShell script).
+The script just crashed. Diagnose the root cause from the log and apply a minimal fix.
 
-Reason: ${reason}
+Key files (read these first):
+- scripts/ve-orchestrator.ps1 — main orchestrator (PowerShell)
+- scripts/ve-kanban.ps1 — vibe-kanban API helpers
+- scripts/codex-monitor/monitor.mjs — process supervisor
+- scripts/codex-monitor/autofix.mjs — auto-fix engine
+- AGENTS.md — project conventions
 
-Log excerpt:\n${logText}\n
-Return a short diagnosis and a concrete fix.`;
+Exit reason: ${reason}
+
+Log excerpt (last lines):
+${logText}
+
+Rules:
+1. Only edit the files listed above.
+2. Fix the specific error shown in the log — do not refactor.
+3. Validate your fix compiles: run the PowerShell parser or node --check.
+4. If the error is a PowerShell ParserError, find the exact line and fix the syntax.
+5. If the error is a null parameter, add a null guard.
+6. Do NOT touch unrelated code.`;
 
     const result = await thread.run(prompt);
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
@@ -1421,24 +2147,78 @@ async function handleExit(code, signal, logPath) {
   const logText = await readFile(logPath, "utf8").catch(() => "");
   const reason = signal ? `signal ${signal}` : `exit ${code}`;
   const isFileChangeRestart = pendingRestart && skipNextAnalyze;
+  const wasGracefulKill = gracefulKill;
   const isAbnormalExit = Boolean(signal) || code !== 0;
 
-  if (pendingRestart) {
+  // ── Graceful restart (file-change, monitor-initiated kill) ────────────
+  // When the monitor itself killed the child (requestRestart), skip ALL
+  // autofix and codex analysis.  Just restart cleanly.
+  if (pendingRestart || wasGracefulKill) {
     pendingRestart = false;
     skipNextAnalyze = false;
+    gracefulKill = false;
     if (!skipNextRestartCount) {
       restartCount += 1;
     }
     skipNextRestartCount = false;
 
-    // File-change restarts don't need analysis or auto-fix
-    if (isFileChangeRestart) {
-      startProcess();
-      return;
-    }
+    console.log(
+      `[monitor] graceful restart (${reason}) — skipping autofix/analysis`,
+    );
+    startProcess();
+    return;
   }
 
-  // ── Auto-fix: try to fix the crash automatically ──────────────────────
+  // ── Clean exit (code 0, no signal) — don't treat as crash ─────────────
+  if (code === 0 && !signal) {
+    console.log(
+      `[monitor] clean exit (${reason}) — restarting without analysis`,
+    );
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
+    return;
+  }
+
+  // ── External kill (hotfix/runner) — skip autofix/analysis ─────────────
+  // External supervisors often terminate the orchestrator with SIGTERM/SIGKILL
+  // during hotfix restarts. Treat these as non-actionable to avoid Codex noise.
+  if (signal === "SIGTERM" || signal === "SIGKILL") {
+    console.warn(
+      `[monitor] external kill (${reason}) — skipping autofix/analysis`,
+    );
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
+    return;
+  }
+
+  // ── Windows crash codes — not orchestrator bugs ───────────────────────
+  // Exit codes like STATUS_LOG_HARD_ERROR (0x40010004) or STATUS_STOWED_EXCEPTION
+  // (0xC000027B) are Windows runtime / COM crashes in the child process (pwsh/Codex),
+  // not bugs in our scripts. Auto-fix cannot help — just restart with backoff.
+  if (code !== null && WINDOWS_CRASH_CODES.has(code)) {
+    console.warn(
+      `[monitor] Windows crash code ${code} (0x${code.toString(16).toUpperCase()}) — skipping autofix (not an orchestrator bug)`,
+    );
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `⚠️ Orchestrator exited with Windows crash code ${code} (0x${code.toString(16).toUpperCase()}). ` +
+          `This is a host/runtime issue, not a script bug. Restarting with backoff.`,
+      );
+    }
+    restartCount += 1;
+    // Use longer delay for Windows crashes — they often recur if the system is stressed
+    const backoffMs = Math.min(
+      restartDelayMs * Math.pow(2, Math.min(restartCount, 5)),
+      5 * 60 * 1000,
+    );
+    console.log(
+      `[monitor] Windows crash backoff: restarting in ${Math.round(backoffMs / 1000)}s`,
+    );
+    setTimeout(startProcess, backoffMs);
+    return;
+  }
+
+  // ── Abnormal exit — attempt autofix ───────────────────────────────────
   if (autoFixEnabled && logText.length > 0) {
     const telegramFn =
       telegramToken && telegramChatId
@@ -1453,6 +2233,7 @@ async function handleExit(code, signal, logPath) {
         logDir,
         onTelegram: telegramFn,
         recentMessages: getTelegramHistory(),
+        execViaShell: getExecViaShell(),
       });
 
       if (result.fixed) {
@@ -1486,13 +2267,15 @@ async function handleExit(code, signal, logPath) {
     }
   }
 
-  // ── Fallback: Codex SDK analysis (diagnosis only) ─────────────────────
-  if (telegramToken && telegramChatId) {
-    void sendTelegramMessage(
-      `🔍 Codex analysis triggered (${reason}):\nAuto-fix was unable to resolve the crash — running diagnostic analysis.`,
-    );
+  // ── Fallback: Codex SDK analysis (diagnosis only, abnormal exits only) ──
+  if (isAbnormalExit && codexEnabled) {
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `🔍 Codex analysis triggered (${reason}):\nAuto-fix was unable to resolve the crash — running diagnostic analysis.`,
+      );
+    }
+    await analyzeWithCodex(logPath, logText.slice(-15000), reason);
   }
-  await analyzeWithCodex(logPath, logText.slice(-15000), reason);
 
   if (hasContextWindowError(logText)) {
     await writeFile(
@@ -1505,23 +2288,23 @@ async function handleExit(code, signal, logPath) {
   if (isAbnormalExit) {
     const restartCountNow = recordOrchestratorRestart();
     if (restartCountNow >= orchestratorRestartThreshold) {
-        if (Date.now() >= orchestratorHaltedUntil) {
-          orchestratorHaltedUntil = Date.now() + orchestratorPauseMs;
-          const pauseMin = Math.round(orchestratorPauseMs / 60000);
-          console.warn(
-            `[monitor] crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin}m.`,
+      if (Date.now() >= orchestratorHaltedUntil) {
+        orchestratorHaltedUntil = Date.now() + orchestratorPauseMs;
+        const pauseMin = Math.round(orchestratorPauseMs / 60000);
+        console.warn(
+          `[monitor] crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin}m.`,
+        );
+        if (!orchestratorResumeTimer) {
+          orchestratorResumeTimer = setTimeout(() => {
+            orchestratorResumeTimer = null;
+            startProcess();
+          }, orchestratorPauseMs);
+        }
+        if (telegramToken && telegramChatId) {
+          void sendTelegramMessage(
+            `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
           );
-          if (!orchestratorResumeTimer) {
-            orchestratorResumeTimer = setTimeout(() => {
-              orchestratorResumeTimer = null;
-              startProcess();
-            }, orchestratorPauseMs);
-          }
-          if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
-            );
-          }
+        }
         if (!orchestratorLoopFixInProgress) {
           orchestratorLoopFixInProgress = true;
           const fixResult = await attemptCrashLoopFix({
@@ -1555,7 +2338,10 @@ async function handleExit(code, signal, logPath) {
 
   const now = Date.now();
   if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
-    const waitMs = Math.max(orchestratorHaltedUntil - now, monitorSafeModeUntil - now);
+    const waitMs = Math.max(
+      orchestratorHaltedUntil - now,
+      monitorSafeModeUntil - now,
+    );
     const waitSec = Math.max(5, Math.round(waitMs / 1000));
     console.warn(`[monitor] restart paused; retrying in ${waitSec}s`);
     setTimeout(startProcess, waitSec * 1000);
@@ -1568,10 +2354,25 @@ async function handleExit(code, signal, logPath) {
 
 async function startProcess() {
   const now = Date.now();
+  if (currentChild && !currentChild.killed) {
+    return;
+  }
+  if (!currentChild && isOrchestratorProcessRunning()) {
+    console.warn(
+      "[monitor] detected existing orchestrator process; deferring start",
+    );
+    setTimeout(startProcess, restartDelayMs);
+    return;
+  }
   if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
-    const waitMs = Math.max(orchestratorHaltedUntil - now, monitorSafeModeUntil - now);
+    const waitMs = Math.max(
+      orchestratorHaltedUntil - now,
+      monitorSafeModeUntil - now,
+    );
     const waitSec = Math.max(5, Math.round(waitMs / 1000));
-    console.warn(`[monitor] orchestrator start blocked; retrying in ${waitSec}s`);
+    console.warn(
+      `[monitor] orchestrator start blocked; retrying in ${waitSec}s`,
+    );
     setTimeout(startProcess, waitSec * 1000);
     return;
   }
@@ -1595,8 +2396,16 @@ async function startProcess() {
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
     for (const line of lines) {
+      if (isContextOverflowLine(line)) {
+        void handleContextOverflow(line);
+      }
       if (isErrorLine(line)) {
         notifyErrorLine(line);
+      }
+      // Check for executor degradation (reconnect loops, rate limits, timeouts)
+      const degradation = checkDegradationPatterns(line);
+      if (degradation) {
+        trackRegionFailover(degradation);
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
         notifyMerge(line);
@@ -1639,6 +2448,7 @@ function requestRestart(reason) {
   pendingRestart = true;
   skipNextAnalyze = true;
   skipNextRestartCount = true;
+  gracefulKill = true;
 
   console.log(`[monitor] restart requested (${reason})`);
   if (currentChild) {
@@ -1650,6 +2460,7 @@ function requestRestart(reason) {
     }, 5000);
   } else {
     pendingRestart = false;
+    gracefulKill = false;
     startProcess();
   }
 }
@@ -1663,18 +2474,44 @@ async function startWatcher() {
   }
   let targetPath = watchPath;
   try {
-    const stats = await (await import("node:fs/promises")).stat(watchPath);
+    const stats = statSync(watchPath);
     if (stats.isFile()) {
       watchFileName = watchPath.split(/[\\/]/).pop();
       targetPath = watchPath.split(/[\\/]/).slice(0, -1).join("/") || ".";
+      watchFileMtimeMs = stats.mtimeMs;
     }
   } catch {
     // Default to watching the provided path.
   }
 
   watcher = watch(targetPath, { persistent: true }, (_event, filename) => {
-    if (watchFileName && filename && filename !== watchFileName) {
-      return;
+    if (watchFileName) {
+      if (filename) {
+        const fileMatches =
+          process.platform === "win32"
+            ? filename.toLowerCase() === watchFileName.toLowerCase()
+            : filename === watchFileName;
+        if (!fileMatches) {
+          return;
+        }
+        try {
+          const stats = statSync(watchPath);
+          watchFileMtimeMs = stats.mtimeMs;
+        } catch {
+          // Ignore stat failures; we'll allow restart below.
+        }
+      } else {
+        // Windows often omits filename for fs.watch; only restart if target file changed.
+        try {
+          const stats = statSync(watchPath);
+          if (watchFileMtimeMs !== null && stats.mtimeMs === watchFileMtimeMs) {
+            return;
+          }
+          watchFileMtimeMs = stats.mtimeMs;
+        } catch {
+          // If file is missing or unreadable, fall through and restart.
+        }
+      }
     }
     if (watcherDebounce) {
       clearTimeout(watcherDebounce);
@@ -1738,10 +2575,10 @@ setInterval(() => {
 }, maintenanceIntervalMs);
 
 startWatcher();
-void ensureVibeKanbanRunning();
+void ensureVibeKanbanRunning().catch(() => {});
 if (Number.isFinite(vkEnsureIntervalMs) && vkEnsureIntervalMs > 0) {
   setInterval(() => {
-    void ensureVibeKanbanRunning();
+    void ensureVibeKanbanRunning().catch(() => {});
   }, vkEnsureIntervalMs);
 }
 void ensureCodexSdkReady().then(() => {
@@ -1754,3 +2591,16 @@ void ensureCodexSdkReady().then(() => {
 });
 startProcess();
 startTelegramNotifier();
+
+// ── Two-way Telegram ↔ Codex shell ──────────────────────────────────────────
+injectMonitorFunctions({
+  sendTelegramMessage,
+  readStatusData,
+  readStatusSummary,
+  getCurrentChild: () => currentChild,
+  startProcess,
+  getVibeKanbanUrl: () => vkPublicUrl || vkEndpointUrl,
+  fetchVk,
+  getRepoRoot: () => repoRoot,
+});
+void startTelegramBot();

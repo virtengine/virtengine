@@ -49,16 +49,21 @@ export function extractErrors(logText) {
     }
   }
 
-  const lines = logText.split(/\r?\n/);
+  // Pre-process: rejoin lines broken by console width wrapping.
+  // PowerShell error headers like "ParserError: C:\...\file.ps1:123" often
+  // get split across lines when the path exceeds terminal width.
+  const rawLines = logText.split(/\r?\n/);
+  const lines = unwrapConsoleLines(rawLines);
 
   // ── Line-by-line parser ───────────────────────────────────────────────
 
   // Pattern A: "ErrorType: filepath:line:col" or "ErrorType: filepath:line"
+  // PS7 uses either exception type (ParserError) or function name (Get-Foo) as prefix
   // Followed by "Line |" block
   const errorHeaderWithCol =
     /^(\w[\w.-]+):\s+([A-Za-z]:\\[^\n:]+\.ps1):(\d+):(\d+)\s*$/;
   const errorHeaderNoCol =
-    /^(\w[\w.-]*Error):\s+([A-Za-z]:\\[^\n:]+\.ps1):(\d+)\s*$/;
+    /^(\w[\w.-]+):\s+([A-Za-z]:\\[^\n:]+\.ps1):(\d+)\s*$/;
 
   // Pattern B: "At filepath:line char:col"
   const atLineHeader = /^At\s+([A-Za-z]:\\[^\n:]+\.ps1):(\d+)\s+char:(\d+)/;
@@ -132,6 +137,70 @@ export function extractErrors(logText) {
   }
 
   return errors;
+}
+
+/**
+ * Rejoin lines that were broken by console width wrapping.
+ * Detects partial Windows paths split across lines and merges them.
+ *
+ * Heuristic: if line N ends mid-path (contains `\` but no `:digit`) and
+ * line N+1 looks like a path continuation (starts with a non-whitespace char
+ * followed by `\` or `.ps1`), join them. Also handles partial error headers
+ * like "ParserError: C:\...\scri" + "pts\file.ps1:123".
+ */
+function unwrapConsoleLines(rawLines) {
+  const result = [];
+  let i = 0;
+  while (i < rawLines.length) {
+    let line = rawLines[i].trimEnd();
+
+    // Check if this line looks like it might be a truncated error header or path.
+    // A line ending with a backslash-prefixed partial path (no :digits at end)
+    // that is followed by a line completing the path is likely wrapped.
+    while (i + 1 < rawLines.length) {
+      const next = rawLines[i + 1].trimEnd();
+      // Case 1: line ends with backslash or partial filename, next completes .ps1:NNN
+      if (
+        /\\[^\\\s:]+$/.test(line) &&
+        !/:$/.test(line) &&
+        /^[^\s|+#]/.test(next) &&
+        !/^\s*(Line\s*\||\d+\s*\||\|)/.test(next)
+      ) {
+        line = line + next;
+        i++;
+        continue;
+      }
+      // Case 2: line ends with path separator continuation (trailing backslash scenarios)
+      if (
+        line.endsWith("\\") &&
+        /^\w/.test(next) &&
+        !next.startsWith("Line") &&
+        !/^\s*\|/.test(next)
+      ) {
+        line = line + next;
+        i++;
+        continue;
+      }
+      // Case 3: line number split across lines — line ends with ":digits" and
+      // next line starts with digits (e.g., "file.ps1:12" + "14" → ":1214")
+      if (/:\d+$/.test(line) && /^\d+\s*$/.test(next)) {
+        line = line + next.trim();
+        i++;
+        continue;
+      }
+      // Case 4: line ends mid-path (contains .ps1 or similar at the end, but the
+      // :lineNumber is on the next line — e.g., "file.ps1" + ":1214")
+      if (/\.ps1\s*$/.test(line) && /^:\d+/.test(next)) {
+        line = line.trimEnd() + next.trim();
+        i++;
+        continue;
+      }
+      break;
+    }
+    result.push(line);
+    i++;
+  }
+  return result;
 }
 
 /**
@@ -317,14 +386,20 @@ export function getFixAttemptCount(signature) {
  * Run `codex exec --full-auto` with a fix prompt.
  * Returns { success, output } — Codex will write fixes directly to disk.
  */
-function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
-  return new Promise((resolve) => {
-    const args = ["exec", "--full-auto", "-C", cwd, prompt];
+async function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
+  return new Promise((promiseResolve) => {
+    // On Windows, 'codex' is a .cmd shim — spawn with shell: false can't
+    // find it.  Use cmd /c to launch it while preserving argument boundaries
+    // (no arg‐splitting like shell: true would cause).
+    const isWin = process.platform === "win32";
+    const codexArgs = ["exec", "--full-auto", "-C", cwd, prompt];
+    const spawnCmd = isWin ? "cmd" : "codex";
+    const spawnArgs = isWin ? ["/c", "codex", ...codexArgs] : codexArgs;
 
-    const child = spawn("codex", args, {
+    const child = spawn(spawnCmd, spawnArgs, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
+      shell: false,
       timeout: timeoutMs,
       env: { ...process.env },
     });
@@ -345,7 +420,7 @@ function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
       } catch {
         /* best effort */
       }
-      resolve({
+      promiseResolve({
         success: false,
         output: stdout,
         error: "timeout after " + timeoutMs + "ms",
@@ -354,7 +429,7 @@ function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      resolve({
+      promiseResolve({
         success: false,
         output: stdout,
         error: err.message,
@@ -363,7 +438,7 @@ function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
 
     child.on("exit", (code) => {
       clearTimeout(timer);
-      resolve({
+      promiseResolve({
         success: code === 0,
         output: stdout + (stderr ? "\n" + stderr : ""),
         error: code !== 0 ? `exit code ${code}` : null,
@@ -421,11 +496,24 @@ function getChangeSummary(repoRoot, files) {
  * @param {string} opts.logDir — directory for fix audit logs
  * @param {function} [opts.onTelegram] — optional callback to send Telegram message
  * @param {string[]} [opts.recentMessages] — recent Telegram messages for context
+ * @param {function} [opts.execViaShell] — optional async (prompt, cwd) => {success, output, error} using Codex Shell SDK
  * @returns {Promise<{fixed: boolean, errors: object[], skipped: string[], outcome: string}>}
  */
 export async function attemptAutoFix(opts) {
-  const { logText, reason, repoRoot, logDir, onTelegram, recentMessages } =
-    opts;
+  const {
+    logText,
+    reason,
+    repoRoot,
+    logDir,
+    onTelegram,
+    recentMessages,
+    execViaShell,
+  } = opts;
+
+  // Use Codex Shell SDK when available, fall back to raw CLI
+  const runFix = execViaShell
+    ? (prompt, cwd) => execViaShell(prompt, cwd)
+    : (prompt, cwd) => runCodexExec(prompt, cwd);
 
   const errors = extractErrors(logText);
 
@@ -504,7 +592,7 @@ export async function attemptAutoFix(opts) {
     );
 
     const filesBefore = detectChangedFiles(repoRoot);
-    const result = await runCodexExec(prompt, repoRoot);
+    const result = await runFix(prompt, repoRoot);
     const filesAfter = detectChangedFiles(repoRoot);
 
     // Detect new changes
@@ -627,8 +715,8 @@ export async function attemptAutoFix(opts) {
     // Snapshot files before
     const filesBefore = detectChangedFiles(repoRoot);
 
-    // Run Codex
-    const result = await runCodexExec(prompt, repoRoot);
+    // Run Codex (via Shell SDK when available, raw CLI otherwise)
+    const result = await runFix(prompt, repoRoot);
 
     // Detect what changed
     const filesAfter = detectChangedFiles(repoRoot);
@@ -771,6 +859,7 @@ ${messagesCtx}
  * @param {string} opts.logDir — log directory
  * @param {function} [opts.onTelegram] — Telegram callback
  * @param {string[]} [opts.recentMessages] — recent Telegram messages for context
+ * @param {function} [opts.execViaShell] — optional async (prompt, cwd) => {success, output, error} using Codex Shell SDK
  * @returns {Promise<{fixed: boolean, outcome: string}>}
  */
 export async function fixLoopingError(opts) {
@@ -781,7 +870,13 @@ export async function fixLoopingError(opts) {
     logDir,
     onTelegram,
     recentMessages,
+    execViaShell,
   } = opts;
+
+  // Use Codex Shell SDK when available, fall back to raw CLI
+  const runFix = execViaShell
+    ? (prompt, cwd) => execViaShell(prompt, cwd)
+    : (prompt, cwd) => runCodexExec(prompt, cwd);
 
   const signature = `loop:${errorLine.slice(0, 120)}`;
 
@@ -849,7 +944,7 @@ ${messagesCtx}
   );
 
   const filesBefore = detectChangedFiles(repoRoot);
-  const result = await runCodexExec(prompt, repoRoot);
+  const result = await runFix(prompt, repoRoot);
   const filesAfter = detectChangedFiles(repoRoot);
   const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
   const changeSummary = getChangeSummary(repoRoot, newChanges);

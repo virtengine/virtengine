@@ -20,11 +20,18 @@
 .PARAMETER PollIntervalSec
     Seconds between orchestration cycles (default: 300 = 5 minutes).
 
+.PARAMETER MutexWaitMaxMin
+    Maximum minutes to wait for an existing orchestrator mutex before exiting.
+    Use 0 to wait indefinitely.
+
 .PARAMETER DryRun
     If set, logs what would happen without making changes.
 
 .PARAMETER WaitForMutex
-    If set, waits for an existing orchestrator instance to release the mutex.
+    Force waiting for an existing orchestrator instance to release the mutex.
+
+.PARAMETER NoWaitForMutex
+    Exit immediately if the mutex is held (overrides default wait).
 
 .PARAMETER OneShot
     Run a single orchestration cycle and exit (useful for testing).
@@ -46,6 +53,7 @@
 param(
     [int]$MaxParallel = 2,
     [int]$PollIntervalSec = 90,
+    [int]$MutexWaitMaxMin = 15,
     [int]$GitHubCooldownSec = 120,
     [int]$VKApiTimeoutSec = 20,
     [int]$VKApiRetryCount = 3,
@@ -53,16 +61,37 @@ param(
     [int]$GitHubCommandTimeoutSec = 120,
     [int]$IdleTimeoutMin = 60,
     [int]$IdleConfirmMin = 15,
+    [int]$StaleRunningTimeoutMin = 45,
     [int]$CiWaitMin = 15,
     [int]$MaxRetries = 5,
+    [int]$KillBurstThreshold = 2,
+    [int]$KillBurstWindowMin = 10,
+    [int]$KillCooldownMin = 15,
+    [int]$KillThrottleMaxParallel = 2,
     [switch]$UseAutoMerge,
     [switch]$UseAdminMerge,
+    [switch]$SkipSecurityChecks,
     [switch]$WaitForMutex,
+    [switch]$NoWaitForMutex,
     [switch]$DryRun,
     [switch]$OneShot,
     [switch]$RunMergeStrategy,
     [switch]$SyncCopilotState
 )
+
+# Default to waiting on the mutex for long-running runs unless explicitly overridden.
+if ($NoWaitForMutex) {
+    $script:WaitForMutexEffective = $false
+}
+elseif ($WaitForMutex) {
+    $script:WaitForMutexEffective = $true
+}
+elseif (-not $OneShot) {
+    $script:WaitForMutexEffective = $true
+}
+else {
+    $script:WaitForMutexEffective = $false
+}
 
 # ─── Load ve-kanban library ──────────────────────────────────────────────────
 function Get-VeKanbanLibraryCandidates {
@@ -79,6 +108,25 @@ function Get-VeKanbanLibraryCandidates {
     $candidates = $candidates | Select-Object -Unique
 
     return $candidates
+}
+
+function Resolve-VeKanbanLibraryPath {
+    <#
+    .SYNOPSIS Resolve the ve-kanban library path from known candidates.
+    #>
+    try {
+        if ($script:VeKanbanLibraryPath -and (Test-Path -LiteralPath $script:VeKanbanLibraryPath)) {
+            return $script:VeKanbanLibraryPath
+        }
+    }
+    catch { }
+
+    $candidates = Get-VeKanbanLibraryCandidates
+    foreach ($path in $candidates) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        return $path
+    }
+    return $null
 }
 
 $script:VeKanbanLibraryCandidates = Get-VeKanbanLibraryCandidates
@@ -106,7 +154,23 @@ $requiredFunctions = @(
     "Get-OpenPullRequests",
     "Get-VKLastGithubError",
     "Get-CurrentExecutorProfile",
-    "Get-NextExecutorProfile"
+    "Get-NextExecutorProfile",
+    "Initialize-ExecutorHealth",
+    "Report-ExecutorFailure",
+    "Report-ExecutorSuccess",
+    "Get-HealthyExecutorProfile",
+    "Get-ExecutorProviderForAttempt",
+    "Increment-ExecutorActiveCount",
+    "Decrement-ExecutorActiveCount",
+    "Get-ExecutorHealthSummary",
+    "Get-TaskComplexity",
+    "Get-BestExecutorForTask",
+    "Switch-CodexRegion",
+    "Get-RegionStatus",
+    "Initialize-CodexRegionTracking",
+    "Set-RegionOverride",
+    "Test-RegionCooldownExpired",
+    "Get-ActiveCodexRegion"
 )
 function Ensure-VeKanbanLibraryLoaded {
     param([string[]]$RequiredFunctions)
@@ -147,6 +211,8 @@ $script:TasksCompleted = 0
 $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
+$script:KillCooldownUntil = $null
+$script:KillEvents = @()
 $script:TaskRetryCounts = @{}
 $script:AttemptSummaries = @{}
 $script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-state.json"
@@ -157,6 +223,9 @@ $script:CompletedTasks = @()
 $script:SubmittedTasks = @()
 $script:FollowUpEvents = @()
 $script:CopilotRequests = @()
+$script:ConflictRetries = @()
+$script:TodoBacklogCount = $null
+$script:TodoBacklogFetchedAt = $null
 
 # ─── Success rate tracking ────────────────────────────────────────────────────
 $script:FirstShotSuccess = 0          # Merged on first attempt, no copilot fix
@@ -189,6 +258,23 @@ function Write-Log {
     Write-Host "  [$ts] $Message" -ForegroundColor $color
 }
 
+function Reset-TerminalIfRequested {
+    <#
+    .SYNOPSIS Clear the terminal when VE_RESET_TERMINAL is set (temporary operator override).
+    #>
+    $reset = $env:VE_RESET_TERMINAL
+    if (-not $reset) { return }
+    if ($reset -in @("1", "true", "True", "TRUE", "yes", "YES")) {
+        try {
+            # ANSI clear + cursor home for terminals that respect VT sequences
+            [Console]::Write("`e[2J`e[H")
+        }
+        catch { }
+        try { Clear-Host } catch { }
+        Write-Log "Terminal reset requested (VE_RESET_TERMINAL=$reset)" -Level "INFO"
+    }
+}
+
 function Request-OrchestratorStop {
     param([string]$Reason = "shutdown")
     if ($script:StopRequested) { return }
@@ -209,14 +295,40 @@ function Test-OrchestratorStop {
 function Start-InterruptibleSleep {
     param(
         [Parameter(Mandatory)][int]$Seconds,
-        [string]$Reason = "sleep"
+        [string]$Reason = "sleep",
+        [int]$HeartbeatSec = 0
     )
     $remaining = [Math]::Max(0, [int]$Seconds)
+    $nextHeartbeat = if ($HeartbeatSec -gt 0) { (Get-Date).AddSeconds($HeartbeatSec) } else { $null }
     while ($remaining -gt 0) {
         if (Test-OrchestratorStop) { return $false }
         $chunk = [Math]::Min(5, $remaining)
         Start-Sleep -Seconds $chunk
         $remaining -= $chunk
+        if ($nextHeartbeat -and (Get-Date) -ge $nextHeartbeat -and $remaining -gt 0) {
+            Write-Log "Sleep heartbeat ($Reason): ${remaining}s remaining" -Level "INFO"
+            $nextHeartbeat = $nextHeartbeat.AddSeconds($HeartbeatSec)
+        }
+    }
+    return $true
+}
+
+function Start-MutexWaitWithHeartbeat {
+    param(
+        [Parameter(Mandatory)][int]$Seconds,
+        [int]$HeartbeatSec = 15
+    )
+    $remaining = [Math]::Max(0, [int]$Seconds)
+    if ($HeartbeatSec -le 0) {
+        return (Start-InterruptibleSleep -Seconds $remaining -Reason "mutex-wait")
+    }
+    while ($remaining -gt 0) {
+        $chunk = [Math]::Min($HeartbeatSec, $remaining)
+        if (-not (Start-InterruptibleSleep -Seconds $chunk -Reason "mutex-wait")) { return $false }
+        $remaining -= $chunk
+        if ($remaining -gt 0) {
+            Write-Log "Still waiting for active orchestrator. Retrying in ${remaining}s." -Level "WARN"
+        }
     }
     return $true
 }
@@ -299,6 +411,7 @@ function Format-ShortId {
 
 function Write-Banner {
     $nextStr = "/"
+    $healthStr = "N/A"
     if (Get-Command Get-CurrentExecutorProfile -ErrorAction SilentlyContinue) {
         try {
             $nextExec = Get-CurrentExecutorProfile -ErrorAction Stop
@@ -308,13 +421,23 @@ function Write-Banner {
             $nextStr = "/"
         }
     }
+    if (Get-Command Get-ExecutorHealthSummary -ErrorAction SilentlyContinue) {
+        try {
+            $healthStr = Get-ExecutorHealthSummary -ErrorAction Stop
+        }
+        catch {
+            $healthStr = "N/A"
+        }
+    }
     Write-Host ""
     Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║          VirtEngine Task Orchestrator                    ║" -ForegroundColor Cyan
     Write-Host "  ║                                                         ║" -ForegroundColor Cyan
     Write-Host "  ║   Parallel: $($MaxParallel.ToString().PadRight(4))  Poll: ${PollIntervalSec}s  $(if($DryRun){'DRY-RUN'}else{'LIVE'})                ║" -ForegroundColor Cyan
-    Write-Host "  ║   Cycling:  CODEX ⇄ COPILOT (50/50)                    ║" -ForegroundColor Cyan
+    Write-Host "  ║   Stale:    ${StaleRunningTimeoutMin}m timeout                                  ║" -ForegroundColor Cyan
+    Write-Host "  ║   Routing:  Health-Aware Multi-Executor                 ║" -ForegroundColor Cyan
     Write-Host "  ║   Next:     $($nextStr.PadRight(44))║" -ForegroundColor Cyan
+    Write-Host "  ║   Health:   $($healthStr.PadRight(44))║" -ForegroundColor Cyan
     Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -806,12 +929,34 @@ function Add-RecentItem {
         [Parameter(Mandatory)][string]$ListName,
         [int]$Limit = 200
     )
-    $current = Get-Variable -Name $ListName -Scope Script -ValueOnly
+    try {
+        $current = Get-Variable -Name $ListName -Scope Script -ValueOnly -ErrorAction Stop
+    }
+    catch {
+        $current = @()
+        Set-Variable -Name $ListName -Scope Script -Value $current
+    }
     $updated = @($current + $Item)
     if ($updated.Count -gt $Limit) {
         $updated = $updated | Select-Object -Last $Limit
     }
     Set-Variable -Name $ListName -Scope Script -Value $updated
+}
+
+function Set-TodoBacklogCount {
+    param([int]$Count)
+    $script:TodoBacklogCount = [math]::Max(0, $Count)
+    $script:TodoBacklogFetchedAt = Get-Date
+}
+
+function Get-TodoBacklogCount {
+    param([int]$MaxAgeSec = 0)
+    if (-not $script:TodoBacklogFetchedAt) { return $null }
+    if ($MaxAgeSec -gt 0) {
+        $ageSec = ((Get-Date) - $script:TodoBacklogFetchedAt).TotalSeconds
+        if ($ageSec -gt $MaxAgeSec) { return $null }
+    }
+    return $script:TodoBacklogCount
 }
 
 function Save-StatusSnapshot {
@@ -839,8 +984,8 @@ function Save-StatusSnapshot {
     $reviewTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "review" } | ForEach-Object { $_.Value.task_id })
     $errorTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "error" } | ForEach-Object { $_.Value.task_id })
     $manualReviewTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "manual_review" } | ForEach-Object { $_.Value.task_id })
-    $todoTasks = Get-VKTasks -Status "todo"
-    $backlogRemaining = if ($todoTasks) { @($todoTasks).Count } else { 0 }
+    $backlogRemaining = Get-TodoBacklogCount -MaxAgeSec ([math]::Max(120, ($PollIntervalSec * 2)))
+    if ($null -eq $backlogRemaining) { $backlogRemaining = 0 }
     $snapshot = @{
         updated_at          = (Get-Date).ToString("o")
         counts              = $counts
@@ -889,24 +1034,47 @@ function Get-OrderedTodoTasks {
     param([int]$Count = 1)
 
     $tasks = Get-VKTasks -Status "todo"
-    if (-not $tasks) { return @() }
+    if (-not $tasks) {
+        Set-TodoBacklogCount -Count 0
+        return @()
+    }
+    $tasks = @($tasks)
+    Set-TodoBacklogCount -Count $tasks.Count
 
+    $slopSeqTasks = [System.Collections.Generic.List[object]]::new()
+    $slopOtherTasks = [System.Collections.Generic.List[object]]::new()
     $seqTasks = [System.Collections.Generic.List[object]]::new()
     $otherTasks = [System.Collections.Generic.List[object]]::new()
+    $slopPattern = [regex]::new("(?i)\bslop(dev)?\b|slopes")
     foreach ($task in $tasks) {
         $seqValue = Get-SequenceValue -Title $task.title
-        if ($seqValue) {
-            $seqTasks.Add([pscustomobject]@{ task = $task; seq = $seqValue })
+        $title = if ($task.title) { $task.title } else { "" }
+        $desc = if ($task.description) { $task.description } else { "" }
+        $isSlop = $slopPattern.IsMatch($title) -or $slopPattern.IsMatch($desc)
+        if ($isSlop) {
+            if ($seqValue) {
+                $slopSeqTasks.Add([pscustomobject]@{ task = $task; seq = $seqValue })
+            }
+            else {
+                $slopOtherTasks.Add($task)
+            }
         }
         else {
-            $otherTasks.Add($task)
+            if ($seqValue) {
+                $seqTasks.Add([pscustomobject]@{ task = $task; seq = $seqValue })
+            }
+            else {
+                $otherTasks.Add($task)
+            }
         }
     }
 
+    $slopSeqTasks = @($slopSeqTasks | Sort-Object -Property seq)
+    $slopOtherTasks = @($slopOtherTasks | Sort-Object -Property created_at)
     $seqTasks = @($seqTasks | Sort-Object -Property seq)
     $otherTasks = @($otherTasks | Sort-Object -Property created_at)
 
-    if ($seqTasks.Count -eq 0) {
+    if ($slopSeqTasks.Count -eq 0 -and $slopOtherTasks.Count -eq 0 -and $seqTasks.Count -eq 0) {
         return @($otherTasks | Select-Object -First $Count)
     }
 
@@ -914,6 +1082,12 @@ function Get-OrderedTodoTasks {
     $lastSeq = $state.last_sequence_value
 
     $ordered = [System.Collections.Generic.List[object]]::new()
+    if ($slopSeqTasks.Count -gt 0) {
+        foreach ($item in $slopSeqTasks) { $ordered.Add($item.task) }
+    }
+    if ($slopOtherTasks.Count -gt 0) {
+        foreach ($item in $slopOtherTasks) { $ordered.Add($item) }
+    }
     if ($lastSeq) {
         $after = @($seqTasks | Where-Object { $_.seq -gt $lastSeq })
         $before = @($seqTasks | Where-Object { $_.seq -le $lastSeq })
@@ -956,6 +1130,51 @@ function Test-GithubRateLimit {
         return $true
     }
     return $false
+}
+
+function Test-KillCooldown {
+    if ($script:KillCooldownUntil -and (Get-Date) -lt $script:KillCooldownUntil) {
+        $remaining = [math]::Ceiling(($script:KillCooldownUntil - (Get-Date)).TotalMinutes)
+        Write-Log "Kill cooldown active ($remaining min remaining) — throttling new attempts" -Level "WARN"
+        return $true
+    }
+    return $false
+}
+
+function Get-EffectiveMaxParallel {
+    $effective = $MaxParallel
+    if (Test-KillCooldown) {
+        if ($KillThrottleMaxParallel -gt 0) {
+            $effective = [math]::Min($effective, $KillThrottleMaxParallel)
+        }
+    }
+    return $effective
+}
+
+function Register-KilledAttempt {
+    param(
+        [Parameter(Mandatory)][string]$AttemptId,
+        [Parameter(Mandatory)][hashtable]$Info
+    )
+    if ($KillBurstThreshold -le 0) { return }
+    $now = Get-Date
+    $window = [math]::Max(1, $KillBurstWindowMin)
+    $recent = @($script:KillEvents | Where-Object { ($_ -is [datetime]) -and (($now - $_).TotalMinutes -le $window) })
+    $recent += $now
+    $script:KillEvents = $recent
+    $count = $recent.Count
+    Write-Log "Killed attempt detected ($($AttemptId.Substring(0,8))). Recent killed: $count in last ${window}m." -Level "WARN"
+    if ($count -ge $KillBurstThreshold) {
+        $cooldownMin = [math]::Max(1, $KillCooldownMin)
+        $script:KillCooldownUntil = $now.AddMinutes($cooldownMin)
+        $effective = if ($KillThrottleMaxParallel -gt 0) {
+            [math]::Min($MaxParallel, $KillThrottleMaxParallel)
+        }
+        else {
+            $MaxParallel
+        }
+        Write-Log "Kill burst detected — throttling parallelism to $effective for ${cooldownMin}m" -Level "WARN"
+    }
 }
 
 function Get-AttemptLastActivity {
@@ -1006,12 +1225,14 @@ function Get-ActiveAgentCount {
 
 function Get-AvailableSlots {
     $activeCount = Get-ActiveAgentCount
-    return [math]::Max(0, $MaxParallel - $activeCount)
+    $effectiveMax = Get-EffectiveMaxParallel
+    return [math]::Max(0, $effectiveMax - $activeCount)
 }
 
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
+              Always uses the task continuation prompt format for agent clarity.
     #>
     [CmdletBinding()]
     param(
@@ -1024,22 +1245,27 @@ function Try-SendFollowUp {
         Write-Log "Skipping follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
     }
-    $Info.last_followup_message = $Message
+
+    # Build continuation prompt with original task context instead of sending raw message
+    $continuationPrompt = Build-TaskContinuationPrompt -Info $Info -ErrorMessage $Message -FailureCategory $Reason
+    Write-Log "Built continuation prompt for $($Info.branch) ($($continuationPrompt.Length) chars)" -Level "INFO"
+
+    $Info.last_followup_message = $continuationPrompt
     $Info.last_followup_reason = $Reason
     $Info.last_followup_at = Get-Date
     $slots = Get-AvailableSlots
     if ($slots -le 0) {
         Write-Log "Deferring follow-up for $($Info.branch): no available slots" -Level "WARN"
-        $Info.pending_followup = @{ message = $Message; reason = $Reason }
+        $Info.pending_followup = @{ message = $continuationPrompt; reason = $Reason }
         return $false
     }
     if (-not $DryRun) {
         try {
-            Send-VKWorkspaceFollowUp -WorkspaceId $AttemptId -Message $Message | Out-Null
+            Send-VKWorkspaceFollowUp -WorkspaceId $AttemptId -Message $continuationPrompt | Out-Null
         }
         catch {
             Write-Log "Follow-up failed for $($Info.branch): $($_.Exception.Message)" -Level "WARN"
-            $Info.pending_followup = @{ message = $Message; reason = $Reason }
+            $Info.pending_followup = @{ message = $continuationPrompt; reason = $Reason }
             return $false
         }
     }
@@ -1116,41 +1342,77 @@ function Test-ContextWindowError {
 function Get-SummaryTextValues {
     <#
     .SYNOPSIS Collect string values from a summary payload (recursive, shallow).
+             Guards against huge payloads (logs/stdout) that can exhaust memory.
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][object]$Value,
+        [AllowNull()][object]$Value,
         [int]$Depth = 0,
-        [int]$MaxDepth = 4
+        [int]$MaxDepth = 4,
+        [int]$MaxItems = 400,
+        [int]$MaxChars = 50000,
+        [int]$MaxItemChars = 8000
     )
-    if ($null -eq $Value) { return @() }
-    if ($Depth -gt $MaxDepth) { return @() }
 
-    if ($Value -is [string]) {
-        return @($Value)
+    $state = @{
+        results = [System.Collections.Generic.List[string]]::new()
+        items   = 0
+        chars   = 0
     }
 
-    $results = @()
-    if ($Value -is [System.Collections.IDictionary]) {
-        foreach ($v in $Value.Values) {
-            $results += Get-SummaryTextValues -Value $v -Depth ($Depth + 1) -MaxDepth $MaxDepth
+    $skipKeys = @(
+        "log", "logs", "stdout", "stderr", "output", "trace", "stacktrace", "messages"
+    )
+
+    $collect = {
+        param([AllowNull()][object]$Val, [int]$Level)
+        if ($null -eq $Val) { return }
+        if ($state.items -ge $MaxItems -or $state.chars -ge $MaxChars) { return }
+        if ($Level -gt $MaxDepth) { return }
+
+        if ($Val -is [string]) {
+            $text = $Val
+            if ($text.Length -gt $MaxItemChars) {
+                $text = $text.Substring(0, $MaxItemChars)
+            }
+            if ($text) {
+                $state.results.Add($text)
+                $state.items += 1
+                $state.chars += $text.Length
+            }
+            return
         }
-        return $results
+
+        if ($Val -is [System.Collections.IDictionary]) {
+            foreach ($entry in $Val.GetEnumerator()) {
+                if ($state.items -ge $MaxItems -or $state.chars -ge $MaxChars) { return }
+                $keyName = if ($entry.Key) { $entry.Key.ToString().ToLowerInvariant() } else { "" }
+                if ($keyName -and $skipKeys -contains $keyName) { continue }
+                & $collect $entry.Value ($Level + 1)
+            }
+            return
+        }
+
+        if ($Val -is [System.Collections.IEnumerable] -and -not ($Val -is [string])) {
+            foreach ($v in $Val) {
+                if ($state.items -ge $MaxItems -or $state.chars -ge $MaxChars) { return }
+                & $collect $v ($Level + 1)
+            }
+            return
+        }
+
+        if ($Val.PSObject -and $Val.PSObject.Properties) {
+            foreach ($prop in $Val.PSObject.Properties) {
+                if ($state.items -ge $MaxItems -or $state.chars -ge $MaxChars) { return }
+                $propName = if ($prop.Name) { $prop.Name.ToLowerInvariant() } else { "" }
+                if ($propName -and $skipKeys -contains $propName) { continue }
+                & $collect $prop.Value ($Level + 1)
+            }
+        }
     }
 
-    if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string])) {
-        foreach ($v in $Value) {
-            $results += Get-SummaryTextValues -Value $v -Depth ($Depth + 1) -MaxDepth $MaxDepth
-        }
-        return $results
-    }
-
-    if ($Value.PSObject -and $Value.PSObject.Properties) {
-        foreach ($prop in $Value.PSObject.Properties) {
-            $results += Get-SummaryTextValues -Value $prop.Value -Depth ($Depth + 1) -MaxDepth $MaxDepth
-        }
-    }
-    return $results
+    & $collect $Value $Depth
+    return @($state.results)
 }
 
 function Get-AttemptFailureCategory {
@@ -1170,9 +1432,20 @@ function Get-AttemptFailureCategory {
         $latestStatus = $Info.last_process_status
     }
 
+    if ($Summary -is [System.DBNull]) {
+        $Summary = $null
+    }
+
     $textValues = @()
-    if ($Summary) {
-        $textValues = Get-SummaryTextValues -Value $Summary
+    try {
+        $summaryTextSource = $Summary
+        if ($summaryTextSource -is [System.DBNull]) { $summaryTextSource = $null }
+        if ($null -ne $summaryTextSource) {
+            $textValues = Get-SummaryTextValues -Value $summaryTextSource -ErrorAction Stop
+        }
+    }
+    catch {
+        $textValues = @()
     }
     $combined = ($textValues | Where-Object { $_ -is [string] -and $_.Trim() }) -join "`n"
     $lower = $combined.ToLowerInvariant()
@@ -1198,6 +1471,48 @@ function Get-AttemptFailureCategory {
         return @{ category = "context_window"; status = $latestStatus; detail = "context window exceeded" }
     }
 
+    # ─── Timeout / stale detection ───────────────────────────────────────────
+    $timeoutPatterns = @(
+        "reconnecting",
+        "reconnecting\.\.\.",
+        "timed? ?out",
+        "deadline exceeded",
+        "connection reset",
+        "hard timeout",
+        "idle timeout",
+        "operation timed out"
+    )
+    foreach ($tp in $timeoutPatterns) {
+        if ($lower -match $tp) {
+            return @{ category = "timeout"; status = $latestStatus; detail = $tp }
+        }
+    }
+    if ($latestStatus -eq "timeout") {
+        return @{ category = "timeout"; status = $latestStatus; detail = "process timeout" }
+    }
+
+    # ─── Rate limit detection ────────────────────────────────────────────────
+    $rateLimitPatterns = @(
+        "rate.?limit",
+        "too many requests",
+        "429",
+        "oops.?you can.?t create more requests",
+        "please wait",
+        "quota exceeded",
+        "throttl",
+        "capacity"
+    )
+    foreach ($rp in $rateLimitPatterns) {
+        if ($lower -match $rp) {
+            return @{ category = "rate_limit"; status = $latestStatus; detail = $rp }
+        }
+    }
+
+    # ─── Reconnect loop detection ────────────────────────────────────────────
+    if ($lower -match "reconnecting\.\.\.\s*\d+/\d+") {
+        return @{ category = "reconnect_loop"; status = $latestStatus; detail = "reconnecting loop" }
+    }
+
     if ($latestStatus -in @("failed", "killed", "crashed", "error", "aborted")) {
         return @{ category = "agent_failed"; status = $latestStatus; detail = $latestStatus }
     }
@@ -1211,7 +1526,7 @@ function Get-TaskRetryKey {
         [string]$Category
     )
     if (-not $TaskId) { return $Category }
-    return "$TaskId:$Category"
+    return "${TaskId}:$Category"
 }
 
 function Increment-TaskRetryCount {
@@ -1229,9 +1544,79 @@ function Increment-TaskRetryCount {
     return $current
 }
 
+function Build-TaskContinuationPrompt {
+    <#
+    .SYNOPSIS Build a continuation prompt that includes the original task context.
+              Used when restarting agents so they don't lose track of what they were doing.
+              Format: {{ORIGINAL TASK SUMMARY}} + "PLEASE CONTINUE" directive.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [string]$ErrorMessage,
+        [string]$FailureCategory
+    )
+
+    # Fetch full task details from VK API
+    $taskDescription = $null
+    if ($Info.task_id) {
+        try {
+            $task = Get-VKTask -TaskId $Info.task_id
+            if ($task -and $task.description) {
+                $taskDescription = $task.description
+            }
+        }
+        catch {
+            Write-Log "Could not fetch task details for continuation prompt: $($_.Exception.Message)" -Level "WARN"
+        }
+    }
+
+    $taskTitle = if ($Info.name) { $Info.name } else { "Unknown task" }
+    $branch = if ($Info.branch) { $Info.branch } else { "unknown" }
+
+    # Build the original task summary section
+    $prompt = @"
+## Original Task
+
+**Title:** $taskTitle
+**Branch:** ``$branch``
+"@
+
+    if ($taskDescription) {
+        $prompt += "`n`n**Task Description:**`n$taskDescription"
+    }
+
+    $prompt += @"
+
+
+---
+
+PLEASE CONTINUE ON THE ABOVE TASK. THE AGENT SESSION ENDED UNEXPECTEDLY.
+
+IF YOU HAVE ALREADY COMPLETED THE TASK, ENSURE IT IS AVAILABLE IN THE UPSTREAM BRANCH (committed, pushed, and PR created).
+
+### Instructions
+1. Check ``git status`` and ``git log --oneline -5`` to see what was already done
+2. Review the branch for any partial work from the previous session
+3. **Continue from where the previous agent left off** — do NOT start over
+4. If the task is already complete (all changes committed and pushed), verify and confirm
+5. Ensure all tests pass and the build succeeds before pushing
+6. Create a PR if one doesn't exist yet (``gh pr list --head $branch``)
+
+### Critical Rules
+- Do NOT redo work that is already committed on this branch
+- Focus ONLY on completing the remaining work for this task
+- Follow AGENTS.md coding standards
+- All tests must pass with 0 warnings before committing
+"@
+
+    return $prompt
+}
+
 function Try-SendFollowUpNewSession {
     <#
     .SYNOPSIS Create a new session and send a follow-up message.
+              Automatically includes original task context for agent continuity.
     #>
     [CmdletBinding()]
     param(
@@ -1244,29 +1629,38 @@ function Try-SendFollowUpNewSession {
         Write-Log "Skipping new-session follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
     }
-    $Info.last_followup_message = $Message
+
+    # Build a rich continuation prompt with original task context
+    $failureCategory = $null
+    if ($Reason -match "retry|failed|error|context|missing|killed") {
+        $failureCategory = $Reason -replace "_", " "
+    }
+    $continuationPrompt = Build-TaskContinuationPrompt -Info $Info -ErrorMessage $Message -FailureCategory $failureCategory
+    Write-Log "Built continuation prompt for $($Info.branch) ($($continuationPrompt.Length) chars)" -Level "INFO"
+
+    $Info.last_followup_message = $continuationPrompt
     $Info.last_followup_reason = $Reason
     $Info.last_followup_at = Get-Date
     $slots = Get-AvailableSlots
     if ($slots -le 0) {
         Write-Log "Deferring new-session follow-up for $($Info.branch): no available slots" -Level "WARN"
-        $Info.pending_followup = @{ message = $Message; reason = $Reason; new_session = $true }
+        $Info.pending_followup = @{ message = $continuationPrompt; reason = $Reason; new_session = $true }
         return $false
     }
     if (-not $DryRun) {
         $session = New-VKSession -WorkspaceId $AttemptId
         if (-not $session) {
             Write-Log "Failed to start new session for $($Info.branch)" -Level "WARN"
-            $Info.pending_followup = @{ message = $Message; reason = $Reason; new_session = $true }
+            $Info.pending_followup = @{ message = $continuationPrompt; reason = $Reason; new_session = $true }
             return $false
         }
         $profile = if ($session.executor) { Get-ExecutorProfileForSession -Executor $session.executor } else { Get-CurrentExecutorProfile }
         try {
-            Send-VKSessionFollowUp -SessionId $session.id -Message $Message -ExecutorProfile $profile | Out-Null
+            Send-VKSessionFollowUp -SessionId $session.id -Message $continuationPrompt -ExecutorProfile $profile | Out-Null
         }
         catch {
             Write-Log "New-session follow-up failed for $($Info.branch): $($_.Exception.Message)" -Level "WARN"
-            $Info.pending_followup = @{ message = $Message; reason = $Reason; new_session = $true }
+            $Info.pending_followup = @{ message = $continuationPrompt; reason = $Reason; new_session = $true }
             return $false
         }
     }
@@ -1287,7 +1681,7 @@ function Try-SendFollowUpNewSession {
 
 function Try-RecoverContextWindow {
     <#
-    .SYNOPSIS Create a new session and re-send the last follow-up when context is exhausted.
+    .SYNOPSIS Create a new session and re-send with original task context when context is exhausted.
     #>
     [CmdletBinding()]
     param(
@@ -1315,18 +1709,21 @@ function Try-RecoverContextWindow {
     $Info.context_recovery_attempted_at = Get-Date
     $Info.status = "running"
 
-    if ($Info.last_followup_message) {
-        $profile = if ($session.executor) {
-            Get-ExecutorProfileForSession -Executor $session.executor
-        }
-        else {
-            Get-ExecutorProfileForSession -Executor "CODEX"
-        }
-        $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $Info.last_followup_message -ExecutorProfile $profile
-        if (-not $sent) {
-            Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
-            return $false
-        }
+    # Build continuation prompt with original task context (not just the old follow-up)
+    $continuationMsg = Build-TaskContinuationPrompt -Info $Info `
+        -ErrorMessage "Context window was exhausted in the previous session. A fresh session has been started." `
+        -FailureCategory "context window exceeded"
+
+    $profile = if ($session.executor) {
+        Get-ExecutorProfileForSession -Executor $session.executor
+    }
+    else {
+        Get-ExecutorProfileForSession -Executor "CODEX"
+    }
+    $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $continuationMsg -ExecutorProfile $profile
+    if (-not $sent) {
+        Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
+        return $false
     }
 
     Write-Log "Context recovery started for $($Info.branch) via new session" -Level "INFO"
@@ -1590,21 +1987,34 @@ function Sync-TrackedAttempts {
     foreach ($a in $apiAttempts) {
         if (-not $a.branch) { continue }
         if (-not $script:TrackedAttempts.ContainsKey($a.id)) {
+            # Determine initial status from summary instead of blindly assuming "running"
+            $initialSummary = $summaryMap[$a.id]
+            $initialStatus = "running"
+            if ($initialSummary -and $initialSummary.latest_process_status) {
+                $vkProcStatus = $initialSummary.latest_process_status
+                if ($vkProcStatus -in @("completed", "failed", "killed", "stopped", "timeout")) {
+                    $initialStatus = if ($vkProcStatus -in @("failed", "killed", "timeout")) { "error" } else { "review" }
+                }
+            }
+
             # Newly discovered active attempt
             $script:TrackedAttempts[$a.id] = @{
                 task_id                       = $a.task_id
                 branch                        = $a.branch
                 pr_number                     = $null
-                status                        = "running"
+                status                        = $initialStatus
                 name                          = $a.name
+                executor                      = $null
+                executor_provider             = $null
+                health_reported               = $false
                 updated_at                    = $a.updated_at
                 container_ref                 = $a.container_ref
                 ci_notified                   = $false
                 conflict_notified             = $false
                 rebase_requested              = $false
                 idle_detected_at              = $null
-                review_marked                 = $false
-                error_notified                = $false
+                review_marked                 = ($initialStatus -ne "running")
+                error_notified                = ($initialStatus -eq "error")
                 push_notified                 = $false
                 merge_failed_notified         = $false
                 merge_failures_total          = 0
@@ -1614,8 +2024,8 @@ function Sync-TrackedAttempts {
                 last_merge_failure_category   = $null
                 last_merge_failure_at         = $null
                 manual_review_notified        = $false
-                last_process_status           = $null
-                last_process_completed_at     = $null
+                last_process_status           = if ($initialSummary) { $initialSummary.latest_process_status } else { $null }
+                last_process_completed_at     = if ($initialSummary) { $initialSummary.latest_process_completed_at } else { $null }
                 pending_followup              = $null
                 last_followup_message         = $null
                 last_followup_reason          = $null
@@ -1627,8 +2037,10 @@ function Sync-TrackedAttempts {
                 copilot_fix_pr_number         = $null
                 copilot_fix_merged            = $false
                 copilot_fix_merged_at         = $null
+                kill_recorded                 = $false
             }
-            Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
+            $statusTag = if ($initialStatus -ne "running") { " [$initialStatus]" } else { "" }
+            Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)$statusTag" -Level "INFO"
         }
         else {
             $script:TrackedAttempts[$a.id].updated_at = $a.updated_at
@@ -1638,10 +2050,19 @@ function Sync-TrackedAttempts {
         $summary = $summaryMap[$a.id]
         if ($summary) {
             $tracked = $script:TrackedAttempts[$a.id]
-            $tracked.last_process_status = $summary.latest_process_status
+            if ($tracked -is [hashtable] -and -not $tracked.ContainsKey("kill_recorded")) {
+                $tracked.kill_recorded = $false
+            }
+            $summaryStatus = $summary.latest_process_status
+            $tracked.last_process_status = $summaryStatus
             $tracked.last_process_completed_at = $summary.latest_process_completed_at
 
-            if ($summary.latest_process_status -eq "running") {
+            if ([string]::IsNullOrWhiteSpace($summaryStatus)) {
+                # VK has not reported a process status yet; keep current state.
+                continue
+            }
+
+            if ($summaryStatus -eq "running") {
                 # Agent is active again; treat as running to avoid review actions
                 $tracked.status = "running"
                 $tracked.review_marked = $false
@@ -1649,24 +2070,56 @@ function Sync-TrackedAttempts {
                 $tracked.ci_notified = $false
                 $tracked.pending_followup = $null
             }
-            elseif ($summary.latest_process_status -in @("completed", "failed")) {
+            elseif ($summaryStatus -in @("completed", "failed", "killed", "stopped", "timeout")) {
+                # Any terminal status — workspace process is no longer running
+                $effectiveStatus = $summaryStatus
                 if ($tracked.status -eq "running") {
                     $tracked.status = "review"
                 }
                 if (-not $tracked.review_marked) {
-                    Write-Log "Attempt $($a.id.Substring(0,8)) finished ($($summary.latest_process_status)) — marking review" -Level "INFO"
+                    Write-Log "Attempt $($a.id.Substring(0,8)) finished ($effectiveStatus) — marking review" -Level "INFO"
                     if (-not $DryRun) {
                         Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
                     }
                     $tracked.review_marked = $true
                 }
-                if ($summary.latest_process_status -eq "failed" -and -not $tracked.error_notified) {
-                    Write-Log "Attempt $($a.id.Substring(0,8)) failed in workspace — requires agent attention" -Level "WARN"
+                if ($effectiveStatus -eq "killed" -and -not $tracked.kill_recorded) {
+                    Register-KilledAttempt -AttemptId $a.id -Info $tracked
+                    $tracked.kill_recorded = $true
+                }
+                if ($effectiveStatus -in @("failed", "killed", "timeout") -and -not $tracked.error_notified) {
+                    Write-Log "Attempt $($a.id.Substring(0,8)) $effectiveStatus in workspace — requires agent attention" -Level "WARN"
                     $tracked.error_notified = $true
                     $tracked.status = "error"
                 }
 
-                if ($summary.latest_process_status -eq "failed" -and (Test-ContextWindowError -Summary $summary)) {
+                # ─── Report executor failure to health system ────────────────
+                $execProvider = $tracked.executor_provider
+                if (-not $execProvider -and $tracked.executor) {
+                    # Legacy attempts without executor_provider — derive from executor name
+                    $execProvider = Get-ExecutorProviderForAttempt -Executor $tracked.executor -Variant $null
+                }
+                if ($execProvider -and -not $tracked.health_reported) {
+                    if ($effectiveStatus -in @("failed", "killed", "timeout")) {
+                        $failCategory = Get-AttemptFailureCategory -Summary $summary -Info $tracked
+                        $failType = switch ($failCategory.category) {
+                            "timeout" { "timeout" }
+                            "rate_limit" { "rate_limit" }
+                            "reconnect_loop" { "reconnect_loop" }
+                            default { "error" }
+                        }
+                        $null = Report-ExecutorFailure -Provider $execProvider -FailureType $failType
+                        Write-Log "Health: reported $failType for $execProvider (attempt $($a.id.Substring(0,8)))" -Level "INFO"
+                    }
+                    else {
+                        # completed/stopped — success
+                        Report-ExecutorSuccess -Provider $execProvider
+                    }
+                    Decrement-ExecutorActiveCount -Provider $execProvider
+                    $tracked.health_reported = $true
+                }
+
+                if ($effectiveStatus -in @("failed", "killed") -and (Test-ContextWindowError -Summary $summary)) {
                     $shouldRecover = $true
                     if ($tracked.context_recovery_attempted_at) {
                         $sinceAttempt = ((Get-Date) - $tracked.context_recovery_attempted_at).TotalMinutes
@@ -1674,6 +2127,60 @@ function Sync-TrackedAttempts {
                     }
                     if ($shouldRecover) {
                         $null = Try-RecoverContextWindow -AttemptId $a.id -Info $tracked
+                    }
+                }
+            }
+            else {
+                # Unknown status (new VK status) — log for visibility
+                Write-Log "Attempt $($a.id.Substring(0,8)) has unknown process status '$summaryStatus' — treating as terminal" -Level "WARN"
+                if ($tracked.status -eq "running") {
+                    $tracked.status = "review"
+                    $tracked.review_marked = $true
+                    if (-not $DryRun) {
+                        Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
+                    }
+                }
+            }
+        }
+    }
+
+    # Stale-running detection: catch workspaces stuck as "running" when they're actually dead.
+    # Two scenarios:
+    #   1. VK says "running" but updated_at hasn't changed in StaleRunningTimeoutMin
+    #   2. No summary data at all and updated_at is stale
+    foreach ($a in $apiAttempts) {
+        $tracked = $script:TrackedAttempts[$a.id]
+        if (-not $tracked) { continue }
+        if ($tracked.status -ne "running") { continue }
+
+        # Use updated_at from VK API as heartbeat
+        $lastHeartbeat = $null
+        if ($tracked.updated_at) {
+            try { $lastHeartbeat = [datetimeoffset]::Parse($tracked.updated_at).ToLocalTime().DateTime }
+            catch { }
+        }
+        # Also consider latest_process_completed_at as secondary signal
+        if (-not $lastHeartbeat -and $tracked.last_process_completed_at) {
+            try { $lastHeartbeat = [datetimeoffset]::Parse($tracked.last_process_completed_at).ToLocalTime().DateTime }
+            catch { }
+        }
+
+        if (-not $lastHeartbeat) { continue }
+
+        $staleMins = ((Get-Date) - $lastHeartbeat).TotalMinutes
+        if ($staleMins -ge $StaleRunningTimeoutMin) {
+            $vkStatus = $tracked.last_process_status
+            Write-Log "Attempt $($a.id.Substring(0,8)) stale-running for $([math]::Round($staleMins))m (VK status: $vkStatus) — marking as error" -Level "WARN"
+            $tracked.status = "error"
+            $tracked.error_notified = $true
+            if (-not $tracked.review_marked) {
+                $tracked.review_marked = $true
+                if (-not $DryRun) {
+                    if ($tracked.task_id) {
+                        Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
+                    }
+                    else {
+                        Write-Log "Attempt $($a.id.Substring(0,8)) missing task_id — skipping inreview update" -Level "WARN"
                     }
                 }
             }
@@ -1832,11 +2339,11 @@ function Process-CompletedAttempts {
                         if ($failure.category -in @("api_key", "agent_failed")) {
                             $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
                             if ($count -ge 2) {
-                                $msg = "Detected a failure (${failure.category}). Starting a fresh session now. Please retry your task. If it fails again or there are no changes, reply NO_CHANGES so we can mark it for manual review."
+                                $msg = "Agent failure detected ($($failure.category)), retry $count — starting fresh session."
                                 $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "retry_new_session"
                             }
                             else {
-                                $msg = "Detected a failure (${failure.category}). Please retry your task. If it fails again, I will start a fresh session."
+                                $msg = "Agent failure detected ($($failure.category)), retry $count."
                                 $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "retry_task"
                             }
                             $info.push_notified = $true
@@ -1845,11 +2352,11 @@ function Process-CompletedAttempts {
 
                         $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "missing_branch"
                         if ($count -ge 2) {
-                            $msg = "Remote branch $branch is missing. Starting a fresh session to retry. Please check 'git status'; push if there are commits. If there are no changes, reply NO_CHANGES."
+                            $msg = "Remote branch $branch not found, retry $count — starting fresh session."
                             $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "missing_branch_new_session"
                         }
                         else {
-                            $msg = "Remote branch $branch is missing. Please check 'git status' and push if there are commits. If there are no changes, reply NO_CHANGES so we can mark this for manual review."
+                            $msg = "Remote branch $branch not found, retry $count."
                             $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "missing_branch"
                         }
                         $info.push_notified = $true
@@ -1867,7 +2374,7 @@ function Process-CompletedAttempts {
                         $info.no_commits = $true
                         $script:TasksFailed++
                         Save-SuccessMetrics
-                        $msg = "Branch $branch has no commits compared to base. If there were no intended changes, reply NO_CHANGES. Otherwise please retry your task or push your commits."
+                        $msg = "Branch $branch has no commits compared to base."
                         $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "no_commits"
                         continue
                     }
@@ -1921,26 +2428,27 @@ function Process-CompletedAttempts {
         $mergeState = if ($prDetails -and $prDetails.mergeStateStatus) { $prDetails.mergeStateStatus } else { "UNKNOWN" }
 
         if ($mergeState -in @("DIRTY", "CONFLICTING")) {
-            Write-Log "PR #$($pr.number) has merge conflicts ($mergeState)" -Level "WARN"
-            $info.status = "review"
-            if (-not $info.conflict_notified) {
-                $body = @"
-@copilot Merge conflict detected for PR #$($pr.number).
-
-Please rebase or resolve conflicts on branch `$branch`, then push updated changes.
-"@
-                if (-not $DryRun) {
-                    Add-PRComment -PRNumber $pr.number -Body $body | Out-Null
-                    Add-RecentItem -ListName "CopilotRequests" -Item @{
-                        pr_number   = $pr.number
-                        pr_title    = $pr.title
-                        pr_url      = $pr.url
-                        reason      = "merge_conflict"
-                        occurred_at = (Get-Date).ToString("o")
-                    }
+            Write-Log "PR #$($pr.number) has merge conflicts ($mergeState) — archiving attempt, will retry fresh" -Level "WARN"
+            if (-not $DryRun) {
+                # Archive-and-retry: close conflicting PR, archive attempt, resubmit fresh
+                Add-RecentItem -ListName "ConflictRetries" -Item @{
+                    pr_number   = $pr.number
+                    pr_title    = $pr.title
+                    branch      = $branch
+                    attempt_id  = $attemptId
+                    task_id     = $info.task_id
+                    reason      = "merge_conflict_archive_retry"
+                    occurred_at = (Get-Date).ToString("o")
                 }
-                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $body.Trim() -Reason "merge_conflict"
-                $info.conflict_notified = $true
+                # Close the conflicting PR and delete its branch
+                $null = Close-PRDeleteBranch -PRNumber $pr.number
+                # Archive the stale attempt
+                Archive-VKAttempt -AttemptId $attemptId | Out-Null
+                # Reset task to todo so it re-enters the backlog for fresh attempt
+                Update-VKTaskStatus -TaskId $info.task_id -Status "todo" | Out-Null
+                # Remove from tracked attempts so a fresh slot opens
+                $processed += $attemptId
+                Write-Log "Archived attempt $($attemptId.Substring(0,8)) for task $($info.task_id.Substring(0,8)) — reset to 'todo' for fresh retry" -Level "ACTION"
             }
             continue
         }
@@ -1948,10 +2456,14 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
         $baseBranch = if ($prDetails -and $prDetails.baseRefName) { $prDetails.baseRefName } else { $script:VK_TARGET_BRANCH }
         if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
         $checkStatus = Get-PRRequiredCheckStatus -PRNumber $pr.number -BaseBranch $baseBranch
+        $securityStatus = if ($SkipSecurityChecks) { "skipped" } else { Get-PRSecurityCheckStatus -PRNumber $pr.number }
         if (Test-GithubRateLimit) { return }
-        Write-Log "PR #$($pr.number) ($branch): CI=$checkStatus" -Level "INFO"
+        Write-Log "PR #$($pr.number) ($branch): CI=$checkStatus Security=$securityStatus" -Level "INFO"
 
-        switch ($checkStatus) {
+        # Security checks are advisory; only required CI gates control merge.
+        $effectiveStatus = $checkStatus
+
+        switch ($effectiveStatus) {
             "passing" {
                 Write-Log "CI passing for PR #$($pr.number) — merging..." -Level "ACTION"
                 if (-not $DryRun) {
@@ -2006,6 +2518,27 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
                         $info.last_merge_failure_reason = $reason
                         $info.last_merge_failure_category = $failure.category
                         $info.last_merge_failure_at = Get-Date
+
+                        # Safety valve: if merge keeps failing (3+ cycles for behind/conflict),
+                        # archive and retry fresh instead of getting stuck
+                        if ($info.merge_failure_cycles -ge 3 -and $failure.category -in @("behind", "base_changed") -and -not $DryRun) {
+                            Write-Log "PR #$($pr.number) stuck behind after $($info.merge_failure_cycles) rebase attempts — archiving for fresh retry" -Level "WARN"
+                            $null = Close-PRDeleteBranch -PRNumber $pr.number
+                            Archive-VKAttempt -AttemptId $attemptId | Out-Null
+                            Update-VKTaskStatus -TaskId $info.task_id -Status "todo" | Out-Null
+                            Add-RecentItem -ListName "ConflictRetries" -Item @{
+                                pr_number   = $pr.number
+                                branch      = $branch
+                                attempt_id  = $attemptId
+                                task_id     = $info.task_id
+                                reason      = "merge_stuck_behind_archive"
+                                cycles      = $info.merge_failure_cycles
+                                occurred_at = (Get-Date).ToString("o")
+                            }
+                            $processed += $attemptId
+                            continue
+                        }
+
                         if (-not $info.manual_review_notified -and $info.merge_failure_cycles -ge 2) {
                             $info.last_merge_notify_at = Get-Date
                             $info.manual_review_notified = $true
@@ -2059,7 +2592,7 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
                 $info.status = "review"
                 $checks = Get-PRChecksDetail -PRNumber $pr.number
                 if (Test-GithubRateLimit) { return }
-                if (-not $checks) {
+                if ($null -eq $checks -or $checks -is [System.DBNull] -or -not $checks) {
                     $checks = @()
                 }
                 $summary = Format-PRCheckFailures -Checks $checks
@@ -2250,7 +2783,7 @@ function Close-StaleCopilotPRs {
 
 function Process-StandaloneCopilotPRs {
     <#
-    .SYNOPSIS Merge completed Copilot-authored PRs (non-[WIP]) even without checks.
+    .SYNOPSIS Merge completed Copilot-authored PRs (non-[WIP]) after required + security checks pass.
     #>
     if (Test-GithubCooldown) { return }
     $openPrs = Get-OpenPullRequests -Limit 200
@@ -2274,9 +2807,28 @@ function Process-StandaloneCopilotPRs {
         $mergeState = if ($details.mergeStateStatus) { $details.mergeStateStatus } else { "UNKNOWN" }
         $mergeableState = if ($details.mergeable) { $details.mergeable } else { "UNKNOWN" }
         if ($mergeState -eq "CONFLICTING" -or $mergeableState -eq "CONFLICTING") {
-            Write-Log "Closing Copilot PR #$($pr.number) due to conflicts ($mergeState)" -Level "WARN"
+            Write-Log "Closing Copilot PR #$($pr.number) due to conflicts ($mergeState) — archive and retry" -Level "WARN"
             if (-not $DryRun) {
                 $null = Close-PRDeleteBranch -PRNumber $pr.number
+                Add-RecentItem -ListName "ConflictRetries" -Item @{
+                    pr_number   = $pr.number
+                    pr_title    = $pr.title
+                    branch      = $pr.headRefName
+                    reason      = "copilot_pr_conflict_archive"
+                    occurred_at = (Get-Date).ToString("o")
+                }
+                # Find and archive the tracked attempt for this branch so the task can be retried
+                $branchName = if ($details.headRefName) { $details.headRefName } else { $pr.headRefName }
+                $matchingAttempt = $script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.branch -eq $branchName } | Select-Object -First 1
+                if ($matchingAttempt) {
+                    Archive-VKAttempt -AttemptId $matchingAttempt.Key | Out-Null
+                    # Reset task to todo so it re-enters backlog
+                    if ($matchingAttempt.Value.task_id) {
+                        Update-VKTaskStatus -TaskId $matchingAttempt.Value.task_id -Status "todo" | Out-Null
+                    }
+                    $script:TrackedAttempts.Remove($matchingAttempt.Key)
+                    Write-Log "Archived attempt $($matchingAttempt.Key.Substring(0,8)) — task will be resubmitted fresh" -Level "ACTION"
+                }
                 $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
                 $refs = Get-ReferencedPRNumbers -Texts @(
                     $pr.title,
@@ -2304,7 +2856,28 @@ function Process-StandaloneCopilotPRs {
             continue
         }
         if ($mergeState -eq "DIRTY" -and $mergeableState -ne "CONFLICTING") {
-            Write-Log "Skipping Copilot PR #$($pr.number) due to DIRTY merge state" -Level "WARN"
+            Write-Log "Copilot PR #$($pr.number) is DIRTY — closing and archiving for fresh retry" -Level "WARN"
+            if (-not $DryRun) {
+                $null = Close-PRDeleteBranch -PRNumber $pr.number
+                Add-RecentItem -ListName "ConflictRetries" -Item @{
+                    pr_number   = $pr.number
+                    pr_title    = $pr.title
+                    branch      = $pr.headRefName
+                    reason      = "copilot_pr_dirty_archive"
+                    occurred_at = (Get-Date).ToString("o")
+                }
+                $branchName = if ($details.headRefName) { $details.headRefName } else { $pr.headRefName }
+                $matchingAttempt = $script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.branch -eq $branchName } | Select-Object -First 1
+                if ($matchingAttempt) {
+                    Archive-VKAttempt -AttemptId $matchingAttempt.Key | Out-Null
+                    # Reset task to todo so it re-enters backlog
+                    if ($matchingAttempt.Value.task_id) {
+                        Update-VKTaskStatus -TaskId $matchingAttempt.Value.task_id -Status "todo" | Out-Null
+                    }
+                    $script:TrackedAttempts.Remove($matchingAttempt.Key)
+                    Write-Log "Archived attempt $($matchingAttempt.Key.Substring(0,8)) — task will be resubmitted fresh" -Level "ACTION"
+                }
+            }
             continue
         }
 
@@ -2317,6 +2890,19 @@ function Process-StandaloneCopilotPRs {
             $details = Get-PRDetails -PRNumber $pr.number
             if (Test-GithubRateLimit) { return }
             if (-not $details -or $details.isDraft) { continue }
+        }
+
+        $baseBranch = if ($details.baseRefName) { $details.baseRefName } else { $script:VK_TARGET_BRANCH }
+        if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
+        $checkStatus = Get-PRRequiredCheckStatus -PRNumber $pr.number -BaseBranch $baseBranch
+        $securityStatus = if ($SkipSecurityChecks) { "skipped" } else { Get-PRSecurityCheckStatus -PRNumber $pr.number }
+        if (Test-GithubRateLimit) { return }
+        if ($checkStatus -ne "passing") {
+            Write-Log "Copilot PR #$($pr.number) not mergeable — CI=$checkStatus" -Level "INFO"
+            continue
+        }
+        if ($securityStatus -ne "passing") {
+            Write-Log "Copilot PR #$($pr.number) security checks are $securityStatus — continuing based on CI" -Level "WARN"
         }
 
         Write-Log "Merging Copilot PR #$($pr.number)" -Level "ACTION"
@@ -2380,6 +2966,16 @@ function Complete-Task {
         Archive-VKAttempt -AttemptId $AttemptId | Out-Null
         Update-VKTaskStatus -TaskId $TaskId -Status "done"
     }
+
+    # ─── Executor health: report success & release slot ──────────────────────
+    if ($AttemptId -and $script:TrackedAttempts.ContainsKey($AttemptId)) {
+        $execProvider = $script:TrackedAttempts[$AttemptId].executor_provider
+        if ($execProvider) {
+            Report-ExecutorSuccess -Provider $execProvider
+            Decrement-ExecutorActiveCount -Provider $execProvider
+        }
+    }
+
     Add-RecentItem -ListName "CompletedTasks" -Item @{
         task_id      = $TaskId
         task_title   = $taskTitle
@@ -2622,13 +3218,14 @@ function Fill-ParallelSlots {
     # Count truly active slots: agents currently working
     $activeCount = @($script:TrackedAttempts.Values | Where-Object { $_.status -eq "running" }).Count
 
-    $slotsAvailable = $MaxParallel - $activeCount
+    $effectiveMax = Get-EffectiveMaxParallel
+    $slotsAvailable = $effectiveMax - $activeCount
     if ($slotsAvailable -le 0) {
-        Write-Log "All $MaxParallel slots occupied ($activeCount active)" -Level "INFO"
+        Write-Log "All $effectiveMax slots occupied ($activeCount active)" -Level "INFO"
         return
     }
 
-    Write-Log "$slotsAvailable slots available (target: $MaxParallel, active: $activeCount)" -Level "ACTION"
+    Write-Log "$slotsAvailable slots available (target: $effectiveMax, active: $activeCount)" -Level "ACTION"
 
     # Get next todo tasks
     $nextTasks = Get-OrderedTodoTasks -Count $slotsAvailable
@@ -2659,19 +3256,66 @@ function Fill-ParallelSlots {
             $task.title
         }
         $shortTitle = $title.Substring(0, [Math]::Min(70, $title.Length))
-        $nextExec = Get-CurrentExecutorProfile
-        Write-Log "Submitting: $shortTitle [$($nextExec.executor)]" -Level "ACTION"
+
+        # ─── Smart executor routing: classify task, pick best model ──────
+        $taskDesc = if ($task.description) { $task.description } else { "" }
+        $complexity = Get-TaskComplexity -Title $title -Description $taskDesc
+
+        # Check for Telegram /model override
+        $overridePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\executor-override.json"
+        $nextExec = $null
+        if (Test-Path $overridePath) {
+            try {
+                $override = Get-Content $overridePath -Raw | ConvertFrom-Json
+                $expired = $false
+                if ($override.expires_at -and (Get-Date) -gt [DateTime]::Parse($override.expires_at)) { $expired = $true }
+                if ($override.remaining_tasks -le 0) { $expired = $true }
+
+                if (-not $expired -and $override.model) {
+                    # Find executor matching the override model
+                    $match = $script:VK_EXECUTORS | Where-Object { $_.model -eq $override.model } | Select-Object -First 1
+                    if ($match) {
+                        $nextExec = $match
+                        # Decrement remaining tasks
+                        $override.remaining_tasks = [Math]::Max(0, $override.remaining_tasks - 1)
+                        $override | ConvertTo-Json -Depth 3 | Set-Content $overridePath -Encoding UTF8
+                        Write-Log "Model override active: $($override.model) ($($override.remaining_tasks) remaining)" -Level "INFO"
+                        if ($override.remaining_tasks -le 0) {
+                            Remove-Item $overridePath -ErrorAction SilentlyContinue
+                            Write-Log "Model override exhausted — returning to smart routing" -Level "INFO"
+                        }
+                    }
+                }
+                else {
+                    # Override expired — clean up
+                    Remove-Item $overridePath -ErrorAction SilentlyContinue
+                }
+            }
+            catch {
+                Write-Log "Failed to read model override: $($_.Exception.Message)" -Level "WARN"
+            }
+        }
+
+        if (-not $nextExec) {
+            $nextExec = Get-BestExecutorForTask -Complexity $complexity
+        }
+        if (-not $nextExec) { $nextExec = Get-CurrentExecutorProfile }
+        $modelTag = if ($nextExec.model) { $nextExec.model } else { $nextExec.variant }
+        Write-Log "Submitting: $shortTitle [$($nextExec.executor)/$($nextExec.variant)] model=$modelTag complexity=$complexity" -Level "ACTION"
 
         if (-not $DryRun) {
-            $attempt = Submit-VKTaskAttempt -TaskId $task.id
+            $attempt = Submit-VKTaskAttempt -TaskId $task.id -ExecutorOverride $nextExec
             if ($attempt) {
+                $executorProvider = if ($nextExec.provider) { $nextExec.provider } else { "unknown" }
+                Increment-ExecutorActiveCount -Provider $executorProvider
                 $script:TrackedAttempts[$attempt.id] = @{
-                    task_id   = $task.id
-                    branch    = $attempt.branch
-                    pr_number = $null
-                    status    = "running"
-                    name      = $title
-                    executor  = $nextExec.executor
+                    task_id           = $task.id
+                    branch            = $attempt.branch
+                    pr_number         = $null
+                    status            = "running"
+                    name              = $title
+                    executor          = $nextExec.executor
+                    executor_provider = $executorProvider
                 }
                 $taskUrl = Get-TaskUrl -TaskId $task.id
                 Add-RecentItem -ListName "SubmittedTasks" -Item @{
@@ -2704,32 +3348,53 @@ function Test-BacklogEmpty {
     <#
     .SYNOPSIS Check if there are no more tasks to process.
     #>
-    $todoTasks = Get-VKTasks -Status "todo" -Limit 1
     $hasTracked = $script:TrackedAttempts.Count -gt 0
-    return (-not $todoTasks -or @($todoTasks).Count -eq 0) -and (-not $hasTracked)
+    if ($hasTracked) { return $false }
+
+    $backlogRemaining = Get-TodoBacklogCount -MaxAgeSec ([math]::Max(120, ($PollIntervalSec * 2)))
+    if ($null -eq $backlogRemaining) {
+        $todoTasks = Get-VKTasks -Status "todo"
+        $backlogRemaining = if ($todoTasks) { @($todoTasks).Count } else { 0 }
+        Set-TodoBacklogCount -Count $backlogRemaining
+    }
+
+    return $backlogRemaining -eq 0
 }
 
 # ─── Main Loop ────────────────────────────────────────────────────────────────
 
 function Start-Orchestrator {
-    Register-OrchestratorShutdownHandlers
+    $mutexWaitStart = $null
     do {
         $script:OrchestratorMutex = Enter-OrchestratorMutex
         if ($script:OrchestratorMutex) { break }
 
-        if (-not $WaitForMutex) {
-            Write-Log "Another orchestrator instance is already running. Exiting (mutex held)." -Level "WARN"
-            return
-        }
-
         if ($OneShot) {
-            Write-Log "Another orchestrator instance is already running. Exiting." -Level "WARN"
+            Write-Log "Another orchestrator instance is already running. Exiting (OneShot mode)." -Level "WARN"
             return
         }
 
-        Write-Log "Another orchestrator instance is already running. Waiting ${PollIntervalSec}s before retry." -Level "WARN"
-        if (-not (Start-InterruptibleSleep -Seconds $PollIntervalSec -Reason "mutex-wait")) { return }
+        if (-not $script:WaitForMutexEffective) {
+            Write-Log "Another orchestrator instance is already running. Exiting (mutex held). Remove -NoWaitForMutex to wait." -Level "WARN"
+            return
+        }
+
+        $sleepSec = $PollIntervalSec
+        if ($MutexWaitMaxMin -gt 0) {
+            if (-not $mutexWaitStart) { $mutexWaitStart = Get-Date }
+            $elapsed = (Get-Date) - $mutexWaitStart
+            $remainingSec = [math]::Max(0, [int](($MutexWaitMaxMin * 60) - $elapsed.TotalSeconds))
+            if ($remainingSec -le 0) {
+                Write-Log "Mutex wait exceeded ${MutexWaitMaxMin}m. Exiting to avoid stale wait (use -MutexWaitMaxMin 0 to wait indefinitely)." -Level "WARN"
+                return
+            }
+            $sleepSec = [math]::Min($sleepSec, $remainingSec)
+        }
+
+        Write-Log "Another orchestrator instance is already running. Waiting ${sleepSec}s before retry." -Level "WARN"
+        if (-not (Start-MutexWaitWithHeartbeat -Seconds $sleepSec -HeartbeatSec 15)) { return }
     } while ($true)
+    Register-OrchestratorShutdownHandlers
     if (Test-OrchestratorStop) { return }
     try {
         Ensure-VeKanbanLibraryLoaded -RequiredFunctions $requiredFunctions | Out-Null
@@ -2739,6 +3404,7 @@ function Start-Orchestrator {
         return
     }
 
+    Reset-TerminalIfRequested
     Write-Banner
     Ensure-GitIdentity
 
@@ -2756,7 +3422,8 @@ function Start-Orchestrator {
     while (-not (Test-VKApiReachable -TimeoutSec $healthTimeout)) {
         Write-Log "Vibe-kanban API not reachable at $healthBaseUrl. Waiting ${vkRetryDelay}s before retry." -Level "WARN"
         if ($OneShot) { return }
-        if (-not (Start-InterruptibleSleep -Seconds $vkRetryDelay -Reason "vk-health")) { return }
+        $vkHeartbeat = if ($vkRetryDelay -ge 60) { 30 } else { 0 }
+        if (-not (Start-InterruptibleSleep -Seconds $vkRetryDelay -Reason "vk-health" -HeartbeatSec $vkHeartbeat)) { return }
         $vkRetryDelay = [math]::Min($vkRetryDelay * 2, 300)
     }
 
@@ -2810,8 +3477,20 @@ function Start-Orchestrator {
     if (-not $repoShort) { $repoShort = "unknown" }
     Write-Log "Project: $projectShort...  Repo: $repoShort..." -Level "OK"
 
-    # Log executor cycling setup
-    Write-Log "Executors: $(($script:VK_EXECUTORS | ForEach-Object { "$($_.executor)/$($_.variant)" }) -join ' ⇄ ')" -Level "INFO"
+    # Initialize executor health tracking
+    Initialize-ExecutorHealth
+
+    # Initialize Codex region tracking (capture US config for later restore)
+    Initialize-CodexRegionTracking
+    $regionInfo = Get-RegionStatus
+    $regionTag = "$($regionInfo.active_region)"
+    if ($regionInfo.sweden_available) { $regionTag += " (sweden backup available)" }
+    else { $regionTag += " (sweden NOT configured — set AZURE_SWEDEN_API_KEY + AZURE_SWEDEN_ENDPOINT)" }
+    Write-Log "Codex region: $regionTag" -Level "INFO"
+
+    # Log executor health status
+    $healthSummary = Get-ExecutorHealthSummary
+    Write-Log "Executors: $healthSummary" -Level "INFO"
 
     # Initial sync
     Sync-TrackedAttempts
@@ -2874,6 +3553,34 @@ function Start-Orchestrator {
             Sync-TrackedAttempts
             if (Test-OrchestratorStop) { break }
 
+            # Step 1b: Region auto-recovery — switch back to US after cooldown
+            if ((Get-ActiveCodexRegion) -eq "sweden" -and -not $script:RegionOverride) {
+                if (Test-RegionCooldownExpired) {
+                    Write-Log "Region cooldown expired — switching Codex back to US" -Level "ACTION"
+                    $result = Switch-CodexRegion -Region "us"
+                    if ($result.changed) {
+                        Write-Log "Region switched: sweden → us" -Level "OK"
+                        # Reset the primary codex health to allow it to be tried again
+                        Report-ExecutorSuccess -Provider "azure_codex_52"
+                    }
+                }
+            }
+
+            # Step 1c: Auto-failover to Sweden on sustained US degradation
+            if ((Get-ActiveCodexRegion) -eq "us" -and -not $script:RegionOverride) {
+                $usHealth = Get-ExecutorHealthStatus -Provider "azure_codex_52"
+                if ($usHealth -eq "cooldown") {
+                    $regionStatus = Get-RegionStatus
+                    if ($regionStatus.sweden_available) {
+                        Write-Log "Primary US codex in cooldown — failover to Sweden" -Level "ACTION"
+                        $result = Switch-CodexRegion -Region "sweden"
+                        if ($result.changed) {
+                            Write-Log "Region switched: us → sweden (auto-failover)" -Level "OK"
+                        }
+                    }
+                }
+            }
+
             # Step 2: Merge standalone Copilot PRs
             Process-StandaloneCopilotPRs
             if (Test-OrchestratorStop) { break }
@@ -2918,7 +3625,8 @@ function Start-Orchestrator {
 
             # Step 6: Wait before next cycle
             Write-Log "Sleeping ${PollIntervalSec}s until next cycle... (Ctrl+C to stop)" -Level "INFO"
-            if (-not (Start-InterruptibleSleep -Seconds $PollIntervalSec -Reason "cycle-wait")) { break }
+            $sleepHeartbeat = if ($PollIntervalSec -ge 60) { 30 } else { 0 }
+            if (-not (Start-InterruptibleSleep -Seconds $PollIntervalSec -Reason "cycle-wait" -HeartbeatSec $sleepHeartbeat)) { break }
 
             Save-StatusSnapshot
 
