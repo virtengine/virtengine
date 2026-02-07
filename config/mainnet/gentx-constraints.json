@@ -1,0 +1,15 @@
+{
+  "chain_id": "virtengine-1",
+  "bond_denom": "uve",
+  "min_self_delegation": "1000000000",
+  "commission": {
+    "min_rate": "0.050000000000000000",
+    "max_rate": "0.200000000000000000",
+    "max_change_rate": "0.010000000000000000"
+  },
+  "min_description_fields": [
+    "moniker",
+    "identity",
+    "website"
+  ]
+}

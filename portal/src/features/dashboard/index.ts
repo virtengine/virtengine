@@ -11,6 +11,7 @@ export {
   selectActiveCustomerAllocations,
   selectTotalMonthlySpend,
   selectUnreadNotificationCount,
+  selectAllocationById,
 } from '@/stores/customerDashboardStore';
 export type {
   CustomerDashboardStore,

@@ -271,6 +271,7 @@ In blockchain consensus, all validators must compute identical state transitions
 - Nonces and salts:
   - Client-provided via `RandomnessInputs` (stored verbatim)
   - Or derived from tx context via `DeterministicRandomSource` (chain-id, block height/time, tx bytes, purpose labels)
+  - Enforced as fixed 32-byte values via `resolveRandomBytes` for consistent proof IDs and commitments
 
 ### Non-Deterministic Operations
 

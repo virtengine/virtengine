@@ -5,6 +5,7 @@ import { UsageSummary } from '@/components/dashboard/UsageSummary';
 import { BillingSummary } from '@/components/dashboard/BillingSummary';
 import { NotificationsFeed } from '@/components/dashboard/NotificationsFeed';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { TerminateAllocationDialog } from '@/components/dashboard/TerminateAllocationDialog';
 import { formatCurrency } from '@/lib/utils';
 import type {
   CustomerAllocation,
@@ -97,10 +98,10 @@ describe('AllocationCard', () => {
     expect(screen.getByText('Mem: 128 GB')).toBeInTheDocument();
   });
 
-  it('links to the order page', () => {
+  it('links to the allocation detail page', () => {
     render(<AllocationCard allocation={mockAllocation} />);
     const link = screen.getByRole('link');
-    expect(link).toHaveAttribute('href', '/orders/order-1001');
+    expect(link).toHaveAttribute('href', '/dashboard/allocations/calloc-001');
   });
 });
 
@@ -228,5 +229,19 @@ describe('QuickActions', () => {
     expect(hrefs).toContain('/orders');
     expect(hrefs).toContain('/support');
     expect(hrefs).toContain('/identity');
+  });
+});
+
+describe('TerminateAllocationDialog', () => {
+  it('does not render dialog content when closed', () => {
+    render(
+      <TerminateAllocationDialog
+        allocation={mockAllocation}
+        open={false}
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('Terminate Allocation')).not.toBeInTheDocument();
   });
 });

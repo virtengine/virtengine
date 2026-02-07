@@ -227,13 +227,13 @@ export default function CompareClient() {
             </CompareRow>
 
             {/* Bidding */}
-            <CompareRow label="Accepts Bids">
+            <CompareRow label="Bidding (Phase 3)">
               {matchedOfferings.map((o) => (
                 <td key={`bid-${o.id.providerAddress}-${o.id.sequence}`} className="py-3 pr-4">
                   {o.allowBidding ? (
-                    <span className="text-green-600 dark:text-green-400">Yes</span>
+                    <span className="text-muted-foreground">Planned</span>
                   ) : (
-                    <span className="text-muted-foreground">No</span>
+                    <span className="text-muted-foreground">Not enabled</span>
                   )}
                 </td>
               ))}

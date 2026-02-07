@@ -11,6 +11,7 @@ Provide a single, auditable checklist for mainnet launch readiness and go/no-go 
 - 6C test(provider): E2E HPC/marketplace provider flow
 - 6D test(veid): security review for ML/verification services
 - 6E feat(escrow): billing reconciliation + dispute workflow
+- 22B docs(mainnet): genesis config + validator onboarding + ceremony tooling
 
 ## A. Required sign-offs
 
@@ -67,6 +68,8 @@ Reference runbooks:
 - _docs/verification-runbook.md
 - _docs/operations/lifecycle-control.md
 - _docs/tee-failover-strategy.md
+- _docs/runbooks/validator-onboarding.md
+- _docs/runbooks/mainnet-genesis-ceremony.md
 
 ## E. Dress rehearsal (staging) summary
 
@@ -121,4 +124,3 @@ Reference runbooks:
 - [ ] Launch packet hashes verified and archived
 - [ ] Runbook updated with final links
 - [ ] Decision record published and indexed
-
