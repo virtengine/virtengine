@@ -824,7 +824,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VaultMetadataResponse"
+                $ref: "#/components/schemas/VaultBlobMetadata"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -1021,28 +1021,20 @@ components:
         payload_base64:
           type: string
           format: byte
+        content_base64:
+          type: string
+          format: byte
     VaultUploadResponse:
       type: object
       properties:
-        blob_id:
-          type: string
         metadata:
           $ref: "#/components/schemas/VaultBlobMetadata"
     VaultRetrieveResponse:
       type: object
       properties:
-        blob_id:
-          type: string
         data_base64:
           type: string
           format: byte
-        metadata:
-          $ref: "#/components/schemas/VaultBlobMetadata"
-    VaultMetadataResponse:
-      type: object
-      properties:
-        blob_id:
-          type: string
         metadata:
           $ref: "#/components/schemas/VaultBlobMetadata"
     VaultAuditResponse:

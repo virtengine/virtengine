@@ -28,4 +28,22 @@ func (c ChainOrgResolver) IsMember(ctx context.Context, orgID, address string) (
 	return false, nil
 }
 
+// MemberRole returns the member role in the organization.
+func (c ChainOrgResolver) MemberRole(ctx context.Context, orgID, address string) (string, bool, error) {
+	if c.ChainQuery == nil || orgID == "" || address == "" {
+		return "", false, nil
+	}
+	members, err := c.ChainQuery.ListOrganizationMembers(ctx, orgID)
+	if err != nil {
+		return "", false, err
+	}
+	for _, member := range members {
+		if member.Address == address {
+			return member.Role, true, nil
+		}
+	}
+	return "", false, nil
+}
+
 var _ data_vault.OrgResolver = ChainOrgResolver{}
+var _ data_vault.OrgRoleResolver = ChainOrgResolver{}

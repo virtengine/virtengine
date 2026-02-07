@@ -13,6 +13,7 @@ import (
 type VaultServiceConfig struct {
 	Enabled          bool
 	Backend          string
+	AuditOwner       string
 	OrgResolver      data_vault.OrgResolver
 	RotateOverlap    time.Duration
 	AnomalyWindow    time.Duration
@@ -24,6 +25,7 @@ func DefaultVaultServiceConfig() VaultServiceConfig {
 	return VaultServiceConfig{
 		Enabled:          true,
 		Backend:          "memory",
+		AuditOwner:       "audit-system",
 		RotateOverlap:    24 * time.Hour,
 		AnomalyWindow:    10 * time.Minute,
 		AnomalyThreshold: 5,
@@ -57,6 +59,7 @@ func NewVaultService(cfg VaultServiceConfig) (data_vault.VaultService, error) {
 	accessControl := data_vault.NewPolicyAccessControl(accessPolicy, nil, cfg.OrgResolver)
 
 	auditLogger := data_vault.NewAuditLogger(data_vault.DefaultAuditLogConfig(), nil)
+	auditLogger.RegisterExporter(data_vault.NewVaultAuditExporter(store, cfg.AuditOwner))
 
 	anomalyDetector := data_vault.NewAccessAnomalyDetector(cfg.AnomalyThreshold, cfg.AnomalyWindow, nil)
 
