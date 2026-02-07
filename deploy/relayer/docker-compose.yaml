@@ -1,0 +1,63 @@
+# Hermes IBC Relayer for VirtEngine
+# Deploys Hermes relayer with health monitoring
+
+version: "3.8"
+
+services:
+  relayer:
+    image: ghcr.io/informalsystems/hermes:v1.10.4
+    container_name: virtengine-relayer
+    restart: unless-stopped
+    volumes:
+      - ./config.toml:/home/hermes/.hermes/config.toml:ro
+      - ./keys:/home/hermes/.hermes/keys:rw
+      - relayer-data:/home/hermes/.hermes
+    command: ["hermes", "start"]
+    ports:
+      - "3000:3000"  # REST API
+      - "3001:3001"  # Telemetry
+    environment:
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  monitor:
+    image: ghcr.io/informalsystems/hermes:v1.10.4
+    container_name: virtengine-relayer-monitor
+    restart: unless-stopped
+    volumes:
+      - ./config.toml:/home/hermes/.hermes/config.toml:ro
+      - ./keys:/home/hermes/.hermes/keys:ro
+      - ./scripts:/scripts:ro
+      - monitor-logs:/var/log/virtengine
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          /scripts/monitor.sh || true
+          sleep 300
+        done
+    environment:
+      - AUTO_CLEAR_PACKETS=false
+      - LOG_FILE=/var/log/virtengine/relayer-monitor.log
+    depends_on:
+      relayer:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  relayer-data:
+  monitor-logs:
