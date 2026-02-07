@@ -411,6 +411,7 @@ jobs:
     needs:
       - provenance-build
     permissions:
+      actions: read
       id-token: write
       contents: write
       attestations: write
