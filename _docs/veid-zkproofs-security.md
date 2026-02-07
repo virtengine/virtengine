@@ -346,6 +346,17 @@ Groth16 requires a **circuit-specific trusted setup** to generate proving and ve
 4. **Geographically distributed participants** (reduces collusion risk)
 5. **Gradual transition to transparent SNARKs** (PLONK, STARKs - no trusted setup)
 
+### Ceremony Tooling
+
+The repository includes a ceremony toolkit under `tools/trusted-setup/`:
+
+- Coordinator service and CLI for managing phase1/phase2 contributions
+- Participant CLI for online and air-gapped contributions
+- Transcript verification command
+- Documentation in `tools/trusted-setup/docs/`
+
+Production deployments must replace the placeholder parameters in `x/veid/zk/params/` with ceremony outputs.
+
 ## Known Limitations
 
 ### 1. Trusted Setup Dependency
