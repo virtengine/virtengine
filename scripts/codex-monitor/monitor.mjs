@@ -144,6 +144,14 @@ void initPrimaryAgent(primaryAgentName);
 const codexAnalyzeMergeStrategy =
   codexEnabled &&
   (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false";
+const mergeStrategyMode = String(
+  process.env.MERGE_STRATEGY_MODE || "smart",
+).toLowerCase();
+const codexResolveConflictsEnabled =
+  codexEnabled && mergeStrategyMode.includes("codexsdk");
+const conflictResolutionTimeoutMs = Number(
+  process.env.MERGE_CONFLICT_RESOLUTION_TIMEOUT_MS || "600000",
+);
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;

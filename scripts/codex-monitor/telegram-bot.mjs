@@ -78,6 +78,12 @@ const presenceTtlSec = Number(
 const presenceDisabled = ["1", "true", "yes"].includes(
   String(process.env.TELEGRAM_PRESENCE_DISABLED || "").toLowerCase(),
 );
+const presenceSilent = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_SILENT || "").toLowerCase(),
+);
+const presenceOnlyOnChange = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_ONLY_ON_CHANGE || "true").toLowerCase(),
+);
 const presenceChatId =
   process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
@@ -306,6 +312,9 @@ async function sendDirect(chatId, text, options = {}) {
     };
     if (options.parseMode) {
       payload.parse_mode = options.parseMode;
+    }
+    if (options.silent) {
+      payload.disable_notification = true;
     }
     payload.disable_web_page_preview = true;
 
@@ -3063,6 +3072,8 @@ function startPresenceLoop() {
     return;
   }
   const intervalMs = presenceIntervalSec * 1000;
+  let lastSentPayload = null;
+
   const sendPresence = async () => {
     try {
       await ensurePresenceReady();
@@ -3072,11 +3083,23 @@ function startPresenceLoop() {
         orchestrator_pid: child?.pid ?? null,
         vk_url: _getVibeKanbanUrl ? _getVibeKanbanUrl() : null,
       });
+
+      // Check if state changed significantly (ignore updated_at for comparison)
+      const shouldSend = !presenceOnlyOnChange || !lastSentPayload || hasPresenceChanged(lastSentPayload, payload);
+
+      // Always update local registry
       await notePresence(payload, {
         source: "local",
         receivedAt: payload.updated_at,
       });
-      await sendDirect(presenceChatId, formatPresenceMessage(payload));
+
+      // Only send to Telegram if state changed or not configured to only-on-change
+      if (shouldSend) {
+        await sendDirect(presenceChatId, formatPresenceMessage(payload), {
+          silent: presenceSilent,
+        });
+        lastSentPayload = payload;
+      }
     } catch (err) {
       console.warn(
         `[telegram-bot] presence heartbeat error: ${err.message || err}`,
@@ -3085,6 +3108,28 @@ function startPresenceLoop() {
   };
   setTimeout(() => void sendPresence(), intervalMs);
   setInterval(() => void sendPresence(), intervalMs);
+}
+
+function hasPresenceChanged(prev, curr) {
+  if (!prev || !curr) return true;
+  // Compare meaningful fields (ignore timestamps)
+  const significantFields = [
+    "instance_id",
+    "workspace_id",
+    "workspace_role",
+    "orchestrator_running",
+    "orchestrator_pid",
+    "git_branch",
+    "git_sha",
+    "coordinator_priority",
+    "coordinator_eligible",
+  ];
+  for (const field of significantFields) {
+    if (prev[field] !== curr[field]) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
