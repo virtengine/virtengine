@@ -809,6 +809,43 @@ const COMMANDS = {
   },
 };
 
+/**
+ * Sync the COMMANDS object to Telegram's bot command menu via setMyCommands.
+ * This makes commands appear when users type "/" in the chat.
+ * Aliases and duplicate entries are deduplicated by key.
+ */
+async function registerBotCommands() {
+  const seen = new Set();
+  const commands = [];
+  for (const [cmd, entry] of Object.entries(COMMANDS)) {
+    const command = cmd.replace(/^\//, ""); // strip leading /
+    if (seen.has(command)) continue; // skip duplicate keys (e.g. /agent appears twice)
+    seen.add(command);
+    // Telegram limits description to 256 chars
+    const description = (entry.desc || command).slice(0, 256);
+    commands.push({ command, description });
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${telegramToken}/setMyCommands`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commands }),
+      },
+    );
+    const data = await res.json();
+    if (data.ok) {
+      console.log(`[telegram-bot] registered ${commands.length} commands with Telegram`);
+    } else {
+      console.warn(`[telegram-bot] setMyCommands failed: ${data.description || JSON.stringify(data)}`);
+    }
+  } catch (err) {
+    console.warn(`[telegram-bot] setMyCommands error: ${err.message}`);
+  }
+}
+
 const FAST_COMMANDS = new Set(["/status", "/tasks"]);
 
 async function handleCommand(text, chatId) {
@@ -2601,6 +2638,9 @@ export async function startTelegramBot() {
 
   // Initialize the Codex shell context
   await initCodexShell();
+
+  // Register bot commands with Telegram (updates the / menu)
+  await registerBotCommands();
 
   // Clear any pending updates that arrived while we were offline
   try {
