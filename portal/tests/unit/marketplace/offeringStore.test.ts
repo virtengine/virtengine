@@ -266,9 +266,26 @@ describe('offeringStore', () => {
       await useOfferingStore.getState().fetchOfferings();
 
       const { offerings } = useOfferingStore.getState();
+      const priceValue = (amount?: string, basePrice?: string) => {
+        if (amount) {
+          const parsed = Number.parseFloat(amount);
+          if (!Number.isNaN(parsed)) return parsed;
+        }
+        if (basePrice) {
+          const parsed = Number.parseFloat(basePrice);
+          if (!Number.isNaN(parsed)) return parsed / 1_000_000;
+        }
+        return 0;
+      };
       for (let i = 1; i < offerings.length; i++) {
-        const prev = parseInt(offerings[i - 1].pricing.basePrice, 10);
-        const curr = parseInt(offerings[i].pricing.basePrice, 10);
+        const prev = priceValue(
+          offerings[i - 1].prices?.[0]?.usdReference,
+          offerings[i - 1].pricing.basePrice
+        );
+        const curr = priceValue(
+          offerings[i].prices?.[0]?.usdReference,
+          offerings[i].pricing.basePrice
+        );
         expect(curr).toBeGreaterThanOrEqual(prev);
       }
     });
@@ -278,9 +295,26 @@ describe('offeringStore', () => {
       await useOfferingStore.getState().fetchOfferings();
 
       const { offerings } = useOfferingStore.getState();
+      const priceValue = (amount?: string, basePrice?: string) => {
+        if (amount) {
+          const parsed = Number.parseFloat(amount);
+          if (!Number.isNaN(parsed)) return parsed;
+        }
+        if (basePrice) {
+          const parsed = Number.parseFloat(basePrice);
+          if (!Number.isNaN(parsed)) return parsed / 1_000_000;
+        }
+        return 0;
+      };
       for (let i = 1; i < offerings.length; i++) {
-        const prev = parseInt(offerings[i - 1].pricing.basePrice, 10);
-        const curr = parseInt(offerings[i].pricing.basePrice, 10);
+        const prev = priceValue(
+          offerings[i - 1].prices?.[0]?.usdReference,
+          offerings[i - 1].pricing.basePrice
+        );
+        const curr = priceValue(
+          offerings[i].prices?.[0]?.usdReference,
+          offerings[i].pricing.basePrice
+        );
         expect(curr).toBeLessThanOrEqual(prev);
       }
     });
