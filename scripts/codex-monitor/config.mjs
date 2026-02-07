@@ -88,6 +88,14 @@ function loadConfigFile(configDir) {
       return { path: p, data: null, error: "invalid-json" };
     }
   }
+  // Hint about the example template
+  const examplePath = resolve(configDir, "codex-monitor.config.example.json");
+  if (existsSync(examplePath)) {
+    console.log(
+      `[config] No codex-monitor.config.json found. Copy the example:\n` +
+        `         cp ${examplePath} ${resolve(configDir, "codex-monitor.config.json")}`,
+    );
+  }
   return { path: null, data: null };
 }
 

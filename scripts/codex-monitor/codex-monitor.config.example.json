@@ -27,7 +27,6 @@
   "repositories": [
     {
       "name": "virtengine",
-      "path": "C:/Users/jON/Documents/source/repos/virtengine-gh/virtengine",
       "slug": "virtengine/virtengine",
       "primary": true
     }
