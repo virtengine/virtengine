@@ -89,6 +89,19 @@ const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
 
+// ── Message Batching Configuration ──────────────────────────────────────────
+const batchingEnabled = !["0", "false", "no"].includes(
+  String(process.env.TELEGRAM_BATCH_NOTIFICATIONS || "true").toLowerCase(),
+);
+const batchIntervalSec = Number(
+  process.env.TELEGRAM_BATCH_INTERVAL_SEC || "300",
+); // 5 minutes default
+const batchMaxSize = Number(process.env.TELEGRAM_BATCH_MAX_SIZE || "50");
+// Priority threshold: only messages >= this priority bypass batching (1=critical, 2=error, 3=warning, 4=info, 5=debug)
+const immediateThreshold = Number(
+  process.env.TELEGRAM_IMMEDIATE_PRIORITY || "1",
+);
+
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
   try {
@@ -3131,6 +3144,170 @@ function hasPresenceChanged(prev, curr) {
   return false;
 }
 
+// ── Notification Batching System ─────────────────────────────────────────────
+
+const messageQueue = {
+  critical: [], // priority 1 - immediate
+  errors: [], // priority 2
+  warnings: [], // priority 3
+  info: [], // priority 4
+  debug: [], // priority 5
+};
+
+let batchFlushTimer = null;
+
+/**
+ * Queue a notification for batched delivery.
+ * @param {string} text - Message text
+ * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
+ * @param {object} options - { category, data, silent }
+ */
+function queueNotification(text, priority = 4, options = {}) {
+  if (!batchingEnabled || priority <= immediateThreshold) {
+    // Send immediately for critical messages or when batching disabled
+    return sendDirect(telegramChatId, text, { silent: options.silent });
+  }
+
+  const category = options.category || "info";
+  const entry = {
+    text,
+    priority,
+    category,
+    timestamp: new Date().toISOString(),
+    data: options.data || {},
+  };
+
+  // Route to appropriate queue
+  if (priority === 1) {
+    messageQueue.critical.push(entry);
+  } else if (priority === 2) {
+    messageQueue.errors.push(entry);
+  } else if (priority === 3) {
+    messageQueue.warnings.push(entry);
+  } else if (priority === 5) {
+    messageQueue.debug.push(entry);
+  } else {
+    messageQueue.info.push(entry);
+  }
+
+  // Flush if queue is getting too large
+  const totalSize =
+    messageQueue.critical.length +
+    messageQueue.errors.length +
+    messageQueue.warnings.length +
+    messageQueue.info.length +
+    messageQueue.debug.length;
+
+  if (totalSize >= batchMaxSize) {
+    flushNotificationQueue();
+  }
+}
+
+/**
+ * Format and send batched notifications as a summary.
+ */
+async function flushNotificationQueue() {
+  const sections = [];
+  const counts = {
+    critical: messageQueue.critical.length,
+    errors: messageQueue.errors.length,
+    warnings: messageQueue.warnings.length,
+    info: messageQueue.info.length,
+    debug: messageQueue.debug.length,
+  };
+
+  const totalMessages =
+    counts.critical + counts.errors + counts.warnings + counts.info + counts.debug;
+
+  if (totalMessages === 0) return; // Nothing to send
+
+  // Build summary header
+  const timestamp = new Date().toISOString().slice(11, 19);
+  let header = `📊 Update Summary (${timestamp})`;
+  if (totalMessages > 0) {
+    const parts = [];
+    if (counts.critical > 0) parts.push(`🔴 ${counts.critical}`);
+    if (counts.errors > 0) parts.push(`❌ ${counts.errors}`);
+    if (counts.warnings > 0) parts.push(`⚠️ ${counts.warnings}`);
+    if (counts.info > 0) parts.push(`ℹ️ ${counts.info}`);
+    header += `\n${parts.join(" • ")}`;
+  }
+
+  // Critical messages (show all)
+  if (counts.critical > 0) {
+    sections.push(
+      `🔴 Critical:\n${messageQueue.critical.map((m) => `  • ${m.text}`).join("\n")}`,
+    );
+  }
+
+  // Errors (show up to 5, then summarize)
+  if (counts.errors > 0) {
+    const errorTexts = messageQueue.errors.slice(0, 5).map((m) => `  • ${m.text}`);
+    if (counts.errors > 5) {
+      errorTexts.push(`  • ... and ${counts.errors - 5} more errors`);
+    }
+    sections.push(`❌ Errors:\n${errorTexts.join("\n")}`);
+  }
+
+  // Warnings (show up to 3, then summarize)
+  if (counts.warnings > 0) {
+    const warnTexts = messageQueue.warnings.slice(0, 3).map((m) => `  • ${m.text}`);
+    if (counts.warnings > 3) {
+      warnTexts.push(`  • ... and ${counts.warnings - 3} more warnings`);
+    }
+    sections.push(`⚠️ Warnings:\n${warnTexts.join("\n")}`);
+  }
+
+  // Info messages (aggregate by category)
+  if (counts.info > 0) {
+    const categories = {};
+    for (const msg of messageQueue.info) {
+      const cat = msg.category || "general";
+      categories[cat] = (categories[cat] || 0) + 1;
+    }
+    const summary = Object.entries(categories)
+      .map(([cat, count]) => `  • ${cat}: ${count}`)
+      .join("\n");
+    sections.push(`ℹ️ Info:\n${summary}`);
+  }
+
+  // Build final message
+  const message = [header, ...sections].join("\n\n");
+
+  // Send the summary
+  await sendDirect(telegramChatId, message, { silent: true });
+
+  // Clear queues
+  messageQueue.critical.length = 0;
+  messageQueue.errors.length = 0;
+  messageQueue.warnings.length = 0;
+  messageQueue.info.length = 0;
+  messageQueue.debug.length = 0;
+}
+
+/**
+ * Start periodic flushing of the notification queue.
+ */
+function startBatchFlushLoop() {
+  if (!batchingEnabled || batchFlushTimer) return;
+  const intervalMs = batchIntervalSec * 1000;
+  batchFlushTimer = setInterval(() => {
+    flushNotificationQueue().catch((err) =>
+      console.warn(`[telegram-bot] batch flush error: ${err.message}`),
+    );
+  }, intervalMs);
+}
+
+/**
+ * Stop the batch flush loop.
+ */
+function stopBatchFlushLoop() {
+  if (batchFlushTimer) {
+    clearInterval(batchFlushTimer);
+    batchFlushTimer = null;
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -3161,6 +3338,9 @@ export async function startTelegramBot() {
 
   // Start presence announcements for multi-workstation discovery
   startPresenceLoop();
+
+  // Start batched notification system
+  startBatchFlushLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {
@@ -3204,6 +3384,19 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
+  // Flush any remaining notifications before stopping
+  flushNotificationQueue().catch(() => {});
+  stopBatchFlushLoop();
   void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
+}
+
+/**
+ * Queue a notification for batched delivery (exported for monitor.mjs).
+ * @param {string} text - Message text
+ * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
+ * @param {object} options - { category, data, silent }
+ */
+export function notify(text, priority = 4, options = {}) {
+  return queueNotification(text, priority, options);
 }
