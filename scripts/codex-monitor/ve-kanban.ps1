@@ -75,6 +75,25 @@ function Invoke-VKApi {
     }
 }
 
+# ─── Copilot Cloud Guard ─────────────────────────────────────────────────────
+
+function Test-CopilotCloudDisabled {
+    $flag = $env:COPILOT_CLOUD_DISABLED
+    if ($flag -and $flag.ToString().ToLower() -in @("1", "true", "yes")) {
+        return $true
+    }
+    $untilRaw = $env:COPILOT_CLOUD_DISABLED_UNTIL
+    if (-not $untilRaw) { return $false }
+    try {
+        $until = [datetimeoffset]::Parse($untilRaw).ToLocalTime().DateTime
+        if ((Get-Date) -lt $until) { return $true }
+    }
+    catch {
+        return $false
+    }
+    return $false
+}
+
 # ─── Auto-Detection & Initialization ─────────────────────────────────────────
 
 function Initialize-VKConfig {
@@ -145,9 +164,19 @@ function Get-NextExecutorProfile {
     <#
     .SYNOPSIS Get the next executor profile in the 50/50 Codex/Copilot rotation.
     #>
-    $profile = $script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX]
-    $script:VK_EXECUTOR_INDEX = ($script:VK_EXECUTOR_INDEX + 1) % $script:VK_EXECUTORS.Count
-    return $profile
+    $max = $script:VK_EXECUTORS.Count
+    if ($max -le 1) {
+        return $script:VK_EXECUTORS[0]
+    }
+    for ($i = 0; $i -lt $max; $i++) {
+        $profile = $script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX]
+        $script:VK_EXECUTOR_INDEX = ($script:VK_EXECUTOR_INDEX + 1) % $script:VK_EXECUTORS.Count
+        if ((Test-CopilotCloudDisabled) -and $profile.executor -eq "COPILOT") {
+            continue
+        }
+        return $profile
+    }
+    return $script:VK_EXECUTORS[0]
 }
 
 function Get-CurrentExecutorProfile {
@@ -188,6 +217,27 @@ function Get-VKTask {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$TaskId)
     return Invoke-VKApi -Path "/api/tasks/$TaskId"
+}
+
+function Create-VKTask {
+    <#
+    .SYNOPSIS Create a new task in vibe-kanban.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Description,
+        [ValidateSet("todo", "inprogress", "inreview", "done", "cancelled")]
+        [string]$Status = "todo"
+    )
+    if (-not (Initialize-VKConfig)) { return $null }
+    $body = @{
+        title       = $Title
+        description = $Description
+        status      = $Status
+        project_id  = $script:VK_PROJECT_ID
+    }
+    return Invoke-VKApi -Path "/api/tasks" -Method "POST" -Body $body
 }
 
 function Update-VKTaskStatus {
@@ -664,6 +714,53 @@ function Add-PRComment {
         "--body", $Body
     )
     return ($null -ne $result)
+}
+
+function Get-PRComments {
+    <#
+    .SYNOPSIS Fetch recent PR comments (issue comments).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$PRNumber,
+        [int]$Limit = 30
+    )
+    $result = Invoke-VKGithub -Args @(
+        "api",
+        "repos/$script:GH_OWNER/$script:GH_REPO/issues/$PRNumber/comments",
+        "-f", "per_page=$Limit"
+    )
+    if (-not $result) { return @() }
+    try {
+        return $result | ConvertFrom-Json
+    }
+    catch {
+        return @()
+    }
+}
+
+function Test-CopilotRateLimitComment {
+    <#
+    .SYNOPSIS Detect Copilot rate limit notices in PR comments.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $comments = Get-PRComments -PRNumber $PRNumber -Limit 30
+    if (-not $comments) { return $null }
+    $pattern = "copilot stopped work|rate limit|rate-limited|secondary rate limit"
+    foreach ($comment in $comments) {
+        if (-not $comment.body) { continue }
+        $body = $comment.body.ToString()
+        if ($body -match $pattern -and $body -match "copilot") {
+            return @{
+                hit        = $true
+                body       = $body
+                created_at = $comment.created_at
+                author     = $comment.user?.login
+            }
+        }
+    }
+    return $null
 }
 
 function Mark-PRReady {

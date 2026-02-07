@@ -632,6 +632,9 @@ function Initialize-CISweepConfig {
     $script:CiSweepEvery = Get-EnvInt -Name "VE_CI_SWEEP_EVERY" -Default 15 -Min 0
     $script:CiSweepPrBackupEnabled = Get-EnvBool -Name "VE_CI_SWEEP_PR_BACKUP" -Default $true
     $script:CiSweepPrEvery = Get-EnvInt -Name "VE_CI_SWEEP_PR_EVERY" -Default $script:CiSweepEvery -Min 0
+    $script:CopilotCloudCooldownMin = Get-EnvInt -Name "COPILOT_CLOUD_COOLDOWN_MIN" -Default 60 -Min 1
+    $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
+    $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
 }
 
 function Initialize-CISweepState {
@@ -707,24 +710,41 @@ function Save-VKConfigCache {
 
 function Get-CopilotState {
     if (-not (Test-Path $script:CopilotStatePath)) {
-        return @{ prs = @{} }
+        return @{
+            prs                   = @{}
+            cloud_disabled_until  = $null
+            cloud_disabled_reason = $null
+            cloud_disabled_at     = $null
+        }
     }
     try {
         $raw = Get-Content -Path $script:CopilotStatePath -Raw
-        if (-not $raw) { return @{ prs = @{} } }
+        if (-not $raw) {
+            return @{
+                prs                   = @{}
+                cloud_disabled_until  = $null
+                cloud_disabled_reason = $null
+                cloud_disabled_at     = $null
+            }
+        }
         $state = $raw | ConvertFrom-Json -Depth 6
-        if (-not $state.prs) { return @{ prs = @{} } }
-        if ($state.prs -is [hashtable]) {
-            return @{ prs = $state.prs }
+        if (-not $state.prs) { $state | Add-Member -NotePropertyName prs -NotePropertyValue @{} -Force }
+        if (-not ($state.prs -is [hashtable])) {
+            $prs = @{}
+            foreach ($prop in $state.prs.PSObject.Properties) {
+                $prs[$prop.Name] = $prop.Value
+            }
+            $state.prs = $prs
         }
-        $prs = @{}
-        foreach ($prop in $state.prs.PSObject.Properties) {
-            $prs[$prop.Name] = $prop.Value
-        }
-        return @{ prs = $prs }
+        return $state
     }
     catch {
-        return @{ prs = @{} }
+        return @{
+            prs                   = @{}
+            cloud_disabled_until  = $null
+            cloud_disabled_reason = $null
+            cloud_disabled_at     = $null
+        }
     }
 }
 
@@ -797,6 +817,73 @@ function Upsert-CopilotPRState {
         merged_at    = $mergedAt
     }
     Save-CopilotState -State $state
+}
+
+function Get-CopilotCloudDisabledUntil {
+    $state = Get-CopilotState
+    $untilRaw = $state.cloud_disabled_until
+    if (-not $untilRaw) { return $null }
+    try {
+        return ([datetimeoffset]::Parse($untilRaw)).ToLocalTime().DateTime
+    }
+    catch {
+        return $null
+    }
+}
+
+function Clear-CopilotCloudDisabled {
+    $state = Get-CopilotState
+    $state.cloud_disabled_until = $null
+    $state.cloud_disabled_reason = $null
+    $state.cloud_disabled_at = $null
+    Save-CopilotState -State $state
+    $env:COPILOT_CLOUD_DISABLED = ""
+    $env:COPILOT_CLOUD_DISABLED_UNTIL = ""
+}
+
+function Test-CopilotCloudDisabled {
+    $flag = $env:COPILOT_CLOUD_DISABLED
+    if ($flag -and $flag.ToString().ToLower() -in @("1", "true", "yes")) {
+        return $true
+    }
+    $until = $null
+    $untilRaw = $env:COPILOT_CLOUD_DISABLED_UNTIL
+    if ($untilRaw) {
+        try {
+            $until = ([datetimeoffset]::Parse($untilRaw)).ToLocalTime().DateTime
+        }
+        catch {
+            $until = $null
+        }
+    }
+    if (-not $until) {
+        $until = Get-CopilotCloudDisabledUntil
+    }
+    if (-not $until) { return $false }
+    if ((Get-Date) -lt $until) { return $true }
+    Clear-CopilotCloudDisabled
+    return $false
+}
+
+function Disable-CopilotCloud {
+    [CmdletBinding()]
+    param(
+        [string]$Reason,
+        [int]$Minutes = 0
+    )
+    $duration = if ($Minutes -gt 0) { $Minutes } else { $script:CopilotCloudCooldownMin }
+    $until = (Get-Date).AddMinutes($duration)
+    $state = Get-CopilotState
+    $state.cloud_disabled_until = $until.ToString("o")
+    $state.cloud_disabled_reason = $Reason
+    $state.cloud_disabled_at = (Get-Date).ToString("o")
+    Save-CopilotState -State $state
+    $env:COPILOT_CLOUD_DISABLED = "1"
+    $env:COPILOT_CLOUD_DISABLED_UNTIL = $until.ToString("o")
+    Write-Log "Copilot cloud disabled until $($until.ToString("o"))" -Level "WARN"
+    if ($Reason) {
+        Write-Log "Copilot cloud disable reason: $Reason" -Level "WARN"
+    }
 }
 
 function Apply-CopilotStateToInfo {
@@ -2166,6 +2253,7 @@ function Sync-TrackedAttempts {
                 copilot_fix_pr_number         = $null
                 copilot_fix_merged            = $false
                 copilot_fix_merged_at         = $null
+                no_commits_retries            = 0
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
         }
@@ -2406,7 +2494,27 @@ function Process-CompletedAttempts {
                     $created = Create-PRForBranchSafe -Branch $branch -Title $title -Body "Automated PR created by ve-orchestrator"
                     if (Test-GithubRateLimit) { return }
                     if ($created -eq "no_commits") {
-                        Write-Log "Branch $branch has no commits vs base — marking for manual review" -Level "WARN"
+                        $info.no_commits_retries = ($info.no_commits_retries ?? 0) + 1
+                        Write-Log "Branch $branch has no commits vs base (retry $($info.no_commits_retries)/2)" -Level "WARN"
+
+                        if ($info.no_commits_retries -ge 2) {
+                            # Stop looping — archive the attempt and move on
+                            Write-Log "Branch $branch: no_commits after $($info.no_commits_retries) retries — archiving attempt" -Level "WARN"
+                            $info.status = "done"
+                            $info.no_commits = $true
+                            $script:TasksFailed++
+                            Save-SuccessMetrics
+                            try {
+                                $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
+                                Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
+                                Write-Log "Archived stale no_commits attempt $($attemptId.Substring(0,8))" -Level "INFO"
+                            } catch {
+                                Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
+                            }
+                            $processed += $attemptId
+                            continue
+                        }
+
                         $info.status = "manual_review"
                         $info.no_commits = $true
                         $script:TasksFailed++
@@ -2612,6 +2720,27 @@ CI is failing for PR #$($pr.number).
 
 $summary
 "@
+
+                if ($script:CopilotCloudDisableOnRateLimit) {
+                    $rateLimitHit = Test-CopilotRateLimitComment -PRNumber $pr.number
+                    if ($rateLimitHit -and $rateLimitHit.hit) {
+                        Disable-CopilotCloud -Reason "copilot_rate_limit_detected"
+                    }
+                }
+
+                if (Test-CopilotCloudDisabled) {
+                    if (-not $info.local_fix_requested) {
+                        Write-Log "Copilot cloud disabled — routing CI fix to local agent" -Level "WARN"
+                        $localBody = @"
+CI is failing for PR #$($pr.number).
+
+$summary
+"@
+                        $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $localBody.Trim() -Reason "ci_failing_local"
+                        $info.local_fix_requested = $true
+                    }
+                    break
+                }
 
                 if ($copilotState) {
                     $info.copilot_fix_requested = $true
@@ -3088,6 +3217,24 @@ function Trigger-CISweep {
         [string]$Reason = "task-count",
         [string]$TriggerInfo = ""
     )
+    if (Test-CopilotCloudDisabled) {
+        Write-Log "Copilot cloud disabled — creating local CI sweep task" -Level "WARN"
+        $title = "ci sweep: resolve failing workflows"
+        $body = @"
+Please review GitHub Actions failures across the repository and resolve them.
+
+Scope:
+- Identify failing workflows on main.
+- Prioritize required checks and security scans.
+- Apply minimal fixes and open PRs as needed.
+Trigger reason: $Reason
+Trigger info: $TriggerInfo
+"@
+        if (-not $DryRun) {
+            $null = Create-VKTask -Title $title -Description $body.Trim() -Status "todo"
+        }
+        return
+    }
     $failedRuns = @()
     $recentMerged = @()
     if (-not (Test-GithubRateLimit)) {
@@ -3533,6 +3680,10 @@ function Start-Orchestrator {
 
             # Step 1: Sync attempt state from API
             Sync-TrackedAttempts
+            if (Test-OrchestratorStop) { break }
+
+            # Step 1b: Prune workspaces for already-completed/cancelled tasks
+            Prune-CompletedTaskWorkspaces
             if (Test-OrchestratorStop) { break }
 
             # Step 2: Merge standalone Copilot PRs

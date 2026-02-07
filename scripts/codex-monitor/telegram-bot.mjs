@@ -32,6 +32,15 @@ import {
   getLocalWorkspace,
 } from "./workspace-registry.mjs";
 import {
+  claimSharedWorkspace,
+  formatSharedWorkspaceDetail,
+  formatSharedWorkspaceSummary,
+  loadSharedWorkspaceRegistry as loadSharedRegistry,
+  releaseSharedWorkspace,
+  resolveSharedWorkspace,
+  sweepExpiredLeases as sweepSharedLeases,
+} from "./shared-workspace-registry.mjs";
+import {
   buildLocalPresence,
   formatCoordinatorSummary,
   formatPresenceMessage,
@@ -68,11 +77,30 @@ const presenceTtlSec = Number(
 const presenceDisabled = ["1", "true", "yes"].includes(
   String(process.env.TELEGRAM_PRESENCE_DISABLED || "").toLowerCase(),
 );
+const presenceSilent = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_SILENT || "").toLowerCase(),
+);
+const presenceOnlyOnChange = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_ONLY_ON_CHANGE || "true").toLowerCase(),
+);
 const presenceChatId =
   process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
+
+// ── Message Batching Configuration ──────────────────────────────────────────
+const batchingEnabled = !["0", "false", "no"].includes(
+  String(process.env.TELEGRAM_BATCH_NOTIFICATIONS || "true").toLowerCase(),
+);
+const batchIntervalSec = Number(
+  process.env.TELEGRAM_BATCH_INTERVAL_SEC || "300",
+); // 5 minutes default
+const batchMaxSize = Number(process.env.TELEGRAM_BATCH_MAX_SIZE || "50");
+// Priority threshold: only messages >= this priority bypass batching (1=critical, 2=error, 3=warning, 4=info, 5=debug)
+const immediateThreshold = Number(
+  process.env.TELEGRAM_IMMEDIATE_PRIORITY || "1",
+);
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -296,6 +324,9 @@ async function sendDirect(chatId, text, options = {}) {
     };
     if (options.parseMode) {
       payload.parse_mode = options.parseMode;
+    }
+    if (options.silent) {
+      payload.disable_notification = true;
     }
     payload.disable_web_page_preview = true;
 
@@ -904,32 +935,38 @@ async function handleUpdate(update) {
   const chatId = String(msg.chat?.id);
   const text = (msg.text || "").trim();
 
-  // Security: only accept from configured chat
-  if (telegramChatId && chatId !== String(telegramChatId)) {
-    console.warn(
-      `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
+    const presencePayload = text ? parsePresenceMessage(text) : null;
+    if (presencePayload) {
+      if (!presenceChatId || chatId !== String(presenceChatId)) {
+        console.warn(
+          `[telegram-bot] ignored presence from chat ${chatId} (expected ${presenceChatId || "unset"})`,
+        );
+        return;
+      }
+      await ensurePresenceReady();
+      const receivedAt = Number.isFinite(msg.date)
+        ? new Date(msg.date * 1000).toISOString()
+        : new Date().toISOString();
+      await notePresence(presencePayload, {
+        source: "telegram",
+        receivedAt,
+      });
+      return;
+    }
+
+    // Security: only accept from configured chat
+    if (telegramChatId && chatId !== String(telegramChatId)) {
+      console.warn(
+        `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
+      );
+      return;
+    }
+
+    if (!text) return;
+
+    console.log(
+      `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
     );
-    return;
-  }
-
-  if (!text) return;
-
-  console.log(
-    `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
-  );
-
-  const presencePayload = parsePresenceMessage(text);
-  if (presencePayload) {
-    await ensurePresenceReady();
-    const receivedAt = Number.isFinite(msg.date)
-      ? new Date(msg.date * 1000).toISOString()
-      : new Date().toISOString();
-    await notePresence(presencePayload, {
-      source: "telegram",
-      receivedAt,
-    });
-    return;
-  }
 
   // Route: slash command or free-text
   if (text.startsWith("/")) {
@@ -1008,6 +1045,18 @@ const COMMANDS = {
   "/model": {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
+  },
+  "/shared-workspaces": {
+    handler: cmdSharedWorkspaces,
+    desc: "List shared cloud workspace availability",
+  },
+  "/claim": {
+    handler: cmdSharedWorkspaceClaim,
+    desc: "Claim a shared workspace: /claim <id> [--owner <id>] [--ttl <minutes>]",
+  },
+  "/release": {
+    handler: cmdSharedWorkspaceRelease,
+    desc: "Release a shared workspace: /release <id> [--owner <id>] [--force]",
   },
   "/agent": {
     handler: cmdAgent,
@@ -1146,6 +1195,47 @@ function splitArgs(input) {
     tokens.push(match[1] ?? match[2] ?? match[3]);
   }
   return tokens;
+}
+
+function parseSharedWorkspaceArgs(args) {
+  const tokens = splitArgs(args);
+  const parsed = {
+    workspaceId: null,
+    owner: null,
+    ttlMinutes: null,
+    note: "",
+    reason: "",
+    force: false,
+  };
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "--owner") {
+      parsed.owner = tokens[i + 1];
+      i++;
+      continue;
+    }
+    if (token === "--ttl") {
+      parsed.ttlMinutes = Number(tokens[i + 1]);
+      i++;
+      continue;
+    }
+    if (token === "--note") {
+      parsed.note = tokens.slice(i + 1).join(" ");
+      break;
+    }
+    if (token === "--reason") {
+      parsed.reason = tokens.slice(i + 1).join(" ");
+      break;
+    }
+    if (token === "--force") {
+      parsed.force = true;
+      continue;
+    }
+    if (!parsed.workspaceId) {
+      parsed.workspaceId = token;
+    }
+  }
+  return parsed;
 }
 
 function parseAgentArgs(args) {
@@ -2057,6 +2147,78 @@ async function cmdModel(chatId, modelArg) {
   } catch (err) {
     await sendReply(chatId, `❌ Error: ${err.message}`);
   }
+}
+
+async function cmdSharedWorkspaces(chatId, rawArgs) {
+  const registry = await loadSharedRegistry();
+  const sweep = await sweepSharedLeases({
+    registry,
+    actor: `telegram:${chatId}`,
+  });
+  const tokens = splitArgs(rawArgs);
+  if (tokens.length > 0) {
+    const workspace = resolveSharedWorkspace(sweep.registry, tokens[0]);
+    if (!workspace) {
+      await sendReply(chatId, `Unknown shared workspace '${tokens[0]}'.`);
+      return;
+    }
+    await sendReply(chatId, formatSharedWorkspaceDetail(workspace));
+    return;
+  }
+  await sendReply(chatId, formatSharedWorkspaceSummary(sweep.registry));
+}
+
+async function cmdSharedWorkspaceClaim(chatId, rawArgs) {
+  const parsed = parseSharedWorkspaceArgs(rawArgs);
+  if (!parsed.workspaceId) {
+    await sendReply(
+      chatId,
+      "Usage: /claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]",
+    );
+    return;
+  }
+  const actor = `telegram:${chatId}`;
+  const owner = parsed.owner || actor;
+  const result = await claimSharedWorkspace({
+    workspaceId: parsed.workspaceId,
+    owner,
+    ttlMinutes: parsed.ttlMinutes,
+    note: parsed.note,
+    force: parsed.force,
+    actor,
+  });
+  if (result.error) {
+    await sendReply(chatId, `❌ ${result.error}`);
+    return;
+  }
+  await sendReply(
+    chatId,
+    `✅ Claimed ${result.workspace.id} for ${result.lease.owner} (expires ${result.lease.lease_expires_at})`,
+  );
+}
+
+async function cmdSharedWorkspaceRelease(chatId, rawArgs) {
+  const parsed = parseSharedWorkspaceArgs(rawArgs);
+  if (!parsed.workspaceId) {
+    await sendReply(
+      chatId,
+      "Usage: /release <id> [--owner <id>] [--reason <text>] [--force]",
+    );
+    return;
+  }
+  const actor = `telegram:${chatId}`;
+  const result = await releaseSharedWorkspace({
+    workspaceId: parsed.workspaceId,
+    owner: parsed.owner,
+    reason: parsed.reason,
+    force: parsed.force,
+    actor,
+  });
+  if (result.error) {
+    await sendReply(chatId, `❌ ${result.error}`);
+    return;
+  }
+  await sendReply(chatId, `✅ Released ${result.workspace.id}`);
 }
 
 // ── /agent — route to workspace registry ────────────────────────────────────
@@ -3112,6 +3274,8 @@ function startPresenceLoop() {
     return;
   }
   const intervalMs = presenceIntervalSec * 1000;
+  let lastSentPayload = null;
+
   const sendPresence = async () => {
     try {
       await ensurePresenceReady();
@@ -3121,11 +3285,23 @@ function startPresenceLoop() {
         orchestrator_pid: child?.pid ?? null,
         vk_url: _getVibeKanbanUrl ? _getVibeKanbanUrl() : null,
       });
+
+      // Check if state changed significantly (ignore updated_at for comparison)
+      const shouldSend = !presenceOnlyOnChange || !lastSentPayload || hasPresenceChanged(lastSentPayload, payload);
+
+      // Always update local registry
       await notePresence(payload, {
         source: "local",
         receivedAt: payload.updated_at,
       });
-      await sendDirect(presenceChatId, formatPresenceMessage(payload));
+
+      // Only send to Telegram if state changed or not configured to only-on-change
+      if (shouldSend) {
+        await sendDirect(presenceChatId, formatPresenceMessage(payload), {
+          silent: presenceSilent,
+        });
+        lastSentPayload = payload;
+      }
     } catch (err) {
       console.warn(
         `[telegram-bot] presence heartbeat error: ${err.message || err}`,
@@ -3134,6 +3310,192 @@ function startPresenceLoop() {
   };
   setTimeout(() => void sendPresence(), intervalMs);
   setInterval(() => void sendPresence(), intervalMs);
+}
+
+function hasPresenceChanged(prev, curr) {
+  if (!prev || !curr) return true;
+  // Compare meaningful fields (ignore timestamps)
+  const significantFields = [
+    "instance_id",
+    "workspace_id",
+    "workspace_role",
+    "orchestrator_running",
+    "orchestrator_pid",
+    "git_branch",
+    "git_sha",
+    "coordinator_priority",
+    "coordinator_eligible",
+  ];
+  for (const field of significantFields) {
+    if (prev[field] !== curr[field]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ── Notification Batching System ─────────────────────────────────────────────
+
+const messageQueue = {
+  critical: [], // priority 1 - immediate
+  errors: [], // priority 2
+  warnings: [], // priority 3
+  info: [], // priority 4
+  debug: [], // priority 5
+};
+
+let batchFlushTimer = null;
+
+/**
+ * Queue a notification for batched delivery.
+ * @param {string} text - Message text
+ * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
+ * @param {object} options - { category, data, silent }
+ */
+function queueNotification(text, priority = 4, options = {}) {
+  if (!batchingEnabled || priority <= immediateThreshold) {
+    // Send immediately for critical messages or when batching disabled
+    return sendDirect(telegramChatId, text, { silent: options.silent });
+  }
+
+  const category = options.category || "info";
+  const entry = {
+    text,
+    priority,
+    category,
+    timestamp: new Date().toISOString(),
+    data: options.data || {},
+  };
+
+  // Route to appropriate queue
+  if (priority === 1) {
+    messageQueue.critical.push(entry);
+  } else if (priority === 2) {
+    messageQueue.errors.push(entry);
+  } else if (priority === 3) {
+    messageQueue.warnings.push(entry);
+  } else if (priority === 5) {
+    messageQueue.debug.push(entry);
+  } else {
+    messageQueue.info.push(entry);
+  }
+
+  // Flush if queue is getting too large
+  const totalSize =
+    messageQueue.critical.length +
+    messageQueue.errors.length +
+    messageQueue.warnings.length +
+    messageQueue.info.length +
+    messageQueue.debug.length;
+
+  if (totalSize >= batchMaxSize) {
+    flushNotificationQueue();
+  }
+}
+
+/**
+ * Format and send batched notifications as a summary.
+ */
+async function flushNotificationQueue() {
+  const sections = [];
+  const counts = {
+    critical: messageQueue.critical.length,
+    errors: messageQueue.errors.length,
+    warnings: messageQueue.warnings.length,
+    info: messageQueue.info.length,
+    debug: messageQueue.debug.length,
+  };
+
+  const totalMessages =
+    counts.critical + counts.errors + counts.warnings + counts.info + counts.debug;
+
+  if (totalMessages === 0) return; // Nothing to send
+
+  // Build summary header
+  const timestamp = new Date().toISOString().slice(11, 19);
+  let header = `📊 Update Summary (${timestamp})`;
+  if (totalMessages > 0) {
+    const parts = [];
+    if (counts.critical > 0) parts.push(`🔴 ${counts.critical}`);
+    if (counts.errors > 0) parts.push(`❌ ${counts.errors}`);
+    if (counts.warnings > 0) parts.push(`⚠️ ${counts.warnings}`);
+    if (counts.info > 0) parts.push(`ℹ️ ${counts.info}`);
+    header += `\n${parts.join(" • ")}`;
+  }
+
+  // Critical messages (show all)
+  if (counts.critical > 0) {
+    sections.push(
+      `🔴 Critical:\n${messageQueue.critical.map((m) => `  • ${m.text}`).join("\n")}`,
+    );
+  }
+
+  // Errors (show up to 5, then summarize)
+  if (counts.errors > 0) {
+    const errorTexts = messageQueue.errors.slice(0, 5).map((m) => `  • ${m.text}`);
+    if (counts.errors > 5) {
+      errorTexts.push(`  • ... and ${counts.errors - 5} more errors`);
+    }
+    sections.push(`❌ Errors:\n${errorTexts.join("\n")}`);
+  }
+
+  // Warnings (show up to 3, then summarize)
+  if (counts.warnings > 0) {
+    const warnTexts = messageQueue.warnings.slice(0, 3).map((m) => `  • ${m.text}`);
+    if (counts.warnings > 3) {
+      warnTexts.push(`  • ... and ${counts.warnings - 3} more warnings`);
+    }
+    sections.push(`⚠️ Warnings:\n${warnTexts.join("\n")}`);
+  }
+
+  // Info messages (aggregate by category)
+  if (counts.info > 0) {
+    const categories = {};
+    for (const msg of messageQueue.info) {
+      const cat = msg.category || "general";
+      categories[cat] = (categories[cat] || 0) + 1;
+    }
+    const summary = Object.entries(categories)
+      .map(([cat, count]) => `  • ${cat}: ${count}`)
+      .join("\n");
+    sections.push(`ℹ️ Info:\n${summary}`);
+  }
+
+  // Build final message
+  const message = [header, ...sections].join("\n\n");
+
+  // Send the summary
+  await sendDirect(telegramChatId, message, { silent: true });
+
+  // Clear queues
+  messageQueue.critical.length = 0;
+  messageQueue.errors.length = 0;
+  messageQueue.warnings.length = 0;
+  messageQueue.info.length = 0;
+  messageQueue.debug.length = 0;
+}
+
+/**
+ * Start periodic flushing of the notification queue.
+ */
+function startBatchFlushLoop() {
+  if (!batchingEnabled || batchFlushTimer) return;
+  const intervalMs = batchIntervalSec * 1000;
+  batchFlushTimer = setInterval(() => {
+    flushNotificationQueue().catch((err) =>
+      console.warn(`[telegram-bot] batch flush error: ${err.message}`),
+    );
+  }, intervalMs);
+}
+
+/**
+ * Stop the batch flush loop.
+ */
+function stopBatchFlushLoop() {
+  if (batchFlushTimer) {
+    clearInterval(batchFlushTimer);
+    batchFlushTimer = null;
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -3166,6 +3528,9 @@ export async function startTelegramBot() {
 
   // Start presence announcements for multi-workstation discovery
   startPresenceLoop();
+
+  // Start batched notification system
+  startBatchFlushLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {
@@ -3209,6 +3574,19 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
+  // Flush any remaining notifications before stopping
+  flushNotificationQueue().catch(() => {});
+  stopBatchFlushLoop();
   void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
+}
+
+/**
+ * Queue a notification for batched delivery (exported for monitor.mjs).
+ * @param {string} text - Message text
+ * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
+ * @param {object} options - { category, data, silent }
+ */
+export function notify(text, priority = 4, options = {}) {
+  return queueNotification(text, priority, options);
 }
