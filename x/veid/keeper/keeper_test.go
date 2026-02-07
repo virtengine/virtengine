@@ -495,6 +495,8 @@ func TestScopeTypeValidation(t *testing.T) {
 	require.True(t, types.IsValidScopeType(types.ScopeTypeSelfie))
 	require.True(t, types.IsValidScopeType(types.ScopeTypeFaceVideo))
 	require.True(t, types.IsValidScopeType(types.ScopeTypeBiometric))
+	require.True(t, types.IsValidScopeType(types.ScopeTypeBiometricHardware))
+	require.True(t, types.IsValidScopeType(types.ScopeTypeDeviceAttestation))
 	require.True(t, types.IsValidScopeType(types.ScopeTypeSSOMetadata))
 	require.True(t, types.IsValidScopeType(types.ScopeTypeEmailProof))
 	require.True(t, types.IsValidScopeType(types.ScopeTypeSMSProof))

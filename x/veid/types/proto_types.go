@@ -22,16 +22,18 @@ type ScopeTypePB = veidv1.ScopeType
 
 // Proto enum constants for ScopeType
 const (
-	ScopeTypePBUnspecified  = veidv1.ScopeTypeUnspecified
-	ScopeTypePBIDDocument   = veidv1.ScopeTypeIDDocument
-	ScopeTypePBSelfie       = veidv1.ScopeTypeSelfie
-	ScopeTypePBFaceVideo    = veidv1.ScopeTypeFaceVideo
-	ScopeTypePBBiometric    = veidv1.ScopeTypeBiometric
-	ScopeTypePBSSOMetadata  = veidv1.ScopeTypeSSOMetadata
-	ScopeTypePBEmailProof   = veidv1.ScopeTypeEmailProof
-	ScopeTypePBSMSProof     = veidv1.ScopeTypeSMSProof
-	ScopeTypePBDomainVerify = veidv1.ScopeTypeDomainVerify
-	ScopeTypePBADSSO        = veidv1.ScopeTypeADSSO
+	ScopeTypePBUnspecified       = veidv1.ScopeTypeUnspecified
+	ScopeTypePBIDDocument        = veidv1.ScopeTypeIDDocument
+	ScopeTypePBSelfie            = veidv1.ScopeTypeSelfie
+	ScopeTypePBFaceVideo         = veidv1.ScopeTypeFaceVideo
+	ScopeTypePBBiometric         = veidv1.ScopeTypeBiometric
+	ScopeTypePBSSOMetadata       = veidv1.ScopeTypeSSOMetadata
+	ScopeTypePBEmailProof        = veidv1.ScopeTypeEmailProof
+	ScopeTypePBSMSProof          = veidv1.ScopeTypeSMSProof
+	ScopeTypePBDomainVerify      = veidv1.ScopeTypeDomainVerify
+	ScopeTypePBADSSO             = veidv1.ScopeTypeADSSO
+	ScopeTypePBBiometricHardware = veidv1.ScopeTypeBiometricHardware
+	ScopeTypePBDeviceAttestation = veidv1.ScopeTypeDeviceAttestation
 )
 
 // VerificationStatusPB is the protobuf-generated enum for verification status
@@ -190,6 +192,10 @@ func ScopeTypeToProto(st ScopeType) ScopeTypePB {
 		return ScopeTypePBFaceVideo
 	case ScopeTypeBiometric:
 		return ScopeTypePBBiometric
+	case ScopeTypeBiometricHardware:
+		return ScopeTypePBBiometricHardware
+	case ScopeTypeDeviceAttestation:
+		return ScopeTypePBDeviceAttestation
 	case ScopeTypeSSOMetadata:
 		return ScopeTypePBSSOMetadata
 	case ScopeTypeEmailProof:
@@ -216,6 +222,10 @@ func ScopeTypeFromProto(st ScopeTypePB) ScopeType {
 		return ScopeTypeFaceVideo
 	case ScopeTypePBBiometric:
 		return ScopeTypeBiometric
+	case ScopeTypePBBiometricHardware:
+		return ScopeTypeBiometricHardware
+	case ScopeTypePBDeviceAttestation:
+		return ScopeTypeDeviceAttestation
 	case ScopeTypePBSSOMetadata:
 		return ScopeTypeSSOMetadata
 	case ScopeTypePBEmailProof:

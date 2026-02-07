@@ -8,6 +8,16 @@ import { useCaptureStore } from "../state/captureStore";
 export function ReviewScreen() {
   const { state, dispatch } = useCaptureStore();
   const [loading, setLoading] = useState(false);
+  const biometricStatus = state.session.biometric
+    ? state.session.biometric.supported
+      ? "Captured"
+      : "Unsupported"
+    : "Pending";
+  const attestationStatus = state.session.deviceAttestation
+    ? state.session.deviceAttestation.supported
+      ? "Verified"
+      : "Unsupported"
+    : "Pending";
 
   useEffect(() => {
     const runOcr = async () => {
@@ -27,8 +37,8 @@ export function ReviewScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Review Capture"
-        stepIndex={4}
-        subtitle="Confirm your document details and liveness status."
+        stepIndex={5}
+        subtitle="Confirm your document, biometric, and liveness status."
       />
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>Captured Assets</Text>
@@ -36,6 +46,8 @@ export function ReviewScreen() {
         <Text style={styles.line}>Document back: {state.session.documentBack ? "Ready" : "Missing"}</Text>
         <Text style={styles.line}>Selfie: {state.session.selfie ? "Ready" : "Missing"}</Text>
         <Text style={styles.line}>Liveness: {state.session.liveness?.passed ? "Passed" : "Pending"}</Text>
+        <Text style={styles.line}>Biometric hardware: {biometricStatus}</Text>
+        <Text style={styles.line}>Device attestation: {attestationStatus}</Text>
 
         <Text style={styles.sectionTitle}>OCR Fields</Text>
         {loading ? <ActivityIndicator /> : null}

@@ -28,6 +28,7 @@ export const env = {
   // API Configuration
   apiUrl: getEnvVar('NEXT_PUBLIC_API_URL', 'https://api.virtengine.io'),
   indexerUrl: getEnvVar('NEXT_PUBLIC_INDEXER_URL', 'https://indexer.virtengine.io'),
+  notificationsWsUrl: getEnvVar('NEXT_PUBLIC_NOTIFICATIONS_WS', ''),
 
   // Wallet Configuration
   walletConnectProjectId: getEnvVar('NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID', ''),

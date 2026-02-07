@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { accountLink, validatorLink } from '@/lib/explorer';
+import { NotificationPreferencesPanel } from '@/components/notifications/NotificationPreferences';
 
 export const metadata: Metadata = {
   title: 'Account Settings',
@@ -331,36 +332,7 @@ export default function AccountSettingsPage() {
                 Configure alerts for billing, deployments, and security events.
               </p>
             </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-              <NotificationGroup
-                title="Email alerts"
-                description="Critical updates and billing receipts."
-                options={[
-                  { label: 'Security alerts', enabled: true },
-                  { label: 'Invoice summaries', enabled: true },
-                  { label: 'Product updates', enabled: false },
-                ]}
-              />
-              <NotificationGroup
-                title="Push notifications"
-                description="Real-time status for workloads."
-                options={[
-                  { label: 'HPC job completion', enabled: true },
-                  { label: 'Marketplace order updates', enabled: true },
-                  { label: 'Delegation approvals', enabled: false },
-                ]}
-              />
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-              >
-                Save notification preferences
-              </button>
-            </div>
+            <NotificationPreferencesPanel />
           </section>
 
           <section
@@ -570,36 +542,5 @@ function SectionLink({ href, label }: { href: string; label: string }) {
       <span>{label}</span>
       <span className="text-xs">/</span>
     </a>
-  );
-}
-
-function NotificationGroup({
-  title,
-  description,
-  options,
-}: {
-  title: string;
-  description: string;
-  options: { label: string; enabled: boolean }[];
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 p-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-      <div className="mt-4 space-y-2 text-sm">
-        {options.map((option) => (
-          <label key={option.label} className="flex items-center justify-between gap-2">
-            <span>{option.label}</span>
-            <input
-              type="checkbox"
-              defaultChecked={option.enabled}
-              className="rounded border-border"
-            />
-          </label>
-        ))}
-      </div>
-    </div>
   );
 }

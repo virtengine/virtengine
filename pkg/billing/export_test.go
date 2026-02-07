@@ -144,8 +144,8 @@ func (s *ExportTestSuite) TestExportInvoicePDF() {
 	data, err := s.svc.ExportInvoicePDF(context.Background(), invoice)
 	s.Require().NoError(err)
 	s.Require().NotEmpty(data)
-	// PDF should contain some recognizable content
-	s.Require().True(len(data) > 0)
+	// PDF should contain a valid header
+	s.Require().True(bytes.HasPrefix(data, []byte("%PDF")))
 }
 
 // TestExportNilInvoice tests that nil invoice returns error

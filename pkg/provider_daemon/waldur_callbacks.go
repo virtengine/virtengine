@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/pkg/waldur"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
@@ -229,7 +230,7 @@ func (h *WaldurCallbackHandler) Start(ctx context.Context) error {
 
 	h.server = &http.Server{
 		Addr:         h.cfg.ListenAddr,
-		Handler:      mux,
+		Handler:      observability.HTTPTracingHandler(mux, "provider.waldur_callbacks"),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

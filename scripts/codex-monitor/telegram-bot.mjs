@@ -51,6 +51,30 @@ let activeAgentSession = null; // { chatId, messageId, taskPreview, abortControl
 let agentMessageId = null; // current agent streaming message ID
 let agentChatId = null; // chat where agent is running
 
+// ── Queues ──────────────────────────────────────────────────────────────────
+
+let fastCommandQueue = Promise.resolve();
+let commandQueue = Promise.resolve();
+let agentQueue = Promise.resolve();
+
+function enqueueFastCommand(task) {
+  fastCommandQueue = fastCommandQueue.then(task).catch((err) => {
+    console.error(`[telegram-bot] fast command error: ${err.message || err}`);
+  });
+}
+
+function enqueueCommand(task) {
+  commandQueue = commandQueue.then(task).catch((err) => {
+    console.error(`[telegram-bot] command error: ${err.message || err}`);
+  });
+}
+
+function enqueueAgentTask(task) {
+  agentQueue = agentQueue.then(task).catch((err) => {
+    console.error(`[telegram-bot] agent error: ${err.message || err}`);
+  });
+}
+
 // ── External refs (injected by monitor.mjs) ──────────────────────────────────
 
 let _sendTelegramMessage = null; // injected from monitor.mjs
@@ -96,9 +120,7 @@ export async function bumpAgentMessage() {
   try {
     // Delete the old message
     await deleteDirect(agentChatId, agentMessageId);
-  } catch {
-    /* best effort */
-  }
+  } catch { /* best effort */ }
   // Re-send at bottom
   const session = activeAgentSession;
   const msg = buildStreamMessage({
@@ -253,9 +275,7 @@ async function deleteDirect(chatId, messageId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
     });
-  } catch {
-    /* best effort */
-  }
+  } catch { /* best effort */ }
 }
 
 /**
@@ -354,11 +374,18 @@ function summarizeAction(event) {
             const fileDescs = item.changes.map((c) => {
               const name = shortPath(c.path);
               const kind =
-                c.kind === "add" ? "➕" : c.kind === "delete" ? "🗑️" : "✏️";
+                c.kind === "add"
+                  ? "➕"
+                  : c.kind === "delete"
+                    ? "🗑️"
+                    : "✏️";
               // Show line counts if available
               const adds = c.additions ?? c.lines_added ?? 0;
               const dels = c.deletions ?? c.lines_deleted ?? 0;
-              const stats = adds || dels ? ` (+${adds} -${dels})` : "";
+              const stats =
+                adds || dels
+                  ? ` (+${adds} -${dels})`
+                  : "";
               return `${kind} ${name}${stats}`;
             });
             return {
@@ -443,9 +470,7 @@ function summarizeCommand(cmd) {
   // PowerShell / search patterns
   if (/pwsh.*-file/i.test(c)) {
     const target = extractTarget(c);
-    return target
-      ? `running PowerShell file ${target}`
-      : "running PowerShell file";
+    return target ? `running PowerShell file ${target}` : "running PowerShell file";
   }
   if (/pwsh.*Get-Content/i.test(c)) {
     const target = extractTarget(c);
@@ -464,8 +489,7 @@ function summarizeCommand(cmd) {
     return describePowerShell(clean);
 
   // Node/npm/pnpm
-  if (/^node\s+-[ec]/i.test(c))
-    return `running Node.js script: ${shortSnippet(clean, 60)}`;
+  if (/^node\s+-[ec]/i.test(c)) return `running Node.js script: ${shortSnippet(clean, 60)}`;
   if (/^npm\s+/i.test(c)) return `running npm: ${shortSnippet(clean, 60)}`;
   if (/^pnpm\s+/i.test(c)) return `running pnpm: ${shortSnippet(clean, 60)}`;
 
@@ -509,8 +533,7 @@ function summarizeCommand(cmd) {
   if (/^(ls|dir|Get-ChildItem)\s*/i.test(c)) return "listing directory";
 
   // Docker
-  if (/^docker\s+/i.test(c))
-    return `running docker: ${shortSnippet(clean, 60)}`;
+  if (/^docker\s+/i.test(c)) return `running docker: ${shortSnippet(clean, 60)}`;
 
   // Fallback: first word + truncated
   const firstWord = c.split(/\s+/)[0];
@@ -537,9 +560,7 @@ function describePowerShell(command) {
     const inner = cmdMatch[1].replace(/^['"]|['"]$/g, "");
     const target = extractTarget(inner);
     const snippet = shortSnippet(inner, 70);
-    return target
-      ? `running PowerShell: ${snippet} → ${target}`
-      : `running PowerShell: ${snippet}`;
+    return target ? `running PowerShell: ${snippet} → ${target}` : `running PowerShell: ${snippet}`;
   }
   return "running PowerShell command";
 }
@@ -633,10 +654,22 @@ async function handleUpdate(update) {
 
   // Route: slash command or free-text
   if (text.startsWith("/")) {
-    await handleCommand(text, chatId);
-  } else {
-    await handleFreeText(text, chatId);
+    const cmd = text.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
+    if (FAST_COMMANDS.has(cmd)) {
+      enqueueFastCommand(() => handleCommand(text, chatId));
+      return;
+    }
+    enqueueCommand(() => handleCommand(text, chatId));
+    return;
   }
+
+  // Free-text agent task runs in a separate queue so polling isn't blocked.
+  // If Codex is already busy, handle immediately so follow-ups can be queued.
+  if (isCodexBusy()) {
+    void handleFreeText(text, chatId);
+    return;
+  }
+  enqueueAgentTask(() => handleFreeText(text, chatId));
 }
 
 // ── Command Router ────────────────────────────────────────────────────────────
@@ -644,10 +677,7 @@ async function handleUpdate(update) {
 const COMMANDS = {
   "/help": { handler: cmdHelp, desc: "Show available commands" },
   "/status": { handler: cmdStatus, desc: "Detailed orchestrator status" },
-  "/tasks": {
-    handler: cmdTasks,
-    desc: "Active tasks, workspace metrics & retries",
-  },
+  "/tasks": { handler: cmdTasks, desc: "Active tasks, workspace metrics & retries" },
   "/logs": { handler: cmdLogs, desc: "Recent monitor logs" },
   "/log": { handler: cmdLogs, desc: "Alias for /logs" },
   "/branches": { handler: cmdBranches, desc: "Recent git branches" },
@@ -686,6 +716,8 @@ const COMMANDS = {
     desc: "Alias for /steer — update in-flight agent context",
   },
 };
+
+const FAST_COMMANDS = new Set(["/status", "/tasks"]);
 
 async function handleCommand(text, chatId) {
   const parts = text.split(/\s+/);
@@ -830,8 +862,7 @@ async function cmdTasks(chatId) {
       lines.push(`   Status: ${status} | Agent: ${executor}`);
 
       // ── Workspace duration ──────────────────────────────────────
-      const started =
-        attempt.started_at || attempt.created_at || attempt.updated_at;
+      const started = attempt.started_at || attempt.created_at || attempt.updated_at;
       if (started) {
         const dur = Date.now() - Date.parse(started);
         const mins = Math.floor(dur / 60000);
@@ -845,9 +876,7 @@ async function cmdTasks(chatId) {
       const failKey = attempt.task_id || id;
       const failCount = data.task_failure_counts?.[failKey] || 0;
       if (failCount > 0) {
-        lines.push(
-          `   🔁 Failures: ${failCount}/3${failCount >= 3 ? " → auto-reattempt" : ""}`,
-        );
+        lines.push(`   🔁 Failures: ${failCount}/3${failCount >= 3 ? " → auto-reattempt" : ""}`);
       }
 
       // ── Git diff stats for the branch ──────────────────────────
@@ -867,27 +896,19 @@ async function cmdTasks(chatId) {
             const files = filesMatch ? filesMatch[1] : "0";
             lines.push(`   📊 ${files} files | +${ins} -${del}`);
           }
-        } catch {
-          /* git diff not available or branch doesn't exist */
-        }
+        } catch { /* git diff not available or branch doesn't exist */ }
       }
       lines.push(""); // spacing between tasks
     }
 
     // ── Overall workspace summary ────────────────────────────────
-    const running = Object.values(attempts).filter(
-      (a) => a?.status === "running",
-    ).length;
-    const errors = Object.values(attempts).filter(
-      (a) => a?.status === "error",
-    ).length;
+    const running = Object.values(attempts).filter((a) => a?.status === "running").length;
+    const errors = Object.values(attempts).filter((a) => a?.status === "error").length;
     const reviews = Object.values(attempts).filter(
       (a) => a?.status === "review" || a?.status === "manual_review",
     ).length;
     lines.push("────────────────────────────");
-    lines.push(
-      `Total: ${Object.keys(attempts).length} | Running: ${running} | Review: ${reviews} | Error: ${errors}`,
-    );
+    lines.push(`Total: ${Object.keys(attempts).length} | Running: ${running} | Review: ${reviews} | Error: ${errors}`);
 
     await sendReply(chatId, lines.join("\n"));
   } catch (err) {
@@ -1090,11 +1111,11 @@ function runPwsh(psScript, timeoutMs = 15000) {
   const isWin = process.platform === "win32";
   const pwsh = isWin ? "powershell.exe" : "pwsh";
   const script = `& { ${psScript} }`;
-  const result = spawnSync(pwsh, ["-NoProfile", "-Command", script], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: timeoutMs,
-  });
+  const result = spawnSync(
+    pwsh,
+    ["-NoProfile", "-Command", script],
+    { cwd: repoRoot, encoding: "utf8", timeout: timeoutMs },
+  );
   if (result.error) {
     throw new Error(result.error.message);
   }
@@ -1355,9 +1376,7 @@ async function cmdBackground(chatId, args) {
   if (agentMessageId && agentChatId) {
     try {
       await deleteDirect(agentChatId, agentMessageId);
-    } catch {
-      /* best effort */
-    }
+    } catch { /* best effort */ }
   }
   agentMessageId = null;
   if (activeAgentSession) {
@@ -1381,9 +1400,7 @@ async function cmdStop(chatId) {
   if (activeAgentSession.abortController) {
     try {
       activeAgentSession.abortController.abort("user_stop");
-    } catch {
-      /* best effort */
-    }
+    } catch { /* best effort */ }
   }
   if (activeAgentSession.actionLog) {
     activeAgentSession.actionLog.push({
@@ -1535,10 +1552,7 @@ async function handleFreeText(text, chatId, options = {}) {
     const qLen = activeAgentSession.followUpQueue.length;
 
     // Acknowledge the follow-up in both the user's chat and update the agent message
-    await sendDirect(
-      chatId,
-      `📌 Follow-up queued (#${qLen}). Agent will process it after current action.`,
-    );
+    await sendDirect(chatId, `📌 Follow-up queued (#${qLen}). Agent will process it after current action.`);
 
     // Add follow-up indicator to the streaming message
     if (activeAgentSession.actionLog) {
@@ -1755,10 +1769,7 @@ async function handleFreeText(text, chatId, options = {}) {
     const followUps = activeAgentSession?.followUpQueue || [];
     if (followUps.length > 0 && !activeAgentSession?.aborted) {
       for (const followUp of followUps) {
-        actionLog.push({
-          icon: "📌",
-          text: `Processing follow-up: "${followUp.slice(0, 60)}"`,
-        });
+        actionLog.push({ icon: "📌", text: `Processing follow-up: "${followUp.slice(0, 60)}"` });
         phase = "processing follow-up…";
         scheduleEdit();
 
@@ -1772,15 +1783,11 @@ async function handleFreeText(text, chatId, options = {}) {
 
           // Merge follow-up results
           if (followUpResult.finalResponse) {
-            result.finalResponse =
-              (result.finalResponse || "") +
+            result.finalResponse = (result.finalResponse || "") +
               `\n\n📌 Follow-up result:\n${followUpResult.finalResponse}`;
           }
         } catch (err) {
-          actionLog.push({
-            icon: "❌",
-            text: `Follow-up error: ${err.message}`,
-          });
+          actionLog.push({ icon: "❌", text: `Follow-up error: ${err.message}` });
         }
       }
     }

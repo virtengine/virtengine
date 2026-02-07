@@ -4,16 +4,18 @@
 
 import { useWallet } from '@/lib/portal-adapter';
 import { isWalletInstalled } from '@/config';
+import { useTranslation } from 'react-i18next';
 
 export function WalletLoginButtons() {
   const { connect, status } = useWallet();
+  const { t } = useTranslation();
 
   return (
     <div className="grid gap-3">
       <button
         type="button"
         className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-        aria-label="Connect with Keplr wallet"
+        aria-label={t('Connect with {{wallet}} wallet', { wallet: 'Keplr' })}
         disabled={status === 'connecting' || !isWalletInstalled('keplr')}
         onClick={() => void connect('keplr')}
       >
@@ -23,7 +25,7 @@ export function WalletLoginButtons() {
       <button
         type="button"
         className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-        aria-label="Connect with Leap wallet"
+        aria-label={t('Connect with {{wallet}} wallet', { wallet: 'Leap' })}
         disabled={status === 'connecting' || !isWalletInstalled('leap')}
         onClick={() => void connect('leap')}
       >
@@ -33,7 +35,7 @@ export function WalletLoginButtons() {
       <button
         type="button"
         className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-        aria-label="Connect with Cosmostation wallet"
+        aria-label={t('Connect with {{wallet}} wallet', { wallet: 'Cosmostation' })}
         disabled={status === 'connecting' || !isWalletInstalled('cosmostation')}
         onClick={() => void connect('cosmostation')}
       >

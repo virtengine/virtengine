@@ -28,6 +28,7 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/inference"
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
+	"github.com/virtengine/virtengine/pkg/observability"
 )
 
 // Version info (set at build time)
@@ -115,6 +116,7 @@ func run() int {
 	grpcServer := grpc.NewServer(
 		grpc.MaxRecvMsgSize(16*1024*1024), // 16MB max message size
 		grpc.MaxSendMsgSize(16*1024*1024),
+		grpc.StatsHandler(observability.GRPCServerStatsHandler()),
 	)
 
 	// Register services

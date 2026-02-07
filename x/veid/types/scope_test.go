@@ -24,6 +24,8 @@ func TestIsValidScopeType(t *testing.T) {
 		{types.ScopeTypeSelfie, true},
 		{types.ScopeTypeFaceVideo, true},
 		{types.ScopeTypeBiometric, true},
+		{types.ScopeTypeBiometricHardware, true},
+		{types.ScopeTypeDeviceAttestation, true},
 		{types.ScopeTypeSSOMetadata, true},
 		{types.ScopeTypeEmailProof, true},
 		{types.ScopeTypeSMSProof, true},
@@ -42,13 +44,15 @@ func TestIsValidScopeType(t *testing.T) {
 
 func TestAllScopeTypes(t *testing.T) {
 	scopeTypes := types.AllScopeTypes()
-	assert.Len(t, scopeTypes, 9) // All 9 scope types
+	assert.Len(t, scopeTypes, 11) // All 11 scope types
 
 	// Verify all types are present
 	assert.Contains(t, scopeTypes, types.ScopeTypeIDDocument)
 	assert.Contains(t, scopeTypes, types.ScopeTypeSelfie)
 	assert.Contains(t, scopeTypes, types.ScopeTypeFaceVideo)
 	assert.Contains(t, scopeTypes, types.ScopeTypeBiometric)
+	assert.Contains(t, scopeTypes, types.ScopeTypeBiometricHardware)
+	assert.Contains(t, scopeTypes, types.ScopeTypeDeviceAttestation)
 	assert.Contains(t, scopeTypes, types.ScopeTypeSSOMetadata)
 	assert.Contains(t, scopeTypes, types.ScopeTypeEmailProof)
 	assert.Contains(t, scopeTypes, types.ScopeTypeSMSProof)
@@ -65,6 +69,8 @@ func TestScopeTypeWeight(t *testing.T) {
 		{types.ScopeTypeFaceVideo, 25},
 		{types.ScopeTypeSelfie, 20},
 		{types.ScopeTypeBiometric, 20},
+		{types.ScopeTypeBiometricHardware, 22},
+		{types.ScopeTypeDeviceAttestation, 12},
 		{types.ScopeTypeDomainVerify, 15},
 		{types.ScopeTypeADSSO, 12},
 		{types.ScopeTypeEmailProof, 10},
@@ -89,6 +95,8 @@ func TestScopeTypeDescription(t *testing.T) {
 		{types.ScopeTypeSelfie, "Selfie photo"},
 		{types.ScopeTypeFaceVideo, "liveness"},
 		{types.ScopeTypeBiometric, "Biometric"},
+		{types.ScopeTypeBiometricHardware, "hardware"},
+		{types.ScopeTypeDeviceAttestation, "Device integrity"},
 		{types.ScopeTypeSSOMetadata, "SSO provider"},
 		{types.ScopeTypeEmailProof, "Email"},
 		{types.ScopeTypeSMSProof, "Phone number"},

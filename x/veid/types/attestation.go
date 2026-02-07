@@ -66,6 +66,12 @@ const (
 	// AttestationTypeBiometricVerification for biometric verification
 	AttestationTypeBiometricVerification AttestationType = "biometric_verification"
 
+	// AttestationTypeBiometricHardware for biometric hardware attestation
+	AttestationTypeBiometricHardware AttestationType = "biometric_hardware_attestation"
+
+	// AttestationTypeDeviceIntegrity for device integrity attestation
+	AttestationTypeDeviceIntegrity AttestationType = "device_integrity_attestation"
+
 	// AttestationTypeCompositeIdentity for combined identity attestations
 	AttestationTypeCompositeIdentity AttestationType = "composite_identity"
 )
@@ -81,6 +87,8 @@ func AllAttestationTypes() []AttestationType {
 		AttestationTypeDomainVerification,
 		AttestationTypeSSOVerification,
 		AttestationTypeBiometricVerification,
+		AttestationTypeBiometricHardware,
+		AttestationTypeDeviceIntegrity,
 		AttestationTypeCompositeIdentity,
 	}
 }
@@ -114,6 +122,10 @@ func ScopeTypeFromAttestationType(t AttestationType) ScopeType {
 		return ScopeTypeSSOMetadata
 	case AttestationTypeBiometricVerification:
 		return ScopeTypeBiometric
+	case AttestationTypeBiometricHardware:
+		return ScopeTypeBiometricHardware
+	case AttestationTypeDeviceIntegrity:
+		return ScopeTypeDeviceAttestation
 	case AttestationTypeCompositeIdentity:
 		return ScopeTypeIDDocument // Default to ID document for composite
 	default:

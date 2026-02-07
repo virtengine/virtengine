@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/Separator';
 import type { ResourceConfig, PriceBreakdown } from '@/features/orders';
 import { formatTokenAmount, durationToHours } from '@/features/orders';
 import { usePriceConversion } from '@/hooks/usePriceConversion';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '@/lib/utils';
 
 interface PriceCalculatorProps {
   resources: ResourceConfig;
@@ -22,10 +24,11 @@ interface PriceCalculatorProps {
  */
 function formatUsd(value: number): string {
   const precision = value < 0.01 ? 4 : 2;
-  return `$${value.toFixed(precision)}`;
+  return formatCurrency(Number(value.toFixed(precision)), 'USD');
 }
 
 export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorProps) {
+  const { t } = useTranslation();
   const totalHours = durationToHours(resources.duration, resources.durationUnit);
   const { uveToUsd, isLoading: rateLoading } = usePriceConversion();
 
@@ -34,21 +37,37 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
       {/* Resource Summary */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Resource Summary</CardTitle>
-          <CardDescription>Your configured deployment resources</CardDescription>
+          <CardTitle className="text-lg">{t('Resource Summary')}</CardTitle>
+          <CardDescription>{t('Your configured deployment resources')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <ResourceSummaryItem label="CPU" value={`${resources.cpu} vCPU`} />
-            <ResourceSummaryItem label="Memory" value={`${resources.memory} GB`} />
-            <ResourceSummaryItem label="Storage" value={`${resources.storage} GB`} />
+            <ResourceSummaryItem
+              label={t('CPU')}
+              value={t('{{count}} vCPU', { count: resources.cpu })}
+            />
+            <ResourceSummaryItem
+              label={t('Memory')}
+              value={t('{{count}} GB', { count: resources.memory })}
+            />
+            <ResourceSummaryItem
+              label={t('Storage')}
+              value={t('{{count}} GB', { count: resources.storage })}
+            />
             {resources.gpu > 0 && (
-              <ResourceSummaryItem label="GPU" value={`${resources.gpu} GPU`} />
+              <ResourceSummaryItem
+                label={t('GPU')}
+                value={t('{{count}} GPU', { count: resources.gpu })}
+              />
             )}
           </div>
           <div className="mt-4 rounded-md bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
-            Duration: {resources.duration} {resources.durationUnit} ({totalHours} hours total)
-            {resources.region && ` • Region: ${resources.region}`}
+            {t('Duration: {{duration}} {{unit}} ({{hours}} hours total)', {
+              duration: resources.duration,
+              unit: t(resources.durationUnit),
+              hours: totalHours,
+            })}
+            {resources.region && ` • ${t('Region')}: ${resources.region}`}
           </div>
         </CardContent>
       </Card>
@@ -56,8 +75,8 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
       {/* Price Breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Price Breakdown</CardTitle>
-          <CardDescription>Estimated cost for your deployment</CardDescription>
+          <CardTitle className="text-lg">{t('Price Breakdown')}</CardTitle>
+          <CardDescription>{t('Estimated cost for your deployment')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -66,14 +85,21 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
                 <div>
                   <span className="font-medium">{item.label}</span>
                   <span className="ml-2 text-muted-foreground">
-                    @ {formatTokenAmount(item.unitPrice, 4)} {priceBreakdown.currency}/{item.unit}
+                    {t('@ {{price}} {{currency}}/{{unit}}', {
+                      price: formatTokenAmount(item.unitPrice, 4),
+                      currency: priceBreakdown.currency,
+                      unit: item.unit,
+                    })}
                   </span>
                 </div>
                 <span className="font-medium">
-                  {formatTokenAmount(item.total)} {priceBreakdown.currency}
+                  {t('{{amount}} {{currency}}', {
+                    amount: formatTokenAmount(item.total),
+                    currency: priceBreakdown.currency,
+                  })}
                   {!rateLoading && uveToUsd(item.total) !== null && (
                     <span className="ml-1 text-muted-foreground">
-                      (~{formatUsd(uveToUsd(item.total)!)})
+                      {t('(~{{amount}})', { amount: formatUsd(uveToUsd(item.total)!) })}
                     </span>
                   )}
                 </span>
@@ -83,12 +109,15 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
             <Separator />
 
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
+              <span className="text-muted-foreground">{t('Subtotal')}</span>
               <span className="font-medium">
-                {formatTokenAmount(priceBreakdown.subtotal)} {priceBreakdown.currency}
+                {t('{{amount}} {{currency}}', {
+                  amount: formatTokenAmount(priceBreakdown.subtotal),
+                  currency: priceBreakdown.currency,
+                })}
                 {!rateLoading && uveToUsd(priceBreakdown.subtotal) !== null && (
                   <span className="ml-1 text-muted-foreground">
-                    (~{formatUsd(uveToUsd(priceBreakdown.subtotal)!)})
+                    {t('(~{{amount}})', { amount: formatUsd(uveToUsd(priceBreakdown.subtotal)!) })}
                   </span>
                 )}
               </span>
@@ -96,14 +125,19 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
 
             <div className="flex items-center justify-between text-sm">
               <div>
-                <span className="text-muted-foreground">Escrow Deposit</span>
-                <span className="ml-1 text-xs text-muted-foreground">(refundable)</span>
+                <span className="text-muted-foreground">{t('Escrow Deposit')}</span>
+                <span className="ml-1 text-xs text-muted-foreground">{t('(refundable)')}</span>
               </div>
               <span className="font-medium text-primary">
-                {formatTokenAmount(priceBreakdown.escrowDeposit)} {priceBreakdown.currency}
+                {t('{{amount}} {{currency}}', {
+                  amount: formatTokenAmount(priceBreakdown.escrowDeposit),
+                  currency: priceBreakdown.currency,
+                })}
                 {!rateLoading && uveToUsd(priceBreakdown.escrowDeposit) !== null && (
                   <span className="ml-1 text-muted-foreground">
-                    (~{formatUsd(uveToUsd(priceBreakdown.escrowDeposit)!)})
+                    {t('(~{{amount}})', {
+                      amount: formatUsd(uveToUsd(priceBreakdown.escrowDeposit)!),
+                    })}
                   </span>
                 )}
               </span>
@@ -112,14 +146,19 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
             <Separator />
 
             <div className="flex items-center justify-between">
-              <span className="text-base font-semibold">Estimated Total</span>
+              <span className="text-base font-semibold">{t('Estimated Total')}</span>
               <div className="text-right">
                 <span className="text-lg font-bold text-primary">
-                  {formatTokenAmount(priceBreakdown.estimatedTotal)} {priceBreakdown.currency}
+                  {t('{{amount}} {{currency}}', {
+                    amount: formatTokenAmount(priceBreakdown.estimatedTotal),
+                    currency: priceBreakdown.currency,
+                  })}
                 </span>
                 {!rateLoading && uveToUsd(priceBreakdown.estimatedTotal) !== null && (
                   <p className="text-sm text-muted-foreground">
-                    ~{formatUsd(uveToUsd(priceBreakdown.estimatedTotal)!)} USD
+                    {t('~{{amount}} USD', {
+                      amount: formatUsd(uveToUsd(priceBreakdown.estimatedTotal)!),
+                    })}
                   </p>
                 )}
               </div>
@@ -127,8 +166,10 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
           </div>
 
           <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-            <strong>Note:</strong> The escrow deposit is held on-chain and refunded when the order
-            completes. Actual costs are settled based on usage.
+            <strong>{t('Note:')}</strong>{' '}
+            {t(
+              'The escrow deposit is held on-chain and refunded when the order completes. Actual costs are settled based on usage.'
+            )}
           </div>
         </CardContent>
       </Card>
@@ -137,18 +178,23 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
       <Card>
         <CardContent className="py-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Effective Hourly Rate</span>
+            <span className="text-sm text-muted-foreground">{t('Effective Hourly Rate')}</span>
             <div className="text-right">
               <span className="text-lg font-semibold">
                 {totalHours > 0
-                  ? `${formatTokenAmount(priceBreakdown.subtotal / totalHours, 4)} ${priceBreakdown.currency}/hr`
-                  : '—'}
+                  ? t('{{amount}} {{currency}}/hr', {
+                      amount: formatTokenAmount(priceBreakdown.subtotal / totalHours, 4),
+                      currency: priceBreakdown.currency,
+                    })
+                  : t('—')}
               </span>
               {totalHours > 0 &&
                 !rateLoading &&
                 uveToUsd(priceBreakdown.subtotal / totalHours) !== null && (
                   <p className="text-sm text-muted-foreground">
-                    ~{formatUsd(uveToUsd(priceBreakdown.subtotal / totalHours)!)}/hr
+                    {t('~{{amount}}/hr', {
+                      amount: formatUsd(uveToUsd(priceBreakdown.subtotal / totalHours)!),
+                    })}
                   </p>
                 )}
             </div>

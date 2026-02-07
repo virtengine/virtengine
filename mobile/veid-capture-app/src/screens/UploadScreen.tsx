@@ -29,8 +29,8 @@ export function UploadScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Secure Upload"
-        stepIndex={5}
-        subtitle="Encrypt and transmit your capture package."
+        stepIndex={6}
+        subtitle="Encrypt and transmit your capture package with attestation."
       />
       <View style={styles.content}>
         {status === "uploading" ? <ActivityIndicator /> : null}

@@ -222,11 +222,13 @@ type ExtractedFeatures struct {
 	DocumentExpiryValid   bool
 
 	// Risk features
-	FraudPatternScore      uint32
-	DeviceFingerprintScore uint32
-	IPReputationScore      uint32
-	VelocityCheckPassed    bool
-	GeoConsistencyScore    uint32
+	FraudPatternScore       uint32
+	DeviceFingerprintScore  uint32
+	DeviceIntegrityScore    uint32
+	IPReputationScore       uint32
+	VelocityCheckPassed     bool
+	DeviceAttestationPassed bool
+	GeoConsistencyScore     uint32
 }
 
 // buildDocAuthenticityInput builds document authenticity input from scopes
@@ -382,8 +384,10 @@ func (k Keeper) buildRiskInput(_ []DecryptedScope, features ExtractedFeatures) t
 
 	input.FraudPatternScore = features.FraudPatternScore
 	input.DeviceFingerprintScore = features.DeviceFingerprintScore
+	input.DeviceIntegrityScore = features.DeviceIntegrityScore
 	input.IPReputationScore = features.IPReputationScore
 	input.VelocityCheckPassed = features.VelocityCheckPassed
+	input.DeviceAttestationPassed = features.DeviceAttestationPassed
 	input.GeoConsistencyScore = features.GeoConsistencyScore
 
 	// Default to reasonable scores if not provided
@@ -395,6 +399,13 @@ func (k Keeper) buildRiskInput(_ []DecryptedScope, features ExtractedFeatures) t
 	}
 	if input.IPReputationScore == 0 {
 		input.IPReputationScore = uint32(types.MaxBasisPoints) / 2 // Unknown IP = 50%
+	}
+	if input.DeviceIntegrityScore == 0 {
+		input.DeviceIntegrityScore = uint32(types.MaxBasisPoints) / 2 // Unknown device attestation = 50%
+	}
+	if !input.DeviceAttestationPassed {
+		// If missing, assume attestation passed to avoid penalizing legacy flows.
+		input.DeviceAttestationPassed = true
 	}
 	if input.GeoConsistencyScore == 0 {
 		input.GeoConsistencyScore = uint32(types.MaxBasisPoints) / 2 // Unknown geo = 50%

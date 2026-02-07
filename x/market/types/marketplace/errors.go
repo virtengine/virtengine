@@ -132,6 +132,18 @@ var (
 
 	// ErrInvalidRequest indicates the request is invalid
 	ErrInvalidRequest = errors.Register("marketplace", 2240, "invalid request")
+
+	// ErrProviderIdentityMissing indicates provider has no VEID identity record
+	ErrProviderIdentityMissing = errors.Register("marketplace", 2241, "provider identity record not found")
+
+	// ErrProviderIdentityNotVerified indicates provider identity is not verified
+	ErrProviderIdentityNotVerified = errors.Register("marketplace", 2242, "provider identity not verified")
+
+	// ErrProviderInsufficientScore indicates provider identity score is too low
+	ErrProviderInsufficientScore = errors.Register("marketplace", 2243, "provider identity score below minimum")
+
+	// ErrProviderComplianceIncomplete indicates provider compliance is incomplete
+	ErrProviderComplianceIncomplete = errors.Register("marketplace", 2244, "provider compliance checklist incomplete")
 )
 
 // WrapIdentityGatingError wraps an identity gating error with context
