@@ -90,7 +90,7 @@ func loadPhase1Contributions(state State) ([]*mpcsetup.Phase1, []string, error) 
 	if len(paths) < 2 {
 		return nil, paths, fmt.Errorf("phase1 requires at least one participant contribution")
 	}
-	var contribs []*mpcsetup.Phase1
+	contribs := make([]*mpcsetup.Phase1, 0, len(paths)-1)
 	for _, path := range paths[1:] {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -113,7 +113,7 @@ func loadPhase2Contributions(state State) ([]*mpcsetup.Phase2, []string, error) 
 	if len(paths) < 2 {
 		return nil, paths, fmt.Errorf("phase2 requires at least one participant contribution")
 	}
-	var contribs []*mpcsetup.Phase2
+	contribs := make([]*mpcsetup.Phase2, 0, len(paths)-1)
 	for _, path := range paths[1:] {
 		data, err := os.ReadFile(path)
 		if err != nil {

@@ -191,7 +191,7 @@ func verifyPhase2(state coordinator.State, cfg *coordinator.Config, tr *transcri
 	}
 	prevBytes := initialBytes
 
-	var contribs []*mpcsetup.Phase2
+	contribs := make([]*mpcsetup.Phase2, 0, len(paths)-1)
 	for idx, path := range paths[1:] {
 		data, err := os.ReadFile(path)
 		if err != nil {
