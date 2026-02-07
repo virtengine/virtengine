@@ -508,7 +508,8 @@ func (s *KeeperTestSuite) TestValidateClientSignature() {
 
 	// Invalid signature
 	invalidSignature := make([]byte, 64)
-	rand.Read(invalidSignature)
+	_, err = rand.Read(invalidSignature)
+	s.Require().NoError(err)
 	err = s.keeper.ValidateClientSignature(s.ctx, "sig-test-client", invalidSignature, messageHash[:])
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "verification failed")
@@ -655,7 +656,8 @@ func (s *KeeperTestSuite) TestVerifyUploadSignatures() {
 
 	// Create test data
 	salt := make([]byte, 32)
-	rand.Read(salt)
+	_, err := rand.Read(salt)
+	s.Require().NoError(err)
 	payloadHash := sha256.Sum256([]byte("test payload"))
 
 	// Compute signing payload (salt + payload hash)
@@ -667,12 +669,13 @@ func (s *KeeperTestSuite) TestVerifyUploadSignatures() {
 	// Create user signing payload
 	// Create mock user signature (in real scenario this would be validated differently)
 	userSignature := make([]byte, 64)
-	rand.Read(userSignature)
+	_, err = rand.Read(userSignature)
+	s.Require().NoError(err)
 
 	userAddr := sdk.AccAddress("test-user-address")
 
 	// Test successful verification
-	err := s.keeper.VerifyUploadSignatures(
+	err = s.keeper.VerifyUploadSignatures(
 		s.ctx,
 		"upload-sig-test",
 		"1.5.0",
