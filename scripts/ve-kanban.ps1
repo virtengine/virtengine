@@ -579,502 +579,553 @@ function Create-GithubIssue {
         "-f", "title=$Title",
         "-f", "body=$Body"
     )
-    return ($null -ne $result)
+    if (-not $result) { return $null }
+    return $result | ConvertFrom-Json
 }
 
-function Format-PRCheckFailures {
+function Assign-IssueToCopilot {
     <#
-    .SYNOPSIS Format failing checks into a short markdown list.
+    .SYNOPSIS Assign a GitHub issue to Copilot.
     #>
     [CmdletBinding()]
-    param([object[]]$Checks = @())
-    if (-not $Checks -or $Checks.Count -eq 0) { return "- No failing checks found" }
-    $failed = $Checks | Where-Object { $_.state -eq "FAILURE" -or $_.state -eq "ERROR" }
-    if (-not $failed -or $failed.Count -eq 0) { return "- No failing checks found" }
-    $lines = $failed | ForEach-Object {
-        $link = if ($_.link) { " ($($_.link))" } else { "" }
-        "- $($_.name): $($_.state)$link"
-    }
-    return ($lines -join "`n")
-}
-
-function Add-PRComment {
-    <#
-    .SYNOPSIS Add a comment to a PR.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$PRNumber,
-        [Parameter(Mandatory)][string]$Body
-    )
-    $result = Invoke-VKGithub -Args @(
-        "pr", "comment", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--body", $Body
-    )
-    return ($null -ne $result)
-}
-
-function Mark-PRReady {
-    <#
-    .SYNOPSIS Mark a PR as ready for review (exit draft).
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][int]$PRNumber)
-    $result = Invoke-VKGithub -Args @(
-        "pr", "ready", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO"
-    )
-    return ($null -ne $result)
-}
-
-function Find-CopilotFixPR {
-    <#
-    .SYNOPSIS Find a Copilot fix PR referencing an original PR number.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][int]$OriginalPRNumber)
-    $search = "$OriginalPRNumber in:title,body"
-    $prJson = Invoke-VKGithub -Args @(
-        "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--state", "open", "--search", $search,
-        "--json", "number,title,body,headRefName,baseRefName,isDraft,url,createdAt",
-        "--limit", "20"
-    )
-    if (-not $prJson) { return $null }
-    $prs = $prJson | ConvertFrom-Json
-    if (-not $prs) { return $null }
-    $pattern = "(?i)(PR\s*#?$OriginalPRNumber|#$OriginalPRNumber)"
-    $match = $prs | Where-Object {
-        ($_.title -match $pattern) -or ($_.body -match $pattern)
-    } | Sort-Object -Property createdAt -Descending | Select-Object -First 1
-    return $match
-}
-
-function Test-CopilotPRComplete {
-    <#
-    .SYNOPSIS Determine whether a Copilot PR is complete (not WIP and not draft).
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][object]$PRDetails)
-    if (-not $PRDetails) { return $false }
-    if ($PRDetails.isDraft) { return $false }
-    if ($PRDetails.title -match "^\[WIP\]") { return $false }
-    return $true
-}
-
-function Close-PRDeleteBranch {
-    <#
-    .SYNOPSIS Close a PR and delete its branch.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][int]$PRNumber)
-    $result = Invoke-VKGithub -Args @(
-        "pr", "close", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--delete-branch"
-    )
-    return ($null -ne $result)
-}
-
-function Merge-BranchFromPR {
-    <#
-    .SYNOPSIS Merge a PR head branch into a target base branch.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$BaseBranch,
-        [Parameter(Mandatory)][string]$HeadBranch
-    )
-    $result = Invoke-VKGithub -Args @(
-        "api", "repos/$script:GH_OWNER/$script:GH_REPO/merges",
-        "-f", "base=$BaseBranch",
-        "-f", "head=$HeadBranch"
-    )
-    return ($null -ne $result)
-}
-
-function Create-PRForBranch {
-    <#
-    .SYNOPSIS Create a PR for a branch when the agent did not open one.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Branch,
-        [Parameter(Mandatory)][string]$Title,
-        [string]$Body = "Automated PR created by ve-orchestrator"
-    )
-    $baseBranch = $script:VK_TARGET_BRANCH
-    if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
-    $result = Invoke-VKGithub -Args @(
-        "pr", "create", "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--head", $Branch,
-        "--base", $baseBranch,
-        "--title", $Title,
-        "--body", $Body
-    )
-    return ($null -ne $result)
-}
-
-function Test-RemoteBranchExists {
-    <#
-    .SYNOPSIS Check if a branch exists on the remote GitHub repo.
-    #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Branch)
+    param([Parameter(Mandatory)][int]$IssueNumber)
     $result = Invoke-VKGithub -Args @(
         "api",
-        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$Branch"
+        "repos/$script:GH_OWNER/$script:GH_REPO/issues/$IssueNumber/assignees",
+        "-f", "assignees[]=copilot"
     )
     return ($null -ne $result)
 }
 
-function Get-VKSessions {
+function Get-RecentMergedPRs {
     <#
+    .SYNOPSIS List recent merged PRs.
+    #>
+    [CmdletBinding()]
+    param([int]$Limit = 15)
+    $prJson = Invoke-VKGithub -Args @(
+        "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--state", "merged", "--limit", $Limit.ToString(),
+        "--json", "number,title,url,mergedAt"
+    )
+    if (-not $prJson -or $prJson -eq "[]") { return @() }
+    return $prJson | ConvertFrom-Json
+}
+
+function Get-FailingWorkflowRuns {
+    <#
+    .SYNOPSIS Get recent failing workflow runs on main.
+    #>
+    [CmdletBinding()]
+    param([int]$Limit = 8)
+    $result = Invoke-VKGithub -Args @(
+        "api",
+        "repos/$script:GH_OWNER/$script:GH_REPO/actions/runs",
+        "-f", "branch=main",
+        "-f", "status=completed",
+        "-f", "per_page=$Limit"
+    )
+    if (-not $result) { return @() }
+    $payload = $result | ConvertFrom-Json
+    $runs = $payload.workflow_runs
+    if (-not $runs) { return @() }
+    return $runs | Where-Object {
+        $_.conclusion -in @("failure", "cancelled", "timed_out", "action_required")
+    }
+
+    function Format-PRCheckFailures {
+        <#
+    .SYNOPSIS Format failing checks into a short markdown list.
+    #>
+        [CmdletBinding()]
+        param([object[]]$Checks = @())
+        if (-not $Checks -or $Checks.Count -eq 0) { return "- No failing checks found" }
+        $failed = $Checks | Where-Object { $_.state -eq "FAILURE" -or $_.state -eq "ERROR" }
+        if (-not $failed -or $failed.Count -eq 0) { return "- No failing checks found" }
+        $lines = $failed | ForEach-Object {
+            $link = if ($_.link) { " ($($_.link))" } else { "" }
+            "- $($_.name): $($_.state)$link"
+        }
+        return ($lines -join "`n")
+    }
+
+    function Add-PRComment {
+        <#
+    .SYNOPSIS Add a comment to a PR.
+    #>
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][int]$PRNumber,
+            [Parameter(Mandatory)][string]$Body
+        )
+        $result = Invoke-VKGithub -Args @(
+            "pr", "comment", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--body", $Body
+        )
+        return ($null -ne $result)
+    }
+
+    function Mark-PRReady {
+        <#
+    .SYNOPSIS Mark a PR as ready for review (exit draft).
+    #>
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][int]$PRNumber)
+        $result = Invoke-VKGithub -Args @(
+            "pr", "ready", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO"
+        )
+        return ($null -ne $result)
+    }
+
+    function Find-CopilotFixPR {
+        <#
+    .SYNOPSIS Find a Copilot fix PR referencing an original PR number.
+    #>
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][int]$OriginalPRNumber)
+        $search = "$OriginalPRNumber in:title,body"
+        $prJson = Invoke-VKGithub -Args @(
+            "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--state", "open", "--search", $search,
+            "--json", "number,title,body,headRefName,baseRefName,isDraft,url,createdAt",
+            "--limit", "20"
+        )
+        if (-not $prJson) { return $null }
+        $prs = $prJson | ConvertFrom-Json
+        if (-not $prs) { return $null }
+        $pattern = "(?i)(PR\s*#?$OriginalPRNumber|#$OriginalPRNumber)"
+        $match = $prs | Where-Object {
+            ($_.title -match $pattern) -or ($_.body -match $pattern)
+        } | Sort-Object -Property createdAt -Descending | Select-Object -First 1
+        return $match
+    }
+
+    function Test-CopilotPRComplete {
+        <#
+    .SYNOPSIS Determine whether a Copilot PR is complete (not WIP and not draft).
+    #>
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][object]$PRDetails)
+        if (-not $PRDetails) { return $false }
+        if ($PRDetails.isDraft) { return $false }
+        if ($PRDetails.title -match "^\[WIP\]") { return $false }
+        return $true
+    }
+
+    function Close-PRDeleteBranch {
+        <#
+    .SYNOPSIS Close a PR and delete its branch.
+    #>
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][int]$PRNumber)
+        $result = Invoke-VKGithub -Args @(
+            "pr", "close", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--delete-branch"
+        )
+        return ($null -ne $result)
+    }
+
+    function Merge-BranchFromPR {
+        <#
+    .SYNOPSIS Merge a PR head branch into a target base branch.
+    #>
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string]$BaseBranch,
+            [Parameter(Mandatory)][string]$HeadBranch
+        )
+        $result = Invoke-VKGithub -Args @(
+            "api", "repos/$script:GH_OWNER/$script:GH_REPO/merges",
+            "-f", "base=$BaseBranch",
+            "-f", "head=$HeadBranch"
+        )
+        return ($null -ne $result)
+    }
+
+    function Create-PRForBranch {
+        <#
+    .SYNOPSIS Create a PR for a branch when the agent did not open one.
+    #>
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string]$Branch,
+            [Parameter(Mandatory)][string]$Title,
+            [string]$Body = "Automated PR created by ve-orchestrator"
+        )
+        $baseBranch = $script:VK_TARGET_BRANCH
+        if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
+        $result = Invoke-VKGithub -Args @(
+            "pr", "create", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--head", $Branch,
+            "--base", $baseBranch,
+            "--title", $Title,
+            "--body", $Body
+        )
+        return ($null -ne $result)
+    }
+
+    function Test-RemoteBranchExists {
+        <#
+    .SYNOPSIS Check if a branch exists on the remote GitHub repo.
+    #>
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][string]$Branch)
+        $result = Invoke-VKGithub -Args @(
+            "api",
+            "repos/$script:GH_OWNER/$script:GH_REPO/branches/$Branch"
+        )
+        return ($null -ne $result)
+    }
+
+    function Get-VKSessions {
+        <#
     .SYNOPSIS List sessions for a workspace.
     #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$WorkspaceId)
-    $result = Invoke-VKApi -Path "/api/sessions?workspace_id=$WorkspaceId"
-    if (-not $result) { return @() }
-    return @($result)
-}
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][string]$WorkspaceId)
+        $result = Invoke-VKApi -Path "/api/sessions?workspace_id=$WorkspaceId"
+        if (-not $result) { return @() }
+        return @($result)
+    }
 
-function New-VKSession {
-    <#
+    function New-VKSession {
+        <#
     .SYNOPSIS Create a new session for a workspace.
     #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$WorkspaceId)
-    $body = @{ workspace_id = $WorkspaceId }
-    return Invoke-VKApi -Path "/api/sessions" -Method "POST" -Body $body
-}
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][string]$WorkspaceId)
+        $body = @{ workspace_id = $WorkspaceId }
+        return Invoke-VKApi -Path "/api/sessions" -Method "POST" -Body $body
+    }
 
-function Get-ExecutorProfileForSession {
-    <#
+    function Get-ExecutorProfileForSession {
+        <#
     .SYNOPSIS Map a session executor to an executor profile.
     #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Executor)
-    switch ($Executor) {
-        "COPILOT" { return @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" } }
-        "CODEX" { return @{ executor = "CODEX"; variant = "DEFAULT" } }
-        default { return @{ executor = "CODEX"; variant = "DEFAULT" } }
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][string]$Executor)
+        switch ($Executor) {
+            "COPILOT" { return @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" } }
+            "CODEX" { return @{ executor = "CODEX"; variant = "DEFAULT" } }
+            default { return @{ executor = "CODEX"; variant = "DEFAULT" } }
+        }
     }
-}
 
-function Send-VKWorkspaceFollowUp {
-    <#
+    function Send-VKWorkspaceFollowUp {
+        <#
     .SYNOPSIS Send a direct follow-up message to the latest session for a workspace.
     #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$WorkspaceId,
-        [Parameter(Mandatory)][string]$Message,
-        [hashtable]$ExecutorOverride
-    )
-    $sessions = Get-VKSessions -WorkspaceId $WorkspaceId
-    if (-not $sessions -or @($sessions).Count -eq 0) { return $false }
-    $session = $sessions | Sort-Object -Property updated_at -Descending | Select-Object -First 1
-    $profile = if ($ExecutorOverride) { $ExecutorOverride } else { Get-ExecutorProfileForSession -Executor $session.executor }
-    return Send-VKSessionFollowUp -SessionId $session.id -Message $Message -ExecutorProfile $profile
-}
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string]$WorkspaceId,
+            [Parameter(Mandatory)][string]$Message,
+            [hashtable]$ExecutorOverride
+        )
+        $sessions = Get-VKSessions -WorkspaceId $WorkspaceId
+        if (-not $sessions -or @($sessions).Count -eq 0) { return $false }
+        $session = $sessions | Sort-Object -Property updated_at -Descending | Select-Object -First 1
+        $profile = if ($ExecutorOverride) { $ExecutorOverride } else { Get-ExecutorProfileForSession -Executor $session.executor }
+        return Send-VKSessionFollowUp -SessionId $session.id -Message $Message -ExecutorProfile $profile
+    }
 
-function Send-VKSessionFollowUp {
-    <#
+    function Send-VKSessionFollowUp {
+        <#
     .SYNOPSIS Send a follow-up message to a specific session.
     #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$SessionId,
-        [Parameter(Mandatory)][string]$Message,
-        [Parameter(Mandatory)][hashtable]$ExecutorProfile
-    )
-    $body = @{ prompt = $Message; executor_profile_id = $ExecutorProfile }
-    $result = Invoke-VKApi -Path "/api/sessions/$SessionId/follow-up" -Method "POST" -Body $body
-    return ($null -ne $result)
-}
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string]$SessionId,
+            [Parameter(Mandatory)][string]$Message,
+            [Parameter(Mandatory)][hashtable]$ExecutorProfile
+        )
+        $body = @{ prompt = $Message; executor_profile_id = $ExecutorProfile }
+        $result = Invoke-VKApi -Path "/api/sessions/$SessionId/follow-up" -Method "POST" -Body $body
+        return ($null -ne $result)
+    }
 
-function Queue-VKWorkspaceMessage {
-    <#
+    function Queue-VKWorkspaceMessage {
+        <#
     .SYNOPSIS Enqueue a message to the latest session for a workspace.
     #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$WorkspaceId,
-        [Parameter(Mandatory)][string]$Message
-    )
-    $sessions = Get-VKSessions -WorkspaceId $WorkspaceId
-    if (-not $sessions -or @($sessions).Count -eq 0) { return $false }
-    $session = $sessions | Sort-Object -Property updated_at -Descending | Select-Object -First 1
-    $profile = Get-ExecutorProfileForSession -Executor $session.executor
-    $body = @{ executor_profile_id = $profile; message = $Message }
-    $result = Invoke-VKApi -Path "/api/sessions/$($session.id)/queue" -Method "POST" -Body $body
-    return ($null -ne $result)
-}
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string]$WorkspaceId,
+            [Parameter(Mandatory)][string]$Message
+        )
+        $sessions = Get-VKSessions -WorkspaceId $WorkspaceId
+        if (-not $sessions -or @($sessions).Count -eq 0) { return $false }
+        $session = $sessions | Sort-Object -Property updated_at -Descending | Select-Object -First 1
+        $profile = Get-ExecutorProfileForSession -Executor $session.executor
+        $body = @{ executor_profile_id = $profile; message = $Message }
+        $result = Invoke-VKApi -Path "/api/sessions/$($session.id)/queue" -Method "POST" -Body $body
+        return ($null -ne $result)
+    }
 
-function Merge-PR {
-    <#
+    function Merge-PR {
+        <#
     .SYNOPSIS Merge a PR after rebase onto latest main. Returns $true on success.
     #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$PRNumber,
-        [switch]$AutoMerge,
-        [switch]$Admin
-    )
-    $args = @(
-        "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--merge", "--delete-branch"
-    )
-    if ($AutoMerge) { $args += "--auto" }
-    if ($Admin) { $args += "--admin" }
-    if ($AutoMerge) {
-        Write-Host "  Enabling auto-merge for PR #$PRNumber ..." -ForegroundColor Yellow
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][int]$PRNumber,
+            [switch]$AutoMerge,
+            [switch]$Admin
+        )
+        $args = @(
+            "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--merge", "--delete-branch"
+        )
+        if ($AutoMerge) { $args += "--auto" }
+        if ($Admin) { $args += "--admin" }
+        if ($AutoMerge) {
+            Write-Host "  Enabling auto-merge for PR #$PRNumber ..." -ForegroundColor Yellow
+        }
+        elseif ($Admin) {
+            Write-Host "  Admin merging PR #$PRNumber ..." -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "  Merging PR #$PRNumber ..." -ForegroundColor Yellow
+        }
+        $result = Invoke-VKGithub -Args $args
+        return ($null -ne $result)
     }
-    elseif ($Admin) {
-        Write-Host "  Admin merging PR #$PRNumber ..." -ForegroundColor Yellow
-    }
-    else {
-        Write-Host "  Merging PR #$PRNumber ..." -ForegroundColor Yellow
-    }
-    $result = Invoke-VKGithub -Args $args
-    return ($null -ne $result)
-}
 
-function Enable-AutoMerge {
-    <#
+    function Enable-AutoMerge {
+        <#
     .SYNOPSIS Enable auto-merge on a PR so it merges when CI passes.
     #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][int]$PRNumber)
-    $result = Invoke-VKGithub -Args @(
-        "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--auto", "--merge", "--delete-branch"
-    )
-    return ($null -ne $result)
-}
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][int]$PRNumber)
+        $result = Invoke-VKGithub -Args @(
+            "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--auto", "--merge", "--delete-branch"
+        )
+        return ($null -ne $result)
+    }
 
-# ─── Orchestration Helpers ────────────────────────────────────────────────────
+    # ─── Orchestration Helpers ────────────────────────────────────────────────────
 
-function Get-ActiveAttemptCount {
-    <#
+    function Get-ActiveAttemptCount {
+        <#
     .SYNOPSIS Count non-archived attempts that have running agents.
     #>
-    $attempts = Get-VKAttempts -ActiveOnly
-    return @($attempts).Count
-}
+        $attempts = Get-VKAttempts -ActiveOnly
+        return @($attempts).Count
+    }
 
-function Get-AttemptTaskMap {
-    <#
+    function Get-AttemptTaskMap {
+        <#
     .SYNOPSIS Build a hashtable mapping task_id → latest attempt for active (non-archived) attempts.
     #>
-    $attempts = Get-VKAttempts -ActiveOnly
-    $map = @{}
-    foreach ($a in $attempts) {
-        $map[$a.task_id] = $a
+        $attempts = Get-VKAttempts -ActiveOnly
+        $map = @{}
+        foreach ($a in $attempts) {
+            $map[$a.task_id] = $a
+        }
+        return $map
     }
-    return $map
-}
 
-function Test-AttemptComplete {
-    <#
+    function Test-AttemptComplete {
+        <#
     .SYNOPSIS Check if an attempt has completed (branch pushed + PR exists or is merged).
     #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][object]$Attempt)
-    if (-not $Attempt.branch) { return $false }
-    $pr = Get-PRForBranch -Branch $Attempt.branch
-    return ($null -ne $pr)
-}
-
-# ─── Display Helpers ──────────────────────────────────────────────────────────
-
-function Show-Tasks {
-    [CmdletBinding()]
-    param(
-        [ValidateSet("todo", "inprogress", "inreview", "done", "cancelled")]
-        [string]$Status = "todo"
-    )
-    $tasks = Get-VKTasks -Status $Status
-    if (-not $tasks) {
-        Write-Host "  No tasks with status '$Status'" -ForegroundColor Yellow
-        return
+        [CmdletBinding()]
+        param([Parameter(Mandatory)][object]$Attempt)
+        if (-not $Attempt.branch) { return $false }
+        $pr = Get-PRForBranch -Branch $Attempt.branch
+        return ($null -ne $pr)
     }
-    Write-Host ""
-    Write-Host "  ┌─ $($Status.ToUpper()) Tasks ($(@($tasks).Count)) ─────────────────" -ForegroundColor Cyan
-    foreach ($t in $tasks) {
-        $age = if ($t.created_at) { [math]::Round(((Get-Date) - [datetime]$t.created_at).TotalDays, 0) } else { "?" }
-        $inProgress = if ($t.has_in_progress_attempt) { " [RUNNING]" } else { "" }
-        Write-Host "  │ $($t.id.Substring(0,8))  $($t.title)$inProgress" -ForegroundColor $(if ($t.has_in_progress_attempt) { "Yellow" } else { "White" })
-    }
-    Write-Host "  └───────────────────────────────────────────" -ForegroundColor Cyan
-    Write-Host ""
-}
 
-function Show-Status {
-    [CmdletBinding()]
-    param(
-        [switch]$ShowIdle
-    )
-    if (-not (Initialize-VKConfig)) { return }
-    $active = Get-VKAttempts -ActiveOnly
-    $todoTasks = Get-VKTasks -Status "todo"
-    $inProgressTasks = Get-VKTasks -Status "inprogress"
+    # ─── Display Helpers ──────────────────────────────────────────────────────────
 
-    Write-Host ""
-    Write-Host "  ╔═══════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║     VirtEngine Kanban Status              ║" -ForegroundColor Cyan
-    Write-Host "  ╚═══════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Todo:        $(@($todoTasks).Count) tasks" -ForegroundColor White
-    Write-Host "  In-Progress: $(@($inProgressTasks).Count) tasks" -ForegroundColor Yellow
-    Write-Host "  Active Attempts: $(@($active).Count)" -ForegroundColor Green
-    Write-Host ""
-
-    if ($active -and @($active).Count -gt 0) {
-        Write-Host "  ┌─ Active Attempts ──────────────────────────" -ForegroundColor Green
-        foreach ($a in $active) {
-            $name = if ($a.name) { $a.name.Substring(0, [Math]::Min(60, $a.name.Length)) } else { "(unnamed)" }
-            $pr = Get-PRForBranch -Branch $a.branch 2>$null
-            $prStatus = if ($pr) { "PR #$($pr.number) ($($pr.state))" } else { "No PR" }
-            Write-Host "  │ $($a.id.Substring(0,8))  $($a.branch)" -ForegroundColor White
-            Write-Host "  │   $name" -ForegroundColor DarkGray
-            Write-Host "  │   $prStatus" -ForegroundColor $(if ($pr -and $pr.state -eq "MERGED") { "Green" } elseif ($pr) { "Yellow" } else { "DarkGray" })
-            if ($ShowIdle) {
-                $lastUpdate = if ($a.updated_at) { [datetime]$a.updated_at } elseif ($a.created_at) { [datetime]$a.created_at } else { $null }
-                $idleMinutes = if ($lastUpdate) { [math]::Round(((Get-Date) - $lastUpdate).TotalMinutes, 1) } else { "?" }
-                $updatedAtText = if ($lastUpdate) { $lastUpdate.ToString("u") } else { "unknown" }
-                Write-Host "  │   Idle: ${idleMinutes} min (last update: $updatedAtText)" -ForegroundColor DarkGray
-            }
+    function Show-Tasks {
+        [CmdletBinding()]
+        param(
+            [ValidateSet("todo", "inprogress", "inreview", "done", "cancelled")]
+            [string]$Status = "todo"
+        )
+        $tasks = Get-VKTasks -Status $Status
+        if (-not $tasks) {
+            Write-Host "  No tasks with status '$Status'" -ForegroundColor Yellow
+            return
         }
-        Write-Host "  └────────────────────────────────────────────" -ForegroundColor Green
-    }
-    Write-Host ""
-}
-
-# ─── CLI Dispatch ─────────────────────────────────────────────────────────────
-
-function Invoke-CLI {
-    param([string[]]$Arguments)
-
-    if ($null -eq $Arguments) {
-        $Arguments = @()
-    }
-    else {
-        $Arguments = @($Arguments)
-    }
-
-    if ($Arguments.Count -eq 0) {
-        Show-Usage
-        return
-    }
-
-    $command = $Arguments[0]
-    $rest = if ($Arguments.Count -gt 1) { $Arguments[1..($Arguments.Count - 1)] } else { @() }
-
-    switch ($command) {
-        "list" {
-            $status = "todo"
-            for ($i = 0; $i -lt $rest.Count; $i++) {
-                if ($rest[$i] -in @("--status", "-s") -and ($i + 1) -lt $rest.Count) { $status = $rest[$i + 1] }
-            }
-            Show-Tasks -Status $status
+        Write-Host ""
+        Write-Host "  ┌─ $($Status.ToUpper()) Tasks ($(@($tasks).Count)) ─────────────────" -ForegroundColor Cyan
+        foreach ($t in $tasks) {
+            $age = if ($t.created_at) { [math]::Round(((Get-Date) - [datetime]$t.created_at).TotalDays, 0) } else { "?" }
+            $inProgress = if ($t.has_in_progress_attempt) { " [RUNNING]" } else { "" }
+            Write-Host "  │ $($t.id.Substring(0,8))  $($t.title)$inProgress" -ForegroundColor $(if ($t.has_in_progress_attempt) { "Yellow" } else { "White" })
         }
-        "status" {
-            $showIdle = $false
-            for ($i = 0; $i -lt $rest.Count; $i++) {
-                if ($rest[$i] -in @("--verbose", "-v")) { $showIdle = $true }
-            }
-            if ($VerbosePreference -eq "Continue") { $showIdle = $true }
-            if (Test-CLIFlagPresent -Flags @("--verbose", "-v") -Arguments $rest) { $showIdle = $true }
-            Show-Status -ShowIdle:$showIdle
-        }
-        "archived" {
-            $archived = Get-VKArchivedAttempts
-            if (-not $archived -or @($archived).Count -eq 0) {
-                Write-Host "  No archived attempts." -ForegroundColor Yellow
-                return
-            }
-            Write-Host "";
-            Write-Host "  ┌─ Archived Attempts ─────────────────────────" -ForegroundColor DarkGray
-            foreach ($a in $archived) {
+        Write-Host "  └───────────────────────────────────────────" -ForegroundColor Cyan
+        Write-Host ""
+    }
+
+    function Show-Status {
+        [CmdletBinding()]
+        param(
+            [switch]$ShowIdle
+        )
+        if (-not (Initialize-VKConfig)) { return }
+        $active = Get-VKAttempts -ActiveOnly
+        $todoTasks = Get-VKTasks -Status "todo"
+        $inProgressTasks = Get-VKTasks -Status "inprogress"
+
+        Write-Host ""
+        Write-Host "  ╔═══════════════════════════════════════════╗" -ForegroundColor Cyan
+        Write-Host "  ║     VirtEngine Kanban Status              ║" -ForegroundColor Cyan
+        Write-Host "  ╚═══════════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  Todo:        $(@($todoTasks).Count) tasks" -ForegroundColor White
+        Write-Host "  In-Progress: $(@($inProgressTasks).Count) tasks" -ForegroundColor Yellow
+        Write-Host "  Active Attempts: $(@($active).Count)" -ForegroundColor Green
+        Write-Host ""
+
+        if ($active -and @($active).Count -gt 0) {
+            Write-Host "  ┌─ Active Attempts ──────────────────────────" -ForegroundColor Green
+            foreach ($a in $active) {
                 $name = if ($a.name) { $a.name.Substring(0, [Math]::Min(60, $a.name.Length)) } else { "(unnamed)" }
+                $pr = Get-PRForBranch -Branch $a.branch 2>$null
+                $prStatus = if ($pr) { "PR #$($pr.number) ($($pr.state))" } else { "No PR" }
                 Write-Host "  │ $($a.id.Substring(0,8))  $($a.branch)" -ForegroundColor White
                 Write-Host "  │   $name" -ForegroundColor DarkGray
+                Write-Host "  │   $prStatus" -ForegroundColor $(if ($pr -and $pr.state -eq "MERGED") { "Green" } elseif ($pr) { "Yellow" } else { "DarkGray" })
+                if ($ShowIdle) {
+                    $lastUpdate = if ($a.updated_at) { [datetime]$a.updated_at } elseif ($a.created_at) { [datetime]$a.created_at } else { $null }
+                    $idleMinutes = if ($lastUpdate) { [math]::Round(((Get-Date) - $lastUpdate).TotalMinutes, 1) } else { "?" }
+                    $updatedAtText = if ($lastUpdate) { $lastUpdate.ToString("u") } else { "unknown" }
+                    Write-Host "  │   Idle: ${idleMinutes} min (last update: $updatedAtText)" -ForegroundColor DarkGray
+                }
             }
-            Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkGray
-            Write-Host ""
+            Write-Host "  └────────────────────────────────────────────" -ForegroundColor Green
         }
-        "unarchive" {
-            if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban unarchive <attempt-id>"; return }
-            Unarchive-VKAttempt -AttemptId $rest[0] | Out-Null
-            Write-Host "  ✓ Attempt $($rest[0]) unarchived" -ForegroundColor Green
+        Write-Host ""
+    }
+
+    # ─── CLI Dispatch ─────────────────────────────────────────────────────────────
+
+    function Invoke-CLI {
+        param([string[]]$Arguments)
+
+        if ($null -eq $Arguments) {
+            $Arguments = @()
         }
-        "submit" {
-            if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban submit <task-id>"; return }
-            $taskId = $rest[0]
-            Submit-VKTaskAttempt -TaskId $taskId
+        else {
+            $Arguments = @($Arguments)
         }
-        "submit-next" {
-            $count = 1
-            for ($i = 0; $i -lt $rest.Count; $i++) {
-                if ($rest[$i] -in @("--count", "-n") -and ($i + 1) -lt $rest.Count) { $count = [int]$rest[$i + 1] }
-            }
-            $tasks = Get-VKNextTodoTasks -Count $count
-            if (-not $tasks -or @($tasks).Count -eq 0) {
-                Write-Host "  No todo tasks available." -ForegroundColor Yellow
-                return
-            }
-            foreach ($t in $tasks) {
-                Write-Host "  → $($t.title)" -ForegroundColor White
-                Submit-VKTaskAttempt -TaskId $t.id
-            }
-        }
-        "rebase" {
-            if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban rebase <attempt-id>"; return }
-            Invoke-VKRebase -AttemptId $rest[0]
-        }
-        "merge" {
-            $branch = $null
-            $auto = $false
-            for ($i = 0; $i -lt $rest.Count; $i++) {
-                if ($rest[$i] -in @("--branch", "-b") -and ($i + 1) -lt $rest.Count) { $branch = $rest[$i + 1] }
-                if ($rest[$i] -eq "--auto") { $auto = $true }
-            }
-            if (-not $branch -and $rest.Count -gt 0 -and $rest[0] -notlike "--*") { $branch = $rest[0] }
-            if (-not $branch) { Write-Error "Usage: ve-kanban merge <branch> [--auto]"; return }
-            $pr = Get-PRForBranch -Branch $branch
-            if (-not $pr) { Write-Error "No PR found for branch $branch"; return }
-            if ($auto) {
-                Enable-AutoMerge -PRNumber $pr.number
-            }
-            else {
-                Merge-PR -PRNumber $pr.number
-            }
-        }
-        "complete" {
-            if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban complete <task-id>"; return }
-            Update-VKTaskStatus -TaskId $rest[0] -Status "done"
-            Write-Host "  ✓ Task $($rest[0]) marked as done" -ForegroundColor Green
-        }
-        "orchestrate" {
-            $parallel = 2
-            $interval = 60
-            for ($i = 0; $i -lt $rest.Count; $i++) {
-                if ($rest[$i] -in @("--parallel", "-p") -and ($i + 1) -lt $rest.Count) { $parallel = [int]$rest[$i + 1] }
-                if ($rest[$i] -in @("--interval", "-i") -and ($i + 1) -lt $rest.Count) { $interval = [int]$rest[$i + 1] }
-            }
-            Write-Host "  Delegating to ve-orchestrator.ps1 with parallel=$parallel, interval=$interval" -ForegroundColor Cyan
-            & "$PSScriptRoot/ve-orchestrator.ps1" -MaxParallel $parallel -PollIntervalSec $interval
-        }
-        "help" { Show-Usage }
-        default {
-            Write-Error "Unknown command: $command"
+
+        if ($Arguments.Count -eq 0) {
             Show-Usage
+            return
+        }
+
+        $command = $Arguments[0]
+        $rest = if ($Arguments.Count -gt 1) { $Arguments[1..($Arguments.Count - 1)] } else { @() }
+
+        switch ($command) {
+            "list" {
+                $status = "todo"
+                for ($i = 0; $i -lt $rest.Count; $i++) {
+                    if ($rest[$i] -in @("--status", "-s") -and ($i + 1) -lt $rest.Count) { $status = $rest[$i + 1] }
+                }
+                Show-Tasks -Status $status
+            }
+            "status" {
+                $showIdle = $false
+                for ($i = 0; $i -lt $rest.Count; $i++) {
+                    if ($rest[$i] -in @("--verbose", "-v")) { $showIdle = $true }
+                }
+                if ($VerbosePreference -eq "Continue") { $showIdle = $true }
+                if (Test-CLIFlagPresent -Flags @("--verbose", "-v") -Arguments $rest) { $showIdle = $true }
+                Show-Status -ShowIdle:$showIdle
+            }
+            "archived" {
+                $archived = Get-VKArchivedAttempts
+                if (-not $archived -or @($archived).Count -eq 0) {
+                    Write-Host "  No archived attempts." -ForegroundColor Yellow
+                    return
+                }
+                Write-Host "";
+                Write-Host "  ┌─ Archived Attempts ─────────────────────────" -ForegroundColor DarkGray
+                foreach ($a in $archived) {
+                    $name = if ($a.name) { $a.name.Substring(0, [Math]::Min(60, $a.name.Length)) } else { "(unnamed)" }
+                    Write-Host "  │ $($a.id.Substring(0,8))  $($a.branch)" -ForegroundColor White
+                    Write-Host "  │   $name" -ForegroundColor DarkGray
+                }
+                Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkGray
+                Write-Host ""
+            }
+            "unarchive" {
+                if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban unarchive <attempt-id>"; return }
+                Unarchive-VKAttempt -AttemptId $rest[0] | Out-Null
+                Write-Host "  ✓ Attempt $($rest[0]) unarchived" -ForegroundColor Green
+            }
+            "submit" {
+                if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban submit <task-id>"; return }
+                $taskId = $rest[0]
+                Submit-VKTaskAttempt -TaskId $taskId
+            }
+            "submit-next" {
+                $count = 1
+                for ($i = 0; $i -lt $rest.Count; $i++) {
+                    if ($rest[$i] -in @("--count", "-n") -and ($i + 1) -lt $rest.Count) { $count = [int]$rest[$i + 1] }
+                }
+                $tasks = Get-VKNextTodoTasks -Count $count
+                if (-not $tasks -or @($tasks).Count -eq 0) {
+                    Write-Host "  No todo tasks available." -ForegroundColor Yellow
+                    return
+                }
+                foreach ($t in $tasks) {
+                    Write-Host "  → $($t.title)" -ForegroundColor White
+                    Submit-VKTaskAttempt -TaskId $t.id
+                }
+            }
+            "rebase" {
+                if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban rebase <attempt-id>"; return }
+                Invoke-VKRebase -AttemptId $rest[0]
+            }
+            "merge" {
+                $branch = $null
+                $auto = $false
+                for ($i = 0; $i -lt $rest.Count; $i++) {
+                    if ($rest[$i] -in @("--branch", "-b") -and ($i + 1) -lt $rest.Count) { $branch = $rest[$i + 1] }
+                    if ($rest[$i] -eq "--auto") { $auto = $true }
+                }
+                if (-not $branch -and $rest.Count -gt 0 -and $rest[0] -notlike "--*") { $branch = $rest[0] }
+                if (-not $branch) { Write-Error "Usage: ve-kanban merge <branch> [--auto]"; return }
+                $pr = Get-PRForBranch -Branch $branch
+                if (-not $pr) { Write-Error "No PR found for branch $branch"; return }
+                if ($auto) {
+                    Enable-AutoMerge -PRNumber $pr.number
+                }
+                else {
+                    Merge-PR -PRNumber $pr.number
+                }
+            }
+            "complete" {
+                if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban complete <task-id>"; return }
+                Update-VKTaskStatus -TaskId $rest[0] -Status "done"
+                Write-Host "  ✓ Task $($rest[0]) marked as done" -ForegroundColor Green
+            }
+            "orchestrate" {
+                $parallel = 2
+                $interval = 60
+                for ($i = 0; $i -lt $rest.Count; $i++) {
+                    if ($rest[$i] -in @("--parallel", "-p") -and ($i + 1) -lt $rest.Count) { $parallel = [int]$rest[$i + 1] }
+                    if ($rest[$i] -in @("--interval", "-i") -and ($i + 1) -lt $rest.Count) { $interval = [int]$rest[$i + 1] }
+                }
+                Write-Host "  Delegating to ve-orchestrator.ps1 with parallel=$parallel, interval=$interval" -ForegroundColor Cyan
+                & "$PSScriptRoot/ve-orchestrator.ps1" -MaxParallel $parallel -PollIntervalSec $interval
+            }
+            "help" { Show-Usage }
+            default {
+                Write-Error "Unknown command: $command"
+                Show-Usage
+            }
         }
     }
-}
 
-function Show-Usage {
-    Write-Host @"
+    function Show-Usage {
+        Write-Host @"
 
   VirtEngine Kanban CLI (ve-kanban)
   ═════════════════════════════════
@@ -1105,30 +1156,30 @@ function Show-Usage {
     Alternates between CODEX/DEFAULT and COPILOT/CLAUDE_OPUS_4_6
     at 50/50 rate to avoid rate-limiting on either agent.
 "@ -ForegroundColor White
-}
-
-function Test-CLIFlagPresent {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string[]]$Flags,
-        [string[]]$Arguments
-    )
-    if ($Arguments) {
-        foreach ($flag in $Flags) {
-            if ($Arguments -contains $flag) { return $true }
-        }
     }
-    if ($script:VK_CLI_RAW_LINE) {
-        foreach ($flag in $Flags) {
-            $pattern = "(^|\s)" + [regex]::Escape($flag) + "(\s|$)"
-            if ($script:VK_CLI_RAW_LINE -match $pattern) { return $true }
-        }
-    }
-    return $false
-}
 
-# Run CLI if invoked directly (not dot-sourced)
-if ($MyInvocation.InvocationName -ne ".") {
-    $script:VK_CLI_RAW_LINE = $MyInvocation.Line
-    Invoke-CLI -Arguments $args
-}
+    function Test-CLIFlagPresent {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string[]]$Flags,
+            [string[]]$Arguments
+        )
+        if ($Arguments) {
+            foreach ($flag in $Flags) {
+                if ($Arguments -contains $flag) { return $true }
+            }
+        }
+        if ($script:VK_CLI_RAW_LINE) {
+            foreach ($flag in $Flags) {
+                $pattern = "(^|\s)" + [regex]::Escape($flag) + "(\s|$)"
+                if ($script:VK_CLI_RAW_LINE -match $pattern) { return $true }
+            }
+        }
+        return $false
+    }
+
+    # Run CLI if invoked directly (not dot-sourced)
+    if ($MyInvocation.InvocationName -ne ".") {
+        $script:VK_CLI_RAW_LINE = $MyInvocation.Line
+        Invoke-CLI -Arguments $args
+    }

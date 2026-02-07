@@ -1560,10 +1560,10 @@ function Complete-Task {
 
 function Maybe-TriggerCISweep {
     <#
-    .SYNOPSIS Trigger a Copilot CI sweep every 20 completed tasks.
+    .SYNOPSIS Trigger a Copilot CI sweep every 15 completed tasks.
     #>
-    if ($script:TasksCompleted -lt 20) { return }
-    if (($script:TasksCompleted % 20) -ne 0) { return }
+    if ($script:TasksCompleted -lt 15) { return }
+    if (($script:TasksCompleted % 15) -ne 0) { return }
 
     $state = Get-OrchestratorState
     if ($state.last_ci_sweep_completed -eq $script:TasksCompleted) { return }
@@ -1577,19 +1577,59 @@ function Trigger-CISweep {
     <#
     .SYNOPSIS Create a Copilot-driven CI sweep issue.
     #>
+    $failedRuns = @()
+    $recentMerged = @()
+    if (-not (Test-GithubRateLimit)) {
+        $failedRuns = Get-FailingWorkflowRuns -Limit 10
+        $recentMerged = Get-RecentMergedPRs -Limit 15
+    }
+
+    $failedRunLines = if ($failedRuns -and @($failedRuns).Count -gt 0) {
+        $failedRuns | ForEach-Object {
+            $name = if ($_.name) { $_.name } elseif ($_.workflow_name) { $_.workflow_name } else { "workflow" }
+            $url = if ($_.html_url) { $_.html_url } else { "" }
+            $conclusion = if ($_.conclusion) { $_.conclusion } else { "unknown" }
+            if ($url) { "- $name ($conclusion): $url" } else { "- $name ($conclusion)" }
+        }
+    }
+    else { @("- none") }
+
+    $mergedLines = if ($recentMerged -and @($recentMerged).Count -gt 0) {
+        $recentMerged | ForEach-Object {
+            $title = if ($_.title) { $_.title } else { "PR #$($_.number)" }
+            $url = if ($_.url) { $_.url } else { "" }
+            if ($url) { "- #$($_.number) $title: $url" } else { "- #$($_.number) $title" }
+        }
+    }
+    else { @("- none") }
+
     $title = "ci sweep: resolve failing workflows"
     $body = @"
+Copilot assignment: this issue will be assigned via API. If it is unassigned, use the "Assign to Copilot" button.
+
 @copilot Please review GitHub Actions failures across the repository and resolve them.
 
 Scope:
 - Identify failing workflows on main.
 - Prioritize required checks and security scans.
 - Apply minimal fixes and open PRs as needed.
+
+Recent failing workflow runs (main):
+$($failedRunLines -join "`n")
+
+Recent merged PRs (last 15):
+$($mergedLines -join "`n")
 "@
 
-    Write-Log "Triggering CI sweep (every 20 tasks)" -Level "ACTION"
+    Write-Log "Triggering CI sweep (every 15 tasks)" -Level "ACTION"
     if (-not $DryRun) {
-        $null = Create-GithubIssue -Title $title -Body $body
+        $issue = Create-GithubIssue -Title $title -Body $body
+        if ($issue -and $issue.number) {
+            $assigned = Assign-IssueToCopilot -IssueNumber $issue.number
+            if (-not $assigned) {
+                Write-Log "Copilot assignment failed for issue #$($issue.number)" -Level "WARN"
+            }
+        }
     }
 }
 

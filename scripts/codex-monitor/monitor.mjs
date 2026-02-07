@@ -81,6 +81,7 @@ const pendingMerges = new Set();
 const errorNotified = new Map();
 const mergeFailureNotified = new Map();
 const vkErrorNotified = new Map();
+const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
 let plannerTriggered = false;
@@ -99,6 +100,7 @@ const errorPatterns = [
   /Cannot bind argument/i,
   /Unhandled/i,
   /\bFailed\b/i,
+  /Copilot assignment failed/i,
 ];
 
 const errorNoisePatterns = [
@@ -529,6 +531,15 @@ async function readStatusSummary() {
 async function sendTelegramMessage(text, options = {}) {
   if (!telegramToken || !telegramChatId) {
     return;
+  }
+  const key = String(text || "").trim();
+  if (key) {
+    const now = Date.now();
+    const last = telegramDedup.get(key) || 0;
+    if (now - last < 5 * 60 * 1000) {
+      return;
+    }
+    telegramDedup.set(key, now);
   }
   const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
   const payload = {
