@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import {
   formatPresenceMessage,
   parsePresenceMessage,
@@ -10,6 +13,25 @@ import {
   initPresence,
   getPresenceState,
 } from "../presence.mjs";
+
+let tempRoot = null;
+
+async function initTestPresence(instanceId) {
+  tempRoot = await mkdtemp(resolve(tmpdir(), "codex-monitor-presence-"));
+  await initPresence({
+    repoRoot: tempRoot,
+    presencePath: resolve(tempRoot, "presence.json"),
+    instanceId,
+    force: true,
+    skipLoad: true,
+  });
+}
+
+afterEach(async () => {
+  if (!tempRoot) return;
+  await rm(tempRoot, { recursive: true, force: true });
+  tempRoot = null;
+});
 
 describe("getPresencePrefix", () => {
   it("returns the correct prefix", () => {
@@ -149,20 +171,8 @@ describe("parsePresenceMessage", () => {
 });
 
 describe("listActiveInstances", () => {
-  let state;
-
   beforeEach(async () => {
-    // Initialize and get reference to internal state
-    await initPresence({
-      repoRoot: process.cwd(),
-      instanceId: "test-init",
-    });
-    state = getPresenceState();
-
-    // Clear instances map
-    const presenceModule = await import("../presence.mjs");
-    const internalState = presenceModule.getPresenceState();
-    // Clear by calling notePresence with fresh instances
+    await initTestPresence("test-init");
   });
 
   it("returns all instances when TTL is 0", async () => {
@@ -298,10 +308,7 @@ describe("listActiveInstances", () => {
 
 describe("selectCoordinator", () => {
   beforeEach(async () => {
-    await initPresence({
-      repoRoot: process.cwd(),
-      instanceId: "test-coordinator-init",
-    });
+    await initTestPresence("test-coordinator-init");
   });
 
   it("selects single coordinator-eligible instance", async () => {
@@ -507,10 +514,7 @@ describe("selectCoordinator", () => {
 
 describe("formatPresenceSummary", () => {
   beforeEach(async () => {
-    await initPresence({
-      repoRoot: process.cwd(),
-      instanceId: "test-summary-init",
-    });
+    await initTestPresence("test-summary-init");
   });
 
   it("returns message when no active instances", () => {
@@ -595,10 +599,7 @@ describe("formatPresenceSummary", () => {
 
 describe("formatCoordinatorSummary", () => {
   beforeEach(async () => {
-    await initPresence({
-      repoRoot: process.cwd(),
-      instanceId: "test-coord-summary-init",
-    });
+    await initTestPresence("test-coord-summary-init");
   });
 
   it("returns message when no coordinator selected", () => {

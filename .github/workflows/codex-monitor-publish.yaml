@@ -116,6 +116,10 @@ jobs:
               working-directory: scripts/codex-monitor
               run: npm install --ignore-scripts
 
+            - name: Test
+              working-directory: scripts/codex-monitor
+              run: npm test
+
             - name: Publish
               if: ${{ !inputs.dry-run }}
               working-directory: scripts/codex-monitor
