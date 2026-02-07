@@ -1,247 +1,295 @@
-# Codex Monitor
+# @virtengine/codex-monitor
 
-> AI-powered orchestrator supervisor — wraps any task orchestrator script, auto-restarts on failure, analyzes crashes with the Codex SDK, manages PRs via the Vibe-Kanban API, and sends real-time Telegram notifications.
+> AI-powered orchestrator supervisor with multi-executor failover, smart PR flow, and Telegram notifications. Install globally, point at any repo, and let AI agents ship code autonomously.
 
-## What It Does
+## Install
 
-Codex Monitor is a long-running Node.js process that:
-
-1. **Supervises** a task orchestrator script (PowerShell, Bash, or any CLI)
-2. **Auto-restarts** the orchestrator on crash with configurable delays
-3. **Analyzes failures** using the Codex SDK — diagnoses root causes from logs
-4. **Auto-fixes** repeating errors by detecting error loops and invoking AI
-5. **Creates PRs automatically** using the Vibe-Kanban API (rebase → resolve conflicts → push → create PR)
-6. **Sends Telegram notifications** for errors, merges, milestones, and status summaries
-7. **Provides a Telegram chatbot** for interactive commands (`/status`, `/tasks`, `/restart`, `/stop`, free-text AI chat)
-8. **Manages Vibe-Kanban** lifecycle — spawns, monitors, and restarts the task board backend
-
-## Benefits
-
-- **Zero-touch operation**: Set up once, walk away. The monitor handles crashes, retries, and PR creation.
-- **Smart PR flow**: Automatically rebases, resolves merge conflicts, runs prepush hooks, and creates PRs — so agents don't get stuck on "agent must push before PR".
-- **AI-powered crash analysis**: When the orchestrator crashes, Codex reads the log and provides a diagnosis.
-- **Loop detection**: If the same error repeats 4+ times in 10 minutes, Codex autofix kicks in automatically.
-- **Stale attempt cleanup**: Detects dead attempts (0 commits, many behind main) and archives them.
-- **Real-time visibility**: Telegram notifications keep you informed without watching a terminal.
-- **Works with any orchestrator**: While built for VirtEngine's `ve-orchestrator.ps1`, it can wrap any long-running script.
+```bash
+npm install -g @virtengine/codex-monitor
+```
 
 ## Quick Start
 
-### 1. Install
-
 ```bash
-# In your project
-cd scripts/codex-monitor   # or wherever you place it
-npm install
+cd your-project
+codex-monitor          # auto-detects first run → launches setup wizard
 ```
 
-### 2. Configure
+That's it. On first run, the setup wizard walks you through everything: executors, AI provider, Telegram, Vibe-Kanban, and agent templates.
 
-Run the interactive setup wizard:
+## What It Does
 
-```bash
-node setup.mjs
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      @virtengine/codex-monitor                   │
+│                                                                  │
+│  cli.mjs ────── entry point, first-run detection                 │
+│       │                                                          │
+│  config.mjs ── unified config (env + JSON + CLI)                 │
+│       │                                                          │
+│  monitor.mjs ── orchestrator supervisor                          │
+│       │    └── log analysis, error detection                     │
+│       │    └── smart PR flow (VK API)                            │
+│       │    └── executor scheduling & failover                    │
+│       │    └── task planner auto-trigger                         │
+│       │                                                          │
+│       ├── telegram-bot.mjs ── interactive chatbot                │
+│       │       └── /status /tasks /restart /stop /agents          │
+│       │       └── free-text AI chat                              │
+│       │                                                          │
+│       ├── codex-shell.mjs ── persistent Codex session            │
+│       │       └── MCP tool access (GitHub, VK, files)            │
+│       │                                                          │
+│       ├── autofix.mjs ── error loop detection + auto-fix         │
+│       │                                                          │
+│       └── maintenance.mjs ── singleton lock, cleanup             │
+│                                                                  │
+│  Integrations:                                                   │
+│    • Vibe-Kanban API (task management, PR creation)              │
+│    • Codex SDK (AI analysis, autofix)                            │
+│    • Telegram Bot API (notifications, commands)                  │
+│    • GitHub CLI (PR operations fallback)                         │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-Or copy the example environment file and edit it:
+### Key Features
 
-```bash
-cp .env.example .env
-# Edit .env with your values
-```
-
-### 3. Run
-
-```bash
-node monitor.mjs
-```
-
-With options:
-
-```bash
-node monitor.mjs --args "-MaxParallel 6" --restart-delay 10000
-```
+- **Multi-executor scheduling** — Configure N AI agents (Copilot, Codex, custom) with weighted distribution and automatic failover
+- **Smart PR flow** — Auto-rebase, resolve merge conflicts, create PRs via Vibe-Kanban API
+- **Crash analysis** — Codex SDK reads logs and diagnoses root causes
+- **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
+- **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
+- **Telegram chatbot** — Real-time notifications + interactive commands
+- **Auto-setup** — First-run wizard configures everything; generates agent templates, wires Vibe-Kanban
+- **Multi-repo support** — Manage separate backend/frontend repos from one monitor instance
+- **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
 
 ## Configuration
 
-All configuration is done through environment variables (or a `.env` file).
+Configuration loads from (highest priority first):
 
-### Required
+1. **CLI flags** (`--script ./myorch.ps1`)
+2. **Environment variables** (`ORCHESTRATOR_SCRIPT=...`)
+3. **`.env` file** (in codex-monitor directory)
+4. **`codex-monitor.config.json`** (project config)
+5. **Built-in defaults**
 
-| Variable             | Description                                                            |
-| -------------------- | ---------------------------------------------------------------------- |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token from @BotFather                                     |
-| `TELEGRAM_CHAT_ID`   | Your Telegram chat ID (use `node get-telegram-chat-id.mjs` to find it) |
-
-### Recommended
-
-| Variable         | Default                  | Description                                       |
-| ---------------- | ------------------------ | ------------------------------------------------- |
-| `OPENAI_API_KEY` | —                        | OpenAI (or compatible) API key for Codex analysis |
-| `VK_BASE_URL`    | `http://127.0.0.1:54089` | Vibe-Kanban API endpoint                          |
-| `GITHUB_REPO`    | auto-detected            | GitHub repo slug (`org/repo`)                     |
-| `MAX_PARALLEL`   | `6`                      | Maximum concurrent agent slots                    |
-
-### Optional
-
-| Variable                            | Default                     | Description                               |
-| ----------------------------------- | --------------------------- | ----------------------------------------- |
-| `OPENAI_BASE_URL`                   | `https://api.openai.com/v1` | Custom API base (Azure, local, etc.)      |
-| `CODEX_MODEL`                       | SDK default                 | Model to use for analysis                 |
-| `CODEX_SDK_DISABLED`                | `0`                         | Set to `1` to disable all AI features     |
-| `VK_RECOVERY_PORT`                  | `54089`                     | Vibe-Kanban API port                      |
-| `VK_PUBLIC_URL`                     | —                           | Public URL for VK links in Telegram       |
-| `VK_NO_SPAWN`                       | `0`                         | Set to `1` to prevent auto-spawning VK    |
-| `TELEGRAM_INTERVAL_MIN`             | `10`                        | Minutes between periodic status summaries |
-| `TASK_PLANNER_PER_CAPITA_THRESHOLD` | `1`                         | Trigger planner when backlog-per-slot < N |
-| `TASK_PLANNER_IDLE_SLOT_THRESHOLD`  | `1`                         | Trigger planner when idle slots ≥ N       |
-| `TASK_PLANNER_DEDUP_HOURS`          | `24`                        | Don't re-trigger planner within N hours   |
-| `RESTART_DELAY_MS`                  | `10000`                     | Delay before restarting orchestrator      |
-| `MAX_RESTARTS`                      | `0`                         | Max restarts (0 = unlimited)              |
-
-See [.env.example](.env.example) for the full reference.
-
-## CLI Options
-
-```
-node monitor.mjs [options]
-```
-
-| Option                      | Description                                                         |
-| --------------------------- | ------------------------------------------------------------------- |
-| `--script <path>`           | Path to the orchestrator script (default: `../ve-orchestrator.ps1`) |
-| `--args "<args>"`           | Arguments passed to the script (default: `-MaxParallel 6`)          |
-| `--restart-delay <ms>`      | Delay before restart (default: `10000`)                             |
-| `--max-restarts <n>`        | Max restarts, 0 = unlimited (default: `0`)                          |
-| `--log-dir <path>`          | Log directory (default: `./logs`)                                   |
-| `--watch-path <path>`       | File to watch for auto-restart (default: script path)               |
-| `--no-codex`                | Disable Codex SDK analysis                                          |
-| `--no-watch`                | Disable file watching                                               |
-| `--no-autofix`              | Disable automatic error fixing                                      |
-| `--no-telegram-bot`         | Disable the interactive Telegram bot                                |
-| `--no-vk-spawn`             | Don't auto-spawn Vibe-Kanban                                        |
-| `--no-echo-logs`            | Don't echo orchestrator output to console                           |
-| `--vk-ensure-interval <ms>` | VK health check interval (default: `60000`)                         |
-
-## Setting Up Telegram
-
-### 1. Create a Bot
-
-1. Open Telegram and search for **@BotFather**
-2. Send `/newbot` and follow the prompts
-3. Copy the bot token (looks like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
-4. Set `TELEGRAM_BOT_TOKEN` in your `.env`
-
-### 2. Get Your Chat ID
+### Setup Wizard
 
 ```bash
-node get-telegram-chat-id.mjs
+codex-monitor --setup
 ```
 
-This starts a temporary listener. Send any message to your bot — the script will print your chat ID. Set `TELEGRAM_CHAT_ID` in your `.env`.
+The wizard configures:
 
-### 3. Bot Commands
+- Project identity (name, repo slug)
+- Multi-repo setup (backend + frontend repos)
+- Executor profiles (AI models, weights, roles)
+- Failover strategy and distribution mode
+- AI provider (OpenAI, Azure, Ollama, custom)
+- Telegram bot
+- Vibe-Kanban connection
+- Agent template files (AGENTS.md, orchestrator.agent.md, task-planner.agent.md)
+- VK workspace scripts (setup, cleanup)
 
-Once running, the Telegram bot responds to:
+### Executor Configuration
 
-| Command               | Description                                     |
-| --------------------- | ----------------------------------------------- |
-| `/status`             | Current orchestrator status and attempt summary |
-| `/tasks`              | List active tasks with progress                 |
-| `/agents`             | Show agent slot utilization                     |
-| `/health`             | System health check                             |
-| `/restart`            | Restart the orchestrator                        |
-| `/stop`               | Gracefully stop the orchestrator                |
-| `/reattempt <id>`     | Re-queue a failed task                          |
-| `/plan <description>` | Trigger the AI task planner                     |
-| Free text             | Chat with Codex AI about the project            |
+Executors are the AI agents that work on tasks. Configure as many as you want with weights and roles:
+
+```json
+// codex-monitor.config.json
+{
+  "projectName": "my-app",
+  "executors": [
+    {
+      "name": "copilot-claude",
+      "executor": "COPILOT",
+      "variant": "CLAUDE_OPUS_4_6",
+      "weight": 40,
+      "role": "primary",
+      "enabled": true
+    },
+    {
+      "name": "codex-default",
+      "executor": "CODEX",
+      "variant": "DEFAULT",
+      "weight": 35,
+      "role": "backup",
+      "enabled": true
+    },
+    {
+      "name": "copilot-gpt",
+      "executor": "COPILOT",
+      "variant": "GPT_4_1",
+      "weight": 25,
+      "role": "tertiary",
+      "enabled": true
+    }
+  ],
+  "failover": {
+    "strategy": "next-in-line",
+    "maxRetries": 3,
+    "cooldownMinutes": 5,
+    "disableOnConsecutiveFailures": 3
+  },
+  "distribution": "weighted"
+}
+```
+
+Or via environment variable shorthand:
+
+```env
+EXECUTORS=COPILOT:CLAUDE_OPUS_4_6:40,CODEX:DEFAULT:35,COPILOT:GPT_4_1:25
+```
+
+#### Distribution Modes
+
+| Mode           | Behavior                                          |
+| -------------- | ------------------------------------------------- |
+| `weighted`     | Distribute tasks by configured weight percentages |
+| `round-robin`  | Alternate between executors equally               |
+| `primary-only` | Always use primary; others only for failover      |
+
+#### Failover Strategies
+
+| Strategy          | Behavior                                             |
+| ----------------- | ---------------------------------------------------- |
+| `next-in-line`    | Use the next executor by role (primary → backup → …) |
+| `weighted-random` | Randomly select from remaining by weight             |
+| `round-robin`     | Cycle through remaining executors                    |
+
+When an executor fails `disableOnConsecutiveFailures` times in a row, it enters cooldown for `cooldownMinutes` minutes. Tasks automatically route to the next available executor.
+
+### Multi-Repo Support
+
+For projects with separate repositories (e.g., backend + frontend):
+
+```json
+{
+  "repositories": [
+    {
+      "name": "backend",
+      "path": "/path/to/backend",
+      "slug": "org/backend",
+      "primary": true
+    },
+    {
+      "name": "frontend",
+      "path": "/path/to/frontend",
+      "slug": "org/frontend"
+    }
+  ]
+}
+```
+
+### Environment Variables
+
+See [.env.example](.env.example) for the full reference. Key variables:
+
+| Variable                | Default                  | Description                        |
+| ----------------------- | ------------------------ | ---------------------------------- |
+| `PROJECT_NAME`          | auto-detected            | Project name for display           |
+| `GITHUB_REPO`           | auto-detected            | GitHub repo slug (`org/repo`)      |
+| `OPENAI_API_KEY`        | —                        | API key for Codex analysis         |
+| `TELEGRAM_BOT_TOKEN`    | —                        | Telegram bot token from @BotFather |
+| `TELEGRAM_CHAT_ID`      | —                        | Telegram chat ID                   |
+| `VK_BASE_URL`           | `http://127.0.0.1:54089` | Vibe-Kanban API endpoint           |
+| `EXECUTORS`             | Copilot+Codex 50/50      | Executor shorthand (see above)     |
+| `EXECUTOR_DISTRIBUTION` | `weighted`               | Distribution mode                  |
+| `FAILOVER_STRATEGY`     | `next-in-line`           | Failover behavior                  |
+| `MAX_PARALLEL`          | `6`                      | Max concurrent agent slots         |
+
+## CLI Reference
+
+```
+codex-monitor [options]
+```
+
+| Option                  | Description                               |
+| ----------------------- | ----------------------------------------- |
+| `--setup`               | Run the interactive setup wizard          |
+| `--help`                | Show help                                 |
+| `--version`             | Show version                              |
+| `--script <path>`       | Path to the orchestrator script           |
+| `--args "<args>"`       | Arguments passed to the script            |
+| `--restart-delay <ms>`  | Delay before restart (default: `10000`)   |
+| `--max-restarts <n>`    | Max restarts, 0 = unlimited               |
+| `--log-dir <path>`      | Log directory (default: `./logs`)         |
+| `--no-codex`            | Disable Codex SDK analysis                |
+| `--no-autofix`          | Disable automatic error fixing            |
+| `--no-telegram-bot`     | Disable the interactive Telegram bot      |
+| `--no-vk-spawn`         | Don't auto-spawn Vibe-Kanban              |
+| `--no-watch`            | Disable file watching for auto-restart    |
+| `--no-echo-logs`        | Don't echo orchestrator output to console |
+| `--config-dir <path>`   | Directory containing config files         |
+| `--repo-root <path>`    | Repository root (auto-detected)           |
+| `--project-name <name>` | Project name for display                  |
+| `--repo <org/repo>`     | GitHub repo slug                          |
+
+## Telegram Bot
+
+### Setup
+
+1. Open Telegram → search **@BotFather** → `/newbot` → copy token
+2. Set `TELEGRAM_BOT_TOKEN` in `.env`
+3. Run `codex-monitor-chat-id` → send a message to your bot → copy the chat ID
+4. Set `TELEGRAM_CHAT_ID` in `.env`
+
+### Commands
+
+| Command               | Description                                   |
+| --------------------- | --------------------------------------------- |
+| `/status`             | Current orchestrator status + attempt summary |
+| `/tasks`              | List active tasks with progress               |
+| `/agents`             | Show executor utilization & health            |
+| `/health`             | System health check                           |
+| `/restart`            | Restart the orchestrator                      |
+| `/stop`               | Gracefully stop the orchestrator              |
+| `/reattempt <id>`     | Re-queue a failed task                        |
+| `/plan <description>` | Trigger the AI task planner                   |
+| Free text             | Chat with Codex AI about the project          |
 
 ## Smart PR Flow
 
-When an agent finishes a task, Codex Monitor automatically handles PR creation:
-
 ```
 Agent finishes task
-        ↓
+        │
    Check branch status (VK API)
-        ↓
+        │
    ┌─── 0 commits + far behind? → Archive stale attempt
    │
-   ├─── Uncommitted changes only? → Prompt agent to commit
+   ├─── Uncommitted changes? → Prompt agent to commit
    │
    └─── Commits exist:
-         ↓
+         │
       Rebase onto main (VK API)
-         ↓
+         │
       ┌── Conflicts? → Auto-resolve (VK API)
-      │       ↓
+      │       │
       │   Still conflicts? → Prompt agent to resolve
       │
       └── Clean rebase:
-            ↓
-         Create PR (VK API, triggers prepush hooks)
-            ↓
+            │
+         Create PR (VK API → triggers pre-push hooks)
+            │
          ┌── Success → Notify via Telegram
-         │
-         ├── Fast fail (<2s) → Worktree issue, prompt agent
-         │
-         └── Slow fail (>30s) → Prepush hook failure, prompt agent to fix
+         ├── Fast fail (<2s) → Worktree issue → prompt agent
+         └── Slow fail (>30s) → Pre-push failure → prompt agent to fix
 ```
 
-## Architecture
+## Agent Templates
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                     codex-monitor                         │
-│                                                           │
-│  monitor.mjs ─── orchestrator supervisor                  │
-│       │     └─── log analysis, error detection            │
-│       │     └─── smart PR flow (VK API)                   │
-│       │     └─── task planner auto-trigger                │
-│       │                                                   │
-│       ├── telegram-bot.mjs ─── interactive chatbot        │
-│       │       └─── commands, free-text AI chat            │
-│       │                                                   │
-│       ├── codex-shell.mjs ─── persistent Codex session    │
-│       │       └─── MCP tool access (GitHub, VK, files)    │
-│       │                                                   │
-│       ├── autofix.mjs ─── error loop detection + fix      │
-│       │                                                   │
-│       └── maintenance.mjs ─── singleton lock, cleanup     │
-│                                                           │
-│  Integrations:                                            │
-│    • Vibe-Kanban API (task management, PR creation)       │
-│    • Codex SDK (AI analysis, autofix)                     │
-│    • Telegram Bot API (notifications, commands)           │
-│    • GitHub CLI (PR operations fallback)                  │
-└──────────────────────────────────────────────────────────┘
-```
+The setup wizard generates agent template files for your project:
 
-## Using with a Different Repository
+| File                                   | Purpose                                                            |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `AGENTS.md`                            | Root-level guide for AI agents (commit conventions, quality gates) |
+| `.github/agents/orchestrator.agent.md` | Task orchestrator agent prompt (for Copilot/Codex)                 |
+| `.github/agents/task-planner.agent.md` | Auto-creates tasks when backlog is low                             |
 
-Codex Monitor is designed to work with any project that uses Vibe-Kanban for task management:
+These are generic starting points. Customize them for your project's specific needs (build commands, test framework, architecture patterns).
 
-1. **Run the setup wizard** in your project:
-
-   ```bash
-   node setup.mjs
-   ```
-
-2. **Point to your orchestrator script** via `--script`:
-
-   ```bash
-   node monitor.mjs --script ./my-orchestrator.ps1
-   ```
-
-3. **Configure your Vibe-Kanban instance** — set `VK_BASE_URL` to your Kanban API.
-
-4. **Customize AI provider** — set `OPENAI_API_KEY` and optionally `OPENAI_BASE_URL` for:
-   - OpenAI (default)
-   - Azure OpenAI
-   - Local models (Ollama, vLLM, etc.)
-   - Any OpenAI-compatible endpoint
-
-### Provider Examples
+## AI Provider Examples
 
 **OpenAI (default):**
 
@@ -254,6 +302,7 @@ OPENAI_API_KEY=sk-...
 ```env
 OPENAI_API_KEY=your-azure-key
 OPENAI_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
+CODEX_MODEL=your-deployment-name
 ```
 
 **Local model (Ollama):**
@@ -264,57 +313,49 @@ OPENAI_BASE_URL=http://localhost:11434/v1
 CODEX_MODEL=codex
 ```
 
-## Agent Support Matrix
+## File Structure
 
-| Agent Type | Subagents           | Codex Shell | Notes                        |
-| ---------- | ------------------- | ----------- | ---------------------------- |
-| Copilot    | Yes (`runSubagent`) | Yes         | Full MCP tool access         |
-| Codex CLI  | No                  | Yes         | Single-session, sandbox mode |
-| Custom     | —                   | Via API     | Bring your own agent         |
-
-The Codex SDK remains the primary driver for the monitor's core AI features (analysis, autofix, shell). When using Copilot as an agent executor, subagent support enables parallel task delegation.
+```
+codex-monitor/
+├── cli.mjs                      # CLI entry point + first-run detection
+├── config.mjs                   # Unified config loader (env + JSON + CLI)
+├── monitor.mjs                  # Main supervisor (log analysis, PR flow)
+├── telegram-bot.mjs             # Interactive Telegram chatbot
+├── codex-shell.mjs              # Persistent Codex SDK session
+├── autofix.mjs                  # Error loop detection + auto-fix
+├── maintenance.mjs              # Singleton lock, process cleanup
+├── setup.mjs                    # Interactive setup wizard
+├── get-telegram-chat-id.mjs     # Telegram chat ID helper
+├── codex-monitor.config.json    # Project config (generated by setup)
+├── .env                         # Environment variables (generated by setup)
+├── .env.example                 # Environment variable reference
+├── package.json                 # NPM package definition
+└── logs/                        # Auto-created log directory
+```
 
 ## Troubleshooting
+
+### First-run setup doesn't launch
+
+The auto-detection checks for `.env` or `codex-monitor.config.json`. If either exists, setup won't auto-launch. Run `codex-monitor --setup` manually.
 
 ### Telegram 409 errors
 
 > `Conflict: terminated by other getUpdates request`
 
-Only one process can poll a Telegram bot at a time. Codex Monitor auto-disables its internal polling when the telegram-bot module is active. If you see this error, ensure only one monitor instance is running (the singleton lock prevents duplicates automatically).
+Only one process can poll a Telegram bot. The monitor auto-disables its polling when `telegram-bot.mjs` is active. Ensure only one monitor instance runs (singleton lock prevents duplicates).
+
+### Executor keeps failing over
+
+Check the executor summary via `/agents` in Telegram. An executor enters cooldown after consecutive failures. Increase `FAILOVER_COOLDOWN_MIN` or `FAILOVER_DISABLE_AFTER` if failovers are too aggressive.
 
 ### "Agent must push before PR"
 
-The Smart PR flow handles this automatically. When this log line appears, the monitor detects it and triggers the VK API flow (rebase → resolve conflicts → create PR → fallback to agent prompt).
+The Smart PR flow handles this automatically. The monitor detects this log line and triggers VK API flow (rebase → resolve conflicts → create PR).
 
 ### Vibe-Kanban not reachable
 
-The monitor auto-spawns Vibe-Kanban if not running. If it keeps failing:
-
-- Check that the vibe-kanban binary is on your PATH
-- Verify `VK_BASE_URL` and `VK_RECOVERY_PORT` match your setup
-- Set `VK_NO_SPAWN=1` to manage VK separately
-
-### Codex analysis not working
-
-- Ensure `OPENAI_API_KEY` is set
-- Check that `CODEX_SDK_DISABLED` is not `1`
-- The Codex SDK auto-installs on first run; check npm/pnpm availability
-
-## File Structure
-
-```
-codex-monitor/
-├── monitor.mjs              # Main supervisor (entry point)
-├── telegram-bot.mjs         # Interactive Telegram chatbot
-├── codex-shell.mjs          # Persistent Codex SDK session
-├── autofix.mjs              # Error loop detection + auto-fix
-├── maintenance.mjs          # Singleton lock, process cleanup
-├── setup.mjs                # Interactive setup wizard
-├── get-telegram-chat-id.mjs # Telegram chat ID helper
-├── .env.example             # Environment variable reference
-├── package.json             # NPM package definition
-└── logs/                    # Auto-created log directory
-```
+The monitor auto-spawns VK if not running. Set `VK_NO_SPAWN=1` to manage VK separately. Verify `VK_BASE_URL` matches your setup.
 
 ## License
 

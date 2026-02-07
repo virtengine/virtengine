@@ -19,23 +19,12 @@ import {
   injectMonitorFunctions,
 } from "./telegram-bot.mjs";
 import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
+import { loadConfig } from "./config.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
-const defaultScript = resolve(__dirname, "..", "ve-orchestrator.ps1");
-const args = process.argv.slice(2);
-
-function getArg(name, fallback) {
-  const idx = args.indexOf(name);
-  if (idx === -1 || idx === args.length - 1) {
-    return fallback;
-  }
-  return args[idx + 1];
-}
-
-function getFlag(name) {
-  return args.includes(name);
-}
+// ── Load unified configuration ──────────────────────────────────────────────
+const config = loadConfig();
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -86,83 +75,56 @@ async function releaseTelegramPollLock() {
   }
 }
 
-const scriptPath = resolve(getArg("--script", defaultScript));
-const scriptArgsRaw = getArg("--args", "-MaxParallel 6");
-const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
-const restartDelayMs = Number(getArg("--restart-delay", "10000"));
-const maxRestarts = Number(getArg("--max-restarts", "0"));
-const logDir = resolve(getArg("--log-dir", resolve(__dirname, "logs")));
-const watchEnabled = !getFlag("--no-watch");
-const watchPath = resolve(getArg("--watch-path", scriptPath));
-const echoLogs = !getFlag("--no-echo-logs");
-const autoFixEnabled = !getFlag("--no-autofix");
-const vkEnsureIntervalMs = Number(getArg("--vk-ensure-interval", "60000"));
-const vkSpawnEnabled = !getFlag("--no-vk-spawn");
-let codexEnabled =
-  !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
-const repoRoot = resolve(__dirname, "..", "..");
-const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
-const telegramPollLockPath = resolve(
+const {
+  projectName,
+  scriptPath,
+  scriptArgs,
+  restartDelayMs,
+  maxRestarts,
+  logDir,
+  watchEnabled,
+  watchPath: configWatchPath,
+  echoLogs,
+  autoFixEnabled,
   repoRoot,
-  ".cache",
-  "telegram-getupdates.lock",
-);
-const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-const telegramChatId = process.env.TELEGRAM_CHAT_ID;
-const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
-const telegramCommandPollTimeoutSec = Math.max(
-  5,
-  Number(process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20"),
-);
-const telegramCommandConcurrency = Math.max(
-  1,
-  Number(process.env.TELEGRAM_COMMAND_CONCURRENCY || "2"),
-);
-const telegramCommandMaxBatch = Math.max(
-  1,
-  Number(process.env.TELEGRAM_COMMAND_MAX_BATCH || "25"),
-);
-const telegramBotEnabled = !getFlag("--no-telegram-bot");
+  statusPath,
+  telegramPollLockPath,
+  telegramToken,
+  telegramChatId,
+  telegramIntervalMin,
+  telegramCommandPollTimeoutSec,
+  telegramCommandConcurrency,
+  telegramCommandMaxBatch,
+  telegramBotEnabled,
+  repoSlug,
+  repoUrlBase,
+  vkRecoveryPort,
+  vkRecoveryHost,
+  vkEndpointUrl,
+  vkPublicUrl,
+  vkRecoveryCooldownMin,
+  vkSpawnEnabled,
+  vkEnsureIntervalMs,
+  plannerPerCapitaThreshold,
+  plannerIdleSlotThreshold,
+  plannerDedupMs,
+  agentPrompts,
+  scheduler: executorScheduler,
+} = config;
+
+const watchPath = resolve(configWatchPath);
+let codexEnabled = config.codexEnabled;
+let codexDisabledReason = codexEnabled
+  ? ""
+  : process.env.CODEX_SDK_DISABLED === "1"
+    ? "disabled via CODEX_SDK_DISABLED"
+    : "disabled via --no-codex";
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
-let telegramCommandEnabled = getFlag("--telegram-commands")
-  ? !telegramBotEnabled // explicit flag, but still disable if bot active
-  : false; // default OFF — telegram-bot.mjs handles commands
+let telegramCommandEnabled = config.telegramCommandEnabled;
 let telegramPollLockHeld = false;
-const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
-const repoUrlBase =
-  process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
-const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
-const vkRecoveryHost =
-  process.env.VK_RECOVERY_HOST || process.env.VK_HOST || "0.0.0.0";
-const vkEndpointUrl =
-  process.env.VK_ENDPOINT_URL ||
-  process.env.VK_BASE_URL ||
-  `http://127.0.0.1:${vkRecoveryPort}`;
-const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
-const vkRecoveryCooldownMin = Number(
-  process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
-);
-const plannerPerCapitaThreshold = Number(
-  process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
-);
-const plannerIdleSlotThreshold = Number(
-  process.env.TASK_PLANNER_IDLE_SLOT_THRESHOLD || "1",
-);
-const plannerDedupHours = Number(process.env.TASK_PLANNER_DEDUP_HOURS || "24");
-const plannerDedupMs = Number.isFinite(plannerDedupHours)
-  ? plannerDedupHours * 60 * 60 * 1000
-  : 24 * 60 * 60 * 1000;
 
 let CodexClient = null;
-let codexDisabledReason = "";
-
-if (!codexEnabled) {
-  codexDisabledReason =
-    process.env.CODEX_SDK_DISABLED === "1"
-      ? "disabled via CODEX_SDK_DISABLED"
-      : "disabled via --no-codex";
-}
 
 let restartCount = 0;
 let shuttingDown = false;
@@ -431,13 +393,13 @@ async function attemptMonitorFix({ error, logText }) {
   }
 
   const attemptNum = recordMonitorFixAttempt(signature);
-  const prompt = `You are debugging the VirtEngine codex-monitor.
+  const prompt = `You are debugging the ${projectName} codex-monitor.
 
 The monitor process hit an unexpected exception and needs a fix.
-Please inspect and fix code in:
-- scripts/codex-monitor/monitor.mjs
-- scripts/codex-monitor/autofix.mjs
-- scripts/codex-monitor/maintenance.mjs
+Please inspect and fix code in the codex-monitor directory:
+- monitor.mjs
+- autofix.mjs
+- maintenance.mjs
 
 Crash info:
 ${error?.stack || error?.message || String(error)}
@@ -584,16 +546,16 @@ async function attemptCrashLoopFix({ reason, logText }) {
   }
 
   const attemptNum = recordCrashLoopFixAttempt(signature);
-  const prompt = `You are a reliability engineer debugging a crash loop in VirtEngine automation.
+  const prompt = `You are a reliability engineer debugging a crash loop in ${projectName} automation.
 
 The orchestrator is restarting repeatedly within minutes.
 Please diagnose the likely root cause and apply a minimal fix.
 
 Targets (edit only if needed):
-- scripts/ve-orchestrator.ps1
-- scripts/codex-monitor/monitor.mjs
-- scripts/codex-monitor/autofix.mjs
-- scripts/codex-monitor/maintenance.mjs
+- ${scriptPath}
+- codex-monitor/monitor.mjs
+- codex-monitor/autofix.mjs
+- codex-monitor/maintenance.mjs
 
 Recent log excerpt:
 ${logText.slice(-6000)}
@@ -836,7 +798,7 @@ function notifyVkError(line) {
     ? formatHtmlLink(vkPublicUrl, "Public URL")
     : null;
   const message = [
-    "VirtEngine Orchestrator Warning",
+    `${projectName} Orchestrator Warning`,
     "Vibe-Kanban API unreachable.",
     `Check ${vkLink} and ensure the service is running.`,
     publicLink ? `Open ${publicLink}.` : null,
@@ -873,7 +835,7 @@ Provide a short recovery plan and validate environment assumptions.
 Reason: ${reason}`;
     const result = await thread.run(prompt);
     const outPath = resolve(logDir, `codex-recovery-${nowStamp()}.txt`);
-    await writeFile(outPath, String(result), "utf8");
+    await writeFile(outPath, formatCodexResult(result), "utf8");
     return outPath;
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
@@ -1463,7 +1425,7 @@ async function flushErrorQueue() {
     return;
   }
   const lines = errorQueue.splice(0, errorQueue.length);
-  const message = ["VirtEngine Orchestrator Error", ...lines].join("\n");
+  const message = [`${projectName} Orchestrator Error`, ...lines].join("\n");
   await sendTelegramMessage(message);
 }
 
@@ -1542,7 +1504,7 @@ async function readStatusSummary() {
     const status = await readStatusData();
     if (!status) {
       return {
-        text: "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)",
+        text: `${projectName} Orchestrator Update\nStatus: unavailable (missing status file)`,
         parseMode: null,
       };
     }
@@ -1684,7 +1646,7 @@ async function readStatusSummary() {
         : "No completed tasks yet";
 
     const message = [
-      "VirtEngine Orchestrator 10-min Update",
+      `${projectName} Orchestrator ${telegramIntervalMin}-min Update`,
       `New tasks created (${recentSubmitted.length}):`,
       ...createdLines,
       `Merged tasks (${recentCompleted.length}):`,
@@ -1702,7 +1664,7 @@ async function readStatusSummary() {
     return { text: message, parseMode: "HTML" };
   } catch (err) {
     return {
-      text: "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)",
+      text: `${projectName} Orchestrator Update\nStatus: unavailable (missing status file)`,
       parseMode: null,
     };
   }
@@ -1927,7 +1889,7 @@ async function buildTasksResponse() {
     : ["- none"];
 
   const message = [
-    "VirtEngine Task Snapshot",
+    `${projectName} Task Snapshot`,
     `Counts: running=${counts.running ?? 0}, review=${counts.review ?? 0}, error=${counts.error ?? 0}, manual_review=${counts.manual_review ?? 0}`,
     `Backlog remaining: ${status.backlog_remaining ?? 0}`,
     "Running attempts:",
@@ -1960,7 +1922,7 @@ async function buildAgentResponse() {
     ? `Orchestrator running (pid ${currentChild.pid}).`
     : "Orchestrator not running.";
   const message = [
-    "VirtEngine Agent Status",
+    `${projectName} Agent Status`,
     orchestratorState,
     `Active attempts: ${runningAttempts.length}`,
     ...(activeLines.length ? activeLines : ["- none"]),
@@ -1980,7 +1942,7 @@ async function buildBackgroundResponse() {
       ? `safe-mode until ${new Date(monitorSafeModeUntil).toISOString()}`
       : "normal";
   const message = [
-    "VirtEngine Background Status",
+    `${projectName} Background Status`,
     currentChild
       ? `Orchestrator: running (pid ${currentChild.pid})`
       : "Orchestrator: stopped",
@@ -1997,7 +1959,7 @@ async function buildHealthResponse() {
     : "unknown";
   const vkOnline = await isVibeKanbanOnline();
   const message = [
-    "VirtEngine Health",
+    `${projectName} Health`,
     `Orchestrator: ${currentChild ? "running" : "stopped"}`,
     `Status updated: ${updatedAt}`,
     `Vibe-kanban: ${vkOnline ? "online" : "unreachable"}`,
@@ -2044,7 +2006,7 @@ async function handleTelegramUpdate(update) {
     case "/start":
       response = {
         text: [
-          "VirtEngine Command Help",
+          `${projectName} Command Help`,
           "/status — summary snapshot",
           "/tasks — task breakdown",
           "/agent — active agent status",
@@ -2200,7 +2162,7 @@ function startTelegramNotifier() {
     await flushMergeNotifications();
     await checkStatusMilestones();
   };
-  void sendTelegramMessage("VirtEngine Orchestrator Notifier started.");
+  void sendTelegramMessage(`${projectName} Orchestrator Notifier started.`);
   setTimeout(sendUpdate, intervalMs);
   setInterval(sendUpdate, intervalMs);
 }
@@ -2304,19 +2266,13 @@ async function triggerTaskPlanner(reason, details) {
     if (!CodexClient) {
       throw new Error("Codex SDK not available");
     }
-    const agentPath = resolve(
-      repoRoot,
-      ".github",
-      "agents",
-      "Task Planner.agent.md",
-    );
-    const agentPrompt = await readFile(agentPath, "utf8");
+    const agentPrompt = agentPrompts.planner;
     const codex = new CodexClient();
     const thread = codex.startThread();
     const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
     const result = await thread.run(prompt);
     const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
-    await writeFile(outPath, String(result), "utf8");
+    await writeFile(outPath, formatCodexResult(result), "utf8");
     await updatePlannerState({
       last_success_at: new Date().toISOString(),
       last_success_reason: reason || "manual",
@@ -2357,6 +2313,60 @@ function nowStamp() {
   )}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
+function safeStringify(value) {
+  const seen = new Set();
+  try {
+    return JSON.stringify(
+      value,
+      (key, val) => {
+        if (typeof val === "object" && val !== null) {
+          if (seen.has(val)) {
+            return "[Circular]";
+          }
+          seen.add(val);
+        }
+        if (typeof val === "bigint") {
+          return val.toString();
+        }
+        return val;
+      },
+      2,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function formatCodexResult(result) {
+  if (result === null || result === undefined) {
+    return "";
+  }
+  if (typeof result === "string") {
+    return result;
+  }
+  if (typeof result === "number" || typeof result === "boolean") {
+    return String(result);
+  }
+  if (typeof result === "object") {
+    const candidates = [
+      result.output,
+      result.text,
+      result.message,
+      result.content,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+    }
+    const serialized = safeStringify(result);
+    if (serialized) {
+      return serialized;
+    }
+  }
+  return String(result);
+}
+
 async function analyzeWithCodex(logPath, logText, reason) {
   if (!codexEnabled) {
     return;
@@ -2382,7 +2392,7 @@ Return a short diagnosis and what the concrete fix would be (but do not apply it
 
     const result = await thread.run(prompt);
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
-    const analysisText = String(result);
+    const analysisText = formatCodexResult(result);
     await writeFile(analysisPath, analysisText, "utf8");
 
     // Notify user with Codex analysis outcome
@@ -2839,8 +2849,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 // ── Singleton guard: prevent ghost monitors ─────────────────────────────────
-const cacheDir = resolve(repoRoot, ".cache");
-if (!acquireMonitorLock(cacheDir)) {
+if (!acquireMonitorLock(config.cacheDir)) {
   process.exit(1);
 }
 

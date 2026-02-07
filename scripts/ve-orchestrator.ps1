@@ -144,6 +144,7 @@ Ensure-VeKanbanLibraryLoaded -RequiredFunctions $requiredFunctions | Out-Null
 # ─── State tracking ──────────────────────────────────────────────────────────
 $script:CycleCount = 0
 $script:TasksCompleted = 0
+$script:TotalTasksCompleted = 0
 $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
@@ -157,6 +158,11 @@ $script:CompletedTasks = @()
 $script:SubmittedTasks = @()
 $script:FollowUpEvents = @()
 $script:CopilotRequests = @()
+
+$script:CiSweepEvery = $null
+$script:CiSweepPrEvery = $null
+$script:CiSweepPrBackupEnabled = $true
+$script:LastCISweepAt = $null
 
 # ─── Success rate tracking ────────────────────────────────────────────────────
 $script:FirstShotSuccess = 0          # Merged on first attempt, no copilot fix
@@ -187,6 +193,42 @@ function Write-Log {
         default { "Gray" }
     }
     Write-Host "  [$ts] $Message" -ForegroundColor $color
+}
+
+function Get-EnvInt {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [int]$Default,
+        [int]$Min = 0
+    )
+    $raw = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
+    $value = 0
+    if (-not [int]::TryParse($raw, [ref]$value)) { return $Default }
+    if ($value -lt $Min) { return $Min }
+    return $value
+}
+
+function Get-EnvBool {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [bool]$Default = $false
+    )
+    $raw = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
+    switch ($raw.Trim().ToLowerInvariant()) {
+        "1" { return $true }
+        "true" { return $true }
+        "yes" { return $true }
+        "y" { return $true }
+        "on" { return $true }
+        "0" { return $false }
+        "false" { return $false }
+        "no" { return $false }
+        "n" { return $false }
+        "off" { return $false }
+        default { return $Default }
+    }
 }
 
 function Request-OrchestratorStop {
@@ -521,6 +563,8 @@ function Get-OrchestratorState {
             last_task_id            = $null
             last_submitted_at       = $null
             last_ci_sweep_completed = 0
+            last_ci_sweep_at        = $null
+            total_tasks_completed   = 0
             vk_project_id           = $null
             vk_repo_id              = $null
         }
@@ -533,17 +577,22 @@ function Get-OrchestratorState {
                 last_task_id            = $null
                 last_submitted_at       = $null
                 last_ci_sweep_completed = 0
+                last_ci_sweep_at        = $null
+                total_tasks_completed   = 0
                 vk_project_id           = $null
                 vk_repo_id              = $null
             }
         }
         $state = $raw | ConvertFrom-Json -Depth 5
         $lastSweep = if ($state.last_ci_sweep_completed) { [int]$state.last_ci_sweep_completed } else { 0 }
+        $totalCompleted = if ($state.total_tasks_completed) { [int]$state.total_tasks_completed } else { 0 }
         return @{
             last_sequence_value     = $state.last_sequence_value
             last_task_id            = $state.last_task_id
             last_submitted_at       = $state.last_submitted_at
             last_ci_sweep_completed = $lastSweep
+            last_ci_sweep_at        = $state.last_ci_sweep_at
+            total_tasks_completed   = $totalCompleted
             vk_project_id           = $state.vk_project_id
             vk_repo_id              = $state.vk_repo_id
         }
@@ -554,6 +603,8 @@ function Get-OrchestratorState {
             last_task_id            = $null
             last_submitted_at       = $null
             last_ci_sweep_completed = 0
+            last_ci_sweep_at        = $null
+            total_tasks_completed   = 0
             vk_project_id           = $null
             vk_repo_id              = $null
         }
@@ -569,6 +620,40 @@ function Save-OrchestratorState {
         New-Item -ItemType Directory -Path $dir | Out-Null
     }
     $State | ConvertTo-Json -Depth 5 | Set-Content -Path $script:StatePath -Encoding UTF8
+}
+
+function Initialize-CISweepConfig {
+    $script:CiSweepEvery = Get-EnvInt -Name "VE_CI_SWEEP_EVERY" -Default 15 -Min 0
+    $script:CiSweepPrBackupEnabled = Get-EnvBool -Name "VE_CI_SWEEP_PR_BACKUP" -Default $true
+    $script:CiSweepPrEvery = Get-EnvInt -Name "VE_CI_SWEEP_PR_EVERY" -Default $script:CiSweepEvery -Min 0
+}
+
+function Initialize-CISweepState {
+    $state = Get-OrchestratorState
+    $script:TotalTasksCompleted = [int]($state.total_tasks_completed ?? 0)
+    if ($state.last_ci_sweep_completed -and $state.last_ci_sweep_completed -gt $script:TotalTasksCompleted) {
+        $script:TotalTasksCompleted = [int]$state.last_ci_sweep_completed
+    }
+    $script:LastCISweepAt = $state.last_ci_sweep_at
+}
+
+function Update-CISweepState {
+    param(
+        [int]$TotalTasksCompleted,
+        [string]$LastSweepAt,
+        [int]$LastSweepCompleted
+    )
+    $state = Get-OrchestratorState
+    if ($PSBoundParameters.ContainsKey("TotalTasksCompleted")) {
+        $state.total_tasks_completed = $TotalTasksCompleted
+    }
+    if ($PSBoundParameters.ContainsKey("LastSweepAt")) {
+        $state.last_ci_sweep_at = $LastSweepAt
+    }
+    if ($PSBoundParameters.ContainsKey("LastSweepCompleted")) {
+        $state.last_ci_sweep_completed = $LastSweepCompleted
+    }
+    Save-OrchestratorState -State $state
 }
 
 function Apply-CachedVKConfig {
@@ -1010,6 +1095,79 @@ function Get-AvailableSlots {
     return [math]::Max(0, $MaxParallel - $activeCount)
 }
 
+function Update-TaskContextCache {
+    param([Parameter(Mandatory)][hashtable]$Info)
+    if (-not $Info.task_id) { return }
+    $needsTitle = -not $Info.task_title_cached
+    $needsDescription = -not $Info.task_description_cached
+    if (-not $needsTitle -and -not $needsDescription) { return }
+
+    try {
+        $task = Get-VKTask -TaskId $Info.task_id
+    }
+    catch {
+        return
+    }
+    if (-not $task) { return }
+
+    if ($needsTitle) {
+        $Info.task_title_cached = if ($task.title) { $task.title } elseif ($task.name) { $task.name } else { $Info.name }
+    }
+    if ($needsDescription) {
+        $Info.task_description_cached = if ($task.description) {
+            $task.description
+        }
+        elseif ($task.body) {
+            $task.body
+        }
+        elseif ($task.details) {
+            $task.details
+        }
+        elseif ($task.content) {
+            $task.content
+        }
+        else {
+            $null
+        }
+    }
+}
+
+function Get-TaskContextBlock {
+    param([Parameter(Mandatory)][hashtable]$Info)
+    Update-TaskContextCache -Info $Info
+
+    $title = if ($Info.task_title_cached) { $Info.task_title_cached } elseif ($Info.name) { $Info.name } else { $null }
+    $description = $Info.task_description_cached
+    if (-not $description) {
+        $description = "Task description unavailable from VK. Open the task URL for full details."
+    }
+
+    $lines = @("Task context (vibe-kanban):")
+    if ($Info.branch) { $lines += "Branch: $($Info.branch)" }
+    if ($title) { $lines += "Title: $title" }
+    $lines += "Description:`n$description"
+    $taskUrl = if ($Info.task_id) { Get-TaskUrl -TaskId $Info.task_id } else { $null }
+    if ($taskUrl) { $lines += "Task URL: $taskUrl" }
+    $lines += "If VE_TASK_TITLE/VE_TASK_DESCRIPTION are missing, treat this as a VK task:"
+    $lines += "- Worktree paths often include .git/worktrees/ or vibe-kanban."
+    $lines += "- VK tasks always map to a ve/<id>-<slug> branch."
+    $lines += "Resume with the context above, then commit/push/PR as usual."
+    return ($lines -join "`n")
+}
+
+function Append-TaskContextToMessage {
+    param(
+        [Parameter(Mandatory)][string]$Message,
+        [Parameter(Mandatory)][hashtable]$Info,
+        [switch]$IncludeContext
+    )
+    if (-not $IncludeContext) { return $Message }
+    if ($Message -match "Task context \\(vibe-kanban\\):") { return $Message }
+    $context = Get-TaskContextBlock -Info $Info
+    if (-not $context) { return $Message }
+    return "$Message`n`n$context"
+}
+
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
@@ -1019,28 +1177,30 @@ function Try-SendFollowUp {
         [Parameter(Mandatory)][string]$AttemptId,
         [Parameter(Mandatory)][hashtable]$Info,
         [Parameter(Mandatory)][string]$Message,
-        [string]$Reason
+        [string]$Reason,
+        [switch]$IncludeTaskContext = $true
     )
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
     }
-    $Info.last_followup_message = $Message
+    $finalMessage = Append-TaskContextToMessage -Message $Message -Info $Info -IncludeContext:$IncludeTaskContext
+    $Info.last_followup_message = $finalMessage
     $Info.last_followup_reason = $Reason
     $Info.last_followup_at = Get-Date
     $slots = Get-AvailableSlots
     if ($slots -le 0) {
         Write-Log "Deferring follow-up for $($Info.branch): no available slots" -Level "WARN"
-        $Info.pending_followup = @{ message = $Message; reason = $Reason }
+        $Info.pending_followup = @{ message = $finalMessage; reason = $Reason }
         return $false
     }
     if (-not $DryRun) {
         try {
-            Send-VKWorkspaceFollowUp -WorkspaceId $AttemptId -Message $Message | Out-Null
+            Send-VKWorkspaceFollowUp -WorkspaceId $AttemptId -Message $finalMessage | Out-Null
         }
         catch {
             Write-Log "Follow-up failed for $($Info.branch): $($_.Exception.Message)" -Level "WARN"
-            $Info.pending_followup = @{ message = $Message; reason = $Reason }
+            $Info.pending_followup = @{ message = $finalMessage; reason = $Reason }
             return $false
         }
     }
@@ -1239,19 +1399,21 @@ function Try-SendFollowUpNewSession {
         [Parameter(Mandatory)][string]$AttemptId,
         [Parameter(Mandatory)][hashtable]$Info,
         [Parameter(Mandatory)][string]$Message,
-        [string]$Reason
+        [string]$Reason,
+        [switch]$IncludeTaskContext = $true
     )
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping new-session follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
     }
-    $Info.last_followup_message = $Message
+    $finalMessage = Append-TaskContextToMessage -Message $Message -Info $Info -IncludeContext:$IncludeTaskContext
+    $Info.last_followup_message = $finalMessage
     $Info.last_followup_reason = $Reason
     $Info.last_followup_at = Get-Date
     $slots = Get-AvailableSlots
     if ($slots -le 0) {
         Write-Log "Deferring new-session follow-up for $($Info.branch): no available slots" -Level "WARN"
-        $Info.pending_followup = @{ message = $Message; reason = $Reason; new_session = $true }
+        $Info.pending_followup = @{ message = $finalMessage; reason = $Reason; new_session = $true }
         return $false
     }
     if (-not $DryRun) {
@@ -1263,11 +1425,11 @@ function Try-SendFollowUpNewSession {
         }
         $profile = if ($session.executor) { Get-ExecutorProfileForSession -Executor $session.executor } else { Get-CurrentExecutorProfile }
         try {
-            Send-VKSessionFollowUp -SessionId $session.id -Message $Message -ExecutorProfile $profile | Out-Null
+            Send-VKSessionFollowUp -SessionId $session.id -Message $finalMessage -ExecutorProfile $profile | Out-Null
         }
         catch {
             Write-Log "New-session follow-up failed for $($Info.branch): $($_.Exception.Message)" -Level "WARN"
-            $Info.pending_followup = @{ message = $Message; reason = $Reason; new_session = $true }
+            $Info.pending_followup = @{ message = $finalMessage; reason = $Reason; new_session = $true }
             return $false
         }
     }
@@ -1323,7 +1485,9 @@ function Try-RecoverContextWindow {
         else {
             Get-ExecutorProfileForSession -Executor "CODEX"
         }
-        $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $Info.last_followup_message -ExecutorProfile $profile
+        $message = Append-TaskContextToMessage -Message $Info.last_followup_message -Info $Info -IncludeContext:$true
+        $Info.last_followup_message = $message
+        $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $message -ExecutorProfile $profile
         if (-not $sent) {
             Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
             return $false
@@ -1598,6 +1762,8 @@ function Sync-TrackedAttempts {
                 pr_number                     = $null
                 status                        = "running"
                 name                          = $a.name
+                task_title_cached             = $null
+                task_description_cached       = $null
                 updated_at                    = $a.updated_at
                 container_ref                 = $a.container_ref
                 ci_notified                   = $false
@@ -1678,6 +1844,11 @@ function Sync-TrackedAttempts {
                     }
                 }
             }
+        }
+
+        $tracked = $script:TrackedAttempts[$a.id]
+        if ($tracked) {
+            Update-TaskContextCache -Info $tracked
         }
     }
 
@@ -2390,6 +2561,8 @@ function Complete-Task {
         completed_at = (Get-Date).ToString("o")
     }
     $script:TasksCompleted++
+    $script:TotalTasksCompleted++
+    Update-CISweepState -TotalTasksCompleted $script:TotalTasksCompleted
 
     # ─── Success rate classification ─────────────────────────────────────────
     $neededFix = $false
@@ -2446,25 +2619,104 @@ function Get-SuccessRateSummary {
     return "First-shot: ${rate}% ($($script:FirstShotSuccess)/$total) | Fix: $($script:TasksNeededFix) | Failed: $($script:TasksFailed)"
 }
 
+function Get-BaseBranchName {
+    param([string]$Branch)
+    $base = if ($Branch) { $Branch } else { $script:VK_TARGET_BRANCH }
+    if (-not $base) { $base = "origin/main" }
+    if ($base -like "origin/*") { $base = $base.Substring(7) }
+    return $base
+}
+
+function Get-MergedPRCountSince {
+    <#
+    .SYNOPSIS Count merged PRs on main since a timestamp.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Since,
+        [string]$BaseBranch,
+        [int]$Limit = 50
+    )
+    if (-not $Since) { return 0 }
+    $base = Get-BaseBranchName -Branch $BaseBranch
+    $prJson = Invoke-VKGithub -Args @(
+        "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--state", "merged", "--base", $base,
+        "--limit", $Limit.ToString(),
+        "--json", "number,mergedAt"
+    )
+    if (Test-GithubRateLimit) { return 0 }
+    if (-not $prJson -or $prJson -eq "[]") { return 0 }
+    $prs = $prJson | ConvertFrom-Json
+    if (-not $prs) { return 0 }
+    try {
+        $sinceTime = [datetimeoffset]::Parse($Since)
+    }
+    catch {
+        return 0
+    }
+    $count = 0
+    foreach ($pr in $prs) {
+        if (-not $pr.mergedAt) { continue }
+        try {
+            $mergedAt = [datetimeoffset]::Parse($pr.mergedAt)
+            if ($mergedAt -gt $sinceTime) { $count++ }
+        }
+        catch {
+            continue
+        }
+    }
+    return $count
+}
+
 function Maybe-TriggerCISweep {
     <#
-    .SYNOPSIS Trigger a Copilot CI sweep every 15 completed tasks.
+    .SYNOPSIS Trigger a Copilot CI sweep based on completed tasks and PR backup thresholds.
     #>
-    if ($script:TasksCompleted -lt 15) { return }
-    if (($script:TasksCompleted % 15) -ne 0) { return }
+    $threshold = [int]($script:CiSweepEvery ?? 0)
+    if ($threshold -le 0) { return }
 
-    $state = Get-OrchestratorState
-    if ($state.last_ci_sweep_completed -eq $script:TasksCompleted) { return }
+    $totalCompleted = [int]($script:TotalTasksCompleted ?? 0)
+    if ($totalCompleted -ge $threshold -and ($totalCompleted % $threshold) -eq 0) {
+        $state = Get-OrchestratorState
+        if ($state.last_ci_sweep_completed -eq $totalCompleted) { return }
 
-    Trigger-CISweep
-    $state.last_ci_sweep_completed = $script:TasksCompleted
-    Save-OrchestratorState -State $state
+        $reason = "task-count"
+        $info = "Total tasks completed: $totalCompleted (threshold: $threshold)"
+        Trigger-CISweep -Reason $reason -TriggerInfo $info
+        $now = (Get-Date).ToString("o")
+        $script:LastCISweepAt = $now
+        Update-CISweepState -TotalTasksCompleted $totalCompleted -LastSweepAt $now -LastSweepCompleted $totalCompleted
+        return
+    }
+
+    if (-not $script:CiSweepPrBackupEnabled) { return }
+    $prThreshold = [int]($script:CiSweepPrEvery ?? 0)
+    if ($prThreshold -le 0) { return }
+    if (-not $script:LastCISweepAt) { return }
+    if (Test-GithubCooldown) { return }
+
+    $baseBranch = Get-BaseBranchName
+    $mergedCount = Get-MergedPRCountSince -Since $script:LastCISweepAt -BaseBranch $baseBranch -Limit 50
+    if ($mergedCount -lt $prThreshold) { return }
+
+    $reason = "pr-backup"
+    $info = "Merged PRs since $($script:LastCISweepAt): $mergedCount (threshold: $prThreshold)"
+    Trigger-CISweep -Reason $reason -TriggerInfo $info
+    $now = (Get-Date).ToString("o")
+    $script:LastCISweepAt = $now
+    Update-CISweepState -TotalTasksCompleted $totalCompleted -LastSweepAt $now -LastSweepCompleted $totalCompleted
 }
 
 function Trigger-CISweep {
     <#
     .SYNOPSIS Create a Copilot-driven CI sweep issue.
     #>
+    [CmdletBinding()]
+    param(
+        [string]$Reason = "task-count",
+        [string]$TriggerInfo = ""
+    )
     $failedRuns = @()
     $recentMerged = @()
     if (-not (Test-GithubRateLimit)) {
@@ -2492,6 +2744,8 @@ function Trigger-CISweep {
     else { @("- none") }
 
     $title = "ci sweep: resolve failing workflows"
+    $reasonLine = if ($Reason) { "Trigger reason: $Reason" } else { $null }
+    $infoLine = if ($TriggerInfo) { "Trigger info: $TriggerInfo" } else { $null }
     $body = @"
 Copilot assignment: this issue will be assigned via API. If it is unassigned, use the "Assign to Copilot" button.
 
@@ -2501,6 +2755,8 @@ Scope:
 - Identify failing workflows on main.
 - Prioritize required checks and security scans.
 - Apply minimal fixes and open PRs as needed.
+$reasonLine
+$infoLine
 
 Recent failing workflow runs (main):
 $($failedRunLines -join "`n")
@@ -2509,7 +2765,8 @@ Recent merged PRs (last 15):
 $($mergedLines -join "`n")
 "@
 
-    Write-Log "Triggering CI sweep (every 15 tasks)" -Level "ACTION"
+    $logReason = if ($Reason) { $Reason } else { "scheduled" }
+    Write-Log "Triggering CI sweep ($logReason)" -Level "ACTION"
     if (-not $DryRun) {
         $issue = Create-GithubIssue -Title $title -Body $body
         if ($issue -and $issue.number) {
@@ -2714,6 +2971,11 @@ function Test-BacklogEmpty {
 
 function Start-Orchestrator {
     Register-OrchestratorShutdownHandlers
+    if (-not $WaitForMutex) {
+        if (Get-EnvBool -Name "VE_ORCHESTRATOR_WAIT_FOR_MUTEX" -Default $false) {
+            $WaitForMutex = $true
+        }
+    }
     do {
         $script:OrchestratorMutex = Enter-OrchestratorMutex
         if ($script:OrchestratorMutex) { break }
@@ -2742,6 +3004,8 @@ function Start-Orchestrator {
 
     Write-Banner
     Ensure-GitIdentity
+    Initialize-CISweepConfig
+    Initialize-CISweepState
 
     # Validate prerequisites
     $ghVersion = gh --version 2>$null
