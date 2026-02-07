@@ -70,18 +70,18 @@ func (b *TicketBridge) CreateFromSupportRequest(ctx context.Context, req *VirtEn
 
 	// Build custom fields
 	customFields := make(map[string]interface{})
-	if cfID, ok := b.config.CustomFieldMappings["ticketId"]; ok {
+	if cfID, ok := b.customFieldID("ticketId", "ticket_id"); ok {
 		customFields[cfID] = req.TicketID
 	}
-	if cfID, ok := b.config.CustomFieldMappings["ticketNumber"]; ok {
+	if cfID, ok := b.customFieldID("ticketNumber", "ticket_number"); ok {
 		customFields[cfID] = req.TicketNumber
 	}
-	if cfID, ok := b.config.CustomFieldMappings["submitterAddress"]; ok {
+	if cfID, ok := b.customFieldID("submitterAddress", "submitter_address", "customer_address"); ok {
 		// Store truncated address for security
 		customFields[cfID] = truncateAddress(req.SubmitterAddress)
 	}
 	if req.RelatedEntity != nil {
-		if cfID, ok := b.config.CustomFieldMappings["relatedEntity"]; ok {
+		if cfID, ok := b.customFieldID("relatedEntity", "related_entity"); ok {
 			customFields[cfID] = fmt.Sprintf("%s:%s", req.RelatedEntity.Type, req.RelatedEntity.ID)
 		}
 	}
@@ -297,6 +297,21 @@ func (b *TicketBridge) SyncStatus(ctx context.Context, jiraKey string, status st
 	return b.client.TransitionIssue(ctx, jiraKey, &TransitionRequest{
 		Transition: TransitionID{ID: matchingTransition.ID},
 	})
+}
+
+func (b *TicketBridge) customFieldID(keys ...string) (string, bool) {
+	if len(keys) == 0 {
+		return "", false
+	}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if cfID, ok := b.config.CustomFieldMappings[key]; ok && cfID != "" {
+			return cfID, true
+		}
+	}
+	return "", false
 }
 
 // mapPriority maps VirtEngine priority to Jira priority

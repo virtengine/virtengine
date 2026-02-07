@@ -4,16 +4,18 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 interface SidebarProps {
-  variant: 'customer' | 'provider';
+  variant: 'customer' | 'provider' | 'admin';
 }
 
 export function Sidebar({ variant }: SidebarProps) {
   const pathname = usePathname();
 
   const customerLinks = [
+    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
     { name: 'Marketplace', href: '/marketplace', icon: '🛒' },
     { name: 'My Orders', href: '/orders', icon: '📋' },
     { name: 'Identity', href: '/identity', icon: '🔐' },
+    { name: 'Metrics', href: '/metrics', icon: '📈' },
     { name: 'HPC Jobs', href: '/hpc/jobs', icon: '⚡' },
     { name: 'Governance', href: '/governance/proposals', icon: '🗳️' },
   ];
@@ -27,7 +29,17 @@ export function Sidebar({ variant }: SidebarProps) {
     { name: 'Revenue', href: '/provider/dashboard?tab=revenue', icon: '📈' },
   ];
 
-  const links = variant === 'provider' ? providerLinks : customerLinks;
+  const adminLinks = [
+    { name: 'Admin Dashboard', href: '/admin', icon: '🛡️' },
+    { name: 'Governance', href: '/admin/governance', icon: '🗳️' },
+    { name: 'Validators', href: '/admin/validators', icon: '⛓️' },
+    { name: 'Support Queue', href: '/admin/support', icon: '🎫' },
+    { name: 'System Health', href: '/admin/health', icon: '💓' },
+    { name: 'User Management', href: '/admin/users', icon: '👥' },
+  ];
+
+  const links =
+    variant === 'admin' ? adminLinks : variant === 'provider' ? providerLinks : customerLinks;
 
   return (
     <aside className="w-64 border-r border-border bg-card">
@@ -68,6 +80,18 @@ export function Sidebar({ variant }: SidebarProps) {
           >
             <span>🛒</span>
             Switch to Customer
+          </Link>
+        </div>
+      )}
+
+      {variant === 'admin' && (
+        <div className="border-t border-border p-4">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent"
+          >
+            <span>📊</span>
+            Back to Portal
           </Link>
         </div>
       )}

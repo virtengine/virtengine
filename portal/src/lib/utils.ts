@@ -75,9 +75,10 @@ export function formatRelativeTime(date: Date | string): string {
  * Format currency amount
  */
 export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
+    currencyDisplay: 'symbol',
   }).format(amount);
 }
 

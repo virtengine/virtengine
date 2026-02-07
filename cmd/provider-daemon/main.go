@@ -170,12 +170,12 @@ const (
 	FlagWaldurOfferingSyncMaxRetries = "waldur-offering-sync-max-retries"
 
 	// Portal API flags
-	FlagPortalAuthSecret      = "portal-auth-secret"
+	FlagPortalAuthSecret      = "portal-auth-secret" // #nosec G101 -- flag name, not a credential
 	FlagPortalAllowInsecure   = "portal-allow-insecure"
 	FlagPortalRequireVEID     = "portal-require-veid"
 	FlagPortalMinVEIDScore    = "portal-min-veid-score"
 	FlagPortalShellSessionTTL = "portal-shell-session-ttl"
-	FlagPortalTokenTTL        = "portal-token-ttl"
+	FlagPortalTokenTTL        = "portal-token-ttl" // #nosec G101 -- flag name, not a credential
 	FlagPortalAuditLogFile    = "portal-audit-log-file"
 
 	// Support service desk flags
@@ -187,6 +187,13 @@ const (
 	FlagSupportWebhookSecret       = "support-webhook-secret" //nolint:gosec
 	FlagSupportWebhookListen       = "support-webhook-listen"
 	FlagSupportWebhookRequireSig   = "support-webhook-require-signature"
+	FlagSupportJiraBaseURL         = "support-jira-base-url"
+	FlagSupportJiraAuthType        = "support-jira-auth-type"
+	FlagSupportJiraUsername        = "support-jira-username"
+	FlagSupportJiraAPIToken        = "support-jira-api-token"    //nolint:gosec
+	FlagSupportJiraBearerToken     = "support-jira-bearer-token" //nolint:gosec
+	FlagSupportJiraProjectKey      = "support-jira-project-key"
+	FlagSupportJiraIssueType       = "support-jira-issue-type"
 	FlagSupportDecryptionKeyPath   = "support-decryption-key-path"
 	FlagSupportDecryptionKeyBase64 = "support-decryption-key-base64"
 	FlagSupportEncryptionKeyPath   = "support-encryption-key-path"
@@ -287,6 +294,13 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagSupportWebhookSecret, "", "Support webhook secret")
 	rootCmd.PersistentFlags().String(FlagSupportWebhookListen, ":8480", "Support webhook listen address")
 	rootCmd.PersistentFlags().Bool(FlagSupportWebhookRequireSig, true, "Require signatures for support webhooks")
+	rootCmd.PersistentFlags().String(FlagSupportJiraBaseURL, "", "Support Jira base URL")
+	rootCmd.PersistentFlags().String(FlagSupportJiraAuthType, "basic", "Support Jira auth type (basic or bearer)")
+	rootCmd.PersistentFlags().String(FlagSupportJiraUsername, "", "Support Jira username (basic auth)")
+	rootCmd.PersistentFlags().String(FlagSupportJiraAPIToken, "", "Support Jira API token (basic auth)")
+	rootCmd.PersistentFlags().String(FlagSupportJiraBearerToken, "", "Support Jira bearer token (OAuth)")
+	rootCmd.PersistentFlags().String(FlagSupportJiraProjectKey, "", "Support Jira project key")
+	rootCmd.PersistentFlags().String(FlagSupportJiraIssueType, "Service Request", "Support Jira issue type")
 	rootCmd.PersistentFlags().String(FlagSupportDecryptionKeyPath, "", "Support payload decryption key path")
 	rootCmd.PersistentFlags().String(FlagSupportDecryptionKeyBase64, "", "Support payload decryption key (base64)")
 	rootCmd.PersistentFlags().String(FlagSupportEncryptionKeyPath, "", "Support payload encryption key path")
@@ -358,6 +372,13 @@ func init() {
 	_ = viper.BindPFlag(FlagSupportWebhookSecret, rootCmd.PersistentFlags().Lookup(FlagSupportWebhookSecret))
 	_ = viper.BindPFlag(FlagSupportWebhookListen, rootCmd.PersistentFlags().Lookup(FlagSupportWebhookListen))
 	_ = viper.BindPFlag(FlagSupportWebhookRequireSig, rootCmd.PersistentFlags().Lookup(FlagSupportWebhookRequireSig))
+	_ = viper.BindPFlag(FlagSupportJiraBaseURL, rootCmd.PersistentFlags().Lookup(FlagSupportJiraBaseURL))
+	_ = viper.BindPFlag(FlagSupportJiraAuthType, rootCmd.PersistentFlags().Lookup(FlagSupportJiraAuthType))
+	_ = viper.BindPFlag(FlagSupportJiraUsername, rootCmd.PersistentFlags().Lookup(FlagSupportJiraUsername))
+	_ = viper.BindPFlag(FlagSupportJiraAPIToken, rootCmd.PersistentFlags().Lookup(FlagSupportJiraAPIToken))
+	_ = viper.BindPFlag(FlagSupportJiraBearerToken, rootCmd.PersistentFlags().Lookup(FlagSupportJiraBearerToken))
+	_ = viper.BindPFlag(FlagSupportJiraProjectKey, rootCmd.PersistentFlags().Lookup(FlagSupportJiraProjectKey))
+	_ = viper.BindPFlag(FlagSupportJiraIssueType, rootCmd.PersistentFlags().Lookup(FlagSupportJiraIssueType))
 	_ = viper.BindPFlag(FlagSupportDecryptionKeyPath, rootCmd.PersistentFlags().Lookup(FlagSupportDecryptionKeyPath))
 	_ = viper.BindPFlag(FlagSupportDecryptionKeyBase64, rootCmd.PersistentFlags().Lookup(FlagSupportDecryptionKeyBase64))
 	_ = viper.BindPFlag(FlagSupportEncryptionKeyPath, rootCmd.PersistentFlags().Lookup(FlagSupportEncryptionKeyPath))
@@ -548,6 +569,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	if hpcProviderConfig.HPC.ProviderAddress == "" {
 		hpcProviderConfig.HPC.ProviderAddress = providerAddress
+	}
+	if hpcProviderConfig.HPC.NodeAggregator.ProviderAddress == "" {
+		hpcProviderConfig.HPC.NodeAggregator.ProviderAddress = hpcProviderConfig.HPC.ProviderAddress
+	}
+	if hpcProviderConfig.HPC.NodeAggregator.ClusterID == "" {
+		hpcProviderConfig.HPC.NodeAggregator.ClusterID = hpcProviderConfig.HPC.ClusterID
+	}
+	if hpcProviderConfig.HPC.SlurmK8s.ClusterName == "" {
+		hpcProviderConfig.HPC.SlurmK8s.ClusterName = hpcProviderConfig.HPC.ClusterID
 	}
 
 	if hpcProviderConfig.HPC.Enabled {
@@ -787,13 +817,28 @@ func runStart(cmd *cobra.Command, args []string) error {
 			}
 			supportCfg.ServiceDeskConfig.Decryption.PrivateKeyPath = viper.GetString(FlagSupportDecryptionKeyPath)
 			supportCfg.ServiceDeskConfig.Decryption.PrivateKeyBase64 = viper.GetString(FlagSupportDecryptionKeyBase64)
-			supportCfg.ServiceDeskConfig.WaldurConfig = &servicedesk.WaldurConfig{
-				BaseURL:          viper.GetString(FlagSupportWaldurBaseURL),
-				Token:            viper.GetString(FlagSupportWaldurToken),
-				OrganizationUUID: viper.GetString(FlagSupportWaldurOrgUUID),
-				ProjectUUID:      viper.GetString(FlagSupportWaldurProjectUUID),
-				WebhookSecret:    viper.GetString(FlagSupportWebhookSecret),
-				Timeout:          30 * time.Second,
+			if viper.GetString(FlagSupportJiraBaseURL) != "" || viper.GetString(FlagSupportJiraProjectKey) != "" {
+				supportCfg.ServiceDeskConfig.JiraConfig = &servicedesk.JiraConfig{
+					BaseURL:       viper.GetString(FlagSupportJiraBaseURL),
+					AuthType:      viper.GetString(FlagSupportJiraAuthType),
+					Username:      viper.GetString(FlagSupportJiraUsername),
+					APIToken:      viper.GetString(FlagSupportJiraAPIToken),
+					BearerToken:   viper.GetString(FlagSupportJiraBearerToken),
+					ProjectKey:    viper.GetString(FlagSupportJiraProjectKey),
+					IssueType:     viper.GetString(FlagSupportJiraIssueType),
+					WebhookSecret: viper.GetString(FlagSupportWebhookSecret),
+					Timeout:       30 * time.Second,
+				}
+			}
+			if viper.GetString(FlagSupportWaldurBaseURL) != "" || viper.GetString(FlagSupportWaldurOrgUUID) != "" {
+				supportCfg.ServiceDeskConfig.WaldurConfig = &servicedesk.WaldurConfig{
+					BaseURL:          viper.GetString(FlagSupportWaldurBaseURL),
+					Token:            viper.GetString(FlagSupportWaldurToken),
+					OrganizationUUID: viper.GetString(FlagSupportWaldurOrgUUID),
+					ProjectUUID:      viper.GetString(FlagSupportWaldurProjectUUID),
+					WebhookSecret:    viper.GetString(FlagSupportWebhookSecret),
+					Timeout:          30 * time.Second,
+				}
 			}
 		}
 

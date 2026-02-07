@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -26,6 +27,9 @@ const (
 	apiPathIssue           = "/rest/api/3/issue/%s"
 	apiPathIssueTransition = "/rest/api/3/issue/%s/transitions"
 	apiPathIssueComment    = "/rest/api/3/issue/%s/comment"
+	apiPathIssueAttachment = "/rest/api/3/issue/%s/attachments"
+	apiPathAttachment      = "/rest/api/3/attachment/%s"
+	apiPathAttachmentBody  = "/rest/api/3/attachment/content/%s"
 	apiPathSearch          = "/rest/api/3/search"
 	apiPathServiceDeskInfo = "/rest/servicedeskapi/info"
 )
@@ -154,6 +158,11 @@ type IClient interface {
 	AddComment(ctx context.Context, issueKeyOrID string, comment *AddCommentRequest) (*Comment, error)
 	GetComments(ctx context.Context, issueKeyOrID string, startAt, maxResults int) (*CommentResponse, error)
 
+	// Attachments
+	AddAttachment(ctx context.Context, issueKeyOrID string, attachment *AttachmentUpload) ([]Attachment, error)
+	GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error)
+	DownloadAttachment(ctx context.Context, attachmentID string) (*AttachmentContent, error)
+
 	// Service Desk specific
 	GetServiceDeskInfo(ctx context.Context) (map[string]interface{}, error)
 }
@@ -172,25 +181,32 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		reqBody = bytes.NewReader(jsonBytes)
 	}
 
+	return c.doRequestWithHeaders(ctx, method, path, reqBody, "application/json", nil)
+}
+
+func (c *Client) doRequestWithHeaders(ctx context.Context, method, path string, body io.Reader, contentType string, headers map[string]string) ([]byte, int, error) {
 	reqURL := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
 		return nil, 0, fmt.Errorf("jira: failed to create request: %w", err)
 	}
 
 	// Set headers
-	req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
+	for key, value := range headers {
+		if key == "" || value == "" {
+			continue
+		}
+		req.Header.Set(key, value)
+	}
 
 	// Set auth header
 	// CRITICAL: Auth header is set but never logged
-	switch c.auth.Type {
-	case AuthTypeBasic:
-		req.SetBasicAuth(c.auth.Username, c.auth.APIToken)
-	case AuthTypeBearer:
-		req.Header.Set("Authorization", "Bearer "+c.auth.BearerToken)
-	}
+	c.applyAuth(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -204,6 +220,15 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	}
 
 	return respBody, resp.StatusCode, nil
+}
+
+func (c *Client) applyAuth(req *http.Request) {
+	switch c.auth.Type {
+	case AuthTypeBasic:
+		req.SetBasicAuth(c.auth.Username, c.auth.APIToken)
+	case AuthTypeBearer:
+		req.Header.Set("Authorization", "Bearer "+c.auth.BearerToken)
+	}
 }
 
 // CreateIssue creates a new Jira issue
@@ -414,6 +439,125 @@ func (c *Client) GetComments(ctx context.Context, issueKeyOrID string, startAt, 
 	}
 
 	return &result, nil
+}
+
+// AddAttachment uploads an attachment to a Jira issue
+func (c *Client) AddAttachment(ctx context.Context, issueKeyOrID string, attachment *AttachmentUpload) ([]Attachment, error) {
+	if issueKeyOrID == "" {
+		return nil, fmt.Errorf("jira: issue key is required")
+	}
+	if attachment == nil {
+		return nil, fmt.Errorf("jira: attachment is required")
+	}
+	if attachment.Filename == "" {
+		return nil, fmt.Errorf("jira: attachment filename is required")
+	}
+	if len(attachment.Data) == 0 {
+		return nil, fmt.Errorf("jira: attachment data is required")
+	}
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("file", attachment.Filename)
+	if err != nil {
+		return nil, fmt.Errorf("jira: create attachment form: %w", err)
+	}
+	if _, err := part.Write(attachment.Data); err != nil {
+		return nil, fmt.Errorf("jira: write attachment data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("jira: finalize attachment form: %w", err)
+	}
+
+	path := fmt.Sprintf(apiPathIssueAttachment, url.PathEscape(issueKeyOrID))
+	headers := map[string]string{
+		"X-Atlassian-Token": "no-check",
+	}
+	respBody, statusCode, err := c.doRequestWithHeaders(ctx, http.MethodPost, path, &buf, writer.FormDataContentType(), headers)
+	if err != nil {
+		return nil, err
+	}
+
+	if statusCode != http.StatusOK && statusCode != http.StatusCreated {
+		var errResp ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil && (len(errResp.ErrorMessages) > 0 || len(errResp.Errors) > 0) {
+			return nil, &errResp
+		}
+		return nil, fmt.Errorf("jira: add attachment failed with status %d", statusCode)
+	}
+
+	var attachments []Attachment
+	if err := json.Unmarshal(respBody, &attachments); err != nil {
+		return nil, fmt.Errorf("jira: failed to parse attachment response: %w", err)
+	}
+
+	return attachments, nil
+}
+
+// GetAttachment retrieves attachment metadata
+func (c *Client) GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error) {
+	if attachmentID == "" {
+		return nil, fmt.Errorf("jira: attachment id is required")
+	}
+	path := fmt.Sprintf(apiPathAttachment, url.PathEscape(attachmentID))
+	respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if statusCode != http.StatusOK {
+		var errResp ErrorResponse
+		if err := json.Unmarshal(respBody, &errResp); err == nil && (len(errResp.ErrorMessages) > 0 || len(errResp.Errors) > 0) {
+			return nil, &errResp
+		}
+		return nil, fmt.Errorf("jira: get attachment failed with status %d", statusCode)
+	}
+
+	var attachment Attachment
+	if err := json.Unmarshal(respBody, &attachment); err != nil {
+		return nil, fmt.Errorf("jira: failed to parse attachment response: %w", err)
+	}
+	return &attachment, nil
+}
+
+// DownloadAttachment downloads attachment content
+func (c *Client) DownloadAttachment(ctx context.Context, attachmentID string) (*AttachmentContent, error) {
+	if attachmentID == "" {
+		return nil, fmt.Errorf("jira: attachment id is required")
+	}
+
+	reqURL := c.baseURL + fmt.Sprintf(apiPathAttachmentBody, url.PathEscape(attachmentID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("jira: failed to create request: %w", err)
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	c.applyAuth(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("jira: request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		var errResp ErrorResponse
+		if err := json.Unmarshal(body, &errResp); err == nil && (len(errResp.ErrorMessages) > 0 || len(errResp.Errors) > 0) {
+			return nil, &errResp
+		}
+		return nil, fmt.Errorf("jira: download attachment failed with status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("jira: failed to read attachment response: %w", err)
+	}
+
+	return &AttachmentContent{
+		Data:        data,
+		ContentType: resp.Header.Get("Content-Type"),
+	}, nil
 }
 
 // GetServiceDeskInfo retrieves service desk information

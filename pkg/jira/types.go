@@ -201,6 +201,32 @@ type Comment struct {
 	Updated string `json:"updated,omitempty"`
 }
 
+// Attachment represents a Jira attachment
+type Attachment struct {
+	ID        string `json:"id,omitempty"`
+	Filename  string `json:"filename,omitempty"`
+	Author    *User  `json:"author,omitempty"`
+	Created   string `json:"created,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	MimeType  string `json:"mimeType,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Thumbnail string `json:"thumbnail,omitempty"`
+	Self      string `json:"self,omitempty"`
+}
+
+// AttachmentUpload represents an attachment upload payload
+type AttachmentUpload struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+// AttachmentContent holds downloaded attachment data
+type AttachmentContent struct {
+	Data        []byte
+	ContentType string
+}
+
 // CommentResponse represents a paginated comment response
 type CommentResponse struct {
 	StartAt    int       `json:"startAt"`

@@ -51,6 +51,7 @@ func TestConfigValidation(t *testing.T) {
 				Enabled: true,
 				JiraConfig: &JiraConfig{
 					BaseURL:    "https://jira.example.com",
+					AuthType:   "basic",
 					Username:   "user",
 					APIToken:   "token",
 					ProjectKey: "PROJ",
@@ -110,6 +111,7 @@ func TestJiraConfigValidation(t *testing.T) {
 			name: "valid config",
 			cfg: &JiraConfig{
 				BaseURL:    "https://jira.example.com",
+				AuthType:   "basic",
 				Username:   "user",
 				APIToken:   "token",
 				ProjectKey: "PROJ",
@@ -117,8 +119,19 @@ func TestJiraConfigValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid bearer config",
+			cfg: &JiraConfig{
+				BaseURL:     "https://jira.example.com",
+				AuthType:    "bearer",
+				BearerToken: "token",
+				ProjectKey:  "PROJ",
+			},
+			wantErr: false,
+		},
+		{
 			name: "missing base url",
 			cfg: &JiraConfig{
+				AuthType:   "basic",
 				Username:   "user",
 				APIToken:   "token",
 				ProjectKey: "PROJ",
@@ -129,6 +142,7 @@ func TestJiraConfigValidation(t *testing.T) {
 			name: "missing username",
 			cfg: &JiraConfig{
 				BaseURL:    "https://jira.example.com",
+				AuthType:   "basic",
 				APIToken:   "token",
 				ProjectKey: "PROJ",
 			},
@@ -138,7 +152,26 @@ func TestJiraConfigValidation(t *testing.T) {
 			name: "missing api token",
 			cfg: &JiraConfig{
 				BaseURL:    "https://jira.example.com",
+				AuthType:   "basic",
 				Username:   "user",
+				ProjectKey: "PROJ",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing bearer token",
+			cfg: &JiraConfig{
+				BaseURL:    "https://jira.example.com",
+				AuthType:   "bearer",
+				ProjectKey: "PROJ",
+			},
+			wantErr: true,
+		},
+		{
+			name: "unsupported auth type",
+			cfg: &JiraConfig{
+				BaseURL:    "https://jira.example.com",
+				AuthType:   "magic",
 				ProjectKey: "PROJ",
 			},
 			wantErr: true,
@@ -147,6 +180,7 @@ func TestJiraConfigValidation(t *testing.T) {
 			name: "missing project key",
 			cfg: &JiraConfig{
 				BaseURL:  "https://jira.example.com",
+				AuthType: "basic",
 				Username: "user",
 				APIToken: "token",
 			},

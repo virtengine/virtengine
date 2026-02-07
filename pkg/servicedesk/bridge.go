@@ -182,24 +182,35 @@ func NewBridge(config *Config, logger log.Logger) (*Bridge, error) {
 
 	// Initialize Jira client if configured
 	if config.JiraConfig != nil {
-		jiraClient, err := jira.NewClient(jira.ClientConfig{
-			BaseURL: config.JiraConfig.BaseURL,
-			Auth: jira.AuthConfig{
+		authType := config.JiraConfig.AuthType
+		if authType == "" {
+			authType = "basic"
+		}
+		authConfig := jira.AuthConfig{}
+		switch authType {
+		case string(jira.AuthTypeBearer):
+			authConfig = jira.AuthConfig{
+				Type:        jira.AuthTypeBearer,
+				BearerToken: config.JiraConfig.BearerToken,
+			}
+		default:
+			authConfig = jira.AuthConfig{
 				Type:     jira.AuthTypeBasic,
 				Username: config.JiraConfig.Username,
 				APIToken: config.JiraConfig.APIToken,
-			},
+			}
+		}
+
+		jiraClient, err := jira.NewClient(jira.ClientConfig{
+			BaseURL: config.JiraConfig.BaseURL,
+			Auth:    authConfig,
 			Timeout: config.JiraConfig.Timeout,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create jira client: %w", err)
 		}
 		bridge.jiraClient = jiraClient
-		bridge.jiraBridge = jira.NewTicketBridge(jiraClient, jira.TicketBridgeConfig{
-			ProjectKey:       config.JiraConfig.ProjectKey,
-			DefaultIssueType: jira.IssueType(config.JiraConfig.IssueType),
-			PriorityMapping:  mapPriorityToJira(config.MappingSchema),
-		})
+		bridge.jiraBridge = jira.NewTicketBridge(jiraClient, buildJiraBridgeConfig(config))
 	}
 
 	// Initialize Waldur client if configured
@@ -234,6 +245,90 @@ func mapPriorityToJira(schema *MappingSchema) map[string]jira.Priority {
 		mapping[m.OnChainPriority] = jira.Priority(m.JiraPriority)
 	}
 	return mapping
+}
+
+func mapCategoryToJiraComponents(schema *MappingSchema) map[string]string {
+	mapping := make(map[string]string)
+	if schema == nil {
+		return mapping
+	}
+	for _, m := range schema.CategoryMappings {
+		if m.OnChainCategory == "" || m.JiraComponent == "" {
+			continue
+		}
+		mapping[m.OnChainCategory] = m.JiraComponent
+	}
+	return mapping
+}
+
+func mapCustomFields(schema *MappingSchema) map[string]string {
+	if schema == nil || len(schema.CustomFieldMappings) == 0 {
+		return nil
+	}
+	custom := make(map[string]string, len(schema.CustomFieldMappings))
+	for key, value := range schema.CustomFieldMappings {
+		if key == "" || value == "" {
+			continue
+		}
+		custom[key] = value
+	}
+	return custom
+}
+
+func mapJiraLabels(schema *MappingSchema) []string {
+	if schema == nil {
+		return nil
+	}
+	labels := map[string]struct{}{}
+	for _, mapping := range schema.CategoryMappings {
+		for _, label := range mapping.JiraLabels {
+			if label == "" {
+				continue
+			}
+			labels[label] = struct{}{}
+		}
+	}
+	if len(labels) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(labels))
+	for label := range labels {
+		result = append(result, label)
+	}
+	return result
+}
+
+func buildJiraBridgeConfig(config *Config) jira.TicketBridgeConfig {
+	jiraConfig := jira.DefaultTicketBridgeConfig()
+	if config == nil || config.JiraConfig == nil {
+		return jiraConfig
+	}
+
+	jiraConfig.ProjectKey = config.JiraConfig.ProjectKey
+	if config.JiraConfig.IssueType != "" {
+		jiraConfig.DefaultIssueType = jira.IssueType(config.JiraConfig.IssueType)
+	}
+
+	priorityMapping := mapPriorityToJira(config.MappingSchema)
+	if len(priorityMapping) > 0 {
+		jiraConfig.PriorityMapping = priorityMapping
+	}
+
+	categoryMapping := mapCategoryToJiraComponents(config.MappingSchema)
+	if len(categoryMapping) > 0 {
+		jiraConfig.CategoryToComponent = categoryMapping
+	}
+
+	customFields := mapCustomFields(config.MappingSchema)
+	if len(customFields) > 0 {
+		jiraConfig.CustomFieldMappings = customFields
+	}
+
+	if labels := mapJiraLabels(config.MappingSchema); len(labels) > 0 {
+		jiraConfig.Labels = labels
+	}
+
+	return jiraConfig
 }
 
 // Start starts the bridge service

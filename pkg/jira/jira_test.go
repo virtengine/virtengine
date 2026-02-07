@@ -880,6 +880,36 @@ func (m *MockClient) GetComments(ctx context.Context, issueKeyOrID string, start
 	}, nil
 }
 
+func (m *MockClient) AddAttachment(ctx context.Context, issueKeyOrID string, attachment *AttachmentUpload) ([]Attachment, error) {
+	if _, ok := m.issues[issueKeyOrID]; !ok {
+		return nil, fmt.Errorf("issue not found: %s", issueKeyOrID)
+	}
+	if attachment == nil {
+		return nil, fmt.Errorf("attachment required")
+	}
+	return []Attachment{
+		{
+			ID:       "att-1",
+			Filename: attachment.Filename,
+			Size:     int64(len(attachment.Data)),
+		},
+	}, nil
+}
+
+func (m *MockClient) GetAttachment(ctx context.Context, attachmentID string) (*Attachment, error) {
+	if attachmentID == "" {
+		return nil, fmt.Errorf("attachment id required")
+	}
+	return &Attachment{ID: attachmentID, Filename: "mock.txt", Size: 1}, nil
+}
+
+func (m *MockClient) DownloadAttachment(ctx context.Context, attachmentID string) (*AttachmentContent, error) {
+	if attachmentID == "" {
+		return nil, fmt.Errorf("attachment id required")
+	}
+	return &AttachmentContent{Data: []byte("x"), ContentType: "text/plain"}, nil
+}
+
 func (m *MockClient) GetServiceDeskInfo(ctx context.Context) (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"version": "5.0.0",
