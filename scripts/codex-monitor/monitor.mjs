@@ -5357,7 +5357,6 @@ async function startProcess() {
 
   // Reset mutex flag before spawn — will be re-set if this instance hits mutex
   restartController.noteProcessStarted(Date.now());
-
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
   });
