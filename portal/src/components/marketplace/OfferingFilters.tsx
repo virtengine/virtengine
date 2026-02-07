@@ -64,6 +64,18 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
     setFilters({ providerSearch: e.target.value });
   };
 
+  const handleCpuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters({ minCpuCores: Number(e.target.value) || 0 });
+  };
+
+  const handleMemoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters({ minMemoryGB: Number(e.target.value) || 0 });
+  };
+
+  const handleGpuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters({ minGpuCount: Number(e.target.value) || 0 });
+  };
+
   const handlePricePreset = (min: number, max: number) => {
     if (min === 0 && max === Infinity) {
       setFilters({ priceRange: null });
@@ -91,6 +103,9 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
     filters.category !== 'all' ||
     filters.region !== 'all' ||
     filters.minReputation > 0 ||
+    filters.minCpuCores > 0 ||
+    filters.minMemoryGB > 0 ||
+    filters.minGpuCount > 0 ||
     filters.search !== '' ||
     filters.state !== 'active' ||
     filters.providerSearch !== '' ||
@@ -195,6 +210,43 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
           onChange={handleProviderSearch}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
         />
+      </div>
+
+      {/* Resource Specs */}
+      <div>
+        <h3 className="mb-3 font-medium">Resource Specs</h3>
+        <div className="grid gap-3">
+          <label className="text-sm text-muted-foreground">
+            Min CPU Cores
+            <input
+              type="number"
+              min={0}
+              value={filters.minCpuCores}
+              onChange={handleCpuChange}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-sm text-muted-foreground">
+            Min RAM (GB)
+            <input
+              type="number"
+              min={0}
+              value={filters.minMemoryGB}
+              onChange={handleMemoryChange}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-sm text-muted-foreground">
+            Min GPU Count
+            <input
+              type="number"
+              min={0}
+              value={filters.minGpuCount}
+              onChange={handleGpuChange}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
       </div>
 
       {/* Provider Reputation */}
