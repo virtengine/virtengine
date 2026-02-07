@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, watch } from "node:fs";
 import {
   copyFile,
@@ -10,6 +10,8 @@ import {
 } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
+import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -36,6 +38,9 @@ const maxRestarts = Number(getArg("--max-restarts", "0"));
 const logDir = resolve(getArg("--log-dir", resolve(__dirname, "logs")));
 const watchEnabled = !getFlag("--no-watch");
 const watchPath = resolve(getArg("--watch-path", scriptPath));
+const echoLogs = !getFlag("--no-echo-logs");
+const autoFixEnabled = !getFlag("--no-autofix");
+const vkEnsureIntervalMs = Number(getArg("--vk-ensure-interval", "60000"));
 let codexEnabled =
   !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
 const repoRoot = resolve(__dirname, "..", "..");
@@ -47,14 +52,16 @@ const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
 const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
-const vkRecoveryHost = process.env.VK_RECOVERY_HOST || "0.0.0.0";
-const vkBaseUrl =
-  process.env.VK_BASE_URL || `http://127.0.0.1:${vkRecoveryPort}`;
+const vkRecoveryHost =
+  process.env.VK_RECOVERY_HOST || process.env.VK_HOST || "0.0.0.0";
+const vkEndpointUrl =
+  process.env.VK_ENDPOINT_URL ||
+  process.env.VK_BASE_URL ||
+  `http://127.0.0.1:${vkRecoveryPort}`;
 const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
 );
-const vkAutoInstall = process.env.VK_AUTO_INSTALL === "1";
 
 let CodexClient = null;
 let codexDisabledReason = "";
@@ -77,6 +84,20 @@ let watcherDebounce = null;
 let watchFileName = null;
 let vkRecoveryLastAt = 0;
 let vibeKanbanProcess = null;
+let vibeKanbanStartedAt = 0;
+let monitorFailureHandling = false;
+const monitorFailureTimestamps = [];
+const monitorFailureWindowMs = 10 * 60 * 1000;
+const monitorRestartCooldownMs = 60 * 1000;
+let lastMonitorRestartAt = 0;
+const orchestratorRestartTimestamps = [];
+const orchestratorRestartWindowMs = 5 * 60 * 1000;
+const orchestratorRestartThreshold = 8;
+const orchestratorPauseMs = 10 * 60 * 1000;
+let orchestratorHaltedUntil = 0;
+let orchestratorLoopFixInProgress = false;
+let monitorSafeModeUntil = 0;
+let orchestratorResumeTimer = null;
 
 let logRemainder = "";
 const mergeNotified = new Set();
@@ -88,6 +109,486 @@ const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
 let plannerTriggered = false;
+
+// ── Telegram history ring buffer ────────────────────────────────────────────
+// Stores the last N sent messages for context enrichment (fed to autofix prompts)
+const TELEGRAM_HISTORY_MAX = 25;
+const telegramHistory = [];
+
+function pushTelegramHistory(text) {
+  const stamp = new Date().toISOString().slice(11, 19);
+  telegramHistory.push(`[${stamp}] ${text.slice(0, 300)}`);
+  if (telegramHistory.length > TELEGRAM_HISTORY_MAX) {
+    telegramHistory.shift();
+  }
+}
+
+function recordMonitorFailure() {
+  const now = Date.now();
+  monitorFailureTimestamps.push(now);
+  while (
+    monitorFailureTimestamps.length &&
+    now - monitorFailureTimestamps[0] > monitorFailureWindowMs
+  ) {
+    monitorFailureTimestamps.shift();
+  }
+  return monitorFailureTimestamps.length;
+}
+
+function shouldRestartMonitor() {
+  const now = Date.now();
+  if (now - lastMonitorRestartAt < monitorRestartCooldownMs) {
+    return false;
+  }
+  return monitorFailureTimestamps.length >= 3;
+}
+
+function restartSelf(reason) {
+  if (shuttingDown) return;
+  const now = Date.now();
+  lastMonitorRestartAt = now;
+  console.warn(`[monitor] restarting self (${reason || "unknown"})`);
+  try {
+    const child = spawn(process.execPath, process.argv.slice(1), {
+      cwd: process.cwd(),
+      env: { ...process.env },
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+  } catch (err) {
+    console.warn(
+      `[monitor] failed to spawn replacement monitor: ${err.message || err}`,
+    );
+  }
+  process.exit(1);
+}
+
+function recordOrchestratorRestart() {
+  const now = Date.now();
+  orchestratorRestartTimestamps.push(now);
+  while (
+    orchestratorRestartTimestamps.length &&
+    now - orchestratorRestartTimestamps[0] > orchestratorRestartWindowMs
+  ) {
+    orchestratorRestartTimestamps.shift();
+  }
+  return orchestratorRestartTimestamps.length;
+}
+
+function shouldHaltOrchestrator() {
+  const now = Date.now();
+  if (now < orchestratorHaltedUntil) {
+    return true;
+  }
+  return orchestratorRestartTimestamps.length >= orchestratorRestartThreshold;
+}
+
+function detectChangedFiles(repoRootPath) {
+  try {
+    const output = execSync("git diff --name-only", {
+      cwd: repoRootPath,
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function getChangeSummary(repoRootPath, files) {
+  if (!files.length) return "(no file changes detected)";
+  try {
+    const diff = execSync("git diff --stat", {
+      cwd: repoRootPath,
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    return diff.trim() || files.join(", ");
+  } catch {
+    return files.join(", ");
+  }
+}
+
+function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
+  return new Promise((resolve) => {
+    const args = ["exec", "--full-auto", "-C", cwd, prompt];
+    const child = spawn("codex", args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: true,
+      timeout: timeoutMs,
+      env: { ...process.env },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* best effort */
+      }
+      resolve({
+        success: false,
+        output: stdout,
+        error: `timeout after ${timeoutMs}ms`,
+      });
+    }, timeoutMs);
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({
+        success: false,
+        output: stdout,
+        error: err.message,
+      });
+    });
+
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      resolve({
+        success: code === 0,
+        output: stdout + (stderr ? `\n${stderr}` : ""),
+        error: code !== 0 ? `exit code ${code}` : null,
+      });
+    });
+  });
+}
+
+const monitorFixAttempts = new Map();
+const monitorFixMaxAttempts = 2;
+const monitorFixCooldownMs = 5 * 60 * 1000;
+
+function canAttemptMonitorFix(signature) {
+  const record = monitorFixAttempts.get(signature);
+  if (!record) return true;
+  if (record.count >= monitorFixMaxAttempts) return false;
+  if (Date.now() - record.lastAt < monitorFixCooldownMs) return false;
+  return true;
+}
+
+function recordMonitorFixAttempt(signature) {
+  const record = monitorFixAttempts.get(signature) || { count: 0, lastAt: 0 };
+  record.count += 1;
+  record.lastAt = Date.now();
+  monitorFixAttempts.set(signature, record);
+  return record.count;
+}
+
+async function attemptMonitorFix({ error, logText }) {
+  if (!autoFixEnabled) return { fixed: false, outcome: "autofix-disabled" };
+  if (!codexEnabled) return { fixed: false, outcome: "codex-disabled" };
+
+  const signature = error?.message || "monitor-crash";
+  if (!canAttemptMonitorFix(signature)) {
+    return { fixed: false, outcome: "monitor-fix-exhausted" };
+  }
+
+  const attemptNum = recordMonitorFixAttempt(signature);
+  const prompt = `You are debugging the VirtEngine codex-monitor.
+
+The monitor process hit an unexpected exception and needs a fix.
+Please inspect and fix code in:
+- scripts/codex-monitor/monitor.mjs
+- scripts/codex-monitor/autofix.mjs
+- scripts/codex-monitor/maintenance.mjs
+
+Crash info:
+${error?.stack || error?.message || String(error)}
+
+Recent log context:
+${logText.slice(-4000)}
+
+Instructions:
+1) Identify the root cause of the crash in codex-monitor.
+2) Apply a minimal fix.
+3) Do not refactor unrelated code.
+4) Keep behavior stable and production-safe.`;
+
+  const filesBefore = detectChangedFiles(repoRoot);
+  const result = await runCodexExec(prompt, repoRoot);
+  const filesAfter = detectChangedFiles(repoRoot);
+  const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
+  const changeSummary = getChangeSummary(repoRoot, newChanges);
+
+  const stamp = nowStamp();
+  const auditPath = resolve(logDir, `monitor-fix-${stamp}-attempt${attemptNum}.log`);
+  await writeFile(
+    auditPath,
+    [
+      `# Monitor fix attempt #${attemptNum}`,
+      `# Signature: ${signature}`,
+      `# Timestamp: ${new Date().toISOString()}`,
+      "",
+      "## Prompt sent to Codex:",
+      prompt,
+      "",
+      "## Codex result:",
+      result.output || "(no output)",
+      result.error ? `## Error: ${result.error}` : "",
+      `## Files changed: ${newChanges.join(", ") || "none"}`,
+      "",
+      "## Diff summary:",
+      changeSummary,
+    ].join("\n"),
+    "utf8",
+  );
+
+  if (result.success && newChanges.length > 0) {
+    return { fixed: true, outcome: `changes: ${changeSummary}` };
+  }
+
+  return {
+    fixed: false,
+    outcome: result.error || "no changes written",
+  };
+}
+
+async function handleMonitorFailure(reason, err) {
+  if (monitorFailureHandling) return;
+  monitorFailureHandling = true;
+  const failureCount = recordMonitorFailure();
+  const message = err && err.message ? err.message : String(err || reason);
+
+  try {
+    await ensureLogDir();
+    const crashPath = resolve(logDir, `monitor-crash-${nowStamp()}.log`);
+    const payload = [
+      `# Monitor crash: ${reason}`,
+      `# Timestamp: ${new Date().toISOString()}`,
+      "",
+      "## Error:",
+      err?.stack || message,
+      "",
+      "## Recent logs:",
+      logRemainder.slice(-8000),
+    ].join("\n");
+    await writeFile(crashPath, payload, "utf8");
+
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `⚠️ codex-monitor exception (${reason}). Attempting recovery (count=${failureCount}).`,
+      );
+    }
+
+    const fixResult = await attemptMonitorFix({
+      error: err || new Error(reason),
+      logText: logRemainder,
+    });
+
+    if (fixResult.fixed) {
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `🛠️ codex-monitor auto-fix applied. Restarting monitor.\n${fixResult.outcome}`,
+        );
+      }
+      restartSelf("monitor-fix-applied");
+      return;
+    }
+
+    if (shouldRestartMonitor()) {
+      monitorSafeModeUntil = Date.now() + orchestratorPauseMs;
+      const pauseMin = Math.round(orchestratorPauseMs / 60000);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `🛑 codex-monitor entering safe mode after repeated failures (${failureCount} in 10m). Pausing restarts for ${pauseMin} minutes.`,
+        );
+      }
+      return;
+    }
+  } catch (fatal) {
+    console.warn(
+      `[monitor] failure handler crashed: ${fatal.message || fatal}`,
+    );
+  } finally {
+    monitorFailureHandling = false;
+  }
+}
+
+const crashLoopFixAttempts = new Map();
+const crashLoopFixMaxAttempts = 2;
+const crashLoopFixCooldownMs = 10 * 60 * 1000;
+
+function canAttemptCrashLoopFix(signature) {
+  const record = crashLoopFixAttempts.get(signature);
+  if (!record) return true;
+  if (record.count >= crashLoopFixMaxAttempts) return false;
+  if (Date.now() - record.lastAt < crashLoopFixCooldownMs) return false;
+  return true;
+}
+
+function recordCrashLoopFixAttempt(signature) {
+  const record = crashLoopFixAttempts.get(signature) || { count: 0, lastAt: 0 };
+  record.count += 1;
+  record.lastAt = Date.now();
+  crashLoopFixAttempts.set(signature, record);
+  return record.count;
+}
+
+async function attemptCrashLoopFix({ reason, logText }) {
+  if (!autoFixEnabled || !codexEnabled) {
+    return { fixed: false, outcome: "codex-disabled" };
+  }
+  const signature = `crash-loop:${reason}`;
+  if (!canAttemptCrashLoopFix(signature)) {
+    return { fixed: false, outcome: "crash-loop-fix-exhausted" };
+  }
+
+  const attemptNum = recordCrashLoopFixAttempt(signature);
+  const prompt = `You are a reliability engineer debugging a crash loop in VirtEngine automation.
+
+The orchestrator is restarting repeatedly within minutes.
+Please diagnose the likely root cause and apply a minimal fix.
+
+Targets (edit only if needed):
+- scripts/ve-orchestrator.ps1
+- scripts/codex-monitor/monitor.mjs
+- scripts/codex-monitor/autofix.mjs
+- scripts/codex-monitor/maintenance.mjs
+
+Recent log excerpt:
+${logText.slice(-6000)}
+
+Constraints:
+1) Prevent rapid restart loops (introduce backoff or safe-mode).
+2) Keep behavior stable and production-safe.
+3) Do not refactor unrelated code.
+4) Prefer small guardrails over big rewrites.`;
+
+  const filesBefore = detectChangedFiles(repoRoot);
+  const result = await runCodexExec(prompt, repoRoot, 180_000);
+  const filesAfter = detectChangedFiles(repoRoot);
+  const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
+  const changeSummary = getChangeSummary(repoRoot, newChanges);
+
+  const stamp = nowStamp();
+  const auditPath = resolve(logDir, `crash-loop-fix-${stamp}-attempt${attemptNum}.log`);
+  await writeFile(
+    auditPath,
+    [
+      `# Crash-loop fix attempt #${attemptNum}`,
+      `# Signature: ${signature}`,
+      `# Timestamp: ${new Date().toISOString()}`,
+      "",
+      "## Prompt sent to Codex:",
+      prompt,
+      "",
+      "## Codex result:",
+      result.output || "(no output)",
+      result.error ? `## Error: ${result.error}` : "",
+      `## Files changed: ${newChanges.join(", ") || "none"}`,
+      "",
+      "## Diff summary:",
+      changeSummary,
+    ].join("\n"),
+    "utf8",
+  );
+
+  if (result.success && newChanges.length > 0) {
+    return { fixed: true, outcome: `changes: ${changeSummary}` };
+  }
+  return { fixed: false, outcome: result.error || "no changes written" };
+}
+
+export function getTelegramHistory() {
+  return [...telegramHistory];
+}
+
+// ── Repeating error detection (loop detector) ───────────────────────────────────
+// Tracks fingerprints of error lines. When the same error appears
+// LOOP_THRESHOLD times within LOOP_WINDOW_MS, triggers Codex autofix.
+const LOOP_THRESHOLD = 4;
+const LOOP_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
+
+/** @type {Map<string, {timestamps: number[], fixTriggeredAt: number}>} */
+const errorFrequency = new Map();
+let loopFixInProgress = false;
+
+function getErrorFingerprint(line) {
+  // Normalize: strip timestamps, attempt IDs, branch-specific parts
+  return line
+    .replace(/\[\d{2}:\d{2}:\d{2}\]\s*/g, "")
+    .replace(/\b[0-9a-f]{8}\b/gi, "<ID>") // attempt IDs
+    .replace(/ve\/[\w.-]+/g, "ve/<BRANCH>") // branch names
+    .trim();
+}
+
+function trackErrorFrequency(line) {
+  const fingerprint = getErrorFingerprint(line);
+  if (!fingerprint) return;
+
+  const now = Date.now();
+  let record = errorFrequency.get(fingerprint);
+  if (!record) {
+    record = { timestamps: [], fixTriggeredAt: 0 };
+    errorFrequency.set(fingerprint, record);
+  }
+
+  record.timestamps.push(now);
+  // Trim old entries outside window
+  record.timestamps = record.timestamps.filter((t) => now - t < LOOP_WINDOW_MS);
+
+  // Check threshold
+  if (
+    record.timestamps.length >= LOOP_THRESHOLD &&
+    now - record.fixTriggeredAt > LOOP_COOLDOWN_MS &&
+    !loopFixInProgress
+  ) {
+    record.fixTriggeredAt = now;
+    console.log(
+      `[monitor] repeating error detected (${record.timestamps.length}x): ${fingerprint.slice(0, 80)}`,
+    );
+    triggerLoopFix(line, record.timestamps.length);
+  }
+}
+
+async function triggerLoopFix(errorLine, repeatCount) {
+  if (!autoFixEnabled) return;
+  loopFixInProgress = true;
+
+  const telegramFn =
+    telegramToken && telegramChatId
+      ? (msg) => void sendTelegramMessage(msg)
+      : null;
+
+  try {
+    const result = await fixLoopingError({
+      errorLine,
+      repeatCount,
+      repoRoot,
+      logDir,
+      onTelegram: telegramFn,
+      recentMessages: getTelegramHistory(),
+    });
+
+    if (result.fixed) {
+      console.log(
+        "[monitor] loop fix applied — file watcher will restart orchestrator",
+      );
+    }
+  } catch (err) {
+    console.warn(`[monitor] loop fix error: ${err.message || err}`);
+    if (telegramFn) {
+      telegramFn(`🔁 Loop fix crashed: ${err.message || err}`);
+    }
+  } finally {
+    loopFixInProgress = false;
+  }
+}
 
 const contextPatterns = [
   "ContextWindowExceeded",
@@ -154,6 +655,10 @@ function notifyErrorLine(line) {
     notifyVkError(line);
     return;
   }
+
+  // Track error frequency for loop detection (always, even if deduped for Telegram)
+  trackErrorFrequency(line);
+
   const key = line.trim();
   if (!key) {
     return;
@@ -175,7 +680,7 @@ function notifyVkError(line) {
     return;
   }
   vkErrorNotified.set(key, now);
-  const vkLink = formatHtmlLink(vkBaseUrl, "VK_BASE_URL");
+  const vkLink = formatHtmlLink(vkEndpointUrl, "VK_ENDPOINT_URL");
   const publicLink = vkPublicUrl
     ? formatHtmlLink(vkPublicUrl, "Public URL")
     : null;
@@ -227,97 +732,80 @@ Reason: ${reason}`;
   }
 }
 
+let vkRestartCount = 0;
+const vkMaxRestarts = 20;
+const vkRestartDelayMs = 5000;
+
 function startVibeKanbanProcess() {
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     return;
   }
-  const runner = resolveVibeKanbanRunner();
-  if (!runner) {
-    console.warn("[monitor] vibe-kanban runner unavailable; skipping start");
-    return;
-  }
+
   const env = {
     ...process.env,
     PORT: vkRecoveryPort,
     HOST: vkRecoveryHost,
   };
-  vibeKanbanProcess = spawn(runner.command, runner.args, {
+
+  console.log(
+    `[monitor] starting vibe-kanban via npx (HOST=${vkRecoveryHost} PORT=${vkRecoveryPort}, endpoint=${vkEndpointUrl})`,
+  );
+
+  vibeKanbanProcess = spawn("npx", ["--yes", "vibe-kanban"], {
     env,
     cwd: repoRoot,
     stdio: "ignore",
+    shell: true,
+    detached: true,
   });
+  vibeKanbanProcess.unref();
+  vibeKanbanStartedAt = Date.now();
+
   vibeKanbanProcess.on("error", (err) => {
     vibeKanbanProcess = null;
+    vibeKanbanStartedAt = 0;
     const message = err && err.message ? err.message : String(err);
-    console.warn(`[monitor] vibe-kanban spawn failed: ${message}`);
+    console.warn(`[monitor] vibe-kanban spawn error: ${message}`);
+    scheduleVibeKanbanRestart();
+  });
+
+  vibeKanbanProcess.on("exit", (code, signal) => {
+    vibeKanbanProcess = null;
+    vibeKanbanStartedAt = 0;
+    const reason = signal ? `signal ${signal}` : `exit code ${code}`;
+    console.warn(`[monitor] vibe-kanban exited (${reason})`);
+    if (!shuttingDown) {
+      scheduleVibeKanbanRestart();
+    }
+  });
+}
+
+function scheduleVibeKanbanRestart() {
+  if (shuttingDown) return;
+  vkRestartCount++;
+  if (vkRestartCount > vkMaxRestarts) {
+    console.error(
+      `[monitor] vibe-kanban exceeded ${vkMaxRestarts} restarts, giving up`,
+    );
     if (telegramToken && telegramChatId) {
       void sendTelegramMessage(
-        `Vibe-kanban spawn failed: ${message}. Check VK_BASE_URL and local npm tooling.`,
+        `Vibe-kanban exceeded ${vkMaxRestarts} restart attempts. Manual intervention required.`,
       );
     }
-  });
-  vibeKanbanProcess.on("exit", () => {
-    vibeKanbanProcess = null;
-  });
-}
-
-function resolveVibeKanbanRunner() {
-  const localBin = resolve(repoRoot, "node_modules", ".bin");
-  const candidates = [
-    resolve(localBin, "vibe-kanban"),
-    resolve(localBin, "vibe-kanban.cmd"),
-  ];
-  const localRunner = candidates.find((candidate) => existsSync(candidate));
-  if (localRunner) {
-    return { command: localRunner, args: [] };
+    return;
   }
-
-  const npx = spawnSync("npx", ["--version"], { stdio: "ignore" });
-  if (npx.status === 0) {
-    return { command: "npx", args: ["vibe-kanban"] };
-  }
-
-  if (vkAutoInstall) {
-    const installed = installWorkspaceDependencies();
-    if (installed) {
-      return resolveVibeKanbanRunner();
-    }
-  }
-
-  return null;
-}
-
-function installWorkspaceDependencies() {
-  const pnpm = spawnSync("pnpm", ["--version"], { stdio: "ignore" });
-  if (pnpm.status === 0) {
-    const res = spawnSync("pnpm", ["install"], {
-      cwd: repoRoot,
-      stdio: "inherit",
-    });
-    return res.status === 0;
-  }
-
-  const corepack = spawnSync("corepack", ["--version"], { stdio: "ignore" });
-  if (corepack.status === 0) {
-    const res = spawnSync("corepack", ["pnpm", "install"], {
-      cwd: repoRoot,
-      stdio: "inherit",
-    });
-    return res.status === 0;
-  }
-
-  const npm = spawnSync("npm", ["install"], {
-    cwd: repoRoot,
-    stdio: "inherit",
-  });
-  return npm.status === 0;
+  const delay = Math.min(vkRestartDelayMs * vkRestartCount, 60000);
+  console.log(
+    `[monitor] restarting vibe-kanban in ${delay}ms (attempt ${vkRestartCount}/${vkMaxRestarts})`,
+  );
+  setTimeout(() => startVibeKanbanProcess(), delay);
 }
 
 async function isVibeKanbanOnline() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2000);
   try {
-    const res = await fetch(`${vkBaseUrl}/api/projects`, {
+    const res = await fetch(`${vkEndpointUrl}/api/projects`, {
       signal: controller.signal,
     });
     return res.ok;
@@ -330,35 +818,42 @@ async function isVibeKanbanOnline() {
 
 async function ensureVibeKanbanRunning() {
   if (await isVibeKanbanOnline()) {
+    // Reset restart counter on successful health check
+    vkRestartCount = 0;
     return;
   }
+  // If process is alive, give it 15s grace to start up
+  if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
+    const graceMs = 15000;
+    if (vibeKanbanStartedAt && Date.now() - vibeKanbanStartedAt < graceMs) {
+      return;
+    }
+    // Process alive but API not responding — kill and let auto-restart handle it
+    console.warn(
+      "[monitor] vibe-kanban process alive but API unresponsive, killing",
+    );
+    try {
+      vibeKanbanProcess.kill();
+    } catch {
+      /* best effort */
+    }
+    return;
+  }
+  // No process running — start fresh
   startVibeKanbanProcess();
 }
 
 function restartVibeKanbanProcess() {
+  // Just kill the process — the exit handler will auto-restart it
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
-    const existing = vibeKanbanProcess;
     try {
-      existing.kill("SIGTERM");
+      vibeKanbanProcess.kill();
     } catch {
-      // Best effort.
+      /* best effort */
     }
-    const killTimer = setTimeout(() => {
-      if (existing && !existing.killed) {
-        try {
-          existing.kill("SIGKILL");
-        } catch {
-          // Best effort.
-        }
-      }
-    }, 5000);
-    existing.once("exit", () => {
-      clearTimeout(killTimer);
-      startVibeKanbanProcess();
-    });
-    return;
+  } else {
+    startVibeKanbanProcess();
   }
-  startVibeKanbanProcess();
 }
 
 async function triggerVibeKanbanRecovery(reason) {
@@ -370,7 +865,7 @@ async function triggerVibeKanbanRecovery(reason) {
   vkRecoveryLastAt = now;
 
   if (telegramToken && telegramChatId) {
-    const link = formatHtmlLink(vkBaseUrl, "VK_BASE_URL");
+    const link = formatHtmlLink(vkEndpointUrl, "VK_ENDPOINT_URL");
     const notice = codexEnabled
       ? `Codex recovery triggered: vibe-kanban unreachable. Attempting restart. (${link})`
       : `Vibe-kanban recovery triggered (Codex disabled). Attempting restart. (${link})`;
@@ -605,6 +1100,18 @@ async function readStatusSummary() {
     const error = counts.error ?? 0;
     const manualReview = counts.manual_review ?? 0;
 
+    // Success rate metrics
+    const sm = status.success_metrics || {};
+    const firstShot = sm.first_shot_success ?? 0;
+    const neededFix = sm.needed_fix ?? 0;
+    const failed = sm.failed ?? 0;
+    const firstShotRate = sm.first_shot_rate ?? 0;
+    const totalDecided = firstShot + neededFix + failed;
+    const successLine =
+      totalDecided > 0
+        ? `First-shot: ${firstShotRate}% (${firstShot}/${totalDecided}) | Fix: ${neededFix} | Failed: ${failed}`
+        : "No completed tasks yet";
+
     const message = [
       "VirtEngine Orchestrator 10-min Update",
       `New tasks created (${recentSubmitted.length}):`,
@@ -618,6 +1125,7 @@ async function readStatusSummary() {
       `Manual review (${manualReviewTasks.length}):`,
       ...manualReviewLines,
       `Counts: running=${running}, review=${review}, error=${error}, manual_review=${manualReview}`,
+      `Success: ${successLine}`,
     ].join("\n");
 
     return { text: message, parseMode: "HTML" };
@@ -642,6 +1150,10 @@ async function sendTelegramMessage(text, options = {}) {
     }
     telegramDedup.set(key, now);
   }
+
+  // Always record to history ring buffer (even deduped messages are useful context)
+  pushTelegramHistory(String(text || ""));
+
   const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
   const payload = {
     chat_id: telegramChatId,
@@ -692,7 +1204,7 @@ function startTelegramNotifier() {
     await checkStatusMilestones();
   };
   void sendTelegramMessage("VirtEngine Orchestrator Notifier started.");
-  sendUpdate();
+  setTimeout(sendUpdate, intervalMs);
   setInterval(sendUpdate, intervalMs);
 }
 
@@ -814,11 +1326,24 @@ Return a short diagnosis and a concrete fix.`;
 
     const result = await thread.run(prompt);
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
-    await writeFile(analysisPath, String(result), "utf8");
+    const analysisText = String(result);
+    await writeFile(analysisPath, analysisText, "utf8");
+
+    // Notify user with Codex analysis outcome
+    if (telegramToken && telegramChatId) {
+      // Extract first 500 chars of diagnosis for telegram
+      const summary = analysisText.slice(0, 500).replace(/\n{3,}/g, "\n\n");
+      void sendTelegramMessage(
+        `🔍 Codex Analysis Result (${reason}):\n${summary}${analysisText.length > 500 ? "\n...(truncated)" : ""}`,
+      );
+    }
   } catch (err) {
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
     const message = err && err.message ? err.message : String(err);
     await writeFile(analysisPath, `Codex SDK failed: ${message}\n`, "utf8");
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(`🔍 Codex Analysis Failed: ${message}`);
+    }
   }
 }
 
@@ -893,24 +1418,80 @@ async function handleExit(code, signal, logPath) {
     return;
   }
 
+  const logText = await readFile(logPath, "utf8").catch(() => "");
+  const reason = signal ? `signal ${signal}` : `exit ${code}`;
+  const isFileChangeRestart = pendingRestart && skipNextAnalyze;
+  const isAbnormalExit = Boolean(signal) || code !== 0;
+
   if (pendingRestart) {
     pendingRestart = false;
-    if (!skipNextAnalyze) {
-      const logText = await readFile(logPath, "utf8").catch(() => "");
-      const reason = signal ? `signal ${signal}` : `exit ${code}`;
-      await analyzeWithCodex(logPath, logText.slice(-15000), reason);
-    }
     skipNextAnalyze = false;
     if (!skipNextRestartCount) {
       restartCount += 1;
     }
     skipNextRestartCount = false;
-    startProcess();
-    return;
+
+    // File-change restarts don't need analysis or auto-fix
+    if (isFileChangeRestart) {
+      startProcess();
+      return;
+    }
   }
 
-  const logText = await readFile(logPath, "utf8").catch(() => "");
-  const reason = signal ? `signal ${signal}` : `exit ${code}`;
+  // ── Auto-fix: try to fix the crash automatically ──────────────────────
+  if (autoFixEnabled && logText.length > 0) {
+    const telegramFn =
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null;
+
+    try {
+      const result = await attemptAutoFix({
+        logText: logText.slice(-15000),
+        reason,
+        repoRoot,
+        logDir,
+        onTelegram: telegramFn,
+        recentMessages: getTelegramHistory(),
+      });
+
+      if (result.fixed) {
+        // Fix was written to disk — the file watcher will restart us.
+        // Don't call startProcess() manually — let the watcher handle it.
+        console.log(
+          "[monitor] auto-fix applied, waiting for file watcher to restart",
+        );
+        return;
+      }
+
+      // Not fixed — notify that autofix tried but couldn't help
+      if (
+        result.outcome &&
+        result.outcome !== "clean-exit-skip" &&
+        telegramFn
+      ) {
+        // Only notify if we haven't already (attemptAutoFix sends its own notifications)
+        // but ensure the user knows the fallback path is happening
+        console.log(
+          `[monitor] auto-fix outcome: ${result.outcome.slice(0, 100)}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] auto-fix error: ${err.message || err}`);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `🔧 Auto-fix crashed: ${err.message || err}\nFalling back to Codex analysis.`,
+        );
+      }
+    }
+  }
+
+  // ── Fallback: Codex SDK analysis (diagnosis only) ─────────────────────
+  if (telegramToken && telegramChatId) {
+    void sendTelegramMessage(
+      `🔍 Codex analysis triggered (${reason}):\nAuto-fix was unable to resolve the crash — running diagnostic analysis.`,
+    );
+  }
   await analyzeWithCodex(logPath, logText.slice(-15000), reason);
 
   if (hasContextWindowError(logText)) {
@@ -921,7 +1502,63 @@ async function handleExit(code, signal, logPath) {
     );
   }
 
+  if (isAbnormalExit) {
+    const restartCountNow = recordOrchestratorRestart();
+    if (restartCountNow >= orchestratorRestartThreshold) {
+        if (Date.now() >= orchestratorHaltedUntil) {
+          orchestratorHaltedUntil = Date.now() + orchestratorPauseMs;
+          const pauseMin = Math.round(orchestratorPauseMs / 60000);
+          console.warn(
+            `[monitor] crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin}m.`,
+          );
+          if (!orchestratorResumeTimer) {
+            orchestratorResumeTimer = setTimeout(() => {
+              orchestratorResumeTimer = null;
+              startProcess();
+            }, orchestratorPauseMs);
+          }
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
+            );
+          }
+        if (!orchestratorLoopFixInProgress) {
+          orchestratorLoopFixInProgress = true;
+          const fixResult = await attemptCrashLoopFix({
+            reason,
+            logText,
+          }).catch((err) => ({
+            fixed: false,
+            outcome: err?.message || "crash-loop-fix-error",
+          }));
+          orchestratorLoopFixInProgress = false;
+          if (fixResult.fixed) {
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `🛠️ Crash-loop fix applied. Orchestrator will retry after cooldown.\n${fixResult.outcome}`,
+              );
+            }
+          } else if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              `⚠️ Crash-loop fix attempt failed: ${fixResult.outcome}. Orchestrator remains paused.`,
+            );
+          }
+        }
+      }
+      return;
+    }
+  }
+
   if (maxRestarts > 0 && restartCount >= maxRestarts) {
+    return;
+  }
+
+  const now = Date.now();
+  if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
+    const waitMs = Math.max(orchestratorHaltedUntil - now, monitorSafeModeUntil - now);
+    const waitSec = Math.max(5, Math.round(waitMs / 1000));
+    console.warn(`[monitor] restart paused; retrying in ${waitSec}s`);
+    setTimeout(startProcess, waitSec * 1000);
     return;
   }
 
@@ -930,6 +1567,14 @@ async function handleExit(code, signal, logPath) {
 }
 
 async function startProcess() {
+  const now = Date.now();
+  if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
+    const waitMs = Math.max(orchestratorHaltedUntil - now, monitorSafeModeUntil - now);
+    const waitSec = Math.max(5, Math.round(waitMs / 1000));
+    console.warn(`[monitor] orchestrator start blocked; retrying in ${waitSec}s`);
+    setTimeout(startProcess, waitSec * 1000);
+    return;
+  }
   await ensureLogDir();
   const activeLogPath = resolve(logDir, "orchestrator-active.log");
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
@@ -941,6 +1586,9 @@ async function startProcess() {
   currentChild = child;
 
   const append = async (chunk) => {
+    if (echoLogs) {
+      process.stdout.write(chunk);
+    }
     const text = chunk.toString();
     await writeFile(activeLogPath, text, { flag: "a" });
     logRemainder += text;
@@ -1033,7 +1681,7 @@ async function startWatcher() {
     }
     watcherDebounce = setTimeout(() => {
       requestRestart("file-change");
-    }, 250);
+    }, 5000);
   });
 }
 
@@ -1059,12 +1707,43 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
+process.on("uncaughtException", (err) => {
+  void handleMonitorFailure("uncaughtException", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  const err =
+    reason instanceof Error ? reason : new Error(String(reason || ""));
+  void handleMonitorFailure("unhandledRejection", err);
+});
+
+// ── Singleton guard: prevent ghost monitors ─────────────────────────────────
+const cacheDir = resolve(repoRoot, ".cache");
+if (!acquireMonitorLock(cacheDir)) {
+  process.exit(1);
+}
+
+// ── Startup sweep: kill stale processes, prune worktrees ────────────────────
+runMaintenanceSweep({ repoRoot });
+
 setInterval(() => {
   void flushErrorQueue();
 }, 60 * 1000);
 
+// ── Periodic maintenance: every 5 min, reap stuck pushes & prune worktrees ──
+const maintenanceIntervalMs = 5 * 60 * 1000;
+setInterval(() => {
+  const childPid = currentChild ? currentChild.pid : undefined;
+  runMaintenanceSweep({ repoRoot, childPid });
+}, maintenanceIntervalMs);
+
 startWatcher();
 void ensureVibeKanbanRunning();
+if (Number.isFinite(vkEnsureIntervalMs) && vkEnsureIntervalMs > 0) {
+  setInterval(() => {
+    void ensureVibeKanbanRunning();
+  }, vkEnsureIntervalMs);
+}
 void ensureCodexSdkReady().then(() => {
   if (!codexEnabled) {
     const reason = codexDisabledReason || "disabled";

@@ -7,7 +7,7 @@
     "start": "node monitor.mjs"
   },
   "dependencies": {
-    "@openai/codex-sdk": "^0.1.0"
+    "@openai/codex-sdk": "0.99.0-alpha.6"
   },
   "engines": {
     "node": ">=18"
