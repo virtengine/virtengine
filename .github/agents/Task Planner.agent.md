@@ -24,6 +24,12 @@ You should use \_docs/AU2024203136A1-LIVE.pdf as a source of truth for what the 
 
 Your analysis should be thorough, you should go through the changes that have been made since the last progreess.md analysis and identify if acceptance criteria has been met for tasks completed between the last analysis and the current date, along with uncovering new gaps that have not been identified in the previous analysis and should be completed.
 
+Multi-workspace planning (Phase 2 workshop):
+- Assign analysis domains per workspace based on the provided registry context (roles, capabilities, model priorities).
+- Prefer routing high-context research or refactor-heavy tasks to higher-capability models.
+- When tasks depend on each other, sequence them (e.g., 12A-12C) and call out handoff points explicitly.
+- Include explicit handoff notes in task descriptions when work should move between workspaces.
+
 Tasks added to the backlog should be documented into the progress.md with the status of the task (e.g. planned, completed) so that it can be tracked into the functionality of the project.
 
 Your goal is NOT to implement any code, only create a thorough plan for tasks that need to be completed - and these tasks should be properly added to the backlog of vibe-kanban through MCP Tool calling, you should not duplicate any previously used sequences (for e.g. if currently the latest backlog tasks are 7A-7D then you should add tasks from 8A onwards unless the new task needs to be completed before the other backlog tasks due to priorities or dependancies)

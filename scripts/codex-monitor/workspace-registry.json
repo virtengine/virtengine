@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "primary_workspace_id": "primary",
+  "workspaces": [
+    {
+      "id": "primary",
+      "name": "Primary Coordinator",
+      "host": "hooman",
+      "role": "coordinator",
+      "capabilities": ["router", "planner", "review"],
+      "model_priorities": ["CODEX_DEFAULT", "COPILOT_CLAUDE_OPUS_4_6"],
+      "vk_endpoint_url": "http://127.0.0.1:54089",
+      "telegram_prefix": "HQ",
+      "executor_profile": {
+        "executor": "CODEX",
+        "variant": "DEFAULT"
+      }
+    },
+    {
+      "id": "eng-1",
+      "name": "Engineering Station 1",
+      "host": "local",
+      "role": "agent",
+      "capabilities": ["go", "infra"],
+      "model_priorities": ["CODEX_DEFAULT"],
+      "vk_endpoint_url": "http://127.0.0.1:54089",
+      "telegram_prefix": "ENG1"
+    }
+  ]
+}

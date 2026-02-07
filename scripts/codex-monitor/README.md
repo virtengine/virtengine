@@ -27,6 +27,26 @@ pnpm -C scripts/codex-monitor start -- --args "-MaxParallel 6"
 - `--no-codex`: Disable Codex SDK analysis.
 - `--no-watch`: Disable file watching.
 
+## Telegram Routing (Phase 2)
+
+Set:
+
+```
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+VE_WORKSPACE_ID
+```
+
+Optional:
+- `VE_WORKSPACE_REGISTRY_PATH` (defaults to `scripts/codex-monitor/workspace-registry.json`)
+- `TELEGRAM_POLL_INTERVAL_SEC` (defaults to 60)
+- `TELEGRAM_HEARTBEAT_MIN` (defaults to 5)
+
+Commands:
+- `/agent --workspace <id> <message>`
+- `/handoff --to <id> <message>`
+- `/status`
+
 ## Notes
 
 - The Codex SDK uses environment configuration from your Codex setup (API key, base URL).

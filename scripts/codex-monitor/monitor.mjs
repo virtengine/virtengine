@@ -1,5 +1,5 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, watch } from "node:fs";
+import { existsSync, readFileSync, watch } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -48,6 +48,12 @@ const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
+const telegramPollIntervalSec = Number(
+  process.env.TELEGRAM_POLL_INTERVAL_SEC || "60",
+);
+const telegramHeartbeatMin = Number(
+  process.env.TELEGRAM_HEARTBEAT_MIN || "5",
+);
 const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
@@ -61,6 +67,29 @@ const vkEndpointUrl =
 const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
 const vkRecoveryCooldownMin = Number(
   process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
+);
+const workspaceRegistryPath = resolve(
+  process.env.VE_WORKSPACE_REGISTRY_PATH ||
+    process.env.WORKSPACE_REGISTRY_PATH ||
+    resolve(__dirname, "workspace-registry.json"),
+);
+const localWorkspaceId =
+  process.env.VE_WORKSPACE_ID ||
+  process.env.WORKSPACE_ID ||
+  process.env.VK_WORKSPACE_ID ||
+  "";
+const telegramOffsetPath = resolve(repoRoot, ".cache", "telegram-offset.json");
+const telegramDigestPath = resolve(repoRoot, ".cache", "telegram-digest.json");
+const taskPlannerCooldownMin = Number(
+  process.env.TASK_PLANNER_COOLDOWN_MIN || "30",
+);
+const taskPlannerBacklogPerAgent = Number(
+  process.env.TASK_PLANNER_BACKLOG_PER_AGENT || "10",
+);
+const taskPlannerIdleMin = Number(process.env.TASK_PLANNER_IDLE_MIN || "20");
+const taskPlannerStallMin = Number(process.env.TASK_PLANNER_STALL_MIN || "30");
+const taskPlannerErrorThreshold = Number(
+  process.env.TASK_PLANNER_ERROR_THRESHOLD || "1",
 );
 
 let CodexClient = null;
@@ -108,7 +137,13 @@ const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
-let plannerTriggered = false;
+let plannerLastTriggeredAt = 0;
+let plannerLastReason = "";
+let workspaceRegistry = null;
+let workspaceRegistryLoadedAt = 0;
+let telegramUpdateOffset = 0;
+let telegramDigestSaveTimer = null;
+const workspaceDigests = new Map();
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -121,6 +156,613 @@ function pushTelegramHistory(text) {
   if (telegramHistory.length > TELEGRAM_HISTORY_MAX) {
     telegramHistory.shift();
   }
+}
+
+function normalizeWorkspaceId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function loadWorkspaceRegistry() {
+  const now = Date.now();
+  if (workspaceRegistry && now - workspaceRegistryLoadedAt < 60_000) {
+    return workspaceRegistry;
+  }
+  let registry = null;
+  if (existsSync(workspaceRegistryPath)) {
+    try {
+      const raw = readFileSync(workspaceRegistryPath, "utf8");
+      registry = JSON.parse(raw);
+    } catch (err) {
+      console.warn(
+        `[monitor] failed to load workspace registry: ${err.message || err}`,
+      );
+    }
+  }
+
+  if (!registry) {
+    registry = {
+      version: 1,
+      primary_workspace_id: localWorkspaceId || "primary",
+      workspaces: localWorkspaceId
+        ? [
+            {
+              id: localWorkspaceId,
+              name: "Local Workspace",
+              role: "coordinator",
+              capabilities: ["orchestrator"],
+              model_priorities: ["CODEX_DEFAULT"],
+            },
+          ]
+        : [],
+    };
+  }
+
+  registry.workspaces = Array.isArray(registry.workspaces)
+    ? registry.workspaces
+    : [];
+  workspaceRegistry = registry;
+  workspaceRegistryLoadedAt = now;
+  return registry;
+}
+
+function getWorkspaceList() {
+  const registry = loadWorkspaceRegistry();
+  return registry.workspaces || [];
+}
+
+function getWorkspaceById(id) {
+  const normalized = normalizeWorkspaceId(id);
+  return getWorkspaceList().find(
+    (ws) => normalizeWorkspaceId(ws.id) === normalized,
+  );
+}
+
+function getPrimaryWorkspaceId() {
+  const registry = loadWorkspaceRegistry();
+  if (registry.primary_workspace_id) {
+    return registry.primary_workspace_id;
+  }
+  const primary = getWorkspaceList().find(
+    (ws) => normalizeWorkspaceId(ws.role) === "coordinator",
+  );
+  return primary?.id || localWorkspaceId || "primary";
+}
+
+function isPrimaryWorkspace(id) {
+  return normalizeWorkspaceId(id) === normalizeWorkspaceId(getPrimaryWorkspaceId());
+}
+
+function getWorkspacePrefix(workspace) {
+  return workspace?.telegram_prefix || workspace?.short || workspace?.id || "ws";
+}
+
+function formatWorkspaceTag(workspace) {
+  return `[${getWorkspacePrefix(workspace)}]`;
+}
+
+function scheduleDigestSave() {
+  if (telegramDigestSaveTimer) {
+    return;
+  }
+  telegramDigestSaveTimer = setTimeout(() => {
+    telegramDigestSaveTimer = null;
+    void saveWorkspaceDigests();
+  }, 2000);
+}
+
+function updateWorkspaceDigest(workspaceId, entry) {
+  if (!workspaceId || !entry) return;
+  const key = normalizeWorkspaceId(workspaceId);
+  const list = workspaceDigests.get(key) || [];
+  list.push(entry);
+  while (list.length > 40) list.shift();
+  workspaceDigests.set(key, list);
+  scheduleDigestSave();
+}
+
+async function saveWorkspaceDigests() {
+  try {
+    const payload = {};
+    for (const [key, entries] of workspaceDigests.entries()) {
+      payload[key] = entries;
+    }
+    await mkdir(resolve(repoRoot, ".cache"), { recursive: true });
+    await writeFile(telegramDigestPath, JSON.stringify(payload, null, 2), "utf8");
+  } catch (err) {
+    console.warn(
+      `[monitor] failed to save telegram digest: ${err.message || err}`,
+    );
+  }
+}
+
+async function loadWorkspaceDigests() {
+  try {
+    if (!existsSync(telegramDigestPath)) return;
+    const raw = await readFile(telegramDigestPath, "utf8");
+    const parsed = JSON.parse(raw);
+    for (const [key, entries] of Object.entries(parsed || {})) {
+      if (Array.isArray(entries)) {
+        workspaceDigests.set(key, entries);
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[monitor] failed to load telegram digest: ${err.message || err}`,
+    );
+  }
+}
+
+async function loadTelegramOffset() {
+  try {
+    if (!existsSync(telegramOffsetPath)) return 0;
+    const raw = await readFile(telegramOffsetPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return Number(parsed?.offset || 0);
+  } catch {
+    return 0;
+  }
+}
+
+async function saveTelegramOffset(offset) {
+  try {
+    await mkdir(resolve(repoRoot, ".cache"), { recursive: true });
+    await writeFile(
+      telegramOffsetPath,
+      JSON.stringify({ offset, updated_at: new Date().toISOString() }, null, 2),
+      "utf8",
+    );
+  } catch (err) {
+    console.warn(
+      `[monitor] failed to save telegram offset: ${err.message || err}`,
+    );
+  }
+}
+
+function tokenizeCommand(text) {
+  if (!text) return [];
+  const tokens = [];
+  const regex = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let match = null;
+  while ((match = regex.exec(text)) !== null) {
+    tokens.push(match[1] || match[2] || match[3]);
+  }
+  return tokens;
+}
+
+function extractMentionedWorkspace(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const workspaces = getWorkspaceList();
+  for (const ws of workspaces) {
+    const id = normalizeWorkspaceId(ws.id);
+    if (!id) continue;
+    if (lower.includes(`@${id}`) || lower.includes(`#${id}`)) {
+      return ws.id;
+    }
+  }
+  return null;
+}
+
+function extractPrefixWorkspace(text) {
+  if (!text) return null;
+  const trimmed = text.trim();
+  const match = trimmed.match(/^\[([^\]]+)\]|^([A-Za-z0-9_-]+):/);
+  const prefix = match ? match[1] || match[2] : null;
+  if (!prefix) return null;
+  const workspaces = getWorkspaceList();
+  return (
+    workspaces.find(
+      (ws) => normalizeWorkspaceId(getWorkspacePrefix(ws)) === normalizeWorkspaceId(prefix),
+    )?.id || null
+  );
+}
+
+function resolveTargetWorkspaceId({
+  commandWorkspaceId,
+  mentionWorkspaceId,
+  prefixWorkspaceId,
+}) {
+  return (
+    commandWorkspaceId ||
+    mentionWorkspaceId ||
+    prefixWorkspaceId ||
+    getPrimaryWorkspaceId()
+  );
+}
+
+function formatWorkspaceMessage({ type, workspace, text }) {
+  const iconMap = {
+    status: "📊",
+    heartbeat: "💓",
+    handoff: "🤝",
+    task: "🧭",
+    alert: "🚨",
+    info: "ℹ️",
+  };
+  const icon = iconMap[type] || "💬";
+  const tag = formatWorkspaceTag(workspace);
+  return `${icon} ${tag} ${text}`.trim();
+}
+
+function getExecutorProfile(workspace) {
+  if (workspace?.executor_profile?.executor && workspace?.executor_profile?.variant) {
+    return {
+      executor: workspace.executor_profile.executor,
+      variant: workspace.executor_profile.variant,
+    };
+  }
+  const priorities = Array.isArray(workspace?.model_priorities)
+    ? workspace.model_priorities
+    : [];
+  for (const entry of priorities) {
+    const normalized = String(entry || "").toUpperCase();
+    if (normalized.includes("COPILOT")) {
+      return { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" };
+    }
+    if (normalized.includes("CODEX")) {
+      return { executor: "CODEX", variant: "DEFAULT" };
+    }
+  }
+  return { executor: "CODEX", variant: "DEFAULT" };
+}
+
+async function vkApiRequest(baseUrl, path, method = "GET", body) {
+  const url = `${baseUrl}${path}`;
+  const options = {
+    method,
+    headers: { "Content-Type": "application/json" },
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`VK API ${method} ${path} failed: ${res.status} ${detail}`);
+  }
+  const payload = await res.json();
+  return payload?.data ?? payload;
+}
+
+async function getWorkspaceSessions(workspace, baseUrl) {
+  const workspaceId = workspace?.vk_workspace_id || workspace?.id;
+  if (!workspaceId) return [];
+  const data = await vkApiRequest(
+    baseUrl,
+    `/api/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+  return Array.isArray(data) ? data : data?.sessions || [];
+}
+
+async function createWorkspaceSession(workspace, baseUrl) {
+  const workspaceId = workspace?.vk_workspace_id || workspace?.id;
+  if (!workspaceId) return null;
+  const body = { workspace_id: workspaceId };
+  const data = await vkApiRequest(baseUrl, "/api/sessions", "POST", body);
+  return data?.id ? data : null;
+}
+
+async function queueWorkspaceMessage(workspace, message, mode = "followup") {
+  const baseUrl = workspace?.vk_endpoint_url || vkEndpointUrl;
+  if (!baseUrl) {
+    throw new Error("VK endpoint URL missing");
+  }
+  const sessions = await getWorkspaceSessions(workspace, baseUrl);
+  let session = sessions.sort((a, b) => {
+    const at = new Date(a.updated_at || a.created_at || 0).getTime();
+    const bt = new Date(b.updated_at || b.created_at || 0).getTime();
+    return bt - at;
+  })[0];
+  if (!session) {
+    session = await createWorkspaceSession(workspace, baseUrl);
+  }
+  if (!session?.id) {
+    throw new Error("No session available for workspace");
+  }
+  const executorProfile = getExecutorProfile(workspace);
+  if (mode === "queue") {
+    await vkApiRequest(
+      baseUrl,
+      `/api/sessions/${session.id}/queue`,
+      "POST",
+      { executor_profile_id: executorProfile, message },
+    );
+  } else {
+    await vkApiRequest(
+      baseUrl,
+      `/api/sessions/${session.id}/follow-up`,
+      "POST",
+      { executor_profile_id: executorProfile, prompt: message },
+    );
+  }
+}
+
+function parseCommand(text) {
+  const tokens = tokenizeCommand(text);
+  if (!tokens.length) return null;
+  const raw = tokens[0];
+  const name = raw.split("@")[0];
+  if (!name.startsWith("/")) return null;
+  return {
+    name,
+    tokens: tokens.slice(1),
+  };
+}
+
+function parseAgentCommand(text) {
+  const parsed = parseCommand(text);
+  if (!parsed || parsed.name !== "/agent") return null;
+  const args = parsed.tokens;
+  let workspaceId = null;
+  let mode = "followup";
+  const messageParts = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === "--workspace" || token === "-w") {
+      workspaceId = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (token === "--queue") {
+      mode = "queue";
+      continue;
+    }
+    if (token === "--followup") {
+      mode = "followup";
+      continue;
+    }
+    messageParts.push(token);
+  }
+  return {
+    workspaceId,
+    mode,
+    message: messageParts.join(" ").trim(),
+  };
+}
+
+function parseHandoffCommand(text) {
+  const parsed = parseCommand(text);
+  if (!parsed || parsed.name !== "/handoff") return null;
+  const args = parsed.tokens;
+  let toWorkspace = null;
+  let fromWorkspace = null;
+  const messageParts = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === "--to") {
+      toWorkspace = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (token === "--from") {
+      fromWorkspace = args[i + 1];
+      i += 1;
+      continue;
+    }
+    messageParts.push(token);
+  }
+  return {
+    toWorkspace,
+    fromWorkspace,
+    message: messageParts.join(" ").trim(),
+  };
+}
+
+async function handleTelegramCommand({
+  text,
+  from,
+  chatId,
+  timestamp,
+}) {
+  const agentCmd = parseAgentCommand(text);
+  const handoffCmd = parseHandoffCommand(text);
+  const statusCmd = parseCommand(text)?.name === "/status" ? true : false;
+
+  const mentionWorkspaceId = extractMentionedWorkspace(text);
+  const prefixWorkspaceId = extractPrefixWorkspace(text);
+
+  if (agentCmd) {
+    const targetWorkspaceId = resolveTargetWorkspaceId({
+      commandWorkspaceId: agentCmd.workspaceId,
+      mentionWorkspaceId,
+      prefixWorkspaceId,
+    });
+    const workspace = getWorkspaceById(targetWorkspaceId);
+    if (!workspace) {
+      await sendTelegramMessage(
+        formatWorkspaceMessage({
+          type: "alert",
+          workspace: { id: "router", telegram_prefix: "router" },
+          text: `Unknown workspace '${targetWorkspaceId}'. Check registry.`,
+        }),
+      );
+      return true;
+    }
+    if (
+      normalizeWorkspaceId(workspace.id) !==
+      normalizeWorkspaceId(localWorkspaceId || workspace.id)
+    ) {
+      return true;
+    }
+    const message = agentCmd.message || "(no message)";
+    const payload = `Telegram /agent from ${from || "unknown"}:\n${message}`;
+    await queueWorkspaceMessage(workspace, payload, agentCmd.mode);
+    updateWorkspaceDigest(workspace.id, {
+      at: timestamp,
+      direction: "inbound",
+      type: "agent",
+      from,
+      text: message,
+    });
+    await sendTelegramMessage(
+      formatWorkspaceMessage({
+        type: "task",
+        workspace,
+        text: `Agent command routed to ${workspace.id}.`,
+      }),
+    );
+    return true;
+  }
+
+  if (handoffCmd) {
+    const targetId = resolveTargetWorkspaceId({
+      commandWorkspaceId: handoffCmd.toWorkspace,
+      mentionWorkspaceId,
+      prefixWorkspaceId,
+    });
+    const workspace = getWorkspaceById(targetId);
+    if (!workspace) {
+      await sendTelegramMessage(
+        formatWorkspaceMessage({
+          type: "alert",
+          workspace: { id: "router", telegram_prefix: "router" },
+          text: `Unknown handoff target '${targetId}'.`,
+        }),
+      );
+      return true;
+    }
+    if (
+      normalizeWorkspaceId(workspace.id) !==
+      normalizeWorkspaceId(localWorkspaceId || workspace.id)
+    ) {
+      return true;
+    }
+    const fromId = handoffCmd.fromWorkspace || from || "unknown";
+    const message = handoffCmd.message || "(no details)";
+    const payload = `Handoff from ${fromId}:\n${message}`;
+    await queueWorkspaceMessage(workspace, payload, "queue");
+    updateWorkspaceDigest(workspace.id, {
+      at: timestamp,
+      direction: "inbound",
+      type: "handoff",
+      from: fromId,
+      text: message,
+    });
+    await sendTelegramMessage(
+      formatWorkspaceMessage({
+        type: "handoff",
+        workspace,
+        text: `Handoff queued for ${workspace.id}.`,
+      }),
+    );
+    return true;
+  }
+
+  if (statusCmd) {
+    if (!isPrimaryWorkspace(localWorkspaceId || getPrimaryWorkspaceId())) {
+      return true;
+    }
+    const summary = await readStatusSummary();
+    if (summary && summary.text) {
+      await sendTelegramMessage(summary.text, {
+        parseMode: summary.parseMode,
+        disablePreview: true,
+      });
+    }
+    return true;
+  }
+
+  if (mentionWorkspaceId || prefixWorkspaceId) {
+    const targetId = resolveTargetWorkspaceId({
+      commandWorkspaceId: null,
+      mentionWorkspaceId,
+      prefixWorkspaceId,
+    });
+    const workspace = getWorkspaceById(targetId);
+    if (
+      workspace &&
+      normalizeWorkspaceId(workspace.id) ===
+        normalizeWorkspaceId(localWorkspaceId || workspace.id)
+    ) {
+      updateWorkspaceDigest(workspace.id, {
+        at: timestamp,
+        direction: "inbound",
+        type: "message",
+        from,
+        text,
+      });
+    }
+  }
+
+  return false;
+}
+
+async function pollTelegramUpdates() {
+  if (!telegramToken || !telegramChatId) return;
+  if (!telegramUpdateOffset) {
+    telegramUpdateOffset = await loadTelegramOffset();
+  }
+  const url = `https://api.telegram.org/bot${telegramToken}/getUpdates`;
+  const payload = {
+    timeout: 0,
+    offset: telegramUpdateOffset ? telegramUpdateOffset + 1 : undefined,
+    limit: 50,
+  };
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[monitor] telegram getUpdates failed: ${res.status} ${body}`);
+      return;
+    }
+    const result = await res.json();
+    if (!result?.ok || !Array.isArray(result.result)) {
+      return;
+    }
+    for (const update of result.result) {
+      telegramUpdateOffset = Math.max(
+        telegramUpdateOffset || 0,
+        update.update_id,
+      );
+      const message =
+        update.message || update.channel_post || update.edited_message;
+      if (!message?.text) continue;
+      if (message.from?.is_bot) continue;
+      if (telegramChatId && String(message.chat?.id) !== String(telegramChatId)) {
+        continue;
+      }
+      const text = String(message.text || "").trim();
+      if (!text) continue;
+      const from =
+        message.from?.username || message.from?.first_name || "unknown";
+      const tsMs = message.date ? message.date * 1000 : Date.now();
+      const timestamp = new Date(tsMs).toISOString();
+      await handleTelegramCommand({
+        text,
+        from,
+        chatId: message.chat?.id,
+        timestamp,
+      });
+    }
+    if (telegramUpdateOffset) {
+      await saveTelegramOffset(telegramUpdateOffset);
+    }
+  } catch (err) {
+    console.warn(`[monitor] telegram getUpdates error: ${err.message || err}`);
+  }
+}
+
+function startTelegramIngest() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (!Number.isFinite(telegramPollIntervalSec) || telegramPollIntervalSec <= 0) {
+    return;
+  }
+  if (!localWorkspaceId && getWorkspaceList().length > 1) {
+    console.warn(
+      "[monitor] VE_WORKSPACE_ID not set; multi-workspace routing may misfire.",
+    );
+  }
+  void loadWorkspaceDigests();
+  setTimeout(pollTelegramUpdates, 2000);
+  setInterval(pollTelegramUpdates, telegramPollIntervalSec * 1000);
 }
 
 function recordMonitorFailure() {
@@ -1208,6 +1850,170 @@ function startTelegramNotifier() {
   setInterval(sendUpdate, intervalMs);
 }
 
+function getPlannerWorkspaceCount() {
+  const workspaces = getWorkspaceList();
+  const eligible = workspaces.filter(
+    (ws) => ws.enabled !== false && normalizeWorkspaceId(ws.role) !== "observer",
+  );
+  return Math.max(eligible.length, 1);
+}
+
+async function fetchWorkspaceSummaries() {
+  try {
+    const data = await vkApiRequest(vkEndpointUrl, "/api/task-attempts/summary", "POST", {
+      archived: false,
+    });
+    const summaries = data?.summaries || data;
+    return Array.isArray(summaries) ? summaries : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseIdleMinutes(summary) {
+  const direct = Number(
+    summary.idle_minutes ??
+      summary.idle_min ??
+      summary.idleMinutes ??
+      summary.idleMin,
+  );
+  if (Number.isFinite(direct) && direct >= 0) {
+    return direct;
+  }
+  const last =
+    summary.last_active_at || summary.updated_at || summary.last_seen_at;
+  if (last) {
+    const delta = Date.now() - new Date(last).getTime();
+    if (Number.isFinite(delta)) {
+      return Math.max(0, delta / 60000);
+    }
+  }
+  return null;
+}
+
+function inferIdleAgentCount(summaries) {
+  if (!summaries || summaries.length === 0) return 0;
+  let active = 0;
+  for (const s of summaries) {
+    const status = String(s.status || s.state || "").toLowerCase();
+    if (status === "running" || status === "active") {
+      active += 1;
+    }
+  }
+  return Math.max(0, summaries.length - active);
+}
+
+function inferStalledAgentCount(summaries) {
+  if (!summaries || summaries.length === 0) return 0;
+  let stalled = 0;
+  for (const s of summaries) {
+    const idleMin = parseIdleMinutes(s);
+    if (idleMin !== null && idleMin >= taskPlannerStallMin) {
+      stalled += 1;
+    }
+  }
+  return stalled;
+}
+
+async function checkPlannerTriggers(status) {
+  if (!codexEnabled) return;
+  const now = Date.now();
+  const cooldownMs = taskPlannerCooldownMin * 60 * 1000;
+  if (plannerLastTriggeredAt && now - plannerLastTriggeredAt < cooldownMs) {
+    return;
+  }
+
+  const backlogRemaining = status?.backlog_remaining ?? 0;
+  const workspaceCount = getPlannerWorkspaceCount();
+  const backlogPerAgent = workspaceCount
+    ? backlogRemaining / workspaceCount
+    : backlogRemaining;
+  const counts = status?.counts || {};
+  const errorCount = counts.error ?? 0;
+  const reviewCount = counts.review ?? 0;
+  const summaries = await fetchWorkspaceSummaries();
+  const idleAgents = inferIdleAgentCount(summaries);
+  const idleOverThreshold = summaries.filter((s) => {
+    const idleMin = parseIdleMinutes(s);
+    return idleMin !== null && idleMin >= taskPlannerIdleMin;
+  }).length;
+  const stalledAgents = inferStalledAgentCount(summaries);
+
+  const reasons = [];
+  if (backlogPerAgent > 0 && backlogPerAgent < taskPlannerBacklogPerAgent) {
+    reasons.push(
+      `backlog per agent ${backlogPerAgent.toFixed(1)} < ${taskPlannerBacklogPerAgent}`,
+    );
+  }
+  if (idleOverThreshold > 0) {
+    reasons.push(
+      `idle agents detected (${idleOverThreshold} ≥ ${taskPlannerIdleMin}m)`,
+    );
+  } else if (idleAgents > 0) {
+    reasons.push(`idle agents detected (${idleAgents})`);
+  }
+  if (stalledAgents > 0) {
+    reasons.push(`stalled agents detected (${stalledAgents})`);
+  }
+  if (errorCount + reviewCount >= taskPlannerErrorThreshold) {
+    reasons.push(
+      `stalled tasks (error=${errorCount}, review=${reviewCount})`,
+    );
+  }
+  if (reasons.length === 0) {
+    return;
+  }
+
+  await triggerTaskPlanner({
+    reason: reasons.join("; "),
+    status,
+    summaries,
+  });
+}
+
+async function sendWorkspaceHeartbeat(status) {
+  const workspace = getWorkspaceById(localWorkspaceId) || {
+    id: localWorkspaceId || getPrimaryWorkspaceId(),
+    telegram_prefix: localWorkspaceId || "primary",
+  };
+  const counts = status?.counts || {};
+  const backlogRemaining = status?.backlog_remaining ?? "?";
+  const running = counts.running ?? 0;
+  const review = counts.review ?? 0;
+  const error = counts.error ?? 0;
+  const message = formatWorkspaceMessage({
+    type: "heartbeat",
+    workspace,
+    text: `Heartbeat • backlog=${backlogRemaining} running=${running} review=${review} error=${error}`,
+  });
+  await sendTelegramMessage(message);
+  updateWorkspaceDigest(workspace.id, {
+    at: new Date().toISOString(),
+    direction: "outbound",
+    type: "heartbeat",
+    text: message,
+  });
+}
+
+function startHeartbeatLoop() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (!Number.isFinite(telegramHeartbeatMin) || telegramHeartbeatMin <= 0) {
+    return;
+  }
+  const intervalMs = telegramHeartbeatMin * 60 * 1000;
+  const tick = async () => {
+    const status = await readStatusData();
+    if (status) {
+      await sendWorkspaceHeartbeat(status);
+      await checkPlannerTriggers(status);
+    }
+  };
+  setTimeout(tick, intervalMs);
+  setInterval(tick, intervalMs);
+}
+
 async function checkStatusMilestones() {
   const status = await readStatusData();
   if (!status) {
@@ -1230,7 +2036,7 @@ async function checkStatusMilestones() {
     await sendTelegramMessage(
       "All tasks completed. Orchestrator backlog is empty.",
     );
-    await triggerTaskPlanner();
+    await triggerTaskPlanner({ reason: "backlog empty", status });
   }
 
   if (!backlogLowNotified && backlogRemaining > 0 && backlogRemaining < 5) {
@@ -1238,17 +2044,25 @@ async function checkStatusMilestones() {
     await sendTelegramMessage(
       `Backlog low: ${backlogRemaining} tasks remaining. Triggering task planner.`,
     );
-    await triggerTaskPlanner();
+    await triggerTaskPlanner({ reason: "backlog low", status });
   }
+
+  await checkPlannerTriggers(status);
 }
 
-async function triggerTaskPlanner() {
-  if (plannerTriggered || !codexEnabled) {
+async function triggerTaskPlanner({ reason, status, summaries } = {}) {
+  if (!codexEnabled) {
     return;
   }
-  plannerTriggered = true;
+  const now = Date.now();
+  const cooldownMs = taskPlannerCooldownMin * 60 * 1000;
+  if (plannerLastTriggeredAt && now - plannerLastTriggeredAt < cooldownMs) {
+    return;
+  }
+  plannerLastTriggeredAt = now;
+  plannerLastReason = reason || "";
   try {
-    notifyCodexTrigger("task planner run");
+    notifyCodexTrigger(`task planner run (${reason || "trigger"})`);
     if (!CodexClient) {
       CodexClient = await loadCodexSdk();
     }
@@ -1264,7 +2078,34 @@ async function triggerTaskPlanner() {
     const agentPrompt = await readFile(agentPath, "utf8");
     const codex = new CodexClient();
     const thread = codex.startThread();
-    const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
+    const registry = loadWorkspaceRegistry();
+    const workspaceList = (registry.workspaces || []).map((ws) => ({
+      id: ws.id,
+      name: ws.name,
+      role: ws.role,
+      capabilities: ws.capabilities,
+      model_priorities: ws.model_priorities,
+    }));
+    const plannerContext = {
+      reason,
+      status,
+      summaries,
+      workspace_registry: {
+        primary: registry.primary_workspace_id,
+        workspaces: workspaceList,
+      },
+      thresholds: {
+        backlog_per_agent: taskPlannerBacklogPerAgent,
+        idle_min: taskPlannerIdleMin,
+        stall_min: taskPlannerStallMin,
+        error_threshold: taskPlannerErrorThreshold,
+      },
+    };
+    const prompt = `${agentPrompt}\n\nPlanner context:\n${JSON.stringify(
+      plannerContext,
+      null,
+      2,
+    )}\n\nPlease execute the task planning instructions above, assigning analysis domains to the available workspaces and routing tasks based on model priorities.`;
     const result = await thread.run(prompt);
     const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
     await writeFile(outPath, String(result), "utf8");
@@ -1754,3 +2595,5 @@ void ensureCodexSdkReady().then(() => {
 });
 startProcess();
 startTelegramNotifier();
+startTelegramIngest();
+startHeartbeatLoop();
