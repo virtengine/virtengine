@@ -34,6 +34,8 @@ func GetTxVEIDCmd() *cobra.Command {
 		GetTxVEIDUpdateConsentCmd(),
 		GetTxVEIDUpdateVerificationCmd(),
 		GetTxVEIDUpdateScoreCmd(),
+		GetTxVEIDRegisterModelCmd(),
+		GetTxVEIDProposeModelUpdateCmd(),
 	)
 	return cmd
 }
@@ -614,6 +616,102 @@ Example:
 
 	cflags.AddTxFlagsToCmd(cmd)
 	cmd.Flags().String("score-version", "v1.0.0", "Score model version")
+
+	return cmd
+}
+
+// GetTxVEIDRegisterModelCmd returns the command to register a new ML model
+func GetTxVEIDRegisterModelCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "register-model [model-type] [model-id] [sha256-hash] [version]",
+		Short: "Register a new ML model on-chain",
+		Long: `Register a new ML model for VEID identity verification.
+
+The model type must be one of: face_verification, liveness, ocr, trust_score, gan_detection.
+The SHA256 hash should match the output of scripts/compute_model_hash.sh.`,
+		Args:              cobra.ExactArgs(4),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			name, _ := cmd.Flags().GetString("name")
+			description, _ := cmd.Flags().GetString("description")
+
+			msg := &veidv1.MsgRegisterModel{
+				Authority: cctx.FromAddress.String(),
+				ModelInfo: veidv1.MLModelInfo{
+					ModelId:     args[1],
+					ModelType:   args[0],
+					Sha256Hash:  args[2],
+					Version:     args[3],
+					Name:        name,
+					Description: description,
+				},
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
+	cmd.Flags().String("name", "", "Human-readable model name")
+	cmd.Flags().String("description", "", "Model description")
+
+	return cmd
+}
+
+// GetTxVEIDProposeModelUpdateCmd returns the command to propose an ML model update
+func GetTxVEIDProposeModelUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "propose-model-update [model-type] [new-model-id] [new-model-hash]",
+		Short: "Propose an ML model update via governance",
+		Long: `Propose updating an active ML model through governance voting.
+
+The proposal must specify the model type, the new model's registered ID,
+and the new model's SHA256 hash for verification.`,
+		Args:              cobra.ExactArgs(3),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			title, _ := cmd.Flags().GetString("title")
+			description, _ := cmd.Flags().GetString("description")
+			activationDelay, _ := cmd.Flags().GetInt64("activation-delay")
+
+			msg := &veidv1.MsgProposeModelUpdate{
+				Proposer: cctx.FromAddress.String(),
+				Proposal: veidv1.ModelUpdateProposal{
+					Title:           title,
+					Description:     description,
+					ModelType:       args[0],
+					NewModelId:      args[1],
+					NewModelHash:    args[2],
+					ActivationDelay: activationDelay,
+				},
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
+	cmd.Flags().String("title", "", "Proposal title (required)")
+	cmd.Flags().String("description", "", "Proposal description")
+	cmd.Flags().Int64("activation-delay", 100, "Blocks to wait after approval before activation")
 
 	return cmd
 }
