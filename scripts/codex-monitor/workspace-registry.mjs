@@ -165,6 +165,22 @@ function resolveRegistryFilePath(rawPath) {
   return resolvePath(process.cwd(), rawPath);
 }
 
+function mergeRegistry(base, next) {
+  if (!next) return base;
+  const baseObj = base && typeof base === "object" && !Array.isArray(base) ? base : {};
+  if (Array.isArray(next)) {
+    return { ...baseObj, workspaces: next };
+  }
+  if (typeof next === "object") {
+    const merged = { ...baseObj, ...next };
+    if (Array.isArray(next.workspaces)) {
+      merged.workspaces = next.workspaces;
+    }
+    return merged;
+  }
+  return base;
+}
+
 export async function loadWorkspaceRegistry() {
   const errors = [];
   const warnings = [];
@@ -175,7 +191,7 @@ export async function loadWorkspaceRegistry() {
     try {
       const raw = await readFile(filePath, "utf8");
       const parsed = parseJson(raw, `file ${filePath}`, errors);
-      if (parsed) merged = parsed;
+      if (parsed) merged = mergeRegistry(merged, parsed);
     } catch (err) {
       errors.push(`Failed to read workspace registry file ${filePath}: ${err.message}`);
     }
@@ -187,11 +203,7 @@ export async function loadWorkspaceRegistry() {
       "VE_WORKSPACE_REGISTRY",
       errors,
     );
-    if (parsed) {
-      merged = merged
-        ? { ...(typeof merged === "object" ? merged : {}), ...parsed }
-        : parsed;
-    }
+    if (parsed) merged = mergeRegistry(merged, parsed);
   }
 
   return normalizeRegistry(merged, errors, warnings);
