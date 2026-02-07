@@ -48,6 +48,18 @@ const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
+const telegramCommandPollTimeoutSec = Math.max(
+  5,
+  Number(process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20"),
+);
+const telegramCommandConcurrency = Math.max(
+  1,
+  Number(process.env.TELEGRAM_COMMAND_CONCURRENCY || "2"),
+);
+const telegramCommandMaxBatch = Math.max(
+  1,
+  Number(process.env.TELEGRAM_COMMAND_MAX_BATCH || "25"),
+);
 const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
@@ -114,6 +126,10 @@ let plannerTriggered = false;
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
 const TELEGRAM_HISTORY_MAX = 25;
 const telegramHistory = [];
+let telegramUpdateOffset = 0;
+const telegramCommandQueue = [];
+let telegramCommandActive = 0;
+let telegramCommandPolling = false;
 
 function pushTelegramHistory(text) {
   const stamp = new Date().toISOString().slice(11, 19);
@@ -1138,17 +1154,18 @@ async function readStatusSummary() {
 }
 
 async function sendTelegramMessage(text, options = {}) {
-  if (!telegramToken || !telegramChatId) {
+  const targetChatId = options.chatId ?? telegramChatId;
+  if (!telegramToken || !targetChatId) {
     return;
   }
-  const key = String(text || "").trim();
-  if (key) {
+  const dedupKey = options.dedupKey ?? String(text || "").trim();
+  if (dedupKey && !options.skipDedup) {
     const now = Date.now();
-    const last = telegramDedup.get(key) || 0;
+    const last = telegramDedup.get(dedupKey) || 0;
     if (now - last < 5 * 60 * 1000) {
       return;
     }
-    telegramDedup.set(key, now);
+    telegramDedup.set(dedupKey, now);
   }
 
   // Always record to history ring buffer (even deduped messages are useful context)
@@ -1156,7 +1173,7 @@ async function sendTelegramMessage(text, options = {}) {
 
   const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
   const payload = {
-    chat_id: telegramChatId,
+    chat_id: targetChatId,
     text,
   };
   if (options.parseMode) {
@@ -1178,6 +1195,364 @@ async function sendTelegramMessage(text, options = {}) {
   } catch (err) {
     console.warn(`[monitor] telegram send failed: ${err.message || err}`);
   }
+}
+
+function enqueueTelegramCommand(handler) {
+  telegramCommandQueue.push(handler);
+  void drainTelegramCommandQueue();
+}
+
+function drainTelegramCommandQueue() {
+  while (
+    telegramCommandActive < telegramCommandConcurrency &&
+    telegramCommandQueue.length > 0
+  ) {
+    const job = telegramCommandQueue.shift();
+    if (!job) {
+      continue;
+    }
+    telegramCommandActive += 1;
+    Promise.resolve()
+      .then(job)
+      .catch((err) => {
+        console.warn(
+          `[monitor] telegram command handler failed: ${err?.message || err}`,
+        );
+      })
+      .finally(() => {
+        telegramCommandActive -= 1;
+        setImmediate(() => drainTelegramCommandQueue());
+      });
+  }
+}
+
+function normalizeTelegramCommand(text) {
+  if (!text) {
+    return null;
+  }
+  const trimmed = String(text).trim();
+  if (!trimmed.startsWith("/")) {
+    return null;
+  }
+  const [raw, ...rest] = trimmed.split(/\s+/);
+  const command = raw.split("@")[0].toLowerCase();
+  return { command, args: rest.join(" ") };
+}
+
+function isAllowedTelegramChat(chatId) {
+  if (!telegramChatId) {
+    return true;
+  }
+  return String(chatId) === String(telegramChatId);
+}
+
+function limitLines(lines, limit = 8) {
+  if (lines.length <= limit) {
+    return lines;
+  }
+  const remaining = lines.length - limit;
+  return [...lines.slice(0, limit), `- ...and ${remaining} more`];
+}
+
+function formatTaskLink(item) {
+  const title = item.task_title || item.task_id || "(task)";
+  if (item.task_url) {
+    return formatHtmlLink(item.task_url, title);
+  }
+  return escapeHtml(title);
+}
+
+function formatAttemptLine(attempt) {
+  if (!attempt) {
+    return null;
+  }
+  const taskId = attempt.task_id ? escapeHtml(attempt.task_id) : "(task)";
+  const branch = attempt.branch ? ` (${escapeHtml(attempt.branch)})` : "";
+  const status = attempt.status ? ` — ${escapeHtml(attempt.status)}` : "";
+  if (attempt.pr_number) {
+    const prLabel = `#${attempt.pr_number}`;
+    const prLink = formatHtmlLink(
+      `${repoUrlBase}/pull/${attempt.pr_number}`,
+      prLabel,
+    );
+    return `- ${taskId} ${prLink}${branch}${status}`;
+  }
+  return `- ${taskId}${branch}${status}`;
+}
+
+async function buildTasksResponse() {
+  const status = await readStatusData();
+  if (!status) {
+    return { text: "Status unavailable (missing status file).", parseMode: null };
+  }
+
+  const counts = status.counts || {};
+  const attempts = status.attempts || {};
+  const runningAttempts = Object.values(attempts).filter(
+    (attempt) => attempt && attempt.status === "running",
+  );
+
+  const reviewTasks = Array.isArray(status.review_tasks)
+    ? status.review_tasks
+    : [];
+  const errorTasks = Array.isArray(status.error_tasks)
+    ? status.error_tasks
+    : [];
+  const manualReviewTasks = Array.isArray(status.manual_review_tasks)
+    ? status.manual_review_tasks
+    : [];
+  const submitted = Array.isArray(status.submitted_tasks)
+    ? status.submitted_tasks
+    : [];
+
+  const runningLines = limitLines(
+    runningAttempts
+      .map((attempt) => formatAttemptLine(attempt))
+      .filter(Boolean),
+  );
+  const submittedLines = limitLines(
+    submitted.map((item) => `- ${formatTaskLink(item)}`),
+  );
+
+  const reviewLines = reviewTasks.length
+    ? limitLines(reviewTasks.map((taskId) => `- ${escapeHtml(taskId)}`))
+    : ["- none"];
+  const errorLines = errorTasks.length
+    ? limitLines(errorTasks.map((taskId) => `- ${escapeHtml(taskId)}`))
+    : ["- none"];
+  const manualLines = manualReviewTasks.length
+    ? limitLines(manualReviewTasks.map((taskId) => `- ${escapeHtml(taskId)}`))
+    : ["- none"];
+
+  const message = [
+    "VirtEngine Task Snapshot",
+    `Counts: running=${counts.running ?? 0}, review=${counts.review ?? 0}, error=${counts.error ?? 0}, manual_review=${counts.manual_review ?? 0}`,
+    `Backlog remaining: ${status.backlog_remaining ?? 0}`,
+    "Running attempts:",
+    ...(runningLines.length ? runningLines : ["- none"]),
+    "Recently submitted:",
+    ...(submittedLines.length ? submittedLines : ["- none"]),
+    "Needs review:",
+    ...reviewLines,
+    "Errors:",
+    ...errorLines,
+    "Manual review:",
+    ...manualLines,
+  ].join("\n");
+
+  return { text: message, parseMode: "HTML" };
+}
+
+async function buildAgentResponse() {
+  const status = await readStatusData();
+  const attempts = status?.attempts || {};
+  const runningAttempts = Object.values(attempts).filter(
+    (attempt) => attempt && attempt.status === "running",
+  );
+  const activeLines = limitLines(
+    runningAttempts
+      .map((attempt) => formatAttemptLine(attempt))
+      .filter(Boolean),
+  );
+  const orchestratorState = currentChild
+    ? `Orchestrator running (pid ${currentChild.pid}).`
+    : "Orchestrator not running.";
+  const message = [
+    "VirtEngine Agent Status",
+    orchestratorState,
+    `Active attempts: ${runningAttempts.length}`,
+    ...(activeLines.length ? activeLines : ["- none"]),
+  ].join("\n");
+  return { text: message, parseMode: "HTML" };
+}
+
+async function buildBackgroundResponse() {
+  const vkOnline = await isVibeKanbanOnline();
+  const now = Date.now();
+  const halted =
+    now < orchestratorHaltedUntil
+      ? `halted until ${new Date(orchestratorHaltedUntil).toISOString()}`
+      : "active";
+  const safeMode =
+    now < monitorSafeModeUntil
+      ? `safe-mode until ${new Date(monitorSafeModeUntil).toISOString()}`
+      : "normal";
+  const message = [
+    "VirtEngine Background Status",
+    currentChild ? `Orchestrator: running (pid ${currentChild.pid})` : "Orchestrator: stopped",
+    `Monitor state: ${halted}, ${safeMode}`,
+    `Vibe-kanban: ${vkOnline ? "online" : "unreachable"}`,
+  ].join("\n");
+  return { text: message, parseMode: null };
+}
+
+async function buildHealthResponse() {
+  const status = await readStatusData();
+  const updatedAt = status?.updated_at
+    ? new Date(status.updated_at).toISOString()
+    : "unknown";
+  const vkOnline = await isVibeKanbanOnline();
+  const message = [
+    "VirtEngine Health",
+    `Orchestrator: ${currentChild ? "running" : "stopped"}`,
+    `Status updated: ${updatedAt}`,
+    `Vibe-kanban: ${vkOnline ? "online" : "unreachable"}`,
+  ].join("\n");
+  return { text: message, parseMode: null };
+}
+
+async function handleTelegramUpdate(update) {
+  if (!update) {
+    return;
+  }
+  const message =
+    update.message || update.edited_message || update.callback_query?.message;
+  if (!message) {
+    return;
+  }
+  const chatId = message.chat?.id;
+  if (!chatId || !isAllowedTelegramChat(chatId)) {
+    return;
+  }
+  const parsed = normalizeTelegramCommand(message.text || "");
+  if (!parsed) {
+    return;
+  }
+
+  let response = null;
+  switch (parsed.command) {
+    case "/status":
+      response = await readStatusSummary();
+      break;
+    case "/tasks":
+      response = await buildTasksResponse();
+      break;
+    case "/agent":
+      response = await buildAgentResponse();
+      break;
+    case "/background":
+      response = await buildBackgroundResponse();
+      break;
+    case "/health":
+      response = await buildHealthResponse();
+      break;
+    case "/help":
+    case "/start":
+      response = {
+        text: [
+          "VirtEngine Command Help",
+          "/status — summary snapshot",
+          "/tasks — task breakdown",
+          "/agent — active agent status",
+          "/background — monitor status",
+          "/health — service health",
+        ].join("\n"),
+        parseMode: null,
+      };
+      break;
+    default:
+      response = {
+        text: "Unknown command. Send /help for available commands.",
+        parseMode: null,
+      };
+      break;
+  }
+
+  if (!response || !response.text) {
+    return;
+  }
+
+  await sendTelegramMessage(response.text, {
+    chatId,
+    parseMode: response.parseMode,
+    disablePreview: true,
+    skipDedup: true,
+  });
+}
+
+async function fetchTelegramUpdates() {
+  const url = `https://api.telegram.org/bot${telegramToken}/getUpdates`;
+  const params = new URLSearchParams({
+    offset: String(telegramUpdateOffset),
+    timeout: String(Math.max(5, telegramCommandPollTimeoutSec)),
+    limit: String(Math.max(1, telegramCommandMaxBatch)),
+  });
+
+  const controller = new AbortController();
+  const timeoutMs = (telegramCommandPollTimeoutSec + 5) * 1000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${url}?${params.toString()}`, {
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[monitor] telegram getUpdates failed: ${res.status} ${body}`);
+      return [];
+    }
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.result)) {
+      return [];
+    }
+    return data.result;
+  } catch (err) {
+    if (err?.name !== "AbortError") {
+      console.warn(`[monitor] telegram getUpdates error: ${err?.message || err}`);
+    }
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function pollTelegramCommands() {
+  if (shuttingDown) {
+    telegramCommandPolling = false;
+    return;
+  }
+  try {
+    const updates = await fetchTelegramUpdates();
+    if (updates.length) {
+      for (const update of updates) {
+        if (typeof update.update_id === "number") {
+          telegramUpdateOffset = update.update_id + 1;
+        }
+        enqueueTelegramCommand(async () => {
+          try {
+            await handleTelegramUpdate(update);
+          } catch (err) {
+            const message =
+              err && err.message ? err.message : String(err || "unknown error");
+            console.warn(`[monitor] telegram command crashed: ${message}`);
+            const chatId = update.message?.chat?.id;
+            if (chatId && isAllowedTelegramChat(chatId)) {
+              await sendTelegramMessage(
+                `Command failed: ${message}`,
+                { chatId, skipDedup: true },
+              );
+            }
+          }
+        });
+      }
+    }
+    const delayMs = updates.length ? 0 : 1000;
+    setTimeout(pollTelegramCommands, delayMs);
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    console.warn(`[monitor] telegram command poll error: ${message}`);
+    setTimeout(pollTelegramCommands, 3000);
+  }
+}
+
+function startTelegramCommandListener() {
+  if (!telegramToken) {
+    return;
+  }
+  if (telegramCommandPolling) {
+    return;
+  }
+  telegramCommandPolling = true;
+  void pollTelegramCommands();
 }
 
 function startTelegramNotifier() {
@@ -1753,4 +2128,5 @@ void ensureCodexSdkReady().then(() => {
   }
 });
 startProcess();
+startTelegramCommandListener();
 startTelegramNotifier();
