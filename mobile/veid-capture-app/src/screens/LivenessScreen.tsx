@@ -7,7 +7,7 @@ import { useCaptureStore } from "../state/captureStore";
 import { LivenessEngine, createDefaultChallenges, DEFAULT_LIVENESS_CONFIG } from "../core/liveness/engine";
 import type { FaceSignal, LivenessUpdate } from "../core/liveness/types";
 
-export function LivenessScreen() {
+export function LivenessScreen({ stepIndex = 3 }: { stepIndex?: number }) {
   const { dispatch } = useCaptureStore();
   const challenges = useMemo(() => createDefaultChallenges(), []);
   const engineRef = useRef(new LivenessEngine(challenges, DEFAULT_LIVENESS_CONFIG));
@@ -83,7 +83,7 @@ export function LivenessScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Liveness Check"
-        stepIndex={3}
+        stepIndex={stepIndex}
         subtitle="Complete the active liveness challenge prompts."
       />
       {update ? (

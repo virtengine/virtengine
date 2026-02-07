@@ -492,12 +492,14 @@ func (s *CompositeScoringTestSuite) createInputsWithAllMax() types.CompositeScor
 			SuccessfulVerificationRate: 10000,
 		},
 		RiskIndicators: types.RiskIndicatorsInput{
-			Present:                true,
-			FraudPatternScore:      10000,
-			DeviceFingerprintScore: 10000,
-			IPReputationScore:      10000,
-			VelocityCheckPassed:    true,
-			GeoConsistencyScore:    10000,
+			Present:                 true,
+			FraudPatternScore:       10000,
+			DeviceFingerprintScore:  10000,
+			DeviceIntegrityScore:    10000,
+			IPReputationScore:       10000,
+			VelocityCheckPassed:     true,
+			DeviceAttestationPassed: true,
+			GeoConsistencyScore:     10000,
 		},
 	}
 }
@@ -542,12 +544,14 @@ func (s *CompositeScoringTestSuite) createInputsWithAllMin() types.CompositeScor
 			SuccessfulVerificationRate: 0,
 		},
 		RiskIndicators: types.RiskIndicatorsInput{
-			Present:                true,
-			FraudPatternScore:      0,
-			DeviceFingerprintScore: 0,
-			IPReputationScore:      0,
-			VelocityCheckPassed:    false,
-			GeoConsistencyScore:    0,
+			Present:                 true,
+			FraudPatternScore:       0,
+			DeviceFingerprintScore:  0,
+			DeviceIntegrityScore:    0,
+			IPReputationScore:       0,
+			VelocityCheckPassed:     false,
+			DeviceAttestationPassed: false,
+			GeoConsistencyScore:     0,
 		},
 	}
 }
@@ -644,9 +648,11 @@ func (s *CompositeScoringTestSuite) createInputsForScore(targetScore uint32) typ
 			AccountAgeScore:        score,
 		},
 		RiskIndicators: types.RiskIndicatorsInput{
-			Present:             true,
-			FraudPatternScore:   score,
-			VelocityCheckPassed: true,
+			Present:                 true,
+			FraudPatternScore:       score,
+			DeviceIntegrityScore:    score,
+			VelocityCheckPassed:     true,
+			DeviceAttestationPassed: true,
 		},
 	}
 }
@@ -721,9 +727,11 @@ func TestCompositeScoreComputation(t *testing.T) {
 
 	t.Run("risk indicators compute score", func(t *testing.T) {
 		input := types.RiskIndicatorsInput{
-			Present:             true,
-			FraudPatternScore:   10000, // No fraud
-			VelocityCheckPassed: true,
+			Present:                 true,
+			FraudPatternScore:       10000, // No fraud
+			DeviceIntegrityScore:    9000,
+			VelocityCheckPassed:     true,
+			DeviceAttestationPassed: true,
 		}
 
 		score := input.ComputeScore()

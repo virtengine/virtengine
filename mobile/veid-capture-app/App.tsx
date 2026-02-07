@@ -5,6 +5,7 @@ import { ConsentScreen } from "./src/screens/ConsentScreen";
 import { DocumentCaptureScreen } from "./src/screens/DocumentCaptureScreen";
 import { SelfieCaptureScreen } from "./src/screens/SelfieCaptureScreen";
 import { LivenessScreen } from "./src/screens/LivenessScreen";
+import { BiometricCaptureScreen } from "./src/screens/BiometricCaptureScreen";
 import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { UploadScreen } from "./src/screens/UploadScreen";
 import { CompleteScreen } from "./src/screens/CompleteScreen";
@@ -20,9 +21,11 @@ function CaptureRouter() {
     case "document_back":
       return <DocumentCaptureScreen side="back" stepIndex={1} />;
     case "selfie":
-      return <SelfieCaptureScreen />;
+      return <SelfieCaptureScreen stepIndex={2} />;
     case "liveness":
-      return <LivenessScreen />;
+      return <LivenessScreen stepIndex={3} />;
+    case "biometric":
+      return <BiometricCaptureScreen />;
     case "review":
       return <ReviewScreen />;
     case "upload":

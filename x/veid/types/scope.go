@@ -24,6 +24,12 @@ const (
 	// ScopeTypeBiometric represents biometric data (fingerprint, voice, etc.)
 	ScopeTypeBiometric ScopeType = "biometric"
 
+	// ScopeTypeBiometricHardware represents biometric hardware attestation payloads
+	ScopeTypeBiometricHardware ScopeType = "biometric_hardware"
+
+	// ScopeTypeDeviceAttestation represents device integrity attestation payloads
+	ScopeTypeDeviceAttestation ScopeType = "device_attestation"
+
 	// ScopeTypeSSOMetadata represents SSO provider metadata pointers
 	ScopeTypeSSOMetadata ScopeType = "sso_metadata"
 
@@ -56,6 +62,8 @@ func AllScopeTypes() []ScopeType {
 		ScopeTypeSelfie,
 		ScopeTypeFaceVideo,
 		ScopeTypeBiometric,
+		ScopeTypeBiometricHardware,
+		ScopeTypeDeviceAttestation,
 		ScopeTypeSSOMetadata,
 		ScopeTypeEmailProof,
 		ScopeTypeSMSProof,
@@ -86,6 +94,10 @@ func ScopeTypeWeight(scopeType ScopeType) uint32 {
 		return 20 // Medium-high weight - face verification
 	case ScopeTypeBiometric:
 		return 20 // Medium-high weight - biometric data
+	case ScopeTypeBiometricHardware:
+		return 22 // Medium-high weight - biometric hardware attestation
+	case ScopeTypeDeviceAttestation:
+		return 12 // Medium weight - device integrity signal
 	case ScopeTypeDomainVerify:
 		return 15 // Medium weight - domain ownership
 	case ScopeTypeEmailProof:
@@ -117,6 +129,10 @@ func ScopeTypeDescription(scopeType ScopeType) string {
 		return "Video recording for liveness detection"
 	case ScopeTypeBiometric:
 		return "Biometric data (fingerprint, voice, etc.)"
+	case ScopeTypeBiometricHardware:
+		return "Biometric hardware attestation (fingerprint/iris sensor integrity)"
+	case ScopeTypeDeviceAttestation:
+		return "Device integrity attestation (Play Integrity / App Attest)"
 	case ScopeTypeSSOMetadata:
 		return "SSO provider metadata and verification pointers"
 	case ScopeTypeEmailProof:

@@ -262,14 +262,18 @@ func TestRiskIndicatorsInputComputeScore(t *testing.T) {
 
 	t.Run("velocity check failure penalizes", func(t *testing.T) {
 		passing := RiskIndicatorsInput{
-			Present:             true,
-			FraudPatternScore:   8000,
-			VelocityCheckPassed: true,
+			Present:                 true,
+			FraudPatternScore:       8000,
+			DeviceIntegrityScore:    8000,
+			VelocityCheckPassed:     true,
+			DeviceAttestationPassed: true,
 		}
 		failing := RiskIndicatorsInput{
-			Present:             true,
-			FraudPatternScore:   8000,
-			VelocityCheckPassed: false,
+			Present:                 true,
+			FraudPatternScore:       8000,
+			DeviceIntegrityScore:    8000,
+			VelocityCheckPassed:     false,
+			DeviceAttestationPassed: true,
 		}
 		require.Greater(t, passing.ComputeScore(), failing.ComputeScore())
 	})
@@ -492,12 +496,14 @@ func createMaxInputs() CompositeScoringInputs {
 			SuccessfulVerificationRate: 10000,
 		},
 		RiskIndicators: RiskIndicatorsInput{
-			Present:                true,
-			FraudPatternScore:      10000,
-			DeviceFingerprintScore: 10000,
-			IPReputationScore:      10000,
-			VelocityCheckPassed:    true,
-			GeoConsistencyScore:    10000,
+			Present:                 true,
+			FraudPatternScore:       10000,
+			DeviceFingerprintScore:  10000,
+			DeviceIntegrityScore:    10000,
+			IPReputationScore:       10000,
+			VelocityCheckPassed:     true,
+			DeviceAttestationPassed: true,
+			GeoConsistencyScore:     10000,
 		},
 	}
 }
@@ -545,12 +551,14 @@ func createMinInputs() CompositeScoringInputs {
 			SuccessfulVerificationRate: 0,
 		},
 		RiskIndicators: RiskIndicatorsInput{
-			Present:                true,
-			FraudPatternScore:      0,
-			DeviceFingerprintScore: 0,
-			IPReputationScore:      0,
-			VelocityCheckPassed:    false,
-			GeoConsistencyScore:    0,
+			Present:                 true,
+			FraudPatternScore:       0,
+			DeviceFingerprintScore:  0,
+			DeviceIntegrityScore:    0,
+			IPReputationScore:       0,
+			VelocityCheckPassed:     false,
+			DeviceAttestationPassed: false,
+			GeoConsistencyScore:     0,
 		},
 	}
 }

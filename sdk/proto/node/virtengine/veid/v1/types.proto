@@ -40,6 +40,12 @@ enum ScopeType {
   
   // SCOPE_TYPE_AD_SSO represents Active Directory SSO verification
   SCOPE_TYPE_AD_SSO = 9 [(gogoproto.enumvalue_customname) = "ScopeTypeADSSO"];
+
+  // SCOPE_TYPE_BIOMETRIC_HARDWARE represents biometric hardware attestation payloads
+  SCOPE_TYPE_BIOMETRIC_HARDWARE = 10 [(gogoproto.enumvalue_customname) = "ScopeTypeBiometricHardware"];
+
+  // SCOPE_TYPE_DEVICE_ATTESTATION represents device integrity attestation payloads
+  SCOPE_TYPE_DEVICE_ATTESTATION = 11 [(gogoproto.enumvalue_customname) = "ScopeTypeDeviceAttestation"];
 }
 
 // VerificationStatus represents the verification state of an identity scope

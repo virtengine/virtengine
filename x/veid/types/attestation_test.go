@@ -293,6 +293,8 @@ func TestVerificationAttestation_ToScopeType(t *testing.T) {
 		{AttestationTypeDomainVerification, ScopeTypeDomainVerify},
 		{AttestationTypeSSOVerification, ScopeTypeSSOMetadata},
 		{AttestationTypeBiometricVerification, ScopeTypeBiometric},
+		{AttestationTypeBiometricHardware, ScopeTypeBiometricHardware},
+		{AttestationTypeDeviceIntegrity, ScopeTypeDeviceAttestation},
 	}
 
 	for _, tc := range tests {
