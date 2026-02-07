@@ -33,6 +33,15 @@ import {
   getLocalWorkspace,
 } from "./workspace-registry.mjs";
 import {
+  claimSharedWorkspace,
+  formatSharedWorkspaceDetail,
+  formatSharedWorkspaceSummary,
+  loadSharedWorkspaceRegistry as loadSharedRegistry,
+  releaseSharedWorkspace,
+  resolveSharedWorkspace,
+  sweepExpiredLeases as sweepSharedLeases,
+} from "./shared-workspace-registry.mjs";
+import {
   buildLocalPresence,
   formatCoordinatorSummary,
   formatPresenceMessage,
@@ -858,10 +867,6 @@ const COMMANDS = {
     handler: cmdBackground,
     desc: "Run a task in background or background the active agent",
   },
-  "/agent": {
-    handler: cmdAgent,
-    desc: "Dispatch a task to a workspace: /agent --workspace <id> --task <prompt>",
-  },
   "/region": {
     handler: cmdRegion,
     desc: "View/switch Codex region: /region [us|sweden|auto]",
@@ -873,6 +878,18 @@ const COMMANDS = {
   "/model": {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
+  },
+  "/shared-workspaces": {
+    handler: cmdSharedWorkspaces,
+    desc: "List shared cloud workspace availability",
+  },
+  "/claim": {
+    handler: cmdSharedWorkspaceClaim,
+    desc: "Claim a shared workspace: /claim <id> [--owner <id>] [--ttl <minutes>]",
+  },
+  "/release": {
+    handler: cmdSharedWorkspaceRelease,
+    desc: "Release a shared workspace: /release <id> [--owner <id>] [--force]",
   },
   "/agent": {
     handler: cmdAgent,
@@ -1011,6 +1028,47 @@ function splitArgs(input) {
     tokens.push(match[1] ?? match[2] ?? match[3]);
   }
   return tokens;
+}
+
+function parseSharedWorkspaceArgs(args) {
+  const tokens = splitArgs(args);
+  const parsed = {
+    workspaceId: null,
+    owner: null,
+    ttlMinutes: null,
+    note: "",
+    reason: "",
+    force: false,
+  };
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "--owner") {
+      parsed.owner = tokens[i + 1];
+      i++;
+      continue;
+    }
+    if (token === "--ttl") {
+      parsed.ttlMinutes = Number(tokens[i + 1]);
+      i++;
+      continue;
+    }
+    if (token === "--note") {
+      parsed.note = tokens.slice(i + 1).join(" ");
+      break;
+    }
+    if (token === "--reason") {
+      parsed.reason = tokens.slice(i + 1).join(" ");
+      break;
+    }
+    if (token === "--force") {
+      parsed.force = true;
+      continue;
+    }
+    if (!parsed.workspaceId) {
+      parsed.workspaceId = token;
+    }
+  }
+  return parsed;
 }
 
 function parseAgentArgs(args) {
@@ -1918,6 +1976,78 @@ async function cmdModel(chatId, modelArg) {
   } catch (err) {
     await sendReply(chatId, `❌ Error: ${err.message}`);
   }
+}
+
+async function cmdSharedWorkspaces(chatId, rawArgs) {
+  const registry = await loadSharedRegistry();
+  const sweep = await sweepSharedLeases({
+    registry,
+    actor: `telegram:${chatId}`,
+  });
+  const tokens = splitArgs(rawArgs);
+  if (tokens.length > 0) {
+    const workspace = resolveSharedWorkspace(sweep.registry, tokens[0]);
+    if (!workspace) {
+      await sendReply(chatId, `Unknown shared workspace '${tokens[0]}'.`);
+      return;
+    }
+    await sendReply(chatId, formatSharedWorkspaceDetail(workspace));
+    return;
+  }
+  await sendReply(chatId, formatSharedWorkspaceSummary(sweep.registry));
+}
+
+async function cmdSharedWorkspaceClaim(chatId, rawArgs) {
+  const parsed = parseSharedWorkspaceArgs(rawArgs);
+  if (!parsed.workspaceId) {
+    await sendReply(
+      chatId,
+      "Usage: /claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]",
+    );
+    return;
+  }
+  const actor = `telegram:${chatId}`;
+  const owner = parsed.owner || actor;
+  const result = await claimSharedWorkspace({
+    workspaceId: parsed.workspaceId,
+    owner,
+    ttlMinutes: parsed.ttlMinutes,
+    note: parsed.note,
+    force: parsed.force,
+    actor,
+  });
+  if (result.error) {
+    await sendReply(chatId, `❌ ${result.error}`);
+    return;
+  }
+  await sendReply(
+    chatId,
+    `✅ Claimed ${result.workspace.id} for ${result.lease.owner} (expires ${result.lease.lease_expires_at})`,
+  );
+}
+
+async function cmdSharedWorkspaceRelease(chatId, rawArgs) {
+  const parsed = parseSharedWorkspaceArgs(rawArgs);
+  if (!parsed.workspaceId) {
+    await sendReply(
+      chatId,
+      "Usage: /release <id> [--owner <id>] [--reason <text>] [--force]",
+    );
+    return;
+  }
+  const actor = `telegram:${chatId}`;
+  const result = await releaseSharedWorkspace({
+    workspaceId: parsed.workspaceId,
+    owner: parsed.owner,
+    reason: parsed.reason,
+    force: parsed.force,
+    actor,
+  });
+  if (result.error) {
+    await sendReply(chatId, `❌ ${result.error}`);
+    return;
+  }
+  await sendReply(chatId, `✅ Released ${result.workspace.id}`);
 }
 
 // ── /agent — route to workspace registry ────────────────────────────────────

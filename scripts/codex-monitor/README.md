@@ -259,6 +259,37 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `CODEX_MONITOR_PROFILE` | —                        | Environment profile name           |
 | `CODEX_MONITOR_MODE`    | `virtengine`/`generic`   | Mode override                      |
 
+### Shared Cloud Workspaces
+
+Codex-monitor can track pooled cloud workspaces with lease-based ownership and
+availability state. The registry lives in JSON and is updated by claim/release
+operations with audit logging.
+
+Defaults:
+
+- Registry: `.cache/codex-monitor/shared-workspaces.json`
+- Audit log: `.cache/codex-monitor/shared-workspace-audit.jsonl`
+- Seed template: `scripts/codex-monitor/shared-workspaces.json`
+
+Overrides:
+
+- `VE_SHARED_WORKSPACE_REGISTRY` — registry file path
+- `VE_SHARED_WORKSPACE_AUDIT_LOG` — audit log file path
+
+CLI examples:
+
+```
+pnpm -C scripts/codex-monitor shared-workspaces list
+pnpm -C scripts/codex-monitor shared-workspaces claim cloud-01 --owner jon --ttl 120
+pnpm -C scripts/codex-monitor shared-workspaces release cloud-01 --owner jon
+```
+
+Telegram commands:
+
+- `/shared-workspaces` — list shared workspace availability
+- `/claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]`
+- `/release <id> [--owner <id>] [--reason <text>] [--force]`
+
 ## CLI Reference
 
 ```
