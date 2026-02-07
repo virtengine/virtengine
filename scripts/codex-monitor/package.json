@@ -64,6 +64,7 @@
     "cli.mjs",
     "config.mjs",
     "monitor.mjs",
+    "utils.mjs",
     "autofix.mjs",
     "codex-shell.mjs",
     "claude-shell.mjs",

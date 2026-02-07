@@ -12,7 +12,12 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
-import { attemptAutoFix, fixLoopingError, isDevMode, runCodexExec } from "./autofix.mjs";
+import {
+  attemptAutoFix,
+  fixLoopingError,
+  isDevMode,
+  runCodexExec,
+} from "./autofix.mjs";
 import {
   startTelegramBot,
   stopTelegramBot,
@@ -28,7 +33,10 @@ import {
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
-import { analyzeMergeStrategy, resetMergeStrategyDedup } from "./merge-strategy.mjs";
+import {
+  analyzeMergeStrategy,
+  resetMergeStrategyDedup,
+} from "./merge-strategy.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -212,13 +220,13 @@ let orchestratorResumeTimer = null;
 // When the orchestrator exits because "Another orchestrator instance is already
 // running" (mutex held), the monitor must NOT restart immediately — the old
 // instance still has the mutex and a tight restart loop will form.
-let mutexHeldDetected = false;          // set true when we see the mutex message in stdout
-let mutexBackoffMs = 0;                 // current backoff delay (escalates 30→60→90s)
-const MUTEX_BACKOFF_STEP_MS = 30_000;   // 30s per step
-const MUTEX_BACKOFF_MAX_MS = 90_000;    // cap at 90s
-let lastProcessStartAt = 0;            // timestamp of most recent startProcess call
+let mutexHeldDetected = false; // set true when we see the mutex message in stdout
+let mutexBackoffMs = 0; // current backoff delay (escalates 30→60→90s)
+const MUTEX_BACKOFF_STEP_MS = 30_000; // 30s per step
+const MUTEX_BACKOFF_MAX_MS = 90_000; // cap at 90s
+let lastProcessStartAt = 0; // timestamp of most recent startProcess call
 const MIN_RESTART_INTERVAL_MS = 15_000; // never restart faster than 15s
-let consecutiveQuickExits = 0;          // count exits that happen within 20s of start
+let consecutiveQuickExits = 0; // count exits that happen within 20s of start
 const QUICK_EXIT_THRESHOLD_MS = 20_000; // exit within 20s = "quick exit"
 
 let logRemainder = "";
@@ -1963,9 +1971,7 @@ async function isBranchMerged(branch) {
     });
 
     // If we get here, the branch is merged
-    console.log(
-      `[monitor] Branch ${branch} is ancestor of main (merged)`,
-    );
+    console.log(`[monitor] Branch ${branch} is ancestor of main (merged)`);
     return true;
   } catch (err) {
     // Non-zero exit code means not merged, or other error
@@ -2157,15 +2163,14 @@ async function runMergeStrategyAnalysis(ctx) {
 
     const decision = await analyzeMergeStrategy(ctx, {
       execCodex: execCodexPrompt,
-      timeoutMs: parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
+      timeoutMs:
+        parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
       logDir,
       onTelegram: telegramFn,
     });
 
     if (!decision || !decision.success) {
-      console.warn(
-        `[${tag}] analysis failed — falling back to manual review`,
-      );
+      console.warn(`[${tag}] analysis failed — falling back to manual review`);
       return;
     }
 
@@ -2191,9 +2196,7 @@ async function runMergeStrategyAnalysis(ctx) {
         break;
 
       case "close_pr":
-        console.log(
-          `[${tag}] → close_pr: ${decision.reason || "no reason"}`,
-        );
+        console.log(`[${tag}] → close_pr: ${decision.reason || "no reason"}`);
         if (telegramFn) {
           telegramFn(
             `🚫 Merge strategy recommends closing PR for ${ctx.shortId}: ${decision.reason || "no reason given"}`,
@@ -2203,9 +2206,7 @@ async function runMergeStrategyAnalysis(ctx) {
         break;
 
       case "re_attempt":
-        console.log(
-          `[${tag}] → re_attempt: ${decision.reason || "no reason"}`,
-        );
+        console.log(`[${tag}] → re_attempt: ${decision.reason || "no reason"}`);
         // Trigger a fresh session retry
         if (typeof attemptFreshSessionRetry === "function") {
           const freshStarted = await attemptFreshSessionRetry(
@@ -2293,9 +2294,17 @@ async function smartPRFlow(attemptId, shortId, status) {
       );
     }
 
-    // No commits and no changes → nothing to push
+    // No commits and no changes → archive stale attempt instead of silently skipping
     if (commits_ahead === 0 && !has_uncommitted_changes) {
-      console.log(`[monitor] ${tag}: no commits ahead, no changes — skipping`);
+      console.warn(
+        `[monitor] ${tag}: no commits ahead, no changes — archiving stale attempt`,
+      );
+      await archiveAttempt(attemptId);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `🗑️ Archived attempt ${shortId}: no commits, no changes (status=${status}). Task will be reattempted.`,
+        );
+      }
       return;
     }
 
@@ -3004,7 +3013,11 @@ async function sendTelegramMessage(text, options = {}) {
   let category = "general";
 
   // Priority 1: Critical/Fatal
-  if (textLower.includes("fatal") || textLower.includes("critical") || textLower.includes("🔥")) {
+  if (
+    textLower.includes("fatal") ||
+    textLower.includes("critical") ||
+    textLower.includes("🔥")
+  ) {
     priority = 1;
     category = "critical";
   }
@@ -3032,7 +3045,10 @@ async function sendTelegramMessage(text, options = {}) {
       category = "task";
     } else if (textLower.includes("codex") || textLower.includes("analysis")) {
       category = "analysis";
-    } else if (textLower.includes("auto-created") || textLower.includes("merged")) {
+    } else if (
+      textLower.includes("auto-created") ||
+      textLower.includes("merged")
+    ) {
       category = "git";
     }
   }
@@ -3839,7 +3855,16 @@ You have FULL READ ACCESS to the workspace. Use it.
 - Active log file: ${logPath}
 - Monitor script: scripts/codex-monitor/monitor.mjs
 - VK endpoint: ${vkEndpointUrl || "(not set)"}
-- Git branch: ${(() => { try { return execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf8" }).trim(); } catch { return "unknown"; } })()}
+- Git branch: ${(() => {
+    try {
+      return execSync("git branch --show-current", {
+        cwd: repoRoot,
+        encoding: "utf8",
+      }).trim();
+    } catch {
+      return "unknown";
+    }
+  })()}
 
 ## Log tail (last ~12k chars)
 \`\`\`
@@ -3897,7 +3922,11 @@ ${logTail}
     } catch (fallbackErr) {
       const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
       const message = fallbackErr?.message || String(fallbackErr);
-      await writeFile(analysisPath, `Codex analysis failed: ${message}\n`, "utf8");
+      await writeFile(
+        analysisPath,
+        `Codex analysis failed: ${message}\n`,
+        "utf8",
+      );
       if (telegramToken && telegramChatId) {
         void sendTelegramMessage(`🔍 Codex Analysis Failed: ${message}`);
       }
