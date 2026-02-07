@@ -123,9 +123,14 @@ function detectProjectName(repoRoot) {
 // ── Prompt System ────────────────────────────────────────────────────────────
 
 function createPrompt() {
+  // Fix for Windows PowerShell double-echo issue
+  // On Windows, readline can echo twice if terminal is set incorrectly
+  const isWindows = process.platform === "win32";
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: !isWindows, // Disable terminal mode on Windows to prevent double echo
   });
 
   return {
