@@ -158,6 +158,12 @@ $script:CompletedTasks = @()
 $script:SubmittedTasks = @()
 $script:FollowUpEvents = @()
 $script:CopilotRequests = @()
+$script:SlotMetrics = @{
+    last_sample_at         = $null
+    total_idle_seconds     = 0.0
+    total_capacity_seconds = 0.0
+    last_snapshot          = $null
+}
 
 $script:CiSweepEvery = $null
 $script:CiSweepPrEvery = $null
@@ -904,6 +910,9 @@ function Save-StatusSnapshot {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir | Out-Null
     }
+    $capacityInfo = Get-AvailableSlotCapacity
+    Update-SlotMetrics -Capacity $capacityInfo.capacity -ActiveWeight $capacityInfo.active_weight -WorkstationInfo $capacityInfo.workstation
+    $slotMetrics = Get-SlotMetricsSnapshot
     $attempts = @{}
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
         $attemptId = $entry.Key
@@ -940,6 +949,7 @@ function Save-StatusSnapshot {
         review_tasks        = $reviewTasks
         error_tasks         = $errorTasks
         manual_review_tasks = $manualReviewTasks
+        slot_metrics        = $slotMetrics
         attempts            = $attempts
         success_metrics     = @{
             first_shot_success = $script:FirstShotSuccess
@@ -967,9 +977,346 @@ function Get-SequenceValue {
     return ($num * 100) + $letterIndex
 }
 
+function Normalize-TaskLabelList {
+    param([object]$Labels)
+    $result = @()
+    if ($null -eq $Labels) { return $result }
+    if ($Labels -is [string]) { return @($Labels) }
+    if ($Labels -is [System.Collections.IEnumerable]) {
+        foreach ($item in $Labels) {
+            if ($null -eq $item) { continue }
+            if ($item -is [string]) {
+                $result += $item
+            }
+            elseif ($item.name) {
+                $result += $item.name
+            }
+            elseif ($item.label) {
+                $result += $item.label
+            }
+            elseif ($item.title) {
+                $result += $item.title
+            }
+        }
+    }
+    return $result
+}
+
+function Get-TaskTextBlob {
+    param([Parameter(Mandatory)][object]$Task)
+    $parts = @()
+    foreach ($field in @("title", "name", "description", "body", "details", "content")) {
+        $value = $Task.$field
+        if ([string]::IsNullOrWhiteSpace($value)) { continue }
+        $parts += $value
+    }
+    $labels = @()
+    foreach ($field in @("labels", "label", "tags", "tag", "categories", "category")) {
+        $labels += Normalize-TaskLabelList -Labels $Task.$field
+    }
+    if ($Task.metadata) {
+        $labels += Normalize-TaskLabelList -Labels $Task.metadata.labels
+        $labels += Normalize-TaskLabelList -Labels $Task.metadata.tags
+    }
+    if ($labels.Count -gt 0) {
+        $parts += ($labels -join " ")
+    }
+    return ($parts -join "`n")
+}
+
+function Get-TaskPriorityInfo {
+    param([Parameter(Mandatory)][object]$Task)
+    $rank = 2
+    $label = "medium"
+
+    $rawPriority = $null
+    foreach ($field in @("priority", "priority_name", "priority_label", "priority_level", "priority_text")) {
+        if ($Task.PSObject.Properties.Name -contains $field -and $Task.$field) {
+            $rawPriority = $Task.$field
+            break
+        }
+    }
+    if (-not $rawPriority -and $Task.metadata) {
+        foreach ($field in @("priority", "priority_name", "priority_label", "priority_level")) {
+            if ($Task.metadata.PSObject.Properties.Name -contains $field -and $Task.metadata.$field) {
+                $rawPriority = $Task.metadata.$field
+                break
+            }
+        }
+    }
+
+    if ($rawPriority -is [int] -or $rawPriority -is [double]) {
+        $num = [double]$rawPriority
+        if ($num -le 0) { $rank = 0; $label = "critical" }
+        elseif ($num -le 1) { $rank = 1; $label = "high" }
+        elseif ($num -le 2) { $rank = 2; $label = "medium" }
+        elseif ($num -le 3) { $rank = 3; $label = "low" }
+        else { $rank = 4; $label = "backlog" }
+        return @{ rank = $rank; label = $label }
+    }
+
+    $text = ""
+    if ($rawPriority) { $text = $rawPriority.ToString() }
+    if (-not $text) { $text = Get-TaskTextBlob -Task $Task }
+    $text = $text.ToLowerInvariant()
+
+    if ($text -match "\b(p0|critical|blocker|urgent|sev0)\b") {
+        $rank = 0; $label = "critical"
+    }
+    elseif ($text -match "\b(p1|high|sev1)\b") {
+        $rank = 1; $label = "high"
+    }
+    elseif ($text -match "\b(p2|medium|med|normal|sev2)\b") {
+        $rank = 2; $label = "medium"
+    }
+    elseif ($text -match "\b(p3|low|sev3)\b") {
+        $rank = 3; $label = "low"
+    }
+    elseif ($text -match "\b(backlog|icebox|later|nice-to-have)\b") {
+        $rank = 4; $label = "backlog"
+    }
+
+    return @{ rank = $rank; label = $label }
+}
+
+function Resolve-TaskSizeFromPoints {
+    param([double]$Points)
+    if ($Points -le 1) { return @{ label = "xs"; weight = 0.75; points = $Points } }
+    if ($Points -le 2) { return @{ label = "s"; weight = 1.0; points = $Points } }
+    if ($Points -le 5) { return @{ label = "m"; weight = 1.5; points = $Points } }
+    if ($Points -le 8) { return @{ label = "l"; weight = 2.0; points = $Points } }
+    if ($Points -le 13) { return @{ label = "xl"; weight = 3.0; points = $Points } }
+    return @{ label = "xxl"; weight = 4.0; points = $Points }
+}
+
+function Get-TaskSizeInfo {
+    param([Parameter(Mandatory)][object]$Task)
+    $sizeToken = $null
+    $points = $null
+
+    foreach ($field in @("size", "estimate", "story_points", "points", "effort", "complexity")) {
+        if ($Task.PSObject.Properties.Name -contains $field -and $Task.$field) {
+            $value = $Task.$field
+            if ($value -is [int] -or $value -is [double]) {
+                return Resolve-TaskSizeFromPoints -Points ([double]$value)
+            }
+            $sizeToken = $value.ToString()
+            break
+        }
+    }
+
+    if (-not $sizeToken -and $Task.metadata) {
+        foreach ($field in @("size", "estimate", "story_points", "points", "effort")) {
+            if ($Task.metadata.PSObject.Properties.Name -contains $field -and $Task.metadata.$field) {
+                $value = $Task.metadata.$field
+                if ($value -is [int] -or $value -is [double]) {
+                    return Resolve-TaskSizeFromPoints -Points ([double]$value)
+                }
+                $sizeToken = $value.ToString()
+                break
+            }
+        }
+    }
+
+    $text = Get-TaskTextBlob -Task $Task
+    if ($text -match "(?i)\[(xs|s|m|l|xl|xxl|2xl)\]") {
+        $sizeToken = $Matches[1]
+    }
+    elseif ($text -match "(?i)\b(size|effort|estimate|points|story\s*points)\s*[:=]\s*(\d+(\.\d+)?)\b") {
+        $points = [double]$Matches[2]
+    }
+    elseif ($text -match "(?i)\b(size|effort|estimate|points|story\s*points)\s*[:=]\s*(xs|s|small|m|medium|l|large|xl|x-large|xxl|2xl)\b") {
+        $sizeToken = $Matches[2]
+    }
+
+    if ($points -ne $null) {
+        return Resolve-TaskSizeFromPoints -Points $points
+    }
+
+    if ($sizeToken) {
+        $token = $sizeToken.ToString().ToLowerInvariant()
+        switch -Regex ($token) {
+            "xxl|2xl" { return @{ label = "xxl"; weight = 4.0; points = $null } }
+            "xl|x-large" { return @{ label = "xl"; weight = 3.0; points = $null } }
+            "l|large|big" { return @{ label = "l"; weight = 2.0; points = $null } }
+            "m|medium|med" { return @{ label = "m"; weight = 1.5; points = $null } }
+            "s|small" { return @{ label = "s"; weight = 1.0; points = $null } }
+            "xs|tiny" { return @{ label = "xs"; weight = 0.75; points = $null } }
+        }
+    }
+
+    return @{ label = "m"; weight = 1.0; points = $null }
+}
+
+function Get-WorkstationRegistryPath {
+    if ($env:VE_WORKSPACE_REGISTRY_PATH) {
+        return $env:VE_WORKSPACE_REGISTRY_PATH
+    }
+    return (Join-Path $PSScriptRoot "workspaces.json")
+}
+
+function Get-WorkstationCapacity {
+    $envCap = Get-EnvInt -Name "VE_WORKSTATION_CAPACITY" -Default 0 -Min 0
+    if ($envCap -gt 0) { return $envCap }
+    $envCap = Get-EnvInt -Name "VK_WORKSTATION_CAPACITY" -Default 0 -Min 0
+    if ($envCap -gt 0) { return $envCap }
+    $envCap = Get-EnvInt -Name "VK_WORKSTATIONS" -Default 0 -Min 0
+    if ($envCap -gt 0) { return $envCap }
+
+    $registryPath = Get-WorkstationRegistryPath
+    if (-not (Test-Path -LiteralPath $registryPath)) { return 0 }
+    try {
+        $raw = Get-Content -LiteralPath $registryPath -Raw
+        $registry = $raw | ConvertFrom-Json
+        if ($registry.workspaces) {
+            $count = @($registry.workspaces).Count
+            if ($count -gt 0) { return $count }
+        }
+    }
+    catch {
+        return 0
+    }
+    return 0
+}
+
+function Get-WorkspaceStatusFromSummary {
+    param([Parameter(Mandatory)][object]$Summary)
+    foreach ($field in @("workspace_status", "status", "agent_status", "latest_process_status")) {
+        if ($Summary.PSObject.Properties.Name -contains $field -and $Summary.$field) {
+            return $Summary.$field.ToString().ToLowerInvariant()
+        }
+    }
+    return ""
+}
+
+function Get-WorkstationAvailability {
+    $capacity = Get-WorkstationCapacity
+    $busy = 0
+    $idle = 0
+
+    foreach ($summary in $script:AttemptSummaries.Values) {
+        $status = Get-WorkspaceStatusFromSummary -Summary $summary
+        if (-not $status) { continue }
+        if ($status -match "running|busy|working|active|in_progress|processing") {
+            $busy++
+        }
+        elseif ($status -match "idle|ready|waiting|available|paused") {
+            $idle++
+        }
+        else {
+            $busy++
+        }
+    }
+
+    $activeCount = Get-ActiveAgentCount
+    if ($activeCount -gt $busy) { $busy = $activeCount }
+
+    if ($capacity -le 0) { $capacity = $MaxParallel }
+    $available = [math]::Max(0, $capacity - $busy)
+    return @{
+        capacity  = $capacity
+        busy      = $busy
+        available = $available
+        idle      = $idle
+    }
+}
+
+function Get-EffectiveParallelCapacity {
+    $availability = Get-WorkstationAvailability
+    $capacity = [math]::Min($MaxParallel, $availability.capacity)
+    if ($capacity -le 0) { $capacity = $MaxParallel }
+    return @{
+        capacity     = $capacity
+        workstation  = $availability
+    }
+}
+
+function Get-ActiveSlotWeight {
+    $total = 0.0
+    foreach ($item in $script:TrackedAttempts.Values) {
+        if ($item.status -ne "running") { continue }
+        $weight = if ($item.task_size_weight) { [double]$item.task_size_weight } else { 1.0 }
+        $total += $weight
+    }
+    return $total
+}
+
+function Get-AvailableSlotCapacity {
+    $capacityInfo = Get-EffectiveParallelCapacity
+    $capacity = [double]$capacityInfo.capacity
+    $activeWeight = Get-ActiveSlotWeight
+    $remaining = [math]::Max(0.0, $capacity - $activeWeight)
+    return @{
+        capacity       = $capacity
+        active_weight  = $activeWeight
+        remaining      = $remaining
+        workstation    = $capacityInfo.workstation
+    }
+}
+
+function Update-SlotMetrics {
+    param(
+        [double]$Capacity,
+        [double]$ActiveWeight,
+        [hashtable]$WorkstationInfo
+    )
+    $now = Get-Date
+    if ($Capacity -le 0) {
+        $script:SlotMetrics.last_sample_at = $now
+        return
+    }
+    if ($script:SlotMetrics.last_sample_at) {
+        $elapsed = ($now - $script:SlotMetrics.last_sample_at).TotalSeconds
+        if ($elapsed -gt 0) {
+            $idle = [math]::Max(0.0, $Capacity - $ActiveWeight)
+            $script:SlotMetrics.total_idle_seconds += ($idle * $elapsed)
+            $script:SlotMetrics.total_capacity_seconds += ($Capacity * $elapsed)
+        }
+    }
+    $script:SlotMetrics.last_sample_at = $now
+    $idleNow = [math]::Max(0.0, $Capacity - $ActiveWeight)
+    $utilizationNow = if ($Capacity -gt 0) { [math]::Round(($ActiveWeight / $Capacity) * 100, 1) } else { 0 }
+    $cumulativeUtilization = if ($script:SlotMetrics.total_capacity_seconds -gt 0) {
+        [math]::Round((1 - ($script:SlotMetrics.total_idle_seconds / $script:SlotMetrics.total_capacity_seconds)) * 100, 1)
+    }
+    else { 0 }
+    $script:SlotMetrics.last_snapshot = @{
+        sampled_at                  = $now.ToString("o")
+        capacity_slots              = $Capacity
+        active_slots                = $ActiveWeight
+        idle_slots                  = $idleNow
+        utilization_percent         = $utilizationNow
+        total_idle_seconds          = [math]::Round($script:SlotMetrics.total_idle_seconds, 1)
+        total_capacity_seconds      = [math]::Round($script:SlotMetrics.total_capacity_seconds, 1)
+        cumulative_utilization_pct  = $cumulativeUtilization
+        workstation_capacity        = $WorkstationInfo.capacity
+        workstation_available       = $WorkstationInfo.available
+        workstation_busy            = $WorkstationInfo.busy
+    }
+}
+
+function Get-SlotMetricsSnapshot {
+    if ($script:SlotMetrics.last_snapshot) {
+        return $script:SlotMetrics.last_snapshot
+    }
+    return @{
+        sampled_at                 = $null
+        capacity_slots             = 0
+        active_slots               = 0
+        idle_slots                 = 0
+        utilization_percent        = 0
+        total_idle_seconds         = 0
+        total_capacity_seconds     = 0
+        cumulative_utilization_pct = 0
+        workstation_capacity       = 0
+        workstation_available      = 0
+        workstation_busy           = 0
+    }
+}
+
 function Get-OrderedTodoTasks {
     <#
-    .SYNOPSIS Return todo tasks ordered by sequence (29A..29Z, 30A..), then by created_at.
+    .SYNOPSIS Return todo tasks ordered by priority queues, sequence, then size/created_at.
     #>
     [CmdletBinding()]
     param([int]$Count = 1)
@@ -977,41 +1324,53 @@ function Get-OrderedTodoTasks {
     $tasks = Get-VKTasks -Status "todo"
     if (-not $tasks) { return @() }
 
-    $seqTasks = [System.Collections.Generic.List[object]]::new()
-    $otherTasks = [System.Collections.Generic.List[object]]::new()
+    $taskInfos = @()
     foreach ($task in $tasks) {
-        $seqValue = Get-SequenceValue -Title $task.title
-        if ($seqValue) {
-            $seqTasks.Add([pscustomobject]@{ task = $task; seq = $seqValue })
+        $priorityInfo = Get-TaskPriorityInfo -Task $task
+        $sizeInfo = Get-TaskSizeInfo -Task $task
+        $seqValue = if ($task.title) { Get-SequenceValue -Title $task.title } else { $null }
+        $taskInfos += [pscustomobject]@{
+            task           = $task
+            priority_rank  = $priorityInfo.rank
+            priority_label = $priorityInfo.label
+            size_weight    = $sizeInfo.weight
+            seq            = $seqValue
+            created_at     = $task.created_at
         }
-        else {
-            $otherTasks.Add($task)
-        }
-    }
-
-    $seqTasks = @($seqTasks | Sort-Object -Property seq)
-    $otherTasks = @($otherTasks | Sort-Object -Property created_at)
-
-    if ($seqTasks.Count -eq 0) {
-        return @($otherTasks | Select-Object -First $Count)
     }
 
     $state = Get-OrchestratorState
     $lastSeq = $state.last_sequence_value
 
     $ordered = [System.Collections.Generic.List[object]]::new()
-    if ($lastSeq) {
-        $after = @($seqTasks | Where-Object { $_.seq -gt $lastSeq })
-        $before = @($seqTasks | Where-Object { $_.seq -le $lastSeq })
-        foreach ($item in $after) { $ordered.Add($item.task) }
-        foreach ($item in $before) { $ordered.Add($item.task) }
-    }
-    else {
-        foreach ($item in $seqTasks) { $ordered.Add($item.task) }
-    }
+    $priorityGroups = $taskInfos | Group-Object -Property priority_rank | Sort-Object -Property Name
+    foreach ($group in $priorityGroups) {
+        $seqTasks = @($group.Group | Where-Object { $_.seq })
+        $otherTasks = @($group.Group | Where-Object { -not $_.seq })
 
-    if ($otherTasks.Count -gt 0) {
-        foreach ($item in $otherTasks) { $ordered.Add($item) }
+        $seqTasks = @($seqTasks | Sort-Object -Property seq)
+        if ($seqTasks.Count -gt 0) {
+            if ($lastSeq) {
+                $after = @($seqTasks | Where-Object { $_.seq -gt $lastSeq })
+                $before = @($seqTasks | Where-Object { $_.seq -le $lastSeq })
+                foreach ($item in $after) { $ordered.Add($item.task) }
+                foreach ($item in $before) { $ordered.Add($item.task) }
+            }
+            else {
+                foreach ($item in $seqTasks) { $ordered.Add($item.task) }
+            }
+        }
+
+        if ($otherTasks.Count -gt 0) {
+            $orderedOther = @($otherTasks | Sort-Object -Property @{
+                    Expression = { $_.size_weight }
+                    Ascending  = $true
+                }, @{
+                    Expression = { $_.created_at }
+                    Ascending  = $true
+                })
+            foreach ($item in $orderedOther) { $ordered.Add($item.task) }
+        }
     }
 
     return @($ordered | Select-Object -First $Count)
@@ -1091,8 +1450,9 @@ function Get-ActiveAgentCount {
 }
 
 function Get-AvailableSlots {
-    $activeCount = Get-ActiveAgentCount
-    return [math]::Max(0, $MaxParallel - $activeCount)
+    $capacityInfo = Get-AvailableSlotCapacity
+    $remaining = $capacityInfo.remaining
+    return [math]::Max(0, [int][math]::Floor($remaining))
 }
 
 function Update-TaskContextCache {
@@ -1100,7 +1460,9 @@ function Update-TaskContextCache {
     if (-not $Info.task_id) { return }
     $needsTitle = -not $Info.task_title_cached
     $needsDescription = -not $Info.task_description_cached
-    if (-not $needsTitle -and -not $needsDescription) { return }
+    $needsSize = -not $Info.task_size_cached
+    $needsPriority = -not $Info.task_priority_cached
+    if (-not $needsTitle -and -not $needsDescription -and -not $needsSize -and -not $needsPriority) { return }
 
     try {
         $task = Get-VKTask -TaskId $Info.task_id
@@ -1129,6 +1491,16 @@ function Update-TaskContextCache {
         else {
             $null
         }
+    }
+    if ($needsSize) {
+        $sizeInfo = Get-TaskSizeInfo -Task $task
+        $Info.task_size_cached = $sizeInfo.label
+        $Info.task_size_weight = $sizeInfo.weight
+    }
+    if ($needsPriority) {
+        $priorityInfo = Get-TaskPriorityInfo -Task $task
+        $Info.task_priority_cached = $priorityInfo.label
+        $Info.task_priority_rank = $priorityInfo.rank
     }
 }
 
@@ -2876,25 +3248,29 @@ function Fill-ParallelSlots {
               Enforces merge gate: won't start new tasks if previous ones have unmerged PRs.
               Uses 50/50 Codex/Copilot executor cycling.
     #>
-    # Count truly active slots: agents currently working
-    $activeCount = @($script:TrackedAttempts.Values | Where-Object { $_.status -eq "running" }).Count
-
-    $slotsAvailable = $MaxParallel - $activeCount
-    if ($slotsAvailable -le 0) {
-        Write-Log "All $MaxParallel slots occupied ($activeCount active)" -Level "INFO"
+    $capacityInfo = Get-AvailableSlotCapacity
+    $remainingCapacity = $capacityInfo.remaining
+    $capacity = $capacityInfo.capacity
+    $activeWeight = $capacityInfo.active_weight
+    if ($remainingCapacity -lt 0.75) {
+        Write-Log "All slots occupied (capacity: $capacity, active weight: $([math]::Round($activeWeight, 2)))" -Level "INFO"
         return
     }
 
-    Write-Log "$slotsAvailable slots available (target: $MaxParallel, active: $activeCount)" -Level "ACTION"
+    Write-Log ("{0} slot capacity available (capacity: {1}, active weight: {2})" -f `
+            [math]::Round($remainingCapacity, 2), $capacity, [math]::Round($activeWeight, 2)) -Level "ACTION"
 
-    # Get next todo tasks
-    $nextTasks = Get-OrderedTodoTasks -Count $slotsAvailable
+    $maxCandidates = [math]::Min(50, [math]::Max(10, [int][math]::Ceiling($capacity * 4)))
+    $nextTasks = Get-OrderedTodoTasks -Count $maxCandidates
     if (-not $nextTasks -or @($nextTasks).Count -eq 0) {
         Write-Log "No more todo tasks in backlog" -Level "WARN"
         return
     }
 
+    $started = 0
     foreach ($task in $nextTasks) {
+        if ($remainingCapacity -lt 0.75) { break }
+
         # Skip tasks that already have a tracked (non-done) attempt
         $existingAttempt = $script:TrackedAttempts.Values | Where-Object { $_.task_id -eq $task.id -and $_.status -ne "done" }
         if ($existingAttempt) {
@@ -2906,6 +3282,14 @@ function Fill-ParallelSlots {
         $taskTitle = if ([string]::IsNullOrWhiteSpace($task.title)) { "" } else { $task.title }
         if (Test-TaskFileOverlap -TaskTitle $taskTitle -TaskId $task.id) {
             Write-Log "Deferring task $($task.id.Substring(0,8)) — file overlap with active agent" -Level "INFO"
+            continue
+        }
+
+        $sizeInfo = Get-TaskSizeInfo -Task $task
+        $requiredWeight = [double]$sizeInfo.weight
+        if ($requiredWeight -gt $remainingCapacity) {
+            Write-Log ("Deferring task {0} — size {1} (weight {2}) exceeds remaining capacity {3}" -f `
+                    $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight, [math]::Round($remainingCapacity, 2)) -Level "INFO"
             continue
         }
 
@@ -2922,6 +3306,7 @@ function Fill-ParallelSlots {
         if (-not $DryRun) {
             $attempt = Submit-VKTaskAttempt -TaskId $task.id
             if ($attempt) {
+                $priorityInfo = Get-TaskPriorityInfo -Task $task
                 $script:TrackedAttempts[$attempt.id] = @{
                     task_id   = $task.id
                     branch    = $attempt.branch
@@ -2929,6 +3314,10 @@ function Fill-ParallelSlots {
                     status    = "running"
                     name      = $title
                     executor  = $nextExec.executor
+                    task_size_cached = $sizeInfo.label
+                    task_size_weight = $sizeInfo.weight
+                    task_priority_cached = $priorityInfo.label
+                    task_priority_rank = $priorityInfo.rank
                 }
                 $taskUrl = Get-TaskUrl -TaskId $task.id
                 Add-RecentItem -ListName "SubmittedTasks" -Item @{
@@ -2947,13 +3336,21 @@ function Fill-ParallelSlots {
                 $state.last_submitted_at = (Get-Date).ToString("o")
                 Save-OrchestratorState -State $state
                 $script:TasksSubmitted++
+                $remainingCapacity -= $requiredWeight
+                $started++
             }
         }
         else {
             Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor)" -Level "ACTION"
             # Still advance the cycling index in dry-run for accurate preview
             $null = Get-NextExecutorProfile
+            $remainingCapacity -= $requiredWeight
+            $started++
         }
+    }
+
+    if ($started -eq 0) {
+        Write-Log "No tasks fit remaining capacity this cycle" -Level "INFO"
     }
 }
 
