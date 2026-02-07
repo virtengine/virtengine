@@ -59,6 +59,7 @@ const telegramPollLockPath = resolve(
   ".cache",
   "telegram-getupdates.lock",
 );
+const liveDigestStatePath = resolve(repoRoot, ".cache", "ve-live-digest.json");
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -84,8 +85,7 @@ const presenceSilent = ["1", "true", "yes"].includes(
 const presenceOnlyOnChange = ["1", "true", "yes"].includes(
   String(process.env.TELEGRAM_PRESENCE_ONLY_ON_CHANGE || "true").toLowerCase(),
 );
-const presenceChatId =
-  process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
+const presenceChatId = process.env.TELEGRAM_PRESENCE_CHAT_ID;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
@@ -102,6 +102,19 @@ const batchMaxSize = Number(process.env.TELEGRAM_BATCH_MAX_SIZE || "50");
 const immediateThreshold = Number(
   process.env.TELEGRAM_IMMEDIATE_PRIORITY || "1",
 );
+
+// ── Live Digest Configuration ──────────────────────────────────────────────
+// Instead of batching and flushing, we maintain a single "live" Telegram message
+// per digest window that gets continuously edited as new events arrive.
+const liveDigestEnabled = !["0", "false", "no"].includes(
+  String(process.env.TELEGRAM_LIVE_DIGEST || "true").toLowerCase(),
+);
+const liveDigestWindowSec = Number(
+  process.env.TELEGRAM_LIVE_DIGEST_WINDOW_SEC || "600",
+); // 10 minutes default
+const liveDigestEditDebounceMs = Number(
+  process.env.TELEGRAM_LIVE_DIGEST_DEBOUNCE_MS || "3000",
+); // 3 second debounce on edits
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -936,38 +949,38 @@ async function handleUpdate(update) {
   const chatId = String(msg.chat?.id);
   const text = (msg.text || "").trim();
 
-    const presencePayload = text ? parsePresenceMessage(text) : null;
-    if (presencePayload) {
-      if (!presenceChatId || chatId !== String(presenceChatId)) {
-        console.warn(
-          `[telegram-bot] ignored presence from chat ${chatId} (expected ${presenceChatId || "unset"})`,
-        );
-        return;
-      }
-      await ensurePresenceReady();
-      const receivedAt = Number.isFinite(msg.date)
-        ? new Date(msg.date * 1000).toISOString()
-        : new Date().toISOString();
-      await notePresence(presencePayload, {
-        source: "telegram",
-        receivedAt,
-      });
-      return;
-    }
-
-    // Security: only accept from configured chat
-    if (telegramChatId && chatId !== String(telegramChatId)) {
+  const presencePayload = text ? parsePresenceMessage(text) : null;
+  if (presencePayload) {
+    if (!presenceChatId || chatId !== String(presenceChatId)) {
       console.warn(
-        `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
+        `[telegram-bot] ignored presence from chat ${chatId} (expected ${presenceChatId || "unset"})`,
       );
       return;
     }
+    await ensurePresenceReady();
+    const receivedAt = Number.isFinite(msg.date)
+      ? new Date(msg.date * 1000).toISOString()
+      : new Date().toISOString();
+    await notePresence(presencePayload, {
+      source: "telegram",
+      receivedAt,
+    });
+    return;
+  }
 
-    if (!text) return;
-
-    console.log(
-      `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
+  // Security: only accept from configured chat
+  if (telegramChatId && chatId !== String(telegramChatId)) {
+    console.warn(
+      `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
     );
+    return;
+  }
+
+  if (!text) return;
+
+  console.log(
+    `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
+  );
 
   // Route: slash command or free-text
   if (text.startsWith("/")) {
@@ -1019,8 +1032,14 @@ const COMMANDS = {
     handler: cmdCleanupMerged,
     desc: "Alias for /cleanup",
   },
-  "/history": { handler: cmdHistory, desc: "Primary agent conversation history" },
-  "/clear": { handler: cmdClear, desc: "Clear primary agent conversation context" },
+  "/history": {
+    handler: cmdHistory,
+    desc: "Primary agent conversation history",
+  },
+  "/clear": {
+    handler: cmdClear,
+    desc: "Clear primary agent conversation context",
+  },
   "/reset_thread": {
     handler: cmdClear,
     desc: "Alias for /clear (reset thread)",
@@ -1047,7 +1066,7 @@ const COMMANDS = {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
   },
-  "/shared-workspaces": {
+  "/shared_workspaces": {
     handler: cmdSharedWorkspaces,
     desc: "List shared cloud workspace availability",
   },
@@ -1133,6 +1152,11 @@ async function registerBotCommands() {
   for (const [cmd, entry] of Object.entries(COMMANDS)) {
     const command = cmd.replace(/^\//, ""); // strip leading /
     if (seen.has(command)) continue; // skip duplicate keys (e.g. /agent appears twice)
+    // Telegram only allows lowercase letters, digits, underscores (1-32 chars)
+    if (!/^[a-z0-9_]{1,32}$/.test(command)) {
+      console.warn(`[telegram-bot] skipping invalid command name: /${command}`);
+      continue;
+    }
     seen.add(command);
     // Telegram limits description to 256 chars
     const description = (entry.desc || command).slice(0, 256);
@@ -1170,7 +1194,7 @@ async function handleCommand(text, chatId) {
   const cmd = parts[0].toLowerCase().replace(/@\w+/, ""); // strip @botname
   const cmdArgs = parts.slice(1).join(" ");
 
-  const entry = COMMANDS[cmd];
+  const entry = COMMANDS[cmd] || COMMANDS[cmd.replace(/-/g, "_")];
   if (entry) {
     try {
       await entry.handler(chatId, cmdArgs);
@@ -1801,7 +1825,10 @@ async function cmdCleanupMerged(chatId) {
     );
     return;
   }
-  await sendReply(chatId, "🧹 Reconciling VK task statuses with PR/branch state…");
+  await sendReply(
+    chatId,
+    "🧹 Reconciling VK task statuses with PR/branch state…",
+  );
   try {
     const result = await _reconcileTaskStatuses("manual-telegram");
     const lines = [
@@ -1818,8 +1845,7 @@ async function cmdCleanupMerged(chatId) {
 
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
-  const providerLabel =
-    info.provider === "COPILOT" ? "Copilot" : "Codex";
+  const providerLabel = info.provider === "COPILOT" ? "Copilot" : "Codex";
   const idLabel = info.sessionId ? "Session ID" : "Thread ID";
   const lines = [
     `🧠 Primary Agent Session (${providerLabel})`,
@@ -3441,7 +3467,10 @@ function startPresenceLoop() {
       });
 
       // Check if state changed significantly (ignore updated_at for comparison)
-      const shouldSend = !presenceOnlyOnChange || !lastSentPayload || hasPresenceChanged(lastSentPayload, payload);
+      const shouldSend =
+        !presenceOnlyOnChange ||
+        !lastSentPayload ||
+        hasPresenceChanged(lastSentPayload, payload);
 
       // Always update local registry
       await notePresence(payload, {
@@ -3500,15 +3529,266 @@ const messageQueue = {
 
 let batchFlushTimer = null;
 
+// ── Live Digest State ───────────────────────────────────────────────────────
+// A single Telegram message that gets continuously edited as events happen.
+// When the digest window expires, the message is sealed and the next event
+// starts a fresh one.
+let liveDigest = {
+  messageId: null, // Telegram message_id of the current live digest
+  chatId: null, // chat_id it was sent to
+  startedAt: 0, // timestamp when this digest window started
+  entries: [], // { emoji, text, time } — events in this digest window
+  sealTimer: null, // timer to seal the digest after the window expires
+  editTimer: null, // debounce timer for edits
+  editPending: false, // whether an edit is pending
+  sealed: false, // true once the window has expired and message is finalized
+};
+
+const PRIORITY_EMOJI = {
+  1: "🔴",
+  2: "❌",
+  3: "⚠️",
+  4: "ℹ️",
+  5: "🔹",
+};
+
+/**
+ * Build the live digest message text from accumulated entries.
+ */
+function buildLiveDigestText() {
+  const d = liveDigest;
+  const startTime = new Date(d.startedAt).toISOString().slice(11, 19);
+  const now = new Date().toISOString().slice(11, 19);
+
+  // Count by severity
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const e of d.entries) {
+    counts[e.priority] = (counts[e.priority] || 0) + 1;
+  }
+
+  const countParts = [];
+  if (counts[1] > 0) countParts.push(`🔴 ${counts[1]}`);
+  if (counts[2] > 0) countParts.push(`❌ ${counts[2]}`);
+  if (counts[3] > 0) countParts.push(`⚠️ ${counts[3]}`);
+  if (counts[4] > 0) countParts.push(`ℹ️ ${counts[4]}`);
+
+  const statusLine = d.sealed
+    ? `📊 Digest (${startTime} → ${now}) — sealed`
+    : `📊 Live Digest (since ${startTime}) — updating...`;
+  const headerLine =
+    countParts.length > 0
+      ? `${statusLine}\n${countParts.join(" • ")}`
+      : statusLine;
+
+  // Build event lines (most recent at bottom, like a log)
+  // Telegram 4096 char limit — keep recent events, trim old ones
+  const MAX_LEN = 3800; // leave room for header
+  const lines = [];
+  let totalLen = headerLine.length + 2; // +2 for \n\n separator
+
+  // Add entries from newest to oldest, then reverse for chronological order
+  for (let i = d.entries.length - 1; i >= 0; i--) {
+    const e = d.entries[i];
+    const line = `${e.time} ${e.emoji} ${e.text}`;
+    if (totalLen + line.length + 1 > MAX_LEN) {
+      const trimmed = d.entries.length - lines.length;
+      if (trimmed > 0) {
+        lines.push(`  …${trimmed} earlier event(s) trimmed`);
+      }
+      break;
+    }
+    lines.push(line);
+    totalLen += line.length + 1;
+  }
+
+  lines.reverse(); // chronological order
+
+  return [headerLine, "", ...lines].join("\n");
+}
+
+/**
+ * Schedule a debounced edit of the live digest message.
+ */
+function scheduleLiveDigestEdit() {
+  const d = liveDigest;
+  if (d.editTimer) {
+    clearTimeout(d.editTimer);
+  }
+  d.editPending = true;
+  d.editTimer = setTimeout(async () => {
+    d.editPending = false;
+    d.editTimer = null;
+    if (!d.messageId || !d.chatId) return;
+    const text = buildLiveDigestText();
+    try {
+      const newId = await editDirect(d.chatId, d.messageId, text);
+      if (newId && newId !== d.messageId) {
+        d.messageId = newId; // editDirect fell back to sendDirect
+      }
+    } catch (err) {
+      console.warn(`[telegram-bot] live digest edit failed: ${err.message}`);
+    }
+  }, liveDigestEditDebounceMs);
+}
+
+/**
+ * Seal the current live digest window — mark final, clear state for next window.
+ */
+function sealLiveDigest() {
+  const d = liveDigest;
+  if (d.entries.length === 0) {
+    // Nothing happened in this window — just reset
+    resetLiveDigest();
+    return;
+  }
+  d.sealed = true;
+  // Flush one last edit to mark it sealed
+  if (d.editTimer) clearTimeout(d.editTimer);
+  const text = buildLiveDigestText();
+  if (d.messageId && d.chatId) {
+    editDirect(d.chatId, d.messageId, text).catch(() => {});
+  }
+  // Reset for next window
+  resetLiveDigest();
+}
+
+/**
+ * Reset live digest state for a new window.
+ */
+function resetLiveDigest() {
+  if (liveDigest.sealTimer) clearTimeout(liveDigest.sealTimer);
+  if (liveDigest.editTimer) clearTimeout(liveDigest.editTimer);
+  liveDigest = {
+    messageId: null,
+    chatId: null,
+    startedAt: 0,
+    entries: [],
+    sealTimer: null,
+    editTimer: null,
+    editPending: false,
+    sealed: false,
+  };
+  // Clear persisted state
+  writeFile(liveDigestStatePath, "{}").catch(() => {});
+}
+
+/**
+ * Persist live digest state to disk so restarts can resume the same message.
+ */
+function persistLiveDigest() {
+  const d = liveDigest;
+  if (!d.messageId) return;
+  const state = {
+    messageId: d.messageId,
+    chatId: d.chatId,
+    startedAt: d.startedAt,
+    entries: d.entries,
+  };
+  writeFile(liveDigestStatePath, JSON.stringify(state)).catch(() => {});
+}
+
+/**
+ * Restore live digest state from disk after a restart.
+ * Returns true if a valid digest was restored (still within window).
+ */
+async function restoreLiveDigest() {
+  try {
+    const raw = await readFile(liveDigestStatePath, "utf8");
+    const state = JSON.parse(raw);
+    if (!state.messageId || !state.startedAt) return false;
+    const now = Date.now();
+    const windowMs = liveDigestWindowSec * 1000;
+    // Only restore if the window hasn't expired
+    if (now - state.startedAt >= windowMs) {
+      await writeFile(liveDigestStatePath, "{}").catch(() => {});
+      return false;
+    }
+    liveDigest.messageId = state.messageId;
+    liveDigest.chatId = state.chatId || telegramChatId;
+    liveDigest.startedAt = state.startedAt;
+    liveDigest.entries = state.entries || [];
+    liveDigest.sealed = false;
+    // Re-schedule the seal timer for remaining window time
+    const remaining = windowMs - (now - state.startedAt);
+    liveDigest.sealTimer = setTimeout(() => sealLiveDigest(), remaining);
+    console.log(
+      `[telegram-bot] restored live digest (${liveDigest.entries.length} entries, ${Math.round(remaining / 1000)}s remaining)`,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Add an event to the live digest. Creates the message on first event,
+ * then edits it for subsequent events in the same window.
+ */
+async function addToLiveDigest(text, priority, category) {
+  const d = liveDigest;
+  const now = Date.now();
+  const timeStr = new Date(now).toISOString().slice(11, 19);
+  const emoji = PRIORITY_EMOJI[priority] || "ℹ️";
+
+  // Check if we need a new digest window
+  const windowMs = liveDigestWindowSec * 1000;
+  const windowExpired = d.startedAt > 0 && now - d.startedAt >= windowMs;
+
+  if (windowExpired || !d.startedAt) {
+    // Seal old digest if it had entries
+    if (d.entries.length > 0) {
+      sealLiveDigest();
+    } else {
+      resetLiveDigest();
+    }
+  }
+
+  // Add entry
+  liveDigest.entries.push({ emoji, text, time: timeStr, priority, category });
+
+  if (!liveDigest.startedAt) {
+    // First event — create the digest message
+    liveDigest.startedAt = now;
+    liveDigest.chatId = telegramChatId;
+
+    const messageText = buildLiveDigestText();
+    const msgId = await sendDirect(telegramChatId, messageText, {
+      silent: true,
+    });
+    if (msgId) {
+      liveDigest.messageId = msgId;
+    }
+    persistLiveDigest();
+
+    // Schedule seal
+    liveDigest.sealTimer = setTimeout(() => sealLiveDigest(), windowMs);
+  } else {
+    // Subsequent event — debounced edit
+    scheduleLiveDigestEdit();
+    persistLiveDigest();
+  }
+}
+
 /**
  * Queue a notification for batched delivery.
+ * Routes through Live Digest when enabled, falls back to batch queues.
  * @param {string} text - Message text
  * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
  * @param {object} options - { category, data, silent }
  */
 function queueNotification(text, priority = 4, options = {}) {
-  if (!batchingEnabled || priority <= immediateThreshold) {
-    // Send immediately for critical messages or when batching disabled
+  // Critical messages always go immediately
+  if (priority <= immediateThreshold) {
+    return sendDirect(telegramChatId, text, { silent: options.silent });
+  }
+
+  // Live Digest mode: append to the continuously-edited message
+  if (liveDigestEnabled && batchingEnabled) {
+    return addToLiveDigest(text, priority, options.category || "general");
+  }
+
+  // Legacy batch mode fallback
+  if (!batchingEnabled) {
     return sendDirect(telegramChatId, text, { silent: options.silent });
   }
 
@@ -3548,7 +3828,7 @@ function queueNotification(text, priority = 4, options = {}) {
 }
 
 /**
- * Format and send batched notifications as a summary.
+ * Format and send batched notifications as a summary (legacy fallback).
  */
 async function flushNotificationQueue() {
   const sections = [];
@@ -3561,7 +3841,11 @@ async function flushNotificationQueue() {
   };
 
   const totalMessages =
-    counts.critical + counts.errors + counts.warnings + counts.info + counts.debug;
+    counts.critical +
+    counts.errors +
+    counts.warnings +
+    counts.info +
+    counts.debug;
 
   if (totalMessages === 0) return; // Nothing to send
 
@@ -3586,7 +3870,9 @@ async function flushNotificationQueue() {
 
   // Errors (show up to 5, then summarize)
   if (counts.errors > 0) {
-    const errorTexts = messageQueue.errors.slice(0, 5).map((m) => `  • ${m.text}`);
+    const errorTexts = messageQueue.errors
+      .slice(0, 5)
+      .map((m) => `  • ${m.text}`);
     if (counts.errors > 5) {
       errorTexts.push(`  • ... and ${counts.errors - 5} more errors`);
     }
@@ -3595,7 +3881,9 @@ async function flushNotificationQueue() {
 
   // Warnings (show up to 3, then summarize)
   if (counts.warnings > 0) {
-    const warnTexts = messageQueue.warnings.slice(0, 3).map((m) => `  • ${m.text}`);
+    const warnTexts = messageQueue.warnings
+      .slice(0, 3)
+      .map((m) => `  • ${m.text}`);
     if (counts.warnings > 3) {
       warnTexts.push(`  • ... and ${counts.warnings - 3} more warnings`);
     }
@@ -3631,9 +3919,15 @@ async function flushNotificationQueue() {
 
 /**
  * Start periodic flushing of the notification queue.
+ * In live-digest mode, the flush loop is only used as a fallback seal timer.
  */
-function startBatchFlushLoop() {
+async function startBatchFlushLoop() {
   if (!batchingEnabled || batchFlushTimer) return;
+  // In live digest mode, restore persisted state and skip flush loop
+  if (liveDigestEnabled) {
+    await restoreLiveDigest();
+    return;
+  }
   const intervalMs = batchIntervalSec * 1000;
   batchFlushTimer = setInterval(() => {
     flushNotificationQueue().catch((err) =>
@@ -3643,12 +3937,18 @@ function startBatchFlushLoop() {
 }
 
 /**
- * Stop the batch flush loop.
+ * Stop the batch flush loop and seal any active live digest.
  */
 function stopBatchFlushLoop() {
   if (batchFlushTimer) {
     clearInterval(batchFlushTimer);
     batchFlushTimer = null;
+  }
+  // Seal any active live digest
+  if (liveDigest.entries.length > 0) {
+    sealLiveDigest();
+  } else {
+    resetLiveDigest();
   }
 }
 
@@ -3683,8 +3983,8 @@ export async function startTelegramBot() {
   // Start presence announcements for multi-workstation discovery
   startPresenceLoop();
 
-  // Start batched notification system
-  startBatchFlushLoop();
+  // Start batched notification / live digest system
+  await startBatchFlushLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {
@@ -3701,11 +4001,28 @@ export async function startTelegramBot() {
 
   polling = true;
 
-  // Send startup notification
-  await sendDirect(
-    telegramChatId,
-    "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
-  );
+  // Only send "online" notification on truly fresh starts, not code-change restarts.
+  const botStartPath = resolve(repoRoot, ".cache", "ve-last-bot-start.txt");
+  let suppressOnline = false;
+  try {
+    const prev = await readFile(botStartPath, "utf8");
+    const elapsed = Date.now() - Number(prev);
+    if (elapsed < 60_000) suppressOnline = true;
+  } catch {
+    /* first start or missing file */
+  }
+  await writeFile(botStartPath, String(Date.now())).catch(() => {});
+
+  if (suppressOnline) {
+    console.log(
+      "[telegram-bot] restarted (suppressed online notification — rapid restart)",
+    );
+  } else {
+    await sendDirect(
+      telegramChatId,
+      "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
+    );
+  }
 
   console.log("[telegram-bot] started — listening for messages");
 
@@ -3728,8 +4045,12 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
-  // Flush any remaining notifications before stopping
-  flushNotificationQueue().catch(() => {});
+  // Seal any active live digest and flush legacy queues before stopping
+  if (liveDigestEnabled && liveDigest.entries.length > 0) {
+    sealLiveDigest();
+  } else {
+    flushNotificationQueue().catch(() => {});
+  }
   stopBatchFlushLoop();
   void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
