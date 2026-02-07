@@ -680,11 +680,13 @@ Environment overrides:
 To minimize Telegram noise from presence heartbeats:
 
 1. **Best:** Use a separate channel for presence messages:
+
    ```env
    TELEGRAM_PRESENCE_CHAT_ID=<separate-channel-id>
    ```
 
 2. **Alternative:** Enable silent notifications (messages arrive without sound):
+
    ```env
    TELEGRAM_PRESENCE_SILENT=true
    ```
