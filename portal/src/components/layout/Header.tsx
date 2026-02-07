@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { WalletButton, WalletModal, useWalletModal } from '@/components/wallet';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { MobileDrawer } from './MobileDrawer';
 import { Sidebar } from './Sidebar';
 
@@ -73,6 +74,7 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
+          <NotificationCenter />
           <ThemeToggle />
           <WalletButton />
         </div>
