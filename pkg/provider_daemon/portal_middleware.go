@@ -10,12 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
 
-type contextKey string
-
-const (
-	contextKeyPrincipal contextKey = "portal_principal"
+	portalauth "github.com/virtengine/virtengine/pkg/provider_daemon/auth"
 )
 
 // RateLimitConfig configures per-user rate limiting.
@@ -113,18 +109,18 @@ func clientIP(remoteAddr string) string {
 }
 
 func principalFromContext(ctx context.Context) string {
-	val := ctx.Value(contextKeyPrincipal)
-	if str, ok := val.(string); ok {
-		return str
-	}
-	return ""
+	return portalauth.FromContext(ctx).Address
 }
 
-func withPrincipal(ctx context.Context, principal string) context.Context {
-	if principal == "" {
+func authFromContext(ctx context.Context) portalauth.AuthContext {
+	return portalauth.FromContext(ctx)
+}
+
+func withAuth(ctx context.Context, auth portalauth.AuthContext) context.Context {
+	if auth.Address == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, contextKeyPrincipal, principal)
+	return portalauth.WithAuth(ctx, auth)
 }
 
 func parseLimit(r *http.Request, fallback, max int) int {
