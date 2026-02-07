@@ -1984,12 +1984,27 @@ async function smartPRFlow(attemptId, shortId, status) {
 const smartPRAttempted = new Set();
 
 /**
+ * Check if a shortId (or a prefix/suffix of it) is already tracked.
+ * Handles the case where the orchestrator emits different-length prefixes
+ * for the same attempt UUID (e.g., "2f71" and "2f7153e7").
+ */
+function isSmartPRAttempted(shortId) {
+  if (smartPRAttempted.has(shortId)) return true;
+  for (const existing of smartPRAttempted) {
+    if (existing.startsWith(shortId) || shortId.startsWith(existing)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Resolve a short (4-8 char) attempt ID prefix to the full UUID and trigger
  * smartPRFlow. De-duplicated so each attempt is only processed once per
  * monitor lifetime.
  */
 async function resolveAndTriggerSmartPR(shortId, status) {
-  if (smartPRAttempted.has(shortId)) return;
+  if (isSmartPRAttempted(shortId)) return;
   smartPRAttempted.add(shortId);
 
   try {
