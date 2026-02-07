@@ -986,6 +986,33 @@ export function loadConfig(argv = process.argv, options = {}) {
     ? plannerDedupHours * 60 * 60 * 1000
     : 24 * 60 * 60 * 1000;
 
+  // ── Dependabot Auto-Merge ─────────────────────────────────
+  const dependabotAutoMerge = !["0", "false", "no"].includes(
+    String(
+      process.env.DEPENDABOT_AUTO_MERGE ??
+        configData.dependabotAutoMerge ??
+        "true",
+    ).toLowerCase(),
+  );
+  const dependabotAutoMergeIntervalMin = Number(
+    process.env.DEPENDABOT_AUTO_MERGE_INTERVAL_MIN || "10",
+  );
+  // Merge method: squash (default), merge, rebase
+  const dependabotMergeMethod = String(
+    process.env.DEPENDABOT_MERGE_METHOD ||
+      configData.dependabotMergeMethod ||
+      "squash",
+  ).toLowerCase();
+  // PR authors to auto-merge (comma-separated). Default: dependabot[bot]
+  const dependabotAuthors = String(
+    process.env.DEPENDABOT_AUTHORS ||
+      configData.dependabotAuthors ||
+      "dependabot[bot],app/dependabot",
+  )
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
+
   // ── Status file ──────────────────────────────────────────
   const cacheDir = resolve(
     repoRoot,
@@ -1081,6 +1108,12 @@ export function loadConfig(argv = process.argv, options = {}) {
     plannerIdleSlotThreshold,
     plannerDedupHours,
     plannerDedupMs,
+
+    // Dependabot Auto-Merge
+    dependabotAutoMerge,
+    dependabotAutoMergeIntervalMin,
+    dependabotMergeMethod,
+    dependabotAuthors,
 
     // Paths
     statusPath,

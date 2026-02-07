@@ -143,6 +143,10 @@ let {
   agentPrompts,
   scheduler: executorScheduler,
   envPaths,
+  dependabotAutoMerge,
+  dependabotAutoMergeIntervalMin,
+  dependabotMergeMethod,
+  dependabotAuthors,
 } = config;
 
 void initPrimaryAgent(config);
@@ -202,6 +206,7 @@ let envWatcherDebounce = null;
 const SELF_RESTART_EXIT_CODE = 75;
 let selfWatcher = null;
 let selfWatcherDebounce = null;
+let pendingSelfRestart = null; // filename that triggered a deferred restart
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
@@ -2088,6 +2093,190 @@ async function checkMergedPRsAndUpdateTasks() {
 async function reconcileTaskStatuses(reason = "manual") {
   console.log(`[monitor] Reconciling VK tasks (${reason})...`);
   return await checkMergedPRsAndUpdateTasks();
+}
+
+// ── Dependabot / Bot PR Auto-Merge ──────────────────────────────────────────
+
+/** Set of PR numbers we've already attempted to merge this session */
+const dependabotMergeAttempted = new Set();
+
+/**
+ * Check for open Dependabot (or other bot) PRs where all CI checks have passed,
+ * and auto-merge them.
+ *
+ * Flow:
+ *   1. `gh pr list` filtered by bot authors
+ *   2. For each PR, `gh pr checks` to verify all CI passed
+ *   3. `gh pr merge --squash` (or configured method)
+ *   4. Notify via Telegram
+ */
+async function checkAndMergeDependabotPRs() {
+  if (!dependabotAutoMerge) return;
+  if (!repoSlug) {
+    console.warn("[dependabot] auto-merge disabled — no repo slug configured");
+    return;
+  }
+
+  const authorFilter = dependabotAuthors
+    .map((a) => `author:${a}`)
+    .join(" ");
+
+  try {
+    // List open PRs by bot authors
+    const listCmd = `gh pr list --repo ${repoSlug} --state open --json number,title,author,headRefName,statusCheckRollup --limit 20`;
+    const listResult = execSync(listCmd, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 30_000,
+    }).trim();
+
+    const prs = JSON.parse(listResult || "[]");
+    if (prs.length === 0) return;
+
+    // Filter to only bot-authored PRs
+    const botPRs = prs.filter((pr) => {
+      const login = pr.author?.login || pr.author?.name || "";
+      return dependabotAuthors.some(
+        (a) =>
+          login === a ||
+          login === a.replace("app/", "") ||
+          a === `app/${login}`,
+      );
+    });
+
+    if (botPRs.length === 0) return;
+    console.log(
+      `[dependabot] found ${botPRs.length} bot PR(s): ${botPRs.map((p) => `#${p.number}`).join(", ")}`,
+    );
+
+    for (const pr of botPRs) {
+      if (dependabotMergeAttempted.has(pr.number)) continue;
+
+      try {
+        // Check CI status — all checks must pass
+        const checksCmd = `gh pr checks ${pr.number} --repo ${repoSlug} --json name,state,conclusion --required`;
+        let checksResult;
+        try {
+          checksResult = execSync(checksCmd, {
+            cwd: repoRoot,
+            encoding: "utf8",
+            timeout: 15_000,
+          }).trim();
+        } catch (checksErr) {
+          // gh pr checks returns exit code 1 if any check failed/pending
+          // Parse the output anyway if available
+          checksResult = checksErr.stdout?.trim() || "";
+          if (!checksResult) {
+            console.log(
+              `[dependabot] PR #${pr.number}: checks still pending or failed`,
+            );
+            continue;
+          }
+        }
+
+        let checks;
+        try {
+          checks = JSON.parse(checksResult || "[]");
+        } catch {
+          // JSON parse failed — might be old gh version, try simpler check
+          console.log(
+            `[dependabot] PR #${pr.number}: could not parse checks output`,
+          );
+          continue;
+        }
+
+        // All required checks must be in a passing state
+        const allPassed =
+          checks.length > 0 &&
+          checks.every(
+            (c) =>
+              c.conclusion === "SUCCESS" ||
+              c.conclusion === "success" ||
+              c.conclusion === "NEUTRAL" ||
+              c.conclusion === "neutral" ||
+              c.conclusion === "SKIPPED" ||
+              c.conclusion === "skipped",
+          );
+
+        if (!allPassed) {
+          const pending = checks.filter(
+            (c) =>
+              !c.conclusion ||
+              c.state === "PENDING" ||
+              c.state === "IN_PROGRESS" ||
+              c.state === "QUEUED",
+          );
+          const failed = checks.filter(
+            (c) =>
+              c.conclusion === "FAILURE" ||
+              c.conclusion === "failure" ||
+              c.conclusion === "ERROR" ||
+              c.conclusion === "error" ||
+              c.conclusion === "TIMED_OUT" ||
+              c.conclusion === "timed_out",
+          );
+          if (failed.length > 0) {
+            console.log(
+              `[dependabot] PR #${pr.number}: ${failed.length} check(s) failed — skipping`,
+            );
+            dependabotMergeAttempted.add(pr.number); // don't retry failed
+          } else if (pending.length > 0) {
+            console.log(
+              `[dependabot] PR #${pr.number}: ${pending.length} check(s) still pending`,
+            );
+          } else if (checks.length === 0) {
+            console.log(
+              `[dependabot] PR #${pr.number}: no required checks found — waiting`,
+            );
+          }
+          continue;
+        }
+
+        // All checks passed — merge!
+        console.log(
+          `[dependabot] PR #${pr.number}: all ${checks.length} check(s) passed — merging (${dependabotMergeMethod})`,
+        );
+        dependabotMergeAttempted.add(pr.number);
+
+        const mergeCmd = `gh pr merge ${pr.number} --repo ${repoSlug} --${dependabotMergeMethod} --delete-branch --auto`;
+        try {
+          execSync(mergeCmd, {
+            cwd: repoRoot,
+            encoding: "utf8",
+            timeout: 30_000,
+          });
+          console.log(
+            `[dependabot] ✅ PR #${pr.number} merged: ${pr.title}`,
+          );
+          void sendTelegramMessage(
+            `✅ Auto-merged bot PR #${pr.number}: ${pr.title}`,
+          );
+        } catch (mergeErr) {
+          const errMsg = mergeErr.stderr || mergeErr.message || "";
+          console.warn(
+            `[dependabot] merge failed for PR #${pr.number}: ${errMsg.slice(0, 200)}`,
+          );
+          // If auto-merge was enabled (queued), that's fine — gh returns success for --auto
+          if (errMsg.includes("auto-merge")) {
+            console.log(
+              `[dependabot] PR #${pr.number}: auto-merge enabled, will merge when protection rules are met`,
+            );
+            void sendTelegramMessage(
+              `🔄 Auto-merge enabled for bot PR #${pr.number}: ${pr.title}`,
+            );
+          }
+        }
+      } catch (prErr) {
+        console.warn(
+          `[dependabot] error processing PR #${pr.number}: ${prErr.message || prErr}`,
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[dependabot] error listing bot PRs: ${err.message || err}`,
+    );
+  }
 }
 
 // ── Merge Strategy Analysis ─────────────────────────────────────────────────
@@ -4446,6 +4635,17 @@ function stopSelfWatcher() {
 }
 
 function selfRestartForSourceChange(filename) {
+  // Defer restart if the primary agent is mid-turn — don't interrupt user tasks
+  if (isPrimaryBusy()) {
+    if (!pendingSelfRestart) {
+      pendingSelfRestart = filename;
+      console.log(
+        `\n[monitor] source file changed: ${filename} — deferring restart (primary agent busy)`,
+      );
+    }
+    return;
+  }
+  pendingSelfRestart = null;
   console.log(`\n[monitor] source file changed: ${filename}`);
   console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
   shuttingDown = true;
@@ -4826,7 +5026,19 @@ setInterval(() => {
 // Run once immediately after startup (delayed by 30s to let things settle)
 setTimeout(() => {
   void checkMergedPRsAndUpdateTasks();
+  void checkAndMergeDependabotPRs();
 }, 30 * 1000);
+
+// ── Periodic Dependabot auto-merge check ─────────────────────────────────────
+if (dependabotAutoMerge) {
+  const depIntervalMs = (dependabotAutoMergeIntervalMin || 10) * 60 * 1000;
+  setInterval(() => {
+    void checkAndMergeDependabotPRs();
+  }, depIntervalMs);
+  console.log(
+    `[dependabot] auto-merge enabled — checking every ${dependabotAutoMergeIntervalMin || 10} min for: ${dependabotAuthors.join(", ")}`,
+  );
+}
 
 // ── Self-updating: poll npm every 10 min, auto-install + restart ────────────
 startAutoUpdateLoop({
