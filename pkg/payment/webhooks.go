@@ -5,7 +5,6 @@ package payment
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -158,12 +157,9 @@ func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, 
 	// Return success
 	// Adyen expects "[accepted]" response
 	if gateway == GatewayAdyen {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]string{"response": "[accepted]"}); err != nil {
-			// Best-effort response encoding - error already logged by caller
-			return
-		}
+		_, _ = w.Write([]byte("[accepted]"))
 		return
 	}
 
