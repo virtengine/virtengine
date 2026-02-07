@@ -365,6 +365,29 @@ export type {
   SignRequestOptions,
 } from "./src/auth/wallet-sign";
 
+// Provider API React Hooks (VE-29D AC-5)
+export { useProviderAPI } from "./src/hooks/useProviderAPI";
+export { useDeploymentStatus } from "./src/hooks/useDeploymentStatus";
+export type {
+  UseDeploymentStatusOptions,
+  UseDeploymentStatusResult,
+} from "./src/hooks/useDeploymentStatus";
+export { useDeploymentMetrics } from "./src/hooks/useDeploymentMetrics";
+export type {
+  UseDeploymentMetricsOptions,
+  UseDeploymentMetricsResult,
+} from "./src/hooks/useDeploymentMetrics";
+export { useDeploymentLogs } from "./src/hooks/useDeploymentLogs";
+export type {
+  UseDeploymentLogsOptions,
+  UseDeploymentLogsResult,
+} from "./src/hooks/useDeploymentLogs";
+export { useDeploymentShell } from "./src/hooks/useDeploymentShell";
+export type {
+  UseDeploymentShellOptions,
+  UseDeploymentShellResult,
+} from "./src/hooks/useDeploymentShell";
+
 // ============================================================================
 // Multi-Provider Aggregation (VE-29G)
 // ============================================================================
