@@ -1885,17 +1885,45 @@ async function updateTaskStatus(taskId, newStatus) {
 
 /**
  * Checks if a git branch has been merged into the main branch.
- * Uses git commands to determine if the branch exists and is merged.
+ * Uses GitHub CLI + git commands to determine merge status.
+ *
+ * IMPORTANT: "branch not on remote" does NOT mean merged. The agent may
+ * never have pushed, the PR may have been closed without merging, or the
+ * branch was manually deleted. We must verify via GitHub PR state.
+ *
  * @param {string} branch - Branch name (e.g., "ve/1234-feat-auth")
- * @returns {Promise<boolean>} true if merged, false otherwise
+ * @returns {Promise<boolean>} true if definitively merged, false otherwise
  */
 async function isBranchMerged(branch) {
   if (!branch) return false;
 
   try {
-    const { execSync } = await import("child_process");
+    // ── Strategy 1: Check GitHub for a merged PR with this head branch ──
+    // This is the most reliable signal — if GitHub says merged, it's merged.
+    if (ghAvailable()) {
+      try {
+        const ghResult = execSync(
+          `gh pr list --head "${branch}" --state merged --json number,mergedAt --limit 1`,
+          {
+            cwd: repoRoot,
+            encoding: "utf8",
+            stdio: ["pipe", "pipe", "ignore"],
+            timeout: 15000,
+          },
+        ).trim();
+        const mergedPRs = JSON.parse(ghResult || "[]");
+        if (mergedPRs.length > 0) {
+          console.log(
+            `[monitor] Branch ${branch} has merged PR #${mergedPRs[0].number}`,
+          );
+          return true;
+        }
+      } catch {
+        // gh failed — fall through to git-based checks
+      }
+    }
 
-    // Check if branch exists in origin
+    // ── Strategy 2: Check if branch exists on remote ────────────────────
     const branchExistsCmd = `git ls-remote --heads origin ${branch}`;
     const branchExists = execSync(branchExistsCmd, {
       cwd: repoRoot,
@@ -1903,28 +1931,20 @@ async function isBranchMerged(branch) {
       stdio: ["pipe", "pipe", "ignore"],
     }).trim();
 
-    // If branch doesn't exist on remote, it might have been deleted after merge
-    // Check if it was merged into main
+    // Branch NOT on remote — this does NOT prove it was merged.
+    // Without a confirmed merged PR (strategy 1), we must assume NOT merged.
     if (!branchExists) {
-      // Fetch latest refs
-      execSync("git fetch origin main --quiet", {
-        cwd: repoRoot,
-        stdio: "ignore",
-      });
-
-      // Check if any commits from the branch are in main
-      // This is a heuristic: if the branch was deleted, it's likely merged
-      // We can't be 100% certain, but deleted branches are usually merged
       console.log(
-        `[monitor] Branch ${branch} not found on remote (likely merged and deleted)`,
+        `[monitor] Branch ${branch} not found on remote — no merged PR found, treating as NOT merged`,
       );
-      return true;
+      return false;
     }
 
-    // Branch still exists - check if it's merged into main
+    // ── Strategy 3: Branch exists on remote — check if ancestor of main ─
     execSync("git fetch origin main --quiet", {
       cwd: repoRoot,
       stdio: "ignore",
+      timeout: 15000,
     });
 
     // Check if the branch is fully merged into origin/main
@@ -1933,9 +1953,13 @@ async function isBranchMerged(branch) {
     execSync(mergeCheckCmd, {
       cwd: repoRoot,
       stdio: "ignore",
+      timeout: 10000,
     });
 
     // If we get here, the branch is merged
+    console.log(
+      `[monitor] Branch ${branch} is ancestor of main (merged)`,
+    );
     return true;
   } catch (err) {
     // Non-zero exit code means not merged, or other error
@@ -2323,6 +2347,60 @@ async function smartPRFlow(attemptId, shortId, status) {
         if (resolveResult?.success) {
           console.log(`[monitor] ${tag}: conflicts resolved automatically`);
         } else {
+          const attemptInfo = await getAttemptInfo(attemptId);
+          const worktreeDir =
+            attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+          if (codexResolveConflictsEnabled) {
+            console.warn(
+              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
+            );
+            const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
+Worktree: ${worktreeDir || "(unknown)"}
+Attempt: ${shortId}
+Conflicted files: ${files.join(", ") || "(unknown)"}
+
+Instructions:
+1) cd into the worktree directory.
+2) Inspect git status and conflicted files.
+3) Resolve conflicts, then run: git add -A
+4) Continue the rebase (git rebase --continue) if needed.
+5) Ensure the branch builds/tests if necessary.
+6) Commit if prompted and push the branch.
+Return a short summary of what you did.`;
+            const codexResult = await runCodexExec(
+              prompt,
+              worktreeDir || repoRoot,
+              conflictResolutionTimeoutMs,
+            );
+            const logPath = resolve(
+              logDir,
+              `codex-conflict-${shortId}-${nowStamp()}.log`,
+            );
+            await writeFile(
+              logPath,
+              codexResult.output || codexResult.error || "(no output)",
+              "utf8",
+            );
+            if (codexResult.success) {
+              console.log(
+                `[monitor] ${tag}: Codex conflict resolution succeeded`,
+              );
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `✅ Codex resolved rebase conflicts for ${shortId}. Log: ${logPath}`,
+                );
+              }
+              return;
+            }
+            console.warn(
+              `[monitor] ${tag}: Codex conflict resolution failed — prompting agent`,
+            );
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `⚠️ Codex failed to resolve conflicts for ${shortId}. Log: ${logPath}`,
+              );
+            }
+          }
           // Auto-resolve failed — ask agent to fix
           console.warn(
             `[monitor] ${tag}: auto-resolve failed — prompting agent`,
