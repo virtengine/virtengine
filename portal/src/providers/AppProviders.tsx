@@ -11,6 +11,7 @@ import { PortalProvider } from '@/lib/portal-adapter';
 import { portalConfig, chainConfig, walletConfig } from '@/config';
 import { Toaster } from '@/components/ui/Toaster';
 import { I18nProvider } from '@/i18n/I18nProvider';
+import { VibeKanbanWebCompanion } from 'vibe-kanban-web-companion';
 import { CosmosKitProvider } from './CosmosKitProvider';
 import { ChainEventProvider } from './ChainEventProvider';
 
@@ -36,6 +37,7 @@ export function AppProviders({ children }: AppProvidersProps) {
           >
             <ChainEventProvider>{children}</ChainEventProvider>
             <Toaster />
+            <VibeKanbanWebCompanion />
           </PortalProvider>
         </CosmosKitProvider>
       </ThemeProvider>
