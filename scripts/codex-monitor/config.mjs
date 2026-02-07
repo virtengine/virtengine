@@ -280,6 +280,8 @@ function normalizePrimaryAgent(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "codex-sdk";
   if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
+  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
+    return "copilot-sdk";
   if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
     return "claude-sdk";
   return raw;

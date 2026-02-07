@@ -288,6 +288,7 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `ORCHESTRATOR_SCRIPT`                 | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
 | `ORCHESTRATOR_ARGS`                   | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
 | `OPENAI_API_KEY`                      | —                              | API key for Codex analysis                                                                                             |
+| `PRIMARY_AGENT`                       | `codex-sdk`                    | Primary agent adapter (`codex-sdk`, `copilot-sdk`, `claude-sdk`)                                                       |
 | `COPILOT_MODEL`                       | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
 | `COPILOT_SDK_DISABLED`                | `0`                            | Disable Copilot SDK primary agent                                                                                      |
 | `COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT` | `true`                         | Disable Copilot cloud triggers when a rate-limit comment is detected                                                   |
