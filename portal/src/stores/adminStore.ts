@@ -24,6 +24,11 @@ import type {
   RevenueSnapshot,
   SettlementRecord,
   SystemHealthMetrics,
+  TreasuryApprovalRequest,
+  TreasuryBalance,
+  TreasuryConversionRecord,
+  TreasuryOverview,
+  TreasuryRotationLog,
   UserAccount,
   UserActivityLog,
   ValidatorInfo,
@@ -47,6 +52,11 @@ export interface AdminState {
   disputes: DisputeCase[];
   settlements: SettlementRecord[];
   revenueSnapshots: RevenueSnapshot[];
+  treasuryOverview: TreasuryOverview;
+  treasuryBalances: TreasuryBalance[];
+  treasuryConversions: TreasuryConversionRecord[];
+  treasuryApprovals: TreasuryApprovalRequest[];
+  treasuryRotationLogs: TreasuryRotationLog[];
   auditLogs: AuditLogEntry[];
   moduleParams: ModuleParam[];
   featureFlags: FeatureFlag[];
@@ -616,6 +626,100 @@ const seedRevenueSnapshots: RevenueSnapshot[] = [
   },
 ];
 
+const seedTreasuryOverview: TreasuryOverview = {
+  totalValueUsd: 4280000,
+  hotWalletBalance: 640000,
+  coldWalletBalance: 3640000,
+  pendingApprovals: 3,
+  lastRotation: new Date(Date.now() - 5 * 24 * 3600 * 1000),
+};
+
+const seedTreasuryBalances: TreasuryBalance[] = [
+  { asset: 'VE', available: 3200000, reserved: 120000, valueUsd: 3520000, change24h: 2.4 },
+  { asset: 'USDC', available: 620000, reserved: 30000, valueUsd: 650000, change24h: -0.3 },
+  { asset: 'ATOM', available: 18000, reserved: 1200, valueUsd: 110000, change24h: 1.1 },
+];
+
+const seedTreasuryConversions: TreasuryConversionRecord[] = [
+  {
+    id: 'conv-901',
+    fromAsset: 'VE',
+    toAsset: 'USDC',
+    inputAmount: 180000,
+    outputAmount: 162000,
+    feeAmount: 720,
+    source: 'dex',
+    status: 'completed',
+    executedAt: new Date(Date.now() - 6 * 3600 * 1000),
+  },
+  {
+    id: 'conv-902',
+    fromAsset: 'USDC',
+    toAsset: 'VE',
+    inputAmount: 85000,
+    outputAmount: 94000,
+    feeAmount: 420,
+    source: 'cex',
+    status: 'completed',
+    executedAt: new Date(Date.now() - 18 * 3600 * 1000),
+  },
+  {
+    id: 'conv-903',
+    fromAsset: 'VE',
+    toAsset: 'ATOM',
+    inputAmount: 62000,
+    outputAmount: 5400,
+    feeAmount: 310,
+    source: 'dex',
+    status: 'pending',
+    executedAt: new Date(Date.now() - 1 * 3600 * 1000),
+  },
+];
+
+const seedTreasuryApprovals: TreasuryApprovalRequest[] = [
+  {
+    id: 'tw-301',
+    requester: 'Treasury Ops',
+    amount: 420000,
+    asset: 'VE',
+    destination: 'virtengine1cust...a1b2',
+    approvals: 1,
+    requiredApprovals: 2,
+    status: 'pending',
+    requestedAt: new Date(Date.now() - 2 * 3600 * 1000),
+  },
+  {
+    id: 'tw-302',
+    requester: 'Finance Lead',
+    amount: 120000,
+    asset: 'USDC',
+    destination: 'virtengine1cust...c3d4',
+    approvals: 2,
+    requiredApprovals: 2,
+    status: 'approved',
+    requestedAt: new Date(Date.now() - 28 * 3600 * 1000),
+  },
+];
+
+const seedTreasuryRotationLogs: TreasuryRotationLog[] = [
+  {
+    id: 'rot-101',
+    walletType: 'hot',
+    fromAddress: 've1hot...old',
+    toAddress: 've1hot...new',
+    rotatedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000),
+    reason: 'scheduled rotation',
+  },
+  {
+    id: 'rot-102',
+    walletType: 'cold',
+    fromAddress: 've1cold...legacy',
+    toAddress: 've1cold...vault',
+    rotatedAt: new Date(Date.now() - 35 * 24 * 3600 * 1000),
+    reason: 'vault migration',
+  },
+];
+
 const seedAuditLogs: AuditLogEntry[] = [
   {
     id: 'audit-1001',
@@ -785,6 +889,11 @@ export const useAdminStore = create<AdminStore>()((set, get) => ({
   disputes: seedDisputes,
   settlements: seedSettlements,
   revenueSnapshots: seedRevenueSnapshots,
+  treasuryOverview: seedTreasuryOverview,
+  treasuryBalances: seedTreasuryBalances,
+  treasuryConversions: seedTreasuryConversions,
+  treasuryApprovals: seedTreasuryApprovals,
+  treasuryRotationLogs: seedTreasuryRotationLogs,
   auditLogs: seedAuditLogs,
   moduleParams: seedModuleParams,
   featureFlags: seedFeatureFlags,

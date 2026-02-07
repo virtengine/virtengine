@@ -14,6 +14,7 @@ test.describe('Marketplace @smoke', () => {
   });
 
   test('should display filter options', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/marketplace');
 
     await expect(page.getByLabel('Sort by:')).toBeVisible();

@@ -36,6 +36,7 @@ export function Sidebar({ variant }: SidebarProps) {
     { name: 'Users', href: '/admin/users', icon: '👥' },
     { name: 'Providers', href: '/admin/providers', icon: '🗂️' },
     { name: 'Escrow', href: '/admin/escrow', icon: '💸' },
+    { name: 'Treasury', href: '/admin/treasury', icon: '🏦' },
     { name: 'VEID Review', href: '/admin/veid', icon: '🧾' },
     { name: 'Audit Logs', href: '/admin/audit', icon: '📜' },
     { name: 'System Config', href: '/admin/system', icon: '🧰' },

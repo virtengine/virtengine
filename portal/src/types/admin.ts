@@ -183,6 +183,59 @@ export interface RevenueSnapshot {
   providerPayouts: number;
 }
 
+export interface TreasuryOverview {
+  totalValueUsd: number;
+  hotWalletBalance: number;
+  coldWalletBalance: number;
+  pendingApprovals: number;
+  lastRotation: Date;
+}
+
+export interface TreasuryBalance {
+  asset: string;
+  available: number;
+  reserved: number;
+  valueUsd: number;
+  change24h: number;
+}
+
+export type TreasuryConversionStatus = 'completed' | 'pending' | 'failed';
+
+export interface TreasuryConversionRecord {
+  id: string;
+  fromAsset: string;
+  toAsset: string;
+  inputAmount: number;
+  outputAmount: number;
+  feeAmount: number;
+  source: 'dex' | 'cex';
+  status: TreasuryConversionStatus;
+  executedAt: Date;
+}
+
+export type TreasuryApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface TreasuryApprovalRequest {
+  id: string;
+  requester: string;
+  amount: number;
+  asset: string;
+  destination: string;
+  approvals: number;
+  requiredApprovals: number;
+  status: TreasuryApprovalStatus;
+  requestedAt: Date;
+}
+
+export interface TreasuryRotationLog {
+  id: string;
+  walletType: 'hot' | 'cold';
+  fromAddress: string;
+  toAddress: string;
+  rotatedAt: Date;
+  reason: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   actor: string;
