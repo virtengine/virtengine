@@ -112,8 +112,13 @@ function getRegistryPath(options = {}) {
   if (options.registryPath) {
     return resolve(options.registryPath);
   }
-  if (process.env.VE_SHARED_WORKSPACE_REGISTRY) {
-    return resolve(process.env.VE_SHARED_WORKSPACE_REGISTRY);
+  const envPath =
+    process.env.VE_SHARED_WORKSPACE_REGISTRY ||
+    process.env.VE_SHARED_WORKSPACE_REGISTRY_PATH ||
+    process.env.VK_SHARED_WORKSPACE_REGISTRY_PATH ||
+    "";
+  if (envPath) {
+    return resolve(envPath);
   }
   return resolve(repoRoot, ".cache", "codex-monitor", "shared-workspaces.json");
 }
@@ -129,8 +134,13 @@ function getAuditPath(options = {}) {
   if (options.auditPath) {
     return resolve(options.auditPath);
   }
-  if (process.env.VE_SHARED_WORKSPACE_AUDIT_LOG) {
-    return resolve(process.env.VE_SHARED_WORKSPACE_AUDIT_LOG);
+  const envPath =
+    process.env.VE_SHARED_WORKSPACE_AUDIT_LOG ||
+    process.env.VE_SHARED_WORKSPACE_AUDIT_PATH ||
+    process.env.VK_SHARED_WORKSPACE_AUDIT_PATH ||
+    "";
+  if (envPath) {
+    return resolve(envPath);
   }
   return resolve(
     repoRoot,
@@ -453,6 +463,21 @@ export function formatSharedWorkspaceDetail(workspace, options = {}) {
     }
   }
   return lines.join("\n");
+}
+
+export function getSharedAvailabilityMap(registry) {
+  const map = new Map();
+  const workspaces = Array.isArray(registry?.workspaces) ? registry.workspaces : [];
+  for (const workspace of workspaces) {
+    if (!workspace?.id) continue;
+    const state = workspace.lease ? "leased" : workspace.availability || "available";
+    map.set(workspace.id, {
+      state,
+      owner: workspace.lease?.owner || null,
+      lease_expires_at: workspace.lease?.lease_expires_at || null,
+    });
+  }
+  return map;
 }
 
 export function getSharedRegistryTemplate() {

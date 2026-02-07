@@ -67,6 +67,7 @@
     "monitor.mjs",
     "utils.mjs",
     "autofix.mjs",
+    "agent-sdk.mjs",
     "codex-shell.mjs",
     "copilot-shell.mjs",
     "primary-agent.mjs",

@@ -337,6 +337,23 @@ Telegram commands:
 - `/claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]`
 - `/release <id> [--owner <id>] [--reason <text>] [--force]`
 
+### Agent SDK Selection (config.toml)
+
+codex-monitor reads `~/.codex/config.toml` for the primary agent SDK and
+capability flags. Example:
+
+```toml
+[agent_sdk]
+primary = "codex" # codex | copilot | claude
+
+[agent_sdk.capabilities]
+steering = true
+subagents = true
+vscode_tools = false
+```
+
+When `primary` is not `codex`, Codex SDK automation features are disabled.
+
 ## CLI Reference
 
 ```
