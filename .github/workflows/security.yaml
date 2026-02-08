@@ -4,6 +4,12 @@
 # NOTE: This runs on schedule and main branch pushes only.
 # For PR security checks, see pr-security-check.yaml (lighter weight)
 #
+# IMPORTANT: This workflow requires "Advanced" CodeQL setup mode.
+# If you see "CodeQL analyses from advanced configurations cannot be processed when
+# the default setup is enabled", disable default setup in:
+# Settings → Code security and analysis → Code scanning → Switch to advanced setup
+# See: _docs/operations/ci-troubleshooting.md for detailed instructions
+#
 # Features:
 #   - CodeQL SAST analysis for Go
 #   - Dependency vulnerability scanning (govulncheck, pip-audit, npm audit)

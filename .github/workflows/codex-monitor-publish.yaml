@@ -9,15 +9,24 @@
 #   - Provenance attestation generated automatically
 #   - Version bump detection prevents redundant publishes
 #
-# Prerequisites (one-time on npmjs.com):
-#   1. Navigate to @virtengine/codex-monitor → Settings → Trusted Publisher
-#   2. Select "GitHub Actions"
-#   3. Configure:
-#      - Organization: virtengine
-#      - Repository: virtengine
-#      - Workflow filename: codex-monitor-publish.yaml
-#      - Environment: npm-publish
-#   4. Save
+# Prerequisites (one-time setup):
+#   1. Package must exist on npm: @virtengine/codex-monitor
+#   2. Configure Trusted Publisher on npmjs.com:
+#      - Navigate to package → Settings → Publishing Access → Add Trusted Publisher
+#      - Select "GitHub Actions"
+#      - Configure:
+#        * Organization: virtengine
+#        * Repository: virtengine
+#        * Workflow filename: codex-monitor-publish.yaml
+#        * Environment: npm-publish
+#      - Save
+#   3. Configure GitHub environment:
+#      - GitHub repo → Settings → Environments → Create "npm-publish"
+#      - (Optional) Add protection rules and required reviewers
+#
+# Troubleshooting:
+#   If you see "404 Not Found" or "Access token expired", the trusted publisher
+#   is likely not configured. See: _docs/operations/ci-troubleshooting.md
 
 name: "Codex Monitor: Publish"
 
