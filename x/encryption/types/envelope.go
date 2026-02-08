@@ -153,7 +153,7 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 					i, algInfo.KeySize, len(pubKey))
 			}
 			fingerprint := ComputeKeyFingerprint(pubKey)
-			if fingerprint != e.RecipientKeyIDs[i] {
+			if fingerprint != NormalizeRecipientKeyID(e.RecipientKeyIDs[i]) {
 				return ErrInvalidEnvelope.Wrapf("recipient key id mismatch at index %d", i)
 			}
 		}
@@ -367,6 +367,9 @@ type RecipientKeyRecord struct {
 
 	// KeyFingerprint is a unique identifier derived from the public key
 	KeyFingerprint string `json:"key_fingerprint"`
+
+	// KeyVersion is the rotation version for this key
+	KeyVersion uint32 `json:"key_version,omitempty"`
 
 	// AlgorithmID specifies which algorithm this key is for
 	AlgorithmID string `json:"algorithm_id"`

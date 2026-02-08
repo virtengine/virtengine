@@ -27,6 +27,13 @@ type KeyPair struct {
 	PrivateKey [32]byte
 }
 
+// RecipientInfo describes a recipient for multi-recipient envelopes.
+type RecipientInfo struct {
+	PublicKey  []byte
+	KeyID      string
+	KeyVersion uint32
+}
+
 // GenerateKeyPair generates a new X25519 key pair using crypto/rand
 func GenerateKeyPair() (*KeyPair, error) {
 	var privateKey [32]byte
@@ -67,8 +74,17 @@ func GenerateNonce() ([24]byte, error) {
 //
 // Returns the encrypted envelope ready for storage on-chain.
 func CreateEnvelope(plaintext []byte, recipientPublicKey []byte, senderKeyPair *KeyPair) (*types.EncryptedPayloadEnvelope, error) {
-	if len(recipientPublicKey) != 32 {
-		return nil, fmt.Errorf("invalid recipient public key size: expected 32, got %d", len(recipientPublicKey))
+	return CreateEnvelopeWithRecipient(plaintext, RecipientInfo{PublicKey: recipientPublicKey}, senderKeyPair)
+}
+
+// CreateEnvelopeWithRecipient creates an encrypted payload envelope for a single recipient
+// with an optional versioned key ID.
+func CreateEnvelopeWithRecipient(plaintext []byte, recipient RecipientInfo, senderKeyPair *KeyPair) (*types.EncryptedPayloadEnvelope, error) {
+	if len(recipient.PublicKey) == 0 {
+		return nil, fmt.Errorf("recipient public key required")
+	}
+	if len(recipient.PublicKey) != 32 {
+		return nil, fmt.Errorf("invalid recipient public key size: expected 32, got %d", len(recipient.PublicKey))
 	}
 
 	// Generate nonce
@@ -79,21 +95,25 @@ func CreateEnvelope(plaintext []byte, recipientPublicKey []byte, senderKeyPair *
 
 	// Convert recipient public key to array
 	var recipientPubKeyArr [32]byte
-	copy(recipientPubKeyArr[:], recipientPublicKey)
+	copy(recipientPubKeyArr[:], recipient.PublicKey)
 
 	// Encrypt using NaCl box
 	ciphertext := box.Seal(nil, plaintext, &nonce, &recipientPubKeyArr, &senderKeyPair.PrivateKey)
 
 	// Compute recipient key fingerprint
-	recipientFingerprint := types.ComputeKeyFingerprint(recipientPublicKey)
+	recipientFingerprint := types.ComputeKeyFingerprint(recipient.PublicKey)
+	recipientKeyID := recipient.KeyID
+	if recipientKeyID == "" {
+		recipientKeyID = types.FormatRecipientKeyID(recipientFingerprint, recipient.KeyVersion)
+	}
 
 	// Create envelope
 	envelope := &types.EncryptedPayloadEnvelope{
 		Version:             types.EnvelopeVersion,
 		AlgorithmID:         types.AlgorithmX25519XSalsa20Poly1305,
 		AlgorithmVersion:    types.AlgorithmVersionV1,
-		RecipientKeyIDs:     []string{recipientFingerprint},
-		RecipientPublicKeys: [][]byte{append([]byte(nil), recipientPublicKey...)},
+		RecipientKeyIDs:     []string{recipientKeyID},
+		RecipientPublicKeys: [][]byte{append([]byte(nil), recipient.PublicKey...)},
 		Nonce:               nonce[:],
 		Ciphertext:          ciphertext,
 		SenderPubKey:        senderKeyPair.PublicKey[:],
@@ -129,6 +149,25 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 		return CreateEnvelope(plaintext, recipientPublicKeys[0], senderKeyPair)
 	}
 
+	recipients := make([]RecipientInfo, len(recipientPublicKeys))
+	for i, pubKey := range recipientPublicKeys {
+		recipients[i] = RecipientInfo{PublicKey: pubKey}
+	}
+
+	return CreateMultiRecipientEnvelopeWithRecipients(plaintext, recipients, senderKeyPair)
+}
+
+// CreateMultiRecipientEnvelopeWithRecipients creates an encrypted payload envelope for multiple recipients
+// using optional versioned key IDs.
+func CreateMultiRecipientEnvelopeWithRecipients(plaintext []byte, recipients []RecipientInfo, senderKeyPair *KeyPair) (*types.EncryptedPayloadEnvelope, error) {
+	if len(recipients) == 0 {
+		return nil, fmt.Errorf("at least one recipient required")
+	}
+
+	if len(recipients) == 1 {
+		return CreateEnvelopeWithRecipient(plaintext, recipients[0], senderKeyPair)
+	}
+
 	// Generate a random Data Encryption Key (DEK)
 	var dek [32]byte
 	if _, err := io.ReadFull(rand.Reader, dek[:]); err != nil {
@@ -146,12 +185,13 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 	ciphertext := xsalsa20Poly1305Encrypt(plaintext, &dek, &dataNonce)
 
 	// Encrypt DEK for each recipient
-	recipientKeyIDs := make([]string, len(recipientPublicKeys))
-	encryptedKeys := make([][]byte, len(recipientPublicKeys))
-	recipientPubKeys := make([][]byte, len(recipientPublicKeys))
-	wrappedKeys := make([]types.WrappedKeyEntry, len(recipientPublicKeys))
+	recipientKeyIDs := make([]string, len(recipients))
+	encryptedKeys := make([][]byte, len(recipients))
+	recipientPubKeys := make([][]byte, len(recipients))
+	wrappedKeys := make([]types.WrappedKeyEntry, len(recipients))
 
-	for i, recipientPubKey := range recipientPublicKeys {
+	for i, recipient := range recipients {
+		recipientPubKey := recipient.PublicKey
 		if len(recipientPubKey) != 32 {
 			return nil, fmt.Errorf("invalid recipient public key size at index %d: expected 32, got %d", i, len(recipientPubKey))
 		}
@@ -169,10 +209,15 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 		encryptedDEK := box.Seal(keyNonce[:], dek[:], &keyNonce, &recipientPubKeyArr, &senderKeyPair.PrivateKey)
 		encryptedKeys[i] = encryptedDEK
 
-		recipientKeyIDs[i] = types.ComputeKeyFingerprint(recipientPubKey)
+		fingerprint := types.ComputeKeyFingerprint(recipientPubKey)
+		keyID := recipient.KeyID
+		if keyID == "" {
+			keyID = types.FormatRecipientKeyID(fingerprint, recipient.KeyVersion)
+		}
+		recipientKeyIDs[i] = keyID
 		recipientPubKeys[i] = append([]byte(nil), recipientPubKey...)
 		wrappedKeys[i] = types.WrappedKeyEntry{
-			RecipientID: recipientKeyIDs[i],
+			RecipientID: keyID,
 			WrappedKey:  encryptedDEK,
 		}
 	}
@@ -269,14 +314,14 @@ func openMultiRecipientEnvelope(envelope *types.EncryptedPayloadEnvelope, recipi
 	// Find our encrypted DEK
 	var encryptedDEK []byte
 	for _, entry := range envelope.WrappedKeys {
-		if entry.RecipientID == ourFingerprint {
+		if types.NormalizeRecipientKeyID(entry.RecipientID) == ourFingerprint {
 			encryptedDEK = entry.WrappedKey
 			break
 		}
 	}
 	if encryptedDEK == nil {
 		for i, keyID := range envelope.RecipientKeyIDs {
-			if keyID == ourFingerprint {
+			if types.NormalizeRecipientKeyID(keyID) == ourFingerprint {
 				if i < len(envelope.EncryptedKeys) {
 					encryptedDEK = envelope.EncryptedKeys[i]
 				}

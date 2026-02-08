@@ -17,7 +17,7 @@ const (
 // Store key prefixes
 var (
 	// PrefixRecipientKey is the prefix for recipient public key storage
-	// Key: PrefixRecipientKey | address -> RecipientKeyRecord
+	// Key: PrefixRecipientKey | address | fingerprint -> RecipientKeyRecord
 	PrefixRecipientKey = []byte{0x01}
 
 	// PrefixKeyByFingerprint is the prefix for key lookup by fingerprint
@@ -30,12 +30,33 @@ var (
 	// PrefixEnvelopeLog is the prefix for envelope validation log (optional audit)
 	// Key: PrefixEnvelopeLog | hash -> EnvelopeLogEntry
 	PrefixEnvelopeLog = []byte{0x04}
+
+	// PrefixActiveKey is the prefix for active key lookup per address
+	// Key: PrefixActiveKey | address -> fingerprint
+	PrefixActiveKey = []byte{0x05}
 )
 
 // RecipientKeyKey returns the store key for a recipient's public key
-func RecipientKeyKey(address []byte) []byte {
+func RecipientKeyKey(address []byte, fingerprint []byte) []byte {
+	key := make([]byte, 0, len(PrefixRecipientKey)+len(address)+len(fingerprint))
+	key = append(key, PrefixRecipientKey...)
+	key = append(key, address...)
+	key = append(key, fingerprint...)
+	return key
+}
+
+// RecipientKeyPrefix returns the prefix for all keys owned by an address.
+func RecipientKeyPrefix(address []byte) []byte {
 	key := make([]byte, 0, len(PrefixRecipientKey)+len(address))
 	key = append(key, PrefixRecipientKey...)
+	key = append(key, address...)
+	return key
+}
+
+// ActiveKeyKey returns the store key for an address's active key fingerprint.
+func ActiveKeyKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixActiveKey)+len(address))
+	key = append(key, PrefixActiveKey...)
 	key = append(key, address...)
 	return key
 }

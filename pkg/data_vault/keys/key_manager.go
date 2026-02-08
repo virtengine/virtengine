@@ -73,6 +73,9 @@ type KeyInfo struct {
 	// DeprecatedAt is when the key was deprecated (can still decrypt)
 	DeprecatedAt *time.Time
 
+	// RevokedAt is when the key was revoked
+	RevokedAt *time.Time
+
 	// Status is the key status
 	Status KeyStatus
 }
@@ -92,6 +95,9 @@ const (
 
 	// KeyStatusRetired indicates the key can no longer be used
 	KeyStatusRetired KeyStatus = "retired"
+
+	// KeyStatusRevoked indicates the key has been revoked
+	KeyStatusRevoked KeyStatus = "revoked"
 )
 
 // KeyManager manages encryption keys for the data vault
@@ -237,6 +243,9 @@ func (km *KeyManager) GetActiveKey(scope Scope) (*KeyInfo, error) {
 	if keyInfo == nil {
 		return nil, fmt.Errorf("active key %s not found for scope %s", keyID, scope)
 	}
+	if keyInfo.Status != KeyStatusActive {
+		return nil, fmt.Errorf("active key %s is not active", keyID)
+	}
 
 	// Return a copy to prevent mutation
 	keyCopy := *keyInfo
@@ -361,6 +370,93 @@ func (km *KeyManager) CompleteRotation(scope Scope) error {
 	rotation.Status = RotationStatusCompleted
 
 	return nil
+}
+
+// RevokeKey revokes a key and removes it from active use.
+func (km *KeyManager) RevokeKey(scope Scope, keyID string) error {
+	km.mu.Lock()
+	defer km.mu.Unlock()
+
+	scopeKeys := km.keys[scope]
+	if scopeKeys == nil {
+		return fmt.Errorf("no keys for scope %s", scope)
+	}
+	keyInfo := scopeKeys[keyID]
+	if keyInfo == nil {
+		return fmt.Errorf("key %s not found for scope %s", keyID, scope)
+	}
+	if keyInfo.Status == KeyStatusRevoked {
+		return fmt.Errorf("key %s already revoked", keyID)
+	}
+
+	now := time.Now()
+	keyInfo.RevokedAt = &now
+	keyInfo.Status = KeyStatusRevoked
+
+	if km.activeKeys[scope] == keyID {
+		delete(km.activeKeys, scope)
+	}
+
+	return nil
+}
+
+// EmergencyRotateKey revokes the active key and immediately promotes a new key.
+func (km *KeyManager) EmergencyRotateKey(scope Scope) (*KeyInfo, error) {
+	km.mu.Lock()
+	defer km.mu.Unlock()
+
+	oldKeyID, exists := km.activeKeys[scope]
+	if !exists {
+		return nil, fmt.Errorf("no active key to rotate for scope %s", scope)
+	}
+
+	// Revoke old key
+	oldKeyInfo := km.keys[scope][oldKeyID]
+	if oldKeyInfo != nil {
+		now := time.Now()
+		oldKeyInfo.RevokedAt = &now
+		oldKeyInfo.Status = KeyStatusRevoked
+	}
+
+	// Generate new key pair
+	keyPair, err := enccrypto.GenerateKeyPair()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate new key pair: %w", err)
+	}
+
+	var keyIDBytes [16]byte
+	if _, err := io.ReadFull(rand.Reader, keyIDBytes[:]); err != nil {
+		return nil, fmt.Errorf("failed to generate key ID: %w", err)
+	}
+	newKeyID := fmt.Sprintf("%s-%x", scope, keyIDBytes)
+	scopeKeys := km.keys[scope]
+	newVersion := uint32(len(scopeKeys)) + 1 //nolint:gosec // key versions are expected to be reasonable
+
+	now := time.Now()
+	newKeyInfo := &KeyInfo{
+		ID:          newKeyID,
+		Scope:       scope,
+		Version:     newVersion,
+		PublicKey:   keyPair.PublicKey,
+		PrivateKey:  keyPair.PrivateKey,
+		CreatedAt:   now,
+		ActivatedAt: &now,
+		Status:      KeyStatusActive,
+	}
+
+	km.keys[scope][newKeyID] = newKeyInfo
+	km.activeKeys[scope] = newKeyID
+
+	return &KeyInfo{
+		ID:          newKeyInfo.ID,
+		Scope:       newKeyInfo.Scope,
+		Version:     newKeyInfo.Version,
+		PublicKey:   newKeyInfo.PublicKey,
+		PrivateKey:  newKeyInfo.PrivateKey,
+		CreatedAt:   newKeyInfo.CreatedAt,
+		ActivatedAt: newKeyInfo.ActivatedAt,
+		Status:      newKeyInfo.Status,
+	}, nil
 }
 
 // GetRotationStatus returns the current rotation status for a scope
