@@ -407,6 +407,55 @@ export async function releaseSharedWorkspace(options = {}) {
   return { registry, workspace, previousLease };
 }
 
+export async function renewSharedWorkspaceLease(options = {}) {
+  const now = options.now ? new Date(options.now) : new Date();
+  const registry = options.registry
+    ? options.registry
+    : await loadSharedWorkspaceRegistry(options);
+  const workspace = resolveSharedWorkspace(registry, options.workspaceId);
+  if (!workspace) {
+    return { error: `Unknown shared workspace '${options.workspaceId}'.` };
+  }
+  if (!workspace.lease) {
+    return { error: `Workspace '${workspace.id}' is not currently leased.` };
+  }
+  const owner = String(options.owner || "").trim();
+  if (owner && normalizeId(owner) !== normalizeId(workspace.lease.owner)) {
+    return {
+      error: `Workspace '${workspace.id}' is leased to ${workspace.lease.owner}, cannot renew.`,
+    };
+  }
+  const ttlMinutes = Number(
+    options.ttlMinutes || workspace.lease.lease_ttl_minutes || registry.default_lease_ttl_minutes,
+  );
+  if (!Number.isFinite(ttlMinutes) || ttlMinutes <= 0) {
+    return { error: "Invalid lease TTL minutes for renewal." };
+  }
+  const previousExpiry = workspace.lease.lease_expires_at;
+  const newExpiresAt = ensureIso(now.getTime() + ttlMinutes * 60 * 1000);
+  workspace.lease.lease_expires_at = newExpiresAt;
+  workspace.lease.last_renewed_at = ensureIso(now);
+  workspace.lease.lease_ttl_minutes = ttlMinutes;
+
+  await saveSharedWorkspaceRegistry(registry, options);
+  await appendAuditEntry(
+    {
+      ts: ensureIso(now),
+      action: "renew_lease",
+      workspace_id: workspace.id,
+      owner: workspace.lease.owner,
+      lease_id: workspace.lease.lease_id,
+      previous_expires_at: previousExpiry,
+      new_expires_at: newExpiresAt,
+      lease_ttl_minutes: ttlMinutes,
+      actor: options.actor || workspace.lease.owner,
+    },
+    options,
+  );
+
+  return { registry, workspace, lease: workspace.lease };
+}
+
 function formatExpiresIn(expiresAt, now) {
   if (!expiresAt) return "unknown";
   const expiry = Date.parse(expiresAt);
