@@ -311,6 +311,8 @@ func (k Keeper) eraseCategory(
 			}
 			affected++
 		}
+		affected += k.DeleteConsentRecordsBySubject(ctx, address)
+		affected += k.DeleteConsentEventsBySubject(ctx, address)
 		report.ConsentRecordsErased = true
 
 	case types.ErasureCategoryAll:
