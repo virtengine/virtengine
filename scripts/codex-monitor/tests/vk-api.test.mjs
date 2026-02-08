@@ -12,7 +12,13 @@ const mockConsoleError = vi
 
 // Import monitor once at module level
 const monitor = await import("../monitor.mjs");
-const { fetchVk, updateTaskStatus, getTaskAgeMs } = monitor;
+const {
+  fetchVk,
+  updateTaskStatus,
+  getTaskAgeMs,
+  safeRecoverTask,
+  recoverySkipCache,
+} = monitor;
 
 describe("fetchVk", () => {
   beforeEach(() => {
@@ -591,5 +597,130 @@ describe("getTaskAgeMs", () => {
   it("returns 0 for future timestamps", () => {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     expect(getTaskAgeMs({ updated_at: future })).toBe(0);
+  });
+});
+
+describe("safeRecoverTask + recoverySkipCache", () => {
+  beforeEach(() => {
+    mockFetch.mockClear();
+    mockConsoleWarn.mockClear();
+    mockConsoleError.mockClear();
+    recoverySkipCache.clear();
+  });
+
+  it("caches task as skipped when live status is already todo", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ data: { status: "todo" } }),
+    });
+
+    const result = await safeRecoverTask("task-1", "Test Task", "stale");
+    expect(result).toBe(false);
+    expect(recoverySkipCache.has("task-1")).toBe(true);
+    expect(recoverySkipCache.get("task-1").resolvedStatus).toBe("todo");
+  });
+
+  it("caches task as skipped when live status is cancelled", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ data: { status: "cancelled" } }),
+    });
+
+    const result = await safeRecoverTask("task-2", "Cancelled Task", "stale");
+    expect(result).toBe(false);
+    expect(recoverySkipCache.has("task-2")).toBe(true);
+    expect(recoverySkipCache.get("task-2").resolvedStatus).toBe("cancelled");
+  });
+
+  it("caches task as skipped when live status is done", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ data: { status: "done" } }),
+    });
+
+    const result = await safeRecoverTask("task-3", "Done Task", "stale");
+    expect(result).toBe(false);
+    expect(recoverySkipCache.has("task-3")).toBe(true);
+    expect(recoverySkipCache.get("task-3").resolvedStatus).toBe("done");
+  });
+
+  it("does NOT cache when task is successfully recovered (moved to todo)", async () => {
+    // First call: safeRecoverTask fetches live status = inprogress
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ data: { status: "inprogress" } }),
+    });
+    // Second call: updateTaskStatus PUT
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ success: true }),
+    });
+
+    const result = await safeRecoverTask("task-4", "Active Task", "stale");
+    expect(result).toBe(true);
+    // Should NOT be in cache — task was moved, so it needs re-evaluation
+    expect(recoverySkipCache.has("task-4")).toBe(false);
+  });
+
+  it("does NOT cache when fetch fails", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("network error"));
+
+    const result = await safeRecoverTask("task-5", "Failing Task", "stale");
+    expect(result).toBe(false);
+    expect(recoverySkipCache.has("task-5")).toBe(false);
+  });
+
+  it("updateTaskStatus clears recoverySkipCache on success", async () => {
+    // Pre-populate cache
+    recoverySkipCache.set("task-clear", {
+      resolvedStatus: "todo",
+      timestamp: Date.now(),
+    });
+    expect(recoverySkipCache.has("task-clear")).toBe(true);
+
+    // Successful updateTaskStatus should clear it
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ success: true }),
+    });
+    await updateTaskStatus("task-clear", "inprogress");
+    expect(recoverySkipCache.has("task-clear")).toBe(false);
+  });
+
+  it("updateTaskStatus does NOT clear cache on failure", async () => {
+    recoverySkipCache.set("task-keep", {
+      resolvedStatus: "cancelled",
+      timestamp: Date.now(),
+    });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ success: false }),
+    });
+    await updateTaskStatus("task-keep", "todo");
+    // Should still be in cache since update failed
+    expect(recoverySkipCache.has("task-keep")).toBe(true);
+  });
+
+  it("cache entries have timestamps for TTL expiry", async () => {
+    const before = Date.now();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Map([["content-type", "application/json"]]),
+      json: async () => ({ data: { status: "todo" } }),
+    });
+
+    await safeRecoverTask("task-ts", "Timestamped", "check");
+    const entry = recoverySkipCache.get("task-ts");
+    expect(entry).toBeDefined();
+    expect(entry.timestamp).toBeGreaterThanOrEqual(before);
+    expect(entry.timestamp).toBeLessThanOrEqual(Date.now());
   });
 });

@@ -1913,7 +1913,10 @@ async function updateTaskStatus(taskId, newStatus) {
     body: { status: newStatus },
     timeoutMs: 10000,
   });
-  return res?.success === true;
+  const ok = res?.success === true;
+  // Clear recovery skip cache — task status changed, so it needs re-evaluation
+  if (ok) recoverySkipCache.delete(taskId);
+  return ok;
 }
 
 /**
@@ -1943,12 +1946,22 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       console.log(
         `[monitor] safeRecover: task "${taskTitle}" is now ${liveStatus} — aborting recovery`,
       );
+      // Cache so we skip this task for RECOVERY_SKIP_CACHE_MS
+      recoverySkipCache.set(taskId, {
+        resolvedStatus: liveStatus,
+        timestamp: Date.now(),
+      });
       return false;
     }
     if (liveStatus === "todo") {
       console.log(
         `[monitor] safeRecover: task "${taskTitle}" is already todo — no action needed`,
       );
+      // Cache so we skip this task for RECOVERY_SKIP_CACHE_MS
+      recoverySkipCache.set(taskId, {
+        resolvedStatus: liveStatus,
+        timestamp: Date.now(),
+      });
       return false;
     }
     const success = await updateTaskStatus(taskId, "todo");
@@ -2181,6 +2194,16 @@ const conflictResolutionCooldown = new Map();
 const CONFLICT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * Cache for tasks whose recovery was a no-op (already todo/cancelled/done).
+ * Prevents redundant VK API calls, branch/PR checks, and log spam every cycle.
+ * Key = task ID, Value = { resolvedStatus: string, timestamp: number }.
+ * Expires after RECOVERY_SKIP_CACHE_MS so we re-check periodically.
+ * @type {Map<string, {resolvedStatus: string, timestamp: number}>}
+ */
+const recoverySkipCache = new Map();
+const RECOVERY_SKIP_CACHE_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
  * Periodic check: find tasks in "inreview" status, check if their PRs
  * have been merged, and automatically move them to "done" status.
  * Also detects open PRs with merge conflicts and triggers resolution.
@@ -2298,6 +2321,17 @@ async function checkMergedPRsAndUpdateTasks() {
 
       // ── Skip cancelled/done tasks — they should never be recovered ──
       if (taskStatus === "cancelled" || taskStatus === "done") {
+        continue;
+      }
+
+      // ── Recovery skip cache: skip tasks we already resolved recently ──
+      // safeRecoverTask caches tasks that are already todo/cancelled/done,
+      // so we skip the entire branch/PR lookup and recovery attempt.
+      const skipEntry = recoverySkipCache.get(task.id);
+      if (
+        skipEntry &&
+        Date.now() - skipEntry.timestamp < RECOVERY_SKIP_CACHE_MS
+      ) {
         continue;
       }
 
@@ -3567,7 +3601,6 @@ Return a short summary of what you did and any files that needed manual resoluti
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
       if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
-      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
@@ -3653,7 +3686,6 @@ Return a short summary of what you did and any files that needed manual resoluti
         );
       }
     }
-  }
   } catch (err) {
     console.warn(`[monitor] ${tag}: error — ${err.message || err}`);
   }
@@ -5873,7 +5905,10 @@ function applyConfig(nextConfig, options = {}) {
   if (primaryAgentChanged) {
     setPrimaryAgent(primaryAgentName);
   }
-  if ((primaryAgentChanged && primaryAgentReady) || (!prevPrimaryAgentReady && primaryAgentReady)) {
+  if (
+    (primaryAgentChanged && primaryAgentReady) ||
+    (!prevPrimaryAgentReady && primaryAgentReady)
+  ) {
     void initPrimaryAgent(primaryAgentName);
   }
 
@@ -6170,6 +6205,8 @@ if (telegramBotEnabled) {
 export {
   fetchVk,
   updateTaskStatus,
+  safeRecoverTask,
+  recoverySkipCache,
   getTaskAgeMs,
   classifyConflictedFiles,
   AUTO_RESOLVE_THEIRS,
