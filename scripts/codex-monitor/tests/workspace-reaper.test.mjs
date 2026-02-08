@@ -21,21 +21,12 @@ const TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
 async function createTestWorktree(name, options = {}) {
   const worktreePath = resolve(TEST_WORKTREE_BASE, name);
   await mkdir(worktreePath, { recursive: true });
-  const gitDir = resolve(worktreePath, ".git");
-  await mkdir(gitDir, { recursive: true });
-  const gitHead = resolve(gitDir, "HEAD");
-  await writeFile(gitHead, "ref: refs/heads/main");
+  await mkdir(resolve(worktreePath, ".git"), { recursive: true });
 
   // Create some test files
-  const testFile = resolve(worktreePath, "test.txt");
-  await writeFile(testFile, "test content");
+  const testFilePath = resolve(worktreePath, "test.txt");
+  await writeFile(testFilePath, "test content");
 
-  if (options.modifiedAt instanceof Date) {
-    await utimes(testFile, options.modifiedAt, options.modifiedAt);
-    await utimes(worktreePath, options.modifiedAt, options.modifiedAt);
-    await utimes(gitDir, options.modifiedAt, options.modifiedAt);
-    await utimes(gitHead, options.modifiedAt, options.modifiedAt);
-  }
   if (options.withLockFile) {
     await writeFile(resolve(worktreePath, ".git", "index.lock"), "12345");
   }
@@ -121,10 +112,10 @@ describe("workspace-reaper", () => {
     });
 
     it("should support dry-run mode", async () => {
-      const now = new Date();
-      await createTestWorktree("old-worktree", { modifiedAt: now });
+      await createTestWorktree("old-worktree");
 
-      const futureTime = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      const futureTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 24,
