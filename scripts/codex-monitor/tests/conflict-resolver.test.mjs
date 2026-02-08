@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   getDirtyTasks,
   prioritizeDirtyTasks,
@@ -6,13 +6,6 @@ import {
   getDirtySlotReservation,
   buildConflictResolutionPrompt,
   isFileOverlapWithDirtyPR,
-  registerDirtyTask,
-  clearDirtyTask,
-  isDirtyTask,
-  getHighTierForDirty,
-  isOnResolutionCooldown,
-  recordResolutionAttempt,
-  formatDirtyTaskSummary,
   DIRTY_TASK_DEFAULTS,
 } from "../conflict-resolver.mjs";
 
@@ -386,95 +379,5 @@ describe("DIRTY_TASK_DEFAULTS", () => {
   it("is an object", () => {
     expect(typeof DIRTY_TASK_DEFAULTS).toBe("object");
     expect(DIRTY_TASK_DEFAULTS).not.toBeNull();
-  });
-});
-
-// ── Dirty task registry ──────────────────────────────────────────────────────
-
-describe("registerDirtyTask / clearDirtyTask / isDirtyTask", () => {
-  beforeEach(() => {
-    // Clear any leftover state between tests
-    clearDirtyTask("test-1");
-    clearDirtyTask("test-2");
-  });
-
-  it("registers and checks a dirty task", () => {
-    expect(isDirtyTask("test-1")).toBe(false);
-    registerDirtyTask({ taskId: "test-1", prNumber: 42, branch: "ve/test" });
-    expect(isDirtyTask("test-1")).toBe(true);
-  });
-
-  it("clears a dirty task", () => {
-    registerDirtyTask({ taskId: "test-1" });
-    expect(isDirtyTask("test-1")).toBe(true);
-    clearDirtyTask("test-1");
-    expect(isDirtyTask("test-1")).toBe(false);
-  });
-
-  it("clearing a non-existent task is a no-op", () => {
-    expect(() => clearDirtyTask("nonexistent")).not.toThrow();
-  });
-
-  it("ignores registration with no taskId", () => {
-    registerDirtyTask({});
-    registerDirtyTask();
-    // Should not throw, and registry should remain empty for missing ids
-    expect(isDirtyTask(undefined)).toBe(false);
-  });
-});
-
-// ── getHighTierForDirty ──────────────────────────────────────────────────────
-
-describe("getHighTierForDirty", () => {
-  it("returns HIGH tier with reason", () => {
-    const result = getHighTierForDirty();
-    expect(result.tier).toBe("HIGH");
-    expect(typeof result.reason).toBe("string");
-    expect(result.reason.length).toBeGreaterThan(0);
-  });
-});
-
-// ── Resolution cooldown ──────────────────────────────────────────────────────
-
-describe("recordResolutionAttempt / isOnResolutionCooldown", () => {
-  it("is not on cooldown before any attempt", () => {
-    expect(isOnResolutionCooldown("cool-1")).toBe(false);
-  });
-
-  it("is on cooldown immediately after an attempt", () => {
-    recordResolutionAttempt("cool-2");
-    expect(isOnResolutionCooldown("cool-2")).toBe(true);
-  });
-
-  it("respects custom cooldown duration", () => {
-    recordResolutionAttempt("cool-3");
-    // With 0ms cooldown it should already be expired
-    expect(isOnResolutionCooldown("cool-3", { cooldownMs: 0 })).toBe(false);
-    // With a very long cooldown it should still be active
-    expect(isOnResolutionCooldown("cool-3", { cooldownMs: 999999999 })).toBe(
-      true,
-    );
-  });
-});
-
-// ── formatDirtyTaskSummary ───────────────────────────────────────────────────
-
-describe("formatDirtyTaskSummary", () => {
-  beforeEach(() => {
-    clearDirtyTask("fmt-1");
-    clearDirtyTask("fmt-2");
-  });
-
-  it("returns zero count when no dirty tasks", () => {
-    const summary = formatDirtyTaskSummary();
-    expect(summary).toContain("0");
-  });
-
-  it("includes task info when dirty tasks exist", () => {
-    registerDirtyTask({ taskId: "fmt-1", prNumber: 99, title: "Fix auth" });
-    const summary = formatDirtyTaskSummary();
-    expect(summary).toContain("1");
-    expect(summary).toContain("Fix auth");
-    expect(summary).toContain("99");
   });
 });

@@ -12,7 +12,6 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
-import { archiveCompletedTasks } from "./task-archiver.mjs";
 import {
   attemptAutoFix,
   fixLoopingError,
@@ -961,16 +960,6 @@ const contextPatterns = [
   "ContextWindowExceeded",
   "context window",
   "ran out of room",
-  "prompt token count",
-  "token count of",
-  "context length exceeded",
-  "maximum context length",
-  "exceeds the limit",
-  "token limit",
-  "too many tokens",
-  "prompt too large",
-  "failed to get response from the ai model",
-  "capierror",
 ];
 
 const errorPatterns = [
@@ -2248,8 +2237,7 @@ loadMergedTaskCache();
 // ── Recovery/Idle caches (persistent) ───────────────────────────────────────
 
 const recoveryCacheEnabled =
-  String(process.env.RECOVERY_CACHE_ENABLED || "true").toLowerCase() !==
-  "false";
+  String(process.env.RECOVERY_CACHE_ENABLED || "true").toLowerCase() !== "false";
 const recoveryLogDedupMs =
   Number(process.env.RECOVERY_LOG_DEDUP_MINUTES || "30") * 60 * 1000;
 const recoveryCacheMaxEntries = Number(
@@ -2317,7 +2305,9 @@ function scheduleRecoveryCacheSave() {
 
 function buildCacheObject(map, tsField) {
   const entries = [...map.entries()];
-  entries.sort((a, b) => (b[1]?.[tsField] || 0) - (a[1]?.[tsField] || 0));
+  entries.sort(
+    (a, b) => (b[1]?.[tsField] || 0) - (a[1]?.[tsField] || 0),
+  );
   const limited =
     recoveryCacheMaxEntries > 0
       ? entries.slice(0, recoveryCacheMaxEntries)
@@ -2779,15 +2769,10 @@ async function checkMergedPRsAndUpdateTasks() {
 
           if (isMerged) {
             // Assess completion confidence for merged PR
-            const sizeLabel =
-              task.title?.match(/\[(xs|s|m|l|xl|xxl)\]/i)?.[1] || "m";
-            const taskComplexity = classifyComplexity({
-              sizeLabel,
-              title: task.title,
-              description: task.description,
-            });
+            const sizeLabel = task.title?.match(/\[(xs|s|m|l|xl|xxl)\]/i)?.[1] || "m";
+            const taskComplexity = classifyComplexity({ sizeLabel, title: task.title, description: task.description });
             const confidence = assessCompletionConfidence({
-              testsPass: true, // PR was merged → CI must have passed
+              testsPass: true,    // PR was merged → CI must have passed
               buildClean: true,
               lintClean: true,
               filesChanged: prInfo?.changed_files || prInfo?.changedFiles || 0,
@@ -2910,15 +2895,7 @@ async function checkMergedPRsAndUpdateTasks() {
               const fullPrInfo = await getPullRequestByNumber(branchPr.number);
               const isConflicting =
                 fullPrInfo?.mergeable === "CONFLICTING" ||
-                fullPrInfo?.mergeable === false ||
-                fullPrInfo?.mergeable_state === "dirty" ||
-                fullPrInfo?.mergeStateStatus === "DIRTY";
-              if (isConflicting) {
-                conflictCandidates.push({
-                  prNumber: branchPr.number,
-                  attemptId: cand.attemptId,
-                  branch: cand.branch,
-                });
+                ful
                 // Register as dirty for slot reservation + file-overlap
                 registerDirtyTask({
                   taskId: task.id,
@@ -2926,6 +2903,14 @@ async function checkMergedPRsAndUpdateTasks() {
                   branch: cand.branch,
                   title: task.title,
                   files: fullPrInfo?.files?.map((f) => f.filename || f) || [],
+                });lPrInfo?.mergeable === false ||
+                fullPrInfo?.mergeable_state === "dirty" ||
+                fullPrInfo?.mergeStateStatus === "DIRTY";
+              if (isConflicting) {
+                conflictCandidates.push({
+                  prNumber: branchPr.number,
+                  attemptId: cand.attemptId,
+                  branch: cand.branch,
                 });
               }
             }
@@ -3092,7 +3077,7 @@ async function checkMergedPRsAndUpdateTasks() {
         `[monitor] Moved ${movedReviewCount} tasks to inreview (PR open)`,
       );
     }
-    console.log(`[monitor] ${formatDirtyTaskSummary()}`);
+      console.log(`[monitor] ${formatDirtyTaskSummary()}`);
     if (conflictsTriggered > 0) {
       console.log(
         `[monitor] Triggered conflict resolution for ${conflictsTriggered} PR(s)`,
@@ -5576,16 +5561,8 @@ async function triggerTaskPlannerViaKanban(
   reason,
   { taskCount, notify = true } = {},
 ) {
-  const defaultPlannerTaskCount = Number(
-    process.env.TASK_PLANNER_DEFAULT_COUNT || "30",
-  );
   const numTasks =
-    taskCount && Number.isFinite(taskCount) && taskCount > 0
-      ? taskCount
-      : defaultPlannerTaskCount;
-  const plannerTaskSizeLabel = String(
-    process.env.TASK_PLANNER_TASK_SIZE_LABEL || "xl",
-  ).toLowerCase();
+    taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
   // Get project ID using the name-matched helper
   const projectId = await findVkProjectId();
   if (!projectId) {
@@ -5604,57 +5581,13 @@ async function triggerTaskPlannerViaKanban(
     // Match both old format "Plan next tasks (...)" and new "[xs] Plan next tasks (...)"
     const stripped = title.replace(/^\[(?:xs|s|m|l|xl|xxl)\]\s*/i, "");
     return (
-      stripped.startsWith("plan next tasks") ||
-      stripped.startsWith("plan next phase")
+      stripped.startsWith("plan next tasks") || stripped.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
     console.log(
       `[monitor] task planner VK task already exists in backlog — skipping: "${existingPlanner.title}" (${existingPlanner.id})`,
     );
-    const desiredTitle = `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`;
-    const desiredDescription = [
-      "## Task Planner — Auto-created by codex-monitor",
-      "",
-      `**Trigger reason:** ${reason || "manual"}`,
-      "",
-      "### Instructions",
-      "",
-      plannerPrompt,
-      "",
-      "### Additional Context",
-      "",
-      "- Review recently merged PRs on GitHub to understand what was completed",
-      "- Check `git log --oneline -20` for the latest changes",
-      "- Look at open issues for inspiration",
-      `- Create ${numTasks} well-scoped tasks in vibe-kanban (minimum 30)`,
-      "- Tasks must be **production-ready** (no placeholders) and thorough",
-      "- Every created task should default to **[xl]** unless clearly smaller",
-      "- If a placeholder is unavoidable, create a paired follow-up task immediately",
-      "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
-      "  This drives automatic complexity-based model routing for task execution.",
-    ].join("\n");
-    // Best-effort: keep backlog task aligned with current requirements
-    if (
-      existingPlanner.title !== desiredTitle ||
-      (existingPlanner.description || "") !== desiredDescription
-    ) {
-      try {
-        await fetchVk(`/api/tasks/${existingPlanner.id}`, {
-          method: "PUT",
-          body: {
-            title: desiredTitle,
-            description: desiredDescription,
-          },
-          timeoutMs: 15000,
-        });
-        console.log(
-          `[monitor] task planner VK task updated with latest requirements (${existingPlanner.id})`,
-        );
-      } catch {
-        /* best-effort */
-      }
-    }
     const taskUrl = buildVkTaskUrl(existingPlanner.id, projectId);
     if (notify) {
       const suffix = taskUrl ? `\n${taskUrl}` : "";
@@ -5674,7 +5607,7 @@ async function triggerTaskPlannerViaKanban(
 
   const plannerPrompt = agentPrompts.planner;
   const taskBody = {
-    title: `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`,
+    title: `[xs] Plan next tasks (${reason || "backlog-empty"})`,
     description: [
       "## Task Planner — Auto-created by codex-monitor",
       "",
@@ -5689,10 +5622,8 @@ async function triggerTaskPlannerViaKanban(
       "- Review recently merged PRs on GitHub to understand what was completed",
       "- Check `git log --oneline -20` for the latest changes",
       "- Look at open issues for inspiration",
-      `- Create ${numTasks} well-scoped tasks in vibe-kanban (minimum 30)`,
-      "- Tasks must be **production-ready** (no placeholders) and thorough",
-      "- Every created task should default to **[xl]** unless clearly smaller",
-      "- If a placeholder is unavoidable, create a paired follow-up task immediately",
+      `- Create ${numTasks} well-scoped tasks in vibe-kanban`,
+      "- Each task should be completable by a single agent in 1-4 hours",
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
     ].join("\n"),
@@ -6955,15 +6886,8 @@ try {
   );
 }
 
-// ── Startup sweep: kill stale processes, prune worktrees, archive old tasks ──
-runMaintenanceSweep({
-  repoRoot,
-  archiveCompletedTasks: async () => {
-    const projectId = await findVkProjectId();
-    if (!projectId) return { archived: 0 };
-    return await archiveCompletedTasks(fetchVk, projectId, { maxArchive: 50 });
-  },
-});
+// ── Startup sweep: kill stale processes, prune worktrees ────────────────────
+runMaintenanceSweep({ repoRoot });
 
 setInterval(() => {
   void flushErrorQueue();
@@ -6973,18 +6897,7 @@ setInterval(() => {
 const maintenanceIntervalMs = 5 * 60 * 1000;
 setInterval(() => {
   const childPid = currentChild ? currentChild.pid : undefined;
-  runMaintenanceSweep({
-    repoRoot,
-    childPid,
-    archiveCompletedTasks: async () => {
-      const projectId = await findVkProjectId();
-      if (!projectId) return { archived: 0 };
-      return await archiveCompletedTasks(fetchVk, projectId, {
-        maxArchive: 25,
-        dryRun: false,
-      });
-    },
-  });
+  runMaintenanceSweep({ repoRoot, childPid });
 }, maintenanceIntervalMs);
 
 // ── Periodic merged PR check: every 10 min, move merged PRs to done ─────────
@@ -7114,14 +7027,10 @@ try {
   const matrixLines = [];
   for (const [exec, tiers] of Object.entries(complexityMatrix)) {
     for (const [tier, profile] of Object.entries(tiers)) {
-      matrixLines.push(
-        `  ${exec}/${tier}: ${profile.model || "default"} (${profile.reasoningEffort || "default"})`,
-      );
+      matrixLines.push(`  ${exec}/${tier}: ${profile.model || "default"} (${profile.reasoningEffort || "default"})`);
     }
   }
-  console.log(
-    `[monitor] complexity routing matrix:\n${matrixLines.join("\n")}`,
-  );
+  console.log(`[monitor] complexity routing matrix:\n${matrixLines.join("\n")}`);
 } catch (err) {
   console.warn(`[monitor] complexity matrix log failed: ${err.message}`);
 }
