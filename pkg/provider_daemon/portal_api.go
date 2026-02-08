@@ -32,41 +32,48 @@ const (
 )
 
 type PortalAPIServerConfig struct {
-	ListenAddr            string
-	AuthSecret            string
-	AllowInsecure         bool
-	RequireVEID           bool
-	MinVEIDScore          int
-	ShellSessionTTL       time.Duration
-	TokenTTL              time.Duration
-	AuditLogger           *AuditLogger
-	LogStore              *DeploymentLogStore
-	ChainQuery            ChainQuery
-	WalletAuthChainID     string
-	WalletAuthNonceStore  portalauth.NonceStore
-	WalletAuthChainQuery  portalauth.ChainQuerier
-	WalletAuthMaxAge      time.Duration
-	WalletAuthFutureDrift time.Duration
-	WalletAuthCacheTTL    time.Duration
-	ProviderInfo          ProviderInfo
-	ProviderPricing       ProviderPricing
-	ProviderCapacity      ProviderCapacity
-	ProviderAttributes    ProviderAttributes
-	ProviderInfoProvider  ProviderInfoProvider
-	RateLimit             RateLimitConfig
-	VaultService          data_vault.VaultService
-	VaultMaxPayloadBytes  int64
+	ListenAddr              string
+	AuthSecret              string
+	AllowInsecure           bool
+	RequireVEID             bool
+	MinVEIDScore            int
+	ShellSessionTTL         time.Duration
+	TokenTTL                time.Duration
+	LifecycleExecutor       LifecycleExecutor
+	LifecycleAllowedRoles   []string
+	LifecycleConsentScope   string
+	LifecycleRequireConsent bool
+	AuditLogger             *AuditLogger
+	LogStore                *DeploymentLogStore
+	ChainQuery              ChainQuery
+	WalletAuthChainID       string
+	WalletAuthNonceStore    portalauth.NonceStore
+	WalletAuthChainQuery    portalauth.ChainQuerier
+	WalletAuthMaxAge        time.Duration
+	WalletAuthFutureDrift   time.Duration
+	WalletAuthCacheTTL      time.Duration
+	ProviderInfo            ProviderInfo
+	ProviderPricing         ProviderPricing
+	ProviderCapacity        ProviderCapacity
+	ProviderAttributes      ProviderAttributes
+	ProviderInfoProvider    ProviderInfoProvider
+	RateLimit               RateLimitConfig
+	VaultService            data_vault.VaultService
+	VaultMaxPayloadBytes    int64
 }
 
 func DefaultPortalAPIServerConfig() PortalAPIServerConfig {
 	return PortalAPIServerConfig{
-		ListenAddr:           ":8080",
-		AllowInsecure:        true,
-		RequireVEID:          true,
-		MinVEIDScore:         80,
-		ShellSessionTTL:      10 * time.Minute,
-		TokenTTL:             5 * time.Minute,
-		VaultMaxPayloadBytes: 10 * 1024 * 1024,
+		ListenAddr:              ":8080",
+		AllowInsecure:           true,
+		RequireVEID:             true,
+		MinVEIDScore:            80,
+		ShellSessionTTL:         10 * time.Minute,
+		TokenTTL:                5 * time.Minute,
+		VaultMaxPayloadBytes:    10 * 1024 * 1024,
+		LifecycleAllowedRoles:   []string{"customer", "administrator", "support_agent"},
+		LifecycleConsentScope:   "marketplace:lifecycle",
+		LifecycleRequireConsent: true,
 		RateLimit: RateLimitConfig{
 			RequestsPerMinute: 120,
 		},
@@ -84,6 +91,7 @@ type PortalAPIServer struct {
 	rateLimiter   *PortalRateLimiter
 	authVerifier  *portalauth.Verifier
 	vault         data_vault.VaultService
+	lifecycleExec LifecycleExecutor
 }
 
 func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
@@ -145,6 +153,7 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 
 	srv.vault = cfg.VaultService
 	srv.rateLimiter = NewPortalRateLimiter(cfg.RateLimit.RequestsPerMinute, time.Minute)
+	srv.lifecycleExec = cfg.LifecycleExecutor
 
 	return srv, nil
 }
@@ -201,6 +210,7 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	api.Handle("/deployments/{deploymentId}/metrics", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentMetrics)))).Methods(http.MethodGet)
 	api.Handle("/deployments/{deploymentId}/metrics/history", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentMetricsHistory)))).Methods(http.MethodGet)
 	api.Handle("/deployments/{deploymentId}/events", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentEvents)))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/actions", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentAction)))).Methods(http.MethodPost)
 	api.Handle("/metrics/aggregate", s.authMiddleware(true)(http.HandlerFunc(s.handleAggregatedMetrics))).Methods(http.MethodGet)
 
 	api.Handle("/provider/info", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderInfo))).Methods(http.MethodGet)

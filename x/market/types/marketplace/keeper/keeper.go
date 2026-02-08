@@ -8,6 +8,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -1018,8 +1019,18 @@ func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.Wal
 	case marketplace.ActionTypeTerminate:
 		return k.processTerminateCallback(ctx, callback)
 	case marketplace.ActionTypeStatusUpdate:
-		return k.processOrderStatusCallback(ctx, callback)
+		switch callback.ChainEntityType {
+		case marketplace.SyncTypeAllocation:
+			return k.processLifecycleStatusCallback(ctx, callback)
+		case marketplace.SyncTypeOrder:
+			return k.processOrderStatusCallback(ctx, callback)
+		default:
+			return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
+		}
 	default:
+		if marketplace.LifecycleActionType(callback.ActionType).IsValid() {
+			return k.processLifecycleStatusCallback(ctx, callback)
+		}
 		// Other action types can be added here
 		return nil
 	}
@@ -1213,6 +1224,169 @@ func (k Keeper) processOrderStatusCallback(ctx sdk.Context, callback *marketplac
 	seq := k.IncrementEventSequence(ctx)
 	event := marketplace.NewOrderStateChangedEventAt(order, oldState, reason, ctx.BlockHeight(), seq, ctx.BlockTime())
 	return k.EmitMarketplaceEvent(ctx, event)
+}
+
+// processLifecycleStatusCallback handles lifecycle status update callbacks.
+func (k Keeper) processLifecycleStatusCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
+	if callback.ChainEntityType != marketplace.SyncTypeAllocation {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
+	}
+	if callback.ChainEntityID == "" {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("allocation id is required")
+	}
+
+	allocationID, err := marketplace.ParseAllocationID(callback.ChainEntityID)
+	if err != nil {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
+	}
+
+	allocation, found := k.GetAllocation(ctx, allocationID)
+	if !found {
+		return marketplace.ErrAllocationNotFound.Wrapf("allocation %s not found", callback.ChainEntityID)
+	}
+
+	order, found := k.GetOrder(ctx, allocationID.OrderID)
+	if !found {
+		return marketplace.ErrOrderNotFound
+	}
+
+	actionStr := callback.Payload["action"]
+	if actionStr == "" {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("missing action")
+	}
+
+	action := marketplace.LifecycleActionType(actionStr)
+	if !action.IsValid() {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("invalid action: %s", actionStr)
+	}
+
+	eventType := callback.Payload["event_type"]
+	success := parseBoolPayload(callback.Payload["success"])
+	if eventType == "" {
+		if success {
+			eventType = "completed"
+		} else if callback.Payload["success"] != "" {
+			eventType = "failed"
+		}
+	}
+
+	targetState, err := marketplace.ValidateLifecycleTransition(allocation.State, action)
+	if err != nil {
+		return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	}
+
+	operationID := callback.Payload["operation_id"]
+	if operationID == "" {
+		operationID = callback.ID
+	}
+
+	switch eventType {
+	case "requested":
+		seq := k.IncrementEventSequence(ctx)
+		event := marketplace.NewLifecycleActionRequestedEventAt(
+			allocation.ID.String(),
+			order.ID.String(),
+			allocation.ProviderAddress,
+			action,
+			operationID,
+			callback.SignerID,
+			targetState,
+			nil,
+			marketplace.RollbackPolicyAutomatic,
+			ctx.BlockHeight(),
+			seq,
+			ctx.BlockTime(),
+		)
+		return k.EmitMarketplaceEvent(ctx, event)
+	case "completed", "failed":
+		return k.applyLifecycleCompletion(ctx, allocation, action, operationID, success, callback)
+	default:
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("unknown lifecycle event type")
+	}
+}
+
+func (k Keeper) applyLifecycleCompletion(
+	ctx sdk.Context,
+	allocation *marketplace.Allocation,
+	action marketplace.LifecycleActionType,
+	operationID string,
+	success bool,
+	callback *marketplace.WaldurCallback,
+) error {
+	oldState := allocation.State
+
+	resultState := parseAllocationState(callback.Payload["result_state"])
+	if resultState == marketplace.AllocationStateUnspecified {
+		if success {
+			resultState, _ = marketplace.ValidateLifecycleTransition(allocation.State, action)
+		} else {
+			resultState = allocation.State
+		}
+	}
+
+	if success && resultState != allocation.State {
+		reason := callback.Payload["reason"]
+		if reason == "" {
+			reason = "lifecycle action completed"
+		}
+		if err := allocation.SetStateAt(resultState, reason, ctx.BlockTime()); err != nil {
+			return err
+		}
+		if err := k.UpdateAllocation(ctx, allocation); err != nil {
+			return err
+		}
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	if success {
+		event := marketplace.NewLifecycleActionCompletedEventAt(
+			allocation.ID.String(),
+			operationID,
+			action,
+			oldState,
+			resultState,
+			0,
+			ctx.BlockHeight(),
+			seq,
+			ctx.BlockTime(),
+		)
+		return k.EmitMarketplaceEvent(ctx, event)
+	}
+
+	errorMsg := callback.Payload["error"]
+	if errorMsg == "" {
+		errorMsg = "lifecycle action failed"
+	}
+	event := marketplace.NewLifecycleActionFailedEventAt(
+		allocation.ID.String(),
+		operationID,
+		action,
+		errorMsg,
+		false,
+		0,
+		ctx.BlockHeight(),
+		seq,
+		ctx.BlockTime(),
+	)
+	return k.EmitMarketplaceEvent(ctx, event)
+}
+
+func parseBoolPayload(value string) bool {
+	switch strings.ToLower(value) {
+	case "true", "1", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+func parseAllocationState(value string) marketplace.AllocationState {
+	for state, name := range marketplace.AllocationStateNames {
+		if name == value {
+			return state
+		}
+	}
+	return marketplace.AllocationStateUnspecified
 }
 
 // applyOrderStateTransition moves an order to the target state using valid transitions.
