@@ -277,7 +277,9 @@ function parseExecutorsFromEnv() {
 }
 
 function normalizePrimaryAgent(value) {
-  const raw = String(value || "").trim().toLowerCase();
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!raw) return "codex-sdk";
   if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
   if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
@@ -846,7 +848,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     selectedRepository?.orchestratorScript ||
     configData.orchestratorScript ||
     findOrchestratorScript(configDir, repoRoot);
-  const defaultArgs = mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
+  const defaultArgs =
+    mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const rawScript =
     cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript;
   // Resolve relative paths against configDir (not cwd) so that
@@ -1032,6 +1035,69 @@ export function loadConfig(argv = process.argv, options = {}) {
     ? plannerDedupHours * 60 * 60 * 1000
     : 24 * 60 * 60 * 1000;
 
+  // ── Branch Routing ────────────────────────────────────────
+  // Maps scope patterns (from conventional commit scopes in task titles) to
+  // upstream branches.  Allows e.g. all "codex-monitor" tasks to route to
+  // "origin/ve/codex-monitor-staging" instead of the default target branch.
+  //
+  // Config format (codex-monitor.config.json):
+  //   "branchRouting": {
+  //     "defaultBranch": "origin/staging",
+  //     "scopeMap": {
+  //       "codex-monitor": "origin/ve/codex-monitor-staging",
+  //       "veid":          "origin/staging",
+  //       "provider":      "origin/staging"
+  //     },
+  //     "autoRebaseOnMerge": true,
+  //     "assessWithSdk": true
+  //   }
+  //
+  // Env overrides:
+  //   VK_TARGET_BRANCH=origin/staging        (default branch)
+  //   BRANCH_ROUTING_SCOPE_MAP=codex-monitor:origin/ve/codex-monitor-staging,veid:origin/staging
+  //   AUTO_REBASE_ON_MERGE=true
+  //   ASSESS_WITH_SDK=true
+  const branchRoutingRaw = configData.branchRouting || {};
+  const defaultTargetBranch =
+    process.env.VK_TARGET_BRANCH ||
+    branchRoutingRaw.defaultBranch ||
+    "origin/main";
+  const scopeMapEnv = process.env.BRANCH_ROUTING_SCOPE_MAP || "";
+  const scopeMapFromEnv = {};
+  if (scopeMapEnv) {
+    for (const pair of scopeMapEnv.split(",")) {
+      const [scope, branch] = pair.split(":").map((s) => s.trim());
+      if (scope && branch) scopeMapFromEnv[scope.toLowerCase()] = branch;
+    }
+  }
+  const scopeMap = {
+    ...(branchRoutingRaw.scopeMap || {}),
+    ...scopeMapFromEnv,
+  };
+  // Normalise keys to lowercase
+  const normalizedScopeMap = {};
+  for (const [key, val] of Object.entries(scopeMap)) {
+    normalizedScopeMap[key.toLowerCase()] = val;
+  }
+  const autoRebaseOnMerge = !["0", "false", "no"].includes(
+    String(
+      process.env.AUTO_REBASE_ON_MERGE ??
+        branchRoutingRaw.autoRebaseOnMerge ??
+        "true",
+    ).toLowerCase(),
+  );
+  const assessWithSdk = !["0", "false", "no"].includes(
+    String(
+      process.env.ASSESS_WITH_SDK ?? branchRoutingRaw.assessWithSdk ?? "true",
+    ).toLowerCase(),
+  );
+  const branchRouting = Object.freeze({
+    defaultBranch: defaultTargetBranch,
+    scopeMap: Object.freeze(normalizedScopeMap),
+    autoRebaseOnMerge,
+    assessWithSdk,
+  });
+
   // ── Dependabot Auto-Merge ─────────────────────────────────
   const dependabotAutoMerge = !["0", "false", "no"].includes(
     String(
@@ -1127,7 +1193,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     // Merge Strategy
     codexAnalyzeMergeStrategy:
       codexEnabled &&
-      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false",
+      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !==
+        "false",
     mergeStrategyTimeoutMs:
       parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
 
@@ -1167,6 +1234,9 @@ export function loadConfig(argv = process.argv, options = {}) {
     dependabotAutoMergeIntervalMin,
     dependabotMergeMethod,
     dependabotAuthors,
+
+    // Branch Routing
+    branchRouting,
 
     // Paths
     statusPath,

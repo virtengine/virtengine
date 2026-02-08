@@ -272,6 +272,7 @@ function runMonitor() {
     );
     monitorChild = fork(monitorPath, process.argv.slice(2), {
       stdio: "inherit",
+      execArgv: ["--max-old-space-size=4096"],
     });
 
     monitorChild.on("exit", (code, signal) => {
@@ -284,7 +285,16 @@ function runMonitor() {
         setTimeout(() => resolve(runMonitor()), 1000);
       } else {
         const exitCode = code ?? (signal ? 1 : 0);
-        if (exitCode !== 0 && !gracefulShutdown) {
+        // 4294967295 (0xFFFFFFFF / -1 signed) = OS killed the process (OOM, external termination)
+        // Auto-restart after a cooldown instead of treating as a fatal crash
+        const isOSKill = exitCode === 4294967295 || exitCode === -1;
+        if (isOSKill && !gracefulShutdown) {
+          console.error(
+            `\n  ⚠ Monitor killed by OS (exit ${exitCode}) — likely OOM. Restarting in 5s...`,
+          );
+          sendCrashNotification(exitCode, signal).catch(() => {});
+          setTimeout(() => resolve(runMonitor()), 5000);
+        } else if (exitCode !== 0 && !gracefulShutdown) {
           console.error(
             `\n  ✖ Monitor crashed (${signal ? `signal ${signal}` : `exit code ${exitCode}`}) — sending crash notification...`,
           );

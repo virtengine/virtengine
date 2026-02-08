@@ -40,6 +40,7 @@ import {
   analyzeMergeStrategy,
   resetMergeStrategyDedup,
 } from "./merge-strategy.mjs";
+import { assessTask, quickAssess } from "./task-assessment.mjs";
 import {
   normalizeDedupKey,
   stripAnsi,
@@ -155,6 +156,7 @@ let {
   dependabotAutoMergeIntervalMin,
   dependabotMergeMethod,
   dependabotAuthors,
+  branchRouting,
   telegramVerbosity,
 } = config;
 
@@ -221,8 +223,15 @@ let envWatcherDebounce = null;
 
 // ── Self-restart: exit code 75 signals cli.mjs to re-fork with fresh ESM cache
 const SELF_RESTART_EXIT_CODE = 75;
+const SELF_RESTART_QUIET_MS = Math.max(
+  90_000,
+  Number(process.env.SELF_RESTART_QUIET_MS || "90000"),
+);
 let selfWatcher = null;
 let selfWatcherDebounce = null;
+let selfRestartTimer = null;
+let selfRestartLastChangeAt = 0;
+let selfRestartLastFile = null;
 let pendingSelfRestart = null; // filename that triggered a deferred restart
 
 // ── Self-restart marker: detect if this process was spawned by a code-change restart
@@ -1868,6 +1877,16 @@ function getTaskAgeMs(task) {
 }
 
 /**
+ * Return the task's "version" timestamp used for cache invalidation.
+ * Prefers updated_at, falls back to created_at.
+ * @param {object} task
+ * @returns {string} ISO-ish timestamp string or empty string
+ */
+function getTaskUpdatedAt(task) {
+  return task?.updated_at || task?.created_at || "";
+}
+
+/**
  * GET /api/projects/:project_id/tasks?status=<status>
  * Fetches tasks by status from VK API.
  * @param {string} status - Task status (e.g., "inreview", "todo", "done")
@@ -1913,7 +1932,10 @@ async function updateTaskStatus(taskId, newStatus) {
     body: { status: newStatus },
     timeoutMs: 10000,
   });
-  return res?.success === true;
+  const ok = res?.success === true;
+  // Clear recovery caches — task status changed, so it needs re-evaluation
+  if (ok) clearRecoveryCaches(taskId);
+  return ok;
 }
 
 /**
@@ -1931,6 +1953,7 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
   try {
     const res = await fetchVk(`/api/tasks/${taskId}`);
     const liveStatus = res?.data?.status || res?.status;
+    const liveUpdatedAt = res?.data?.updated_at || res?.data?.created_at || "";
     if (!liveStatus) {
       console.warn(
         `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping`,
@@ -1943,12 +1966,28 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       console.log(
         `[monitor] safeRecover: task "${taskTitle}" is now ${liveStatus} — aborting recovery`,
       );
+      // Cache so we skip this task for RECOVERY_SKIP_CACHE_MS
+      recoverySkipCache.set(taskId, {
+        resolvedStatus: liveStatus,
+        timestamp: Date.now(),
+        updatedAt: liveUpdatedAt,
+        status: liveStatus,
+      });
+      scheduleRecoveryCacheSave();
       return false;
     }
     if (liveStatus === "todo") {
       console.log(
         `[monitor] safeRecover: task "${taskTitle}" is already todo — no action needed`,
       );
+      // Cache so we skip this task for RECOVERY_SKIP_CACHE_MS
+      recoverySkipCache.set(taskId, {
+        resolvedStatus: liveStatus,
+        timestamp: Date.now(),
+        updatedAt: liveUpdatedAt,
+        status: liveStatus,
+      });
+      scheduleRecoveryCacheSave();
       return false;
     }
     const success = await updateTaskStatus(taskId, "todo");
@@ -2144,21 +2183,191 @@ function saveMergedTaskCache() {
 // Load cache on startup
 loadMergedTaskCache();
 
-/** Maximum number of tasks to process per sweep (0 = unlimited) */
-const MERGE_CHECK_BATCH_SIZE = 0;
+// ── Recovery/Idle caches (persistent) ───────────────────────────────────────
 
-/** Small delay between GitHub API calls to avoid rate-limiting (ms) */
-const MERGE_CHECK_THROTTLE_MS = 1500;
+const recoveryCacheEnabled =
+  String(process.env.RECOVERY_CACHE_ENABLED || "true").toLowerCase() !== "false";
+const recoveryLogDedupMs =
+  Number(process.env.RECOVERY_LOG_DEDUP_MINUTES || "30") * 60 * 1000;
+const recoveryCacheMaxEntries = Number(
+  process.env.RECOVERY_CACHE_MAX || "2000",
+);
+
+const recoveryCachePath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-task-recovery-cache.json",
+);
 
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
  * no PR, abandoned).  We re-check them every 30 min instead of every cycle.
  * After STALE_MAX_STRIKES consecutive stale checks the task is moved back
  * to "todo" so another agent can pick it up.
- * Key = task ID, Value = { lastCheck: timestamp, strikes: number }.
- * @type {Map<string, {lastCheck: number, strikes: number}>}
+ * Key = task ID, Value = { lastCheck: timestamp, strikes: number, updatedAt?: string, status?: string }.
+ * @type {Map<string, {lastCheck: number, strikes: number, updatedAt?: string, status?: string}>}
  */
 const staleBranchCooldown = new Map();
+
+/**
+ * Cache for tasks whose recovery was a no-op (already todo/cancelled/done).
+ * Prevents redundant VK API calls, branch/PR checks, and log spam every cycle.
+ * Key = task ID, Value = { resolvedStatus: string, timestamp: number, updatedAt?: string, status?: string }.
+ * Expires after RECOVERY_SKIP_CACHE_MS so we re-check periodically.
+ * @type {Map<string, {resolvedStatus: string, timestamp: number, updatedAt?: string, status?: string}>}
+ */
+const recoverySkipCache = new Map();
+
+/**
+ * Log dedup for repeated "no attempt found" messages.
+ * Key = task ID, Value = { lastLogAt: number, updatedAt?: string, status?: string, reason?: string }.
+ * @type {Map<string, {lastLogAt: number, updatedAt?: string, status?: string, reason?: string}>}
+ */
+const noAttemptLogCache = new Map();
+
+let recoveryCacheDirty = false;
+let recoveryCacheSaveTimer = null;
+
+function taskVersionMatches(task, entry, status) {
+  if (!entry) return false;
+  const updatedAt = getTaskUpdatedAt(task);
+  if (!updatedAt) return false;
+  if (!entry.updatedAt) return false;
+  if (entry.updatedAt !== updatedAt) return false;
+  if (entry.status && status && entry.status !== status) return false;
+  return true;
+}
+
+function scheduleRecoveryCacheSave() {
+  if (!recoveryCacheEnabled) return;
+  recoveryCacheDirty = true;
+  if (recoveryCacheSaveTimer) return;
+  recoveryCacheSaveTimer = setTimeout(() => {
+    recoveryCacheSaveTimer = null;
+    if (!recoveryCacheDirty) return;
+    recoveryCacheDirty = false;
+    saveRecoveryCache();
+  }, 1000);
+  if (typeof recoveryCacheSaveTimer.unref === "function") {
+    recoveryCacheSaveTimer.unref();
+  }
+}
+
+function buildCacheObject(map, tsField) {
+  const entries = [...map.entries()];
+  entries.sort(
+    (a, b) => (b[1]?.[tsField] || 0) - (a[1]?.[tsField] || 0),
+  );
+  const limited =
+    recoveryCacheMaxEntries > 0
+      ? entries.slice(0, recoveryCacheMaxEntries)
+      : entries;
+  const obj = {};
+  for (const [id, value] of limited) {
+    obj[id] = value;
+  }
+  return obj;
+}
+
+function saveRecoveryCache() {
+  if (!recoveryCacheEnabled) return;
+  try {
+    const payload = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      staleCooldown: buildCacheObject(staleBranchCooldown, "lastCheck"),
+      recoverySkip: buildCacheObject(recoverySkipCache, "timestamp"),
+      noAttemptLog: buildCacheObject(noAttemptLogCache, "lastLogAt"),
+    };
+    writeFileSync(recoveryCachePath, JSON.stringify(payload, null, 2), "utf8");
+  } catch {
+    /* best-effort */
+  }
+}
+
+function loadRecoveryCache() {
+  if (!recoveryCacheEnabled) return;
+  try {
+    if (!existsSync(recoveryCachePath)) return;
+    const raw = readFileSync(recoveryCachePath, "utf8");
+    const data = JSON.parse(raw);
+    const now = Date.now();
+    const staleEntries = data?.staleCooldown || {};
+    for (const [id, entry] of Object.entries(staleEntries)) {
+      if (!entry?.lastCheck) continue;
+      if (now - entry.lastCheck > STALE_COOLDOWN_MS) continue;
+      staleBranchCooldown.set(id, entry);
+    }
+    const skipEntries = data?.recoverySkip || {};
+    for (const [id, entry] of Object.entries(skipEntries)) {
+      if (!entry?.timestamp) continue;
+      if (now - entry.timestamp > RECOVERY_SKIP_CACHE_MS) continue;
+      recoverySkipCache.set(id, entry);
+    }
+    const logEntries = data?.noAttemptLog || {};
+    for (const [id, entry] of Object.entries(logEntries)) {
+      if (!entry?.lastLogAt) continue;
+      if (
+        recoveryLogDedupMs > 0 &&
+        now - entry.lastLogAt > recoveryLogDedupMs
+      ) {
+        continue;
+      }
+      noAttemptLogCache.set(id, entry);
+    }
+    const total =
+      staleBranchCooldown.size +
+      recoverySkipCache.size +
+      noAttemptLogCache.size;
+    if (total > 0) {
+      console.log(
+        `[monitor] Restored ${total} recovery cache entries (stale=${staleBranchCooldown.size}, skip=${recoverySkipCache.size}, logs=${noAttemptLogCache.size})`,
+      );
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
+function clearRecoveryCaches(taskId) {
+  let changed = false;
+  if (staleBranchCooldown.delete(taskId)) changed = true;
+  if (recoverySkipCache.delete(taskId)) changed = true;
+  if (noAttemptLogCache.delete(taskId)) changed = true;
+  if (changed) scheduleRecoveryCacheSave();
+}
+
+function shouldLogNoAttempt(task, taskStatus, reason) {
+  if (!recoveryCacheEnabled || recoveryLogDedupMs <= 0) return true;
+  const entry = noAttemptLogCache.get(task.id);
+  if (!entry) return true;
+  if (entry.reason && entry.reason !== reason) return true;
+  if (!taskVersionMatches(task, entry, taskStatus)) {
+    noAttemptLogCache.delete(task.id);
+    scheduleRecoveryCacheSave();
+    return true;
+  }
+  return Date.now() - entry.lastLogAt >= recoveryLogDedupMs;
+}
+
+function recordNoAttemptLog(task, taskStatus, reason) {
+  if (!recoveryCacheEnabled) return;
+  const updatedAt = getTaskUpdatedAt(task);
+  if (!updatedAt) return;
+  noAttemptLogCache.set(task.id, {
+    lastLogAt: Date.now(),
+    updatedAt,
+    status: taskStatus,
+    reason,
+  });
+  scheduleRecoveryCacheSave();
+}
+
+/** Maximum number of tasks to process per sweep (0 = unlimited) */
+const MERGE_CHECK_BATCH_SIZE = 0;
+
+/** Small delay between GitHub API calls to avoid rate-limiting (ms) */
+const MERGE_CHECK_THROTTLE_MS = 1500;
+
 const STALE_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 const STALE_MAX_STRIKES = 2; // move to todo after this many stale checks
 
@@ -2179,6 +2388,11 @@ const STALE_TASK_AGE_MS = STALE_TASK_AGE_HOURS * 60 * 60 * 1000;
  */
 const conflictResolutionCooldown = new Map();
 const CONFLICT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+
+const RECOVERY_SKIP_CACHE_MS = 30 * 60 * 1000; // 30 minutes
+
+// Load recovery cache on startup (after constants initialize)
+loadRecoveryCache();
 
 /**
  * Periodic check: find tasks in "inreview" status, check if their PRs
@@ -2272,9 +2486,12 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
           );
         } else {
-          console.log(
-            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
-          );
+          if (shouldLogNoAttempt(task, taskStatus, "no_attempt")) {
+            console.log(
+              `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+            );
+            recordNoAttemptLog(task, taskStatus, "no_attempt");
+          }
         }
       }
       const branch =
@@ -2301,10 +2518,28 @@ async function checkMergedPRsAndUpdateTasks() {
         continue;
       }
 
+      // ── Recovery skip cache: skip tasks we already resolved recently ──
+      // safeRecoverTask caches tasks that are already todo/cancelled/done,
+      // so we skip the entire branch/PR lookup and recovery attempt.
+      const skipEntry = recoverySkipCache.get(task.id);
+      if (skipEntry) {
+        if (!taskVersionMatches(task, skipEntry, taskStatus)) {
+          recoverySkipCache.delete(task.id);
+          scheduleRecoveryCacheSave();
+        } else if (Date.now() - skipEntry.timestamp < RECOVERY_SKIP_CACHE_MS) {
+          continue;
+        }
+      }
+
       // ── Stale cooldown: skip tasks we already checked recently ──
       const staleEntry = staleBranchCooldown.get(task.id);
-      if (staleEntry && Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS) {
-        continue;
+      if (staleEntry) {
+        if (!taskVersionMatches(task, staleEntry, taskStatus)) {
+          staleBranchCooldown.delete(task.id);
+          scheduleRecoveryCacheSave();
+        } else if (Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS) {
+          continue;
+        }
       }
 
       // ── Gather ALL attempts for this task (local + VK API) ──
@@ -2360,14 +2595,23 @@ async function checkMergedPRsAndUpdateTasks() {
         pr_url: task?.pr_url,
       });
 
+      if (candidates.length > 0) {
+        if (noAttemptLogCache.delete(task.id)) {
+          scheduleRecoveryCacheSave();
+        }
+      }
+
       if (candidates.length === 0) {
         // ── Only recover idle inprogress tasks — never inreview ──
         // inreview tasks are monitored by merge/conflict checks.
         // inprogress tasks with an active agent should not be touched.
         if (taskStatus !== "inprogress") {
-          console.log(
-            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) in ${taskStatus} — skipping (only idle inprogress tasks are recovered)`,
-          );
+          if (shouldLogNoAttempt(task, taskStatus, "no_attempt_skip_status")) {
+            console.log(
+              `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) in ${taskStatus} — skipping (only idle inprogress tasks are recovered)`,
+            );
+            recordNoAttemptLog(task, taskStatus, "no_attempt_skip_status");
+          }
           continue;
         }
 
@@ -2399,13 +2643,20 @@ async function checkMergedPRsAndUpdateTasks() {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
+            scheduleRecoveryCacheSave();
           }
           continue;
         }
 
         const prev = staleBranchCooldown.get(task.id);
         const strikes = (prev?.strikes || 0) + 1;
-        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+        staleBranchCooldown.set(task.id, {
+          lastCheck: Date.now(),
+          strikes,
+          updatedAt: getTaskUpdatedAt(task),
+          status: taskStatus,
+        });
+        scheduleRecoveryCacheSave();
         console.log(
           `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — strike ${strikes}/${STALE_MAX_STRIKES}`,
         );
@@ -2419,6 +2670,7 @@ async function checkMergedPRsAndUpdateTasks() {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
+            scheduleRecoveryCacheSave();
           }
         }
         continue;
@@ -2484,6 +2736,12 @@ async function checkMergedPRsAndUpdateTasks() {
                 `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (PR is merged)`,
               );
             }
+            // ── Trigger downstream rebase for tasks on same upstream ──
+            const mergedBase =
+              cand.baseBranch ||
+              resolveUpstreamFromTask(task) ||
+              DEFAULT_TARGET_BRANCH;
+            void rebaseDownstreamTasks(mergedBase, cand.attemptId);
             resolved = true;
             break;
           }
@@ -2537,6 +2795,12 @@ async function checkMergedPRsAndUpdateTasks() {
               `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (branch is merged)`,
             );
           }
+          // ── Trigger downstream rebase for tasks on same upstream ──
+          const mergedBase2 =
+            cand.baseBranch ||
+            resolveUpstreamFromTask(task) ||
+            DEFAULT_TARGET_BRANCH;
+          void rebaseDownstreamTasks(mergedBase2, cand.attemptId);
           resolved = true;
           break;
         }
@@ -2657,12 +2921,19 @@ async function checkMergedPRsAndUpdateTasks() {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
+            scheduleRecoveryCacheSave();
           }
         } else {
           // Not old enough — use the strike-based system
           const prev = staleBranchCooldown.get(task.id);
           const strikes = (prev?.strikes || 0) + 1;
-          staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+          staleBranchCooldown.set(task.id, {
+            lastCheck: Date.now(),
+            strikes,
+            updatedAt: getTaskUpdatedAt(task),
+            status: taskStatus,
+          });
+          scheduleRecoveryCacheSave();
           console.log(
             `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch, no PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
           );
@@ -2676,6 +2947,7 @@ async function checkMergedPRsAndUpdateTasks() {
               movedTodoCount++;
               recoveredTaskNames.push(task.title);
               staleBranchCooldown.delete(task.id);
+              scheduleRecoveryCacheSave();
             }
           }
         }
@@ -3063,11 +3335,387 @@ async function runMergeStrategyAnalysis(ctx) {
   }
 }
 
+// ── Auto-Rebase Downstream Tasks on PR Merge ────────────────────────────────
+
+/**
+ * When a PR is merged into an upstream branch, find all active tasks that
+ * share the same upstream and trigger a rebase on each of them.
+ *
+ * This prevents tasks from drifting behind their upstream and accumulating
+ * merge conflicts.
+ *
+ * @param {string} mergedUpstreamBranch - The branch the PR was merged into
+ * @param {string} [excludeAttemptId]   - Attempt to exclude (the one that just merged)
+ */
+async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
+  if (!branchRouting?.autoRebaseOnMerge) {
+    console.log("[rebase-downstream] auto-rebase disabled in config");
+    return;
+  }
+
+  const tag = "rebase-downstream";
+  console.log(
+    `[${tag}] PR merged into ${mergedUpstreamBranch} — checking for downstream tasks to rebase`,
+  );
+
+  try {
+    // Get all active tasks
+    const statuses = ["inprogress", "inreview"];
+    const tasksByStatus = await Promise.all(
+      statuses.map((status) => fetchTasksByStatus(status)),
+    );
+    const allTasks = [];
+    for (const tasks of tasksByStatus) {
+      for (const task of tasks) {
+        if (task?.id) allTasks.push(task);
+      }
+    }
+
+    // Get active attempts from status file
+    const statusData = await readStatusData();
+    const attempts = Array.isArray(statusData?.active_attempts)
+      ? statusData.active_attempts
+      : Object.values(statusData?.attempts || {});
+
+    // Also fetch VK task-attempts as fallback
+    let vkAttempts = [];
+    try {
+      const vkRes = await fetchVk("/api/task-attempts");
+      const vkData = vkRes?.data ?? vkRes;
+      if (Array.isArray(vkData)) vkAttempts = vkData;
+    } catch {
+      /* best-effort */
+    }
+
+    let rebasedCount = 0;
+    let failedCount = 0;
+    const rebaseResults = [];
+
+    for (const task of allTasks) {
+      // Resolve this task's upstream branch
+      const taskUpstream =
+        resolveUpstreamFromTask(task) || DEFAULT_TARGET_BRANCH;
+
+      // Normalize both branches for comparison (strip "origin/" prefix)
+      const normalize = (b) => b?.replace(/^origin\//, "") || "";
+      if (normalize(taskUpstream) !== normalize(mergedUpstreamBranch)) {
+        continue; // Different upstream — not affected
+      }
+
+      // Find the attempt for this task
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) attempt = vkMatch[0];
+      }
+
+      if (!attempt || attempt.id === excludeAttemptId) continue;
+      if (!attempt.branch) continue;
+
+      console.log(
+        `[${tag}] rebasing task "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
+      );
+
+      try {
+        const rebaseResult = await rebaseAttempt(
+          attempt.id,
+          mergedUpstreamBranch,
+        );
+
+        if (rebaseResult?.success || rebaseResult?.data?.success) {
+          rebasedCount++;
+          rebaseResults.push({
+            taskTitle: task.title,
+            attemptId: attempt.id,
+            status: "success",
+          });
+          console.log(
+            `[${tag}] ✓ rebased "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
+          );
+        } else {
+          failedCount++;
+          const error =
+            rebaseResult?.error || rebaseResult?.message || "unknown";
+          rebaseResults.push({
+            taskTitle: task.title,
+            attemptId: attempt.id,
+            status: "failed",
+            error,
+          });
+          console.warn(
+            `[${tag}] ✗ rebase failed for "${task.title}" (${attempt.id.substring(0, 8)}): ${error}`,
+          );
+
+          // ── Run task assessment on rebase failure ──────────────
+          if (
+            branchRouting?.assessWithSdk &&
+            codexEnabled &&
+            !isPrimaryBusy()
+          ) {
+            void runTaskAssessment({
+              taskId: task.id,
+              taskTitle: task.title,
+              taskDescription: task.description,
+              attemptId: attempt.id,
+              shortId: attempt.id.substring(0, 8),
+              trigger: "rebase_failed",
+              branch: attempt.branch,
+              upstreamBranch: mergedUpstreamBranch,
+              rebaseError: error,
+              conflictFiles:
+                rebaseResult?.conflicted_files ||
+                rebaseResult?.data?.conflicted_files ||
+                [],
+            });
+          }
+        }
+      } catch (err) {
+        failedCount++;
+        rebaseResults.push({
+          taskTitle: task.title,
+          attemptId: attempt.id,
+          status: "error",
+          error: err.message || String(err),
+        });
+        console.warn(
+          `[${tag}] error rebasing "${task.title}": ${err.message || err}`,
+        );
+      }
+    }
+
+    if (rebasedCount > 0 || failedCount > 0) {
+      const summary = `Downstream rebase after merge to ${mergedUpstreamBranch}: ${rebasedCount} rebased, ${failedCount} failed`;
+      console.log(`[${tag}] ${summary}`);
+      void sendTelegramMessage(
+        `🔄 ${summary}\n${rebaseResults.map((r) => `  ${r.status === "success" ? "✓" : "✗"} ${r.taskTitle}`).join("\n")}`,
+      );
+    } else {
+      console.log(
+        `[${tag}] no downstream tasks found on upstream ${mergedUpstreamBranch}`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[${tag}] error: ${err.message || err}`);
+  }
+}
+
+// ── Task Assessment Integration ─────────────────────────────────────────────
+
+/**
+ * Run a full task lifecycle assessment using Codex/Copilot SDK.
+ * First tries quickAssess (heuristic, no SDK call), then falls back to
+ * full SDK assessment if needed.
+ *
+ * After getting a decision, ACTS on it — sends prompts, triggers retries, etc.
+ *
+ * @param {import("./task-assessment.mjs").TaskAssessmentContext} ctx
+ */
+async function runTaskAssessment(ctx) {
+  const tag = `assessment(${ctx.shortId})`;
+  try {
+    // ── Quick heuristic assessment first ───────────────────
+    const quick = quickAssess(ctx);
+    if (quick) {
+      console.log(
+        `[${tag}] quick decision: ${quick.action} — ${(quick.reason || "").slice(0, 100)}`,
+      );
+      await actOnAssessment(ctx, quick);
+      return;
+    }
+
+    // ── Full SDK assessment ───────────────────────────────
+    if (!codexEnabled || isPrimaryBusy()) {
+      console.log(
+        `[${tag}] skipping SDK assessment — agent ${isPrimaryBusy() ? "busy" : "disabled"}`,
+      );
+      return;
+    }
+
+    const telegramFn =
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null;
+
+    const decision = await assessTask(ctx, {
+      execCodex: execPrimaryPrompt,
+      timeoutMs: 5 * 60 * 1000,
+      logDir,
+      onTelegram: telegramFn,
+    });
+
+    if (!decision?.success) {
+      console.warn(`[${tag}] assessment failed — no action taken`);
+      return;
+    }
+
+    await actOnAssessment(ctx, decision);
+  } catch (err) {
+    console.warn(`[${tag}] error: ${err.message || err}`);
+  }
+}
+
+/**
+ * Act on an assessment decision — execute the recommended action.
+ *
+ * @param {import("./task-assessment.mjs").TaskAssessmentContext} ctx
+ * @param {import("./task-assessment.mjs").TaskAssessmentDecision} decision
+ */
+async function actOnAssessment(ctx, decision) {
+  const tag = `assessment-act(${ctx.shortId})`;
+
+  switch (decision.action) {
+    case "merge":
+      console.log(`[${tag}] → merge`);
+      // Handled by VK cleanup script / auto-merge
+      break;
+
+    case "reprompt_same":
+      console.log(`[${tag}] → reprompt same session`);
+      if (decision.prompt && codexEnabled && !isPrimaryBusy()) {
+        void execPrimaryPrompt(decision.prompt, { timeoutMs: 15 * 60 * 1000 });
+      }
+      break;
+
+    case "reprompt_new_session":
+      console.log(`[${tag}] → reprompt new session`);
+      if (typeof startFreshSession === "function") {
+        startFreshSession(
+          decision.prompt || `Resume task: ${ctx.taskTitle}`,
+          decision.reason,
+        );
+      } else if (typeof attemptFreshSessionRetry === "function") {
+        await attemptFreshSessionRetry(
+          "assessment_new_session",
+          decision.reason || "Assessment recommended new session",
+        );
+      }
+      break;
+
+    case "new_attempt":
+      console.log(
+        `[${tag}] → new attempt (agent: ${decision.agentType || "auto"})`,
+      );
+      // Move task back to todo for re-scheduling
+      if (ctx.taskId) {
+        await updateTaskStatus(ctx.taskId, "todo");
+      }
+      void sendTelegramMessage(
+        `🆕 Assessment: starting new attempt for "${ctx.taskTitle}" — ${decision.reason || ""}`,
+      );
+      break;
+
+    case "wait": {
+      const waitSec = decision.waitSeconds || 300;
+      console.log(`[${tag}] → wait ${waitSec}s`);
+      setTimeout(() => {
+        void runTaskAssessment({
+          ...ctx,
+          trigger: "reassessment",
+        });
+      }, waitSec * 1000);
+      break;
+    }
+
+    case "manual_review":
+      console.log(`[${tag}] → manual review`);
+      void sendTelegramMessage(
+        `👀 Assessment: manual review needed for "${ctx.taskTitle}" — ${decision.reason || ""}`,
+      );
+      break;
+
+    case "close_and_replan":
+      console.log(`[${tag}] → close and replan`);
+      if (ctx.taskId) {
+        await updateTaskStatus(ctx.taskId, "todo");
+      }
+      void sendTelegramMessage(
+        `🚫 Assessment: closing and replanning "${ctx.taskTitle}" — ${decision.reason || ""}`,
+      );
+      break;
+
+    case "noop":
+      console.log(`[${tag}] → noop`);
+      break;
+
+    default:
+      console.warn(`[${tag}] unknown action: ${decision.action}`);
+  }
+}
+
 // ── Smart PR creation flow ──────────────────────────────────────────────────
 
-const DEFAULT_TARGET_BRANCH = process.env.VK_TARGET_BRANCH || "origin/main";
+// Use config-driven branch routing instead of hardcoded defaults
+const DEFAULT_TARGET_BRANCH =
+  branchRouting?.defaultBranch || process.env.VK_TARGET_BRANCH || "origin/main";
 const DEFAULT_CODEX_MONITOR_UPSTREAM =
-  process.env.CODEX_MONITOR_TASK_UPSTREAM || "origin/ve/codex-monitor-generic";
+  branchRouting?.scopeMap?.["codex-monitor"] ||
+  process.env.CODEX_MONITOR_TASK_UPSTREAM ||
+  "origin/ve/codex-monitor-generic";
+
+/**
+ * Extract the conventional commit scope from a task title.
+ * E.g. "feat(codex-monitor): add caching" → "codex-monitor"
+ *      "[P1] fix(veid): broken flow"      → "veid"
+ *      "chore(provider): cleanup"         → "provider"
+ * @param {string} title
+ * @returns {string|null}
+ */
+function extractScopeFromTitle(title) {
+  if (!title) return null;
+  // Match conventional commit patterns: type(scope): ... or [P*] type(scope): ...
+  const match = String(title).match(
+    /(?:^\[P\d+\]\s*)?(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([^)]+)\)/i,
+  );
+  return match ? match[1].toLowerCase().trim() : null;
+}
+
+/**
+ * Resolve the upstream branch for a task using config-based scope routing.
+ * Priority:
+ *   1. Task-level explicit fields (target_branch, base_branch, etc.)
+ *   2. Task metadata fields
+ *   3. Task labels with upstream/base/target patterns
+ *   4. Text body extraction
+ *   5. Config scopeMap matching (title scope → branch)
+ *   6. Config scopeMap matching (keyword-based)
+ *   7. Legacy codex-monitor keyword detection
+ *   8. Config defaultBranch
+ * @param {object} task
+ * @returns {string|null}
+ */
+function resolveUpstreamFromConfig(task) {
+  if (!task) return null;
+
+  // ── Priority 5+: Config-based scope routing ──────────────
+  const scope = extractScopeFromTitle(task.title || task.name);
+  if (scope && branchRouting?.scopeMap) {
+    // Exact scope match
+    const exactMatch = branchRouting.scopeMap[scope];
+    if (exactMatch) return exactMatch;
+
+    // Partial scope match — check if any config key is contained in the scope
+    for (const [key, branch] of Object.entries(branchRouting.scopeMap)) {
+      if (scope.includes(key) || key.includes(scope)) return branch;
+    }
+  }
+
+  // ── Priority 6: Keyword-based scope matching from task text ─
+  if (branchRouting?.scopeMap) {
+    const text = getTaskTextBlob(task).toLowerCase();
+    for (const [key, branch] of Object.entries(branchRouting.scopeMap)) {
+      // Check if the routing key appears as a keyword in the task text
+      if (text.includes(key.toLowerCase())) return branch;
+    }
+  }
+
+  return null;
+}
 
 function normalizeBranchName(value) {
   if (!value) return null;
@@ -3174,6 +3822,11 @@ function resolveUpstreamFromTask(task) {
   const fromText = extractUpstreamFromText(getTaskTextBlob(task));
   if (fromText) return fromText;
 
+  // ── Config-based scope routing ────────────────────────────
+  const fromConfig = resolveUpstreamFromConfig(task);
+  if (fromConfig) return fromConfig;
+
+  // ── Legacy codex-monitor keyword detection ────────────────
   const text = getTaskTextBlob(task).toLowerCase();
   if (
     text.includes("codex-monitor") ||
@@ -3567,7 +4220,6 @@ Return a short summary of what you did and any files that needed manual resoluti
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
       if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
-      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
@@ -3653,7 +4305,6 @@ Return a short summary of what you did and any files that needed manual resoluti
         );
       }
     }
-  }
   } catch (err) {
     console.warn(`[monitor] ${tag}: error — ${err.message || err}`);
   }
@@ -4078,11 +4729,14 @@ async function sendTelegramMessage(text, options = {}) {
   // Positive signals override negative keyword matches — a "✅ Task completed"
   // message should never be classified as an error even when the task title
   // happens to contain words like "error" or "failed".
+  // Orchestrator periodic updates contain counter labels like "Failed: 0" and
+  // "error=0" which should NOT trigger error classification.
   const isPositive =
     textLower.includes("✅") ||
     textLower.includes("task completed") ||
     textLower.includes("branch merged") ||
-    textLower.includes("pr merged");
+    textLower.includes("pr merged") ||
+    (textLower.includes("orchestrator") && textLower.includes("-min update"));
 
   // Priority 1: Critical/Fatal
   if (
@@ -5629,21 +6283,17 @@ function stopSelfWatcher() {
     clearTimeout(selfWatcherDebounce);
     selfWatcherDebounce = null;
   }
+  if (selfRestartTimer) {
+    clearTimeout(selfRestartTimer);
+    selfRestartTimer = null;
+  }
 }
 
 function selfRestartForSourceChange(filename) {
-  // Defer restart if the primary agent is mid-turn — don't interrupt user tasks
-  if (isPrimaryBusy()) {
-    if (!pendingSelfRestart) {
-      pendingSelfRestart = filename;
-      console.log(
-        `\n[monitor] source file changed: ${filename} — deferring restart (primary agent busy)`,
-      );
-    }
-    return;
-  }
   pendingSelfRestart = null;
-  console.log(`\n[monitor] source file changed: ${filename}`);
+  console.log(
+    `\n[monitor] source files stable for ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s — restarting (${filename})`,
+  );
   console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
   shuttingDown = true;
   stopAutoUpdateLoop();
@@ -5673,18 +6323,51 @@ function selfRestartForSourceChange(filename) {
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
 }
 
-function retryDeferredSelfRestart() {
-  if (!pendingSelfRestart) return;
+function attemptSelfRestartAfterQuiet() {
+  if (selfRestartTimer) {
+    clearTimeout(selfRestartTimer);
+    selfRestartTimer = null;
+  }
+  if (!selfRestartLastChangeAt) return;
+  const now = Date.now();
+  const sinceLastChange = now - selfRestartLastChangeAt;
+  if (sinceLastChange < SELF_RESTART_QUIET_MS) {
+    const waitMs = SELF_RESTART_QUIET_MS - sinceLastChange;
+    selfRestartTimer = setTimeout(attemptSelfRestartAfterQuiet, waitMs);
+    return;
+  }
+  const filename = selfRestartLastFile || "unknown";
   if (isPrimaryBusy()) {
-    // Still busy — check again in 5s
+    if (!pendingSelfRestart) {
+      console.log(
+        `\n[monitor] source files stable but primary agent busy — deferring restart (${filename})`,
+      );
+    }
+    pendingSelfRestart = filename;
     setTimeout(retryDeferredSelfRestart, 5000);
     return;
   }
-  const filename = pendingSelfRestart;
-  console.log(
-    `[monitor] primary agent finished — proceeding with deferred self-restart (${filename})`,
-  );
   selfRestartForSourceChange(filename);
+}
+
+function queueSelfRestart(filename) {
+  selfRestartLastChangeAt = Date.now();
+  selfRestartLastFile = filename;
+  if (selfRestartTimer) {
+    clearTimeout(selfRestartTimer);
+  }
+  console.log(
+    `\n[monitor] source file changed: ${filename} — waiting ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s for quiet before restart`,
+  );
+  selfRestartTimer = setTimeout(
+    attemptSelfRestartAfterQuiet,
+    SELF_RESTART_QUIET_MS,
+  );
+}
+
+function retryDeferredSelfRestart() {
+  if (!pendingSelfRestart) return;
+  attemptSelfRestartAfterQuiet();
 }
 
 function startSelfWatcher() {
@@ -5699,12 +6382,8 @@ function startSelfWatcher() {
         clearTimeout(selfWatcherDebounce);
       }
       selfWatcherDebounce = setTimeout(() => {
-        selfRestartForSourceChange(filename);
-        // If deferred, start polling for agent completion
-        if (pendingSelfRestart) {
-          setTimeout(retryDeferredSelfRestart, 5000);
-        }
-      }, 3000);
+        queueSelfRestart(filename);
+      }, 1000);
     });
     console.log("[monitor] watching own source files for self-restart");
   } catch (err) {
@@ -5870,7 +6549,10 @@ function applyConfig(nextConfig, options = {}) {
   if (primaryAgentChanged) {
     setPrimaryAgent(primaryAgentName);
   }
-  if ((primaryAgentChanged && primaryAgentReady) || (!prevPrimaryAgentReady && primaryAgentReady)) {
+  if (
+    (primaryAgentChanged && primaryAgentReady) ||
+    (!prevPrimaryAgentReady && primaryAgentReady)
+  ) {
     void initPrimaryAgent(primaryAgentName);
   }
 
@@ -6167,9 +6849,15 @@ if (telegramBotEnabled) {
 export {
   fetchVk,
   updateTaskStatus,
+  safeRecoverTask,
+  recoverySkipCache,
   getTaskAgeMs,
   classifyConflictedFiles,
   AUTO_RESOLVE_THEIRS,
   AUTO_RESOLVE_OURS,
   AUTO_RESOLVE_LOCK_EXTENSIONS,
+  extractScopeFromTitle,
+  resolveUpstreamFromConfig,
+  rebaseDownstreamTasks,
+  runTaskAssessment,
 };

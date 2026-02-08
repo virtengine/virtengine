@@ -247,6 +247,9 @@ function Get-EnvString {
     return $value.Trim()
 }
 
+$script:FollowUpMaxChars = Get-EnvInt -Name "VE_FOLLOWUP_MAX_CHARS" -Default 16000 -Min 2000
+$script:FollowUpMaxDescriptionChars = Get-EnvInt -Name "VE_FOLLOWUP_MAX_DESC_CHARS" -Default 2000 -Min 200
+
 function Request-OrchestratorStop {
     param([string]$Reason = "shutdown")
     if ($script:StopRequested) { return }
@@ -416,13 +419,22 @@ function Ensure-GitCredentialHelper {
             Write-Log "Removing stale local credential.helper: $localHelper" -Level "WARN"
             git config --local --unset credential.helper 2>$null
         }
-    } catch {
+    }
+    catch {
         # Non-fatal — if we can't check, push will fail with a clear error anyway
     }
 }
 
 function Write-CycleSummary {
     $elapsed = (Get-Date) - $script:StartTime
+    $backlogCount = $null
+    try {
+        $todoTasks = Get-VKTasks -Status "todo" -Limit 1
+        $backlogCount = if ($todoTasks) { @($todoTasks).Count } else { 0 }
+    }
+    catch {
+        $backlogCount = $null
+    }
     Write-Host ""
     Write-Host "  ── Cycle $($script:CycleCount) ──────────────────────────────" -ForegroundColor DarkCyan
     Write-Host "  │ Elapsed:   $([math]::Round($elapsed.TotalMinutes, 1)) min" -ForegroundColor DarkGray
@@ -430,6 +442,12 @@ function Write-CycleSummary {
     Write-Host "  │ Tracked:   $($script:TrackedAttempts.Count) attempts" -ForegroundColor DarkGray
     $successSummary = Get-SuccessRateSummary
     Write-Host "  │ $successSummary" -ForegroundColor DarkGray
+    if ($null -ne $backlogCount) {
+        Write-Host "  │ Backlog:   $backlogCount" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "  │ Backlog:   unknown" -ForegroundColor DarkGray
+    }
     Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkCyan
 }
 
@@ -667,6 +685,20 @@ function Initialize-CISweepConfig {
     $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
     $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
     $script:CodexMonitorTaskUpstream = Get-EnvString -Name "CODEX_MONITOR_TASK_UPSTREAM" -Default "origin/ve/codex-monitor-generic"
+
+    # Branch routing scope map (v0.8) — maps conventional commit scopes to upstream branches
+    $script:BranchRoutingScopeMap = @{}
+    $script:AutoRebaseOnMerge = Get-EnvBool -Name "AUTO_REBASE_ON_MERGE" -Default $true
+    $envScopeMap = $env:BRANCH_ROUTING_SCOPE_MAP
+    if ($envScopeMap) {
+        foreach ($pair in $envScopeMap.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $parts = $pair.Split(":", 2)
+            if ($parts.Count -eq 2 -and $parts[0].Trim() -and $parts[1].Trim()) {
+                $script:BranchRoutingScopeMap[$parts[0].Trim().ToLowerInvariant()] = $parts[1].Trim()
+            }
+        }
+        Write-Log "Loaded $($script:BranchRoutingScopeMap.Count) branch routing scope entries from env" -Level "INFO"
+    }
 }
 
 function Initialize-CISweepState {
@@ -1209,6 +1241,53 @@ function Test-IsCodexMonitorTask {
     return $false
 }
 
+function Extract-ScopeFromTitle {
+    <#
+    .SYNOPSIS Extract conventional commit scope from task title.
+    .DESCRIPTION E.g. "feat(codex-monitor): add caching" → "codex-monitor"
+                      "[P1] fix(veid): broken flow" → "veid"
+    #>
+    param([string]$Title)
+    if (-not $Title) { return $null }
+    $m = [regex]::Match($Title, '(?:^\[P\d+\]\s*)?(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([^)]+)\)', "IgnoreCase")
+    if ($m.Success) { return $m.Groups[1].Value.ToLowerInvariant().Trim() }
+    return $null
+}
+
+function Resolve-BranchFromScopeMap {
+    <#
+    .SYNOPSIS Resolve upstream branch from config-based scope map.
+    .DESCRIPTION Checks $script:BranchRoutingScopeMap for a matching scope.
+    #>
+    param([Parameter(Mandatory)][object]$Task)
+    if (-not $script:BranchRoutingScopeMap -or $script:BranchRoutingScopeMap.Count -eq 0) { return $null }
+
+    # 1. Title scope exact match
+    $scope = Extract-ScopeFromTitle -Title ($Task.title ?? $Task.name)
+    if ($scope -and $script:BranchRoutingScopeMap.ContainsKey($scope)) {
+        return $script:BranchRoutingScopeMap[$scope]
+    }
+
+    # 2. Partial scope match
+    if ($scope) {
+        foreach ($key in $script:BranchRoutingScopeMap.Keys) {
+            if ($scope.Contains($key) -or $key.Contains($scope)) {
+                return $script:BranchRoutingScopeMap[$key]
+            }
+        }
+    }
+
+    # 3. Keyword match in task text
+    $text = (Get-TaskTextBlob -Task $Task).ToLowerInvariant()
+    foreach ($key in $script:BranchRoutingScopeMap.Keys) {
+        if ($text.Contains($key.ToLowerInvariant())) {
+            return $script:BranchRoutingScopeMap[$key]
+        }
+    }
+
+    return $null
+}
+
 function Get-TaskUpstreamBranch {
     param([Parameter(Mandatory)][object]$Task)
     $fields = @(
@@ -1257,6 +1336,10 @@ function Get-TaskUpstreamBranch {
 
     $fromText = Extract-UpstreamFromText -Text (Get-TaskTextBlob -Task $Task)
     if ($fromText) { return $fromText }
+
+    # Config-based scope routing (new in v0.8)
+    $fromScope = Resolve-BranchFromScopeMap -Task $Task
+    if ($fromScope) { return $fromScope }
 
     if (Test-IsCodexMonitorTask -Task $Task) {
         return $script:CodexMonitorTaskUpstream
@@ -1746,13 +1829,20 @@ function Update-TaskContextCache {
 }
 
 function Get-TaskContextBlock {
-    param([Parameter(Mandatory)][hashtable]$Info)
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [int]$MaxDescriptionChars = 0
+    )
     Update-TaskContextCache -Info $Info
 
     $title = if ($Info.task_title_cached) { $Info.task_title_cached } elseif ($Info.name) { $Info.name } else { $null }
     $description = $Info.task_description_cached
     if (-not $description) {
         $description = "Task description unavailable from VK. Open the task URL for full details."
+    }
+    elseif ($MaxDescriptionChars -gt 0 -and $description.Length -gt $MaxDescriptionChars) {
+        $description = ($description.Substring(0, $MaxDescriptionChars)).TrimEnd()
+        $description = "$description`n...[truncated]"
     }
 
     $lines = @("Task context (vibe-kanban):")
@@ -1775,10 +1865,45 @@ function Append-TaskContextToMessage {
         [switch]$IncludeContext
     )
     if (-not $IncludeContext) { return $Message }
-    if ($Message -match "Task context \\(vibe-kanban\\):") { return $Message }
+    if ($Message -match "Task context \\(vibe-kanban\\):") {
+        if ($script:FollowUpMaxChars -and $Message.Length -gt $script:FollowUpMaxChars) {
+            $trimmed = ($Message.Substring(0, $script:FollowUpMaxChars)).TrimEnd()
+            return "$trimmed`n...[truncated]"
+        }
+        return $Message
+    }
     $context = Get-TaskContextBlock -Info $Info
     if (-not $context) { return $Message }
-    return "$Message`n`n$context"
+    $final = "$Message`n`n$context"
+    if ($script:FollowUpMaxChars -and $final.Length -gt $script:FollowUpMaxChars) {
+        $compact = Get-TaskContextBlock -Info $Info -MaxDescriptionChars $script:FollowUpMaxDescriptionChars
+        if ($compact) {
+            $final = "$Message`n`n$compact"
+        }
+        if ($final.Length -gt $script:FollowUpMaxChars) {
+            $final = ($final.Substring(0, $script:FollowUpMaxChars)).TrimEnd()
+            $final = "$final`n...[truncated]"
+        }
+    }
+    return $final
+}
+
+function Get-ContextRecoveryMessage {
+    <#
+    .SYNOPSIS Build a compact follow-up message for context window/token limit failures.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [int]$MaxDescriptionChars = 2000
+    )
+    $parts = @(
+        "Context window exceeded (prompt too large). Start a fresh session with minimal context.",
+        "Re-open the repo and continue the task. Keep prompts concise; avoid large log dumps."
+    )
+    $context = Get-TaskContextBlock -Info $Info -MaxDescriptionChars $MaxDescriptionChars
+    if ($context) { $parts += $context }
+    return ($parts -join "`n`n")
 }
 
 function Try-SendFollowUp {
@@ -1874,7 +1999,11 @@ function Test-ContextWindowError {
     $patterns = @(
         "ContextWindowExceeded",
         "context window",
-        "ran out of room"
+        "ran out of room",
+        "prompt token count",
+        "token count of",
+        "context length exceeded",
+        "maximum context length"
     )
     foreach ($prop in $Summary.PSObject.Properties) {
         $value = $prop.Value
@@ -1968,7 +2097,13 @@ function Get-AttemptFailureCategory {
         }
     }
 
-    if ($lower -match "context window" -or $lower -match "contextwindowexceeded" -or $lower -match "ran out of room") {
+    if ($lower -match "context window" -or
+        $lower -match "contextwindowexceeded" -or
+        $lower -match "ran out of room" -or
+        $lower -match "prompt token count" -or
+        $lower -match "token count of" -or
+        $lower -match "context length exceeded" -or
+        $lower -match "maximum context length") {
         return @{ category = "context_window"; status = $latestStatus; detail = "context window exceeded" }
     }
 
@@ -2091,20 +2226,20 @@ function Try-RecoverContextWindow {
     $Info.context_recovery_attempted_at = Get-Date
     $Info.status = "running"
 
-    if ($Info.last_followup_message) {
-        $profile = if ($session.executor) {
-            Get-ExecutorProfileForSession -Executor $session.executor
-        }
-        else {
-            Get-ExecutorProfileForSession -Executor "CODEX"
-        }
-        $message = Append-TaskContextToMessage -Message $Info.last_followup_message -Info $Info -IncludeContext:$true
-        $Info.last_followup_message = $message
-        $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $message -ExecutorProfile $profile
-        if (-not $sent) {
-            Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
-            return $false
-        }
+    $profile = if ($session.executor) {
+        Get-ExecutorProfileForSession -Executor $session.executor
+    }
+    else {
+        Get-ExecutorProfileForSession -Executor "CODEX"
+    }
+    $message = Get-ContextRecoveryMessage -Info $Info
+    $Info.last_followup_message = $message
+    $Info.last_followup_reason = "context_window_recovery"
+    $Info.last_followup_at = Get-Date
+    $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $message -ExecutorProfile $profile
+    if (-not $sent) {
+        Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
+        return $false
     }
 
     Write-Log "Context recovery started for $($Info.branch) via new session" -Level "INFO"
@@ -2780,6 +2915,17 @@ function Process-CompletedAttempts {
                     }
 
                     if (-not $recentFollowup) {
+                        if ($failure.category -eq "context_window") {
+                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
+                            $msg = Get-ContextRecoveryMessage -Info $info
+                            if ($count -ge 2) {
+                                $msg = "$msg`n`nIf this fails again or there are no changes, reply NO_CHANGES so we can mark it for manual review."
+                            }
+                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "context_window_recovery" -IncludeTaskContext:$false
+                            $info.push_notified = $true
+                            continue
+                        }
+
                         if ($failure.category -in @("api_key", "agent_failed")) {
                             $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
                             if ($count -ge 2) {
@@ -3544,6 +3690,68 @@ Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolut
     }
 }
 
+function Invoke-DownstreamRebase {
+    <#
+    .SYNOPSIS Trigger rebase for all active tasks targeting the same upstream branch.
+    .DESCRIPTION After a PR merges, other tasks on the same upstream need rebasing.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$UpstreamBranch,
+        [string]$ExcludeAttemptId
+    )
+    $rebaseTargets = @()
+    foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+        $aid = $entry.Key
+        $info = $entry.Value
+        if ($aid -eq $ExcludeAttemptId) { continue }
+        if ($info.status -notin @("inprogress", "inreview", "active", "running")) { continue }
+        $taskUpstream = $info.upstream_branch
+        if (-not $taskUpstream -and $info.task_id) {
+            try {
+                $taskObj = Get-VKTask -TaskId $info.task_id -ErrorAction SilentlyContinue
+                if ($taskObj) { $taskUpstream = Get-TaskUpstreamBranch -Task $taskObj }
+            }
+            catch { }
+        }
+        if ($taskUpstream -eq $UpstreamBranch) {
+            $rebaseTargets += @{ AttemptId = $aid; Info = $info }
+        }
+    }
+    if ($rebaseTargets.Count -eq 0) {
+        Write-Log "No downstream tasks to rebase for '$UpstreamBranch'" -Level "DEBUG"
+        return
+    }
+    Write-Log "Found $($rebaseTargets.Count) downstream tasks to rebase after merge on '$UpstreamBranch'" -Level "INFO"
+    $rebased = 0; $failed = 0
+    foreach ($target in $rebaseTargets) {
+        $aid = $target.AttemptId
+        $shortId = $aid.Substring(0, [Math]::Min(8, $aid.Length))
+        try {
+            $branch = $target.Info.branch ?? "ve/$shortId"
+            Write-Log "Rebasing downstream task $shortId (branch: $branch) onto $UpstreamBranch" -Level "INFO"
+            $result = & git rebase $UpstreamBranch $branch 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $rebased++
+                Write-Log "Rebased $shortId successfully" -Level "OK"
+            }
+            else {
+                $failed++
+                Write-Log "Rebase failed for $shortId - may need manual resolution: $result" -Level "WARN"
+                & git rebase --abort 2>&1 | Out-Null
+            }
+        }
+        catch {
+            $failed++
+            Write-Log "Error rebasing $shortId`: $_" -Level "ERROR"
+            & git rebase --abort 2>&1 | Out-Null
+        }
+    }
+    if ($rebased -gt 0 -or $failed -gt 0) {
+        $msg = "Downstream rebase: $rebased OK, $failed failed (upstream: $UpstreamBranch)"
+        Write-Log $msg -Level $(if ($failed -gt 0) { "WARN" } else { "OK" })
+    }
+}
+
 function Complete-Task {
     <#
     .SYNOPSIS Mark a task as done after its PR is merged.
@@ -3604,6 +3812,25 @@ function Complete-Task {
         Write-Log "Task $($TaskId.Substring(0,8)) merged first-shot" -Level "OK"
     }
     Save-SuccessMetrics
+
+    # ─── Downstream rebase trigger (v0.8) ────────────────────────────────────
+    if ($script:AutoRebaseOnMerge -and $AttemptId -and $script:TrackedAttempts.ContainsKey($AttemptId)) {
+        $info = $script:TrackedAttempts[$AttemptId]
+        $mergedUpstream = $info.upstream_branch
+        if (-not $mergedUpstream -and $TaskId) {
+            # Fallback: resolve from task
+            try {
+                $taskObj = Get-VKTask -TaskId $TaskId -ErrorAction SilentlyContinue
+                if ($taskObj) { $mergedUpstream = Get-TaskUpstreamBranch -Task $taskObj }
+            }
+            catch { }
+        }
+        if ($mergedUpstream) {
+            Write-Log "Triggering downstream rebase for tasks on '$mergedUpstream' (excluding $($AttemptId.Substring(0,8)))" -Level "INFO"
+            Invoke-DownstreamRebase -UpstreamBranch $mergedUpstream -ExcludeAttemptId $AttemptId
+        }
+    }
+
     Maybe-TriggerCISweep
 }
 
