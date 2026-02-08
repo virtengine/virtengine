@@ -284,6 +284,7 @@ export async function appendKnowledgeEntry(entry) {
       await writeFile(filePath, newContent, "utf8");
     } else {
       // Append at end of existing section (before any next ## header or EOF)
+
       const afterSection = content.slice(
         sectionIdx + knowledgeState.sectionHeader.length,
       );
@@ -291,6 +292,7 @@ export async function appendKnowledgeEntry(entry) {
       const nextSectionMatch = afterSection.match(/\n## [^#]/);
       if (nextSectionMatch) {
         const insertPos =
+
           sectionIdx +
           knowledgeState.sectionHeader.length +
           nextSectionMatch.index;
@@ -337,6 +339,7 @@ export async function readKnowledgeEntries() {
     const sectionIdx = content.indexOf(knowledgeState.sectionHeader);
     if (sectionIdx === -1) return [];
 
+
     const sectionContent = content.slice(
       sectionIdx + knowledgeState.sectionHeader.length,
     );
@@ -364,6 +367,7 @@ export async function readKnowledgeEntries() {
       const agentMatch = agentLine?.match(/\*\*Agent:\*\* ([^ ]+) \(([^)]+)\)/);
 
       // Extract content
+
       const contentLines = lines
         .filter(
           (l) =>

@@ -38,14 +38,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Repo Fingerprinting ──────────────────────────────────────────────────────
 
-function buildGitEnv() {
-  const env = { ...process.env };
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
-  delete env.GIT_INDEX_FILE;
-  return env;
-}
-
 /**
  * Generate a stable fingerprint for a git repository.
  * Two workstations with the same repo will produce the same fingerprint.
@@ -63,7 +55,6 @@ export function computeRepoFingerprint(repoRoot) {
     remoteUrl = execSync("git config --get remote.origin.url", {
       cwd: repoRoot,
       encoding: "utf8",
-      env: buildGitEnv(),
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
   } catch {
@@ -85,7 +76,6 @@ export function computeRepoFingerprint(repoRoot) {
     const rootCommit = execSync("git rev-list --max-parents=0 HEAD", {
       cwd: repoRoot,
       encoding: "utf8",
-      env: buildGitEnv(),
       stdio: ["ignore", "pipe", "ignore"],
     }).trim().split("\n")[0];
 
@@ -728,7 +718,6 @@ export function markAutoGenTriggered() {
 export function resetAutoGenCooldown() {
   lastAutoGenTimestamp = null;
 }
-
 // ── Fleet State Persistence ──────────────────────────────────────────────────
 
 const FLEET_STATE_DIR = ".cache/codex-monitor";
