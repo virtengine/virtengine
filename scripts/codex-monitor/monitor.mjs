@@ -1846,6 +1846,20 @@ async function attemptFreshSessionRetry(reason, logTail) {
 }
 
 /**
+ * Calculate how long a task has been in its current state (ms).
+ * Uses `updated_at` if available, otherwise `created_at`.
+ * @param {object} task - VK task object with `updated_at` / `created_at`
+ * @returns {number} Age in milliseconds, or 0 if no timestamp available
+ */
+function getTaskAgeMs(task) {
+  const ts = task?.updated_at || task?.created_at;
+  if (!ts) return 0;
+  const parsed = new Date(ts).getTime();
+  if (Number.isNaN(parsed)) return 0;
+  return Math.max(0, Date.now() - parsed);
+}
+
+/**
  * GET /api/projects/:project_id/tasks?status=<status>
  * Fetches tasks by status from VK API.
  * @param {string} status - Task status (e.g., "inreview", "todo", "done")
@@ -2058,15 +2072,24 @@ const MERGE_CHECK_THROTTLE_MS = 1500;
 
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
- * no PR, abandoned).  We re-check them every 6 hours instead of every cycle.
+ * no PR, abandoned).  We re-check them every 30 min instead of every cycle.
  * After STALE_MAX_STRIKES consecutive stale checks the task is moved back
  * to "todo" so another agent can pick it up.
  * Key = task ID, Value = { lastCheck: timestamp, strikes: number }.
  * @type {Map<string, {lastCheck: number, strikes: number}>}
  */
 const staleBranchCooldown = new Map();
-const STALE_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+const STALE_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 const STALE_MAX_STRIKES = 2; // move to todo after this many stale checks
+
+/**
+ * Age-based stale detection: if a task has been in inprogress/inreview for
+ * longer than this threshold with no active branch or PR, it is immediately
+ * moved back to "todo" on the first check — no strikes needed.
+ * Configurable via STALE_TASK_AGE_HOURS env var (default: 3).
+ */
+const STALE_TASK_AGE_HOURS = Number(process.env.STALE_TASK_AGE_HOURS || "3");
+const STALE_TASK_AGE_MS = STALE_TASK_AGE_HOURS * 60 * 60 * 1000;
 
 /**
  * Cooldown cache for tasks whose PRs have merge conflicts.
@@ -2152,6 +2175,11 @@ async function checkMergedPRsAndUpdateTasks() {
       const task = entry.task;
       const taskStatus = entry.status;
 
+      // ── Skip cancelled/done tasks — they should never be recovered ──
+      if (taskStatus === "cancelled" || taskStatus === "done") {
+        continue;
+      }
+
       // ── Stale cooldown: skip tasks we already checked recently ──
       const staleEntry = staleBranchCooldown.get(task.id);
       if (
@@ -2203,23 +2231,62 @@ async function checkMergedPRsAndUpdateTasks() {
       });
 
       if (candidates.length === 0) {
-        const prev = staleBranchCooldown.get(task.id);
-        const strikes = (prev?.strikes || 0) + 1;
-        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
-        console.log(
-          `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
-        );
-        if (
-          strikes >= STALE_MAX_STRIKES &&
-          (taskStatus === "inprogress" || taskStatus === "inreview")
-        ) {
+        // ── Only recover idle inprogress tasks — never inreview ──
+        // inreview tasks are monitored by merge/conflict checks.
+        // inprogress tasks with an active agent should not be touched.
+        if (taskStatus !== "inprogress") {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) in ${taskStatus} — skipping (only idle inprogress tasks are recovered)`,
+          );
+          continue;
+        }
+
+        // Check if an agent is actively working on this task
+        const hasActiveAgent =
+          task.has_in_progress_attempt === true ||
+          !!localAttempt;
+        if (hasActiveAgent) {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has active agent — skipping recovery`,
+          );
+          continue;
+        }
+
+        // ── Age-based immediate recovery ──
+        // If the task has been stuck for longer than STALE_TASK_AGE_MS
+        // with no active agent and no branch/PR, move it to todo immediately.
+        const taskAge = getTaskAgeMs(task);
+        if (taskAge >= STALE_TASK_AGE_MS) {
+          const ageHours = (taskAge / (60 * 60 * 1000)).toFixed(1);
+          console.log(
+            `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — stale for ${ageHours}h, moving to todo`,
+          );
           const success = await updateTaskStatus(task.id, "todo");
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
             console.log(
-              `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (no branch/PR after ${strikes} checks)`,
+              `[monitor] ♻️ Recovered idle task "${task.title}" → todo (age-based: ${ageHours}h, no agent, no branch/PR)`,
+            );
+          }
+          continue;
+        }
+
+        const prev = staleBranchCooldown.get(task.id);
+        const strikes = (prev?.strikes || 0) + 1;
+        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+        console.log(
+          `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — strike ${strikes}/${STALE_MAX_STRIKES}`,
+        );
+        if (strikes >= STALE_MAX_STRIKES) {
+          const success = await updateTaskStatus(task.id, "todo");
+          if (success) {
+            movedTodoCount++;
+            recoveredTaskNames.push(task.title);
+            staleBranchCooldown.delete(task.id);
+            console.log(
+              `[monitor] ♻️ Recovered idle task "${task.title}" → todo (no branch/PR after ${strikes} checks)`,
             );
           }
         }
@@ -2425,25 +2492,59 @@ async function checkMergedPRsAndUpdateTasks() {
           );
         }
       } else if (!hasOpenPR) {
-        // All branches unresolvable — increment strike counter
-        const prev = staleBranchCooldown.get(task.id);
-        const strikes = (prev?.strikes || 0) + 1;
-        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
-        console.log(
-          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no branch on remote, no open PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
-        );
-        if (
-          strikes >= STALE_MAX_STRIKES &&
-          (taskStatus === "inprogress" || taskStatus === "inreview")
-        ) {
+        // ── Only recover idle inprogress tasks — never inreview ──
+        if (taskStatus !== "inprogress") {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but status=${taskStatus} — skipping recovery`,
+          );
+          continue;
+        }
+
+        // Check if an agent is actively working on this task
+        const hasActiveAgent =
+          task.has_in_progress_attempt === true ||
+          !!localAttempt;
+        if (hasActiveAgent) {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but agent is active — skipping recovery`,
+          );
+          continue;
+        }
+
+        // Genuinely idle inprogress task with no open PR — recover
+        const taskAge = getTaskAgeMs(task);
+        if (taskAge >= STALE_TASK_AGE_MS) {
+          const ageHours = (taskAge / (60 * 60 * 1000)).toFixed(1);
+          console.log(
+            `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch/PR, stale for ${ageHours}h — moving to todo`,
+          );
           const success = await updateTaskStatus(task.id, "todo");
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
             console.log(
-              `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (abandoned — ${strikes} stale checks)`,
+              `[monitor] ♻️ Recovered idle task "${task.title}" → todo (age-based: ${ageHours}h, no agent, no branch/PR)`,
             );
+          }
+        } else {
+          // Not old enough — use the strike-based system
+          const prev = staleBranchCooldown.get(task.id);
+          const strikes = (prev?.strikes || 0) + 1;
+          staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+          console.log(
+            `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch, no PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
+          );
+          if (strikes >= STALE_MAX_STRIKES) {
+            const success = await updateTaskStatus(task.id, "todo");
+            if (success) {
+              movedTodoCount++;
+              recoveredTaskNames.push(task.title);
+              staleBranchCooldown.delete(task.id);
+              console.log(
+                `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (abandoned — ${strikes} stale checks)`,
+              );
+            }
           }
         }
       }
@@ -5808,4 +5909,4 @@ if (telegramBotEnabled) {
 }
 
 // ── Named exports for testing ───────────────────────────────────────────────
-export { fetchVk, updateTaskStatus };
+export { fetchVk, updateTaskStatus, getTaskAgeMs };
