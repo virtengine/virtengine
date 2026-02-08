@@ -2595,9 +2595,35 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → inreview`,
           );
         }
+<<<<<<< HEAD
       } else if (!hasOpenPR) {
         // ── Only recover idle inprogress tasks — never inreview ──
         if (taskStatus !== "inprogress") {
+=======
+      }
+
+      if (!branch) {
+        continue;
+      }
+
+      // Throttle between GitHub API calls to avoid rate-limiting
+      if (MERGE_CHECK_THROTTLE_MS > 0) {
+        await new Promise((r) => setTimeout(r, MERGE_CHECK_THROTTLE_MS));
+      }
+
+      // Check if the branch has been merged
+      const merged = await isBranchMerged(branch);
+      if (merged) {
+        console.log(
+          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch, updating to done`,
+        );
+
+        const success = await updateTaskStatus(task.id, "done");
+        if (success) {
+          movedCount++;
+          mergedTaskCache.add(task.id);
+          saveMergedTaskCache();
+>>>>>>> 7a923e03 (fix(monitor): persist merged-task cache to disk + fix codex exec prompt)
           console.log(
             `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but status=${taskStatus} — skipping recovery`,
           );
