@@ -472,17 +472,21 @@ func nonNegativeInt64(value int64) int64 {
 
 func uint64ToInt(value uint64) int {
 	maxInt := int(^uint(0) >> 1)
-	if value > uint64(maxInt) {
+	maxIntUint := uint64(^uint(0) >> 1)
+	if value > maxIntUint {
 		return maxInt
 	}
+	//nolint:gosec // bounds checked above
 	return int(value)
 }
 
 func uint64ToInt64(value uint64) int64 {
 	maxInt64 := int64(^uint64(0) >> 1)
-	if value > uint64(maxInt64) {
+	maxInt64Uint := uint64(^uint64(0) >> 1)
+	if value > maxInt64Uint {
 		return maxInt64
 	}
+	//nolint:gosec // bounds checked above
 	return int64(value)
 }
 
@@ -494,11 +498,12 @@ func unixToUint64(value int64) uint64 {
 }
 
 func secondsToDuration(seconds uint64) time.Duration {
-	maxInt64 := int64(^uint64(0) >> 1)
-	maxSeconds := maxInt64 / int64(time.Second)
-	if seconds > uint64(maxSeconds) {
-		return time.Duration(maxSeconds) * time.Second
+	maxSecondsUint := uint64(^uint64(0)>>1) / uint64(time.Second)
+	if seconds > maxSecondsUint {
+		//nolint:gosec // bounded to max duration
+		return time.Duration(maxSecondsUint) * time.Second
 	}
+	//nolint:gosec // bounds checked above
 	return time.Duration(seconds) * time.Second
 }
 

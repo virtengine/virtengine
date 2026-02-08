@@ -3,7 +3,6 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -94,7 +93,7 @@ func (k Keeper) UpdateInventoryFromHeartbeat(ctx sdk.Context, msg *types.MsgProv
 // PruneStaleInventories marks inventories stale based on heartbeat timeout.
 func (k Keeper) PruneStaleInventories(ctx sdk.Context) {
 	params := k.GetParams(ctx)
-	cutoff := ctx.BlockTime().Add(-time.Duration(params.HeartbeatTimeoutSeconds) * time.Second)
+	cutoff := ctx.BlockTime().Add(-secondsToDuration(params.HeartbeatTimeoutSeconds))
 
 	k.WithInventories(ctx, func(inv types.ResourceInventory) bool {
 		if inv.LastHeartbeat.Before(cutoff) {
