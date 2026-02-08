@@ -22,7 +22,7 @@
 name: "Codex Monitor: Publish"
 
 env:
-    NODE_VERSION: "20"
+    NODE_VERSION: "24"
 
 on:
     push:
@@ -131,7 +131,8 @@ jobs:
               if: ${{ !inputs.dry-run }}
               working-directory: scripts/codex-monitor
               run: npm publish --access public --provenance
-              # No NODE_AUTH_TOKEN needed — OIDC handles auth via trusted publishing
+              # No NODE_AUTH_TOKEN needed — npm v11.5.1+ handles OIDC auth natively
+              # --provenance is optional with trusted publishing but kept for backward compat
 
             - name: Publish (dry run)
               if: ${{ inputs.dry-run }}
