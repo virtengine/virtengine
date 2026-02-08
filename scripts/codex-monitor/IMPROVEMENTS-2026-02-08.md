@@ -136,11 +136,6 @@ export async function archiveCompletedTasks(fetchVk, projectId, options = {})
 **Features:**
 - Fetches tasks with status "done" or "cancelled"
 - Archives to JSON files: `.cache/completed-tasks/YYYY-MM-DD-{task-id}.json`
-- **Cleans up agent sessions** (Copilot, Codex, Claude SDK sessions)
-  - Removes sessions from `~/.copilot/sessions`
-  - Removes sessions from `~/.codex/sessions`
-  - Removes sessions from `~/.claude/sessions`
-  - Prevents VS Code extension slowdown
 - Deletes tasks from VK database (or marks as archived)
 - Configurable max archive per cycle (default: 50)
 - Dry-run mode for testing
