@@ -1,0 +1,124 @@
+package types
+
+import "time"
+
+// SSOLinkageToProto converts linkage metadata to its protobuf representation.
+func SSOLinkageToProto(linkage *SSOLinkageMetadata) *SSOLinkageMetadataPB {
+	if linkage == nil {
+		return nil
+	}
+
+	resp := &SSOLinkageMetadataPB{
+		Version:                linkage.Version,
+		LinkageId:              linkage.LinkageID,
+		Provider:               string(linkage.Provider),
+		Issuer:                 linkage.Issuer,
+		SubjectHash:            linkage.SubjectHash,
+		Nonce:                  linkage.Nonce,
+		VerifiedAt:             linkage.VerifiedAt.Unix(),
+		AccountSignature:       linkage.AccountSignature,
+		Status:                 string(linkage.Status),
+		EmailDomainHash:        linkage.EmailDomainHash,
+		OrgIdHash:              linkage.OrgIDHash,
+		EvidenceHash:           linkage.EvidenceHash,
+		EvidenceStorageBackend: linkage.EvidenceStorageBackend,
+		EvidenceStorageRef:     linkage.EvidenceStorageRef,
+		EvidenceMetadata:       linkage.EvidenceMetadata,
+	}
+
+	if linkage.ExpiresAt != nil {
+		resp.ExpiresAt = linkage.ExpiresAt.Unix()
+	}
+
+	return resp
+}
+
+// EmailVerificationRecordToProto converts an email verification record to protobuf.
+func EmailVerificationRecordToProto(record *EmailVerificationRecord) *EmailVerificationRecordPB {
+	if record == nil {
+		return nil
+	}
+
+	resp := &EmailVerificationRecordPB{
+		Version:                record.Version,
+		VerificationId:         record.VerificationID,
+		AccountAddress:         record.AccountAddress,
+		EmailHash:              record.EmailHash,
+		DomainHash:             record.DomainHash,
+		Nonce:                  record.Nonce,
+		Status:                 string(record.Status),
+		CreatedAt:              record.CreatedAt.Unix(),
+		UpdatedAt:              record.UpdatedAt.Unix(),
+		AccountSignature:       record.AccountSignature,
+		IsOrganizational:       record.IsOrganizational,
+		VerificationAttempts:   record.VerificationAttempts,
+		EvidenceHash:           record.EvidenceHash,
+		EvidenceStorageBackend: record.EvidenceStorageBackend,
+		EvidenceStorageRef:     record.EvidenceStorageRef,
+		EvidenceMetadata:       record.EvidenceMetadata,
+	}
+
+	if record.NonceUsedAt != nil {
+		resp.NonceUsedAt = record.NonceUsedAt.Unix()
+	}
+	if record.VerifiedAt != nil {
+		resp.VerifiedAt = record.VerifiedAt.Unix()
+	}
+	if record.ExpiresAt != nil {
+		resp.ExpiresAt = record.ExpiresAt.Unix()
+	}
+
+	return resp
+}
+
+// SMSVerificationRecordToProto converts an SMS verification record to protobuf.
+func SMSVerificationRecordToProto(record *SMSVerificationRecord) *SMSVerificationRecordPB {
+	if record == nil {
+		return nil
+	}
+
+	resp := &SMSVerificationRecordPB{
+		Version:                record.Version,
+		VerificationId:         record.VerificationID,
+		AccountAddress:         record.AccountAddress,
+		PhoneHash:              PhoneNumberHashToProto(record.PhoneHash),
+		Status:                 string(record.Status),
+		CreatedAt:              record.CreatedAt.Unix(),
+		UpdatedAt:              record.UpdatedAt.Unix(),
+		VerificationAttempts:   record.VerificationAttempts,
+		IsVoip:                 record.IsVoIP,
+		CarrierType:            record.CarrierType,
+		ValidatorAddress:       record.ValidatorAddress,
+		AccountSignature:       record.AccountSignature,
+		EvidenceHash:           record.EvidenceHash,
+		EvidenceStorageBackend: record.EvidenceStorageBackend,
+		EvidenceStorageRef:     record.EvidenceStorageRef,
+		EvidenceMetadata:       record.EvidenceMetadata,
+	}
+
+	if record.VerifiedAt != nil {
+		resp.VerifiedAt = record.VerifiedAt.Unix()
+	}
+	if record.ExpiresAt != nil {
+		resp.ExpiresAt = record.ExpiresAt.Unix()
+	}
+
+	return resp
+}
+
+// PhoneNumberHashToProto converts a phone hash to protobuf.
+func PhoneNumberHashToProto(hash PhoneNumberHash) *PhoneNumberHashPB {
+	return &PhoneNumberHashPB{
+		Hash:            hash.Hash,
+		Salt:            hash.Salt,
+		CountryCodeHash: hash.CountryCodeHash,
+		CreatedAt:       toUnix(hash.CreatedAt),
+	}
+}
+
+func toUnix(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}

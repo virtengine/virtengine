@@ -68,5 +68,5 @@ func SignAndSubmitAttestation(ctx context.Context, attestation *veidtypes.SSOAtt
 		})
 	}
 
-	return SubmitSSOLinkage(ctx, chainClient, attestation, linkageID, auditor)
+	return SubmitSSOVerificationProof(ctx, chainClient, attestation, linkageID, auditor)
 }

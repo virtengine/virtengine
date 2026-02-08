@@ -227,6 +227,18 @@ type SMSVerificationRecord struct {
 
 	// AccountSignature binds this verification to the account
 	AccountSignature []byte `json:"account_signature"`
+
+	// EvidenceHash is the SHA256 hash of the verification evidence payload
+	EvidenceHash string `json:"evidence_hash,omitempty"`
+
+	// EvidenceStorageBackend indicates where the encrypted evidence is stored
+	EvidenceStorageBackend string `json:"evidence_storage_backend,omitempty"`
+
+	// EvidenceStorageRef is a backend-specific reference to the encrypted evidence
+	EvidenceStorageRef string `json:"evidence_storage_ref,omitempty"`
+
+	// EvidenceMetadata contains optional evidence metadata (non-sensitive)
+	EvidenceMetadata map[string]string `json:"evidence_metadata,omitempty"`
 }
 
 // NewSMSVerificationRecord creates a new SMS verification record
@@ -244,13 +256,14 @@ func NewSMSVerificationRecord(
 	}
 
 	return &SMSVerificationRecord{
-		Version:        SMSVerificationVersion,
-		VerificationID: verificationID,
-		AccountAddress: accountAddress,
-		PhoneHash:      *phoneHash,
-		Status:         SMSStatusPending,
-		CreatedAt:      createdAt,
-		UpdatedAt:      createdAt,
+		Version:          SMSVerificationVersion,
+		VerificationID:   verificationID,
+		AccountAddress:   accountAddress,
+		PhoneHash:        *phoneHash,
+		Status:           SMSStatusPending,
+		CreatedAt:        createdAt,
+		UpdatedAt:        createdAt,
+		EvidenceMetadata: make(map[string]string),
 	}, nil
 }
 
@@ -280,15 +293,24 @@ func (r *SMSVerificationRecord) Validate() error {
 		return ErrInvalidPhone.Wrap(errMsgCreatedAtZero)
 	}
 
+	if err := validateEvidencePointer(r.EvidenceHash, r.EvidenceStorageBackend, r.EvidenceStorageRef, r.Status == SMSStatusVerified); err != nil {
+		return ErrInvalidPhone.Wrap(err.Error())
+	}
+
 	return nil
 }
 
 // IsActive returns true if the verification is currently valid
 func (r *SMSVerificationRecord) IsActive() bool {
+	return r.IsActiveAt(time.Now())
+}
+
+// IsActiveAt returns true if the verification is currently valid at the provided time.
+func (r *SMSVerificationRecord) IsActiveAt(now time.Time) bool {
 	if r.Status != SMSStatusVerified {
 		return false
 	}
-	if r.ExpiresAt != nil && time.Now().After(*r.ExpiresAt) {
+	if r.ExpiresAt != nil && now.After(*r.ExpiresAt) {
 		return false
 	}
 	return true
@@ -566,7 +588,7 @@ func DefaultSMSScoringWeight() SMSScoringWeight {
 
 // CalculateSMSScore calculates the score contribution for an SMS verification
 func CalculateSMSScore(record *SMSVerificationRecord, weight SMSScoringWeight, now time.Time) uint32 {
-	if !record.IsActive() {
+	if !record.IsActiveAt(now) {
 		return 0
 	}
 

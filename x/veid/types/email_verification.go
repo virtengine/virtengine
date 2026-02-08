@@ -102,6 +102,18 @@ type EmailVerificationRecord struct {
 
 	// VerificationAttempts counts failed verification attempts
 	VerificationAttempts uint32 `json:"verification_attempts"`
+
+	// EvidenceHash is the SHA256 hash of the verification evidence payload
+	EvidenceHash string `json:"evidence_hash,omitempty"`
+
+	// EvidenceStorageBackend indicates where the encrypted evidence is stored
+	EvidenceStorageBackend string `json:"evidence_storage_backend,omitempty"`
+
+	// EvidenceStorageRef is a backend-specific reference to the encrypted evidence
+	EvidenceStorageRef string `json:"evidence_storage_ref,omitempty"`
+
+	// EvidenceMetadata contains optional evidence metadata (non-sensitive)
+	EvidenceMetadata map[string]string `json:"evidence_metadata,omitempty"`
 }
 
 // NewEmailVerificationRecord creates a new email verification record
@@ -114,15 +126,16 @@ func NewEmailVerificationRecord(
 ) *EmailVerificationRecord {
 	emailHash, domainHash := HashEmail(email)
 	return &EmailVerificationRecord{
-		Version:        EmailVerificationVersion,
-		VerificationID: verificationID,
-		AccountAddress: accountAddress,
-		EmailHash:      emailHash,
-		DomainHash:     domainHash,
-		Nonce:          nonce,
-		Status:         EmailStatusPending,
-		CreatedAt:      createdAt,
-		UpdatedAt:      createdAt,
+		Version:          EmailVerificationVersion,
+		VerificationID:   verificationID,
+		AccountAddress:   accountAddress,
+		EmailHash:        emailHash,
+		DomainHash:       domainHash,
+		Nonce:            nonce,
+		Status:           EmailStatusPending,
+		CreatedAt:        createdAt,
+		UpdatedAt:        createdAt,
+		EvidenceMetadata: make(map[string]string),
 	}
 }
 
@@ -197,15 +210,24 @@ func (r *EmailVerificationRecord) Validate() error {
 		return ErrInvalidEmail.Wrap("created_at cannot be zero")
 	}
 
+	if err := validateEvidencePointer(r.EvidenceHash, r.EvidenceStorageBackend, r.EvidenceStorageRef, r.Status == EmailStatusVerified); err != nil {
+		return ErrInvalidEmail.Wrap(err.Error())
+	}
+
 	return nil
 }
 
 // IsActive returns true if the verification is currently valid
 func (r *EmailVerificationRecord) IsActive() bool {
+	return r.IsActiveAt(time.Now())
+}
+
+// IsActiveAt returns true if the verification is currently valid at the provided time.
+func (r *EmailVerificationRecord) IsActiveAt(now time.Time) bool {
 	if r.Status != EmailStatusVerified {
 		return false
 	}
-	if r.ExpiresAt != nil && time.Now().After(*r.ExpiresAt) {
+	if r.ExpiresAt != nil && now.After(*r.ExpiresAt) {
 		return false
 	}
 	return true
@@ -377,7 +399,7 @@ func DefaultEmailScoringWeight() EmailScoringWeight {
 
 // CalculateEmailScore calculates the score contribution for an email verification
 func CalculateEmailScore(record *EmailVerificationRecord, weight EmailScoringWeight, now time.Time) uint32 {
-	if !record.IsActive() {
+	if !record.IsActiveAt(now) {
 		return 0
 	}
 

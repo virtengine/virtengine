@@ -59,6 +59,19 @@ service Msg {
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 
   // ==========================================================================
+  // Web-Scope Verification Proofs (SSO/Email/SMS)
+  // ==========================================================================
+
+  // SubmitSSOVerificationProof submits an SSO verification proof
+  rpc SubmitSSOVerificationProof(MsgSubmitSSOVerificationProof) returns (MsgSubmitSSOVerificationProofResponse);
+
+  // SubmitEmailVerificationProof submits an email OTP verification proof
+  rpc SubmitEmailVerificationProof(MsgSubmitEmailVerificationProof) returns (MsgSubmitEmailVerificationProofResponse);
+
+  // SubmitSMSVerificationProof submits an SMS OTP verification proof
+  rpc SubmitSMSVerificationProof(MsgSubmitSMSVerificationProof) returns (MsgSubmitSMSVerificationProofResponse);
+
+  // ==========================================================================
   // Appeal Messages (VE-3020)
   // ==========================================================================
   
@@ -215,6 +228,284 @@ message MsgUploadScopeResponse {
   int64 uploaded_at = 3 [
     (gogoproto.jsontag) = "uploaded_at",
     (gogoproto.moretags) = "yaml:\"uploaded_at\""
+  ];
+}
+
+// MsgSubmitSSOVerificationProof submits an SSO verification proof.
+message MsgSubmitSSOVerificationProof {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitSSOVerificationProof";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string linkage_id = 2 [
+    (gogoproto.jsontag) = "linkage_id",
+    (gogoproto.moretags) = "yaml:\"linkage_id\""
+  ];
+
+  bytes attestation_data = 3 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  string evidence_hash = 4 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 5 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 6 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 7 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitSSOVerificationProofResponse is the response for SSO proof submission.
+message MsgSubmitSSOVerificationProofResponse {
+  string linkage_id = 1 [
+    (gogoproto.jsontag) = "linkage_id",
+    (gogoproto.moretags) = "yaml:\"linkage_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgSubmitEmailVerificationProof submits an email OTP verification proof.
+message MsgSubmitEmailVerificationProof {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitEmailVerificationProof";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string verification_id = 2 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string email_hash = 3 [
+    (gogoproto.jsontag) = "email_hash",
+    (gogoproto.moretags) = "yaml:\"email_hash\""
+  ];
+
+  string domain_hash = 4 [
+    (gogoproto.jsontag) = "domain_hash",
+    (gogoproto.moretags) = "yaml:\"domain_hash\""
+  ];
+
+  string nonce = 5 [
+    (gogoproto.jsontag) = "nonce",
+    (gogoproto.moretags) = "yaml:\"nonce\""
+  ];
+
+  bool is_organizational = 6 [
+    (gogoproto.jsontag) = "is_organizational",
+    (gogoproto.moretags) = "yaml:\"is_organizational\""
+  ];
+
+  bytes attestation_data = 7 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  bytes account_signature = 8 [
+    (gogoproto.jsontag) = "account_signature",
+    (gogoproto.moretags) = "yaml:\"account_signature\""
+  ];
+
+  int64 verified_at = 9 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  int64 expires_at = 10 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  string evidence_hash = 11 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 12 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 13 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 14 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitEmailVerificationProofResponse is the response for email proof submission.
+message MsgSubmitEmailVerificationProofResponse {
+  string verification_id = 1 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgSubmitSMSVerificationProof submits an SMS OTP verification proof.
+message MsgSubmitSMSVerificationProof {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitSMSVerificationProof";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string verification_id = 2 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string phone_hash = 3 [
+    (gogoproto.jsontag) = "phone_hash",
+    (gogoproto.moretags) = "yaml:\"phone_hash\""
+  ];
+
+  string phone_hash_salt = 4 [
+    (gogoproto.jsontag) = "phone_hash_salt",
+    (gogoproto.moretags) = "yaml:\"phone_hash_salt\""
+  ];
+
+  string country_code_hash = 5 [
+    (gogoproto.jsontag) = "country_code_hash",
+    (gogoproto.moretags) = "yaml:\"country_code_hash\""
+  ];
+
+  string carrier_type = 6 [
+    (gogoproto.jsontag) = "carrier_type",
+    (gogoproto.moretags) = "yaml:\"carrier_type\""
+  ];
+
+  bool is_voip = 7 [
+    (gogoproto.jsontag) = "is_voip",
+    (gogoproto.moretags) = "yaml:\"is_voip\""
+  ];
+
+  string validator_address = 8 [
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  bytes attestation_data = 9 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  bytes account_signature = 10 [
+    (gogoproto.jsontag) = "account_signature",
+    (gogoproto.moretags) = "yaml:\"account_signature\""
+  ];
+
+  int64 verified_at = 11 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  int64 expires_at = 12 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  string evidence_hash = 13 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 14 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 15 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 16 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitSMSVerificationProofResponse is the response for SMS proof submission.
+message MsgSubmitSMSVerificationProofResponse {
+  string verification_id = 1 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
   ];
 }
 

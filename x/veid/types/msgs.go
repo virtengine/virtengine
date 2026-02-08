@@ -16,11 +16,14 @@ import (
 
 // Message type constants - kept for backwards compatibility
 const (
-	TypeMsgUploadScope              = "upload_scope"
-	TypeMsgRevokeScope              = "revoke_scope"
-	TypeMsgRequestVerification      = "request_verification"
-	TypeMsgUpdateVerificationStatus = "update_verification_status"
-	TypeMsgUpdateScore              = "update_score"
+	TypeMsgUploadScope                  = "upload_scope"
+	TypeMsgRevokeScope                  = "revoke_scope"
+	TypeMsgRequestVerification          = "request_verification"
+	TypeMsgUpdateVerificationStatus     = "update_verification_status"
+	TypeMsgUpdateScore                  = "update_score"
+	TypeMsgSubmitSSOVerificationProof   = "submit_sso_verification_proof"
+	TypeMsgSubmitEmailVerificationProof = "submit_email_verification_proof"
+	TypeMsgSubmitSMSVerificationProof   = "submit_sms_verification_proof"
 )
 
 // ============================================================================
@@ -58,6 +61,24 @@ type MsgUpdateScore = veidv1.MsgUpdateScore
 
 // MsgUpdateScoreResponse is the response for MsgUpdateScore
 type MsgUpdateScoreResponse = veidv1.MsgUpdateScoreResponse
+
+// MsgSubmitSSOVerificationProof is the message for SSO verification proof submission
+type MsgSubmitSSOVerificationProof = veidv1.MsgSubmitSSOVerificationProof
+
+// MsgSubmitSSOVerificationProofResponse is the response for SSO proof submission
+type MsgSubmitSSOVerificationProofResponse = veidv1.MsgSubmitSSOVerificationProofResponse
+
+// MsgSubmitEmailVerificationProof is the message for email verification proof submission
+type MsgSubmitEmailVerificationProof = veidv1.MsgSubmitEmailVerificationProof
+
+// MsgSubmitEmailVerificationProofResponse is the response for email proof submission
+type MsgSubmitEmailVerificationProofResponse = veidv1.MsgSubmitEmailVerificationProofResponse
+
+// MsgSubmitSMSVerificationProof is the message for SMS verification proof submission
+type MsgSubmitSMSVerificationProof = veidv1.MsgSubmitSMSVerificationProof
+
+// MsgSubmitSMSVerificationProofResponse is the response for SMS proof submission
+type MsgSubmitSMSVerificationProofResponse = veidv1.MsgSubmitSMSVerificationProofResponse
 
 // EncryptedPayloadEnvelope is the encrypted payload type from proto
 type EncryptedPayloadEnvelope = veidv1.EncryptedPayloadEnvelope
