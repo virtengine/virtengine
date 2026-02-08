@@ -14,7 +14,7 @@
  *   - Caches the last check timestamp so we don't query npm too aggressively
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -26,6 +26,7 @@ const PKG_NAME = "@virtengine/codex-monitor";
 const CACHE_FILE = resolve(__dirname, "logs", ".update-check-cache.json");
 const STARTUP_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour (startup notice)
 const AUTO_UPDATE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (polling loop)
+const IS_WIN = process.platform === "win32";
 
 // ── Semver comparison ────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ async function fetchLatestVersion() {
       encoding: "utf8",
       timeout: 15000,
       stdio: ["pipe", "pipe", "ignore"],
+      shell: IS_WIN,
     }).trim();
     return out || null;
   } catch {
@@ -158,6 +160,7 @@ export async function forceUpdate(currentVersion) {
     execFileSync("npm", ["install", "-g", `${PKG_NAME}@${latest}`], {
       stdio: "inherit",
       timeout: 120000,
+      shell: IS_WIN,
     });
     console.log(
       `\n  ✅ Updated to v${latest}. Restart codex-monitor to use the new version.\n`,
@@ -246,6 +249,7 @@ export function startAutoUpdateLoop(opts = {}) {
         execFileSync("npm", ["install", "-g", `${PKG_NAME}@${latest}`], {
           timeout: 180000,
           stdio: ["pipe", "pipe", "pipe"],
+          shell: IS_WIN,
         });
       } catch (installErr) {
         const errMsg = `[auto-update] ❌ Install failed: ${installErr.message || installErr}`;

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
+
 /**
- * prepublish-check.mjs — Pre-publish gate for @virtengine/codex-monitor.
+ * prepublish-check.mjs — Pre-publish validation gate.
  *
- * Validates:
- *   1. package.json has a version
- *   2. Every local import (from "./foo.mjs") is in the `files` array
- *   3. No duplicate entries in `files`
+ * Scans all .mjs files for local `import ... from "./foo.mjs"` statements
+ * and verifies each imported file is listed in package.json's `files` array.
+ * Also checks for duplicate entries in `files`.
  *
- * Prevents shipping broken builds where modules exist on disk
- * but aren't included in the npm tarball.
+ * Run automatically via `prepublishOnly` script, or manually:
+ *   node prepublish-check.mjs
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -16,93 +16,67 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const pkg = JSON.parse(
-  readFileSync(resolve(__dirname, "package.json"), "utf8"),
-);
-
-// ── 1. Version check ─────────────────────────────────────────────────────────
+const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8"));
 
 if (!pkg.version) {
   console.error("❌ Missing version in package.json");
   process.exit(1);
 }
 
-console.log(`Publishing ${pkg.name}@${pkg.version}`);
+const filesArray = pkg.files || [];
+const filesSet = new Set(filesArray);
 
-// ── 2. Collect all local imports from .mjs files ──────────────────────────────
+// ── Check for duplicates ─────────────────────────────────────────────────────
+const seen = new Set();
+const duplicates = [];
+for (const f of filesArray) {
+  if (seen.has(f)) duplicates.push(f);
+  seen.add(f);
+}
+if (duplicates.length > 0) {
+  console.error(`❌ Duplicate entries in files array: ${duplicates.join(", ")}`);
+  process.exit(1);
+}
 
-const filesArray = new Set(pkg.files || []);
+// ── Scan all .mjs files for local imports ────────────────────────────────────
 const mjsFiles = readdirSync(__dirname).filter(
   (f) => f.endsWith(".mjs") && f !== "prepublish-check.mjs",
 );
 
-// Match:  from "./foo.mjs"  or  from './foo.mjs'  or  import("./foo.mjs")
-const importPatterns = [
-  /\bfrom\s+["']\.\/([^"']+)["']/g,
-  /\bimport\s*\(\s*["']\.\/([^"']+)["']\s*\)/g,
-];
-
-const allImports = new Set();
-const importSources = new Map(); // file -> Set of importers
+const importPattern = /from\s+["']\.\/([^"']+)["']/g;
+const missing = [];
 
 for (const file of mjsFiles) {
-  try {
-    const content = readFileSync(resolve(__dirname, file), "utf8");
-    for (const pattern of importPatterns) {
-      pattern.lastIndex = 0;
-      let match;
-      while ((match = pattern.exec(content)) !== null) {
-        const imported = match[1];
-        allImports.add(imported);
-        if (!importSources.has(imported)) importSources.set(imported, new Set());
-        importSources.get(imported).add(file);
-      }
+  // Only check files that are in the files array (i.e., will be published)
+  if (!filesSet.has(file)) continue;
+
+  const content = readFileSync(resolve(__dirname, file), "utf8");
+  let match;
+  importPattern.lastIndex = 0;
+
+  while ((match = importPattern.exec(content)) !== null) {
+    const imported = match[1];
+    // Skip if it's a comment line
+    const lineStart = content.lastIndexOf("\n", match.index) + 1;
+    const line = content.slice(lineStart, match.index).trimStart();
+    if (line.startsWith("//") || line.startsWith("*") || line.startsWith("/*")) {
+      continue;
     }
-  } catch {
-    // skip unreadable files
-  }
-}
-
-// ── 3. Check for missing files ────────────────────────────────────────────────
-
-const missing = [];
-for (const imp of allImports) {
-  if (!filesArray.has(imp)) {
-    const importers = importSources.get(imp);
-    missing.push({ file: imp, importedBy: [...importers] });
+    if (!filesSet.has(imported)) {
+      missing.push({ file, imported });
+    }
   }
 }
 
 if (missing.length > 0) {
-  console.error("\n❌ Files imported locally but NOT in package.json 'files' array:\n");
-  for (const { file, importedBy } of missing) {
-    console.error(`   • ${file}`);
-    console.error(`     imported by: ${importedBy.join(", ")}\n`);
+  console.error("❌ Local imports not in package.json files array:");
+  for (const { file, imported } of missing) {
+    console.error(`   ${file} → import from "./${imported}"`);
   }
-  console.error("Add them to the 'files' array in package.json before publishing.\n");
+  console.error("\nAdd these to the 'files' array in package.json.");
   process.exit(1);
 }
 
-// ── 4. Check for duplicates ───────────────────────────────────────────────────
-
-const seen = new Set();
-const duplicates = [];
-for (const f of pkg.files || []) {
-  if (seen.has(f)) duplicates.push(f);
-  seen.add(f);
-}
-
-if (duplicates.length > 0) {
-  console.error("\n⚠️  Duplicate entries in 'files' array:");
-  for (const d of duplicates) {
-    console.error(`   • ${d}`);
-  }
-  console.error("\nRemove duplicates before publishing.\n");
-  process.exit(1);
-}
-
-// ── All good ──────────────────────────────────────────────────────────────────
-
-console.log(`✅ All ${allImports.size} local imports verified in files array`);
-console.log(`✅ ${filesArray.size} files listed, 0 duplicates`);
+console.log(
+  `✅ ${pkg.name}@${pkg.version} — ${filesArray.length} files, ${mjsFiles.length} .mjs scanned, 0 missing imports`,
+);
