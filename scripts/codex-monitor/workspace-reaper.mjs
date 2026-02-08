@@ -19,6 +19,14 @@ const DEFAULT_ORPHAN_THRESHOLD_HOURS = 24;
 const DEFAULT_PROCESS_CHECK_RETRIES = 3;
 const IS_WINDOWS = process.platform === "win32";
 
+function buildGitEnv() {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  return env;
+}
+
 function ensureIso(date) {
   return new Date(date).toISOString();
 }
@@ -99,6 +107,9 @@ async function getLastModifiedTime(dirPath) {
     let latestMtime = null;
     const entries = await readdir(dirPath, { withFileTypes: true, recursive: false });
     for (const entry of entries) {
+      if (entry.name === ".git") {
+        continue;
+      }
       const fullPath = resolve(dirPath, entry.name);
       try {
         const stats = await stat(fullPath);
@@ -153,6 +164,7 @@ async function isWorktreeOrphaned(worktreePath, options = {}) {
         : `cd "${worktreePath}" && git status --porcelain`;
       const gitStatus = execSync(cmd, {
         encoding: "utf8",
+        env: buildGitEnv(),
         stdio: ["pipe", "pipe", "ignore"],
       }).trim();
       if (gitStatus.length > 0) {
