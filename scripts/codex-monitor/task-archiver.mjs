@@ -4,52 +4,134 @@
  * Automatically archives completed VK tasks to local .cache after 1+ days.
  * Keeps VK database clean and fast by moving old completed tasks out of sight.
  * Archived tasks are stored as JSON for later sprint review.
+ *
+ * Robustness features:
+ * - Idempotent: re-archiving an already-archived task is a no-op
+ * - Atomic writes via temp file + rename to prevent corruption
+ * - Archive pruning: removes archives older than retention period
+ * - Graceful handling of corrupted archive files
+ * - Session cleanup is best-effort and never blocks archival
  */
 
-import { mkdir, writeFile, readdir, readFile } from "node:fs/promises";
+import {
+  mkdir,
+  writeFile,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ARCHIVE_DIR = resolve(__dirname, ".cache", "completed-tasks");
-const ARCHIVE_AGE_HOURS = 24; // Archive tasks older than 1 day
+
+/** @type {string} Default archive directory */
+export const ARCHIVE_DIR = resolve(__dirname, ".cache", "completed-tasks");
+
+/** @type {number} Archive tasks completed more than this many hours ago */
+export const ARCHIVE_AGE_HOURS = 24;
+
+/** @type {number} Prune archive files older than this many days */
+export const ARCHIVE_RETENTION_DAYS = 90;
+
+/** @type {number} Max tasks to archive per sweep to avoid overload */
+export const DEFAULT_MAX_ARCHIVE = 50;
 
 /**
- * Archive a single task to local storage
+ * Check whether a task has already been archived to the local file store.
+ * @param {string} taskId
+ * @param {string} [archiveDir]
+ * @returns {Promise<boolean>}
  */
-async function archiveTaskToFile(task, attemptData = null) {
+export async function isAlreadyArchived(taskId, archiveDir = ARCHIVE_DIR) {
+  if (!taskId) return false;
   try {
-    await mkdir(ARCHIVE_DIR, { recursive: true });
+    if (!existsSync(archiveDir)) return false;
+    const files = await readdir(archiveDir);
+    return files.some((f) => f.includes(taskId) && f.endsWith(".json"));
+  } catch {
+    return false;
+  }
+}
 
-    const completedAt = new Date(task.completed_at || task.updated_at || Date.now());
+/**
+ * Archive a single task to local storage using atomic write (temp + rename).
+ * Idempotent — returns the existing path if the task has already been archived.
+ *
+ * @param {object} task
+ * @param {object|null} attemptData
+ * @param {string} [archiveDir]
+ * @returns {Promise<string|null>} path to the archive file, or null on failure
+ */
+export async function archiveTaskToFile(
+  task,
+  attemptData = null,
+  archiveDir = ARCHIVE_DIR,
+) {
+  try {
+    await mkdir(archiveDir, { recursive: true });
+
+    const completedAt = new Date(
+      task.completed_at || task.updated_at || Date.now(),
+    );
     const dateStr = completedAt.toISOString().split("T")[0]; // YYYY-MM-DD
-    const taskFile = resolve(ARCHIVE_DIR, `${dateStr}-${task.id}.json`);
+    const taskFile = resolve(archiveDir, `${dateStr}-${task.id}.json`);
+
+    // Idempotent: skip if already archived
+    if (existsSync(taskFile)) {
+      return taskFile;
+    }
 
     const archiveData = {
       task,
       attempt: attemptData,
       archived_at: new Date().toISOString(),
+      archiver_version: 2,
     };
 
-    await writeFile(taskFile, JSON.stringify(archiveData, null, 2));
+    // Atomic write: write to temp file first, then rename
+    const tmpFile = resolve(
+      archiveDir,
+      `.tmp-${randomBytes(6).toString("hex")}.json`,
+    );
+    await writeFile(tmpFile, JSON.stringify(archiveData, null, 2));
+    try {
+      await rename(tmpFile, taskFile);
+    } catch {
+      // Cross-device rename fallback: copy + delete
+      await writeFile(taskFile, JSON.stringify(archiveData, null, 2));
+      await rm(tmpFile, { force: true }).catch(() => {});
+    }
+
     return taskFile;
   } catch (err) {
-    console.error(`[archiver] Failed to archive task ${task.id}: ${err.message}`);
+    console.error(
+      `[archiver] Failed to archive task ${task?.id}: ${err.message}`,
+    );
     return null;
   }
 }
 
 /**
- * Fetch completed tasks from VK API
+ * Fetch completed tasks from VK API.
+ * @param {function} fetchVk
+ * @param {string} projectId
+ * @returns {Promise<object[]>}
  */
-async function fetchCompletedTasks(fetchVk, projectId) {
+export async function fetchCompletedTasks(fetchVk, projectId) {
+  if (!fetchVk || !projectId) return [];
   try {
     const statuses = ["done", "cancelled"];
     const allCompleted = [];
 
     for (const status of statuses) {
-      const res = await fetchVk(`/api/tasks?project_id=${projectId}&status=${status}`);
+      const res = await fetchVk(
+        `/api/tasks?project_id=${projectId}&status=${status}`,
+      );
       if (res?.success && Array.isArray(res.data)) {
         allCompleted.push(...res.data);
       }
@@ -63,18 +145,98 @@ async function fetchCompletedTasks(fetchVk, projectId) {
 }
 
 /**
- * Check if task is old enough to archive (completed > ARCHIVE_AGE_HOURS ago)
+ * Check if task is old enough to archive.
+ * @param {object} task
+ * @param {{ ageHours?: number, nowMs?: number }} [opts]
+ * @returns {boolean}
  */
-function isOldEnoughToArchive(task) {
+export function isOldEnoughToArchive(task, opts = {}) {
+  const ageHours = opts.ageHours ?? ARCHIVE_AGE_HOURS;
+  const nowMs = opts.nowMs ?? Date.now();
   const completedAt = new Date(task.completed_at || task.updated_at);
-  const ageHours = (Date.now() - completedAt.getTime()) / (1000 * 60 * 60);
-  return ageHours >= ARCHIVE_AGE_HOURS;
+  if (isNaN(completedAt.getTime())) return false;
+  const taskAgeHours = (nowMs - completedAt.getTime()) / (1000 * 60 * 60);
+  return taskAgeHours >= ageHours;
 }
 
 /**
- * Delete task from VK (mark as archived or hard delete)
+ * Clean up agent sessions (Copilot/Codex/Claude) associated with a task.
+ * Best-effort — never throws; returns the count of cleaned sessions.
+ *
+ * @param {string} taskId
+ * @param {string} attemptId
+ * @returns {Promise<number>}
  */
-async function deleteTaskFromVK(fetchVk, taskId) {
+export async function cleanupAgentSessions(taskId, attemptId) {
+  if (!taskId) return 0;
+  let cleaned = 0;
+
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
+  if (!homeDir) return 0;
+
+  // Helper: scan a directory for session files matching taskId or attemptId
+  async function cleanDir(sessionDir) {
+    try {
+      if (!existsSync(sessionDir)) return 0;
+      const sessionFiles = await readdir(sessionDir);
+      let dirCleaned = 0;
+
+      for (const file of sessionFiles) {
+        if (file.includes(taskId) || (attemptId && file.includes(attemptId))) {
+          await rm(resolve(sessionDir, file), { force: true, recursive: true });
+          dirCleaned++;
+        }
+      }
+      return dirCleaned;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Codex SDK sessions
+  cleaned += await cleanDir(resolve(homeDir, ".codex", "sessions"));
+
+  // Claude SDK sessions
+  cleaned += await cleanDir(resolve(homeDir, ".claude", "sessions"));
+
+  // Copilot sessions — try via CLI (best-effort, fast timeout)
+  try {
+    const { execSync } = await import("node:child_process");
+    const sessionsOutput = execSync("gh copilot session list --json", {
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    const sessions = JSON.parse(sessionsOutput);
+    if (Array.isArray(sessions)) {
+      for (const session of sessions) {
+        if (
+          session.id?.includes(taskId) ||
+          (attemptId && session.id?.includes(attemptId))
+        ) {
+          execSync(`gh copilot session delete ${session.id}`, {
+            timeout: 5000,
+            stdio: ["pipe", "pipe", "ignore"],
+          });
+          cleaned++;
+        }
+      }
+    }
+  } catch {
+    // Copilot CLI might not be available or no sessions to clean
+  }
+
+  return cleaned;
+}
+
+/**
+ * Delete task from VK (mark as archived or hard delete).
+ * @param {function} fetchVk
+ * @param {string} taskId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteTaskFromVK(fetchVk, taskId) {
+  if (!fetchVk || !taskId) return false;
   try {
     // Try DELETE endpoint first
     const deleteRes = await fetchVk(`/api/tasks/${taskId}`, {
@@ -100,86 +262,207 @@ async function deleteTaskFromVK(fetchVk, taskId) {
 }
 
 /**
- * Main archiver function - runs during maintenance sweep
+ * Prune old archive files that exceed the retention period.
+ * @param {{ retentionDays?: number, archiveDir?: string, nowMs?: number }} [opts]
+ * @returns {Promise<number>} number of files pruned
  */
-export async function archiveCompletedTasks(fetchVk, projectId, options = {}) {
-  const dryRun = options.dryRun || false;
-  const maxArchive = options.maxArchive || 50; // Limit per cycle to avoid overload
+export async function pruneOldArchives(opts = {}) {
+  const retentionDays = opts.retentionDays ?? ARCHIVE_RETENTION_DAYS;
+  const archiveDir = opts.archiveDir ?? ARCHIVE_DIR;
+  const nowMs = opts.nowMs ?? Date.now();
+  const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
 
-  console.log(`[archiver] Scanning for completed tasks older than ${ARCHIVE_AGE_HOURS}h...`);
-
+  let pruned = 0;
   try {
-    const completedTasks = await fetchCompletedTasks(fetchVk, projectId);
-    const oldTasks = completedTasks.filter(isOldEnoughToArchive);
+    if (!existsSync(archiveDir)) return 0;
+    const files = await readdir(archiveDir);
 
-    if (oldTasks.length === 0) {
-      console.log(`[archiver] No old completed tasks to archive`);
-      return { archived: 0, deleted: 0, errors: 0 };
-    }
-
-    console.log(
-      `[archiver] Found ${oldTasks.length} tasks to archive (limit: ${maxArchive})`,
-    );
-
-    let archived = 0;
-    let deleted = 0;
-    let errors = 0;
-
-    for (const task of oldTasks.slice(0, maxArchive)) {
-      // Archive to file first
-      const archivePath = await archiveTaskToFile(task);
-      if (!archivePath) {
-        errors++;
-        continue;
-      }
-
-      archived++;
-      console.log(
-        `[archiver] Archived task "${task.title}" (${task.id.substring(0, 8)}) to ${archivePath}`,
-      );
-
-      // Delete from VK unless dry-run
-      if (!dryRun) {
-        const deleteSuccess = await deleteTaskFromVK(fetchVk, task.id);
-        if (deleteSuccess) {
-          deleted++;
-          console.log(
-            `[archiver] Deleted task "${task.title}" (${task.id.substring(0, 8)}) from VK`,
-          );
-        } else {
-          console.warn(
-            `[archiver] Failed to delete task "${task.title}" (${task.id.substring(0, 8)}) from VK`,
-          );
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const filePath = resolve(archiveDir, file);
+        const fileStat = await stat(filePath);
+        if (nowMs - fileStat.mtimeMs > maxAgeMs) {
+          await rm(filePath, { force: true });
+          pruned++;
         }
+      } catch {
+        // Skip files we can't stat
       }
     }
 
-    return { archived, deleted, errors };
+    if (pruned > 0) {
+      console.log(
+        `[archiver] Pruned ${pruned} archive files older than ${retentionDays} days`,
+      );
+    }
   } catch (err) {
-    console.error(`[archiver] Archive sweep failed: ${err.message}`);
-    return { archived: 0, deleted: 0, errors: 1 };
+    console.warn(`[archiver] Archive pruning failed: ${err.message}`);
+  }
+  return pruned;
+}
+
+/**
+ * Get archive statistics (file count and total size).
+ * @param {string} [archiveDir]
+ * @returns {Promise<{ count: number, totalBytes: number }>}
+ */
+export async function getArchiveStats(archiveDir = ARCHIVE_DIR) {
+  try {
+    if (!existsSync(archiveDir)) return { count: 0, totalBytes: 0 };
+    const files = await readdir(archiveDir);
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    let totalBytes = 0;
+
+    for (const file of jsonFiles) {
+      try {
+        const fileStat = await stat(resolve(archiveDir, file));
+        totalBytes += fileStat.size;
+      } catch {
+        // skip
+      }
+    }
+
+    return { count: jsonFiles.length, totalBytes };
+  } catch {
+    return { count: 0, totalBytes: 0 };
   }
 }
 
 /**
- * Load archived tasks for sprint review
+ * Main archiver function — runs during maintenance sweep.
+ *
+ * @param {function} fetchVk - VK API fetch function
+ * @param {string} projectId - VK project ID
+ * @param {object} [options]
+ * @param {boolean} [options.dryRun=false] - if true, archive to file but don't delete from VK
+ * @param {number} [options.maxArchive=50] - max tasks to archive per cycle
+ * @param {number} [options.ageHours] - override age threshold
+ * @param {boolean} [options.prune=true] - prune old archives
+ * @param {string} [options.archiveDir] - override archive directory
+ * @returns {Promise<{ archived: number, deleted: number, skipped: number, sessionsCleaned: number, pruned: number, errors: number }>}
+ */
+export async function archiveCompletedTasks(fetchVk, projectId, options = {}) {
+  const dryRun = options.dryRun ?? false;
+  const maxArchive = options.maxArchive ?? DEFAULT_MAX_ARCHIVE;
+  const ageHours = options.ageHours ?? ARCHIVE_AGE_HOURS;
+  const shouldPrune = options.prune ?? true;
+  const archiveDir = options.archiveDir ?? ARCHIVE_DIR;
+
+  console.log(
+    `[archiver] Scanning for completed tasks older than ${ageHours}h...`,
+  );
+
+  const result = {
+    archived: 0,
+    deleted: 0,
+    skipped: 0,
+    sessionsCleaned: 0,
+    pruned: 0,
+    errors: 0,
+  };
+
+  try {
+    const completedTasks = await fetchCompletedTasks(fetchVk, projectId);
+    const oldTasks = completedTasks.filter((t) =>
+      isOldEnoughToArchive(t, { ageHours }),
+    );
+
+    if (oldTasks.length === 0) {
+      console.log(`[archiver] No old completed tasks to archive`);
+    } else {
+      console.log(
+        `[archiver] Found ${oldTasks.length} tasks to archive (limit: ${maxArchive})`,
+      );
+
+      for (const task of oldTasks.slice(0, maxArchive)) {
+        // Skip already-archived tasks (idempotent guard)
+        if (await isAlreadyArchived(task.id, archiveDir)) {
+          result.skipped++;
+          continue;
+        }
+
+        // Archive to file first
+        const archivePath = await archiveTaskToFile(task, null, archiveDir);
+        if (!archivePath) {
+          result.errors++;
+          continue;
+        }
+
+        result.archived++;
+        console.log(
+          `[archiver] Archived task "${task.title}" (${task.id.substring(0, 8)})`,
+        );
+
+        // Clean up agent sessions (best-effort, never blocks)
+        if (!dryRun) {
+          const attemptId = task.latest_attempt_id || task.attempt_id || "";
+          const sessionsCleanedForTask = await cleanupAgentSessions(
+            task.id,
+            attemptId,
+          );
+          if (sessionsCleanedForTask > 0) {
+            result.sessionsCleaned += sessionsCleanedForTask;
+            console.log(
+              `[archiver] Cleaned ${sessionsCleanedForTask} agent session(s) for task "${task.title}"`,
+            );
+          }
+        }
+
+        // Delete from VK unless dry-run
+        if (!dryRun) {
+          const deleteSuccess = await deleteTaskFromVK(fetchVk, task.id);
+          if (deleteSuccess) {
+            result.deleted++;
+          } else {
+            console.warn(
+              `[archiver] Failed to delete task "${task.title}" (${task.id.substring(0, 8)}) from VK`,
+            );
+          }
+        }
+      }
+    }
+
+    // Prune old archives beyond retention period
+    if (shouldPrune) {
+      result.pruned = await pruneOldArchives({ archiveDir });
+    }
+
+    return result;
+  } catch (err) {
+    console.error(`[archiver] Archive sweep failed: ${err.message}`);
+    result.errors++;
+    return result;
+  }
+}
+
+/**
+ * Load archived tasks for sprint review.
+ * @param {object} [options]
+ * @param {string|Date} [options.since] - include archives after this date
+ * @param {string|Date} [options.until] - include archives before this date
+ * @param {string} [options.status] - filter by task status
+ * @param {string} [options.archiveDir] - override archive directory
+ * @returns {Promise<object[]>}
  */
 export async function loadArchivedTasks(options = {}) {
   const since = options.since ? new Date(options.since) : null;
   const until = options.until ? new Date(options.until) : null;
+  const statusFilter = options.status ?? null;
+  const archiveDir = options.archiveDir ?? ARCHIVE_DIR;
 
   try {
-    if (!existsSync(ARCHIVE_DIR)) {
+    if (!existsSync(archiveDir)) {
       return [];
     }
 
-    const files = await readdir(ARCHIVE_DIR);
+    const files = await readdir(archiveDir);
     const jsonFiles = files.filter((f) => f.endsWith(".json"));
     const archivedTasks = [];
 
     for (const file of jsonFiles) {
       try {
-        const filePath = resolve(ARCHIVE_DIR, file);
+        const filePath = resolve(archiveDir, file);
         const content = await readFile(filePath, "utf8");
         const data = JSON.parse(content);
 
@@ -188,9 +471,12 @@ export async function loadArchivedTasks(options = {}) {
         if (since && archivedAt < since) continue;
         if (until && archivedAt > until) continue;
 
+        // Filter by status
+        if (statusFilter && data.task?.status !== statusFilter) continue;
+
         archivedTasks.push(data);
       } catch {
-        // Skip corrupted files
+        // Skip corrupted files silently
       }
     }
 
@@ -204,9 +490,14 @@ export async function loadArchivedTasks(options = {}) {
 }
 
 /**
- * Generate sprint review report from archived tasks
+ * Generate sprint review report from archived tasks.
+ * @param {object[]} archivedTasks
+ * @returns {object}
  */
 export function generateSprintReport(archivedTasks) {
+  if (!Array.isArray(archivedTasks))
+    return { total: 0, by_status: {}, by_priority: {}, by_date: {}, tasks: [] };
+
   const report = {
     total: archivedTasks.length,
     by_status: {},
@@ -217,8 +508,12 @@ export function generateSprintReport(archivedTasks) {
 
   for (const item of archivedTasks) {
     const task = item.task;
+    if (!task) continue;
+
     const completedAt = new Date(task.completed_at || task.updated_at);
-    const dateStr = completedAt.toISOString().split("T")[0];
+    const dateStr = isNaN(completedAt.getTime())
+      ? "unknown"
+      : completedAt.toISOString().split("T")[0];
 
     // Group by status
     report.by_status[task.status] = (report.by_status[task.status] || 0) + 1;
@@ -245,37 +540,49 @@ export function generateSprintReport(archivedTasks) {
 }
 
 /**
- * Format sprint report as text
+ * Format sprint report as text for Telegram/console.
+ * @param {object} report
+ * @returns {string}
  */
 export function formatSprintReport(report) {
+  if (!report || typeof report !== "object") return "No report data.";
+
   const lines = [];
   lines.push("=== Sprint Review Report ===");
-  lines.push(`Total Tasks Completed: ${report.total}`);
+  lines.push(`Total Tasks Completed: ${report.total ?? 0}`);
   lines.push("");
 
-  lines.push("By Status:");
-  for (const [status, count] of Object.entries(report.by_status)) {
-    lines.push(`  ${status}: ${count}`);
+  if (report.by_status && Object.keys(report.by_status).length > 0) {
+    lines.push("By Status:");
+    for (const [status, count] of Object.entries(report.by_status)) {
+      lines.push(`  ${status}: ${count}`);
+    }
+    lines.push("");
   }
-  lines.push("");
 
-  lines.push("By Priority:");
-  for (const [priority, count] of Object.entries(report.by_priority)) {
-    lines.push(`  ${priority}: ${count}`);
+  if (report.by_priority && Object.keys(report.by_priority).length > 0) {
+    lines.push("By Priority:");
+    for (const [priority, count] of Object.entries(report.by_priority)) {
+      lines.push(`  ${priority}: ${count}`);
+    }
+    lines.push("");
   }
-  lines.push("");
 
-  lines.push("By Date:");
-  for (const [date, count] of Object.entries(report.by_date)) {
-    lines.push(`  ${date}: ${count} tasks`);
+  if (report.by_date && Object.keys(report.by_date).length > 0) {
+    lines.push("By Date:");
+    for (const [date, count] of Object.entries(report.by_date)) {
+      lines.push(`  ${date}: ${count} tasks`);
+    }
+    lines.push("");
   }
-  lines.push("");
 
-  lines.push("Recent Tasks:");
-  for (const task of report.tasks.slice(0, 10)) {
-    lines.push(
-      `  [${task.status}] ${task.title.substring(0, 60)} (${task.id.substring(0, 8)})`,
-    );
+  if (Array.isArray(report.tasks) && report.tasks.length > 0) {
+    lines.push("Recent Tasks:");
+    for (const task of report.tasks.slice(0, 10)) {
+      const title = (task.title || "untitled").substring(0, 60);
+      const shortId = (task.id || "?").substring(0, 8);
+      lines.push(`  [${task.status || "?"}] ${title} (${shortId})`);
+    }
   }
 
   return lines.join("\n");
