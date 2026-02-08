@@ -89,6 +89,64 @@
         "orchestrator": { "type": "string" },
         "planner": { "type": "string" }
       }
+    },
+    "auth": {
+      "type": "object",
+      "description": "Authentication configuration for agent SDKs",
+      "additionalProperties": false,
+      "properties": {
+        "copilot": {
+          "type": "object",
+          "properties": {
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["env", "cli", "vscode", "interactive"]
+              },
+              "description": "Auth source priority: env (tokens), cli (gh auth), vscode (extension), interactive (prompt)"
+            },
+            "fallbackToInteractive": {
+              "type": "boolean",
+              "description": "Allow interactive login if all other sources fail"
+            }
+          }
+        },
+        "claude": {
+          "type": "object",
+          "properties": {
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["env", "cli", "interactive"]
+              },
+              "description": "Auth source priority: env (API key), cli (config file), interactive (prompt)"
+            },
+            "fallbackToInteractive": {
+              "type": "boolean",
+              "description": "Allow interactive API key prompt if all other sources fail"
+            }
+          }
+        },
+        "codex": {
+          "type": "object",
+          "properties": {
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["config", "env", "interactive"]
+              },
+              "description": "Auth source priority: config (config.toml), env (API key), interactive (prompt)"
+            },
+            "fallbackToInteractive": {
+              "type": "boolean",
+              "description": "Allow interactive configuration if all other sources fail"
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
