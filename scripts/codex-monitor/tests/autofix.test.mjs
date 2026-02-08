@@ -242,7 +242,8 @@ describe("isDevMode + resetDevModeCache", () => {
     expect(isDevMode()).toBe(true);
   });
 
-  it("returns false for AUTOFIX_MODE=npm (analyze mode)", async () => {
+  it("returns false for AUTOFIX_MODE=npm (analyze-only)", async () => {
+    vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     process.env.AUTOFIX_MODE = "npm";
     resetDevModeCache();
@@ -250,19 +251,25 @@ describe("isDevMode + resetDevModeCache", () => {
     expect(isDevMode()).toBe(false);
   });
 
-  it("returns true for missing mode when inside source repo", async () => {
+  it("falls back to repo detection when mode is missing", async () => {
+    vi.resetModules();
     const { isDevMode, resetDevModeCache } = await loadAutofix();
     delete process.env.AUTOFIX_MODE;
     resetDevModeCache();
 
-    // Inside the virtengine monorepo, no AUTOFIX_MODE falls through
-    // to monorepo marker detection which returns true
     expect(isDevMode()).toBe(true);
+  });
 
-    process.env.AUTOFIX_MODE = "prod";
+  it("returns false for explicit analyze-only modes", async () => {
+    vi.resetModules();
+    const { isDevMode, resetDevModeCache } = await loadAutofix();
+    process.env.AUTOFIX_MODE = "analyze";
     resetDevModeCache();
-    // "prod" is not a recognized mode, so also falls through to monorepo detection
-    expect(isDevMode()).toBe(true);
+    expect(isDevMode()).toBe(false);
+
+    process.env.AUTOFIX_MODE = "suggest";
+    resetDevModeCache();
+    expect(isDevMode()).toBe(false);
   });
 
   it("resets cached value", async () => {
@@ -272,7 +279,6 @@ describe("isDevMode + resetDevModeCache", () => {
     resetDevModeCache();
     expect(isDevMode()).toBe(true);
 
-    // Without reset, cache returns stale value
     process.env.AUTOFIX_MODE = "analyze";
     expect(isDevMode()).toBe(true);
 
@@ -313,8 +319,7 @@ describe("getFixAttemptCount", () => {
     });
     expect(getFixAttemptCount(signature)).toBe(1);
 
-    // Must advance past FIX_COOLDOWN_MS (5 min = 300_000ms)
-    vi.setSystemTime(301_000);
+    vi.setSystemTime(5 * 60_000 + 1);
     await fixLoopingError({
       errorLine: "repeating error",
       repeatCount: 3,

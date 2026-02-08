@@ -28,7 +28,7 @@
  */
 
 import { spawn, execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,45 +51,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  *  - No monorepo markers in parent directories
  *  - AUTOFIX_MODE env var is set to "analyze" (explicit override)
  */
-let _devModeCache = null;
-
-export function isDevMode() {
-  if (_devModeCache !== null) return _devModeCache;
-
-  // Explicit env override
-  const envMode = (process.env.AUTOFIX_MODE || "").toLowerCase();
-  if (envMode === "execute" || envMode === "dev") {
-    _devModeCache = true;
-    return true;
-  }
-  if (envMode === "analyze" || envMode === "npm" || envMode === "suggest") {
-    _devModeCache = false;
-    return false;
-  }
-
-  // Check if we're inside node_modules (npm install)
-  const normalized = __dirname.replace(/\\/g, "/").toLowerCase();
-  if (normalized.includes("/node_modules/")) {
-    _devModeCache = false;
-    return false;
-  }
-
-  // Check for monorepo markers (source repo)
-  const repoRoot = resolve(__dirname, "..", "..");
-  const monoRepoMarkers = ["go.mod", "Makefile", "AGENTS.md", "x"];
-  const isMonoRepo = monoRepoMarkers.some((m) =>
-    existsSync(resolve(repoRoot, m)),
-  );
-
-  _devModeCache = isMonoRepo;
-  return isMonoRepo;
-}
-
-/** Reset dev mode cache (for testing). */
-export function resetDevModeCache() {
-  _devModeCache = null;
-}
-
 // ── Error extraction ────────────────────────────────────────────────────────
 
 /**
@@ -351,12 +312,58 @@ async function readSourceContext(filePath, errorLine, contextLines = 30) {
 
 // ── Fix tracking ────────────────────────────────────────────────────────────
 
+// ── Dev mode detection ───────────────────────────────────────────────────────
+
+/**
+ * Detect whether codex-monitor is running from its source repo (dev mode)
+ * or from an npm install (npm mode).
+ *
+ * Dev mode: AUTOFIX_MODE=dev/execute, or monorepo markers present
+ * npm mode: AUTOFIX_MODE=npm/analyze/suggest, or inside node_modules
+ */
+let _devModeCache = null;
+
+export function isDevMode() {
+  if (_devModeCache !== null) return _devModeCache;
+
+  const envMode = (process.env.AUTOFIX_MODE || "").toLowerCase();
+  if (envMode === "execute" || envMode === "dev") {
+    _devModeCache = true;
+    return true;
+  }
+  if (envMode === "analyze" || envMode === "npm" || envMode === "suggest") {
+    _devModeCache = false;
+    return false;
+  }
+
+  // Check if we're inside node_modules (npm install)
+  const normalized = __dirname.replace(/\\/g, "/").toLowerCase();
+  if (normalized.includes("/node_modules/")) {
+    _devModeCache = false;
+    return false;
+  }
+
+  // Check for monorepo markers (source repo)
+  const repoRoot = resolve(__dirname, "..", "..");
+  const monoRepoMarkers = ["go.mod", "Makefile", "AGENTS.md", "x"];
+  const isMonoRepo = monoRepoMarkers.some((m) =>
+    existsSync(resolve(repoRoot, m)),
+  );
+
+  _devModeCache = isMonoRepo;
+  return isMonoRepo;
+}
+
+/** Reset dev mode cache (for testing). */
+export function resetDevModeCache() {
+  _devModeCache = null;
+}
+
 /** @type {Map<string, {count: number, lastAt: number}>} */
 const fixAttempts = new Map();
 const MAX_FIX_ATTEMPTS = 3;
-// 5 min cooldown prevents rapid-fire crash loop where autofix itself triggers
-// 3 attempts in < 3 minutes and then gets throttled by monitor's circuit breaker.
-const FIX_COOLDOWN_MS = 5 * 60_000;
+// 1 min cooldown prevents rapid-fire crash loop while keeping retry cadence short.
+const FIX_COOLDOWN_MS = 60_000;
 
 function canAttemptFix(signature) {
   const record = fixAttempts.get(signature);

@@ -43,7 +43,8 @@
     "./telegram-bot": "./telegram-bot.mjs",
     "./workspace-registry": "./workspace-registry.mjs",
     "./shared-workspace-registry": "./shared-workspace-registry.mjs",
-    "./merge-strategy": "./merge-strategy.mjs"
+    "./merge-strategy": "./merge-strategy.mjs",
+    "./restart-controller": "./restart-controller.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -60,6 +61,7 @@
     "syntax:check": "node -e \"const fs=require('fs'),path=require('path');const files=fs.readdirSync('.').filter(f=>f.endsWith('.mjs'));let fail=0;for(const f of files){try{require('child_process').execSync('node --check '+f,{stdio:'pipe'});}catch(e){console.error('Syntax error: '+f);console.error(e.stderr.toString());fail=1;}}if(fail)process.exit(1);console.log('Syntax OK: '+files.length+' files checked');\"",
     "pretest": "npm run syntax:check",
     "test": "vitest run --config vitest.config.mjs",
+    "test:watch": "vitest",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
   },
@@ -67,6 +69,7 @@
     "cli.mjs",
     "config.mjs",
     "monitor.mjs",
+    "restart-controller.mjs",
     "utils.mjs",
     "autofix.mjs",
     "agent-sdk.mjs",

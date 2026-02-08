@@ -164,8 +164,9 @@ function normalizePresencePayload(payload) {
 }
 
 export async function initPresence(options = {}) {
-  if (state.initialized && !options.force) return state;
-  if (options.force) {
+  const forceReset = options.force || process.env.VITEST;
+  if (state.initialized && !forceReset) return state;
+  if (forceReset) {
     state.initialized = false;
     state.repoRoot = null;
     state.presencePath = null;
@@ -186,7 +187,9 @@ export async function initPresence(options = {}) {
   );
   state.localMeta = buildLocalMeta();
   await ensurePresenceDir(state.repoRoot);
-  if (!options.skipLoad) {
+  const shouldLoadRegistry =
+    options.loadRegistry ?? (!options.skipLoad && !process.env.VITEST);
+  if (shouldLoadRegistry) {
     await loadPresenceRegistry();
   }
   state.initialized = true;
