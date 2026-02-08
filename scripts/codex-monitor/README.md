@@ -98,7 +98,6 @@ Telegram users can also send explicit prompts with `/ask <prompt>` (free-text st
 - **Telegram chatbot** — Real-time notifications + interactive commands
 - **Interactive shell** — REPL-style agent prompts inside the monitor terminal (`--shell`)
 - **Distributed task claiming** — Idempotent task claiming across multiple workstations with deterministic conflict resolution
-- **Interactive shell** — REPL-style agent prompts inside the monitor terminal (`--shell`)
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
 - **Task planner** — Detects empty backlog and auto-generates new tasks via AI
