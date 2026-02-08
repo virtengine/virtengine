@@ -849,7 +849,9 @@ function Clear-CopilotCloudDisabled {
     $state.cloud_disabled_reason = $null
     $state.cloud_disabled_at = $null
     Save-CopilotState -State $state
-    $env:COPILOT_CLOUD_DISABLED = ""
+    # Only clear the _UNTIL cooldown — never clear COPILOT_CLOUD_DISABLED itself.
+    # The user may have set COPILOT_CLOUD_DISABLED=1 permanently in .env;
+    # wiping it here would override their intent when a cooldown expires.
     $env:COPILOT_CLOUD_DISABLED_UNTIL = ""
 }
 
@@ -890,7 +892,10 @@ function Disable-CopilotCloud {
     $state.cloud_disabled_reason = $Reason
     $state.cloud_disabled_at = (Get-Date).ToString("o")
     Save-CopilotState -State $state
-    $env:COPILOT_CLOUD_DISABLED = "1"
+    # Only set _UNTIL — never touch COPILOT_CLOUD_DISABLED itself.
+    # That flag is the user's permanent setting from .env and must not be
+    # overwritten by runtime cooldowns (otherwise Clear would need to restore
+    # the original value, and wiping it re-enables Copilot when it shouldn't be).
     $env:COPILOT_CLOUD_DISABLED_UNTIL = $until.ToString("o")
     Write-Log "Copilot cloud disabled until $($until.ToString("o"))" -Level "WARN"
     if ($Reason) {
@@ -990,6 +995,43 @@ function Get-TaskUrl {
     return "$base/tasks/$TaskId"
 }
 
+function Get-AttemptExecutorProfile {
+    param([Parameter(Mandatory)][object]$Attempt)
+    if (-not $Attempt) { return $null }
+
+    $profile = $null
+    if ($Attempt.executor_profile_id) {
+        $profile = $Attempt.executor_profile_id
+    }
+    elseif ($Attempt.executor_profile) {
+        $profile = $Attempt.executor_profile
+    }
+
+    if ($profile) {
+        if ($profile -is [string]) {
+            $parts = $profile -split "[:/]"
+            if ($parts.Count -ge 2) {
+                return @{ executor = $parts[0]; variant = $parts[1] }
+            }
+            return @{ executor = $profile }
+        }
+
+        $execName = $profile.executor ?? $profile.Executor ?? $profile.name ?? $profile.id
+        $variant = $profile.variant ?? $profile.Variant ?? $profile.model ?? $profile.model_variant
+        if ($execName -or $variant) {
+            return @{ executor = $execName; variant = $variant }
+        }
+    }
+
+    $attemptExec = $Attempt.executor ?? $Attempt.Executor
+    $attemptVariant = $Attempt.executor_variant ?? $Attempt.variant ?? $Attempt.executorVariant
+    if ($attemptExec -or $attemptVariant) {
+        return @{ executor = $attemptExec; variant = $attemptVariant }
+    }
+
+    return $null
+}
+
 function Add-RecentItem {
     param(
         [Parameter(Mandatory)][hashtable]$Item,
@@ -1020,6 +1062,9 @@ function Save-StatusSnapshot {
             task_id               = $info.task_id
             branch                = $info.branch
             pr_number             = $info.pr_number
+            executor              = $info.executor
+            executor_variant      = $info.executor_variant
+            target_branch         = $info.target_branch
             status                = $info.status
             updated_at            = (Get-Date).ToString("o")
             last_process_status   = $info.last_process_status
@@ -2302,6 +2347,7 @@ function Sync-TrackedAttempts {
 
     foreach ($a in $apiAttempts) {
         if (-not $a.branch) { continue }
+        $execProfile = Get-AttemptExecutorProfile -Attempt $a
         if (-not $script:TrackedAttempts.ContainsKey($a.id)) {
             # Newly discovered active attempt
             $script:TrackedAttempts[$a.id] = @{
@@ -2314,6 +2360,8 @@ function Sync-TrackedAttempts {
                 task_description_cached       = $null
                 updated_at                    = $a.updated_at
                 container_ref                 = $a.container_ref
+                executor                      = $execProfile.executor
+                executor_variant              = $execProfile.variant
                 ci_notified                   = $false
                 conflict_notified             = $false
                 rebase_requested              = $false
@@ -2349,6 +2397,14 @@ function Sync-TrackedAttempts {
         else {
             $script:TrackedAttempts[$a.id].updated_at = $a.updated_at
             $script:TrackedAttempts[$a.id].container_ref = $a.container_ref
+            if ($execProfile) {
+                if (-not $script:TrackedAttempts[$a.id].executor -and $execProfile.executor) {
+                    $script:TrackedAttempts[$a.id].executor = $execProfile.executor
+                }
+                if (-not $script:TrackedAttempts[$a.id].executor_variant -and $execProfile.variant) {
+                    $script:TrackedAttempts[$a.id].executor_variant = $execProfile.variant
+                }
+            }
         }
 
         $summary = $summaryMap[$a.id]
