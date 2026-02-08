@@ -48,6 +48,23 @@ func (s *KeeperTestSuite) TestSettleOrder() {
 	updatedUsage, found := s.keeper.GetUsageRecord(s.ctx, "usage-1")
 	s.Require().True(found)
 	s.Require().True(updatedUsage.Settled)
+
+	params := s.keeper.GetParams(s.ctx)
+	height := s.ctx.BlockHeight()
+	if height < 0 {
+		height = 0
+	}
+	epoch := uint64(height) / params.StakingRewardEpochLength //nolint:gosec // non-negative height checked above
+	distributions := s.keeper.GetRewardsByEpoch(s.ctx, epoch)
+
+	foundUsageRewards := false
+	for _, dist := range distributions {
+		if dist.Source == types.RewardSourceUsage {
+			foundUsageRewards = true
+			break
+		}
+	}
+	s.Require().True(foundUsageRewards, "expected usage rewards distribution")
 }
 
 func (s *KeeperTestSuite) TestFinalSettlement() {
@@ -199,6 +216,54 @@ func (s *KeeperTestSuite) TestGetSettlementsByOrder() {
 	settlements := s.keeper.GetSettlementsByOrder(s.ctx, "order-multi-settle")
 	// Initially no settlements
 	s.Require().Len(settlements, 0)
+}
+
+func (s *KeeperTestSuite) TestBuildUsageSummary() {
+	amount := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000)))
+	escrowID, err := s.keeper.CreateEscrow(s.ctx, "order-summary", s.depositor, amount, time.Hour*24, nil)
+	s.Require().NoError(err)
+	err = s.keeper.ActivateEscrow(s.ctx, escrowID, "lease-summary", s.provider)
+	s.Require().NoError(err)
+
+	now := s.ctx.BlockTime()
+	usages := []types.UsageRecord{
+		{
+			OrderID:           "order-summary",
+			Provider:          s.provider.String(),
+			Customer:          s.depositor.String(),
+			UsageUnits:        100,
+			UsageType:         "cpu",
+			TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(200))),
+			PeriodStart:       now.Add(-2 * time.Hour),
+			PeriodEnd:         now.Add(-time.Hour),
+			SubmittedAt:       now.Add(-time.Hour),
+			ProviderSignature: []byte("sig-1"),
+		},
+		{
+			OrderID:           "order-summary",
+			Provider:          s.provider.String(),
+			Customer:          s.depositor.String(),
+			UsageUnits:        50,
+			UsageType:         "gpu",
+			TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(300))),
+			PeriodStart:       now.Add(-time.Hour),
+			PeriodEnd:         now,
+			SubmittedAt:       now,
+			ProviderSignature: []byte("sig-2"),
+		},
+	}
+
+	for _, usage := range usages {
+		u := usage
+		err := s.keeper.RecordUsage(s.ctx, &u)
+		s.Require().NoError(err)
+	}
+
+	summary, err := s.keeper.BuildUsageSummary(s.ctx, "order-summary", s.provider.String(), time.Time{}, time.Time{})
+	s.Require().NoError(err)
+	s.Require().Equal(uint64(150), summary.TotalUsage)
+	s.Require().Equal(sdkmath.NewInt(500), summary.TotalCost.AmountOf("uve"))
+	s.Require().Len(summary.ByUsageType, 2)
 }
 
 func TestSettlementValidation(t *testing.T) {

@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"time"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -161,6 +163,30 @@ func (q GRPCQuerier) UsageRecordsByOrder(ctx sdk.Context, req *types.QueryUsageR
 	}, nil
 }
 
+// UsageSummary returns usage summary for an order/provider and period.
+func (q GRPCQuerier) UsageSummary(ctx sdk.Context, req *types.QueryUsageSummaryRequest) (*types.QueryUsageSummaryResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	var start, end time.Time
+	if req.PeriodStart > 0 {
+		start = time.Unix(req.PeriodStart, 0).UTC()
+	}
+	if req.PeriodEnd > 0 {
+		end = time.Unix(req.PeriodEnd, 0).UTC()
+	}
+
+	summary, err := q.BuildUsageSummary(ctx, req.OrderID, req.Provider, start, end)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	return &types.QueryUsageSummaryResponse{
+		Summary: summary,
+	}, nil
+}
+
 // RewardDistribution returns a reward distribution by ID
 func (q GRPCQuerier) RewardDistribution(ctx sdk.Context, req *types.QueryRewardDistributionRequest) (*types.QueryRewardDistributionResponse, error) {
 	if req == nil {
@@ -196,6 +222,22 @@ func (q GRPCQuerier) RewardsByEpoch(ctx sdk.Context, req *types.QueryRewardsByEp
 	}, nil
 }
 
+// RewardHistory returns reward history for an address.
+func (q GRPCQuerier) RewardHistory(ctx sdk.Context, req *types.QueryRewardHistoryRequest) (*types.QueryRewardHistoryResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	entries, err := q.GetRewardHistory(ctx, req.Address, req.Source, req.Limit, req.Offset)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	return &types.QueryRewardHistoryResponse{
+		Entries: entries,
+	}, nil
+}
+
 // ClaimableRewards returns claimable rewards for an address
 func (q GRPCQuerier) ClaimableRewards(ctx sdk.Context, req *types.QueryClaimableRewardsRequest) (*types.QueryClaimableRewardsResponse, error) {
 	if req == nil {
@@ -220,6 +262,45 @@ func (q GRPCQuerier) ClaimableRewards(ctx sdk.Context, req *types.QueryClaimable
 
 	return &types.QueryClaimableRewardsResponse{
 		Rewards: &rewards,
+	}, nil
+}
+
+// Payout returns a payout record by ID.
+func (q GRPCQuerier) Payout(ctx sdk.Context, req *types.QueryPayoutRequest) (*types.QueryPayoutResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	if req.PayoutID == "" {
+		return nil, status.Error(codes.InvalidArgument, "payout_id cannot be empty")
+	}
+
+	payout, found := q.GetPayout(ctx, req.PayoutID)
+	if !found {
+		return &types.QueryPayoutResponse{
+			Payout: nil,
+		}, nil
+	}
+
+	return &types.QueryPayoutResponse{
+		Payout: &payout,
+	}, nil
+}
+
+// PayoutsByProvider returns payouts for a provider.
+func (q GRPCQuerier) PayoutsByProvider(ctx sdk.Context, req *types.QueryPayoutsByProviderRequest) (*types.QueryPayoutsByProviderResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	if req.Provider == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
+	}
+
+	payouts := q.GetPayoutsByProvider(ctx, req.Provider)
+
+	return &types.QueryPayoutsByProviderResponse{
+		Payouts: payouts,
 	}, nil
 }
 

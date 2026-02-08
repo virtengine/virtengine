@@ -492,6 +492,53 @@ func TestSettlementPipeline_SubmitUsageToChain(t *testing.T) {
 	}
 }
 
+func TestSettlementPipeline_SubmitUsageToChain_MultiResource(t *testing.T) {
+	cfg := DefaultSettlementConfig()
+	cfg.ProviderAddress = "provider123"
+
+	mockSubmitter := &mockChainSubmitter{}
+	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+
+	now := time.Now()
+	record := &UsageRecord{
+		ID:           "test-record-2",
+		DeploymentID: "order-2",
+		LeaseID:      "lease-2",
+		StartTime:    now.Add(-time.Hour),
+		EndTime:      now,
+		Metrics: ResourceMetrics{
+			CPUMilliSeconds: 3600000,
+			GPUSeconds:      7200,
+			NetworkBytesIn:  2 * 1024 * 1024 * 1024,
+		},
+		PricingInputs: PricingInputs{
+			AgreedCPURate:     "0.01",
+			AgreedGPURate:     "0.02",
+			AgreedNetworkRate: "0.005",
+		},
+	}
+
+	err := pipeline.SubmitUsageToChain(context.Background(), record)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	if len(mockSubmitter.usageReports) != 3 {
+		t.Errorf("expected 3 usage reports, got %d", len(mockSubmitter.usageReports))
+	}
+
+	usageTypes := make(map[string]bool)
+	for _, report := range mockSubmitter.usageReports {
+		usageTypes[report.UsageType] = true
+	}
+
+	for _, usageType := range []string{"cpu", "gpu", "network"} {
+		if !usageTypes[usageType] {
+			t.Errorf("expected usage type %s to be reported", usageType)
+		}
+	}
+}
+
 func TestSettlementPipeline_SubmitUsageToChain_Retry(t *testing.T) {
 	cfg := DefaultSettlementConfig()
 	cfg.RetryAttempts = 3

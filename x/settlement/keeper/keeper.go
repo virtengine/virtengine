@@ -43,6 +43,8 @@ type IKeeper interface {
 	// Rewards
 	DistributeStakingRewards(ctx sdk.Context, epoch uint64) (*types.RewardDistribution, error)
 	DistributeProviderRewards(ctx sdk.Context, usageRecords []types.UsageRecord) (*types.RewardDistribution, error)
+	DistributeUsageRewards(ctx sdk.Context, usageRecords []types.UsageRecord) (*types.RewardDistribution, error)
+	DistributeUsageRewardsForSettlement(ctx sdk.Context, settlementID string, usageRecords []types.UsageRecord) (*types.RewardDistribution, error)
 	DistributeVerificationRewards(ctx sdk.Context, verificationResults []VerificationResult) (*types.RewardDistribution, error)
 	AddClaimableReward(ctx sdk.Context, address sdk.AccAddress, entry types.RewardEntry) error
 	GetClaimableRewards(ctx sdk.Context, address sdk.AccAddress) (types.ClaimableRewards, bool)

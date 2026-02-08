@@ -1,12 +1,24 @@
 package keeper
 
 import (
+	"fmt"
+	"sort"
 	"strconv"
+	"strings"
+	"time"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/settlement/types"
+)
+
+const (
+	usageTypeCPU     = "cpu"
+	usageTypeMemory  = "memory"
+	usageTypeStorage = "storage"
+	usageTypeGPU     = "gpu"
+	usageTypeNetwork = "network"
 )
 
 // DistributeStakingRewards distributes staking rewards for an epoch
@@ -174,6 +186,241 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 	)
 
 	return dist, nil
+}
+
+// DistributeUsageRewards distributes usage-based rewards for settled usage records.
+func (k Keeper) DistributeUsageRewards(ctx sdk.Context, usageRecords []types.UsageRecord) (*types.RewardDistribution, error) {
+	return k.distributeUsageRewardsWithMetadata(ctx, usageRecords, nil)
+}
+
+// DistributeUsageRewardsForSettlement distributes usage rewards for a settlement.
+func (k Keeper) DistributeUsageRewardsForSettlement(
+	ctx sdk.Context,
+	settlementID string,
+	usageRecords []types.UsageRecord,
+) (*types.RewardDistribution, error) {
+	if settlementID == "" {
+		return nil, types.ErrInvalidReward.Wrap("settlement_id is required")
+	}
+
+	if existing, found := k.findUsageRewardDistributionBySettlement(ctx, settlementID); found {
+		return &existing, nil
+	}
+
+	metadata := map[string]string{
+		"settlement_id": settlementID,
+	}
+
+	return k.distributeUsageRewardsWithMetadata(ctx, usageRecords, metadata)
+}
+
+func (k Keeper) distributeUsageRewardsWithMetadata(
+	ctx sdk.Context,
+	usageRecords []types.UsageRecord,
+	metadata map[string]string,
+) (*types.RewardDistribution, error) {
+	if len(usageRecords) == 0 {
+		return nil, types.ErrInvalidReward.Wrap("no usage records provided")
+	}
+
+	params := k.GetParams(ctx)
+	if params.UsageRewardRateBps == 0 {
+		return nil, types.ErrInvalidReward.Wrap("usage reward rate is zero")
+	}
+
+	sorted := make([]types.UsageRecord, len(usageRecords))
+	copy(sorted, usageRecords)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Provider == sorted[j].Provider {
+			if sorted[i].UsageType == sorted[j].UsageType {
+				return sorted[i].UsageID < sorted[j].UsageID
+			}
+			return sorted[i].UsageType < sorted[j].UsageType
+		}
+		return sorted[i].Provider < sorted[j].Provider
+	})
+
+	recipients := make([]types.RewardRecipient, 0, len(sorted))
+	for _, usage := range sorted {
+		rewardAmount := k.calculateUsageReward(usage, params)
+		if rewardAmount.IsZero() {
+			continue
+		}
+
+		normalizedType := normalizeUsageType(usage.UsageType)
+		recipients = append(recipients, types.RewardRecipient{
+			Address:     usage.Provider,
+			Amount:      rewardAmount,
+			Reason:      fmt.Sprintf("usage_%s_reward", normalizedType),
+			UsageUnits:  usage.UsageUnits,
+			ReferenceID: usage.UsageID,
+		})
+	}
+
+	if len(recipients) == 0 {
+		return nil, types.ErrInvalidReward.Wrap("no rewards to distribute")
+	}
+
+	seq := k.incrementDistributionSequence(ctx)
+	distributionID := generateIDWithTimestamp("usage", seq, ctx.BlockTime().Unix())
+	epoch := k.calculateCurrentEpoch(ctx)
+
+	dist := types.NewRewardDistribution(
+		distributionID,
+		epoch,
+		types.RewardSourceUsage,
+		recipients,
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	)
+
+	if len(metadata) > 0 {
+		for key, value := range metadata {
+			dist.Metadata[key] = value
+		}
+	}
+
+	if err := k.SetRewardDistribution(ctx, *dist); err != nil {
+		return nil, err
+	}
+
+	err := ctx.EventManager().EmitTypedEvent(&types.EventRewardsDistributed{
+		DistributionID: distributionID,
+		EpochNumber:    epoch,
+		Source:         string(types.RewardSourceUsage),
+		TotalRewards:   dist.TotalRewards.String(),
+		RecipientCount: safeUint32FromInt(len(recipients)),
+		DistributedAt:  ctx.BlockTime().Unix(),
+	})
+	if err != nil {
+		k.Logger(ctx).Error("failed to emit usage rewards distributed event", "error", err)
+	}
+
+	k.Logger(ctx).Info("usage rewards distributed",
+		"distribution_id", distributionID,
+		"recipients", len(recipients),
+		"total", dist.TotalRewards.String(),
+	)
+
+	return dist, nil
+}
+
+func (k Keeper) findUsageRewardDistributionBySettlement(ctx sdk.Context, settlementID string) (types.RewardDistribution, bool) {
+	var foundDist types.RewardDistribution
+	found := false
+
+	k.WithRewardDistributions(ctx, func(dist types.RewardDistribution) bool {
+		if dist.Source != types.RewardSourceUsage {
+			return false
+		}
+		if dist.Metadata != nil && dist.Metadata["settlement_id"] == settlementID {
+			foundDist = dist
+			found = true
+			return true
+		}
+		return false
+	})
+
+	return foundDist, found
+}
+
+func (k Keeper) calculateUsageReward(usage types.UsageRecord, params types.Params) sdk.Coins {
+	if usage.TotalCost == nil || usage.TotalCost.IsZero() {
+		return sdk.NewCoins()
+	}
+
+	resourceMultiplier := usageResourceMultiplierBps(params, usage.UsageType)
+	slaMultiplier := usageSLAMultiplierBps(params, usage)
+	ackMultiplier := usageAcknowledgementMultiplierBps(params, usage)
+
+	totalRewards := sdk.NewCoins()
+	for _, coin := range usage.TotalCost {
+		amount := sdkmath.LegacyNewDecFromInt(coin.Amount)
+		reward := amount.
+			MulInt64(int64(params.UsageRewardRateBps)).
+			QuoInt64(10000).
+			MulInt64(int64(resourceMultiplier)).
+			QuoInt64(10000).
+			MulInt64(int64(slaMultiplier)).
+			QuoInt64(10000).
+			MulInt64(int64(ackMultiplier)).
+			QuoInt64(10000)
+
+		rewardAmt := reward.TruncateInt()
+		if rewardAmt.IsPositive() {
+			totalRewards = totalRewards.Add(sdk.NewCoin(coin.Denom, rewardAmt))
+		}
+	}
+
+	return totalRewards
+}
+
+func usageResourceMultiplierBps(params types.Params, usageType string) uint32 {
+	switch normalizeUsageType(usageType) {
+	case usageTypeCPU:
+		return params.UsageRewardCPUMultiplierBps
+	case usageTypeMemory:
+		return params.UsageRewardMemoryMultiplierBps
+	case usageTypeStorage:
+		return params.UsageRewardStorageMultiplierBps
+	case usageTypeGPU:
+		return params.UsageRewardGPUMultiplierBps
+	case usageTypeNetwork:
+		return params.UsageRewardNetworkMultiplierBps
+	default:
+		return params.UsageRewardCPUMultiplierBps
+	}
+}
+
+func usageSLAMultiplierBps(params types.Params, usage types.UsageRecord) uint32 {
+	if params.UsageGracePeriod == 0 {
+		return params.UsageRewardSLAOnTimeMultiplierBps
+	}
+
+	submittedAt := usage.SubmittedAt
+	if submittedAt.IsZero() {
+		submittedAt = usage.PeriodEnd
+	}
+
+	grace := safeDurationFromSeconds(params.UsageGracePeriod)
+	if submittedAt.After(usage.PeriodEnd.Add(grace)) {
+		return params.UsageRewardSLALateMultiplierBps
+	}
+
+	return params.UsageRewardSLAOnTimeMultiplierBps
+}
+
+func usageAcknowledgementMultiplierBps(params types.Params, usage types.UsageRecord) uint32 {
+	if usage.CustomerAcknowledged {
+		return params.UsageRewardAcknowledgedMultiplierBps
+	}
+	return params.UsageRewardUnacknowledgedMultiplierBps
+}
+
+func normalizeUsageType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "compute", "cpu", "cpu_core_hours", "core-hour", "core_hours", "corehours", "cpu_hours":
+		return usageTypeCPU
+	case "memory", "ram", "mem", "memory_gb_hours", "gb-hour", "gb_hours":
+		return usageTypeMemory
+	case "storage", "disk", "storage_gb_hours":
+		return usageTypeStorage
+	case "gpu", "gpu_hours", "gpu-hour":
+		return usageTypeGPU
+	case "network", "bandwidth", "network_gb":
+		return usageTypeNetwork
+	default:
+		return normalized
+	}
+}
+
+func safeDurationFromSeconds(seconds uint64) time.Duration {
+	maxSeconds := uint64(^uint64(0)>>1) / uint64(time.Second)
+	if seconds > maxSeconds {
+		return time.Duration(maxSeconds) * time.Second
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // DistributeVerificationRewards distributes rewards for identity verifications
