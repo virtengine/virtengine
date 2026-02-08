@@ -1988,6 +1988,14 @@ async function isBranchMerged(branch) {
  */
 const mergedTaskCache = new Set();
 
+/**
+ * Branch-level dedup cache — VK can have duplicate tasks (different IDs)
+ * pointing at the same branch. Once a branch is confirmed merged we skip
+ * ALL tasks that reference it, regardless of task ID.
+ * @type {Set<string>}
+ */
+const mergedBranchCache = new Set();
+
 /** Path to the persistent merged-task cache file */
 const mergedTaskCachePath = resolve(
   config.cacheDir || resolve(config.repoRoot, ".cache"),
@@ -2001,12 +2009,19 @@ function loadMergedTaskCache() {
       const raw = readFileSync(mergedTaskCachePath, "utf8");
       const data = JSON.parse(raw);
       // No expiry — merged PRs don't un-merge. Cache is permanent.
-      for (const id of Object.keys(data)) {
+      const ids = data.taskIds ?? data; // back-compat: old format was flat {id:ts}
+      for (const id of Object.keys(ids)) {
         mergedTaskCache.add(id);
       }
-      if (mergedTaskCache.size > 0) {
+      if (Array.isArray(data.branches)) {
+        for (const b of data.branches) {
+          mergedBranchCache.add(b);
+        }
+      }
+      const total = mergedTaskCache.size + mergedBranchCache.size;
+      if (total > 0) {
         console.log(
-          `[monitor] Restored ${mergedTaskCache.size} merged-task cache entries from disk`,
+          `[monitor] Restored ${mergedTaskCache.size} task IDs + ${mergedBranchCache.size} branches from merged-task cache`,
         );
       }
     }
@@ -2018,12 +2033,20 @@ function loadMergedTaskCache() {
 /** Persist merged-task cache to disk (best-effort) */
 function saveMergedTaskCache() {
   try {
-    const data = {};
+    const taskIds = {};
     const now = Date.now();
     for (const id of mergedTaskCache) {
-      data[id] = now;
+      taskIds[id] = now;
     }
-    writeFileSync(mergedTaskCachePath, JSON.stringify(data, null, 2), "utf8");
+    const payload = {
+      taskIds,
+      branches: [...mergedBranchCache],
+    };
+    writeFileSync(
+      mergedTaskCachePath,
+      JSON.stringify(payload, null, 2),
+      "utf8",
+    );
   } catch {
     /* best-effort */
   }
@@ -2135,6 +2158,17 @@ async function checkMergedPRsAndUpdateTasks() {
         task?.branch ||
         task?.workspace_branch ||
         task?.git_branch;
+
+      // Branch-level dedup: VK may have duplicate tasks (different IDs) for
+      // the same branch.  If this branch is already known-merged, skip it
+      // and silently cache the task ID so it won't appear again.
+      if (branch && mergedBranchCache.has(branch)) {
+        mergedTaskCache.add(task.id);
+        saveMergedTaskCache();
+        // Still try to mark done in VK (best-effort, don't count as "moved")
+        void updateTaskStatus(task.id, "done");
+        continue;
+      }
       const prNumber =
         attempt?.pr_number ||
         task?.pr_number ||
@@ -2158,6 +2192,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const success = await updateTaskStatus(task.id, "done");
         movedCount++;
         mergedTaskCache.add(task.id);
+        if (branch) mergedBranchCache.add(branch);
         saveMergedTaskCache(); // persist immediately — crash-safe
         completedTaskNames.push(task.title);
         if (success) {
@@ -2201,6 +2236,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const success = await updateTaskStatus(task.id, "done");
         movedCount++;
         mergedTaskCache.add(task.id);
+        if (branch) mergedBranchCache.add(branch);
         saveMergedTaskCache(); // persist immediately — crash-safe
         completedTaskNames.push(task.title);
         if (success) {
