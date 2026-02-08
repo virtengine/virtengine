@@ -121,6 +121,7 @@ type recipientKeyStore struct {
 	Address        string `json:"address"`
 	PublicKey      []byte `json:"public_key"`
 	KeyFingerprint string `json:"key_fingerprint"`
+	KeyVersion     uint32 `json:"key_version"`
 	AlgorithmID    string `json:"algorithm_id"`
 	RegisteredAt   int64  `json:"registered_at"`
 	RevokedAt      int64  `json:"revoked_at"`
@@ -164,10 +165,18 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 
 	store := ctx.KVStore(k.skey)
 
+	nextVersion := uint32(1)
+	for _, key := range existingKeys {
+		if key.KeyVersion >= nextVersion {
+			nextVersion = key.KeyVersion + 1
+		}
+	}
+
 	record := recipientKeyStore{
 		Address:        address.String(),
 		PublicKey:      publicKey,
 		KeyFingerprint: fingerprint,
+		KeyVersion:     nextVersion,
 		AlgorithmID:    algorithmID,
 		RegisteredAt:   ctx.BlockTime().Unix(),
 		RevokedAt:      0,
@@ -179,11 +188,14 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 		return "", err
 	}
 
-	// Store by address
-	store.Set(types.RecipientKeyKey(address.Bytes()), bz)
+	// Store by address + fingerprint
+	store.Set(types.RecipientKeyKey(address.Bytes(), []byte(fingerprint)), bz)
 
 	// Store fingerprint -> address mapping
 	store.Set(types.KeyByFingerprintKey([]byte(fingerprint)), address.Bytes())
+
+	// Update active key pointer
+	store.Set(types.ActiveKeyKey(address.Bytes()), []byte(fingerprint))
 
 	return fingerprint, nil
 }
@@ -192,11 +204,27 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 func (k Keeper) RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyFingerprint string) error {
 	store := ctx.KVStore(k.skey)
 
+	if address.String() != k.authority {
+		addrBytes := store.Get(types.KeyByFingerprintKey([]byte(keyFingerprint)))
+		if addrBytes != nil && string(addrBytes) != address.String() {
+			return types.ErrUnauthorized.Wrap("sender is not key owner or authority")
+		}
+	}
+
+	targetAddr := address
+	if address.String() == k.authority {
+		addrBytes := store.Get(types.KeyByFingerprintKey([]byte(keyFingerprint)))
+		if addrBytes == nil {
+			return types.ErrKeyNotFound.Wrapf("key fingerprint %s not found", keyFingerprint)
+		}
+		targetAddr = sdk.AccAddress(addrBytes)
+	}
+
 	// Get existing key record
-	key := types.RecipientKeyKey(address.Bytes())
+	key := types.RecipientKeyKey(targetAddr.Bytes(), []byte(keyFingerprint))
 	bz := store.Get(key)
 	if bz == nil {
-		return types.ErrKeyNotFound.Wrapf("no key found for address %s", address.String())
+		return types.ErrKeyNotFound.Wrapf("no key found for address %s", targetAddr.String())
 	}
 
 	var record recipientKeyStore
@@ -206,7 +234,7 @@ func (k Keeper) RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyF
 
 	// Verify fingerprint matches
 	if record.KeyFingerprint != keyFingerprint {
-		return types.ErrKeyNotFound.Wrapf("key fingerprint %s not found for address %s", keyFingerprint, address.String())
+		return types.ErrKeyNotFound.Wrapf("key fingerprint %s not found for address %s", keyFingerprint, targetAddr.String())
 	}
 
 	// Check if already revoked
@@ -224,6 +252,11 @@ func (k Keeper) RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyF
 
 	store.Set(key, bz)
 
+	activeKey := store.Get(types.ActiveKeyKey(targetAddr.Bytes()))
+	if string(activeKey) == keyFingerprint {
+		k.setLatestActiveKey(ctx, targetAddr)
+	}
+
 	return nil
 }
 
@@ -232,7 +265,7 @@ func (k Keeper) UpdateKeyLabel(ctx sdk.Context, address sdk.AccAddress, keyFinge
 	store := ctx.KVStore(k.skey)
 
 	// Get existing key record
-	key := types.RecipientKeyKey(address.Bytes())
+	key := types.RecipientKeyKey(address.Bytes(), []byte(keyFingerprint))
 	bz := store.Get(key)
 	if bz == nil {
 		return types.ErrKeyNotFound.Wrapf("no key found for address %s", address.String())
@@ -265,26 +298,30 @@ func (k Keeper) UpdateKeyLabel(ctx sdk.Context, address sdk.AccAddress, keyFinge
 func (k Keeper) GetRecipientKeys(ctx sdk.Context, address sdk.AccAddress) []types.RecipientKeyRecord {
 	store := ctx.KVStore(k.skey)
 
-	key := types.RecipientKeyKey(address.Bytes())
-	bz := store.Get(key)
-	if bz == nil {
-		return nil
+	iter := storetypes.KVStorePrefixIterator(store, types.RecipientKeyPrefix(address.Bytes()))
+	defer func() {
+		_ = iter.Close()
+	}()
+
+	keys := make([]types.RecipientKeyRecord, 0)
+	for ; iter.Valid(); iter.Next() {
+		var record recipientKeyStore
+		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+			continue
+		}
+		keys = append(keys, types.RecipientKeyRecord{
+			Address:        record.Address,
+			PublicKey:      record.PublicKey,
+			KeyFingerprint: record.KeyFingerprint,
+			AlgorithmID:    record.AlgorithmID,
+			RegisteredAt:   record.RegisteredAt,
+			RevokedAt:      record.RevokedAt,
+			Label:          record.Label,
+			KeyVersion:     record.KeyVersion,
+		})
 	}
 
-	var record recipientKeyStore
-	if err := json.Unmarshal(bz, &record); err != nil {
-		return nil
-	}
-
-	return []types.RecipientKeyRecord{{
-		Address:        record.Address,
-		PublicKey:      record.PublicKey,
-		KeyFingerprint: record.KeyFingerprint,
-		AlgorithmID:    record.AlgorithmID,
-		RegisteredAt:   record.RegisteredAt,
-		RevokedAt:      record.RevokedAt,
-		Label:          record.Label,
-	}}
+	return keys
 }
 
 // GetRecipientKeyByFingerprint returns a key record by its fingerprint
@@ -297,8 +334,8 @@ func (k Keeper) GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string
 		return types.RecipientKeyRecord{}, false
 	}
 
-	// Get key record by address
-	bz := store.Get(types.RecipientKeyKey(addrBytes))
+	// Get key record by address + fingerprint
+	bz := store.Get(types.RecipientKeyKey(addrBytes, []byte(fingerprint)))
 	if bz == nil {
 		return types.RecipientKeyRecord{}, false
 	}
@@ -321,17 +358,30 @@ func (k Keeper) GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string
 		RegisteredAt:   record.RegisteredAt,
 		RevokedAt:      record.RevokedAt,
 		Label:          record.Label,
+		KeyVersion:     record.KeyVersion,
 	}, true
 }
 
 // GetActiveRecipientKey returns the active (non-revoked) key for an address
 func (k Keeper) GetActiveRecipientKey(ctx sdk.Context, address sdk.AccAddress) (types.RecipientKeyRecord, bool) {
-	keys := k.GetRecipientKeys(ctx, address)
-	for _, key := range keys {
-		if key.IsActive() {
-			return key, true
+	store := ctx.KVStore(k.skey)
+	activeFingerprint := store.Get(types.ActiveKeyKey(address.Bytes()))
+	if len(activeFingerprint) > 0 {
+		record, found := k.GetRecipientKeyByFingerprint(ctx, string(activeFingerprint))
+		if found && record.IsActive() {
+			return record, true
 		}
 	}
+
+	k.setLatestActiveKey(ctx, address)
+	activeFingerprint = store.Get(types.ActiveKeyKey(address.Bytes()))
+	if len(activeFingerprint) > 0 {
+		record, found := k.GetRecipientKeyByFingerprint(ctx, string(activeFingerprint))
+		if found && record.IsActive() {
+			return record, true
+		}
+	}
+
 	return types.RecipientKeyRecord{}, false
 }
 
@@ -376,7 +426,8 @@ func (k Keeper) ValidateEnvelopeRecipients(ctx sdk.Context, envelope *types.Encr
 	var missingKeys []string
 
 	for _, keyID := range envelope.RecipientKeyIDs {
-		record, found := k.GetRecipientKeyByFingerprint(ctx, keyID)
+		fingerprint := types.NormalizeRecipientKeyID(keyID)
+		record, found := k.GetRecipientKeyByFingerprint(ctx, fingerprint)
 		if !found {
 			missingKeys = append(missingKeys, keyID)
 			continue
@@ -423,10 +474,32 @@ func (k Keeper) WithRecipientKeys(ctx sdk.Context, fn func(record types.Recipien
 			RegisteredAt:   record.RegisteredAt,
 			RevokedAt:      record.RevokedAt,
 			Label:          record.Label,
+			KeyVersion:     record.KeyVersion,
 		}
 
 		if stop := fn(keyRecord); stop {
 			break
 		}
 	}
+}
+
+func (k Keeper) setLatestActiveKey(ctx sdk.Context, address sdk.AccAddress) {
+	keys := k.GetRecipientKeys(ctx, address)
+	var latest types.RecipientKeyRecord
+	found := false
+	for _, key := range keys {
+		if !key.IsActive() {
+			continue
+		}
+		if !found || key.KeyVersion > latest.KeyVersion {
+			latest = key
+			found = true
+		}
+	}
+	if !found {
+		return
+	}
+
+	store := ctx.KVStore(k.skey)
+	store.Set(types.ActiveKeyKey(address.Bytes()), []byte(latest.KeyFingerprint))
 }

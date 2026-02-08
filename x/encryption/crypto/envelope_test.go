@@ -223,6 +223,29 @@ func TestCreateMultiRecipientEnvelope_NoRecipients(t *testing.T) {
 	assert.Contains(t, err.Error(), "at least one recipient")
 }
 
+func TestOpenEnvelope_VersionedKeyID(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+
+	recipient, err := GenerateKeyPair()
+	require.NoError(t, err)
+
+	plaintext := []byte("versioned envelope")
+
+	envelope, err := CreateEnvelopeWithRecipient(plaintext, RecipientInfo{
+		PublicKey:  recipient.PublicKey[:],
+		KeyVersion: 2,
+	}, sender)
+	require.NoError(t, err)
+
+	require.Len(t, envelope.RecipientKeyIDs, 1)
+	assert.Contains(t, envelope.RecipientKeyIDs[0], ":v2")
+
+	decrypted, err := OpenEnvelope(envelope, recipient.PrivateKey[:])
+	require.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+}
+
 func TestValidateEnvelopeSignature(t *testing.T) {
 	sender, err := GenerateKeyPair()
 	require.NoError(t, err)

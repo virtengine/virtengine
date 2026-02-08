@@ -211,3 +211,44 @@ func TestKeyManager_RotationPolicy(t *testing.T) {
 	require.Equal(t, policy.AutoRotate, retrieved.AutoRotate)
 	require.Equal(t, policy.RotationSchedule, retrieved.RotationSchedule)
 }
+
+func TestKeyManager_RevokeKey(t *testing.T) {
+	km := NewKeyManager()
+
+	err := km.GenerateKey(ScopeVEID)
+	require.NoError(t, err)
+
+	key, err := km.GetActiveKey(ScopeVEID)
+	require.NoError(t, err)
+
+	err = km.RevokeKey(ScopeVEID, key.ID)
+	require.NoError(t, err)
+
+	revoked, err := km.GetKey(ScopeVEID, key.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyStatusRevoked, revoked.Status)
+	require.NotNil(t, revoked.RevokedAt)
+}
+
+func TestKeyManager_EmergencyRotateKey(t *testing.T) {
+	km := NewKeyManager()
+
+	err := km.GenerateKey(ScopeVEID)
+	require.NoError(t, err)
+
+	oldKey, err := km.GetActiveKey(ScopeVEID)
+	require.NoError(t, err)
+
+	newKey, err := km.EmergencyRotateKey(ScopeVEID)
+	require.NoError(t, err)
+	require.NotNil(t, newKey)
+	require.NotEqual(t, oldKey.ID, newKey.ID)
+
+	oldKeyUpdated, err := km.GetKey(ScopeVEID, oldKey.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyStatusRevoked, oldKeyUpdated.Status)
+
+	active, err := km.GetActiveKey(ScopeVEID)
+	require.NoError(t, err)
+	require.Equal(t, newKey.ID, active.ID)
+}
