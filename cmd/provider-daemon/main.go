@@ -24,6 +24,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	rolesv1 "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -733,6 +734,32 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start bid engine: %w", err)
 	}
 	fmt.Println("  Bid Engine: started")
+
+	// Initialize resource availability sync (RES-36C)
+	if resourceChainClient, ok := chainClient.(provider_daemon.ResourceChainClient); ok {
+		providerConfig, err := chainClient.GetProviderConfig(ctx, providerAddress)
+		if err != nil {
+			fmt.Printf("Warning: failed to load provider config for resource sync: %v\n", err)
+		} else {
+			resourceCfg := provider_daemon.DefaultResourceSyncConfig()
+			resourceCfg.ProviderAddress = providerAddress
+			resourceCfg.InventoryID = fmt.Sprintf("%s-compute", providerAddress)
+			resourceCfg.ResourceClass = resourcesv1.ResourceClass_RESOURCE_CLASS_COMPUTE
+			if len(providerConfig.Regions) > 0 {
+				resourceCfg.Region = providerConfig.Regions[0]
+			}
+
+			snapshot := provider_daemon.NewStaticResourceSnapshotProvider(providerConfig.Capacity, "", resourceCfg.TotalNetworkMbps, resourceCfg.ReservedNetwork)
+			resourceSync, err := provider_daemon.NewResourceAvailabilitySync(resourceCfg, resourceChainClient, snapshot)
+			if err != nil {
+				fmt.Printf("Warning: failed to initialize resource sync: %v\n", err)
+			} else if err := resourceSync.Start(ctx); err != nil {
+				fmt.Printf("Warning: failed to start resource sync: %v\n", err)
+			} else {
+				fmt.Println("  Resource Sync: started")
+			}
+		}
+	}
 
 	// Initialize Kubernetes adapter (VE-403)
 	statusUpdateChan := make(chan provider_daemon.WorkloadStatusUpdate, 100)

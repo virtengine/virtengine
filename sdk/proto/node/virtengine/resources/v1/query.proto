@@ -1,0 +1,87 @@
+syntax = "proto3";
+package virtengine.resources.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "virtengine/resources/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/resources/v1";
+
+// Query defines the gRPC querier service for the resources module.
+service Query {
+  // AvailableResources returns eligible inventories for a request.
+  rpc AvailableResources(QueryAvailableResourcesRequest) returns (QueryAvailableResourcesResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/availability";
+  }
+
+  // Allocation returns an allocation by ID.
+  rpc Allocation(QueryAllocationRequest) returns (QueryAllocationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/allocation/{allocation_id}";
+  }
+
+  // AllocationHistory returns lifecycle events for an allocation.
+  rpc AllocationHistory(QueryAllocationHistoryRequest) returns (QueryAllocationHistoryResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/allocation/{allocation_id}/history";
+  }
+
+  // AllocationsByProvider returns allocations for a provider.
+  rpc AllocationsByProvider(QueryAllocationsByProviderRequest) returns (QueryAllocationsByProviderResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/allocations/provider/{provider_address}";
+  }
+
+  // Params returns module parameters.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/params";
+  }
+}
+
+message QueryAvailableResourcesRequest {
+  ResourceRequest request = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "request", (gogoproto.moretags) = "yaml:\"request\""];
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message AvailableResource {
+  ResourceInventory inventory = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "inventory", (gogoproto.moretags) = "yaml:\"inventory\""];
+  string score = 2 [(gogoproto.jsontag) = "score", (gogoproto.moretags) = "yaml:\"score\""];
+}
+
+message QueryAvailableResourcesResponse {
+  repeated AvailableResource candidates = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "candidates", (gogoproto.moretags) = "yaml:\"candidates\""];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message QueryAllocationRequest {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+}
+
+message QueryAllocationResponse {
+  ResourceAllocation allocation = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "allocation", (gogoproto.moretags) = "yaml:\"allocation\""];
+}
+
+message QueryAllocationHistoryRequest {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message QueryAllocationHistoryResponse {
+  repeated AllocationEvent events = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "events", (gogoproto.moretags) = "yaml:\"events\""];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message QueryAllocationsByProviderRequest {
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message QueryAllocationsByProviderResponse {
+  repeated ResourceAllocation allocations = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "allocations", (gogoproto.moretags) = "yaml:\"allocations\""];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "params", (gogoproto.moretags) = "yaml:\"params\""];
+}

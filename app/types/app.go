@@ -98,6 +98,8 @@ import (
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	oraclekeeper "github.com/virtengine/virtengine/x/oracle/keeper"
 	pkeeper "github.com/virtengine/virtengine/x/provider/keeper"
+	resourceskeeper "github.com/virtengine/virtengine/x/resources/keeper"
+	resourcestypes "github.com/virtengine/virtengine/x/resources/types"
 	reviewkeeper "github.com/virtengine/virtengine/x/review/keeper"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	roleskeeper "github.com/virtengine/virtengine/x/roles/keeper"
@@ -155,6 +157,7 @@ type AppKeepers struct {
 		MFA         mfakeeper.Keeper
 		Config      configkeeper.Keeper
 		HPC         hpckeeper.Keeper
+		Resources   resourceskeeper.Keeper
 		Benchmark   benchkeeper.Keeper
 		Enclave     enclavekeeper.Keeper
 		Settlement  settlementkeeper.Keeper
@@ -548,6 +551,13 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	app.Keepers.VirtEngine.Resources = resourceskeeper.NewKeeper(
+		cdc,
+		app.keys[resourcestypes.StoreKey],
+		app.GetSubspace(resourcestypes.ModuleName),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	// Keepers with dependencies
 	app.Keepers.VirtEngine.MFA = mfakeeper.NewKeeper(
 		cdc,
@@ -706,6 +716,7 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(astakingtypes.ModuleName).WithKeyTable(astakingtypes.ParamKeyTable()) // nolint: staticcheck // SA1019
 	paramsKeeper.Subspace(agovtypes.ModuleName).WithKeyTable(agovtypes.ParamKeyTable())         // nolint: staticcheck // SA1019
 	paramsKeeper.Subspace(ttypes.ModuleName).WithKeyTable(ttypes.ParamKeyTable())               // nolint: staticcheck // SA1019
+	paramsKeeper.Subspace(resourcestypes.ModuleName).WithKeyTable(resourcestypes.ParamKeyTable())
 
 	return paramsKeeper
 }
@@ -753,6 +764,7 @@ func virtengineKVStoreKeys() []string {
 		mfatypes.StoreKey,
 		configtypes.StoreKey,
 		hpctypes.StoreKey,
+		resourcestypes.StoreKey,
 		benchtypes.StoreKey,
 		enclavetypes.StoreKey,
 		settlementtypes.StoreKey,
