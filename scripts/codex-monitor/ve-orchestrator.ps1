@@ -401,6 +401,26 @@ function Ensure-GitIdentity {
     }
 }
 
+function Ensure-GitCredentialHelper {
+    <#
+    .SYNOPSIS Remove stale local credential helpers injected by VK workspace agents.
+              VK containers may run 'gh auth setup-git' which writes the container's
+              gh path (e.g., /home/jon/bin/gh.exe) into .git/config.  This breaks
+              pushes from the host or other environments.  The global ~/.gitconfig
+              already has the correct credential helper, so the local override is
+              unnecessary and harmful.
+    #>
+    try {
+        $localHelper = git config --local credential.helper 2>$null
+        if ($localHelper -and ($localHelper -match '/home/.*/gh(\.exe)?|/tmp/.*/gh')) {
+            Write-Log "Removing stale local credential.helper: $localHelper" -Level "WARN"
+            git config --local --unset credential.helper 2>$null
+        }
+    } catch {
+        # Non-fatal — if we can't check, push will fail with a clear error anyway
+    }
+}
+
 function Write-CycleSummary {
     $elapsed = (Get-Date) - $script:StartTime
     Write-Host ""
@@ -4047,6 +4067,7 @@ function Start-Orchestrator {
 
     Write-Banner
     Ensure-GitIdentity
+    Ensure-GitCredentialHelper
     Initialize-CISweepConfig
     Initialize-CISweepState
 

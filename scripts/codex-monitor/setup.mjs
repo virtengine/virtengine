@@ -463,6 +463,58 @@ set -euo pipefail
 
 echo "Setting up workspace for ${config.projectName}..."
 
+# ── PATH propagation ──────────────────────────────────────────────────────────
+# Ensure common tool directories are on PATH so agents can find gh, pwsh, node,
+# go, etc. without using full absolute paths. The host user's PATH may not be
+# inherited by the workspace shell.
+_add_to_path() { case ":\$PATH:" in *":\$1:"*) ;; *) export PATH="\$1:\$PATH" ;; esac; }
+
+for _dir in \\
+  /usr/local/bin \\
+  /usr/local/sbin \\
+  /usr/bin \\
+  "\$HOME/.local/bin" \\
+  "\$HOME/bin" \\
+  "\$HOME/go/bin" \\
+  "\$HOME/.cargo/bin" \\
+  /snap/bin \\
+  /opt/homebrew/bin; do
+  [ -d "\$_dir" ] && _add_to_path "\$_dir"
+done
+
+# Windows-specific paths (Git Bash / MSYS2 environment)
+case "\$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*)
+    for _wdir in \\
+      "/c/Program Files/GitHub CLI" \\
+      "/c/Program Files/PowerShell/7" \\
+      "/c/Program Files/nodejs"; do
+      [ -d "\$_wdir" ] && _add_to_path "\$_wdir"
+    done
+    ;;
+esac
+
+# ── Git credential guard ─────────────────────────────────────────────────────
+# NEVER run 'gh auth setup-git' inside a workspace — it writes the container's
+# gh path into .git/config, corrupting pushes from other environments.
+# Rely on GH_TOKEN/GITHUB_TOKEN env vars or the global credential helper.
+if git config --local credential.helper &>/dev/null; then
+  _local_helper=\$(git config --local credential.helper)
+  if echo "\$_local_helper" | grep -qE '/home/.*/gh(\\.exe)?|/tmp/.*/gh'; then
+    echo "  [setup] Removing stale local credential.helper: \$_local_helper"
+    git config --local --unset credential.helper || true
+  fi
+fi
+
+# ── GitHub auth verification ─────────────────────────────────────────────────
+if command -v gh &>/dev/null; then
+  echo "  [setup] gh CLI found at: \$(command -v gh)"
+  gh auth status 2>/dev/null || echo "  [setup] gh not authenticated — ensure GH_TOKEN is set"
+else
+  echo "  [setup] WARNING: gh CLI not found on PATH"
+  echo "  [setup] Current PATH: \$PATH"
+fi
+
 # Install dependencies
 if [ -f "package.json" ]; then
   if command -v pnpm &>/dev/null; then
