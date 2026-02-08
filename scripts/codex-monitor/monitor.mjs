@@ -158,16 +158,12 @@ let {
   telegramVerbosity,
 } = config;
 
-void initPrimaryAgent(config);
-
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
 console.log(`[monitor] task planner mode: ${plannerMode}`);
-let primaryAgentName = primaryAgent;
-let primaryAgentReady = primaryAgentEnabled;
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -176,12 +172,10 @@ let codexDisabledReason = codexEnabled
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
 setPrimaryAgent(primaryAgentName);
-void initPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
-setPrimaryAgent(primaryAgentName);
 if (primaryAgentReady) {
-  void initPrimaryAgent(config);
+  void initPrimaryAgent(primaryAgentName);
 }
 
 // Merge strategy: Codex-powered merge decision analysis
