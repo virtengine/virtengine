@@ -21,7 +21,10 @@ const TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
 async function createTestWorktree(name, options = {}) {
   const worktreePath = resolve(TEST_WORKTREE_BASE, name);
   await mkdir(worktreePath, { recursive: true });
-  await mkdir(resolve(worktreePath, ".git"), { recursive: true });
+  const gitDir = resolve(worktreePath, ".git");
+  await mkdir(gitDir, { recursive: true });
+  const gitHead = resolve(gitDir, "HEAD");
+  await writeFile(gitHead, "ref: refs/heads/main");
 
   // Create some test files
   const testFile = resolve(worktreePath, "test.txt");
@@ -118,7 +121,8 @@ describe("workspace-reaper", () => {
     });
 
     it("should support dry-run mode", async () => {
-      await createTestWorktree("old-worktree");
+      const now = new Date();
+      await createTestWorktree("old-worktree", { modifiedAt: now });
 
       const futureTime = new Date(now.getTime() + 48 * 60 * 60 * 1000);
       const result = await cleanOrphanedWorktrees({
@@ -196,8 +200,9 @@ describe("workspace-reaper", () => {
       // Create an old worktree
       await createTestWorktree("old-worktree", { mtime: now });
 
-      // Run reaper 2 hours later (lease expired, worktree old)
-      const laterTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+      // Run reaper far enough in the future that both lease and worktree are expired
+      const laterTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
       const result = await runReaperSweep({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 1,
