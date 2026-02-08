@@ -2601,8 +2601,14 @@ Cooldown: $cooldown minutes. Resolution mode: $($script:CopilotLocalResolution).
                 $body = @"
 @copilot Merge conflict detected for PR #$($pr.number).
 
-Please rebase or resolve conflicts on branch `$branch`, then push updated changes.
+Please rebase or resolve conflicts on branch ``$branch``, then push updated changes.
 "@
+                # Guard: never post @copilot if already mentioned or Copilot PR was closed
+                if ((Test-PRHasCopilotComment -PRNumber $pr.number) -or (Test-CopilotPRClosed -PRNumber $pr.number)) {
+                    Write-Log "Skipping @copilot for PR #$($pr.number) — already mentioned or Copilot PR previously closed" -Level "WARN"
+                    $info.conflict_notified = $true
+                    continue
+                }
                 if (-not $DryRun) {
                     Add-PRComment -PRNumber $pr.number -Body $body | Out-Null
                     Add-RecentItem -ListName "CopilotRequests" -Item @{
@@ -2811,6 +2817,12 @@ Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolut
                 }
 
                 if (-not $info.copilot_fix_requested) {
+                    # Guard: never post @copilot if already mentioned or Copilot PR was closed
+                    if ((Test-PRHasCopilotComment -PRNumber $pr.number) -or (Test-CopilotPRClosed -PRNumber $pr.number)) {
+                        Write-Log "Skipping @copilot CI fix for PR #$($pr.number) — already mentioned or Copilot PR previously closed" -Level "WARN"
+                        $info.copilot_fix_requested = $true
+                        break
+                    }
                     $copilotBody = @"
 @copilot CI is failing for PR #$($pr.number).
 
@@ -3601,6 +3613,8 @@ function Fill-ParallelSlots {
         if (-not $DryRun) {
             $attempt = Submit-VKTaskAttempt -TaskId $task.id
             if ($attempt) {
+                # Move task to inprogress on VK board when agent starts
+                Update-VKTaskStatus -TaskId $task.id -Status "inprogress" | Out-Null
                 $priorityInfo = Get-TaskPriorityInfo -Task $task
                 $script:TrackedAttempts[$attempt.id] = @{
                     task_id   = $task.id
