@@ -66,10 +66,6 @@ import {
   detectMaintenanceMode,
   formatFleetSummary,
   persistFleetState,
-  shouldAutoGenerateTasks,
-  markAutoGenTriggered,
-  publishTaskList,
-  bootstrapFromPeer,
 } from "./fleet-coordinator.mjs";
 import {
   resolveExecutorForTask,
@@ -2927,6 +2923,14 @@ async function checkMergedPRsAndUpdateTasks() {
                   attemptId: cand.attemptId,
                   branch: cand.branch,
                 });
+                // Register as dirty for slot reservation + file-overlap
+                registerDirtyTask({
+                  taskId: task.id,
+                  prNumber: branchPr.number,
+                  branch: cand.branch,
+                  title: task.title,
+                  files: fullPrInfo?.files?.map((f) => f.filename || f) || [],
+                });
               }
             }
           }
@@ -5601,11 +5605,9 @@ async function triggerTaskPlannerViaKanban(
     // Double-check status client-side — VK API filter may not work reliably
     if (t.status && t.status !== "todo") return false;
     const title = (t.title || "").toLowerCase();
-    // Match both old format "Plan next tasks (...)" and new "[xs] Plan next tasks (...)"
-    const stripped = title.replace(/^\[(?:xs|s|m|l|xl|xxl)\]\s*/i, "");
+    // Only match the exact title format we create: "Plan next tasks (...)"
     return (
-      stripped.startsWith("plan next tasks") ||
-      stripped.startsWith("plan next phase")
+      title.startsWith("plan next tasks") || title.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
@@ -7125,7 +7127,6 @@ try {
 } catch (err) {
   console.warn(`[monitor] complexity matrix log failed: ${err.message}`);
 }
-
 startProcess();
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
