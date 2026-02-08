@@ -21,6 +21,9 @@
 
 name: "Codex Monitor: Publish"
 
+env:
+    NODE_VERSION: "20"
+
 on:
     push:
         branches: [main]
@@ -65,8 +68,10 @@ jobs:
 
             - uses: actions/setup-node@v4
               with:
-                  node-version: "24"
+                  node-version: ${{ env.NODE_VERSION }}
                   registry-url: "https://registry.npmjs.org"
+                  cache: "npm"
+                  cache-dependency-path: scripts/codex-monitor/package-lock.json
 
             - name: Compare versions
               id: compare
@@ -109,8 +114,10 @@ jobs:
 
             - uses: actions/setup-node@v4
               with:
-                  node-version: "24"
+                  node-version: ${{ env.NODE_VERSION }}
                   registry-url: "https://registry.npmjs.org"
+                  cache: "npm"
+                  cache-dependency-path: scripts/codex-monitor/package-lock.json
 
             - name: Install dependencies
               working-directory: scripts/codex-monitor

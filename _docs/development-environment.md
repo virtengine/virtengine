@@ -32,7 +32,7 @@ VirtEngine uses pnpm for frontend workspaces. Ensure pnpm is available:
 
 ```shell
 corepack enable
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@10.28.2 --activate
 pnpm --version
 ```
 
@@ -137,7 +137,7 @@ The localnet provides a complete local development environment with all VirtEngi
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- Go 1.22+ (for running tests locally)
+- Go 1.25.5+ (matches go.mod)
 - Bash shell (WSL2 on Windows, native on Linux/macOS)
 
 ### Quick Start
