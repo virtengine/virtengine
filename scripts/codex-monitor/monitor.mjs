@@ -2054,11 +2054,14 @@ const MERGE_CHECK_THROTTLE_MS = 1500;
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
  * no PR, abandoned).  We re-check them every 6 hours instead of every cycle.
- * Key = task ID, Value = timestamp of last check.
- * @type {Map<string, number>}
+ * After STALE_MAX_STRIKES consecutive stale checks the task is moved back
+ * to "todo" so another agent can pick it up.
+ * Key = task ID, Value = { lastCheck: timestamp, strikes: number }.
+ * @type {Map<string, {lastCheck: number, strikes: number}>}
  */
 const staleBranchCooldown = new Map();
 const STALE_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+const STALE_MAX_STRIKES = 2; // move to todo after this many stale checks
 
 /**
  * Cooldown cache for tasks whose PRs have merge conflicts.
@@ -2133,17 +2136,23 @@ async function checkMergedPRsAndUpdateTasks() {
 
     let movedCount = 0;
     let movedReviewCount = 0;
+    let movedTodoCount = 0;
     let conflictsTriggered = 0;
     /** @type {string[]} */
     const completedTaskNames = [];
+    /** @type {string[]} */
+    const recoveredTaskNames = [];
 
     for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
 
       // ── Stale cooldown: skip tasks we already checked recently ──
-      const lastStaleCheck = staleBranchCooldown.get(task.id);
-      if (lastStaleCheck && Date.now() - lastStaleCheck < STALE_COOLDOWN_MS) {
+      const staleEntry = staleBranchCooldown.get(task.id);
+      if (
+        staleEntry &&
+        Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS
+      ) {
         continue;
       }
 
@@ -2189,10 +2198,26 @@ async function checkMergedPRsAndUpdateTasks() {
       });
 
       if (candidates.length === 0) {
+        const prev = staleBranchCooldown.get(task.id);
+        const strikes = (prev?.strikes || 0) + 1;
+        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
         console.log(
-          `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+          `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
         );
-        staleBranchCooldown.set(task.id, Date.now());
+        if (
+          strikes >= STALE_MAX_STRIKES &&
+          (taskStatus === "inprogress" || taskStatus === "inreview")
+        ) {
+          const success = await updateTaskStatus(task.id, "todo");
+          if (success) {
+            movedTodoCount++;
+            recoveredTaskNames.push(task.title);
+            staleBranchCooldown.delete(task.id);
+            console.log(
+              `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (no branch/PR after ${strikes} checks)`,
+            );
+          }
+        }
         continue;
       }
 
@@ -2395,8 +2420,27 @@ async function checkMergedPRsAndUpdateTasks() {
           );
         }
       } else if (!hasOpenPR) {
-        // All branches unresolvable — put on cooldown (recheck in 6h)
-        staleBranchCooldown.set(task.id, Date.now());
+        // All branches unresolvable — increment strike counter
+        const prev = staleBranchCooldown.get(task.id);
+        const strikes = (prev?.strikes || 0) + 1;
+        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+        console.log(
+          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no branch on remote, no open PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
+        );
+        if (
+          strikes >= STALE_MAX_STRIKES &&
+          (taskStatus === "inprogress" || taskStatus === "inreview")
+        ) {
+          const success = await updateTaskStatus(task.id, "todo");
+          if (success) {
+            movedTodoCount++;
+            recoveredTaskNames.push(task.title);
+            staleBranchCooldown.delete(task.id);
+            console.log(
+              `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (abandoned — ${strikes} stale checks)`,
+            );
+          }
+        }
       }
     }
 
@@ -2433,16 +2477,42 @@ async function checkMergedPRsAndUpdateTasks() {
         `[monitor] Triggered conflict resolution for ${conflictsTriggered} PR(s)`,
       );
     }
+    // Notify about tasks recovered to todo
+    if (movedTodoCount > 0) {
+      console.log(
+        `[monitor] Recovered ${movedTodoCount} abandoned tasks to todo`,
+      );
+      if (telegramToken && telegramChatId) {
+        if (movedTodoCount <= 3) {
+          for (const name of recoveredTaskNames) {
+            void sendTelegramMessage(
+              `♻️ Task recovered to todo (abandoned — no branch/PR): "${name}"`,
+            );
+          }
+        } else {
+          const listed = recoveredTaskNames
+            .slice(0, 5)
+            .map((n) => `• ${n}`)
+            .join("\n");
+          const extra =
+            movedTodoCount > 5 ? `\n…and ${movedTodoCount - 5} more` : "";
+          void sendTelegramMessage(
+            `♻️ ${movedTodoCount} abandoned tasks recovered to todo:\n${listed}${extra}`,
+          );
+        }
+      }
+    }
     return {
       checked: batch.length,
       movedDone: movedCount,
       movedReview: movedReviewCount,
+      movedTodo: movedTodoCount,
       conflictsTriggered,
       cached: mergedTaskCache.size,
     };
   } catch (err) {
     console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
-    return { checked: 0, movedDone: 0, movedReview: 0, error: err };
+    return { checked: 0, movedDone: 0, movedReview: 0, movedTodo: 0, error: err };
   }
 }
 
