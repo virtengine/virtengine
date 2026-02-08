@@ -216,7 +216,7 @@ feat(api)!: change response format
 
 This repo uses the GSD (Get Stuff Done) framework for autonomous development with dual-agent orchestration.
 
-**Orchestrator Workflow (`scripts/ve-orchestrator.ps1`):**
+**Orchestrator Workflow (`scripts/codex-monitor/ve-orchestrator.ps1`):**
 
 1.  **Task Source:** Vibe-Kanban board (auto-detected by project name "virtengine").
 2.  **Agent Cycling:** Alternates 50/50 between Codex (DEFAULT profile) and Copilot (CLAUDE_OPUS_4_6 profile) to avoid rate-limiting.

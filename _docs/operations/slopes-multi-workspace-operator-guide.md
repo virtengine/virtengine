@@ -5,7 +5,7 @@ This guide documents how to bootstrap, add workspaces, configure Telegram notifi
 ## Scope and terminology
 
 - **Workspace**: A vibe-kanban task attempt that creates a Git worktree and runs an agent session.
-- **Orchestrator**: `scripts/ve-orchestrator.ps1`, the loop that assigns tasks and monitors progress.
+- **Orchestrator**: `scripts/codex-monitor/ve-orchestrator.ps1`, the loop that assigns tasks and monitors progress.
 - **Monitor**: `scripts/codex-monitor/monitor.mjs`, long-running wrapper with restart + diagnostics.
 
 ## Bootstrap (Windows)
@@ -42,7 +42,7 @@ setx VK_PUBLIC_URL "http://<vk-host>:<port>"
 pnpm -C scripts/codex-monitor start -- --args "-MaxParallel 6"
 ```
 
-This launches `scripts/ve-orchestrator.ps1` and auto-restarts on failures.
+This launches `scripts/codex-monitor/ve-orchestrator.ps1` and auto-restarts on failures.
 
 ## Bootstrap (Linux/WSL - future)
 
@@ -67,19 +67,19 @@ Use the vibe-kanban CLI wrapper to create new attempts (workspaces). Each attemp
 ### Add a specific workspace (task ID)
 
 ```bash
-pwsh scripts/ve-kanban.ps1 submit <task-id>
+pwsh scripts/codex-monitor/ve-kanban.ps1 submit <task-id>
 ```
 
 ### Add the next N tasks as workspaces
 
 ```bash
-pwsh scripts/ve-kanban.ps1 submit-next --count 2
+pwsh scripts/codex-monitor/ve-kanban.ps1 submit-next --count 2
 ```
 
 ### See active workspaces
 
 ```bash
-pwsh scripts/ve-kanban.ps1 status
+pwsh scripts/codex-monitor/ve-kanban.ps1 status
 ```
 
 ## Telegram bot configuration
@@ -114,7 +114,7 @@ Start the monitor and confirm the first status post arrives in the chat.
 
 ## Model priority configuration examples
 
-The orchestrator alternates between executor profiles defined in `scripts/ve-kanban.ps1` (used by `ve-orchestrator.ps1`). Update the list to control priority or weighting.
+The orchestrator alternates between executor profiles defined in `scripts/codex-monitor/ve-kanban.ps1` (used by `ve-orchestrator.ps1`). Update the list to control priority or weighting.
 
 ### Default (50/50 Codex/Copilot)
 
@@ -168,19 +168,19 @@ Steps:
 1. List archived attempts:
 
 ```bash
-pwsh scripts/ve-kanban.ps1 archived
+pwsh scripts/codex-monitor/ve-kanban.ps1 archived
 ```
 
 2. Unarchive if needed:
 
 ```bash
-pwsh scripts/ve-kanban.ps1 unarchive <attempt-id>
+pwsh scripts/codex-monitor/ve-kanban.ps1 unarchive <attempt-id>
 ```
 
 3. Rebase the attempt:
 
 ```bash
-pwsh scripts/ve-kanban.ps1 rebase <attempt-id>
+pwsh scripts/codex-monitor/ve-kanban.ps1 rebase <attempt-id>
 ```
 
 ### Agent session disconnected
@@ -191,12 +191,12 @@ Symptoms:
 
 Steps:
 1. Restart the monitor (it auto-relaunches the orchestrator).
-2. Verify the workspace still exists via `pwsh scripts/ve-kanban.ps1 status`.
+2. Verify the workspace still exists via `pwsh scripts/codex-monitor/ve-kanban.ps1 status`.
 3. If the attempt is stale, archive it in VK (or via the CLI helper) and resubmit the task:
 
 ```bash
 pwsh -Command ". .\\scripts\\ve-kanban.ps1; Archive-VKAttempt -AttemptId <attempt-id>"
-pwsh scripts/ve-kanban.ps1 submit <task-id>
+pwsh scripts/codex-monitor/ve-kanban.ps1 submit <task-id>
 ```
 
 ### GitHub auth expired
@@ -224,7 +224,7 @@ gh auth login
 
 ## Related references
 
-- `scripts/ve-orchestrator.ps1`
-- `scripts/ve-kanban.ps1`
+- `scripts/codex-monitor/ve-orchestrator.ps1`
+- `scripts/codex-monitor/ve-kanban.ps1`
 - `scripts/codex-monitor/README.md`
 - `_docs/failure-analysis.md`
