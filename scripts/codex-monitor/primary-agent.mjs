@@ -136,6 +136,22 @@ export function getPrimaryAgentName() {
   return activeAdapter?.name || "codex-sdk";
 }
 
+export async function switchPrimaryAgent(name) {
+  const normalized = normalizePrimaryAgent(name);
+  if (!ADAPTERS[normalized]) {
+    return { ok: false, reason: "unknown_agent" };
+  }
+  activeAdapter = ADAPTERS[normalized];
+  primaryFallbackReason = null;
+  initialized = false;
+  try {
+    await initPrimaryAgent(normalized);
+    return { ok: true, name: getPrimaryAgentName() };
+  } catch (err) {
+    return { ok: false, reason: err?.message || "init_failed" };
+  }
+}
+
 export async function initPrimaryAgent(nameOrConfig = null) {
   if (initialized) return getPrimaryAgentName();
   const desired = resolvePrimaryAgent(nameOrConfig);

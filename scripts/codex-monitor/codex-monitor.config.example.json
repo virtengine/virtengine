@@ -2,6 +2,7 @@
   "$schema": "./codex-monitor.schema.json",
   "projectName": "my-project",
   "primaryAgent": "codex-sdk",
+  "interactiveShellEnabled": false,
   "executors": [
     {
       "name": "codex-default",

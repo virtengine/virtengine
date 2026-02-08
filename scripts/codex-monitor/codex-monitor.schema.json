@@ -33,6 +33,8 @@
     "watchEnabled": { "type": "boolean" },
     "echoLogs": { "type": "boolean" },
     "autoFixEnabled": { "type": "boolean" },
+    "interactiveShellEnabled": { "type": "boolean" },
+    "shellEnabled": { "type": "boolean" },
     "codexEnabled": { "type": "boolean" },
     "primaryAgent": {
       "type": "string",
