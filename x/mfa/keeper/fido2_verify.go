@@ -631,13 +631,14 @@ func (k Keeper) CreateFIDO2Challenge(
 	}
 
 	// Create challenge
-	challenge, err := types.NewChallenge(
+	challenge, err := types.NewChallengeAt(
 		address.String(),
 		types.FactorTypeFIDO2,
 		"", // factorID will be determined during verification
 		types.SensitiveTxUnspecified,
 		300, // 5 minute TTL
 		3,   // max 3 attempts
+		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
 		return nil, err
@@ -682,15 +683,26 @@ func (k Keeper) VerifyFIDO2Registration(
 		return nil, types.ErrUnauthorized.Wrap("challenge belongs to different account")
 	}
 
+	if challenge.FactorType != types.FactorTypeFIDO2 {
+		return nil, types.ErrInvalidFactorType.Wrap("challenge is not for FIDO2")
+	}
+
 	if challenge.Status != types.ChallengeStatusPending {
 		return nil, types.ErrChallengeAlreadyUsed
 	}
 
-	if ctx.BlockTime().Unix() > challenge.ExpiresAt {
+	now := ctx.BlockTime()
+	if challenge.IsExpired(now) {
 		challenge.Status = types.ChallengeStatusExpired
 		_ = k.UpdateChallenge(ctx, challenge)
 		return nil, types.ErrChallengeExpired
 	}
+
+	if !challenge.CanAttempt(now) {
+		return nil, types.ErrMaxAttemptsExceeded
+	}
+
+	challenge.RecordAttempt()
 
 	// Get FIDO2 challenge data
 	if challenge.Metadata == nil || challenge.Metadata.FIDO2Challenge == nil {
@@ -715,7 +727,6 @@ func (k Keeper) VerifyFIDO2Registration(
 		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
-		challenge.AttemptCount++
 		if challenge.AttemptCount >= challenge.MaxAttempts {
 			challenge.Status = types.ChallengeStatusFailed
 		}
@@ -726,6 +737,7 @@ func (k Keeper) VerifyFIDO2Registration(
 	// Mark challenge as verified
 	challenge.Status = types.ChallengeStatusVerified
 	challenge.VerifiedAt = ctx.BlockTime().Unix()
+	challenge.FactorID = result.Credential.CredentialIDBase64()
 	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Create enrollment
@@ -734,12 +746,13 @@ func (k Keeper) VerifyFIDO2Registration(
 	credential.Label = label
 
 	enrollment := &types.FactorEnrollment{
-		AccountAddress: address.String(),
-		FactorType:     types.FactorTypeFIDO2,
-		FactorID:       credential.CredentialIDBase64(),
-		Status:         types.EnrollmentStatusActive,
-		EnrolledAt:     ctx.BlockTime().Unix(),
-		Label:          label,
+		AccountAddress:   address.String(),
+		FactorType:       types.FactorTypeFIDO2,
+		FactorID:         credential.CredentialIDBase64(),
+		PublicIdentifier: credential.PublicKey.RawCBOR,
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       ctx.BlockTime().Unix(),
+		Label:            label,
 		Metadata: &types.FactorMetadata{
 			FIDO2Info: &types.FIDO2CredentialInfo{
 				CredentialID:    credential.CredentialID,
@@ -776,6 +789,10 @@ func (k Keeper) VerifyFIDO2Assertion(
 
 	if challenge.AccountAddress != address.String() {
 		return types.ErrUnauthorized.Wrap("challenge belongs to different account")
+	}
+
+	if challenge.FactorType != types.FactorTypeFIDO2 {
+		return types.ErrInvalidFactorType.Wrap("challenge is not for FIDO2")
 	}
 
 	if challenge.Status != types.ChallengeStatusPending {
@@ -849,11 +866,6 @@ func (k Keeper) VerifyFIDO2Assertion(
 		fido2Info.SignCount,
 	)
 	if err != nil {
-		challenge.AttemptCount++
-		if challenge.AttemptCount >= challenge.MaxAttempts {
-			challenge.Status = types.ChallengeStatusFailed
-		}
-		_ = k.UpdateChallenge(ctx, challenge)
 		return err
 	}
 
@@ -862,7 +874,7 @@ func (k Keeper) VerifyFIDO2Assertion(
 	enrollment.Metadata.FIDO2Info = fido2Info
 	enrollment.LastUsedAt = ctx.BlockTime().Unix()
 
-	if err := k.EnrollFactor(ctx, enrollment); err != nil {
+	if err := k.updateFactorEnrollment(ctx, enrollment); err != nil {
 		return err
 	}
 

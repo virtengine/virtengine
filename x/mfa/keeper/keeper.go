@@ -822,28 +822,26 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 
 // verifyFIDO2Response verifies a FIDO2 authentication response
 func (k Keeper) verifyFIDO2Response(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
-	// Get the factor enrollment to retrieve the public key
+	if response == nil {
+		return false, types.ErrInvalidChallengeResponse.Wrap("missing response")
+	}
+
+	payload, err := types.ParseFIDO2AssertionPayload(response.ResponseData)
+	if err != nil {
+		return false, err
+	}
+
 	address, _ := sdk.AccAddressFromBech32(challenge.AccountAddress)
-	enrollment, found := k.GetFactorEnrollment(ctx, address, types.FactorTypeFIDO2, challenge.FactorID)
-	if !found {
-		return false, types.ErrEnrollmentNotFound.Wrap("FIDO2 credential not found")
-	}
-
-	if !enrollment.IsActive() {
-		return false, types.ErrFactorRevoked.Wrap("FIDO2 credential has been revoked")
-	}
-
-	// In a real implementation, this would:
-	// 1. Parse the authenticator assertion response
-	// 2. Verify the signature using the stored public key
-	// 3. Verify the challenge matches
-	// 4. Update the sign counter
-	// For now, we return true as a placeholder (actual crypto verification would be done off-chain or via a verifier contract)
-
-	// NOTE: The actual FIDO2 signature verification should be done using a WebAuthn library
-	// This is a placeholder that assumes the off-chain verifier has validated the response
-	if len(response.ResponseData) == 0 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("empty response data")
+	if err := k.VerifyFIDO2Assertion(
+		ctx,
+		address,
+		challenge.ChallengeID,
+		payload.CredentialID,
+		payload.ClientDataJSON,
+		payload.AuthenticatorData,
+		payload.Signature,
+	); err != nil {
+		return false, err
 	}
 
 	return true, nil
