@@ -17,8 +17,9 @@ type msgServer struct {
 	keeper Keeper
 }
 
-// NewMsgServerImpl returns an implementation of the HPC MsgServer interface
-func NewMsgServerImpl(k Keeper) types.MsgServer {
+// NewMsgServerImpl returns an implementation of the HPC MsgServer interface.
+// It returns the concrete server to allow access to extended template methods in tests.
+func NewMsgServerImpl(k Keeper) *msgServer {
 	return &msgServer{keeper: k}
 }
 

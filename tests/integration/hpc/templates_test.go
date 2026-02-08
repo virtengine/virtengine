@@ -143,7 +143,7 @@ func TestWorkloadTemplateLifecycle(t *testing.T) {
 	// Step 6: Submit a job using the template
 	jobMsg := &hpctypes.MsgSubmitJobFromTemplate{
 		Creator:    creator.String(),
-		TemplateId: "test-mpi-template",
+		TemplateID: "test-mpi-template",
 		Version:    "1.0.0",
 		Parameters: map[string]string{
 			"iterations": "2000",
@@ -166,7 +166,7 @@ func TestWorkloadTemplateLifecycle(t *testing.T) {
 	}
 	usageResp, err := queryServer.WorkloadTemplateUsage(sdk.WrapSDKContext(ctx), usageReq)
 	require.NoError(t, err, "failed to query template usage")
-	require.GreaterOrEqual(t, usageResp.TotalUses, uint64(1), "template should have at least 1 use")
+	require.GreaterOrEqual(t, usageResp.TotalUses, int64(1), "template should have at least 1 use")
 }
 
 func registerTemplateOffering(
@@ -204,6 +204,13 @@ func registerTemplateOffering(
 		SlurmVersion: "23.02",
 	})
 	require.NoError(t, err, "failed to register cluster")
+
+	_, err = msgServer.UpdateCluster(ctx, &hpctypes.MsgUpdateCluster{
+		ProviderAddress: provider.String(),
+		ClusterId:       registerResp.ClusterId,
+		State:           hpcv1.ClusterStateActive,
+	})
+	require.NoError(t, err, "failed to activate cluster")
 
 	memGB := int32(template.Resources.DefaultMemoryMBPerNode / 1024)
 	if memGB < 1 {
@@ -561,7 +568,7 @@ func TestWorkloadTemplateSearch(t *testing.T) {
 
 	// Test list by type
 	listByTypeReq := &hpctypes.QueryListWorkloadTemplatesByTypeRequest{
-		Type: string(hpctypes.WorkloadTypeMPI),
+		Type: hpctypes.WorkloadTypeMPI,
 	}
 	listByTypeResp, err := queryServer.ListWorkloadTemplatesByType(sdk.WrapSDKContext(ctx), listByTypeReq)
 	require.NoError(t, err, "failed to list by type")

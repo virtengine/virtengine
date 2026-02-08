@@ -63,14 +63,6 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgFlagDispute{},
 		&MsgResolveDispute{},
 		&MsgUpdateParams{},
-		// VE-5F: Workload template messages
-		&MsgCreateWorkloadTemplate{},
-		&MsgUpdateWorkloadTemplate{},
-		&MsgApproveWorkloadTemplate{},
-		&MsgRejectWorkloadTemplate{},
-		&MsgDeprecateWorkloadTemplate{},
-		&MsgRevokeWorkloadTemplate{},
-		&MsgSubmitJobFromTemplate{},
 	)
 
 	msgservice.RegisterMsgServiceDesc(registry, &hpcv1.Msg_serviceDesc)
