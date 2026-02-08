@@ -242,7 +242,7 @@ function Get-EnvString {
         [Parameter(Mandatory)][string]$Name,
         [string]$Default = ""
     )
-    $value = $env:$Name
+    $value = [System.Environment]::GetEnvironmentVariable($Name)
     if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
     return $value.Trim()
 }
@@ -1489,7 +1489,7 @@ $script:ComplexityModels = @{
     "CODEX" = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
         "medium" = @{ model = "gpt-5.2-codex";      variant = "DEFAULT";           reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.3-codex";      variant = "DEFAULT";           reasoningEffort = "high" }
+        "high"   = @{ model = "gpt-5.1-codex-max";  variant = "GPT51_CODEX_MAX";  reasoningEffort = "high" }
     }
     "COPILOT" = @{
         "low"    = @{ model = "haiku-4.5";   variant = "HAIKU_4_5";       reasoningEffort = "low" }
@@ -1505,7 +1505,13 @@ $script:ComplexityEscalators = @(
     "\b(breaking\s+change|backward.*compat|api.*redesign)\b",
     "\b(security.*audit|vulnerability|encryption.*scheme|key.*rotation)\b",
     "\b(consensus|determinism|state.*machine|genesis|upgrade.*handler)\b",
-    "\b(e2e.*test.*suite|integration.*framework|test.*infrastructure)\b"
+    "\b(e2e.*test.*suite|integration.*framework|test.*infrastructure)\b",
+    "\b(load\s+test|stress\s+test|1M|1,000,000|million\s+nodes?)\b",
+    "\b(service\s+mesh|api\s+gateway|mTLS|circuit\s+breaker)\b",
+    "Est\.?\s*LOC\s*:\s*[3-9],?\d{3}",
+    "Est\.?\s*LOC\s*:\s*\d{2,},?\d{3}",
+    "\b(\d{2,}\s+(?:test|file|module)s?\s+fail)",
+    "\b(disaster\s+recovery|business\s+continuity|CRITICAL)\b"
 )
 
 # Keyword patterns that simplify complexity
@@ -1516,7 +1522,9 @@ $script:ComplexitySimplifiers = @(
     "\b(lint|format|prettier|eslint)\s*(fix|cleanup|config)?\b",
     "\b(rename|move\s+file|copy\s+file)\b",
     "\b(add\s+comment|update\s+comment)\b",
-    "\b(config\s+change|env\s+var|\.env)\b"
+    "\b(config\s+change|env\s+var|\.env)\b",
+    "\bPlan\s+next\s+tasks\b",
+    "\b(manual[- ]telegram|triage)\b"
 )
 
 function Resolve-ComplexityTier {

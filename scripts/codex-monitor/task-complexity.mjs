@@ -17,7 +17,7 @@
  *   ├──────────┼──────────────────────┼─────────────────────┤
  *   │ LOW      │ gpt-5.1-codex-mini   │ haiku-4.5           │
  *   │ MEDIUM   │ gpt-5.2-codex        │ sonnet-4.5          │
- *   │ HIGH     │ gpt-5.3-codex        │ opus-4.6            │
+ *   │ HIGH     │ gpt-5.1-codex-max    │ opus-4.6            │
  *   └──────────┴──────────────────────┴─────────────────────┘
  *
  * Reasoning Effort per tier:
@@ -67,8 +67,8 @@ export const DEFAULT_MODEL_PROFILES = Object.freeze({
       reasoningEffort: "medium",
     },
     [COMPLEXITY_TIERS.HIGH]: {
-      model: "gpt-5.3-codex",
-      variant: "DEFAULT",
+      model: "gpt-5.1-codex-max",
+      variant: "GPT51_CODEX_MAX",
       reasoningEffort: "high",
     },
   },
@@ -92,6 +92,21 @@ export const DEFAULT_MODEL_PROFILES = Object.freeze({
 });
 
 /**
+ * Additional model aliases for manual overrides and telegram /model command.
+ * These are not used in automatic routing but allow explicit model selection.
+ */
+export const MODEL_ALIASES = Object.freeze({
+  "gpt-5.1-codex-mini": { executor: "CODEX", variant: "GPT51_CODEX_MINI" },
+  "gpt-5.2-codex": { executor: "CODEX", variant: "DEFAULT" },
+  "gpt-5.1-codex-max": { executor: "CODEX", variant: "GPT51_CODEX_MAX" },
+  "claude-opus-4.6": { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" },
+  "opus-4.6": { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" },
+  "sonnet-4.5": { executor: "COPILOT", variant: "SONNET_4_5" },
+  "haiku-4.5": { executor: "COPILOT", variant: "HAIKU_4_5" },
+  "claude-code": { executor: "COPILOT", variant: "CLAUDE_CODE" },
+});
+
+/**
  * Keywords in task titles/descriptions that bump complexity up or down.
  * Scanned case-insensitively against the combined task text blob.
  */
@@ -108,6 +123,15 @@ export const COMPLEXITY_SIGNALS = Object.freeze({
     /\b(consensus|determinism|state.*machine|genesis|upgrade.*handler)\b/i,
     // Testing complexity
     /\b(e2e.*test.*suite|integration.*framework|test.*infrastructure)\b/i,
+    // Scale / performance
+    /\b(load\s+test|stress\s+test|1M|1,000,000|million\s+nodes?)\b/i,
+    /\b(service\s+mesh|api\s+gateway|mTLS|circuit\s+breaker)\b/i,
+    // LOC estimation (>3000 LOC signals high complexity)
+    /Est\.?\s*LOC\s*:\s*[3-9],?\d{3}/i,
+    /Est\.?\s*LOC\s*:\s*\d{2,},?\d{3}/i,
+    // Multi-file / broad scope
+    /\b(\d{2,}\s+(?:test|file|module)s?\s+fail)/i,
+    /\b(disaster\s+recovery|business\s+continuity|CRITICAL)\b/i,
   ],
   /** Signals that push complexity DOWN */
   simplifiers: [
@@ -118,6 +142,9 @@ export const COMPLEXITY_SIGNALS = Object.freeze({
     /\b(rename|move\s+file|copy\s+file)\b/i,
     /\b(add\s+comment|update\s+comment)\b/i,
     /\b(config\s+change|env\s+var|\.env)\b/i,
+    // Plan-only tasks
+    /\bPlan\s+next\s+tasks\b/i,
+    /\b(manual[- ]telegram|triage)\b/i,
   ],
 });
 

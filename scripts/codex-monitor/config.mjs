@@ -621,10 +621,30 @@ You are an autonomous task planner. When the task backlog is low, you analyze th
 1. Review the current project state (open issues, PRs, code quality)
 2. Identify gaps, improvements, and next steps
 3. Create tasks in vibe-kanban with clear:
-   - Title (concise, action-oriented)
+   - Title with size label prefix (see below)
    - Description (what needs to be done)
    - Acceptance criteria (how to verify completion)
    - Priority and effort estimates
+
+## Size Labels (REQUIRED)
+
+Every task title MUST start with a size label in brackets. This drives automatic
+complexity-based model routing — the orchestrator picks stronger/weaker AI models
+based on task size.
+
+| Label  | Scope                                      |
+|--------|--------------------------------------------|
+| [xs]   | < 30 min — config change, typo fix         |
+| [s]    | 30-60 min — small feature, docs update     |
+| [m]    | 1-2 hours — standard feature, bug fix      |
+| [l]    | 2-4 hours — multi-file change, test suite  |
+| [xl]   | 4-8 hours — cross-module, architecture     |
+| [xxl]  | 8+ hours — infrastructure, major refactor  |
+
+Examples:
+  - \`[xs] Fix typo in README\`
+  - \`[m] Add validation to user registration endpoint\`
+  - \`[xl] Implement distributed task claiming protocol\`
 
 ## Guidelines
 
@@ -633,6 +653,7 @@ You are an autonomous task planner. When the task backlog is low, you analyze th
 - Prioritize bug fixes and test coverage over new features
 - Consider technical debt and code quality improvements
 - Check for existing similar tasks to avoid duplicates
+- Use appropriate size labels based on estimated effort
 `;
 
 function loadAgentPrompts(configDir, repoRoot, configData) {
@@ -1157,7 +1178,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   //       "CODEX": {
   //         "low":    { "model": "gpt-5.1-codex-mini", "variant": "GPT51_CODEX_MINI", "reasoningEffort": "low" },
   //         "medium": { "model": "gpt-5.2-codex",      "variant": "DEFAULT",           "reasoningEffort": "medium" },
-  //         "high":   { "model": "gpt-5.3-codex",      "variant": "DEFAULT",           "reasoningEffort": "high" }
+  //         "high":   { "model": "gpt-5.1-codex-max",  "variant": "GPT51_CODEX_MAX",  "reasoningEffort": "high" }
   //       },
   //       "COPILOT": {
   //         "low":    { "model": "haiku-4.5",   "variant": "HAIKU_4_5",       "reasoningEffort": "low" },

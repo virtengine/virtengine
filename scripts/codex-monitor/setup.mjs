@@ -434,10 +434,30 @@ You are an autonomous task planner for the **${projectName}** project. When agen
 1. Review current project state (open issues, PRs, code health)
 2. Identify gaps, improvements, and next steps
 3. Create 3-5 well-scoped tasks in vibe-kanban with:
-   - Clear, action-oriented title
+   - Title prefixed with a size label (see below)
    - Detailed description of what needs to be done
    - Acceptance criteria for verification
    - Priority and effort estimates
+
+## Size Labels (REQUIRED)
+
+Every task title MUST start with a size label in brackets. This drives automatic
+complexity-based model routing — the orchestrator selects stronger/weaker AI
+models based on task size.
+
+| Label  | Scope                                      |
+|--------|--------------------------------------------|
+| [xs]   | < 30 min — config change, typo fix         |
+| [s]    | 30-60 min — small feature, docs update     |
+| [m]    | 1-2 hours — standard feature, bug fix      |
+| [l]    | 2-4 hours — multi-file change, test suite  |
+| [xl]   | 4-8 hours — cross-module, architecture     |
+| [xxl]  | 8+ hours — infrastructure, major refactor  |
+
+Examples:
+  - \`[xs] Fix typo in README\`
+  - \`[m] Add validation to user registration endpoint\`
+  - \`[xl] Implement distributed task claiming protocol\`
 
 ## Guidelines
 
@@ -445,6 +465,7 @@ You are an autonomous task planner for the **${projectName}** project. When agen
 - Prioritize: bug fixes > test coverage > tech debt > new features
 - Check for existing similar tasks to avoid duplicates
 - Consider dependencies between tasks
+- Use appropriate size labels based on estimated complexity
 `;
 }
 
@@ -1260,6 +1281,9 @@ async function main() {
       const setupScript = generateVkSetupScript(vkConfig);
       const cleanupScript = generateVkCleanupScript(vkConfig);
 
+      // Get current PATH for VK executor profiles
+      const currentPath = process.env.PATH || "";
+
       // Write to config for VK API auto-wiring
       configJson.vkAutoConfig = {
         setupScript,
@@ -1267,11 +1291,18 @@ async function main() {
         executorProfiles: configJson.executors.map((e) => ({
           executor: e.executor,
           variant: e.variant,
+          environmentVariables: {
+            PATH: currentPath,
+            // Ensure GitHub token is available in workspace
+            GH_TOKEN: "${GH_TOKEN}",
+            GITHUB_TOKEN: "${GITHUB_TOKEN}",
+          },
         })),
       };
 
       info("VK configuration will be applied on first launch.");
       info("Setup and cleanup scripts generated for your workspace.");
+      info(`PATH environment variable configured for ${configJson.executors.length} executor profile(s)`);
     }
   } finally {
     prompt.close();
@@ -1386,8 +1417,8 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   // ── codex-monitor.config.json ──────────────────────────
   // Write config with schema reference for editor autocomplete
   const configOut = { $schema: "./codex-monitor.schema.json", ...configJson };
-  // Remove internal auto-config data — not needed in config file
-  delete configOut.vkAutoConfig;
+  // Keep vkAutoConfig in config file for monitor to apply on first launch
+  // (includes executorProfiles with environment variables like PATH)
   const configPath = resolve(__dirname, "codex-monitor.config.json");
   writeFileSync(configPath, JSON.stringify(configOut, null, 2) + "\n", "utf8");
   success(`Config written to ${relative(repoRoot, configPath)}`);

@@ -202,6 +202,42 @@ hook_info "Running $TOTAL_CHECKS checks (smart mode)"
 echo ""
 
 # =========================================================================
+# GIT PUSH REQUIREMENTS CHECK (fast-fail before expensive tests)
+# =========================================================================
+hook_info "[pre-flight] Checking git push requirements..."
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "HEAD" ]; then
+    REMOTE_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
+    if [ -n "$REMOTE_BRANCH" ]; then
+        # Check if we're behind the remote (would cause non-fast-forward rejection)
+        LOCAL_COMMIT=$(git rev-parse HEAD 2>/dev/null)
+        REMOTE_COMMIT=$(git rev-parse "$REMOTE_BRANCH" 2>/dev/null || echo "")
+        if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+            MERGE_BASE=$(git merge-base HEAD "$REMOTE_BRANCH" 2>/dev/null || echo "")
+            if [ "$MERGE_BASE" != "$REMOTE_COMMIT" ] && [ "$MERGE_BASE" != "$LOCAL_COMMIT" ]; then
+                # Branches have diverged
+                BEHIND=$(git rev-list --count HEAD.."$REMOTE_BRANCH" 2>/dev/null || echo "0")
+                AHEAD=$(git rev-list --count "$REMOTE_BRANCH"..HEAD 2>/dev/null || echo "0")
+                if [ "$BEHIND" != "0" ]; then
+                    hook_fail "Branch has diverged: $BEHIND commit(s) behind, $AHEAD commit(s) ahead"
+                    hook_fail "Remote: $REMOTE_BRANCH"
+                    hook_fail "Push will be rejected (non-fast-forward)"
+                    echo ""
+                    hook_info "Options:"
+                    hook_info "  1. git pull --rebase    # Rebase your commits"
+                    hook_info "  2. git pull             # Merge remote changes"
+                    hook_info "  3. git push --force     # Force push (dangerous)"
+                    hook_info "  4. git push --no-verify # Skip this check"
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+fi
+hook_pass "[pre-flight] Git push requirements OK"
+echo ""
+
+# =========================================================================
 # HELPERS
 # =========================================================================
 run_check() {

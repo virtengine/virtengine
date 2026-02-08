@@ -339,6 +339,82 @@ Routing precedence:
 
 This works for generic repos too — you can tag tasks with their own upstreams without hardcoding VirtEngine logic.
 
+### Task Complexity Routing
+
+codex-monitor automatically selects AI models based on task complexity. The
+orchestrator reads a **size label** from each task title and maps it to a
+complexity tier (LOW / MEDIUM / HIGH), then picks the appropriate model.
+
+#### Size Labels
+
+Prefix every task title with a size label in brackets:
+
+| Label  | Complexity | Scope                                      |
+|--------|------------|--------------------------------------------|
+| `[xs]` | LOW        | < 30 min — config change, typo fix         |
+| `[s]`  | LOW        | 30-60 min — small feature, docs update     |
+| `[m]`  | MEDIUM     | 1-2 hours — standard feature, bug fix      |
+| `[l]`  | HIGH       | 2-4 hours — multi-file change, test suite  |
+| `[xl]` | HIGH       | 4-8 hours — cross-module, architecture     |
+| `[xxl]`| HIGH       | 8+ hours — infrastructure, major refactor  |
+
+Tasks without a size label default to `[m]` (MEDIUM).
+
+#### Default Models
+
+| Tier   | Codex (OpenAI)       | Copilot (Claude)     |
+|--------|----------------------|----------------------|
+| LOW    | gpt-5.1-codex-mini   | haiku-4.5            |
+| MEDIUM | gpt-5.2-codex        | sonnet-4.5           |
+| HIGH   | gpt-5.1-codex-max    | opus-4.6             |
+
+#### Keyword Escalation / Simplification
+
+Even after size-based classification, keyword signals in task titles and
+descriptions can bump the tier up (escalators) or down (simplifiers):
+
+- **Escalators:** architect, migration, consensus, security, load test, service
+  mesh, disaster recovery, CRITICAL, Est. LOC > 3000
+- **Simplifiers:** typo, bump version, docs only, lint fix, rename, config change,
+  plan next tasks
+
+#### Configuration
+
+Complexity routing is **enabled by default**. Override via environment variables
+or `codex-monitor.config.json`:
+
+```bash
+# Disable entirely
+COMPLEXITY_ROUTING_ENABLED=false
+
+# Override specific tier models
+COMPLEXITY_ROUTING_CODEX_HIGH_MODEL=gpt-5.2-codex
+COMPLEXITY_ROUTING_COPILOT_LOW_MODEL=sonnet-4.5
+```
+
+Or in `codex-monitor.config.json`:
+
+```json
+{
+  "complexityRouting": {
+    "enabled": true,
+    "models": {
+      "CODEX": {
+        "high": { "model": "gpt-5.1-codex-max", "variant": "GPT51_CODEX_MAX", "reasoningEffort": "high" }
+      }
+    }
+  }
+}
+```
+
+See `codex-monitor.config.example.json` for the full model matrix.
+
+#### Task Planner Integration
+
+The built-in task planner (triggered when backlog is empty) instructs agents to
+include size labels on every created task. If you write a custom planner prompt,
+include the size label table in your instructions.
+
 ### Shared Cloud Workspaces
 
 Codex-monitor can track pooled cloud workspaces with lease-based ownership and
