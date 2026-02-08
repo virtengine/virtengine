@@ -880,8 +880,15 @@ func TestVerifyECDSASignature(t *testing.T) {
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
 	require.NoError(t, err)
 
-	// Create raw r||s signature format
-	signature := append(r.Bytes(), s.Bytes()...)
+	// Create raw r||s signature format with fixed-width padding
+	curveBytes := (privateKey.Curve.Params().BitSize + 7) / 8
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+	signature := make([]byte, 0, curveBytes*2)
+	signature = append(signature, make([]byte, curveBytes-len(rBytes))...)
+	signature = append(signature, rBytes...)
+	signature = append(signature, make([]byte, curveBytes-len(sBytes))...)
+	signature = append(signature, sBytes...)
 
 	t.Run("valid signature raw format", func(t *testing.T) {
 		err := verifyECDSA(cert.PublicKey, data, signature, crypto.SHA256)
