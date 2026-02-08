@@ -65,7 +65,7 @@ export async function readDailyArchive(dateStr, archiveDir = ARCHIVE_DIR) {
     if (!existsSync(filePath)) return [];
     const raw = await readFile(filePath, "utf8");
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : data?.entries ?? [];
+    return Array.isArray(data) ? data : (data?.entries ?? []);
   } catch {
     return [];
   }
@@ -120,7 +120,9 @@ export async function isAlreadyArchived(taskId, archiveDir = ARCHIVE_DIR) {
         try {
           const raw = await readFile(resolve(archiveDir, f), "utf8");
           const entries = JSON.parse(raw);
-          const arr = Array.isArray(entries) ? entries : entries?.entries ?? [];
+          const arr = Array.isArray(entries)
+            ? entries
+            : (entries?.entries ?? []);
           if (arr.some((e) => e.task?.id === taskId)) return true;
         } catch {
           // corrupted file — skip
@@ -401,7 +403,9 @@ export async function getArchiveStats(archiveDir = ARCHIVE_DIR) {
         if (/^\d{4}-\d{2}-\d{2}\.json$/.test(file)) {
           const raw = await readFile(filePath, "utf8");
           const entries = JSON.parse(raw);
-          const arr = Array.isArray(entries) ? entries : entries?.entries ?? [];
+          const arr = Array.isArray(entries)
+            ? entries
+            : (entries?.entries ?? []);
           taskCount += arr.length;
         } else {
           // Legacy per-task file
@@ -459,7 +463,9 @@ export async function migrateLegacyArchives(archiveDir = ARCHIVE_DIR) {
         const existing = await readDailyArchive(datePrefix, archiveDir);
 
         // Build set of already-migrated task IDs to avoid duplicates
-        const existingIds = new Set(existing.map((e) => e.task?.id).filter(Boolean));
+        const existingIds = new Set(
+          existing.map((e) => e.task?.id).filter(Boolean),
+        );
 
         for (const legacyFile of fileNames) {
           try {
