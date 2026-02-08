@@ -10,6 +10,7 @@ import {
   SIZE_TO_COMPLEXITY,
   DEFAULT_MODEL_PROFILES,
   COMPLETION_CONFIDENCE,
+  MODEL_ALIASES,
 } from "../task-complexity.mjs";
 
 // ── classifyComplexity ───────────────────────────────────────────────────────
@@ -188,8 +189,8 @@ describe("getModelForComplexity", () => {
 
   it("returns correct CODEX model for HIGH", () => {
     const result = getModelForComplexity("high", "CODEX");
-    expect(result.model).toBe("gpt-5.3-codex");
-    expect(result.variant).toBe("DEFAULT");
+    expect(result.model).toBe("gpt-5.1-codex-max");
+    expect(result.variant).toBe("GPT51_CODEX_MAX");
     expect(result.reasoningEffort).toBe("high");
   });
 
@@ -287,8 +288,8 @@ describe("resolveExecutorForTask", () => {
   it("routes large task to CODEX top model", () => {
     const task = { title: "architect new module", size: "xl" };
     const result = resolveExecutorForTask(task, baseCodexProfile);
-    expect(result.model).toBe("gpt-5.3-codex");
-    expect(result.variant).toBe("DEFAULT");
+    expect(result.model).toBe("gpt-5.1-codex-max");
+    expect(result.variant).toBe("GPT51_CODEX_MAX");
     expect(result.reasoningEffort).toBe("high");
     expect(result.complexity.tier).toBe("high");
   });
@@ -380,14 +381,14 @@ describe("formatComplexityDecision", () => {
   it("formats a full decision string", () => {
     const resolved = {
       complexity: { tier: "high", sizeLabel: "xl", adjusted: false },
-      model: "gpt-5.3-codex",
+      model: "gpt-5.1-codex-max",
       reasoningEffort: "high",
       executor: "CODEX",
     };
     const str = formatComplexityDecision(resolved);
     expect(str).toContain("complexity=high");
     expect(str).toContain("size=xl");
-    expect(str).toContain("model=gpt-5.3-codex");
+    expect(str).toContain("model=gpt-5.1-codex-max");
     expect(str).toContain("reasoning=high");
     expect(str).toContain("executor=CODEX");
     expect(str).not.toContain("adjusted=true");
@@ -558,5 +559,116 @@ describe("constants", () => {
     expect(COMPLETION_CONFIDENCE.NEEDS_REVIEW).toBe("needs-review");
     expect(COMPLETION_CONFIDENCE.PARTIAL).toBe("partial");
     expect(COMPLETION_CONFIDENCE.FAILED).toBe("failed");
+  });
+
+  it("MODEL_ALIASES contains all available models", () => {
+    expect(MODEL_ALIASES).toBeDefined();
+    expect(MODEL_ALIASES["gpt-5.1-codex-mini"]).toEqual({ executor: "CODEX", variant: "GPT51_CODEX_MINI" });
+    expect(MODEL_ALIASES["gpt-5.2-codex"]).toEqual({ executor: "CODEX", variant: "DEFAULT" });
+    expect(MODEL_ALIASES["gpt-5.1-codex-max"]).toEqual({ executor: "CODEX", variant: "GPT51_CODEX_MAX" });
+    expect(MODEL_ALIASES["claude-opus-4.6"]).toEqual({ executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" });
+    expect(MODEL_ALIASES["opus-4.6"]).toEqual({ executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" });
+    expect(MODEL_ALIASES["sonnet-4.5"]).toEqual({ executor: "COPILOT", variant: "SONNET_4_5" });
+    expect(MODEL_ALIASES["haiku-4.5"]).toEqual({ executor: "COPILOT", variant: "HAIKU_4_5" });
+    expect(MODEL_ALIASES["claude-code"]).toEqual({ executor: "COPILOT", variant: "CLAUDE_CODE" });
+    expect(Object.keys(MODEL_ALIASES)).toHaveLength(8);
+  });
+});
+
+// ── New complexity signal patterns ───────────────────────────────────────────
+
+describe("new escalator signal patterns", () => {
+  it("escalates on load test / stress test keywords", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "Load Testing 1M Nodes",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on stress test keyword", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "run stress test on provider endpoints",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on service mesh keyword", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "implement service mesh with mTLS",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on circuit breaker keyword", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "add circuit breaker to provider gateway",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on Est. LOC > 3000 in description", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "build new module",
+      description: "Est. LOC: 5,000–8,000 lines of infrastructure code",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on multi-file failures (10+ files)", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "Fix 78 tests failing across modules",
+      description: "15 files fail with import errors",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on disaster recovery keywords", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "Disaster Recovery & Failover Testing",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("escalates on CRITICAL keyword", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "CRITICAL: fix consensus bug",
+    });
+    expect(result.tier).toBe("high");
+    expect(result.adjusted).toBe(true);
+  });
+});
+
+describe("new simplifier signal patterns", () => {
+  it("simplifies on 'Plan next tasks' title", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "Plan next tasks for sprint",
+    });
+    expect(result.tier).toBe("low");
+    expect(result.adjusted).toBe(true);
+  });
+
+  it("simplifies on manual-telegram/triage keyword", () => {
+    const result = classifyComplexity({
+      sizeLabel: "m",
+      title: "manual-telegram triage of incoming requests",
+    });
+    expect(result.tier).toBe("low");
+    expect(result.adjusted).toBe(true);
   });
 });

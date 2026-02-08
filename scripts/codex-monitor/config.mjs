@@ -1157,7 +1157,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   //       "CODEX": {
   //         "low":    { "model": "gpt-5.1-codex-mini", "variant": "GPT51_CODEX_MINI", "reasoningEffort": "low" },
   //         "medium": { "model": "gpt-5.2-codex",      "variant": "DEFAULT",           "reasoningEffort": "medium" },
-  //         "high":   { "model": "gpt-5.3-codex",      "variant": "DEFAULT",           "reasoningEffort": "high" }
+  //         "high":   { "model": "gpt-5.1-codex-max",  "variant": "GPT51_CODEX_MAX",  "reasoningEffort": "high" }
   //       },
   //       "COPILOT": {
   //         "low":    { "model": "haiku-4.5",   "variant": "HAIKU_4_5",       "reasoningEffort": "low" },
