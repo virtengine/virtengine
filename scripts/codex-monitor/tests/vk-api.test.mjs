@@ -6,7 +6,9 @@ global.fetch = mockFetch;
 
 // Mock console methods to avoid noise in test output
 const mockConsoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
-const mockConsoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+const mockConsoleError = vi
+  .spyOn(console, "error")
+  .mockImplementation(() => {});
 
 // Import monitor once at module level
 const monitor = await import("../monitor.mjs");
@@ -48,7 +50,7 @@ describe("fetchVk", () => {
     it("should make successful POST request with body", async () => {
       const requestBody = { status: "in_progress" };
       const mockResponse = { success: true };
-      
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Map([["content-type", "application/json"]]),
@@ -74,7 +76,7 @@ describe("fetchVk", () => {
     it("should make successful PUT request (not PATCH)", async () => {
       const requestBody = { status: "completed" };
       const mockResponse = { success: true };
-      
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Map([["content-type", "application/json"]]),
@@ -158,7 +160,7 @@ describe("fetchVk", () => {
 
     it("should handle non-JSON response (HTML error page)", async () => {
       const htmlResponse = "<html><body><h1>404 Not Found</h1></body></html>";
-      
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Map([["content-type", "text/html"]]),
@@ -374,7 +376,7 @@ describe("updateTaskStatus", () => {
 
   it("should handle various status values", async () => {
     const statuses = ["pending", "in_progress", "completed", "failed"];
-    
+
     for (const status of statuses) {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -383,7 +385,7 @@ describe("updateTaskStatus", () => {
       });
 
       const result = await updateTaskStatus(1, status);
-      
+
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
@@ -418,7 +420,7 @@ describe("updateTaskStatus", () => {
 
     const call = mockFetch.mock.calls[0];
     const body = JSON.parse(call[1].body);
-    
+
     expect(body).toEqual({ status: "completed" });
     expect(Object.keys(body)).toHaveLength(1);
   });
@@ -483,7 +485,7 @@ describe("VK API integration scenarios", () => {
 
   it("should handle concurrent status updates", async () => {
     const taskIds = [1, 2, 3, 4, 5];
-    
+
     // Mock all responses
     taskIds.forEach(() => {
       mockFetch.mockResolvedValueOnce({
@@ -524,13 +526,13 @@ describe("VK API integration scenarios", () => {
 
     const call = mockFetch.mock.calls[0];
     const body = call[1].body;
-    
+
     // Should be a string, not an object
     expect(typeof body).toBe("string");
-    
+
     // Should be valid JSON
     expect(() => JSON.parse(body)).not.toThrow();
-    
+
     // Should match expected structure
     const parsed = JSON.parse(body);
     expect(parsed).toEqual({ status: "completed" });
