@@ -1,5 +1,5 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, watch, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, watch, writeFileSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -1963,11 +1963,58 @@ async function isBranchMerged(branch) {
 }
 
 /**
- * Session-level cache of task IDs already confirmed as done.
- * Prevents re-processing tasks every cycle when VK API has propagation delay.
+ * Persistent cache of task IDs already confirmed as done.
+ * Survives monitor restarts by writing to disk.
  * @type {Set<string>}
  */
 const mergedTaskCache = new Set();
+
+/** Path to the persistent merged-task cache file */
+const mergedTaskCachePath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-merged-tasks.json",
+);
+
+/** Load persisted merged-task cache from disk (best-effort) */
+function loadMergedTaskCache() {
+  try {
+    if (existsSync(mergedTaskCachePath)) {
+      const raw = readFileSync(mergedTaskCachePath, "utf8");
+      const data = JSON.parse(raw);
+      // Expire entries older than 24 hours to prevent stale buildup
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      for (const [id, ts] of Object.entries(data)) {
+        if (typeof ts === "number" && ts > cutoff) {
+          mergedTaskCache.add(id);
+        }
+      }
+      if (mergedTaskCache.size > 0) {
+        console.log(
+          `[monitor] Restored ${mergedTaskCache.size} merged-task cache entries from disk`,
+        );
+      }
+    }
+  } catch {
+    /* best-effort — start fresh */
+  }
+}
+
+/** Persist merged-task cache to disk (best-effort) */
+function saveMergedTaskCache() {
+  try {
+    const data = {};
+    const now = Date.now();
+    for (const id of mergedTaskCache) {
+      data[id] = now;
+    }
+    writeFileSync(mergedTaskCachePath, JSON.stringify(data, null, 2), "utf8");
+  } catch {
+    /* best-effort */
+  }
+}
+
+// Load cache on startup
+loadMergedTaskCache();
 
 /** Maximum number of tasks to process per sweep (prevents thundering herd) */
 const MERGE_CHECK_BATCH_SIZE = 10;
@@ -2089,6 +2136,7 @@ async function checkMergedPRsAndUpdateTasks() {
         if (success) {
           movedCount++;
           mergedTaskCache.add(task.id);
+          saveMergedTaskCache();
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
@@ -2137,6 +2185,7 @@ async function checkMergedPRsAndUpdateTasks() {
         if (success) {
           movedCount++;
           mergedTaskCache.add(task.id);
+          saveMergedTaskCache();
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
