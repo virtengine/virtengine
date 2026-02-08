@@ -150,8 +150,6 @@ $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
 $script:TaskRetryCounts = @{}
 $script:AttemptSummaries = @{}
-$script:TaskFollowUpCounts = @{}  # Per-task follow-up counter to prevent infinite loops
-$script:MAX_FOLLOWUPS_PER_TASK = 6  # Hard cap on follow-ups per task before marking manual_review
 $script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-state.json"
 $script:CopilotStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-copilot.json"
 $script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-status.json"
@@ -203,65 +201,13 @@ function Write-Log {
     Write-Host "  [$ts] $Message" -ForegroundColor $color
 }
 
-function Get-EnvFallback {
-    <#
-    .SYNOPSIS Robust env var lookup with fallbacks.
-    .DESCRIPTION Uses multiple access paths to avoid parser edge cases.
-    #>
-    param(
-        [Parameter(Mandatory)][string]$Name
-    )
-
-    try {
-        $value = [Environment]::GetEnvironmentVariable($Name)
-        if ($value) { return $value }
-    } catch { }
-
-    try {
-        $item = Get-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue
-        if ($item -and $item.Value) { return $item.Value }
-    } catch { }
-
-    try {
-        $all = [Environment]::GetEnvironmentVariables()
-        if ($all -and $all.ContainsKey($Name)) {
-            $value = $all[$Name]
-            if ($value) { return $value }
-        }
-    } catch { }
-
-    return $null
-}
-
-function Set-EnvValue {
-    <#
-    .SYNOPSIS Robust env var setter with fallbacks.
-    #>
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [AllowNull()][object]$Value
-    )
-
-    try {
-        if ($null -eq $Value -or $Value -eq "") {
-            Remove-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue | Out-Null
-        } else {
-            Set-Item -Path ("Env:{0}" -f $Name) -Value $Value -ErrorAction SilentlyContinue | Out-Null
-        }
-    } catch { }
-
-    try {
-        [Environment]::SetEnvironmentVariable($Name, $Value)
-    } catch { }
-}
-
 function Get-EnvInt {
     param(
         [Parameter(Mandatory)][string]$Name,
         [int]$Default,
         [int]$Min = 0
     )
-    $raw = Get-EnvFallback -Name $Name
+    $raw = [Environment]::GetEnvironmentVariable($Name)
     if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
     $value = 0
     if (-not [int]::TryParse($raw, [ref]$value)) { return $Default }
@@ -274,7 +220,7 @@ function Get-EnvBool {
         [Parameter(Mandatory)][string]$Name,
         [bool]$Default = $false
     )
-    $raw = Get-EnvFallback -Name $Name
+    $raw = [Environment]::GetEnvironmentVariable($Name)
     if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
     switch ($raw.Trim().ToLowerInvariant()) {
         "1" { return $true }
@@ -296,7 +242,7 @@ function Get-EnvString {
         [Parameter(Mandatory)][string]$Name,
         [string]$Default = ""
     )
-    $value = Get-EnvFallback -Name $Name
+    $value = [System.Environment]::GetEnvironmentVariable($Name)
     if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
     return $value.Trim()
 }
@@ -438,20 +384,20 @@ function Ensure-GitIdentity {
     <#
     .SYNOPSIS Ensure git author/committer identity is set when env overrides are provided.
     #>
-    $name = Get-EnvFallback -Name "VE_GIT_AUTHOR_NAME"
-    if (-not $name) { $name = Get-EnvFallback -Name "GIT_AUTHOR_NAME" }
-    $email = Get-EnvFallback -Name "VE_GIT_AUTHOR_EMAIL"
-    if (-not $email) { $email = Get-EnvFallback -Name "GIT_AUTHOR_EMAIL" }
+    $name = $env:VE_GIT_AUTHOR_NAME
+    if (-not $name) { $name = $env:GIT_AUTHOR_NAME }
+    $email = $env:VE_GIT_AUTHOR_EMAIL
+    if (-not $email) { $email = $env:GIT_AUTHOR_EMAIL }
 
     if ($name) {
         try { git config user.name $name | Out-Null } catch { }
-        Set-EnvValue -Name "GIT_AUTHOR_NAME" -Value $name
-        Set-EnvValue -Name "GIT_COMMITTER_NAME" -Value $name
+        $env:GIT_AUTHOR_NAME = $name
+        $env:GIT_COMMITTER_NAME = $name
     }
     if ($email) {
         try { git config user.email $email | Out-Null } catch { }
-        Set-EnvValue -Name "GIT_AUTHOR_EMAIL" -Value $email
-        Set-EnvValue -Name "GIT_COMMITTER_EMAIL" -Value $email
+        $env:GIT_AUTHOR_EMAIL = $email
+        $env:GIT_COMMITTER_EMAIL = $email
     }
     if ($name -or $email) {
         Write-Log "Git identity configured from VE_GIT_AUTHOR_*" -Level "INFO"
@@ -696,8 +642,7 @@ function Test-VKApiReachable {
 
 function Get-VKBaseUrl {
     if ($script:VK_BASE_URL) { return $script:VK_BASE_URL }
-    $envBase = Get-EnvFallback -Name "VK_BASE_URL"
-    if ($envBase) { return $envBase }
+    if ($env:VK_BASE_URL) { return $env:VK_BASE_URL }
     return "http://127.0.0.1:54089"
 }
 
@@ -774,14 +719,13 @@ function Initialize-CISweepConfig {
     $script:CopilotCloudCooldownMin = Get-EnvInt -Name "COPILOT_CLOUD_COOLDOWN_MIN" -Default 60 -Min 1
     $script:CopilotRateLimitCooldownMin = Get-EnvInt -Name "COPILOT_RATE_LIMIT_COOLDOWN_MIN" -Default 120 -Min 30
     $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
-    $envCopilotLocalResolution = Get-EnvFallback -Name "COPILOT_LOCAL_RESOLUTION"
-    $script:CopilotLocalResolution = if ($envCopilotLocalResolution) { $envCopilotLocalResolution } else { "agent" }
+    $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
     $script:CodexMonitorTaskUpstream = Get-EnvString -Name "CODEX_MONITOR_TASK_UPSTREAM" -Default "origin/ve/codex-monitor-generic"
 
     # Branch routing scope map (v0.8) — maps conventional commit scopes to upstream branches
     $script:BranchRoutingScopeMap = @{}
     $script:AutoRebaseOnMerge = Get-EnvBool -Name "AUTO_REBASE_ON_MERGE" -Default $true
-    $envScopeMap = Get-EnvFallback -Name "BRANCH_ROUTING_SCOPE_MAP"
+    $envScopeMap = $env:BRANCH_ROUTING_SCOPE_MAP
     if ($envScopeMap) {
         foreach ($pair in $envScopeMap.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
             $parts = $pair.Split(":", 2)
@@ -829,14 +773,14 @@ function Apply-CachedVKConfig {
 
     if (-not $script:VK_PROJECT_ID -and $cachedProjectId) {
         $script:VK_PROJECT_ID = $cachedProjectId
-        Set-EnvValue -Name "VK_PROJECT_ID" -Value $cachedProjectId
+        $env:VK_PROJECT_ID = $cachedProjectId
         $applied = $true
         Write-Log "Using cached VK project ID $($cachedProjectId.Substring(0,8))..." -Level "INFO"
     }
 
     if (-not $script:VK_REPO_ID -and $cachedRepoId) {
         $script:VK_REPO_ID = $cachedRepoId
-        Set-EnvValue -Name "VK_REPO_ID" -Value $cachedRepoId
+        $env:VK_REPO_ID = $cachedRepoId
         $applied = $true
         Write-Log "Using cached VK repo ID $($cachedRepoId.Substring(0,8))..." -Level "INFO"
     }
@@ -996,16 +940,16 @@ function Clear-CopilotCloudDisabled {
     # Only clear the _UNTIL cooldown — never clear COPILOT_CLOUD_DISABLED itself.
     # The user may have set COPILOT_CLOUD_DISABLED=1 permanently in .env;
     # wiping it here would override their intent when a cooldown expires.
-    Set-EnvValue -Name "COPILOT_CLOUD_DISABLED_UNTIL" -Value ""
+    $env:COPILOT_CLOUD_DISABLED_UNTIL = ""
 }
 
 function Test-CopilotCloudDisabled {
-    $flag = Get-EnvFallback -Name "COPILOT_CLOUD_DISABLED"
+    $flag = $env:COPILOT_CLOUD_DISABLED
     if ($flag -and $flag.ToString().ToLower() -in @("1", "true", "yes")) {
         return $true
     }
     $until = $null
-    $untilRaw = Get-EnvFallback -Name "COPILOT_CLOUD_DISABLED_UNTIL"
+    $untilRaw = $env:COPILOT_CLOUD_DISABLED_UNTIL
     if ($untilRaw) {
         try {
             $until = ([datetimeoffset]::Parse($untilRaw)).ToLocalTime().DateTime
@@ -1040,7 +984,7 @@ function Disable-CopilotCloud {
     # That flag is the user's permanent setting from .env and must not be
     # overwritten by runtime cooldowns (otherwise Clear would need to restore
     # the original value, and wiping it re-enables Copilot when it shouldn't be).
-    Set-EnvValue -Name "COPILOT_CLOUD_DISABLED_UNTIL" -Value $until.ToString("o")
+    $env:COPILOT_CLOUD_DISABLED_UNTIL = $until.ToString("o")
     Write-Log "Copilot cloud disabled until $($until.ToString("o"))" -Level "WARN"
     if ($Reason) {
         Write-Log "Copilot cloud disable reason: $Reason" -Level "WARN"
@@ -1129,12 +1073,12 @@ function Sync-CopilotPRState {
 
 function Get-TaskUrl {
     param([Parameter(Mandatory)][string]$TaskId)
-    $template = Get-EnvFallback -Name "VK_TASK_URL_TEMPLATE"
+    $template = $env:VK_TASK_URL_TEMPLATE
     if ($template) {
         return $template.Replace("{taskId}", $TaskId).Replace("{projectId}", $script:VK_PROJECT_ID)
     }
-    $base = Get-EnvFallback -Name "VK_BOARD_URL"
-    if (-not $base) { $base = Get-EnvFallback -Name "VK_WEB_URL" }
+    $base = $env:VK_BOARD_URL
+    if (-not $base) { $base = $env:VK_WEB_URL }
     if (-not $base) { return $null }
     return "$base/tasks/$TaskId"
 }
@@ -1578,15 +1522,15 @@ $script:SizeToComplexity = @{
 
 # Default model profiles per complexity tier and executor type
 $script:ComplexityModels = @{
-    "CODEX" = @{
+    "CODEX"   = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
-        "medium" = @{ model = "gpt-5.2-codex";      variant = "DEFAULT";           reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.3-codex";      variant = "DEFAULT";           reasoningEffort = "high" }
+        "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
+        "high"   = @{ model = "gpt-5.1-codex-max"; variant = "GPT51_CODEX_MAX"; reasoningEffort = "high" }
     }
     "COPILOT" = @{
-        "low"    = @{ model = "haiku-4.5";   variant = "HAIKU_4_5";       reasoningEffort = "low" }
-        "medium" = @{ model = "sonnet-4.5";  variant = "SONNET_4_5";      reasoningEffort = "medium" }
-        "high"   = @{ model = "opus-4.6";    variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
+        "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
+        "medium" = @{ model = "sonnet-4.5"; variant = "SONNET_4_5"; reasoningEffort = "medium" }
+        "high"   = @{ model = "opus-4.6"; variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
     }
 }
 
@@ -1693,8 +1637,8 @@ function Resolve-ExecutorForComplexity {
 
     # Check env overrides per tier
     $prefix = "COMPLEXITY_ROUTING_${executorType}_$($complexity.tier.ToUpperInvariant())"
-    $envModel = Get-EnvFallback -Name ("{0}_MODEL" -f $prefix)
-    $envVariant = Get-EnvFallback -Name ("{0}_VARIANT" -f $prefix)
+    $envModel = $env:("${prefix}_MODEL")
+    $envVariant = $env:("${prefix}_VARIANT")
 
     $result = @{
         name            = $BaseProfile.name
@@ -1709,16 +1653,15 @@ function Resolve-ExecutorForComplexity {
     }
 
     Write-Log ("Complexity routing: {0} (size={1}, complexity={2}, model={3}, reasoning={4})" -f `
-        $title.Substring(0, [Math]::Min(50, $title.Length)),
+            $title.Substring(0, [Math]::Min(50, $title.Length)),
         $sizeInfo.label, $complexity.tier, $result.model, $result.reasoningEffort) -Level "INFO"
 
     return $result
 }
 
 function Get-WorkstationRegistryPath {
-    $registryPath = Get-EnvFallback -Name "VE_WORKSPACE_REGISTRY_PATH"
-    if ($registryPath) {
-        return $registryPath
+    if ($env:VE_WORKSPACE_REGISTRY_PATH) {
+        return $env:VE_WORKSPACE_REGISTRY_PATH
     }
     return (Join-Path $PSScriptRoot "workspaces.json")
 }
@@ -2098,10 +2041,7 @@ function Get-TaskContextBlock {
     $lines += "If VE_TASK_TITLE/VE_TASK_DESCRIPTION are missing, treat this as a VK task:"
     $lines += "- Worktree paths often include .git/worktrees/ or vibe-kanban."
     $lines += "- VK tasks always map to a ve/<id>-<slug> branch."
-    $lines += ""
-    $lines += "IMPORTANT: Your job is to COMPLETE the task described above END TO END."
-    $lines += "Implement the code changes, ensure tests pass, then commit and push."
-    $lines += "Do NOT just check git status or reply with status — do the actual work."
+    $lines += "Resume with the context above, then commit/push/PR as usual."
     return ($lines -join "`n")
 }
 
@@ -2153,24 +2093,6 @@ function Get-ContextRecoveryMessage {
     return ($parts -join "`n`n")
 }
 
-function Get-ModelErrorRecoveryMessage {
-    <#
-    .SYNOPSIS Build a compact follow-up message for model/API failures.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][hashtable]$Info,
-        [int]$MaxDescriptionChars = 2000
-    )
-    $parts = @(
-        "Model API failure detected. Start a fresh session with minimal context.",
-        "Keep prompts concise and avoid large logs or dumps."
-    )
-    $context = Get-TaskContextBlock -Info $Info -MaxDescriptionChars $MaxDescriptionChars
-    if ($context) { $parts += $context }
-    return ($parts -join "`n`n")
-}
-
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
@@ -2183,9 +2105,6 @@ function Try-SendFollowUp {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
-    if ($Info.force_new_session) {
-        return (Try-SendFollowUpNewSession -AttemptId $AttemptId -Info $Info -Message $Message -Reason $Reason -IncludeTaskContext:$IncludeTaskContext)
-    }
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
@@ -2271,11 +2190,7 @@ function Test-ContextWindowError {
         "prompt token count",
         "token count of",
         "context length exceeded",
-        "maximum context length",
-        "exceeds the limit",
-        "token limit",
-        "too many tokens",
-        "prompt too large"
+        "maximum context length"
     )
     foreach ($prop in $Summary.PSObject.Properties) {
         $value = $prop.Value
@@ -2375,49 +2290,8 @@ function Get-AttemptFailureCategory {
         $lower -match "prompt token count" -or
         $lower -match "token count of" -or
         $lower -match "context length exceeded" -or
-        $lower -match "maximum context length" -or
-        $lower -match "exceeds the limit" -or
-        $lower -match "token limit" -or
-        $lower -match "too many tokens" -or
-        $lower -match "prompt too large") {
+        $lower -match "maximum context length") {
         return @{ category = "context_window"; status = $latestStatus; detail = "context window exceeded" }
-    }
-
-    $modelErrorPatterns = @(
-        "failed to get response from the ai model",
-        "capierror",
-        "openaierror",
-        "model error",
-        "model returned an error",
-        "upstream error"
-    )
-    foreach ($pattern in $modelErrorPatterns) {
-        if ($lower -match [regex]::Escape($pattern)) {
-            return @{ category = "model_error"; status = $latestStatus; detail = $pattern }
-        }
-    }
-
-    # Agent/AI API rate limits (Copilot, Codex, OpenAI, Anthropic)
-    $agentRateLimitPatterns = @(
-        '429 Too Many Requests',
-        '429',
-        'rate limit reached',
-        'rate_limit_exceeded',
-        'exceeded your current quota',
-        'too many requests',
-        'request limit reached',
-        'throttled',
-        'capacity exceeded',
-        'overloaded',
-        'server is busy',
-        'model is currently overloaded',
-        'resource_exhausted',
-        'quota exceeded'
-    )
-    foreach ($pattern in $agentRateLimitPatterns) {
-        if ($lower -match [regex]::Escape($pattern)) {
-            return @{ category = "agent_rate_limit"; status = $latestStatus; detail = $pattern }
-        }
     }
 
     if ($latestStatus -in @("failed", "killed", "crashed", "error", "aborted")) {
@@ -2791,9 +2665,9 @@ function Resolve-RebaseConflicts {
         if (-not $allResolvable) { return $false }
 
         # Continue the rebase
-        Set-EnvValue -Name "GIT_EDITOR" -Value "true"  # Don't open editor for commit messages
+        $env:GIT_EDITOR = "true"  # Don't open editor for commit messages
         $continueOut = git rebase --continue 2>&1
-        Set-EnvValue -Name "GIT_EDITOR" -Value $null
+        $env:GIT_EDITOR = $null
         if ($LASTEXITCODE -eq 0) {
             return $true
         }
@@ -3060,18 +2934,14 @@ function Sync-TrackedAttempts {
                     $tracked.status = "error"
                 }
 
-                if ($summary.latest_process_status -eq "failed") {
-                    $failure = Get-AttemptFailureCategory -Summary $summary -Info $tracked
-                    if ($failure.category -in @("context_window", "model_error")) {
-                        $tracked.force_new_session = $true
-                        $shouldRecover = $true
-                        if ($tracked.context_recovery_attempted_at) {
-                            $sinceAttempt = ((Get-Date) - $tracked.context_recovery_attempted_at).TotalMinutes
-                            if ($sinceAttempt -lt 10) { $shouldRecover = $false }
-                        }
-                        if ($shouldRecover) {
-                            $null = Try-RecoverContextWindow -AttemptId $a.id -Info $tracked
-                        }
+                if ($summary.latest_process_status -eq "failed" -and (Test-ContextWindowError -Summary $summary)) {
+                    $shouldRecover = $true
+                    if ($tracked.context_recovery_attempted_at) {
+                        $sinceAttempt = ((Get-Date) - $tracked.context_recovery_attempted_at).TotalMinutes
+                        if ($sinceAttempt -lt 10) { $shouldRecover = $false }
+                    }
+                    if ($shouldRecover) {
+                        $null = Try-RecoverContextWindow -AttemptId $a.id -Info $tracked
                     }
                 }
             }
@@ -3218,10 +3088,7 @@ function Prune-CompletedTaskWorkspaces {
     }
 
     # Clean up VK workspace directories for completed tasks
-    $tempRoot = Get-EnvFallback -Name "TEMP"
-    if (-not $tempRoot) { $tempRoot = Get-EnvFallback -Name "TMP" }
-    if (-not $tempRoot) { $tempRoot = [IO.Path]::GetTempPath() }
-    $vkWorkspaceBase = Join-Path $tempRoot "vibe-kanban\worktrees"
+    $vkWorkspaceBase = "$env:TEMP\vibe-kanban\worktrees"
     if (-not (Test-Path $vkWorkspaceBase)) {
         Write-Log "VK workspace directory not found: $vkWorkspaceBase" -Level "DEBUG"
         return
@@ -3234,7 +3101,7 @@ function Prune-CompletedTaskWorkspaces {
         # VK workspace pattern: <taskid-prefix>-<slug>/
         $taskPrefix = $task.id.Substring(0, [Math]::Min(4, $task.id.Length))
         $workspaceDirs = Get-ChildItem -Path $vkWorkspaceBase -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "$taskPrefix-*" }
+        Where-Object { $_.Name -like "$taskPrefix-*" }
 
         foreach ($dir in $workspaceDirs) {
             $fullPath = $dir.FullName
@@ -3315,18 +3182,12 @@ function Process-CompletedAttempts {
                     }
 
                     if (-not $recentFollowup) {
-                        if ($failure.category -in @("context_window", "model_error")) {
+                        if ($failure.category -eq "context_window") {
                             $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
-                            $msg = if ($failure.category -eq "model_error") {
-                                Get-ModelErrorRecoveryMessage -Info $info
-                            }
-                            else {
-                                Get-ContextRecoveryMessage -Info $info
-                            }
+                            $msg = Get-ContextRecoveryMessage -Info $info
                             if ($count -ge 2) {
                                 $msg = "$msg`n`nIf this fails again or there are no changes, reply NO_CHANGES so we can mark it for manual review."
                             }
-                            $info.force_new_session = $true
                             $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "context_window_recovery" -IncludeTaskContext:$false
                             $info.push_notified = $true
                             continue
@@ -3435,7 +3296,7 @@ function Process-CompletedAttempts {
                         $info.no_commits = $true
                         $script:TasksFailed++
                         Save-SuccessMetrics
-                        $msg = "Branch $branch has no commits compared to base. Please COMPLETE the assigned task: implement the code changes, write tests, commit, and push. If the task genuinely requires no code changes, reply NO_CHANGES."
+                        $msg = "Branch $branch has no commits compared to base. If there were no intended changes, reply NO_CHANGES. Otherwise please retry your task or push your commits."
                         $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "no_commits"
                         continue
                     }
