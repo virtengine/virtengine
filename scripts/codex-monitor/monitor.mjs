@@ -1410,7 +1410,7 @@ async function getPullRequestByNumber(prNumber) {
         "view",
         String(prNumber),
         "--json",
-        "number,state,title,url,mergedAt,closedAt",
+        "number,state,title,url,mergedAt,closedAt,mergeable,mergeStateStatus",
       ],
       { encoding: "utf8" },
     );
@@ -2060,8 +2060,18 @@ const staleBranchCooldown = new Map();
 const STALE_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /**
+ * Cooldown cache for tasks whose PRs have merge conflicts.
+ * We re-trigger conflict resolution at most every 30 minutes per task.
+ * Key = task ID, Value = timestamp of last resolution attempt.
+ * @type {Map<string, number>}
+ */
+const conflictResolutionCooldown = new Map();
+const CONFLICT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
  * Periodic check: find tasks in "inreview" status, check if their PRs
  * have been merged, and automatically move them to "done" status.
+ * Also detects open PRs with merge conflicts and triggers resolution.
  */
 async function checkMergedPRsAndUpdateTasks() {
   try {
@@ -2122,6 +2132,7 @@ async function checkMergedPRsAndUpdateTasks() {
 
     let movedCount = 0;
     let movedReviewCount = 0;
+    let conflictsTriggered = 0;
     /** @type {string[]} */
     const completedTaskNames = [];
 
@@ -2148,7 +2159,7 @@ async function checkMergedPRsAndUpdateTasks() {
         );
 
       // Build a deduplicated list of all branches + PR numbers to check
-      /** @type {Array<{branch?: string, prNumber?: number}>} */
+      /** @type {Array<{branch?: string, prNumber?: number, attemptId?: string}>} */
       const candidates = [];
       const seenBranches = new Set();
 
@@ -2157,11 +2168,12 @@ async function checkMergedPRsAndUpdateTasks() {
         const pr =
           src?.pr_number ||
           parsePrNumberFromUrl(src?.pr_url);
+        const aid = src?.id; // attempt UUID
         if (b && !seenBranches.has(b)) {
           seenBranches.add(b);
-          candidates.push({ branch: b, prNumber: pr || undefined });
+          candidates.push({ branch: b, prNumber: pr || undefined, attemptId: aid });
         } else if (pr && !candidates.some((c) => c.prNumber === pr)) {
-          candidates.push({ branch: b, prNumber: pr });
+          candidates.push({ branch: b, prNumber: pr, attemptId: aid });
         }
       };
 
@@ -2208,6 +2220,8 @@ async function checkMergedPRsAndUpdateTasks() {
       // ── Check ALL candidates for a merged PR/branch ──
       let resolved = false;
       let hasOpenPR = false;
+      /** @type {Array<{prNumber: number, attemptId?: string, branch?: string}>} */
+      const conflictCandidates = [];
 
       for (const cand of candidates) {
         // Check PR by number first (cheapest)
@@ -2244,7 +2258,24 @@ async function checkMergedPRsAndUpdateTasks() {
             resolved = true;
             break;
           }
-          if (prState === "OPEN") hasOpenPR = true;
+          if (prState === "OPEN") {
+            hasOpenPR = true;
+            // Detect merge conflicts on open PRs
+            // gh CLI: mergeable = "CONFLICTING" / "MERGEABLE" / "UNKNOWN"
+            // REST API: mergeable = false, mergeable_state = "dirty"
+            const isConflicting =
+              prInfo?.mergeable === "CONFLICTING" ||
+              prInfo?.mergeable === false ||
+              prInfo?.mergeable_state === "dirty" ||
+              prInfo?.mergeStateStatus === "DIRTY";
+            if (isConflicting) {
+              conflictCandidates.push({
+                prNumber: cand.prNumber,
+                attemptId: cand.attemptId,
+                branch: cand.branch,
+              });
+            }
+          }
         }
 
         if (!cand.branch) continue;
@@ -2280,9 +2311,78 @@ async function checkMergedPRsAndUpdateTasks() {
           resolved = true;
           break;
         }
+
+        // Branch not merged — look up its open PR and check for conflicts
+        if (!cand.prNumber) {
+          let branchPr = null;
+          if (ghAvailable()) {
+            branchPr = await findExistingPrForBranch(cand.branch);
+          }
+          if (!branchPr) {
+            branchPr = await findExistingPrForBranchApi(cand.branch);
+          }
+          if (branchPr) {
+            const bpState = String(branchPr.state).toUpperCase();
+            if (bpState === "OPEN") {
+              hasOpenPR = true;
+              // Fetch full PR info (with mergeable) via number
+              const fullPrInfo = await getPullRequestByNumber(branchPr.number);
+              const isConflicting =
+                fullPrInfo?.mergeable === "CONFLICTING" ||
+                fullPrInfo?.mergeable === false ||
+                fullPrInfo?.mergeable_state === "dirty" ||
+                fullPrInfo?.mergeStateStatus === "DIRTY";
+              if (isConflicting) {
+                conflictCandidates.push({
+                  prNumber: branchPr.number,
+                  attemptId: cand.attemptId,
+                  branch: cand.branch,
+                });
+              }
+            }
+          }
+        }
       }
 
       if (resolved) continue;
+
+      // ── Conflict resolution for open PRs with merge conflicts ──
+      if (conflictCandidates.length > 0) {
+        const lastConflictCheck = conflictResolutionCooldown.get(task.id);
+        const onCooldown =
+          lastConflictCheck &&
+          Date.now() - lastConflictCheck < CONFLICT_COOLDOWN_MS;
+        if (!onCooldown) {
+          const cc = conflictCandidates[0];
+          // Find the attempt ID — prefer the one on the candidate, else search
+          let resolveAttemptId = cc.attemptId;
+          if (!resolveAttemptId) {
+            const matchAttempt = allVkAttempts.find(
+              (a) => a.branch === cc.branch || a.pr_number === cc.prNumber,
+            );
+            resolveAttemptId = matchAttempt?.id || localAttempt?.id;
+          }
+          if (resolveAttemptId) {
+            const shortId = resolveAttemptId.substring(0, 8);
+            console.log(
+              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution`,
+            );
+            conflictResolutionCooldown.set(task.id, Date.now());
+            conflictsTriggered++;
+            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
+            void smartPRFlow(resolveAttemptId, shortId, "conflict");
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution`,
+              );
+            }
+          } else {
+            console.warn(
+              `[monitor] Task "${task.title}" PR #${cc.prNumber} has conflicts but no attempt ID — cannot trigger resolution`,
+            );
+          }
+        }
+      }
 
       // Task is NOT merged via any attempt — handle accordingly
       if (hasOpenPR && taskStatus !== "inreview") {
@@ -2293,7 +2393,7 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → inreview`,
           );
         }
-      } else {
+      } else if (!hasOpenPR) {
         // All branches unresolvable — put on cooldown (recheck in 6h)
         staleBranchCooldown.set(task.id, Date.now());
       }
@@ -2327,10 +2427,16 @@ async function checkMergedPRsAndUpdateTasks() {
         `[monitor] Moved ${movedReviewCount} tasks to inreview (PR open)`,
       );
     }
+    if (conflictsTriggered > 0) {
+      console.log(
+        `[monitor] Triggered conflict resolution for ${conflictsTriggered} PR(s)`,
+      );
+    }
     return {
       checked: batch.length,
       movedDone: movedCount,
       movedReview: movedReviewCount,
+      conflictsTriggered,
       cached: mergedTaskCache.size,
     };
   } catch (err) {
@@ -3302,7 +3408,7 @@ async function readStatusSummary() {
       ...copilotLines,
       `Manual review (${manualReviewTasks.length}):`,
       ...manualReviewLines,
-      `Counts: running=${running}, review=${review}, error=${error}, manual_review=${manualReview}`,
+      `Counts: running=${running}, review=${review}, error=${error}, manual_review=${manualReview}, conflict_resolving=${conflictResolutionCooldown.size}`,
       `Success: ${successLine}`,
     ].join("\n");
 
