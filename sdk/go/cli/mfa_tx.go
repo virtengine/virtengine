@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,10 +27,12 @@ func GetTxMFACmd() *cobra.Command {
 
 	cmd.AddCommand(
 		GetTxMFAEnrollFactorCmd(),
+		GetTxMFAEnrollFIDO2Cmd(),
 		GetTxMFARevokeFactorCmd(),
 		GetTxMFASetPolicyCmd(),
 		GetTxMFACreateChallengeCmd(),
 		GetTxMFAVerifyChallengeCmd(),
+		GetTxMFAVerifyFIDO2Cmd(),
 		GetTxMFAAddTrustedDeviceCmd(),
 		GetTxMFARemoveTrustedDeviceCmd(),
 	)
@@ -75,6 +79,78 @@ func GetTxMFAEnrollFactorCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("label", "", "Label for the factor")
+
+	cflags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+type fido2RegistrationPayload struct {
+	ChallengeID       string   `json:"challenge_id"`
+	ClientDataJSON    []byte   `json:"client_data_json"`
+	AttestationObject []byte   `json:"attestation_object"`
+	Transports        []string `json:"transports,omitempty"`
+}
+
+func GetTxMFAEnrollFIDO2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "enroll-fido2 [challenge-id] [client-data-json-b64] [attestation-object-b64]",
+		Short:             "Enroll a FIDO2/WebAuthn security key",
+		Long:              "Enroll a FIDO2/WebAuthn factor using a registration challenge and attestation data (base64-encoded).",
+		Args:              cobra.ExactArgs(3),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+
+			cctx, err := GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			challengeID := args[0]
+			clientDataJSON, err := decodeBase64(args[1])
+			if err != nil {
+				return fmt.Errorf("invalid client-data-json base64: %w", err)
+			}
+			attestationObject, err := decodeBase64(args[2])
+			if err != nil {
+				return fmt.Errorf("invalid attestation-object base64: %w", err)
+			}
+
+			transportsCSV, _ := cmd.Flags().GetString("transports")
+			transports := splitCSV(transportsCSV)
+			label, _ := cmd.Flags().GetString("label")
+
+			payload := fido2RegistrationPayload{
+				ChallengeID:       challengeID,
+				ClientDataJSON:    clientDataJSON,
+				AttestationObject: attestationObject,
+				Transports:        transports,
+			}
+
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgEnrollFactor{
+				Sender:                   cctx.GetFromAddress().String(),
+				FactorType:               types.FactorTypeFIDO2,
+				Label:                    label,
+				InitialVerificationProof: payloadBytes,
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cmd.Flags().String("label", "", "Label for the security key")
+	cmd.Flags().String("transports", "", "Comma-separated transports (usb,nfc,ble,internal)")
 
 	cflags.AddTxFlagsToCmd(cmd)
 	return cmd
@@ -239,6 +315,95 @@ func GetTxMFAVerifyChallengeCmd() *cobra.Command {
 	return cmd
 }
 
+type fido2AssertionPayload struct {
+	CredentialID      []byte `json:"credential_id"`
+	ClientDataJSON    []byte `json:"client_data_json"`
+	AuthenticatorData []byte `json:"authenticator_data"`
+	Signature         []byte `json:"signature"`
+	UserHandle        []byte `json:"user_handle,omitempty"`
+}
+
+func GetTxMFAVerifyFIDO2Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "verify-fido2 [challenge-id] [credential-id-b64] [client-data-json-b64] [authenticator-data-b64] [signature-b64]",
+		Short:             "Verify a FIDO2/WebAuthn challenge response",
+		Long:              "Verify a FIDO2/WebAuthn assertion using base64-encoded WebAuthn response fields.",
+		Args:              cobra.ExactArgs(5),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+
+			cctx, err := GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			challengeID := args[0]
+			credentialID, err := decodeBase64(args[1])
+			if err != nil {
+				return fmt.Errorf("invalid credential-id base64: %w", err)
+			}
+			clientDataJSON, err := decodeBase64(args[2])
+			if err != nil {
+				return fmt.Errorf("invalid client-data-json base64: %w", err)
+			}
+			authenticatorData, err := decodeBase64(args[3])
+			if err != nil {
+				return fmt.Errorf("invalid authenticator-data base64: %w", err)
+			}
+			signature, err := decodeBase64(args[4])
+			if err != nil {
+				return fmt.Errorf("invalid signature base64: %w", err)
+			}
+
+			userHandleB64, _ := cmd.Flags().GetString("user-handle")
+			var userHandle []byte
+			if userHandleB64 != "" {
+				userHandle, err = decodeBase64(userHandleB64)
+				if err != nil {
+					return fmt.Errorf("invalid user-handle base64: %w", err)
+				}
+			}
+
+			payload := fido2AssertionPayload{
+				CredentialID:      credentialID,
+				ClientDataJSON:    clientDataJSON,
+				AuthenticatorData: authenticatorData,
+				Signature:         signature,
+				UserHandle:        userHandle,
+			}
+
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgVerifyChallenge{
+				Sender:      cctx.GetFromAddress().String(),
+				ChallengeId: challengeID,
+				Response: types.ChallengeResponse{
+					ChallengeId:  challengeID,
+					FactorType:   types.FactorTypeFIDO2,
+					ResponseData: payloadBytes,
+				},
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cmd.Flags().String("user-handle", "", "Optional base64-encoded user handle")
+
+	cflags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
 func GetTxMFAAddTrustedDeviceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "add-trusted-device [fingerprint] [user-agent]",
@@ -358,4 +523,33 @@ func parseSensitiveTransactionTypeMFA(s string) (types.SensitiveTransactionType,
 	}
 
 	return 0, fmt.Errorf("invalid transaction type: %s", s)
+}
+
+func splitCSV(input string) []string {
+	if input == "" {
+		return nil
+	}
+
+	parts := strings.Split(input, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	return out
+}
+
+func decodeBase64(value string) ([]byte, error) {
+	if value == "" {
+		return nil, fmt.Errorf("empty value")
+	}
+
+	if decoded, err := base64.StdEncoding.DecodeString(value); err == nil {
+		return decoded, nil
+	}
+
+	return base64.RawURLEncoding.DecodeString(value)
 }

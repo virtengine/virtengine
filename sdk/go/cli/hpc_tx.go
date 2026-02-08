@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -69,6 +70,10 @@ func GetTxHPCRegisterClusterCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			totalGpusInt64, err := uint64ToInt64(totalGpus)
+			if err != nil {
+				return err
+			}
 
 			description := strings.TrimSpace(args[1])
 			if endpoint != "" {
@@ -86,7 +91,7 @@ func GetTxHPCRegisterClusterCmd() *cobra.Command {
 				Region:          args[2],
 				Partitions:      []types.Partition{},
 				TotalNodes:      totalNodesInt32,
-				ClusterMetadata: types.ClusterMetadata{TotalGpus: int64(totalGpus)},
+				ClusterMetadata: types.ClusterMetadata{TotalGpus: totalGpusInt64},
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -130,6 +135,10 @@ func GetTxHPCUpdateClusterCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			totalGpusInt64, err := uint64ToInt64(totalGpus)
+			if err != nil {
+				return err
+			}
 
 			state := types.ClusterStateOffline
 			if active {
@@ -143,7 +152,7 @@ func GetTxHPCUpdateClusterCmd() *cobra.Command {
 				State:           state,
 				Partitions:      []types.Partition{},
 				TotalNodes:      totalNodesInt32,
-				ClusterMetadata: &types.ClusterMetadata{TotalGpus: int64(totalGpus)},
+				ClusterMetadata: &types.ClusterMetadata{TotalGpus: totalGpusInt64},
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -229,6 +238,11 @@ func GetTxHPCCreateOfferingCmd() *cobra.Command {
 
 			_ = minDuration
 
+			maxDurationInt64, err := uint64ToInt64(maxDuration)
+			if err != nil {
+				return err
+			}
+
 			msg := &types.MsgCreateOffering{
 				ProviderAddress:           cctx.GetFromAddress().String(),
 				ClusterId:                 args[0],
@@ -237,7 +251,7 @@ func GetTxHPCCreateOfferingCmd() *cobra.Command {
 				QueueOptions:              []types.QueueOption{},
 				Pricing:                   pricing,
 				RequiredIdentityThreshold: 0,
-				MaxRuntimeSeconds:         int64(maxDuration),
+				MaxRuntimeSeconds:         maxDurationInt64,
 				PreconfiguredWorkloads:    []types.PreconfiguredWorkload{},
 				SupportsCustomWorkloads:   true,
 			}
@@ -293,6 +307,11 @@ func GetTxHPCSubmitJobCmd() *cobra.Command {
 				maxPrice = sdk.NewCoins()
 			}
 
+			maxDurationInt64, err := uint64ToInt64(maxDuration)
+			if err != nil {
+				return err
+			}
+
 			msg := &types.MsgSubmitJob{
 				CustomerAddress: cctx.GetFromAddress().String(),
 				OfferingId:      args[0],
@@ -303,7 +322,7 @@ func GetTxHPCSubmitJobCmd() *cobra.Command {
 					Nodes:       requestedNodesInt32,
 					GpusPerNode: requestedGpusInt32,
 				},
-				MaxRuntimeSeconds: int64(maxDuration),
+				MaxRuntimeSeconds: maxDurationInt64,
 				MaxPrice:          maxPrice,
 			}
 
@@ -366,11 +385,16 @@ func GetTxHPCCancelJobCmd() *cobra.Command {
 // unused but kept for compile consistency
 var _ = strconv.Itoa
 
-const maxInt32 = int32(^uint32(0) >> 1)
-
 func uint64ToInt32(value uint64) (int32, error) {
-	if value > uint64(maxInt32) {
+	if value > uint64(math.MaxInt32) {
 		return 0, fmt.Errorf("value %d exceeds max int32", value)
 	}
 	return int32(value), nil
+}
+
+func uint64ToInt64(value uint64) (int64, error) {
+	if value > uint64(math.MaxInt64) {
+		return 0, fmt.Errorf("value %d exceeds max int64", value)
+	}
+	return int64(value), nil
 }

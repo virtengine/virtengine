@@ -166,6 +166,27 @@ func NewChallenge(
 	ttlSeconds int64,
 	maxAttempts uint32,
 ) (*Challenge, error) {
+	return NewChallengeAt(
+		accountAddress,
+		factorType,
+		factorID,
+		txType,
+		ttlSeconds,
+		maxAttempts,
+		time.Now().Unix(),
+	)
+}
+
+// NewChallengeAt creates a new challenge with a deterministic createdAt timestamp.
+func NewChallengeAt(
+	accountAddress string,
+	factorType FactorType,
+	factorID string,
+	txType SensitiveTransactionType,
+	ttlSeconds int64,
+	maxAttempts uint32,
+	createdAt int64,
+) (*Challenge, error) {
 	// Generate challenge ID
 	idBytes := make([]byte, 16)
 	if _, err := rand.Read(idBytes); err != nil {
@@ -184,8 +205,6 @@ func NewChallenge(
 		return nil, ErrChallengeCreationFailed.Wrapf("failed to generate challenge data: %v", err)
 	}
 
-	now := time.Now().Unix()
-
 	return &Challenge{
 		ChallengeID:     hex.EncodeToString(idBytes),
 		AccountAddress:  accountAddress,
@@ -194,8 +213,8 @@ func NewChallenge(
 		TransactionType: txType,
 		Status:          ChallengeStatusPending,
 		ChallengeData:   challengeData,
-		CreatedAt:       now,
-		ExpiresAt:       now + ttlSeconds,
+		CreatedAt:       createdAt,
+		ExpiresAt:       createdAt + ttlSeconds,
 		AttemptCount:    0,
 		MaxAttempts:     maxAttempts,
 		Nonce:           hex.EncodeToString(nonceBytes),
