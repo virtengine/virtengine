@@ -183,11 +183,7 @@ export function StatsSection({
           <p>Real-time network telemetry from the VirtEngine chain.</p>
         </div>
         <div className="ve-stats__meta" aria-live="polite">
-          {isLoading
-            ? "Syncing..."
-            : error
-              ? "Live feed unavailable"
-              : "Updated just now"}
+          {formatStatusLabel(isLoading, error, lastUpdated)}
         </div>
       </div>
 
@@ -315,6 +311,22 @@ function formatCompact(value: number): string {
     maximumFractionDigits: value < 1000 ? 0 : 2,
   });
   return formatter.format(Math.round(value));
+}
+
+function formatStatusLabel(
+  isLoading: boolean,
+  error: string | null,
+  lastUpdated: number | null,
+): string {
+  if (isLoading) return "Syncing...";
+  if (error) return "Live feed unavailable";
+  if (!lastUpdated) return "Updated just now";
+
+  const seconds = Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000));
+  if (seconds < 10) return "Updated just now";
+  if (seconds < 60) return `Updated ${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `Updated ${minutes}m ago`;
 }
 
 const statsStyles = `
