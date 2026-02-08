@@ -4,6 +4,7 @@ use (
 	.
 	./infra/tests
 	./infra/terraform/tests
+	./infra/dr/tests
 	./sdk/go
 	./sdk/specs
 )
