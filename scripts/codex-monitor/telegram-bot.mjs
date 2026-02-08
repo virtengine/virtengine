@@ -24,6 +24,7 @@ import {
   resetPrimaryAgent,
   initPrimaryAgent,
   steerPrimaryPrompt,
+  getPrimaryAgentName,
 } from "./primary-agent.mjs";
 import { loadExecutorConfig } from "./config.mjs";
 import {
@@ -509,14 +510,22 @@ function getCopilotToolInfo(event) {
 function extractCopilotCommand(input) {
   if (!input) return null;
   if (typeof input === "string") return input;
-  return (
-    input.command ||
-    input.cmd ||
-    input.shell ||
-    input.script ||
-    input.execute ||
-    null
-  );
+  const candidates = [
+    "command",
+    "cmd",
+    "shell",
+    "script",
+    "execute",
+    "args",
+    "run",
+  ];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
 }
 
 function extractCopilotPath(input) {
@@ -1035,11 +1044,11 @@ const COMMANDS = {
   },
   "/history": {
     handler: cmdHistory,
-    desc: "Primary agent conversation history",
+    desc: "Primary agent session history",
   },
   "/clear": {
     handler: cmdClear,
-    desc: "Clear primary agent conversation context",
+    desc: "Clear primary agent session context",
   },
   "/reset_thread": {
     handler: cmdClear,
@@ -1050,10 +1059,6 @@ const COMMANDS = {
   "/background": {
     handler: cmdBackground,
     desc: "Run a task in background or background the active agent",
-  },
-  "/agent": {
-    handler: cmdAgent,
-    desc: "Dispatch a task to a workspace: /agent --workspace <id> --task <prompt>",
   },
   "/region": {
     handler: cmdRegion,
@@ -1846,12 +1851,12 @@ async function cmdCleanupMerged(chatId) {
 
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
-  const providerLabel = info.provider === "COPILOT" ? "Copilot" : "Codex";
-  const idLabel = info.sessionId ? "Session ID" : "Thread ID";
+  const sessionLabel = info.sessionId || info.threadId || "(none)";
+  const agentLabel = info.adapter || info.provider || getPrimaryAgentName();
   const lines = [
-    `🧠 Primary Agent Session (${providerLabel})`,
+    `🧠 Primary Agent (${agentLabel})`,
     "",
-    `${idLabel}: ${info.sessionId || info.threadId || "(none)"}`,
+    `Session: ${sessionLabel}`,
     `Turns: ${info.turnCount}`,
     `Active: ${info.isActive ? "yes" : "no"}`,
     `Busy: ${info.isBusy ? "yes" : "no"}`,
@@ -4144,7 +4149,7 @@ export async function startTelegramBot() {
   } else {
     await sendDirect(
       telegramChatId,
-      "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
+      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
     );
   }
 

@@ -156,6 +156,9 @@ function main() {
   console.log(`  ✅ vibe-kanban (bundled)`);
   console.log(`  ✅ @openai/codex-sdk (bundled)`);
   console.log(`  ✅ @github/copilot-sdk (bundled)`);
+  console.log(`  ✅ @anthropic-ai/claude-agent-sdk (bundled)`);
+  console.log(`  ✅ @github/copilot-sdk (bundled)`);
+  console.log(`  ✅ @anthropic-ai/claude-agent-sdk (bundled)`);
 
   // Summary
   console.log("");

@@ -29,6 +29,7 @@ import {
   execPrimaryPrompt,
   isPrimaryBusy,
   initPrimaryAgent,
+  setPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -119,6 +120,8 @@ let {
   autoFixEnabled,
   preflightEnabled: configPreflightEnabled,
   preflightRetryMs: configPreflightRetryMs,
+  primaryAgent,
+  primaryAgentEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -155,11 +158,12 @@ let {
   telegramVerbosity,
 } = config;
 
-void initPrimaryAgent(config);
-
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
+console.log(`[monitor] task planner mode: ${plannerMode}`);
+let primaryAgentName = primaryAgent;
+let primaryAgentReady = primaryAgentEnabled;
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let codexDisabledReason = codexEnabled
   ? ""
@@ -168,8 +172,12 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
+setPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
+if (primaryAgentReady) {
+  void initPrimaryAgent(primaryAgentName);
+}
 
 // Merge strategy: Codex-powered merge decision analysis
 // Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
@@ -2246,6 +2254,47 @@ async function checkMergedPRsAndUpdateTasks() {
     for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
+      // Find the attempt associated with this task — first in local status,
+      // then fall back to the VK API (which includes archived attempts)
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        // VK API fallback: find the most recent attempt for this task
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) {
+          attempt = vkMatch[0];
+          console.log(
+            `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
+          );
+        } else {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+          );
+        }
+      }
+      const branch =
+        attempt?.branch ||
+        task?.branch ||
+        task?.workspace_branch ||
+        task?.git_branch;
+      const prNumber =
+        attempt?.pr_number ||
+        task?.pr_number ||
+        parsePrNumberFromUrl(attempt?.pr_url) ||
+        parsePrNumberFromUrl(task?.pr_url);
+      let prInfo = null;
+      if (prNumber) {
+        prInfo = await getPullRequestByNumber(prNumber);
+      }
+      const isMerged =
+        !!prInfo?.mergedAt ||
+        (!!prInfo?.merged_at && prInfo.merged_at !== null);
+      const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
 
       // ── Skip cancelled/done tasks — they should never be recovered ──
       if (taskStatus === "cancelled" || taskStatus === "done") {
@@ -3269,7 +3318,7 @@ async function smartPRFlow(attemptId, shortId, status) {
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
       // Ask the agent to commit via primary agent
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
@@ -3434,7 +3483,7 @@ Return a short summary of what you did and any files that needed manual resoluti
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (!isPrimaryBusy()) {
+          if (primaryAgentReady && !isPrimaryBusy()) {
             void execPrimaryPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
@@ -3518,6 +3567,7 @@ Return a short summary of what you did and any files that needed manual resoluti
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
       if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
+      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
@@ -3564,7 +3614,7 @@ Return a short summary of what you did and any files that needed manual resoluti
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
@@ -3587,7 +3637,7 @@ Return a short summary of what you did and any files that needed manual resoluti
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
@@ -3603,6 +3653,7 @@ Return a short summary of what you did and any files that needed manual resoluti
         );
       }
     }
+  }
   } catch (err) {
     console.warn(`[monitor] ${tag}: error — ${err.message || err}`);
   }
@@ -5448,7 +5499,6 @@ async function startProcess() {
 
   // Reset mutex flag before spawn — will be re-set if this instance hits mutex
   restartController.noteProcessStarted(Date.now());
-
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -5754,6 +5804,8 @@ function applyConfig(nextConfig, options = {}) {
   const prevWatchPath = watchPath;
   const prevTelegramInterval = telegramIntervalMin;
   const prevCodexEnabled = codexEnabled;
+  const prevPrimaryAgentName = primaryAgentName;
+  const prevPrimaryAgentReady = primaryAgentReady;
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
   const prevPreflightEnabled = preflightEnabled;
@@ -5804,6 +5856,8 @@ function applyConfig(nextConfig, options = {}) {
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
   codexEnabled = nextConfig.codexEnabled;
+  primaryAgentName = nextConfig.primaryAgent;
+  primaryAgentReady = nextConfig.primaryAgentEnabled;
   codexDisabledReason = codexEnabled
     ? ""
     : process.env.CODEX_SDK_DISABLED === "1"
@@ -5811,6 +5865,14 @@ function applyConfig(nextConfig, options = {}) {
       : agentSdk?.primary && agentSdk.primary !== "codex"
         ? `disabled via agent_sdk.primary=${agentSdk.primary}`
         : "disabled via --no-codex";
+
+  const primaryAgentChanged = prevPrimaryAgentName !== primaryAgentName;
+  if (primaryAgentChanged) {
+    setPrimaryAgent(primaryAgentName);
+  }
+  if ((primaryAgentChanged && primaryAgentReady) || (!prevPrimaryAgentReady && primaryAgentReady)) {
+    void initPrimaryAgent(primaryAgentName);
+  }
 
   if (prevWatchPath !== watchPath || watchEnabled === false) {
     void startWatcher(true);

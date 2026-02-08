@@ -276,6 +276,17 @@ function parseExecutorsFromEnv() {
   return executors.length ? executors : null;
 }
 
+function normalizePrimaryAgent(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "codex-sdk";
+  if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
+  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
+    return "copilot-sdk";
+  if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
+    return "claude-sdk";
+  return raw;
+}
+
 function loadExecutorConfig(configDir, configData) {
   // 1. Try env var
   const fromEnv = parseExecutorsFromEnv();
@@ -835,6 +846,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     selectedRepository?.orchestratorScript ||
     configData.orchestratorScript ||
     findOrchestratorScript(configDir, repoRoot);
+  const defaultArgs = mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const rawScript =
     cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript;
   // Resolve relative paths against configDir (not cwd) so that
@@ -842,7 +854,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   // regardless of what directory the process was started from.
   let scriptPath = resolve(configDir, rawScript);
   // If the resolved path doesn't exist and rawScript is just a filename (no path separators),
-  // fall back to auto-detection to find it in common locations
+  // fall back to auto-detection to find it in common locations.
   if (
     !existsSync(scriptPath) &&
     !rawScript.includes("/") &&
@@ -853,8 +865,6 @@ export function loadConfig(argv = process.argv, options = {}) {
       scriptPath = autoDetected;
     }
   }
-  const defaultArgs =
-    mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const scriptArgsRaw =
     cli.args ||
     process.env.ORCHESTRATOR_ARGS ||
@@ -935,6 +945,20 @@ export function loadConfig(argv = process.argv, options = {}) {
     (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
     process.env.CODEX_SDK_DISABLED !== "1" &&
     agentSdk.primary === "codex";
+  const primaryAgent = normalizePrimaryAgent(
+    process.env.PRIMARY_AGENT ||
+      process.env.PRIMARY_AGENT_SDK ||
+      configData.primaryAgent ||
+      "codex-sdk",
+  );
+  const primaryAgentEnabled =
+    process.env.PRIMARY_AGENT_DISABLED === "1"
+      ? false
+      : primaryAgent === "codex-sdk"
+        ? codexEnabled
+        : primaryAgent === "copilot-sdk"
+          ? process.env.COPILOT_SDK_DISABLED !== "1"
+          : process.env.CLAUDE_SDK_DISABLED !== "1";
 
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
@@ -1097,12 +1121,13 @@ export function loadConfig(argv = process.argv, options = {}) {
     preflightEnabled,
     preflightRetryMs,
     codexEnabled,
+    primaryAgent,
+    primaryAgentEnabled,
 
     // Merge Strategy
     codexAnalyzeMergeStrategy:
       codexEnabled &&
-      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !==
-        "false",
+      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false",
     mergeStrategyTimeoutMs:
       parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
 
