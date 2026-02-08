@@ -243,6 +243,16 @@ func NewHPCProvider(
 		if nodeCfg.ClusterID == "" {
 			nodeCfg.ClusterID = config.HPC.ClusterID
 		}
+		if nodeCfg.NodeDiscoverer == nil {
+			if slurmWrapper, ok := scheduler.(*SLURMSchedulerWrapper); ok {
+				nodeCfg.NodeDiscoverer = NewHPCSLURMNodeDiscoverer(
+					slurmWrapper.adapter,
+					nodeCfg.ClusterID,
+					nodeCfg.DefaultRegion,
+					nodeCfg.DefaultDatacenter,
+				)
+			}
+		}
 		if nodeCfg.ChainReporter == nil {
 			if reporter, ok := chainClient.(HPCNodeChainReporter); ok {
 				nodeCfg.ChainReporter = reporter

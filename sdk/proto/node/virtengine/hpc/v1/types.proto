@@ -60,6 +60,61 @@ enum JobState {
   JOB_STATE_TIMEOUT = 7 [(gogoproto.enumvalue_customname) = "JobStateTimeout"];
 }
 
+// NodeState represents the state of a compute node
+enum NodeState {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // NODE_STATE_UNSPECIFIED represents an unspecified node state
+  NODE_STATE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "NodeStateUnspecified"];
+
+  // NODE_STATE_UNKNOWN indicates unknown node state
+  NODE_STATE_UNKNOWN = 1 [(gogoproto.enumvalue_customname) = "NodeStateUnknown"];
+
+  // NODE_STATE_PENDING indicates the node is pending registration
+  NODE_STATE_PENDING = 2 [(gogoproto.enumvalue_customname) = "NodeStatePending"];
+
+  // NODE_STATE_ACTIVE indicates the node is active
+  NODE_STATE_ACTIVE = 3 [(gogoproto.enumvalue_customname) = "NodeStateActive"];
+
+  // NODE_STATE_STALE indicates the node has missed heartbeats
+  NODE_STATE_STALE = 4 [(gogoproto.enumvalue_customname) = "NodeStateStale"];
+
+  // NODE_STATE_DRAINING indicates the node is draining
+  NODE_STATE_DRAINING = 5 [(gogoproto.enumvalue_customname) = "NodeStateDraining"];
+
+  // NODE_STATE_DRAINED indicates the node is drained
+  NODE_STATE_DRAINED = 6 [(gogoproto.enumvalue_customname) = "NodeStateDrained"];
+
+  // NODE_STATE_OFFLINE indicates the node is offline
+  NODE_STATE_OFFLINE = 7 [(gogoproto.enumvalue_customname) = "NodeStateOffline"];
+
+  // NODE_STATE_DEREGISTERED indicates the node is deregistered
+  NODE_STATE_DEREGISTERED = 8 [(gogoproto.enumvalue_customname) = "NodeStateDeregistered"];
+}
+
+// HealthStatus represents the health status of a node
+enum HealthStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // HEALTH_STATUS_UNSPECIFIED represents an unspecified health status
+  HEALTH_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "HealthStatusUnspecified"];
+
+  // HEALTH_STATUS_HEALTHY indicates healthy
+  HEALTH_STATUS_HEALTHY = 1 [(gogoproto.enumvalue_customname) = "HealthStatusHealthy"];
+
+  // HEALTH_STATUS_DEGRADED indicates degraded
+  HEALTH_STATUS_DEGRADED = 2 [(gogoproto.enumvalue_customname) = "HealthStatusDegraded"];
+
+  // HEALTH_STATUS_UNHEALTHY indicates unhealthy
+  HEALTH_STATUS_UNHEALTHY = 3 [(gogoproto.enumvalue_customname) = "HealthStatusUnhealthy"];
+
+  // HEALTH_STATUS_DRAINING indicates draining
+  HEALTH_STATUS_DRAINING = 4 [(gogoproto.enumvalue_customname) = "HealthStatusDraining"];
+
+  // HEALTH_STATUS_OFFLINE indicates offline
+  HEALTH_STATUS_OFFLINE = 5 [(gogoproto.enumvalue_customname) = "HealthStatusOffline"];
+}
+
 // HPCRewardSource indicates the source of HPC rewards
 enum HPCRewardSource {
   option (gogoproto.goproto_enum_prefix) = false;
@@ -341,6 +396,89 @@ message NodeResources {
   int32 storage_gb = 5 [(gogoproto.jsontag) = "storage_gb", (gogoproto.moretags) = "yaml:\"storage_gb\""];
 }
 
+// NodeCapacity contains node capacity information
+message NodeCapacity {
+  option (gogoproto.equal) = false;
+
+  int32 cpu_cores_total = 1 [(gogoproto.jsontag) = "cpu_cores_total", (gogoproto.moretags) = "yaml:\"cpu_cores_total\""];
+  int32 cpu_cores_available = 2 [(gogoproto.jsontag) = "cpu_cores_available", (gogoproto.moretags) = "yaml:\"cpu_cores_available\""];
+  int32 cpu_cores_allocated = 3 [(gogoproto.jsontag) = "cpu_cores_allocated", (gogoproto.moretags) = "yaml:\"cpu_cores_allocated\""];
+  int32 memory_gb_total = 4 [(gogoproto.jsontag) = "memory_gb_total", (gogoproto.moretags) = "yaml:\"memory_gb_total\""];
+  int32 memory_gb_available = 5 [(gogoproto.jsontag) = "memory_gb_available", (gogoproto.moretags) = "yaml:\"memory_gb_available\""];
+  int32 memory_gb_allocated = 6 [(gogoproto.jsontag) = "memory_gb_allocated", (gogoproto.moretags) = "yaml:\"memory_gb_allocated\""];
+  int32 gpus_total = 7 [(gogoproto.jsontag) = "gpus_total", (gogoproto.moretags) = "yaml:\"gpus_total\""];
+  int32 gpus_available = 8 [(gogoproto.jsontag) = "gpus_available", (gogoproto.moretags) = "yaml:\"gpus_available\""];
+  int32 gpus_allocated = 9 [(gogoproto.jsontag) = "gpus_allocated", (gogoproto.moretags) = "yaml:\"gpus_allocated\""];
+  string gpu_type = 10 [(gogoproto.jsontag) = "gpu_type,omitempty", (gogoproto.moretags) = "yaml:\"gpu_type\""];
+  int32 storage_gb_total = 11 [(gogoproto.jsontag) = "storage_gb_total", (gogoproto.moretags) = "yaml:\"storage_gb_total\""];
+  int32 storage_gb_available = 12 [(gogoproto.jsontag) = "storage_gb_available", (gogoproto.moretags) = "yaml:\"storage_gb_available\""];
+  int32 storage_gb_allocated = 13 [(gogoproto.jsontag) = "storage_gb_allocated", (gogoproto.moretags) = "yaml:\"storage_gb_allocated\""];
+}
+
+// NodeHealth contains node health information
+message NodeHealth {
+  option (gogoproto.equal) = false;
+
+  HealthStatus status = 1 [(gogoproto.jsontag) = "status", (gogoproto.moretags) = "yaml:\"status\""];
+  int64 uptime_seconds = 2 [(gogoproto.jsontag) = "uptime_seconds", (gogoproto.moretags) = "yaml:\"uptime_seconds\""];
+  string load_average_1m = 3 [(gogoproto.jsontag) = "load_average_1m", (gogoproto.moretags) = "yaml:\"load_average_1m\""];
+  string load_average_5m = 4 [(gogoproto.jsontag) = "load_average_5m", (gogoproto.moretags) = "yaml:\"load_average_5m\""];
+  string load_average_15m = 5 [(gogoproto.jsontag) = "load_average_15m", (gogoproto.moretags) = "yaml:\"load_average_15m\""];
+  int32 cpu_utilization_percent = 6 [(gogoproto.jsontag) = "cpu_utilization_percent", (gogoproto.moretags) = "yaml:\"cpu_utilization_percent\""];
+  int32 memory_utilization_percent = 7 [(gogoproto.jsontag) = "memory_utilization_percent", (gogoproto.moretags) = "yaml:\"memory_utilization_percent\""];
+  int32 gpu_utilization_percent = 8 [(gogoproto.jsontag) = "gpu_utilization_percent,omitempty", (gogoproto.moretags) = "yaml:\"gpu_utilization_percent\""];
+  int32 gpu_memory_utilization_percent = 9 [(gogoproto.jsontag) = "gpu_memory_utilization_percent,omitempty", (gogoproto.moretags) = "yaml:\"gpu_memory_utilization_percent\""];
+  int32 disk_io_utilization_percent = 10 [(gogoproto.jsontag) = "disk_io_utilization_percent", (gogoproto.moretags) = "yaml:\"disk_io_utilization_percent\""];
+  int32 network_utilization_percent = 11 [(gogoproto.jsontag) = "network_utilization_percent", (gogoproto.moretags) = "yaml:\"network_utilization_percent\""];
+  int32 temperature_celsius = 12 [(gogoproto.jsontag) = "temperature_celsius,omitempty", (gogoproto.moretags) = "yaml:\"temperature_celsius\""];
+  int32 gpu_temperature_celsius = 13 [(gogoproto.jsontag) = "gpu_temperature_celsius,omitempty", (gogoproto.moretags) = "yaml:\"gpu_temperature_celsius\""];
+  int32 error_count_24h = 14 [(gogoproto.jsontag) = "error_count_24h", (gogoproto.moretags) = "yaml:\"error_count_24h\""];
+  int32 warning_count_24h = 15 [(gogoproto.jsontag) = "warning_count_24h", (gogoproto.moretags) = "yaml:\"warning_count_24h\""];
+  string last_error_message = 16 [(gogoproto.jsontag) = "last_error_message,omitempty", (gogoproto.moretags) = "yaml:\"last_error_message\""];
+  string slurm_state = 17 [(gogoproto.jsontag) = "slurm_state,omitempty", (gogoproto.moretags) = "yaml:\"slurm_state\""];
+}
+
+// NodeHardware contains node hardware details
+message NodeHardware {
+  option (gogoproto.equal) = false;
+
+  string cpu_model = 1 [(gogoproto.jsontag) = "cpu_model,omitempty", (gogoproto.moretags) = "yaml:\"cpu_model\""];
+  string cpu_vendor = 2 [(gogoproto.jsontag) = "cpu_vendor,omitempty", (gogoproto.moretags) = "yaml:\"cpu_vendor\""];
+  string cpu_arch = 3 [(gogoproto.jsontag) = "cpu_arch,omitempty", (gogoproto.moretags) = "yaml:\"cpu_arch\""];
+  int32 sockets = 4 [(gogoproto.jsontag) = "sockets,omitempty", (gogoproto.moretags) = "yaml:\"sockets\""];
+  int32 cores_per_socket = 5 [(gogoproto.jsontag) = "cores_per_socket,omitempty", (gogoproto.moretags) = "yaml:\"cores_per_socket\""];
+  int32 threads_per_core = 6 [(gogoproto.jsontag) = "threads_per_core,omitempty", (gogoproto.moretags) = "yaml:\"threads_per_core\""];
+  string memory_type = 7 [(gogoproto.jsontag) = "memory_type,omitempty", (gogoproto.moretags) = "yaml:\"memory_type\""];
+  int32 memory_speed_mhz = 8 [(gogoproto.jsontag) = "memory_speed_mhz,omitempty", (gogoproto.moretags) = "yaml:\"memory_speed_mhz\""];
+  string gpu_model = 9 [(gogoproto.jsontag) = "gpu_model,omitempty", (gogoproto.moretags) = "yaml:\"gpu_model\""];
+  int32 gpu_memory_gb = 10 [(gogoproto.jsontag) = "gpu_memory_gb,omitempty", (gogoproto.moretags) = "yaml:\"gpu_memory_gb\""];
+  string storage_type = 11 [(gogoproto.jsontag) = "storage_type,omitempty", (gogoproto.moretags) = "yaml:\"storage_type\""];
+  repeated string features = 12 [(gogoproto.jsontag) = "features,omitempty", (gogoproto.moretags) = "yaml:\"features\""];
+}
+
+// NodeTopology describes node topology
+message NodeTopology {
+  option (gogoproto.equal) = false;
+
+  int32 numa_nodes = 1 [(gogoproto.jsontag) = "numa_nodes,omitempty", (gogoproto.moretags) = "yaml:\"numa_nodes\""];
+  int32 numa_memory_gb = 2 [(gogoproto.jsontag) = "numa_memory_gb,omitempty", (gogoproto.moretags) = "yaml:\"numa_memory_gb\""];
+  string interconnect = 3 [(gogoproto.jsontag) = "interconnect,omitempty", (gogoproto.moretags) = "yaml:\"interconnect\""];
+  string network_fabric = 4 [(gogoproto.jsontag) = "network_fabric,omitempty", (gogoproto.moretags) = "yaml:\"network_fabric\""];
+  string topology_hint = 5 [(gogoproto.jsontag) = "topology_hint,omitempty", (gogoproto.moretags) = "yaml:\"topology_hint\""];
+}
+
+// NodeLocality describes node locality
+message NodeLocality {
+  option (gogoproto.equal) = false;
+
+  string region = 1 [(gogoproto.jsontag) = "region,omitempty", (gogoproto.moretags) = "yaml:\"region\""];
+  string datacenter = 2 [(gogoproto.jsontag) = "datacenter,omitempty", (gogoproto.moretags) = "yaml:\"datacenter\""];
+  string zone = 3 [(gogoproto.jsontag) = "zone,omitempty", (gogoproto.moretags) = "yaml:\"zone\""];
+  string rack = 4 [(gogoproto.jsontag) = "rack,omitempty", (gogoproto.moretags) = "yaml:\"rack\""];
+  string row = 5 [(gogoproto.jsontag) = "row,omitempty", (gogoproto.moretags) = "yaml:\"row\""];
+  string position = 6 [(gogoproto.jsontag) = "position,omitempty", (gogoproto.moretags) = "yaml:\"position\""];
+}
+
 // NodeMetadata contains metadata about a compute node
 message NodeMetadata {
   option (gogoproto.equal) = false;
@@ -359,6 +497,17 @@ message NodeMetadata {
   google.protobuf.Timestamp joined_at = 12 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "joined_at", (gogoproto.moretags) = "yaml:\"joined_at\""];
   google.protobuf.Timestamp updated_at = 13 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
   int64 block_height = 14 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+  NodeState state = 15 [(gogoproto.jsontag) = "state,omitempty", (gogoproto.moretags) = "yaml:\"state\""];
+  HealthStatus health_status = 16 [(gogoproto.jsontag) = "health_status,omitempty", (gogoproto.moretags) = "yaml:\"health_status\""];
+  string agent_pubkey = 17 [(gogoproto.jsontag) = "agent_pubkey,omitempty", (gogoproto.moretags) = "yaml:\"agent_pubkey\""];
+  string hardware_fingerprint = 18 [(gogoproto.jsontag) = "hardware_fingerprint,omitempty", (gogoproto.moretags) = "yaml:\"hardware_fingerprint\""];
+  string agent_version = 19 [(gogoproto.jsontag) = "agent_version,omitempty", (gogoproto.moretags) = "yaml:\"agent_version\""];
+  uint64 last_sequence_number = 20 [(gogoproto.jsontag) = "last_sequence_number,omitempty", (gogoproto.moretags) = "yaml:\"last_sequence_number\""];
+  NodeCapacity capacity = 21 [(gogoproto.jsontag) = "capacity,omitempty", (gogoproto.moretags) = "yaml:\"capacity\""];
+  NodeHealth health = 22 [(gogoproto.jsontag) = "health,omitempty", (gogoproto.moretags) = "yaml:\"health\""];
+  NodeHardware hardware = 23 [(gogoproto.jsontag) = "hardware,omitempty", (gogoproto.moretags) = "yaml:\"hardware\""];
+  NodeTopology topology = 24 [(gogoproto.jsontag) = "topology,omitempty", (gogoproto.moretags) = "yaml:\"topology\""];
+  NodeLocality locality = 25 [(gogoproto.jsontag) = "locality,omitempty", (gogoproto.moretags) = "yaml:\"locality\""];
 }
 
 // ClusterCandidate represents a candidate cluster for scheduling

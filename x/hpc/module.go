@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	"github.com/virtengine/virtengine/x/hpc/client/cli"
 	"github.com/virtengine/virtengine/x/hpc/keeper"
 	"github.com/virtengine/virtengine/x/hpc/types"
@@ -116,7 +117,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-	// Query server registration will be added when query service is implemented
+	hpcv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewQuerier(am.keeper))
 }
 
 // InitGenesis performs genesis initialization for the HPC module.
@@ -148,6 +149,11 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 	// Check cluster health
 	if err := am.keeper.CheckClusterHealth(sdkCtx); err != nil {
 		am.keeper.Logger(sdkCtx).Error("failed to check cluster health", "error", err)
+	}
+
+	// Check node liveness and prune stale nodes
+	if err := am.keeper.CheckStaleNodes(sdkCtx); err != nil {
+		am.keeper.Logger(sdkCtx).Error("failed to check stale nodes", "error", err)
 	}
 
 	return nil

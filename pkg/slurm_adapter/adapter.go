@@ -155,6 +155,14 @@ func (a *SLURMAdapter) IsRunning() bool {
 	return a.running
 }
 
+// ListNodes returns the current SLURM node inventory.
+func (a *SLURMAdapter) ListNodes(ctx context.Context) ([]NodeInfo, error) {
+	if !a.IsRunning() {
+		return nil, ErrSLURMNotConnected
+	}
+	return a.client.ListNodes(ctx)
+}
+
 // SubmitJob submits a job to SLURM
 func (a *SLURMAdapter) SubmitJob(ctx context.Context, virtEngineJobID string, spec *SLURMJobSpec) (*SLURMJob, error) {
 	if !a.IsRunning() {

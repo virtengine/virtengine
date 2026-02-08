@@ -111,6 +111,26 @@ func (m *MetricsCollector) CollectHealth() (*NodeHealth, error) {
 	return health, nil
 }
 
+// CollectHardware collects node hardware details.
+//
+//nolint:unparam // Signature reserved for future hardware probes that may return errors.
+func (m *MetricsCollector) CollectHardware() (*NodeHardware, error) {
+	hardware := &NodeHardware{
+		CPUArch: runtime.GOARCH,
+	}
+
+	if runtime.GOOS == osLinux {
+		model, vendor := m.getCPUInfo()
+		hardware.CPUModel = model
+		hardware.CPUVendor = vendor
+	}
+
+	_, _, gpuType := m.getGPUInfo()
+	hardware.GPUModel = gpuType
+
+	return hardware, nil
+}
+
 // CollectLatency collects latency measurements
 func (m *MetricsCollector) CollectLatency(targets []string) *NodeLatency {
 	latency := &NodeLatency{
@@ -232,6 +252,42 @@ func (m *MetricsCollector) getMemoryInfo() (uint64, uint64) {
 
 	// Fallback for non-Linux systems
 	return 16 * 1024 * 1024 * 1024, 8 * 1024 * 1024 * 1024 // 16GB total, 8GB available
+}
+
+func (m *MetricsCollector) getCPUInfo() (string, string) {
+	if runtime.GOOS != osLinux {
+		return "", ""
+	}
+
+	file, err := os.Open("/proc/cpuinfo")
+	if err != nil {
+		return "", ""
+	}
+	defer file.Close()
+
+	var model, vendor string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "model name") && model == "" {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				model = strings.TrimSpace(parts[1])
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "vendor_id") && vendor == "" {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				vendor = strings.TrimSpace(parts[1])
+			}
+		}
+		if model != "" && vendor != "" {
+			break
+		}
+	}
+
+	return model, vendor
 }
 
 func (m *MetricsCollector) getLoadAverage() (float64, float64, float64) {

@@ -48,6 +48,10 @@ heartbeat-interval: 30s
 key-file: "/etc/virtengine/virtengine-agent.key"
 region: "us-east-1"
 datacenter: "dc1"
+zone: "a"
+rack: "rack-7"
+row: "row-2"
+position: "u14"
 latency-targets:
   - "node-002"
   - "node-003"
@@ -76,6 +80,8 @@ hpc-node-agent register \
   --cluster-id hpc-cluster-1 \
   --provider-address virtengine1provider...
 ```
+
+The agent also attempts registration automatically on startup before the first heartbeat.
 
 ### Start the Agent
 
@@ -177,6 +183,59 @@ The agent sends heartbeats in the following JSON format:
     "signature": "base64-ed25519-signature",
     "nonce": "base64-nonce",
     "timestamp": 1705315800
+  }
+}
+```
+
+## Registration Payload
+
+The registration request includes initial capacity, health, and hardware metadata so the chain has a baseline before the
+first heartbeat:
+
+```json
+{
+  "node_id": "node-001",
+  "cluster_id": "hpc-cluster-1",
+  "provider_address": "virtengine1provider...",
+  "agent_pubkey": "base64-ed25519-public-key",
+  "hostname": "node-001.local",
+  "hardware_fingerprint": "sha256-hex",
+  "agent_version": "0.1.0",
+  "region": "us-east-1",
+  "datacenter": "dc1",
+  "capacity": {
+    "cpu_cores_total": 64,
+    "cpu_cores_available": 64,
+    "memory_gb_total": 512,
+    "memory_gb_available": 512,
+    "gpus_total": 8,
+    "gpus_available": 8,
+    "gpu_type": "NVIDIA A100",
+    "storage_gb_total": 4000,
+    "storage_gb_available": 4000
+  },
+  "health": {
+    "status": "healthy",
+    "uptime_seconds": 120,
+    "load_average_1m": "0.150000",
+    "cpu_utilization_percent": 5,
+    "memory_utilization_percent": 8,
+    "slurm_state": "idle"
+  },
+  "hardware": {
+    "cpu_model": "AMD EPYC 9654",
+    "cpu_vendor": "AMD",
+    "cpu_arch": "x86_64",
+    "gpu_model": "NVIDIA A100",
+    "storage_type": "NVMe"
+  },
+  "locality": {
+    "region": "us-east-1",
+    "datacenter": "dc1",
+    "zone": "a",
+    "rack": "rack-7",
+    "row": "row-2",
+    "position": "u14"
   }
 }
 ```

@@ -318,8 +318,21 @@ func NewCmdQueryNode() *cobra.Command {
 		Use:   "node [node-id]",
 		Args:  cobra.ExactArgs(1),
 		Short: "Query HPC compute node metadata",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return fmt.Errorf("node queries are not available in this build")
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			queryClient := hpctypes.NewQueryClient(clientCtx)
+			resp, err := queryClient.NodeMetadata(cmd.Context(), &hpctypes.QueryNodeMetadataRequest{
+				NodeId: args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			return clientCtx.PrintProto(resp)
 		},
 	}
 
@@ -334,7 +347,34 @@ func NewCmdQueryNodes() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Short: "List HPC compute nodes",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return fmt.Errorf("node queries are not available in this build")
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			clusterID, err := cmd.Flags().GetString(flagClusterID)
+			if err != nil {
+				return err
+			}
+			if clusterID == "" {
+				return fmt.Errorf("cluster-id is required")
+			}
+
+			pageReq, err := client.ReadPageRequest(cmd.Flags())
+			if err != nil {
+				return err
+			}
+
+			queryClient := hpctypes.NewQueryClient(clientCtx)
+			resp, err := queryClient.NodesByCluster(cmd.Context(), &hpctypes.QueryNodesByClusterRequest{
+				ClusterId:  clusterID,
+				Pagination: pageReq,
+			})
+			if err != nil {
+				return err
+			}
+
+			return clientCtx.PrintProto(resp)
 		},
 	}
 

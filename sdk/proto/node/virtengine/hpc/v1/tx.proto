@@ -223,6 +223,17 @@ message MsgUpdateNodeMetadata {
   int64 network_bandwidth_mbps = 7 [(gogoproto.jsontag) = "network_bandwidth_mbps,omitempty", (gogoproto.moretags) = "yaml:\"network_bandwidth_mbps\""];
   NodeResources resources = 8 [(gogoproto.jsontag) = "resources,omitempty", (gogoproto.moretags) = "yaml:\"resources\""];
   bool active = 9 [(gogoproto.jsontag) = "active,omitempty", (gogoproto.moretags) = "yaml:\"active\""];
+  NodeState state = 10 [(gogoproto.jsontag) = "state,omitempty", (gogoproto.moretags) = "yaml:\"state\""];
+  HealthStatus health_status = 11 [(gogoproto.jsontag) = "health_status,omitempty", (gogoproto.moretags) = "yaml:\"health_status\""];
+  string agent_pubkey = 12 [(gogoproto.jsontag) = "agent_pubkey,omitempty", (gogoproto.moretags) = "yaml:\"agent_pubkey\""];
+  string hardware_fingerprint = 13 [(gogoproto.jsontag) = "hardware_fingerprint,omitempty", (gogoproto.moretags) = "yaml:\"hardware_fingerprint\""];
+  string agent_version = 14 [(gogoproto.jsontag) = "agent_version,omitempty", (gogoproto.moretags) = "yaml:\"agent_version\""];
+  uint64 last_sequence_number = 15 [(gogoproto.jsontag) = "last_sequence_number,omitempty", (gogoproto.moretags) = "yaml:\"last_sequence_number\""];
+  NodeCapacity capacity = 16 [(gogoproto.jsontag) = "capacity,omitempty", (gogoproto.moretags) = "yaml:\"capacity\""];
+  NodeHealth health = 17 [(gogoproto.jsontag) = "health,omitempty", (gogoproto.moretags) = "yaml:\"health\""];
+  NodeHardware hardware = 18 [(gogoproto.jsontag) = "hardware,omitempty", (gogoproto.moretags) = "yaml:\"hardware\""];
+  NodeTopology topology = 19 [(gogoproto.jsontag) = "topology,omitempty", (gogoproto.moretags) = "yaml:\"topology\""];
+  NodeLocality locality = 20 [(gogoproto.jsontag) = "locality,omitempty", (gogoproto.moretags) = "yaml:\"locality\""];
 }
 
 // MsgUpdateNodeMetadataResponse is the response for MsgUpdateNodeMetadata

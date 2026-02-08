@@ -32,6 +32,10 @@ const (
 	FlagHostname          = "hostname"
 	FlagRegion            = "region"
 	FlagDatacenter        = "datacenter"
+	FlagZone              = "zone"
+	FlagRack              = "rack"
+	FlagRow               = "row"
+	FlagPosition          = "position"
 	FlagLatencyTargets    = "latency-targets"
 	FlagLogLevel          = "log-level"
 )
@@ -74,6 +78,10 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagHostname, "", "Node hostname (auto-detected if empty)")
 	rootCmd.PersistentFlags().String(FlagRegion, "", "Geographic region")
 	rootCmd.PersistentFlags().String(FlagDatacenter, "", "Datacenter identifier")
+	rootCmd.PersistentFlags().String(FlagZone, "", "Availability zone")
+	rootCmd.PersistentFlags().String(FlagRack, "", "Rack identifier")
+	rootCmd.PersistentFlags().String(FlagRow, "", "Row identifier")
+	rootCmd.PersistentFlags().String(FlagPosition, "", "Position within rack/row")
 	rootCmd.PersistentFlags().StringSlice(FlagLatencyTargets, nil, "Node IDs to measure latency to")
 	rootCmd.PersistentFlags().String(FlagLogLevel, "info", "Log level (debug, info, warn, error)")
 
@@ -87,6 +95,10 @@ func init() {
 	_ = viper.BindPFlag(FlagHostname, rootCmd.PersistentFlags().Lookup(FlagHostname))
 	_ = viper.BindPFlag(FlagRegion, rootCmd.PersistentFlags().Lookup(FlagRegion))
 	_ = viper.BindPFlag(FlagDatacenter, rootCmd.PersistentFlags().Lookup(FlagDatacenter))
+	_ = viper.BindPFlag(FlagZone, rootCmd.PersistentFlags().Lookup(FlagZone))
+	_ = viper.BindPFlag(FlagRack, rootCmd.PersistentFlags().Lookup(FlagRack))
+	_ = viper.BindPFlag(FlagRow, rootCmd.PersistentFlags().Lookup(FlagRow))
+	_ = viper.BindPFlag(FlagPosition, rootCmd.PersistentFlags().Lookup(FlagPosition))
 	_ = viper.BindPFlag(FlagLatencyTargets, rootCmd.PersistentFlags().Lookup(FlagLatencyTargets))
 	_ = viper.BindPFlag(FlagLogLevel, rootCmd.PersistentFlags().Lookup(FlagLogLevel))
 
@@ -182,6 +194,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		Hostname:          hostname,
 		Region:            viper.GetString(FlagRegion),
 		Datacenter:        viper.GetString(FlagDatacenter),
+		Zone:              viper.GetString(FlagZone),
+		Rack:              viper.GetString(FlagRack),
+		Row:               viper.GetString(FlagRow),
+		Position:          viper.GetString(FlagPosition),
 		LatencyTargets:    viper.GetStringSlice(FlagLatencyTargets),
 	}
 
@@ -260,13 +276,17 @@ func registerCmd() *cobra.Command {
 			nodeID := viper.GetString(FlagNodeID)
 			clusterID := viper.GetString(FlagClusterID)
 			providerAddress := viper.GetString(FlagProviderAddress)
+			providerDaemonURL := viper.GetString(FlagProviderDaemonURL)
 			keyFile := viper.GetString(FlagKeyFile)
 
 			if nodeID == "" || clusterID == "" || providerAddress == "" {
 				return fmt.Errorf("--node-id, --cluster-id, and --provider-address are required")
 			}
+			if providerDaemonURL == "" {
+				return fmt.Errorf("--provider-daemon-url is required")
+			}
 
-			_, publicKey, err := loadOrGenerateKey(keyFile)
+			privateKey, publicKey, err := loadOrGenerateKey(keyFile)
 			if err != nil {
 				return fmt.Errorf("failed to load key: %w", err)
 			}
@@ -276,23 +296,33 @@ func registerCmd() *cobra.Command {
 				hostname = h
 			}
 
-			identity := NodeIdentity{
-				NodeID:          nodeID,
-				ClusterID:       clusterID,
-				ProviderAddress: providerAddress,
-				AgentPubkey:     base64.StdEncoding.EncodeToString(publicKey),
-				Hostname:        hostname,
+			config := AgentConfig{
+				NodeID:            nodeID,
+				ClusterID:         clusterID,
+				ProviderAddress:   providerAddress,
+				ProviderDaemonURL: providerDaemonURL,
+				HeartbeatInterval: 30 * time.Second,
+				PrivateKey:        privateKey,
+				PublicKey:         publicKey,
+				Hostname:          hostname,
+				Region:            viper.GetString(FlagRegion),
+				Datacenter:        viper.GetString(FlagDatacenter),
+				Zone:              viper.GetString(FlagZone),
+				Rack:              viper.GetString(FlagRack),
+				Row:               viper.GetString(FlagRow),
+				Position:          viper.GetString(FlagPosition),
 			}
 
-			fmt.Println("Node Identity:")
-			fmt.Printf("  Node ID: %s\n", identity.NodeID)
-			fmt.Printf("  Cluster ID: %s\n", identity.ClusterID)
-			fmt.Printf("  Provider: %s\n", identity.ProviderAddress)
-			fmt.Printf("  Public Key: %s\n", identity.AgentPubkey)
-			fmt.Printf("  Hostname: %s\n", identity.Hostname)
+			agent := NewAgent(config)
+			if err := agent.registerNode(cmd.Context()); err != nil {
+				return err
+			}
 
-			// In production, this would call the provider daemon API
-			fmt.Println("\nNote: Registration requires provider daemon connectivity")
+			fmt.Println("Node registration accepted.")
+			fmt.Printf("  Node ID: %s\n", nodeID)
+			fmt.Printf("  Cluster ID: %s\n", clusterID)
+			fmt.Printf("  Provider: %s\n", providerAddress)
+			fmt.Printf("  Public Key: %s\n", base64.StdEncoding.EncodeToString(publicKey))
 			return nil
 		},
 	}
