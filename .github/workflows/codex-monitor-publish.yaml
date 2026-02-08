@@ -1,23 +1,20 @@
-# Publish @virtengine/codex-monitor to npm via OIDC Trusted Publishing
+# Publish @virtengine/codex-monitor to npm
 #
 # Triggers:
 #   1. Push to main that changes scripts/codex-monitor/** (auto-publish)
 #   2. Manual dispatch with optional version bump
 #
 # Security:
-#   - Uses npm Trusted Publishing (OIDC) — no long-lived tokens
-#   - Provenance attestation generated automatically
+#   - Uses NPM_TOKEN secret for authentication
+#   - Provenance attestation generated via --provenance flag
 #   - Version bump detection prevents redundant publishes
 #
-# Prerequisites (one-time on npmjs.com):
-#   1. Navigate to @virtengine/codex-monitor → Settings → Trusted Publisher
-#   2. Select "GitHub Actions"
-#   3. Configure:
-#      - Organization: virtengine
-#      - Repository: virtengine
-#      - Workflow filename: codex-monitor-publish.yaml
-#      - Environment: npm-publish
-#   4. Save
+# Prerequisites:
+#   1. Create an npm access token (Granular or Automation type) at
+#      https://www.npmjs.com/settings/<user>/tokens
+#   2. Add it as a repository secret named NPM_TOKEN
+#      (Settings → Secrets and variables → Actions → New repository secret)
+#   3. If using an environment, add it to the "npm-publish" environment instead
 
 name: "Codex Monitor: Publish"
 
@@ -50,7 +47,7 @@ concurrency:
 
 permissions:
     contents: read
-    id-token: write # Required for OIDC trusted publishing
+    id-token: write # Required for provenance attestation
 
 jobs:
     # ─── Gate: only proceed if the package.json version is newer than registry ──
@@ -130,13 +127,16 @@ jobs:
             - name: Publish
               if: ${{ !inputs.dry-run }}
               working-directory: scripts/codex-monitor
-              run: npm publish --access public
-              # No NODE_AUTH_TOKEN needed — OIDC handles auth via trusted publishing
+              run: npm publish --access public --provenance
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
             - name: Publish (dry run)
               if: ${{ inputs.dry-run }}
               working-directory: scripts/codex-monitor
               run: npm publish --access public --dry-run
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
             - name: Verify publication
               if: ${{ !inputs.dry-run }}
