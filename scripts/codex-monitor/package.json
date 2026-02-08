@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.8.0",
+  "version": "0.10.1",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "MIT",
@@ -45,7 +45,11 @@
     "./workspace-registry": "./workspace-registry.mjs",
     "./shared-workspace-registry": "./shared-workspace-registry.mjs",
     "./merge-strategy": "./merge-strategy.mjs",
-    "./restart-controller": "./restart-controller.mjs"
+    "./restart-controller": "./restart-controller.mjs",
+    "./fleet-coordinator": "./fleet-coordinator.mjs",
+    "./shared-knowledge": "./shared-knowledge.mjs",
+    "./task-complexity": "./task-complexity.mjs",
+    "./presence": "./presence.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -64,7 +68,7 @@
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest",
     "postinstall": "node postinstall.mjs",
-    "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
+    "prepublishOnly": "node prepublish-check.mjs"
   },
   "files": [
     "cli.mjs",
@@ -77,11 +81,12 @@
     "codex-shell.mjs",
     "copilot-shell.mjs",
     "claude-shell.mjs",
-    "copilot-shell.mjs",
-    "claude-shell.mjs",
     "primary-agent.mjs",
     "maintenance.mjs",
     "telegram-bot.mjs",
+    "presence.mjs",
+    "preflight.mjs",
+    "task-assessment.mjs",
     "get-telegram-chat-id.mjs",
     "setup.mjs",
     "workspace-registry.mjs",
@@ -93,8 +98,12 @@
     "ve-orchestrator.ps1",
     "ve-kanban.ps1",
     "postinstall.mjs",
+    "prepublish-check.mjs",
     "update-check.mjs",
     "merge-strategy.mjs",
+    "fleet-coordinator.mjs",
+    "shared-knowledge.mjs",
+    "task-complexity.mjs",
     ".env.example",
     "codex-monitor.config.example.json",
     "codex-monitor.schema.json",
