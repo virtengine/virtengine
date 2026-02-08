@@ -219,7 +219,11 @@ describe("getModelForComplexity", () => {
     const overrides = {
       models: {
         CODEX: {
-          low: { model: "custom-mini", variant: "CUSTOM", reasoningEffort: "minimal" },
+          low: {
+            model: "custom-mini",
+            variant: "CUSTOM",
+            reasoningEffort: "minimal",
+          },
         },
       },
     };
@@ -357,7 +361,11 @@ describe("resolveExecutorForTask", () => {
     const config = {
       models: {
         CODEX: {
-          medium: { model: "custom-model", variant: "CUSTOM_V", reasoningEffort: "high" },
+          medium: {
+            model: "custom-model",
+            variant: "CUSTOM_V",
+            reasoningEffort: "high",
+          },
         },
       },
     };
@@ -563,14 +571,38 @@ describe("constants", () => {
 
   it("MODEL_ALIASES contains all available models", () => {
     expect(MODEL_ALIASES).toBeDefined();
-    expect(MODEL_ALIASES["gpt-5.1-codex-mini"]).toEqual({ executor: "CODEX", variant: "GPT51_CODEX_MINI" });
-    expect(MODEL_ALIASES["gpt-5.2-codex"]).toEqual({ executor: "CODEX", variant: "DEFAULT" });
-    expect(MODEL_ALIASES["gpt-5.1-codex-max"]).toEqual({ executor: "CODEX", variant: "GPT51_CODEX_MAX" });
-    expect(MODEL_ALIASES["claude-opus-4.6"]).toEqual({ executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" });
-    expect(MODEL_ALIASES["opus-4.6"]).toEqual({ executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" });
-    expect(MODEL_ALIASES["sonnet-4.5"]).toEqual({ executor: "COPILOT", variant: "SONNET_4_5" });
-    expect(MODEL_ALIASES["haiku-4.5"]).toEqual({ executor: "COPILOT", variant: "HAIKU_4_5" });
-    expect(MODEL_ALIASES["claude-code"]).toEqual({ executor: "COPILOT", variant: "CLAUDE_CODE" });
+    expect(MODEL_ALIASES["gpt-5.1-codex-mini"]).toEqual({
+      executor: "CODEX",
+      variant: "GPT51_CODEX_MINI",
+    });
+    expect(MODEL_ALIASES["gpt-5.2-codex"]).toEqual({
+      executor: "CODEX",
+      variant: "DEFAULT",
+    });
+    expect(MODEL_ALIASES["gpt-5.1-codex-max"]).toEqual({
+      executor: "CODEX",
+      variant: "GPT51_CODEX_MAX",
+    });
+    expect(MODEL_ALIASES["claude-opus-4.6"]).toEqual({
+      executor: "COPILOT",
+      variant: "CLAUDE_OPUS_4_6",
+    });
+    expect(MODEL_ALIASES["opus-4.6"]).toEqual({
+      executor: "COPILOT",
+      variant: "CLAUDE_OPUS_4_6",
+    });
+    expect(MODEL_ALIASES["sonnet-4.5"]).toEqual({
+      executor: "COPILOT",
+      variant: "SONNET_4_5",
+    });
+    expect(MODEL_ALIASES["haiku-4.5"]).toEqual({
+      executor: "COPILOT",
+      variant: "HAIKU_4_5",
+    });
+    expect(MODEL_ALIASES["claude-code"]).toEqual({
+      executor: "COPILOT",
+      variant: "CLAUDE_CODE",
+    });
     expect(Object.keys(MODEL_ALIASES)).toHaveLength(8);
   });
 });

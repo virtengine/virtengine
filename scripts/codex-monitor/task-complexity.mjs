@@ -414,9 +414,7 @@ export function assessCompletionConfidence({
   if (!testsPass || !buildClean) {
     return {
       confidence: COMPLETION_CONFIDENCE.FAILED,
-      reason: testsPass
-        ? "build has errors"
-        : "tests failing",
+      reason: testsPass ? "build has errors" : "tests failing",
       shouldAutoMerge: false,
     };
   }
