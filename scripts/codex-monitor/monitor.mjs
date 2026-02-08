@@ -2895,15 +2895,7 @@ async function checkMergedPRsAndUpdateTasks() {
               const fullPrInfo = await getPullRequestByNumber(branchPr.number);
               const isConflicting =
                 fullPrInfo?.mergeable === "CONFLICTING" ||
-                ful
-                // Register as dirty for slot reservation + file-overlap
-                registerDirtyTask({
-                  taskId: task.id,
-                  prNumber: branchPr.number,
-                  branch: cand.branch,
-                  title: task.title,
-                  files: fullPrInfo?.files?.map((f) => f.filename || f) || [],
-                });lPrInfo?.mergeable === false ||
+                fullPrInfo?.mergeable === false ||
                 fullPrInfo?.mergeable_state === "dirty" ||
                 fullPrInfo?.mergeStateStatus === "DIRTY";
               if (isConflicting) {
@@ -2911,6 +2903,14 @@ async function checkMergedPRsAndUpdateTasks() {
                   prNumber: branchPr.number,
                   attemptId: cand.attemptId,
                   branch: cand.branch,
+                });
+                // Register as dirty for slot reservation + file-overlap
+                registerDirtyTask({
+                  taskId: task.id,
+                  prNumber: branchPr.number,
+                  branch: cand.branch,
+                  title: task.title,
+                  files: fullPrInfo?.files?.map((f) => f.filename || f) || [],
                 });
               }
             }

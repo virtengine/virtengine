@@ -320,7 +320,7 @@ check_codex_monitor_syntax() {
     # module instantiation errors that only surface at import time.
     if [ $fail -eq 0 ]; then
         hook_step "Validating ESM exports (import check)..."
-        if ! VITEST=1 node -e "
+        if ! node -e "
           import('file://${monitor_dir}/monitor.mjs')
             .then(() => process.exit(0))
             .catch(e => {

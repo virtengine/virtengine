@@ -133,3 +133,91 @@ export function isFileOverlapWithDirtyPR(files = [], dirtyFiles = []) {
     left.has(String(file).toLowerCase())
   );
 }
+
+// ── In-memory dirty task registry ────────────────────────────────────────────
+// Tracks tasks whose PRs have merge conflicts so the monitor can reserve
+// executor slots for conflict resolution and avoid file-overlap collisions.
+
+const _dirtyTaskRegistry = new Map();
+
+/**
+ * Register a task as "dirty" (PR has merge conflicts).
+ * @param {{ taskId: string, prNumber?: number, branch?: string, title?: string, files?: string[] }} entry
+ */
+export function registerDirtyTask({ taskId, prNumber, branch, title, files } = {}) {
+  if (!taskId) return;
+  _dirtyTaskRegistry.set(taskId, {
+    taskId,
+    prNumber: prNumber ?? null,
+    branch: branch ?? null,
+    title: title ?? "",
+    files: Array.isArray(files) ? files : [],
+    registeredAt: Date.now(),
+  });
+}
+
+/**
+ * Remove a task from the dirty registry (e.g. after successful merge or resolution).
+ * @param {string} taskId
+ */
+export function clearDirtyTask(taskId) {
+  _dirtyTaskRegistry.delete(taskId);
+}
+
+/**
+ * Check whether a task is currently registered as dirty.
+ * @param {string} taskId
+ * @returns {boolean}
+ */
+export function isDirtyTask(taskId) {
+  return _dirtyTaskRegistry.has(taskId);
+}
+
+/**
+ * Return a HIGH complexity tier override for dirty/conflict tasks.
+ * @returns {{ tier: string, reason: string }}
+ */
+export function getHighTierForDirty() {
+  return { tier: "HIGH", reason: "dirty-conflict-override" };
+}
+
+// ── Resolution cooldown tracking ─────────────────────────────────────────────
+// Prevents the monitor from re-triggering conflict resolution too quickly
+// for the same task.
+
+const _resolutionAttempts = new Map();
+const RESOLUTION_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Record that a conflict-resolution attempt was made for a task.
+ * @param {string} taskId
+ */
+export function recordResolutionAttempt(taskId) {
+  _resolutionAttempts.set(taskId, Date.now());
+}
+
+/**
+ * Check whether a task is still within the resolution cooldown window.
+ * @param {string} taskId
+ * @param {{ cooldownMs?: number }} opts
+ * @returns {boolean}
+ */
+export function isOnResolutionCooldown(taskId, opts = {}) {
+  const lastAttempt = _resolutionAttempts.get(taskId);
+  if (!lastAttempt) return false;
+  const cooldown = opts.cooldownMs ?? RESOLUTION_COOLDOWN_MS;
+  return Date.now() - lastAttempt < cooldown;
+}
+
+/**
+ * Return a human-readable summary of the current dirty task state.
+ * @returns {string}
+ */
+export function formatDirtyTaskSummary() {
+  const count = _dirtyTaskRegistry.size;
+  if (count === 0) return "Dirty tasks: 0";
+  const entries = [..._dirtyTaskRegistry.values()]
+    .map((e) => `${e.title || e.taskId} (PR #${e.prNumber ?? "?"})`)
+    .join(", ");
+  return `Dirty tasks: ${count} — ${entries}`;
+}
