@@ -308,6 +308,8 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `TELEGRAM_BOT_TOKEN`                  | —                              | Telegram bot token from @BotFather                                                                                     |
 | `TELEGRAM_CHAT_ID`                    | —                              | Telegram chat ID                                                                                                       |
 | `VK_BASE_URL`                         | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
+| `VK_TARGET_BRANCH`                    | `origin/main`                  | Default upstream branch for task attempts/PRs                                                                          |
+| `CODEX_MONITOR_TASK_UPSTREAM`         | `origin/ve/codex-monitor-generic` | Default upstream branch for codex-monitor tasks (overrides `VK_TARGET_BRANCH`)                                        |
 | `EXECUTORS`                           | Codex only                     | Executor shorthand (see above)                                                                                         |
 | `EXECUTOR_DISTRIBUTION`               | `weighted`                     | Distribution mode                                                                                                      |
 | `FAILOVER_STRATEGY`                   | `next-in-line`                 | Failover behavior                                                                                                      |
@@ -320,6 +322,22 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `LOG_MAX_SIZE_MB`                     | `500`                          | Max total log folder size in MB (0 = unlimited)                                                                        |
 | `LOG_CLEANUP_INTERVAL_MIN`            | `30`                           | How often to check log folder size (0 = startup only)                                                                  |
 | `TELEGRAM_VERBOSITY`                  | `summary`                      | Notification verbosity: `minimal`, `summary`, or `detailed`                                                            |
+
+### Task Upstream Routing
+
+codex-monitor can route task attempts to a custom upstream branch based on task metadata. This is how
+codex-monitor avoids targeting `main` for codex-monitor tasks by default.
+
+Routing precedence:
+
+1. Task fields: `target_branch`, `base_branch`, `upstream_branch`, `upstream`, `target`, `base`
+2. Task metadata fields with the same names
+3. Labels/tags like `upstream:origin/branch` or `base:origin/branch`
+4. Text hints in the task description, e.g. `upstream=origin/branch`
+5. If the task mentions codex-monitor, default to `CODEX_MONITOR_TASK_UPSTREAM`
+6. Otherwise fall back to `VK_TARGET_BRANCH`
+
+This works for generic repos too — you can tag tasks with their own upstreams without hardcoding VirtEngine logic.
 
 ### Shared Cloud Workspaces
 
