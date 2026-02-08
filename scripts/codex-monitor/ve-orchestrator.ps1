@@ -3093,37 +3093,36 @@ function Process-StandaloneCopilotPRs {
         if (-not $details) { continue }
 
         if (Test-CopilotCloudDisabled) {
-            if ($details.isDraft -or $pr.title -match '^\[WIP\]') {
-                Write-Log "Closing Copilot PR #$($pr.number) while Copilot cloud is disabled" -Level "WARN"
-                if (-not $DryRun) {
-                    $null = Close-PRDeleteBranch -PRNumber $pr.number
-                }
-
-                $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
-                $refs = Get-ReferencedPRNumbers -Texts @(
-                    $pr.title,
-                    $details.body,
-                    $details.headRefName,
-                    $pr.headRefName
-                )
-                if (-not $refs -or @($refs).Count -eq 0) {
-                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
-                        requested_at = $requestedAt
-                        completed    = $true
-                        copilot_pr   = $pr.number
-                        merged_at    = $null
-                    }
-                }
-                foreach ($ref in $refs) {
-                    Upsert-CopilotPRState -PRNumber $ref -Update @{
-                        requested_at = $requestedAt
-                        completed    = $true
-                        copilot_pr   = $pr.number
-                        merged_at    = $null
-                    }
-                }
-                continue
+            # Close ALL Copilot PRs when cloud is disabled — not just WIP/draft
+            Write-Log "Closing Copilot PR #$($pr.number) while Copilot cloud is disabled" -Level "WARN"
+            if (-not $DryRun) {
+                $null = Close-PRDeleteBranch -PRNumber $pr.number
             }
+
+            $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+            $refs = Get-ReferencedPRNumbers -Texts @(
+                $pr.title,
+                $details.body,
+                $details.headRefName,
+                $pr.headRefName
+            )
+            if (-not $refs -or @($refs).Count -eq 0) {
+                Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                    requested_at = $requestedAt
+                    completed    = $true
+                    copilot_pr   = $pr.number
+                    merged_at    = $null
+                }
+            }
+            foreach ($ref in $refs) {
+                Upsert-CopilotPRState -PRNumber $ref -Update @{
+                    requested_at = $requestedAt
+                    completed    = $true
+                    copilot_pr   = $pr.number
+                    merged_at    = $null
+                }
+            }
+            continue
         }
 
         $rateLimitHit = $null
@@ -3191,7 +3190,22 @@ Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolut
             continue
         }
 
-        if ($pr.title -match '^\[WIP\]') { continue }
+        # Auto-close stale WIP/draft Copilot PRs (> 60 min old)
+        if ($pr.title -match '^\[WIP\]' -or $details.isDraft) {
+            $prAge = 0
+            if ($pr.createdAt) {
+                try { $prAge = ((Get-Date) - [datetimeoffset]::Parse($pr.createdAt).ToLocalTime().DateTime).TotalMinutes } catch { $prAge = 0 }
+            }
+            if ($prAge -lt 60) {
+                Write-Log "Copilot WIP PR #$($pr.number) is $([int]$prAge) min old — waiting" -Level "INFO"
+                continue
+            }
+            Write-Log "Auto-closing stale Copilot WIP PR #$($pr.number) ($([int]$prAge) min old)" -Level "WARN"
+            if (-not $DryRun) {
+                $null = Close-PRDeleteBranch -PRNumber $pr.number
+            }
+            continue
+        }
         $mergeState = if ($details.mergeStateStatus) { $details.mergeStateStatus } else { "UNKNOWN" }
         $mergeableState = if ($details.mergeable) { $details.mergeable } else { "UNKNOWN" }
         if ($mergeState -eq "CONFLICTING" -or $mergeableState -eq "CONFLICTING") {
