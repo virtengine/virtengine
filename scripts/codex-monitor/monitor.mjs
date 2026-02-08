@@ -2062,6 +2062,15 @@ const MERGE_CHECK_BATCH_SIZE = 0;
 const MERGE_CHECK_THROTTLE_MS = 1500;
 
 /**
+ * Cooldown cache for tasks whose branches are all unresolvable (deleted,
+ * no PR, abandoned).  We re-check them every 6 hours instead of every cycle.
+ * Key = task ID, Value = timestamp of last check.
+ * @type {Map<string, number>}
+ */
+const staleBranchCooldown = new Map();
+const STALE_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
  * Periodic check: find tasks in "inreview" status, check if their PRs
  * have been merged, and automatically move them to "done" status.
  */
@@ -2130,84 +2139,164 @@ async function checkMergedPRsAndUpdateTasks() {
     for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
-      // Find the attempt associated with this task — first in local status,
-      // then fall back to the VK API (which includes archived attempts)
-      let attempt = attempts.find((a) => a?.task_id === task.id);
-      if (!attempt) {
-        // VK API fallback: find the most recent attempt for this task
-        const vkMatch = vkAttempts
-          .filter((a) => a?.task_id === task.id)
-          .sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime(),
-          );
-        if (vkMatch.length > 0) {
-          attempt = vkMatch[0];
-          console.log(
-            `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
-          );
-        } else {
-          console.log(
-            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
-          );
-        }
-      }
-      const branch =
-        attempt?.branch ||
-        task?.branch ||
-        task?.workspace_branch ||
-        task?.git_branch;
 
-      // Branch-level dedup: VK may have duplicate tasks (different IDs) for
-      // the same branch.  If this branch is already known-merged, skip it
-      // and silently cache the task ID so it won't appear again.
-      if (branch && mergedBranchCache.has(branch)) {
+      // ── Stale cooldown: skip tasks we already checked recently ──
+      const lastStaleCheck = staleBranchCooldown.get(task.id);
+      if (lastStaleCheck && Date.now() - lastStaleCheck < STALE_COOLDOWN_MS) {
+        continue;
+      }
+
+      // ── Gather ALL attempts for this task (local + VK API) ──
+      // VK can have multiple attempts with different branches. An older
+      // attempt may have the merged PR while the newest was abandoned.
+      const localAttempt = attempts.find((a) => a?.task_id === task.id);
+      const allVkAttempts = vkAttempts
+        .filter((a) => a?.task_id === task.id)
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime(),
+        );
+
+      // Build a deduplicated list of all branches + PR numbers to check
+      /** @type {Array<{branch?: string, prNumber?: number}>} */
+      const candidates = [];
+      const seenBranches = new Set();
+
+      const addCandidate = (src) => {
+        const b = src?.branch;
+        const pr =
+          src?.pr_number ||
+          parsePrNumberFromUrl(src?.pr_url);
+        if (b && !seenBranches.has(b)) {
+          seenBranches.add(b);
+          candidates.push({ branch: b, prNumber: pr || undefined });
+        } else if (pr && !candidates.some((c) => c.prNumber === pr)) {
+          candidates.push({ branch: b, prNumber: pr });
+        }
+      };
+
+      if (localAttempt) addCandidate(localAttempt);
+      for (const a of allVkAttempts) addCandidate(a);
+      // Also check task-level fields
+      addCandidate({
+        branch:
+          task?.branch || task?.workspace_branch || task?.git_branch,
+        pr_number: task?.pr_number,
+        pr_url: task?.pr_url,
+      });
+
+      if (candidates.length === 0) {
+        console.log(
+          `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+        );
+        staleBranchCooldown.set(task.id, Date.now());
+        continue;
+      }
+
+      if (allVkAttempts.length > 0) {
+        const branches = candidates.map((c) => c.branch).filter(Boolean);
+        console.log(
+          `[monitor] Task "${task.title}": checking ${candidates.length} attempt(s) [${branches.join(", ")}]`,
+        );
+      }
+
+      // ── Branch-level dedup: skip if ANY branch is already known-merged ──
+      const knownBranch = candidates.find(
+        (c) => c.branch && mergedBranchCache.has(c.branch),
+      );
+      if (knownBranch) {
         mergedTaskCache.add(task.id);
+        // Cache all branches for this task
+        for (const c of candidates) {
+          if (c.branch) mergedBranchCache.add(c.branch);
+        }
         saveMergedTaskCache();
-        // Still try to mark done in VK (best-effort, don't count as "moved")
         void updateTaskStatus(task.id, "done");
         continue;
       }
-      const prNumber =
-        attempt?.pr_number ||
-        task?.pr_number ||
-        parsePrNumberFromUrl(attempt?.pr_url) ||
-        parsePrNumberFromUrl(task?.pr_url);
-      let prInfo = null;
-      if (prNumber) {
-        prInfo = await getPullRequestByNumber(prNumber);
-      }
-      const isMerged =
-        !!prInfo?.mergedAt ||
-        (!!prInfo?.merged_at && prInfo.merged_at !== null);
-      const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
 
-      // Prefer PR status when available.
-      if (isMerged) {
-        console.log(
-          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged PR, updating to done`,
-        );
+      // ── Check ALL candidates for a merged PR/branch ──
+      let resolved = false;
+      let hasOpenPR = false;
 
-        const success = await updateTaskStatus(task.id, "done");
-        movedCount++;
-        mergedTaskCache.add(task.id);
-        if (branch) mergedBranchCache.add(branch);
-        saveMergedTaskCache(); // persist immediately — crash-safe
-        completedTaskNames.push(task.title);
-        if (success) {
-          console.log(
-            `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
-          );
-        } else {
-          console.warn(
-            `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (PR is merged)`,
-          );
+      for (const cand of candidates) {
+        // Check PR by number first (cheapest)
+        if (cand.prNumber) {
+          const prInfo = await getPullRequestByNumber(cand.prNumber);
+          const isMerged =
+            !!prInfo?.mergedAt ||
+            (!!prInfo?.merged_at && prInfo.merged_at !== null);
+          const prState = prInfo?.state
+            ? String(prInfo.state).toUpperCase()
+            : "";
+
+          if (isMerged) {
+            console.log(
+              `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged PR #${cand.prNumber}, updating to done`,
+            );
+            const success = await updateTaskStatus(task.id, "done");
+            movedCount++;
+            mergedTaskCache.add(task.id);
+            for (const c of candidates) {
+              if (c.branch) mergedBranchCache.add(c.branch);
+            }
+            saveMergedTaskCache();
+            completedTaskNames.push(task.title);
+            if (success) {
+              console.log(
+                `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
+              );
+            } else {
+              console.warn(
+                `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (PR is merged)`,
+              );
+            }
+            resolved = true;
+            break;
+          }
+          if (prState === "OPEN") hasOpenPR = true;
         }
-        continue;
+
+        if (!cand.branch) continue;
+
+        // Throttle between GitHub API calls
+        if (MERGE_CHECK_THROTTLE_MS > 0) {
+          await new Promise((r) => setTimeout(r, MERGE_CHECK_THROTTLE_MS));
+        }
+
+        // Check if the branch has been merged (checks gh + git)
+        const merged = await isBranchMerged(cand.branch);
+        if (merged) {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch ${cand.branch}, updating to done`,
+          );
+          const success = await updateTaskStatus(task.id, "done");
+          movedCount++;
+          mergedTaskCache.add(task.id);
+          for (const c of candidates) {
+            if (c.branch) mergedBranchCache.add(c.branch);
+          }
+          saveMergedTaskCache();
+          completedTaskNames.push(task.title);
+          if (success) {
+            console.log(
+              `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
+            );
+          } else {
+            console.warn(
+              `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (branch is merged)`,
+            );
+          }
+          resolved = true;
+          break;
+        }
       }
 
-      if (prState === "OPEN" && taskStatus !== "inreview") {
+      if (resolved) continue;
+
+      // Task is NOT merged via any attempt — handle accordingly
+      if (hasOpenPR && taskStatus !== "inreview") {
         const success = await updateTaskStatus(task.id, "inreview");
         if (success) {
           movedReviewCount++;
@@ -2215,39 +2304,9 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → inreview`,
           );
         }
-      }
-
-      if (!branch) {
-        continue;
-      }
-
-      // Throttle between GitHub API calls to avoid rate-limiting
-      if (MERGE_CHECK_THROTTLE_MS > 0) {
-        await new Promise((r) => setTimeout(r, MERGE_CHECK_THROTTLE_MS));
-      }
-
-      // Check if the branch has been merged
-      const merged = await isBranchMerged(branch);
-      if (merged) {
-        console.log(
-          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch, updating to done`,
-        );
-
-        const success = await updateTaskStatus(task.id, "done");
-        movedCount++;
-        mergedTaskCache.add(task.id);
-        if (branch) mergedBranchCache.add(branch);
-        saveMergedTaskCache(); // persist immediately — crash-safe
-        completedTaskNames.push(task.title);
-        if (success) {
-          console.log(
-            `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
-          );
-        } else {
-          console.warn(
-            `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (branch is merged)`,
-          );
-        }
+      } else {
+        // All branches unresolvable — put on cooldown (recheck in 6h)
+        staleBranchCooldown.set(task.id, Date.now());
       }
     }
 
