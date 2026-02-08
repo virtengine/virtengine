@@ -180,8 +180,8 @@ describe("workspace-reaper", () => {
       // Create an old worktree
       await createTestWorktree("old-worktree");
 
-      // Run reaper 2 hours later (lease expired, worktree old)
-      const laterTime = new Date("2026-02-08T12:00:00Z");
+      // Run reaper far enough in the future that both lease and worktree are expired
+      const laterTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
       
       const result = await runReaperSweep({
         searchPaths: [TEST_WORKTREE_BASE],
