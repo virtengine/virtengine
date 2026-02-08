@@ -741,19 +741,21 @@ function Get-PRComments {
 
 function Test-CopilotRateLimitComment {
     <#
-    .SYNOPSIS Detect Copilot rate limit notices in PR comments.
+    .SYNOPSIS Detect Copilot rate limit notices OR "stopped work due to error" in PR comments.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][int]$PRNumber)
     $comments = Get-PRComments -PRNumber $PRNumber -Limit 30
     if (-not $comments) { return $null }
-    $pattern = "copilot stopped work|rate limit|rate-limited|secondary rate limit"
+    $pattern = "copilot stopped work|rate limit|rate-limited|secondary rate limit|due to an error"
     foreach ($comment in $comments) {
         if (-not $comment.body) { continue }
         $body = $comment.body.ToString()
         if ($body -match $pattern -and $body -match "copilot") {
+            $isError = $body -match "due to an error|stopped work"
             return @{
                 hit        = $true
+                is_error   = [bool]$isError
                 body       = $body
                 created_at = $comment.created_at
                 author     = $comment.user?.login
@@ -761,6 +763,54 @@ function Test-CopilotRateLimitComment {
         }
     }
     return $null
+}
+
+function Test-PRHasCopilotComment {
+    <#
+    .SYNOPSIS Check if @copilot has already been mentioned in PR comments.
+              Returns $true if any comment body contains '@copilot' — meaning Copilot
+              was already triggered and should NOT be triggered again.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $comments = Get-PRComments -PRNumber $PRNumber -Limit 50
+    if (-not $comments) { return $false }
+    foreach ($comment in $comments) {
+        if (-not $comment.body) { continue }
+        if ($comment.body.ToString() -match "@copilot") {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Test-CopilotPRClosed {
+    <#
+    .SYNOPSIS Check if a Copilot-authored PR for this PR number was ever closed.
+              If so, we should never trigger @copilot for this PR again.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $search = "$PRNumber in:title,body"
+    $prJson = Invoke-VKGithub -Args @(
+        "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--state", "closed", "--search", $search,
+        "--json", "number,title,body,author",
+        "--limit", "10"
+    )
+    if (-not $prJson) { return $false }
+    $prs = $prJson | ConvertFrom-Json
+    if (-not $prs) { return $false }
+    $pattern = "(?i)(PR\s*#?$PRNumber|#$PRNumber)"
+    foreach ($pr in $prs) {
+        if (($pr.title -match $pattern) -or ($pr.body -match $pattern)) {
+            $authorLogin = if ($pr.author -and $pr.author.login) { $pr.author.login } else { "" }
+            if ($authorLogin -match "copilot|bot") {
+                return $true
+            }
+        }
+    }
+    return $false
 }
 
 function Mark-PRReady {
