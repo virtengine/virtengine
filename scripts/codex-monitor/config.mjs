@@ -1098,6 +1098,53 @@ export function loadConfig(argv = process.argv, options = {}) {
     assessWithSdk,
   });
 
+  // ── Fleet Coordination ─────────────────────────────────────
+  // Multi-workstation collaboration: when 2+ codex-monitor instances share
+  // the same repo, the fleet system coordinates task planning, dispatch,
+  // and conflict-aware ordering.
+  const fleetEnabled = !["0", "false", "no"].includes(
+    String(
+      process.env.FLEET_ENABLED ??
+        configData.fleetEnabled ??
+        "true",
+    ).toLowerCase(),
+  );
+  const fleetBufferMultiplier = Number(
+    process.env.FLEET_BUFFER_MULTIPLIER ||
+      configData.fleetBufferMultiplier ||
+      "3",
+  );
+  const fleetSyncIntervalMs = Number(
+    process.env.FLEET_SYNC_INTERVAL_MS ||
+      configData.fleetSyncIntervalMs ||
+      String(2 * 60 * 1000), // 2 minutes
+  );
+  const fleetPresenceTtlMs = Number(
+    process.env.FLEET_PRESENCE_TTL_MS ||
+      configData.fleetPresenceTtlMs ||
+      String(5 * 60 * 1000), // 5 minutes
+  );
+  const fleetKnowledgeEnabled = !["0", "false", "no"].includes(
+    String(
+      process.env.FLEET_KNOWLEDGE_ENABLED ??
+        configData.fleetKnowledgeEnabled ??
+        "true",
+    ).toLowerCase(),
+  );
+  const fleetKnowledgeFile = String(
+    process.env.FLEET_KNOWLEDGE_FILE ||
+      configData.fleetKnowledgeFile ||
+      "AGENTS.md",
+  );
+  const fleet = Object.freeze({
+    enabled: fleetEnabled,
+    bufferMultiplier: fleetBufferMultiplier,
+    syncIntervalMs: fleetSyncIntervalMs,
+    presenceTtlMs: fleetPresenceTtlMs,
+    knowledgeEnabled: fleetKnowledgeEnabled,
+    knowledgeFile: fleetKnowledgeFile,
+  });
+
   // ── Dependabot Auto-Merge ─────────────────────────────────
   const dependabotAutoMerge = !["0", "false", "no"].includes(
     String(
@@ -1237,6 +1284,9 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Branch Routing
     branchRouting,
+
+    // Fleet Coordination
+    fleet,
 
     // Paths
     statusPath,

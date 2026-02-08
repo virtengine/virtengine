@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "MIT",
@@ -45,7 +45,10 @@
     "./workspace-registry": "./workspace-registry.mjs",
     "./shared-workspace-registry": "./shared-workspace-registry.mjs",
     "./merge-strategy": "./merge-strategy.mjs",
-    "./restart-controller": "./restart-controller.mjs"
+    "./restart-controller": "./restart-controller.mjs",
+    "./fleet-coordinator": "./fleet-coordinator.mjs",
+    "./shared-knowledge": "./shared-knowledge.mjs",
+    "./presence": "./presence.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -77,8 +80,6 @@
     "codex-shell.mjs",
     "copilot-shell.mjs",
     "claude-shell.mjs",
-    "copilot-shell.mjs",
-    "claude-shell.mjs",
     "primary-agent.mjs",
     "maintenance.mjs",
     "telegram-bot.mjs",
@@ -95,6 +96,12 @@
     "postinstall.mjs",
     "update-check.mjs",
     "merge-strategy.mjs",
+    "presence.mjs",
+    "preflight.mjs",
+    "task-assessment.mjs",
+    "prepublish-check.mjs",
+    "fleet-coordinator.mjs",
+    "shared-knowledge.mjs",
     ".env.example",
     "codex-monitor.config.example.json",
     "codex-monitor.schema.json",

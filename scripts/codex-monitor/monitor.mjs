@@ -51,6 +51,27 @@ import {
   getMaxParallelFromArgs,
   parsePrNumberFromUrl,
 } from "./utils.mjs";
+import {
+  initFleet,
+  refreshFleet,
+  buildFleetPresence,
+  getFleetState,
+  isFleetCoordinator,
+  getFleetMode,
+  getTotalFleetSlots,
+  buildExecutionWaves,
+  assignTasksToWorkstations,
+  calculateBacklogDepth,
+  detectMaintenanceMode,
+  formatFleetSummary,
+  persistFleetState,
+} from "./fleet-coordinator.mjs";
+import {
+  initSharedKnowledge,
+  buildKnowledgeEntry,
+  appendKnowledgeEntry,
+  formatKnowledgeSummary,
+} from "./shared-knowledge.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -158,6 +179,7 @@ let {
   dependabotAuthors,
   branchRouting,
   telegramVerbosity,
+  fleet: fleetConfig,
 } = config;
 
 let watchPath = resolve(configWatchPath);
@@ -5273,10 +5295,55 @@ async function checkStatusMilestones() {
   const running = counts.running ?? 0;
   const review = counts.review ?? 0;
   const error = counts.error ?? 0;
-  const maxParallel = getMaxParallelFromArgs(scriptArgs) || running || 1;
+  const localMaxParallel = getMaxParallelFromArgs(scriptArgs) || running || 1;
+
+  // Fleet-aware capacity: use total fleet slots when fleet is active
+  const fleet = fleetConfig?.enabled ? getFleetState() : null;
+  const maxParallel =
+    fleet && fleet.mode === "fleet" && fleet.totalSlots > 0
+      ? fleet.totalSlots
+      : localMaxParallel;
   const backlogPerCapita =
     maxParallel > 0 ? backlogRemaining / maxParallel : backlogRemaining;
   const idleSlots = Math.max(0, maxParallel - running);
+
+  // Fleet-aware backlog depth check: if fleet is active, check if we need
+  // more tasks to keep all workstations busy
+  if (fleet && fleet.mode === "fleet") {
+    const depth = calculateBacklogDepth({
+      totalSlots: fleet.totalSlots,
+      currentBacklog: backlogRemaining,
+      bufferMultiplier: fleetConfig?.bufferMultiplier || 3,
+    });
+    if (depth.shouldGenerate && depth.deficit > 0) {
+      // Only coordinator triggers planner to avoid duplicates
+      if (isFleetCoordinator()) {
+        await maybeTriggerTaskPlanner("fleet-deficit", {
+          backlogRemaining,
+          targetDepth: depth.targetDepth,
+          deficit: depth.deficit,
+          fleetSize: fleet.fleetSize,
+          totalSlots: fleet.totalSlots,
+          formula: depth.formula,
+        });
+      }
+    }
+
+    // Maintenance mode detection
+    const maintenance = detectMaintenanceMode({
+      backlog_remaining: backlogRemaining,
+      counts,
+    });
+    if (maintenance.isMaintenanceMode && isFleetCoordinator()) {
+      if (!allCompleteNotified) {
+        allCompleteNotified = true;
+        await sendTelegramMessage(
+          `🛰️ Fleet entering maintenance mode: ${maintenance.reason}`,
+        );
+      }
+      return;
+    }
+  }
 
   if (
     !allCompleteNotified &&
@@ -6767,6 +6834,51 @@ setTimeout(() => {
   void checkAndMergeDependabotPRs();
 }, 30 * 1000);
 
+// ── Fleet Coordination ───────────────────────────────────────────────────────
+if (fleetConfig?.enabled) {
+  const maxParallel = getMaxParallelFromArgs(scriptArgs) || 6;
+  void initFleet({
+    repoRoot,
+    localSlots: maxParallel,
+    ttlMs: fleetConfig.presenceTtlMs,
+  })
+    .then((state) => {
+      console.log(
+        `[fleet] ready: mode=${state.mode}, peers=${state.fleetSize}, totalSlots=${state.totalSlots}`,
+      );
+      void persistFleetState(repoRoot);
+    })
+    .catch((err) => {
+      console.warn(`[fleet] init failed (continuing solo): ${err.message}`);
+    });
+
+  // Periodic fleet sync
+  const syncMs = fleetConfig.syncIntervalMs || 2 * 60 * 1000;
+  setInterval(() => {
+    void refreshFleet({ ttlMs: fleetConfig.presenceTtlMs })
+      .then(() => persistFleetState(repoRoot))
+      .catch((err) => {
+        console.warn(`[fleet] sync error: ${err.message}`);
+      });
+  }, syncMs);
+  console.log(
+    `[fleet] sync every ${Math.round(syncMs / 1000)}s, TTL=${Math.round((fleetConfig.presenceTtlMs || 300000) / 1000)}s`,
+  );
+
+  // Shared knowledge system
+  if (fleetConfig.knowledgeEnabled) {
+    initSharedKnowledge({
+      repoRoot,
+      targetFile: fleetConfig.knowledgeFile || "AGENTS.md",
+    });
+    console.log(
+      `[fleet] shared knowledge enabled → ${fleetConfig.knowledgeFile || "AGENTS.md"}`,
+    );
+  }
+} else {
+  console.log("[fleet] disabled (set FLEET_ENABLED=true to enable)");
+}
+
 // ── Periodic Dependabot auto-merge check ─────────────────────────────────────
 if (dependabotAutoMerge) {
   const depIntervalMs = (dependabotAutoMergeIntervalMin || 10) * 60 * 1000;
@@ -6860,4 +6972,15 @@ export {
   resolveUpstreamFromConfig,
   rebaseDownstreamTasks,
   runTaskAssessment,
+  // Fleet coordination re-exports for external consumers
+  getFleetState,
+  isFleetCoordinator,
+  getFleetMode,
+  formatFleetSummary,
+  buildExecutionWaves,
+  calculateBacklogDepth,
+  detectMaintenanceMode,
+  appendKnowledgeEntry,
+  buildKnowledgeEntry,
+  formatKnowledgeSummary,
 };
