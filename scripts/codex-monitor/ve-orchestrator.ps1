@@ -1472,6 +1472,149 @@ function Get-TaskSizeInfo {
     return @{ label = "m"; weight = 1.0; points = $null }
 }
 
+# ─── Complexity Routing ───────────────────────────────────────────────────────
+
+# Map task size labels to complexity tiers
+$script:SizeToComplexity = @{
+    "xs"  = "low"
+    "s"   = "low"
+    "m"   = "medium"
+    "l"   = "high"
+    "xl"  = "high"
+    "xxl" = "high"
+}
+
+# Default model profiles per complexity tier and executor type
+$script:ComplexityModels = @{
+    "CODEX" = @{
+        "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
+        "medium" = @{ model = "gpt-5.2-codex";      variant = "DEFAULT";           reasoningEffort = "medium" }
+        "high"   = @{ model = "gpt-5.3-codex";      variant = "DEFAULT";           reasoningEffort = "high" }
+    }
+    "COPILOT" = @{
+        "low"    = @{ model = "haiku-4.5";   variant = "HAIKU_4_5";       reasoningEffort = "low" }
+        "medium" = @{ model = "sonnet-4.5";  variant = "SONNET_4_5";      reasoningEffort = "medium" }
+        "high"   = @{ model = "opus-4.6";    variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
+    }
+}
+
+# Keyword patterns that escalate complexity
+$script:ComplexityEscalators = @(
+    "\b(architect|redesign|refactor.*entire|overhaul|migration)\b",
+    "\b(multi[- ]?module|cross[- ]?cutting|system[- ]?wide)\b",
+    "\b(breaking\s+change|backward.*compat|api.*redesign)\b",
+    "\b(security.*audit|vulnerability|encryption.*scheme|key.*rotation)\b",
+    "\b(consensus|determinism|state.*machine|genesis|upgrade.*handler)\b",
+    "\b(e2e.*test.*suite|integration.*framework|test.*infrastructure)\b"
+)
+
+# Keyword patterns that simplify complexity
+$script:ComplexitySimplifiers = @(
+    "\b(typo|typos|spelling|grammar)\b",
+    "\b(bump|upgrade)\s+(version|dep|dependency)\b",
+    "\b(readme|changelog|docs?\s+only)\b",
+    "\b(lint|format|prettier|eslint)\s*(fix|cleanup|config)?\b",
+    "\b(rename|move\s+file|copy\s+file)\b",
+    "\b(add\s+comment|update\s+comment)\b",
+    "\b(config\s+change|env\s+var|\.env)\b"
+)
+
+function Resolve-ComplexityTier {
+    <#
+    .SYNOPSIS Map task size + text signals to a complexity tier (low/medium/high).
+    .DESCRIPTION Mirrors task-complexity.mjs classifyComplexity() logic.
+    #>
+    param(
+        [string]$SizeLabel = "m",
+        [string]$Title = "",
+        [string]$Description = ""
+    )
+
+    $tier = $script:SizeToComplexity[$SizeLabel.ToLowerInvariant()]
+    if (-not $tier) { $tier = "medium" }
+
+    $text = "$Title $Description".Trim()
+    if (-not $text) {
+        return @{ tier = $tier; adjusted = $false; reason = "size=$SizeLabel" }
+    }
+
+    $escalatorHits = 0
+    $simplifierHits = 0
+    foreach ($pattern in $script:ComplexityEscalators) {
+        if ($text -match "(?i)$pattern") { $escalatorHits++ }
+    }
+    foreach ($pattern in $script:ComplexitySimplifiers) {
+        if ($text -match "(?i)$pattern") { $simplifierHits++ }
+    }
+
+    $adjusted = $false
+    $reason = "size=$SizeLabel"
+    if ($escalatorHits -gt 0 -and $simplifierHits -eq 0) {
+        if ($tier -eq "low")    { $tier = "medium"; $adjusted = $true; $reason += " → escalated" }
+        elseif ($tier -eq "medium") { $tier = "high"; $adjusted = $true; $reason += " → escalated" }
+    }
+    elseif ($simplifierHits -gt 0 -and $escalatorHits -eq 0) {
+        if ($tier -eq "high")   { $tier = "medium"; $adjusted = $true; $reason += " → simplified" }
+        elseif ($tier -eq "medium") { $tier = "low"; $adjusted = $true; $reason += " → simplified" }
+    }
+
+    return @{ tier = $tier; adjusted = $adjusted; reason = $reason }
+}
+
+function Resolve-ExecutorForComplexity {
+    <#
+    .SYNOPSIS Select the right executor model/variant for a task based on its complexity.
+    .DESCRIPTION Given a task and the base executor profile, returns an enhanced
+    profile with the optimal model/variant/reasoningEffort for the task's complexity tier.
+    .OUTPUTS Hashtable with: executor, variant, model, reasoningEffort, complexity
+    #>
+    param(
+        [Parameter(Mandatory)][object]$Task,
+        [Parameter(Mandatory)][hashtable]$BaseProfile
+    )
+
+    $complexityEnabled = Get-EnvBool -Name "COMPLEXITY_ROUTING_ENABLED" -Default $true
+    if (-not $complexityEnabled) {
+        return $BaseProfile
+    }
+
+    $sizeInfo = Get-TaskSizeInfo -Task $Task
+    $title = if ($Task.title) { $Task.title } else { "" }
+    $description = if ($Task.description) { $Task.description } else { "" }
+
+    $complexity = Resolve-ComplexityTier -SizeLabel $sizeInfo.label -Title $title -Description $description
+    $executorType = if ($BaseProfile.executor) { $BaseProfile.executor.ToUpperInvariant() } else { "CODEX" }
+
+    # Get model profile for this tier + executor type
+    $models = $script:ComplexityModels[$executorType]
+    if (-not $models) { $models = $script:ComplexityModels["CODEX"] }
+    $modelProfile = $models[$complexity.tier]
+    if (-not $modelProfile) { $modelProfile = $models["medium"] }
+
+    # Check env overrides per tier
+    $prefix = "COMPLEXITY_ROUTING_${executorType}_$($complexity.tier.ToUpperInvariant())"
+    $envModel = $env:("${prefix}_MODEL")
+    $envVariant = $env:("${prefix}_VARIANT")
+
+    $result = @{
+        name            = $BaseProfile.name
+        executor        = $BaseProfile.executor
+        variant         = if ($envVariant) { $envVariant } elseif ($modelProfile.variant) { $modelProfile.variant } else { $BaseProfile.variant }
+        weight          = $BaseProfile.weight
+        role            = $BaseProfile.role
+        enabled         = $BaseProfile.enabled
+        model           = if ($envModel) { $envModel } else { $modelProfile.model }
+        reasoningEffort = $modelProfile.reasoningEffort
+        complexity      = $complexity
+    }
+
+    Write-Log ("Complexity routing: {0} (size={1}, complexity={2}, model={3}, reasoning={4})" -f `
+        $title.Substring(0, [Math]::Min(50, $title.Length)),
+        $sizeInfo.label, $complexity.tier, $result.model, $result.reasoningEffort) -Level "INFO"
+
+    return $result
+}
+
 function Get-WorkstationRegistryPath {
     if ($env:VE_WORKSPACE_REGISTRY_PATH) {
         return $env:VE_WORKSPACE_REGISTRY_PATH
@@ -2869,6 +3012,86 @@ function Sync-TrackedAttempts {
     }
 }
 
+function Prune-CompletedTaskWorkspaces {
+    <#
+    .SYNOPSIS Clean up workspaces and worktrees for completed/cancelled tasks.
+    .DESCRIPTION
+    Removes VK workspace directories and prunes git worktrees for tasks that are
+    already done or cancelled to prevent zombie workspaces and stale worktree errors.
+    #>
+
+    # Get all completed/cancelled tasks
+    $completedTasks = Get-VKTasks -Status "done"
+    $cancelledTasks = Get-VKTasks -Status "cancelled"
+    $allDoneTasks = @($completedTasks) + @($cancelledTasks)
+
+    if ($allDoneTasks.Count -eq 0) {
+        Write-Log "No completed/cancelled tasks to clean up" -Level "DEBUG"
+        return
+    }
+
+    Write-Log "Checking $($allDoneTasks.Count) completed/cancelled tasks for workspace cleanup..." -Level "DEBUG"
+
+    # Prune stale git worktrees first (this cleans up orphaned metadata)
+    try {
+        $pruneOutput = git worktree prune -v 2>&1
+        if ($pruneOutput -and $pruneOutput -ne "") {
+            Write-Log "Pruned stale git worktrees: $pruneOutput" -Level "INFO"
+        }
+    }
+    catch {
+        Write-Log "Failed to prune git worktrees: $_" -Level "WARN"
+    }
+
+    # Clean up VK workspace directories for completed tasks
+    $vkWorkspaceBase = "$env:TEMP\vibe-kanban\worktrees"
+    if (-not (Test-Path $vkWorkspaceBase)) {
+        Write-Log "VK workspace directory not found: $vkWorkspaceBase" -Level "DEBUG"
+        return
+    }
+
+    $cleanedCount = 0
+    foreach ($task in $allDoneTasks) {
+        if (-not $task.id) { continue }
+
+        # VK workspace pattern: <taskid-prefix>-<slug>/
+        $taskPrefix = $task.id.Substring(0, [Math]::Min(4, $task.id.Length))
+        $workspaceDirs = Get-ChildItem -Path $vkWorkspaceBase -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "$taskPrefix-*" }
+
+        foreach ($dir in $workspaceDirs) {
+            $fullPath = $dir.FullName
+            Write-Log "Removing workspace for completed task $($task.id.Substring(0,8)): $($dir.Name)" -Level "INFO"
+
+            if (-not $DryRun) {
+                try {
+                    Remove-Item -Path $fullPath -Recurse -Force -ErrorAction Stop
+                    $cleanedCount++
+                }
+                catch {
+                    Write-Log "Failed to remove workspace $($dir.Name): $_" -Level "WARN"
+                }
+            }
+            else {
+                Write-Log "[DRY-RUN] Would remove: $fullPath" -Level "INFO"
+                $cleanedCount++
+            }
+        }
+    }
+
+    if ($cleanedCount -gt 0) {
+        Write-Log "Cleaned up $cleanedCount workspace(s) for completed/cancelled tasks" -Level "OK"
+
+        # Prune worktrees again after cleanup to remove references
+        try {
+            git worktree prune -v 2>&1 | Out-Null
+        }
+        catch {
+            # Silently ignore - already logged above
+        }
+    }
+}
+
 function Process-CompletedAttempts {
     <#
     .SYNOPSIS Check tracked attempts for PR status and handle merging.
@@ -4191,11 +4414,17 @@ function Fill-ParallelSlots {
         }
         $shortTitle = $title.Substring(0, [Math]::Min(70, $title.Length))
         $targetBranch = Get-TaskUpstreamBranch -Task $task
-        $nextExec = Get-CurrentExecutorProfile
-        Write-Log "Submitting: $shortTitle [$($nextExec.executor)] (base: $targetBranch)" -Level "ACTION"
+        $baseExec = Get-CurrentExecutorProfile
+        $nextExec = Resolve-ExecutorForComplexity -Task $task -BaseProfile $baseExec
+        $complexityTag = if ($nextExec.complexity) { " complexity=$($nextExec.complexity.tier)" } else { "" }
+        Write-Log "Submitting: $shortTitle [$($nextExec.executor)/$($nextExec.model)]$complexityTag (base: $targetBranch)" -Level "ACTION"
 
         if (-not $DryRun) {
-            $attempt = Submit-VKTaskAttempt -TaskId $task.id -TargetBranch $targetBranch
+            $execOverride = @{
+                executor = $nextExec.executor
+                variant  = $nextExec.variant
+            }
+            $attempt = Submit-VKTaskAttempt -TaskId $task.id -TargetBranch $targetBranch -ExecutorOverride $execOverride
             if ($attempt) {
                 # Move task to inprogress on VK board when agent starts
                 Update-VKTaskStatus -TaskId $task.id -Status "inprogress" | Out-Null
@@ -4208,6 +4437,9 @@ function Fill-ParallelSlots {
                     status               = "running"
                     name                 = $title
                     executor             = $nextExec.executor
+                    model                = $nextExec.model
+                    reasoning_effort     = $nextExec.reasoningEffort
+                    complexity_tier      = if ($nextExec.complexity) { $nextExec.complexity.tier } else { $null }
                     task_size_cached     = $sizeInfo.label
                     task_size_weight     = $sizeInfo.weight
                     task_priority_cached = $priorityInfo.label
@@ -4235,7 +4467,7 @@ function Fill-ParallelSlots {
             }
         }
         else {
-            Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor) (base: $targetBranch)" -Level "ACTION"
+            Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor)/$($nextExec.model)$complexityTag (base: $targetBranch)" -Level "ACTION"
             # Still advance the cycling index in dry-run for accurate preview
             $null = Get-NextExecutorProfile
             $remainingCapacity -= $requiredWeight
