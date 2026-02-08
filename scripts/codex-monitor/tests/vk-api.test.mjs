@@ -199,7 +199,8 @@ describe("fetchVk", () => {
       const result = await fetchVk("/api/tasks", { timeoutMs: 100 });
 
       expect(result).toBeNull();
-      expect(mockConsoleWarn).toHaveBeenCalled();
+      // Abort errors are intentionally silenced (not logged)
+      expect(mockConsoleWarn).not.toHaveBeenCalled();
     });
 
     it("should handle network errors", async () => {
@@ -237,8 +238,14 @@ describe("fetchVk", () => {
 
       await fetchVk("/api/tasks");
 
+      // fetchVk truncates the response text to 200 chars via .slice(0, 200)
+      const expectedTruncated = "A".repeat(200);
       expect(mockConsoleWarn).toHaveBeenCalledWith(
-        expect.stringMatching(/.*200\)$/), // Truncated to 200 chars
+        expect.stringContaining(expectedTruncated),
+      );
+      // Full 500-char text should NOT appear in the log
+      expect(mockConsoleWarn).not.toHaveBeenCalledWith(
+        expect.stringContaining(longText),
       );
     });
   });
