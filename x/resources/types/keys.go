@@ -52,10 +52,10 @@ func AllocationKey(allocationID string) []byte {
 
 // AllocationEventKey returns the key for an allocation event.
 func AllocationEventKey(allocationID string, sequence uint64) []byte {
-	seq := make([]byte, 8)
-	binary.BigEndian.PutUint64(seq, sequence)
-	key := append([]byte(allocationID), 0x00)
-	key = append(key, seq...)
+	key := make([]byte, 0, 1+len(allocationID)+1+8)
+	key = append(key, []byte(allocationID)...)
+	key = append(key, 0x00)
+	key = binary.BigEndian.AppendUint64(key, sequence)
 	return append(AllocationEventKeyPrefix, key...)
 }
 
@@ -67,10 +67,10 @@ func AllocationEventPrefix(allocationID string) []byte {
 
 // SlashingEventKey returns the key for a slashing event.
 func SlashingEventKey(allocationID string, sequence uint64) []byte {
-	seq := make([]byte, 8)
-	binary.BigEndian.PutUint64(seq, sequence)
-	key := append([]byte(allocationID), 0x00)
-	key = append(key, seq...)
+	key := make([]byte, 0, 1+len(allocationID)+1+8)
+	key = append(key, []byte(allocationID)...)
+	key = append(key, 0x00)
+	key = binary.BigEndian.AppendUint64(key, sequence)
 	return append(SlashingEventKeyPrefix, key...)
 }
 
@@ -89,8 +89,8 @@ func AllocationProviderPrefix(provider string) []byte {
 
 // PendingAllocationKey indexes pending allocations by expiry.
 func PendingAllocationKey(expiryUnix uint64, allocationID string) []byte {
-	seq := make([]byte, 8)
-	binary.BigEndian.PutUint64(seq, expiryUnix)
+	seq := make([]byte, 0, 9+len(allocationID))
+	seq = binary.BigEndian.AppendUint64(seq, expiryUnix)
 	seq = append(seq, 0x00)
 	seq = append(seq, []byte(allocationID)...)
 	return append(PendingAllocationKeyPrefix, seq...)
@@ -98,8 +98,8 @@ func PendingAllocationKey(expiryUnix uint64, allocationID string) []byte {
 
 // PendingAllocationPrefixByTime returns prefix up to time.
 func PendingAllocationPrefixByTime(expiryUnix uint64) []byte {
-	seq := make([]byte, 8)
-	binary.BigEndian.PutUint64(seq, expiryUnix)
+	seq := make([]byte, 0, 8)
+	seq = binary.BigEndian.AppendUint64(seq, expiryUnix)
 	return append(PendingAllocationKeyPrefix, seq...)
 }
 
