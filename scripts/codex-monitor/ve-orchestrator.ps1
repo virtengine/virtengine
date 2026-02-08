@@ -237,6 +237,16 @@ function Get-EnvBool {
     }
 }
 
+function Get-EnvString {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Default = ""
+    )
+    $value = $env:$Name
+    if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
+    return $value.Trim()
+}
+
 function Request-OrchestratorStop {
     param([string]$Reason = "shutdown")
     if ($script:StopRequested) { return }
@@ -636,6 +646,7 @@ function Initialize-CISweepConfig {
     $script:CopilotRateLimitCooldownMin = Get-EnvInt -Name "COPILOT_RATE_LIMIT_COOLDOWN_MIN" -Default 120 -Min 30
     $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
     $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
+    $script:CodexMonitorTaskUpstream = Get-EnvString -Name "CODEX_MONITOR_TASK_UPSTREAM" -Default "origin/ve/codex-monitor-generic"
 }
 
 function Initialize-CISweepState {
@@ -1110,6 +1121,83 @@ function Get-TaskTextBlob {
         $parts += ($labels -join " ")
     }
     return ($parts -join "`n")
+}
+
+function Normalize-BranchName {
+    param([string]$Branch)
+    if ([string]::IsNullOrWhiteSpace($Branch)) { return $null }
+    return $Branch.Trim()
+}
+
+function Extract-UpstreamFromText {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+    $match = [regex]::Match($Text, "\b(?:upstream|base|target)(?:_branch| branch)?\s*[:=]\s*([A-Za-z0-9._/-]+)", "IgnoreCase")
+    if (-not $match.Success) { return $null }
+    return Normalize-BranchName -Branch $match.Groups[1].Value
+}
+
+function Test-IsCodexMonitorTask {
+    param([Parameter(Mandatory)][object]$Task)
+    $text = (Get-TaskTextBlob -Task $Task).ToLowerInvariant()
+    if ($text -match "codex-monitor|codex monitor|@virtengine/codex-monitor|scripts/codex-monitor") { return $true }
+    return $false
+}
+
+function Get-TaskUpstreamBranch {
+    param([Parameter(Mandatory)][object]$Task)
+    $fields = @(
+        "target_branch",
+        "base_branch",
+        "upstream_branch",
+        "upstream",
+        "target",
+        "base",
+        "targetBranch",
+        "baseBranch"
+    )
+
+    foreach ($field in $fields) {
+        if ($Task.PSObject.Properties.Name -contains $field -and $Task.$field) {
+            $value = Normalize-BranchName -Branch $Task.$field
+            if ($value) { return $value }
+        }
+    }
+
+    if ($Task.metadata) {
+        foreach ($field in $fields) {
+            if ($Task.metadata.PSObject.Properties.Name -contains $field -and $Task.metadata.$field) {
+                $value = Normalize-BranchName -Branch $Task.metadata.$field
+                if ($value) { return $value }
+            }
+        }
+    }
+
+    $labels = @()
+    foreach ($field in @("labels", "label", "tags", "tag", "categories", "category")) {
+        $labels += Normalize-TaskLabelList -Labels $Task.$field
+    }
+    if ($Task.metadata) {
+        $labels += Normalize-TaskLabelList -Labels $Task.metadata.labels
+        $labels += Normalize-TaskLabelList -Labels $Task.metadata.tags
+    }
+    foreach ($label in $labels) {
+        if (-not $label) { continue }
+        $match = [regex]::Match($label.ToString(), "^(?:upstream|base|target)(?:_branch)?[:=]\s*([A-Za-z0-9._/-]+)$", "IgnoreCase")
+        if ($match.Success) {
+            $value = Normalize-BranchName -Branch $match.Groups[1].Value
+            if ($value) { return $value }
+        }
+    }
+
+    $fromText = Extract-UpstreamFromText -Text (Get-TaskTextBlob -Task $Task)
+    if ($fromText) { return $fromText }
+
+    if (Test-IsCodexMonitorTask -Task $Task) {
+        return $script:CodexMonitorTaskUpstream
+    }
+
+    return $script:VK_TARGET_BRANCH
 }
 
 function Get-TaskPriorityInfo {
@@ -3607,11 +3695,12 @@ function Fill-ParallelSlots {
             $task.title
         }
         $shortTitle = $title.Substring(0, [Math]::Min(70, $title.Length))
+        $targetBranch = Get-TaskUpstreamBranch -Task $task
         $nextExec = Get-CurrentExecutorProfile
-        Write-Log "Submitting: $shortTitle [$($nextExec.executor)]" -Level "ACTION"
+        Write-Log "Submitting: $shortTitle [$($nextExec.executor)] (base: $targetBranch)" -Level "ACTION"
 
         if (-not $DryRun) {
-            $attempt = Submit-VKTaskAttempt -TaskId $task.id
+            $attempt = Submit-VKTaskAttempt -TaskId $task.id -TargetBranch $targetBranch
             if ($attempt) {
                 # Move task to inprogress on VK board when agent starts
                 Update-VKTaskStatus -TaskId $task.id -Status "inprogress" | Out-Null
@@ -3619,6 +3708,7 @@ function Fill-ParallelSlots {
                 $script:TrackedAttempts[$attempt.id] = @{
                     task_id   = $task.id
                     branch    = $attempt.branch
+                    target_branch = $targetBranch
                     pr_number = $null
                     status    = "running"
                     name      = $title
@@ -3650,7 +3740,7 @@ function Fill-ParallelSlots {
             }
         }
         else {
-            Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor)" -Level "ACTION"
+            Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor) (base: $targetBranch)" -Level "ACTION"
             # Still advance the cycling index in dry-run for accurate preview
             $null = Get-NextExecutorProfile
             $remainingCapacity -= $requiredWeight

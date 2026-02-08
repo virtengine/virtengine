@@ -1552,7 +1552,7 @@ async function getRepoId() {
  * POST /api/task-attempts/:id/rebase
  * Rebases the attempt's worktree onto target branch.
  */
-async function rebaseAttempt(attemptId) {
+async function rebaseAttempt(attemptId, baseBranch) {
   const repoId = await getRepoId();
   if (!repoId) {
     console.warn("[monitor] Cannot rebase: repo_id not available");
@@ -1562,9 +1562,14 @@ async function rebaseAttempt(attemptId) {
       message: "repo_id not available",
     };
   }
+  const body = { repo_id: repoId };
+  if (baseBranch) {
+    body.old_base_branch = baseBranch;
+    body.new_base_branch = baseBranch;
+  }
   const res = await fetchVk(`/api/task-attempts/${attemptId}/rebase`, {
     method: "POST",
-    body: { repo_id: repoId },
+    body,
     timeoutMs: 60000,
   });
   return res;
@@ -1590,7 +1595,7 @@ async function createPRViaVK(attemptId, prOpts = {}) {
     title: prOpts.title || "",
     description: prOpts.description || "",
     draft: prOpts.draft ?? true,
-    base: prOpts.base || "origin/main",
+    base: prOpts.base || process.env.VK_TARGET_BRANCH || "origin/main",
   };
   const startMs = Date.now();
   const res = await fetchVk(`/api/task-attempts/${attemptId}/pr`, {
@@ -2821,6 +2826,137 @@ async function runMergeStrategyAnalysis(ctx) {
 
 // ── Smart PR creation flow ──────────────────────────────────────────────────
 
+const DEFAULT_TARGET_BRANCH = process.env.VK_TARGET_BRANCH || "origin/main";
+const DEFAULT_CODEX_MONITOR_UPSTREAM =
+  process.env.CODEX_MONITOR_TASK_UPSTREAM || "origin/ve/codex-monitor-generic";
+
+function normalizeBranchName(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  return trimmed ? trimmed : null;
+}
+
+function extractUpstreamFromText(text) {
+  if (!text) return null;
+  const match = String(text).match(
+    /\b(?:upstream|base|target)(?:_branch| branch)?\s*[:=]\s*([A-Za-z0-9._/-]+)/i,
+  );
+  if (!match) return null;
+  return normalizeBranchName(match[1]);
+}
+
+function collectTaskLabels(task) {
+  const labels = [];
+  if (!task) return labels;
+  for (const field of ["labels", "label", "tags", "tag", "categories", "category"]) {
+    const value = task[field];
+    if (!value) continue;
+    if (typeof value === "string") {
+      labels.push(value);
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (!item) continue;
+        if (typeof item === "string") labels.push(item);
+        else if (item.name) labels.push(item.name);
+        else if (item.label) labels.push(item.label);
+        else if (item.title) labels.push(item.title);
+      }
+    }
+  }
+  if (task.metadata) {
+    for (const field of ["labels", "tags"]) {
+      const value = task.metadata[field];
+      if (!value) continue;
+      if (typeof value === "string") labels.push(value);
+      else if (Array.isArray(value)) labels.push(...value);
+    }
+  }
+  return labels;
+}
+
+function getTaskTextBlob(task) {
+  const parts = [];
+  if (!task) return "";
+  for (const field of ["title", "name", "description", "body", "details", "content"]) {
+    const value = task[field];
+    if (value) parts.push(value);
+  }
+  const labels = collectTaskLabels(task);
+  if (labels.length) parts.push(labels.join(" "));
+  return parts.join("\n");
+}
+
+function resolveUpstreamFromTask(task) {
+  if (!task) return null;
+
+  const directFields = [
+    "target_branch",
+    "base_branch",
+    "upstream_branch",
+    "upstream",
+    "target",
+    "base",
+    "targetBranch",
+    "baseBranch",
+  ];
+  for (const field of directFields) {
+    if (task[field]) return normalizeBranchName(task[field]);
+  }
+  if (task.metadata) {
+    for (const field of directFields) {
+      if (task.metadata[field]) return normalizeBranchName(task.metadata[field]);
+    }
+  }
+
+  for (const label of collectTaskLabels(task)) {
+    const match = String(label).match(
+      /^(?:upstream|base|target)(?:_branch)?[:=]\s*([A-Za-z0-9._/-]+)$/i,
+    );
+    if (match) return normalizeBranchName(match[1]);
+  }
+
+  const fromText = extractUpstreamFromText(getTaskTextBlob(task));
+  if (fromText) return fromText;
+
+  const text = getTaskTextBlob(task).toLowerCase();
+  if (
+    text.includes("codex-monitor") ||
+    text.includes("codex monitor") ||
+    text.includes("@virtengine/codex-monitor") ||
+    text.includes("scripts/codex-monitor")
+  ) {
+    return DEFAULT_CODEX_MONITOR_UPSTREAM;
+  }
+
+  return null;
+}
+
+function resolveAttemptTargetBranch(attempt, task) {
+  if (attempt) {
+    const candidate =
+      attempt.target_branch ||
+      attempt.targetBranch ||
+      attempt.base_branch ||
+      attempt.baseBranch ||
+      attempt.upstream_branch;
+    const normalized = normalizeBranchName(candidate);
+    if (normalized) return normalized;
+    if (Array.isArray(attempt.repos) && attempt.repos.length) {
+      const repoTarget =
+        attempt.repos[0].target_branch || attempt.repos[0].targetBranch;
+      const repoNorm = normalizeBranchName(repoTarget);
+      if (repoNorm) return repoNorm;
+    }
+  }
+
+  const fromTask = resolveUpstreamFromTask(task);
+  if (fromTask) return fromTask;
+
+  return DEFAULT_TARGET_BRANCH;
+}
+
 /**
  * Intelligent multi-step PR creation using the VK API:
  *
@@ -2891,9 +3027,29 @@ async function smartPRFlow(attemptId, shortId, status) {
       return;
     }
 
-    // ── Step 3: Rebase onto main ────────────────────────────────
-    console.log(`[monitor] ${tag}: rebasing onto main...`);
-    const rebaseResult = await rebaseAttempt(attemptId);
+    // ── Resolve target branch (task-level upstream overrides) ───
+    const attempt = await getAttemptInfo(attemptId);
+    let taskData = null;
+    if (attempt?.task_id) {
+      try {
+        const taskRes = await fetchVk(`/api/tasks/${attempt.task_id}`);
+        if (taskRes?.success && taskRes.data) {
+          taskData = taskRes.data;
+          attempt.task_title = attempt.task_title || taskRes.data.title;
+          attempt.task_description =
+            taskRes.data.description || taskRes.data.body || "";
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+    const targetBranch = resolveAttemptTargetBranch(attempt, taskData);
+
+    // ── Step 3: Rebase onto target branch ────────────────────────
+    console.log(
+      `[monitor] ${tag}: rebasing onto ${targetBranch}...`,
+    );
+    const rebaseResult = await rebaseAttempt(attemptId, targetBranch);
 
     if (rebaseResult && !rebaseResult.success) {
       if (isStale) {
@@ -3002,21 +3158,6 @@ Return a short summary of what you did.`;
     }
 
     // ── Step 4: Build PR title & description from VK task ─────
-    const attempt = await getAttemptInfo(attemptId);
-
-    // Enrich attempt with task title & description from VK if available
-    if (attempt?.task_id && !attempt.task_description) {
-      try {
-        const taskRes = await fetchVk(`/api/tasks/${attempt.task_id}`);
-        if (taskRes?.success && taskRes.data) {
-          attempt.task_title = attempt.task_title || taskRes.data.title;
-          attempt.task_description =
-            taskRes.data.description || taskRes.data.body || "";
-        }
-      } catch {
-        /* best effort — fall back to branch/shortId */
-      }
-    }
 
     let prTitle = attempt?.task_title || attempt?.branch || shortId;
     prTitle = prTitle.replace(/\s*\(vibe-kanban\)$/i, "");
@@ -3071,6 +3212,7 @@ Return a short summary of what you did.`;
       title: prTitle,
       description: prDescription,
       draft: false,
+      base: targetBranch,
     });
 
     if (prResult?.success) {
