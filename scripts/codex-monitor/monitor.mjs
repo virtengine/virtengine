@@ -1,5 +1,5 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, watch } from "node:fs";
+import { existsSync, watch, writeFileSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -23,6 +23,7 @@ import {
   stopTelegramBot,
   injectMonitorFunctions,
   notify,
+  restoreLiveDigest,
 } from "./telegram-bot.mjs";
 import {
   execPrimaryPrompt,
@@ -110,6 +111,8 @@ let {
   restartDelayMs,
   maxRestarts,
   logDir,
+  logMaxSizeMb,
+  logCleanupIntervalMin,
   watchEnabled,
   watchPath: configWatchPath,
   echoLogs,
@@ -145,6 +148,11 @@ let {
   scheduler: executorScheduler,
   agentSdk,
   envPaths,
+  dependabotAutoMerge,
+  dependabotAutoMergeIntervalMin,
+  dependabotMergeMethod,
+  dependabotAuthors,
+  telegramVerbosity,
 } = config;
 
 void initPrimaryAgent(config);
@@ -159,7 +167,6 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
-    : "disabled via --no-codex";
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
 
@@ -207,6 +214,29 @@ let envWatcherDebounce = null;
 const SELF_RESTART_EXIT_CODE = 75;
 let selfWatcher = null;
 let selfWatcherDebounce = null;
+let pendingSelfRestart = null; // filename that triggered a deferred restart
+
+// ── Self-restart marker: detect if this process was spawned by a code-change restart
+const selfRestartMarkerPath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-self-restart.marker",
+);
+let isSelfRestart = false;
+try {
+  if (existsSync(selfRestartMarkerPath)) {
+    const ts = Number(
+      (await import("node:fs")).readFileSync(selfRestartMarkerPath, "utf8"),
+    );
+    // Marker is valid if written within the last 30 seconds
+    if (Date.now() - ts < 30_000) {
+      isSelfRestart = true;
+      console.log("[monitor] detected self-restart marker — suppressing startup notifications");
+    }
+    // Clean up marker regardless
+    try { (await import("node:fs")).unlinkSync(selfRestartMarkerPath); } catch { /* best effort */ }
+  }
+} catch { /* first start or missing file */ }
+
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
@@ -1933,6 +1963,19 @@ async function isBranchMerged(branch) {
 }
 
 /**
+ * Session-level cache of task IDs already confirmed as done.
+ * Prevents re-processing tasks every cycle when VK API has propagation delay.
+ * @type {Set<string>}
+ */
+const mergedTaskCache = new Set();
+
+/** Maximum number of tasks to process per sweep (prevents thundering herd) */
+const MERGE_CHECK_BATCH_SIZE = 10;
+
+/** Small delay between GitHub API calls to avoid rate-limiting (ms) */
+const MERGE_CHECK_THROTTLE_MS = 1500;
+
+/**
  * Periodic check: find tasks in "inreview" status, check if their PRs
  * have been merged, and automatically move them to "done" status.
  */
@@ -1952,14 +1995,21 @@ async function checkMergedPRsAndUpdateTasks() {
         }
       }
     });
-    const reviewTasks = Array.from(taskMap.values());
+    const reviewTasks = Array.from(taskMap.values()).filter(
+      (entry) => !mergedTaskCache.has(entry.task.id),
+    );
     if (reviewTasks.length === 0) {
-      console.log("[monitor] No tasks in review/inprogress status");
+      console.log("[monitor] No tasks in review/inprogress status (after dedup)");
       return { checked: 0, movedDone: 0, movedReview: 0 };
     }
 
+    const totalCandidates = reviewTasks.length;
+    const batch = reviewTasks.slice(0, MERGE_CHECK_BATCH_SIZE);
     console.log(
-      `[monitor] Found ${reviewTasks.length} tasks in review/inprogress`,
+      `[monitor] Found ${totalCandidates} tasks in review/inprogress` +
+        (totalCandidates > MERGE_CHECK_BATCH_SIZE
+          ? ` (processing first ${MERGE_CHECK_BATCH_SIZE})`
+          : ""),
     );
 
     // For each task, get its workspace/branch and check if merged
@@ -1968,14 +2018,48 @@ async function checkMergedPRsAndUpdateTasks() {
       ? statusData.active_attempts
       : Object.values(statusData?.attempts || {});
 
+    // Also fetch VK task-attempts as fallback (covers archived attempts
+    // that are no longer in the orchestrator's status file)
+    let vkAttempts = [];
+    try {
+      const vkRes = await fetchVk("/api/task-attempts");
+      const vkData = vkRes?.data ?? vkRes;
+      if (Array.isArray(vkData)) {
+        vkAttempts = vkData;
+      }
+    } catch {
+      /* best-effort fallback */
+    }
+
     let movedCount = 0;
     let movedReviewCount = 0;
 
-    for (const entry of reviewTasks) {
+    for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
-      // Find the attempt associated with this task
-      const attempt = attempts.find((a) => a?.task_id === task.id);
+      // Find the attempt associated with this task — first in local status,
+      // then fall back to the VK API (which includes archived attempts)
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        // VK API fallback: find the most recent attempt for this task
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) {
+          attempt = vkMatch[0];
+          console.log(
+            `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
+          );
+        } else {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+          );
+        }
+      }
       const branch =
         attempt?.branch ||
         task?.branch ||
@@ -2004,6 +2088,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const success = await updateTaskStatus(task.id, "done");
         if (success) {
           movedCount++;
+          mergedTaskCache.add(task.id);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
@@ -2036,6 +2121,11 @@ async function checkMergedPRsAndUpdateTasks() {
         continue;
       }
 
+      // Throttle between GitHub API calls to avoid rate-limiting
+      if (MERGE_CHECK_THROTTLE_MS > 0) {
+        await new Promise((r) => setTimeout(r, MERGE_CHECK_THROTTLE_MS));
+      }
+
       // Check if the branch has been merged
       const merged = await isBranchMerged(branch);
       if (merged) {
@@ -2046,6 +2136,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const success = await updateTaskStatus(task.id, "done");
         if (success) {
           movedCount++;
+          mergedTaskCache.add(task.id);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
@@ -2073,9 +2164,10 @@ async function checkMergedPRsAndUpdateTasks() {
       );
     }
     return {
-      checked: reviewTasks.length,
+      checked: batch.length,
       movedDone: movedCount,
       movedReview: movedReviewCount,
+      cached: mergedTaskCache.size,
     };
   } catch (err) {
     console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
@@ -2086,6 +2178,184 @@ async function checkMergedPRsAndUpdateTasks() {
 async function reconcileTaskStatuses(reason = "manual") {
   console.log(`[monitor] Reconciling VK tasks (${reason})...`);
   return await checkMergedPRsAndUpdateTasks();
+}
+
+// ── Dependabot / Bot PR Auto-Merge ──────────────────────────────────────────
+
+/** Set of PR numbers we've already attempted to merge this session */
+const dependabotMergeAttempted = new Set();
+
+/**
+ * Check for open Dependabot (or other bot) PRs where all CI checks have passed,
+ * and auto-merge them.
+ *
+ * Flow:
+ *   1. `gh pr list` filtered by bot authors
+ *   2. For each PR, `gh pr checks` to verify all CI passed
+ *   3. `gh pr merge --squash` (or configured method)
+ *   4. Notify via Telegram
+ */
+async function checkAndMergeDependabotPRs() {
+  if (!dependabotAutoMerge) return;
+  if (!repoSlug) {
+    console.warn("[dependabot] auto-merge disabled — no repo slug configured");
+    return;
+  }
+
+  const authorFilter = dependabotAuthors.map((a) => `author:${a}`).join(" ");
+
+  try {
+    // List open PRs by bot authors
+    const listCmd = `gh pr list --repo ${repoSlug} --state open --json number,title,author,headRefName,statusCheckRollup --limit 20`;
+    const listResult = execSync(listCmd, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 30_000,
+    }).trim();
+
+    const prs = JSON.parse(listResult || "[]");
+    if (prs.length === 0) return;
+
+    // Filter to only bot-authored PRs
+    const botPRs = prs.filter((pr) => {
+      const login = pr.author?.login || pr.author?.name || "";
+      return dependabotAuthors.some(
+        (a) =>
+          login === a ||
+          login === a.replace("app/", "") ||
+          a === `app/${login}`,
+      );
+    });
+
+    if (botPRs.length === 0) return;
+    console.log(
+      `[dependabot] found ${botPRs.length} bot PR(s): ${botPRs.map((p) => `#${p.number}`).join(", ")}`,
+    );
+
+    for (const pr of botPRs) {
+      if (dependabotMergeAttempted.has(pr.number)) continue;
+
+      try {
+        // Check CI status — all checks must pass
+        const checksCmd = `gh pr checks ${pr.number} --repo ${repoSlug} --json name,state,conclusion --required`;
+        let checksResult;
+        try {
+          checksResult = execSync(checksCmd, {
+            cwd: repoRoot,
+            encoding: "utf8",
+            timeout: 15_000,
+          }).trim();
+        } catch (checksErr) {
+          // gh pr checks returns exit code 1 if any check failed/pending
+          // Parse the output anyway if available
+          checksResult = checksErr.stdout?.trim() || "";
+          if (!checksResult) {
+            console.log(
+              `[dependabot] PR #${pr.number}: checks still pending or failed`,
+            );
+            continue;
+          }
+        }
+
+        let checks;
+        try {
+          checks = JSON.parse(checksResult || "[]");
+        } catch {
+          // JSON parse failed — might be old gh version, try simpler check
+          console.log(
+            `[dependabot] PR #${pr.number}: could not parse checks output`,
+          );
+          continue;
+        }
+
+        // All required checks must be in a passing state
+        const allPassed =
+          checks.length > 0 &&
+          checks.every(
+            (c) =>
+              c.conclusion === "SUCCESS" ||
+              c.conclusion === "success" ||
+              c.conclusion === "NEUTRAL" ||
+              c.conclusion === "neutral" ||
+              c.conclusion === "SKIPPED" ||
+              c.conclusion === "skipped",
+          );
+
+        if (!allPassed) {
+          const pending = checks.filter(
+            (c) =>
+              !c.conclusion ||
+              c.state === "PENDING" ||
+              c.state === "IN_PROGRESS" ||
+              c.state === "QUEUED",
+          );
+          const failed = checks.filter(
+            (c) =>
+              c.conclusion === "FAILURE" ||
+              c.conclusion === "failure" ||
+              c.conclusion === "ERROR" ||
+              c.conclusion === "error" ||
+              c.conclusion === "TIMED_OUT" ||
+              c.conclusion === "timed_out",
+          );
+          if (failed.length > 0) {
+            console.log(
+              `[dependabot] PR #${pr.number}: ${failed.length} check(s) failed — skipping`,
+            );
+            dependabotMergeAttempted.add(pr.number); // don't retry failed
+          } else if (pending.length > 0) {
+            console.log(
+              `[dependabot] PR #${pr.number}: ${pending.length} check(s) still pending`,
+            );
+          } else if (checks.length === 0) {
+            console.log(
+              `[dependabot] PR #${pr.number}: no required checks found — waiting`,
+            );
+          }
+          continue;
+        }
+
+        // All checks passed — merge!
+        console.log(
+          `[dependabot] PR #${pr.number}: all ${checks.length} check(s) passed — merging (${dependabotMergeMethod})`,
+        );
+        dependabotMergeAttempted.add(pr.number);
+
+        const mergeCmd = `gh pr merge ${pr.number} --repo ${repoSlug} --${dependabotMergeMethod} --delete-branch --auto`;
+        try {
+          execSync(mergeCmd, {
+            cwd: repoRoot,
+            encoding: "utf8",
+            timeout: 30_000,
+          });
+          console.log(`[dependabot] ✅ PR #${pr.number} merged: ${pr.title}`);
+          void sendTelegramMessage(
+            `✅ Auto-merged bot PR #${pr.number}: ${pr.title}`,
+          );
+        } catch (mergeErr) {
+          const errMsg = mergeErr.stderr || mergeErr.message || "";
+          console.warn(
+            `[dependabot] merge failed for PR #${pr.number}: ${errMsg.slice(0, 200)}`,
+          );
+          // If auto-merge was enabled (queued), that's fine — gh returns success for --auto
+          if (errMsg.includes("auto-merge")) {
+            console.log(
+              `[dependabot] PR #${pr.number}: auto-merge enabled, will merge when protection rules are met`,
+            );
+            void sendTelegramMessage(
+              `🔄 Auto-merge enabled for bot PR #${pr.number}: ${pr.title}`,
+            );
+          }
+        }
+      } catch (prErr) {
+        console.warn(
+          `[dependabot] error processing PR #${pr.number}: ${prErr.message || prErr}`,
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(`[dependabot] error listing bot PRs: ${err.message || err}`);
+  }
 }
 
 // ── Merge Strategy Analysis ─────────────────────────────────────────────────
@@ -3020,7 +3290,15 @@ async function sendTelegramMessage(text, options = {}) {
     }
   }
 
-  // Route through batching system
+  // Route through batching system — apply verbosity filter first.
+  // minimal: only priority 1-2 (critical + error)
+  // summary: priority 1-4 (everything except debug) — DEFAULT
+  // detailed: priority 1-5 (everything)
+  const maxPriority =
+    telegramVerbosity === "minimal" ? 2 :
+    telegramVerbosity === "detailed" ? 5 : 4;
+  if (priority > maxPriority) return; // filtered out by verbosity setting
+
   return notify(text, priority, {
     category,
     silent: options.silent,
@@ -3465,13 +3743,15 @@ async function startTelegramNotifier() {
     ".cache",
     "ve-last-notifier-start.txt",
   );
-  let suppressStartup = false;
-  try {
-    const prev = await readFile(lastStartPath, "utf8");
-    const elapsed = Date.now() - Number(prev);
-    if (elapsed < 60_000) suppressStartup = true;
-  } catch {
-    /* first start or missing file */
+  let suppressStartup = isSelfRestart;
+  if (!suppressStartup) {
+    try {
+      const prev = await readFile(lastStartPath, "utf8");
+      const elapsed = Date.now() - Number(prev);
+      if (elapsed < 60_000) suppressStartup = true;
+    } catch {
+      /* first start or missing file */
+    }
   }
   await writeFile(lastStartPath, String(Date.now())).catch(() => {});
 
@@ -3748,6 +4028,65 @@ async function triggerTaskPlannerViaCodex(reason, { notify = true } = {}) {
 
 async function ensureLogDir() {
   await mkdir(logDir, { recursive: true });
+}
+
+/**
+ * Truncate the log directory to stay within logMaxSizeMb.
+ * Deletes oldest files first until total size is under the limit.
+ * Returns { deletedCount, freedBytes, totalBefore, totalAfter }.
+ */
+async function truncateOldLogs() {
+  if (!logMaxSizeMb || logMaxSizeMb <= 0) return { deletedCount: 0, freedBytes: 0 };
+  const { readdir, stat: fsStat } = await import("node:fs/promises");
+  const maxBytes = logMaxSizeMb * 1024 * 1024;
+  let entries;
+  try {
+    entries = await readdir(logDir);
+  } catch {
+    return { deletedCount: 0, freedBytes: 0 };
+  }
+  // Gather file info
+  const files = [];
+  for (const name of entries) {
+    const filePath = resolve(logDir, name);
+    try {
+      const s = await fsStat(filePath);
+      if (s.isFile()) {
+        files.push({ name, path: filePath, size: s.size, mtimeMs: s.mtimeMs });
+      }
+    } catch {
+      /* skip inaccessible files */
+    }
+  }
+  const totalBefore = files.reduce((sum, f) => sum + f.size, 0);
+  if (totalBefore <= maxBytes) {
+    return { deletedCount: 0, freedBytes: 0, totalBefore, totalAfter: totalBefore };
+  }
+  // Sort oldest first
+  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  let currentSize = totalBefore;
+  let deletedCount = 0;
+  let freedBytes = 0;
+  for (const f of files) {
+    if (currentSize <= maxBytes) break;
+    try {
+      await unlink(f.path);
+      currentSize -= f.size;
+      freedBytes += f.size;
+      deletedCount++;
+    } catch {
+      /* skip locked/active files */
+    }
+  }
+  const totalAfter = currentSize;
+  if (deletedCount > 0) {
+    const mbFreed = (freedBytes / 1024 / 1024).toFixed(1);
+    const mbAfter = (totalAfter / 1024 / 1024).toFixed(1);
+    console.log(
+      `[monitor] log rotation: deleted ${deletedCount} old log files, freed ${mbFreed} MB (${mbAfter} MB / ${logMaxSizeMb} MB limit)`,
+    );
+  }
+  return { deletedCount, freedBytes, totalBefore, totalAfter };
 }
 
 async function finalizeActiveLog(activePath, archivePath) {
@@ -4428,6 +4767,17 @@ function stopSelfWatcher() {
 }
 
 function selfRestartForSourceChange(filename) {
+  // Defer restart if the primary agent is mid-turn — don't interrupt user tasks
+  if (isPrimaryBusy()) {
+    if (!pendingSelfRestart) {
+      pendingSelfRestart = filename;
+      console.log(
+        `\n[monitor] source file changed: ${filename} — deferring restart (primary agent busy)`,
+      );
+    }
+    return;
+  }
+  pendingSelfRestart = null;
   console.log(`\n[monitor] source file changed: ${filename}`);
   console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
   shuttingDown = true;
@@ -4444,9 +4794,30 @@ function selfRestartForSourceChange(filename) {
     }, 3000);
   }
   void releaseTelegramPollLock();
-  stopTelegramBot();
+  stopTelegramBot({ preserveDigest: true });
+  // Write self-restart marker so the new process suppresses startup notifications
+  try {
+    writeFileSync(
+      resolve(repoRoot, ".cache", "ve-self-restart.marker"),
+      String(Date.now()),
+    );
+  } catch { /* best effort */ }
   // Exit with special code — cli.mjs re-forks with fresh module cache
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+}
+
+function retryDeferredSelfRestart() {
+  if (!pendingSelfRestart) return;
+  if (isPrimaryBusy()) {
+    // Still busy — check again in 5s
+    setTimeout(retryDeferredSelfRestart, 5000);
+    return;
+  }
+  const filename = pendingSelfRestart;
+  console.log(
+    `[monitor] primary agent finished — proceeding with deferred self-restart (${filename})`,
+  );
+  selfRestartForSourceChange(filename);
 }
 
 function startSelfWatcher() {
@@ -4462,6 +4833,10 @@ function startSelfWatcher() {
       }
       selfWatcherDebounce = setTimeout(() => {
         selfRestartForSourceChange(filename);
+        // If deferred, start polling for agent completion
+        if (pendingSelfRestart) {
+          setTimeout(retryDeferredSelfRestart, 5000);
+        }
       }, 3000);
     });
     console.log("[monitor] watching own source files for self-restart");
@@ -4808,10 +5183,39 @@ setInterval(() => {
   void checkMergedPRsAndUpdateTasks();
 }, mergedPRCheckIntervalMs);
 
+// ── Log rotation: truncate oldest logs when folder exceeds size limit ───────
+if (logMaxSizeMb > 0) {
+  // Run once at startup (delayed 10s)
+  setTimeout(() => void truncateOldLogs(), 10 * 1000);
+  if (logCleanupIntervalMin > 0) {
+    const logCleanupIntervalMs = logCleanupIntervalMin * 60 * 1000;
+    setInterval(() => void truncateOldLogs(), logCleanupIntervalMs);
+    console.log(
+      `[monitor] log rotation enabled — max ${logMaxSizeMb} MB, checking every ${logCleanupIntervalMin} min`,
+    );
+  } else {
+    console.log(
+      `[monitor] log rotation enabled — max ${logMaxSizeMb} MB (startup check only)`,
+    );
+  }
+}
+
 // Run once immediately after startup (delayed by 30s to let things settle)
 setTimeout(() => {
   void checkMergedPRsAndUpdateTasks();
+  void checkAndMergeDependabotPRs();
 }, 30 * 1000);
+
+// ── Periodic Dependabot auto-merge check ─────────────────────────────────────
+if (dependabotAutoMerge) {
+  const depIntervalMs = (dependabotAutoMergeIntervalMin || 10) * 60 * 1000;
+  setInterval(() => {
+    void checkAndMergeDependabotPRs();
+  }, depIntervalMs);
+  console.log(
+    `[dependabot] auto-merge enabled — checking every ${dependabotAutoMergeIntervalMin || 10} min for: ${dependabotAuthors.join(", ")}`,
+  );
+}
 
 // ── Self-updating: poll npm every 10 min, auto-install + restart ────────────
 startAutoUpdateLoop({
@@ -4852,7 +5256,12 @@ startProcess();
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
 }
-void startTelegramNotifier();
+// Restore live digest state BEFORE any messages flow — so restarts continue the
+// existing digest message instead of creating a new one.
+// Chain notifier start after restore to prevent race conditions.
+void restoreLiveDigest()
+  .catch(() => {})
+  .then(() => startTelegramNotifier());
 
 // ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({

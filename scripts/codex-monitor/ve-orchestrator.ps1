@@ -633,6 +633,7 @@ function Initialize-CISweepConfig {
     $script:CiSweepPrBackupEnabled = Get-EnvBool -Name "VE_CI_SWEEP_PR_BACKUP" -Default $true
     $script:CiSweepPrEvery = Get-EnvInt -Name "VE_CI_SWEEP_PR_EVERY" -Default $script:CiSweepEvery -Min 0
     $script:CopilotCloudCooldownMin = Get-EnvInt -Name "COPILOT_CLOUD_COOLDOWN_MIN" -Default 60 -Min 1
+    $script:CopilotRateLimitCooldownMin = Get-EnvInt -Name "COPILOT_RATE_LIMIT_COOLDOWN_MIN" -Default 120 -Min 30
     $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
     $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
 }
@@ -2576,6 +2577,27 @@ function Process-CompletedAttempts {
             Write-Log "PR #$($pr.number) has merge conflicts ($mergeState)" -Level "WARN"
             $info.status = "review"
             if (-not $info.conflict_notified) {
+                $rateLimitHit = $null
+                if ($script:CopilotCloudDisableOnRateLimit) {
+                    $rateLimitHit = Test-CopilotRateLimitComment -PRNumber $pr.number
+                    if ($rateLimitHit -and $rateLimitHit.hit) {
+                        Disable-CopilotCloud -Minutes $script:CopilotRateLimitCooldownMin -Reason "copilot_rate_limit_detected"
+                    }
+                }
+
+                if (Test-CopilotCloudDisabled -or ($rateLimitHit -and $rateLimitHit.hit)) {
+                    $cooldown = $script:CopilotRateLimitCooldownMin
+                    $message = @"
+Merge conflict detected for PR #$($pr.number).
+
+Copilot cloud is disabled (rate limit detected). Please rebase or resolve conflicts on branch `$branch`, then push updated changes.
+Cooldown: $cooldown minutes. Resolution mode: $($script:CopilotLocalResolution).
+"@
+                    $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $message.Trim() -Reason "merge_conflict_local"
+                    $info.conflict_notified = $true
+                    continue
+                }
+
                 $body = @"
 @copilot Merge conflict detected for PR #$($pr.number).
 
@@ -2724,7 +2746,7 @@ $summary
                 if ($script:CopilotCloudDisableOnRateLimit) {
                     $rateLimitHit = Test-CopilotRateLimitComment -PRNumber $pr.number
                     if ($rateLimitHit -and $rateLimitHit.hit) {
-                        Disable-CopilotCloud -Reason "copilot_rate_limit_detected"
+                        Disable-CopilotCloud -Minutes $script:CopilotRateLimitCooldownMin -Reason "copilot_rate_limit_detected"
                     }
                 }
 
@@ -2750,6 +2772,32 @@ $summary
                 if (-not $info.copilot_fix_pr_number) {
                     $existingCopilot = Find-CopilotFixPR -OriginalPRNumber $pr.number
                     if ($existingCopilot) {
+                        if ($script:CopilotCloudDisableOnRateLimit) {
+                            $copilotRateLimit = Test-CopilotRateLimitComment -PRNumber $existingCopilot.number
+                            if ($copilotRateLimit -and $copilotRateLimit.hit) {
+                                Disable-CopilotCloud -Minutes $script:CopilotRateLimitCooldownMin -Reason "copilot_rate_limit_detected"
+                                Write-Log "Closing Copilot PR #$($existingCopilot.number) due to rate limit comment" -Level "WARN"
+                                if (-not $DryRun) {
+                                    $null = Close-PRDeleteBranch -PRNumber $existingCopilot.number
+                                }
+
+                                $info.copilot_fix_requested = $false
+                                $info.copilot_fix_requested_at = $null
+                                $info.copilot_fix_pr_number = $null
+                                $info.copilot_fix_merged = $false
+                                $info.copilot_fix_stale = $true
+
+                                $cooldown = $script:CopilotRateLimitCooldownMin
+                                $localBody = @"
+Copilot rate limit detected for sub-PR #$($existingCopilot.number). The sub-PR was closed and Copilot cloud is disabled for $cooldown minutes.
+
+Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolution)) or via Vibe-Kanban per config.
+"@
+                                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $localBody.Trim() -Reason "copilot_rate_limit"
+                                $info.local_fix_requested = $true
+                                break
+                            }
+                        }
                         $info.copilot_fix_requested = $true
                         $info.copilot_fix_pr_number = $existingCopilot.number
                         Upsert-CopilotPRState -PRNumber $pr.number -Update @{
@@ -2939,11 +2987,111 @@ function Process-StandaloneCopilotPRs {
 
     foreach ($pr in $copilotCandidates) {
         if (-not $pr.author -or -not (Test-IsCopilotAuthor -Author $pr.author)) { continue }
-        if ($pr.title -match '^\[WIP\]') { continue }
 
         $details = Get-PRDetails -PRNumber $pr.number
         if (Test-GithubRateLimit) { return }
         if (-not $details) { continue }
+
+        if (Test-CopilotCloudDisabled) {
+            if ($details.isDraft -or $pr.title -match '^\[WIP\]') {
+                Write-Log "Closing Copilot PR #$($pr.number) while Copilot cloud is disabled" -Level "WARN"
+                if (-not $DryRun) {
+                    $null = Close-PRDeleteBranch -PRNumber $pr.number
+                }
+
+                $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+                $refs = Get-ReferencedPRNumbers -Texts @(
+                    $pr.title,
+                    $details.body,
+                    $details.headRefName,
+                    $pr.headRefName
+                )
+                if (-not $refs -or @($refs).Count -eq 0) {
+                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = $null
+                    }
+                }
+                foreach ($ref in $refs) {
+                    Upsert-CopilotPRState -PRNumber $ref -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = $null
+                    }
+                }
+                continue
+            }
+        }
+
+        $rateLimitHit = $null
+        if ($script:CopilotCloudDisableOnRateLimit) {
+            $rateLimitHit = Test-CopilotRateLimitComment -PRNumber $pr.number
+            if ($rateLimitHit -and $rateLimitHit.hit) {
+                Disable-CopilotCloud -Minutes $script:CopilotRateLimitCooldownMin -Reason "copilot_rate_limit_detected"
+            }
+        }
+
+        if ($rateLimitHit -and $rateLimitHit.hit) {
+            Write-Log "Closing Copilot PR #$($pr.number) due to rate limit comment" -Level "WARN"
+            if (-not $DryRun) {
+                $null = Close-PRDeleteBranch -PRNumber $pr.number
+            }
+
+            $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+            $refs = Get-ReferencedPRNumbers -Texts @(
+                $pr.title,
+                $details.body,
+                $details.headRefName,
+                $pr.headRefName
+            )
+            if (-not $refs -or @($refs).Count -eq 0) {
+                Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                    requested_at = $requestedAt
+                    completed    = $true
+                    copilot_pr   = $pr.number
+                    merged_at    = $null
+                }
+            }
+
+            $attemptEntry = $null
+            foreach ($ref in $refs) {
+                Upsert-CopilotPRState -PRNumber $ref -Update @{
+                    requested_at = $requestedAt
+                    completed    = $true
+                    copilot_pr   = $pr.number
+                    merged_at    = $null
+                }
+                if (-not $attemptEntry) {
+                    $attemptEntry = $script:TrackedAttempts.GetEnumerator() | Where-Object {
+                        $_.Value.pr_number -eq $ref
+                    } | Select-Object -First 1
+                }
+            }
+
+            if ($attemptEntry) {
+                $attemptId = $attemptEntry.Key
+                $info = $attemptEntry.Value
+                $info.copilot_fix_requested = $false
+                $info.copilot_fix_requested_at = $null
+                $info.copilot_fix_pr_number = $null
+                $info.copilot_fix_merged = $false
+                $info.copilot_fix_stale = $true
+
+                $cooldown = $script:CopilotRateLimitCooldownMin
+                $message = @"
+Copilot rate limit detected for sub-PR #$($pr.number). The sub-PR was closed and Copilot cloud is disabled for $cooldown minutes.
+
+Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolution)) or via Vibe-Kanban per config.
+"@
+                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $message.Trim() -Reason "copilot_rate_limit"
+            }
+            continue
+        }
+
+        if ($pr.title -match '^\[WIP\]') { continue }
         $mergeState = if ($details.mergeStateStatus) { $details.mergeStateStatus } else { "UNKNOWN" }
         $mergeableState = if ($details.mergeable) { $details.mergeable } else { "UNKNOWN" }
         if ($mergeState -eq "CONFLICTING" -or $mergeableState -eq "CONFLICTING") {

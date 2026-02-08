@@ -170,6 +170,7 @@ RUN_GO_BUILD=false; RUN_GO_TEST=false; RUN_MOD_VENDOR=false
 RUN_PRETTIER=false; RUN_PORTAL_LINT=false
 RUN_PORTAL_TYPECHECK=false; RUN_PORTAL_TEST=false; RUN_PORTAL_BUILD=false; RUN_PNPM_LOCK=false
 RUN_TERRAFORM_FMT=false
+RUN_CODEX_MONITOR_SYNTAX=false
 RUN_CODEX_MONITOR_TEST=false
 
 if $HAS_GO || $HAS_DEPS_GO; then
@@ -184,12 +185,15 @@ if $HAS_PORTAL || $HAS_DEPS_JS; then
 fi
 $HAS_DEPS_JS && RUN_PNPM_LOCK=true
 $HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
-$HAS_CODEX_MONITOR && RUN_CODEX_MONITOR_TEST=true
+if $HAS_CODEX_MONITOR; then
+    RUN_CODEX_MONITOR_SYNTAX=true
+    RUN_CODEX_MONITOR_TEST=true
+fi
 
 for flag in $RUN_GO_VET $RUN_GOFMT $RUN_GO_LINT $RUN_GO_BUILD $RUN_GO_TEST \
             $RUN_MOD_VENDOR $RUN_PRETTIER $RUN_PORTAL_LINT $RUN_PORTAL_TYPECHECK \
             $RUN_PORTAL_TEST $RUN_PORTAL_BUILD $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT \
-            $RUN_CODEX_MONITOR_TEST; do
+            $RUN_CODEX_MONITOR_SYNTAX $RUN_CODEX_MONITOR_TEST; do
     $flag && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 done
 
@@ -259,6 +263,23 @@ ensure_codex_monitor_deps() {
         fi
     fi
     return 0
+}
+
+check_codex_monitor_syntax() {
+    local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
+    hook_step "Syntax-checking codex-monitor .mjs files (node --check)..."
+    local fail=0
+    local checked=0
+    for f in "$monitor_dir"/*.mjs; do
+        [ -f "$f" ] || continue
+        checked=$((checked + 1))
+        if ! node --check "$f" 2>&1; then
+            hook_fail "Syntax error: $(basename "$f")"
+            fail=1
+        fi
+    done
+    hook_step "Checked $checked .mjs files"
+    return $fail
 }
 
 check_codex_monitor_test() {
@@ -584,6 +605,7 @@ else
     # === JS dependency checks ===
     $RUN_PNPM_LOCK  && { run_check "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true; }
     # === Codex Monitor checks ===
+    $RUN_CODEX_MONITOR_SYNTAX && { run_check "Codex Monitor syntax" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_syntax || true; }
     $RUN_CODEX_MONITOR_TEST && { run_check "Codex Monitor tests" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_test || true; }
     # === Terraform formatting ===
     $RUN_TERRAFORM_FMT && { run_check "terraform fmt" VE_HOOK_SKIP_TF check_terraform_fmt || true; }

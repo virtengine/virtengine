@@ -1,0 +1,28 @@
+{
+  "$schema": "./codex-monitor.schema.json",
+  "projectName": "my-project",
+  "executors": [
+    {
+      "name": "codex-default",
+      "executor": "CODEX",
+      "variant": "DEFAULT",
+      "weight": 100,
+      "role": "primary"
+    }
+  ],
+  "failover": {
+    "strategy": "weighted-random",
+    "maxRetries": 3,
+    "cooldownMinutes": 5,
+    "disableOnConsecutiveFailures": 3
+  },
+  "distribution": "primary-only",
+  "repositories": [
+    {
+      "name": "my-project",
+      "slug": "org/my-project",
+      "primary": true
+    }
+  ],
+  "agentPrompts": {}
+}

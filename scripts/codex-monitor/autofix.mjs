@@ -28,6 +28,7 @@
  */
 
 import { spawn, execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -310,6 +311,53 @@ async function readSourceContext(filePath, errorLine, contextLines = 30) {
 }
 
 // ── Fix tracking ────────────────────────────────────────────────────────────
+
+// ── Dev mode detection ───────────────────────────────────────────────────────
+
+/**
+ * Detect whether codex-monitor is running from its source repo (dev mode)
+ * or from an npm install (npm mode).
+ *
+ * Dev mode: AUTOFIX_MODE=dev/execute, or monorepo markers present
+ * npm mode: AUTOFIX_MODE=npm/analyze/suggest, or inside node_modules
+ */
+let _devModeCache = null;
+
+export function isDevMode() {
+  if (_devModeCache !== null) return _devModeCache;
+
+  const envMode = (process.env.AUTOFIX_MODE || "").toLowerCase();
+  if (envMode === "execute" || envMode === "dev") {
+    _devModeCache = true;
+    return true;
+  }
+  if (envMode === "analyze" || envMode === "npm" || envMode === "suggest") {
+    _devModeCache = false;
+    return false;
+  }
+
+  // Check if we're inside node_modules (npm install)
+  const normalized = __dirname.replace(/\\/g, "/").toLowerCase();
+  if (normalized.includes("/node_modules/")) {
+    _devModeCache = false;
+    return false;
+  }
+
+  // Check for monorepo markers (source repo)
+  const repoRoot = resolve(__dirname, "..", "..");
+  const monoRepoMarkers = ["go.mod", "Makefile", "AGENTS.md", "x"];
+  const isMonoRepo = monoRepoMarkers.some((m) =>
+    existsSync(resolve(repoRoot, m)),
+  );
+
+  _devModeCache = isMonoRepo;
+  return isMonoRepo;
+}
+
+/** Reset dev mode cache (for testing). */
+export function resetDevModeCache() {
+  _devModeCache = null;
+}
 
 /** @type {Map<string, {count: number, lastAt: number}>} */
 const fixAttempts = new Map();

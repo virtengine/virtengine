@@ -11,6 +11,8 @@ function runCommand(command, args, options = {}) {
     return spawnSync(command, args, {
       encoding: "utf8",
       windowsHide: true,
+      // On Windows, use shell to resolve .cmd/.ps1 shims (pnpm, gh, etc.)
+      shell: isWindows,
       ...options,
     });
   } catch (error) {
@@ -138,6 +140,9 @@ function checkToolVersion(label, command, args, hint) {
   return { label, ok: true, version };
 }
 
+// Tools that MUST be present — missing any of these is an error
+const REQUIRED_TOOLS = new Set(["git", "gh", "node", "pwsh"]);
+
 function checkToolchain() {
   const tools = [
     checkToolVersion(
@@ -177,7 +182,10 @@ function checkToolchain() {
       "Install PowerShell 7+ (pwsh) and ensure it is on PATH.",
     ),
   ];
-  const ok = tools.every((tool) => tool.ok);
+  // Only required tools determine pass/fail — optional tools are warnings
+  const ok = tools
+    .filter((tool) => REQUIRED_TOOLS.has(tool.label))
+    .every((tool) => tool.ok);
   return { ok, tools };
 }
 
@@ -200,15 +208,14 @@ export function runPreflightChecks(options = {}) {
 
   const toolchain = checkToolchain();
   let ghAuth = { ok: false, method: "unknown" };
-  if (!toolchain.ok) {
-    toolchain.tools
-      .filter((tool) => !tool.ok)
-      .forEach((tool) => {
-        errors.push({
-          title: `Missing tool: ${tool.label}`,
-          message: tool.hint,
-        });
-      });
+  for (const tool of toolchain.tools) {
+    if (tool.ok) continue;
+    const entry = { title: `Missing tool: ${tool.label}`, message: tool.hint };
+    if (REQUIRED_TOOLS.has(tool.label)) {
+      errors.push(entry);
+    } else {
+      warnings.push(entry);
+    }
   }
 
   const gitConfig = checkGitConfig(repoRoot);
@@ -224,10 +231,12 @@ export function runPreflightChecks(options = {}) {
   if (!worktree.ok) {
     const sample = worktree.dirtyFiles.slice(0, 12).join(os.EOL);
     const suffix = worktree.dirtyFiles.length > 12 ? `${os.EOL}…` : "";
-    errors.push({
+    // Downgrade to warning — orchestrator uses separate worktrees so main
+    // worktree changes don't block operation.
+    warnings.push({
       title: "Worktree has uncommitted changes",
       message:
-        `Clean or stash changes before running the orchestrator.${os.EOL}` +
+        `Consider committing or stashing changes.${os.EOL}` +
         `${sample}${suffix}`,
     });
   }

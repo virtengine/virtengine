@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "MIT",
@@ -58,7 +58,9 @@
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
     "shared-workspaces": "node shared-workspace-cli.mjs",
-    "test": "vitest run",
+    "syntax:check": "node -e \"const fs=require('fs'),path=require('path');const files=fs.readdirSync('.').filter(f=>f.endsWith('.mjs'));let fail=0;for(const f of files){try{require('child_process').execSync('node --check '+f,{stdio:'pipe'});}catch(e){console.error('Syntax error: '+f);console.error(e.stderr.toString());fail=1;}}if(fail)process.exit(1);console.log('Syntax OK: '+files.length+' files checked');\"",
+    "pretest": "npm run syntax:check",
+    "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
@@ -90,6 +92,8 @@
     "update-check.mjs",
     "merge-strategy.mjs",
     ".env.example",
+    "codex-monitor.config.example.json",
+    "codex-monitor.schema.json",
     "README.md",
     "LICENSE"
   ],

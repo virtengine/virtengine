@@ -39,24 +39,62 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const isNonInteractive =
   process.argv.includes("--non-interactive") || process.argv.includes("-y");
 
+// ── Zero-dependency terminal styling (replaces chalk) ────────────────────────
+const isTTY = process.stdout.isTTY;
+const chalk = {
+  bold: (s) => (isTTY ? `\x1b[1m${s}\x1b[22m` : s),
+  dim: (s) => (isTTY ? `\x1b[2m${s}\x1b[22m` : s),
+  cyan: (s) => (isTTY ? `\x1b[36m${s}\x1b[39m` : s),
+  green: (s) => (isTTY ? `\x1b[32m${s}\x1b[39m` : s),
+  yellow: (s) => (isTTY ? `\x1b[33m${s}\x1b[39m` : s),
+  red: (s) => (isTTY ? `\x1b[31m${s}\x1b[39m` : s),
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function getVersion() {
+  try {
+    return JSON.parse(
+      readFileSync(resolve(__dirname, "package.json"), "utf8"),
+    ).version;
+  } catch {
+    return "0.0.0";
+  }
+}
+
 function printBanner() {
+  const ver = getVersion();
+  const title = `Codex Monitor — Setup Wizard  v${ver}`;
+  const pad = Math.max(0, 57 - title.length);
+  const left = Math.floor(pad / 2);
+  const right = pad - left;
   console.log("");
   console.log(
     "  ╔═══════════════════════════════════════════════════════════════╗",
   );
   console.log(
-    "  ║              Codex Monitor — Setup Wizard  v0.3              ║",
+    `  ║${" ".repeat(left + 3)}${title}${" ".repeat(right + 3)}║`,
   );
   console.log(
     "  ╚═══════════════════════════════════════════════════════════════╝",
   );
   console.log("");
+  console.log(
+    chalk.dim(
+      "  This wizard will configure codex-monitor for your project.",
+    ),
+  );
+  console.log(
+    chalk.dim(
+      "  Press Enter to accept defaults shown in [brackets].",
+    ),
+  );
+  console.log("");
 }
 
 function heading(text) {
-  console.log(`\n  ── ${text} ──\n`);
+  const line = "\u2500".repeat(Math.max(0, 59 - text.length));
+  console.log(`\n  ${chalk.bold(text)} ${chalk.dim(line)}\n`);
 }
 
 function check(label, ok, hint) {
@@ -484,8 +522,8 @@ echo "Cleanup complete."
 async function main() {
   printBanner();
 
-  // ── Prerequisites ───────────────────────────────────────
-  heading("Prerequisites");
+  // ── Step 1: Prerequisites ───────────────────────────────
+  heading("Step 1 of 7 — Prerequisites");
   const hasNode = check(
     "Node.js ≥ 18",
     Number(process.versions.node.split(".")[0]) >= 18,
@@ -512,10 +550,8 @@ async function main() {
       "vibe-kanban not found. This is bundled with codex-monitor, so this is unexpected.",
     );
     info("Try reinstalling:");
-    console.log("  npm uninstall -g @virtengine/codex-monitor");
-    console.log("  npm install -g @virtengine/codex-monitor\n");
-    info("If the problem persists, vibe-kanban should be available via npx:");
-    console.log("  npx vibe-kanban --help\n");
+    console.log("     npm uninstall -g @virtengine/codex-monitor");
+    console.log("     npm install -g @virtengine/codex-monitor\n");
   }
 
   if (!hasNode) {
@@ -544,8 +580,8 @@ async function main() {
   const prompt = createPrompt();
 
   try {
-    // ── Project Identity ──────────────────────────────────
-    heading("Project Identity");
+    // ── Step 2: Project Identity ──────────────────────────
+    heading("Step 2 of 7 — Project Identity");
     env.PROJECT_NAME = await prompt.ask("Project name", projectName);
     env.GITHUB_REPO = await prompt.ask(
       "GitHub repo slug (org/repo)",
@@ -553,8 +589,8 @@ async function main() {
     );
     configJson.projectName = env.PROJECT_NAME;
 
-    // ── Multi-Repo ────────────────────────────────────────
-    heading("Repository Configuration");
+    // ── Step 3: Repository ─────────────────────────────────
+    heading("Step 3 of 7 — Repository Configuration");
     const multiRepo = await prompt.confirm(
       "Do you have multiple repositories (e.g. separate backend/frontend)?",
       false,
@@ -587,25 +623,24 @@ async function main() {
         addMore = await prompt.confirm("Add another repository?", false);
       }
     } else {
+      // Single-repo: omit path — config.mjs auto-detects via git
       configJson.repositories.push({
         name: basename(repoRoot),
-        path: repoRoot,
         slug: env.GITHUB_REPO,
         primary: true,
       });
     }
 
-    // ── Executor Configuration ────────────────────────────
-    heading("Executor / Agent Model Configuration");
+    // ── Step 4: Executor Configuration ─────────────────────
+    heading("Step 4 of 7 — Executor / Agent Configuration");
     console.log("  Executors are the AI agents that work on tasks.\n");
-    console.log("  Choose a preset or configure custom executors:\n");
 
     const presetIdx = await prompt.choose(
       "Select executor preset:",
       [
-        "Copilot + Codex (50/50 split — recommended)",
-        "Copilot only (Claude Opus 4.6)",
         "Codex only",
+        "Copilot + Codex (50/50 split)",
+        "Copilot only (Claude Opus 4.6)",
         "Triple (Copilot Claude 40%, Codex 35%, Copilot GPT 25%)",
         "Custom — I'll define my own executors",
       ],
@@ -613,9 +648,9 @@ async function main() {
     );
 
     const presetNames = [
+      "codex-only",
       "copilot-codex",
       "copilot-only",
-      "codex-only",
       "triple",
       "custom",
     ];
@@ -659,8 +694,9 @@ async function main() {
     }
 
     // Failover strategy
-    heading("Failover Strategy");
-    console.log("  What happens when an executor fails repeatedly?\n");
+    console.log();
+    console.log(chalk.dim("  What happens when an executor fails repeatedly?"));
+    console.log();
 
     const failoverIdx = await prompt.choose(
       "Select failover strategy:",
@@ -686,9 +722,9 @@ async function main() {
     );
     configJson.distribution = DISTRIBUTION_MODES[distIdx].name;
 
-    // ── AI Provider ───────────────────────────────────────
-    heading("AI / Codex Provider");
-    console.log("  Codex Monitor uses the Codex SDK for AI analysis.\n");
+    // ── Step 5: AI Provider ────────────────────────────────
+    heading("Step 5 of 7 — AI / Codex Provider");
+    console.log("  Codex Monitor uses the Codex SDK for crash analysis & autofix.\n");
 
     const providerIdx = await prompt.choose(
       "Select AI provider:",
@@ -731,13 +767,12 @@ async function main() {
       env.CODEX_SDK_DISABLED = "1";
     }
 
-    // ── Telegram ──────────────────────────────────────────
-    heading("Telegram Bot");
-    info(
-      "The Telegram bot sends real-time notifications and lets you control the orchestrator",
+    // ── Step 6: Telegram ──────────────────────────────────
+    heading("Step 6 of 7 — Telegram Notifications");
+    console.log(
+      "  The Telegram bot sends real-time notifications and lets you\n" +
+        "  control the orchestrator via /status, /tasks, /restart, etc.\n",
     );
-    info("via commands like /status, /tasks, /restart, etc.");
-    console.log();
 
     const wantTelegram = await prompt.confirm(
       "Set up Telegram notifications?",
@@ -920,7 +955,7 @@ async function main() {
                 const testMsg =
                   "🤖 *Telegram Bot Test*\n\n" +
                   "Your codex-monitor Telegram bot is configured correctly!\n\n" +
-                  `Project: ${config.projectName || "Unknown"}\n` +
+                  `Project: ${env.PROJECT_NAME || configJson.projectName || "Unknown"}\n` +
                   "Try: /status, /tasks, /help";
 
                 const response = await fetch(
@@ -957,8 +992,8 @@ async function main() {
       }
     }
 
-    // ── Vibe-Kanban ───────────────────────────────────────
-    heading("Vibe-Kanban");
+    // ── Step 7: Vibe-Kanban ───────────────────────────────
+    heading("Step 7 of 7 — Vibe-Kanban & Orchestration");
     env.VK_BASE_URL = await prompt.ask(
       "VK API URL",
       process.env.VK_BASE_URL || "http://127.0.0.1:54089",
@@ -974,7 +1009,8 @@ async function main() {
     if (!spawnVk) env.VK_NO_SPAWN = "1";
 
     // ── Codex CLI Config (config.toml) ─────────────────────
-    heading("Codex CLI Config (~/.codex/config.toml)");
+    heading("Codex CLI Config");
+    console.log(chalk.dim("  ~/.codex/config.toml — agent-level config\n"));
 
     const existingToml = readCodexConfig();
     const configTomlPath = getConfigPath();
@@ -1027,6 +1063,11 @@ async function main() {
 
     // ── Orchestrator ──────────────────────────────────────
     heading("Orchestrator Script");
+    console.log(
+      chalk.dim(
+        "  The orchestrator manages task execution and agent spawning.\n",
+      ),
+    );
 
     // Check for default scripts in codex-monitor directory
     const defaultOrchestrator = resolve(__dirname, "ve-orchestrator.ps1");
@@ -1081,6 +1122,11 @@ async function main() {
 
     // ── Agent Templates ───────────────────────────────────
     heading("Agent Templates");
+    console.log(
+      chalk.dim(
+        "  Agent templates (AGENTS.md) guide AI agents working on your codebase.\n",
+      ),
+    );
     const generateAgents = await prompt.confirm(
       "Generate agent template files for this project?",
       true,
@@ -1215,7 +1261,7 @@ async function runNonInteractive({
     }
   }
   if (!configJson.executors.length) {
-    configJson.executors = EXECUTOR_PRESETS["copilot-codex"];
+    configJson.executors = EXECUTOR_PRESETS["codex-only"];
   }
 
   configJson.projectName = env.PROJECT_NAME;
@@ -1231,7 +1277,6 @@ async function runNonInteractive({
   configJson.repositories = [
     {
       name: basename(repoRoot),
-      path: repoRoot,
       slug: env.GITHUB_REPO,
       primary: true,
     },
@@ -1262,8 +1307,10 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   ];
 
   for (const [key, value] of Object.entries(env)) {
+    // Skip internal flags — not user-facing config
+    if (key.startsWith("_")) continue;
     if (value) {
-      // Quote values that contain spaces
+      // Quote values that contain spaces or special chars
       const needsQuotes = value.includes(" ") || value.includes("=");
       lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
     } else {
@@ -1275,8 +1322,12 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   success(`Environment written to ${relative(repoRoot, targetEnvPath)}`);
 
   // ── codex-monitor.config.json ──────────────────────────
+  // Write config with schema reference for editor autocomplete
+  const configOut = { $schema: "./codex-monitor.schema.json", ...configJson };
+  // Remove internal auto-config data — not needed in config file
+  delete configOut.vkAutoConfig;
   const configPath = resolve(__dirname, "codex-monitor.config.json");
-  writeFileSync(configPath, JSON.stringify(configJson, null, 2) + "\n", "utf8");
+  writeFileSync(configPath, JSON.stringify(configOut, null, 2) + "\n", "utf8");
   success(`Config written to ${relative(repoRoot, configPath)}`);
 
   // ── Codex CLI config.toml ─────────────────────────────
@@ -1310,25 +1361,21 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   }
 
   // ── Summary ────────────────────────────────────────────
-  heading("Setup Complete");
-  console.log("  To start codex-monitor:\n");
-  console.log("    codex-monitor\n");
-  console.log("  Or with options:\n");
+  console.log("");
   console.log(
-    '    codex-monitor --args "-MaxParallel 6" --restart-delay 10000\n',
+    "  ╔═══════════════════════════════════════════════════════════════╗",
   );
+  console.log(
+    "  ║                    ✅ Setup Complete!                        ║",
+  );
+  console.log(
+    "  ╚═══════════════════════════════════════════════════════════════╝",
+  );
+  console.log("");
 
-  if (!env.TELEGRAM_BOT_TOKEN) {
-    info(
-      "Telegram not configured. Add TELEGRAM_BOT_TOKEN to .env for notifications.",
-    );
-  }
-  if (!env.OPENAI_API_KEY && env.CODEX_SDK_DISABLED !== "1") {
-    info("No API key set. AI analysis/autofix will be disabled.");
-  }
-
+  // Executor summary
   const totalWeight = configJson.executors.reduce((s, e) => s + e.weight, 0);
-  console.log("\n  Executor Configuration:");
+  console.log(chalk.bold("  Executors:"));
   for (const e of configJson.executors) {
     const pct =
       totalWeight > 0 ? Math.round((e.weight / totalWeight) * 100) : 0;
@@ -1337,8 +1384,31 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
     );
   }
   console.log(
-    `  Strategy: ${configJson.distribution} distribution, ${configJson.failover.strategy} failover\n`,
+    chalk.dim(
+      `  Strategy: ${configJson.distribution} distribution, ${configJson.failover.strategy} failover`,
+    ),
   );
+
+  // Missing items
+  console.log("");
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    info(
+      "Telegram not configured — add TELEGRAM_BOT_TOKEN to .env later.",
+    );
+  }
+  if (!env.OPENAI_API_KEY && env.CODEX_SDK_DISABLED !== "1") {
+    info("No API key set — AI analysis & autofix will be disabled.");
+  }
+
+  console.log("");
+  console.log(chalk.bold("  Next steps:"));
+  console.log("");
+  console.log(chalk.green("    codex-monitor"));
+  console.log(chalk.dim("    Start the orchestrator supervisor\n"));
+  console.log(chalk.green("    codex-monitor --setup"));
+  console.log(chalk.dim("    Re-run this wizard anytime\n"));
+  console.log(chalk.green("    codex-monitor --help"));
+  console.log(chalk.dim("    See all options & env vars\n"));
 }
 
 // ── Auto-Launch Detection ────────────────────────────────────────────────────

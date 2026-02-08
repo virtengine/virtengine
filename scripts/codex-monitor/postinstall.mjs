@@ -165,12 +165,17 @@ function main() {
     );
   } else if (hasWarnings) {
     console.log(
-      "  ✅ Core dependencies satisfied. Install optional tools above for full functionality.",
+      "  \u2705 Core dependencies satisfied. Optional tools above unlock full functionality.",
     );
   } else {
-    console.log("  ✅ All dependencies satisfied. Run: codex-monitor --setup");
+    console.log("  \u2705 All dependencies satisfied!");
   }
 
+  console.log("");
+  console.log("  Get started:");
+  console.log("    codex-monitor --setup     Interactive setup wizard");
+  console.log("    codex-monitor             Start with existing config");
+  console.log("    codex-monitor --help       See all options");
   console.log("");
 }
 

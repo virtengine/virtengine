@@ -89,6 +89,14 @@ function loadConfigFile(configDir) {
       return { path: p, data: null, error: "invalid-json" };
     }
   }
+  // Hint about the example template
+  const examplePath = resolve(configDir, "codex-monitor.config.example.json");
+  if (existsSync(examplePath)) {
+    console.log(
+      `[config] No codex-monitor.config.json found. Copy the example:\n` +
+        `         cp ${examplePath} ${resolve(configDir, "codex-monitor.config.json")}`,
+    );
+  }
   return { path: null, data: null };
 }
 
@@ -229,19 +237,11 @@ function detectRepoRoot() {
 const DEFAULT_EXECUTORS = {
   executors: [
     {
-      name: "copilot-claude",
-      executor: "COPILOT",
-      variant: "CLAUDE_OPUS_4_6",
-      weight: 50,
-      role: "primary",
-      enabled: true,
-    },
-    {
       name: "codex-default",
       executor: "CODEX",
       variant: "DEFAULT",
-      weight: 50,
-      role: "backup",
+      weight: 100,
+      role: "primary",
       enabled: true,
     },
   ],
@@ -251,11 +251,11 @@ const DEFAULT_EXECUTORS = {
     cooldownMinutes: 5,
     disableOnConsecutiveFailures: 3,
   },
-  distribution: "weighted",
+  distribution: "primary-only",
 };
 
 function parseExecutorsFromEnv() {
-  // EXECUTORS=COPILOT:CLAUDE_OPUS_4_6:50,CODEX:DEFAULT:50
+  // EXECUTORS=CODEX:DEFAULT:100
   const raw = process.env.EXECUTORS;
   if (!raw) return null;
   const entries = raw.split(",").map((e) => e.trim());
@@ -879,6 +879,16 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.logDir ||
       resolve(configDir, "logs"),
   );
+  // Max total size of the log directory in MB. 0 = unlimited.
+  const logMaxSizeMb = Number(
+    process.env.LOG_MAX_SIZE_MB ?? configData.logMaxSizeMb ?? 500,
+  );
+  // How often to check log folder size (minutes). 0 = only at startup.
+  const logCleanupIntervalMin = Number(
+    process.env.LOG_CLEANUP_INTERVAL_MIN ??
+      configData.logCleanupIntervalMin ??
+      30,
+  );
 
   // ── Agent SDK Selection ───────────────────────────────────
   const agentSdk = resolveAgentSdkConfig();
@@ -971,6 +981,13 @@ export function loadConfig(argv = process.argv, options = {}) {
   const telegramCommandEnabled = flags.has("telegram-commands")
     ? !telegramBotEnabled
     : false;
+  // Verbosity: minimal (critical+error only), summary (default — up to warnings
+  // + key info), detailed (everything including debug).
+  const telegramVerbosity = (
+    process.env.TELEGRAM_VERBOSITY ||
+    configData.telegramVerbosity ||
+    "summary"
+  ).toLowerCase();
 
   // ── Task Planner ─────────────────────────────────────────
   // Mode: "codex-sdk" (default) runs Codex directly, "kanban" creates a VK
@@ -990,6 +1007,33 @@ export function loadConfig(argv = process.argv, options = {}) {
   const plannerDedupMs = Number.isFinite(plannerDedupHours)
     ? plannerDedupHours * 60 * 60 * 1000
     : 24 * 60 * 60 * 1000;
+
+  // ── Dependabot Auto-Merge ─────────────────────────────────
+  const dependabotAutoMerge = !["0", "false", "no"].includes(
+    String(
+      process.env.DEPENDABOT_AUTO_MERGE ??
+        configData.dependabotAutoMerge ??
+        "true",
+    ).toLowerCase(),
+  );
+  const dependabotAutoMergeIntervalMin = Number(
+    process.env.DEPENDABOT_AUTO_MERGE_INTERVAL_MIN || "10",
+  );
+  // Merge method: squash (default), merge, rebase
+  const dependabotMergeMethod = String(
+    process.env.DEPENDABOT_MERGE_METHOD ||
+      configData.dependabotMergeMethod ||
+      "squash",
+  ).toLowerCase();
+  // PR authors to auto-merge (comma-separated). Default: dependabot[bot]
+  const dependabotAuthors = String(
+    process.env.DEPENDABOT_AUTHORS ||
+      configData.dependabotAuthors ||
+      "dependabot[bot],app/dependabot",
+  )
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
 
   // ── Status file ──────────────────────────────────────────
   const cacheDir = resolve(
@@ -1039,6 +1083,8 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Logging
     logDir,
+    logMaxSizeMb,
+    logCleanupIntervalMin,
 
     // Agent SDK
     agentSdk,
@@ -1082,6 +1128,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     telegramCommandMaxBatch,
     telegramBotEnabled,
     telegramCommandEnabled,
+    telegramVerbosity,
 
     // Task Planner
     plannerMode,
@@ -1089,6 +1136,12 @@ export function loadConfig(argv = process.argv, options = {}) {
     plannerIdleSlotThreshold,
     plannerDedupHours,
     plannerDedupMs,
+
+    // Dependabot Auto-Merge
+    dependabotAutoMerge,
+    dependabotAutoMergeIntervalMin,
+    dependabotMergeMethod,
+    dependabotAuthors,
 
     // Paths
     statusPath,
