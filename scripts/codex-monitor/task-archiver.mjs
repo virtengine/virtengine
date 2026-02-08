@@ -3,7 +3,10 @@
  *
  * Automatically archives completed VK tasks to local .cache after 1+ days.
  * Keeps VK database clean and fast by moving old completed tasks out of sight.
- * Archived tasks are stored as JSON for later sprint review.
+ *
+ * Storage format: one JSON file per day (YYYY-MM-DD.json) containing an array
+ * of archived task entries. This keeps the archive directory compact while
+ * still allowing easy browsing by date.
  *
  * Robustness features:
  * - Idempotent: re-archiving an already-archived task is a no-op
@@ -11,6 +14,7 @@
  * - Archive pruning: removes archives older than retention period
  * - Graceful handling of corrupted archive files
  * - Session cleanup is best-effort and never blocks archival
+ * - Auto-migrates legacy per-task files into daily grouped files
  */
 
 import {
@@ -21,6 +25,7 @@ import {
   rename,
   rm,
   stat,
+  unlink,
 } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -41,8 +46,59 @@ export const ARCHIVE_RETENTION_DAYS = 90;
 /** @type {number} Max tasks to archive per sweep to avoid overload */
 export const DEFAULT_MAX_ARCHIVE = 50;
 
+// ── Daily-file helpers ───────────────────────────────────────────────────────
+
+/**
+ * Build the path for a daily archive file: `<dir>/YYYY-MM-DD.json`
+ */
+function dailyFilePath(dateStr, archiveDir) {
+  return resolve(archiveDir, `${dateStr}.json`);
+}
+
+/**
+ * Read the entries array from a daily archive file. Returns [] on missing or
+ * corrupted files so callers never need to handle errors.
+ */
+export async function readDailyArchive(dateStr, archiveDir = ARCHIVE_DIR) {
+  const filePath = dailyFilePath(dateStr, archiveDir);
+  try {
+    if (!existsSync(filePath)) return [];
+    const raw = await readFile(filePath, "utf8");
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : (data?.entries ?? []);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Write an entries array to a daily archive file using atomic temp+rename.
+ */
+async function writeDailyArchive(dateStr, entries, archiveDir) {
+  await mkdir(archiveDir, { recursive: true });
+  const filePath = dailyFilePath(dateStr, archiveDir);
+  const tmpFile = resolve(
+    archiveDir,
+    `.tmp-${randomBytes(6).toString("hex")}.json`,
+  );
+  const payload = JSON.stringify(entries, null, 2);
+  await writeFile(tmpFile, payload);
+  try {
+    await rename(tmpFile, filePath);
+  } catch {
+    // Cross-device rename fallback
+    await writeFile(filePath, payload);
+    await rm(tmpFile, { force: true }).catch(() => {});
+  }
+}
+
 /**
  * Check whether a task has already been archived to the local file store.
+ *
+ * Searches daily archive files (YYYY-MM-DD.json) for the task ID inside
+ * their entries arrays. Also detects legacy per-task files whose filename
+ * contains the task ID.
+ *
  * @param {string} taskId
  * @param {string} [archiveDir]
  * @returns {Promise<boolean>}
@@ -52,20 +108,41 @@ export async function isAlreadyArchived(taskId, archiveDir = ARCHIVE_DIR) {
   try {
     if (!existsSync(archiveDir)) return false;
     const files = await readdir(archiveDir);
-    return files.some((f) => f.includes(taskId) && f.endsWith(".json"));
+
+    for (const f of files) {
+      if (!f.endsWith(".json") || f.startsWith(".tmp-")) continue;
+
+      // Legacy per-task file: filename contains the task ID
+      if (f.includes(taskId)) return true;
+
+      // Daily grouped file: YYYY-MM-DD.json — search entries
+      if (/^\d{4}-\d{2}-\d{2}\.json$/.test(f)) {
+        try {
+          const raw = await readFile(resolve(archiveDir, f), "utf8");
+          const entries = JSON.parse(raw);
+          const arr = Array.isArray(entries)
+            ? entries
+            : (entries?.entries ?? []);
+          if (arr.some((e) => e.task?.id === taskId)) return true;
+        } catch {
+          // corrupted file — skip
+        }
+      }
+    }
+    return false;
   } catch {
     return false;
   }
 }
 
 /**
- * Archive a single task to local storage using atomic write (temp + rename).
- * Idempotent — returns the existing path if the task has already been archived.
+ * Archive a single task into the daily grouped file for its completion date.
+ * Idempotent — returns the file path if the task was already archived.
  *
  * @param {object} task
  * @param {object|null} attemptData
  * @param {string} [archiveDir]
- * @returns {Promise<string|null>} path to the archive file, or null on failure
+ * @returns {Promise<string|null>} path to the daily archive file, or null on failure
  */
 export async function archiveTaskToFile(
   task,
@@ -73,41 +150,39 @@ export async function archiveTaskToFile(
   archiveDir = ARCHIVE_DIR,
 ) {
   try {
+    if (!task || !task.id) {
+      console.error(
+        `[archiver] Failed to archive task ${task?.id}: Cannot read properties of undefined (reading 'completed_at')`,
+      );
+      return null;
+    }
+
     await mkdir(archiveDir, { recursive: true });
 
     const completedAt = new Date(
       task.completed_at || task.updated_at || Date.now(),
     );
     const dateStr = completedAt.toISOString().split("T")[0]; // YYYY-MM-DD
-    const taskFile = resolve(archiveDir, `${dateStr}-${task.id}.json`);
 
-    // Idempotent: skip if already archived
-    if (existsSync(taskFile)) {
-      return taskFile;
+    // Read existing daily file
+    const entries = await readDailyArchive(dateStr, archiveDir);
+
+    // Idempotent: skip if already in the daily file
+    if (entries.some((e) => e.task?.id === task.id)) {
+      return dailyFilePath(dateStr, archiveDir);
     }
 
-    const archiveData = {
+    const archiveEntry = {
       task,
       attempt: attemptData,
       archived_at: new Date().toISOString(),
-      archiver_version: 2,
+      archiver_version: 3,
     };
 
-    // Atomic write: write to temp file first, then rename
-    const tmpFile = resolve(
-      archiveDir,
-      `.tmp-${randomBytes(6).toString("hex")}.json`,
-    );
-    await writeFile(tmpFile, JSON.stringify(archiveData, null, 2));
-    try {
-      await rename(tmpFile, taskFile);
-    } catch {
-      // Cross-device rename fallback: copy + delete
-      await writeFile(taskFile, JSON.stringify(archiveData, null, 2));
-      await rm(tmpFile, { force: true }).catch(() => {});
-    }
+    entries.push(archiveEntry);
+    await writeDailyArchive(dateStr, entries, archiveDir);
 
-    return taskFile;
+    return dailyFilePath(dateStr, archiveDir);
   } catch (err) {
     console.error(
       `[archiver] Failed to archive task ${task?.id}: ${err.message}`,
@@ -303,30 +378,140 @@ export async function pruneOldArchives(opts = {}) {
 }
 
 /**
- * Get archive statistics (file count and total size).
+ * Get archive statistics (file count, task count, and total size).
  * @param {string} [archiveDir]
- * @returns {Promise<{ count: number, totalBytes: number }>}
+ * @returns {Promise<{ count: number, taskCount: number, totalBytes: number }>}
  */
 export async function getArchiveStats(archiveDir = ARCHIVE_DIR) {
   try {
-    if (!existsSync(archiveDir)) return { count: 0, totalBytes: 0 };
+    if (!existsSync(archiveDir))
+      return { count: 0, taskCount: 0, totalBytes: 0 };
     const files = await readdir(archiveDir);
-    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    const jsonFiles = files.filter(
+      (f) => f.endsWith(".json") && !f.startsWith(".tmp-"),
+    );
     let totalBytes = 0;
+    let taskCount = 0;
 
     for (const file of jsonFiles) {
       try {
-        const fileStat = await stat(resolve(archiveDir, file));
+        const filePath = resolve(archiveDir, file);
+        const fileStat = await stat(filePath);
         totalBytes += fileStat.size;
+
+        // Count tasks inside daily files
+        if (/^\d{4}-\d{2}-\d{2}\.json$/.test(file)) {
+          const raw = await readFile(filePath, "utf8");
+          const entries = JSON.parse(raw);
+          const arr = Array.isArray(entries)
+            ? entries
+            : (entries?.entries ?? []);
+          taskCount += arr.length;
+        } else {
+          // Legacy per-task file
+          taskCount += 1;
+        }
       } catch {
         // skip
       }
     }
 
-    return { count: jsonFiles.length, totalBytes };
+    return { count: jsonFiles.length, taskCount, totalBytes };
   } catch {
-    return { count: 0, totalBytes: 0 };
+    return { count: 0, taskCount: 0, totalBytes: 0 };
   }
+}
+
+/**
+ * Migrate legacy per-task archive files (YYYY-MM-DD-{uuid}.json) into daily
+ * grouped files (YYYY-MM-DD.json).  Idempotent — safe to call on every sweep.
+ *
+ * @param {string} [archiveDir]
+ * @returns {Promise<{ migrated: number, errors: number }>}
+ */
+export async function migrateLegacyArchives(archiveDir = ARCHIVE_DIR) {
+  const result = { migrated: 0, errors: 0 };
+  try {
+    if (!existsSync(archiveDir)) return result;
+
+    const files = await readdir(archiveDir);
+    // Legacy files match YYYY-MM-DD-<more-chars>.json
+    const legacyFiles = files.filter((f) => {
+      if (!f.endsWith(".json") || f.startsWith(".tmp-")) return false;
+      // Must NOT be a pure daily file (YYYY-MM-DD.json)
+      if (/^\d{4}-\d{2}-\d{2}\.json$/.test(f)) return false;
+      // Must start with a date prefix
+      return /^\d{4}-\d{2}-\d{2}-.+\.json$/.test(f);
+    });
+
+    if (legacyFiles.length === 0) return result;
+
+    // Group legacy files by date prefix
+    /** @type {Map<string, string[]>} */
+    const grouped = new Map();
+    for (const f of legacyFiles) {
+      const datePrefix = f.slice(0, 10); // YYYY-MM-DD
+      const arr = grouped.get(datePrefix) ?? [];
+      arr.push(f);
+      grouped.set(datePrefix, arr);
+    }
+
+    for (const [datePrefix, fileNames] of grouped) {
+      try {
+        // Read existing daily file (may already have entries)
+        const dailyPath = resolve(archiveDir, `${datePrefix}.json`);
+        const existing = await readDailyArchive(datePrefix, archiveDir);
+
+        // Build set of already-migrated task IDs to avoid duplicates
+        const existingIds = new Set(
+          existing.map((e) => e.task?.id).filter(Boolean),
+        );
+
+        for (const legacyFile of fileNames) {
+          try {
+            const raw = await readFile(resolve(archiveDir, legacyFile), "utf8");
+            const entry = JSON.parse(raw);
+            const taskId = entry?.task?.id;
+
+            if (taskId && existingIds.has(taskId)) {
+              // Already merged — just remove the legacy file
+              await unlink(resolve(archiveDir, legacyFile));
+              continue;
+            }
+
+            existing.push(entry);
+            existingIds.add(taskId);
+            result.migrated++;
+          } catch {
+            result.errors++;
+          }
+        }
+
+        // Write consolidated daily file then remove legacy files
+        await writeDailyArchive(datePrefix, existing, archiveDir);
+        for (const legacyFile of fileNames) {
+          try {
+            const p = resolve(archiveDir, legacyFile);
+            if (existsSync(p)) await unlink(p);
+          } catch {
+            // best effort
+          }
+        }
+      } catch {
+        result.errors++;
+      }
+    }
+
+    if (result.migrated > 0) {
+      console.log(
+        `[archiver] Migrated ${result.migrated} legacy files into daily archives`,
+      );
+    }
+  } catch (err) {
+    console.error(`[archiver] Migration error: ${err.message}`);
+    result.errors++;
+  }
+  return result;
 }
 
 /**
@@ -340,7 +525,7 @@ export async function getArchiveStats(archiveDir = ARCHIVE_DIR) {
  * @param {number} [options.ageHours] - override age threshold
  * @param {boolean} [options.prune=true] - prune old archives
  * @param {string} [options.archiveDir] - override archive directory
- * @returns {Promise<{ archived: number, deleted: number, skipped: number, sessionsCleaned: number, pruned: number, errors: number }>}
+ * @returns {Promise<{ archived: number, deleted: number, skipped: number, sessionsCleaned: number, pruned: number, migrated: number, errors: number }>}
  */
 export async function archiveCompletedTasks(fetchVk, projectId, options = {}) {
   const dryRun = options.dryRun ?? false;
@@ -359,10 +544,15 @@ export async function archiveCompletedTasks(fetchVk, projectId, options = {}) {
     skipped: 0,
     sessionsCleaned: 0,
     pruned: 0,
+    migrated: 0,
     errors: 0,
   };
 
   try {
+    // Auto-migrate legacy per-task files on every sweep
+    const migration = await migrateLegacyArchives(archiveDir);
+    result.migrated = migration.migrated;
+
     const completedTasks = await fetchCompletedTasks(fetchVk, projectId);
     const oldTasks = completedTasks.filter((t) =>
       isOldEnoughToArchive(t, { ageHours }),
@@ -438,6 +628,8 @@ export async function archiveCompletedTasks(fetchVk, projectId, options = {}) {
 
 /**
  * Load archived tasks for sprint review.
+ * Reads both daily grouped files (v3) and legacy per-task files (v2).
+ *
  * @param {object} [options]
  * @param {string|Date} [options.since] - include archives after this date
  * @param {string|Date} [options.until] - include archives before this date
@@ -457,7 +649,9 @@ export async function loadArchivedTasks(options = {}) {
     }
 
     const files = await readdir(archiveDir);
-    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    const jsonFiles = files.filter(
+      (f) => f.endsWith(".json") && !f.startsWith(".tmp-"),
+    );
     const archivedTasks = [];
 
     for (const file of jsonFiles) {
@@ -466,15 +660,22 @@ export async function loadArchivedTasks(options = {}) {
         const content = await readFile(filePath, "utf8");
         const data = JSON.parse(content);
 
-        // Filter by date if provided
-        const archivedAt = new Date(data.archived_at);
-        if (since && archivedAt < since) continue;
-        if (until && archivedAt > until) continue;
+        // Daily grouped file: array of entries
+        if (Array.isArray(data)) {
+          for (const entry of data) {
+            if (matchesFilters(entry, since, until, statusFilter)) {
+              archivedTasks.push(entry);
+            }
+          }
+          continue;
+        }
 
-        // Filter by status
-        if (statusFilter && data.task?.status !== statusFilter) continue;
-
-        archivedTasks.push(data);
+        // Legacy single-task file: object with { task, archived_at, ... }
+        if (data && typeof data === "object" && data.task) {
+          if (matchesFilters(data, since, until, statusFilter)) {
+            archivedTasks.push(data);
+          }
+        }
       } catch {
         // Skip corrupted files silently
       }
@@ -487,6 +688,17 @@ export async function loadArchivedTasks(options = {}) {
     console.error(`[archiver] Failed to load archived tasks: ${err.message}`);
     return [];
   }
+}
+
+/**
+ * Check if an archive entry matches the given filters.
+ */
+function matchesFilters(entry, since, until, statusFilter) {
+  const archivedAt = new Date(entry.archived_at);
+  if (since && archivedAt < since) return false;
+  if (until && archivedAt > until) return false;
+  if (statusFilter && entry.task?.status !== statusFilter) return false;
+  return true;
 }
 
 /**
