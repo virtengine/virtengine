@@ -1,7 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
   "version": "0.7.0",
->>>>>>> 8655ab5b (Commit changes from coding agent for workspace 22d4e536-276f-4ebd-ad67-162fcec0b973)
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "MIT",
