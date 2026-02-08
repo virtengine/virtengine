@@ -16,6 +16,8 @@ import {
   getArchiveStats,
   generateSprintReport,
   formatSprintReport,
+  readDailyArchive,
+  migrateLegacyArchives,
   ARCHIVE_AGE_HOURS,
   ARCHIVE_RETENTION_DAYS,
   DEFAULT_MAX_ARCHIVE,
@@ -122,29 +124,44 @@ describe("archiveTaskToFile", () => {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it("creates archive file with correct structure", async () => {
+  it("creates daily archive file with correct structure", async () => {
     const task = makeTask({ id: "abc123" });
     const path = await archiveTaskToFile(task, null, dir);
 
     expect(path).not.toBeNull();
     expect(existsSync(path)).toBe(true);
 
-    const content = JSON.parse(await readFile(path, "utf8"));
-    expect(content.task.id).toBe("abc123");
-    expect(content.archived_at).toBeDefined();
-    expect(content.archiver_version).toBe(2);
+    // Daily file is an array of entries
+    const entries = JSON.parse(await readFile(path, "utf8"));
+    expect(Array.isArray(entries)).toBe(true);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].task.id).toBe("abc123");
+    expect(entries[0].archived_at).toBeDefined();
+    expect(entries[0].archiver_version).toBe(3);
   });
 
-  it("is idempotent — returns same path on second call", async () => {
+  it("appends to existing daily file (same day)", async () => {
+    const task1 = makeTask({ id: "day-1" });
+    const task2 = makeTask({ id: "day-2" });
+    const path1 = await archiveTaskToFile(task1, null, dir);
+    const path2 = await archiveTaskToFile(task2, null, dir);
+
+    // Both land in same daily file
+    expect(path1).toBe(path2);
+    const entries = JSON.parse(await readFile(path1, "utf8"));
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.task.id).sort()).toEqual(["day-1", "day-2"]);
+  });
+
+  it("is idempotent — does not duplicate on second call", async () => {
     const task = makeTask({ id: "idem123" });
     const path1 = await archiveTaskToFile(task, null, dir);
     const path2 = await archiveTaskToFile(task, null, dir);
 
     expect(path1).toBe(path2);
-    // Verify only one file exists
-    const files = await readdir(dir);
-    const matching = files.filter((f) => f.includes("idem123"));
-    expect(matching).toHaveLength(1);
+    const entries = JSON.parse(await readFile(path1, "utf8"));
+    // Only one entry despite two calls
+    expect(entries.filter((e) => e.task.id === "idem123")).toHaveLength(1);
   });
 
   it("includes attempt data when provided", async () => {
@@ -152,8 +169,8 @@ describe("archiveTaskToFile", () => {
     const attempt = { id: "att-1", branch: "ve/test" };
     const path = await archiveTaskToFile(task, attempt, dir);
 
-    const content = JSON.parse(await readFile(path, "utf8"));
-    expect(content.attempt).toEqual(attempt);
+    const entries = JSON.parse(await readFile(path, "utf8"));
+    expect(entries[0].attempt).toEqual(attempt);
   });
 
   it("creates directory if it doesn't exist", async () => {
@@ -189,14 +206,27 @@ describe("isAlreadyArchived", () => {
 
   it("returns false when task not archived", async () => {
     await mkdir(dir, { recursive: true });
-    await writeFile(resolve(dir, "2026-01-01-other.json"), "{}");
+    // Daily file exists but task ID is not inside
+    await writeFile(
+      resolve(dir, "2026-01-01.json"),
+      JSON.stringify([{ task: { id: "other" }, archived_at: "2026-01-01" }]),
+    );
     expect(await isAlreadyArchived("test-id", dir)).toBe(false);
   });
 
-  it("returns true when task file exists", async () => {
+  it("returns true when task exists inside a daily file", async () => {
     await mkdir(dir, { recursive: true });
-    await writeFile(resolve(dir, "2026-01-01-match123.json"), "{}");
+    await writeFile(
+      resolve(dir, "2026-01-01.json"),
+      JSON.stringify([{ task: { id: "match123" }, archived_at: "2026-01-01" }]),
+    );
     expect(await isAlreadyArchived("match123", dir)).toBe(true);
+  });
+
+  it("returns true for legacy per-task file (backwards compat)", async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(resolve(dir, "2026-01-01-legacy99.json"), "{}");
+    expect(await isAlreadyArchived("legacy99", dir)).toBe(true);
   });
 
   it("returns false for empty taskId", async () => {
@@ -360,18 +390,38 @@ describe("getArchiveStats", () => {
 
   it("returns zeros for non-existent directory", async () => {
     const stats = await getArchiveStats(dir);
-    expect(stats).toEqual({ count: 0, totalBytes: 0 });
+    expect(stats).toEqual({ count: 0, taskCount: 0, totalBytes: 0 });
   });
 
-  it("counts json files and sums sizes", async () => {
+  it("counts json files, tasks inside daily files, and sums sizes", async () => {
     await mkdir(dir, { recursive: true });
-    await writeFile(resolve(dir, "a.json"), '{"x":1}');
-    await writeFile(resolve(dir, "b.json"), '{"y":2}');
+    // Daily file with 3 entries
+    await writeFile(
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([
+        { task: { id: "a" }, archived_at: "2026-02-01" },
+        { task: { id: "b" }, archived_at: "2026-02-01" },
+        { task: { id: "c" }, archived_at: "2026-02-01" },
+      ]),
+    );
+    // Legacy per-task file (one task)
+    await writeFile(
+      resolve(dir, "2026-02-02-legacy.json"),
+      JSON.stringify({ task: { id: "d" }, archived_at: "2026-02-02" }),
+    );
     await writeFile(resolve(dir, "c.txt"), "not counted");
 
     const stats = await getArchiveStats(dir);
     expect(stats.count).toBe(2);
+    expect(stats.taskCount).toBe(4); // 3 in daily + 1 legacy
     expect(stats.totalBytes).toBeGreaterThan(0);
+  });
+
+  it("ignores .tmp- files", async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(resolve(dir, ".tmp-partial.json"), "[]");
+    const stats = await getArchiveStats(dir);
+    expect(stats.count).toBe(0);
   });
 });
 
@@ -541,7 +591,36 @@ describe("loadArchivedTasks", () => {
     expect(await loadArchivedTasks({ archiveDir: dir })).toEqual([]);
   });
 
-  it("loads and sorts archives newest first", async () => {
+  it("loads from daily grouped files and sorts newest first", async () => {
+    await mkdir(dir, { recursive: true });
+
+    const entries = [
+      {
+        task: makeTask({ id: "old" }),
+        archived_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        task: makeTask({ id: "new" }),
+        archived_at: "2026-02-01T00:00:00.000Z",
+      },
+    ];
+
+    await writeFile(
+      resolve(dir, "2026-01-01.json"),
+      JSON.stringify([entries[0]]),
+    );
+    await writeFile(
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([entries[1]]),
+    );
+
+    const result = await loadArchivedTasks({ archiveDir: dir });
+    expect(result).toHaveLength(2);
+    expect(result[0].task.id).toBe("new");
+    expect(result[1].task.id).toBe("old");
+  });
+
+  it("loads from legacy single-task files", async () => {
     await mkdir(dir, { recursive: true });
 
     const older = {
@@ -562,20 +641,51 @@ describe("loadArchivedTasks", () => {
     expect(result[1].task.id).toBe("old");
   });
 
+  it("loads from mixed daily + legacy files", async () => {
+    await mkdir(dir, { recursive: true });
+
+    // Daily file with 2 entries
+    await writeFile(
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([
+        { task: makeTask({ id: "d1" }), archived_at: "2026-02-01T10:00:00Z" },
+        { task: makeTask({ id: "d2" }), archived_at: "2026-02-01T12:00:00Z" },
+      ]),
+    );
+    // Legacy single-task file
+    await writeFile(
+      resolve(dir, "2026-01-15-legacy.json"),
+      JSON.stringify({
+        task: makeTask({ id: "legacy" }),
+        archived_at: "2026-01-15T00:00:00Z",
+      }),
+    );
+
+    const result = await loadArchivedTasks({ archiveDir: dir });
+    expect(result).toHaveLength(3);
+  });
+
   it("filters by since date", async () => {
     await mkdir(dir, { recursive: true });
 
-    const old = {
-      task: makeTask({ id: "old" }),
-      archived_at: "2025-12-01T00:00:00.000Z",
-    };
-    const recent = {
-      task: makeTask({ id: "recent" }),
-      archived_at: "2026-02-01T00:00:00.000Z",
-    };
-
-    await writeFile(resolve(dir, "old.json"), JSON.stringify(old));
-    await writeFile(resolve(dir, "recent.json"), JSON.stringify(recent));
+    await writeFile(
+      resolve(dir, "2025-12-01.json"),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "old" }),
+          archived_at: "2025-12-01T00:00:00.000Z",
+        },
+      ]),
+    );
+    await writeFile(
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "recent" }),
+          archived_at: "2026-02-01T00:00:00.000Z",
+        },
+      ]),
+    );
 
     const result = await loadArchivedTasks({
       archiveDir: dir,
@@ -588,19 +698,19 @@ describe("loadArchivedTasks", () => {
   it("filters by status", async () => {
     await mkdir(dir, { recursive: true });
 
-    const doneTask = {
-      task: makeTask({ id: "done-1", status: "done" }),
-      archived_at: "2026-02-01T00:00:00.000Z",
-    };
-    const cancelledTask = {
-      task: makeTask({ id: "cancelled-1", status: "cancelled" }),
-      archived_at: "2026-02-01T00:00:00.000Z",
-    };
-
-    await writeFile(resolve(dir, "done.json"), JSON.stringify(doneTask));
+    // Both tasks in the same daily file
     await writeFile(
-      resolve(dir, "cancelled.json"),
-      JSON.stringify(cancelledTask),
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "done-1", status: "done" }),
+          archived_at: "2026-02-01T00:00:00.000Z",
+        },
+        {
+          task: makeTask({ id: "cancelled-1", status: "cancelled" }),
+          archived_at: "2026-02-01T00:00:00.000Z",
+        },
+      ]),
     );
 
     const result = await loadArchivedTasks({
@@ -614,17 +724,186 @@ describe("loadArchivedTasks", () => {
   it("skips corrupted JSON files", async () => {
     await mkdir(dir, { recursive: true });
     await writeFile(
-      resolve(dir, "good.json"),
-      JSON.stringify({
-        task: makeTask({ id: "good" }),
-        archived_at: "2026-02-01T00:00:00.000Z",
-      }),
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "good" }),
+          archived_at: "2026-02-01T00:00:00.000Z",
+        },
+      ]),
     );
-    await writeFile(resolve(dir, "bad.json"), "not valid json{{{");
+    await writeFile(resolve(dir, "2026-02-02.json"), "not valid json{{{");
 
     const result = await loadArchivedTasks({ archiveDir: dir });
     expect(result).toHaveLength(1);
     expect(result[0].task.id).toBe("good");
+  });
+});
+
+// ── readDailyArchive ─────────────────────────────────────────────────────────────
+
+describe("readDailyArchive", () => {
+  let dir;
+
+  beforeEach(() => {
+    dir = tmpArchiveDir();
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it("returns empty array for missing file", async () => {
+    await mkdir(dir, { recursive: true });
+    const entries = await readDailyArchive("2099-01-01", dir);
+    expect(entries).toEqual([]);
+  });
+
+  it("returns parsed entries from daily file", async () => {
+    await mkdir(dir, { recursive: true });
+    const data = [
+      { task: { id: "a" }, archived_at: "2026-02-01" },
+      { task: { id: "b" }, archived_at: "2026-02-01" },
+    ];
+    await writeFile(resolve(dir, "2026-02-01.json"), JSON.stringify(data));
+    const entries = await readDailyArchive("2026-02-01", dir);
+    expect(entries).toHaveLength(2);
+  });
+
+  it("returns empty array for corrupted file", async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(resolve(dir, "2026-02-01.json"), "broken{{");
+    const entries = await readDailyArchive("2026-02-01", dir);
+    expect(entries).toEqual([]);
+  });
+});
+
+// ── migrateLegacyArchives ───────────────────────────────────────────────────────
+
+describe("migrateLegacyArchives", () => {
+  let dir;
+
+  beforeEach(() => {
+    dir = tmpArchiveDir();
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it("returns zero counts for non-existent directory", async () => {
+    const r = await migrateLegacyArchives(dir);
+    expect(r).toEqual({ migrated: 0, errors: 0 });
+  });
+
+  it("returns zero counts when no legacy files exist", async () => {
+    await mkdir(dir, { recursive: true });
+    // Only a daily file with no legacy siblings
+    await writeFile(
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([{ task: { id: "x" }, archived_at: "2026-02-01" }]),
+    );
+    const r = await migrateLegacyArchives(dir);
+    expect(r.migrated).toBe(0);
+  });
+
+  it("consolidates legacy per-task files into daily files", async () => {
+    await mkdir(dir, { recursive: true });
+
+    // 3 legacy files on same date
+    const t1 = { task: { id: "aa" }, archived_at: "2026-02-01T10:00:00Z" };
+    const t2 = { task: { id: "bb" }, archived_at: "2026-02-01T11:00:00Z" };
+    const t3 = { task: { id: "cc" }, archived_at: "2026-02-01T12:00:00Z" };
+    await writeFile(resolve(dir, "2026-02-01-aa.json"), JSON.stringify(t1));
+    await writeFile(resolve(dir, "2026-02-01-bb.json"), JSON.stringify(t2));
+    await writeFile(resolve(dir, "2026-02-01-cc.json"), JSON.stringify(t3));
+
+    const r = await migrateLegacyArchives(dir);
+    expect(r.migrated).toBe(3);
+    expect(r.errors).toBe(0);
+
+    // Legacy files should be deleted
+    const files = await readdir(dir);
+    expect(
+      files.filter(
+        (f) => f.includes("-aa") || f.includes("-bb") || f.includes("-cc"),
+      ),
+    ).toHaveLength(0);
+
+    // Daily file should contain all 3
+    const daily = JSON.parse(
+      await readFile(resolve(dir, "2026-02-01.json"), "utf8"),
+    );
+    expect(daily).toHaveLength(3);
+  });
+
+  it("merges legacy files into existing daily file without duplicates", async () => {
+    await mkdir(dir, { recursive: true });
+
+    // Pre-existing daily file
+    const existing = [
+      { task: { id: "pre" }, archived_at: "2026-02-01T09:00:00Z" },
+    ];
+    await writeFile(resolve(dir, "2026-02-01.json"), JSON.stringify(existing));
+
+    // Legacy file for same date, different task
+    const legacy = {
+      task: { id: "extra" },
+      archived_at: "2026-02-01T15:00:00Z",
+    };
+    await writeFile(
+      resolve(dir, "2026-02-01-extra.json"),
+      JSON.stringify(legacy),
+    );
+
+    const r = await migrateLegacyArchives(dir);
+    expect(r.migrated).toBe(1);
+
+    const daily = JSON.parse(
+      await readFile(resolve(dir, "2026-02-01.json"), "utf8"),
+    );
+    expect(daily).toHaveLength(2);
+    expect(daily.map((e) => e.task.id).sort()).toEqual(["extra", "pre"]);
+  });
+
+  it("skips duplicate task IDs during migration", async () => {
+    await mkdir(dir, { recursive: true });
+
+    // Daily file already has this task
+    const existing = [{ task: { id: "dup" }, archived_at: "2026-02-01" }];
+    await writeFile(resolve(dir, "2026-02-01.json"), JSON.stringify(existing));
+
+    // Legacy file with same task ID
+    await writeFile(
+      resolve(dir, "2026-02-01-dup.json"),
+      JSON.stringify({ task: { id: "dup" }, archived_at: "2026-02-01" }),
+    );
+
+    const r = await migrateLegacyArchives(dir);
+    expect(r.migrated).toBe(0); // skipped as duplicate
+
+    // Legacy file should still be cleaned up
+    const files = await readdir(dir);
+    expect(files.filter((f) => f.includes("-dup"))).toHaveLength(0);
+  });
+
+  it("is idempotent — running twice produces same result", async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      resolve(dir, "2026-03-01-once.json"),
+      JSON.stringify({ task: { id: "once" }, archived_at: "2026-03-01" }),
+    );
+
+    const r1 = await migrateLegacyArchives(dir);
+    expect(r1.migrated).toBe(1);
+
+    const r2 = await migrateLegacyArchives(dir);
+    expect(r2.migrated).toBe(0); // nothing left to migrate
+
+    const daily = JSON.parse(
+      await readFile(resolve(dir, "2026-03-01.json"), "utf8"),
+    );
+    expect(daily).toHaveLength(1);
   });
 });
 
