@@ -5,10 +5,7 @@ workspaces.json
 
 # Logs
 logs/
-
-# Orchestrator scripts (not part of the npm package)
-ve-orchestrator.ps1
-ve-kanban.ps1
+.cache/
 
 # Dev / CI
 node_modules/
