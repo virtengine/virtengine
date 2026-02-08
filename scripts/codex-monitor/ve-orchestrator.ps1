@@ -242,7 +242,7 @@ function Get-EnvString {
         [Parameter(Mandatory)][string]$Name,
         [string]$Default = ""
     )
-    $value = $env:$Name
+    $value = [System.Environment]::GetEnvironmentVariable($Name)
     if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
     return $value.Trim()
 }
