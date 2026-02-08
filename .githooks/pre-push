@@ -315,6 +315,28 @@ check_codex_monitor_syntax() {
         fi
     done
     hook_step "Checked $checked .mjs files"
+    # Also verify ESM import/export linkage for the main entry point.
+    # node --check only catches parse errors; missing named exports are
+    # module instantiation errors that only surface at import time.
+    if [ $fail -eq 0 ]; then
+        hook_step "Validating ESM exports (import check)..."
+        if ! node -e "
+          import('file://${monitor_dir}/monitor.mjs')
+            .then(() => process.exit(0))
+            .catch(e => {
+              if (e instanceof SyntaxError || /does not provide an export named/.test(e.message)) {
+                console.error('ESM linkage error: ' + e.message);
+                process.exit(1);
+              }
+              // Other runtime errors (missing env vars, network, etc.) are OK — we
+              // only care about import-time failures here.
+              process.exit(0);
+            });
+        " 2>&1; then
+            hook_fail "ESM import validation failed for monitor.mjs"
+            fail=1
+        fi
+    fi
     return $fail
 }
 
