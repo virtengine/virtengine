@@ -52,6 +52,32 @@ func (s *KeeperTestSuite) TestDistributeProviderRewards() {
 	s.Require().Equal(types.RewardSourceProvider, dist.Source)
 }
 
+func (s *KeeperTestSuite) TestDistributeUsageRewards() {
+	now := s.ctx.BlockTime()
+	usages := []types.UsageRecord{
+		{
+			UsageID:              "usage-reward-usage-1",
+			OrderID:              "order-usage-1",
+			Provider:             s.provider.String(),
+			Customer:             s.depositor.String(),
+			UsageUnits:           1000,
+			UsageType:            "cpu",
+			TotalCost:            sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+			PeriodStart:          now.Add(-time.Hour),
+			PeriodEnd:            now,
+			SubmittedAt:          now,
+			CustomerAcknowledged: true,
+			ProviderSignature:    []byte("provider-signature"),
+		},
+	}
+
+	dist, err := s.keeper.DistributeUsageRewards(s.ctx, usages)
+	s.Require().NoError(err)
+	s.Require().NotNil(dist)
+	s.Require().Equal(types.RewardSourceUsage, dist.Source)
+	s.Require().Equal(sdkmath.NewInt(100), dist.TotalRewards.AmountOf("uve"))
+}
+
 func (s *KeeperTestSuite) TestDistributeVerificationRewards() {
 	// Create verification results
 	results := []keeper.VerificationResult{
@@ -153,6 +179,33 @@ func (s *KeeperTestSuite) TestGetRewardsByEpoch() {
 	// Non-existent epoch
 	epoch3Rewards := s.keeper.GetRewardsByEpoch(s.ctx, 3)
 	s.Require().Len(epoch3Rewards, 0)
+}
+
+func (s *KeeperTestSuite) TestGetRewardHistory() {
+	recipients := []types.RewardRecipient{
+		{
+			Address: s.provider.String(),
+			Amount:  sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(123))),
+			Reason:  "usage_cpu_reward",
+		},
+	}
+
+	dist := types.NewRewardDistribution(
+		"dist-usage-1",
+		1,
+		types.RewardSourceUsage,
+		recipients,
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)
+
+	err := s.keeper.SetRewardDistribution(s.ctx, *dist)
+	s.Require().NoError(err)
+
+	entries, err := s.keeper.GetRewardHistory(s.ctx, s.provider.String(), "", 0, 0)
+	s.Require().NoError(err)
+	s.Require().Len(entries, 1)
+	s.Require().Equal("dist-usage-1", entries[0].DistributionID)
 }
 
 func TestRewardDistributionValidation(t *testing.T) {

@@ -230,6 +230,12 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		}
 	}
 
+	if len(usageRecords) > 0 {
+		if _, err := k.DistributeUsageRewardsForSettlement(ctx, settlement.SettlementID, usageRecords); err != nil {
+			k.Logger(ctx).Debug("usage reward distribution skipped", "error", err, "settlement_id", settlement.SettlementID)
+		}
+	}
+
 	// Emit event
 	err = ctx.EventManager().EmitTypedEvent(&types.EventOrderSettled{
 		SettlementID:   settlementID,

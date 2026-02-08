@@ -792,23 +792,9 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 		return fmt.Errorf("chain submitter not configured")
 	}
 
-	// Calculate usage units (sum of normalized resource usage)
-	usageUnits := p.calculateUsageUnits(record)
-
-	// Determine primary usage type
-	usageType := p.determineUsageType(record)
-
-	// Get the primary rate for unit price
-	unitPrice := p.getPrimaryRate(record, usageType)
-
-	report := &ChainUsageReport{
-		OrderID:     record.DeploymentID,
-		LeaseID:     record.LeaseID,
-		UsageUnits:  usageUnits,
-		UsageType:   usageType,
-		PeriodStart: record.StartTime,
-		PeriodEnd:   record.EndTime,
-		UnitPrice:   unitPrice,
+	reports := p.buildUsageReports(record)
+	if len(reports) == 0 {
+		return fmt.Errorf("no usage reports generated")
 	}
 
 	// Sign the report
@@ -817,13 +803,113 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 		sig, err := p.keyManager.Sign(hash)
 		if err == nil {
 			sigBytes, _ := hex.DecodeString(sig.Signature)
-			report.Signature = sigBytes
+			for _, report := range reports {
+				report.Signature = sigBytes
+			}
 		}
 	}
 
-	return p.withRetry(ctx, func() error {
-		return p.chainSubmit.SubmitUsageReport(ctx, report)
-	})
+	for _, report := range reports {
+		if err := p.withRetry(ctx, func() error {
+			return p.chainSubmit.SubmitUsageReport(ctx, report)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *SettlementPipeline) buildUsageReports(record *UsageRecord) []*ChainUsageReport {
+	reports := make([]*ChainUsageReport, 0, 5)
+
+	cpuUnits := usageUnitsFromMilliSeconds(record.Metrics.CPUMilliSeconds)
+	if cpuUnits > 0 {
+		reports = append(reports, p.buildReport(record, "cpu", cpuUnits, record.PricingInputs.AgreedCPURate))
+	}
+
+	memoryUnits := usageUnitsFromByteSeconds(record.Metrics.MemoryByteSeconds)
+	if memoryUnits > 0 {
+		reports = append(reports, p.buildReport(record, "memory", memoryUnits, record.PricingInputs.AgreedMemoryRate))
+	}
+
+	storageUnits := usageUnitsFromByteSeconds(record.Metrics.StorageByteSeconds)
+	if storageUnits > 0 {
+		reports = append(reports, p.buildReport(record, "storage", storageUnits, record.PricingInputs.AgreedStorageRate))
+	}
+
+	gpuUnits := usageUnitsFromSeconds(record.Metrics.GPUSeconds)
+	if gpuUnits > 0 {
+		reports = append(reports, p.buildReport(record, "gpu", gpuUnits, record.PricingInputs.AgreedGPURate))
+	}
+
+	networkUnits := usageUnitsFromBytes(record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut)
+	if networkUnits > 0 {
+		reports = append(reports, p.buildReport(record, "network", networkUnits, record.PricingInputs.AgreedNetworkRate))
+	}
+
+	if len(reports) == 0 {
+		reports = append(reports, p.buildReport(record, "cpu", 1, record.PricingInputs.AgreedCPURate))
+	}
+
+	return reports
+}
+
+func (p *SettlementPipeline) buildReport(record *UsageRecord, usageType string, units uint64, rateStr string) *ChainUsageReport {
+	return &ChainUsageReport{
+		OrderID:     record.DeploymentID,
+		LeaseID:     record.LeaseID,
+		UsageUnits:  units,
+		UsageType:   usageType,
+		PeriodStart: record.StartTime,
+		PeriodEnd:   record.EndTime,
+		UnitPrice:   parseUnitPrice(rateStr),
+	}
+}
+
+func usageUnitsFromMilliSeconds(ms int64) uint64 {
+	if ms <= 0 {
+		return 0
+	}
+	//nolint:gosec // usage metrics should be non-negative
+	return uint64(ms / (1000 * 3600))
+}
+
+func usageUnitsFromByteSeconds(byteSeconds int64) uint64 {
+	if byteSeconds <= 0 {
+		return 0
+	}
+	//nolint:gosec // usage metrics should be non-negative
+	return uint64(byteSeconds / (1024 * 1024 * 1024 * 3600))
+}
+
+func usageUnitsFromSeconds(seconds int64) uint64 {
+	if seconds <= 0 {
+		return 0
+	}
+	//nolint:gosec // usage metrics should be non-negative
+	return uint64(seconds / 3600)
+}
+
+func usageUnitsFromBytes(bytes int64) uint64 {
+	if bytes <= 0 {
+		return 0
+	}
+	//nolint:gosec // usage metrics should be non-negative
+	return uint64(bytes / (1024 * 1024 * 1024))
+}
+
+func parseUnitPrice(rateStr string) sdk.DecCoin {
+	if rateStr == "" {
+		return sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyZeroDec())
+	}
+
+	rate, err := sdkmath.LegacyNewDecFromStr(rateStr)
+	if err != nil {
+		return sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyZeroDec())
+	}
+
+	return sdk.NewDecCoinFromDec("uvirt", rate)
 }
 
 // calculateUsageUnits calculates usage units from a record.
