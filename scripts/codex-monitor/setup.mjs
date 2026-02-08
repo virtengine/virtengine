@@ -1260,6 +1260,9 @@ async function main() {
       const setupScript = generateVkSetupScript(vkConfig);
       const cleanupScript = generateVkCleanupScript(vkConfig);
 
+      // Get current PATH for VK executor profiles
+      const currentPath = process.env.PATH || "";
+
       // Write to config for VK API auto-wiring
       configJson.vkAutoConfig = {
         setupScript,
@@ -1267,11 +1270,18 @@ async function main() {
         executorProfiles: configJson.executors.map((e) => ({
           executor: e.executor,
           variant: e.variant,
+          environmentVariables: {
+            PATH: currentPath,
+            // Ensure GitHub token is available in workspace
+            GH_TOKEN: "${GH_TOKEN}",
+            GITHUB_TOKEN: "${GITHUB_TOKEN}",
+          },
         })),
       };
 
       info("VK configuration will be applied on first launch.");
       info("Setup and cleanup scripts generated for your workspace.");
+      info(`PATH environment variable configured for ${configJson.executors.length} executor profile(s)`);
     }
   } finally {
     prompt.close();
@@ -1386,8 +1396,8 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   // ── codex-monitor.config.json ──────────────────────────
   // Write config with schema reference for editor autocomplete
   const configOut = { $schema: "./codex-monitor.schema.json", ...configJson };
-  // Remove internal auto-config data — not needed in config file
-  delete configOut.vkAutoConfig;
+  // Keep vkAutoConfig in config file for monitor to apply on first launch
+  // (includes executorProfiles with environment variables like PATH)
   const configPath = resolve(__dirname, "codex-monitor.config.json");
   writeFileSync(configPath, JSON.stringify(configOut, null, 2) + "\n", "utf8");
   success(`Config written to ${relative(repoRoot, configPath)}`);
