@@ -433,16 +433,30 @@ func (msg *MsgRevokeWorkloadTemplate) ValidateBasic() error {
 	return nil
 }
 
+// ResourceOverrides allows users to override template defaults.
+type ResourceOverrides struct {
+	Nodes           int32 `json:"nodes,omitempty"`
+	CpusPerNode     int32 `json:"cpus_per_node,omitempty"`
+	MemoryMbPerNode int64 `json:"memory_mb_per_node,omitempty"`
+	RuntimeMinutes  int64 `json:"runtime_minutes,omitempty"`
+	GpusPerNode     int32 `json:"gpus_per_node,omitempty"`
+}
+
 // MsgSubmitJobFromTemplate submits a job from a template
 type MsgSubmitJobFromTemplate struct {
 	Creator    string            `json:"creator"`
 	TemplateID string            `json:"template_id"`
 	Version    string            `json:"version"`
 	Parameters map[string]string `json:"parameters,omitempty"`
-	Nodes      int32             `json:"nodes,omitempty"`
-	CPUs       int32             `json:"cpus,omitempty"`
-	MemoryMB   int64             `json:"memory_mb,omitempty"`
-	Runtime    int64             `json:"runtime,omitempty"`
+
+	// ResourceOverrides provides structured overrides (preferred).
+	ResourceOverrides *ResourceOverrides `json:"resource_overrides,omitempty"`
+
+	// Legacy override fields (kept for CLI/backwards compatibility).
+	Nodes    int32 `json:"nodes,omitempty"`
+	CPUs     int32 `json:"cpus,omitempty"`
+	MemoryMB int64 `json:"memory_mb,omitempty"`
+	Runtime  int64 `json:"runtime,omitempty"`
 }
 
 // ProtoMessage implements proto.Message
@@ -518,6 +532,24 @@ func (msg *MsgSubmitJobFromTemplate) ValidateBasic() error {
 		return fmt.Errorf("runtime cannot be negative")
 	}
 
+	if msg.ResourceOverrides != nil {
+		if msg.ResourceOverrides.Nodes < 0 {
+			return fmt.Errorf("resource_overrides.nodes cannot be negative")
+		}
+		if msg.ResourceOverrides.CpusPerNode < 0 {
+			return fmt.Errorf("resource_overrides.cpus_per_node cannot be negative")
+		}
+		if msg.ResourceOverrides.MemoryMbPerNode < 0 {
+			return fmt.Errorf("resource_overrides.memory_mb_per_node cannot be negative")
+		}
+		if msg.ResourceOverrides.RuntimeMinutes < 0 {
+			return fmt.Errorf("resource_overrides.runtime_minutes cannot be negative")
+		}
+		if msg.ResourceOverrides.GpusPerNode < 0 {
+			return fmt.Errorf("resource_overrides.gpus_per_node cannot be negative")
+		}
+	}
+
 	return nil
 }
 
@@ -537,5 +569,5 @@ type MsgDeprecateWorkloadTemplateResponse struct{}
 type MsgRevokeWorkloadTemplateResponse struct{}
 
 type MsgSubmitJobFromTemplateResponse struct {
-	JobID string `json:"job_id"`
+	JobId string `json:"job_id"`
 }

@@ -13,6 +13,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/app"
+	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 	hpckeeper "github.com/virtengine/virtengine/x/hpc/keeper"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
@@ -108,6 +109,10 @@ func TestWorkloadTemplateLifecycle(t *testing.T) {
 	_, err := msgServer.CreateWorkloadTemplate(ctx, createMsg)
 	require.NoError(t, err, "failed to create workload template")
 
+	// Register a cluster + offering that supports this template
+	provider := sdktestutil.AccAddress(t)
+	registerTemplateOffering(t, ctx, msgServer, template, provider)
+
 	// Step 2: Query the template (should exist but not be approved)
 	getReq := &hpctypes.QueryGetWorkloadTemplateRequest{
 		TemplateId: "test-mpi-template",
@@ -162,6 +167,97 @@ func TestWorkloadTemplateLifecycle(t *testing.T) {
 	usageResp, err := queryServer.WorkloadTemplateUsage(sdk.WrapSDKContext(ctx), usageReq)
 	require.NoError(t, err, "failed to query template usage")
 	require.GreaterOrEqual(t, usageResp.TotalUses, uint64(1), "template should have at least 1 use")
+}
+
+func registerTemplateOffering(
+	t *testing.T,
+	ctx sdk.Context,
+	msgServer hpctypes.MsgServer,
+	template *hpctypes.WorkloadTemplate,
+	provider sdk.AccAddress,
+) (string, string) {
+	t.Helper()
+
+	registerResp, err := msgServer.RegisterCluster(ctx, &hpctypes.MsgRegisterCluster{
+		ProviderAddress: provider.String(),
+		Name:            "test-cluster",
+		Description:     "test cluster for templates",
+		Region:          "us-test-1",
+		Partitions: []hpcv1.Partition{
+			{
+				Name:           "default",
+				Nodes:          128,
+				MaxRuntime:     86400,
+				DefaultRuntime: 3600,
+				MaxNodes:       128,
+				Features:       []string{"gpu"},
+				Priority:       1,
+				State:          "UP",
+			},
+		},
+		TotalNodes: 128,
+		ClusterMetadata: hpcv1.ClusterMetadata{
+			TotalCpuCores: 2048,
+			TotalMemoryGb: 8192,
+			TotalGpus:     256,
+		},
+		SlurmVersion: "23.02",
+	})
+	require.NoError(t, err, "failed to register cluster")
+
+	memGB := int32(template.Resources.DefaultMemoryMBPerNode / 1024)
+	if memGB < 1 {
+		memGB = 1
+	}
+
+	offeringResp, err := msgServer.CreateOffering(ctx, &hpctypes.MsgCreateOffering{
+		ProviderAddress: provider.String(),
+		ClusterId:       registerResp.ClusterId,
+		Name:            "template-offering",
+		Description:     "offering for workload templates",
+		QueueOptions: []hpcv1.QueueOption{
+			{
+				PartitionName:   "default",
+				DisplayName:     "Default",
+				MaxNodes:        128,
+				MaxRuntime:      86400,
+				Features:        []string{"gpu"},
+				PriceMultiplier: "1.0",
+			},
+		},
+		Pricing: hpcv1.HPCPricing{
+			BaseNodeHourPrice: "1uvirt",
+			CpuCoreHourPrice:  "1uvirt",
+			MemoryGbHourPrice: "1uvirt",
+			StorageGbPrice:    "1uvirt",
+			NetworkGbPrice:    "1uvirt",
+			Currency:          "uvirt",
+			MinimumCharge:     "1uvirt",
+		},
+		RequiredIdentityThreshold: 0,
+		MaxRuntimeSeconds:         86400,
+		PreconfiguredWorkloads: []hpcv1.PreconfiguredWorkload{
+			{
+				WorkloadId:     template.TemplateID,
+				Name:           template.Name,
+				Description:    template.Description,
+				ContainerImage: template.Runtime.ContainerImage,
+				DefaultCommand: template.Entrypoint.Command,
+				RequiredResources: hpcv1.JobResources{
+					Nodes:           template.Resources.DefaultNodes,
+					CpuCoresPerNode: template.Resources.DefaultCPUsPerNode,
+					MemoryGbPerNode: memGB,
+					GpusPerNode:     template.Resources.DefaultGPUsPerNode,
+				},
+				Category: string(template.Type),
+				Version:  template.Version,
+			},
+		},
+		SupportsCustomWorkloads: true,
+	})
+	require.NoError(t, err, "failed to create offering")
+
+	return registerResp.ClusterId, offeringResp.OfferingId
 }
 
 // TestWorkloadTemplateVersioning validates template versioning and updates.
