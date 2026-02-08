@@ -151,6 +151,8 @@ $script:GitHubCooldownUntil = $null
 $script:TaskRetryCounts = @{}
 $script:TaskRetryState = @{}
 $script:AttemptSummaries = @{}
+$script:TaskFollowUpCounts = @{}  # Per-task follow-up counter to prevent infinite loops
+$script:MAX_FOLLOWUPS_PER_TASK = 6  # Hard cap on follow-ups per task before marking manual_review
 $script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-state.json"
 $script:CopilotStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-copilot.json"
 $script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-status.json"
@@ -459,6 +461,27 @@ function Invoke-GhWithTimeout {
         output    = $output
         error     = $error
     }
+}
+
+function Get-CommitsAhead {
+    <#
+    .SYNOPSIS Check how many commits a branch has compared to base branch.
+    .OUTPUTS Integer count of commits ahead, or -1 if branch doesn't exist
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+    $baseRef = $BaseBranch
+    $branchExists = git rev-parse --verify --quiet $Branch 2>$null
+    if ($LASTEXITCODE -ne 0) { return -1 }
+    $commitsAhead = git rev-list --count "${baseRef}..${Branch}" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "Failed to count commits for ${Branch} vs ${baseRef}" -Level "WARN"
+        return -1
+    }
+    return [int]$commitsAhead
 }
 
 function Create-PRForBranchSafe {
@@ -1253,7 +1276,10 @@ function Get-TaskContextBlock {
     $lines += "If VE_TASK_TITLE/VE_TASK_DESCRIPTION are missing, treat this as a VK task:"
     $lines += "- Worktree paths often include .git/worktrees/ or vibe-kanban."
     $lines += "- VK tasks always map to a ve/<id>-<slug> branch."
-    $lines += "Resume with the context above, then commit/push/PR as usual."
+    $lines += ""
+    $lines += "IMPORTANT: Your job is to COMPLETE the task described above END TO END."
+    $lines += "Implement the code changes, ensure tests pass, then commit and push."
+    $lines += "Do NOT just check git status or reply with status — do the actual work."
     return ($lines -join "`n")
 }
 
@@ -1273,6 +1299,7 @@ function Append-TaskContextToMessage {
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
+    Tracks per-task follow-up count to prevent infinite loops.
     #>
     [CmdletBinding()]
     param(
@@ -1282,6 +1309,18 @@ function Try-SendFollowUp {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+    # Per-task follow-up cap — prevent infinite loops
+    $taskKey = if ($Info.task_id) { $Info.task_id } else { $AttemptId }
+    if (-not $script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+        $script:TaskFollowUpCounts[$taskKey] = 0
+    }
+    $script:TaskFollowUpCounts[$taskKey]++
+    if ($script:TaskFollowUpCounts[$taskKey] -gt $script:MAX_FOLLOWUPS_PER_TASK) {
+        Write-Log "Follow-up cap reached for $($Info.branch) ($($script:TaskFollowUpCounts[$taskKey])/$script:MAX_FOLLOWUPS_PER_TASK) — marking for manual review to prevent loop" -Level "WARN"
+        $Info.status = "manual_review"
+        $Info.followup_cap_reached = $true
+        return $false
+    }
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
@@ -1495,6 +1534,29 @@ function Get-AttemptFailureCategory {
         }
     }
 
+    # Agent/AI API rate limits (Copilot, Codex, OpenAI, Anthropic)
+    $agentRateLimitPatterns = @(
+        '429 Too Many Requests',
+        '429',
+        'rate limit reached',
+        'rate_limit_exceeded',
+        'exceeded your current quota',
+        'too many requests',
+        'request limit reached',
+        'throttled',
+        'capacity exceeded',
+        'overloaded',
+        'server is busy',
+        'model is currently overloaded',
+        'resource_exhausted',
+        'quota exceeded'
+    )
+    foreach ($pattern in $agentRateLimitPatterns) {
+        if ($combined -match $pattern) {
+            return @{ category = "agent_rate_limit"; status = $latestStatus; detail = $pattern }
+        }
+    }
+
     $gitPatterns = @(
         'fatal:\s+not a git repository',
         'fatal:\s+unable to access',
@@ -1615,12 +1677,13 @@ function Get-RetryPolicyForCategory {
         "api_key" { return @{ max_attempts = 2; base_delay_sec = 300; max_delay_sec = 1800; new_session_after = 2; message = "Detected an API key/auth failure. Please update credentials and retry the task." } }
         "context_window" { return @{ max_attempts = 2; base_delay_sec = 300; max_delay_sec = 1800; new_session_after = 1; message = "Context window exceeded. Starting a fresh session so you can retry cleanly." } }
         "agent_failed" { return @{ max_attempts = 2; base_delay_sec = 180; max_delay_sec = 1200; new_session_after = 2; message = "Agent crashed or exited unexpectedly. Please retry the task." } }
+        "agent_rate_limit" { return @{ max_attempts = 3; base_delay_sec = 600; max_delay_sec = 3600; new_session_after = 1; message = "Agent API rate limit detected. Waiting for cooldown before retrying. Do NOT send rapid requests — complete the task in a single focused session." } }
         "git" { return @{ max_attempts = 3; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 3; message = "Git failure detected. Please fix git status/push and retry the task." } }
         "gh" { return @{ max_attempts = 3; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 3; message = "GitHub CLI/API failure detected. Please retry once the GH issue clears." } }
         "vk" { return @{ max_attempts = 4; base_delay_sec = 60; max_delay_sec = 600; new_session_after = 0; message = "Vibe-kanban appears unavailable. Please retry after the service recovers." } }
         "network" { return @{ max_attempts = 4; base_delay_sec = 60; max_delay_sec = 600; new_session_after = 0; message = "Network connectivity issue detected. Please retry after connectivity stabilizes." } }
         "test" { return @{ max_attempts = 2; base_delay_sec = 300; max_delay_sec = 1800; new_session_after = 2; message = "Tests failed. Please fix the failures and retry the task." } }
-        "missing_branch" { return @{ max_attempts = 2; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 2; message = "Remote branch is missing. Please check 'git status' and push your commits, then retry." } }
+        "missing_branch" { return @{ max_attempts = 2; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 1; message = "No remote branch found. Complete the assigned task (implement code, tests, commit), then push. Do NOT just run git status — do the actual work." } }
         default { return $null }
     }
 }
@@ -1719,6 +1782,7 @@ function Invoke-AutoRetryPolicy {
 function Try-SendFollowUpNewSession {
     <#
     .SYNOPSIS Create a new session and send a follow-up message.
+    Tracks per-task follow-up count to prevent infinite loops.
     #>
     [CmdletBinding()]
     param(
@@ -1728,6 +1792,18 @@ function Try-SendFollowUpNewSession {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+    # Per-task follow-up cap — prevent infinite loops
+    $taskKey = if ($Info.task_id) { $Info.task_id } else { $AttemptId }
+    if (-not $script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+        $script:TaskFollowUpCounts[$taskKey] = 0
+    }
+    $script:TaskFollowUpCounts[$taskKey]++
+    if ($script:TaskFollowUpCounts[$taskKey] -gt $script:MAX_FOLLOWUPS_PER_TASK) {
+        Write-Log "Follow-up cap reached for $($Info.branch) ($($script:TaskFollowUpCounts[$taskKey])/$script:MAX_FOLLOWUPS_PER_TASK) — marking for manual review to prevent loop" -Level "WARN"
+        $Info.status = "manual_review"
+        $Info.followup_cap_reached = $true
+        return $false
+    }
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping new-session follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
@@ -2333,7 +2409,14 @@ function Process-CompletedAttempts {
                             $handled = Invoke-AutoRetryPolicy -AttemptId $attemptId -Info $info -Category $failure.category -ReasonPrefix "retry"
                         }
                         if (-not $handled) {
-                            $fallback = "Remote branch $branch is missing. Please check 'git status' and push your commits. If there are no changes, reply NO_CHANGES so we can mark this for manual review."
+                            $commitsAhead = Get-CommitsAhead -Branch $branch
+                            if ($commitsAhead -gt 0) {
+                                # Has local commits — just needs a push
+                                $fallback = "You have $commitsAhead local commit(s) on $branch. Push them: git push -u origin $branch"
+                            } else {
+                                # No commits at all — agent needs to DO THE WORK, not check git status
+                                $fallback = "No work has been committed yet on $branch. Please COMPLETE the assigned task: implement the code changes, ensure tests pass, commit, and push. Do NOT just check git status."
+                            }
                             $handled = Invoke-AutoRetryPolicy -AttemptId $attemptId -Info $info -Category "missing_branch" -ReasonPrefix "missing_branch" -FallbackMessage $fallback
                         }
                         if ($handled) {
@@ -2353,7 +2436,7 @@ function Process-CompletedAttempts {
                         $info.no_commits = $true
                         $script:TasksFailed++
                         Save-SuccessMetrics
-                        $msg = "Branch $branch has no commits compared to base. If there were no intended changes, reply NO_CHANGES. Otherwise please retry your task or push your commits."
+                        $msg = "Branch $branch has no commits compared to base. Please COMPLETE the assigned task: implement the code changes, write tests, commit, and push. If the task genuinely requires no code changes, reply NO_CHANGES."
                         $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "no_commits"
                         continue
                     }

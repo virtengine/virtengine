@@ -150,6 +150,8 @@ $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
 $script:TaskRetryCounts = @{}
 $script:AttemptSummaries = @{}
+$script:TaskFollowUpCounts = @{}  # Per-task follow-up counter to prevent infinite loops
+$script:MAX_FOLLOWUPS_PER_TASK = 6  # Hard cap on follow-ups per task before marking manual_review
 $script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-state.json"
 $script:CopilotStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-copilot.json"
 $script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-status.json"
@@ -2096,7 +2098,10 @@ function Get-TaskContextBlock {
     $lines += "If VE_TASK_TITLE/VE_TASK_DESCRIPTION are missing, treat this as a VK task:"
     $lines += "- Worktree paths often include .git/worktrees/ or vibe-kanban."
     $lines += "- VK tasks always map to a ve/<id>-<slug> branch."
-    $lines += "Resume with the context above, then commit/push/PR as usual."
+    $lines += ""
+    $lines += "IMPORTANT: Your job is to COMPLETE the task described above END TO END."
+    $lines += "Implement the code changes, ensure tests pass, then commit and push."
+    $lines += "Do NOT just check git status or reply with status — do the actual work."
     return ($lines -join "`n")
 }
 
@@ -2148,6 +2153,24 @@ function Get-ContextRecoveryMessage {
     return ($parts -join "`n`n")
 }
 
+function Get-ModelErrorRecoveryMessage {
+    <#
+    .SYNOPSIS Build a compact follow-up message for model/API failures.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [int]$MaxDescriptionChars = 2000
+    )
+    $parts = @(
+        "Model API failure detected. Start a fresh session with minimal context.",
+        "Keep prompts concise and avoid large logs or dumps."
+    )
+    $context = Get-TaskContextBlock -Info $Info -MaxDescriptionChars $MaxDescriptionChars
+    if ($context) { $parts += $context }
+    return ($parts -join "`n`n")
+}
+
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
@@ -2160,6 +2183,9 @@ function Try-SendFollowUp {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+    if ($Info.force_new_session) {
+        return (Try-SendFollowUpNewSession -AttemptId $AttemptId -Info $Info -Message $Message -Reason $Reason -IncludeTaskContext:$IncludeTaskContext)
+    }
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
@@ -2245,7 +2271,11 @@ function Test-ContextWindowError {
         "prompt token count",
         "token count of",
         "context length exceeded",
-        "maximum context length"
+        "maximum context length",
+        "exceeds the limit",
+        "token limit",
+        "too many tokens",
+        "prompt too large"
     )
     foreach ($prop in $Summary.PSObject.Properties) {
         $value = $prop.Value
@@ -2345,8 +2375,49 @@ function Get-AttemptFailureCategory {
         $lower -match "prompt token count" -or
         $lower -match "token count of" -or
         $lower -match "context length exceeded" -or
-        $lower -match "maximum context length") {
+        $lower -match "maximum context length" -or
+        $lower -match "exceeds the limit" -or
+        $lower -match "token limit" -or
+        $lower -match "too many tokens" -or
+        $lower -match "prompt too large") {
         return @{ category = "context_window"; status = $latestStatus; detail = "context window exceeded" }
+    }
+
+    $modelErrorPatterns = @(
+        "failed to get response from the ai model",
+        "capierror",
+        "openaierror",
+        "model error",
+        "model returned an error",
+        "upstream error"
+    )
+    foreach ($pattern in $modelErrorPatterns) {
+        if ($lower -match [regex]::Escape($pattern)) {
+            return @{ category = "model_error"; status = $latestStatus; detail = $pattern }
+        }
+    }
+
+    # Agent/AI API rate limits (Copilot, Codex, OpenAI, Anthropic)
+    $agentRateLimitPatterns = @(
+        '429 Too Many Requests',
+        '429',
+        'rate limit reached',
+        'rate_limit_exceeded',
+        'exceeded your current quota',
+        'too many requests',
+        'request limit reached',
+        'throttled',
+        'capacity exceeded',
+        'overloaded',
+        'server is busy',
+        'model is currently overloaded',
+        'resource_exhausted',
+        'quota exceeded'
+    )
+    foreach ($pattern in $agentRateLimitPatterns) {
+        if ($lower -match [regex]::Escape($pattern)) {
+            return @{ category = "agent_rate_limit"; status = $latestStatus; detail = $pattern }
+        }
     }
 
     if ($latestStatus -in @("failed", "killed", "crashed", "error", "aborted")) {
@@ -2989,14 +3060,18 @@ function Sync-TrackedAttempts {
                     $tracked.status = "error"
                 }
 
-                if ($summary.latest_process_status -eq "failed" -and (Test-ContextWindowError -Summary $summary)) {
-                    $shouldRecover = $true
-                    if ($tracked.context_recovery_attempted_at) {
-                        $sinceAttempt = ((Get-Date) - $tracked.context_recovery_attempted_at).TotalMinutes
-                        if ($sinceAttempt -lt 10) { $shouldRecover = $false }
-                    }
-                    if ($shouldRecover) {
-                        $null = Try-RecoverContextWindow -AttemptId $a.id -Info $tracked
+                if ($summary.latest_process_status -eq "failed") {
+                    $failure = Get-AttemptFailureCategory -Summary $summary -Info $tracked
+                    if ($failure.category -in @("context_window", "model_error")) {
+                        $tracked.force_new_session = $true
+                        $shouldRecover = $true
+                        if ($tracked.context_recovery_attempted_at) {
+                            $sinceAttempt = ((Get-Date) - $tracked.context_recovery_attempted_at).TotalMinutes
+                            if ($sinceAttempt -lt 10) { $shouldRecover = $false }
+                        }
+                        if ($shouldRecover) {
+                            $null = Try-RecoverContextWindow -AttemptId $a.id -Info $tracked
+                        }
                     }
                 }
             }
@@ -3240,12 +3315,18 @@ function Process-CompletedAttempts {
                     }
 
                     if (-not $recentFollowup) {
-                        if ($failure.category -eq "context_window") {
+                        if ($failure.category -in @("context_window", "model_error")) {
                             $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
-                            $msg = Get-ContextRecoveryMessage -Info $info
+                            $msg = if ($failure.category -eq "model_error") {
+                                Get-ModelErrorRecoveryMessage -Info $info
+                            }
+                            else {
+                                Get-ContextRecoveryMessage -Info $info
+                            }
                             if ($count -ge 2) {
                                 $msg = "$msg`n`nIf this fails again or there are no changes, reply NO_CHANGES so we can mark it for manual review."
                             }
+                            $info.force_new_session = $true
                             $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "context_window_recovery" -IncludeTaskContext:$false
                             $info.push_notified = $true
                             continue
@@ -3354,7 +3435,7 @@ function Process-CompletedAttempts {
                         $info.no_commits = $true
                         $script:TasksFailed++
                         Save-SuccessMetrics
-                        $msg = "Branch $branch has no commits compared to base. If there were no intended changes, reply NO_CHANGES. Otherwise please retry your task or push your commits."
+                        $msg = "Branch $branch has no commits compared to base. Please COMPLETE the assigned task: implement the code changes, write tests, commit, and push. If the task genuinely requires no code changes, reply NO_CHANGES."
                         $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "no_commits"
                         continue
                     }

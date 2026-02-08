@@ -43,7 +43,7 @@ $script:VK_EXECUTORS = @(
     @{ executor = "CODEX"; variant = "DEFAULT" }
     @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" }
 )
-$script:VK_EXECUTOR_INDEX = 0   # Tracks cycling state
+$script:VK_EXECUTOR_INDEX = (Get-Random -Minimum 0 -Maximum $script:VK_EXECUTORS.Count)   # Random start for session diversity
 
 # ─── HTTP Helpers ─────────────────────────────────────────────────────────────
 

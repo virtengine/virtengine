@@ -22,18 +22,21 @@ async function createTestWorktree(name, options = {}) {
   const worktreePath = resolve(TEST_WORKTREE_BASE, name);
   await mkdir(worktreePath, { recursive: true });
   await mkdir(resolve(worktreePath, ".git"), { recursive: true });
-  
+
   // Create some test files
   await writeFile(resolve(worktreePath, "test.txt"), "test content");
-  
+
   if (options.withLockFile) {
     await writeFile(resolve(worktreePath, ".git", "index.lock"), "12345");
   }
-  
+
   if (options.withPidFile) {
-    await writeFile(resolve(worktreePath, ".codex-monitor.pid"), String(options.pid || "99999"));
+    await writeFile(
+      resolve(worktreePath, ".codex-monitor.pid"),
+      String(options.pid || "99999"),
+    );
   }
-  
+
   return worktreePath;
 }
 
@@ -52,7 +55,7 @@ describe("workspace-reaper", () => {
   describe("cleanOrphanedWorktrees", () => {
     it("should skip recently modified worktrees", async () => {
       await createTestWorktree("recent-worktree");
-      
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 24,
@@ -63,7 +66,9 @@ describe("workspace-reaper", () => {
       expect(result.cleaned).toBe(0);
       expect(result.skipped).toBe(1);
       expect(result.skipped_reasons.recently_modified).toBe(1);
-      expect(existsSync(resolve(TEST_WORKTREE_BASE, "recent-worktree"))).toBe(true);
+      expect(existsSync(resolve(TEST_WORKTREE_BASE, "recent-worktree"))).toBe(
+        true,
+      );
     });
 
     it("should skip worktrees with active processes", async () => {
@@ -72,7 +77,7 @@ describe("workspace-reaper", () => {
         withPidFile: true,
         pid: process.pid,
       });
-      
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 0,
@@ -87,10 +92,10 @@ describe("workspace-reaper", () => {
 
     it("should clean old orphaned worktrees", async () => {
       const worktreePath = await createTestWorktree("old-worktree");
-      
+
       // Simulate an old worktree by setting test time far in future
       const futureTime = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours ahead
-      
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 24,
@@ -107,9 +112,9 @@ describe("workspace-reaper", () => {
 
     it("should support dry-run mode", async () => {
       await createTestWorktree("old-worktree");
-      
+
       const futureTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
-      
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 24,
@@ -120,16 +125,21 @@ describe("workspace-reaper", () => {
       expect(result.scanned).toBe(1);
       expect(result.cleaned).toBe(1);
       expect(result.cleaned_paths[0].dryRun).toBe(true);
-      expect(existsSync(resolve(TEST_WORKTREE_BASE, "old-worktree"))).toBe(true);
+      expect(existsSync(resolve(TEST_WORKTREE_BASE, "old-worktree"))).toBe(
+        true,
+      );
     });
 
     it("should handle multiple worktrees", async () => {
       await createTestWorktree("worktree1");
       await createTestWorktree("worktree2");
-      await createTestWorktree("worktree3", { withPidFile: true, pid: process.pid });
-      
+      await createTestWorktree("worktree3", {
+        withPidFile: true,
+        pid: process.pid,
+      });
+
       const futureTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
-      
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 24,
@@ -182,7 +192,7 @@ describe("workspace-reaper", () => {
 
       // Run reaper far enough in the future that both lease and worktree are expired
       const laterTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
-      
+
       const result = await runReaperSweep({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 1,
@@ -233,8 +243,10 @@ describe("workspace-reaper", () => {
       };
 
       const formatted = formatReaperResults(results);
-      
-      expect(formatted).toContain("Sweep completed at 2026-02-08T10:00:00.000Z");
+
+      expect(formatted).toContain(
+        "Sweep completed at 2026-02-08T10:00:00.000Z",
+      );
       expect(formatted).toContain("Leases: 2 expired, 2 cleaned");
       expect(formatted).toContain("Worktrees: 5 scanned, 3 cleaned, 2 skipped");
       expect(formatted).toContain("recently_modified: 1");
@@ -260,7 +272,7 @@ describe("workspace-reaper", () => {
       };
 
       const metrics = calculateReaperMetrics(results);
-      
+
       expect(metrics.timestamp).toBe("2026-02-08T10:00:00.000Z");
       expect(metrics.leases_expired).toBe(2);
       expect(metrics.leases_cleaned).toBe(2);
