@@ -365,19 +365,6 @@ const MAX_FIX_ATTEMPTS = 3;
 // 1 min cooldown prevents rapid-fire crash loop while keeping retry cadence short.
 const FIX_COOLDOWN_MS = 60_000;
 
-let devModeCache;
-
-export function resetDevModeCache() {
-  devModeCache = undefined;
-}
-
-export function isDevMode() {
-  if (devModeCache !== undefined) return devModeCache;
-  const mode = (process.env.AUTOFIX_MODE || "").trim().toLowerCase();
-  devModeCache = mode === "dev" || mode === "npm";
-  return devModeCache;
-}
-
 function canAttemptFix(signature) {
   const record = fixAttempts.get(signature);
   if (!record) return true;
