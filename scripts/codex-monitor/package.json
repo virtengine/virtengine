@@ -50,7 +50,8 @@
     "./fleet-coordinator": "./fleet-coordinator.mjs",
     "./shared-knowledge": "./shared-knowledge.mjs",
     "./task-complexity": "./task-complexity.mjs",
-    "./presence": "./presence.mjs"
+    "./presence": "./presence.mjs",
+    "./task-archiver": "./task-archiver.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -106,6 +107,7 @@
     "fleet-coordinator.mjs",
     "shared-knowledge.mjs",
     "task-complexity.mjs",
+    "task-archiver.mjs",
     ".env.example",
     "codex-monitor.config.example.json",
     "codex-monitor.schema.json",

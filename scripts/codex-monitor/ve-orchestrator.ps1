@@ -514,6 +514,42 @@ function Invoke-GhWithTimeout {
     }
 }
 
+function Get-CommitsAhead {
+    <#
+    .SYNOPSIS Check how many commits a branch has compared to base branch.
+    .DESCRIPTION Returns the number of commits the branch has that base doesn't have.
+    .PARAMETER Branch The branch to check
+    .PARAMETER BaseBranch The base branch to compare against (default: $script:VK_TARGET_BRANCH)
+    .OUTPUTS Integer count of commits ahead, or -1 if branch doesn't exist
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+
+    # Ensure base branch format is correct (no origin/ prefix for rev-list)
+    $baseRef = $BaseBranch
+    if ($baseRef -like "origin/*") {
+        $baseRef = $baseRef  # Keep origin/ for rev-list
+    }
+
+    # Check if branch exists
+    $branchExists = git rev-parse --verify --quiet $Branch 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return -1
+    }
+
+    # Count commits ahead
+    $commitsAhead = git rev-list --count "${baseRef}..${Branch}" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "Failed to count commits for ${Branch} vs ${baseRef}" -Level "WARN"
+        return -1
+    }
+
+    return [int]$commitsAhead
+}
+
 function Create-PRForBranchSafe {
     <#
     .SYNOPSIS Create a PR for a branch with timeout + non-interactive guardrails.
@@ -1486,15 +1522,15 @@ $script:SizeToComplexity = @{
 
 # Default model profiles per complexity tier and executor type
 $script:ComplexityModels = @{
-    "CODEX" = @{
+    "CODEX"   = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
-        "medium" = @{ model = "gpt-5.2-codex";      variant = "DEFAULT";           reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.1-codex-max";  variant = "GPT51_CODEX_MAX";  reasoningEffort = "high" }
+        "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
+        "high"   = @{ model = "gpt-5.1-codex-max"; variant = "GPT51_CODEX_MAX"; reasoningEffort = "high" }
     }
     "COPILOT" = @{
-        "low"    = @{ model = "haiku-4.5";   variant = "HAIKU_4_5";       reasoningEffort = "low" }
-        "medium" = @{ model = "sonnet-4.5";  variant = "SONNET_4_5";      reasoningEffort = "medium" }
-        "high"   = @{ model = "opus-4.6";    variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
+        "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
+        "medium" = @{ model = "sonnet-4.5"; variant = "SONNET_4_5"; reasoningEffort = "medium" }
+        "high"   = @{ model = "opus-4.6"; variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
     }
 }
 
@@ -1558,11 +1594,11 @@ function Resolve-ComplexityTier {
     $adjusted = $false
     $reason = "size=$SizeLabel"
     if ($escalatorHits -gt 0 -and $simplifierHits -eq 0) {
-        if ($tier -eq "low")    { $tier = "medium"; $adjusted = $true; $reason += " → escalated" }
+        if ($tier -eq "low") { $tier = "medium"; $adjusted = $true; $reason += " → escalated" }
         elseif ($tier -eq "medium") { $tier = "high"; $adjusted = $true; $reason += " → escalated" }
     }
     elseif ($simplifierHits -gt 0 -and $escalatorHits -eq 0) {
-        if ($tier -eq "high")   { $tier = "medium"; $adjusted = $true; $reason += " → simplified" }
+        if ($tier -eq "high") { $tier = "medium"; $adjusted = $true; $reason += " → simplified" }
         elseif ($tier -eq "medium") { $tier = "low"; $adjusted = $true; $reason += " → simplified" }
     }
 
@@ -1617,7 +1653,7 @@ function Resolve-ExecutorForComplexity {
     }
 
     Write-Log ("Complexity routing: {0} (size={1}, complexity={2}, model={3}, reasoning={4})" -f `
-        $title.Substring(0, [Math]::Min(50, $title.Length)),
+            $title.Substring(0, [Math]::Min(50, $title.Length)),
         $sizeInfo.label, $complexity.tier, $result.model, $result.reasoningEffort) -Level "INFO"
 
     return $result
@@ -3065,7 +3101,7 @@ function Prune-CompletedTaskWorkspaces {
         # VK workspace pattern: <taskid-prefix>-<slug>/
         $taskPrefix = $task.id.Substring(0, [Math]::Min(4, $task.id.Length))
         $workspaceDirs = Get-ChildItem -Path $vkWorkspaceBase -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "$taskPrefix-*" }
+        Where-Object { $_.Name -like "$taskPrefix-*" }
 
         foreach ($dir in $workspaceDirs) {
             $fullPath = $dir.FullName
@@ -3171,16 +3207,60 @@ function Process-CompletedAttempts {
                             continue
                         }
 
-                        $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "missing_branch"
-                        if ($count -ge 2) {
-                            $msg = "Remote branch $branch is missing. Starting a fresh session to retry. Please check 'git status'; push if there are commits. If there are no changes, reply NO_CHANGES."
-                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "missing_branch_new_session"
+                        # Check if this is a fresh task (0 commits) or crashed task (has commits)
+                        $commitsAhead = Get-CommitsAhead -Branch $branch
+                        if ($commitsAhead -eq 0) {
+                            # Fresh task: branch exists locally but has no work. Start fresh.
+                            Write-Log "Branch $branch has 0 commits vs base — treating as fresh task, starting from scratch" -Level "INFO"
+                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "fresh_task_restart"
+                            if ($count -ge 2) {
+                                # Even fresh restart failed twice — mark for manual review
+                                Write-Log "Fresh task restart failed $count times for $($info.task_id) — marking for manual review" -Level "WARN"
+                                $info.status = "manual_review"
+                                $info.fresh_task_failed = $true
+                                $script:TasksFailed++
+                                Save-SuccessMetrics
+                                try {
+                                    $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
+                                    Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
+                                    Write-Log "Archived failed fresh task attempt $($attemptId.Substring(0,8))" -Level "INFO"
+                                }
+                                catch {
+                                    Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
+                                }
+                                $processed += $attemptId
+                                continue
+                            }
+                            # Start fresh session with original task prompt (no "check git status" nonsense)
+                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message "" -Reason "fresh_task_restart" -IncludeTaskContext:$true
+                            $info.push_notified = $true
+                            continue
+                        }
+                        elseif ($commitsAhead -gt 0) {
+                            # Has commits locally but not pushed — ask agent to push
+                            Write-Log "Branch $branch has $commitsAhead commit(s) but remote is missing — asking agent to push" -Level "INFO"
+                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "missing_branch"
+                            if ($count -ge 2) {
+                                $msg = "You have $commitsAhead local commit(s) on branch $branch that aren't pushed to remote. Please run: git push -u origin $branch`n`nIf push fails or there's an issue, describe the problem so I can help."
+                                $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "push_commits_new_session"
+                            }
+                            else {
+                                $msg = "Branch $branch has $commitsAhead commit(s) locally but remote branch is missing. Please push: git push -u origin $branch"
+                                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "push_commits"
+                            }
+                            $info.push_notified = $true
+                            continue
                         }
                         else {
-                            $msg = "Remote branch $branch is missing. Please check 'git status' and push if there are commits. If there are no changes, reply NO_CHANGES so we can mark this for manual review."
-                            $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "missing_branch"
+                            # commitsAhead == -1 (branch doesn't exist) — should not happen at this point
+                            Write-Log "Branch $branch doesn't exist locally despite being tracked — this is unexpected" -Level "ERROR"
+                            $info.status = "manual_review"
+                            $info.branch_missing = $true
+                            $script:TasksFailed++
+                            Save-SuccessMetrics
+                            $processed += $attemptId
+                            continue
                         }
-                        $info.push_notified = $true
                     }
                     continue
                 }
@@ -4363,16 +4443,254 @@ function Test-TaskFileOverlap {
     return $false
 }
 
+# ── Dirty/Conflict Task Prioritization ────────────────────────────────────────
+
+# In-memory dirty PR tracking
+$script:DirtyPRTasks = @{}       # taskId → @{ prNumber; branch; title; detectedAt; files }
+$script:DirtyResolutionCooldown = @{} # taskId → last resolution timestamp
+$script:DIRTY_COOLDOWN_MS = 15 * 60 * 1000  # 15 minutes between resolution attempts
+$script:DIRTY_RESERVED_SLOTS = 1  # Reserve 1 slot for dirty/conflict resolution
+$script:DIRTY_MAX_CONCURRENT = 2  # Max concurrent dirty resolutions
+
+function Register-DirtyPRTask {
+    <#
+    .SYNOPSIS Track a task whose PR has merge conflicts (dirty state).
+    #>
+    param(
+        [string]$TaskId,
+        [int]$PrNumber,
+        [string]$Branch,
+        [string]$Title,
+        [string[]]$Files = @()
+    )
+    $script:DirtyPRTasks[$TaskId] = @{
+        prNumber   = $PrNumber
+        branch     = $Branch
+        title      = $Title
+        detectedAt = (Get-Date)
+        files      = $Files
+        attempts   = 0
+    }
+    Write-Log "Registered dirty PR: task=$($TaskId.Substring(0,8)) PR=#$PrNumber branch=$Branch" -Level "WARN"
+}
+
+function Clear-DirtyPRTask {
+    <#
+    .SYNOPSIS Remove a task from dirty tracking (resolved or merged).
+    #>
+    param([string]$TaskId)
+    $script:DirtyPRTasks.Remove($TaskId)
+    $script:DirtyResolutionCooldown.Remove($TaskId)
+}
+
+function Get-DirtyPRTasks {
+    <#
+    .SYNOPSIS Get all currently tracked dirty/conflict tasks.
+    .OUTPUTS Array of dirty task objects.
+    #>
+    return @($script:DirtyPRTasks.Values)
+}
+
+function Test-DirtyPRFileOverlap {
+    <#
+    .SYNOPSIS Check if a new task would touch the same files as an active dirty PR.
+              If yes, the new task should be DEFERRED to avoid creating more conflicts.
+    .OUTPUTS $true if there's file overlap with a dirty PR (should defer).
+    #>
+    param(
+        [string]$TaskTitle,
+        [string]$TaskId
+    )
+
+    $dirtyTasks = @($script:DirtyPRTasks.Values)
+    if ($dirtyTasks.Count -eq 0) { return $false }
+
+    $modulePatterns = @{
+        'portal'     = @('portal/', 'lib/portal/', 'lib/capture/', 'lib/admin/', 'pnpm-lock.yaml')
+        'veid'       = @('x/veid/', 'pkg/inference/')
+        'market'     = @('x/market/')
+        'escrow'     = @('x/escrow/')
+        'mfa'        = @('x/mfa/')
+        'encryption' = @('x/encryption/')
+        'provider'   = @('pkg/provider_daemon/', 'cmd/provider-daemon/')
+        'hpc'        = @('x/hpc/')
+        'roles'      = @('x/roles/')
+        'sdk'        = @('sdk/')
+        'app'        = @('app/')
+        'ci'         = @('.github/', 'Makefile', 'make/')
+        'ml'         = @('ml/')
+        'deps'       = @('go.mod', 'go.sum', 'vendor/')
+        'codexmonitor' = @('scripts/codex-monitor/')
+    }
+
+    $titleLower = $TaskTitle.ToLower()
+    $taskModules = [System.Collections.Generic.List[string]]::new()
+    foreach ($kv in $modulePatterns.GetEnumerator()) {
+        if ($titleLower -match $kv.Key) {
+            foreach ($p in $kv.Value) { $taskModules.Add($p) }
+        }
+    }
+
+    # Unknown modules → allow (don't block)
+    if ($taskModules.Count -eq 0) { return $false }
+
+    foreach ($dirty in $dirtyTasks) {
+        # Determine dirty task's likely modules
+        $dirtyTitleLower = if ($dirty.title) { $dirty.title.ToLower() } else { "" }
+        $dirtyModules = [System.Collections.Generic.List[string]]::new()
+
+        # From dirty task's title
+        foreach ($kv in $modulePatterns.GetEnumerator()) {
+            if ($dirtyTitleLower -match $kv.Key) {
+                foreach ($p in $kv.Value) { $dirtyModules.Add($p) }
+            }
+        }
+        # From dirty task's changed files
+        foreach ($f in $dirty.files) {
+            $dirtyModules.Add($f)
+        }
+
+        # Check overlap
+        foreach ($tp in $taskModules) {
+            foreach ($dp in $dirtyModules) {
+                if ($tp -eq $dp -or $tp.StartsWith($dp) -or $dp.StartsWith($tp)) {
+                    Write-Log "Dirty PR overlap: task '$($TaskTitle.Substring(0, [Math]::Min(50, $TaskTitle.Length)))' conflicts with dirty PR #$($dirty.prNumber) '$($dirty.title)' on $dp" -Level "WARN"
+                    return $true
+                }
+            }
+        }
+
+        # Go module global conflict check
+        $goModules = @('veid', 'market', 'escrow', 'mfa', 'encryption', 'hpc', 'roles', 'provider', 'app', 'sdk')
+        $taskIsGo = $goModules | Where-Object { $titleLower -match $_ }
+        $dirtyHasGoFiles = @($dirty.files) | Where-Object { $_ -match '^go\.(mod|sum)$' -or $_ -match '^vendor/' }
+        if ($taskIsGo -and $dirtyHasGoFiles) {
+            Write-Log "Dirty PR Go overlap: task '$($TaskTitle.Substring(0, [Math]::Min(50, $TaskTitle.Length)))' conflicts with dirty PR #$($dirty.prNumber) on Go module files" -Level "WARN"
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Get-DirtySlotReservation {
+    <#
+    .SYNOPSIS Calculate effective slot capacity after reserving for dirty tasks.
+    .OUTPUTS Hashtable with effectiveCapacity, reservedForDirty, hasDirtyTasks.
+    #>
+    param(
+        [double]$TotalCapacity,
+        [double]$ActiveWeight
+    )
+
+    $dirtyCount = $script:DirtyPRTasks.Count
+    if ($dirtyCount -eq 0) {
+        return @{
+            effectiveCapacity = $TotalCapacity
+            reservedForDirty  = 0
+            hasDirtyTasks     = $false
+            dirtyCount        = 0
+        }
+    }
+
+    # Count how many dirty tasks are already being resolved
+    $activeDirtyCount = @($script:TrackedAttempts.Values | Where-Object {
+        $_.status -eq "running" -and $_.is_dirty_resolution -eq $true
+    }).Count
+
+    if ($activeDirtyCount -ge $script:DIRTY_MAX_CONCURRENT) {
+        return @{
+            effectiveCapacity = $TotalCapacity
+            reservedForDirty  = 0
+            hasDirtyTasks     = $true
+            dirtyCount        = $dirtyCount
+        }
+    }
+
+    # Reserve slots — never more than 25% of capacity
+    $reserved = [math]::Min($script:DIRTY_RESERVED_SLOTS, [math]::Max(1, [math]::Floor($TotalCapacity * 0.25)))
+    return @{
+        effectiveCapacity = [math]::Max(0, $TotalCapacity - $reserved)
+        reservedForDirty  = $reserved
+        hasDirtyTasks     = $true
+        dirtyCount        = $dirtyCount
+    }
+}
+
+function Resolve-ExecutorForDirtyTask {
+    <#
+    .SYNOPSIS Force the HIGHEST model tier for dirty/conflict task resolution.
+              Dirty tasks ALWAYS get the most capable model, regardless of task size.
+    #>
+    param(
+        [Parameter(Mandatory)][object]$Task,
+        [Parameter(Mandatory)][hashtable]$BaseProfile
+    )
+
+    $executor = if ($BaseProfile.executor) { $BaseProfile.executor.ToUpper() } else { "CODEX" }
+
+    # Force HIGH tier
+    $highModels = $script:ComplexityModels
+    if (-not $highModels) {
+        # Fallback to hardcoded HIGH tier
+        if ($executor -eq "COPILOT") {
+            return @{
+                executor        = "COPILOT"
+                variant         = "CLAUDE_OPUS_4_6"
+                model           = "opus-4.6"
+                reasoningEffort = "high"
+                complexity      = @{ tier = "high"; reason = "dirty/conflict → forced HIGH"; adjusted = $true }
+            }
+        }
+        return @{
+            executor        = "CODEX"
+            variant         = "GPT51_CODEX_MAX"
+            model           = "gpt-5.1-codex-max"
+            reasoningEffort = "high"
+            complexity      = @{ tier = "high"; reason = "dirty/conflict → forced HIGH"; adjusted = $true }
+        }
+    }
+
+    $model = $highModels[$executor]?.high
+    if (-not $model) {
+        $model = @{ Model = "gpt-5.1-codex-max"; Variant = "GPT51_CODEX_MAX"; Reasoning = "high" }
+    }
+
+    return @{
+        executor        = $executor
+        variant         = $model.Variant
+        model           = $model.Model
+        reasoningEffort = $model.Reasoning
+        complexity      = @{ tier = "high"; reason = "dirty/conflict → forced HIGH"; adjusted = $true }
+    }
+}
+
 function Fill-ParallelSlots {
     <#
     .SYNOPSIS Submit new task attempts to reach the target parallelism.
               Enforces merge gate: won't start new tasks if previous ones have unmerged PRs.
               Uses 50/50 Codex/Copilot executor cycling.
+              Reserves slots for dirty/conflict resolution tasks.
+              Dirty tasks get priority over new tasks and use highest models.
     #>
     $capacityInfo = Get-AvailableSlotCapacity
     $remainingCapacity = $capacityInfo.remaining
     $capacity = $capacityInfo.capacity
     $activeWeight = $capacityInfo.active_weight
+
+    # ── Dirty/Conflict Slot Reservation ──────────────────────────────────────
+    # Reserve slot(s) for dirty/conflict tasks so new tasks don't fill ALL capacity
+    $dirtyReservation = Get-DirtySlotReservation -TotalCapacity $capacity -ActiveWeight $activeWeight
+    if ($dirtyReservation.hasDirtyTasks) {
+        $effectiveCap = $dirtyReservation.effectiveCapacity
+        $reservedSlots = $dirtyReservation.reservedForDirty
+        $dirtyCount = $dirtyReservation.dirtyCount
+        Write-Log ("Dirty/conflict tasks: {0} detected — reserving {1} slot(s) for resolution (effective capacity for new tasks: {2})" -f `
+                $dirtyCount, $reservedSlots, [math]::Round($effectiveCap, 2)) -Level "WARN"
+        # Reduce remaining capacity for new tasks (dirty tasks get their own path)
+        $remainingCapacity = [math]::Max(0, $effectiveCap - $activeWeight)
+    }
+
     if ($remainingCapacity -lt 0.75) {
         Write-Log "All slots occupied (capacity: $capacity, active weight: $([math]::Round($activeWeight, 2)))" -Level "INFO"
         return
@@ -4406,12 +4724,27 @@ function Fill-ParallelSlots {
             continue
         }
 
+        # ── Dirty PR file-overlap guard ──────────────────────────────────────
+        # Don't schedule tasks that touch the same files as an active dirty PR
+        if (Test-DirtyPRFileOverlap -TaskTitle $taskTitle -TaskId $task.id) {
+            Write-Log "Deferring task $($task.id.Substring(0,8)) — file overlap with dirty/conflict PR" -Level "WARN"
+            continue
+        }
+
+        # ── Check if this IS a dirty/conflict task (prioritize + force HIGH model) ──
+        $isDirtyTask = $script:DirtyPRTasks.ContainsKey($task.id)
+
         $sizeInfo = Get-TaskSizeInfo -Task $task
         $requiredWeight = [double]$sizeInfo.weight
         if ($requiredWeight -gt $remainingCapacity) {
-            Write-Log ("Deferring task {0} — size {1} (weight {2}) exceeds remaining capacity {3}" -f `
-                    $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight, [math]::Round($remainingCapacity, 2)) -Level "INFO"
-            continue
+            # Dirty tasks get priority even when capacity is tight (use reserved slot)
+            if (-not $isDirtyTask) {
+                Write-Log ("Deferring task {0} — size {1} (weight {2}) exceeds remaining capacity {3}" -f `
+                        $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight, [math]::Round($remainingCapacity, 2)) -Level "INFO"
+                continue
+            }
+            Write-Log ("Dirty task {0} using reserved slot — size {1} (weight {2})" -f `
+                    $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight) -Level "WARN"
         }
 
         $title = if ([string]::IsNullOrWhiteSpace($task.title)) {
@@ -4423,7 +4756,15 @@ function Fill-ParallelSlots {
         $shortTitle = $title.Substring(0, [Math]::Min(70, $title.Length))
         $targetBranch = Get-TaskUpstreamBranch -Task $task
         $baseExec = Get-CurrentExecutorProfile
-        $nextExec = Resolve-ExecutorForComplexity -Task $task -BaseProfile $baseExec
+
+        # ── Force highest model for dirty tasks ──────────────────────────────
+        $nextExec = if ($isDirtyTask) {
+            $dirtyExec = Resolve-ExecutorForDirtyTask -Task $task -BaseProfile $baseExec
+            Write-Log "DIRTY TASK: $shortTitle — forcing HIGH model [$($dirtyExec.executor)/$($dirtyExec.model)]" -Level "WARN"
+            $dirtyExec
+        } else {
+            Resolve-ExecutorForComplexity -Task $task -BaseProfile $baseExec
+        }
         $complexityTag = if ($nextExec.complexity) { " complexity=$($nextExec.complexity.tier)" } else { "" }
         Write-Log "Submitting: $shortTitle [$($nextExec.executor)/$($nextExec.model)]$complexityTag (base: $targetBranch)" -Level "ACTION"
 
@@ -4452,6 +4793,7 @@ function Fill-ParallelSlots {
                     task_size_weight     = $sizeInfo.weight
                     task_priority_cached = $priorityInfo.label
                     task_priority_rank   = $priorityInfo.rank
+                    is_dirty_resolution  = $isDirtyTask
                 }
                 $taskUrl = Get-TaskUrl -TaskId $task.id
                 Add-RecentItem -ListName "SubmittedTasks" -Item @{
