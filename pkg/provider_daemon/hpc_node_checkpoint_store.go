@@ -23,6 +23,9 @@ type HPCNodeCheckpointNode struct {
 	NodeID                string           `json:"node_id"`
 	ClusterID             string           `json:"cluster_id"`
 	PublicKey             string           `json:"public_key"`
+	AgentPubkey           string           `json:"agent_pubkey,omitempty"`
+	HardwareFingerprint   string           `json:"hardware_fingerprint,omitempty"`
+	AgentVersion          string           `json:"agent_version,omitempty"`
 	LastHeartbeat         time.Time        `json:"last_heartbeat"`
 	LastSequence          uint64           `json:"last_sequence"`
 	ConsecutiveMisses     int              `json:"consecutive_misses"`
@@ -30,6 +33,9 @@ type HPCNodeCheckpointNode struct {
 	Capacity              *HPCNodeCapacity `json:"capacity,omitempty"`
 	Health                *HPCNodeHealth   `json:"health,omitempty"`
 	Latency               *HPCNodeLatency  `json:"latency,omitempty"`
+	Hardware              *HPCNodeHardware `json:"hardware,omitempty"`
+	Topology              *HPCNodeTopology `json:"topology,omitempty"`
+	Locality              *HPCNodeLocality `json:"locality,omitempty"`
 	PendingChainUpdate    bool             `json:"pending_chain_update"`
 	OnChainRegistered     bool             `json:"on_chain_registered"`
 	LastSubmittedSequence uint64           `json:"last_submitted_sequence"`

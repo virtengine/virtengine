@@ -81,11 +81,38 @@ type HPCNodeAggregatorConfig struct {
 	// DefaultDatacenter is used when heartbeats don't include datacenter.
 	DefaultDatacenter string `json:"default_datacenter" yaml:"default_datacenter"`
 
+	// DiscoveryEnabled enables scheduler-based node discovery.
+	DiscoveryEnabled bool `json:"discovery_enabled" yaml:"discovery_enabled"`
+
+	// DiscoveryInterval controls how often to discover nodes.
+	DiscoveryInterval time.Duration `json:"discovery_interval" yaml:"discovery_interval"`
+
 	// ChainReporter is the on-chain reporter (optional).
 	ChainReporter HPCNodeChainReporter `json:"-" yaml:"-"`
 
 	// CheckpointStore overrides the checkpoint store (optional).
 	CheckpointStore *HPCNodeCheckpointStore `json:"-" yaml:"-"`
+
+	// NodeDiscoverer provides node discovery results (optional).
+	NodeDiscoverer HPCNodeDiscoverer `json:"-" yaml:"-"`
+}
+
+// HPCNodeDiscoverer defines scheduler-backed node discovery.
+type HPCNodeDiscoverer interface {
+	ListNodes(ctx context.Context) ([]HPCDiscoveredNode, error)
+}
+
+// HPCDiscoveredNode describes a node discovered from the scheduler.
+type HPCDiscoveredNode struct {
+	NodeID      string
+	ClusterID   string
+	Region      string
+	Datacenter  string
+	Capacity    *HPCNodeCapacity
+	Hardware    *HPCNodeHardware
+	Topology    *HPCNodeTopology
+	Locality    *HPCNodeLocality
+	AgentPubkey string
 }
 
 // DefaultHPCNodeAggregatorConfig returns the default configuration
@@ -102,6 +129,8 @@ func DefaultHPCNodeAggregatorConfig() HPCNodeAggregatorConfig {
 		MaxSubmitRetries:    5,
 		RetryBackoff:        5 * time.Second,
 		StaleMissThreshold:  5,
+		DiscoveryEnabled:    true,
+		DiscoveryInterval:   2 * time.Minute,
 	}
 }
 
@@ -128,6 +157,9 @@ type aggregatedNodeState struct {
 	NodeID                string
 	ClusterID             string
 	PublicKey             ed25519.PublicKey
+	AgentPubkey           string
+	HardwareFingerprint   string
+	AgentVersion          string
 	LastHeartbeat         time.Time
 	LastSequence          uint64
 	ConsecutiveMisses     int
@@ -135,6 +167,9 @@ type aggregatedNodeState struct {
 	Capacity              *HPCNodeCapacity
 	Health                *HPCNodeHealth
 	Latency               *HPCNodeLatency
+	Hardware              *HPCNodeHardware
+	Topology              *HPCNodeTopology
+	Locality              *HPCNodeLocality
 	PendingChainUpdate    bool
 	OnChainRegistered     bool
 	LastSubmittedSequence uint64
@@ -163,6 +198,23 @@ type nodeUpdate struct {
 	EnqueuedAt     time.Time
 }
 
+type nodeRegistration struct {
+	NodeID              string           `json:"node_id"`
+	ClusterID           string           `json:"cluster_id"`
+	ProviderAddress     string           `json:"provider_address"`
+	AgentPubkey         string           `json:"agent_pubkey"`
+	Hostname            string           `json:"hostname,omitempty"`
+	HardwareFingerprint string           `json:"hardware_fingerprint,omitempty"`
+	AgentVersion        string           `json:"agent_version,omitempty"`
+	Region              string           `json:"region,omitempty"`
+	Datacenter          string           `json:"datacenter,omitempty"`
+	Capacity            *HPCNodeCapacity `json:"capacity,omitempty"`
+	Health              *HPCNodeHealth   `json:"health,omitempty"`
+	Hardware            *HPCNodeHardware `json:"hardware,omitempty"`
+	Topology            *HPCNodeTopology `json:"topology,omitempty"`
+	Locality            *HPCNodeLocality `json:"locality,omitempty"`
+}
+
 // HPCNodeHeartbeat is a heartbeat received from a node
 type HPCNodeHeartbeat struct {
 	NodeID         string          `json:"node_id"`
@@ -181,13 +233,17 @@ type HPCNodeHeartbeat struct {
 type HPCNodeCapacity struct {
 	CPUCoresTotal      int32  `json:"cpu_cores_total"`
 	CPUCoresAvailable  int32  `json:"cpu_cores_available"`
+	CPUCoresAllocated  int32  `json:"cpu_cores_allocated,omitempty"`
 	MemoryGBTotal      int32  `json:"memory_gb_total"`
 	MemoryGBAvailable  int32  `json:"memory_gb_available"`
+	MemoryGBAllocated  int32  `json:"memory_gb_allocated,omitempty"`
 	GPUsTotal          int32  `json:"gpus_total"`
 	GPUsAvailable      int32  `json:"gpus_available"`
+	GPUsAllocated      int32  `json:"gpus_allocated,omitempty"`
 	GPUType            string `json:"gpu_type,omitempty"`
 	StorageGBTotal     int32  `json:"storage_gb_total"`
 	StorageGBAvailable int32  `json:"storage_gb_available"`
+	StorageGBAllocated int32  `json:"storage_gb_allocated,omitempty"`
 }
 
 // HPCNodeHealth contains node health
@@ -198,6 +254,41 @@ type HPCNodeHealth struct {
 	CPUUtilizationPercent    int32  `json:"cpu_utilization_percent"`
 	MemoryUtilizationPercent int32  `json:"memory_utilization_percent"`
 	SLURMState               string `json:"slurm_state,omitempty"`
+}
+
+// HPCNodeHardware contains node hardware details
+type HPCNodeHardware struct {
+	CPUModel       string   `json:"cpu_model,omitempty"`
+	CPUVendor      string   `json:"cpu_vendor,omitempty"`
+	CPUArch        string   `json:"cpu_arch,omitempty"`
+	Sockets        int32    `json:"sockets,omitempty"`
+	CoresPerSocket int32    `json:"cores_per_socket,omitempty"`
+	ThreadsPerCore int32    `json:"threads_per_core,omitempty"`
+	MemoryType     string   `json:"memory_type,omitempty"`
+	MemorySpeedMHz int32    `json:"memory_speed_mhz,omitempty"`
+	GPUModel       string   `json:"gpu_model,omitempty"`
+	GPUMemoryGB    int32    `json:"gpu_memory_gb,omitempty"`
+	StorageType    string   `json:"storage_type,omitempty"`
+	Features       []string `json:"features,omitempty"`
+}
+
+// HPCNodeTopology describes node topology
+type HPCNodeTopology struct {
+	NUMANodes     int32  `json:"numa_nodes,omitempty"`
+	NUMAMemoryGB  int32  `json:"numa_memory_gb,omitempty"`
+	Interconnect  string `json:"interconnect,omitempty"`
+	NetworkFabric string `json:"network_fabric,omitempty"`
+	TopologyHint  string `json:"topology_hint,omitempty"`
+}
+
+// HPCNodeLocality describes node locality
+type HPCNodeLocality struct {
+	Region     string `json:"region,omitempty"`
+	Datacenter string `json:"datacenter,omitempty"`
+	Zone       string `json:"zone,omitempty"`
+	Rack       string `json:"rack,omitempty"`
+	Row        string `json:"row,omitempty"`
+	Position   string `json:"position,omitempty"`
 }
 
 // HPCNodeLatency contains latency measurements
@@ -329,9 +420,17 @@ func (a *HPCNodeAggregator) Start(ctx context.Context) error {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	a.wg.Add(2)
+	discoveryEnabled := a.config.DiscoveryEnabled && a.config.NodeDiscoverer != nil
+	workers := 2
+	if discoveryEnabled {
+		workers++
+	}
+	a.wg.Add(workers)
 	go a.runHTTPServer(ctx)
 	go a.runBatchSubmitter(ctx)
+	if discoveryEnabled {
+		go a.runDiscoveryLoop(ctx)
+	}
 
 	return nil
 }
@@ -388,6 +487,69 @@ func (a *HPCNodeAggregator) runBatchSubmitter(ctx context.Context) {
 	}
 }
 
+func (a *HPCNodeAggregator) runDiscoveryLoop(ctx context.Context) {
+	defer a.wg.Done()
+
+	interval := a.config.DiscoveryInterval
+	if interval <= 0 {
+		interval = 2 * time.Minute
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	a.discoverNodes(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-a.stopCh:
+			return
+		case <-ticker.C:
+			a.discoverNodes(ctx)
+		}
+	}
+}
+
+func (a *HPCNodeAggregator) discoverNodes(ctx context.Context) {
+	if a.config.NodeDiscoverer == nil {
+		return
+	}
+
+	nodes, err := a.config.NodeDiscoverer.ListNodes(ctx)
+	if err != nil {
+		fmt.Printf("[HPC-AGGREGATOR] Node discovery failed: %v\n", err)
+		return
+	}
+
+	for _, node := range nodes {
+		a.nodesMu.RLock()
+		_, exists := a.nodes[node.NodeID]
+		a.nodesMu.RUnlock()
+		if exists {
+			continue
+		}
+
+		reg := nodeRegistration{
+			NodeID:          node.NodeID,
+			ClusterID:       node.ClusterID,
+			ProviderAddress: a.config.ProviderAddress,
+			Region:          node.Region,
+			Datacenter:      node.Datacenter,
+			Capacity:        node.Capacity,
+			Hardware:        node.Hardware,
+			Topology:        node.Topology,
+			Locality:        node.Locality,
+			AgentPubkey:     node.AgentPubkey,
+		}
+
+		if err := a.registerNode(reg); err != nil {
+			fmt.Printf("[HPC-AGGREGATOR] Discovery registration failed for %s: %v\n", node.NodeID, err)
+		}
+	}
+}
+
 func (a *HPCNodeAggregator) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -399,20 +561,14 @@ func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req struct {
-		NodeID          string `json:"node_id"`
-		ClusterID       string `json:"cluster_id"`
-		ProviderAddress string `json:"provider_address"`
-		AgentPubkey     string `json:"agent_pubkey"`
-		Hostname        string `json:"hostname"`
-	}
+	var req nodeRegistration
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	if err := a.registerNode(req.NodeID, req.ClusterID, req.ProviderAddress, req.AgentPubkey); err != nil {
+	if err := a.registerNode(req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -425,59 +581,95 @@ func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (a *HPCNodeAggregator) registerNode(nodeID, clusterID, providerAddress, agentPubkey string) error {
-	if providerAddress != a.config.ProviderAddress {
+func (a *HPCNodeAggregator) registerNode(reg nodeRegistration) error {
+	if reg.ProviderAddress != a.config.ProviderAddress {
 		return fmt.Errorf("provider address mismatch")
 	}
-	if nodeID == "" {
+	if reg.NodeID == "" {
 		return fmt.Errorf("node_id required")
 	}
-	if clusterID == "" {
-		clusterID = a.config.ClusterID
+	if reg.ClusterID == "" {
+		reg.ClusterID = a.config.ClusterID
 	}
-	if clusterID == "" {
+	if reg.ClusterID == "" {
 		return fmt.Errorf("cluster_id required")
 	}
 
-	pubkeyBytes, err := base64.StdEncoding.DecodeString(agentPubkey)
-	if err != nil {
-		return fmt.Errorf("invalid public key")
+	var pubkeyBytes []byte
+	if reg.AgentPubkey != "" {
+		var err error
+		pubkeyBytes, err = base64.StdEncoding.DecodeString(reg.AgentPubkey)
+		if err != nil {
+			return fmt.Errorf("invalid public key")
+		}
 	}
 
-	a.config.AllowedNodePubkeys[agentPubkey] = true
+	if reg.AgentPubkey != "" {
+		a.config.AllowedNodePubkeys[reg.AgentPubkey] = true
+	}
 
 	now := time.Now()
 	a.nodesMu.Lock()
-	state, exists := a.nodes[nodeID]
+	state, exists := a.nodes[reg.NodeID]
 	if !exists {
 		state = &aggregatedNodeState{
-			NodeID:        nodeID,
-			ClusterID:     clusterID,
+			NodeID:        reg.NodeID,
+			ClusterID:     reg.ClusterID,
 			PublicKey:     ed25519.PublicKey(pubkeyBytes),
+			AgentPubkey:   reg.AgentPubkey,
 			LastHeartbeat: now,
 			RegisteredAt:  now,
 		}
-		a.nodes[nodeID] = state
+		a.nodes[reg.NodeID] = state
 	} else {
-		state.ClusterID = clusterID
-		state.PublicKey = ed25519.PublicKey(pubkeyBytes)
+		state.ClusterID = reg.ClusterID
+		if len(pubkeyBytes) > 0 {
+			state.PublicKey = ed25519.PublicKey(pubkeyBytes)
+			state.AgentPubkey = reg.AgentPubkey
+		}
 		state.LastHeartbeat = now
 		if state.RegisteredAt.IsZero() {
 			state.RegisteredAt = now
+		}
+	}
+	if reg.HardwareFingerprint != "" {
+		state.HardwareFingerprint = reg.HardwareFingerprint
+	}
+	if reg.AgentVersion != "" {
+		state.AgentVersion = reg.AgentVersion
+	}
+	if reg.Capacity != nil {
+		state.Capacity = reg.Capacity
+	}
+	if reg.Health != nil {
+		state.Health = reg.Health
+	}
+	if reg.Hardware != nil {
+		state.Hardware = reg.Hardware
+	}
+	if reg.Topology != nil {
+		state.Topology = reg.Topology
+	}
+	if reg.Locality != nil {
+		state.Locality = reg.Locality
+	} else if reg.Region != "" || reg.Datacenter != "" {
+		state.Locality = &HPCNodeLocality{
+			Region:     reg.Region,
+			Datacenter: reg.Datacenter,
 		}
 	}
 	state.PendingChainUpdate = true
 	a.nodesMu.Unlock()
 
 	a.enqueueUpdate(&nodeUpdate{
-		NodeID:     nodeID,
-		ClusterID:  clusterID,
+		NodeID:     reg.NodeID,
+		ClusterID:  reg.ClusterID,
 		UpdateType: nodeUpdateRegistration,
 		Active:     false,
 		EnqueuedAt: now,
 	})
 
-	fmt.Printf("[HPC-AGGREGATOR] Registered node: %s\n", nodeID)
+	fmt.Printf("[HPC-AGGREGATOR] Registered node: %s\n", reg.NodeID)
 	return nil
 }
 
@@ -572,6 +764,7 @@ func (a *HPCNodeAggregator) processHeartbeat(hb *HPCNodeHeartbeat, auth *HPCHear
 	nodeState.LastSequence = hb.SequenceNumber
 	nodeState.ConsecutiveMisses = 0
 	nodeState.TotalHeartbeats++
+	nodeState.AgentVersion = hb.AgentVersion
 	nodeState.Capacity = &hb.Capacity
 	nodeState.Health = &hb.Health
 	nodeState.Latency = &hb.Latency
@@ -686,18 +879,41 @@ func (a *HPCNodeAggregator) buildNodeMetadataUpdate(update *nodeUpdate) *hpcv1.M
 	}
 
 	capacity := &HPCNodeCapacity{}
+	health := &HPCNodeHealth{}
+	agentVersion := state.AgentVersion
 	if heartbeat != nil {
 		capacity = &heartbeat.Capacity
+		health = &heartbeat.Health
+		if heartbeat.AgentVersion != "" {
+			agentVersion = heartbeat.AgentVersion
+		}
 	} else if state.Capacity != nil {
 		capacity = state.Capacity
+	}
+	if heartbeat == nil && state.Health != nil {
+		health = state.Health
+	}
+
+	healthStatus := healthStatusFromString(health.Status)
+	nodeState := nodeStateForUpdate(update, healthStatus)
+
+	region := a.config.DefaultRegion
+	datacenter := a.config.DefaultDatacenter
+	if state.Locality != nil {
+		if state.Locality.Region != "" {
+			region = state.Locality.Region
+		}
+		if state.Locality.Datacenter != "" {
+			datacenter = state.Locality.Datacenter
+		}
 	}
 
 	return &hpcv1.MsgUpdateNodeMetadata{
 		ProviderAddress:     a.config.ProviderAddress,
 		NodeId:              update.NodeID,
 		ClusterId:           update.ClusterID,
-		Region:              a.config.DefaultRegion,
-		Datacenter:          a.config.DefaultDatacenter,
+		Region:              region,
+		Datacenter:          datacenter,
 		LatencyMeasurements: latency,
 		Resources: &hpcv1.NodeResources{
 			CpuCores:  capacity.CPUCoresTotal,
@@ -706,7 +922,18 @@ func (a *HPCNodeAggregator) buildNodeMetadataUpdate(update *nodeUpdate) *hpcv1.M
 			GpuType:   capacity.GPUType,
 			StorageGb: capacity.StorageGBTotal,
 		},
-		Active: update.Active,
+		Active:              update.Active,
+		State:               nodeState,
+		HealthStatus:        healthStatus,
+		AgentPubkey:         state.AgentPubkey,
+		HardwareFingerprint: state.HardwareFingerprint,
+		AgentVersion:        agentVersion,
+		LastSequenceNumber:  update.SequenceNumber,
+		Capacity:            nodeCapacityToProto(capacity),
+		Health:              nodeHealthToProto(health),
+		Hardware:            nodeHardwareToProto(state.Hardware),
+		Topology:            nodeTopologyToProto(state.Topology),
+		Locality:            nodeLocalityToProto(state.Locality, a.config.DefaultRegion, a.config.DefaultDatacenter),
 	}
 }
 
@@ -908,6 +1135,137 @@ func (a *HPCNodeAggregator) isActiveHealth(status string) bool {
 	}
 }
 
+func healthStatusFromString(status string) hpcv1.HealthStatus {
+	switch status {
+	case healthStatusHealthy:
+		return hpcv1.HealthStatusHealthy
+	case healthStatusDegraded:
+		return hpcv1.HealthStatusDegraded
+	case "unhealthy":
+		return hpcv1.HealthStatusUnhealthy
+	case "draining":
+		return hpcv1.HealthStatusDraining
+	case healthStatusOffline:
+		return hpcv1.HealthStatusOffline
+	default:
+		return hpcv1.HealthStatusUnspecified
+	}
+}
+
+func nodeStateForUpdate(update *nodeUpdate, healthStatus hpcv1.HealthStatus) hpcv1.NodeState {
+	if update == nil {
+		return hpcv1.NodeStateUnspecified
+	}
+
+	switch update.UpdateType {
+	case nodeUpdateRegistration:
+		return hpcv1.NodeStatePending
+	case nodeUpdateOffline:
+		return hpcv1.NodeStateOffline
+	}
+
+	switch healthStatus {
+	case hpcv1.HealthStatusOffline:
+		return hpcv1.NodeStateOffline
+	case hpcv1.HealthStatusDraining:
+		return hpcv1.NodeStateDraining
+	}
+
+	if update.Active {
+		return hpcv1.NodeStateActive
+	}
+
+	return hpcv1.NodeStateStale
+}
+
+func nodeCapacityToProto(capacity *HPCNodeCapacity) *hpcv1.NodeCapacity {
+	if capacity == nil {
+		return nil
+	}
+	return &hpcv1.NodeCapacity{
+		CpuCoresTotal:      capacity.CPUCoresTotal,
+		CpuCoresAvailable:  capacity.CPUCoresAvailable,
+		CpuCoresAllocated:  capacity.CPUCoresAllocated,
+		MemoryGbTotal:      capacity.MemoryGBTotal,
+		MemoryGbAvailable:  capacity.MemoryGBAvailable,
+		MemoryGbAllocated:  capacity.MemoryGBAllocated,
+		GpusTotal:          capacity.GPUsTotal,
+		GpusAvailable:      capacity.GPUsAvailable,
+		GpusAllocated:      capacity.GPUsAllocated,
+		GpuType:            capacity.GPUType,
+		StorageGbTotal:     capacity.StorageGBTotal,
+		StorageGbAvailable: capacity.StorageGBAvailable,
+		StorageGbAllocated: capacity.StorageGBAllocated,
+	}
+}
+
+func nodeHealthToProto(health *HPCNodeHealth) *hpcv1.NodeHealth {
+	if health == nil {
+		return nil
+	}
+	return &hpcv1.NodeHealth{
+		Status:                   healthStatusFromString(health.Status),
+		UptimeSeconds:            health.UptimeSeconds,
+		LoadAverage_1M:           health.LoadAverage1m,
+		CpuUtilizationPercent:    health.CPUUtilizationPercent,
+		MemoryUtilizationPercent: health.MemoryUtilizationPercent,
+		SlurmState:               health.SLURMState,
+	}
+}
+
+func nodeHardwareToProto(hardware *HPCNodeHardware) *hpcv1.NodeHardware {
+	if hardware == nil {
+		return nil
+	}
+	return &hpcv1.NodeHardware{
+		CpuModel:       hardware.CPUModel,
+		CpuVendor:      hardware.CPUVendor,
+		CpuArch:        hardware.CPUArch,
+		Sockets:        hardware.Sockets,
+		CoresPerSocket: hardware.CoresPerSocket,
+		ThreadsPerCore: hardware.ThreadsPerCore,
+		MemoryType:     hardware.MemoryType,
+		MemorySpeedMhz: hardware.MemorySpeedMHz,
+		GpuModel:       hardware.GPUModel,
+		GpuMemoryGb:    hardware.GPUMemoryGB,
+		StorageType:    hardware.StorageType,
+		Features:       hardware.Features,
+	}
+}
+
+func nodeTopologyToProto(topology *HPCNodeTopology) *hpcv1.NodeTopology {
+	if topology == nil {
+		return nil
+	}
+	return &hpcv1.NodeTopology{
+		NumaNodes:     topology.NUMANodes,
+		NumaMemoryGb:  topology.NUMAMemoryGB,
+		Interconnect:  topology.Interconnect,
+		NetworkFabric: topology.NetworkFabric,
+		TopologyHint:  topology.TopologyHint,
+	}
+}
+
+func nodeLocalityToProto(locality *HPCNodeLocality, defaultRegion, defaultDatacenter string) *hpcv1.NodeLocality {
+	if locality == nil {
+		if defaultRegion == "" && defaultDatacenter == "" {
+			return nil
+		}
+		return &hpcv1.NodeLocality{
+			Region:     defaultRegion,
+			Datacenter: defaultDatacenter,
+		}
+	}
+	return &hpcv1.NodeLocality{
+		Region:     locality.Region,
+		Datacenter: locality.Datacenter,
+		Zone:       locality.Zone,
+		Rack:       locality.Rack,
+		Row:        locality.Row,
+		Position:   locality.Position,
+	}
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -935,11 +1293,17 @@ func (a *HPCNodeAggregator) loadCheckpoint() error {
 				a.config.AllowedNodePubkeys[node.PublicKey] = true
 			}
 		}
+		if node.AgentPubkey != "" {
+			a.config.AllowedNodePubkeys[node.AgentPubkey] = true
+		}
 
 		a.nodes[node.NodeID] = &aggregatedNodeState{
 			NodeID:                node.NodeID,
 			ClusterID:             node.ClusterID,
 			PublicKey:             pubkey,
+			AgentPubkey:           node.AgentPubkey,
+			HardwareFingerprint:   node.HardwareFingerprint,
+			AgentVersion:          node.AgentVersion,
 			LastHeartbeat:         node.LastHeartbeat,
 			LastSequence:          node.LastSequence,
 			ConsecutiveMisses:     node.ConsecutiveMisses,
@@ -947,6 +1311,9 @@ func (a *HPCNodeAggregator) loadCheckpoint() error {
 			Capacity:              node.Capacity,
 			Health:                node.Health,
 			Latency:               node.Latency,
+			Hardware:              node.Hardware,
+			Topology:              node.Topology,
+			Locality:              node.Locality,
 			PendingChainUpdate:    node.PendingChainUpdate,
 			OnChainRegistered:     node.OnChainRegistered,
 			LastSubmittedSequence: node.LastSubmittedSequence,
@@ -993,6 +1360,9 @@ func (a *HPCNodeAggregator) persistCheckpoint() error {
 			NodeID:                state.NodeID,
 			ClusterID:             state.ClusterID,
 			PublicKey:             publicKey,
+			AgentPubkey:           state.AgentPubkey,
+			HardwareFingerprint:   state.HardwareFingerprint,
+			AgentVersion:          state.AgentVersion,
 			LastHeartbeat:         state.LastHeartbeat,
 			LastSequence:          state.LastSequence,
 			ConsecutiveMisses:     state.ConsecutiveMisses,
@@ -1000,6 +1370,9 @@ func (a *HPCNodeAggregator) persistCheckpoint() error {
 			Capacity:              state.Capacity,
 			Health:                state.Health,
 			Latency:               state.Latency,
+			Hardware:              state.Hardware,
+			Topology:              state.Topology,
+			Locality:              state.Locality,
 			PendingChainUpdate:    state.PendingChainUpdate,
 			OnChainRegistered:     state.OnChainRegistered,
 			LastSubmittedSequence: state.LastSubmittedSequence,

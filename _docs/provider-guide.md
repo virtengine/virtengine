@@ -331,6 +331,8 @@ hpc:
     max_submit_retries: 5
     retry_backoff: "5s"
     stale_miss_threshold: 5
+    discovery_enabled: true
+    discovery_interval: "2m"
     default_region: "us-west-1"
     default_datacenter: "pdx-1"
 ```
@@ -339,6 +341,8 @@ hpc:
 
 - `slurm_k8s.provider_endpoint` must be reachable from the SLURM node agents (often the provider daemon service).
 - The node aggregator persists checkpoints so restarts do not lose heartbeat sequences or pending chain updates.
+- If `discovery_enabled` is true and a SLURM scheduler is configured, the provider daemon discovers nodes via SLURM
+  and auto-registers them on-chain before heartbeats begin.
 - If bootstrap readiness fails and `rollback_on_failure` is enabled, the Helm release is uninstalled.
 
 ## Key Management

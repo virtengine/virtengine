@@ -86,6 +86,15 @@ type NodeMetadata struct {
 	// Health contains current health snapshot from last heartbeat
 	Health *NodeHealth `json:"health,omitempty"`
 
+	// Hardware contains static hardware details
+	Hardware *NodeHardware `json:"hardware,omitempty"`
+
+	// Topology contains topology and fabric details
+	Topology *NodeTopology `json:"topology,omitempty"`
+
+	// Locality contains locality details beyond region/datacenter
+	Locality *NodeLocality `json:"locality,omitempty"`
+
 	// MissedHeartbeatCount is consecutive missed heartbeats
 	MissedHeartbeatCount int32 `json:"missed_heartbeat_count"`
 

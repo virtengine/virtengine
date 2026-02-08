@@ -28,5 +28,8 @@ func (c *HPCNodeAggregatorConfig) Validate() error {
 	if c.CheckpointInterval < time.Second {
 		return fmt.Errorf("node_aggregator.checkpoint_interval must be >= 1s")
 	}
+	if c.DiscoveryEnabled && c.DiscoveryInterval < time.Second {
+		return fmt.Errorf("node_aggregator.discovery_interval must be >= 1s")
+	}
 	return nil
 }
