@@ -506,6 +506,18 @@ if git config --local credential.helper &>/dev/null; then
   fi
 fi
 
+# ── Git worktree cleanup ─────────────────────────────────────────────────────
+# Prune stale worktree references to prevent path corruption errors.
+# This happens when worktree directories are deleted but git metadata remains.
+if [ -f ".git" ]; then
+  _gitdir=\$(cat .git | sed 's/^gitdir: //')
+  _repo_root=\$(dirname "\$_gitdir" | xargs dirname | xargs dirname)
+  if [ -d "\$_repo_root/.git/worktrees" ]; then
+    echo "  [setup] Pruning stale worktrees..."
+    ( cd "\$_repo_root" && git worktree prune -v 2>&1 | sed 's/^/  [prune] /' ) || true
+  fi
+fi
+
 # ── GitHub auth verification ─────────────────────────────────────────────────
 if command -v gh &>/dev/null; then
   echo "  [setup] gh CLI found at: \$(command -v gh)"
