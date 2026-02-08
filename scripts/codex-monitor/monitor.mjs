@@ -1963,6 +1963,19 @@ async function isBranchMerged(branch) {
 }
 
 /**
+ * Session-level cache of task IDs already confirmed as done.
+ * Prevents re-processing tasks every cycle when VK API has propagation delay.
+ * @type {Set<string>}
+ */
+const mergedTaskCache = new Set();
+
+/** Maximum number of tasks to process per sweep (prevents thundering herd) */
+const MERGE_CHECK_BATCH_SIZE = 10;
+
+/** Small delay between GitHub API calls to avoid rate-limiting (ms) */
+const MERGE_CHECK_THROTTLE_MS = 1500;
+
+/**
  * Periodic check: find tasks in "inreview" status, check if their PRs
  * have been merged, and automatically move them to "done" status.
  */
@@ -1982,14 +1995,21 @@ async function checkMergedPRsAndUpdateTasks() {
         }
       }
     });
-    const reviewTasks = Array.from(taskMap.values());
+    const reviewTasks = Array.from(taskMap.values()).filter(
+      (entry) => !mergedTaskCache.has(entry.task.id),
+    );
     if (reviewTasks.length === 0) {
-      console.log("[monitor] No tasks in review/inprogress status");
+      console.log("[monitor] No tasks in review/inprogress status (after dedup)");
       return { checked: 0, movedDone: 0, movedReview: 0 };
     }
 
+    const totalCandidates = reviewTasks.length;
+    const batch = reviewTasks.slice(0, MERGE_CHECK_BATCH_SIZE);
     console.log(
-      `[monitor] Found ${reviewTasks.length} tasks in review/inprogress`,
+      `[monitor] Found ${totalCandidates} tasks in review/inprogress` +
+        (totalCandidates > MERGE_CHECK_BATCH_SIZE
+          ? ` (processing first ${MERGE_CHECK_BATCH_SIZE})`
+          : ""),
     );
 
     // For each task, get its workspace/branch and check if merged
@@ -2014,7 +2034,7 @@ async function checkMergedPRsAndUpdateTasks() {
     let movedCount = 0;
     let movedReviewCount = 0;
 
-    for (const entry of reviewTasks) {
+    for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
       // Find the attempt associated with this task — first in local status,
@@ -2068,6 +2088,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const success = await updateTaskStatus(task.id, "done");
         if (success) {
           movedCount++;
+          mergedTaskCache.add(task.id);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
@@ -2100,6 +2121,11 @@ async function checkMergedPRsAndUpdateTasks() {
         continue;
       }
 
+      // Throttle between GitHub API calls to avoid rate-limiting
+      if (MERGE_CHECK_THROTTLE_MS > 0) {
+        await new Promise((r) => setTimeout(r, MERGE_CHECK_THROTTLE_MS));
+      }
+
       // Check if the branch has been merged
       const merged = await isBranchMerged(branch);
       if (merged) {
@@ -2110,6 +2136,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const success = await updateTaskStatus(task.id, "done");
         if (success) {
           movedCount++;
+          mergedTaskCache.add(task.id);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
@@ -2137,9 +2164,10 @@ async function checkMergedPRsAndUpdateTasks() {
       );
     }
     return {
-      checked: reviewTasks.length,
+      checked: batch.length,
       movedDone: movedCount,
       movedReview: movedReviewCount,
+      cached: mergedTaskCache.size,
     };
   } catch (err) {
     console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
