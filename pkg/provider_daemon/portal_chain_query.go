@@ -40,6 +40,8 @@ type ChainQuery interface {
 
 	// Roles.
 	HasRole(ctx context.Context, address, role string) (bool, error)
+	// Consent.
+	HasConsent(ctx context.Context, address, scopeID string) (bool, error)
 }
 
 // NoopChainQuery is a default implementation that returns empty results.
@@ -142,5 +144,10 @@ func (NoopChainQuery) GetAggregatedMetrics(_ context.Context, _ time.Time, _ tim
 
 // HasRole returns false in noop implementation.
 func (NoopChainQuery) HasRole(_ context.Context, _ string, _ string) (bool, error) {
+	return false, nil
+}
+
+// HasConsent returns false in noop implementation.
+func (NoopChainQuery) HasConsent(_ context.Context, _ string, _ string) (bool, error) {
 	return false, nil
 }

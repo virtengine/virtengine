@@ -25,12 +25,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	rolesv1 "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/virtengine/virtengine/pkg/observability"
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/pkg/servicedesk"
+	"github.com/virtengine/virtengine/pkg/waldur"
 )
 
 const (
@@ -120,6 +122,24 @@ const (
 
 	// FlagWaldurOrderCallbackPath is the callback path for order status callbacks
 	FlagWaldurOrderCallbackPath = "waldur-order-callback-path"
+
+	// FlagWaldurLifecycleCallbackURL is callback URL for lifecycle operations
+	FlagWaldurLifecycleCallbackURL = "waldur-lifecycle-callback-url"
+
+	// FlagWaldurLifecycleCallbackListen is the listen address for lifecycle callbacks
+	FlagWaldurLifecycleCallbackListen = "waldur-lifecycle-callback-listen"
+
+	// FlagWaldurLifecycleCallbackPath is the callback path for lifecycle callbacks
+	FlagWaldurLifecycleCallbackPath = "waldur-lifecycle-callback-path"
+
+	// FlagWaldurLifecycleRequireConsent toggles consent enforcement for lifecycle actions
+	FlagWaldurLifecycleRequireConsent = "waldur-lifecycle-require-consent"
+
+	// FlagWaldurLifecycleConsentScope sets the consent scope for lifecycle actions
+	FlagWaldurLifecycleConsentScope = "waldur-lifecycle-consent-scope"
+
+	// FlagWaldurLifecycleAllowedRoles sets allowed roles for lifecycle actions (comma-separated)
+	FlagWaldurLifecycleAllowedRoles = "waldur-lifecycle-allowed-roles"
 
 	// FlagWaldurOrderRoutingMaxRetries is max retries for order routing
 	FlagWaldurOrderRoutingMaxRetries = "waldur-order-routing-max-retries"
@@ -306,6 +326,12 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagWaldurOrderCheckpointFile, "data/waldur_order_checkpoint.json", "Order routing checkpoint file path")
 	rootCmd.PersistentFlags().String(FlagWaldurOrderCallbackListen, ":8444", "Listen address for Waldur order status callbacks")
 	rootCmd.PersistentFlags().String(FlagWaldurOrderCallbackPath, "/v1/callbacks/waldur/orders", "HTTP path for Waldur order status callbacks")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleCallbackURL, "", "Callback URL to include in Waldur lifecycle actions")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleCallbackListen, ":8445", "Listen address for Waldur lifecycle callbacks")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleCallbackPath, "/v1/callbacks/waldur", "Base HTTP path for Waldur callbacks (lifecycle is /lifecycle)")
+	rootCmd.PersistentFlags().Bool(FlagWaldurLifecycleRequireConsent, true, "Require consent for lifecycle actions")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleConsentScope, "marketplace:lifecycle", "Consent scope ID for lifecycle actions")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleAllowedRoles, "customer,administrator,support_agent", "Comma-separated roles allowed to request lifecycle actions")
 	rootCmd.PersistentFlags().Int(FlagWaldurOrderRoutingMaxRetries, 5, "Max retries for Waldur order routing")
 	rootCmd.PersistentFlags().Int(FlagWaldurOrderRoutingWorkers, 4, "Number of Waldur order routing workers")
 	rootCmd.PersistentFlags().Bool(FlagWaldurChainSubmit, false, "Submit Waldur callbacks on-chain via MsgWaldurCallback")
@@ -400,6 +426,12 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurOrderCheckpointFile, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCheckpointFile))
 	_ = viper.BindPFlag(FlagWaldurOrderCallbackListen, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCallbackListen))
 	_ = viper.BindPFlag(FlagWaldurOrderCallbackPath, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCallbackPath))
+	_ = viper.BindPFlag(FlagWaldurLifecycleCallbackURL, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleCallbackURL))
+	_ = viper.BindPFlag(FlagWaldurLifecycleCallbackListen, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleCallbackListen))
+	_ = viper.BindPFlag(FlagWaldurLifecycleCallbackPath, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleCallbackPath))
+	_ = viper.BindPFlag(FlagWaldurLifecycleRequireConsent, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleRequireConsent))
+	_ = viper.BindPFlag(FlagWaldurLifecycleConsentScope, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleConsentScope))
+	_ = viper.BindPFlag(FlagWaldurLifecycleAllowedRoles, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleAllowedRoles))
 	_ = viper.BindPFlag(FlagWaldurOrderRoutingMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderRoutingMaxRetries))
 	_ = viper.BindPFlag(FlagWaldurOrderRoutingWorkers, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderRoutingWorkers))
 	_ = viper.BindPFlag(FlagWaldurChainSubmit, rootCmd.PersistentFlags().Lookup(FlagWaldurChainSubmit))
@@ -766,7 +798,83 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	defer portalAuditLogger.Close()
 
-	chainQuery := provider_daemon.NoopChainQuery{}
+	var lifecycleManager *provider_daemon.ResourceLifecycleManager
+	var lifecycleController *provider_daemon.LifecycleController
+	var lifecycleReconciler *provider_daemon.LifecycleDriftReconciler
+
+	if viper.GetBool(FlagWaldurEnabled) {
+		waldurCfg := waldur.DefaultConfig()
+		waldurCfg.BaseURL = viper.GetString(FlagWaldurBaseURL)
+		waldurCfg.Token = viper.GetString(FlagWaldurToken)
+		waldurClient, err := waldur.NewClient(waldurCfg)
+		if err != nil {
+			return fmt.Errorf("failed to create Waldur client: %w", err)
+		}
+		marketplaceClient := waldur.NewMarketplaceClient(waldurClient)
+
+		lifecycleControllerCfg := provider_daemon.DefaultLifecycleControllerConfig()
+		lifecycleControllerCfg.ProviderAddress = providerAddress
+		lifecycleControllerCfg.CallbackURL = viper.GetString(FlagWaldurLifecycleCallbackURL)
+		lifecycleControllerCfg.StateFilePath = "data/lifecycle_state.json"
+
+		controller, err := provider_daemon.NewLifecycleController(
+			lifecycleControllerCfg,
+			keyManager,
+			callbackSink,
+			marketplaceClient,
+			portalAuditLogger,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize lifecycle controller: %w", err)
+		}
+		lifecycleController = controller
+
+		lifecycleClient := waldur.NewLifecycleClient(marketplaceClient)
+		lifecycleManager = provider_daemon.NewResourceLifecycleManager(
+			provider_daemon.DefaultResourceLifecycleConfig(),
+			lifecycleController,
+			lifecycleClient,
+			portalAuditLogger,
+		)
+
+		if err := lifecycleController.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start lifecycle controller: %w", err)
+		}
+
+		reconciler := provider_daemon.NewLifecycleDriftReconciler(
+			provider_daemon.DefaultLifecycleDriftReconcilerConfig(),
+			lifecycleController,
+			lifecycleManager,
+			lifecycleClient,
+			portalAuditLogger,
+		)
+		lifecycleReconciler = reconciler
+		if err := lifecycleReconciler.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start lifecycle reconciler: %w", err)
+		}
+
+		callbackCfg := provider_daemon.DefaultWaldurCallbackConfig()
+		callbackCfg.ListenAddr = viper.GetString(FlagWaldurLifecycleCallbackListen)
+		callbackCfg.CallbackPath = viper.GetString(FlagWaldurLifecycleCallbackPath)
+		callbackCfg.EnableAuditLogging = true
+		callbackHandler := provider_daemon.NewWaldurCallbackHandler(
+			callbackCfg,
+			lifecycleController,
+			callbackSink,
+			portalAuditLogger,
+			keyManager,
+		)
+		callbackHandler.SetLifecycleManager(lifecycleManager)
+		go func() {
+			if err := callbackHandler.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				fmt.Printf("[WALDUR] lifecycle callback handler stopped: %v\\n", err)
+			}
+		}()
+		fmt.Println("  Waldur Lifecycle Callback Handler: started")
+	}
+
+	var chainQuery provider_daemon.ChainQuery = provider_daemon.NoopChainQuery{}
+	var roleConn *grpc.ClientConn
 
 	vaultCfg := provider_daemon.DefaultVaultServiceConfig()
 	vaultCfg.Enabled = viper.GetBool(FlagVaultEnabled)
@@ -778,7 +886,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	vaultCfg.OrgResolver = provider_daemon.ChainOrgResolver{ChainQuery: chainQuery}
 	vaultCfg.RoleResolver = provider_daemon.ChainRoleResolver{ChainQuery: chainQuery}
 	if grpcEndpoint := viper.GetString(FlagWaldurChainGRPC); grpcEndpoint != "" {
-		roleConn, err := grpc.NewClient(
+		conn, err := grpc.NewClient(
 			grpcEndpoint,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithStatsHandler(observability.GRPCClientStatsHandler()),
@@ -786,10 +894,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to connect role query grpc: %w", err)
 		}
+		roleConn = conn
 		defer func() {
 			_ = roleConn.Close()
 		}()
-		vaultCfg.RoleResolver = provider_daemon.NewGRPCRoleResolver(rolesv1.NewQueryClient(roleConn))
+
+		rolesClient := rolesv1.NewQueryClient(roleConn)
+		veidClient := veidv1.NewQueryClient(roleConn)
+		if portalQuery := provider_daemon.NewGRPCPortalChainQuery(rolesClient, veidClient); portalQuery != nil {
+			chainQuery = portalQuery
+		}
+
+		vaultCfg.RoleResolver = provider_daemon.NewGRPCRoleResolver(rolesClient)
 	}
 
 	vaultService, err := provider_daemon.NewVaultService(vaultCfg)
@@ -809,6 +925,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 	portalCfg.WalletAuthChainID = viper.GetString(FlagChainID)
 	portalCfg.ChainQuery = chainQuery
 	portalCfg.VaultService = vaultService
+	portalCfg.LifecycleExecutor = lifecycleManager
+	portalCfg.LifecycleRequireConsent = viper.GetBool(FlagWaldurLifecycleRequireConsent)
+	portalCfg.LifecycleConsentScope = viper.GetString(FlagWaldurLifecycleConsentScope)
+	portalCfg.LifecycleAllowedRoles = parseCSVList(viper.GetString(FlagWaldurLifecycleAllowedRoles))
 
 	portalAPI, err := provider_daemon.NewPortalAPIServer(portalCfg)
 	if err != nil {
@@ -923,6 +1043,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 		waldurBridge, err := provider_daemon.NewWaldurBridge(bridgeCfg, keyManager, callbackSink, usageReporter)
 		if err != nil {
 			return fmt.Errorf("failed to create waldur bridge: %w", err)
+		}
+		if lifecycleManager != nil {
+			waldurBridge.SetLifecycleManager(lifecycleManager)
 		}
 
 		go func() {
@@ -1256,4 +1379,20 @@ func normalizeCometRPC(node string) string {
 		return node
 	}
 	return "http://" + node
+}
+
+func parseCSVList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		result = append(result, value)
+	}
+	return result
 }

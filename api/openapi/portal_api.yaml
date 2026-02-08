@@ -1238,7 +1238,7 @@ components:
       properties:
         action:
           type: string
-          enum: [start, stop, restart]
+          enum: [start, stop, restart, resize]
         parameters:
           type: object
           additionalProperties: true
@@ -1249,6 +1249,10 @@ components:
         success:
           type: boolean
         message:
+          type: string
+        operation_id:
+          type: string
+        state:
           type: string
     DeploymentEvent:
       type: object
