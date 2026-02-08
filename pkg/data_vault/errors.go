@@ -35,6 +35,9 @@ var (
 
 	// ErrInvalidRequest indicates an invalid request
 	ErrInvalidRequest = errors.New("invalid request")
+
+	// ErrConsentRequired indicates access is missing required consent
+	ErrConsentRequired = errors.New("consent required")
 )
 
 // VaultError wraps an error with additional context
