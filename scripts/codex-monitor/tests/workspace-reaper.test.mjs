@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile, utimes } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import {
@@ -24,7 +24,8 @@ async function createTestWorktree(name, options = {}) {
   await mkdir(resolve(worktreePath, ".git"), { recursive: true });
 
   // Create some test files
-  await writeFile(resolve(worktreePath, "test.txt"), "test content");
+  const testFilePath = resolve(worktreePath, "test.txt");
+  await writeFile(testFilePath, "test content");
 
   if (options.withLockFile) {
     await writeFile(resolve(worktreePath, ".git", "index.lock"), "12345");
@@ -188,7 +189,7 @@ describe("workspace-reaper", () => {
       });
 
       // Create an old worktree
-      await createTestWorktree("old-worktree");
+      await createTestWorktree("old-worktree", { mtime: now });
 
       // Run reaper far enough in the future that both lease and worktree are expired
       const laterTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
