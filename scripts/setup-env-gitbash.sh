@@ -14,6 +14,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+PNPM_TARGET_VERSION="10.28.2"
 
 # Check if running in Git Bash
 if [[ ! "$OSTYPE" =~ "msys" ]] && [[ ! "$OSTYPE" =~ "cygwin" ]]; then
@@ -135,14 +136,14 @@ else
     if command_exists corepack; then
         print_status "warn" "pnpm not found, enabling via corepack"
         corepack enable || true
-        corepack prepare pnpm@latest --activate || true
+        corepack prepare pnpm@${PNPM_TARGET_VERSION} --activate || true
     fi
     if command_exists pnpm; then
         PNPM_VERSION=$(pnpm --version)
         print_status "ok" "pnpm installed: $PNPM_VERSION"
     else
         print_status "warn" "pnpm not available (frontend installs will be skipped)"
-        echo "  Install with: corepack enable && corepack prepare pnpm@latest --activate"
+        echo "  Install with: corepack enable && corepack prepare pnpm@${PNPM_TARGET_VERSION} --activate"
     fi
 fi
 

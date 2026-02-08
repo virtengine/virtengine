@@ -37,7 +37,7 @@ The VEID verification infrastructure consists of several components:
 
 ## Prerequisites
 
-- Go 1.21+ for building
+- Go 1.25.5+ for building
 - Redis 6.0+ (for production rate limiting and nonce storage)
 - HashiCorp Vault (optional, for secure key storage)
 - Prometheus (for metrics collection)

@@ -50,6 +50,7 @@ permissions:
 
 env:
   GO_VERSION: '1.25.5'
+  GO_TEST_TIMEOUT_UNIT: "30m"
   # Production determinism settings - NEVER CHANGE
   TF_DETERMINISTIC_OPS: '1'
   TF_CUDNN_DETERMINISTIC: '1'
@@ -86,7 +87,8 @@ jobs:
 
       - name: Run determinism unit tests
         run: |
-          go test -v -count=1 ./pkg/inference/... -run "Determinism|Hash|Golden"
+          go test -v -count=1 -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            ./pkg/inference/... -run "Determinism|Hash|Golden"
         timeout-minutes: 15
 
       - name: Run conformance suite
@@ -94,7 +96,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p ./conformance-evidence
-          VEID_CONFORMANCE_EVIDENCE_DIR=./conformance-evidence go test -v -count=1 ./pkg/inference/... -run "TestMultiMachineConformanceSuite" || echo "conformance_failed=true" >> $GITHUB_OUTPUT
+          VEID_CONFORMANCE_EVIDENCE_DIR=./conformance-evidence go test -v -count=1 \
+            -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            ./pkg/inference/... -run "TestMultiMachineConformanceSuite" || echo "conformance_failed=true" >> $GITHUB_OUTPUT
         timeout-minutes: 20
 
       - name: Upload conformance evidence
@@ -271,7 +275,8 @@ jobs:
       - name: Check pinned registry
         run: |
           # Verify the pinned model registry exists and is valid
-          go test -v -count=1 ./pkg/inference/... -run "TestPinnedModelRegistry"
+          go test -v -count=1 -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            ./pkg/inference/... -run "TestPinnedModelRegistry"
 
   # ============================================================================
   # Job 5: Configuration Validation
@@ -292,11 +297,13 @@ jobs:
 
       - name: Validate production determinism config
         run: |
-          go test -v -count=1 ./pkg/inference/... -run "TestProductionDeterminismConfig|TestProductionConfig"
+          go test -v -count=1 -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            ./pkg/inference/... -run "TestProductionDeterminismConfig|TestProductionConfig"
 
       - name: Verify CPU-only enforcement
         run: |
-          go test -v -count=1 ./pkg/inference/... -run "TestCPUOnly|TestForceCPU"
+          go test -v -count=1 -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            ./pkg/inference/... -run "TestCPUOnly|TestForceCPU"
 
       - name: Check random seed is production value
         run: |
