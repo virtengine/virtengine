@@ -2706,7 +2706,9 @@ async function cmdAgent(chatId, rawArgs) {
   }
 
   const healthMap = await getWorkspaceHealth(candidates);
-  const ranked = rankWorkspaceCandidates(candidates, healthMap, { preferredId });
+  const ranked = rankWorkspaceCandidates(candidates, healthMap, {
+    preferredId,
+  });
   const preferredMatch = preferredId
     ? candidates.find((ws) => ws.id === preferredId)
     : null;
@@ -4013,7 +4015,9 @@ export async function startTelegramBot() {
       const ts = Number(readFileSync(selfRestartPath, "utf8"));
       if (Date.now() - ts < 30_000) suppressOnline = true;
     }
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
   if (!suppressOnline) {
     try {
       const prev = await readFile(botStartPath, "utf8");

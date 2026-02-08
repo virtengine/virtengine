@@ -54,9 +54,8 @@ const chalk = {
 
 function getVersion() {
   try {
-    return JSON.parse(
-      readFileSync(resolve(__dirname, "package.json"), "utf8"),
-    ).version;
+    return JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8"))
+      .version;
   } catch {
     return "0.0.0";
   }
@@ -72,22 +71,16 @@ function printBanner() {
   console.log(
     "  ╔═══════════════════════════════════════════════════════════════╗",
   );
-  console.log(
-    `  ║${" ".repeat(left + 3)}${title}${" ".repeat(right + 3)}║`,
-  );
+  console.log(`  ║${" ".repeat(left + 3)}${title}${" ".repeat(right + 3)}║`);
   console.log(
     "  ╚═══════════════════════════════════════════════════════════════╝",
   );
   console.log("");
   console.log(
-    chalk.dim(
-      "  This wizard will configure codex-monitor for your project.",
-    ),
+    chalk.dim("  This wizard will configure codex-monitor for your project."),
   );
   console.log(
-    chalk.dim(
-      "  Press Enter to accept defaults shown in [brackets].",
-    ),
+    chalk.dim("  Press Enter to accept defaults shown in [brackets]."),
   );
   console.log("");
 }
@@ -724,7 +717,9 @@ async function main() {
 
     // ── Step 5: AI Provider ────────────────────────────────
     heading("Step 5 of 7 — AI / Codex Provider");
-    console.log("  Codex Monitor uses the Codex SDK for crash analysis & autofix.\n");
+    console.log(
+      "  Codex Monitor uses the Codex SDK for crash analysis & autofix.\n",
+    );
 
     const providerIdx = await prompt.choose(
       "Select AI provider:",
@@ -1392,9 +1387,7 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   // Missing items
   console.log("");
   if (!env.TELEGRAM_BOT_TOKEN) {
-    info(
-      "Telegram not configured — add TELEGRAM_BOT_TOKEN to .env later.",
-    );
+    info("Telegram not configured — add TELEGRAM_BOT_TOKEN to .env later.");
   }
   if (!env.OPENAI_API_KEY && env.CODEX_SDK_DISABLED !== "1") {
     info("No API key set — AI analysis & autofix will be disabled.");

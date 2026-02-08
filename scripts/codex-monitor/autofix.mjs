@@ -399,7 +399,8 @@ export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
   return new Promise((resolve) => {
     let args;
     try {
-      args = ["exec", "--full-auto", "-C", cwd, prompt];
+      // Pass prompt via stdin (no positional arg) to avoid shell word-splitting
+      args = ["exec", "--full-auto", "-C", cwd];
     } catch (err) {
       return resolve({
         success: false,
@@ -412,7 +413,7 @@ export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
     try {
       child = spawn("codex", args, {
         cwd,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         shell: true,
         timeout: timeoutMs,
         env: { ...process.env },
@@ -423,6 +424,14 @@ export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
         output: "",
         error: `spawn failed: ${err.message}`,
       });
+    }
+
+    // Write prompt to stdin then close the stream
+    try {
+      child.stdin.write(prompt);
+      child.stdin.end();
+    } catch {
+      /* stdin may already be closed */
     }
 
     let stdout = "";

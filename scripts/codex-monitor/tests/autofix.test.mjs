@@ -197,9 +197,7 @@ describe("extractFallbackContext", () => {
   it("returns full tail for short logs", async () => {
     const { extractFallbackContext } = await loadAutofix();
 
-    const log = ["booting", "starting monitor", "failed to connect"].join(
-      "\n",
-    );
+    const log = ["booting", "starting monitor", "failed to connect"].join("\n");
     const result = extractFallbackContext(log, "signal SIGTERM");
 
     expect(result.lineCount).toBe(3);
