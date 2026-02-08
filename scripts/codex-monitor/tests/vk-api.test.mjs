@@ -558,7 +558,10 @@ describe("VK API integration scenarios", () => {
 describe("getTaskAgeMs", () => {
   it("returns age from updated_at", () => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const age = getTaskAgeMs({ updated_at: twoHoursAgo, created_at: "2020-01-01T00:00:00Z" });
+    const age = getTaskAgeMs({
+      updated_at: twoHoursAgo,
+      created_at: "2020-01-01T00:00:00Z",
+    });
     // Should be approximately 2 hours (within 5s tolerance)
     expect(age).toBeGreaterThan(2 * 60 * 60 * 1000 - 5000);
     expect(age).toBeLessThan(2 * 60 * 60 * 1000 + 5000);

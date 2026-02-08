@@ -1080,22 +1080,22 @@ function Save-StatusSnapshot {
     $todoTasks = Get-VKTasks -Status "todo"
     $backlogRemaining = if ($todoTasks) { @($todoTasks).Count } else { 0 }
     $snapshot = @{
-        updated_at          = (Get-Date).ToString("o")
-        counts              = $counts
-        tasks_submitted     = $script:TasksSubmitted
-        tasks_completed     = $script:TasksCompleted
+        updated_at            = (Get-Date).ToString("o")
+        counts                = $counts
+        tasks_submitted       = $script:TasksSubmitted
+        tasks_completed       = $script:TasksCompleted
         total_tasks_completed = $script:TotalTasksCompleted
-        backlog_remaining   = $backlogRemaining
-        completed_tasks     = $script:CompletedTasks
-        submitted_tasks     = $script:SubmittedTasks
-        followup_events     = $script:FollowUpEvents
-        copilot_requests    = $script:CopilotRequests
-        review_tasks        = $reviewTasks
-        error_tasks         = $errorTasks
-        manual_review_tasks = $manualReviewTasks
-        slot_metrics        = $slotMetrics
-        attempts            = $attempts
-        success_metrics     = @{
+        backlog_remaining     = $backlogRemaining
+        completed_tasks       = $script:CompletedTasks
+        submitted_tasks       = $script:SubmittedTasks
+        followup_events       = $script:FollowUpEvents
+        copilot_requests      = $script:CopilotRequests
+        review_tasks          = $reviewTasks
+        error_tasks           = $errorTasks
+        manual_review_tasks   = $manualReviewTasks
+        slot_metrics          = $slotMetrics
+        attempts              = $attempts
+        success_metrics       = @{
             first_shot_success = $script:FirstShotSuccess
             needed_fix         = $script:TasksNeededFix
             failed             = $script:TasksFailed
@@ -1447,8 +1447,8 @@ function Get-EffectiveParallelCapacity {
     $capacity = [math]::Min($MaxParallel, $availability.capacity)
     if ($capacity -le 0) { $capacity = $MaxParallel }
     return @{
-        capacity     = $capacity
-        workstation  = $availability
+        capacity    = $capacity
+        workstation = $availability
     }
 }
 
@@ -1468,10 +1468,10 @@ function Get-AvailableSlotCapacity {
     $activeWeight = Get-ActiveSlotWeight
     $remaining = [math]::Max(0.0, $capacity - $activeWeight)
     return @{
-        capacity       = $capacity
-        active_weight  = $activeWeight
-        remaining      = $remaining
-        workstation    = $capacityInfo.workstation
+        capacity      = $capacity
+        active_weight = $activeWeight
+        remaining     = $remaining
+        workstation   = $capacityInfo.workstation
     }
 }
 
@@ -1502,17 +1502,17 @@ function Update-SlotMetrics {
     }
     else { 0 }
     $script:SlotMetrics.last_snapshot = @{
-        sampled_at                  = $now.ToString("o")
-        capacity_slots              = $Capacity
-        active_slots                = $ActiveWeight
-        idle_slots                  = $idleNow
-        utilization_percent         = $utilizationNow
-        total_idle_seconds          = [math]::Round($script:SlotMetrics.total_idle_seconds, 1)
-        total_capacity_seconds      = [math]::Round($script:SlotMetrics.total_capacity_seconds, 1)
-        cumulative_utilization_pct  = $cumulativeUtilization
-        workstation_capacity        = $WorkstationInfo.capacity
-        workstation_available       = $WorkstationInfo.available
-        workstation_busy            = $WorkstationInfo.busy
+        sampled_at                 = $now.ToString("o")
+        capacity_slots             = $Capacity
+        active_slots               = $ActiveWeight
+        idle_slots                 = $idleNow
+        utilization_percent        = $utilizationNow
+        total_idle_seconds         = [math]::Round($script:SlotMetrics.total_idle_seconds, 1)
+        total_capacity_seconds     = [math]::Round($script:SlotMetrics.total_capacity_seconds, 1)
+        cumulative_utilization_pct = $cumulativeUtilization
+        workstation_capacity       = $WorkstationInfo.capacity
+        workstation_available      = $WorkstationInfo.available
+        workstation_busy           = $WorkstationInfo.busy
     }
 }
 
@@ -2153,7 +2153,8 @@ function Resolve-PRBaseBranch {
                     return $base
                 }
             }
-        } catch {
+        }
+        catch {
             # Best effort — fall through
         }
     }
@@ -2234,7 +2235,8 @@ function Invoke-DirectRebase {
         # Clean up temp branch — restore original working state
         if ($originalBranch -and $originalBranch -ne $tempBranch -and $originalBranch -ne "HEAD") {
             git checkout $originalBranch 2>&1 | Out-Null
-        } else {
+        }
+        else {
             git checkout - 2>&1 | Out-Null
         }
         git branch -D $tempBranch 2>&1 | Out-Null
@@ -2310,7 +2312,8 @@ function Resolve-RebaseConflicts {
             # Apply resolution strategy
             if ($strategy -eq "theirs") {
                 git checkout --theirs -- $file 2>&1 | Out-Null
-            } else {
+            }
+            else {
                 git checkout --ours -- $file 2>&1 | Out-Null
             }
             git add $file 2>&1 | Out-Null
@@ -2804,7 +2807,8 @@ function Process-CompletedAttempts {
                                 $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
                                 Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
                                 Write-Log "Archived stale no_commits attempt $($attemptId.Substring(0,8))" -Level "INFO"
-                            } catch {
+                            }
+                            catch {
                                 Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
                             }
                             $processed += $attemptId
@@ -3950,17 +3954,17 @@ function Fill-ParallelSlots {
                 Update-VKTaskStatus -TaskId $task.id -Status "inprogress" | Out-Null
                 $priorityInfo = Get-TaskPriorityInfo -Task $task
                 $script:TrackedAttempts[$attempt.id] = @{
-                    task_id   = $task.id
-                    branch    = $attempt.branch
-                    target_branch = $targetBranch
-                    pr_number = $null
-                    status    = "running"
-                    name      = $title
-                    executor  = $nextExec.executor
-                    task_size_cached = $sizeInfo.label
-                    task_size_weight = $sizeInfo.weight
+                    task_id              = $task.id
+                    branch               = $attempt.branch
+                    target_branch        = $targetBranch
+                    pr_number            = $null
+                    status               = "running"
+                    name                 = $title
+                    executor             = $nextExec.executor
+                    task_size_cached     = $sizeInfo.label
+                    task_size_weight     = $sizeInfo.weight
                     task_priority_cached = $priorityInfo.label
-                    task_priority_rank = $priorityInfo.rank
+                    task_priority_rank   = $priorityInfo.rank
                 }
                 $taskUrl = Get-TaskUrl -TaskId $task.id
                 Add-RecentItem -ListName "SubmittedTasks" -Item @{

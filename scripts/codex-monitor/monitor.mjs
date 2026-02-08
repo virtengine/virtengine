@@ -1959,7 +1959,7 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
 }
 
 /**
- * Checks if a git branch has been merged into the main branch.
+ * Checks if a git branch has been merged into the target base branch.
  * Uses GitHub CLI + git commands to determine merge status.
  *
  * IMPORTANT: "branch not on remote" does NOT mean merged. The agent may
@@ -1967,18 +1967,33 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
  * branch was manually deleted. We must verify via GitHub PR state.
  *
  * @param {string} branch - Branch name (e.g., "ve/1234-feat-auth")
+ * @param {string} [baseBranch] - Upstream/base branch to compare against
  * @returns {Promise<boolean>} true if definitively merged, false otherwise
  */
-async function isBranchMerged(branch) {
+async function isBranchMerged(branch, baseBranch) {
   if (!branch) return false;
 
   try {
+    const target = normalizeBranchName(baseBranch) || DEFAULT_TARGET_BRANCH;
+
+    const splitRemoteRef = (ref, defaultRemote = "origin") => {
+      const match = String(ref || "").match(/^([^/]+)\/(.+)$/);
+      if (match) return { remote: match[1], name: match[2] };
+      return { remote: defaultRemote, name: ref };
+    };
+
+    const branchInfo = splitRemoteRef(normalizeBranchName(branch), "origin");
+    const baseInfo = splitRemoteRef(target, "origin");
+    const branchRef = `${branchInfo.remote}/${branchInfo.name}`;
+    const baseRef = `${baseInfo.remote}/${baseInfo.name}`;
+    const ghHead = branchInfo.name || branch;
+
     // ── Strategy 1: Check GitHub for a merged PR with this head branch ──
     // This is the most reliable signal — if GitHub says merged, it's merged.
     if (ghAvailable()) {
       try {
         const ghResult = execSync(
-          `gh pr list --head "${branch}" --state merged --json number,mergedAt --limit 1`,
+          `gh pr list --head "${ghHead}" --state merged --json number,mergedAt --limit 1`,
           {
             cwd: repoRoot,
             encoding: "utf8",
@@ -1999,7 +2014,7 @@ async function isBranchMerged(branch) {
     }
 
     // ── Strategy 2: Check if branch exists on remote ────────────────────
-    const branchExistsCmd = `git ls-remote --heads origin ${branch}`;
+    const branchExistsCmd = `git ls-remote --heads ${branchInfo.remote} ${branchInfo.name}`;
     const branchExists = execSync(branchExistsCmd, {
       cwd: repoRoot,
       encoding: "utf8",
@@ -2010,13 +2025,18 @@ async function isBranchMerged(branch) {
     // Without a confirmed merged PR (strategy 1), we must assume NOT merged.
     if (!branchExists) {
       console.log(
-        `[monitor] Branch ${branch} not found on remote — no merged PR found, treating as NOT merged`,
+        `[monitor] Branch ${branchRef} not found on ${branchInfo.remote} — no merged PR found against ${baseRef}, treating as NOT merged`,
       );
       return false;
     }
 
     // ── Strategy 3: Branch exists on remote — check if ancestor of main ─
-    execSync("git fetch origin main --quiet", {
+    execSync(`git fetch ${baseInfo.remote} ${baseInfo.name} --quiet`, {
+      cwd: repoRoot,
+      stdio: "ignore",
+      timeout: 15000,
+    });
+    execSync(`git fetch ${branchInfo.remote} ${branchInfo.name} --quiet`, {
       cwd: repoRoot,
       stdio: "ignore",
       timeout: 15000,
@@ -2024,7 +2044,7 @@ async function isBranchMerged(branch) {
 
     // Check if the branch is fully merged into origin/main
     // Returns non-zero exit code if not merged
-    const mergeCheckCmd = `git merge-base --is-ancestor origin/${branch} origin/main`;
+    const mergeCheckCmd = `git merge-base --is-ancestor ${branchRef} ${baseRef}`;
     execSync(mergeCheckCmd, {
       cwd: repoRoot,
       stdio: "ignore",
@@ -2032,7 +2052,9 @@ async function isBranchMerged(branch) {
     });
 
     // If we get here, the branch is merged
-    console.log(`[monitor] Branch ${branch} is ancestor of main (merged)`);
+    console.log(
+      `[monitor] Branch ${branchRef} is ancestor of ${baseRef} (merged)`,
+    );
     return true;
   } catch (err) {
     // Non-zero exit code means not merged, or other error
@@ -2232,10 +2254,7 @@ async function checkMergedPRsAndUpdateTasks() {
 
       // ── Stale cooldown: skip tasks we already checked recently ──
       const staleEntry = staleBranchCooldown.get(task.id);
-      if (
-        staleEntry &&
-        Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS
-      ) {
+      if (staleEntry && Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS) {
         continue;
       }
 
@@ -2247,26 +2266,39 @@ async function checkMergedPRsAndUpdateTasks() {
         .filter((a) => a?.task_id === task.id)
         .sort(
           (a, b) =>
-            new Date(b.created_at).getTime() -
-            new Date(a.created_at).getTime(),
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
 
       // Build a deduplicated list of all branches + PR numbers to check
-      /** @type {Array<{branch?: string, prNumber?: number, attemptId?: string}>} */
+      /** @type {Array<{branch?: string, prNumber?: number, attemptId?: string, baseBranch?: string}>} */
       const candidates = [];
       const seenBranches = new Set();
 
       const addCandidate = (src) => {
         const b = src?.branch;
-        const pr =
-          src?.pr_number ||
-          parsePrNumberFromUrl(src?.pr_url);
+        const pr = src?.pr_number || parsePrNumberFromUrl(src?.pr_url);
         const aid = src?.id; // attempt UUID
+        const baseBranch = resolveAttemptTargetBranch(src, task);
         if (b && !seenBranches.has(b)) {
           seenBranches.add(b);
-          candidates.push({ branch: b, prNumber: pr || undefined, attemptId: aid });
+          candidates.push({
+            branch: b,
+            prNumber: pr || undefined,
+            attemptId: aid,
+            baseBranch,
+          });
+        } else if (b && baseBranch) {
+          const existing = candidates.find((c) => c.branch === b);
+          if (existing && !existing.baseBranch) {
+            existing.baseBranch = baseBranch;
+          }
         } else if (pr && !candidates.some((c) => c.prNumber === pr)) {
-          candidates.push({ branch: b, prNumber: pr, attemptId: aid });
+          candidates.push({
+            branch: b,
+            prNumber: pr,
+            attemptId: aid,
+            baseBranch,
+          });
         }
       };
 
@@ -2274,8 +2306,7 @@ async function checkMergedPRsAndUpdateTasks() {
       for (const a of allVkAttempts) addCandidate(a);
       // Also check task-level fields
       addCandidate({
-        branch:
-          task?.branch || task?.workspace_branch || task?.git_branch,
+        branch: task?.branch || task?.workspace_branch || task?.git_branch,
         pr_number: task?.pr_number,
         pr_url: task?.pr_url,
       });
@@ -2293,8 +2324,7 @@ async function checkMergedPRsAndUpdateTasks() {
 
         // Check if an agent is actively working on this task
         const hasActiveAgent =
-          task.has_in_progress_attempt === true ||
-          !!localAttempt;
+          task.has_in_progress_attempt === true || !!localAttempt;
         if (hasActiveAgent) {
           console.log(
             `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has active agent — skipping recovery`,
@@ -2436,7 +2466,7 @@ async function checkMergedPRsAndUpdateTasks() {
         }
 
         // Check if the branch has been merged (checks gh + git)
-        const merged = await isBranchMerged(cand.branch);
+        const merged = await isBranchMerged(cand.branch, cand.baseBranch);
         if (merged) {
           console.log(
             `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch ${cand.branch}, updating to done`,
@@ -2554,8 +2584,7 @@ async function checkMergedPRsAndUpdateTasks() {
 
         // Check if an agent is actively working on this task
         const hasActiveAgent =
-          task.has_in_progress_attempt === true ||
-          !!localAttempt;
+          task.has_in_progress_attempt === true || !!localAttempt;
         if (hasActiveAgent) {
           console.log(
             `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but agent is active — skipping recovery`,
@@ -2672,7 +2701,13 @@ async function checkMergedPRsAndUpdateTasks() {
     };
   } catch (err) {
     console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
-    return { checked: 0, movedDone: 0, movedReview: 0, movedTodo: 0, error: err };
+    return {
+      checked: 0,
+      movedDone: 0,
+      movedReview: 0,
+      movedTodo: 0,
+      error: err,
+    };
   }
 }
 
@@ -3003,7 +3038,14 @@ function extractUpstreamFromText(text) {
 function collectTaskLabels(task) {
   const labels = [];
   if (!task) return labels;
-  for (const field of ["labels", "label", "tags", "tag", "categories", "category"]) {
+  for (const field of [
+    "labels",
+    "label",
+    "tags",
+    "tag",
+    "categories",
+    "category",
+  ]) {
     const value = task[field];
     if (!value) continue;
     if (typeof value === "string") {
@@ -3034,7 +3076,14 @@ function collectTaskLabels(task) {
 function getTaskTextBlob(task) {
   const parts = [];
   if (!task) return "";
-  for (const field of ["title", "name", "description", "body", "details", "content"]) {
+  for (const field of [
+    "title",
+    "name",
+    "description",
+    "body",
+    "details",
+    "content",
+  ]) {
     const value = task[field];
     if (value) parts.push(value);
   }
@@ -3061,7 +3110,8 @@ function resolveUpstreamFromTask(task) {
   }
   if (task.metadata) {
     for (const field of directFields) {
-      if (task.metadata[field]) return normalizeBranchName(task.metadata[field]);
+      if (task.metadata[field])
+        return normalizeBranchName(task.metadata[field]);
     }
   }
 
@@ -3098,11 +3148,7 @@ const AUTO_RESOLVE_THEIRS = [
   "yarn.lock",
   "go.sum",
 ];
-const AUTO_RESOLVE_OURS = [
-  "CHANGELOG.md",
-  "coverage.txt",
-  "results.txt",
-];
+const AUTO_RESOLVE_OURS = ["CHANGELOG.md", "coverage.txt", "results.txt"];
 const AUTO_RESOLVE_LOCK_EXTENSIONS = [".lock"];
 
 /**
@@ -3122,7 +3168,9 @@ function classifyConflictedFiles(files) {
       strategy = "theirs";
     } else if (AUTO_RESOLVE_OURS.includes(fileName)) {
       strategy = "ours";
-    } else if (AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fileName.endsWith(ext))) {
+    } else if (
+      AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fileName.endsWith(ext))
+    ) {
       strategy = "theirs";
     }
 
@@ -3253,9 +3301,7 @@ async function smartPRFlow(attemptId, shortId, status) {
     const targetBranch = resolveAttemptTargetBranch(attempt, taskData);
 
     // ── Step 3: Rebase onto target branch ────────────────────────
-    console.log(
-      `[monitor] ${tag}: rebasing onto ${targetBranch}...`,
-    );
+    console.log(`[monitor] ${tag}: rebasing onto ${targetBranch}...`);
     const rebaseResult = await rebaseAttempt(attemptId, targetBranch);
 
     if (rebaseResult && !rebaseResult.success) {
@@ -3314,7 +3360,10 @@ async function smartPRFlow(attemptId, shortId, status) {
             const fileGuidance = files
               .map((f) => {
                 const fn = f.split("/").pop();
-                if (AUTO_RESOLVE_THEIRS.includes(fn) || AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))) {
+                if (
+                  AUTO_RESOLVE_THEIRS.includes(fn) ||
+                  AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))
+                ) {
                   return `  - ${f}: Accept THEIRS (upstream version — lock/generated file)`;
                 }
                 if (AUTO_RESOLVE_OURS.includes(fn)) {
@@ -3917,7 +3966,9 @@ async function maybeTriggerTaskPlanner(reason, details) {
     return;
   }
   if (plannerMode === "codex-sdk" && !codexEnabled) {
-    console.log(`[monitor] task planner skipped: codex-sdk mode but Codex disabled`);
+    console.log(
+      `[monitor] task planner skipped: codex-sdk mode but Codex disabled`,
+    );
     return;
   }
   if (plannerTriggered) {
@@ -3928,12 +3979,16 @@ async function maybeTriggerTaskPlanner(reason, details) {
   const state = await readPlannerState();
   if (isPlannerDeduped(state, now)) {
     const lastAt = state?.last_triggered_at || "unknown";
-    console.log(`[monitor] task planner skipped: deduped (last triggered ${lastAt})`);
+    console.log(
+      `[monitor] task planner skipped: deduped (last triggered ${lastAt})`,
+    );
     return;
   }
   try {
     const result = await triggerTaskPlanner(reason, details);
-    console.log(`[monitor] task planner result: ${result?.status || "unknown"} (${reason})`);
+    console.log(
+      `[monitor] task planner result: ${result?.status || "unknown"} (${reason})`,
+    );
   } catch (err) {
     // Auto-triggered planner failures are non-fatal — already logged/notified by triggerTaskPlanner
     console.warn(
@@ -4661,8 +4716,7 @@ async function triggerTaskPlannerViaKanban(
     const title = (t.title || "").toLowerCase();
     // Only match the exact title format we create: "Plan next tasks (...)"
     return (
-      title.startsWith("plan next tasks") ||
-      title.startsWith("plan next phase")
+      title.startsWith("plan next tasks") || title.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {

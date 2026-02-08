@@ -106,9 +106,7 @@ describe("classifyConflictedFiles", () => {
       "go.sum",
     ]);
     expect(result.allResolvable).toBe(false);
-    expect(result.manualFiles).toEqual([
-      "scripts/codex-monitor/monitor.mjs",
-    ]);
+    expect(result.manualFiles).toEqual(["scripts/codex-monitor/monitor.mjs"]);
     expect(result.summary).toBe("pnpm-lock.yaml→theirs, go.sum→theirs");
   });
 
