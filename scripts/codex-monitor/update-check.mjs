@@ -192,6 +192,9 @@ export function getCurrentVersion() {
 
 let autoUpdateTimer = null;
 let autoUpdateRunning = false;
+let parentPid = null;
+let parentCheckInterval = null;
+let cleanupHandlersRegistered = false;
 
 /**
  * Start a background polling loop that checks for updates every `intervalMs`
@@ -201,10 +204,17 @@ let autoUpdateRunning = false;
  *
  * This is fully autonomous — no user interaction required.
  *
+ * Safety features to prevent zombie processes:
+ *   - Monitors parent process health (terminates if parent dies)
+ *   - Registers cleanup handlers for SIGTERM, SIGINT, SIGHUP
+ *   - Cleans up intervals on process exit or uncaught exceptions
+ *   - Periodic parent health check every 30 seconds
+ *
  * @param {object} opts
  * @param {function} [opts.onRestart] - Called after successful update (should restart process)
  * @param {function} [opts.onNotify]  - Called with message string for Telegram/log
  * @param {number}   [opts.intervalMs] - Poll interval (default: 10 min)
+ * @param {number}   [opts.parentPid]  - Parent process PID to monitor (default: process.ppid)
  */
 export function startAutoUpdateLoop(opts = {}) {
   if (process.env.CODEX_MONITOR_SKIP_AUTO_UPDATE === "1") {
@@ -219,11 +229,30 @@ export function startAutoUpdateLoop(opts = {}) {
   const onRestart = opts.onRestart || (() => process.exit(0));
   const onNotify = opts.onNotify || ((msg) => console.log(msg));
 
+  // Register cleanup handlers to prevent zombie processes
+  registerCleanupHandlers();
+
+  // Track parent process if provided
+  if (opts.parentPid) {
+    parentPid = opts.parentPid;
+    console.log(`[auto-update] Monitoring parent process PID ${parentPid}`);
+  } else {
+    parentPid = process.ppid; // Track parent by default
+    console.log(`[auto-update] Monitoring parent process PID ${parentPid}`);
+  }
+
   console.log(
     `[auto-update] Polling every ${Math.round(intervalMs / 1000 / 60)} min for upstream changes`,
   );
 
   async function poll() {
+    // Safety check: Is parent process still alive?
+    if (!isParentAlive()) {
+      console.log(`[auto-update] Parent process ${parentPid} no longer exists. Terminating.`);
+      stopAutoUpdateLoop();
+      process.exit(0);
+    }
+
     if (autoUpdateRunning) return;
     autoUpdateRunning = true;
     try {
@@ -286,6 +315,17 @@ export function startAutoUpdateLoop(opts = {}) {
     }
   }
 
+  // Set up parent health check (every 30s)
+  if (parentPid) {
+    parentCheckInterval = setInterval(() => {
+      if (!isParentAlive()) {
+        console.log(`[auto-update] Parent process ${parentPid} died. Exiting.`);
+        stopAutoUpdateLoop();
+        process.exit(0);
+      }
+    }, 30 * 1000);
+  }
+
   // First poll after 60s (let startup settle), then every intervalMs
   setTimeout(() => {
     void poll();
@@ -301,6 +341,68 @@ export function stopAutoUpdateLoop() {
     clearInterval(autoUpdateTimer);
     autoUpdateTimer = null;
   }
+  if (parentCheckInterval) {
+    clearInterval(parentCheckInterval);
+    parentCheckInterval = null;
+  }
+  parentPid = null;
+}
+
+/**
+ * Check if parent process is still alive.
+ * If parent dies, this child polling loop should terminate too.
+ */
+function isParentAlive() {
+  if (!parentPid) return true; // No parent tracking configured
+  try {
+    // On Windows and Unix, kill(pid, 0) checks if process exists without sending signal
+    process.kill(parentPid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH = no such process
+    if (err.code === "ESRCH") {
+      return false;
+    }
+    // Other errors (EPERM) mean process exists but we can't signal it
+    return true;
+  }
+}
+
+/**
+ * Register cleanup handlers to prevent zombie processes.
+ */
+function registerCleanupHandlers() {
+  if (cleanupHandlersRegistered) return;
+  cleanupHandlersRegistered = true;
+
+  const cleanup = (signal) => {
+    console.log(`[auto-update] Received ${signal}, cleaning up...`);
+    stopAutoUpdateLoop();
+    // Don't call process.exit() - let the signal handler chain continue
+  };
+
+  // Handle graceful shutdown signals
+  process.on("SIGTERM", () => cleanup("SIGTERM"));
+  process.on("SIGINT", () => cleanup("SIGINT"));
+  process.on("SIGHUP", () => cleanup("SIGHUP"));
+
+  // Handle process exit
+  process.on("exit", () => {
+    stopAutoUpdateLoop();
+  });
+
+  // Handle uncaught exceptions (last resort)
+  const originalUncaughtException = process.listeners("uncaughtException");
+  process.on("uncaughtException", (err) => {
+    console.error(`[auto-update] Uncaught exception, cleaning up:`, err);
+    stopAutoUpdateLoop();
+    // Re-emit for other handlers
+    if (originalUncaughtException.length > 0) {
+      for (const handler of originalUncaughtException) {
+        handler(err);
+      }
+    }
+  });
 }
 
 function printUpdateNotice(current, latest) {
