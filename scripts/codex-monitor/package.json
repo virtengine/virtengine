@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "MIT",
@@ -64,7 +64,7 @@
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest",
     "postinstall": "node postinstall.mjs",
-    "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
+    "prepublishOnly": "node prepublish-check.mjs"
   },
   "files": [
     "cli.mjs",
@@ -94,6 +94,7 @@
     "ve-orchestrator.ps1",
     "ve-kanban.ps1",
     "postinstall.mjs",
+    "prepublish-check.mjs",
     "update-check.mjs",
     "merge-strategy.mjs",
     ".env.example",
