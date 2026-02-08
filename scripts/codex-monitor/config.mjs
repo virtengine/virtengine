@@ -1145,6 +1145,96 @@ export function loadConfig(argv = process.argv, options = {}) {
     knowledgeFile: fleetKnowledgeFile,
   });
 
+  // ── Complexity Routing ──────────────────────────────────────
+  // Maps task complexity tiers (low/medium/high) to model variants per executor
+  // type. Allows cheaper/faster models for simple tasks and the strongest
+  // models for complex work.
+  //
+  // Config format (codex-monitor.config.json):
+  //   "complexityRouting": {
+  //     "enabled": true,
+  //     "models": {
+  //       "CODEX": {
+  //         "low":    { "model": "gpt-5.1-codex-mini", "variant": "GPT51_CODEX_MINI", "reasoningEffort": "low" },
+  //         "medium": { "model": "gpt-5.2-codex",      "variant": "DEFAULT",           "reasoningEffort": "medium" },
+  //         "high":   { "model": "gpt-5.3-codex",      "variant": "DEFAULT",           "reasoningEffort": "high" }
+  //       },
+  //       "COPILOT": {
+  //         "low":    { "model": "haiku-4.5",   "variant": "HAIKU_4_5",       "reasoningEffort": "low" },
+  //         "medium": { "model": "sonnet-4.5",  "variant": "SONNET_4_5",      "reasoningEffort": "medium" },
+  //         "high":   { "model": "opus-4.6",    "variant": "CLAUDE_OPUS_4_6", "reasoningEffort": "high" }
+  //       }
+  //     }
+  //   }
+  //
+  // Env overrides:
+  //   COMPLEXITY_ROUTING_ENABLED=true
+  //   COMPLEXITY_ROUTING_CODEX_LOW_MODEL=gpt-5.1-codex-mini
+  //   COMPLEXITY_ROUTING_CODEX_LOW_VARIANT=GPT51_CODEX_MINI
+  //   COMPLEXITY_ROUTING_CODEX_MEDIUM_MODEL=gpt-5.2-codex
+  //   COMPLEXITY_ROUTING_COPILOT_HIGH_MODEL=opus-4.6
+  const complexityRoutingEnabled = !["0", "false", "no"].includes(
+    String(
+      process.env.COMPLEXITY_ROUTING_ENABLED ??
+        configData.complexityRouting?.enabled ??
+        "true",
+    ).toLowerCase(),
+  );
+
+  // Build model overrides from env vars
+  const complexityModelsFromEnv = {};
+  for (const execType of ["CODEX", "COPILOT"]) {
+    for (const tier of ["low", "medium", "high"]) {
+      const prefix = `COMPLEXITY_ROUTING_${execType}_${tier.toUpperCase()}`;
+      const model = process.env[`${prefix}_MODEL`];
+      const variant = process.env[`${prefix}_VARIANT`];
+      const reasoning = process.env[`${prefix}_REASONING`];
+      if (model || variant || reasoning) {
+        if (!complexityModelsFromEnv[execType])
+          complexityModelsFromEnv[execType] = {};
+        complexityModelsFromEnv[execType][tier] = {
+          ...(model ? { model } : {}),
+          ...(variant ? { variant } : {}),
+          ...(reasoning ? { reasoningEffort: reasoning } : {}),
+        };
+      }
+    }
+  }
+
+  // Merge: env overrides → config file → defaults (handled in task-complexity.mjs)
+  const complexityModelsFromConfig = configData.complexityRouting?.models || {};
+  const mergedComplexityModels = {};
+  for (const execType of ["CODEX", "COPILOT"]) {
+    if (
+      complexityModelsFromEnv[execType] ||
+      complexityModelsFromConfig[execType]
+    ) {
+      mergedComplexityModels[execType] = {};
+      for (const tier of ["low", "medium", "high"]) {
+        mergedComplexityModels[execType][tier] = {
+          ...(complexityModelsFromConfig[execType]?.[tier] || {}),
+          ...(complexityModelsFromEnv[execType]?.[tier] || {}),
+        };
+        // Remove empty entries
+        if (
+          Object.keys(mergedComplexityModels[execType][tier]).length === 0
+        ) {
+          delete mergedComplexityModels[execType][tier];
+        }
+      }
+      if (Object.keys(mergedComplexityModels[execType]).length === 0) {
+        delete mergedComplexityModels[execType];
+      }
+    }
+  }
+
+  const complexityRouting = Object.freeze({
+    enabled: complexityRoutingEnabled,
+    models: Object.keys(mergedComplexityModels).length
+      ? Object.freeze(mergedComplexityModels)
+      : null,
+  });
+
   // ── Dependabot Auto-Merge ─────────────────────────────────
   const dependabotAutoMerge = !["0", "false", "no"].includes(
     String(
@@ -1287,6 +1377,9 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Fleet Coordination
     fleet,
+
+    // Complexity Routing
+    complexityRouting,
 
     // Paths
     statusPath,

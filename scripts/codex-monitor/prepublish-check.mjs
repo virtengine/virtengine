@@ -16,7 +16,9 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8"));
+const pkg = JSON.parse(
+  readFileSync(resolve(__dirname, "package.json"), "utf8"),
+);
 
 if (!pkg.version) {
   console.error("❌ Missing version in package.json");
@@ -34,7 +36,9 @@ for (const f of filesArray) {
   seen.add(f);
 }
 if (duplicates.length > 0) {
-  console.error(`❌ Duplicate entries in files array: ${duplicates.join(", ")}`);
+  console.error(
+    `❌ Duplicate entries in files array: ${duplicates.join(", ")}`,
+  );
   process.exit(1);
 }
 
@@ -59,7 +63,11 @@ for (const file of mjsFiles) {
     // Skip if it's a comment line
     const lineStart = content.lastIndexOf("\n", match.index) + 1;
     const line = content.slice(lineStart, match.index).trimStart();
-    if (line.startsWith("//") || line.startsWith("*") || line.startsWith("/*")) {
+    if (
+      line.startsWith("//") ||
+      line.startsWith("*") ||
+      line.startsWith("/*")
+    ) {
       continue;
     }
     if (!filesSet.has(imported)) {

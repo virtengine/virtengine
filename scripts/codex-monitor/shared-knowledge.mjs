@@ -27,8 +27,8 @@ const DEFAULT_SECTION_HEADER = "## Agent Learnings";
 const DEFAULT_TARGET_FILE = "AGENTS.md";
 const ENTRY_SEPARATOR = "\n---\n";
 const MAX_ENTRY_LENGTH = 2000; // chars
-const MIN_ENTRY_LENGTH = 20;   // chars
-const RATE_LIMIT_MS = 30_000;  // 30s between entries from same agent
+const MIN_ENTRY_LENGTH = 20; // chars
+const RATE_LIMIT_MS = 30_000; // 30s between entries from same agent
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -98,7 +98,8 @@ export function buildKnowledgeEntry(opts = {}) {
  */
 export function formatEntryAsMarkdown(entry) {
   const lines = [];
-  const datePart = entry.timestamp?.split("T")[0] || new Date().toISOString().split("T")[0];
+  const datePart =
+    entry.timestamp?.split("T")[0] || new Date().toISOString().split("T")[0];
   const scopePart = entry.scope ? ` (${entry.scope})` : "";
   const catPart = entry.category ? `[${entry.category}]` : "";
   const taskPart = entry.taskRef ? ` • ref: \`${entry.taskRef}\`` : "";
@@ -126,17 +127,23 @@ export function validateEntry(entry) {
 
   const content = String(entry.content || "").trim();
   if (content.length < MIN_ENTRY_LENGTH) {
-    return { valid: false, reason: `content too short (min ${MIN_ENTRY_LENGTH} chars)` };
+    return {
+      valid: false,
+      reason: `content too short (min ${MIN_ENTRY_LENGTH} chars)`,
+    };
   }
   if (content.length > MAX_ENTRY_LENGTH) {
-    return { valid: false, reason: `content too long (max ${MAX_ENTRY_LENGTH} chars)` };
+    return {
+      valid: false,
+      reason: `content too long (max ${MAX_ENTRY_LENGTH} chars)`,
+    };
   }
 
   // Check for obviously low-value entries
   const lowValuePatterns = [
     /^(ok|done|yes|no|maybe|test|todo|fixme|hack)$/i,
-    /^[^a-zA-Z]*$/,  // no letters at all
-    /(.)\1{20,}/,     // 20+ repeated chars
+    /^[^a-zA-Z]*$/, // no letters at all
+    /(.)\1{20,}/, // 20+ repeated chars
   ];
   for (const pat of lowValuePatterns) {
     if (pat.test(content)) {
@@ -145,9 +152,20 @@ export function validateEntry(entry) {
   }
 
   // Validate category
-  const validCategories = ["pattern", "gotcha", "perf", "security", "convention", "tip", "bug"];
+  const validCategories = [
+    "pattern",
+    "gotcha",
+    "perf",
+    "security",
+    "convention",
+    "tip",
+    "bug",
+  ];
   if (entry.category && !validCategories.includes(entry.category)) {
-    return { valid: false, reason: `invalid category — must be one of: ${validCategories.join(", ")}` };
+    return {
+      valid: false,
+      reason: `invalid category — must be one of: ${validCategories.join(", ")}`,
+    };
   }
 
   return { valid: true };
@@ -156,7 +174,9 @@ export function validateEntry(entry) {
 // ── Deduplication ────────────────────────────────────────────────────────────
 
 function hashEntry(content, scope) {
-  const data = `${scope || ""}|${String(content || "").trim().toLowerCase()}`;
+  const data = `${scope || ""}|${String(content || "")
+    .trim()
+    .toLowerCase()}`;
   return crypto.createHash("sha256").update(data).digest("hex").slice(0, 16);
 }
 
@@ -264,18 +284,30 @@ export async function appendKnowledgeEntry(entry) {
       await writeFile(filePath, newContent, "utf8");
     } else {
       // Append at end of existing section (before any next ## header or EOF)
-      const afterSection = content.slice(sectionIdx + knowledgeState.sectionHeader.length);
+      const afterSection = content.slice(
+        sectionIdx + knowledgeState.sectionHeader.length,
+      );
       // Find next top-level heading (## but not ###)
       const nextSectionMatch = afterSection.match(/\n## [^#]/);
       if (nextSectionMatch) {
         const insertPos =
-          sectionIdx + knowledgeState.sectionHeader.length + nextSectionMatch.index;
+          sectionIdx +
+          knowledgeState.sectionHeader.length +
+          nextSectionMatch.index;
         const before = content.slice(0, insertPos);
         const after = content.slice(insertPos);
-        await writeFile(filePath, before + "\n" + markdown + ENTRY_SEPARATOR + after, "utf8");
+        await writeFile(
+          filePath,
+          before + "\n" + markdown + ENTRY_SEPARATOR + after,
+          "utf8",
+        );
       } else {
         // Append at end of file
-        await writeFile(filePath, content.trimEnd() + "\n\n" + markdown + ENTRY_SEPARATOR, "utf8");
+        await writeFile(
+          filePath,
+          content.trimEnd() + "\n\n" + markdown + ENTRY_SEPARATOR,
+          "utf8",
+        );
       }
     }
 
@@ -305,7 +337,9 @@ export async function readKnowledgeEntries() {
     const sectionIdx = content.indexOf(knowledgeState.sectionHeader);
     if (sectionIdx === -1) return [];
 
-    const sectionContent = content.slice(sectionIdx + knowledgeState.sectionHeader.length);
+    const sectionContent = content.slice(
+      sectionIdx + knowledgeState.sectionHeader.length,
+    );
     // Find next top-level heading
     const nextSectionMatch = sectionContent.match(/\n## [^#]/);
     const relevantContent = nextSectionMatch
@@ -330,12 +364,12 @@ export async function readKnowledgeEntries() {
       const agentMatch = agentLine?.match(/\*\*Agent:\*\* ([^ ]+) \(([^)]+)\)/);
 
       // Extract content
-      const contentLines = lines.filter(
-        (l) =>
-          !l.startsWith(">") &&
-          l.trim().length > 0 &&
-          !l.startsWith("---"),
-      ).slice(1); // skip header line
+      const contentLines = lines
+        .filter(
+          (l) =>
+            !l.startsWith(">") && l.trim().length > 0 && !l.startsWith("---"),
+        )
+        .slice(1); // skip header line
 
       entries.push({
         category: catMatch?.[1] || "unknown",

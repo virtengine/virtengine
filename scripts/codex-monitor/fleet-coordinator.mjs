@@ -490,6 +490,235 @@ export function detectMaintenanceMode(status) {
   };
 }
 
+// ── Task List Sharing ────────────────────────────────────────────────────────
+
+/**
+ * @typedef {object} SharedTaskList
+ * @property {string} instanceId  - Which workstation published this list
+ * @property {string} instanceLabel
+ * @property {string} repoFingerprint
+ * @property {Array<{id: string, title: string, status: string, size?: string, complexity?: string}>} tasks
+ * @property {string} publishedAt - ISO timestamp
+ */
+
+const SHARED_TASKS_FILENAME = "fleet-tasks.json";
+
+/**
+ * Publish this workstation's current task list so peers can pull it.
+ * Called periodically by the fleet sync loop.
+ *
+ * @param {object} opts
+ * @param {string} opts.repoRoot - Git repository root for persistence
+ * @param {Array<object>} opts.tasks - Current tasks (from VK or orchestrator)
+ * @returns {SharedTaskList}
+ */
+export async function publishTaskList({ repoRoot, tasks = [] } = {}) {
+  const presenceState = getPresenceState();
+  const payload = {
+    instanceId: presenceState.instance_id,
+    instanceLabel: presenceState.instance_label || presenceState.instance_id,
+    repoFingerprint: fleetState.repoFingerprint?.hash || null,
+    tasks: tasks.map((t) => ({
+      id: t.id,
+      title: t.title || "",
+      status: t.status || "unknown",
+      size: t.size || t.metadata?.size || null,
+      complexity: t.complexity || null,
+    })),
+    publishedAt: new Date().toISOString(),
+  };
+
+  try {
+    const dir = resolve(repoRoot || process.cwd(), FLEET_STATE_DIR);
+    await mkdir(dir, { recursive: true });
+    const path = resolve(dir, SHARED_TASKS_FILENAME);
+    await writeFile(path, JSON.stringify(payload, null, 2), "utf8");
+  } catch (err) {
+    console.warn(`[fleet] publishTaskList error: ${err.message}`);
+  }
+
+  return payload;
+}
+
+/**
+ * Read another workstation's shared task list (from their fleet-tasks.json).
+ * In practice, workstations share this via a shared filesystem or git sync.
+ *
+ * @param {string} filePath - Path to the fleet-tasks.json file
+ * @returns {SharedTaskList|null}
+ */
+export async function readPeerTaskList(filePath) {
+  try {
+    if (!existsSync(filePath)) return null;
+    const raw = await readFile(filePath, "utf8");
+    const data = JSON.parse(raw);
+    // Validate shape
+    if (!data.instanceId || !Array.isArray(data.tasks)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bootstrap a new workstation from an existing peer's task list.
+ * When a new workstation joins with no local backlog, it can pull tasks
+ * from the coordinator or any active peer.
+ *
+ * @param {object} opts
+ * @param {Array<SharedTaskList>} opts.peerLists - Task lists from peers
+ * @param {string} [opts.myInstanceId] - This workstation's instance ID (to exclude self)
+ * @returns {{ tasks: Array, source: string, sourceLabel: string }|null}
+ */
+export function bootstrapFromPeer({ peerLists = [], myInstanceId } = {}) {
+  if (!peerLists.length) return null;
+
+  // Filter to peers with matching repo fingerprint (if we have one)
+  const myFingerprint = fleetState.repoFingerprint?.hash;
+  let candidates = peerLists;
+  if (myFingerprint) {
+    candidates = peerLists.filter(
+      (pl) => pl.repoFingerprint === myFingerprint,
+    );
+  }
+
+  // Exclude self
+  if (myInstanceId) {
+    candidates = candidates.filter((pl) => pl.instanceId !== myInstanceId);
+  }
+
+  if (!candidates.length) return null;
+
+  // Pick the peer with the most todo tasks
+  let best = null;
+  let bestTodoCount = 0;
+  for (const pl of candidates) {
+    const todoCount = pl.tasks.filter((t) => t.status === "todo").length;
+    if (todoCount > bestTodoCount) {
+      bestTodoCount = todoCount;
+      best = pl;
+    }
+  }
+
+  if (!best || bestTodoCount === 0) return null;
+
+  return {
+    tasks: best.tasks.filter((t) => t.status === "todo"),
+    source: best.instanceId,
+    sourceLabel: best.instanceLabel,
+    totalAvailable: bestTodoCount,
+  };
+}
+
+// ── Task Auto-Generation Trigger ─────────────────────────────────────────────
+
+/**
+ * @typedef {object} AutoGenDecision
+ * @property {boolean} shouldGenerate  - Whether to trigger task generation
+ * @property {string}  reason          - Why/why not
+ * @property {number}  deficit         - How many tasks are needed
+ * @property {boolean} needsApproval   - Whether user approval is required first
+ * @property {string}  mode            - "auto" | "confirm" | "skip"
+ */
+
+/** @type {number|null} Last time auto-gen was triggered */
+let lastAutoGenTimestamp = null;
+
+/**
+ * Decide whether to trigger automatic task generation.
+ *
+ * Conditions for generation:
+ *   1. Backlog is below threshold (based on fleet capacity)
+ *   2. Planner is not disabled
+ *   3. Cooldown has elapsed since last generation
+ *   4. This instance is the coordinator (in fleet mode)
+ *
+ * @param {object} opts
+ * @param {number} opts.currentBacklog    - Current todo task count
+ * @param {string} opts.plannerMode       - "codex-sdk" | "kanban" | "disabled"
+ * @param {number} [opts.cooldownMs=3600000] - Min time between generations (default: 1 hour)
+ * @param {boolean} [opts.requireApproval=true] - Whether to require user confirmation
+ * @returns {AutoGenDecision}
+ */
+export function shouldAutoGenerateTasks({
+  currentBacklog = 0,
+  plannerMode = "kanban",
+  cooldownMs = 60 * 60 * 1000,
+  requireApproval = true,
+} = {}) {
+  // Disabled planner → skip
+  if (plannerMode === "disabled") {
+    return {
+      shouldGenerate: false,
+      reason: "planner disabled",
+      deficit: 0,
+      needsApproval: false,
+      mode: "skip",
+    };
+  }
+
+  // Not coordinator in fleet mode → skip (only coordinator generates)
+  if (fleetState.mode === "fleet" && !fleetState.isCoordinator) {
+    return {
+      shouldGenerate: false,
+      reason: "not fleet coordinator",
+      deficit: 0,
+      needsApproval: false,
+      mode: "skip",
+    };
+  }
+
+  // Cooldown check
+  if (lastAutoGenTimestamp && Date.now() - lastAutoGenTimestamp < cooldownMs) {
+    const remainingMs = cooldownMs - (Date.now() - lastAutoGenTimestamp);
+    return {
+      shouldGenerate: false,
+      reason: `cooldown active (${Math.ceil(remainingMs / 60000)} min remaining)`,
+      deficit: 0,
+      needsApproval: false,
+      mode: "skip",
+    };
+  }
+
+  // Calculate backlog depth
+  const depth = calculateBacklogDepth({
+    totalSlots: fleetState.totalSlots || fleetState.localSlots,
+    currentBacklog,
+  });
+
+  if (!depth.shouldGenerate) {
+    return {
+      shouldGenerate: false,
+      reason: `backlog sufficient (${currentBacklog}/${depth.targetDepth})`,
+      deficit: 0,
+      needsApproval: false,
+      mode: "skip",
+    };
+  }
+
+  return {
+    shouldGenerate: true,
+    reason: `backlog low (${currentBacklog}/${depth.targetDepth}, deficit=${depth.deficit})`,
+    deficit: depth.deficit,
+    needsApproval: requireApproval,
+    mode: requireApproval ? "confirm" : "auto",
+  };
+}
+
+/**
+ * Mark that auto-generation was triggered (for cooldown tracking).
+ */
+export function markAutoGenTriggered() {
+  lastAutoGenTimestamp = Date.now();
+}
+
+/**
+ * Reset auto-gen cooldown (for testing).
+ */
+export function resetAutoGenCooldown() {
+  lastAutoGenTimestamp = null;
+}
+
 // ── Fleet State Persistence ──────────────────────────────────────────────────
 
 const FLEET_STATE_DIR = ".cache/codex-monitor";

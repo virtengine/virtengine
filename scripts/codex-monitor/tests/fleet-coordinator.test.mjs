@@ -580,4 +580,208 @@ Always use deterministic TF ops.
       expect(summary).toContain("Shared Knowledge");
     });
   });
+
+  // ── Task List Sharing ────────────────────────────────────────────────────
+
+  describe("publishTaskList", () => {
+    let publishTaskList;
+    beforeEach(async () => {
+      ({ publishTaskList } = await import("../fleet-coordinator.mjs"));
+    });
+
+    it("writes task list JSON to fleet-tasks.json", async () => {
+      const tasks = [
+        { id: "t1", title: "Fix login", status: "todo", size: "s" },
+        { id: "t2", title: "Add feature", status: "inprogress", size: "m" },
+      ];
+      const result = await publishTaskList({ repoRoot: tempRoot, tasks });
+      expect(result.tasks).toHaveLength(2);
+      expect(result.publishedAt).toBeTruthy();
+
+      // Verify file was written
+      const filePath = resolve(tempRoot, ".cache/codex-monitor/fleet-tasks.json");
+      const raw = await readFile(filePath, "utf8");
+      const data = JSON.parse(raw);
+      expect(data.tasks).toHaveLength(2);
+      expect(data.tasks[0].title).toBe("Fix login");
+    });
+
+    it("handles empty task list", async () => {
+      const result = await publishTaskList({ repoRoot: tempRoot, tasks: [] });
+      expect(result.tasks).toEqual([]);
+    });
+  });
+
+  describe("readPeerTaskList", () => {
+    let readPeerTaskList;
+    beforeEach(async () => {
+      ({ readPeerTaskList } = await import("../fleet-coordinator.mjs"));
+    });
+
+    it("reads a valid peer task list file", async () => {
+      const dir = resolve(tempRoot, "peer-cache");
+      await mkdir(dir, { recursive: true });
+      const filePath = resolve(dir, "fleet-tasks.json");
+      const payload = {
+        instanceId: "peer-1",
+        instanceLabel: "Peer 1",
+        repoFingerprint: "abc123",
+        tasks: [{ id: "t1", title: "Task 1", status: "todo" }],
+        publishedAt: new Date().toISOString(),
+      };
+      await writeFile(filePath, JSON.stringify(payload), "utf8");
+
+      const result = await readPeerTaskList(filePath);
+      expect(result).not.toBeNull();
+      expect(result.instanceId).toBe("peer-1");
+      expect(result.tasks).toHaveLength(1);
+    });
+
+    it("returns null for non-existent file", async () => {
+      const result = await readPeerTaskList("/nonexistent/path.json");
+      expect(result).toBeNull();
+    });
+
+    it("returns null for invalid JSON", async () => {
+      const filePath = resolve(tempRoot, "bad.json");
+      await writeFile(filePath, "not json", "utf8");
+      const result = await readPeerTaskList(filePath);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("bootstrapFromPeer", () => {
+    let bootstrapFromPeer;
+    beforeEach(async () => {
+      ({ bootstrapFromPeer } = await import("../fleet-coordinator.mjs"));
+    });
+
+    it("returns null when no peer lists", () => {
+      const result = bootstrapFromPeer({ peerLists: [] });
+      expect(result).toBeNull();
+    });
+
+    it("picks peer with most todo tasks", () => {
+      const peerLists = [
+        {
+          instanceId: "p1",
+          instanceLabel: "Peer 1",
+          repoFingerprint: null,
+          tasks: [
+            { id: "t1", status: "todo" },
+            { id: "t2", status: "done" },
+          ],
+        },
+        {
+          instanceId: "p2",
+          instanceLabel: "Peer 2",
+          repoFingerprint: null,
+          tasks: [
+            { id: "t3", status: "todo" },
+            { id: "t4", status: "todo" },
+            { id: "t5", status: "todo" },
+          ],
+        },
+      ];
+      const result = bootstrapFromPeer({ peerLists });
+      expect(result.source).toBe("p2");
+      expect(result.tasks).toHaveLength(3);
+      expect(result.totalAvailable).toBe(3);
+    });
+
+    it("excludes self by instance ID", () => {
+      const peerLists = [
+        {
+          instanceId: "self",
+          instanceLabel: "Me",
+          repoFingerprint: null,
+          tasks: [{ id: "t1", status: "todo" }],
+        },
+      ];
+      const result = bootstrapFromPeer({
+        peerLists,
+        myInstanceId: "self",
+      });
+      expect(result).toBeNull();
+    });
+
+    it("returns null when no peers have todo tasks", () => {
+      const peerLists = [
+        {
+          instanceId: "p1",
+          instanceLabel: "Peer 1",
+          repoFingerprint: null,
+          tasks: [{ id: "t1", status: "done" }],
+        },
+      ];
+      const result = bootstrapFromPeer({ peerLists });
+      expect(result).toBeNull();
+    });
+  });
+
+  // ── Auto-generation Trigger ──────────────────────────────────────────────
+
+  describe("shouldAutoGenerateTasks", () => {
+    let shouldAutoGenerateTasks, resetAutoGenCooldown, markAutoGenTriggered;
+    beforeEach(async () => {
+      ({ shouldAutoGenerateTasks, resetAutoGenCooldown, markAutoGenTriggered } =
+        await import("../fleet-coordinator.mjs"));
+      resetAutoGenCooldown();
+    });
+
+    it("returns shouldGenerate=false when planner disabled", () => {
+      const result = shouldAutoGenerateTasks({ plannerMode: "disabled" });
+      expect(result.shouldGenerate).toBe(false);
+      expect(result.mode).toBe("skip");
+    });
+
+    it("returns shouldGenerate=true when backlog is empty", () => {
+      const result = shouldAutoGenerateTasks({
+        currentBacklog: 0,
+        plannerMode: "kanban",
+      });
+      expect(result.shouldGenerate).toBe(true);
+      expect(result.deficit).toBeGreaterThan(0);
+    });
+
+    it("returns needsApproval=true by default", () => {
+      const result = shouldAutoGenerateTasks({
+        currentBacklog: 0,
+        plannerMode: "kanban",
+        requireApproval: true,
+      });
+      expect(result.needsApproval).toBe(true);
+      expect(result.mode).toBe("confirm");
+    });
+
+    it("returns needsApproval=false when requireApproval=false", () => {
+      const result = shouldAutoGenerateTasks({
+        currentBacklog: 0,
+        plannerMode: "kanban",
+        requireApproval: false,
+      });
+      expect(result.needsApproval).toBe(false);
+      expect(result.mode).toBe("auto");
+    });
+
+    it("respects cooldown period", () => {
+      markAutoGenTriggered();
+      const result = shouldAutoGenerateTasks({
+        currentBacklog: 0,
+        plannerMode: "kanban",
+        cooldownMs: 60000,
+      });
+      expect(result.shouldGenerate).toBe(false);
+      expect(result.reason).toContain("cooldown");
+    });
+
+    it("returns shouldGenerate=false when backlog is sufficient", () => {
+      const result = shouldAutoGenerateTasks({
+        currentBacklog: 100,
+        plannerMode: "kanban",
+      });
+      expect(result.shouldGenerate).toBe(false);
+      expect(result.reason).toContain("sufficient");
+    });
+  });
 });

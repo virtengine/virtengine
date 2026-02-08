@@ -65,7 +65,17 @@ import {
   detectMaintenanceMode,
   formatFleetSummary,
   persistFleetState,
+  shouldAutoGenerateTasks,
+  markAutoGenTriggered,
+  publishTaskList,
+  bootstrapFromPeer,
 } from "./fleet-coordinator.mjs";
+import {
+  resolveExecutorForTask,
+  formatComplexityDecision,
+  getComplexityMatrix,
+  assessCompletionConfidence,
+} from "./task-complexity.mjs";
 import {
   initSharedKnowledge,
   buildKnowledgeEntry,
