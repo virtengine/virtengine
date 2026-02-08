@@ -1292,13 +1292,14 @@ func (k Keeper) CreateOTPChallenge(
 	params := k.GetParams(ctx)
 
 	// Create the challenge
-	challenge, err := types.NewChallenge(
+	challenge, err := types.NewChallengeAt(
 		address.String(),
 		factorType,
 		factorID,
 		types.SensitiveTxUnspecified,
 		params.ChallengeTTL,
 		params.MaxChallengeAttempts,
+		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
 		return nil, err
@@ -1344,13 +1345,14 @@ func (k Keeper) CreateVEIDChallenge(
 	params := k.GetParams(ctx)
 
 	// Create the challenge
-	challenge, err := types.NewChallenge(
+	challenge, err := types.NewChallengeAt(
 		address.String(),
 		types.FactorTypeVEID,
 		"veid_threshold",
 		txType,
 		params.ChallengeTTL,
 		1, // VEID check is instant, only 1 attempt needed
+		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
 		return nil, err
@@ -1403,13 +1405,14 @@ func (k Keeper) CreateHardwareKeyChallenge(
 	copy(nonceBytes, nonceSeed[:16])
 
 	// Create the challenge
-	challenge, err := types.NewChallenge(
+	challenge, err := types.NewChallengeAt(
 		address.String(),
 		types.FactorTypeHardwareKey,
 		factorID,
 		txType,
 		params.ChallengeTTL,
 		params.MaxChallengeAttempts,
+		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
 		return nil, err

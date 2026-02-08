@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
 const (
@@ -107,6 +108,8 @@ func init() {
 	rootCmd.AddCommand(initCmd())
 	rootCmd.AddCommand(registerCmd())
 	rootCmd.AddCommand(statusCmd())
+	rootCmd.AddCommand(handoffCmd())
+	rootCmd.AddCommand(needmoreCmd())
 	rootCmd.AddCommand(versionCmd())
 }
 
@@ -375,6 +378,198 @@ func versionCmd() *cobra.Command {
 			fmt.Println("  Features: VE-500 (Node Registration & Heartbeat)")
 		},
 	}
+}
+
+func handoffCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "handoff [target-node-id]",
+		Short: "Request handoff of a task to another node",
+		Long:  `Sends a handoff request to transfer a task to another agent.`,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetNodeID := args[0]
+			taskID, _ := cmd.Flags().GetString("task-id")
+			jobID, _ := cmd.Flags().GetString("job-id")
+			summary, _ := cmd.Flags().GetString("summary")
+			reason, _ := cmd.Flags().GetString("reason")
+			priority, _ := cmd.Flags().GetInt("priority")
+
+			if taskID == "" {
+				return fmt.Errorf("--task-id is required")
+			}
+			if summary == "" {
+				return fmt.Errorf("--summary is required")
+			}
+			if priority < 1 || priority > 20 {
+				return fmt.Errorf("priority must be between 1 and 20")
+			}
+
+			// Load config and create agent
+			agent, err := createAgentFromConfig()
+			if err != nil {
+				return err
+			}
+
+			// Create handoff request
+			req := &hpctypes.HandoffRequest{
+				TaskID:   taskID,
+				JobID:    jobID,
+				Summary:  summary,
+				Reason:   reason,
+				Priority: hpctypes.MessagePriority(priority), // nolint:gosec
+			}
+
+			fmt.Printf("Sending handoff request to %s...\n", targetNodeID)
+			fmt.Printf("  Task ID: %s\n", taskID)
+			fmt.Printf("  Summary: %s\n", summary)
+			fmt.Printf("  Priority: %d\n", priority)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			resp, err := agent.messageHandler.SendHandoffRequest(ctx, targetNodeID, req)
+			if err != nil {
+				return fmt.Errorf("handoff request failed: %w", err)
+			}
+
+			if resp.Accepted {
+				fmt.Println("\n✓ Handoff ACCEPTED")
+				fmt.Printf("  Reason: %s\n", resp.Reason)
+				if resp.EstimatedStartTime != nil {
+					fmt.Printf("  Estimated Start: %s\n", resp.EstimatedStartTime.Format(time.RFC3339))
+				}
+			} else {
+				fmt.Println("\n✗ Handoff REJECTED")
+				fmt.Printf("  Code: %s\n", resp.RejectionCode)
+				fmt.Printf("  Reason: %s\n", resp.Reason)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().String("task-id", "", "Task identifier (required)")
+	cmd.Flags().String("job-id", "", "Job identifier")
+	cmd.Flags().String("summary", "", "Task summary (required)")
+	cmd.Flags().String("reason", "", "Reason for handoff")
+	cmd.Flags().Int("priority", int(hpctypes.MessagePriorityNormal), "Message priority (1-20)")
+
+	return cmd
+}
+
+func needmoreCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "needmore",
+		Short: "Request more tasks from provider daemon",
+		Long:  `Sends a request to the provider daemon for additional work.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			maxTasks, _ := cmd.Flags().GetInt("max-tasks")
+			priority, _ := cmd.Flags().GetInt("priority")
+
+			if maxTasks < 1 || maxTasks > 100 {
+				return fmt.Errorf("max-tasks must be between 1 and 100")
+			}
+			if priority < 1 || priority > 20 {
+				return fmt.Errorf("priority must be between 1 and 20")
+			}
+
+			// Load config and create agent
+			agent, err := createAgentFromConfig()
+			if err != nil {
+				return err
+			}
+
+			// Collect current capacity
+			capacity, err := agent.metricsCollector.CollectCapacity()
+			if err != nil {
+				return fmt.Errorf("failed to collect capacity: %w", err)
+			}
+
+			// Create need more request
+			req := &hpctypes.NeedMoreRequest{
+				MaxTasks:          int32(maxTasks),                    // nolint:gosec
+				PreferredPriority: hpctypes.MessagePriority(priority), // nolint:gosec
+			}
+
+			// Set available capacity
+			req.AvailableCapacity.CPUCoresAvailable = int32(capacity.CPUCoresAvailable)
+			req.AvailableCapacity.MemoryGBAvailable = int32(capacity.MemoryGBAvailable)
+			req.AvailableCapacity.GPUsAvailable = int32(capacity.GPUsAvailable)
+			req.AvailableCapacity.StorageGBAvailable = int32(capacity.StorageGBAvailable)
+
+			fmt.Println("Requesting more tasks from provider daemon...")
+			fmt.Printf("  Max Tasks: %d\n", maxTasks)
+			fmt.Printf("  Preferred Priority: %d\n", priority)
+			fmt.Printf("  Available CPU: %d cores\n", capacity.CPUCoresAvailable)
+			fmt.Printf("  Available Memory: %d GB\n", capacity.MemoryGBAvailable)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancel()
+
+			resp, err := agent.messageHandler.SendNeedMoreRequest(ctx, req)
+			if err != nil {
+				return fmt.Errorf("needmore request failed: %w", err)
+			}
+
+			if resp.NoTasksAvailable {
+				fmt.Println("\nNo tasks available")
+				if resp.RetryAfterSeconds > 0 {
+					fmt.Printf("Retry after: %d seconds\n", resp.RetryAfterSeconds)
+				}
+			} else {
+				fmt.Printf("\n✓ Received %d task(s)\n", len(resp.TaskIDs))
+				for i, taskID := range resp.TaskIDs {
+					jobID := resp.JobIDs[taskID]
+					fmt.Printf("  %d. Task: %s (Job: %s)\n", i+1, taskID, jobID)
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().Int("max-tasks", 5, "Maximum number of tasks to request")
+	cmd.Flags().Int("priority", int(hpctypes.MessagePriorityNormal), "Preferred task priority (1-20)")
+
+	return cmd
+}
+
+func createAgentFromConfig() (*Agent, error) {
+	nodeID := viper.GetString(FlagNodeID)
+	clusterID := viper.GetString(FlagClusterID)
+	providerAddress := viper.GetString(FlagProviderAddress)
+	providerDaemonURL := viper.GetString(FlagProviderDaemonURL)
+	keyFile := viper.GetString(FlagKeyFile)
+
+	if nodeID == "" || clusterID == "" || providerAddress == "" {
+		return nil, fmt.Errorf("--node-id, --cluster-id, and --provider-address are required")
+	}
+	if providerDaemonURL == "" {
+		return nil, fmt.Errorf("--provider-daemon-url is required")
+	}
+
+	privateKey, publicKey, err := loadOrGenerateKey(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load key: %w", err)
+	}
+
+	hostname, _ := os.Hostname()
+	if h := viper.GetString(FlagHostname); h != "" {
+		hostname = h
+	}
+
+	config := AgentConfig{
+		NodeID:            nodeID,
+		ClusterID:         clusterID,
+		ProviderAddress:   providerAddress,
+		ProviderDaemonURL: providerDaemonURL,
+		HeartbeatInterval: 30 * time.Second,
+		PrivateKey:        privateKey,
+		PublicKey:         publicKey,
+		Hostname:          hostname,
+	}
+
+	return NewAgent(config), nil
 }
 
 func loadOrGenerateKey(keyFile string) (ed25519.PrivateKey, ed25519.PublicKey, error) {

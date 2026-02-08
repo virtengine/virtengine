@@ -6,7 +6,9 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
@@ -152,12 +154,51 @@ function createMessageQueue() {
   return { iterator, push, close, size };
 }
 
+/**
+ * Detect Claude API key from multiple sources (auth passthrough).
+ * Priority: ENV > CLI config > undefined (SDK will prompt).
+ */
+function detectClaudeAuth() {
+  // 1. Direct API key env vars (highest priority)
+  const envKey =
+    process.env.ANTHROPIC_API_KEY ||
+    process.env.CLAUDE_API_KEY ||
+    process.env.CLAUDE_KEY;
+  if (envKey) {
+    console.log("[claude-shell] using API key from environment");
+    return envKey;
+  }
+
+  // 2. Try to read from Claude CLI config (~/.config/claude/)
+  try {
+    const configPath = resolve(homedir(), ".config", "claude", "config.json");
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, "utf8"));
+      if (config.api_key) {
+        console.log("[claude-shell] using API key from CLI config");
+        return config.api_key;
+      }
+    }
+  } catch {
+    // Config not found or invalid
+  }
+
+  console.log("[claude-shell] no pre-auth detected, SDK may prompt");
+  return undefined;
+}
+
 function buildOptions() {
   const options = {
     cwd: REPO_ROOT,
     settingSources: ["user", "project"],
     permissionMode: process.env.CLAUDE_PERMISSION_MODE || "bypassPermissions",
   };
+
+  // Auth passthrough: detect API key from multiple sources
+  const apiKey = detectClaudeAuth();
+  if (apiKey) {
+    options.apiKey = apiKey;
+  }
 
   const model =
     process.env.CLAUDE_MODEL ||

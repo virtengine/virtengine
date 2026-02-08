@@ -421,6 +421,23 @@ func (k Keeper) AddScopeToWallet(
 		return types.ErrScopeAlreadyInWallet.Wrapf("scope %s already in wallet", scopeRef.ScopeID)
 	}
 
+	// Enforce explicit consent before adding sensitive scopes
+	if types.RequiresExplicitConsent(types.ScopeTypeToConsentCategory(scopeRef.ScopeType)) {
+		consent, found := wallet.ConsentSettings.GetScopeConsent(scopeRef.ScopeID)
+		if !found {
+			return types.ErrConsentNotGranted.Wrapf("consent required for scope %s", scopeRef.ScopeID)
+		}
+		if consent.ExpiresAt != nil && ctx.BlockTime().After(*consent.ExpiresAt) {
+			return types.ErrConsentExpired.Wrapf("consent expired for scope %s", scopeRef.ScopeID)
+		}
+		if !consent.Granted {
+			return types.ErrConsentNotGranted.Wrapf("consent not granted for scope %s", scopeRef.ScopeID)
+		}
+		if !k.HasValidConsentRecord(ctx, accountAddr, scopeRef.ScopeID) {
+			return types.ErrConsentNotGranted.Wrapf("consent record missing for scope %s", scopeRef.ScopeID)
+		}
+	}
+
 	// Add the scope reference
 	wallet.AddScopeReference(scopeRef, ctx.BlockTime())
 
@@ -509,6 +526,15 @@ func (k Keeper) UpdateConsent(
 	// Save the wallet
 	if err := k.SetWallet(ctx, wallet); err != nil {
 		return err
+	}
+
+	record, err := k.RecordConsentChange(ctx, wallet, update, userSignature)
+	if err != nil {
+		return err
+	}
+
+	if record != nil && !update.GrantConsent {
+		k.HandleConsentWithdrawal(ctx, accountAddr, record.Purpose)
 	}
 
 	k.Logger(ctx).Info("Updated consent settings",

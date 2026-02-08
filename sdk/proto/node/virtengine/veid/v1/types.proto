@@ -1078,3 +1078,89 @@ message IdentityWallet {
     (gogoproto.moretags) = "yaml:\"metadata\""
   ];
 }
+
+// ======================================================================
+// Web-Scope Verification Types (SSO/Email/SMS)
+// ======================================================================
+
+// SSOLinkageMetadata represents on-chain metadata for SSO linkage.
+message SSOLinkageMetadata {
+  uint32 version = 1 [(gogoproto.jsontag) = "version"];
+  string linkage_id = 2 [(gogoproto.jsontag) = "linkage_id"];
+  string provider = 3 [(gogoproto.jsontag) = "provider"];
+  string issuer = 4 [(gogoproto.jsontag) = "issuer"];
+  string subject_hash = 5 [(gogoproto.jsontag) = "subject_hash"];
+  string nonce = 6 [(gogoproto.jsontag) = "nonce"];
+  int64 verified_at = 7 [(gogoproto.jsontag) = "verified_at"];
+  int64 expires_at = 8 [(gogoproto.jsontag) = "expires_at"];
+  bytes account_signature = 9 [(gogoproto.jsontag) = "account_signature"];
+  string status = 10 [(gogoproto.jsontag) = "status"];
+  string email_domain_hash = 11 [(gogoproto.jsontag) = "email_domain_hash"];
+  string org_id_hash = 12 [(gogoproto.jsontag) = "org_id_hash"];
+  string evidence_hash = 13 [(gogoproto.jsontag) = "evidence_hash"];
+  string evidence_storage_backend = 14 [(gogoproto.jsontag) = "evidence_storage_backend"];
+  string evidence_storage_ref = 15 [(gogoproto.jsontag) = "evidence_storage_ref"];
+  map<string, string> evidence_metadata = 16 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// PhoneNumberHash represents a hashed phone number with salt.
+message PhoneNumberHash {
+  string hash = 1 [(gogoproto.jsontag) = "hash"];
+  string salt = 2 [(gogoproto.jsontag) = "salt"];
+  string country_code_hash = 3 [(gogoproto.jsontag) = "country_code_hash"];
+  int64 created_at = 4 [(gogoproto.jsontag) = "created_at"];
+}
+
+// EmailVerificationRecord represents on-chain email verification metadata.
+message EmailVerificationRecord {
+  uint32 version = 1 [(gogoproto.jsontag) = "version"];
+  string verification_id = 2 [(gogoproto.jsontag) = "verification_id"];
+  string account_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "account_address"];
+  string email_hash = 4 [(gogoproto.jsontag) = "email_hash"];
+  string domain_hash = 5 [(gogoproto.jsontag) = "domain_hash"];
+  string nonce = 6 [(gogoproto.jsontag) = "nonce"];
+  int64 nonce_used_at = 7 [(gogoproto.jsontag) = "nonce_used_at"];
+  string status = 8 [(gogoproto.jsontag) = "status"];
+  int64 verified_at = 9 [(gogoproto.jsontag) = "verified_at"];
+  int64 expires_at = 10 [(gogoproto.jsontag) = "expires_at"];
+  int64 created_at = 11 [(gogoproto.jsontag) = "created_at"];
+  int64 updated_at = 12 [(gogoproto.jsontag) = "updated_at"];
+  bytes account_signature = 13 [(gogoproto.jsontag) = "account_signature"];
+  bool is_organizational = 14 [(gogoproto.jsontag) = "is_organizational"];
+  uint32 verification_attempts = 15 [(gogoproto.jsontag) = "verification_attempts"];
+  string evidence_hash = 16 [(gogoproto.jsontag) = "evidence_hash"];
+  string evidence_storage_backend = 17 [(gogoproto.jsontag) = "evidence_storage_backend"];
+  string evidence_storage_ref = 18 [(gogoproto.jsontag) = "evidence_storage_ref"];
+  map<string, string> evidence_metadata = 19 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// SMSVerificationRecord represents on-chain SMS verification metadata.
+message SMSVerificationRecord {
+  uint32 version = 1 [(gogoproto.jsontag) = "version"];
+  string verification_id = 2 [(gogoproto.jsontag) = "verification_id"];
+  string account_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "account_address"];
+  PhoneNumberHash phone_hash = 4 [(gogoproto.jsontag) = "phone_hash"];
+  string status = 5 [(gogoproto.jsontag) = "status"];
+  int64 verified_at = 6 [(gogoproto.jsontag) = "verified_at"];
+  int64 expires_at = 7 [(gogoproto.jsontag) = "expires_at"];
+  int64 created_at = 8 [(gogoproto.jsontag) = "created_at"];
+  int64 updated_at = 9 [(gogoproto.jsontag) = "updated_at"];
+  uint32 verification_attempts = 10 [(gogoproto.jsontag) = "verification_attempts"];
+  bool is_voip = 11 [(gogoproto.jsontag) = "is_voip"];
+  string carrier_type = 12 [(gogoproto.jsontag) = "carrier_type"];
+  string validator_address = 13 [(gogoproto.jsontag) = "validator_address"];
+  bytes account_signature = 14 [(gogoproto.jsontag) = "account_signature"];
+  string evidence_hash = 15 [(gogoproto.jsontag) = "evidence_hash"];
+  string evidence_storage_backend = 16 [(gogoproto.jsontag) = "evidence_storage_backend"];
+  string evidence_storage_ref = 17 [(gogoproto.jsontag) = "evidence_storage_ref"];
+  map<string, string> evidence_metadata = 18 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}

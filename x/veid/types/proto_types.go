@@ -110,6 +110,18 @@ type IdentityRecordPB = veidv1.IdentityRecord
 // IdentityScorePB is the generated proto type for identity scores
 type IdentityScorePB = veidv1.IdentityScore
 
+// SSOLinkageMetadataPB is the generated proto type for SSO linkage metadata
+type SSOLinkageMetadataPB = veidv1.SSOLinkageMetadata
+
+// EmailVerificationRecordPB is the generated proto type for email verification records
+type EmailVerificationRecordPB = veidv1.EmailVerificationRecord
+
+// SMSVerificationRecordPB is the generated proto type for SMS verification records
+type SMSVerificationRecordPB = veidv1.SMSVerificationRecord
+
+// PhoneNumberHashPB is the generated proto type for phone hashes
+type PhoneNumberHashPB = veidv1.PhoneNumberHash
+
 // ConsentSettingsPB is the generated proto type for consent settings
 type ConsentSettingsPB = veidv1.ConsentSettings
 
@@ -158,6 +170,24 @@ type MsgUpdateScorePB = veidv1.MsgUpdateScore
 
 // MsgUpdateScoreResponsePB is the generated proto response type
 type MsgUpdateScoreResponsePB = veidv1.MsgUpdateScoreResponse
+
+// MsgSubmitSSOVerificationProofPB is the generated proto type
+type MsgSubmitSSOVerificationProofPB = veidv1.MsgSubmitSSOVerificationProof
+
+// MsgSubmitSSOVerificationProofResponsePB is the generated proto response type
+type MsgSubmitSSOVerificationProofResponsePB = veidv1.MsgSubmitSSOVerificationProofResponse
+
+// MsgSubmitEmailVerificationProofPB is the generated proto type
+type MsgSubmitEmailVerificationProofPB = veidv1.MsgSubmitEmailVerificationProof
+
+// MsgSubmitEmailVerificationProofResponsePB is the generated proto response type
+type MsgSubmitEmailVerificationProofResponsePB = veidv1.MsgSubmitEmailVerificationProofResponse
+
+// MsgSubmitSMSVerificationProofPB is the generated proto type
+type MsgSubmitSMSVerificationProofPB = veidv1.MsgSubmitSMSVerificationProof
+
+// MsgSubmitSMSVerificationProofResponsePB is the generated proto response type
+type MsgSubmitSMSVerificationProofResponsePB = veidv1.MsgSubmitSMSVerificationProofResponse
 
 // MsgCreateIdentityWalletPB is the generated proto type
 type MsgCreateIdentityWalletPB = veidv1.MsgCreateIdentityWallet

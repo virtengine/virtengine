@@ -9,6 +9,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/virtengine/virtengine/pkg/observability"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -202,6 +203,36 @@ func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusR
 		SignedTimestamp: report.Timestamp.Unix(),
 	})
 	return err
+}
+
+// SubmitResourceHeartbeat submits a provider resource heartbeat.
+func (c *rpcChainClient) SubmitResourceHeartbeat(ctx context.Context, heartbeat *resourcesv1.MsgProviderHeartbeat) error {
+	if heartbeat == nil {
+		return nil
+	}
+	if c.grpcConn == nil {
+		return nil
+	}
+
+	msgClient := resourcesv1.NewMsgClient(c.grpcConn)
+	_, err := msgClient.ProviderHeartbeat(ctx, heartbeat)
+	return err
+}
+
+// GetProviderAllocations queries allocations for a provider.
+func (c *rpcChainClient) GetProviderAllocations(ctx context.Context, provider string) ([]resourcesv1.ResourceAllocation, error) {
+	if provider == "" {
+		return nil, nil
+	}
+	if c.grpcConn == nil {
+		return nil, fmt.Errorf("grpc endpoint not configured")
+	}
+	client := resourcesv1.NewQueryClient(c.grpcConn)
+	resp, err := client.AllocationsByProvider(ctx, &resourcesv1.QueryAllocationsByProviderRequest{ProviderAddress: provider, Pagination: &query.PageRequest{Limit: defaultHPCPollPageLimit}})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Allocations, nil
 }
 
 // SubmitNodeMetadata submits node metadata updates to chain (best-effort).

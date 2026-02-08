@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile, utimes } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import {
@@ -21,10 +21,21 @@ const TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
 async function createTestWorktree(name, options = {}) {
   const worktreePath = resolve(TEST_WORKTREE_BASE, name);
   await mkdir(worktreePath, { recursive: true });
-  await mkdir(resolve(worktreePath, ".git"), { recursive: true });
+  const gitDir = resolve(worktreePath, ".git");
+  await mkdir(gitDir, { recursive: true });
+  const gitHead = resolve(gitDir, "HEAD");
+  await writeFile(gitHead, "ref: refs/heads/main");
 
   // Create some test files
-  await writeFile(resolve(worktreePath, "test.txt"), "test content");
+  const testFile = resolve(worktreePath, "test.txt");
+  await writeFile(testFile, "test content");
+
+  if (options.modifiedAt instanceof Date) {
+    await utimes(testFile, options.modifiedAt, options.modifiedAt);
+    await utimes(worktreePath, options.modifiedAt, options.modifiedAt);
+    await utimes(gitDir, options.modifiedAt, options.modifiedAt);
+    await utimes(gitHead, options.modifiedAt, options.modifiedAt);
+  }
 
   if (options.withLockFile) {
     await writeFile(resolve(worktreePath, ".git", "index.lock"), "12345");
@@ -111,9 +122,10 @@ describe("workspace-reaper", () => {
     });
 
     it("should support dry-run mode", async () => {
-      await createTestWorktree("old-worktree");
+      const now = new Date();
+      await createTestWorktree("old-worktree", { modifiedAt: now });
 
-      const futureTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      const futureTime = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
@@ -188,10 +200,10 @@ describe("workspace-reaper", () => {
       });
 
       // Create an old worktree
-      await createTestWorktree("old-worktree");
+      await createTestWorktree("old-worktree", { modifiedAt: now });
 
-      // Run reaper far enough in the future that both lease and worktree are expired
-      const laterTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      // Run reaper 2 hours later (lease expired, worktree old)
+      const laterTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
       const result = await runReaperSweep({
         searchPaths: [TEST_WORKTREE_BASE],

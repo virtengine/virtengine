@@ -157,7 +157,7 @@ var (
 	ErrConsentExpired = errorsmod.Register(ModuleName, 1045, "consent has expired")
 
 	// ErrInvalidBindingSignature is returned when wallet binding signature is invalid
-	ErrInvalidBindingSignature = errorsmod.Register(ModuleName, 1046, "invalid wallet binding signature")
+	ErrInvalidBindingSignature = veidv1.ErrInvalidBindingSignature
 
 	// ErrScopeNotInWallet is returned when a scope is not found in the wallet
 	ErrScopeNotInWallet = errorsmod.Register(ModuleName, 1047, "scope not found in wallet")
@@ -265,7 +265,7 @@ var (
 	// ============================================================================
 
 	// ErrInvalidSSO is returned for SSO verification errors
-	ErrInvalidSSO = errorsmod.Register(ModuleName, 1078, "invalid SSO verification")
+	ErrInvalidSSO = veidv1.ErrInvalidSSO
 
 	// ErrSSONotFound is returned when SSO linkage is not found
 	ErrSSONotFound = errorsmod.Register(ModuleName, 1079, "SSO linkage not found")
@@ -289,7 +289,7 @@ var (
 	ErrDomainRevoked = errorsmod.Register(ModuleName, 1085, "domain verification has been revoked")
 
 	// ErrInvalidEmail is returned for email verification errors
-	ErrInvalidEmail = errorsmod.Register(ModuleName, 1086, "invalid email verification")
+	ErrInvalidEmail = veidv1.ErrInvalidEmail
 
 	// ErrEmailNotFound is returned when email verification is not found
 	ErrEmailNotFound = errorsmod.Register(ModuleName, 1087, "email verification not found")
@@ -386,7 +386,7 @@ var (
 	// ============================================================================
 
 	// ErrInvalidPhone is returned for phone/SMS verification errors
-	ErrInvalidPhone = errorsmod.Register(ModuleName, 1113, "invalid phone verification")
+	ErrInvalidPhone = veidv1.ErrInvalidPhone
 
 	// ErrPhoneNotFound is returned when phone verification is not found
 	ErrPhoneNotFound = errorsmod.Register(ModuleName, 1114, "phone verification not found")
@@ -650,7 +650,7 @@ var (
 	// ============================================================================
 
 	// ErrInvalidAttestation is returned when an attestation is malformed or invalid
-	ErrInvalidAttestation = errorsmod.Register(ModuleName, 1240, "invalid verification attestation")
+	ErrInvalidAttestation = veidv1.ErrInvalidAttestation
 
 	// ErrAttestationNotFound is returned when an attestation is not found
 	ErrAttestationNotFound = errorsmod.Register(ModuleName, 1241, "attestation not found")

@@ -78,6 +78,7 @@ nul
 _docs/ralph/tasks/
 .localnet*
 scripts/codex-monitor/logs/*
+scripts/codex-monitor/.cache/
 scripts/codex-monitor/codex-monitor.config.json
 scripts/codex-monitor/.codex-monitor.json
 scripts/codex-monitor/codex-monitor.json

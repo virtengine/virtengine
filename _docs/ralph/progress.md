@@ -1,10 +1,73 @@
 ## STATUS: 🟡 IN PROGRESS - Production Readiness Phase (~78% Complete)
 
-**Last Analysis:** 2026-02-08 UTC
+**Last Analysis:** 2026-02-08 UTC (manual-telegram)
 
-**Summary:** 77 core tasks | 28 patent gap tasks | 12 health fixes | 14 CI/CD fixes | 24 VE-2000 series | 4 TEE HW tasks | 23 VEID gap tasks | 8 gap fixes | 28 spec-driven tasks | 115+ vibe-kanban tasks | **18 Tasks (28A-28R)** | **12 Tasks (29A-29L)** | **5 Tasks (30A-30E)** | **15 Tasks (31A-31O)** | **5 Tasks (34A-34E)** | **Detailed task specs in `_docs/ralph/tasks/`**
+**Summary:** 77 core tasks | 28 patent gap tasks | 12 health fixes | 14 CI/CD fixes | 24 VE-2000 series | 4 TEE HW tasks | 23 VEID gap tasks | 8 gap fixes | 28 spec-driven tasks | 115+ vibe-kanban tasks | **18 Tasks (28A-28R)** | **12 Tasks (29A-29L)** | **5 Tasks (30A-30E)** | **15 Tasks (31A-31O)** | **5 Tasks (34A-34E)** | **Detailed task specs in `_docs/ralph/tasks/`** | **10 Tasks (36A-36J)**
 
 ---
+
+
+## 🔄 ANALYSIS UPDATE (2026-02-08)
+
+### Timeline Note
+
+- The **ANALYSIS UPDATE (2026-02-12)** section below is future-dated relative to today (2026-02-08). Treat it as a forecast draft, not a completed status update.
+
+### Recent Completions (Feb 8, 2026)
+
+| PR  | Title                                                                 | Status    |
+| --- | --------------------------------------------------------------------- | --------- |
+| 567 | INFRA-002: Disaster Recovery & Business Continuity Infrastructure     | ✅ MERGED |
+| 566 | fix(mfa): re-enable MFA keeper tests (gating + keeper)                | ✅ MERGED |
+| 564 | fix(settlement): re-enable settlement keeper tests (4 files)          | ✅ MERGED |
+| 563 | docs(api): Complete API documentation with OpenAPI specs              | ✅ MERGED |
+| 562 | codex-monitor generic v0.13.0                                         | ✅ MERGED |
+
+### Gap Review Since Last Analysis
+
+Patent-driven gaps still open after the latest merges:
+
+- **Web-scope identity verification** (SSO/email/SMS adapters) not yet wired into VEID scoring.
+- **Third‑party public‑key encryption + key rotation** missing for sensitive data storage.
+- **Resource discovery + allocation engine** incomplete for decentralized compute claims.
+- **HPC workload template library** missing for pre‑configured supercomputer workloads.
+- **VM/container provisioning workflow** from chain → provider daemon incomplete.
+- **Usage ledger + invoice state machine** not implemented to close billing requirements.
+- **Lifecycle management APIs** for end‑user resource control absent.
+- **WebAuthn/FIDO2 MFA** not implemented (hardware key flows required).
+- **Crypto→fiat conversion pipeline** (DEX + off‑ramp settlement) not implemented.
+- **End‑to‑end integration tests** across identity → provision → usage → payout missing.
+
+### New Tasks Added: Series 36 (Patent Gaps + Platform Hardening)
+
+| ID  | Title                                                         | Priority | Status  | Est. LOC |
+| --- | ------------------------------------------------------------- | -------- | ------- | -------- |
+| 36A | Web-scope verification adapters (SSO/email/SMS)               | **P0**   | PLANNED | 4k-7k    |
+| 36B | Third‑party public‑key envelopes + rotation                   | **P0**   | PLANNED | 3k-6k    |
+| 36C | Decentralized resource discovery + allocation                 | P1       | PLANNED | 4k-8k    |
+| 36D | WebAuthn/FIDO2 hardware‑key MFA                               | P1       | PLANNED | 2.5k-5k  |
+| 36E | HPC workload template library + on‑chain registry             | P1       | PLANNED | 3k-7k    |
+| 36F | VM/container provisioning workflow                            | P1       | PLANNED | 5k-9k    |
+| 36G | Usage ledger + invoice state machine                          | P1       | PLANNED | 3.5k-7k  |
+| 36H | Resource lifecycle API + audit trails                         | P2       | PLANNED | 2.5k-5k  |
+| 36I | E2E identity→provision→usage→payout tests                      | P1       | PLANNED | 3k-6k    |
+| 36J | Crypto→fiat on/off‑ramp settlement pipeline                    | P2       | PLANNED | 3k-7k    |
+
+### vibe-kanban Task IDs (Series 36)
+
+| ID  | vibe-kanban UUID                     |
+| --- | ------------------------------------ |
+| 36A | 5b45aa2b-b7fb-48a2-9f5f-78e292454559 |
+| 36B | 32c3e889-782f-4489-b303-be091d8f42ce |
+| 36C | ea896d7b-2ece-4458-a171-36e0b8011768 |
+| 36D | ad44c09e-d85c-4f49-85ae-c73ff806fece |
+| 36E | cb4afb5c-a287-408f-b138-81ee42f2deb1 |
+| 36F | 0a0a51c7-0d83-4890-ac53-85504e54f760 |
+| 36G | 3e8edcfc-1641-4157-b35c-6bca2610a700 |
+| 36H | 5630ca88-6e2f-460c-b205-053df699fe46 |
+| 36I | d3e58ff7-cc7f-4354-8176-28354d3c165b |
+| 36J | 8cd48e76-3828-48ae-8610-ccf2ce41f51e |
+
 
 ## 🔄 ANALYSIS UPDATE (2026-02-08)
 

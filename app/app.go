@@ -79,6 +79,7 @@ import (
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
+	resourcestypes "github.com/virtengine/virtengine/x/resources/types"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
@@ -320,6 +321,7 @@ func orderBeginBlockers(_ []string) []string {
 		supporttypes.ModuleName,
 		configtypes.ModuleName,
 		hpctypes.ModuleName,
+		resourcestypes.ModuleName,
 		benchmarktypes.ModuleName,
 		enclavetypes.ModuleName,
 		settlementtypes.ModuleName,

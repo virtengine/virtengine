@@ -38,6 +38,35 @@ func (m *msgServer) EnrollFactor(goCtx context.Context, msg *types.MsgEnrollFact
 		return nil, types.ErrInvalidFactorType.Wrapf("factor type %s is not allowed", msg.FactorType.String())
 	}
 
+	if msg.FactorType == types.FactorTypeFIDO2 {
+		if len(msg.InitialVerificationProof) == 0 {
+			return nil, types.ErrInvalidChallengeResponse.Wrap("missing FIDO2 registration payload")
+		}
+
+		payload, err := types.ParseFIDO2RegistrationPayload(msg.InitialVerificationProof)
+		if err != nil {
+			return nil, err
+		}
+
+		enrollment, err := m.VerifyFIDO2Registration(
+			ctx,
+			address,
+			payload.ChallengeID,
+			payload.ClientDataJSON,
+			payload.AttestationObject,
+			payload.Transports,
+			msg.Label,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		return &types.MsgEnrollFactorResponse{
+			FactorID: enrollment.FactorID,
+			Status:   enrollment.Status,
+		}, nil
+	}
+
 	now := ctx.BlockTime().Unix()
 
 	// Generate factor ID based on factor type
@@ -170,9 +199,36 @@ func (m *msgServer) CreateChallenge(goCtx context.Context, msg *types.MsgCreateC
 
 	params := m.GetParams(ctx)
 
-	// Find an active enrollment for this factor type
+	// Find active enrollments for this factor type
 	enrollments := m.GetActiveFactorsByType(ctx, address, msg.FactorType)
 	if len(enrollments) == 0 {
+		if msg.FactorType == types.FactorTypeFIDO2 {
+			challenge, err := m.CreateFIDO2Challenge(
+				ctx,
+				address,
+				"virtengine.com",
+				"preferred",
+				nil,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			if msg.ClientInfo != nil {
+				if challenge.Metadata == nil {
+					challenge.Metadata = &types.ChallengeMetadata{}
+				}
+				challenge.Metadata.ClientInfo = msg.ClientInfo
+				_ = m.UpdateChallenge(ctx, challenge)
+			}
+
+			return &types.MsgCreateChallengeResponse{
+				ChallengeID:   challenge.ChallengeID,
+				ChallengeData: challenge.ChallengeData,
+				ExpiresAt:     challenge.ExpiresAt,
+			}, nil
+		}
+
 		return nil, types.ErrEnrollmentNotFound.Wrapf("no active %s factor found", msg.FactorType.String())
 	}
 
@@ -195,13 +251,14 @@ func (m *msgServer) CreateChallenge(goCtx context.Context, msg *types.MsgCreateC
 	}
 
 	// Create the challenge
-	challenge, err := types.NewChallenge(
+	challenge, err := types.NewChallengeAt(
 		msg.Sender,
 		msg.FactorType,
 		enrollment.FactorID,
 		msg.TransactionType,
 		params.ChallengeTTL,
 		params.MaxChallengeAttempts,
+		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
 		return nil, err
@@ -213,10 +270,26 @@ func (m *msgServer) CreateChallenge(goCtx context.Context, msg *types.MsgCreateC
 
 	// Add factor-specific challenge data
 	if msg.FactorType == types.FactorTypeFIDO2 {
+		allowedCredentials := make([][]byte, 0, len(enrollments))
+		for _, e := range enrollments {
+			if e.Metadata == nil || e.Metadata.FIDO2Info == nil {
+				continue
+			}
+			allowedCredentials = append(allowedCredentials, e.Metadata.FIDO2Info.CredentialID)
+		}
+
+		if msg.FactorID != "" && enrollment.Metadata != nil && enrollment.Metadata.FIDO2Info != nil {
+			allowedCredentials = [][]byte{enrollment.Metadata.FIDO2Info.CredentialID}
+		}
+
+		if len(allowedCredentials) == 0 {
+			return nil, types.ErrInvalidEnrollment.Wrap("missing FIDO2 credential metadata")
+		}
+
 		challenge.Metadata.FIDO2Challenge = &types.FIDO2ChallengeData{
 			Challenge:                   challenge.ChallengeData,
 			RelyingPartyID:              "virtengine.com", // Configure from params
-			AllowedCredentials:          [][]byte{enrollment.Metadata.FIDO2Info.CredentialID},
+			AllowedCredentials:          allowedCredentials,
 			UserVerificationRequirement: "preferred",
 		}
 	}
