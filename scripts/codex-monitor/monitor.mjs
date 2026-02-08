@@ -3675,7 +3675,7 @@ function buildVkTaskUrl(taskId, projectId) {
   if (!base || !projectId) {
     return null;
   }
-  return `${base}/projects/${projectId}/tasks/${taskId}`;
+  return `${base}/local-projects/${projectId}/tasks/${taskId}`;
 }
 
 function formatTaskLink(item) {
@@ -4212,18 +4212,23 @@ async function triggerTaskPlannerViaKanban(
   }
 
   // Check for existing planner tasks to avoid duplicates
+  // Only block on TODO tasks whose title matches the exact format we create
   const existingTasks = await fetchVk(
     `/api/tasks?project_id=${projectId}&status=todo`,
   );
-  const existingPlanner = existingTasks?.data?.find(
-    (t) =>
-      t.title?.toLowerCase().includes("task planner") ||
-      t.title?.toLowerCase().includes("plan next phase") ||
-      t.title?.toLowerCase().includes("plan next tasks"),
-  );
+  const existingPlanner = (existingTasks?.data || []).find((t) => {
+    // Double-check status client-side — VK API filter may not work reliably
+    if (t.status && t.status !== "todo") return false;
+    const title = (t.title || "").toLowerCase();
+    // Only match the exact title format we create: "Plan next tasks (...)"
+    return (
+      title.startsWith("plan next tasks") ||
+      title.startsWith("plan next phase")
+    );
+  });
   if (existingPlanner) {
     console.log(
-      "[monitor] task planner VK task already exists in backlog — skipping",
+      `[monitor] task planner VK task already exists in backlog — skipping: "${existingPlanner.title}" (${existingPlanner.id})`,
     );
     const taskUrl = buildVkTaskUrl(existingPlanner.id, projectId);
     if (notify) {
