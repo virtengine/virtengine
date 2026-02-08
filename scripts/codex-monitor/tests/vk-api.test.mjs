@@ -12,7 +12,7 @@ const mockConsoleError = vi
 
 // Import monitor once at module level
 const monitor = await import("../monitor.mjs");
-const { fetchVk, updateTaskStatus } = monitor;
+const { fetchVk, updateTaskStatus, getTaskAgeMs } = monitor;
 
 describe("fetchVk", () => {
   beforeEach(() => {
@@ -552,5 +552,44 @@ describe("VK API integration scenarios", () => {
     expect(mockConsoleWarn).toHaveBeenCalledWith(
       expect.stringContaining("non-JSON response"),
     );
+  });
+});
+
+describe("getTaskAgeMs", () => {
+  it("returns age from updated_at", () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const age = getTaskAgeMs({
+      updated_at: twoHoursAgo,
+      created_at: "2020-01-01T00:00:00Z",
+    });
+    // Should be approximately 2 hours (within 5s tolerance)
+    expect(age).toBeGreaterThan(2 * 60 * 60 * 1000 - 5000);
+    expect(age).toBeLessThan(2 * 60 * 60 * 1000 + 5000);
+  });
+
+  it("falls back to created_at when updated_at is missing", () => {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const age = getTaskAgeMs({ created_at: oneHourAgo });
+    expect(age).toBeGreaterThan(60 * 60 * 1000 - 5000);
+    expect(age).toBeLessThan(60 * 60 * 1000 + 5000);
+  });
+
+  it("returns 0 for null/undefined task", () => {
+    expect(getTaskAgeMs(null)).toBe(0);
+    expect(getTaskAgeMs(undefined)).toBe(0);
+  });
+
+  it("returns 0 when no timestamps", () => {
+    expect(getTaskAgeMs({})).toBe(0);
+    expect(getTaskAgeMs({ title: "test" })).toBe(0);
+  });
+
+  it("returns 0 for invalid date strings", () => {
+    expect(getTaskAgeMs({ updated_at: "not-a-date" })).toBe(0);
+  });
+
+  it("returns 0 for future timestamps", () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    expect(getTaskAgeMs({ updated_at: future })).toBe(0);
   });
 });

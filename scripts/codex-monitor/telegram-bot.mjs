@@ -24,7 +24,9 @@ import {
   resetPrimaryAgent,
   initPrimaryAgent,
   steerPrimaryPrompt,
+  getPrimaryAgentName,
 } from "./primary-agent.mjs";
+import { loadExecutorConfig } from "./config.mjs";
 import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
@@ -508,14 +510,22 @@ function getCopilotToolInfo(event) {
 function extractCopilotCommand(input) {
   if (!input) return null;
   if (typeof input === "string") return input;
-  return (
-    input.command ||
-    input.cmd ||
-    input.shell ||
-    input.script ||
-    input.execute ||
-    null
-  );
+  const candidates = [
+    "command",
+    "cmd",
+    "shell",
+    "script",
+    "execute",
+    "args",
+    "run",
+  ];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
 }
 
 function extractCopilotPath(input) {
@@ -1034,11 +1044,11 @@ const COMMANDS = {
   },
   "/history": {
     handler: cmdHistory,
-    desc: "Primary agent conversation history",
+    desc: "Primary agent session history",
   },
   "/clear": {
     handler: cmdClear,
-    desc: "Clear primary agent conversation context",
+    desc: "Clear primary agent session context",
   },
   "/reset_thread": {
     handler: cmdClear,
@@ -1049,10 +1059,6 @@ const COMMANDS = {
   "/background": {
     handler: cmdBackground,
     desc: "Run a task in background or background the active agent",
-  },
-  "/agent": {
-    handler: cmdAgent,
-    desc: "Dispatch a task to a workspace: /agent --workspace <id> --task <prompt>",
   },
   "/region": {
     handler: cmdRegion,
@@ -1845,12 +1851,12 @@ async function cmdCleanupMerged(chatId) {
 
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
-  const providerLabel = info.provider === "COPILOT" ? "Copilot" : "Codex";
-  const idLabel = info.sessionId ? "Session ID" : "Thread ID";
+  const sessionLabel = info.sessionId || info.threadId || "(none)";
+  const agentLabel = info.adapter || info.provider || getPrimaryAgentName();
   const lines = [
-    `🧠 Primary Agent Session (${providerLabel})`,
+    `🧠 Primary Agent (${agentLabel})`,
     "",
-    `${idLabel}: ${info.sessionId || info.threadId || "(none)"}`,
+    `Session: ${sessionLabel}`,
     `Turns: ${info.turnCount}`,
     `Active: ${info.isActive ? "yes" : "no"}`,
     `Busy: ${info.isBusy ? "yes" : "no"}`,
@@ -1971,6 +1977,124 @@ function runPwsh(psScript, timeoutMs = 15000) {
   return result.stdout;
 }
 
+async function readStatusSnapshot() {
+  try {
+    const raw = await readFile(statusPath, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function buildExecutorKey(executor, variant) {
+  const exec = (executor || "unknown").toString().trim().toUpperCase();
+  const varNorm = variant ? String(variant).trim().toUpperCase() : "";
+  return varNorm ? `${exec}:${varNorm}` : exec;
+}
+
+function buildExecutorHealthFromStatus(statusData) {
+  const metrics = new Map();
+  const attempts = statusData?.attempts ?? {};
+  for (const info of Object.values(attempts)) {
+    if (!info) continue;
+    const key = buildExecutorKey(info.executor, info.executor_variant);
+    const entry =
+      metrics.get(key) || {
+        active: 0,
+        failures: 0,
+        successes: 0,
+        timeouts: 0,
+        rate_limits: 0,
+      };
+
+    const processStatus = String(
+      info.last_process_status || info.status || "",
+    ).toLowerCase();
+    const trackedStatus = String(info.status || "").toLowerCase();
+
+    if (
+      ["running", "queued", "in_progress", "active"].includes(processStatus) ||
+      trackedStatus === "running"
+    ) {
+      entry.active += 1;
+    } else if (
+      ["failed", "error", "killed", "aborted"].includes(processStatus) ||
+      trackedStatus === "error"
+    ) {
+      entry.failures += 1;
+    } else if (
+      ["completed", "success", "review", "done"].includes(processStatus) ||
+      ["review", "completed", "done"].includes(trackedStatus)
+    ) {
+      entry.successes += 1;
+    }
+
+    if (processStatus.includes("timeout")) entry.timeouts += 1;
+    if (processStatus.includes("rate") || processStatus.includes("limit")) {
+      entry.rate_limits += 1;
+    }
+
+    metrics.set(key, entry);
+  }
+  return metrics;
+}
+
+function deriveExecutorStatus(stats) {
+  if (!stats) return "unknown";
+  if ((stats.rate_limits ?? 0) > 0) return "cooldown";
+  if ((stats.failures ?? 0) > 0 || (stats.timeouts ?? 0) > 0) {
+    return "degraded";
+  }
+  if ((stats.active ?? 0) > 0 || (stats.successes ?? 0) > 0) {
+    return "healthy";
+  }
+  return "unknown";
+}
+
+function buildExecutorHealthEntries(executorConfig, metrics) {
+  const entries = [];
+  const usedKeys = new Set();
+  const executors = executorConfig?.executors ?? [];
+
+  for (const exec of executors) {
+    const key = buildExecutorKey(exec.executor, exec.variant);
+    const stats =
+      metrics.get(key) ||
+      metrics.get(buildExecutorKey(exec.executor, null)) ||
+      null;
+    usedKeys.add(key);
+    entries.push({
+      label:
+        exec.executor && exec.variant
+          ? `${exec.executor}/${exec.variant}`
+          : exec.executor || exec.name || key,
+      tier: exec.tier || exec.role || "default",
+      region: exec.region || exec.variant || "default",
+      status: deriveExecutorStatus(stats),
+      stats: stats || {
+        active: 0,
+        failures: 0,
+        successes: 0,
+        timeouts: 0,
+        rate_limits: 0,
+      },
+    });
+  }
+
+  for (const [key, stats] of metrics.entries()) {
+    if (usedKeys.has(key)) continue;
+    entries.push({
+      label: key.replace(":", "/"),
+      tier: "default",
+      region: "default",
+      status: deriveExecutorStatus(stats),
+      stats,
+    });
+  }
+
+  return entries;
+}
+
 async function cmdRegion(chatId, regionArg) {
   if (!regionArg || regionArg.trim() === "") {
     // Show current region status
@@ -2031,34 +2155,15 @@ async function cmdRegion(chatId, regionArg) {
 
 async function cmdHealth(chatId) {
   try {
-    const psScript = [
-      `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}';`,
-      "Initialize-ExecutorHealth;",
-      "$out = @();",
-      "foreach ($exec in $script:VK_EXECUTORS) {",
-      "  $p = $exec.provider;",
-      "  $h = $script:ExecutorHealth[$p];",
-      "  $status = Get-ExecutorHealthStatus -Provider $p;",
-      "  $out += @{",
-      "    model = $exec.model;",
-      "    variant = $exec.variant;",
-      "    tier = $exec.tier;",
-      "    region = $exec.region;",
-      "    status = $status;",
-      "    active = if ($h) { $h.active_tasks } else { 0 };",
-      "    failures = if ($h) { $h.consecutive_failures } else { 0 };",
-      "    successes = if ($h) { $h.total_successes } else { 0 };",
-      "    timeouts = if ($h) { $h.total_timeouts } else { 0 };",
-      "    rate_limits = if ($h) { $h.total_rate_limits } else { 0 };",
-      "  }",
-      "}",
-      "$out | ConvertTo-Json -Depth 3",
-    ].join(" ");
-
-    const result = runPwsh(psScript);
-
-    const executors = JSON.parse(result);
-    const arr = Array.isArray(executors) ? executors : [executors];
+    const statusData = await readStatusSnapshot();
+    let executorConfig = null;
+    try {
+      executorConfig = loadExecutorConfig(__dirname, null);
+    } catch {
+      executorConfig = null;
+    }
+    const metrics = buildExecutorHealthFromStatus(statusData);
+    const arr = buildExecutorHealthEntries(executorConfig, metrics);
 
     const iconMap = {
       healthy: "✅",
@@ -2068,28 +2173,36 @@ async function cmdHealth(chatId) {
     };
     const lines = ["🏥 Executor Health Dashboard\n"];
 
+    if (!arr.length) {
+      lines.push("No executor data available.");
+    }
+
     for (const e of arr) {
       const icon = iconMap[e.status] || "❓";
       lines.push(
-        `${icon} ${e.model} (${e.tier}/${e.region})\n` +
-          `   Status: ${e.status} | Active: ${e.active}\n` +
-          `   ✓${e.successes} ✗${e.failures} ⏱${e.timeouts} 🚫${e.rate_limits}`,
+        `${icon} ${e.label} (${e.tier}/${e.region})\n` +
+          `   Status: ${e.status} | Active: ${e.stats.active}\n` +
+          `   ✓${e.stats.successes} ✗${e.stats.failures} ⏱${e.stats.timeouts} 🚫${e.stats.rate_limits}`,
       );
     }
 
     // Add region info
-    const regionScript = [
-      `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}';`,
-      "Initialize-CodexRegionTracking;",
-      "Get-RegionStatus | ConvertTo-Json",
-    ].join(" ");
-    const regionResult = runPwsh(regionScript, 10000);
-    const region = JSON.parse(regionResult);
-    lines.push(
-      "",
-      `🌍 Region: ${region.active_region?.toUpperCase()} ${region.override ? `(override: ${region.override})` : "(auto)"}`,
-      `Sweden backup: ${region.sweden_available ? "available" : "not configured"}`,
-    );
+    try {
+      const regionScript = [
+        `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}';`,
+        "Initialize-CodexRegionTracking;",
+        "Get-RegionStatus | ConvertTo-Json",
+      ].join(" ");
+      const regionResult = runPwsh(regionScript, 10000);
+      const region = JSON.parse(regionResult);
+      lines.push(
+        "",
+        `🌍 Region: ${region.active_region?.toUpperCase()} ${region.override ? `(override: ${region.override})` : "(auto)"}`,
+        `Sweden backup: ${region.sweden_available ? "available" : "not configured"}`,
+      );
+    } catch {
+      lines.push("", "🌍 Region: unavailable");
+    }
 
     await sendReply(chatId, lines.join("\n"));
   } catch (err) {
@@ -4036,7 +4149,7 @@ export async function startTelegramBot() {
   } else {
     await sendDirect(
       telegramChatId,
-      "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
+      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
     );
   }
 

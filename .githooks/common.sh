@@ -114,6 +114,16 @@ ensure_direnv_env() {
     # Add tool paths
     export PATH="$VE_DEVCACHE_BIN:$VIRTENGINE_DEVCACHE_NODE_BIN:$PATH"
 
+    # Guard: remove stale local credential helpers injected by VK workspace agents.
+    # VK containers run 'gh auth setup-git' which writes the container's gh path
+    # (e.g., /home/jon/bin/gh.exe) into .git/config, breaking pushes elsewhere.
+    local _local_cred
+    _local_cred=$(git config --local credential.helper 2>/dev/null || true)
+    if [ -n "$_local_cred" ] && echo "$_local_cred" | grep -qE '/home/.*/gh(\.exe)?|/tmp/.*/gh'; then
+        hook_warn "Removing stale local credential.helper: $_local_cred"
+        git config --local --unset credential.helper 2>/dev/null || true
+    fi
+
     # Ensure cache directories exist
     mkdir -p "$VE_DEVCACHE" "$VE_DEVCACHE_BIN" "$VE_DEVCACHE_INCLUDE" \
              "$VE_DEVCACHE_VERSIONS" "$VE_RUN_BIN" 2>/dev/null || true

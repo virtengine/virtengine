@@ -34,6 +34,10 @@
     "echoLogs": { "type": "boolean" },
     "autoFixEnabled": { "type": "boolean" },
     "codexEnabled": { "type": "boolean" },
+    "primaryAgent": {
+      "type": "string",
+      "enum": ["codex-sdk", "copilot-sdk", "claude-sdk"]
+    },
     "vkSpawnEnabled": { "type": "boolean" },
     "plannerMode": {
       "type": "string",

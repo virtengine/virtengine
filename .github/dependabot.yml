@@ -113,6 +113,30 @@ updates:
     commit-message:
       prefix: "chore(deps)"
 
+  # npm dependencies (Codex Monitor)
+  - package-ecosystem: "npm"
+    directory: "/scripts/codex-monitor"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      linting:
+        patterns:
+          - "eslint*"
+          - "prettier*"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "build(deps-dev)"
+
   # npm dependencies (Portal library)
   - package-ecosystem: "npm"
     directory: "/lib/portal"

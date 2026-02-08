@@ -29,6 +29,7 @@ import {
   execPrimaryPrompt,
   isPrimaryBusy,
   initPrimaryAgent,
+  setPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -119,6 +120,8 @@ let {
   autoFixEnabled,
   preflightEnabled: configPreflightEnabled,
   preflightRetryMs: configPreflightRetryMs,
+  primaryAgent,
+  primaryAgentEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -155,11 +158,12 @@ let {
   telegramVerbosity,
 } = config;
 
-void initPrimaryAgent(config);
-
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
+console.log(`[monitor] task planner mode: ${plannerMode}`);
+let primaryAgentName = primaryAgent;
+let primaryAgentReady = primaryAgentEnabled;
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let codexDisabledReason = codexEnabled
   ? ""
@@ -168,8 +172,12 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
+setPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
+if (primaryAgentReady) {
+  void initPrimaryAgent(primaryAgentName);
+}
 
 // Merge strategy: Codex-powered merge decision analysis
 // Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
@@ -1846,6 +1854,20 @@ async function attemptFreshSessionRetry(reason, logTail) {
 }
 
 /**
+ * Calculate how long a task has been in its current state (ms).
+ * Uses `updated_at` if available, otherwise `created_at`.
+ * @param {object} task - VK task object with `updated_at` / `created_at`
+ * @returns {number} Age in milliseconds, or 0 if no timestamp available
+ */
+function getTaskAgeMs(task) {
+  const ts = task?.updated_at || task?.created_at;
+  if (!ts) return 0;
+  const parsed = new Date(ts).getTime();
+  if (Number.isNaN(parsed)) return 0;
+  return Math.max(0, Date.now() - parsed);
+}
+
+/**
  * GET /api/projects/:project_id/tasks?status=<status>
  * Fetches tasks by status from VK API.
  * @param {string} status - Task status (e.g., "inreview", "todo", "done")
@@ -1895,7 +1917,57 @@ async function updateTaskStatus(taskId, newStatus) {
 }
 
 /**
- * Checks if a git branch has been merged into the main branch.
+ * Safe recovery: re-fetches a task's live status from VK before moving it
+ * to "todo".  If the user has since cancelled/done the task, the recovery
+ * is aborted.  This prevents the loop where:
+ *   user cancels → monitor moves to todo → orchestrator re-dispatches.
+ *
+ * @param {string} taskId - Task UUID
+ * @param {string} taskTitle - Human-readable title (for logging)
+ * @param {string} reason - Why the recovery is happening (for logging)
+ * @returns {Promise<boolean>} true if moved to todo, false if skipped/failed
+ */
+async function safeRecoverTask(taskId, taskTitle, reason) {
+  try {
+    const res = await fetchVk(`/api/tasks/${taskId}`);
+    const liveStatus = res?.data?.status || res?.status;
+    if (!liveStatus) {
+      console.warn(
+        `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping`,
+      );
+      return false;
+    }
+    // If the user has moved the task out of inprogress (cancelled, done,
+    // or even already todo), do NOT touch it.
+    if (liveStatus === "cancelled" || liveStatus === "done") {
+      console.log(
+        `[monitor] safeRecover: task "${taskTitle}" is now ${liveStatus} — aborting recovery`,
+      );
+      return false;
+    }
+    if (liveStatus === "todo") {
+      console.log(
+        `[monitor] safeRecover: task "${taskTitle}" is already todo — no action needed`,
+      );
+      return false;
+    }
+    const success = await updateTaskStatus(taskId, "todo");
+    if (success) {
+      console.log(
+        `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason})`,
+      );
+    }
+    return success;
+  } catch (err) {
+    console.warn(
+      `[monitor] safeRecover failed for "${taskTitle}": ${err.message || err}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Checks if a git branch has been merged into the target base branch.
  * Uses GitHub CLI + git commands to determine merge status.
  *
  * IMPORTANT: "branch not on remote" does NOT mean merged. The agent may
@@ -1903,18 +1975,33 @@ async function updateTaskStatus(taskId, newStatus) {
  * branch was manually deleted. We must verify via GitHub PR state.
  *
  * @param {string} branch - Branch name (e.g., "ve/1234-feat-auth")
+ * @param {string} [baseBranch] - Upstream/base branch to compare against
  * @returns {Promise<boolean>} true if definitively merged, false otherwise
  */
-async function isBranchMerged(branch) {
+async function isBranchMerged(branch, baseBranch) {
   if (!branch) return false;
 
   try {
+    const target = normalizeBranchName(baseBranch) || DEFAULT_TARGET_BRANCH;
+
+    const splitRemoteRef = (ref, defaultRemote = "origin") => {
+      const match = String(ref || "").match(/^([^/]+)\/(.+)$/);
+      if (match) return { remote: match[1], name: match[2] };
+      return { remote: defaultRemote, name: ref };
+    };
+
+    const branchInfo = splitRemoteRef(normalizeBranchName(branch), "origin");
+    const baseInfo = splitRemoteRef(target, "origin");
+    const branchRef = `${branchInfo.remote}/${branchInfo.name}`;
+    const baseRef = `${baseInfo.remote}/${baseInfo.name}`;
+    const ghHead = branchInfo.name || branch;
+
     // ── Strategy 1: Check GitHub for a merged PR with this head branch ──
     // This is the most reliable signal — if GitHub says merged, it's merged.
     if (ghAvailable()) {
       try {
         const ghResult = execSync(
-          `gh pr list --head "${branch}" --state merged --json number,mergedAt --limit 1`,
+          `gh pr list --head "${ghHead}" --state merged --json number,mergedAt --limit 1`,
           {
             cwd: repoRoot,
             encoding: "utf8",
@@ -1935,7 +2022,7 @@ async function isBranchMerged(branch) {
     }
 
     // ── Strategy 2: Check if branch exists on remote ────────────────────
-    const branchExistsCmd = `git ls-remote --heads origin ${branch}`;
+    const branchExistsCmd = `git ls-remote --heads ${branchInfo.remote} ${branchInfo.name}`;
     const branchExists = execSync(branchExistsCmd, {
       cwd: repoRoot,
       encoding: "utf8",
@@ -1946,13 +2033,18 @@ async function isBranchMerged(branch) {
     // Without a confirmed merged PR (strategy 1), we must assume NOT merged.
     if (!branchExists) {
       console.log(
-        `[monitor] Branch ${branch} not found on remote — no merged PR found, treating as NOT merged`,
+        `[monitor] Branch ${branchRef} not found on ${branchInfo.remote} — no merged PR found against ${baseRef}, treating as NOT merged`,
       );
       return false;
     }
 
     // ── Strategy 3: Branch exists on remote — check if ancestor of main ─
-    execSync("git fetch origin main --quiet", {
+    execSync(`git fetch ${baseInfo.remote} ${baseInfo.name} --quiet`, {
+      cwd: repoRoot,
+      stdio: "ignore",
+      timeout: 15000,
+    });
+    execSync(`git fetch ${branchInfo.remote} ${branchInfo.name} --quiet`, {
       cwd: repoRoot,
       stdio: "ignore",
       timeout: 15000,
@@ -1960,7 +2052,7 @@ async function isBranchMerged(branch) {
 
     // Check if the branch is fully merged into origin/main
     // Returns non-zero exit code if not merged
-    const mergeCheckCmd = `git merge-base --is-ancestor origin/${branch} origin/main`;
+    const mergeCheckCmd = `git merge-base --is-ancestor ${branchRef} ${baseRef}`;
     execSync(mergeCheckCmd, {
       cwd: repoRoot,
       stdio: "ignore",
@@ -1968,7 +2060,9 @@ async function isBranchMerged(branch) {
     });
 
     // If we get here, the branch is merged
-    console.log(`[monitor] Branch ${branch} is ancestor of main (merged)`);
+    console.log(
+      `[monitor] Branch ${branchRef} is ancestor of ${baseRef} (merged)`,
+    );
     return true;
   } catch (err) {
     // Non-zero exit code means not merged, or other error
@@ -2058,15 +2152,24 @@ const MERGE_CHECK_THROTTLE_MS = 1500;
 
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
- * no PR, abandoned).  We re-check them every 6 hours instead of every cycle.
+ * no PR, abandoned).  We re-check them every 30 min instead of every cycle.
  * After STALE_MAX_STRIKES consecutive stale checks the task is moved back
  * to "todo" so another agent can pick it up.
  * Key = task ID, Value = { lastCheck: timestamp, strikes: number }.
  * @type {Map<string, {lastCheck: number, strikes: number}>}
  */
 const staleBranchCooldown = new Map();
-const STALE_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+const STALE_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 const STALE_MAX_STRIKES = 2; // move to todo after this many stale checks
+
+/**
+ * Age-based stale detection: if a task has been in inprogress/inreview for
+ * longer than this threshold with no active branch or PR, it is immediately
+ * moved back to "todo" on the first check — no strikes needed.
+ * Configurable via STALE_TASK_AGE_HOURS env var (default: 3).
+ */
+const STALE_TASK_AGE_HOURS = Number(process.env.STALE_TASK_AGE_HOURS || "3");
+const STALE_TASK_AGE_MS = STALE_TASK_AGE_HOURS * 60 * 60 * 1000;
 
 /**
  * Cooldown cache for tasks whose PRs have merge conflicts.
@@ -2151,13 +2254,56 @@ async function checkMergedPRsAndUpdateTasks() {
     for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
+      // Find the attempt associated with this task — first in local status,
+      // then fall back to the VK API (which includes archived attempts)
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        // VK API fallback: find the most recent attempt for this task
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) {
+          attempt = vkMatch[0];
+          console.log(
+            `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
+          );
+        } else {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+          );
+        }
+      }
+      const branch =
+        attempt?.branch ||
+        task?.branch ||
+        task?.workspace_branch ||
+        task?.git_branch;
+      const prNumber =
+        attempt?.pr_number ||
+        task?.pr_number ||
+        parsePrNumberFromUrl(attempt?.pr_url) ||
+        parsePrNumberFromUrl(task?.pr_url);
+      let prInfo = null;
+      if (prNumber) {
+        prInfo = await getPullRequestByNumber(prNumber);
+      }
+      const isMerged =
+        !!prInfo?.mergedAt ||
+        (!!prInfo?.merged_at && prInfo.merged_at !== null);
+      const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
+
+      // ── Skip cancelled/done tasks — they should never be recovered ──
+      if (taskStatus === "cancelled" || taskStatus === "done") {
+        continue;
+      }
 
       // ── Stale cooldown: skip tasks we already checked recently ──
       const staleEntry = staleBranchCooldown.get(task.id);
-      if (
-        staleEntry &&
-        Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS
-      ) {
+      if (staleEntry && Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS) {
         continue;
       }
 
@@ -2169,26 +2315,39 @@ async function checkMergedPRsAndUpdateTasks() {
         .filter((a) => a?.task_id === task.id)
         .sort(
           (a, b) =>
-            new Date(b.created_at).getTime() -
-            new Date(a.created_at).getTime(),
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
 
       // Build a deduplicated list of all branches + PR numbers to check
-      /** @type {Array<{branch?: string, prNumber?: number, attemptId?: string}>} */
+      /** @type {Array<{branch?: string, prNumber?: number, attemptId?: string, baseBranch?: string}>} */
       const candidates = [];
       const seenBranches = new Set();
 
       const addCandidate = (src) => {
         const b = src?.branch;
-        const pr =
-          src?.pr_number ||
-          parsePrNumberFromUrl(src?.pr_url);
+        const pr = src?.pr_number || parsePrNumberFromUrl(src?.pr_url);
         const aid = src?.id; // attempt UUID
+        const baseBranch = resolveAttemptTargetBranch(src, task);
         if (b && !seenBranches.has(b)) {
           seenBranches.add(b);
-          candidates.push({ branch: b, prNumber: pr || undefined, attemptId: aid });
+          candidates.push({
+            branch: b,
+            prNumber: pr || undefined,
+            attemptId: aid,
+            baseBranch,
+          });
+        } else if (b && baseBranch) {
+          const existing = candidates.find((c) => c.branch === b);
+          if (existing && !existing.baseBranch) {
+            existing.baseBranch = baseBranch;
+          }
         } else if (pr && !candidates.some((c) => c.prNumber === pr)) {
-          candidates.push({ branch: b, prNumber: pr, attemptId: aid });
+          candidates.push({
+            branch: b,
+            prNumber: pr,
+            attemptId: aid,
+            baseBranch,
+          });
         }
       };
 
@@ -2196,31 +2355,70 @@ async function checkMergedPRsAndUpdateTasks() {
       for (const a of allVkAttempts) addCandidate(a);
       // Also check task-level fields
       addCandidate({
-        branch:
-          task?.branch || task?.workspace_branch || task?.git_branch,
+        branch: task?.branch || task?.workspace_branch || task?.git_branch,
         pr_number: task?.pr_number,
         pr_url: task?.pr_url,
       });
 
       if (candidates.length === 0) {
-        const prev = staleBranchCooldown.get(task.id);
-        const strikes = (prev?.strikes || 0) + 1;
-        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
-        console.log(
-          `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
-        );
-        if (
-          strikes >= STALE_MAX_STRIKES &&
-          (taskStatus === "inprogress" || taskStatus === "inreview")
-        ) {
-          const success = await updateTaskStatus(task.id, "todo");
+        // ── Only recover idle inprogress tasks — never inreview ──
+        // inreview tasks are monitored by merge/conflict checks.
+        // inprogress tasks with an active agent should not be touched.
+        if (taskStatus !== "inprogress") {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) in ${taskStatus} — skipping (only idle inprogress tasks are recovered)`,
+          );
+          continue;
+        }
+
+        // Check if an agent is actively working on this task
+        const hasActiveAgent =
+          task.has_in_progress_attempt === true || !!localAttempt;
+        if (hasActiveAgent) {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has active agent — skipping recovery`,
+          );
+          continue;
+        }
+
+        // ── Age-based immediate recovery ──
+        // If the task has been stuck for longer than STALE_TASK_AGE_MS
+        // with no active agent and no branch/PR, move it to todo immediately.
+        const taskAge = getTaskAgeMs(task);
+        if (taskAge >= STALE_TASK_AGE_MS) {
+          const ageHours = (taskAge / (60 * 60 * 1000)).toFixed(1);
+          console.log(
+            `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — stale for ${ageHours}h, attempting recovery`,
+          );
+          const success = await safeRecoverTask(
+            task.id,
+            task.title,
+            `age-based: ${ageHours}h, no agent, no branch/PR`,
+          );
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
-            console.log(
-              `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (no branch/PR after ${strikes} checks)`,
-            );
+          }
+          continue;
+        }
+
+        const prev = staleBranchCooldown.get(task.id);
+        const strikes = (prev?.strikes || 0) + 1;
+        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+        console.log(
+          `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — strike ${strikes}/${STALE_MAX_STRIKES}`,
+        );
+        if (strikes >= STALE_MAX_STRIKES) {
+          const success = await safeRecoverTask(
+            task.id,
+            task.title,
+            `no branch/PR after ${strikes} checks`,
+          );
+          if (success) {
+            movedTodoCount++;
+            recoveredTaskNames.push(task.title);
+            staleBranchCooldown.delete(task.id);
           }
         }
         continue;
@@ -2317,7 +2515,7 @@ async function checkMergedPRsAndUpdateTasks() {
         }
 
         // Check if the branch has been merged (checks gh + git)
-        const merged = await isBranchMerged(cand.branch);
+        const merged = await isBranchMerged(cand.branch, cand.baseBranch);
         if (merged) {
           console.log(
             `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch ${cand.branch}, updating to done`,
@@ -2425,25 +2623,60 @@ async function checkMergedPRsAndUpdateTasks() {
           );
         }
       } else if (!hasOpenPR) {
-        // All branches unresolvable — increment strike counter
-        const prev = staleBranchCooldown.get(task.id);
-        const strikes = (prev?.strikes || 0) + 1;
-        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
-        console.log(
-          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no branch on remote, no open PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
-        );
-        if (
-          strikes >= STALE_MAX_STRIKES &&
-          (taskStatus === "inprogress" || taskStatus === "inreview")
-        ) {
-          const success = await updateTaskStatus(task.id, "todo");
+        // ── Only recover idle inprogress tasks — never inreview ──
+        if (taskStatus !== "inprogress") {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but status=${taskStatus} — skipping recovery`,
+          );
+          continue;
+        }
+
+        // Check if an agent is actively working on this task
+        const hasActiveAgent =
+          task.has_in_progress_attempt === true || !!localAttempt;
+        if (hasActiveAgent) {
+          console.log(
+            `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but agent is active — skipping recovery`,
+          );
+          continue;
+        }
+
+        // Genuinely idle inprogress task with no open PR — recover
+        const taskAge = getTaskAgeMs(task);
+        if (taskAge >= STALE_TASK_AGE_MS) {
+          const ageHours = (taskAge / (60 * 60 * 1000)).toFixed(1);
+          console.log(
+            `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch/PR, stale for ${ageHours}h — attempting recovery`,
+          );
+          const success = await safeRecoverTask(
+            task.id,
+            task.title,
+            `age-based: ${ageHours}h, no agent, no branch/PR`,
+          );
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
-            console.log(
-              `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (abandoned — ${strikes} stale checks)`,
+          }
+        } else {
+          // Not old enough — use the strike-based system
+          const prev = staleBranchCooldown.get(task.id);
+          const strikes = (prev?.strikes || 0) + 1;
+          staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+          console.log(
+            `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch, no PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
+          );
+          if (strikes >= STALE_MAX_STRIKES) {
+            const success = await safeRecoverTask(
+              task.id,
+              task.title,
+              `abandoned — ${strikes} stale checks`,
             );
+            if (success) {
+              movedTodoCount++;
+              recoveredTaskNames.push(task.title);
+              staleBranchCooldown.delete(task.id);
+            }
           }
         }
       }
@@ -2517,7 +2750,13 @@ async function checkMergedPRsAndUpdateTasks() {
     };
   } catch (err) {
     console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
-    return { checked: 0, movedDone: 0, movedReview: 0, movedTodo: 0, error: err };
+    return {
+      checked: 0,
+      movedDone: 0,
+      movedReview: 0,
+      movedTodo: 0,
+      error: err,
+    };
   }
 }
 
@@ -2848,7 +3087,14 @@ function extractUpstreamFromText(text) {
 function collectTaskLabels(task) {
   const labels = [];
   if (!task) return labels;
-  for (const field of ["labels", "label", "tags", "tag", "categories", "category"]) {
+  for (const field of [
+    "labels",
+    "label",
+    "tags",
+    "tag",
+    "categories",
+    "category",
+  ]) {
     const value = task[field];
     if (!value) continue;
     if (typeof value === "string") {
@@ -2879,7 +3125,14 @@ function collectTaskLabels(task) {
 function getTaskTextBlob(task) {
   const parts = [];
   if (!task) return "";
-  for (const field of ["title", "name", "description", "body", "details", "content"]) {
+  for (const field of [
+    "title",
+    "name",
+    "description",
+    "body",
+    "details",
+    "content",
+  ]) {
     const value = task[field];
     if (value) parts.push(value);
   }
@@ -2906,7 +3159,8 @@ function resolveUpstreamFromTask(task) {
   }
   if (task.metadata) {
     for (const field of directFields) {
-      if (task.metadata[field]) return normalizeBranchName(task.metadata[field]);
+      if (task.metadata[field])
+        return normalizeBranchName(task.metadata[field]);
     }
   }
 
@@ -2931,6 +3185,56 @@ function resolveUpstreamFromTask(task) {
   }
 
   return null;
+}
+
+// ── Conflict Classification ─────────────────────────────────────────────────
+// Auto-resolvable file patterns for rebase conflicts:
+//   "theirs" = accept upstream version (lock files, generated files)
+//   "ours"   = keep our version (changelogs, coverage reports)
+const AUTO_RESOLVE_THEIRS = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "go.sum",
+];
+const AUTO_RESOLVE_OURS = ["CHANGELOG.md", "coverage.txt", "results.txt"];
+const AUTO_RESOLVE_LOCK_EXTENSIONS = [".lock"];
+
+/**
+ * Classify conflicted files into auto-resolvable and manual categories.
+ * @param {string[]} files - List of conflicted file paths
+ * @returns {{ allResolvable: boolean, manualFiles: string[], summary: string }}
+ */
+function classifyConflictedFiles(files) {
+  const manualFiles = [];
+  const strategies = [];
+
+  for (const file of files) {
+    const fileName = file.split("/").pop();
+    let strategy = null;
+
+    if (AUTO_RESOLVE_THEIRS.includes(fileName)) {
+      strategy = "theirs";
+    } else if (AUTO_RESOLVE_OURS.includes(fileName)) {
+      strategy = "ours";
+    } else if (
+      AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fileName.endsWith(ext))
+    ) {
+      strategy = "theirs";
+    }
+
+    if (strategy) {
+      strategies.push(`${fileName}→${strategy}`);
+    } else {
+      manualFiles.push(file);
+    }
+  }
+
+  return {
+    allResolvable: manualFiles.length === 0,
+    manualFiles,
+    summary: strategies.join(", ") || "none",
+  };
 }
 
 function resolveAttemptTargetBranch(attempt, task) {
@@ -3014,7 +3318,7 @@ async function smartPRFlow(attemptId, shortId, status) {
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
       // Ask the agent to commit via primary agent
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
@@ -3046,9 +3350,7 @@ async function smartPRFlow(attemptId, shortId, status) {
     const targetBranch = resolveAttemptTargetBranch(attempt, taskData);
 
     // ── Step 3: Rebase onto target branch ────────────────────────
-    console.log(
-      `[monitor] ${tag}: rebasing onto ${targetBranch}...`,
-    );
+    console.log(`[monitor] ${tag}: rebasing onto ${targetBranch}...`);
     const rebaseResult = await rebaseAttempt(attemptId, targetBranch);
 
     if (rebaseResult && !rebaseResult.success) {
@@ -3072,15 +3374,29 @@ async function smartPRFlow(attemptId, shortId, status) {
         return;
       }
       const errorData = rebaseResult.error_data;
-      // Rebase has conflicts → try auto-resolve
+      // Rebase has conflicts → try smart auto-resolve based on file type
       if (errorData?.type === "merge_conflicts") {
         const files = errorData.conflicted_files || [];
         console.warn(
-          `[monitor] ${tag}: rebase conflicts in ${files.join(", ")} — attempting auto-resolve`,
+          `[monitor] ${tag}: rebase conflicts in ${files.join(", ")} — attempting smart auto-resolve`,
         );
+
+        // Classify conflicted files
+        const autoResolvable = classifyConflictedFiles(files);
+        if (autoResolvable.allResolvable) {
+          console.log(
+            `[monitor] ${tag}: all ${files.length} conflicted files are auto-resolvable (${autoResolvable.summary})`,
+          );
+        } else {
+          console.warn(
+            `[monitor] ${tag}: ${autoResolvable.manualFiles.length} files need manual resolution: ${autoResolvable.manualFiles.join(", ")}`,
+          );
+        }
+
+        // Try VK resolve-conflicts API first (it does "accept ours")
         const resolveResult = await resolveConflicts(attemptId);
         if (resolveResult?.success) {
-          console.log(`[monitor] ${tag}: conflicts resolved automatically`);
+          console.log(`[monitor] ${tag}: conflicts resolved via VK API`);
         } else {
           const attemptInfo = await getAttemptInfo(attemptId);
           const worktreeDir =
@@ -3089,19 +3405,41 @@ async function smartPRFlow(attemptId, shortId, status) {
             console.warn(
               `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
             );
+            const classification = classifyConflictedFiles(files);
+            const fileGuidance = files
+              .map((f) => {
+                const fn = f.split("/").pop();
+                if (
+                  AUTO_RESOLVE_THEIRS.includes(fn) ||
+                  AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))
+                ) {
+                  return `  - ${f}: Accept THEIRS (upstream version — lock/generated file)`;
+                }
+                if (AUTO_RESOLVE_OURS.includes(fn)) {
+                  return `  - ${f}: Accept OURS (keep our version)`;
+                }
+                return `  - ${f}: Resolve MANUALLY (inspect both sides, merge intelligently)`;
+              })
+              .join("\n");
             const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
 Worktree: ${worktreeDir || "(unknown)"}
 Attempt: ${shortId}
 Conflicted files: ${files.join(", ") || "(unknown)"}
 
+Per-file resolution strategy:
+${fileGuidance}
+
 Instructions:
 1) cd into the worktree directory.
-2) Inspect git status and conflicted files.
-3) Resolve conflicts, then run: git add -A
-4) Continue the rebase (git rebase --continue) if needed.
-5) Ensure the branch builds/tests if necessary.
-6) Commit if prompted and push the branch.
-Return a short summary of what you did.`;
+2) For each conflicted file, apply the strategy above:
+   - THEIRS: git checkout --theirs -- <file> && git add <file>
+   - OURS: git checkout --ours -- <file> && git add <file>
+   - MANUAL: Open the file, remove conflict markers (<<<< ==== >>>>), merge both sides intelligently, then git add <file>
+3) After resolving all files, run: git rebase --continue
+4) If more conflicts appear, repeat steps 2-3.
+5) Once rebase completes, push the branch: git push --force-with-lease
+6) Verify the build still passes if possible.
+Return a short summary of what you did and any files that needed manual resolution.`;
             const codexResult = await runCodexExec(
               prompt,
               worktreeDir || repoRoot,
@@ -3145,7 +3483,7 @@ Return a short summary of what you did.`;
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (!isPrimaryBusy()) {
+          if (primaryAgentReady && !isPrimaryBusy()) {
             void execPrimaryPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
@@ -3229,6 +3567,7 @@ Return a short summary of what you did.`;
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
       if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
+      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
@@ -3275,7 +3614,7 @@ Return a short summary of what you did.`;
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
@@ -3298,7 +3637,7 @@ Return a short summary of what you did.`;
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (!isPrimaryBusy()) {
+      if (primaryAgentReady && !isPrimaryBusy()) {
         void execPrimaryPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
@@ -3314,6 +3653,7 @@ Return a short summary of what you did.`;
         );
       }
     }
+  }
   } catch (err) {
     console.warn(`[monitor] ${tag}: error — ${err.message || err}`);
   }
@@ -3677,7 +4017,9 @@ async function maybeTriggerTaskPlanner(reason, details) {
     return;
   }
   if (plannerMode === "codex-sdk" && !codexEnabled) {
-    console.log(`[monitor] task planner skipped: codex-sdk mode but Codex disabled`);
+    console.log(
+      `[monitor] task planner skipped: codex-sdk mode but Codex disabled`,
+    );
     return;
   }
   if (plannerTriggered) {
@@ -3688,12 +4030,16 @@ async function maybeTriggerTaskPlanner(reason, details) {
   const state = await readPlannerState();
   if (isPlannerDeduped(state, now)) {
     const lastAt = state?.last_triggered_at || "unknown";
-    console.log(`[monitor] task planner skipped: deduped (last triggered ${lastAt})`);
+    console.log(
+      `[monitor] task planner skipped: deduped (last triggered ${lastAt})`,
+    );
     return;
   }
   try {
     const result = await triggerTaskPlanner(reason, details);
-    console.log(`[monitor] task planner result: ${result?.status || "unknown"} (${reason})`);
+    console.log(
+      `[monitor] task planner result: ${result?.status || "unknown"} (${reason})`,
+    );
   } catch (err) {
     // Auto-triggered planner failures are non-fatal — already logged/notified by triggerTaskPlanner
     console.warn(
@@ -4421,8 +4767,7 @@ async function triggerTaskPlannerViaKanban(
     const title = (t.title || "").toLowerCase();
     // Only match the exact title format we create: "Plan next tasks (...)"
     return (
-      title.startsWith("plan next tasks") ||
-      title.startsWith("plan next phase")
+      title.startsWith("plan next tasks") || title.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
@@ -5154,7 +5499,6 @@ async function startProcess() {
 
   // Reset mutex flag before spawn — will be re-set if this instance hits mutex
   restartController.noteProcessStarted(Date.now());
-
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -5460,6 +5804,8 @@ function applyConfig(nextConfig, options = {}) {
   const prevWatchPath = watchPath;
   const prevTelegramInterval = telegramIntervalMin;
   const prevCodexEnabled = codexEnabled;
+  const prevPrimaryAgentName = primaryAgentName;
+  const prevPrimaryAgentReady = primaryAgentReady;
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
   const prevPreflightEnabled = preflightEnabled;
@@ -5510,6 +5856,8 @@ function applyConfig(nextConfig, options = {}) {
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
   codexEnabled = nextConfig.codexEnabled;
+  primaryAgentName = nextConfig.primaryAgent;
+  primaryAgentReady = nextConfig.primaryAgentEnabled;
   codexDisabledReason = codexEnabled
     ? ""
     : process.env.CODEX_SDK_DISABLED === "1"
@@ -5517,6 +5865,14 @@ function applyConfig(nextConfig, options = {}) {
       : agentSdk?.primary && agentSdk.primary !== "codex"
         ? `disabled via agent_sdk.primary=${agentSdk.primary}`
         : "disabled via --no-codex";
+
+  const primaryAgentChanged = prevPrimaryAgentName !== primaryAgentName;
+  if (primaryAgentChanged) {
+    setPrimaryAgent(primaryAgentName);
+  }
+  if ((primaryAgentChanged && primaryAgentReady) || (!prevPrimaryAgentReady && primaryAgentReady)) {
+    void initPrimaryAgent(primaryAgentName);
+  }
 
   if (prevWatchPath !== watchPath || watchEnabled === false) {
     void startWatcher(true);
@@ -5808,4 +6164,12 @@ if (telegramBotEnabled) {
 }
 
 // ── Named exports for testing ───────────────────────────────────────────────
-export { fetchVk, updateTaskStatus };
+export {
+  fetchVk,
+  updateTaskStatus,
+  getTaskAgeMs,
+  classifyConflictedFiles,
+  AUTO_RESOLVE_THEIRS,
+  AUTO_RESOLVE_OURS,
+  AUTO_RESOLVE_LOCK_EXTENSIONS,
+};

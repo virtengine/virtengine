@@ -83,6 +83,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Crash analysis** — Codex SDK reads logs and diagnoses root causes automatically
 - **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
 - **Live Telegram digest** — One continuously-edited message per time window shows events as they happen, like a real-time log
+- **Telegram chatbot** — Real-time notifications + interactive commands
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
 - **Task planner** — Detects empty backlog and auto-generates new tasks via AI
@@ -92,6 +93,16 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
 - **Hot .env reload** — Changes to `.env` files are detected and applied without restart
 - **Self-restart on code changes** — Monitor detects changes to its own source files and reloads with fresh ESM modules
+
+### Screenshots
+
+**Live Telegram Digest** — Events stream into a single continuously-edited message per digest window (default 10 min). Critical items get ❌, warnings get ⚠️, and info gets ℹ️. When the window expires, the message is sealed and the next event starts a fresh one. Digest state persists across restarts — no duplicate messages.
+
+![Live Telegram Digest](docs/telegram-live-digest.png)
+
+**Kanban Board** — Vibe-Kanban task board showing the full pipeline: To Do → In Progress → In Review → Done. Agents auto-claim tasks, create PRs, and merged PRs auto-move tasks to Done — fully autonomous.
+
+![Kanban Board](docs/kanban-board.png)
 
 ### Screenshots
 
@@ -288,6 +299,7 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `ORCHESTRATOR_SCRIPT`                 | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
 | `ORCHESTRATOR_ARGS`                   | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
 | `OPENAI_API_KEY`                      | —                              | API key for Codex analysis                                                                                             |
+| `PRIMARY_AGENT`                       | `codex-sdk`                    | Primary agent adapter (`codex-sdk`, `copilot-sdk`, `claude-sdk`)                                                       |
 | `COPILOT_MODEL`                       | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
 | `COPILOT_SDK_DISABLED`                | `0`                            | Disable Copilot SDK primary agent                                                                                      |
 | `COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT` | `true`                         | Disable Copilot cloud triggers when a rate-limit comment is detected                                                   |
@@ -374,6 +386,37 @@ vscode_tools = false
 ```
 
 When `primary` is not `codex`, Codex SDK automation features are disabled.
+
+### Shared Cloud Workspaces
+
+Codex-monitor can track pooled cloud workspaces with lease-based ownership and
+availability state. The registry lives in JSON and is updated by claim/release
+operations with audit logging.
+
+Defaults:
+
+- Registry: `.cache/codex-monitor/shared-workspaces.json`
+- Audit log: `.cache/codex-monitor/shared-workspace-audit.jsonl`
+- Seed template: `scripts/codex-monitor/shared-workspaces.json`
+
+Overrides:
+
+- `VE_SHARED_WORKSPACE_REGISTRY` — registry file path
+- `VE_SHARED_WORKSPACE_AUDIT_LOG` — audit log file path
+
+CLI examples:
+
+```
+pnpm -C scripts/codex-monitor shared-workspaces list
+pnpm -C scripts/codex-monitor shared-workspaces claim cloud-01 --owner jon --ttl 120
+pnpm -C scripts/codex-monitor shared-workspaces release cloud-01 --owner jon
+```
+
+Telegram commands:
+
+- `/shared-workspaces` — list shared workspace availability
+- `/claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]`
+- `/release <id> [--owner <id>] [--reason <text>] [--force]`
 
 ## CLI Reference
 
@@ -741,8 +784,9 @@ codex-monitor/
 ├── monitor.mjs                  # Main supervisor (log analysis, PR flow)
 ├── telegram-bot.mjs             # Interactive Telegram chatbot
 ├── codex-shell.mjs              # Persistent Codex SDK session
+├── claude-shell.mjs             # Persistent Claude Agent SDK session
 ├── copilot-shell.mjs            # Persistent Copilot SDK session
-├── primary-agent.mjs            # Primary agent adapter (Copilot/Codex)
+├── primary-agent.mjs            # Primary agent adapter (Codex/Copilot/Claude)
 ├── autofix.mjs                  # Error loop detection + auto-fix
 ├── maintenance.mjs              # Singleton lock, process cleanup
 ├── setup.mjs                    # Interactive setup wizard

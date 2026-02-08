@@ -467,10 +467,14 @@ export function formatSharedWorkspaceDetail(workspace, options = {}) {
 
 export function getSharedAvailabilityMap(registry) {
   const map = new Map();
-  const workspaces = Array.isArray(registry?.workspaces) ? registry.workspaces : [];
+  const workspaces = Array.isArray(registry?.workspaces)
+    ? registry.workspaces
+    : [];
   for (const workspace of workspaces) {
     if (!workspace?.id) continue;
-    const state = workspace.lease ? "leased" : workspace.availability || "available";
+    const state = workspace.lease
+      ? "leased"
+      : workspace.availability || "available";
     map.set(workspace.id, {
       state,
       owner: workspace.lease?.owner || null,
@@ -479,7 +483,6 @@ export function getSharedAvailabilityMap(registry) {
   }
   return map;
 }
-
 export function getSharedRegistryTemplate() {
   return JSON.stringify(DEFAULT_REGISTRY, null, 2);
 }
