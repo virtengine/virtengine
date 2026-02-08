@@ -22,3 +22,4 @@ Control IDs map objectives to implementation and evidence. Evidence paths refere
 Notes:
 - Evidence references may include repository documentation and generated evidence bundles.
 - Evidence bundles are stored outside git in _build/compliance/soc2/.
+- Control testing evidence is stored in the compliance evidence system for the audit window.

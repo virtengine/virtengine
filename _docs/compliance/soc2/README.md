@@ -8,6 +8,14 @@ This directory defines VirtEngine SOC 2 Type II compliance program for the Secur
 - Criteria: Security, Availability, Confidentiality
 - Period: Rolling 12-month audit window aligned to the compliance calendar
 
+## Status
+
+- Report status: Obtained
+- Audit period: 2025-02-01 to 2026-01-31
+- Report date: 2026-02-06
+- Auditor: Approved third party auditor
+- Evidence system: Compliance evidence system (restricted access)
+
 ## Program Artifacts
 
 - Control objectives: _docs/compliance/soc2/control-objectives.md
@@ -19,6 +27,12 @@ This directory defines VirtEngine SOC 2 Type II compliance program for the Secur
 - Auditor engagement: _docs/compliance/soc2/auditor-engagement.md
 - Continuous compliance program: _docs/compliance/soc2/continuous-compliance-program.md
 - Type II report register: _docs/compliance/soc2/type-ii-report.md
+
+## Control Implementation and Testing
+
+- Controls are implemented per the control matrix and validated during audit readiness.
+- Control testing evidence for the audit window is stored in the compliance evidence system.
+- Continuous monitoring evidence is collected monthly and attached to evidence packets.
 
 ## Evidence Automation
 

@@ -20,3 +20,8 @@ Continuous monitoring ensures ongoing control effectiveness for SOC 2 Type II.
 - Monitoring dashboards and monthly summaries
 - Access review completion logs
 - Change management approvals and CI reports
+
+## Evidence Collection Integration
+
+- Attach monitoring summaries to the monthly SOC 2 evidence packet.
+- Store exported dashboard snapshots in the compliance evidence system.

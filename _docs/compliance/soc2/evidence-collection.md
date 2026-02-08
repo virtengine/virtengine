@@ -21,6 +21,12 @@ Some evidence remains manual and must be added to the monthly evidence packet:
 - Vendor assessment approvals
 - Incident postmortems and corrective action tracking
 - Business continuity and disaster recovery test results
+- Continuous monitoring summaries and dashboard exports
+
+## Control Testing Evidence
+
+- Testing worksheets and sampling notes are stored in the compliance evidence system.
+- Link the testing packet to the monthly evidence folder for audit traceability.
 
 ## Evidence Retention
 
