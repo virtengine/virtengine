@@ -1235,6 +1235,9 @@ async function runNonInteractive({
   env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
   env.MAX_PARALLEL = process.env.MAX_PARALLEL || "6";
 
+  // Copilot cloud: disabled by default — set to 0 to allow @copilot PR comments
+  env.COPILOT_CLOUD_DISABLED = process.env.COPILOT_CLOUD_DISABLED || "1";
+
   // Parse EXECUTORS env if set, else use default preset
   if (process.env.EXECUTORS) {
     const entries = process.env.EXECUTORS.split(",").map((e) => e.trim());
