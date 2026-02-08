@@ -204,7 +204,7 @@ Repository layout:
   .github/      → CI, agents, instructions
 
 Key files:
-  scripts/ve-orchestrator.ps1 — Main orchestrator (manages parallel AI agents)
+  scripts/codex-monitor/ve-orchestrator.ps1 — Main orchestrator (manages parallel AI agents)
   .cache/ve-orchestrator-status.json — Live status data
   scripts/codex-monitor/logs/ — Monitor logs
   _docs/ralph/progress.md — Project progress tracking

@@ -1,7 +1,11 @@
 $tokens = $null
 $errors = $null
+$orchestratorPath = Join-Path $PSScriptRoot 'codex-monitor\ve-orchestrator.ps1'
+if (-not (Test-Path $orchestratorPath)) {
+    $orchestratorPath = Join-Path $PSScriptRoot 've-orchestrator.ps1'
+}
 $null = [System.Management.Automation.Language.Parser]::ParseFile(
-    'c:\Users\jON\Documents\source\repos\virtengine-gh\virtengine\scripts\ve-orchestrator.ps1',
+    $orchestratorPath,
     [ref]$tokens,
     [ref]$errors
 )

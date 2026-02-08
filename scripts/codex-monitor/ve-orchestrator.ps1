@@ -906,8 +906,11 @@ function Get-CopilotState {
 
 function Save-CopilotState {
     param(
-        [Parameter(Mandatory)][hashtable]$State
+        [Parameter(Mandatory)][object]$State
     )
+    if ($State -is [pscustomobject]) {
+        $State = $State | ConvertTo-Json -Depth 6 | ConvertFrom-Json -AsHashtable
+    }
     $dir = Split-Path -Parent $script:CopilotStatePath
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir | Out-Null
@@ -2711,6 +2714,37 @@ function Invoke-DirectRebase {
     }
 }
 
+# ── VK rebase fallback ──────────────────────────────────────────────────────
+function Rebase-VKAttempt {
+    <#
+    .SYNOPSIS
+        Request a server-side rebase for an attempt via ve-kanban.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AttemptId,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+
+    if (-not (Get-Command Invoke-VKRebase -ErrorAction SilentlyContinue)) {
+        Write-Log "VK rebase unavailable (Invoke-VKRebase not loaded) for attempt $AttemptId" -Level "WARN"
+        return $false
+    }
+
+    try {
+        $result = Invoke-VKRebase -AttemptId $AttemptId -BaseBranch $BaseBranch
+        if ($result) {
+            Write-Log "VK rebase requested for attempt $AttemptId" -Level "INFO"
+            return $true
+        }
+    }
+    catch {
+        Write-Log "VK rebase failed for attempt ${AttemptId}: $($_.Exception.Message)" -Level "WARN"
+    }
+
+    return $false
+}
+
 # ── Auto-resolvable file patterns for rebase conflicts ────────────────────
 $script:AutoResolveTheirs = @(
     "pnpm-lock.yaml",
@@ -3414,7 +3448,7 @@ function Process-CompletedAttempts {
 
                         if ($info.no_commits_retries -ge 2) {
                             # Stop looping — archive the attempt and move on
-                            Write-Log "Branch $branch: no_commits after $($info.no_commits_retries) retries — archiving attempt" -Level "WARN"
+                            Write-Log "Branch ${branch}: no_commits after $($info.no_commits_retries) retries — archiving attempt" -Level "WARN"
                             $info.status = "done"
                             $info.no_commits = $true
                             $script:TasksFailed++

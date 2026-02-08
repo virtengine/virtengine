@@ -337,6 +337,34 @@ check_codex_monitor_syntax() {
             fail=1
         fi
     fi
+
+    # Parse-check PowerShell .ps1 files bundled with codex-monitor.
+    # PowerShell treats "$var:" as a scope reference, so unescaped colons
+    # after variable names cause parser errors that only surface at runtime.
+    if [ $fail -eq 0 ] && command -v pwsh >/dev/null 2>&1; then
+        hook_step "Syntax-checking .ps1 files (pwsh parser)..."
+        local ps1_checked=0
+        for f in "$monitor_dir"/*.ps1; do
+            [ -f "$f" ] || continue
+            ps1_checked=$((ps1_checked + 1))
+            local ps1_errors
+            ps1_errors=$(pwsh -NoProfile -Command "
+                \$tokens = \$null; \$errors = \$null
+                [void][System.Management.Automation.Language.Parser]::ParseFile('$f', [ref]\$tokens, [ref]\$errors)
+                foreach (\$e in \$errors) {
+                    Write-Output ('{0}:{1}:{2} — {3}' -f (Split-Path '$f' -Leaf), \$e.Extent.StartLineNumber, \$e.Extent.StartColumnNumber, \$e.Message)
+                }
+                if (\$errors.Count -gt 0) { exit 1 } else { exit 0 }
+            " 2>&1)
+            if [ $? -ne 0 ]; then
+                echo "$ps1_errors"
+                hook_fail "PS1 syntax error: $(basename "$f")"
+                fail=1
+            fi
+        done
+        hook_step "Checked $ps1_checked .ps1 files"
+    fi
+
     return $fail
 }
 

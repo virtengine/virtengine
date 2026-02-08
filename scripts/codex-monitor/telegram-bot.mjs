@@ -2100,7 +2100,7 @@ async function cmdRegion(chatId, regionArg) {
     // Show current region status
     try {
       const result = runPwsh(
-        `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}'; Initialize-CodexRegionTracking; Get-RegionStatus | ConvertTo-Json -Depth 3`,
+        `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}'; Initialize-CodexRegionTracking; Get-RegionStatus | ConvertTo-Json -Depth 3`,
       );
       const status = JSON.parse(result);
       const lines = [
@@ -2139,8 +2139,8 @@ async function cmdRegion(chatId, regionArg) {
   try {
     const psCmd =
       target === "auto"
-        ? `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}'; Set-RegionOverride -Region $null | ConvertTo-Json`
-        : `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}'; Set-RegionOverride -Region '${target}' | ConvertTo-Json`;
+        ? `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}'; Set-RegionOverride -Region $null | ConvertTo-Json`
+        : `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}'; Set-RegionOverride -Region '${target}' | ConvertTo-Json`;
     const result = runPwsh(psCmd);
     const info = JSON.parse(result);
     const icon = info.changed ? "✅" : "ℹ️";
@@ -2189,7 +2189,7 @@ async function cmdHealth(chatId) {
     // Add region info
     try {
       const regionScript = [
-        `. '${resolve(repoRoot, "scripts", "ve-kanban.ps1")}';`,
+        `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}';`,
         "Initialize-CodexRegionTracking;",
         "Get-RegionStatus | ConvertTo-Json",
       ].join(" ");
