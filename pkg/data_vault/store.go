@@ -60,8 +60,15 @@ func (s *EncryptedBlobStore) Store(ctx context.Context, req *UploadRequest) (*En
 		return nil, NewVaultError("Store", ErrEncryptionFailed, fmt.Sprintf("failed to generate sender keypair: %v", err))
 	}
 
+	recipients := buildRecipientInfos(keyInfo, req.Recipients)
+
 	// Create encrypted envelope
-	envelope, err := enccrypto.CreateEnvelope(req.Plaintext, keyInfo.PublicKey[:], senderKeyPair)
+	var envelope *enctypes.EncryptedPayloadEnvelope
+	if len(recipients) > 1 {
+		envelope, err = enccrypto.CreateMultiRecipientEnvelopeWithRecipients(req.Plaintext, recipients, senderKeyPair)
+	} else {
+		envelope, err = enccrypto.CreateEnvelopeWithRecipient(req.Plaintext, recipients[0], senderKeyPair)
+	}
 	if err != nil {
 		return nil, NewVaultError("Store", ErrEncryptionFailed, fmt.Sprintf("failed to create envelope: %v", err))
 	}
@@ -185,32 +192,7 @@ func (s *EncryptedBlobStore) Retrieve(ctx context.Context, blobID BlobID) ([]byt
 	// Note: We need to reverse lookup by blob ID to content address
 	// For now, we'll need to enhance this with a mapping
 	// This is a simplified implementation
-	backendRef := metadata.BackendRef
-	if backendRef == "" {
-		backendRef = string(blobID)
-	}
-	backendName := s.backend.Backend()
-	if metadata.Backend != "" {
-		backendName = artifact_store.BackendType(metadata.Backend)
-	}
-	contentAddress := &artifact_store.ContentAddress{
-		Version:    metadata.ContentAddressVersion,
-		Hash:       metadata.ContentAddressHash,
-		Algorithm:  metadata.ContentAddressAlgorithm,
-		Size:       metadata.ContentAddressSize,
-		Backend:    backendName,
-		BackendRef: backendRef,
-	}
-	if len(contentAddress.Hash) == 0 || contentAddress.BackendRef == "" {
-		contentAddress = &artifact_store.ContentAddress{
-			Version:    artifact_store.ContentAddressVersion,
-			Hash:       metadata.ContentHash,
-			Algorithm:  "sha256",
-			Size:       safeUint64FromInt64(metadata.EncryptedSize),
-			Backend:    backendName,
-			BackendRef: backendRef,
-		}
-	}
+	contentAddress := s.resolveContentAddress(metadata, blobID)
 
 	getReq := &artifact_store.GetRequest{
 		ContentAddress: contentAddress,
@@ -269,32 +251,7 @@ func (s *EncryptedBlobStore) Delete(ctx context.Context, blobID BlobID) error {
 	}
 
 	// Delete from backend
-	backendRef := metadata.BackendRef
-	if backendRef == "" {
-		backendRef = string(blobID)
-	}
-	backendName := s.backend.Backend()
-	if metadata.Backend != "" {
-		backendName = artifact_store.BackendType(metadata.Backend)
-	}
-	deleteAddress := &artifact_store.ContentAddress{
-		Version:    metadata.ContentAddressVersion,
-		Hash:       metadata.ContentAddressHash,
-		Algorithm:  metadata.ContentAddressAlgorithm,
-		Size:       metadata.ContentAddressSize,
-		Backend:    backendName,
-		BackendRef: backendRef,
-	}
-	if len(deleteAddress.Hash) == 0 || deleteAddress.BackendRef == "" {
-		deleteAddress = &artifact_store.ContentAddress{
-			Version:    artifact_store.ContentAddressVersion,
-			Hash:       metadata.ContentHash,
-			Algorithm:  "sha256",
-			Size:       safeUint64FromInt64(metadata.EncryptedSize),
-			Backend:    backendName,
-			BackendRef: backendRef,
-		}
-	}
+	deleteAddress := s.resolveContentAddress(metadata, blobID)
 
 	deleteReq := &artifact_store.DeleteRequest{
 		ContentAddress:    deleteAddress,
@@ -339,6 +296,230 @@ func (s *EncryptedBlobStore) Close() error {
 // KeyManager returns the key manager used by the store.
 func (s *EncryptedBlobStore) KeyManager() *keys.KeyManager {
 	return s.keyMgr
+}
+
+// Reencrypt rewraps an existing blob with a new key.
+func (s *EncryptedBlobStore) Reencrypt(ctx context.Context, blobID BlobID, oldKey, newKey *keys.KeyInfo) (*EncryptedBlob, error) {
+	if oldKey == nil || newKey == nil {
+		return nil, NewVaultError("Reencrypt", ErrInvalidRequest, "keys required")
+	}
+
+	plaintext, metadata, err := s.Retrieve(ctx, blobID)
+	if err != nil {
+		return nil, err
+	}
+
+	envelope, err := s.loadEnvelope(ctx, metadata, blobID)
+	if err != nil {
+		return nil, err
+	}
+
+	recipients := rebuildRecipients(envelope, oldKey, newKey)
+	if len(recipients) == 0 {
+		recipients = buildRecipientInfos(newKey, nil)
+	}
+
+	senderKeyPair, err := enccrypto.GenerateKeyPair()
+	if err != nil {
+		return nil, NewVaultError("Reencrypt", ErrEncryptionFailed, fmt.Sprintf("failed to generate sender keypair: %v", err))
+	}
+
+	var newEnvelope *enctypes.EncryptedPayloadEnvelope
+	if len(recipients) > 1 {
+		newEnvelope, err = enccrypto.CreateMultiRecipientEnvelopeWithRecipients(plaintext, recipients, senderKeyPair)
+	} else {
+		newEnvelope, err = enccrypto.CreateEnvelopeWithRecipient(plaintext, recipients[0], senderKeyPair)
+	}
+	if err != nil {
+		return nil, NewVaultError("Reencrypt", ErrEncryptionFailed, fmt.Sprintf("failed to create envelope: %v", err))
+	}
+
+	envelopeBytes, err := json.Marshal(newEnvelope)
+	if err != nil {
+		return nil, NewVaultError("Reencrypt", ErrEncryptionFailed, fmt.Sprintf("failed to marshal envelope: %v", err))
+	}
+
+	contentHash := sha256.Sum256(plaintext)
+	envelopeHash := sha256.Sum256(envelopeBytes)
+
+	artifactMeta := &artifact_store.EncryptionMetadata{
+		AlgorithmID:     string(newEnvelope.AlgorithmID),
+		RecipientKeyIDs: newEnvelope.RecipientKeyIDs,
+		EnvelopeHash:    envelopeHash[:],
+		SenderKeyID:     hex.EncodeToString(newEnvelope.SenderPubKey),
+	}
+
+	retentionTag := &artifact_store.RetentionTag{
+		PolicyID: metadata.RetentionPolicy,
+		Owner:    metadata.Owner,
+	}
+	if metadata.ExpiresAt != nil {
+		retentionTag.ExpiresAt = metadata.ExpiresAt
+	}
+
+	putReq := &artifact_store.PutRequest{
+		Data:               envelopeBytes,
+		ContentHash:        contentHash[:],
+		EncryptionMetadata: artifactMeta,
+		RetentionTag:       retentionTag,
+		Owner:              metadata.Owner,
+		ArtifactType:       string(metadata.Scope),
+		Metadata:           metadata.Tags,
+	}
+
+	putResp, err := s.backend.Put(ctx, putReq)
+	if err != nil {
+		return nil, NewVaultError("Reencrypt", ErrStorageBackend, fmt.Sprintf("backend store failed: %v", err))
+	}
+
+	backendRef := ""
+	backendName := ""
+	if putResp.ContentAddress != nil {
+		backendRef = putResp.ContentAddress.BackendRef
+		backendName = string(putResp.ContentAddress.Backend)
+	}
+
+	metadata.KeyID = newKey.ID
+	metadata.KeyVersion = newKey.Version
+	metadata.ContentHash = contentHash[:]
+	metadata.EncryptedSize = int64(len(envelopeBytes))
+	metadata.Backend = backendName
+	metadata.BackendRef = backendRef
+
+	if putResp.ContentAddress != nil {
+		metadata.ContentAddressHash = putResp.ContentAddress.Hash
+		metadata.ContentAddressSize = putResp.ContentAddress.Size
+		metadata.ContentAddressAlgorithm = putResp.ContentAddress.Algorithm
+		metadata.ContentAddressVersion = putResp.ContentAddress.Version
+	}
+
+	s.mu.Lock()
+	s.metadata[blobID] = metadata
+	s.mu.Unlock()
+
+	return &EncryptedBlob{
+		Metadata:    *metadata,
+		Envelope:    newEnvelope,
+		BackendPath: backendRef,
+	}, nil
+}
+
+func (s *EncryptedBlobStore) resolveContentAddress(metadata *BlobMetadata, blobID BlobID) *artifact_store.ContentAddress {
+	backendRef := metadata.BackendRef
+	if backendRef == "" {
+		backendRef = string(blobID)
+	}
+	backendName := s.backend.Backend()
+	if metadata.Backend != "" {
+		backendName = artifact_store.BackendType(metadata.Backend)
+	}
+	contentAddress := &artifact_store.ContentAddress{
+		Version:    metadata.ContentAddressVersion,
+		Hash:       metadata.ContentAddressHash,
+		Algorithm:  metadata.ContentAddressAlgorithm,
+		Size:       metadata.ContentAddressSize,
+		Backend:    backendName,
+		BackendRef: backendRef,
+	}
+	if len(contentAddress.Hash) == 0 || contentAddress.BackendRef == "" {
+		contentAddress = &artifact_store.ContentAddress{
+			Version:    artifact_store.ContentAddressVersion,
+			Hash:       metadata.ContentHash,
+			Algorithm:  "sha256",
+			Size:       safeUint64FromInt64(metadata.EncryptedSize),
+			Backend:    backendName,
+			BackendRef: backendRef,
+		}
+	}
+	return contentAddress
+}
+
+func (s *EncryptedBlobStore) loadEnvelope(ctx context.Context, metadata *BlobMetadata, blobID BlobID) (*enctypes.EncryptedPayloadEnvelope, error) {
+	contentAddress := s.resolveContentAddress(metadata, blobID)
+	getResp, err := s.backend.Get(ctx, &artifact_store.GetRequest{ContentAddress: contentAddress})
+	if err != nil {
+		return nil, NewVaultError("Retrieve", ErrStorageBackend, fmt.Sprintf("backend get failed: %v", err))
+	}
+	var envelope enctypes.EncryptedPayloadEnvelope
+	if err := json.Unmarshal(getResp.Data, &envelope); err != nil {
+		return nil, NewVaultError("Retrieve", ErrDecryptionFailed, fmt.Sprintf("failed to unmarshal envelope: %v", err))
+	}
+	return &envelope, nil
+}
+
+func buildRecipientInfos(keyInfo *keys.KeyInfo, extra []Recipient) []enccrypto.RecipientInfo {
+	recipients := make([]enccrypto.RecipientInfo, 0, 1+len(extra))
+	seen := map[string]bool{}
+	if keyInfo != nil {
+		fingerprint := enctypes.ComputeKeyFingerprint(keyInfo.PublicKey[:])
+		seen[fingerprint] = true
+		recipients = append(recipients, enccrypto.RecipientInfo{
+			PublicKey:  keyInfo.PublicKey[:],
+			KeyID:      enctypes.FormatRecipientKeyID(fingerprint, keyInfo.Version),
+			KeyVersion: keyInfo.Version,
+		})
+	}
+	for _, rec := range extra {
+		if len(rec.PublicKey) == 0 {
+			continue
+		}
+		fingerprint := enctypes.ComputeKeyFingerprint(rec.PublicKey)
+		if seen[fingerprint] {
+			continue
+		}
+		seen[fingerprint] = true
+
+		keyID := rec.KeyID
+		if keyID == "" {
+			keyID = enctypes.FormatRecipientKeyID(fingerprint, rec.KeyVersion)
+		}
+		recipients = append(recipients, enccrypto.RecipientInfo{
+			PublicKey:  rec.PublicKey,
+			KeyID:      keyID,
+			KeyVersion: rec.KeyVersion,
+		})
+	}
+
+	return recipients
+}
+
+func rebuildRecipients(envelope *enctypes.EncryptedPayloadEnvelope, oldKey, newKey *keys.KeyInfo) []enccrypto.RecipientInfo {
+	if envelope == nil || newKey == nil {
+		return nil
+	}
+	recipientKeyIDs := make(map[string]string, len(envelope.RecipientKeyIDs))
+	for i, keyID := range envelope.RecipientKeyIDs {
+		if len(envelope.RecipientPublicKeys) > i {
+			fingerprint := enctypes.ComputeKeyFingerprint(envelope.RecipientPublicKeys[i])
+			recipientKeyIDs[fingerprint] = keyID
+		}
+	}
+
+	oldFingerprint := ""
+	if oldKey != nil {
+		oldFingerprint = enctypes.ComputeKeyFingerprint(oldKey.PublicKey[:])
+	}
+
+	recipients := make([]enccrypto.RecipientInfo, 0, len(envelope.RecipientPublicKeys)+1)
+	for _, pubKey := range envelope.RecipientPublicKeys {
+		fingerprint := enctypes.ComputeKeyFingerprint(pubKey)
+		if oldFingerprint != "" && fingerprint == oldFingerprint {
+			continue
+		}
+		recipients = append(recipients, enccrypto.RecipientInfo{
+			PublicKey: pubKey,
+			KeyID:     recipientKeyIDs[fingerprint],
+		})
+	}
+
+	newFingerprint := enctypes.ComputeKeyFingerprint(newKey.PublicKey[:])
+	recipients = append(recipients, enccrypto.RecipientInfo{
+		PublicKey:  newKey.PublicKey[:],
+		KeyID:      enctypes.FormatRecipientKeyID(newFingerprint, newKey.Version),
+		KeyVersion: newKey.Version,
+	})
+
+	return recipients
 }
 
 func safeUint64FromInt64(value int64) uint64 {

@@ -14,6 +14,8 @@ const (
 	AccessActionMetadata AccessAction = "metadata"
 	AccessActionDelete   AccessAction = "delete"
 	AccessActionAudit    AccessAction = "audit"
+	AccessActionRotate   AccessAction = "rotate"
+	AccessActionKeyInfo  AccessAction = "key_metadata"
 )
 
 // Role names mirrored from x/roles/types.Role.String().

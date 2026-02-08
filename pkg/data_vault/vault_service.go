@@ -14,6 +14,7 @@ import (
 type VaultConfig struct {
 	Store           *EncryptedBlobStore
 	AccessControl   AccessControl
+	ConsentResolver ConsentResolver
 	AuditLogger     *AuditLogger
 	AuditOwner      string
 	Metrics         *VaultMetrics
@@ -27,6 +28,7 @@ type VaultConfig struct {
 type Vault struct {
 	store           *EncryptedBlobStore
 	accessControl   AccessControl
+	consentResolver ConsentResolver
 	auditLogger     *AuditLogger
 	metrics         *VaultMetrics
 	anomalyDetector *AccessAnomalyDetector
@@ -40,6 +42,9 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 	}
 	if cfg.AccessControl == nil {
 		cfg.AccessControl = OwnerOnlyAccessControl{}
+	}
+	if cfg.ConsentResolver == nil {
+		cfg.ConsentResolver = AllowAllConsentResolver{}
 	}
 	if cfg.AuditOwner == "" {
 		cfg.AuditOwner = "audit-system"
@@ -58,6 +63,7 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 	return &Vault{
 		store:           cfg.Store,
 		accessControl:   cfg.AccessControl,
+		consentResolver: cfg.ConsentResolver,
 		auditLogger:     cfg.AuditLogger,
 		metrics:         cfg.Metrics,
 		anomalyDetector: cfg.AnomalyDetector,
@@ -136,6 +142,29 @@ func (v *Vault) Retrieve(ctx context.Context, req *RetrieveRequest) ([]byte, *Bl
 		}
 		v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
 		return nil, nil, err
+	}
+
+	if v.consentResolver != nil {
+		consentOK, err := v.consentResolver.HasConsent(ctx, ConsentRequest{
+			Requester: req.Requester,
+			Owner:     metadata.Owner,
+			Scope:     metadata.Scope,
+			OrgID:     req.OrgID,
+			Purpose:   req.Purpose,
+			Reason:    req.Reason,
+			Metadata:  req.Metadata,
+		})
+		if err != nil {
+			v.recordAccess(AccessActionRead, metadata.Scope, req.Requester, false, err)
+			v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+			return nil, nil, err
+		}
+		if !consentOK {
+			err := NewVaultError("Retrieve", ErrConsentRequired, "consent required")
+			v.recordAccess(AccessActionRead, metadata.Scope, req.Requester, false, err)
+			v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+			return nil, nil, err
+		}
 	}
 
 	data, meta, err := v.store.Retrieve(ctx, req.ID)
@@ -234,10 +263,129 @@ func (v *Vault) RotateKeys(ctx context.Context, scope Scope) error {
 	if v.store == nil || v.store.KeyManager() == nil {
 		return NewVaultError("RotateKeys", ErrInvalidRequest, "key manager unavailable")
 	}
-	if err := v.store.KeyManager().RotateKey(keys.Scope(scope), v.rotationOverlap); err != nil {
+	keyMgr := v.store.KeyManager()
+	oldKey, err := keyMgr.GetActiveKey(keys.Scope(scope))
+	if err != nil {
+		return NewVaultError("RotateKeys", err, "active key unavailable")
+	}
+
+	if err := keyMgr.RotateKey(keys.Scope(scope), v.rotationOverlap); err != nil {
 		return NewVaultError("RotateKeys", err, "rotation failed")
 	}
+
+	rotation, err := keyMgr.GetRotationStatus(keys.Scope(scope))
+	if err != nil {
+		return NewVaultError("RotateKeys", err, "rotation status unavailable")
+	}
+
+	newKey, err := keyMgr.GetKey(keys.Scope(scope), rotation.NewKeyID)
+	if err != nil {
+		return NewVaultError("RotateKeys", err, "new key unavailable")
+	}
+
+	metadata, err := v.store.ListByScope(scope)
+	if err != nil {
+		return NewVaultError("RotateKeys", err, "failed to list blobs")
+	}
+
+	for _, meta := range metadata {
+		if meta == nil {
+			continue
+		}
+		_, reencryptErr := v.store.Reencrypt(ctx, meta.ID, oldKey, newKey)
+		if reencryptErr != nil {
+			v.logAudit(ctx, scope, meta.ID, "", meta.OrgID, AccessActionRotate, false, reencryptErr, map[string]string{
+				"old_key_id": oldKey.ID,
+				"new_key_id": newKey.ID,
+			})
+			return NewVaultError("RotateKeys", reencryptErr, "re-encryption failed")
+		}
+		v.logAudit(ctx, scope, meta.ID, "", meta.OrgID, AccessActionRotate, true, nil, map[string]string{
+			"old_key_id": oldKey.ID,
+			"new_key_id": newKey.ID,
+		})
+	}
+
+	if err := keyMgr.CompleteRotation(keys.Scope(scope)); err != nil {
+		return NewVaultError("RotateKeys", err, "complete rotation failed")
+	}
+
 	return nil
+}
+
+// ListKeyMetadata returns key metadata for a scope.
+func (v *Vault) ListKeyMetadata(ctx context.Context, scope Scope, requester, orgID string) ([]KeyMetadata, error) {
+	if requester == "" {
+		return nil, NewVaultError("ListKeyMetadata", ErrInvalidRequest, "requester required")
+	}
+	if v.store == nil || v.store.KeyManager() == nil {
+		return nil, NewVaultError("ListKeyMetadata", ErrInvalidRequest, "key manager unavailable")
+	}
+	if err := v.accessControl.Authorize(ctx, AccessRequest{
+		Action:        AccessActionKeyInfo,
+		Requester:     requester,
+		Owner:         requester,
+		Scope:         scope,
+		OrgID:         orgID,
+		ResourceOrgID: orgID,
+	}); err != nil {
+		return nil, err
+	}
+	keys, err := v.store.KeyManager().ListKeys(keys.Scope(scope))
+	if err != nil {
+		return nil, NewVaultError("ListKeyMetadata", err, "list keys failed")
+	}
+	metadata := make([]KeyMetadata, 0, len(keys))
+	for _, key := range keys {
+		if key == nil {
+			continue
+		}
+		metadata = append(metadata, KeyMetadata{
+			ID:           key.ID,
+			Scope:        scope,
+			Version:      key.Version,
+			Status:       string(key.Status),
+			CreatedAt:    key.CreatedAt,
+			ActivatedAt:  key.ActivatedAt,
+			DeprecatedAt: key.DeprecatedAt,
+			RevokedAt:    key.RevokedAt,
+		})
+	}
+	return metadata, nil
+}
+
+// GetKeyMetadata returns key metadata for a key ID.
+func (v *Vault) GetKeyMetadata(ctx context.Context, scope Scope, keyID string, requester, orgID string) (*KeyMetadata, error) {
+	if keyID == "" {
+		return nil, NewVaultError("GetKeyMetadata", ErrInvalidRequest, "key id required")
+	}
+	if v.store == nil || v.store.KeyManager() == nil {
+		return nil, NewVaultError("GetKeyMetadata", ErrInvalidRequest, "key manager unavailable")
+	}
+	if err := v.accessControl.Authorize(ctx, AccessRequest{
+		Action:        AccessActionKeyInfo,
+		Requester:     requester,
+		Owner:         requester,
+		Scope:         scope,
+		OrgID:         orgID,
+		ResourceOrgID: orgID,
+	}); err != nil {
+		return nil, err
+	}
+	key, err := v.store.KeyManager().GetKey(keys.Scope(scope), keyID)
+	if err != nil {
+		return nil, NewVaultError("GetKeyMetadata", err, "key not found")
+	}
+	return &KeyMetadata{
+		ID:           key.ID,
+		Scope:        scope,
+		Version:      key.Version,
+		Status:       string(key.Status),
+		CreatedAt:    key.CreatedAt,
+		ActivatedAt:  key.ActivatedAt,
+		DeprecatedAt: key.DeprecatedAt,
+		RevokedAt:    key.RevokedAt,
+	}, nil
 }
 
 // GetAuditEvents retrieves audit events for a scope or blob.

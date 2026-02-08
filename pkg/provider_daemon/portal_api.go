@@ -213,6 +213,8 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 		api.Handle("/vault/blobs/{blobId}", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultRetrieve))).Methods(http.MethodGet)
 		api.Handle("/vault/blobs/{blobId}/metadata", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultMetadata))).Methods(http.MethodGet)
 		api.Handle("/vault/blobs/{blobId}", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultDelete))).Methods(http.MethodDelete)
+		api.Handle("/vault/keys", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultKeyList))).Methods(http.MethodGet)
+		api.Handle("/vault/keys/{keyId}", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultKeyMetadata))).Methods(http.MethodGet)
 		api.Handle("/vault/audit", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultAuditSearch))).Methods(http.MethodGet)
 	}
 }

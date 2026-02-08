@@ -120,6 +120,9 @@ type UploadRequest struct {
 
 	// Tags are optional public metadata
 	Tags map[string]string
+
+	// Recipients are optional additional recipients for the envelope
+	Recipients []Recipient
 }
 
 // RetrieveRequest is a request to retrieve and decrypt a blob
@@ -180,4 +183,23 @@ type AuditEvent struct {
 
 	// Metadata contains additional context
 	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// Recipient describes a third-party recipient for envelope encryption.
+type Recipient struct {
+	PublicKey  []byte `json:"public_key"`
+	KeyID      string `json:"key_id,omitempty"`
+	KeyVersion uint32 `json:"key_version,omitempty"`
+}
+
+// KeyMetadata provides key details for audit and rotation.
+type KeyMetadata struct {
+	ID           string     `json:"id"`
+	Scope        Scope      `json:"scope"`
+	Version      uint32     `json:"version"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ActivatedAt  *time.Time `json:"activated_at,omitempty"`
+	DeprecatedAt *time.Time `json:"deprecated_at,omitempty"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
 }
