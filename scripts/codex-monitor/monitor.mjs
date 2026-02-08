@@ -960,6 +960,16 @@ const contextPatterns = [
   "ContextWindowExceeded",
   "context window",
   "ran out of room",
+  "prompt token count",
+  "token count of",
+  "context length exceeded",
+  "maximum context length",
+  "exceeds the limit",
+  "token limit",
+  "too many tokens",
+  "prompt too large",
+  "failed to get response from the ai model",
+  "capierror",
 ];
 
 const errorPatterns = [
@@ -5561,8 +5571,16 @@ async function triggerTaskPlannerViaKanban(
   reason,
   { taskCount, notify = true } = {},
 ) {
+  const defaultPlannerTaskCount = Number(
+    process.env.TASK_PLANNER_DEFAULT_COUNT || "30",
+  );
   const numTasks =
-    taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
+    taskCount && Number.isFinite(taskCount) && taskCount > 0
+      ? taskCount
+      : defaultPlannerTaskCount;
+  const plannerTaskSizeLabel = String(
+    process.env.TASK_PLANNER_TASK_SIZE_LABEL || "xl",
+  ).toLowerCase();
   // Get project ID using the name-matched helper
   const projectId = await findVkProjectId();
   if (!projectId) {
@@ -5588,6 +5606,49 @@ async function triggerTaskPlannerViaKanban(
     console.log(
       `[monitor] task planner VK task already exists in backlog — skipping: "${existingPlanner.title}" (${existingPlanner.id})`,
     );
+    const desiredTitle = `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`;
+    const desiredDescription = [
+      "## Task Planner — Auto-created by codex-monitor",
+      "",
+      `**Trigger reason:** ${reason || "manual"}`,
+      "",
+      "### Instructions",
+      "",
+      plannerPrompt,
+      "",
+      "### Additional Context",
+      "",
+      "- Review recently merged PRs on GitHub to understand what was completed",
+      "- Check `git log --oneline -20` for the latest changes",
+      "- Look at open issues for inspiration",
+      `- Create ${numTasks} well-scoped tasks in vibe-kanban (minimum 30)`,
+      "- Tasks must be **production-ready** (no placeholders) and thorough",
+      "- Every created task should default to **[xl]** unless clearly smaller",
+      "- If a placeholder is unavoidable, create a paired follow-up task immediately",
+      "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
+      "  This drives automatic complexity-based model routing for task execution.",
+    ].join("\n");
+    // Best-effort: keep backlog task aligned with current requirements
+    if (
+      existingPlanner.title !== desiredTitle ||
+      (existingPlanner.description || "") !== desiredDescription
+    ) {
+      try {
+        await fetchVk(`/api/tasks/${existingPlanner.id}`, {
+          method: "PUT",
+          body: {
+            title: desiredTitle,
+            description: desiredDescription,
+          },
+          timeoutMs: 15000,
+        });
+        console.log(
+          `[monitor] task planner VK task updated with latest requirements (${existingPlanner.id})`,
+        );
+      } catch {
+        /* best-effort */
+      }
+    }
     const taskUrl = buildVkTaskUrl(existingPlanner.id, projectId);
     if (notify) {
       const suffix = taskUrl ? `\n${taskUrl}` : "";
@@ -5607,7 +5668,7 @@ async function triggerTaskPlannerViaKanban(
 
   const plannerPrompt = agentPrompts.planner;
   const taskBody = {
-    title: `[xs] Plan next tasks (${reason || "backlog-empty"})`,
+    title: `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`,
     description: [
       "## Task Planner — Auto-created by codex-monitor",
       "",
@@ -5622,8 +5683,10 @@ async function triggerTaskPlannerViaKanban(
       "- Review recently merged PRs on GitHub to understand what was completed",
       "- Check `git log --oneline -20` for the latest changes",
       "- Look at open issues for inspiration",
-      `- Create ${numTasks} well-scoped tasks in vibe-kanban`,
-      "- Each task should be completable by a single agent in 1-4 hours",
+      `- Create ${numTasks} well-scoped tasks in vibe-kanban (minimum 30)`,
+      "- Tasks must be **production-ready** (no placeholders) and thorough",
+      "- Every created task should default to **[xl]** unless clearly smaller",
+      "- If a placeholder is unavoidable, create a paired follow-up task immediately",
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
     ].join("\n"),
