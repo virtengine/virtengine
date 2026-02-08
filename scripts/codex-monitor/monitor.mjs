@@ -2004,14 +2004,48 @@ async function checkMergedPRsAndUpdateTasks() {
       ? statusData.active_attempts
       : Object.values(statusData?.attempts || {});
 
+    // Also fetch VK task-attempts as fallback (covers archived attempts
+    // that are no longer in the orchestrator's status file)
+    let vkAttempts = [];
+    try {
+      const vkRes = await fetchVk("/api/task-attempts");
+      const vkData = vkRes?.data ?? vkRes;
+      if (Array.isArray(vkData)) {
+        vkAttempts = vkData;
+      }
+    } catch {
+      /* best-effort fallback */
+    }
+
     let movedCount = 0;
     let movedReviewCount = 0;
 
     for (const entry of reviewTasks) {
       const task = entry.task;
       const taskStatus = entry.status;
-      // Find the attempt associated with this task
-      const attempt = attempts.find((a) => a?.task_id === task.id);
+      // Find the attempt associated with this task — first in local status,
+      // then fall back to the VK API (which includes archived attempts)
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        // VK API fallback: find the most recent attempt for this task
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) {
+          attempt = vkMatch[0];
+          console.log(
+            `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
+          );
+        } else {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+          );
+        }
+      }
       const branch =
         attempt?.branch ||
         task?.branch ||
