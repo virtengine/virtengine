@@ -4,7 +4,11 @@ const DEFAULT_AUTO_RESOLVE_THEIRS = [
   "yarn.lock",
   "go.sum",
 ];
-const DEFAULT_AUTO_RESOLVE_OURS = ["CHANGELOG.md", "coverage.txt", "results.txt"];
+const DEFAULT_AUTO_RESOLVE_OURS = [
+  "CHANGELOG.md",
+  "coverage.txt",
+  "results.txt",
+];
 const DEFAULT_AUTO_RESOLVE_LOCK_EXTENSIONS = [".lock"];
 
 export const DIRTY_TASK_DEFAULTS = {
@@ -121,7 +125,7 @@ export function buildConflictResolutionPrompt({
   }
 
   lines.push(
-    `Use 'git checkout --theirs <file>' for lockfiles and 'git checkout --ours <file>' for CHANGELOG.md/coverage.txt/results.txt.`
+    `Use 'git checkout --theirs <file>' for lockfiles and 'git checkout --ours <file>' for CHANGELOG.md/coverage.txt/results.txt.`,
   );
 
   return lines.join("\n");
@@ -130,7 +134,7 @@ export function buildConflictResolutionPrompt({
 export function isFileOverlapWithDirtyPR(files = [], dirtyFiles = []) {
   const left = new Set((files || []).map((file) => file.toLowerCase()));
   return (dirtyFiles || []).some((file) =>
-    left.has(String(file).toLowerCase())
+    left.has(String(file).toLowerCase()),
   );
 }
 
@@ -144,7 +148,13 @@ const _dirtyTaskRegistry = new Map();
  * Register a task as "dirty" (PR has merge conflicts).
  * @param {{ taskId: string, prNumber?: number, branch?: string, title?: string, files?: string[] }} entry
  */
-export function registerDirtyTask({ taskId, prNumber, branch, title, files } = {}) {
+export function registerDirtyTask({
+  taskId,
+  prNumber,
+  branch,
+  title,
+  files,
+} = {}) {
   if (!taskId) return;
   _dirtyTaskRegistry.set(taskId, {
     taskId,

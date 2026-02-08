@@ -201,13 +201,65 @@ function Write-Log {
     Write-Host "  [$ts] $Message" -ForegroundColor $color
 }
 
+function Get-EnvFallback {
+    <#
+    .SYNOPSIS Robust env var lookup with fallbacks.
+    .DESCRIPTION Uses multiple access paths to avoid parser edge cases.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    try {
+        $value = [Environment]::GetEnvironmentVariable($Name)
+        if ($value) { return $value }
+    } catch { }
+
+    try {
+        $item = Get-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue
+        if ($item -and $item.Value) { return $item.Value }
+    } catch { }
+
+    try {
+        $all = [Environment]::GetEnvironmentVariables()
+        if ($all -and $all.ContainsKey($Name)) {
+            $value = $all[$Name]
+            if ($value) { return $value }
+        }
+    } catch { }
+
+    return $null
+}
+
+function Set-EnvValue {
+    <#
+    .SYNOPSIS Robust env var setter with fallbacks.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [AllowNull()][object]$Value
+    )
+
+    try {
+        if ($null -eq $Value -or $Value -eq "") {
+            Remove-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue | Out-Null
+        } else {
+            Set-Item -Path ("Env:{0}" -f $Name) -Value $Value -ErrorAction SilentlyContinue | Out-Null
+        }
+    } catch { }
+
+    try {
+        [Environment]::SetEnvironmentVariable($Name, $Value)
+    } catch { }
+}
+
 function Get-EnvInt {
     param(
         [Parameter(Mandatory)][string]$Name,
         [int]$Default,
         [int]$Min = 0
     )
-    $raw = [Environment]::GetEnvironmentVariable($Name)
+    $raw = Get-EnvFallback -Name $Name
     if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
     $value = 0
     if (-not [int]::TryParse($raw, [ref]$value)) { return $Default }
@@ -220,7 +272,7 @@ function Get-EnvBool {
         [Parameter(Mandatory)][string]$Name,
         [bool]$Default = $false
     )
-    $raw = [Environment]::GetEnvironmentVariable($Name)
+    $raw = Get-EnvFallback -Name $Name
     if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
     switch ($raw.Trim().ToLowerInvariant()) {
         "1" { return $true }
@@ -242,7 +294,7 @@ function Get-EnvString {
         [Parameter(Mandatory)][string]$Name,
         [string]$Default = ""
     )
-    $value = [System.Environment]::GetEnvironmentVariable($Name)
+    $value = Get-EnvFallback -Name $Name
     if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
     return $value.Trim()
 }
@@ -384,20 +436,20 @@ function Ensure-GitIdentity {
     <#
     .SYNOPSIS Ensure git author/committer identity is set when env overrides are provided.
     #>
-    $name = $env:VE_GIT_AUTHOR_NAME
-    if (-not $name) { $name = $env:GIT_AUTHOR_NAME }
-    $email = $env:VE_GIT_AUTHOR_EMAIL
-    if (-not $email) { $email = $env:GIT_AUTHOR_EMAIL }
+    $name = Get-EnvFallback -Name "VE_GIT_AUTHOR_NAME"
+    if (-not $name) { $name = Get-EnvFallback -Name "GIT_AUTHOR_NAME" }
+    $email = Get-EnvFallback -Name "VE_GIT_AUTHOR_EMAIL"
+    if (-not $email) { $email = Get-EnvFallback -Name "GIT_AUTHOR_EMAIL" }
 
     if ($name) {
         try { git config user.name $name | Out-Null } catch { }
-        $env:GIT_AUTHOR_NAME = $name
-        $env:GIT_COMMITTER_NAME = $name
+        Set-EnvValue -Name "GIT_AUTHOR_NAME" -Value $name
+        Set-EnvValue -Name "GIT_COMMITTER_NAME" -Value $name
     }
     if ($email) {
         try { git config user.email $email | Out-Null } catch { }
-        $env:GIT_AUTHOR_EMAIL = $email
-        $env:GIT_COMMITTER_EMAIL = $email
+        Set-EnvValue -Name "GIT_AUTHOR_EMAIL" -Value $email
+        Set-EnvValue -Name "GIT_COMMITTER_EMAIL" -Value $email
     }
     if ($name -or $email) {
         Write-Log "Git identity configured from VE_GIT_AUTHOR_*" -Level "INFO"
@@ -642,7 +694,8 @@ function Test-VKApiReachable {
 
 function Get-VKBaseUrl {
     if ($script:VK_BASE_URL) { return $script:VK_BASE_URL }
-    if ($env:VK_BASE_URL) { return $env:VK_BASE_URL }
+    $envBase = Get-EnvFallback -Name "VK_BASE_URL"
+    if ($envBase) { return $envBase }
     return "http://127.0.0.1:54089"
 }
 
@@ -719,13 +772,14 @@ function Initialize-CISweepConfig {
     $script:CopilotCloudCooldownMin = Get-EnvInt -Name "COPILOT_CLOUD_COOLDOWN_MIN" -Default 60 -Min 1
     $script:CopilotRateLimitCooldownMin = Get-EnvInt -Name "COPILOT_RATE_LIMIT_COOLDOWN_MIN" -Default 120 -Min 30
     $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
-    $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
+    $envCopilotLocalResolution = Get-EnvFallback -Name "COPILOT_LOCAL_RESOLUTION"
+    $script:CopilotLocalResolution = if ($envCopilotLocalResolution) { $envCopilotLocalResolution } else { "agent" }
     $script:CodexMonitorTaskUpstream = Get-EnvString -Name "CODEX_MONITOR_TASK_UPSTREAM" -Default "origin/ve/codex-monitor-generic"
 
     # Branch routing scope map (v0.8) — maps conventional commit scopes to upstream branches
     $script:BranchRoutingScopeMap = @{}
     $script:AutoRebaseOnMerge = Get-EnvBool -Name "AUTO_REBASE_ON_MERGE" -Default $true
-    $envScopeMap = $env:BRANCH_ROUTING_SCOPE_MAP
+    $envScopeMap = Get-EnvFallback -Name "BRANCH_ROUTING_SCOPE_MAP"
     if ($envScopeMap) {
         foreach ($pair in $envScopeMap.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
             $parts = $pair.Split(":", 2)
@@ -773,14 +827,14 @@ function Apply-CachedVKConfig {
 
     if (-not $script:VK_PROJECT_ID -and $cachedProjectId) {
         $script:VK_PROJECT_ID = $cachedProjectId
-        $env:VK_PROJECT_ID = $cachedProjectId
+        Set-EnvValue -Name "VK_PROJECT_ID" -Value $cachedProjectId
         $applied = $true
         Write-Log "Using cached VK project ID $($cachedProjectId.Substring(0,8))..." -Level "INFO"
     }
 
     if (-not $script:VK_REPO_ID -and $cachedRepoId) {
         $script:VK_REPO_ID = $cachedRepoId
-        $env:VK_REPO_ID = $cachedRepoId
+        Set-EnvValue -Name "VK_REPO_ID" -Value $cachedRepoId
         $applied = $true
         Write-Log "Using cached VK repo ID $($cachedRepoId.Substring(0,8))..." -Level "INFO"
     }
@@ -940,16 +994,16 @@ function Clear-CopilotCloudDisabled {
     # Only clear the _UNTIL cooldown — never clear COPILOT_CLOUD_DISABLED itself.
     # The user may have set COPILOT_CLOUD_DISABLED=1 permanently in .env;
     # wiping it here would override their intent when a cooldown expires.
-    $env:COPILOT_CLOUD_DISABLED_UNTIL = ""
+    Set-EnvValue -Name "COPILOT_CLOUD_DISABLED_UNTIL" -Value ""
 }
 
 function Test-CopilotCloudDisabled {
-    $flag = $env:COPILOT_CLOUD_DISABLED
+    $flag = Get-EnvFallback -Name "COPILOT_CLOUD_DISABLED"
     if ($flag -and $flag.ToString().ToLower() -in @("1", "true", "yes")) {
         return $true
     }
     $until = $null
-    $untilRaw = $env:COPILOT_CLOUD_DISABLED_UNTIL
+    $untilRaw = Get-EnvFallback -Name "COPILOT_CLOUD_DISABLED_UNTIL"
     if ($untilRaw) {
         try {
             $until = ([datetimeoffset]::Parse($untilRaw)).ToLocalTime().DateTime
@@ -984,7 +1038,7 @@ function Disable-CopilotCloud {
     # That flag is the user's permanent setting from .env and must not be
     # overwritten by runtime cooldowns (otherwise Clear would need to restore
     # the original value, and wiping it re-enables Copilot when it shouldn't be).
-    $env:COPILOT_CLOUD_DISABLED_UNTIL = $until.ToString("o")
+    Set-EnvValue -Name "COPILOT_CLOUD_DISABLED_UNTIL" -Value $until.ToString("o")
     Write-Log "Copilot cloud disabled until $($until.ToString("o"))" -Level "WARN"
     if ($Reason) {
         Write-Log "Copilot cloud disable reason: $Reason" -Level "WARN"
@@ -1073,12 +1127,12 @@ function Sync-CopilotPRState {
 
 function Get-TaskUrl {
     param([Parameter(Mandatory)][string]$TaskId)
-    $template = $env:VK_TASK_URL_TEMPLATE
+    $template = Get-EnvFallback -Name "VK_TASK_URL_TEMPLATE"
     if ($template) {
         return $template.Replace("{taskId}", $TaskId).Replace("{projectId}", $script:VK_PROJECT_ID)
     }
-    $base = $env:VK_BOARD_URL
-    if (-not $base) { $base = $env:VK_WEB_URL }
+    $base = Get-EnvFallback -Name "VK_BOARD_URL"
+    if (-not $base) { $base = Get-EnvFallback -Name "VK_WEB_URL" }
     if (-not $base) { return $null }
     return "$base/tasks/$TaskId"
 }
@@ -1637,8 +1691,8 @@ function Resolve-ExecutorForComplexity {
 
     # Check env overrides per tier
     $prefix = "COMPLEXITY_ROUTING_${executorType}_$($complexity.tier.ToUpperInvariant())"
-    $envModel = $env:("${prefix}_MODEL")
-    $envVariant = $env:("${prefix}_VARIANT")
+    $envModel = Get-EnvFallback -Name ("{0}_MODEL" -f $prefix)
+    $envVariant = Get-EnvFallback -Name ("{0}_VARIANT" -f $prefix)
 
     $result = @{
         name            = $BaseProfile.name
@@ -1660,8 +1714,9 @@ function Resolve-ExecutorForComplexity {
 }
 
 function Get-WorkstationRegistryPath {
-    if ($env:VE_WORKSPACE_REGISTRY_PATH) {
-        return $env:VE_WORKSPACE_REGISTRY_PATH
+    $registryPath = Get-EnvFallback -Name "VE_WORKSPACE_REGISTRY_PATH"
+    if ($registryPath) {
+        return $registryPath
     }
     return (Join-Path $PSScriptRoot "workspaces.json")
 }
@@ -2665,9 +2720,9 @@ function Resolve-RebaseConflicts {
         if (-not $allResolvable) { return $false }
 
         # Continue the rebase
-        $env:GIT_EDITOR = "true"  # Don't open editor for commit messages
+        Set-EnvValue -Name "GIT_EDITOR" -Value "true"  # Don't open editor for commit messages
         $continueOut = git rebase --continue 2>&1
-        $env:GIT_EDITOR = $null
+        Set-EnvValue -Name "GIT_EDITOR" -Value $null
         if ($LASTEXITCODE -eq 0) {
             return $true
         }
@@ -3088,7 +3143,10 @@ function Prune-CompletedTaskWorkspaces {
     }
 
     # Clean up VK workspace directories for completed tasks
-    $vkWorkspaceBase = "$env:TEMP\vibe-kanban\worktrees"
+    $tempRoot = Get-EnvFallback -Name "TEMP"
+    if (-not $tempRoot) { $tempRoot = Get-EnvFallback -Name "TMP" }
+    if (-not $tempRoot) { $tempRoot = [IO.Path]::GetTempPath() }
+    $vkWorkspaceBase = Join-Path $tempRoot "vibe-kanban\worktrees"
     if (-not (Test-Path $vkWorkspaceBase)) {
         Write-Log "VK workspace directory not found: $vkWorkspaceBase" -Level "DEBUG"
         return
