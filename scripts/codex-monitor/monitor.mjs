@@ -230,12 +230,20 @@ try {
     // Marker is valid if written within the last 30 seconds
     if (Date.now() - ts < 30_000) {
       isSelfRestart = true;
-      console.log("[monitor] detected self-restart marker — suppressing startup notifications");
+      console.log(
+        "[monitor] detected self-restart marker — suppressing startup notifications",
+      );
     }
     // Clean up marker regardless
-    try { (await import("node:fs")).unlinkSync(selfRestartMarkerPath); } catch { /* best effort */ }
+    try {
+      (await import("node:fs")).unlinkSync(selfRestartMarkerPath);
+    } catch {
+      /* best effort */
+    }
   }
-} catch { /* first start or missing file */ }
+} catch {
+  /* first start or missing file */
+}
 
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
@@ -1981,12 +1989,9 @@ function loadMergedTaskCache() {
     if (existsSync(mergedTaskCachePath)) {
       const raw = readFileSync(mergedTaskCachePath, "utf8");
       const data = JSON.parse(raw);
-      // Expire entries older than 24 hours to prevent stale buildup
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-      for (const [id, ts] of Object.entries(data)) {
-        if (typeof ts === "number" && ts > cutoff) {
-          mergedTaskCache.add(id);
-        }
+      // No expiry — merged PRs don't un-merge. Cache is permanent.
+      for (const id of Object.keys(data)) {
+        mergedTaskCache.add(id);
       }
       if (mergedTaskCache.size > 0) {
         console.log(
@@ -2046,7 +2051,9 @@ async function checkMergedPRsAndUpdateTasks() {
       (entry) => !mergedTaskCache.has(entry.task.id),
     );
     if (reviewTasks.length === 0) {
-      console.log("[monitor] No tasks in review/inprogress status (after dedup)");
+      console.log(
+        "[monitor] No tasks in review/inprogress status (after dedup)",
+      );
       return { checked: 0, movedDone: 0, movedReview: 0 };
     }
 
@@ -2138,16 +2145,17 @@ async function checkMergedPRsAndUpdateTasks() {
         );
 
         const success = await updateTaskStatus(task.id, "done");
+        movedCount++;
+        mergedTaskCache.add(task.id);
+        saveMergedTaskCache(); // persist immediately — crash-safe
+        completedTaskNames.push(task.title);
         if (success) {
-          movedCount++;
-          mergedTaskCache.add(task.id);
-          completedTaskNames.push(task.title);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
         } else {
           console.warn(
-            `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
+            `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (PR is merged)`,
           );
         }
         continue;
@@ -2180,24 +2188,20 @@ async function checkMergedPRsAndUpdateTasks() {
         );
 
         const success = await updateTaskStatus(task.id, "done");
+        movedCount++;
+        mergedTaskCache.add(task.id);
+        saveMergedTaskCache(); // persist immediately — crash-safe
+        completedTaskNames.push(task.title);
         if (success) {
-          movedCount++;
-          mergedTaskCache.add(task.id);
-          completedTaskNames.push(task.title);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
         } else {
           console.warn(
-            `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
+            `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (branch is merged)`,
           );
         }
       }
-    }
-
-    // Persist cache once after the entire sweep (not per-task)
-    if (movedCount > 0) {
-      saveMergedTaskCache();
     }
 
     // Send a single aggregated Telegram notification
@@ -2209,7 +2213,10 @@ async function checkMergedPRsAndUpdateTasks() {
         }
       } else {
         // Many tasks — send a single summary to avoid spam
-        const listed = completedTaskNames.slice(0, 5).map((n) => `• ${n}`).join("\n");
+        const listed = completedTaskNames
+          .slice(0, 5)
+          .map((n) => `• ${n}`)
+          .join("\n");
         const extra = movedCount > 5 ? `\n…and ${movedCount - 5} more` : "";
         void sendTelegramMessage(
           `✅ ${movedCount} tasks moved to done:\n${listed}${extra}`,
@@ -3357,8 +3364,11 @@ async function sendTelegramMessage(text, options = {}) {
   // summary: priority 1-4 (everything except debug) — DEFAULT
   // detailed: priority 1-5 (everything)
   const maxPriority =
-    telegramVerbosity === "minimal" ? 2 :
-    telegramVerbosity === "detailed" ? 5 : 4;
+    telegramVerbosity === "minimal"
+      ? 2
+      : telegramVerbosity === "detailed"
+        ? 5
+        : 4;
   if (priority > maxPriority) return; // filtered out by verbosity setting
 
   return notify(text, priority, {
@@ -4098,7 +4108,8 @@ async function ensureLogDir() {
  * Returns { deletedCount, freedBytes, totalBefore, totalAfter }.
  */
 async function truncateOldLogs() {
-  if (!logMaxSizeMb || logMaxSizeMb <= 0) return { deletedCount: 0, freedBytes: 0 };
+  if (!logMaxSizeMb || logMaxSizeMb <= 0)
+    return { deletedCount: 0, freedBytes: 0 };
   const { readdir, stat: fsStat } = await import("node:fs/promises");
   const maxBytes = logMaxSizeMb * 1024 * 1024;
   let entries;
@@ -4122,7 +4133,12 @@ async function truncateOldLogs() {
   }
   const totalBefore = files.reduce((sum, f) => sum + f.size, 0);
   if (totalBefore <= maxBytes) {
-    return { deletedCount: 0, freedBytes: 0, totalBefore, totalAfter: totalBefore };
+    return {
+      deletedCount: 0,
+      freedBytes: 0,
+      totalBefore,
+      totalAfter: totalBefore,
+    };
   }
   // Sort oldest first
   files.sort((a, b) => a.mtimeMs - b.mtimeMs);
@@ -4863,7 +4879,9 @@ function selfRestartForSourceChange(filename) {
       resolve(repoRoot, ".cache", "ve-self-restart.marker"),
       String(Date.now()),
     );
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
   // Exit with special code — cli.mjs re-forks with fresh module cache
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
 }
