@@ -40,7 +40,6 @@
     "./copilot-shell": "./copilot-shell.mjs",
     "./claude-shell": "./claude-shell.mjs",
     "./copilot-shell": "./copilot-shell.mjs",
-    "./claude-shell": "./claude-shell.mjs",
     "./primary-agent": "./primary-agent.mjs",
     "./maintenance": "./maintenance.mjs",
     "./telegram-bot": "./telegram-bot.mjs",
