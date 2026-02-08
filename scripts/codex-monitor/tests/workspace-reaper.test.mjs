@@ -36,6 +36,7 @@ async function createTestWorktree(name, options = {}) {
     await utimes(gitDir, options.modifiedAt, options.modifiedAt);
     await utimes(gitHead, options.modifiedAt, options.modifiedAt);
   }
+
   if (options.withLockFile) {
     await writeFile(resolve(worktreePath, ".git", "index.lock"), "12345");
   }
@@ -125,6 +126,7 @@ describe("workspace-reaper", () => {
       await createTestWorktree("old-worktree", { modifiedAt: now });
 
       const futureTime = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
       const result = await cleanOrphanedWorktrees({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 24,
@@ -202,6 +204,7 @@ describe("workspace-reaper", () => {
 
       // Run reaper 2 hours later (lease expired, worktree old)
       const laterTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
       const result = await runReaperSweep({
         searchPaths: [TEST_WORKTREE_BASE],
         orphanThresholdHours: 1,

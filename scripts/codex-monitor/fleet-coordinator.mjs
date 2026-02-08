@@ -57,6 +57,20 @@ function buildGitEnv() {
 export function computeRepoFingerprint(repoRoot) {
   if (!repoRoot) return null;
 
+  // Ensure repoRoot is actually inside a git worktree.
+  try {
+    const isWorktree = execSync("git rev-parse --is-inside-work-tree", {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (isWorktree !== "true") {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
   // Try remote origin URL first (most reliable for same-repo detection)
   let remoteUrl = null;
   try {
