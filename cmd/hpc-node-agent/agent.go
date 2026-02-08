@@ -41,6 +41,7 @@ type AgentConfig struct {
 type Agent struct {
 	config           AgentConfig
 	metricsCollector *MetricsCollector
+	messageHandler   *MessageHandler
 	sequenceNumber   uint64
 	httpClient       *http.Client
 	stopCh           chan struct{}
@@ -52,7 +53,7 @@ const agentVersion = "0.1.0"
 
 // NewAgent creates a new node agent
 func NewAgent(config AgentConfig) *Agent {
-	return &Agent{
+	agent := &Agent{
 		config:           config,
 		metricsCollector: NewMetricsCollector(),
 		httpClient: &http.Client{
@@ -60,6 +61,8 @@ func NewAgent(config AgentConfig) *Agent {
 		},
 		stopCh: make(chan struct{}),
 	}
+	agent.messageHandler = NewMessageHandler(agent)
+	return agent
 }
 
 // Start begins the agent's heartbeat loop
@@ -71,6 +74,9 @@ func (a *Agent) Start(ctx context.Context) error {
 	if err := a.registerNode(ctx); err != nil {
 		fmt.Printf("[REGISTER] Error registering node: %v\n", err)
 	}
+
+	// Start message handler
+	a.messageHandler.Start(ctx)
 
 	a.wg.Add(1)
 	go a.heartbeatLoop(ctx)
@@ -84,6 +90,7 @@ func (a *Agent) Stop() {
 		return
 	}
 	close(a.stopCh)
+	a.messageHandler.Stop()
 	a.wg.Wait()
 }
 
