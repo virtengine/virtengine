@@ -24,6 +24,7 @@ concurrency:
 env:
   GO_VERSION: "1.25.5"
   GOWORK: "off" # Disable workspace mode for vendor operations
+  GO_TEST_TIMEOUT_UNIT: "30m"
 
 permissions:
   contents: read
@@ -55,10 +56,33 @@ jobs:
           version: v2.4.0
           args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    needs: [lint]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run go vet
+        env:
+          GOFLAGS: "-mod=readonly"
+        run: go vet ./...
+
   build:
     name: build
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, vet]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,7 +103,7 @@ jobs:
   test-go:
     name: test-go
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, vet]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -95,7 +119,7 @@ jobs:
 
       - name: Run core tests
         run: |
-          go test -mod=readonly -v -short -race \
+          go test -mod=readonly -v -short -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
             ./pkg/benchmark/... \
             ./pkg/cache/... \
             ./pkg/compatibility/... \

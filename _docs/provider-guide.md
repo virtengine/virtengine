@@ -41,7 +41,7 @@ VirtEngine providers offer compute resources through the decentralized marketpla
 ### Prerequisites
 
 - Ubuntu 22.04 LTS or equivalent
-- Go 1.21+
+- Go 1.25.5+
 - Access to VirtEngine node (RPC endpoint)
 - Kubernetes cluster or SLURM installation
 - Provider wallet with sufficient stake

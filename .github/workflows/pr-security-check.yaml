@@ -26,6 +26,7 @@ concurrency:
 env:
   GO_VERSION: "1.25.5"
   GOWORK: "off"  # Disable workspace mode for vendor operations
+  GO_TEST_TIMEOUT_UNIT: "30m"
 
 permissions:
   contents: read
@@ -239,7 +240,8 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          go test -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null || true
+          go test -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null || true
 
       - name: Check coverage threshold
         id: coverage
