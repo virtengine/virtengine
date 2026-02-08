@@ -23,6 +23,7 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	"github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/cmd/virtengine/cmd/access"
 	"github.com/virtengine/virtengine/cmd/virtengine/cmd/hpc"
 	hsmcmd "github.com/virtengine/virtengine/cmd/virtengine/cmd/hsm"
 	"github.com/virtengine/virtengine/cmd/virtengine/cmd/testnetify"
@@ -107,6 +108,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig sdkutil.EncodingConfig) 
 		PrepareGenesisCmd(app.DefaultHome, app.ModuleBasics()),
 		testnetify.GetCmd(ac.newTestnetApp),
 		waldur.GetCmd(),
+		access.GetCmd(),
 		hpc.GetCmd(),
 		hpc.GetTemplatesCmd(),
 		hsmcmd.GetCmd(),

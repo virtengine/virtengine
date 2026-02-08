@@ -686,8 +686,14 @@ func (h *WaldurCallbackHandler) createChainCallback(lc *marketplace.LifecycleCal
 	callback.ExpiresAt = lc.ExpiresAt
 	callback.Payload["operation_id"] = lc.OperationID
 	callback.Payload["action"] = string(lc.Action)
+	if lc.Success {
+		callback.Payload["event_type"] = "completed"
+	} else {
+		callback.Payload["event_type"] = "failed"
+	}
 	callback.Payload["success"] = fmt.Sprintf("%t", lc.Success)
 	callback.Payload["result_state"] = lc.ResultState.String()
+	callback.Payload["idempotency_key"] = lc.IdempotencyKey
 	if lc.Error != "" {
 		callback.Payload["error"] = lc.Error
 	}

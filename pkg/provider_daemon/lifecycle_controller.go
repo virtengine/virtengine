@@ -265,6 +265,15 @@ func (lc *LifecycleController) ExecuteLifecycleAction(
 		})
 	}
 
+	// Emit on-chain lifecycle requested event when possible.
+	if lc.callbackSink != nil {
+		go func(operation *marketplace.LifecycleOperation, resourceUUID string) {
+			if err := lc.emitLifecycleRequestedCallback(context.Background(), operation, resourceUUID); err != nil {
+				log.Printf("[lifecycle-controller] failed to emit lifecycle requested callback: %v", err)
+			}
+		}(op, waldurResourceUUID)
+	}
+
 	// Execute asynchronously
 	go lc.executeOperation(ctx, op, waldurResourceUUID)
 
@@ -620,6 +629,31 @@ func (lc *LifecycleController) signAndSubmitCallback(ctx context.Context, callba
 
 	callback.Signature = sigBytes
 	return lc.callbackSink.Submit(ctx, callback)
+}
+
+func (lc *LifecycleController) emitLifecycleRequestedCallback(ctx context.Context, op *marketplace.LifecycleOperation, resourceUUID string) error {
+	if op == nil || lc.callbackSink == nil {
+		return nil
+	}
+
+	callback := marketplace.NewWaldurCallback(
+		marketplace.ActionTypeStatusUpdate,
+		resourceUUID,
+		marketplace.SyncTypeAllocation,
+		op.AllocationID,
+	)
+
+	callback.SignerID = lc.cfg.ProviderAddress
+	callback.ExpiresAt = callback.Timestamp.Add(lc.cfg.CallbackTTL)
+	callback.Payload["event_type"] = "requested"
+	callback.Payload["operation_id"] = op.ID
+	callback.Payload["action"] = string(op.Action)
+	callback.Payload["target_state"] = op.TargetAllocationState.String()
+	callback.Payload["requested_by"] = op.RequestedBy
+	callback.Payload["idempotency_key"] = op.IdempotencyKey
+	callback.Payload["provider_address"] = lc.cfg.ProviderAddress
+
+	return lc.signAndSubmitCallback(ctx, callback)
 }
 
 // retryWorker retries failed operations
