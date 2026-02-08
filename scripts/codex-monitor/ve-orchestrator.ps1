@@ -419,7 +419,8 @@ function Ensure-GitCredentialHelper {
             Write-Log "Removing stale local credential.helper: $localHelper" -Level "WARN"
             git config --local --unset credential.helper 2>$null
         }
-    } catch {
+    }
+    catch {
         # Non-fatal — if we can't check, push will fail with a clear error anyway
     }
 }
@@ -430,7 +431,8 @@ function Write-CycleSummary {
     try {
         $todoTasks = Get-VKTasks -Status "todo" -Limit 1
         $backlogCount = if ($todoTasks) { @($todoTasks).Count } else { 0 }
-    } catch {
+    }
+    catch {
         $backlogCount = $null
     }
     Write-Host ""
@@ -442,7 +444,8 @@ function Write-CycleSummary {
     Write-Host "  │ $successSummary" -ForegroundColor DarkGray
     if ($null -ne $backlogCount) {
         Write-Host "  │ Backlog:   $backlogCount" -ForegroundColor DarkGray
-    } else {
+    }
+    else {
         Write-Host "  │ Backlog:   unknown" -ForegroundColor DarkGray
     }
     Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkCyan
@@ -682,6 +685,20 @@ function Initialize-CISweepConfig {
     $script:CopilotCloudDisableOnRateLimit = Get-EnvBool -Name "COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT" -Default $true
     $script:CopilotLocalResolution = $env:COPILOT_LOCAL_RESOLUTION ?? "agent"
     $script:CodexMonitorTaskUpstream = Get-EnvString -Name "CODEX_MONITOR_TASK_UPSTREAM" -Default "origin/ve/codex-monitor-generic"
+
+    # Branch routing scope map (v0.8) — maps conventional commit scopes to upstream branches
+    $script:BranchRoutingScopeMap = @{}
+    $script:AutoRebaseOnMerge = Get-EnvBool -Name "AUTO_REBASE_ON_MERGE" -Default $true
+    $envScopeMap = $env:BRANCH_ROUTING_SCOPE_MAP
+    if ($envScopeMap) {
+        foreach ($pair in $envScopeMap.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $parts = $pair.Split(":", 2)
+            if ($parts.Count -eq 2 -and $parts[0].Trim() -and $parts[1].Trim()) {
+                $script:BranchRoutingScopeMap[$parts[0].Trim().ToLowerInvariant()] = $parts[1].Trim()
+            }
+        }
+        Write-Log "Loaded $($script:BranchRoutingScopeMap.Count) branch routing scope entries from env" -Level "INFO"
+    }
 }
 
 function Initialize-CISweepState {
@@ -1224,6 +1241,53 @@ function Test-IsCodexMonitorTask {
     return $false
 }
 
+function Extract-ScopeFromTitle {
+    <#
+    .SYNOPSIS Extract conventional commit scope from task title.
+    .DESCRIPTION E.g. "feat(codex-monitor): add caching" → "codex-monitor"
+                      "[P1] fix(veid): broken flow" → "veid"
+    #>
+    param([string]$Title)
+    if (-not $Title) { return $null }
+    $m = [regex]::Match($Title, '(?:^\[P\d+\]\s*)?(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([^)]+)\)', "IgnoreCase")
+    if ($m.Success) { return $m.Groups[1].Value.ToLowerInvariant().Trim() }
+    return $null
+}
+
+function Resolve-BranchFromScopeMap {
+    <#
+    .SYNOPSIS Resolve upstream branch from config-based scope map.
+    .DESCRIPTION Checks $script:BranchRoutingScopeMap for a matching scope.
+    #>
+    param([Parameter(Mandatory)][object]$Task)
+    if (-not $script:BranchRoutingScopeMap -or $script:BranchRoutingScopeMap.Count -eq 0) { return $null }
+
+    # 1. Title scope exact match
+    $scope = Extract-ScopeFromTitle -Title ($Task.title ?? $Task.name)
+    if ($scope -and $script:BranchRoutingScopeMap.ContainsKey($scope)) {
+        return $script:BranchRoutingScopeMap[$scope]
+    }
+
+    # 2. Partial scope match
+    if ($scope) {
+        foreach ($key in $script:BranchRoutingScopeMap.Keys) {
+            if ($scope.Contains($key) -or $key.Contains($scope)) {
+                return $script:BranchRoutingScopeMap[$key]
+            }
+        }
+    }
+
+    # 3. Keyword match in task text
+    $text = (Get-TaskTextBlob -Task $Task).ToLowerInvariant()
+    foreach ($key in $script:BranchRoutingScopeMap.Keys) {
+        if ($text.Contains($key.ToLowerInvariant())) {
+            return $script:BranchRoutingScopeMap[$key]
+        }
+    }
+
+    return $null
+}
+
 function Get-TaskUpstreamBranch {
     param([Parameter(Mandatory)][object]$Task)
     $fields = @(
@@ -1272,6 +1336,10 @@ function Get-TaskUpstreamBranch {
 
     $fromText = Extract-UpstreamFromText -Text (Get-TaskTextBlob -Task $Task)
     if ($fromText) { return $fromText }
+
+    # Config-based scope routing (new in v0.8)
+    $fromScope = Resolve-BranchFromScopeMap -Task $Task
+    if ($fromScope) { return $fromScope }
 
     if (Test-IsCodexMonitorTask -Task $Task) {
         return $script:CodexMonitorTaskUpstream
@@ -3622,6 +3690,68 @@ Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolut
     }
 }
 
+function Invoke-DownstreamRebase {
+    <#
+    .SYNOPSIS Trigger rebase for all active tasks targeting the same upstream branch.
+    .DESCRIPTION After a PR merges, other tasks on the same upstream need rebasing.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$UpstreamBranch,
+        [string]$ExcludeAttemptId
+    )
+    $rebaseTargets = @()
+    foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+        $aid = $entry.Key
+        $info = $entry.Value
+        if ($aid -eq $ExcludeAttemptId) { continue }
+        if ($info.status -notin @("inprogress", "inreview", "active", "running")) { continue }
+        $taskUpstream = $info.upstream_branch
+        if (-not $taskUpstream -and $info.task_id) {
+            try {
+                $taskObj = Get-VKTask -TaskId $info.task_id -ErrorAction SilentlyContinue
+                if ($taskObj) { $taskUpstream = Get-TaskUpstreamBranch -Task $taskObj }
+            }
+            catch { }
+        }
+        if ($taskUpstream -eq $UpstreamBranch) {
+            $rebaseTargets += @{ AttemptId = $aid; Info = $info }
+        }
+    }
+    if ($rebaseTargets.Count -eq 0) {
+        Write-Log "No downstream tasks to rebase for '$UpstreamBranch'" -Level "DEBUG"
+        return
+    }
+    Write-Log "Found $($rebaseTargets.Count) downstream tasks to rebase after merge on '$UpstreamBranch'" -Level "INFO"
+    $rebased = 0; $failed = 0
+    foreach ($target in $rebaseTargets) {
+        $aid = $target.AttemptId
+        $shortId = $aid.Substring(0, [Math]::Min(8, $aid.Length))
+        try {
+            $branch = $target.Info.branch ?? "ve/$shortId"
+            Write-Log "Rebasing downstream task $shortId (branch: $branch) onto $UpstreamBranch" -Level "INFO"
+            $result = & git rebase $UpstreamBranch $branch 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $rebased++
+                Write-Log "Rebased $shortId successfully" -Level "OK"
+            }
+            else {
+                $failed++
+                Write-Log "Rebase failed for $shortId - may need manual resolution: $result" -Level "WARN"
+                & git rebase --abort 2>&1 | Out-Null
+            }
+        }
+        catch {
+            $failed++
+            Write-Log "Error rebasing $shortId`: $_" -Level "ERROR"
+            & git rebase --abort 2>&1 | Out-Null
+        }
+    }
+    if ($rebased -gt 0 -or $failed -gt 0) {
+        $msg = "Downstream rebase: $rebased OK, $failed failed (upstream: $UpstreamBranch)"
+        Write-Log $msg -Level $(if ($failed -gt 0) { "WARN" } else { "OK" })
+    }
+}
+
 function Complete-Task {
     <#
     .SYNOPSIS Mark a task as done after its PR is merged.
@@ -3682,6 +3812,25 @@ function Complete-Task {
         Write-Log "Task $($TaskId.Substring(0,8)) merged first-shot" -Level "OK"
     }
     Save-SuccessMetrics
+
+    # ─── Downstream rebase trigger (v0.8) ────────────────────────────────────
+    if ($script:AutoRebaseOnMerge -and $AttemptId -and $script:TrackedAttempts.ContainsKey($AttemptId)) {
+        $info = $script:TrackedAttempts[$AttemptId]
+        $mergedUpstream = $info.upstream_branch
+        if (-not $mergedUpstream -and $TaskId) {
+            # Fallback: resolve from task
+            try {
+                $taskObj = Get-VKTask -TaskId $TaskId -ErrorAction SilentlyContinue
+                if ($taskObj) { $mergedUpstream = Get-TaskUpstreamBranch -Task $taskObj }
+            }
+            catch { }
+        }
+        if ($mergedUpstream) {
+            Write-Log "Triggering downstream rebase for tasks on '$mergedUpstream' (excluding $($AttemptId.Substring(0,8)))" -Level "INFO"
+            Invoke-DownstreamRebase -UpstreamBranch $mergedUpstream -ExcludeAttemptId $AttemptId
+        }
+    }
+
     Maybe-TriggerCISweep
 }
 

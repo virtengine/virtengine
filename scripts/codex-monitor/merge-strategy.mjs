@@ -281,19 +281,22 @@ function readLastAgentMessage(worktreeDir) {
 }
 
 /**
- * Get diff stats for the branch vs main.
+ * Get diff stats for the branch vs its upstream/base.
+ * @param {string} worktreeDir
+ * @param {string} [baseBranch] - upstream branch to diff against, defaults to origin/main
  */
-function getDiffDetails(worktreeDir) {
+function getDiffDetails(worktreeDir, baseBranch) {
   if (!worktreeDir)
     return { diffStat: null, changedFiles: [], filesChanged: 0 };
+  const base = baseBranch || "origin/main";
   try {
-    const stat = execSync("git diff --stat origin/main...HEAD", {
+    const stat = execSync(`git diff --stat ${base}...HEAD`, {
       cwd: worktreeDir,
       encoding: "utf8",
       timeout: 10000,
     }).trim();
 
-    const files = execSync("git diff --name-only origin/main...HEAD", {
+    const files = execSync(`git diff --name-only ${base}...HEAD`, {
       cwd: worktreeDir,
       encoding: "utf8",
       timeout: 10000,
@@ -351,7 +354,7 @@ export async function analyzeMergeStrategy(ctx, opts) {
       ctx.agentLastMessage = readLastAgentMessage(ctx.worktreeDir);
     }
     if (!ctx.diffStat || !ctx.changedFiles?.length) {
-      const diff = getDiffDetails(ctx.worktreeDir);
+      const diff = getDiffDetails(ctx.worktreeDir, ctx.baseBranch);
       ctx.diffStat = ctx.diffStat || diff.diffStat;
       ctx.changedFiles = ctx.changedFiles?.length
         ? ctx.changedFiles

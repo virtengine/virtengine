@@ -40,6 +40,7 @@ import {
   analyzeMergeStrategy,
   resetMergeStrategyDedup,
 } from "./merge-strategy.mjs";
+import { assessTask, quickAssess } from "./task-assessment.mjs";
 import {
   normalizeDedupKey,
   stripAnsi,
@@ -155,6 +156,7 @@ let {
   dependabotAutoMergeIntervalMin,
   dependabotMergeMethod,
   dependabotAuthors,
+  branchRouting,
   telegramVerbosity,
 } = config;
 
@@ -221,8 +223,15 @@ let envWatcherDebounce = null;
 
 // ── Self-restart: exit code 75 signals cli.mjs to re-fork with fresh ESM cache
 const SELF_RESTART_EXIT_CODE = 75;
+const SELF_RESTART_QUIET_MS = Math.max(
+  90_000,
+  Number(process.env.SELF_RESTART_QUIET_MS || "90000"),
+);
 let selfWatcher = null;
 let selfWatcherDebounce = null;
+let selfRestartTimer = null;
+let selfRestartLastChangeAt = 0;
+let selfRestartLastFile = null;
 let pendingSelfRestart = null; // filename that triggered a deferred restart
 
 // ── Self-restart marker: detect if this process was spawned by a code-change restart
@@ -2518,6 +2527,12 @@ async function checkMergedPRsAndUpdateTasks() {
                 `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (PR is merged)`,
               );
             }
+            // ── Trigger downstream rebase for tasks on same upstream ──
+            const mergedBase =
+              cand.baseBranch ||
+              resolveUpstreamFromTask(task) ||
+              DEFAULT_TARGET_BRANCH;
+            void rebaseDownstreamTasks(mergedBase, cand.attemptId);
             resolved = true;
             break;
           }
@@ -2571,6 +2586,12 @@ async function checkMergedPRsAndUpdateTasks() {
               `[monitor] ⚠️ VK update failed for "${task.title}" — cached anyway (branch is merged)`,
             );
           }
+          // ── Trigger downstream rebase for tasks on same upstream ──
+          const mergedBase2 =
+            cand.baseBranch ||
+            resolveUpstreamFromTask(task) ||
+            DEFAULT_TARGET_BRANCH;
+          void rebaseDownstreamTasks(mergedBase2, cand.attemptId);
           resolved = true;
           break;
         }
@@ -3097,11 +3118,387 @@ async function runMergeStrategyAnalysis(ctx) {
   }
 }
 
+// ── Auto-Rebase Downstream Tasks on PR Merge ────────────────────────────────
+
+/**
+ * When a PR is merged into an upstream branch, find all active tasks that
+ * share the same upstream and trigger a rebase on each of them.
+ *
+ * This prevents tasks from drifting behind their upstream and accumulating
+ * merge conflicts.
+ *
+ * @param {string} mergedUpstreamBranch - The branch the PR was merged into
+ * @param {string} [excludeAttemptId]   - Attempt to exclude (the one that just merged)
+ */
+async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
+  if (!branchRouting?.autoRebaseOnMerge) {
+    console.log("[rebase-downstream] auto-rebase disabled in config");
+    return;
+  }
+
+  const tag = "rebase-downstream";
+  console.log(
+    `[${tag}] PR merged into ${mergedUpstreamBranch} — checking for downstream tasks to rebase`,
+  );
+
+  try {
+    // Get all active tasks
+    const statuses = ["inprogress", "inreview"];
+    const tasksByStatus = await Promise.all(
+      statuses.map((status) => fetchTasksByStatus(status)),
+    );
+    const allTasks = [];
+    for (const tasks of tasksByStatus) {
+      for (const task of tasks) {
+        if (task?.id) allTasks.push(task);
+      }
+    }
+
+    // Get active attempts from status file
+    const statusData = await readStatusData();
+    const attempts = Array.isArray(statusData?.active_attempts)
+      ? statusData.active_attempts
+      : Object.values(statusData?.attempts || {});
+
+    // Also fetch VK task-attempts as fallback
+    let vkAttempts = [];
+    try {
+      const vkRes = await fetchVk("/api/task-attempts");
+      const vkData = vkRes?.data ?? vkRes;
+      if (Array.isArray(vkData)) vkAttempts = vkData;
+    } catch {
+      /* best-effort */
+    }
+
+    let rebasedCount = 0;
+    let failedCount = 0;
+    const rebaseResults = [];
+
+    for (const task of allTasks) {
+      // Resolve this task's upstream branch
+      const taskUpstream =
+        resolveUpstreamFromTask(task) || DEFAULT_TARGET_BRANCH;
+
+      // Normalize both branches for comparison (strip "origin/" prefix)
+      const normalize = (b) => b?.replace(/^origin\//, "") || "";
+      if (normalize(taskUpstream) !== normalize(mergedUpstreamBranch)) {
+        continue; // Different upstream — not affected
+      }
+
+      // Find the attempt for this task
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) attempt = vkMatch[0];
+      }
+
+      if (!attempt || attempt.id === excludeAttemptId) continue;
+      if (!attempt.branch) continue;
+
+      console.log(
+        `[${tag}] rebasing task "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
+      );
+
+      try {
+        const rebaseResult = await rebaseAttempt(
+          attempt.id,
+          mergedUpstreamBranch,
+        );
+
+        if (rebaseResult?.success || rebaseResult?.data?.success) {
+          rebasedCount++;
+          rebaseResults.push({
+            taskTitle: task.title,
+            attemptId: attempt.id,
+            status: "success",
+          });
+          console.log(
+            `[${tag}] ✓ rebased "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
+          );
+        } else {
+          failedCount++;
+          const error =
+            rebaseResult?.error || rebaseResult?.message || "unknown";
+          rebaseResults.push({
+            taskTitle: task.title,
+            attemptId: attempt.id,
+            status: "failed",
+            error,
+          });
+          console.warn(
+            `[${tag}] ✗ rebase failed for "${task.title}" (${attempt.id.substring(0, 8)}): ${error}`,
+          );
+
+          // ── Run task assessment on rebase failure ──────────────
+          if (
+            branchRouting?.assessWithSdk &&
+            codexEnabled &&
+            !isPrimaryBusy()
+          ) {
+            void runTaskAssessment({
+              taskId: task.id,
+              taskTitle: task.title,
+              taskDescription: task.description,
+              attemptId: attempt.id,
+              shortId: attempt.id.substring(0, 8),
+              trigger: "rebase_failed",
+              branch: attempt.branch,
+              upstreamBranch: mergedUpstreamBranch,
+              rebaseError: error,
+              conflictFiles:
+                rebaseResult?.conflicted_files ||
+                rebaseResult?.data?.conflicted_files ||
+                [],
+            });
+          }
+        }
+      } catch (err) {
+        failedCount++;
+        rebaseResults.push({
+          taskTitle: task.title,
+          attemptId: attempt.id,
+          status: "error",
+          error: err.message || String(err),
+        });
+        console.warn(
+          `[${tag}] error rebasing "${task.title}": ${err.message || err}`,
+        );
+      }
+    }
+
+    if (rebasedCount > 0 || failedCount > 0) {
+      const summary = `Downstream rebase after merge to ${mergedUpstreamBranch}: ${rebasedCount} rebased, ${failedCount} failed`;
+      console.log(`[${tag}] ${summary}`);
+      void sendTelegramMessage(
+        `🔄 ${summary}\n${rebaseResults.map((r) => `  ${r.status === "success" ? "✓" : "✗"} ${r.taskTitle}`).join("\n")}`,
+      );
+    } else {
+      console.log(
+        `[${tag}] no downstream tasks found on upstream ${mergedUpstreamBranch}`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[${tag}] error: ${err.message || err}`);
+  }
+}
+
+// ── Task Assessment Integration ─────────────────────────────────────────────
+
+/**
+ * Run a full task lifecycle assessment using Codex/Copilot SDK.
+ * First tries quickAssess (heuristic, no SDK call), then falls back to
+ * full SDK assessment if needed.
+ *
+ * After getting a decision, ACTS on it — sends prompts, triggers retries, etc.
+ *
+ * @param {import("./task-assessment.mjs").TaskAssessmentContext} ctx
+ */
+async function runTaskAssessment(ctx) {
+  const tag = `assessment(${ctx.shortId})`;
+  try {
+    // ── Quick heuristic assessment first ───────────────────
+    const quick = quickAssess(ctx);
+    if (quick) {
+      console.log(
+        `[${tag}] quick decision: ${quick.action} — ${(quick.reason || "").slice(0, 100)}`,
+      );
+      await actOnAssessment(ctx, quick);
+      return;
+    }
+
+    // ── Full SDK assessment ───────────────────────────────
+    if (!codexEnabled || isPrimaryBusy()) {
+      console.log(
+        `[${tag}] skipping SDK assessment — agent ${isPrimaryBusy() ? "busy" : "disabled"}`,
+      );
+      return;
+    }
+
+    const telegramFn =
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null;
+
+    const decision = await assessTask(ctx, {
+      execCodex: execPrimaryPrompt,
+      timeoutMs: 5 * 60 * 1000,
+      logDir,
+      onTelegram: telegramFn,
+    });
+
+    if (!decision?.success) {
+      console.warn(`[${tag}] assessment failed — no action taken`);
+      return;
+    }
+
+    await actOnAssessment(ctx, decision);
+  } catch (err) {
+    console.warn(`[${tag}] error: ${err.message || err}`);
+  }
+}
+
+/**
+ * Act on an assessment decision — execute the recommended action.
+ *
+ * @param {import("./task-assessment.mjs").TaskAssessmentContext} ctx
+ * @param {import("./task-assessment.mjs").TaskAssessmentDecision} decision
+ */
+async function actOnAssessment(ctx, decision) {
+  const tag = `assessment-act(${ctx.shortId})`;
+
+  switch (decision.action) {
+    case "merge":
+      console.log(`[${tag}] → merge`);
+      // Handled by VK cleanup script / auto-merge
+      break;
+
+    case "reprompt_same":
+      console.log(`[${tag}] → reprompt same session`);
+      if (decision.prompt && codexEnabled && !isPrimaryBusy()) {
+        void execPrimaryPrompt(decision.prompt, { timeoutMs: 15 * 60 * 1000 });
+      }
+      break;
+
+    case "reprompt_new_session":
+      console.log(`[${tag}] → reprompt new session`);
+      if (typeof startFreshSession === "function") {
+        startFreshSession(
+          decision.prompt || `Resume task: ${ctx.taskTitle}`,
+          decision.reason,
+        );
+      } else if (typeof attemptFreshSessionRetry === "function") {
+        await attemptFreshSessionRetry(
+          "assessment_new_session",
+          decision.reason || "Assessment recommended new session",
+        );
+      }
+      break;
+
+    case "new_attempt":
+      console.log(
+        `[${tag}] → new attempt (agent: ${decision.agentType || "auto"})`,
+      );
+      // Move task back to todo for re-scheduling
+      if (ctx.taskId) {
+        await updateTaskStatus(ctx.taskId, "todo");
+      }
+      void sendTelegramMessage(
+        `🆕 Assessment: starting new attempt for "${ctx.taskTitle}" — ${decision.reason || ""}`,
+      );
+      break;
+
+    case "wait": {
+      const waitSec = decision.waitSeconds || 300;
+      console.log(`[${tag}] → wait ${waitSec}s`);
+      setTimeout(() => {
+        void runTaskAssessment({
+          ...ctx,
+          trigger: "reassessment",
+        });
+      }, waitSec * 1000);
+      break;
+    }
+
+    case "manual_review":
+      console.log(`[${tag}] → manual review`);
+      void sendTelegramMessage(
+        `👀 Assessment: manual review needed for "${ctx.taskTitle}" — ${decision.reason || ""}`,
+      );
+      break;
+
+    case "close_and_replan":
+      console.log(`[${tag}] → close and replan`);
+      if (ctx.taskId) {
+        await updateTaskStatus(ctx.taskId, "todo");
+      }
+      void sendTelegramMessage(
+        `🚫 Assessment: closing and replanning "${ctx.taskTitle}" — ${decision.reason || ""}`,
+      );
+      break;
+
+    case "noop":
+      console.log(`[${tag}] → noop`);
+      break;
+
+    default:
+      console.warn(`[${tag}] unknown action: ${decision.action}`);
+  }
+}
+
 // ── Smart PR creation flow ──────────────────────────────────────────────────
 
-const DEFAULT_TARGET_BRANCH = process.env.VK_TARGET_BRANCH || "origin/main";
+// Use config-driven branch routing instead of hardcoded defaults
+const DEFAULT_TARGET_BRANCH =
+  branchRouting?.defaultBranch || process.env.VK_TARGET_BRANCH || "origin/main";
 const DEFAULT_CODEX_MONITOR_UPSTREAM =
-  process.env.CODEX_MONITOR_TASK_UPSTREAM || "origin/ve/codex-monitor-generic";
+  branchRouting?.scopeMap?.["codex-monitor"] ||
+  process.env.CODEX_MONITOR_TASK_UPSTREAM ||
+  "origin/ve/codex-monitor-generic";
+
+/**
+ * Extract the conventional commit scope from a task title.
+ * E.g. "feat(codex-monitor): add caching" → "codex-monitor"
+ *      "[P1] fix(veid): broken flow"      → "veid"
+ *      "chore(provider): cleanup"         → "provider"
+ * @param {string} title
+ * @returns {string|null}
+ */
+function extractScopeFromTitle(title) {
+  if (!title) return null;
+  // Match conventional commit patterns: type(scope): ... or [P*] type(scope): ...
+  const match = String(title).match(
+    /(?:^\[P\d+\]\s*)?(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([^)]+)\)/i,
+  );
+  return match ? match[1].toLowerCase().trim() : null;
+}
+
+/**
+ * Resolve the upstream branch for a task using config-based scope routing.
+ * Priority:
+ *   1. Task-level explicit fields (target_branch, base_branch, etc.)
+ *   2. Task metadata fields
+ *   3. Task labels with upstream/base/target patterns
+ *   4. Text body extraction
+ *   5. Config scopeMap matching (title scope → branch)
+ *   6. Config scopeMap matching (keyword-based)
+ *   7. Legacy codex-monitor keyword detection
+ *   8. Config defaultBranch
+ * @param {object} task
+ * @returns {string|null}
+ */
+function resolveUpstreamFromConfig(task) {
+  if (!task) return null;
+
+  // ── Priority 5+: Config-based scope routing ──────────────
+  const scope = extractScopeFromTitle(task.title || task.name);
+  if (scope && branchRouting?.scopeMap) {
+    // Exact scope match
+    const exactMatch = branchRouting.scopeMap[scope];
+    if (exactMatch) return exactMatch;
+
+    // Partial scope match — check if any config key is contained in the scope
+    for (const [key, branch] of Object.entries(branchRouting.scopeMap)) {
+      if (scope.includes(key) || key.includes(scope)) return branch;
+    }
+  }
+
+  // ── Priority 6: Keyword-based scope matching from task text ─
+  if (branchRouting?.scopeMap) {
+    const text = getTaskTextBlob(task).toLowerCase();
+    for (const [key, branch] of Object.entries(branchRouting.scopeMap)) {
+      // Check if the routing key appears as a keyword in the task text
+      if (text.includes(key.toLowerCase())) return branch;
+    }
+  }
+
+  return null;
+}
 
 function normalizeBranchName(value) {
   if (!value) return null;
@@ -3208,6 +3605,11 @@ function resolveUpstreamFromTask(task) {
   const fromText = extractUpstreamFromText(getTaskTextBlob(task));
   if (fromText) return fromText;
 
+  // ── Config-based scope routing ────────────────────────────
+  const fromConfig = resolveUpstreamFromConfig(task);
+  if (fromConfig) return fromConfig;
+
+  // ── Legacy codex-monitor keyword detection ────────────────
   const text = getTaskTextBlob(task).toLowerCase();
   if (
     text.includes("codex-monitor") ||
@@ -5664,21 +6066,17 @@ function stopSelfWatcher() {
     clearTimeout(selfWatcherDebounce);
     selfWatcherDebounce = null;
   }
+  if (selfRestartTimer) {
+    clearTimeout(selfRestartTimer);
+    selfRestartTimer = null;
+  }
 }
 
 function selfRestartForSourceChange(filename) {
-  // Defer restart if the primary agent is mid-turn — don't interrupt user tasks
-  if (isPrimaryBusy()) {
-    if (!pendingSelfRestart) {
-      pendingSelfRestart = filename;
-      console.log(
-        `\n[monitor] source file changed: ${filename} — deferring restart (primary agent busy)`,
-      );
-    }
-    return;
-  }
   pendingSelfRestart = null;
-  console.log(`\n[monitor] source file changed: ${filename}`);
+  console.log(
+    `\n[monitor] source files stable for ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s — restarting (${filename})`,
+  );
   console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
   shuttingDown = true;
   stopAutoUpdateLoop();
@@ -5708,18 +6106,51 @@ function selfRestartForSourceChange(filename) {
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
 }
 
-function retryDeferredSelfRestart() {
-  if (!pendingSelfRestart) return;
+function attemptSelfRestartAfterQuiet() {
+  if (selfRestartTimer) {
+    clearTimeout(selfRestartTimer);
+    selfRestartTimer = null;
+  }
+  if (!selfRestartLastChangeAt) return;
+  const now = Date.now();
+  const sinceLastChange = now - selfRestartLastChangeAt;
+  if (sinceLastChange < SELF_RESTART_QUIET_MS) {
+    const waitMs = SELF_RESTART_QUIET_MS - sinceLastChange;
+    selfRestartTimer = setTimeout(attemptSelfRestartAfterQuiet, waitMs);
+    return;
+  }
+  const filename = selfRestartLastFile || "unknown";
   if (isPrimaryBusy()) {
-    // Still busy — check again in 5s
+    if (!pendingSelfRestart) {
+      console.log(
+        `\n[monitor] source files stable but primary agent busy — deferring restart (${filename})`,
+      );
+    }
+    pendingSelfRestart = filename;
     setTimeout(retryDeferredSelfRestart, 5000);
     return;
   }
-  const filename = pendingSelfRestart;
-  console.log(
-    `[monitor] primary agent finished — proceeding with deferred self-restart (${filename})`,
-  );
   selfRestartForSourceChange(filename);
+}
+
+function queueSelfRestart(filename) {
+  selfRestartLastChangeAt = Date.now();
+  selfRestartLastFile = filename;
+  if (selfRestartTimer) {
+    clearTimeout(selfRestartTimer);
+  }
+  console.log(
+    `\n[monitor] source file changed: ${filename} — waiting ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s for quiet before restart`,
+  );
+  selfRestartTimer = setTimeout(
+    attemptSelfRestartAfterQuiet,
+    SELF_RESTART_QUIET_MS,
+  );
+}
+
+function retryDeferredSelfRestart() {
+  if (!pendingSelfRestart) return;
+  attemptSelfRestartAfterQuiet();
 }
 
 function startSelfWatcher() {
@@ -5734,12 +6165,8 @@ function startSelfWatcher() {
         clearTimeout(selfWatcherDebounce);
       }
       selfWatcherDebounce = setTimeout(() => {
-        selfRestartForSourceChange(filename);
-        // If deferred, start polling for agent completion
-        if (pendingSelfRestart) {
-          setTimeout(retryDeferredSelfRestart, 5000);
-        }
-      }, 3000);
+        queueSelfRestart(filename);
+      }, 1000);
     });
     console.log("[monitor] watching own source files for self-restart");
   } catch (err) {
@@ -6212,4 +6639,8 @@ export {
   AUTO_RESOLVE_THEIRS,
   AUTO_RESOLVE_OURS,
   AUTO_RESOLVE_LOCK_EXTENSIONS,
+  extractScopeFromTitle,
+  resolveUpstreamFromConfig,
+  rebaseDownstreamTasks,
+  runTaskAssessment,
 };
