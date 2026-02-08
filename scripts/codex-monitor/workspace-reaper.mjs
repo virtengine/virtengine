@@ -142,21 +142,27 @@ async function isWorktreeOrphaned(worktreePath, options = {}) {
   }
   
   // Safety check 4: Check git status for uncommitted work
-  try {
-    const cmd = IS_WINDOWS
-      ? `cd /d "${worktreePath}" && git status --porcelain`
-      : `cd "${worktreePath}" && git status --porcelain`;
-    const gitStatus = execSync(cmd, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "ignore"],
-    }).trim();
-    if (gitStatus.length > 0) {
-      return { orphaned: false, reason: "uncommitted_changes" };
+  // Only check git status if .git is a FILE (proper worktree), not a directory
+  const gitPath = resolve(worktreePath, ".git");
+  const isProperWorktree = existsSync(gitPath) && !statSync(gitPath).isDirectory();
+
+  if (isProperWorktree) {
+    try {
+      const cmd = IS_WINDOWS
+        ? `cd /d "${worktreePath}" && git status --porcelain`
+        : `cd "${worktreePath}" && git status --porcelain`;
+      const gitStatus = execSync(cmd, {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "ignore"],
+      }).trim();
+      if (gitStatus.length > 0) {
+        return { orphaned: false, reason: "uncommitted_changes" };
+      }
+    } catch {
+      // If git command fails, worktree might be corrupted - consider orphaned
     }
-  } catch {
-    // If git command fails, worktree might be corrupted - consider orphaned
   }
-  
+
   return { orphaned: true, lastModified, ageHours: lastModified ? (now.getTime() - lastModified.getTime()) / (1000 * 60 * 60) : null };
 }
 
