@@ -330,23 +330,177 @@ function isProcessAlive(pid) {
 // ── Full Maintenance Sweep ──────────────────────────────────────────────
 
 /**
- * Run full maintenance sweep: stale kill, git push reap, worktree cleanup.
+ * Fast-forward local tracking branches (e.g. main) to match origin.
+ *
+ * When local `main` falls behind `origin/main`, new worktrees and task
+ * branches spawned from it start stale, causing avoidable rebase conflicts.
+ * This function periodically pulls so the local ref stays current.
+ *
+ * Safe: only does `--ff-only` — never creates merge commits. If the local
+ * branch has diverged (someone committed directly), it logs a warning and
+ * skips.  Also skips if the branch is currently checked out with uncommitted
+ * work (git will refuse the checkout anyway).
+ *
+ * @param {string} repoRoot
+ * @param {string[]} [branches] - branches to sync (default: ["main"])
+ * @returns {number} count of branches successfully synced
+ */
+export function syncLocalTrackingBranches(repoRoot, branches) {
+  if (!repoRoot) return 0;
+  const toSync = branches && branches.length ? branches : ["main"];
+  let synced = 0;
+
+  // 1. Fetch all remotes first (single network call)
+  try {
+    spawnSync("git", ["fetch", "--all", "--prune", "--quiet"], {
+      cwd: repoRoot,
+      timeout: 60_000,
+      windowsHide: true,
+    });
+  } catch (e) {
+    console.warn(`[maintenance] git fetch --all failed: ${e.message}`);
+    return 0;
+  }
+
+  // 2. Determine which branch is currently checked out (so we can handle it)
+  let currentBranch = null;
+  try {
+    const result = spawnSync(
+      "git",
+      ["rev-parse", "--abbrev-ref", "HEAD"],
+      { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+    );
+    if (result.status === 0) currentBranch = result.stdout.trim();
+  } catch { /* best effort */ }
+
+  for (const branch of toSync) {
+    try {
+      // Check if local branch exists
+      const refCheck = spawnSync(
+        "git",
+        ["rev-parse", "--verify", `refs/heads/${branch}`],
+        { cwd: repoRoot, timeout: 5000, windowsHide: true },
+      );
+      if (refCheck.status !== 0) {
+        // Local branch doesn't exist — nothing to sync
+        continue;
+      }
+
+      // Check if remote tracking ref exists
+      const remoteRef = `origin/${branch}`;
+      const remoteCheck = spawnSync(
+        "git",
+        ["rev-parse", "--verify", `refs/remotes/${remoteRef}`],
+        { cwd: repoRoot, timeout: 5000, windowsHide: true },
+      );
+      if (remoteCheck.status !== 0) continue;
+
+      // Compare: is local behind?
+      const behindCheck = spawnSync(
+        "git",
+        ["rev-list", "--count", `${branch}..${remoteRef}`],
+        { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+      );
+      const behind = parseInt(behindCheck.stdout?.trim(), 10) || 0;
+      if (behind === 0) continue; // Already up to date
+
+      // Check if local has commits not in remote (diverged)
+      const aheadCheck = spawnSync(
+        "git",
+        ["rev-list", "--count", `${remoteRef}..${branch}`],
+        { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+      );
+      const ahead = parseInt(aheadCheck.stdout?.trim(), 10) || 0;
+      if (ahead > 0) {
+        console.warn(
+          `[maintenance] local '${branch}' has ${ahead} commit(s) ahead of ${remoteRef} — skipping (diverged)`,
+        );
+        continue;
+      }
+
+      // If this is the currently checked-out branch, use git pull --ff-only
+      if (branch === currentBranch) {
+        // Check for uncommitted changes — skip if dirty
+        const statusCheck = spawnSync(
+          "git",
+          ["status", "--porcelain"],
+          { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+        );
+        if (statusCheck.stdout?.trim()) {
+          console.warn(
+            `[maintenance] '${branch}' is checked out with uncommitted changes — skipping pull`,
+          );
+          continue;
+        }
+
+        const pull = spawnSync(
+          "git",
+          ["pull", "--ff-only", "--quiet"],
+          { cwd: repoRoot, encoding: "utf8", timeout: 30_000, windowsHide: true },
+        );
+        if (pull.status === 0) {
+          console.log(
+            `[maintenance] fast-forwarded checked-out '${branch}' (was ${behind} behind)`,
+          );
+          synced++;
+        } else {
+          console.warn(
+            `[maintenance] git pull --ff-only on '${branch}' failed: ${(pull.stderr || pull.stdout || "").toString().trim()}`,
+          );
+        }
+      } else {
+        // Not checked out — use git fetch to update the local ref directly
+        // This is safe because no worktree has it checked out
+        const update = spawnSync(
+          "git",
+          ["update-ref", `refs/heads/${branch}`, `refs/remotes/${remoteRef}`],
+          { cwd: repoRoot, timeout: 5000, windowsHide: true },
+        );
+        if (update.status === 0) {
+          console.log(
+            `[maintenance] fast-forwarded '${branch}' → ${remoteRef} (was ${behind} behind)`,
+          );
+          synced++;
+        } else {
+          console.warn(`[maintenance] update-ref failed for '${branch}'`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[maintenance] error syncing '${branch}': ${e.message}`);
+    }
+  }
+
+  if (synced > 0) {
+    console.log(
+      `[maintenance] synced ${synced}/${toSync.length} local tracking branch(es)`,
+    );
+  }
+  return synced;
+}
+
+/**
+ * Run full maintenance sweep: stale kill, git push reap, worktree cleanup,
+ * and local tracking branch sync.
  * @param {object} opts
  * @param {string} opts.repoRoot - repository root path
  * @param {number} [opts.childPid] - current orchestrator child PID to skip
  * @param {number} [opts.gitPushMaxAgeMs] - max age for git push before kill (default 5min)
+ * @param {string[]} [opts.syncBranches] - local branches to fast-forward (default: ["main"])
  */
 export function runMaintenanceSweep(opts = {}) {
-  const { repoRoot, childPid, gitPushMaxAgeMs } = opts;
+  const { repoRoot, childPid, gitPushMaxAgeMs, syncBranches } = opts;
   console.log("[maintenance] starting sweep...");
 
   const staleKilled = killStaleOrchestrators(childPid);
   const pushesReaped = reapStuckGitPushes(gitPushMaxAgeMs);
   const worktreesPruned = repoRoot ? cleanupWorktrees(repoRoot) : 0;
+  const branchesSynced = repoRoot
+    ? syncLocalTrackingBranches(repoRoot, syncBranches)
+    : 0;
 
   console.log(
-    `[maintenance] sweep complete: ${staleKilled} stale orchestrators, ${pushesReaped} stuck pushes, ${worktreesPruned} worktrees pruned`,
+    `[maintenance] sweep complete: ${staleKilled} stale orchestrators, ${pushesReaped} stuck pushes, ${worktreesPruned} worktrees pruned, ${branchesSynced} branches synced`,
   );
 
-  return { staleKilled, pushesReaped, worktreesPruned };
+  return { staleKilled, pushesReaped, worktreesPruned, branchesSynced };
 }
