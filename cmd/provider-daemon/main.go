@@ -185,6 +185,39 @@ const (
 	// FlagWaldurOfferingSyncMaxRetries is max retries before dead-letter
 	FlagWaldurOfferingSyncMaxRetries = "waldur-offering-sync-max-retries"
 
+	// FlagWaldurLifecycleQueueEnabled enables the lifecycle command queue
+	FlagWaldurLifecycleQueueEnabled = "waldur-lifecycle-queue-enabled"
+
+	// FlagWaldurLifecycleQueueBackend sets lifecycle queue storage backend
+	FlagWaldurLifecycleQueueBackend = "waldur-lifecycle-queue-backend"
+
+	// FlagWaldurLifecycleQueuePath sets lifecycle queue storage path
+	FlagWaldurLifecycleQueuePath = "waldur-lifecycle-queue-path"
+
+	// FlagWaldurLifecycleQueueWorkers sets lifecycle queue worker count
+	FlagWaldurLifecycleQueueWorkers = "waldur-lifecycle-queue-workers"
+
+	// FlagWaldurLifecycleQueueMaxRetries sets lifecycle queue max retries
+	FlagWaldurLifecycleQueueMaxRetries = "waldur-lifecycle-queue-max-retries"
+
+	// FlagWaldurLifecycleQueueRetryBackoff sets lifecycle queue retry backoff
+	FlagWaldurLifecycleQueueRetryBackoff = "waldur-lifecycle-queue-retry-backoff"
+
+	// FlagWaldurLifecycleQueueMaxBackoff sets lifecycle queue max backoff
+	FlagWaldurLifecycleQueueMaxBackoff = "waldur-lifecycle-queue-max-backoff"
+
+	// FlagWaldurLifecycleQueuePollInterval sets lifecycle queue poll interval
+	FlagWaldurLifecycleQueuePollInterval = "waldur-lifecycle-queue-poll-interval"
+
+	// FlagWaldurLifecycleQueueReconcileInterval sets lifecycle queue reconcile interval
+	FlagWaldurLifecycleQueueReconcileInterval = "waldur-lifecycle-queue-reconcile-interval"
+
+	// FlagWaldurLifecycleQueueReconcileOnStart toggles reconciliation on startup
+	FlagWaldurLifecycleQueueReconcileOnStart = "waldur-lifecycle-queue-reconcile-on-start"
+
+	// FlagWaldurLifecycleQueueStaleAfter sets stale executing command threshold
+	FlagWaldurLifecycleQueueStaleAfter = "waldur-lifecycle-queue-stale-after"
+
 	// Portal API flags
 	FlagPortalAuthSecret      = "portal-auth-secret" // #nosec G101 -- flag name, not a credential
 	FlagPortalAllowInsecure   = "portal-allow-insecure"
@@ -296,6 +329,17 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagWaldurCategoryMap, "", "Path to JSON file mapping offering categories to Waldur category UUIDs")
 	rootCmd.PersistentFlags().Int64(FlagWaldurOfferingSyncInterval, 300, "Offering sync reconciliation interval in seconds")
 	rootCmd.PersistentFlags().Int(FlagWaldurOfferingSyncMaxRetries, 5, "Max sync retries before dead-lettering")
+	rootCmd.PersistentFlags().Bool(FlagWaldurLifecycleQueueEnabled, true, "Enable durable lifecycle command queue")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleQueueBackend, "badger", "Lifecycle queue storage backend (badger)")
+	rootCmd.PersistentFlags().String(FlagWaldurLifecycleQueuePath, "data/lifecycle_queue", "Lifecycle queue storage path")
+	rootCmd.PersistentFlags().Int(FlagWaldurLifecycleQueueWorkers, 2, "Lifecycle queue worker count")
+	rootCmd.PersistentFlags().Int(FlagWaldurLifecycleQueueMaxRetries, 5, "Lifecycle queue max retries")
+	rootCmd.PersistentFlags().Duration(FlagWaldurLifecycleQueueRetryBackoff, 10*time.Second, "Lifecycle queue retry backoff")
+	rootCmd.PersistentFlags().Duration(FlagWaldurLifecycleQueueMaxBackoff, 5*time.Minute, "Lifecycle queue max backoff")
+	rootCmd.PersistentFlags().Duration(FlagWaldurLifecycleQueuePollInterval, 2*time.Second, "Lifecycle queue poll interval")
+	rootCmd.PersistentFlags().Duration(FlagWaldurLifecycleQueueReconcileInterval, 5*time.Minute, "Lifecycle queue reconcile interval")
+	rootCmd.PersistentFlags().Bool(FlagWaldurLifecycleQueueReconcileOnStart, true, "Run lifecycle reconciliation on startup")
+	rootCmd.PersistentFlags().Duration(FlagWaldurLifecycleQueueStaleAfter, 20*time.Minute, "Lifecycle queue stale command threshold")
 
 	// Portal API flags
 	rootCmd.PersistentFlags().String(FlagPortalAuthSecret, "", "Shared secret for portal signed requests")
@@ -379,6 +423,17 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurCategoryMap, rootCmd.PersistentFlags().Lookup(FlagWaldurCategoryMap))
 	_ = viper.BindPFlag(FlagWaldurOfferingSyncInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncInterval))
 	_ = viper.BindPFlag(FlagWaldurOfferingSyncMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncMaxRetries))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueEnabled))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueBackend, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueBackend))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueuePath, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueuePath))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueWorkers, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueWorkers))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueMaxRetries))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueRetryBackoff, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueRetryBackoff))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueMaxBackoff, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueMaxBackoff))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueuePollInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueuePollInterval))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueReconcileInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueReconcileInterval))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueReconcileOnStart, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueReconcileOnStart))
+	_ = viper.BindPFlag(FlagWaldurLifecycleQueueStaleAfter, rootCmd.PersistentFlags().Lookup(FlagWaldurLifecycleQueueStaleAfter))
 
 	// Portal API flags
 	_ = viper.BindPFlag(FlagPortalAuthSecret, rootCmd.PersistentFlags().Lookup(FlagPortalAuthSecret))
@@ -853,6 +908,17 @@ func runStart(cmd *cobra.Command, args []string) error {
 		bridgeCfg.WaldurProjectUUID = viper.GetString(FlagWaldurProjectUUID)
 		bridgeCfg.WaldurOfferingMap = offeringMap
 		bridgeCfg.OrderCallbackURL = viper.GetString(FlagWaldurOrderCallbackURL)
+		bridgeCfg.LifecycleQueueEnabled = viper.GetBool(FlagWaldurLifecycleQueueEnabled)
+		bridgeCfg.LifecycleQueueBackend = viper.GetString(FlagWaldurLifecycleQueueBackend)
+		bridgeCfg.LifecycleQueuePath = viper.GetString(FlagWaldurLifecycleQueuePath)
+		bridgeCfg.LifecycleQueueWorkerCount = viper.GetInt(FlagWaldurLifecycleQueueWorkers)
+		bridgeCfg.LifecycleQueueMaxRetries = viper.GetInt(FlagWaldurLifecycleQueueMaxRetries)
+		bridgeCfg.LifecycleQueueRetryBackoff = viper.GetDuration(FlagWaldurLifecycleQueueRetryBackoff)
+		bridgeCfg.LifecycleQueueMaxBackoff = viper.GetDuration(FlagWaldurLifecycleQueueMaxBackoff)
+		bridgeCfg.LifecycleQueuePollInterval = viper.GetDuration(FlagWaldurLifecycleQueuePollInterval)
+		bridgeCfg.LifecycleQueueReconcileInterval = viper.GetDuration(FlagWaldurLifecycleQueueReconcileInterval)
+		bridgeCfg.LifecycleQueueReconcileOnStart = viper.GetBool(FlagWaldurLifecycleQueueReconcileOnStart)
+		bridgeCfg.LifecycleQueueStaleAfter = viper.GetDuration(FlagWaldurLifecycleQueueStaleAfter)
 
 		waldurBridge, err := provider_daemon.NewWaldurBridge(bridgeCfg, keyManager, callbackSink, usageReporter)
 		if err != nil {
