@@ -5496,9 +5496,10 @@ async function triggerTaskPlannerViaKanban(
     // Double-check status client-side — VK API filter may not work reliably
     if (t.status && t.status !== "todo") return false;
     const title = (t.title || "").toLowerCase();
-    // Only match the exact title format we create: "Plan next tasks (...)"
+    // Match both old format "Plan next tasks (...)" and new "[xs] Plan next tasks (...)"
+    const stripped = title.replace(/^\[(?:xs|s|m|l|xl|xxl)\]\s*/i, "");
     return (
-      title.startsWith("plan next tasks") || title.startsWith("plan next phase")
+      stripped.startsWith("plan next tasks") || stripped.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
@@ -5524,7 +5525,7 @@ async function triggerTaskPlannerViaKanban(
 
   const plannerPrompt = agentPrompts.planner;
   const taskBody = {
-    title: `Plan next tasks (${reason || "backlog-empty"})`,
+    title: `[xs] Plan next tasks (${reason || "backlog-empty"})`,
     description: [
       "## Task Planner — Auto-created by codex-monitor",
       "",
@@ -5541,6 +5542,8 @@ async function triggerTaskPlannerViaKanban(
       "- Look at open issues for inspiration",
       `- Create ${numTasks} well-scoped tasks in vibe-kanban`,
       "- Each task should be completable by a single agent in 1-4 hours",
+      "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
+      "  This drives automatic complexity-based model routing for task execution.",
     ].join("\n"),
     status: "todo",
     project_id: projectId,
