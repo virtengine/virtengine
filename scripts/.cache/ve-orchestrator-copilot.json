@@ -30,11 +30,11 @@
       "copilot_pr": 592,
       "requested_at": "2026-02-08T16:26:42Z"
     },
-    "602": {
+    "581": {
       "merged_at": null,
-      "requested_at": "2026-02-08T18:06:17Z",
       "completed": true,
-      "copilot_pr": 602
+      "copilot_pr": 588,
+      "requested_at": "2026-02-08T17:34:14Z"
     },
     "586": {
       "merged_at": null,
@@ -48,15 +48,15 @@
       "copilot_pr": 588,
       "requested_at": "2026-02-08T15:30:24Z"
     },
-    "581": {
+    "602": {
       "merged_at": null,
+      "requested_at": "2026-02-08T18:06:17Z",
       "completed": true,
-      "copilot_pr": 588,
-      "requested_at": "2026-02-08T17:34:14Z"
+      "copilot_pr": 602
     },
     "583": {
       "merged_at": null,
-      "completed": false,
+      "completed": true,
       "copilot_pr": 583,
       "requested_at": "2026-02-08T14:14:54Z"
     }

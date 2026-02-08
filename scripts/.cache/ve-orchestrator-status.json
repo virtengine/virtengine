@@ -1,0 +1,100 @@
+{
+  "review_tasks": [
+    "18631227-3a02-4b6b-8e44-a4c2834db4de"
+  ],
+  "slot_metrics": {
+    "workstation_busy": 4,
+    "total_idle_seconds": 0.0,
+    "utilization_percent": 100.0,
+    "workstation_capacity": 3,
+    "cumulative_utilization_pct": 0,
+    "idle_slots": 0.0,
+    "total_capacity_seconds": 0.0,
+    "capacity_slots": 3.0,
+    "sampled_at": "2026-02-09T06:22:55.8102527+11:00",
+    "workstation_available": 0,
+    "active_slots": 3.0
+  },
+  "backlog_remaining": 10,
+  "updated_at": "2026-02-09T06:22:55.9017003+11:00",
+  "success_metrics": {
+    "failed": 0,
+    "needed_fix": 0,
+    "first_shot_rate": 0,
+    "first_shot_success": 0
+  },
+  "tasks_submitted": 0,
+  "tasks_completed": 0,
+  "attempts": {
+    "40fac89b-7d86-4a13-b4d1-6718cc41d416": {
+      "updated_at": "2026-02-09T06:22:55.8235094+11:00",
+      "copilot_fix_requested": true,
+      "task_id": "18631227-3a02-4b6b-8e44-a4c2834db4de",
+      "branch": "ve/40fa-m-interactive-co",
+      "copilot_fix_pr_number": 588,
+      "last_process_status": "completed",
+      "pr_number": 581,
+      "status": "review",
+      "executor": null,
+      "executor_variant": null,
+      "target_branch": null,
+      "copilot_fix_merged": true
+    },
+    "359ff7b3-220f-4c12-914e-73ce52ecfbb9": {
+      "updated_at": "2026-02-09T06:22:55.8255369+11:00",
+      "copilot_fix_requested": false,
+      "task_id": "b0b35c56-e488-4428-945f-ad3a797c861d",
+      "branch": "ve/359f-docs-portal-adr",
+      "copilot_fix_pr_number": null,
+      "last_process_status": "running",
+      "pr_number": null,
+      "status": "running",
+      "executor": null,
+      "executor_variant": null,
+      "target_branch": null,
+      "copilot_fix_merged": false
+    },
+    "0f9fe2de-78ab-4a92-b05b-e3f64551b897": {
+      "updated_at": "2026-02-09T06:22:55.8261842+11:00",
+      "copilot_fix_requested": false,
+      "task_id": "5630ca88-6e2f-460c-b205-053df699fe46",
+      "branch": "ve/0f9f-p2-feat-access-r",
+      "copilot_fix_pr_number": null,
+      "last_process_status": "running",
+      "pr_number": null,
+      "status": "running",
+      "executor": null,
+      "executor_variant": null,
+      "target_branch": null,
+      "copilot_fix_merged": false
+    },
+    "2832cae3-7ee3-4b44-8632-43bf8ca2f798": {
+      "updated_at": "2026-02-09T06:22:55.8267045+11:00",
+      "copilot_fix_requested": false,
+      "task_id": "d3e58ff7-cc7f-4354-8176-28354d3c165b",
+      "branch": "ve/2832-p1-test-e2e-iden",
+      "copilot_fix_pr_number": null,
+      "last_process_status": "running",
+      "pr_number": null,
+      "status": "running",
+      "executor": null,
+      "executor_variant": null,
+      "target_branch": null,
+      "copilot_fix_merged": false
+    }
+  },
+  "total_tasks_completed": 2,
+  "submitted_tasks": [],
+  "followup_events": [],
+  "completed_tasks": [],
+  "error_tasks": [],
+  "counts": {
+    "manual_review": 0,
+    "review": 1,
+    "running": 3,
+    "other": 0,
+    "error": 0
+  },
+  "manual_review_tasks": [],
+  "copilot_requests": []
+}

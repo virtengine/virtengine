@@ -2714,6 +2714,37 @@ function Invoke-DirectRebase {
     }
 }
 
+# ── VK rebase fallback ──────────────────────────────────────────────────────
+function Rebase-VKAttempt {
+    <#
+    .SYNOPSIS
+        Request a server-side rebase for an attempt via ve-kanban.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AttemptId,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+
+    if (-not (Get-Command Invoke-VKRebase -ErrorAction SilentlyContinue)) {
+        Write-Log "VK rebase unavailable (Invoke-VKRebase not loaded) for attempt $AttemptId" -Level "WARN"
+        return $false
+    }
+
+    try {
+        $result = Invoke-VKRebase -AttemptId $AttemptId -BaseBranch $BaseBranch
+        if ($result) {
+            Write-Log "VK rebase requested for attempt $AttemptId" -Level "INFO"
+            return $true
+        }
+    }
+    catch {
+        Write-Log "VK rebase failed for attempt ${AttemptId}: $($_.Exception.Message)" -Level "WARN"
+    }
+
+    return $false
+}
+
 # ── Auto-resolvable file patterns for rebase conflicts ────────────────────
 $script:AutoResolveTheirs = @(
     "pnpm-lock.yaml",

@@ -81,3 +81,4 @@ scripts/codex-monitor/logs/*
 scripts/codex-monitor/codex-monitor.config.json
 scripts/codex-monitor/.codex-monitor.json
 scripts/codex-monitor/codex-monitor.json
+scripts/.cache/ve-orchestrator-copilot.json
