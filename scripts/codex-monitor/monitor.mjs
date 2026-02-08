@@ -5140,7 +5140,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 // ── Singleton guard: prevent ghost monitors ─────────────────────────────────
-if (!acquireMonitorLock(config.cacheDir)) {
+if (!process.env.VITEST && !acquireMonitorLock(config.cacheDir)) {
   process.exit(1);
 }
 
@@ -5283,3 +5283,6 @@ injectMonitorFunctions({
 if (telegramBotEnabled) {
   void startTelegramBot();
 }
+
+// ── Named exports for testing ───────────────────────────────────────────────
+export { fetchVk, updateTaskStatus };
