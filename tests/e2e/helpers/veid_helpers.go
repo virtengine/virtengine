@@ -216,6 +216,28 @@ func DefaultFaceVideoUploadParams(scopeID string) ScopeUploadParams {
 	}
 }
 
+// DefaultEmailProofUploadParams returns default parameters for email proof scope upload
+func DefaultEmailProofUploadParams(scopeID string) ScopeUploadParams {
+	return ScopeUploadParams{
+		ScopeID:           scopeID,
+		ScopeType:         veidtypes.ScopeTypeEmailProof,
+		Salt:              bytes.Repeat([]byte{0x4d}, 16),
+		DeviceFingerprint: TestDeviceFingerprint,
+		CaptureTimestamp:  TestBlockTimeUnix,
+	}
+}
+
+// DefaultDomainVerifyUploadParams returns default parameters for domain verification scope upload
+func DefaultDomainVerifyUploadParams(scopeID string) ScopeUploadParams {
+	return ScopeUploadParams{
+		ScopeID:           scopeID,
+		ScopeType:         veidtypes.ScopeTypeDomainVerify,
+		Salt:              bytes.Repeat([]byte{0x5e}, 16),
+		DeviceFingerprint: TestDeviceFingerprint,
+		CaptureTimestamp:  TestBlockTimeUnix,
+	}
+}
+
 // UploadScope uploads an encrypted scope for a customer
 func UploadScope(
 	t *testing.T,
