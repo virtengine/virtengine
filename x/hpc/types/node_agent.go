@@ -258,6 +258,84 @@ type NodeHealth struct {
 	SLURMState string `json:"slurm_state,omitempty"`
 }
 
+// NodeHardware contains node hardware details
+type NodeHardware struct {
+	// CPUModel is the CPU model
+	CPUModel string `json:"cpu_model,omitempty"`
+
+	// CPUVendor is the CPU vendor
+	CPUVendor string `json:"cpu_vendor,omitempty"`
+
+	// CPUArch is the CPU architecture
+	CPUArch string `json:"cpu_arch,omitempty"`
+
+	// Sockets is the number of CPU sockets
+	Sockets int32 `json:"sockets,omitempty"`
+
+	// CoresPerSocket is the number of cores per socket
+	CoresPerSocket int32 `json:"cores_per_socket,omitempty"`
+
+	// ThreadsPerCore is the number of threads per core
+	ThreadsPerCore int32 `json:"threads_per_core,omitempty"`
+
+	// MemoryType is the memory type (e.g. DDR5)
+	MemoryType string `json:"memory_type,omitempty"`
+
+	// MemorySpeedMHz is the memory speed in MHz
+	MemorySpeedMHz int32 `json:"memory_speed_mhz,omitempty"`
+
+	// GPUModel is the GPU model
+	GPUModel string `json:"gpu_model,omitempty"`
+
+	// GPUMemoryGB is the GPU memory in GB
+	GPUMemoryGB int32 `json:"gpu_memory_gb,omitempty"`
+
+	// StorageType is the storage type (e.g. NVMe)
+	StorageType string `json:"storage_type,omitempty"`
+
+	// Features is the list of hardware features
+	Features []string `json:"features,omitempty"`
+}
+
+// NodeTopology describes node topology
+type NodeTopology struct {
+	// NUMANodes is the number of NUMA nodes
+	NUMANodes int32 `json:"numa_nodes,omitempty"`
+
+	// NUMAMemoryGB is the total NUMA memory in GB
+	NUMAMemoryGB int32 `json:"numa_memory_gb,omitempty"`
+
+	// Interconnect is the interconnect type (e.g. infiniband)
+	Interconnect string `json:"interconnect,omitempty"`
+
+	// NetworkFabric is the network fabric type
+	NetworkFabric string `json:"network_fabric,omitempty"`
+
+	// TopologyHint contains optional topology hints
+	TopologyHint string `json:"topology_hint,omitempty"`
+}
+
+// NodeLocality describes node locality
+type NodeLocality struct {
+	// Region is the geographic region
+	Region string `json:"region,omitempty"`
+
+	// Datacenter is the datacenter identifier
+	Datacenter string `json:"datacenter,omitempty"`
+
+	// Zone is the availability zone
+	Zone string `json:"zone,omitempty"`
+
+	// Rack is the rack identifier
+	Rack string `json:"rack,omitempty"`
+
+	// Row is the row identifier
+	Row string `json:"row,omitempty"`
+
+	// Position is the position in rack/row
+	Position string `json:"position,omitempty"`
+}
+
 // NodeLatency contains latency measurements
 type NodeLatency struct {
 	// Measurements contains latency measurements to other nodes

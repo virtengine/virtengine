@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,6 +30,10 @@ type AgentConfig struct {
 	Hostname          string
 	Region            string
 	Datacenter        string
+	Zone              string
+	Rack              string
+	Row               string
+	Position          string
 	LatencyTargets    []string
 }
 
@@ -41,6 +47,8 @@ type Agent struct {
 	wg               sync.WaitGroup
 	running          int32
 }
+
+const agentVersion = "0.1.0"
 
 // NewAgent creates a new node agent
 func NewAgent(config AgentConfig) *Agent {
@@ -58,6 +66,10 @@ func NewAgent(config AgentConfig) *Agent {
 func (a *Agent) Start(ctx context.Context) error {
 	if !atomic.CompareAndSwapInt32(&a.running, 0, 1) {
 		return fmt.Errorf("agent already running")
+	}
+
+	if err := a.registerNode(ctx); err != nil {
+		fmt.Printf("[REGISTER] Error registering node: %v\n", err)
 	}
 
 	a.wg.Add(1)
@@ -152,7 +164,7 @@ func (a *Agent) buildHeartbeat() (*NodeHeartbeat, error) {
 		ClusterID:      a.config.ClusterID,
 		SequenceNumber: a.sequenceNumber,
 		Timestamp:      time.Now().UTC(),
-		AgentVersion:   "0.1.0",
+		AgentVersion:   agentVersion,
 		Capacity:       *capacity,
 		Health:         *health,
 		Latency:        *latency,
@@ -239,6 +251,110 @@ func (a *Agent) submitHeartbeat(ctx context.Context, heartbeat *NodeHeartbeat, a
 	return &response, nil
 }
 
+func (a *Agent) registerNode(ctx context.Context) error {
+	registration, err := a.buildRegistration()
+	if err != nil {
+		return err
+	}
+	return a.submitRegistration(ctx, registration)
+}
+
+func (a *Agent) buildRegistration() (*NodeRegistrationRequest, error) {
+	hardware, err := a.metricsCollector.CollectHardware()
+	if err != nil {
+		return nil, err
+	}
+
+	capacity, err := a.metricsCollector.CollectCapacity()
+	if err != nil {
+		return nil, err
+	}
+
+	health, err := a.metricsCollector.CollectHealth()
+	if err != nil {
+		return nil, err
+	}
+
+	locality := &NodeLocality{
+		Region:     a.config.Region,
+		Datacenter: a.config.Datacenter,
+		Zone:       a.config.Zone,
+		Rack:       a.config.Rack,
+		Row:        a.config.Row,
+		Position:   a.config.Position,
+	}
+
+	agentPubkey := base64.StdEncoding.EncodeToString(a.config.PublicKey)
+	fingerprint := computeHardwareFingerprint(capacity, hardware)
+
+	return &NodeRegistrationRequest{
+		NodeID:              a.config.NodeID,
+		ClusterID:           a.config.ClusterID,
+		ProviderAddress:     a.config.ProviderAddress,
+		AgentPubkey:         agentPubkey,
+		Hostname:            a.config.Hostname,
+		HardwareFingerprint: fingerprint,
+		AgentVersion:        agentVersion,
+		Region:              a.config.Region,
+		Datacenter:          a.config.Datacenter,
+		Capacity:            capacity,
+		Health:              health,
+		Hardware:            hardware,
+		Locality:            locality,
+	}, nil
+}
+
+func (a *Agent) submitRegistration(ctx context.Context, registration *NodeRegistrationRequest) error {
+	if registration == nil {
+		return fmt.Errorf("registration is nil")
+	}
+
+	data, err := json.Marshal(registration)
+	if err != nil {
+		return fmt.Errorf("failed to marshal registration: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/v1/hpc/nodes/register", a.config.ProviderDaemonURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create registration request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("registration request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("registration failed: HTTP %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func computeHardwareFingerprint(capacity *NodeCapacity, hardware *NodeHardware) string {
+	h := sha256.New()
+	if hardware != nil {
+		h.Write([]byte(hardware.CPUModel))
+		h.Write([]byte(hardware.CPUVendor))
+		h.Write([]byte(hardware.CPUArch))
+		h.Write([]byte(hardware.GPUModel))
+		h.Write([]byte(hardware.StorageType))
+	}
+	if capacity != nil {
+		_, _ = fmt.Fprintf(h, "%d/%d/%d/%d",
+			capacity.CPUCoresTotal,
+			capacity.MemoryGBTotal,
+			capacity.GPUsTotal,
+			capacity.StorageGBTotal,
+		)
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func (a *Agent) processCommand(cmd NodeCommand) {
 	fmt.Printf("[COMMAND] Received: %s (%s)\n", cmd.Type, cmd.CommandID)
 
@@ -321,6 +437,41 @@ type NodeHealth struct {
 	SLURMState                  string `json:"slurm_state,omitempty"`
 }
 
+// NodeHardware contains node hardware details
+type NodeHardware struct {
+	CPUModel       string   `json:"cpu_model,omitempty"`
+	CPUVendor      string   `json:"cpu_vendor,omitempty"`
+	CPUArch        string   `json:"cpu_arch,omitempty"`
+	Sockets        int32    `json:"sockets,omitempty"`
+	CoresPerSocket int32    `json:"cores_per_socket,omitempty"`
+	ThreadsPerCore int32    `json:"threads_per_core,omitempty"`
+	MemoryType     string   `json:"memory_type,omitempty"`
+	MemorySpeedMHz int32    `json:"memory_speed_mhz,omitempty"`
+	GPUModel       string   `json:"gpu_model,omitempty"`
+	GPUMemoryGB    int32    `json:"gpu_memory_gb,omitempty"`
+	StorageType    string   `json:"storage_type,omitempty"`
+	Features       []string `json:"features,omitempty"`
+}
+
+// NodeTopology describes node topology
+type NodeTopology struct {
+	NUMANodes     int32  `json:"numa_nodes,omitempty"`
+	NUMAMemoryGB  int32  `json:"numa_memory_gb,omitempty"`
+	Interconnect  string `json:"interconnect,omitempty"`
+	NetworkFabric string `json:"network_fabric,omitempty"`
+	TopologyHint  string `json:"topology_hint,omitempty"`
+}
+
+// NodeLocality describes node locality
+type NodeLocality struct {
+	Region     string `json:"region,omitempty"`
+	Datacenter string `json:"datacenter,omitempty"`
+	Zone       string `json:"zone,omitempty"`
+	Rack       string `json:"rack,omitempty"`
+	Row        string `json:"row,omitempty"`
+	Position   string `json:"position,omitempty"`
+}
+
 // NodeLatency contains latency measurements
 type NodeLatency struct {
 	Measurements      []LatencyProbe `json:"measurements,omitempty"`
@@ -360,6 +511,24 @@ type HeartbeatAuth struct {
 	Signature string `json:"signature"`
 	Nonce     string `json:"nonce"`
 	Timestamp int64  `json:"timestamp,omitempty"`
+}
+
+// NodeRegistrationRequest is the registration payload
+type NodeRegistrationRequest struct {
+	NodeID              string        `json:"node_id"`
+	ClusterID           string        `json:"cluster_id"`
+	ProviderAddress     string        `json:"provider_address"`
+	AgentPubkey         string        `json:"agent_pubkey"`
+	Hostname            string        `json:"hostname,omitempty"`
+	HardwareFingerprint string        `json:"hardware_fingerprint,omitempty"`
+	AgentVersion        string        `json:"agent_version,omitempty"`
+	Region              string        `json:"region,omitempty"`
+	Datacenter          string        `json:"datacenter,omitempty"`
+	Capacity            *NodeCapacity `json:"capacity,omitempty"`
+	Health              *NodeHealth   `json:"health,omitempty"`
+	Hardware            *NodeHardware `json:"hardware,omitempty"`
+	Topology            *NodeTopology `json:"topology,omitempty"`
+	Locality            *NodeLocality `json:"locality,omitempty"`
 }
 
 // HeartbeatResponse is the response to a heartbeat

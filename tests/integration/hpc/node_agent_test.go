@@ -34,7 +34,10 @@ func TestNodeAgentHeartbeatFlow(t *testing.T) {
 	config.BatchSubmitInterval = 5 * time.Second
 	config.HeartbeatTimeout = 10 * time.Second
 
-	aggregator := provider_daemon.NewHPCNodeAggregator(config, nil)
+	aggregator, err := provider_daemon.NewHPCNodeAggregator(config, nil)
+	if err != nil {
+		t.Fatalf("failed to create aggregator: %v", err)
+	}
 
 	// Start aggregator
 	if err := aggregator.Start(ctx); err != nil {
@@ -149,7 +152,10 @@ func TestHeartbeatMonitor(t *testing.T) {
 // TestNodeAggregatorHeartbeatValidation tests heartbeat validation in the aggregator.
 func TestNodeAggregatorHeartbeatValidation(t *testing.T) {
 	config := provider_daemon.DefaultHPCNodeAggregatorConfig()
-	aggregator := provider_daemon.NewHPCNodeAggregator(config, nil)
+	aggregator, err := provider_daemon.NewHPCNodeAggregator(config, nil)
+	if err != nil {
+		t.Fatalf("failed to create aggregator: %v", err)
+	}
 
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

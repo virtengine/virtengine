@@ -9,6 +9,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
@@ -61,24 +62,48 @@ type WaldurBridgeConfig struct {
 	OfferingSyncMaxRetries int
 	// OfferingSyncReconcileOnStartup triggers full reconciliation on start (default: true).
 	OfferingSyncReconcileOnStartup bool
+
+	// VE-34E: Durable lifecycle command queue configuration
+	LifecycleQueueEnabled           bool
+	LifecycleQueueBackend           string
+	LifecycleQueuePath              string
+	LifecycleQueueWorkerCount       int
+	LifecycleQueueMaxRetries        int
+	LifecycleQueueRetryBackoff      time.Duration
+	LifecycleQueueMaxBackoff        time.Duration
+	LifecycleQueuePollInterval      time.Duration
+	LifecycleQueueReconcileInterval time.Duration
+	LifecycleQueueReconcileOnStart  bool
+	LifecycleQueueStaleAfter        time.Duration
 }
 
 // DefaultWaldurBridgeConfig returns a default configuration.
 func DefaultWaldurBridgeConfig() WaldurBridgeConfig {
 	return WaldurBridgeConfig{
-		EventBuffer:                    100,
-		CallbackTTL:                    time.Hour,
-		OperationTimeout:               45 * time.Second,
-		HealthCheckOnStart:             true,
-		HealthCheckTimeout:             15 * time.Second,
-		CallbackSinkDir:                "data/callbacks",
-		StateFile:                      "data/waldur_bridge_state.json",
-		CheckpointFile:                 "data/marketplace_checkpoint.json",
-		CometWS:                        "/websocket",
-		OfferingSyncStateFile:          "data/offering_sync_state.json",
-		OfferingSyncInterval:           300,
-		OfferingSyncMaxRetries:         5,
-		OfferingSyncReconcileOnStartup: true,
+		EventBuffer:                     100,
+		CallbackTTL:                     time.Hour,
+		OperationTimeout:                45 * time.Second,
+		HealthCheckOnStart:              true,
+		HealthCheckTimeout:              15 * time.Second,
+		CallbackSinkDir:                 "data/callbacks",
+		StateFile:                       "data/waldur_bridge_state.json",
+		CheckpointFile:                  "data/marketplace_checkpoint.json",
+		CometWS:                         "/websocket",
+		OfferingSyncStateFile:           "data/offering_sync_state.json",
+		OfferingSyncInterval:            300,
+		OfferingSyncMaxRetries:          5,
+		OfferingSyncReconcileOnStartup:  true,
+		LifecycleQueueEnabled:           true,
+		LifecycleQueueBackend:           "badger",
+		LifecycleQueuePath:              "data/lifecycle_queue",
+		LifecycleQueueWorkerCount:       2,
+		LifecycleQueueMaxRetries:        5,
+		LifecycleQueueRetryBackoff:      10 * time.Second,
+		LifecycleQueueMaxBackoff:        5 * time.Minute,
+		LifecycleQueuePollInterval:      2 * time.Second,
+		LifecycleQueueReconcileInterval: 5 * time.Minute,
+		LifecycleQueueReconcileOnStart:  true,
+		LifecycleQueueStaleAfter:        20 * time.Minute,
 	}
 }
 
@@ -94,10 +119,15 @@ type WaldurBridge struct {
 	checkpoint      *EventCheckpointState
 	waldurClient    *waldur.Client
 	marketplace     *waldur.MarketplaceClient
+	lifecycleClient *waldur.LifecycleClient
 	rpcClient       *rpchttp.HTTP
+	stateMu         sync.RWMutex
 
 	// VE-2D: Offering sync worker for automatic chain-to-Waldur synchronization
 	offeringSyncWorker *OfferingSyncWorker
+
+	// VE-34E: Durable lifecycle queue
+	lifecycleQueue *LifecycleCommandQueue
 }
 
 // NewWaldurBridge creates a Waldur bridge instance.
@@ -202,12 +232,60 @@ func (b *WaldurBridge) Start(ctx context.Context) error {
 	}
 	b.waldurClient = waldurClient
 	b.marketplace = waldur.NewMarketplaceClient(waldurClient)
+	b.lifecycleClient = waldur.NewLifecycleClient(b.marketplace)
 	if b.cfg.HealthCheckOnStart {
 		healthCtx, cancel := context.WithTimeout(ctx, b.cfg.HealthCheckTimeout)
 		defer cancel()
 		if err := b.waldurClient.HealthCheck(healthCtx); err != nil {
 			return fmt.Errorf("waldur health check failed: %w", err)
 		}
+	}
+
+	if b.cfg.LifecycleQueueEnabled {
+		queueCfg := DefaultLifecycleCommandQueueConfig()
+		queueCfg.Enabled = true
+		queueCfg.Backend = b.cfg.LifecycleQueueBackend
+		queueCfg.Path = b.cfg.LifecycleQueuePath
+		queueCfg.WorkerCount = b.cfg.LifecycleQueueWorkerCount
+		queueCfg.MaxRetries = b.cfg.LifecycleQueueMaxRetries
+		queueCfg.RetryBackoff = b.cfg.LifecycleQueueRetryBackoff
+		queueCfg.MaxBackoff = b.cfg.LifecycleQueueMaxBackoff
+		queueCfg.PollInterval = b.cfg.LifecycleQueuePollInterval
+		queueCfg.ReconcileInterval = b.cfg.LifecycleQueueReconcileInterval
+		queueCfg.ReconcileOnStart = b.cfg.LifecycleQueueReconcileOnStart
+		queueCfg.StaleAfter = b.cfg.LifecycleQueueStaleAfter
+		queueCfg.ExecuteTimeout = b.cfg.OperationTimeout
+
+		var store LifecycleCommandStore
+		backend := strings.ToLower(queueCfg.Backend)
+		switch backend {
+		case "", "badger":
+			store, err = OpenBadgerLifecycleCommandStore(queueCfg.Path, queueCfg.InMemory)
+		default:
+			return fmt.Errorf("unsupported lifecycle queue backend: %s", queueCfg.Backend)
+		}
+		if err != nil {
+			return fmt.Errorf("open lifecycle command store: %w", err)
+		}
+		executor := NewWaldurLifecycleCommandExecutor(b.lifecycleClient)
+
+		queue, err := NewLifecycleCommandQueue(
+			queueCfg,
+			store,
+			executor,
+			b.resolveResourceUUID,
+			b.sendLifecycleCommandCallback,
+			nil,
+		)
+		if err != nil {
+			return fmt.Errorf("create lifecycle command queue: %w", err)
+		}
+
+		if err := queue.Start(ctx); err != nil {
+			return fmt.Errorf("start lifecycle command queue: %w", err)
+		}
+		b.lifecycleQueue = queue
+		log.Printf("[waldur-bridge] lifecycle command queue started")
 	}
 
 	// VE-2D: Start offering sync worker if enabled
@@ -261,6 +339,9 @@ func (b *WaldurBridge) Start(ctx context.Context) error {
 			// VE-2D: Stop offering sync worker on shutdown
 			if b.offeringSyncWorker != nil {
 				_ = b.offeringSyncWorker.Stop()
+			}
+			if b.lifecycleQueue != nil {
+				b.lifecycleQueue.Stop()
 			}
 			return ctx.Err()
 		case msg := <-sub:
@@ -355,7 +436,9 @@ func (b *WaldurBridge) handleTerminateRequested(ctx context.Context, event marke
 		return nil
 	}
 
+	b.stateMu.RLock()
 	mapping := b.state.Mappings[event.AllocationID]
+	b.stateMu.RUnlock()
 	if mapping == nil {
 		return fmt.Errorf("no mapping for allocation %s", event.AllocationID)
 	}
@@ -398,7 +481,9 @@ func (b *WaldurBridge) handleUsageUpdateRequested(ctx context.Context, event mar
 		return nil
 	}
 
+	b.stateMu.RLock()
 	mapping := b.state.Mappings[event.AllocationID]
+	b.stateMu.RUnlock()
 	if mapping != nil && mapping.ResourceUUID == "" {
 		mapping = b.refreshAllocationMapping(ctx, mapping)
 	}
@@ -478,7 +563,11 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 		return nil
 	}
 
+	b.stateMu.RLock()
+	b.stateMu.RLock()
 	mapping := b.state.Mappings[event.AllocationID]
+	b.stateMu.RUnlock()
+	b.stateMu.RUnlock()
 	if mapping == nil {
 		return fmt.Errorf("no mapping for allocation %s", event.AllocationID)
 	}
@@ -490,13 +579,17 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 		}
 	}
 
-	// Map lifecycle action to Waldur action
+	if b.lifecycleQueue != nil {
+		_, err := b.lifecycleQueue.EnqueueFromEvent(ctx, event, mapping.ResourceUUID)
+		return err
+	}
+
+	// Fallback: execute immediately when queue is disabled.
 	waldurAction := mapLifecycleActionToWaldur(event.Action)
 	if waldurAction == "" {
 		return fmt.Errorf("unsupported lifecycle action: %s", event.Action)
 	}
 
-	// Execute lifecycle action via Waldur
 	opCtx, cancel := b.operationContext(ctx)
 	defer cancel()
 
@@ -512,16 +605,15 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "suspend", event)
 	case marketplace.LifecycleActionResume:
 		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resume", event)
+	case marketplace.LifecycleActionResize:
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resize", event)
 	case marketplace.LifecycleActionTerminate:
-		attrs := map[string]interface{}{
-			"operation_id": event.OperationID,
-		}
+		attrs := map[string]interface{}{"operation_id": event.OperationID}
 		err = b.marketplace.TerminateResource(opCtx, mapping.ResourceUUID, attrs)
 	default:
 		return fmt.Errorf("unsupported lifecycle action: %s", event.Action)
 	}
 
-	// Create callback with result
 	callback := marketplace.NewWaldurCallbackAt(
 		marketplace.WaldurActionType(waldurAction),
 		mapping.ResourceUUID,
@@ -538,7 +630,7 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 	)
 
 	if err != nil {
-		callback.Payload["state"] = "failed"
+		callback.Payload["state"] = string(HPCJobStateFailed)
 		callback.Payload["error"] = err.Error()
 		log.Printf("[waldur-bridge] lifecycle action %s failed for allocation %s: %v",
 			event.Action, event.AllocationID, err)
@@ -672,7 +764,9 @@ func (b *WaldurBridge) operationContext(parent context.Context) (context.Context
 }
 
 func (b *WaldurBridge) ensureAllocationMapping(ctx context.Context, event marketplace.AllocationCreatedEvent) (*WaldurAllocationMapping, error) {
+	b.stateMu.RLock()
 	existing := b.state.Mappings[event.AllocationID]
+	b.stateMu.RUnlock()
 	if existing != nil {
 		return b.refreshAllocationMapping(ctx, existing), nil
 	}
@@ -749,8 +843,11 @@ func (b *WaldurBridge) ensureAllocationMapping(ctx context.Context, event market
 		OfferingUUID: waldurOfferingUUID,
 		UpdatedAt:    time.Now().UTC(),
 	}
+	b.stateMu.Lock()
 	b.state.Mappings[event.AllocationID] = mapping
-	if err := b.stateStore.Save(b.state); err != nil {
+	err = b.stateStore.Save(b.state)
+	b.stateMu.Unlock()
+	if err != nil {
 		return nil, fmt.Errorf("save mapping: %w", err)
 	}
 
@@ -771,10 +868,78 @@ func (b *WaldurBridge) refreshAllocationMapping(ctx context.Context, mapping *Wa
 	if order.ResourceUUID != "" && order.ResourceUUID != mapping.ResourceUUID {
 		mapping.ResourceUUID = order.ResourceUUID
 		mapping.UpdatedAt = time.Now().UTC()
+		b.stateMu.Lock()
 		b.state.Mappings[mapping.AllocationID] = mapping
 		_ = b.stateStore.Save(b.state)
+		b.stateMu.Unlock()
 	}
 	return mapping
+}
+
+func (b *WaldurBridge) resolveResourceUUID(ctx context.Context, allocationID string) (string, error) {
+	if allocationID == "" {
+		return "", fmt.Errorf("allocation ID is required")
+	}
+	b.stateMu.RLock()
+	mapping := b.state.Mappings[allocationID]
+	b.stateMu.RUnlock()
+	if mapping == nil {
+		return "", fmt.Errorf("no mapping for allocation %s", allocationID)
+	}
+	if mapping.ResourceUUID == "" {
+		mapping = b.refreshAllocationMapping(ctx, mapping)
+	}
+	if mapping == nil || mapping.ResourceUUID == "" {
+		return "", fmt.Errorf("resource UUID not available for allocation %s", allocationID)
+	}
+	return mapping.ResourceUUID, nil
+}
+
+func (b *WaldurBridge) sendLifecycleCommandCallback(ctx context.Context, cmd *LifecycleCommand, err error) error {
+	if cmd == nil {
+		return fmt.Errorf("command is nil")
+	}
+	resourceUUID := cmd.ResourceUUID
+	if resourceUUID == "" {
+		resolved, resolveErr := b.resolveResourceUUID(ctx, cmd.AllocationID)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		resourceUUID = resolved
+	}
+
+	waldurAction := mapLifecycleActionToWaldur(cmd.Action)
+	if waldurAction == "" {
+		return fmt.Errorf("unsupported lifecycle action: %s", cmd.Action)
+	}
+
+	callback := marketplace.NewWaldurCallbackAt(
+		marketplace.WaldurActionType(waldurAction),
+		resourceUUID,
+		marketplace.SyncTypeAllocation,
+		cmd.AllocationID,
+		time.Now().UTC(),
+	)
+	callback.SignerID = b.cfg.ProviderAddress
+	callback.ExpiresAt = callback.Timestamp.Add(b.cfg.CallbackTTL)
+
+	operationID := cmd.OperationID
+	if operationID == "" {
+		operationID = cmd.ID
+	}
+	callback.Payload["operation_id"] = operationID
+	callback.Payload["action"] = string(cmd.Action)
+	callback.Payload["idempotency_key"] = cmd.IdempotencyKey
+
+	if err != nil {
+		callback.Payload["state"] = string(HPCJobStateFailed)
+		callback.Payload["error"] = err.Error()
+	} else {
+		callback.Payload["state"] = string(HPCJobStateCompleted)
+		callback.Payload["target_state"] = cmd.TargetState.String()
+	}
+
+	return b.signAndSubmitCallback(ctx, callback)
 }
 
 func hoursFromMilliSeconds(ms int64) float64 {

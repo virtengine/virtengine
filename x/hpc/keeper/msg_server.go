@@ -408,6 +408,8 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 	}
 
 	// Create/update node metadata
+	state := nodeStateFromProto(msg.State, msg.Active)
+	healthStatus := healthStatusFromProto(msg.HealthStatus, msg.Health)
 	node := &types.NodeMetadata{
 		NodeID:               msg.NodeId,
 		ClusterID:            msg.ClusterId,
@@ -419,7 +421,18 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 		Resources:            nodeResourcesFromProto(msg.Resources),
 		LastHeartbeat:        ctx.BlockTime(),
 		UpdatedAt:            ctx.BlockTime(),
-		Active:               msg.Active,
+		Active:               resolveActiveFlag(msg.Active, state),
+		State:                state,
+		HealthStatus:         healthStatus,
+		AgentPubkey:          msg.AgentPubkey,
+		HardwareFingerprint:  msg.HardwareFingerprint,
+		AgentVersion:         msg.AgentVersion,
+		LastSequenceNumber:   msg.LastSequenceNumber,
+		Capacity:             nodeCapacityFromProto(msg.Capacity),
+		Health:               nodeHealthFromProto(msg.Health),
+		Hardware:             nodeHardwareFromProto(msg.Hardware),
+		Topology:             nodeTopologyFromProto(msg.Topology),
+		Locality:             nodeLocalityFromProto(msg.Locality),
 	}
 
 	if err := ms.keeper.UpdateNodeMetadata(ctx, node); err != nil {
@@ -594,6 +607,66 @@ func disputeStatusFromProto(status hpcv1.DisputeStatus) types.DisputeStatus {
 	}
 }
 
+func nodeStateFromProto(state hpcv1.NodeState, active bool) types.NodeState {
+	switch state {
+	case hpcv1.NodeStateUnknown:
+		return types.NodeStateUnknown
+	case hpcv1.NodeStatePending:
+		return types.NodeStatePending
+	case hpcv1.NodeStateActive:
+		return types.NodeStateActive
+	case hpcv1.NodeStateStale:
+		return types.NodeStateStale
+	case hpcv1.NodeStateDraining:
+		return types.NodeStateDraining
+	case hpcv1.NodeStateDrained:
+		return types.NodeStateDrained
+	case hpcv1.NodeStateOffline:
+		return types.NodeStateOffline
+	case hpcv1.NodeStateDeregistered:
+		return types.NodeStateDeregistered
+	default:
+		if active {
+			return types.NodeStateActive
+		}
+		return ""
+	}
+}
+
+func resolveActiveFlag(active bool, state types.NodeState) bool {
+	if state == "" {
+		return active
+	}
+	return state == types.NodeStateActive
+}
+
+func healthStatusFromProto(status hpcv1.HealthStatus, health *hpcv1.NodeHealth) types.HealthStatus {
+	if health != nil && health.Status != hpcv1.HealthStatusUnspecified {
+		return healthStatusEnumFromProto(health.Status)
+	}
+	if status != hpcv1.HealthStatusUnspecified {
+		return healthStatusEnumFromProto(status)
+	}
+	return ""
+}
+
+func healthStatusEnumFromProto(status hpcv1.HealthStatus) types.HealthStatus {
+	switch status {
+	case hpcv1.HealthStatusHealthy:
+		return types.HealthStatusHealthy
+	case hpcv1.HealthStatusDegraded:
+		return types.HealthStatusDegraded
+	case hpcv1.HealthStatusUnhealthy:
+		return types.HealthStatusUnhealthy
+	case hpcv1.HealthStatusDraining:
+		return types.HealthStatusDraining
+	case hpcv1.HealthStatusOffline:
+		return types.HealthStatusOffline
+	default:
+		return ""
+	}
+}
+
 func clusterMetadataFromProto(meta hpcv1.ClusterMetadata) types.ClusterMetadata {
 	return types.ClusterMetadata{
 		TotalCPUCores:    meta.TotalCpuCores,
@@ -745,6 +818,99 @@ func nodeResourcesFromProto(resources *hpcv1.NodeResources) types.NodeResources 
 		GPUs:      resources.Gpus,
 		GPUType:   resources.GpuType,
 		StorageGB: resources.StorageGb,
+	}
+}
+
+func nodeCapacityFromProto(capacity *hpcv1.NodeCapacity) *types.NodeCapacity {
+	if capacity == nil {
+		return nil
+	}
+	return &types.NodeCapacity{
+		CPUCoresTotal:      capacity.CpuCoresTotal,
+		CPUCoresAvailable:  capacity.CpuCoresAvailable,
+		CPUCoresAllocated:  capacity.CpuCoresAllocated,
+		MemoryGBTotal:      capacity.MemoryGbTotal,
+		MemoryGBAvailable:  capacity.MemoryGbAvailable,
+		MemoryGBAllocated:  capacity.MemoryGbAllocated,
+		GPUsTotal:          capacity.GpusTotal,
+		GPUsAvailable:      capacity.GpusAvailable,
+		GPUsAllocated:      capacity.GpusAllocated,
+		GPUType:            capacity.GpuType,
+		StorageGBTotal:     capacity.StorageGbTotal,
+		StorageGBAvailable: capacity.StorageGbAvailable,
+		StorageGBAllocated: capacity.StorageGbAllocated,
+	}
+}
+
+func nodeHealthFromProto(health *hpcv1.NodeHealth) *types.NodeHealth {
+	if health == nil {
+		return nil
+	}
+	return &types.NodeHealth{
+		Status:                      healthStatusEnumFromProto(health.Status),
+		UptimeSeconds:               health.UptimeSeconds,
+		LoadAverage1m:               health.LoadAverage_1M,
+		LoadAverage5m:               health.LoadAverage_5M,
+		LoadAverage15m:              health.LoadAverage_15M,
+		CPUUtilizationPercent:       health.CpuUtilizationPercent,
+		MemoryUtilizationPercent:    health.MemoryUtilizationPercent,
+		GPUUtilizationPercent:       health.GpuUtilizationPercent,
+		GPUMemoryUtilizationPercent: health.GpuMemoryUtilizationPercent,
+		DiskIOUtilizationPercent:    health.DiskIoUtilizationPercent,
+		NetworkUtilizationPercent:   health.NetworkUtilizationPercent,
+		TemperatureCelsius:          health.TemperatureCelsius,
+		GPUTemperatureCelsius:       health.GpuTemperatureCelsius,
+		ErrorCount24h:               health.ErrorCount_24H,
+		WarningCount24h:             health.WarningCount_24H,
+		LastErrorMessage:            health.LastErrorMessage,
+		SLURMState:                  health.SlurmState,
+	}
+}
+
+func nodeHardwareFromProto(hardware *hpcv1.NodeHardware) *types.NodeHardware {
+	if hardware == nil {
+		return nil
+	}
+	return &types.NodeHardware{
+		CPUModel:       hardware.CpuModel,
+		CPUVendor:      hardware.CpuVendor,
+		CPUArch:        hardware.CpuArch,
+		Sockets:        hardware.Sockets,
+		CoresPerSocket: hardware.CoresPerSocket,
+		ThreadsPerCore: hardware.ThreadsPerCore,
+		MemoryType:     hardware.MemoryType,
+		MemorySpeedMHz: hardware.MemorySpeedMhz,
+		GPUModel:       hardware.GpuModel,
+		GPUMemoryGB:    hardware.GpuMemoryGb,
+		StorageType:    hardware.StorageType,
+		Features:       hardware.Features,
+	}
+}
+
+func nodeTopologyFromProto(topology *hpcv1.NodeTopology) *types.NodeTopology {
+	if topology == nil {
+		return nil
+	}
+	return &types.NodeTopology{
+		NUMANodes:     topology.NumaNodes,
+		NUMAMemoryGB:  topology.NumaMemoryGb,
+		Interconnect:  topology.Interconnect,
+		NetworkFabric: topology.NetworkFabric,
+		TopologyHint:  topology.TopologyHint,
+	}
+}
+
+func nodeLocalityFromProto(locality *hpcv1.NodeLocality) *types.NodeLocality {
+	if locality == nil {
+		return nil
+	}
+	return &types.NodeLocality{
+		Region:     locality.Region,
+		Datacenter: locality.Datacenter,
+		Zone:       locality.Zone,
+		Rack:       locality.Rack,
+		Row:        locality.Row,
+		Position:   locality.Position,
 	}
 }
 

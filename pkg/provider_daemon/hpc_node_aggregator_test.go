@@ -34,7 +34,12 @@ func TestNodeAggregatorCheckpointRestore(t *testing.T) {
 		t.Fatalf("failed to create aggregator: %v", err)
 	}
 
-	if err := agg.registerNode("node-1", cfg.ClusterID, cfg.ProviderAddress, pubkey); err != nil {
+	if err := agg.registerNode(nodeRegistration{
+		NodeID:          "node-1",
+		ClusterID:       cfg.ClusterID,
+		ProviderAddress: cfg.ProviderAddress,
+		AgentPubkey:     pubkey,
+	}); err != nil {
 		t.Fatalf("failed to register node: %v", err)
 	}
 

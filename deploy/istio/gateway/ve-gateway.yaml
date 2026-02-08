@@ -1,0 +1,288 @@
+# VirtEngine API Gateway Configuration
+# External ingress gateway for portal, provider API, and chain services
+#
+# This gateway handles:
+# - HTTP/HTTPS traffic to portal UI
+# - gRPC traffic to provider daemon
+# - REST/gRPC traffic to blockchain node
+# - Request signing verification
+# - Rate limiting per org/project
+# - WAF protection
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: virtengine-gateway
+  namespace: istio-system
+  labels:
+    app: virtengine-gateway
+    version: v1
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    # HTTP port (redirect to HTTPS)
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+      # Redirect HTTP to HTTPS
+      tls:
+        httpsRedirect: true
+    
+    # HTTPS port for portal and REST APIs
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "*"
+      tls:
+        mode: SIMPLE
+        credentialName: virtengine-gateway-cert
+        minProtocolVersion: TLSV1_2
+        cipherSuites:
+          - ECDHE-ECDSA-AES256-GCM-SHA384
+          - ECDHE-RSA-AES256-GCM-SHA384
+          - ECDHE-ECDSA-AES128-GCM-SHA256
+          - ECDHE-RSA-AES128-GCM-SHA256
+    
+    # gRPC port for provider daemon
+    - port:
+        number: 8444
+        name: grpc-provider
+        protocol: GRPC
+      hosts:
+        - "*"
+      tls:
+        mode: SIMPLE
+        credentialName: virtengine-gateway-cert
+        minProtocolVersion: TLSV1_2
+    
+    # gRPC port for blockchain node
+    - port:
+        number: 9090
+        name: grpc-chain
+        protocol: GRPC
+      hosts:
+        - "*"
+      tls:
+        mode: SIMPLE
+        credentialName: virtengine-gateway-cert
+        minProtocolVersion: TLSV1_2
+
+---
+# Portal UI Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: portal-vs
+  namespace: istio-system
+  labels:
+    app: virtengine-gateway
+    service: portal
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - virtengine-gateway
+  http:
+    # Portal root and /app routes
+    - match:
+        - uri:
+            prefix: /
+        - uri:
+            prefix: /app
+        - uri:
+            prefix: /_next
+        - uri:
+            prefix: /api/portal
+      headers:
+        request:
+          add:
+            # Add correlation ID if not present
+            x-ve-correlation-id: "%REQ(X-REQUEST-ID)%"
+            # Add trace headers
+            traceparent: "%REQ(TRACEPARENT)%"
+            tracestate: "%REQ(TRACESTATE)%"
+      route:
+        - destination:
+            host: portal.default.svc.cluster.local
+            port:
+              number: 3000
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+      corsPolicy:
+        allowOrigins:
+          - prefix: "https://"
+        allowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        allowHeaders:
+          - content-type
+          - authorization
+          - x-ve-address
+          - x-ve-timestamp
+          - x-ve-nonce
+          - x-ve-signature
+          - x-ve-pubkey
+          - x-ve-correlation-id
+        exposeHeaders:
+          - x-ve-correlation-id
+          - x-ratelimit-limit
+          - x-ratelimit-remaining
+          - x-ratelimit-reset
+        maxAge: 24h
+        allowCredentials: true
+
+---
+# Provider Daemon Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: provider-vs
+  namespace: istio-system
+  labels:
+    app: virtengine-gateway
+    service: provider
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - virtengine-gateway
+  http:
+    # Provider REST API
+    - match:
+        - uri:
+            prefix: /provider/v1
+      headers:
+        request:
+          add:
+            x-ve-correlation-id: "%REQ(X-REQUEST-ID)%"
+            traceparent: "%REQ(TRACEPARENT)%"
+      route:
+        - destination:
+            host: provider-daemon.default.svc.cluster.local
+            port:
+              number: 8443
+      timeout: 60s
+      retries:
+        attempts: 2
+        perTryTimeout: 30s
+        retryOn: 5xx,reset,connect-failure
+  
+  # Provider gRPC API
+  - match:
+      - port: 8444
+    route:
+      - destination:
+          host: provider-daemon.default.svc.cluster.local
+          port:
+            number: 8444
+    timeout: 120s
+
+---
+# Blockchain Node Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: chain-vs
+  namespace: istio-system
+  labels:
+    app: virtengine-gateway
+    service: chain
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - virtengine-gateway
+  http:
+    # Cosmos REST API
+    - match:
+        - uri:
+            prefix: /cosmos
+        - uri:
+            prefix: /virtengine
+      headers:
+        request:
+          add:
+            x-ve-correlation-id: "%REQ(X-REQUEST-ID)%"
+            traceparent: "%REQ(TRACEPARENT)%"
+      route:
+        - destination:
+            host: virtengine-node.default.svc.cluster.local
+            port:
+              number: 1317
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: 5xx,reset,connect-failure
+    
+    # Tendermint RPC
+    - match:
+        - uri:
+            prefix: /rpc
+      route:
+        - destination:
+            host: virtengine-node.default.svc.cluster.local
+            port:
+              number: 26657
+      timeout: 30s
+  
+  # Chain gRPC API
+  - match:
+      - port: 9090
+    route:
+      - destination:
+          host: virtengine-node.default.svc.cluster.local
+          port:
+            number: 9090
+    timeout: 30s
+
+---
+# Waldur Integration Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: waldur-vs
+  namespace: istio-system
+  labels:
+    app: virtengine-gateway
+    service: waldur
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - virtengine-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /waldur/api
+      headers:
+        request:
+          add:
+            x-ve-correlation-id: "%REQ(X-REQUEST-ID)%"
+          remove:
+            # Remove internal auth headers before forwarding
+            - x-ve-signature
+            - x-ve-pubkey
+      route:
+        - destination:
+            host: waldur-caddy.default.svc.cluster.local
+            port:
+              number: 80
+      timeout: 60s
+      retries:
+        attempts: 2
+        perTryTimeout: 30s

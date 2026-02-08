@@ -7,8 +7,10 @@ package scale
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -691,6 +693,13 @@ func averageDuration(durations []time.Duration) time.Duration {
 }
 
 func lookupEnvScale() int {
-	// In production, this would check SCALE_TEST_VALIDATORS env var
-	return 0
+	scaleStr := os.Getenv("SCALE_TEST_VALIDATORS")
+	if scaleStr == "" {
+		return 0
+	}
+	value, err := strconv.Atoi(scaleStr)
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
 }

@@ -2,6 +2,11 @@
 
 This program sustains SOC 2 Type II compliance beyond the initial audit.
 
+## Status
+
+- Program status: Active
+- Effective date: 2026-02-06
+
 ## Program Elements
 
 - Control owners and quarterly reviews

@@ -127,6 +127,26 @@ type QueryUsageRecordsByOrderResponse struct {
 	UsageRecords []UsageRecord `json:"usage_records"`
 }
 
+// QueryUsageSummaryRequest is the request for querying usage summaries
+type QueryUsageSummaryRequest struct {
+	// OrderID filters by order (optional)
+	OrderID string `json:"order_id,omitempty"`
+
+	// Provider filters by provider address (optional)
+	Provider string `json:"provider,omitempty"`
+
+	// PeriodStart filters records starting at or after this timestamp (unix seconds)
+	PeriodStart int64 `json:"period_start,omitempty"`
+
+	// PeriodEnd filters records ending at or before this timestamp (unix seconds)
+	PeriodEnd int64 `json:"period_end,omitempty"`
+}
+
+// QueryUsageSummaryResponse is the response for querying usage summaries
+type QueryUsageSummaryResponse struct {
+	Summary UsageSummary `json:"summary"`
+}
+
 // QueryRewardDistributionRequest is the request for querying a reward distribution
 type QueryRewardDistributionRequest struct {
 	DistributionID string `json:"distribution_id"`
@@ -145,6 +165,45 @@ type QueryRewardsByEpochRequest struct {
 // QueryRewardsByEpochResponse is the response for querying rewards by epoch
 type QueryRewardsByEpochResponse struct {
 	Distributions []RewardDistribution `json:"distributions"`
+}
+
+// QueryRewardHistoryRequest is the request for querying reward history by address
+type QueryRewardHistoryRequest struct {
+	Address string `json:"address"`
+
+	// Source filters by reward source (optional)
+	Source string `json:"source,omitempty"`
+
+	// Limit caps the number of entries returned (optional)
+	Limit uint32 `json:"limit,omitempty"`
+
+	// Offset skips a number of entries (optional)
+	Offset uint32 `json:"offset,omitempty"`
+}
+
+// QueryRewardHistoryResponse is the response for querying reward history
+type QueryRewardHistoryResponse struct {
+	Entries []RewardHistoryEntry `json:"entries"`
+}
+
+// QueryPayoutRequest is the request for querying a payout by ID
+type QueryPayoutRequest struct {
+	PayoutID string `json:"payout_id"`
+}
+
+// QueryPayoutResponse is the response for querying a payout by ID
+type QueryPayoutResponse struct {
+	Payout *PayoutRecord `json:"payout"`
+}
+
+// QueryPayoutsByProviderRequest is the request for querying payouts by provider
+type QueryPayoutsByProviderRequest struct {
+	Provider string `json:"provider"`
+}
+
+// QueryPayoutsByProviderResponse is the response for querying payouts by provider
+type QueryPayoutsByProviderResponse struct {
+	Payouts []PayoutRecord `json:"payouts"`
 }
 
 // QueryClaimableRewardsRequest is the request for querying claimable rewards

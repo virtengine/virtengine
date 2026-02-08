@@ -10,7 +10,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	"gopkg.in/yaml.v3"
 )
 
@@ -144,7 +146,17 @@ func (h *HelmCLIClient) runWithValues(ctx context.Context, args []string, values
 
 func (h *HelmCLIClient) run(ctx context.Context, args []string) ([]byte, error) {
 	args = append(args, h.config.ExtraArgs...)
-	// #nosec G204 -- command and args are operator-configured
+
+	// Validate command using security package
+	validator := security.NewCommandValidator(
+		[]string{"helm"},
+		5*time.Minute,
+	)
+	if err := validator.ValidateCommand(h.config.Binary, args...); err != nil {
+		return nil, fmt.Errorf("command validation failed: %w", err)
+	}
+
+	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
 	cmd := exec.CommandContext(ctx, h.config.Binary, args...)
 	if h.config.Kubeconfig != "" {
 		cmd.Env = append(os.Environ(), "KUBECONFIG="+h.config.Kubeconfig)
@@ -252,7 +264,17 @@ func (k *KubeCLIStatusChecker) ExecInPod(ctx context.Context, namespace, podName
 
 func (k *KubeCLIStatusChecker) run(ctx context.Context, args []string) ([]byte, error) {
 	args = append(args, k.config.ExtraArgs...)
-	// #nosec G204 -- command and args are operator-configured
+
+	// Validate command using security package
+	validator := security.NewCommandValidator(
+		[]string{"kubectl"},
+		5*time.Minute,
+	)
+	if err := validator.ValidateCommand(k.config.Binary, args...); err != nil {
+		return nil, fmt.Errorf("command validation failed: %w", err)
+	}
+
+	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
 	cmd := exec.CommandContext(ctx, k.config.Binary, args...)
 	if k.config.Kubeconfig != "" {
 		cmd.Env = append(os.Environ(), "KUBECONFIG="+k.config.Kubeconfig)

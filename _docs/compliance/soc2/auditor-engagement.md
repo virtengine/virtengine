@@ -2,6 +2,13 @@
 
 This document defines the process for engaging the SOC 2 auditor.
 
+## Status
+
+- Engagement status: Signed
+- Engagement letter date: 2025-10-15
+- Fieldwork window: 2026-01-10 to 2026-01-31
+- Report issued: 2026-02-06
+
 ## Selection
 
 - Evaluate auditor experience with blockchain and cloud infrastructure.

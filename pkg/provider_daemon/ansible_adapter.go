@@ -513,6 +513,15 @@ func (a *AnsibleAdapter) CheckAnsibleInstalled(ctx context.Context) error {
 		ansiblePath = a.config.AnsiblePath
 	}
 
+	// Check if ansible is available and validate command
+	validator := security.NewCommandValidator(
+		[]string{"ansible-playbook", "ansible"},
+		10*time.Second,
+	)
+	if err := validator.ValidateCommand(ansiblePath, "--version"); err != nil {
+		return fmt.Errorf("command validation failed: %w", err)
+	}
+	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
 	cmd := exec.CommandContext(ctx, ansiblePath, "--version")
 	if err := cmd.Run(); err != nil {
 		return ErrAnsibleNotInstalled
@@ -548,7 +557,15 @@ func (a *AnsibleAdapter) ValidatePlaybook(ctx context.Context, playbook *Playboo
 		ansiblePath = a.config.AnsiblePath
 	}
 
-	// Run syntax check
+	// Run syntax check with validated command
+	validator := security.NewCommandValidator(
+		[]string{"ansible-playbook", "ansible"},
+		30*time.Second,
+	)
+	if err := validator.ValidateCommand(ansiblePath, "--syntax-check", cleanPath); err != nil {
+		return fmt.Errorf("command validation failed: %w", err)
+	}
+	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
 	cmd := exec.CommandContext(ctx, ansiblePath, "--syntax-check", cleanPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: syntax error: %s", ErrInvalidPlaybook, string(output))
@@ -674,7 +691,18 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 		ansiblePath = a.config.AnsiblePath
 	}
 
-	// Create command
+	// Validate command and arguments using security.CommandValidator
+	// to prevent command injection (G204)
+	validator := security.NewCommandValidator(
+		[]string{"ansible-playbook", "ansible"},
+		5*time.Minute, // Default timeout for ansible operations
+	)
+	if err := validator.ValidateCommand(ansiblePath, args...); err != nil {
+		return fmt.Errorf("command validation failed: %w", err)
+	}
+
+	// Create command (validated above)
+	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
 	cmd := exec.CommandContext(ctx, ansiblePath, args...)
 
 	// Set working directory
@@ -701,6 +729,12 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 		}
 		defer os.Remove(vaultPwFile)
 		args = append(args, "--vault-password-file", vaultPwFile)
+
+		// Re-validate with updated args
+		if err := validator.ValidateCommand(ansiblePath, args...); err != nil {
+			return fmt.Errorf("command validation failed: %w", err)
+		}
+		//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
 		cmd = exec.CommandContext(ctx, ansiblePath, args...)
 	} else if options.VaultPasswordFile != "" {
 		// Validate vault password file path
