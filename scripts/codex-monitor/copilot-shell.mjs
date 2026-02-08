@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -67,16 +68,53 @@ async function loadCopilotSdk() {
   }
 }
 
+/**
+ * Detect GitHub token from multiple sources (auth passthrough).
+ * Priority: ENV > gh CLI > undefined (SDK will use default auth).
+ */
+function detectGitHubToken() {
+  // 1. Direct token env vars (highest priority)
+  const envToken =
+    process.env.COPILOT_CLI_TOKEN ||
+    process.env.GITHUB_TOKEN ||
+    process.env.GH_TOKEN ||
+    process.env.GITHUB_PAT;
+  if (envToken) {
+    console.log("[copilot-shell] using token from environment");
+    return envToken;
+  }
+
+  // 2. Try to read from gh CLI auth
+  try {
+    execSync("gh auth status", { stdio: "pipe", encoding: "utf8" });
+    console.log("[copilot-shell] detected gh CLI authentication");
+    // gh CLI is authenticated - SDK will use it automatically
+    return undefined;
+  } catch {
+    // gh not authenticated or not installed
+  }
+
+  // 3. VS Code auth detection could be added here
+  // For now, return undefined to let SDK use default auth flow
+  console.log(
+    "[copilot-shell] no pre-auth detected, using SDK default auth",
+  );
+  return undefined;
+}
+
 async function ensureClientStarted() {
   if (clientStarted && copilotClient) return true;
   const Cls = await loadCopilotSdk();
   if (!Cls) return false;
+
+  // Auth passthrough: detect from multiple sources
   const cliPath =
     process.env.COPILOT_CLI_PATH ||
     process.env.GITHUB_COPILOT_CLI_PATH ||
     undefined;
   const cliUrl = process.env.COPILOT_CLI_URL || undefined;
-  const token = process.env.COPILOT_CLI_TOKEN || undefined;
+  const token = detectGitHubToken();
+
   copilotClient = new Cls(
     cliUrl
       ? { cliUrl }
