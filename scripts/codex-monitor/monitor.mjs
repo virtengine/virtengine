@@ -165,6 +165,7 @@ let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+console.log(`[monitor] task planner mode: ${plannerMode}`);
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -3459,7 +3460,12 @@ function isPlannerDeduped(state, now) {
   if (!state || !state.last_triggered_at) {
     return false;
   }
-  const last = Date.parse(state.last_triggered_at);
+  // Only dedup if the last run was successful — failed/skipped runs
+  // should not block subsequent attempts
+  if (!state.last_success_at) {
+    return false;
+  }
+  const last = Date.parse(state.last_success_at);
   if (!Number.isFinite(last)) {
     return false;
   }
@@ -3468,21 +3474,27 @@ function isPlannerDeduped(state, now) {
 
 async function maybeTriggerTaskPlanner(reason, details) {
   if (plannerMode === "disabled") {
+    console.log(`[monitor] task planner skipped: mode=disabled`);
     return;
   }
   if (plannerMode === "codex-sdk" && !codexEnabled) {
+    console.log(`[monitor] task planner skipped: codex-sdk mode but Codex disabled`);
     return;
   }
   if (plannerTriggered) {
+    console.log(`[monitor] task planner skipped: already running`);
     return;
   }
   const now = Date.now();
   const state = await readPlannerState();
   if (isPlannerDeduped(state, now)) {
+    const lastAt = state?.last_triggered_at || "unknown";
+    console.log(`[monitor] task planner skipped: deduped (last triggered ${lastAt})`);
     return;
   }
   try {
-    await triggerTaskPlanner(reason, details);
+    const result = await triggerTaskPlanner(reason, details);
+    console.log(`[monitor] task planner result: ${result?.status || "unknown"} (${reason})`);
   } catch (err) {
     // Auto-triggered planner failures are non-fatal — already logged/notified by triggerTaskPlanner
     console.warn(
@@ -4090,18 +4102,24 @@ async function checkStatusMilestones() {
     return;
   }
 
-  if (
-    !backlogLowNotified &&
+  // Planner triggers: reset notification flags each cycle so we can
+  // re-trigger if conditions persist and dedup window has passed.
+  // The dedup state file prevents rapid re-triggering (default 6h).
+  const plannerConditionsMet =
     backlogRemaining > 0 &&
     Number.isFinite(backlogPerCapita) &&
-    backlogPerCapita < plannerPerCapitaThreshold
-  ) {
-    backlogLowNotified = true;
-    await sendTelegramMessage(
-      `Backlog per-capita low: ${backlogRemaining} tasks for ${maxParallel} slots (${backlogPerCapita.toFixed(
-        2,
-      )} per slot). Triggering task planner.`,
-    );
+    backlogPerCapita < plannerPerCapitaThreshold;
+  const idleConditionsMet = idleSlots >= plannerIdleSlotThreshold;
+
+  if (plannerConditionsMet) {
+    if (!backlogLowNotified) {
+      backlogLowNotified = true;
+      await sendTelegramMessage(
+        `Backlog per-capita low: ${backlogRemaining} tasks for ${maxParallel} slots (${backlogPerCapita.toFixed(
+          2,
+        )} per slot). Triggering task planner.`,
+      );
+    }
     await maybeTriggerTaskPlanner("backlog-per-capita", {
       backlogRemaining,
       backlogPerCapita,
@@ -4113,13 +4131,18 @@ async function checkStatusMilestones() {
       threshold: plannerPerCapitaThreshold,
     });
     return;
+  } else {
+    // Conditions no longer met — reset so we re-notify next time
+    backlogLowNotified = false;
   }
 
-  if (!idleAgentsNotified && idleSlots >= plannerIdleSlotThreshold) {
-    idleAgentsNotified = true;
-    await sendTelegramMessage(
-      `Agents idle: ${idleSlots} slot(s) available (running ${running}/${maxParallel}). Triggering task planner.`,
-    );
+  if (idleConditionsMet) {
+    if (!idleAgentsNotified) {
+      idleAgentsNotified = true;
+      await sendTelegramMessage(
+        `Agents idle: ${idleSlots} slot(s) available (running ${running}/${maxParallel}). Triggering task planner.`,
+      );
+    }
     await maybeTriggerTaskPlanner("idle-slots", {
       backlogRemaining,
       backlogPerCapita,
@@ -4130,6 +4153,8 @@ async function checkStatusMilestones() {
       maxParallel,
       threshold: plannerIdleSlotThreshold,
     });
+  } else {
+    idleAgentsNotified = false;
   }
 }
 
