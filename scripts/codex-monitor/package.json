@@ -43,7 +43,8 @@
     "./telegram-bot": "./telegram-bot.mjs",
     "./workspace-registry": "./workspace-registry.mjs",
     "./shared-workspace-registry": "./shared-workspace-registry.mjs",
-    "./merge-strategy": "./merge-strategy.mjs"
+    "./merge-strategy": "./merge-strategy.mjs",
+    "./restart-controller": "./restart-controller.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -66,6 +67,7 @@
     "cli.mjs",
     "config.mjs",
     "monitor.mjs",
+    "restart-controller.mjs",
     "utils.mjs",
     "autofix.mjs",
     "agent-sdk.mjs",

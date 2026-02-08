@@ -33,6 +33,7 @@ import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
+import { RestartController } from "./restart-controller.mjs";
 import {
   analyzeMergeStrategy,
   resetMergeStrategyDedup,
@@ -238,14 +239,7 @@ let orchestratorResumeTimer = null;
 // When the orchestrator exits because "Another orchestrator instance is already
 // running" (mutex held), the monitor must NOT restart immediately — the old
 // instance still has the mutex and a tight restart loop will form.
-let mutexHeldDetected = false; // set true when we see the mutex message in stdout
-let mutexBackoffMs = 0; // current backoff delay (escalates 30→60→90s)
-const MUTEX_BACKOFF_STEP_MS = 30_000; // 30s per step
-const MUTEX_BACKOFF_MAX_MS = 90_000; // cap at 90s
-let lastProcessStartAt = 0; // timestamp of most recent startProcess call
-const MIN_RESTART_INTERVAL_MS = 15_000; // never restart faster than 15s
-let consecutiveQuickExits = 0; // count exits that happen within 20s of start
-const QUICK_EXIT_THRESHOLD_MS = 20_000; // exit within 20s = "quick exit"
+const restartController = new RestartController();
 
 let logRemainder = "";
 const mergeNotified = new Set();
@@ -4024,43 +4018,33 @@ async function handleExit(code, signal, logPath) {
   }
 
   // ── Track quick exits for crash-loop detection ──────────────────────
-  const runDurationMs = lastProcessStartAt
-    ? Date.now() - lastProcessStartAt
+  const runDurationMs = restartController.lastProcessStartAt
+    ? Date.now() - restartController.lastProcessStartAt
     : Infinity;
-  if (runDurationMs < QUICK_EXIT_THRESHOLD_MS) {
-    consecutiveQuickExits += 1;
-  } else {
-    // Orchestrator ran long enough — healthy; reset backoff state
-    consecutiveQuickExits = 0;
-    if (mutexBackoffMs > 0) {
-      console.log("[monitor] orchestrator ran >20s — resetting mutex backoff");
-      mutexBackoffMs = 0;
-    }
-  }
 
   // ── Mutex-held: orchestrator found another instance holding the mutex ──
   const isMutexHeld =
-    mutexHeldDetected ||
+    restartController.mutexHeldDetected ||
     logText.includes("Another orchestrator instance is already running") ||
     logText.includes("mutex held");
+  const exitState = restartController.recordExit(runDurationMs, isMutexHeld);
 
-  if (isMutexHeld) {
-    mutexHeldDetected = false; // reset flag for next cycle
-    mutexBackoffMs = Math.min(
-      mutexBackoffMs + MUTEX_BACKOFF_STEP_MS,
-      MUTEX_BACKOFF_MAX_MS,
-    );
+  if (exitState.backoffReset) {
+    console.log("[monitor] orchestrator ran >20s — resetting mutex backoff");
+  }
+
+  if (exitState.isMutexHeld) {
     console.warn(
-      `[monitor] mutex held detected — backing off ${mutexBackoffMs / 1000}s ` +
-        `(consecutive quick exits: ${consecutiveQuickExits})`,
+      `[monitor] mutex held detected — backing off ${exitState.backoffMs / 1000}s ` +
+        `(consecutive quick exits: ${exitState.consecutiveQuickExits})`,
     );
     if (telegramToken && telegramChatId) {
       void sendTelegramMessage(
-        `⏳ Mutex held — backing off ${mutexBackoffMs / 1000}s before retry`,
+        `⏳ Mutex held — backing off ${exitState.backoffMs / 1000}s before retry`,
       );
     }
     restartCount += 1;
-    setTimeout(startProcess, mutexBackoffMs);
+    setTimeout(startProcess, exitState.backoffMs);
     return;
   }
 
@@ -4262,10 +4246,10 @@ async function startProcess() {
   const now = Date.now();
 
   // ── Minimum restart interval — never restart faster than 15s ──────
-  if (lastProcessStartAt > 0) {
-    const sinceLast = now - lastProcessStartAt;
-    if (sinceLast < MIN_RESTART_INTERVAL_MS) {
-      const waitMs = MIN_RESTART_INTERVAL_MS - sinceLast;
+  if (restartController.lastProcessStartAt > 0) {
+    const sinceLast = now - restartController.lastProcessStartAt;
+    const waitMs = restartController.getMinRestartDelay(now);
+    if (waitMs > 0) {
       console.log(
         `[monitor] throttling restart — only ${Math.round(sinceLast / 1000)}s since last start, waiting ${Math.round(waitMs / 1000)}s`,
       );
@@ -4309,8 +4293,7 @@ async function startProcess() {
   }
 
   // Reset mutex flag before spawn — will be re-set if this instance hits mutex
-  mutexHeldDetected = false;
-  lastProcessStartAt = Date.now();
+  restartController.noteProcessStarted(Date.now());
 
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -4345,12 +4328,7 @@ async function startProcess() {
         notifyMergeFailure(line);
       }
       // ── Mutex-held detection ─────────────────────────────────────
-      if (
-        line.includes("Another orchestrator instance is already running") ||
-        line.includes("mutex held")
-      ) {
-        mutexHeldDetected = true;
-      }
+      restartController.noteLogLine(line);
       // ── Smart PR creation: detect completed/failed attempts ──────
       const prFlowMatch = line.match(
         /Attempt\s+([0-9a-f]{8})\s+finished\s+\((completed|failed)\)\s*[—–-]\s*marking review/i,
@@ -4404,9 +4382,9 @@ function requestRestart(reason) {
     return;
   }
   // ── Suppress file-change restarts during mutex backoff ──────────
-  if (reason === "file-change" && mutexBackoffMs > 0) {
+  if (restartController.shouldSuppressRestart(reason)) {
     console.log(
-      `[monitor] suppressing file-change restart — mutex backoff active (${mutexBackoffMs / 1000}s)`,
+      `[monitor] suppressing file-change restart — mutex backoff active (${restartController.mutexBackoffMs / 1000}s)`,
     );
     return;
   }

@@ -28,10 +28,28 @@
  */
 
 import { spawn, execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Dev mode detection ──────────────────────────────────────────────────────
+
+/**
+ * Detect whether codex-monitor is running from its source repo (dev mode)
+ * or from an npm install (npm mode).
+ *
+ * Dev mode indicators:
+ *  - Running from a path that contains the source repo structure
+ *  - The parent directory has go.mod, Makefile, etc. (monorepo root)
+ *  - AUTOFIX_MODE env var is set to "execute" (explicit override)
+ *
+ * npm mode indicators:
+ *  - Running from node_modules/
+ *  - No monorepo markers in parent directories
+ *  - AUTOFIX_MODE env var is set to "analyze" (explicit override)
+ */
 // ── Error extraction ────────────────────────────────────────────────────────
 
 /**
@@ -296,8 +314,7 @@ async function readSourceContext(filePath, errorLine, contextLines = 30) {
 /** @type {Map<string, {count: number, lastAt: number}>} */
 const fixAttempts = new Map();
 const MAX_FIX_ATTEMPTS = 3;
-// 5 min cooldown prevents rapid-fire crash loop where autofix itself triggers
-// 3 attempts in < 3 minutes and then gets throttled by monitor's circuit breaker.
+// 1 min cooldown prevents rapid-fire crash loop while keeping retry cadence short.
 const FIX_COOLDOWN_MS = 60_000;
 
 function canAttemptFix(signature) {
