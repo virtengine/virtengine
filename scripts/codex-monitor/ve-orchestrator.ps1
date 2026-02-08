@@ -247,6 +247,9 @@ function Get-EnvString {
     return $value.Trim()
 }
 
+$script:FollowUpMaxChars = Get-EnvInt -Name "VE_FOLLOWUP_MAX_CHARS" -Default 16000 -Min 2000
+$script:FollowUpMaxDescriptionChars = Get-EnvInt -Name "VE_FOLLOWUP_MAX_DESC_CHARS" -Default 2000 -Min 200
+
 function Request-OrchestratorStop {
     param([string]$Reason = "shutdown")
     if ($script:StopRequested) { return }
@@ -423,6 +426,13 @@ function Ensure-GitCredentialHelper {
 
 function Write-CycleSummary {
     $elapsed = (Get-Date) - $script:StartTime
+    $backlogCount = $null
+    try {
+        $todoTasks = Get-VKTasks -Status "todo" -Limit 1
+        $backlogCount = if ($todoTasks) { @($todoTasks).Count } else { 0 }
+    } catch {
+        $backlogCount = $null
+    }
     Write-Host ""
     Write-Host "  ── Cycle $($script:CycleCount) ──────────────────────────────" -ForegroundColor DarkCyan
     Write-Host "  │ Elapsed:   $([math]::Round($elapsed.TotalMinutes, 1)) min" -ForegroundColor DarkGray
@@ -430,6 +440,11 @@ function Write-CycleSummary {
     Write-Host "  │ Tracked:   $($script:TrackedAttempts.Count) attempts" -ForegroundColor DarkGray
     $successSummary = Get-SuccessRateSummary
     Write-Host "  │ $successSummary" -ForegroundColor DarkGray
+    if ($null -ne $backlogCount) {
+        Write-Host "  │ Backlog:   $backlogCount" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  │ Backlog:   unknown" -ForegroundColor DarkGray
+    }
     Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkCyan
 }
 
@@ -1746,13 +1761,20 @@ function Update-TaskContextCache {
 }
 
 function Get-TaskContextBlock {
-    param([Parameter(Mandatory)][hashtable]$Info)
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [int]$MaxDescriptionChars = 0
+    )
     Update-TaskContextCache -Info $Info
 
     $title = if ($Info.task_title_cached) { $Info.task_title_cached } elseif ($Info.name) { $Info.name } else { $null }
     $description = $Info.task_description_cached
     if (-not $description) {
         $description = "Task description unavailable from VK. Open the task URL for full details."
+    }
+    elseif ($MaxDescriptionChars -gt 0 -and $description.Length -gt $MaxDescriptionChars) {
+        $description = ($description.Substring(0, $MaxDescriptionChars)).TrimEnd()
+        $description = "$description`n...[truncated]"
     }
 
     $lines = @("Task context (vibe-kanban):")
@@ -1775,10 +1797,45 @@ function Append-TaskContextToMessage {
         [switch]$IncludeContext
     )
     if (-not $IncludeContext) { return $Message }
-    if ($Message -match "Task context \\(vibe-kanban\\):") { return $Message }
+    if ($Message -match "Task context \\(vibe-kanban\\):") {
+        if ($script:FollowUpMaxChars -and $Message.Length -gt $script:FollowUpMaxChars) {
+            $trimmed = ($Message.Substring(0, $script:FollowUpMaxChars)).TrimEnd()
+            return "$trimmed`n...[truncated]"
+        }
+        return $Message
+    }
     $context = Get-TaskContextBlock -Info $Info
     if (-not $context) { return $Message }
-    return "$Message`n`n$context"
+    $final = "$Message`n`n$context"
+    if ($script:FollowUpMaxChars -and $final.Length -gt $script:FollowUpMaxChars) {
+        $compact = Get-TaskContextBlock -Info $Info -MaxDescriptionChars $script:FollowUpMaxDescriptionChars
+        if ($compact) {
+            $final = "$Message`n`n$compact"
+        }
+        if ($final.Length -gt $script:FollowUpMaxChars) {
+            $final = ($final.Substring(0, $script:FollowUpMaxChars)).TrimEnd()
+            $final = "$final`n...[truncated]"
+        }
+    }
+    return $final
+}
+
+function Get-ContextRecoveryMessage {
+    <#
+    .SYNOPSIS Build a compact follow-up message for context window/token limit failures.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [int]$MaxDescriptionChars = 2000
+    )
+    $parts = @(
+        "Context window exceeded (prompt too large). Start a fresh session with minimal context.",
+        "Re-open the repo and continue the task. Keep prompts concise; avoid large log dumps."
+    )
+    $context = Get-TaskContextBlock -Info $Info -MaxDescriptionChars $MaxDescriptionChars
+    if ($context) { $parts += $context }
+    return ($parts -join "`n`n")
 }
 
 function Try-SendFollowUp {
@@ -1874,7 +1931,11 @@ function Test-ContextWindowError {
     $patterns = @(
         "ContextWindowExceeded",
         "context window",
-        "ran out of room"
+        "ran out of room",
+        "prompt token count",
+        "token count of",
+        "context length exceeded",
+        "maximum context length"
     )
     foreach ($prop in $Summary.PSObject.Properties) {
         $value = $prop.Value
@@ -1968,7 +2029,13 @@ function Get-AttemptFailureCategory {
         }
     }
 
-    if ($lower -match "context window" -or $lower -match "contextwindowexceeded" -or $lower -match "ran out of room") {
+    if ($lower -match "context window" -or
+        $lower -match "contextwindowexceeded" -or
+        $lower -match "ran out of room" -or
+        $lower -match "prompt token count" -or
+        $lower -match "token count of" -or
+        $lower -match "context length exceeded" -or
+        $lower -match "maximum context length") {
         return @{ category = "context_window"; status = $latestStatus; detail = "context window exceeded" }
     }
 
@@ -2091,20 +2158,20 @@ function Try-RecoverContextWindow {
     $Info.context_recovery_attempted_at = Get-Date
     $Info.status = "running"
 
-    if ($Info.last_followup_message) {
-        $profile = if ($session.executor) {
-            Get-ExecutorProfileForSession -Executor $session.executor
-        }
-        else {
-            Get-ExecutorProfileForSession -Executor "CODEX"
-        }
-        $message = Append-TaskContextToMessage -Message $Info.last_followup_message -Info $Info -IncludeContext:$true
-        $Info.last_followup_message = $message
-        $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $message -ExecutorProfile $profile
-        if (-not $sent) {
-            Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
-            return $false
-        }
+    $profile = if ($session.executor) {
+        Get-ExecutorProfileForSession -Executor $session.executor
+    }
+    else {
+        Get-ExecutorProfileForSession -Executor "CODEX"
+    }
+    $message = Get-ContextRecoveryMessage -Info $Info
+    $Info.last_followup_message = $message
+    $Info.last_followup_reason = "context_window_recovery"
+    $Info.last_followup_at = Get-Date
+    $sent = Send-VKSessionFollowUp -SessionId $session.id -Message $message -ExecutorProfile $profile
+    if (-not $sent) {
+        Write-Log "Follow-up resend failed for $($Info.branch)" -Level "WARN"
+        return $false
     }
 
     Write-Log "Context recovery started for $($Info.branch) via new session" -Level "INFO"
@@ -2780,6 +2847,17 @@ function Process-CompletedAttempts {
                     }
 
                     if (-not $recentFollowup) {
+                        if ($failure.category -eq "context_window") {
+                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
+                            $msg = Get-ContextRecoveryMessage -Info $info
+                            if ($count -ge 2) {
+                                $msg = "$msg`n`nIf this fails again or there are no changes, reply NO_CHANGES so we can mark it for manual review."
+                            }
+                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "context_window_recovery" -IncludeTaskContext:$false
+                            $info.push_notified = $true
+                            continue
+                        }
+
                         if ($failure.category -in @("api_key", "agent_failed")) {
                             $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
                             if ($count -ge 2) {
