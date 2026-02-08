@@ -12,6 +12,7 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
+import { archiveCompletedTasks } from "./task-archiver.mjs";
 import {
   attemptAutoFix,
   fixLoopingError,
@@ -2237,7 +2238,8 @@ loadMergedTaskCache();
 // ── Recovery/Idle caches (persistent) ───────────────────────────────────────
 
 const recoveryCacheEnabled =
-  String(process.env.RECOVERY_CACHE_ENABLED || "true").toLowerCase() !== "false";
+  String(process.env.RECOVERY_CACHE_ENABLED || "true").toLowerCase() !==
+  "false";
 const recoveryLogDedupMs =
   Number(process.env.RECOVERY_LOG_DEDUP_MINUTES || "30") * 60 * 1000;
 const recoveryCacheMaxEntries = Number(
@@ -2305,9 +2307,7 @@ function scheduleRecoveryCacheSave() {
 
 function buildCacheObject(map, tsField) {
   const entries = [...map.entries()];
-  entries.sort(
-    (a, b) => (b[1]?.[tsField] || 0) - (a[1]?.[tsField] || 0),
-  );
+  entries.sort((a, b) => (b[1]?.[tsField] || 0) - (a[1]?.[tsField] || 0));
   const limited =
     recoveryCacheMaxEntries > 0
       ? entries.slice(0, recoveryCacheMaxEntries)
@@ -2769,10 +2769,15 @@ async function checkMergedPRsAndUpdateTasks() {
 
           if (isMerged) {
             // Assess completion confidence for merged PR
-            const sizeLabel = task.title?.match(/\[(xs|s|m|l|xl|xxl)\]/i)?.[1] || "m";
-            const taskComplexity = classifyComplexity({ sizeLabel, title: task.title, description: task.description });
+            const sizeLabel =
+              task.title?.match(/\[(xs|s|m|l|xl|xxl)\]/i)?.[1] || "m";
+            const taskComplexity = classifyComplexity({
+              sizeLabel,
+              title: task.title,
+              description: task.description,
+            });
             const confidence = assessCompletionConfidence({
-              testsPass: true,    // PR was merged → CI must have passed
+              testsPass: true, // PR was merged → CI must have passed
               buildClean: true,
               lintClean: true,
               filesChanged: prInfo?.changed_files || prInfo?.changedFiles || 0,
@@ -3077,7 +3082,7 @@ async function checkMergedPRsAndUpdateTasks() {
         `[monitor] Moved ${movedReviewCount} tasks to inreview (PR open)`,
       );
     }
-      console.log(`[monitor] ${formatDirtyTaskSummary()}`);
+    console.log(`[monitor] ${formatDirtyTaskSummary()}`);
     if (conflictsTriggered > 0) {
       console.log(
         `[monitor] Triggered conflict resolution for ${conflictsTriggered} PR(s)`,
@@ -5581,7 +5586,8 @@ async function triggerTaskPlannerViaKanban(
     // Match both old format "Plan next tasks (...)" and new "[xs] Plan next tasks (...)"
     const stripped = title.replace(/^\[(?:xs|s|m|l|xl|xxl)\]\s*/i, "");
     return (
-      stripped.startsWith("plan next tasks") || stripped.startsWith("plan next phase")
+      stripped.startsWith("plan next tasks") ||
+      stripped.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
@@ -6886,8 +6892,15 @@ try {
   );
 }
 
-// ── Startup sweep: kill stale processes, prune worktrees ────────────────────
-runMaintenanceSweep({ repoRoot });
+// ── Startup sweep: kill stale processes, prune worktrees, archive old tasks ──
+runMaintenanceSweep({
+  repoRoot,
+  archiveCompletedTasks: async () => {
+    const projectId = await findVkProjectId();
+    if (!projectId) return { archived: 0 };
+    return await archiveCompletedTasks(fetchVk, projectId, { maxArchive: 50 });
+  },
+});
 
 setInterval(() => {
   void flushErrorQueue();
@@ -6897,7 +6910,18 @@ setInterval(() => {
 const maintenanceIntervalMs = 5 * 60 * 1000;
 setInterval(() => {
   const childPid = currentChild ? currentChild.pid : undefined;
-  runMaintenanceSweep({ repoRoot, childPid });
+  runMaintenanceSweep({
+    repoRoot,
+    childPid,
+    archiveCompletedTasks: async () => {
+      const projectId = await findVkProjectId();
+      if (!projectId) return { archived: 0 };
+      return await archiveCompletedTasks(fetchVk, projectId, {
+        maxArchive: 25,
+        dryRun: false,
+      });
+    },
+  });
 }, maintenanceIntervalMs);
 
 // ── Periodic merged PR check: every 10 min, move merged PRs to done ─────────
@@ -7027,10 +7051,14 @@ try {
   const matrixLines = [];
   for (const [exec, tiers] of Object.entries(complexityMatrix)) {
     for (const [tier, profile] of Object.entries(tiers)) {
-      matrixLines.push(`  ${exec}/${tier}: ${profile.model || "default"} (${profile.reasoningEffort || "default"})`);
+      matrixLines.push(
+        `  ${exec}/${tier}: ${profile.model || "default"} (${profile.reasoningEffort || "default"})`,
+      );
     }
   }
-  console.log(`[monitor] complexity routing matrix:\n${matrixLines.join("\n")}`);
+  console.log(
+    `[monitor] complexity routing matrix:\n${matrixLines.join("\n")}`,
+  );
 } catch (err) {
   console.warn(`[monitor] complexity matrix log failed: ${err.message}`);
 }
