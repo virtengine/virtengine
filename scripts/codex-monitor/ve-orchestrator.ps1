@@ -2117,10 +2117,57 @@ function Merge-PRWithFallback {
     return @{ merged = $false; reason = $reason; used_admin = $ForceAdmin }
 }
 
+function Resolve-PRBaseBranch {
+    <#
+    .SYNOPSIS Determine the correct base branch for a PR/attempt.
+              Uses PR's actual base, then tracked target_branch, then task-level
+              upstream detection, then falls back to VK_TARGET_BRANCH.
+    #>
+    [CmdletBinding()]
+    param(
+        [hashtable]$Info,
+        [object]$PRDetails
+    )
+    # 1. Use PR's declared base branch (most authoritative)
+    if ($PRDetails -and $PRDetails.baseRefName) {
+        $base = $PRDetails.baseRefName
+        if ($base -like "origin/*") { $base = $base.Substring(7) }
+        return $base
+    }
+    # 2. Use stored target_branch from submission
+    if ($Info -and $Info.target_branch) {
+        $base = $Info.target_branch
+        if ($base -like "origin/*") { $base = $base.Substring(7) }
+        return $base
+    }
+    # 3. Try task-level detection via task_id
+    if ($Info -and $Info.task_id) {
+        try {
+            $taskData = Get-VKTask -TaskId $Info.task_id
+            if ($taskData) {
+                $taskObj = [pscustomobject]$taskData
+                $upstream = Get-TaskUpstreamBranch -Task $taskObj
+                if ($upstream) {
+                    $base = $upstream
+                    if ($base -like "origin/*") { $base = $base.Substring(7) }
+                    return $base
+                }
+            }
+        } catch {
+            # Best effort — fall through
+        }
+    }
+    # 4. Fallback
+    $base = $script:VK_TARGET_BRANCH
+    if ($base -like "origin/*") { $base = $base.Substring(7) }
+    return $base
+}
+
 function Invoke-DirectRebase {
     <#
-    .SYNOPSIS Attempt a direct git rebase of a PR branch onto main.
-              Falls back to VK rebase if direct fails.
+    .SYNOPSIS Smart rebase of a PR branch onto its base branch.
+              Handles auto-resolvable conflicts (lock files, generated files)
+              before falling back to VK rebase.
     #>
     [CmdletBinding()]
     param(
@@ -2130,6 +2177,9 @@ function Invoke-DirectRebase {
     )
 
     Write-Log "Attempting direct rebase of $Branch onto $BaseBranch" -Level "ACTION"
+
+    # Save current branch so we can restore
+    $originalBranch = (git rev-parse --abbrev-ref HEAD 2>&1).ToString().Trim()
 
     # Fetch latest
     $fetchOut = git fetch origin $BaseBranch 2>&1
@@ -2158,14 +2208,19 @@ function Invoke-DirectRebase {
 
         $rebaseOut = git rebase "origin/$BaseBranch" 2>&1
         if ($LASTEXITCODE -ne 0) {
-            git rebase --abort 2>&1 | Out-Null
-            throw "rebase conflict: $rebaseOut"
+            # Rebase hit conflicts — try auto-resolving
+            $resolved = Resolve-RebaseConflicts -BaseBranch $BaseBranch
+            if (-not $resolved) {
+                git rebase --abort 2>&1 | Out-Null
+                throw "rebase conflict (not auto-resolvable): $rebaseOut"
+            }
+            Write-Log "Auto-resolved rebase conflicts for $Branch" -Level "OK"
         }
 
         $pushOut = git push origin "${tempBranch}:${Branch}" --force-with-lease 2>&1
         if ($LASTEXITCODE -ne 0) { throw "push failed: $pushOut" }
 
-        Write-Log "Direct rebase succeeded for $Branch" -Level "OK"
+        Write-Log "Direct rebase succeeded for $Branch onto $BaseBranch" -Level "OK"
         return $true
     }
     catch {
@@ -2176,10 +2231,105 @@ function Invoke-DirectRebase {
         return $false
     }
     finally {
-        # Clean up temp branch
-        git checkout - 2>&1 | Out-Null
+        # Clean up temp branch — restore original working state
+        if ($originalBranch -and $originalBranch -ne $tempBranch -and $originalBranch -ne "HEAD") {
+            git checkout $originalBranch 2>&1 | Out-Null
+        } else {
+            git checkout - 2>&1 | Out-Null
+        }
         git branch -D $tempBranch 2>&1 | Out-Null
     }
+}
+
+# ── Auto-resolvable file patterns for rebase conflicts ────────────────────
+$script:AutoResolveTheirs = @(
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    "go.sum",
+    "*.lock"
+)
+$script:AutoResolveOurs = @(
+    "CHANGELOG.md",
+    "coverage.txt",
+    "results.txt"
+)
+
+function Test-AutoResolvable {
+    <#
+    .SYNOPSIS Check if a conflicted file can be auto-resolved.
+    .RETURNS "theirs", "ours", or $null (manual resolution required)
+    #>
+    param([string]$FilePath)
+    $fileName = Split-Path -Leaf $FilePath
+    foreach ($pattern in $script:AutoResolveTheirs) {
+        if ($fileName -like $pattern) { return "theirs" }
+    }
+    foreach ($pattern in $script:AutoResolveOurs) {
+        if ($fileName -like $pattern) { return "ours" }
+    }
+    return $null
+}
+
+function Resolve-RebaseConflicts {
+    <#
+    .SYNOPSIS Attempt to auto-resolve rebase conflicts during an active rebase.
+              Resolves lock files as "theirs", changelog as "ours", etc.
+              If any file is NOT auto-resolvable, returns $false.
+              Loops through all conflicting commits until rebase completes.
+    #>
+    param([string]$BaseBranch = "main")
+
+    $maxIterations = 50  # Safety: prevent infinite loops
+    for ($i = 0; $i -lt $maxIterations; $i++) {
+        # Get conflicted files
+        $conflicted = @(git diff --name-only --diff-filter=U 2>&1)
+        if ($LASTEXITCODE -ne 0 -or $conflicted.Count -eq 0) {
+            # Check if rebase is still in progress
+            $rebaseDir = git rev-parse --git-dir 2>&1
+            if (Test-Path "$rebaseDir/rebase-merge" -ErrorAction SilentlyContinue) {
+                # No conflicts but rebase continues — run continue
+                git rebase --continue 2>&1 | Out-Null
+                if ($LASTEXITCODE -eq 0) { return $true }
+                continue
+            }
+            # Rebase completed
+            return $true
+        }
+
+        $allResolvable = $true
+        foreach ($file in $conflicted) {
+            $file = $file.Trim()
+            if ([string]::IsNullOrWhiteSpace($file)) { continue }
+            $strategy = Test-AutoResolvable -FilePath $file
+            if (-not $strategy) {
+                Write-Log "Cannot auto-resolve: $file (manual resolution needed)" -Level "WARN"
+                $allResolvable = $false
+                break
+            }
+            # Apply resolution strategy
+            if ($strategy -eq "theirs") {
+                git checkout --theirs -- $file 2>&1 | Out-Null
+            } else {
+                git checkout --ours -- $file 2>&1 | Out-Null
+            }
+            git add $file 2>&1 | Out-Null
+            Write-Log "Auto-resolved conflict ($strategy): $file" -Level "INFO"
+        }
+
+        if (-not $allResolvable) { return $false }
+
+        # Continue the rebase
+        $env:GIT_EDITOR = "true"  # Don't open editor for commit messages
+        $continueOut = git rebase --continue 2>&1
+        $env:GIT_EDITOR = $null
+        if ($LASTEXITCODE -eq 0) {
+            return $true
+        }
+        # If rebase continue fails with more conflicts, loop will retry
+    }
+    Write-Log "Auto-resolve exhausted $maxIterations iterations" -Level "WARN"
+    return $false
 }
 
 function Get-MergeFailureInfo {
@@ -2391,6 +2541,7 @@ function Sync-TrackedAttempts {
                 copilot_fix_merged            = $false
                 copilot_fix_merged_at         = $null
                 no_commits_retries            = 0
+                conflict_rebase_attempted     = $false
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
         }
@@ -2720,7 +2871,29 @@ function Process-CompletedAttempts {
         if ($mergeState -in @("DIRTY", "CONFLICTING")) {
             Write-Log "PR #$($pr.number) has merge conflicts ($mergeState)" -Level "WARN"
             $info.status = "review"
+
+            # ── Try direct rebase first (uses correct base branch) ────────
+            if (-not $info.conflict_rebase_attempted) {
+                $info.conflict_rebase_attempted = $true
+                $rebaseBase = Resolve-PRBaseBranch -Info $info -PRDetails $prDetails
+                Write-Log "Attempting direct rebase for conflicting PR #$($pr.number) onto $rebaseBase" -Level "ACTION"
+                $rebaseOk = Invoke-DirectRebase -Branch $branch -BaseBranch $rebaseBase -AttemptId $attemptId
+                if ($rebaseOk) {
+                    Write-Log "Direct rebase resolved conflicts for PR #$($pr.number)" -Level "OK"
+                    $info.conflict_notified = $false
+                    continue  # Re-check merge state next cycle
+                }
+                Write-Log "Direct rebase failed for PR #$($pr.number) — proceeding to notification" -Level "WARN"
+            }
+
             if (-not $info.conflict_notified) {
+                # Guard FIRST: never duplicate @copilot — survives orchestrator restarts
+                if ((Test-PRHasCopilotComment -PRNumber $pr.number) -or (Test-CopilotPRClosed -PRNumber $pr.number)) {
+                    Write-Log "Skipping conflict notification for PR #$($pr.number) — @copilot already mentioned or sub-PR was closed" -Level "WARN"
+                    $info.conflict_notified = $true
+                    continue
+                }
+
                 $rateLimitHit = $null
                 if ($script:CopilotCloudDisableOnRateLimit) {
                     $rateLimitHit = Test-CopilotRateLimitComment -PRNumber $pr.number
@@ -2747,12 +2920,6 @@ Cooldown: $cooldown minutes. Resolution mode: $($script:CopilotLocalResolution).
 
 Please rebase or resolve conflicts on branch ``$branch``, then push updated changes.
 "@
-                # Guard: never post @copilot if already mentioned or Copilot PR was closed
-                if ((Test-PRHasCopilotComment -PRNumber $pr.number) -or (Test-CopilotPRClosed -PRNumber $pr.number)) {
-                    Write-Log "Skipping @copilot for PR #$($pr.number) — already mentioned or Copilot PR previously closed" -Level "WARN"
-                    $info.conflict_notified = $true
-                    continue
-                }
                 if (-not $DryRun) {
                     Add-PRComment -PRNumber $pr.number -Body $body | Out-Null
                     Add-RecentItem -ListName "CopilotRequests" -Item @{
@@ -2817,9 +2984,10 @@ Please rebase or resolve conflicts on branch ``$branch``, then push updated chan
                         }
 
                         if ($failure.category -eq "behind" -and $attemptId -and -not $info.rebase_requested) {
-                            Write-Log "Requesting direct rebase for PR #$($pr.number) (attempt $($attemptId.Substring(0,8)))" -Level "ACTION"
+                            $rebaseBase = Resolve-PRBaseBranch -Info $info -PRDetails $prDetails
+                            Write-Log "Requesting direct rebase for PR #$($pr.number) onto $rebaseBase (attempt $($attemptId.Substring(0,8)))" -Level "ACTION"
                             $info.rebase_requested = $true
-                            $rebaseOk = Invoke-DirectRebase -Branch $branch -AttemptId $attemptId
+                            $rebaseOk = Invoke-DirectRebase -Branch $branch -BaseBranch $rebaseBase -AttemptId $attemptId
                             if ($rebaseOk) {
                                 $info.rebase_requested = $false  # Reset so rebase can be retried if still behind
                             }
@@ -2881,6 +3049,12 @@ Please rebase or resolve conflicts on branch ``$branch``, then push updated chan
                 # Don't block the slot — the agent or a human needs to fix this
                 # We mark it so we don't keep retrying every cycle
                 $info.status = "review"
+
+                # Global guard: if @copilot was already mentioned on this PR, do not
+                # invoke Copilot cloud again (survives orchestrator restarts where
+                # in-memory flags like copilot_fix_requested are lost).
+                $alreadyMentioned = (Test-PRHasCopilotComment -PRNumber $pr.number) -or (Test-CopilotPRClosed -PRNumber $pr.number)
+
                 $checks = Get-PRChecksDetail -PRNumber $pr.number
                 if (Test-GithubRateLimit) { return }
                 if (-not $checks) {
@@ -2962,7 +3136,7 @@ Please reattempt the fix locally (resolution mode: $($script:CopilotLocalResolut
 
                 if (-not $info.copilot_fix_requested) {
                     # Guard: never post @copilot if already mentioned or Copilot PR was closed
-                    if ((Test-PRHasCopilotComment -PRNumber $pr.number) -or (Test-CopilotPRClosed -PRNumber $pr.number)) {
+                    if ($alreadyMentioned) {
                         Write-Log "Skipping @copilot CI fix for PR #$($pr.number) — already mentioned or Copilot PR previously closed" -Level "WARN"
                         $info.copilot_fix_requested = $true
                         break

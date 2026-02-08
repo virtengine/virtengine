@@ -3088,6 +3088,58 @@ function resolveUpstreamFromTask(task) {
   return null;
 }
 
+// ── Conflict Classification ─────────────────────────────────────────────────
+// Auto-resolvable file patterns for rebase conflicts:
+//   "theirs" = accept upstream version (lock files, generated files)
+//   "ours"   = keep our version (changelogs, coverage reports)
+const AUTO_RESOLVE_THEIRS = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "go.sum",
+];
+const AUTO_RESOLVE_OURS = [
+  "CHANGELOG.md",
+  "coverage.txt",
+  "results.txt",
+];
+const AUTO_RESOLVE_LOCK_EXTENSIONS = [".lock"];
+
+/**
+ * Classify conflicted files into auto-resolvable and manual categories.
+ * @param {string[]} files - List of conflicted file paths
+ * @returns {{ allResolvable: boolean, manualFiles: string[], summary: string }}
+ */
+function classifyConflictedFiles(files) {
+  const manualFiles = [];
+  const strategies = [];
+
+  for (const file of files) {
+    const fileName = file.split("/").pop();
+    let strategy = null;
+
+    if (AUTO_RESOLVE_THEIRS.includes(fileName)) {
+      strategy = "theirs";
+    } else if (AUTO_RESOLVE_OURS.includes(fileName)) {
+      strategy = "ours";
+    } else if (AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fileName.endsWith(ext))) {
+      strategy = "theirs";
+    }
+
+    if (strategy) {
+      strategies.push(`${fileName}→${strategy}`);
+    } else {
+      manualFiles.push(file);
+    }
+  }
+
+  return {
+    allResolvable: manualFiles.length === 0,
+    manualFiles,
+    summary: strategies.join(", ") || "none",
+  };
+}
+
 function resolveAttemptTargetBranch(attempt, task) {
   if (attempt) {
     const candidate =
@@ -3227,15 +3279,29 @@ async function smartPRFlow(attemptId, shortId, status) {
         return;
       }
       const errorData = rebaseResult.error_data;
-      // Rebase has conflicts → try auto-resolve
+      // Rebase has conflicts → try smart auto-resolve based on file type
       if (errorData?.type === "merge_conflicts") {
         const files = errorData.conflicted_files || [];
         console.warn(
-          `[monitor] ${tag}: rebase conflicts in ${files.join(", ")} — attempting auto-resolve`,
+          `[monitor] ${tag}: rebase conflicts in ${files.join(", ")} — attempting smart auto-resolve`,
         );
+
+        // Classify conflicted files
+        const autoResolvable = classifyConflictedFiles(files);
+        if (autoResolvable.allResolvable) {
+          console.log(
+            `[monitor] ${tag}: all ${files.length} conflicted files are auto-resolvable (${autoResolvable.summary})`,
+          );
+        } else {
+          console.warn(
+            `[monitor] ${tag}: ${autoResolvable.manualFiles.length} files need manual resolution: ${autoResolvable.manualFiles.join(", ")}`,
+          );
+        }
+
+        // Try VK resolve-conflicts API first (it does "accept ours")
         const resolveResult = await resolveConflicts(attemptId);
         if (resolveResult?.success) {
-          console.log(`[monitor] ${tag}: conflicts resolved automatically`);
+          console.log(`[monitor] ${tag}: conflicts resolved via VK API`);
         } else {
           const attemptInfo = await getAttemptInfo(attemptId);
           const worktreeDir =
@@ -3244,19 +3310,38 @@ async function smartPRFlow(attemptId, shortId, status) {
             console.warn(
               `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
             );
+            const classification = classifyConflictedFiles(files);
+            const fileGuidance = files
+              .map((f) => {
+                const fn = f.split("/").pop();
+                if (AUTO_RESOLVE_THEIRS.includes(fn) || AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))) {
+                  return `  - ${f}: Accept THEIRS (upstream version — lock/generated file)`;
+                }
+                if (AUTO_RESOLVE_OURS.includes(fn)) {
+                  return `  - ${f}: Accept OURS (keep our version)`;
+                }
+                return `  - ${f}: Resolve MANUALLY (inspect both sides, merge intelligently)`;
+              })
+              .join("\n");
             const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
 Worktree: ${worktreeDir || "(unknown)"}
 Attempt: ${shortId}
 Conflicted files: ${files.join(", ") || "(unknown)"}
 
+Per-file resolution strategy:
+${fileGuidance}
+
 Instructions:
 1) cd into the worktree directory.
-2) Inspect git status and conflicted files.
-3) Resolve conflicts, then run: git add -A
-4) Continue the rebase (git rebase --continue) if needed.
-5) Ensure the branch builds/tests if necessary.
-6) Commit if prompted and push the branch.
-Return a short summary of what you did.`;
+2) For each conflicted file, apply the strategy above:
+   - THEIRS: git checkout --theirs -- <file> && git add <file>
+   - OURS: git checkout --ours -- <file> && git add <file>
+   - MANUAL: Open the file, remove conflict markers (<<<< ==== >>>>), merge both sides intelligently, then git add <file>
+3) After resolving all files, run: git rebase --continue
+4) If more conflicts appear, repeat steps 2-3.
+5) Once rebase completes, push the branch: git push --force-with-lease
+6) Verify the build still passes if possible.
+Return a short summary of what you did and any files that needed manual resolution.`;
             const codexResult = await runCodexExec(
               prompt,
               worktreeDir || repoRoot,
@@ -5963,4 +6048,12 @@ if (telegramBotEnabled) {
 }
 
 // ── Named exports for testing ───────────────────────────────────────────────
-export { fetchVk, updateTaskStatus, getTaskAgeMs };
+export {
+  fetchVk,
+  updateTaskStatus,
+  getTaskAgeMs,
+  classifyConflictedFiles,
+  AUTO_RESOLVE_THEIRS,
+  AUTO_RESOLVE_OURS,
+  AUTO_RESOLVE_LOCK_EXTENSIONS,
+};
