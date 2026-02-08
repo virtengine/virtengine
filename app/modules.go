@@ -49,6 +49,7 @@ import (
 	"github.com/virtengine/virtengine/x/mfa"
 	"github.com/virtengine/virtengine/x/oracle"
 	"github.com/virtengine/virtengine/x/provider"
+	"github.com/virtengine/virtengine/x/resources"
 	"github.com/virtengine/virtengine/x/review"
 	"github.com/virtengine/virtengine/x/roles"
 	"github.com/virtengine/virtengine/x/settlement"
@@ -241,6 +242,10 @@ func appModules(
 		hpc.NewAppModule(
 			app.cdc,
 			app.Keepers.VirtEngine.HPC,
+		),
+		resources.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.Resources,
 		),
 		benchmark.NewAppModule(
 			app.cdc,

@@ -1,0 +1,117 @@
+syntax = "proto3";
+package virtengine.resources.v1;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/resources/v1";
+
+// ResourceClass defines the resource category.
+enum ResourceClass {
+  RESOURCE_CLASS_UNSPECIFIED = 0;
+  RESOURCE_CLASS_COMPUTE = 1;
+  RESOURCE_CLASS_STORAGE = 2;
+  RESOURCE_CLASS_NETWORK = 3;
+}
+
+// AllocationState defines the reservation lifecycle state.
+enum AllocationState {
+  ALLOCATION_STATE_UNSPECIFIED = 0;
+  ALLOCATION_STATE_PENDING = 1;
+  ALLOCATION_STATE_ACTIVE = 2;
+  ALLOCATION_STATE_EXPIRED = 3;
+  ALLOCATION_STATE_RELEASED = 4;
+}
+
+// Locality captures location information.
+message Locality {
+  string region = 1 [(gogoproto.jsontag) = "region,omitempty", (gogoproto.moretags) = "yaml:\"region\""];
+  string zone = 2 [(gogoproto.jsontag) = "zone,omitempty", (gogoproto.moretags) = "yaml:\"zone\""];
+  string datacenter = 3 [(gogoproto.jsontag) = "datacenter,omitempty", (gogoproto.moretags) = "yaml:\"datacenter\""];
+  string country = 4 [(gogoproto.jsontag) = "country,omitempty", (gogoproto.moretags) = "yaml:\"country\""];
+}
+
+// ResourceCapacity describes capacity values.
+message ResourceCapacity {
+  int64 cpu_cores = 1 [(gogoproto.jsontag) = "cpu_cores,omitempty", (gogoproto.moretags) = "yaml:\"cpu_cores\""];
+  int64 memory_gb = 2 [(gogoproto.jsontag) = "memory_gb,omitempty", (gogoproto.moretags) = "yaml:\"memory_gb\""];
+  int64 storage_gb = 3 [(gogoproto.jsontag) = "storage_gb,omitempty", (gogoproto.moretags) = "yaml:\"storage_gb\""];
+  int64 network_mbps = 4 [(gogoproto.jsontag) = "network_mbps,omitempty", (gogoproto.moretags) = "yaml:\"network_mbps\""];
+  int64 gpus = 5 [(gogoproto.jsontag) = "gpus,omitempty", (gogoproto.moretags) = "yaml:\"gpus\""];
+  string gpu_type = 6 [(gogoproto.jsontag) = "gpu_type,omitempty", (gogoproto.moretags) = "yaml:\"gpu_type\""];
+}
+
+// ResourceInventory captures provider availability snapshots.
+message ResourceInventory {
+  string inventory_id = 1 [(gogoproto.jsontag) = "inventory_id", (gogoproto.moretags) = "yaml:\"inventory_id\""];
+  string provider_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  ResourceClass resource_class = 3 [(gogoproto.jsontag) = "resource_class", (gogoproto.moretags) = "yaml:\"resource_class\""];
+  ResourceCapacity total = 4 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "total", (gogoproto.moretags) = "yaml:\"total\""];
+  ResourceCapacity available = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "available", (gogoproto.moretags) = "yaml:\"available\""];
+  Locality locality = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "locality", (gogoproto.moretags) = "yaml:\"locality\""];
+  bool active = 7 [(gogoproto.jsontag) = "active", (gogoproto.moretags) = "yaml:\"active\""];
+  uint64 heartbeat_sequence = 8 [(gogoproto.jsontag) = "heartbeat_sequence", (gogoproto.moretags) = "yaml:\"heartbeat_sequence\""];
+  google.protobuf.Timestamp last_heartbeat = 9 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "last_heartbeat", (gogoproto.moretags) = "yaml:\"last_heartbeat\""];
+  google.protobuf.Timestamp updated_at = 10 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+}
+
+// ResourceRequest represents an allocation request.
+message ResourceRequest {
+  string request_id = 1 [(gogoproto.jsontag) = "request_id", (gogoproto.moretags) = "yaml:\"request_id\""];
+  string requester_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  ResourceClass resource_class = 3 [(gogoproto.jsontag) = "resource_class", (gogoproto.moretags) = "yaml:\"resource_class\""];
+  ResourceCapacity required = 4 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "required", (gogoproto.moretags) = "yaml:\"required\""];
+  Locality locality = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "locality", (gogoproto.moretags) = "yaml:\"locality\""];
+  string locality_policy = 6 [(gogoproto.jsontag) = "locality_policy,omitempty", (gogoproto.moretags) = "yaml:\"locality_policy\""];
+  uint64 max_candidates = 7 [(gogoproto.jsontag) = "max_candidates,omitempty", (gogoproto.moretags) = "yaml:\"max_candidates\""];
+}
+
+// ResourceAllocation stores the allocation decision.
+message ResourceAllocation {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string request_id = 2 [(gogoproto.jsontag) = "request_id", (gogoproto.moretags) = "yaml:\"request_id\""];
+  string requester_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  string provider_address = 4 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  ResourceClass resource_class = 5 [(gogoproto.jsontag) = "resource_class", (gogoproto.moretags) = "yaml:\"resource_class\""];
+  ResourceCapacity required = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "required", (gogoproto.moretags) = "yaml:\"required\""];
+  ResourceCapacity assigned = 7 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "assigned", (gogoproto.moretags) = "yaml:\"assigned\""];
+  AllocationState state = 8 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  string score = 9 [(gogoproto.jsontag) = "score", (gogoproto.moretags) = "yaml:\"score\""];
+  Locality locality = 10 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "locality", (gogoproto.moretags) = "yaml:\"locality\""];
+  google.protobuf.Timestamp created_at = 11 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp expires_at = 12 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "expires_at,omitempty", (gogoproto.moretags) = "yaml:\"expires_at\""];
+  google.protobuf.Timestamp activated_at = 13 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "activated_at,omitempty", (gogoproto.moretags) = "yaml:\"activated_at\""];
+  google.protobuf.Timestamp updated_at = 14 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  int64 block_height = 15 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// AllocationEvent records allocation lifecycle transitions.
+message AllocationEvent {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  uint64 sequence = 2 [(gogoproto.jsontag) = "sequence", (gogoproto.moretags) = "yaml:\"sequence\""];
+  AllocationState state = 3 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  string reason = 4 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+  string provider_address = 5 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  google.protobuf.Timestamp created_at = 6 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+}
+
+// SlashingEvent captures non-fulfillment penalties.
+message SlashingEvent {
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string reason = 3 [(gogoproto.jsontag) = "reason", (gogoproto.moretags) = "yaml:\"reason\""];
+  string penalty = 4 [(gogoproto.jsontag) = "penalty", (gogoproto.moretags) = "yaml:\"penalty\""];
+  google.protobuf.Timestamp created_at = 5 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+}
+
+// Params defines module parameters.
+message Params {
+  uint64 heartbeat_timeout_seconds = 1 [(gogoproto.jsontag) = "heartbeat_timeout_seconds", (gogoproto.moretags) = "yaml:\"heartbeat_timeout_seconds\""];
+  uint64 reservation_timeout_seconds = 2 [(gogoproto.jsontag) = "reservation_timeout_seconds", (gogoproto.moretags) = "yaml:\"reservation_timeout_seconds\""];
+  uint64 max_candidates = 3 [(gogoproto.jsontag) = "max_candidates", (gogoproto.moretags) = "yaml:\"max_candidates\""];
+  string locality_weight = 4 [(gogoproto.jsontag) = "locality_weight", (gogoproto.moretags) = "yaml:\"locality_weight\""];
+  string capacity_weight = 5 [(gogoproto.jsontag) = "capacity_weight", (gogoproto.moretags) = "yaml:\"capacity_weight\""];
+  uint64 slashing_grace_seconds = 6 [(gogoproto.jsontag) = "slashing_grace_seconds", (gogoproto.moretags) = "yaml:\"slashing_grace_seconds\""];
+  string slashing_penalty = 7 [(gogoproto.jsontag) = "slashing_penalty", (gogoproto.moretags) = "yaml:\"slashing_penalty\""];
+}
