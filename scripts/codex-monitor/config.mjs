@@ -621,30 +621,10 @@ You are an autonomous task planner. When the task backlog is low, you analyze th
 1. Review the current project state (open issues, PRs, code quality)
 2. Identify gaps, improvements, and next steps
 3. Create tasks in vibe-kanban with clear:
-   - Title with size label prefix (see below)
+   - Title (concise, action-oriented)
    - Description (what needs to be done)
    - Acceptance criteria (how to verify completion)
    - Priority and effort estimates
-
-## Size Labels (REQUIRED)
-
-Every task title MUST start with a size label in brackets. This drives automatic
-complexity-based model routing — the orchestrator picks stronger/weaker AI models
-based on task size.
-
-| Label  | Scope                                      |
-|--------|--------------------------------------------|
-| [xs]   | < 30 min — config change, typo fix         |
-| [s]    | 30-60 min — small feature, docs update     |
-| [m]    | 1-2 hours — standard feature, bug fix      |
-| [l]    | 2-4 hours — multi-file change, test suite  |
-| [xl]   | 4-8 hours — cross-module, architecture     |
-| [xxl]  | 8+ hours — infrastructure, major refactor  |
-
-Examples:
-  - \`[xs] Fix typo in README\`
-  - \`[m] Add validation to user registration endpoint\`
-  - \`[xl] Implement distributed task claiming protocol\`
 
 ## Guidelines
 
@@ -653,7 +633,6 @@ Examples:
 - Prioritize bug fixes and test coverage over new features
 - Consider technical debt and code quality improvements
 - Check for existing similar tasks to avoid duplicates
-- Use appropriate size labels based on estimated effort
 `;
 
 function loadAgentPrompts(configDir, repoRoot, configData) {
@@ -1166,96 +1145,6 @@ export function loadConfig(argv = process.argv, options = {}) {
     knowledgeFile: fleetKnowledgeFile,
   });
 
-  // ── Complexity Routing ──────────────────────────────────────
-  // Maps task complexity tiers (low/medium/high) to model variants per executor
-  // type. Allows cheaper/faster models for simple tasks and the strongest
-  // models for complex work.
-  //
-  // Config format (codex-monitor.config.json):
-  //   "complexityRouting": {
-  //     "enabled": true,
-  //     "models": {
-  //       "CODEX": {
-  //         "low":    { "model": "gpt-5.1-codex-mini", "variant": "GPT51_CODEX_MINI", "reasoningEffort": "low" },
-  //         "medium": { "model": "gpt-5.2-codex",      "variant": "DEFAULT",           "reasoningEffort": "medium" },
-  //         "high":   { "model": "gpt-5.1-codex-max",  "variant": "GPT51_CODEX_MAX",  "reasoningEffort": "high" }
-  //       },
-  //       "COPILOT": {
-  //         "low":    { "model": "haiku-4.5",   "variant": "HAIKU_4_5",       "reasoningEffort": "low" },
-  //         "medium": { "model": "sonnet-4.5",  "variant": "SONNET_4_5",      "reasoningEffort": "medium" },
-  //         "high":   { "model": "opus-4.6",    "variant": "CLAUDE_OPUS_4_6", "reasoningEffort": "high" }
-  //       }
-  //     }
-  //   }
-  //
-  // Env overrides:
-  //   COMPLEXITY_ROUTING_ENABLED=true
-  //   COMPLEXITY_ROUTING_CODEX_LOW_MODEL=gpt-5.1-codex-mini
-  //   COMPLEXITY_ROUTING_CODEX_LOW_VARIANT=GPT51_CODEX_MINI
-  //   COMPLEXITY_ROUTING_CODEX_MEDIUM_MODEL=gpt-5.2-codex
-  //   COMPLEXITY_ROUTING_COPILOT_HIGH_MODEL=opus-4.6
-  const complexityRoutingEnabled = !["0", "false", "no"].includes(
-    String(
-      process.env.COMPLEXITY_ROUTING_ENABLED ??
-        configData.complexityRouting?.enabled ??
-        "true",
-    ).toLowerCase(),
-  );
-
-  // Build model overrides from env vars
-  const complexityModelsFromEnv = {};
-  for (const execType of ["CODEX", "COPILOT"]) {
-    for (const tier of ["low", "medium", "high"]) {
-      const prefix = `COMPLEXITY_ROUTING_${execType}_${tier.toUpperCase()}`;
-      const model = process.env[`${prefix}_MODEL`];
-      const variant = process.env[`${prefix}_VARIANT`];
-      const reasoning = process.env[`${prefix}_REASONING`];
-      if (model || variant || reasoning) {
-        if (!complexityModelsFromEnv[execType])
-          complexityModelsFromEnv[execType] = {};
-        complexityModelsFromEnv[execType][tier] = {
-          ...(model ? { model } : {}),
-          ...(variant ? { variant } : {}),
-          ...(reasoning ? { reasoningEffort: reasoning } : {}),
-        };
-      }
-    }
-  }
-
-  // Merge: env overrides → config file → defaults (handled in task-complexity.mjs)
-  const complexityModelsFromConfig = configData.complexityRouting?.models || {};
-  const mergedComplexityModels = {};
-  for (const execType of ["CODEX", "COPILOT"]) {
-    if (
-      complexityModelsFromEnv[execType] ||
-      complexityModelsFromConfig[execType]
-    ) {
-      mergedComplexityModels[execType] = {};
-      for (const tier of ["low", "medium", "high"]) {
-        mergedComplexityModels[execType][tier] = {
-          ...(complexityModelsFromConfig[execType]?.[tier] || {}),
-          ...(complexityModelsFromEnv[execType]?.[tier] || {}),
-        };
-        // Remove empty entries
-        if (
-          Object.keys(mergedComplexityModels[execType][tier]).length === 0
-        ) {
-          delete mergedComplexityModels[execType][tier];
-        }
-      }
-      if (Object.keys(mergedComplexityModels[execType]).length === 0) {
-        delete mergedComplexityModels[execType];
-      }
-    }
-  }
-
-  const complexityRouting = Object.freeze({
-    enabled: complexityRoutingEnabled,
-    models: Object.keys(mergedComplexityModels).length
-      ? Object.freeze(mergedComplexityModels)
-      : null,
-  });
-
   // ── Dependabot Auto-Merge ─────────────────────────────────
   const dependabotAutoMerge = !["0", "false", "no"].includes(
     String(
@@ -1398,9 +1287,6 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Fleet Coordination
     fleet,
-
-    // Complexity Routing
-    complexityRouting,
 
     // Paths
     statusPath,

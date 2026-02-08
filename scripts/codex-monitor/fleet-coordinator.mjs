@@ -718,7 +718,6 @@ export function markAutoGenTriggered() {
 export function resetAutoGenCooldown() {
   lastAutoGenTimestamp = null;
 }
-
 // ── Fleet State Persistence ──────────────────────────────────────────────────
 
 const FLEET_STATE_DIR = ".cache/codex-monitor";
