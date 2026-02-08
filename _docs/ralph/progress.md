@@ -1,10 +1,52 @@
 ## STATUS: 🟡 IN PROGRESS - Production Readiness Phase (~78% Complete)
 
-**Last Analysis:** 2026-02-12 UTC
+**Last Analysis:** 2026-02-08 UTC
 
-**Summary:** 77 core tasks | 28 patent gap tasks | 12 health fixes | 14 CI/CD fixes | 24 VE-2000 series | 4 TEE HW tasks | 23 VEID gap tasks | 8 gap fixes | 28 spec-driven tasks | 115+ vibe-kanban tasks | **18 Tasks (28A-28R)** | **12 Tasks (29A-29L)** | **5 Tasks (30A-30E)** | **15 Tasks (31A-31O)** | **Detailed task specs in `_docs/ralph/tasks/`**
+**Summary:** 77 core tasks | 28 patent gap tasks | 12 health fixes | 14 CI/CD fixes | 24 VE-2000 series | 4 TEE HW tasks | 23 VEID gap tasks | 8 gap fixes | 28 spec-driven tasks | 115+ vibe-kanban tasks | **18 Tasks (28A-28R)** | **12 Tasks (29A-29L)** | **5 Tasks (30A-30E)** | **15 Tasks (31A-31O)** | **5 Tasks (34A-34E)** | **Detailed task specs in `_docs/ralph/tasks/`**
 
 ---
+
+## 🔄 ANALYSIS UPDATE (2026-02-08)
+
+### Timeline Note
+
+- The prior **Last Analysis** entry referenced 2026-02-12, which is in the future relative to today (2026-02-08). This update supersedes it.
+
+### Recent Completions (Feb 7-8, 2026)
+
+| Commit   | Title                                                      | Task | Status    |
+| -------- | ---------------------------------------------------------- | ---- | --------- |
+| 069543ce | Merge PR #526: codex-monitor generic v0.6.3                | -    | ✅ MERGED |
+| 9202d48b | fix(monitor): task dedup + cooldown behavior               | -    | ✅ DONE   |
+| 7d5bbfc0 | fix(monitor): VK duplicate task detection                  | -    | ✅ DONE   |
+| 875fd730 | fix(monitor): export fetchVk/updateTaskStatus              | -    | ✅ DONE   |
+| 7180d7f5 | test(codex-monitor): VK API client integration tests       | -    | ✅ DONE   |
+
+### Gap Review Since Last Analysis
+
+- Core chain/portal spec gaps remain unchanged; recent changes are codex-monitor tooling and do not close AU2024203136A1 gaps.
+- Open issues highlight ongoing risk areas: CI failures (#483) and security remediation (#152–#161).
+- Remaining gaps prioritized for the next series: security remediation, CI stabilization, HPC node provisioning, and usage→rewards accounting.
+
+### New Tasks Added: Series 34 (Security + Production Hardening)
+
+| ID  | Title                                              | Priority | Status   | Est. LOC |
+| --- | -------------------------------------------------- | -------- | -------- | -------- |
+| 34A | Security remediation sweep (gosec/CodeQL)          | **P0**   | PLANNED  | 3–7k     |
+| 34B | CI workflow stability + toolchain pinning          | P1       | PLANNED  | 2–4k     |
+| 34C | HPC node provisioning + on-chain registration      | P1       | PLANNED  | 4–8k     |
+| 34D | Usage accounting → rewards distribution            | P1       | PLANNED  | 3.5–7k   |
+| 34E | Provider daemon durable command queue + reconcile  | P2       | PLANNED  | 2.5–5k   |
+
+### vibe-kanban Task IDs (Series 34)
+
+| ID  | vibe-kanban UUID                     |
+| --- | ------------------------------------ |
+| 34A | 764a5038-354c-4da2-8f03-a72c1beeaf05 |
+| 34B | a2781cf6-85e3-46c8-a6d5-b025f409173a |
+| 34C | 499cbdb5-525d-4c75-aa17-f20298349531 |
+| 34D | 96a2dd80-9f89-449a-a4c5-540526f24ff8 |
+| 34E | 207226dc-65d5-4a56-b4e7-13916224d6fb |
 
 ## 🔄 ANALYSIS UPDATE (2026-02-12)
 
