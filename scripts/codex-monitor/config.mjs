@@ -237,19 +237,11 @@ function detectRepoRoot() {
 const DEFAULT_EXECUTORS = {
   executors: [
     {
-      name: "copilot-claude",
-      executor: "COPILOT",
-      variant: "CLAUDE_OPUS_4_6",
-      weight: 50,
-      role: "primary",
-      enabled: true,
-    },
-    {
       name: "codex-default",
       executor: "CODEX",
       variant: "DEFAULT",
-      weight: 50,
-      role: "backup",
+      weight: 100,
+      role: "primary",
       enabled: true,
     },
   ],
@@ -259,11 +251,11 @@ const DEFAULT_EXECUTORS = {
     cooldownMinutes: 5,
     disableOnConsecutiveFailures: 3,
   },
-  distribution: "weighted",
+  distribution: "primary-only",
 };
 
 function parseExecutorsFromEnv() {
-  // EXECUTORS=COPILOT:CLAUDE_OPUS_4_6:50,CODEX:DEFAULT:50
+  // EXECUTORS=CODEX:DEFAULT:100
   const raw = process.env.EXECUTORS;
   if (!raw) return null;
   const entries = raw.split(",").map((e) => e.trim());

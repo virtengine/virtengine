@@ -3,18 +3,11 @@
   "projectName": "my-project",
   "executors": [
     {
-      "name": "copilot-claude",
-      "executor": "COPILOT",
-      "variant": "CLAUDE_OPUS_4_6",
-      "weight": 50,
-      "role": "primary"
-    },
-    {
       "name": "codex-default",
       "executor": "CODEX",
       "variant": "DEFAULT",
-      "weight": 50,
-      "role": "backup"
+      "weight": 100,
+      "role": "primary"
     }
   ],
   "failover": {
@@ -23,7 +16,7 @@
     "cooldownMinutes": 5,
     "disableOnConsecutiveFailures": 3
   },
-  "distribution": "weighted",
+  "distribution": "primary-only",
   "repositories": [
     {
       "name": "my-project",

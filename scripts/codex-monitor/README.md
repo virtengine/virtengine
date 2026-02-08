@@ -296,7 +296,7 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `TELEGRAM_BOT_TOKEN`                  | —                              | Telegram bot token from @BotFather                                                                                     |
 | `TELEGRAM_CHAT_ID`                    | —                              | Telegram chat ID                                                                                                       |
 | `VK_BASE_URL`                         | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
-| `EXECUTORS`                           | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
+| `EXECUTORS`                           | Codex only                     | Executor shorthand (see above)                                                                                         |
 | `EXECUTOR_DISTRIBUTION`               | `weighted`                     | Distribution mode                                                                                                      |
 | `FAILOVER_STRATEGY`                   | `next-in-line`                 | Failover behavior                                                                                                      |
 | `MAX_PARALLEL`                        | `6`                            | Max concurrent agent slots                                                                                             |

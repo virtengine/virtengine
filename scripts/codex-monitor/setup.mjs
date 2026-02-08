@@ -638,9 +638,9 @@ async function main() {
     const presetIdx = await prompt.choose(
       "Select executor preset:",
       [
-        "Copilot + Codex (50/50 split — recommended)",
-        "Copilot only (Claude Opus 4.6)",
         "Codex only",
+        "Copilot + Codex (50/50 split)",
+        "Copilot only (Claude Opus 4.6)",
         "Triple (Copilot Claude 40%, Codex 35%, Copilot GPT 25%)",
         "Custom — I'll define my own executors",
       ],
@@ -648,9 +648,9 @@ async function main() {
     );
 
     const presetNames = [
+      "codex-only",
       "copilot-codex",
       "copilot-only",
-      "codex-only",
       "triple",
       "custom",
     ];
@@ -1261,7 +1261,7 @@ async function runNonInteractive({
     }
   }
   if (!configJson.executors.length) {
-    configJson.executors = EXECUTOR_PRESETS["copilot-codex"];
+    configJson.executors = EXECUTOR_PRESETS["codex-only"];
   }
 
   configJson.projectName = env.PROJECT_NAME;
