@@ -415,6 +415,61 @@ The built-in task planner (triggered when backlog is empty) instructs agents to
 include size labels on every created task. If you write a custom planner prompt,
 include the size label table in your instructions.
 
+### Dirty/Conflict Task Prioritization
+
+When a PR has merge conflicts or a task is marked "dirty" (failed rebase, CI
+conflicts, or stale branch), codex-monitor activates a dedicated conflict
+resolution pipeline. This system ensures conflicts are resolved quickly without
+blocking new work.
+
+#### Slot Reservation
+
+The orchestrator reserves capacity for dirty/conflict tasks so they aren't
+starved by new work:
+
+- **1 slot** (or 25% of total capacity, whichever is smaller) is reserved for
+  dirty task resolution when conflicts are detected
+- New tasks cannot fill this reserved capacity — only dirty resolution tasks can
+- Once conflicts are cleared, the reservation is released automatically
+
+#### File-Overlap Guards
+
+Before scheduling a new task, the orchestrator checks whether it touches the same
+files as any active dirty PR. This prevents launching agents that would
+immediately conflict with ongoing resolution:
+
+- Module-level pattern matching detects overlapping Go packages, portal/frontend,
+  SDK, ML, and infrastructure files
+- Tasks that overlap with dirty PRs are deferred until the conflict is resolved
+
+#### Forced HIGH Tier Models
+
+All dirty/conflict resolution tasks are automatically assigned the **highest
+available model** regardless of their original complexity classification:
+
+| Executor | Model              |
+|----------|--------------------|
+| CODEX    | gpt-5.1-codex-max  |
+| COPILOT  | opus-4.6           |
+
+This ensures conflicts get the most capable model for complex merge resolution.
+
+#### Fresh Session Policy
+
+Conflict resolution **always** starts a new session — context is never reused
+from previous failed attempts. The resolution prompt includes:
+
+- Per-file merge strategy (THEIRS for lockfiles, OURS for changelogs, MANUAL for
+  code)
+- Full task context (title, description, target branch)
+- Worktree location and conflicted file list
+
+#### Resolution Cooldown
+
+A 15-minute cooldown prevents repeated resolution attempts on the same task.
+After a resolution attempt, the task won't be retried until the cooldown expires.
+The standard conflict cooldown (30 minutes) also applies independently.
+
 ### Shared Cloud Workspaces
 
 Codex-monitor can track pooled cloud workspaces with lease-based ownership and

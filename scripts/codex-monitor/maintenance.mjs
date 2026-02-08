@@ -480,15 +480,16 @@ export function syncLocalTrackingBranches(repoRoot, branches) {
 
 /**
  * Run full maintenance sweep: stale kill, git push reap, worktree cleanup,
- * and local tracking branch sync.
+ * local tracking branch sync, and optionally VK task archiving.
  * @param {object} opts
  * @param {string} opts.repoRoot - repository root path
  * @param {number} [opts.childPid] - current orchestrator child PID to skip
  * @param {number} [opts.gitPushMaxAgeMs] - max age for git push before kill (default 5min)
  * @param {string[]} [opts.syncBranches] - local branches to fast-forward (default: ["main"])
+ * @param {function} [opts.archiveCompletedTasks] - optional async function to archive VK tasks
  */
-export function runMaintenanceSweep(opts = {}) {
-  const { repoRoot, childPid, gitPushMaxAgeMs, syncBranches } = opts;
+export async function runMaintenanceSweep(opts = {}) {
+  const { repoRoot, childPid, gitPushMaxAgeMs, syncBranches, archiveCompletedTasks } = opts;
   console.log("[maintenance] starting sweep...");
 
   const staleKilled = killStaleOrchestrators(childPid);
@@ -498,9 +499,23 @@ export function runMaintenanceSweep(opts = {}) {
     ? syncLocalTrackingBranches(repoRoot, syncBranches)
     : 0;
 
+  // Optional: Archive old completed VK tasks (if provided)
+  let tasksArchived = 0;
+  if (archiveCompletedTasks && typeof archiveCompletedTasks === "function") {
+    try {
+      const result = await archiveCompletedTasks();
+      tasksArchived = result?.archived || 0;
+      if (tasksArchived > 0) {
+        console.log(`[maintenance] archived ${tasksArchived} old completed tasks`);
+      }
+    } catch (err) {
+      console.warn(`[maintenance] task archiving failed: ${err.message}`);
+    }
+  }
+
   console.log(
     `[maintenance] sweep complete: ${staleKilled} stale orchestrators, ${pushesReaped} stuck pushes, ${worktreesPruned} worktrees pruned, ${branchesSynced} branches synced`,
   );
 
-  return { staleKilled, pushesReaped, worktreesPruned, branchesSynced };
+  return { staleKilled, pushesReaped, worktreesPruned, branchesSynced, tasksArchived };
 }
