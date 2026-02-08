@@ -166,6 +166,7 @@ let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+console.log(`[monitor] task planner mode: ${plannerMode}`);
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
