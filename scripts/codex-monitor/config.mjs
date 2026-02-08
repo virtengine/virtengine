@@ -852,7 +852,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   // regardless of what directory the process was started from.
   let scriptPath = resolve(configDir, rawScript);
   // If the resolved path doesn't exist and rawScript is just a filename (no path separators),
-  // fall back to auto-detection to find it in common locations
+  // fall back to auto-detection to find it in common locations.
   if (
     !existsSync(scriptPath) &&
     !rawScript.includes("/") &&
@@ -1125,8 +1125,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     // Merge Strategy
     codexAnalyzeMergeStrategy:
       codexEnabled &&
-      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !==
-        "false",
+      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false",
     mergeStrategyTimeoutMs:
       parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
 
