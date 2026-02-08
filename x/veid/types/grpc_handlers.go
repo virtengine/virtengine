@@ -39,6 +39,10 @@ var _Msg_serviceDesc = struct {
 		{MethodName: "UpdateDerivedFeatures", Handler: nil},
 		{MethodName: "CompleteBorderlineFallback", Handler: nil},
 		{MethodName: "UpdateBorderlineParams", Handler: nil},
+		{MethodName: "UpdateParams", Handler: nil},
+		{MethodName: "SubmitSSOVerificationProof", Handler: nil},
+		{MethodName: "SubmitEmailVerificationProof", Handler: nil},
+		{MethodName: "SubmitSMSVerificationProof", Handler: nil},
 	},
 	Streams:  []struct{}{},
 	Metadata: "virtengine/veid/v1/msg.proto",
@@ -64,6 +68,10 @@ type MsgServer interface {
 	UpdateBorderlineParams(ctx context.Context, msg *MsgUpdateBorderlineParams) (*MsgUpdateBorderlineParamsResponse, error)
 	// Params (from SDK proto)
 	UpdateParams(ctx context.Context, msg *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+	// Web-scope verification proofs
+	SubmitSSOVerificationProof(ctx context.Context, msg *MsgSubmitSSOVerificationProof) (*MsgSubmitSSOVerificationProofResponse, error)
+	SubmitEmailVerificationProof(ctx context.Context, msg *MsgSubmitEmailVerificationProof) (*MsgSubmitEmailVerificationProofResponse, error)
+	SubmitSMSVerificationProof(ctx context.Context, msg *MsgSubmitSMSVerificationProof) (*MsgSubmitSMSVerificationProofResponse, error)
 }
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
@@ -91,6 +99,9 @@ var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "CompleteBorderlineFallback", Handler: _Msg_CompleteBorderlineFallback_Handler},
 		{MethodName: "UpdateBorderlineParams", Handler: _Msg_UpdateBorderlineParams_Handler},
 		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
+		{MethodName: "SubmitSSOVerificationProof", Handler: _Msg_SubmitSSOVerificationProof_Handler},
+		{MethodName: "SubmitEmailVerificationProof", Handler: _Msg_SubmitEmailVerificationProof_Handler},
+		{MethodName: "SubmitSMSVerificationProof", Handler: _Msg_SubmitSMSVerificationProof_Handler},
 	},
 	Streams:  []ggrpc.StreamDesc{},
 	Metadata: "virtengine/veid/v1/msg.proto",
@@ -292,6 +303,48 @@ func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(in
 	})
 }
 
+func _Msg_SubmitSSOVerificationProof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitSSOVerificationProof)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitSSOVerificationProof(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitSSOVerificationProof"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitSSOVerificationProof(ctx, req.(*MsgSubmitSSOVerificationProof))
+	})
+}
+
+func _Msg_SubmitEmailVerificationProof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitEmailVerificationProof)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitEmailVerificationProof(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitEmailVerificationProof"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitEmailVerificationProof(ctx, req.(*MsgSubmitEmailVerificationProof))
+	})
+}
+
+func _Msg_SubmitSMSVerificationProof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitSMSVerificationProof)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitSMSVerificationProof(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitSMSVerificationProof"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitSMSVerificationProof(ctx, req.(*MsgSubmitSMSVerificationProof))
+	})
+}
+
 // QueryServer is the interface for the query server
 type QueryServer interface {
 	IdentityRecord(ctx context.Context, req *QueryIdentityRecordRequest) (*QueryIdentityRecordResponse, error)
@@ -300,6 +353,9 @@ type QueryServer interface {
 	VerificationHistory(ctx context.Context, req *QueryVerificationHistoryRequest) (*QueryVerificationHistoryResponse, error)
 	ApprovedClients(ctx context.Context, req *QueryApprovedClientsRequest) (*QueryApprovedClientsResponse, error)
 	Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error)
+	SSOLinkage(ctx context.Context, req *QuerySSOLinkageRequest) (*QuerySSOLinkageResponse, error)
+	EmailVerification(ctx context.Context, req *QueryEmailVerificationRequest) (*QueryEmailVerificationResponse, error)
+	SMSVerification(ctx context.Context, req *QuerySMSVerificationRequest) (*QuerySMSVerificationResponse, error)
 	// Wallet queries
 	IdentityWallet(ctx context.Context, req *QueryIdentityWalletRequest) (*QueryIdentityWalletResponse, error)
 	WalletScopes(ctx context.Context, req *QueryWalletScopesRequest) (*QueryWalletScopesResponse, error)
@@ -338,6 +394,9 @@ var _Query_serviceDesc = struct {
 		{MethodName: "VerificationHistory", Handler: nil},
 		{MethodName: "ApprovedClients", Handler: nil},
 		{MethodName: "Params", Handler: nil},
+		{MethodName: "SSOLinkage", Handler: nil},
+		{MethodName: "EmailVerification", Handler: nil},
+		{MethodName: "SMSVerification", Handler: nil},
 		{MethodName: "IdentityWallet", Handler: nil},
 		{MethodName: "WalletScopes", Handler: nil},
 		{MethodName: "ConsentSettings", Handler: nil},
@@ -368,6 +427,9 @@ var _Query_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "VerificationHistory", Handler: _Query_VerificationHistory_Handler},
 		{MethodName: "ApprovedClients", Handler: _Query_ApprovedClients_Handler},
 		{MethodName: "Params", Handler: _Query_Params_Handler},
+		{MethodName: "SSOLinkage", Handler: _Query_SSOLinkage_Handler},
+		{MethodName: "EmailVerification", Handler: _Query_EmailVerification_Handler},
+		{MethodName: "SMSVerification", Handler: _Query_SMSVerification_Handler},
 		{MethodName: "IdentityWallet", Handler: _Query_IdentityWallet_Handler},
 		{MethodName: "WalletScopes", Handler: _Query_WalletScopes_Handler},
 		{MethodName: "ConsentSettings", Handler: _Query_ConsentSettings_Handler},
@@ -463,6 +525,48 @@ func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interf
 	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/Params"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(QueryServer).Params(ctx, req.(*QueryParamsRequest))
+	})
+}
+
+func _Query_SSOLinkage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuerySSOLinkageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).SSOLinkage(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/SSOLinkage"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).SSOLinkage(ctx, req.(*QuerySSOLinkageRequest))
+	})
+}
+
+func _Query_EmailVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryEmailVerificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).EmailVerification(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/EmailVerification"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).EmailVerification(ctx, req.(*QueryEmailVerificationRequest))
+	})
+}
+
+func _Query_SMSVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuerySMSVerificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).SMSVerification(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/SMSVerification"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).SMSVerification(ctx, req.(*QuerySMSVerificationRequest))
 	})
 }
 
@@ -637,6 +741,36 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
+type QuerySSOLinkageRequest struct {
+	LinkageId      string `json:"linkage_id"`
+	AccountAddress string `json:"account_address"`
+	Provider       string `json:"provider"`
+}
+
+type QuerySSOLinkageResponse struct {
+	Linkage *SSOLinkageMetadataPB `json:"linkage,omitempty"`
+}
+
+type QueryEmailVerificationRequest struct {
+	VerificationId string `json:"verification_id"`
+	AccountAddress string `json:"account_address"`
+	EmailHash      string `json:"email_hash"`
+}
+
+type QueryEmailVerificationResponse struct {
+	Record *EmailVerificationRecordPB `json:"record,omitempty"`
+}
+
+type QuerySMSVerificationRequest struct {
+	VerificationId string `json:"verification_id"`
+	AccountAddress string `json:"account_address"`
+	PhoneHash      string `json:"phone_hash"`
+}
+
+type QuerySMSVerificationResponse struct {
+	Record *SMSVerificationRecordPB `json:"record,omitempty"`
+}
+
 // ============================================================================
 // Appeal Query Types (VE-3020)
 // ============================================================================
@@ -728,6 +862,30 @@ func (*QueryParamsRequest) ProtoMessage()    {}
 func (m *QueryParamsResponse) Reset()         { *m = QueryParamsResponse{} }
 func (m *QueryParamsResponse) String() string { return "" }
 func (*QueryParamsResponse) ProtoMessage()    {}
+
+func (m *QuerySSOLinkageRequest) Reset()         { *m = QuerySSOLinkageRequest{} }
+func (m *QuerySSOLinkageRequest) String() string { return "" }
+func (*QuerySSOLinkageRequest) ProtoMessage()    {}
+
+func (m *QuerySSOLinkageResponse) Reset()         { *m = QuerySSOLinkageResponse{} }
+func (m *QuerySSOLinkageResponse) String() string { return "" }
+func (*QuerySSOLinkageResponse) ProtoMessage()    {}
+
+func (m *QueryEmailVerificationRequest) Reset()         { *m = QueryEmailVerificationRequest{} }
+func (m *QueryEmailVerificationRequest) String() string { return "" }
+func (*QueryEmailVerificationRequest) ProtoMessage()    {}
+
+func (m *QueryEmailVerificationResponse) Reset()         { *m = QueryEmailVerificationResponse{} }
+func (m *QueryEmailVerificationResponse) String() string { return "" }
+func (*QueryEmailVerificationResponse) ProtoMessage()    {}
+
+func (m *QuerySMSVerificationRequest) Reset()         { *m = QuerySMSVerificationRequest{} }
+func (m *QuerySMSVerificationRequest) String() string { return "" }
+func (*QuerySMSVerificationRequest) ProtoMessage()    {}
+
+func (m *QuerySMSVerificationResponse) Reset()         { *m = QuerySMSVerificationResponse{} }
+func (m *QuerySMSVerificationResponse) String() string { return "" }
+func (*QuerySMSVerificationResponse) ProtoMessage()    {}
 
 func (m *QueryAppealRequest) Reset()         { *m = QueryAppealRequest{} }
 func (m *QueryAppealRequest) String() string { return "" }

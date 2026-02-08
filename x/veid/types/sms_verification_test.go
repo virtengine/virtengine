@@ -1,6 +1,7 @@
 package types_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -379,6 +380,30 @@ func TestSMSVerificationRecord_IsActive(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestSMSVerificationRecord_EvidenceRequiredForVerified(t *testing.T) {
+	now := time.Now()
+	record := &types.SMSVerificationRecord{
+		Version:        types.SMSVerificationVersion,
+		VerificationID: "sms-verified",
+		AccountAddress: "cosmos1abc...",
+		PhoneHash: types.PhoneNumberHash{
+			Hash:      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			Salt:      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			CreatedAt: now,
+		},
+		Status:    types.SMSStatusVerified,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	require.Error(t, record.Validate())
+
+	record.EvidenceHash = strings.Repeat("b", 64)
+	record.EvidenceStorageBackend = string(types.StorageBackendWaldur)
+	record.EvidenceStorageRef = "vault://sms/evidence"
+	require.NoError(t, record.Validate())
 }
 
 func TestSMSVerificationRecord_MarkVerified(t *testing.T) {
