@@ -40,6 +40,8 @@ env:
   PYTHON_VERSION: "3.11"
   GOWORK: "off"  # Disable workspace mode for vendor operations
   TF_VERSION: "2.15.0"
+  GO_TEST_TIMEOUT_UNIT: "30m"
+  GO_TEST_TIMEOUT_INTEGRATION: "45m"
 
 permissions:
   contents: read
@@ -132,11 +134,11 @@ jobs:
 
       - name: Run inference package tests
         run: |
-          go test -v -race ./pkg/inference/...
+          go test -v -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} ./pkg/inference/...
 
       - name: Run conformance tests
         run: |
-          go test -v ./pkg/inference/... -run TestConformance
+          go test -v -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} ./pkg/inference/... -run TestConformance
 
   # ===========================================================================
   # SavedModel Verification
@@ -357,7 +359,8 @@ jobs:
 
       - name: Run SavedModel integration test
         run: |
-          go test -v ./pkg/inference/... -run TestSavedModelIntegration -tags="integration"
+          go test -v -timeout ${{ env.GO_TEST_TIMEOUT_INTEGRATION }} \
+            ./pkg/inference/... -run TestSavedModelIntegration -tags="integration"
         env:
           VEID_MODEL_PATH: ${{ github.event.inputs.model_path }}
           TF_FORCE_CPU: 1

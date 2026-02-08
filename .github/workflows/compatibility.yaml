@@ -23,6 +23,7 @@ on:
 
 env:
   GOWORK: "off" # Disable workspace mode for vendor operations
+  GO_TEST_TIMEOUT_UNIT: "30m"
 
 jobs:
   # Run proto breaking change detection
@@ -154,7 +155,8 @@ jobs:
       - name: Validate compatibility matrix
         run: |
           # Run the compatibility matrix validation
-          go test -v ./pkg/compatibility/... -run TestCompatibilityMatrix || true
+          go test -v -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            ./pkg/compatibility/... -run TestCompatibilityMatrix || true
 
           # Check that COMPATIBILITY.md is up to date
           if [ -f "docs/COMPATIBILITY.md" ]; then

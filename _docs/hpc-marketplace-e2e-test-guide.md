@@ -31,7 +31,7 @@ tests/e2e/
 
 | Component | Description                       | Configuration           |
 | --------- | --------------------------------- | ----------------------- |
-| Go 1.21+  | Build and test execution          | `GO_VERSION` in CI      |
+| Go 1.25.5+  | Build and test execution          | `GO_VERSION` in CI      |
 | Docker    | Localnet container orchestration  | Docker Buildx required  |
 | Localnet  | Local chain for integration tests | `./scripts/localnet.sh` |
 

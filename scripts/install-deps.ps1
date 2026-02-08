@@ -206,7 +206,7 @@ Write-Host ""
 Write-Host "5. " -NoNewline
 Write-Host "Enable pnpm and install frontend deps:" -ForegroundColor Yellow
 Write-Host "   corepack enable" -ForegroundColor Cyan
-Write-Host "   corepack prepare pnpm@latest --activate" -ForegroundColor Cyan
+Write-Host "   corepack prepare pnpm@10.28.2 --activate" -ForegroundColor Cyan
 Write-Host "   pnpm -C portal install" -ForegroundColor Cyan
 Write-Host "   pnpm -C sdk/ts install" -ForegroundColor Cyan
 Write-Host ""
