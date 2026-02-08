@@ -300,6 +300,17 @@ func (k Keeper) exportConsentData(ctx sdk.Context, address sdk.AccAddress, pkg *
 		pkg.Consent.ScopeConsents = append(pkg.Consent.ScopeConsents, portableConsent)
 	}
 
+	events := k.GetConsentEventsBySubject(ctx, address)
+	for _, event := range events {
+		pkg.Consent.ConsentHistory = append(pkg.Consent.ConsentHistory, types.PortableConsentEvent{
+			EventType:   string(event.EventType),
+			ScopeID:     event.ScopeID,
+			Timestamp:   event.OccurredAt,
+			BlockHeight: event.BlockHeight,
+			Details:     event.Details,
+		})
+	}
+
 	pkg.Metadata.SchemaVersions[types.ExportCategoryConsent] = schemaVersion10
 	return nil
 }
