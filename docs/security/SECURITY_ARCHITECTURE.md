@@ -45,7 +45,7 @@ VirtEngine implements a defense-in-depth security architecture for its decentral
 
 | Certification | Status | Target Date |
 |---------------|--------|-------------|
-| SOC 2 Type II | In Progress | Q3 2026 |
+| SOC 2 Type II | ✅ Certified | 2026-02-06 |
 | ISO 27001 | Planned | Q4 2026 |
 | GDPR Compliance | ✅ Compliant | Current |
 
@@ -579,7 +579,7 @@ See [docs/sre/INCIDENT_RESPONSE.md](../sre/INCIDENT_RESPONSE.md) for detailed pr
 | Framework | Status | Scope |
 |-----------|--------|-------|
 | **GDPR** | ✅ Compliant | Personal data, EU users |
-| **SOC 2 Type II** | In Progress | Security, availability, confidentiality |
+| **SOC 2 Type II** | ✅ Certified | Security, availability, confidentiality |
 | **ISO 27001** | Planned | Information security management |
 | **HIPAA** | Not applicable | No healthcare data |
 | **PCI DSS** | Partial | Payment-related operations |
