@@ -2027,8 +2027,8 @@ function saveMergedTaskCache() {
 // Load cache on startup
 loadMergedTaskCache();
 
-/** Maximum number of tasks to process per sweep (prevents thundering herd) */
-const MERGE_CHECK_BATCH_SIZE = 10;
+/** Maximum number of tasks to process per sweep (0 = unlimited) */
+const MERGE_CHECK_BATCH_SIZE = 0;
 
 /** Small delay between GitHub API calls to avoid rate-limiting (ms) */
 const MERGE_CHECK_THROTTLE_MS = 1500;
@@ -2062,10 +2062,13 @@ async function checkMergedPRsAndUpdateTasks() {
     }
 
     const totalCandidates = reviewTasks.length;
-    const batch = reviewTasks.slice(0, MERGE_CHECK_BATCH_SIZE);
+    const batch =
+      MERGE_CHECK_BATCH_SIZE > 0
+        ? reviewTasks.slice(0, MERGE_CHECK_BATCH_SIZE)
+        : reviewTasks;
     console.log(
       `[monitor] Found ${totalCandidates} tasks in review/inprogress` +
-        (totalCandidates > MERGE_CHECK_BATCH_SIZE
+        (MERGE_CHECK_BATCH_SIZE > 0 && totalCandidates > MERGE_CHECK_BATCH_SIZE
           ? ` (processing first ${MERGE_CHECK_BATCH_SIZE})`
           : ""),
     );
@@ -2091,6 +2094,8 @@ async function checkMergedPRsAndUpdateTasks() {
 
     let movedCount = 0;
     let movedReviewCount = 0;
+    /** @type {string[]} */
+    const completedTaskNames = [];
 
     for (const entry of batch) {
       const task = entry.task;
@@ -2147,17 +2152,10 @@ async function checkMergedPRsAndUpdateTasks() {
         if (success) {
           movedCount++;
           mergedTaskCache.add(task.id);
-          saveMergedTaskCache();
+          completedTaskNames.push(task.title);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
-
-          // Send Telegram notification
-          if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `✅ Task completed: "${task.title}" (PR merged)`,
-            );
-          }
         } else {
           console.warn(
             `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
@@ -2196,22 +2194,37 @@ async function checkMergedPRsAndUpdateTasks() {
         if (success) {
           movedCount++;
           mergedTaskCache.add(task.id);
-          saveMergedTaskCache();
+          completedTaskNames.push(task.title);
           console.log(
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
           );
-
-          // Send Telegram notification
-          if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `✅ Task completed: "${task.title}" (branch merged)`,
-            );
-          }
         } else {
           console.warn(
             `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
           );
         }
+      }
+    }
+
+    // Persist cache once after the entire sweep (not per-task)
+    if (movedCount > 0) {
+      saveMergedTaskCache();
+    }
+
+    // Send a single aggregated Telegram notification
+    if (movedCount > 0 && telegramToken && telegramChatId) {
+      if (movedCount <= 3) {
+        // Few tasks — list them individually
+        for (const name of completedTaskNames) {
+          void sendTelegramMessage(`✅ Task completed: "${name}"`);
+        }
+      } else {
+        // Many tasks — send a single summary to avoid spam
+        const listed = completedTaskNames.slice(0, 5).map((n) => `• ${n}`).join("\n");
+        const extra = movedCount > 5 ? `\n…and ${movedCount - 5} more` : "";
+        void sendTelegramMessage(
+          `✅ ${movedCount} tasks moved to done:\n${listed}${extra}`,
+        );
       }
     }
 
