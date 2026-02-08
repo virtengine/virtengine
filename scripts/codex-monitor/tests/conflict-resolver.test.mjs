@@ -451,9 +451,9 @@ describe("recordResolutionAttempt / isOnResolutionCooldown", () => {
     // With 0ms cooldown it should already be expired
     expect(isOnResolutionCooldown("cool-3", { cooldownMs: 0 })).toBe(false);
     // With a very long cooldown it should still be active
-    expect(
-      isOnResolutionCooldown("cool-3", { cooldownMs: 999999999 }),
-    ).toBe(true);
+    expect(isOnResolutionCooldown("cool-3", { cooldownMs: 999999999 })).toBe(
+      true,
+    );
   });
 });
 
