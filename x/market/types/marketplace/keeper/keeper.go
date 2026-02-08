@@ -8,6 +8,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -1019,6 +1020,8 @@ func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.Wal
 		return k.processTerminateCallback(ctx, callback)
 	case marketplace.ActionTypeStatusUpdate:
 		return k.processOrderStatusCallback(ctx, callback)
+	case marketplace.ActionTypeUsageReport:
+		return k.processUsageReportCallback(ctx, callback)
 	default:
 		// Other action types can be added here
 		return nil
@@ -1042,6 +1045,10 @@ func (k Keeper) processProvisionCallback(ctx sdk.Context, callback *marketplace.
 	}
 
 	if allocation.State.IsTerminal() {
+		// Allow idempotent terminal updates.
+		if stateValue, ok := callback.Payload["state"]; ok && strings.EqualFold(stateValue, allocation.State.String()) {
+			return nil
+		}
 		return marketplace.ErrInvalidStateTransition.Wrapf("allocation %s already terminal", allocationID.String())
 	}
 
@@ -1055,21 +1062,86 @@ func (k Keeper) processProvisionCallback(ctx sdk.Context, callback *marketplace.
 		reason = value
 	}
 
-	if allocation.State != marketplace.AllocationStateProvisioning && allocation.State != marketplace.AllocationStateActive {
-		if err := allocation.SetStateAt(marketplace.AllocationStateProvisioning, reason, ctx.BlockTime()); err != nil {
-			return err
-		}
-		if err := k.UpdateAllocation(ctx, allocation); err != nil {
+	targetState := marketplace.AllocationStateProvisioning
+	if value, ok := callback.Payload["state"]; ok && value != "" {
+		targetState = marketplace.ParseAllocationState(value)
+	}
+	if targetState == marketplace.AllocationStateUnspecified {
+		targetState = marketplace.AllocationStateProvisioning
+	}
+
+	phase := provisioningPhaseForState(targetState)
+	if value, ok := callback.Payload["phase"]; ok && value != "" {
+		phase = marketplace.ProvisioningPhase(strings.ToLower(value))
+	}
+	message := callback.Payload["message"]
+	progress := parseProgress(callback.Payload, targetState)
+	errorCode := callback.Payload["error_code"]
+	if errorCode == "" {
+		errorCode = callback.Payload["error"]
+	}
+	allocation.UpdateProvisioningStatus(phase, message, progress, errorCode, ctx.BlockTime())
+
+	oldState := allocation.State
+	if err := applyAllocationStateTransition(allocation, targetState, reason, ctx.BlockTime()); err != nil {
+		return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	}
+
+	if err := k.UpdateAllocation(ctx, allocation); err != nil {
+		return err
+	}
+
+	if oldState != allocation.State {
+		if err := k.emitAllocationStateChange(ctx, allocation, oldState, reason); err != nil {
 			return err
 		}
 	}
 
-	if order.State != marketplace.OrderStateProvisioning && order.State != marketplace.OrderStateActive {
-		if err := order.SetStateAt(marketplace.OrderStateProvisioning, reason, ctx.BlockTime()); err != nil {
-			return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	switch targetState {
+	case marketplace.AllocationStateProvisioning:
+		if order.State != marketplace.OrderStateProvisioning && order.State != marketplace.OrderStateActive {
+			if err := applyOrderStateTransition(order, marketplace.OrderStateProvisioning, reason, ctx.BlockTime()); err != nil {
+				return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+			}
+			if err := k.UpdateOrder(ctx, order); err != nil {
+				return err
+			}
 		}
-		if err := k.UpdateOrder(ctx, order); err != nil {
-			return err
+	case marketplace.AllocationStateActive:
+		if order.State != marketplace.OrderStateActive {
+			if err := applyOrderStateTransition(order, marketplace.OrderStateActive, reason, ctx.BlockTime()); err != nil {
+				return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+			}
+			if err := k.UpdateOrder(ctx, order); err != nil {
+				return err
+			}
+		}
+	case marketplace.AllocationStateFailed:
+		if order.State != marketplace.OrderStateFailed {
+			if err := applyOrderStateTransition(order, marketplace.OrderStateFailed, reason, ctx.BlockTime()); err != nil {
+				return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+			}
+			if err := k.UpdateOrder(ctx, order); err != nil {
+				return err
+			}
+		}
+	case marketplace.AllocationStateTerminating:
+		if order.State != marketplace.OrderStatePendingTermination {
+			if err := applyOrderStateTransition(order, marketplace.OrderStatePendingTermination, reason, ctx.BlockTime()); err != nil {
+				return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+			}
+			if err := k.UpdateOrder(ctx, order); err != nil {
+				return err
+			}
+		}
+	case marketplace.AllocationStateTerminated:
+		if order.State != marketplace.OrderStateTerminated {
+			if err := applyOrderStateTransition(order, marketplace.OrderStateTerminated, reason, ctx.BlockTime()); err != nil {
+				return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+			}
+			if err := k.UpdateOrder(ctx, order); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1080,8 +1152,28 @@ func (k Keeper) processProvisionCallback(ctx sdk.Context, callback *marketplace.
 		encryptedConfigRef = order.EncryptedConfig.EnvelopeRef
 	}
 
+	if targetState != marketplace.AllocationStateProvisioning {
+		return nil
+	}
+
 	seq := k.IncrementEventSequence(ctx)
 	event := marketplace.NewProvisionRequestedEventAt(allocation, encryptedConfigRef, ctx.BlockHeight(), seq, ctx.BlockTime())
+
+	offering, found := k.GetOffering(ctx, allocation.OfferingID)
+	if found {
+		if offering.Specifications != nil {
+			specs := make(map[string]string, len(offering.Specifications))
+			for key, value := range offering.Specifications {
+				specs[key] = value
+			}
+			event.Specifications = specs
+		}
+		serviceType := marketplace.ServiceTypeFromSpecs(offering.Specifications)
+		if serviceType != marketplace.ServiceTypeUnknown {
+			event.ServiceType = string(serviceType)
+		}
+	}
+
 	return k.EmitMarketplaceEvent(ctx, event)
 }
 

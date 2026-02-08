@@ -7,6 +7,7 @@ package marketplace
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -80,6 +81,17 @@ func (s AllocationState) IsTerminal() bool {
 // IsActive returns true if the allocation is currently active
 func (s AllocationState) IsActive() bool {
 	return s == AllocationStateActive || s == AllocationStateProvisioning
+}
+
+// ParseAllocationState parses a string into AllocationState.
+func ParseAllocationState(value string) AllocationState {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	for state, name := range AllocationStateNames {
+		if name == normalized {
+			return state
+		}
+	}
+	return AllocationStateUnspecified
 }
 
 // AllocationID is the unique identifier for an allocation
@@ -252,6 +264,22 @@ type ProvisioningStatus struct {
 	ErrorCode string `json:"error_code,omitempty"`
 }
 
+// ProvisioningPhase represents standardized provisioning phases.
+type ProvisioningPhase string
+
+const (
+	// ProvisioningPhaseRequested indicates provisioning has been requested.
+	ProvisioningPhaseRequested ProvisioningPhase = "requested"
+	// ProvisioningPhaseProvisioning indicates provisioning is in progress.
+	ProvisioningPhaseProvisioning ProvisioningPhase = "provisioning"
+	// ProvisioningPhaseActive indicates provisioning is complete and active.
+	ProvisioningPhaseActive ProvisioningPhase = "active"
+	// ProvisioningPhaseTerminated indicates the resource is terminated.
+	ProvisioningPhaseTerminated ProvisioningPhase = "terminated"
+	// ProvisioningPhaseFailed indicates provisioning failed.
+	ProvisioningPhaseFailed ProvisioningPhase = "failed"
+)
+
 // Allocation represents a mapping of an order to a selected provider
 type Allocation struct {
 	// ID is the unique allocation identifier
@@ -376,6 +404,34 @@ func (a *Allocation) SetStateAt(newState AllocationState, reason string, now tim
 	}
 
 	return nil
+}
+
+// UpdateProvisioningStatus updates provisioning status with a new phase and message.
+func (a *Allocation) UpdateProvisioningStatus(phase ProvisioningPhase, message string, progress uint8, errCode string, now time.Time) {
+	updatedAt := now.UTC()
+	if a.ProvisioningStatus == nil {
+		a.ProvisioningStatus = &ProvisioningStatus{
+			Phase:     string(phase),
+			Message:   message,
+			Progress:  progress,
+			StartedAt: updatedAt,
+			UpdatedAt: updatedAt,
+		}
+	} else {
+		a.ProvisioningStatus.Phase = string(phase)
+		a.ProvisioningStatus.Message = message
+		a.ProvisioningStatus.Progress = progress
+		a.ProvisioningStatus.UpdatedAt = updatedAt
+	}
+
+	if errCode != "" {
+		a.ProvisioningStatus.ErrorCode = errCode
+	}
+
+	if phase == ProvisioningPhaseActive || phase == ProvisioningPhaseTerminated || phase == ProvisioningPhaseFailed {
+		completed := updatedAt
+		a.ProvisioningStatus.CompletedAt = &completed
+	}
 }
 
 // Hash returns a unique hash of the allocation
