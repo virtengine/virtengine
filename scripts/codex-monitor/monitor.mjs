@@ -1909,6 +1909,56 @@ async function updateTaskStatus(taskId, newStatus) {
 }
 
 /**
+ * Safe recovery: re-fetches a task's live status from VK before moving it
+ * to "todo".  If the user has since cancelled/done the task, the recovery
+ * is aborted.  This prevents the loop where:
+ *   user cancels → monitor moves to todo → orchestrator re-dispatches.
+ *
+ * @param {string} taskId - Task UUID
+ * @param {string} taskTitle - Human-readable title (for logging)
+ * @param {string} reason - Why the recovery is happening (for logging)
+ * @returns {Promise<boolean>} true if moved to todo, false if skipped/failed
+ */
+async function safeRecoverTask(taskId, taskTitle, reason) {
+  try {
+    const res = await fetchVk(`/api/tasks/${taskId}`);
+    const liveStatus = res?.data?.status || res?.status;
+    if (!liveStatus) {
+      console.warn(
+        `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping`,
+      );
+      return false;
+    }
+    // If the user has moved the task out of inprogress (cancelled, done,
+    // or even already todo), do NOT touch it.
+    if (liveStatus === "cancelled" || liveStatus === "done") {
+      console.log(
+        `[monitor] safeRecover: task "${taskTitle}" is now ${liveStatus} — aborting recovery`,
+      );
+      return false;
+    }
+    if (liveStatus === "todo") {
+      console.log(
+        `[monitor] safeRecover: task "${taskTitle}" is already todo — no action needed`,
+      );
+      return false;
+    }
+    const success = await updateTaskStatus(taskId, "todo");
+    if (success) {
+      console.log(
+        `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason})`,
+      );
+    }
+    return success;
+  } catch (err) {
+    console.warn(
+      `[monitor] safeRecover failed for "${taskTitle}": ${err.message || err}`,
+    );
+    return false;
+  }
+}
+
+/**
  * Checks if a git branch has been merged into the main branch.
  * Uses GitHub CLI + git commands to determine merge status.
  *
@@ -2259,16 +2309,17 @@ async function checkMergedPRsAndUpdateTasks() {
         if (taskAge >= STALE_TASK_AGE_MS) {
           const ageHours = (taskAge / (60 * 60 * 1000)).toFixed(1);
           console.log(
-            `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — stale for ${ageHours}h, moving to todo`,
+            `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — stale for ${ageHours}h, attempting recovery`,
           );
-          const success = await updateTaskStatus(task.id, "todo");
+          const success = await safeRecoverTask(
+            task.id,
+            task.title,
+            `age-based: ${ageHours}h, no agent, no branch/PR`,
+          );
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
-            console.log(
-              `[monitor] ♻️ Recovered idle task "${task.title}" → todo (age-based: ${ageHours}h, no agent, no branch/PR)`,
-            );
           }
           continue;
         }
@@ -2280,14 +2331,15 @@ async function checkMergedPRsAndUpdateTasks() {
           `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — strike ${strikes}/${STALE_MAX_STRIKES}`,
         );
         if (strikes >= STALE_MAX_STRIKES) {
-          const success = await updateTaskStatus(task.id, "todo");
+          const success = await safeRecoverTask(
+            task.id,
+            task.title,
+            `no branch/PR after ${strikes} checks`,
+          );
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
-            console.log(
-              `[monitor] ♻️ Recovered idle task "${task.title}" → todo (no branch/PR after ${strikes} checks)`,
-            );
           }
         }
         continue;
@@ -2516,16 +2568,17 @@ async function checkMergedPRsAndUpdateTasks() {
         if (taskAge >= STALE_TASK_AGE_MS) {
           const ageHours = (taskAge / (60 * 60 * 1000)).toFixed(1);
           console.log(
-            `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch/PR, stale for ${ageHours}h — moving to todo`,
+            `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch/PR, stale for ${ageHours}h — attempting recovery`,
           );
-          const success = await updateTaskStatus(task.id, "todo");
+          const success = await safeRecoverTask(
+            task.id,
+            task.title,
+            `age-based: ${ageHours}h, no agent, no branch/PR`,
+          );
           if (success) {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
-            console.log(
-              `[monitor] ♻️ Recovered idle task "${task.title}" → todo (age-based: ${ageHours}h, no agent, no branch/PR)`,
-            );
           }
         } else {
           // Not old enough — use the strike-based system
@@ -2536,14 +2589,15 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch, no PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
           );
           if (strikes >= STALE_MAX_STRIKES) {
-            const success = await updateTaskStatus(task.id, "todo");
+            const success = await safeRecoverTask(
+              task.id,
+              task.title,
+              `abandoned — ${strikes} stale checks`,
+            );
             if (success) {
               movedTodoCount++;
               recoveredTaskNames.push(task.title);
               staleBranchCooldown.delete(task.id);
-              console.log(
-                `[monitor] ♻️ Recovered task "${task.title}" from ${taskStatus} → todo (abandoned — ${strikes} stale checks)`,
-              );
             }
           }
         }
