@@ -148,6 +148,7 @@ func (m *MetricsCollector) CollectJobs() *NodeJobs {
 	}
 
 	// Try to get SLURM job counts using validated arguments
+	//nolint:gosec // G204: Command "squeue" and arguments validated by security.SLURMSqueueArgs
 	if output, err := exec.Command("squeue", args...).Output(); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 		for _, line := range lines {
@@ -168,16 +169,19 @@ func (m *MetricsCollector) CollectServices() *NodeServices {
 	services := &NodeServices{}
 
 	// Check slurmd
+	//nolint:gosec // G204: pgrep with fixed argument "-x" and literal "slurmd"
 	if _, err := exec.Command("pgrep", "-x", "slurmd").Output(); err == nil {
 		services.SLURMDRunning = true
 	}
 
 	// Get slurmd version
+	//nolint:gosec // G204: slurmd with fixed argument "--version"
 	if output, err := exec.Command("slurmd", "--version").Output(); err == nil {
 		services.SLURMDVersion = strings.TrimSpace(string(output))
 	}
 
 	// Check munge
+	//nolint:gosec // G204: pgrep with fixed argument "-x" and literal "munged"
 	if _, err := exec.Command("pgrep", "-x", "munged").Output(); err == nil {
 		services.MungeRunning = true
 	}
@@ -185,11 +189,13 @@ func (m *MetricsCollector) CollectServices() *NodeServices {
 	// Check container runtime
 	if _, err := exec.LookPath("singularity"); err == nil {
 		services.ContainerRuntime = "singularity"
+		//nolint:gosec // G204: singularity with fixed argument "--version"
 		if output, err := exec.Command("singularity", "--version").Output(); err == nil {
 			services.ContainerRuntimeVersion = strings.TrimSpace(string(output))
 		}
 	} else if _, err := exec.LookPath("docker"); err == nil {
 		services.ContainerRuntime = "docker"
+		//nolint:gosec // G204: docker with fixed argument "--version"
 		if output, err := exec.Command("docker", "--version").Output(); err == nil {
 			services.ContainerRuntimeVersion = strings.TrimSpace(string(output))
 		}
@@ -292,6 +298,7 @@ func (m *MetricsCollector) getCPUUtilization() int32 {
 
 func (m *MetricsCollector) getGPUInfo() (int32, int32, string) {
 	// Try nvidia-smi
+	//nolint:gosec // G204: nvidia-smi with fixed arguments
 	output, err := exec.Command("nvidia-smi", "--query-gpu=count,name", "--format=csv,noheader").Output()
 	if err != nil {
 		return 0, 0, ""
@@ -320,6 +327,7 @@ func (m *MetricsCollector) getStorageInfo(path string) (uint64, uint64) {
 			return 0, 0
 		}
 
+		//nolint:gosec // G204: Command "df" and arguments validated by security.DfArgs
 		output, err := exec.Command("df", args...).Output()
 		if err != nil {
 			return 0, 0
@@ -360,6 +368,7 @@ func (m *MetricsCollector) getSLURMNodeState() string {
 		return osUnknown
 	}
 
+	//nolint:gosec // G204: Command "sinfo" and arguments validated by security.SLURMSinfoArgs
 	output, err := exec.Command("sinfo", args...).Output()
 	if err != nil {
 		return osUnknown
@@ -386,6 +395,7 @@ func (m *MetricsCollector) measureLatency(target string) *LatencyProbe {
 		}
 
 		// Try ICMP ping if available
+		//nolint:gosec // G204: Command "ping" and arguments validated by security.PingArgs
 		_, execErr := exec.Command("ping", args...).Output()
 		if execErr != nil {
 			return nil

@@ -272,6 +272,7 @@ func (r *DefaultBenchmarkRunner) runPingTest(ctx context.Context, endpoint strin
 		return 10000
 	}
 
+	//nolint:gosec // G204: Command "ping" and arguments validated by security.PingArgs
 	cmd := exec.CommandContext(ctx, "ping", args...)
 
 	output, err := cmd.Output()
