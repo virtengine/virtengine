@@ -130,7 +130,7 @@ jobs:
             - name: Publish
               if: ${{ !inputs.dry-run }}
               working-directory: scripts/codex-monitor
-              run: npm publish --access public
+              run: npm publish --access public --provenance
               # No NODE_AUTH_TOKEN needed — OIDC handles auth via trusted publishing
 
             - name: Publish (dry run)
