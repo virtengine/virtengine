@@ -3432,6 +3432,7 @@ Return a short summary of what you did.`;
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
       if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
+      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
