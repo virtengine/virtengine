@@ -67,7 +67,7 @@ func (s *StaticResourceSnapshotProvider) Snapshot(_ context.Context) (*resources
 		GpuType:     s.gpuType,
 	}
 	available := total
-	available.NetworkMbps = maxInt64(0, total.NetworkMbps-s.reservedNetwork)
+	available.NetworkMbps = nonNegativeInt64(total.NetworkMbps - s.reservedNetwork)
 	return &total, &available, nil
 }
 
@@ -177,7 +177,7 @@ func (s *ResourceAvailabilitySync) syncOnce(ctx context.Context) error {
 			Zone:       s.cfg.Zone,
 			Datacenter: s.cfg.Datacenter,
 		},
-		Sequence: uint64(time.Now().UnixNano()),
+		Sequence: unixNanoToUint64(time.Now().UnixNano()),
 	}
 
 	return s.chainClient.SubmitResourceHeartbeat(ctx, heartbeat)
@@ -196,19 +196,26 @@ func sumCapacity(a resourcesv1.ResourceCapacity, b resourcesv1.ResourceCapacity)
 
 func subtractCapacity(total resourcesv1.ResourceCapacity, used resourcesv1.ResourceCapacity) *resourcesv1.ResourceCapacity {
 	result := resourcesv1.ResourceCapacity{
-		CpuCores:    maxInt64(0, total.CpuCores-used.CpuCores),
-		MemoryGb:    maxInt64(0, total.MemoryGb-used.MemoryGb),
-		StorageGb:   maxInt64(0, total.StorageGb-used.StorageGb),
-		NetworkMbps: maxInt64(0, total.NetworkMbps-used.NetworkMbps),
-		Gpus:        maxInt64(0, total.Gpus-used.Gpus),
+		CpuCores:    nonNegativeInt64(total.CpuCores - used.CpuCores),
+		MemoryGb:    nonNegativeInt64(total.MemoryGb - used.MemoryGb),
+		StorageGb:   nonNegativeInt64(total.StorageGb - used.StorageGb),
+		NetworkMbps: nonNegativeInt64(total.NetworkMbps - used.NetworkMbps),
+		Gpus:        nonNegativeInt64(total.Gpus - used.Gpus),
 		GpuType:     total.GpuType,
 	}
 	return &result
 }
 
-func maxInt64(a, b int64) int64 {
-	if a > b {
-		return a
+func nonNegativeInt64(value int64) int64 {
+	if value < 0 {
+		return 0
 	}
-	return b
+	return value
+}
+
+func unixNanoToUint64(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	return uint64(value)
 }

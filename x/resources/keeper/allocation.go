@@ -82,9 +82,12 @@ func (k Keeper) RecordAllocationEvent(ctx sdk.Context, allocation types.Resource
 // AllocateResources selects a provider and creates a pending allocation.
 func (k Keeper) AllocateResources(ctx sdk.Context, request types.ResourceRequest) (*types.ResourceAllocation, error) {
 	params := k.GetParams(ctx)
-	limit := int(params.MaxCandidates)
-	if request.MaxCandidates > 0 && int(request.MaxCandidates) < limit {
-		limit = int(request.MaxCandidates)
+	limit := uint64ToInt(params.MaxCandidates)
+	if request.MaxCandidates > 0 {
+		requestLimit := uint64ToInt(request.MaxCandidates)
+		if requestLimit < limit {
+			limit = requestLimit
+		}
 	}
 	candidates := k.selectInventoryCandidates(ctx, request, limit)
 	if len(candidates) == 0 {
@@ -120,7 +123,7 @@ func (k Keeper) AllocateResources(ctx sdk.Context, request types.ResourceRequest
 		BlockHeight:      ctx.BlockHeight(),
 	}
 
-	expiresAt := ctx.BlockTime().Add(time.Duration(params.ReservationTimeoutSeconds) * time.Second)
+	expiresAt := ctx.BlockTime().Add(secondsToDuration(params.ReservationTimeoutSeconds))
 	allocation.ExpiresAt = &expiresAt
 
 	if err := k.SetAllocation(ctx, allocation); err != nil {
@@ -128,7 +131,7 @@ func (k Keeper) AllocateResources(ctx sdk.Context, request types.ResourceRequest
 	}
 
 	ctx.KVStore(k.skey).Set(types.AllocationProviderKey(inventory.ProviderAddress, allocationID), []byte{0x01})
-	ctx.KVStore(k.skey).Set(types.PendingAllocationKey(uint64(expiresAt.Unix()), allocationID), []byte{0x01})
+	ctx.KVStore(k.skey).Set(types.PendingAllocationKey(unixToUint64(expiresAt.Unix()), allocationID), []byte{0x01})
 
 	if err := k.RecordAllocationEvent(ctx, allocation, "allocation_pending"); err != nil {
 		k.Logger(ctx).Error("failed to record allocation event", "error", err)
@@ -162,7 +165,7 @@ func (k Keeper) ActivateAllocation(ctx sdk.Context, allocationID, provider strin
 		return nil, err
 	}
 	if allocation.ExpiresAt != nil {
-		ctx.KVStore(k.skey).Delete(types.PendingAllocationKey(uint64(allocation.ExpiresAt.Unix()), allocation.AllocationId))
+		ctx.KVStore(k.skey).Delete(types.PendingAllocationKey(unixToUint64(allocation.ExpiresAt.Unix()), allocation.AllocationId))
 	}
 
 	if err := k.RecordAllocationEvent(ctx, allocation, "allocation_active"); err != nil {
@@ -205,7 +208,7 @@ func (k Keeper) ReleaseAllocation(ctx sdk.Context, allocationID, requester, reas
 // ExpirePendingAllocations marks pending allocations expired and applies slashing.
 func (k Keeper) ExpirePendingAllocations(ctx sdk.Context) {
 	params := k.GetParams(ctx)
-	cutoff := ctx.BlockTime().Add(-time.Duration(params.SlashingGraceSeconds) * time.Second)
+	cutoff := ctx.BlockTime().Add(-secondsToDuration(params.SlashingGraceSeconds))
 
 	store := prefix.NewStore(ctx.KVStore(k.skey), types.PendingAllocationKeyPrefix)
 	iter := store.Iterator(nil, nil)
@@ -216,7 +219,7 @@ func (k Keeper) ExpirePendingAllocations(ctx sdk.Context) {
 		if len(key) < 9 {
 			continue
 		}
-		expiry := int64(binaryToUint64(key[:8]))
+		expiry := uint64ToInt64(binaryToUint64(key[:8]))
 		expiryTime := time.Unix(expiry, 0)
 		if expiryTime.After(ctx.BlockTime()) {
 			break
@@ -309,7 +312,7 @@ type inventoryCandidate struct {
 
 func (k Keeper) selectInventoryCandidates(ctx sdk.Context, request types.ResourceRequest, limit int) []inventoryCandidate {
 	params := k.GetParams(ctx)
-	cutoff := ctx.BlockTime().Add(-time.Duration(params.HeartbeatTimeoutSeconds) * time.Second)
+	cutoff := ctx.BlockTime().Add(-secondsToDuration(params.HeartbeatTimeoutSeconds))
 	localityWeight := parseFixedPoint(params.LocalityWeight)
 	capacityWeight := parseFixedPoint(params.CapacityWeight)
 
@@ -443,11 +446,11 @@ func capacitySatisfies(available, required types.ResourceCapacity) bool {
 }
 
 func subtractCapacity(available, required types.ResourceCapacity) types.ResourceCapacity {
-	available.CpuCores = maxInt64(0, available.CpuCores-required.CpuCores)
-	available.MemoryGb = maxInt64(0, available.MemoryGb-required.MemoryGb)
-	available.StorageGb = maxInt64(0, available.StorageGb-required.StorageGb)
-	available.NetworkMbps = maxInt64(0, available.NetworkMbps-required.NetworkMbps)
-	available.Gpus = maxInt64(0, available.Gpus-required.Gpus)
+	available.CpuCores = nonNegativeInt64(available.CpuCores - required.CpuCores)
+	available.MemoryGb = nonNegativeInt64(available.MemoryGb - required.MemoryGb)
+	available.StorageGb = nonNegativeInt64(available.StorageGb - required.StorageGb)
+	available.NetworkMbps = nonNegativeInt64(available.NetworkMbps - required.NetworkMbps)
+	available.Gpus = nonNegativeInt64(available.Gpus - required.Gpus)
 	return available
 }
 
@@ -460,11 +463,43 @@ func addCapacity(available, delta types.ResourceCapacity) types.ResourceCapacity
 	return available
 }
 
-func maxInt64(a, b int64) int64 {
-	if a > b {
-		return a
+func nonNegativeInt64(value int64) int64 {
+	if value < 0 {
+		return 0
 	}
-	return b
+	return value
+}
+
+func uint64ToInt(value uint64) int {
+	maxInt := int(^uint(0) >> 1)
+	if value > uint64(maxInt) {
+		return maxInt
+	}
+	return int(value)
+}
+
+func uint64ToInt64(value uint64) int64 {
+	maxInt64 := int64(^uint64(0) >> 1)
+	if value > uint64(maxInt64) {
+		return maxInt64
+	}
+	return int64(value)
+}
+
+func unixToUint64(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func secondsToDuration(seconds uint64) time.Duration {
+	maxInt64 := int64(^uint64(0) >> 1)
+	maxSeconds := maxInt64 / int64(time.Second)
+	if seconds > uint64(maxSeconds) {
+		return time.Duration(maxSeconds) * time.Second
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func binaryToUint64(b []byte) uint64 {

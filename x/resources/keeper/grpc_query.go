@@ -36,7 +36,7 @@ func (q *Querier) AvailableResources(ctx context.Context, req *resourcesv1.Query
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	candidates := q.selectInventoryCandidates(sdkCtx, req.Request, int(req.Request.MaxCandidates))
+	candidates := q.selectInventoryCandidates(sdkCtx, req.Request, uint64ToInt(req.Request.MaxCandidates))
 	out := make([]resourcesv1.AvailableResource, 0, len(candidates))
 
 	for _, candidate := range candidates {

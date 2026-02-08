@@ -91,9 +91,9 @@ func AllocationProviderPrefix(provider string) []byte {
 func PendingAllocationKey(expiryUnix uint64, allocationID string) []byte {
 	seq := make([]byte, 8)
 	binary.BigEndian.PutUint64(seq, expiryUnix)
-	key := append(seq, 0x00)
-	key = append(key, []byte(allocationID)...)
-	return append(PendingAllocationKeyPrefix, key...)
+	seq = append(seq, 0x00)
+	seq = append(seq, []byte(allocationID)...)
+	return append(PendingAllocationKeyPrefix, seq...)
 }
 
 // PendingAllocationPrefixByTime returns prefix up to time.
