@@ -4078,11 +4078,14 @@ async function sendTelegramMessage(text, options = {}) {
   // Positive signals override negative keyword matches — a "✅ Task completed"
   // message should never be classified as an error even when the task title
   // happens to contain words like "error" or "failed".
+  // Orchestrator periodic updates contain counter labels like "Failed: 0" and
+  // "error=0" which should NOT trigger error classification.
   const isPositive =
     textLower.includes("✅") ||
     textLower.includes("task completed") ||
     textLower.includes("branch merged") ||
-    textLower.includes("pr merged");
+    textLower.includes("pr merged") ||
+    (textLower.includes("orchestrator") && textLower.includes("-min update"));
 
   // Priority 1: Critical/Fatal
   if (
