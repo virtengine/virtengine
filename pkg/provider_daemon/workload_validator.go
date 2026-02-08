@@ -6,6 +6,7 @@ package provider_daemon
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/virtengine/virtengine/pkg/hpc_workload_library"
@@ -68,6 +69,10 @@ func NewDefaultTemplateStore() *DefaultTemplateStore {
 
 // GetTemplate retrieves a template by ID
 func (s *DefaultTemplateStore) GetTemplate(ctx context.Context, templateID string) (*hpctypes.WorkloadTemplate, error) {
+	if baseID, version, ok := splitTemplateIDVersion(templateID); ok {
+		return s.GetTemplateByVersion(ctx, baseID, version)
+	}
+
 	// Check built-in templates first
 	if t := hpc_workload_library.GetTemplateByID(templateID); t != nil {
 		return t, nil
@@ -85,6 +90,22 @@ func (s *DefaultTemplateStore) GetTemplate(ctx context.Context, templateID strin
 
 // GetTemplateByVersion retrieves a specific version
 func (s *DefaultTemplateStore) GetTemplateByVersion(ctx context.Context, templateID, version string) (*hpctypes.WorkloadTemplate, error) {
+	versionedID := templateID + "@" + version
+
+	s.mu.RLock()
+	if t, ok := s.customTemplates[versionedID]; ok {
+		s.mu.RUnlock()
+		return t, nil
+	}
+	s.mu.RUnlock()
+
+	// Check built-in templates by ID
+	if t := hpc_workload_library.GetTemplateByID(templateID); t != nil {
+		if t.Version == version {
+			return t, nil
+		}
+	}
+
 	t, err := s.GetTemplate(ctx, templateID)
 	if err != nil {
 		return nil, err
@@ -116,6 +137,7 @@ func (s *DefaultTemplateStore) RegisterTemplate(template *hpctypes.WorkloadTempl
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.customTemplates[template.TemplateID] = template
+	s.customTemplates[template.GetVersionedID()] = template
 	return nil
 }
 
@@ -158,7 +180,7 @@ func (v *HPCWorkloadValidator) ValidateJobSubmission(ctx context.Context, job *h
 		if v.config.RequireApprovedTemplates {
 			if !template.ApprovalStatus.CanBeUsed() {
 				// Check if it's a built-in template
-				if !v.config.AllowBuiltinTemplates || hpc_workload_library.GetTemplateByID(template.TemplateID) == nil {
+				if !v.config.AllowBuiltinTemplates || hpc_workload_library.GetTemplateByID(stripTemplateVersion(job.WorkloadSpec.PreconfiguredWorkloadID)) == nil {
 					return fmt.Errorf("template %s is not approved for use", template.TemplateID)
 				}
 			}
@@ -283,4 +305,22 @@ func ApplyResourceDefaults(job *hpctypes.HPCJob, template *hpctypes.WorkloadTemp
 	if job.MaxRuntimeSeconds == 0 {
 		job.MaxRuntimeSeconds = r.DefaultRuntimeMinutes * 60
 	}
+}
+
+func splitTemplateIDVersion(value string) (string, string, bool) {
+	if value == "" {
+		return "", "", false
+	}
+	parts := strings.SplitN(value, "@", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func stripTemplateVersion(value string) string {
+	if id, _, ok := splitTemplateIDVersion(value); ok {
+		return id
+	}
+	return value
 }

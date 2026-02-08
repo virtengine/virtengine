@@ -6,9 +6,11 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"golang.org/x/mod/semver"
 
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
@@ -24,8 +26,8 @@ func (k Keeper) CreateWorkloadTemplate(ctx sdk.Context, template *types.Workload
 	}
 
 	// Check for duplicate
-	if _, exists := k.GetWorkloadTemplate(ctx, template.TemplateID); exists {
-		return types.ErrInvalidWorkloadTemplate.Wrap("template already exists")
+	if _, exists := k.GetWorkloadTemplateByVersion(ctx, template.TemplateID, template.Version); exists {
+		return types.ErrInvalidWorkloadTemplate.Wrap("template version already exists")
 	}
 
 	template.ApprovalStatus = types.WorkloadApprovalPending
@@ -53,7 +55,7 @@ func (k Keeper) CreateWorkloadTemplate(ctx sdk.Context, template *types.Workload
 
 // UpdateWorkloadTemplate updates an existing workload template
 func (k Keeper) UpdateWorkloadTemplate(ctx sdk.Context, template *types.WorkloadTemplate) error {
-	existing, exists := k.GetWorkloadTemplate(ctx, template.TemplateID)
+	existing, exists := k.GetWorkloadTemplateByVersion(ctx, template.TemplateID, template.Version)
 	if !exists {
 		return types.ErrWorkloadTemplateNotFound
 	}
@@ -117,14 +119,15 @@ func (k Keeper) SetWorkloadTemplate(ctx sdk.Context, template types.WorkloadTemp
 		return err
 	}
 
-	// Store by ID (latest version)
-	store.Set(types.GetWorkloadTemplateKey(template.TemplateID), bz)
-
 	// Store by ID and version
 	store.Set(types.GetWorkloadTemplateVersionKey(template.TemplateID, template.Version), bz)
 
-	// Store by type index
-	store.Set(types.GetWorkloadTemplateByTypeKey(template.Type, template.TemplateID), []byte(template.TemplateID))
+	// Store by ID (latest version) if newer or same version
+	if shouldUpdateLatestTemplate(ctx, k, template) {
+		store.Set(types.GetWorkloadTemplateKey(template.TemplateID), bz)
+		// Store by type index for latest version
+		store.Set(types.GetWorkloadTemplateByTypeKey(template.Type, template.TemplateID), []byte(template.TemplateID))
+	}
 
 	return nil
 }
@@ -145,8 +148,8 @@ func (k Keeper) DeleteWorkloadTemplate(ctx sdk.Context, templateID string) error
 }
 
 // ApproveWorkloadTemplate approves a workload template
-func (k Keeper) ApproveWorkloadTemplate(ctx sdk.Context, templateID string, approver sdk.AccAddress) error {
-	template, exists := k.GetWorkloadTemplate(ctx, templateID)
+func (k Keeper) ApproveWorkloadTemplate(ctx sdk.Context, templateID, version string, approver sdk.AccAddress) error {
+	template, exists := k.GetWorkloadTemplateByVersion(ctx, templateID, version)
 	if !exists {
 		return types.ErrWorkloadTemplateNotFound
 	}
@@ -181,8 +184,8 @@ func (k Keeper) ApproveWorkloadTemplate(ctx sdk.Context, templateID string, appr
 }
 
 // RejectWorkloadTemplate rejects a workload template
-func (k Keeper) RejectWorkloadTemplate(ctx sdk.Context, templateID string, reason string, rejector sdk.AccAddress) error {
-	template, exists := k.GetWorkloadTemplate(ctx, templateID)
+func (k Keeper) RejectWorkloadTemplate(ctx sdk.Context, templateID, version string, reason string, rejector sdk.AccAddress) error {
+	template, exists := k.GetWorkloadTemplateByVersion(ctx, templateID, version)
 	if !exists {
 		return types.ErrWorkloadTemplateNotFound
 	}
@@ -214,8 +217,8 @@ func (k Keeper) RejectWorkloadTemplate(ctx sdk.Context, templateID string, reaso
 }
 
 // DeprecateWorkloadTemplate deprecates a workload template
-func (k Keeper) DeprecateWorkloadTemplate(ctx sdk.Context, templateID string, deprecator sdk.AccAddress) error {
-	template, exists := k.GetWorkloadTemplate(ctx, templateID)
+func (k Keeper) DeprecateWorkloadTemplate(ctx sdk.Context, templateID, version string, deprecator sdk.AccAddress) error {
+	template, exists := k.GetWorkloadTemplateByVersion(ctx, templateID, version)
 	if !exists {
 		return types.ErrWorkloadTemplateNotFound
 	}
@@ -247,8 +250,8 @@ func (k Keeper) DeprecateWorkloadTemplate(ctx sdk.Context, templateID string, de
 }
 
 // RevokeWorkloadTemplate revokes a workload template for security reasons
-func (k Keeper) RevokeWorkloadTemplate(ctx sdk.Context, templateID string, securityReason string, revoker sdk.AccAddress) error {
-	template, exists := k.GetWorkloadTemplate(ctx, templateID)
+func (k Keeper) RevokeWorkloadTemplate(ctx sdk.Context, templateID, version string, securityReason string, revoker sdk.AccAddress) error {
+	template, exists := k.GetWorkloadTemplateByVersion(ctx, templateID, version)
 	if !exists {
 		return types.ErrWorkloadTemplateNotFound
 	}
@@ -477,19 +480,19 @@ func (k Keeper) ExecuteWorkloadProposal(ctx sdk.Context, proposal *types.Workloa
 			return err
 		}
 		// Auto-approve since it passed governance
-		return k.ApproveWorkloadTemplate(ctx, proposal.Template.TemplateID, authority)
+		return k.ApproveWorkloadTemplate(ctx, proposal.Template.TemplateID, proposal.Template.Version, authority)
 
 	case types.WorkloadProposalTypeApprove:
-		return k.ApproveWorkloadTemplate(ctx, proposal.TemplateID, authority)
+		return k.ApproveWorkloadTemplate(ctx, proposal.TemplateID, proposal.TemplateVersion, authority)
 
 	case types.WorkloadProposalTypeReject:
-		return k.RejectWorkloadTemplate(ctx, proposal.TemplateID, "Rejected by governance", authority)
+		return k.RejectWorkloadTemplate(ctx, proposal.TemplateID, proposal.TemplateVersion, "Rejected by governance", authority)
 
 	case types.WorkloadProposalTypeDeprecate:
-		return k.DeprecateWorkloadTemplate(ctx, proposal.TemplateID, authority)
+		return k.DeprecateWorkloadTemplate(ctx, proposal.TemplateID, proposal.TemplateVersion, authority)
 
 	case types.WorkloadProposalTypeRevoke:
-		return k.RevokeWorkloadTemplate(ctx, proposal.TemplateID, proposal.SecurityReason, authority)
+		return k.RevokeWorkloadTemplate(ctx, proposal.TemplateID, proposal.TemplateVersion, proposal.SecurityReason, authority)
 
 	default:
 		return types.ErrWorkloadGovernanceFailed.Wrapf("unknown proposal type: %s", proposal.Type)
@@ -596,4 +599,29 @@ func (k Keeper) SetNextWorkloadProposalSequence(ctx sdk.Context, seq uint64) {
 // SetNextWorkloadTemplateSequence sets the next template sequence
 func (k Keeper) SetNextWorkloadTemplateSequence(ctx sdk.Context, seq uint64) {
 	k.setNextSequence(ctx, types.SequenceKeyWorkloadTemplate, seq)
+}
+
+// shouldUpdateLatestTemplate determines if the latest template entry should be updated.
+func shouldUpdateLatestTemplate(ctx sdk.Context, k Keeper, template types.WorkloadTemplate) bool {
+	current, exists := k.GetWorkloadTemplate(ctx, template.TemplateID)
+	if !exists {
+		return true
+	}
+
+	if current.Version == template.Version {
+		return true
+	}
+
+	return compareSemver(template.Version, current.Version) > 0
+}
+
+// compareSemver compares two semver strings (without leading "v").
+// Returns 1 if a > b, -1 if a < b, 0 if equal or unparsable.
+func compareSemver(a, b string) int {
+	na := "v" + strings.TrimPrefix(a, "v")
+	nb := "v" + strings.TrimPrefix(b, "v")
+	if !semver.IsValid(na) || !semver.IsValid(nb) {
+		return 0
+	}
+	return semver.Compare(na, nb)
 }
