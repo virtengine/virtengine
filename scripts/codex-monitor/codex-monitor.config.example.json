@@ -2,6 +2,20 @@
   "$schema": "./codex-monitor.schema.json",
   "projectName": "my-project",
   "primaryAgent": "codex-sdk",
+  "auth": {
+    "copilot": {
+      "sources": ["env", "cli"],
+      "fallbackToInteractive": false
+    },
+    "claude": {
+      "sources": ["env", "cli"],
+      "fallbackToInteractive": false
+    },
+    "codex": {
+      "sources": ["config"],
+      "fallbackToInteractive": true
+    }
+  },
   "executors": [
     {
       "name": "codex-default",
