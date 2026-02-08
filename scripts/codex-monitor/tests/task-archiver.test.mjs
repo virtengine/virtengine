@@ -419,7 +419,7 @@ describe("getArchiveStats", () => {
 
   it("ignores .tmp- files", async () => {
     await mkdir(dir, { recursive: true });
-    await writeFile(resolve(dir, ".tmp-partial.json"), '[]');
+    await writeFile(resolve(dir, ".tmp-partial.json"), "[]");
     const stats = await getArchiveStats(dir);
     expect(stats.count).toBe(0);
   });
@@ -605,8 +605,14 @@ describe("loadArchivedTasks", () => {
       },
     ];
 
-    await writeFile(resolve(dir, "2026-01-01.json"), JSON.stringify([entries[0]]));
-    await writeFile(resolve(dir, "2026-02-01.json"), JSON.stringify([entries[1]]));
+    await writeFile(
+      resolve(dir, "2026-01-01.json"),
+      JSON.stringify([entries[0]]),
+    );
+    await writeFile(
+      resolve(dir, "2026-02-01.json"),
+      JSON.stringify([entries[1]]),
+    );
 
     const result = await loadArchivedTasks({ archiveDir: dir });
     expect(result).toHaveLength(2);
@@ -664,17 +670,21 @@ describe("loadArchivedTasks", () => {
 
     await writeFile(
       resolve(dir, "2025-12-01.json"),
-      JSON.stringify([{
-        task: makeTask({ id: "old" }),
-        archived_at: "2025-12-01T00:00:00.000Z",
-      }]),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "old" }),
+          archived_at: "2025-12-01T00:00:00.000Z",
+        },
+      ]),
     );
     await writeFile(
       resolve(dir, "2026-02-01.json"),
-      JSON.stringify([{
-        task: makeTask({ id: "recent" }),
-        archived_at: "2026-02-01T00:00:00.000Z",
-      }]),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "recent" }),
+          archived_at: "2026-02-01T00:00:00.000Z",
+        },
+      ]),
     );
 
     const result = await loadArchivedTasks({
@@ -715,10 +725,12 @@ describe("loadArchivedTasks", () => {
     await mkdir(dir, { recursive: true });
     await writeFile(
       resolve(dir, "2026-02-01.json"),
-      JSON.stringify([{
-        task: makeTask({ id: "good" }),
-        archived_at: "2026-02-01T00:00:00.000Z",
-      }]),
+      JSON.stringify([
+        {
+          task: makeTask({ id: "good" }),
+          archived_at: "2026-02-01T00:00:00.000Z",
+        },
+      ]),
     );
     await writeFile(resolve(dir, "2026-02-02.json"), "not valid json{{{");
 
@@ -812,10 +824,16 @@ describe("migrateLegacyArchives", () => {
 
     // Legacy files should be deleted
     const files = await readdir(dir);
-    expect(files.filter((f) => f.includes("-aa") || f.includes("-bb") || f.includes("-cc"))).toHaveLength(0);
+    expect(
+      files.filter(
+        (f) => f.includes("-aa") || f.includes("-bb") || f.includes("-cc"),
+      ),
+    ).toHaveLength(0);
 
     // Daily file should contain all 3
-    const daily = JSON.parse(await readFile(resolve(dir, "2026-02-01.json"), "utf8"));
+    const daily = JSON.parse(
+      await readFile(resolve(dir, "2026-02-01.json"), "utf8"),
+    );
     expect(daily).toHaveLength(3);
   });
 
@@ -823,17 +841,27 @@ describe("migrateLegacyArchives", () => {
     await mkdir(dir, { recursive: true });
 
     // Pre-existing daily file
-    const existing = [{ task: { id: "pre" }, archived_at: "2026-02-01T09:00:00Z" }];
+    const existing = [
+      { task: { id: "pre" }, archived_at: "2026-02-01T09:00:00Z" },
+    ];
     await writeFile(resolve(dir, "2026-02-01.json"), JSON.stringify(existing));
 
     // Legacy file for same date, different task
-    const legacy = { task: { id: "extra" }, archived_at: "2026-02-01T15:00:00Z" };
-    await writeFile(resolve(dir, "2026-02-01-extra.json"), JSON.stringify(legacy));
+    const legacy = {
+      task: { id: "extra" },
+      archived_at: "2026-02-01T15:00:00Z",
+    };
+    await writeFile(
+      resolve(dir, "2026-02-01-extra.json"),
+      JSON.stringify(legacy),
+    );
 
     const r = await migrateLegacyArchives(dir);
     expect(r.migrated).toBe(1);
 
-    const daily = JSON.parse(await readFile(resolve(dir, "2026-02-01.json"), "utf8"));
+    const daily = JSON.parse(
+      await readFile(resolve(dir, "2026-02-01.json"), "utf8"),
+    );
     expect(daily).toHaveLength(2);
     expect(daily.map((e) => e.task.id).sort()).toEqual(["extra", "pre"]);
   });
@@ -872,7 +900,9 @@ describe("migrateLegacyArchives", () => {
     const r2 = await migrateLegacyArchives(dir);
     expect(r2.migrated).toBe(0); // nothing left to migrate
 
-    const daily = JSON.parse(await readFile(resolve(dir, "2026-03-01.json"), "utf8"));
+    const daily = JSON.parse(
+      await readFile(resolve(dir, "2026-03-01.json"), "utf8"),
+    );
     expect(daily).toHaveLength(1);
   });
 });
