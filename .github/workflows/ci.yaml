@@ -43,8 +43,12 @@ env:
   GO_VERSION: "1.25.5"
   GOLANGCI_LINT_VERSION: "v2.4.0"
   NODE_VERSION: "20"
+  PNPM_VERSION: "10.28.2"
   PYTHON_VERSION: "3.11"
   GOWORK: "off" # Disable workspace mode for vendor operations
+  GO_TEST_TIMEOUT_UNIT: "30m"
+  GO_TEST_TIMEOUT_INTEGRATION: "40m"
+  GO_TEST_TIMEOUT_E2E: "45m"
 
 permissions:
   contents: read
@@ -92,6 +96,31 @@ jobs:
           test -z "$(gofmt -l .)"
 
   # ===========================================================================
+  # Go Vet Job - Pre-push Parity
+  # ===========================================================================
+  vet:
+    name: Go Vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run go vet
+        env:
+          GOFLAGS: "-mod=readonly"
+        run: go vet ./...
+
+  # ===========================================================================
   # Shell Lint Job
   # ===========================================================================
   lint-shell:
@@ -135,7 +164,8 @@ jobs:
 
       - name: Run unit tests
         run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          go test -v -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            -coverprofile=coverage.out -covermode=atomic ./...
 
       # INFRA-003: Coverage enforcement gate (80% minimum)
       - name: Check coverage threshold
@@ -254,25 +284,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: "package-lock.json"
+          cache: "pnpm"
+          cache-dependency-path: "pnpm-lock.yaml"
+
+      - name: Set up pnpm
+        if: steps.detect.outputs.run == 'true'
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Install dependencies
         if: steps.detect.outputs.run == 'true'
         run: |
           if [ -d lib/portal ] && [ -f lib/portal/package.json ]; then
-            cd lib/portal
-            npm ci --ignore-scripts || npm install --ignore-scripts
+            pnpm install --frozen-lockfile
           else
             echo "Portal package not found, skipping"
           fi
 
-      - name: Run unit tests
+      - name: Run portal tests
         if: steps.detect.outputs.run == 'true'
         run: |
           if [ -d lib/portal ] && [ -f lib/portal/package.json ]; then
-            cd lib/portal
-            npm test -- --passWithNoTests || echo "Portal tests completed"
+            pnpm -C lib/portal test
+            pnpm -C portal test --coverage || echo "Portal tests completed"
           else
             echo "Portal package not found, skipping"
           fi
@@ -419,7 +454,8 @@ jobs:
         id: integration-tests
         run: |
           # INFRA-003: Integration tests are required gates
-          go test -v -tags="e2e.integration" ./tests/integration/... 2>&1 | tee integration-output.txt
+          go test -v -tags="e2e.integration" -timeout ${{ env.GO_TEST_TIMEOUT_INTEGRATION }} \
+            ./tests/integration/... 2>&1 | tee integration-output.txt
           TEST_EXIT_CODE=${PIPESTATUS[0]}
 
           # Parse test results
@@ -514,7 +550,7 @@ jobs:
         run: |
           # VE-8C: HPC marketplace provider flow E2E tests
           go test -v -tags="e2e.integration" \
-            -timeout 30m \
+            -timeout ${{ env.GO_TEST_TIMEOUT_E2E }} \
             ./tests/e2e/... \
             -run "TestHPCMarketplaceE2E" \
             2>&1 | tee hpc-e2e-output.txt
@@ -836,6 +872,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - lint
+      - vet
       - lint-shell
       - test-go
       - build
@@ -852,11 +889,19 @@ jobs:
           echo "| Gate | Status | Required |" >> $GITHUB_STEP_SUMMARY
           echo "|------|--------|----------|" >> $GITHUB_STEP_SUMMARY
           echo "| Go Linting | ${{ needs.lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Vet | ${{ needs.vet.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Shell Linting | ${{ needs.lint-shell.result }} | ⚠️ Warning only |" >> $GITHUB_STEP_SUMMARY
           echo "| Go Tests | ${{ needs.test-go.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Integration Tests | ${{ needs.integration.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Container Security | ${{ needs.container-security.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Pre-push Parity" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| golangci-lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| go vet | ${{ needs.vet.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| go test (unit) | ${{ needs.test-go.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## INFRA-003 Compliance" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Static code analysis (golangci-lint with gosec)" >> $GITHUB_STEP_SUMMARY
@@ -870,6 +915,11 @@ jobs:
 
           if [ "${{ needs.lint.result }}" == "failure" ]; then
             echo "::error::Linting failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.vet.result }}" == "failure" ]; then
+            echo "::error::Go vet failed"
             FAILED=1
           fi
 

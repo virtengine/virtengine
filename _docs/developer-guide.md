@@ -35,7 +35,7 @@ VirtEngine is a Cosmos SDK-based blockchain with specialized modules for:
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.25.5+
 - Node.js 18+ (for TypeScript SDK)
 - Python 3.10+ (for Python helpers)
 - Docker & Docker Compose

@@ -99,7 +99,7 @@ make test
 ### Required Tools
 
 - **Git for Windows** - Version control and Git Bash environment
-- **Go 1.21+** - Programming language for VirtEngine
+- **Go 1.25.5+** - Programming language for VirtEngine
 - **Node.js & npm** - JavaScript runtime for build tools
 - **GNU Make 4+** - Build system
 - **direnv 2.32+** - Environment management
@@ -231,7 +231,7 @@ After setup, verify everything works:
 
 - [ ] Git Bash opens without errors
 - [ ] `git --version` shows Git 2.30+
-- [ ] `go version` shows Go 1.21+
+- [ ] `go version` shows Go 1.25.5+
 - [ ] `node --version` and `npm --version` work
 - [ ] `make --version` shows GNU Make 4+
 - [ ] `jq --version` works
