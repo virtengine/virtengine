@@ -38,6 +38,14 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgFlagDispute{}, "hpc/MsgFlagDispute")
 	legacy.RegisterAminoMsg(cdc, &MsgResolveDispute{}, "hpc/MsgResolveDispute")
 	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "hpc/MsgUpdateParams")
+	// VE-5F: Workload template messages
+	legacy.RegisterAminoMsg(cdc, &MsgCreateWorkloadTemplate{}, "hpc/MsgCreateWorkloadTemplate")
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateWorkloadTemplate{}, "hpc/MsgUpdateWorkloadTemplate")
+	legacy.RegisterAminoMsg(cdc, &MsgApproveWorkloadTemplate{}, "hpc/MsgApproveWorkloadTemplate")
+	legacy.RegisterAminoMsg(cdc, &MsgRejectWorkloadTemplate{}, "hpc/MsgRejectWorkloadTemplate")
+	legacy.RegisterAminoMsg(cdc, &MsgDeprecateWorkloadTemplate{}, "hpc/MsgDeprecateWorkloadTemplate")
+	legacy.RegisterAminoMsg(cdc, &MsgRevokeWorkloadTemplate{}, "hpc/MsgRevokeWorkloadTemplate")
+	legacy.RegisterAminoMsg(cdc, &MsgSubmitJobFromTemplate{}, "hpc/MsgSubmitJobFromTemplate")
 }
 
 // RegisterInterfaces registers the x/hpc interfaces types with the interface registry
@@ -55,6 +63,14 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgFlagDispute{},
 		&MsgResolveDispute{},
 		&MsgUpdateParams{},
+		// VE-5F: Workload template messages
+		&MsgCreateWorkloadTemplate{},
+		&MsgUpdateWorkloadTemplate{},
+		&MsgApproveWorkloadTemplate{},
+		&MsgRejectWorkloadTemplate{},
+		&MsgDeprecateWorkloadTemplate{},
+		&MsgRevokeWorkloadTemplate{},
+		&MsgSubmitJobFromTemplate{},
 	)
 
 	msgservice.RegisterMsgServiceDesc(registry, &hpcv1.Msg_serviceDesc)
