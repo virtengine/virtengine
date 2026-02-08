@@ -463,6 +463,27 @@ function Invoke-GhWithTimeout {
     }
 }
 
+function Get-CommitsAhead {
+    <#
+    .SYNOPSIS Check how many commits a branch has compared to base branch.
+    .OUTPUTS Integer count of commits ahead, or -1 if branch doesn't exist
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+    $baseRef = $BaseBranch
+    $branchExists = git rev-parse --verify --quiet $Branch 2>$null
+    if ($LASTEXITCODE -ne 0) { return -1 }
+    $commitsAhead = git rev-list --count "${baseRef}..${Branch}" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "Failed to count commits for ${Branch} vs ${baseRef}" -Level "WARN"
+        return -1
+    }
+    return [int]$commitsAhead
+}
+
 function Create-PRForBranchSafe {
     <#
     .SYNOPSIS Create a PR for a branch with timeout + non-interactive guardrails.
