@@ -1877,6 +1877,16 @@ function getTaskAgeMs(task) {
 }
 
 /**
+ * Return the task's "version" timestamp used for cache invalidation.
+ * Prefers updated_at, falls back to created_at.
+ * @param {object} task
+ * @returns {string} ISO-ish timestamp string or empty string
+ */
+function getTaskUpdatedAt(task) {
+  return task?.updated_at || task?.created_at || "";
+}
+
+/**
  * GET /api/projects/:project_id/tasks?status=<status>
  * Fetches tasks by status from VK API.
  * @param {string} status - Task status (e.g., "inreview", "todo", "done")
@@ -1923,8 +1933,8 @@ async function updateTaskStatus(taskId, newStatus) {
     timeoutMs: 10000,
   });
   const ok = res?.success === true;
-  // Clear recovery skip cache — task status changed, so it needs re-evaluation
-  if (ok) recoverySkipCache.delete(taskId);
+  // Clear recovery caches — task status changed, so it needs re-evaluation
+  if (ok) clearRecoveryCaches(taskId);
   return ok;
 }
 
@@ -1943,6 +1953,7 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
   try {
     const res = await fetchVk(`/api/tasks/${taskId}`);
     const liveStatus = res?.data?.status || res?.status;
+    const liveUpdatedAt = res?.data?.updated_at || res?.data?.created_at || "";
     if (!liveStatus) {
       console.warn(
         `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping`,
@@ -1959,7 +1970,10 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       recoverySkipCache.set(taskId, {
         resolvedStatus: liveStatus,
         timestamp: Date.now(),
+        updatedAt: liveUpdatedAt,
+        status: liveStatus,
       });
+      scheduleRecoveryCacheSave();
       return false;
     }
     if (liveStatus === "todo") {
@@ -1970,7 +1984,10 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       recoverySkipCache.set(taskId, {
         resolvedStatus: liveStatus,
         timestamp: Date.now(),
+        updatedAt: liveUpdatedAt,
+        status: liveStatus,
       });
+      scheduleRecoveryCacheSave();
       return false;
     }
     const success = await updateTaskStatus(taskId, "todo");
@@ -2166,21 +2183,191 @@ function saveMergedTaskCache() {
 // Load cache on startup
 loadMergedTaskCache();
 
-/** Maximum number of tasks to process per sweep (0 = unlimited) */
-const MERGE_CHECK_BATCH_SIZE = 0;
+// ── Recovery/Idle caches (persistent) ───────────────────────────────────────
 
-/** Small delay between GitHub API calls to avoid rate-limiting (ms) */
-const MERGE_CHECK_THROTTLE_MS = 1500;
+const recoveryCacheEnabled =
+  String(process.env.RECOVERY_CACHE_ENABLED || "true").toLowerCase() !== "false";
+const recoveryLogDedupMs =
+  Number(process.env.RECOVERY_LOG_DEDUP_MINUTES || "30") * 60 * 1000;
+const recoveryCacheMaxEntries = Number(
+  process.env.RECOVERY_CACHE_MAX || "2000",
+);
+
+const recoveryCachePath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-task-recovery-cache.json",
+);
 
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
  * no PR, abandoned).  We re-check them every 30 min instead of every cycle.
  * After STALE_MAX_STRIKES consecutive stale checks the task is moved back
  * to "todo" so another agent can pick it up.
- * Key = task ID, Value = { lastCheck: timestamp, strikes: number }.
- * @type {Map<string, {lastCheck: number, strikes: number}>}
+ * Key = task ID, Value = { lastCheck: timestamp, strikes: number, updatedAt?: string, status?: string }.
+ * @type {Map<string, {lastCheck: number, strikes: number, updatedAt?: string, status?: string}>}
  */
 const staleBranchCooldown = new Map();
+
+/**
+ * Cache for tasks whose recovery was a no-op (already todo/cancelled/done).
+ * Prevents redundant VK API calls, branch/PR checks, and log spam every cycle.
+ * Key = task ID, Value = { resolvedStatus: string, timestamp: number, updatedAt?: string, status?: string }.
+ * Expires after RECOVERY_SKIP_CACHE_MS so we re-check periodically.
+ * @type {Map<string, {resolvedStatus: string, timestamp: number, updatedAt?: string, status?: string}>}
+ */
+const recoverySkipCache = new Map();
+
+/**
+ * Log dedup for repeated "no attempt found" messages.
+ * Key = task ID, Value = { lastLogAt: number, updatedAt?: string, status?: string, reason?: string }.
+ * @type {Map<string, {lastLogAt: number, updatedAt?: string, status?: string, reason?: string}>}
+ */
+const noAttemptLogCache = new Map();
+
+let recoveryCacheDirty = false;
+let recoveryCacheSaveTimer = null;
+
+function taskVersionMatches(task, entry, status) {
+  if (!entry) return false;
+  const updatedAt = getTaskUpdatedAt(task);
+  if (!updatedAt) return false;
+  if (!entry.updatedAt) return false;
+  if (entry.updatedAt !== updatedAt) return false;
+  if (entry.status && status && entry.status !== status) return false;
+  return true;
+}
+
+function scheduleRecoveryCacheSave() {
+  if (!recoveryCacheEnabled) return;
+  recoveryCacheDirty = true;
+  if (recoveryCacheSaveTimer) return;
+  recoveryCacheSaveTimer = setTimeout(() => {
+    recoveryCacheSaveTimer = null;
+    if (!recoveryCacheDirty) return;
+    recoveryCacheDirty = false;
+    saveRecoveryCache();
+  }, 1000);
+  if (typeof recoveryCacheSaveTimer.unref === "function") {
+    recoveryCacheSaveTimer.unref();
+  }
+}
+
+function buildCacheObject(map, tsField) {
+  const entries = [...map.entries()];
+  entries.sort(
+    (a, b) => (b[1]?.[tsField] || 0) - (a[1]?.[tsField] || 0),
+  );
+  const limited =
+    recoveryCacheMaxEntries > 0
+      ? entries.slice(0, recoveryCacheMaxEntries)
+      : entries;
+  const obj = {};
+  for (const [id, value] of limited) {
+    obj[id] = value;
+  }
+  return obj;
+}
+
+function saveRecoveryCache() {
+  if (!recoveryCacheEnabled) return;
+  try {
+    const payload = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      staleCooldown: buildCacheObject(staleBranchCooldown, "lastCheck"),
+      recoverySkip: buildCacheObject(recoverySkipCache, "timestamp"),
+      noAttemptLog: buildCacheObject(noAttemptLogCache, "lastLogAt"),
+    };
+    writeFileSync(recoveryCachePath, JSON.stringify(payload, null, 2), "utf8");
+  } catch {
+    /* best-effort */
+  }
+}
+
+function loadRecoveryCache() {
+  if (!recoveryCacheEnabled) return;
+  try {
+    if (!existsSync(recoveryCachePath)) return;
+    const raw = readFileSync(recoveryCachePath, "utf8");
+    const data = JSON.parse(raw);
+    const now = Date.now();
+    const staleEntries = data?.staleCooldown || {};
+    for (const [id, entry] of Object.entries(staleEntries)) {
+      if (!entry?.lastCheck) continue;
+      if (now - entry.lastCheck > STALE_COOLDOWN_MS) continue;
+      staleBranchCooldown.set(id, entry);
+    }
+    const skipEntries = data?.recoverySkip || {};
+    for (const [id, entry] of Object.entries(skipEntries)) {
+      if (!entry?.timestamp) continue;
+      if (now - entry.timestamp > RECOVERY_SKIP_CACHE_MS) continue;
+      recoverySkipCache.set(id, entry);
+    }
+    const logEntries = data?.noAttemptLog || {};
+    for (const [id, entry] of Object.entries(logEntries)) {
+      if (!entry?.lastLogAt) continue;
+      if (
+        recoveryLogDedupMs > 0 &&
+        now - entry.lastLogAt > recoveryLogDedupMs
+      ) {
+        continue;
+      }
+      noAttemptLogCache.set(id, entry);
+    }
+    const total =
+      staleBranchCooldown.size +
+      recoverySkipCache.size +
+      noAttemptLogCache.size;
+    if (total > 0) {
+      console.log(
+        `[monitor] Restored ${total} recovery cache entries (stale=${staleBranchCooldown.size}, skip=${recoverySkipCache.size}, logs=${noAttemptLogCache.size})`,
+      );
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
+function clearRecoveryCaches(taskId) {
+  let changed = false;
+  if (staleBranchCooldown.delete(taskId)) changed = true;
+  if (recoverySkipCache.delete(taskId)) changed = true;
+  if (noAttemptLogCache.delete(taskId)) changed = true;
+  if (changed) scheduleRecoveryCacheSave();
+}
+
+function shouldLogNoAttempt(task, taskStatus, reason) {
+  if (!recoveryCacheEnabled || recoveryLogDedupMs <= 0) return true;
+  const entry = noAttemptLogCache.get(task.id);
+  if (!entry) return true;
+  if (entry.reason && entry.reason !== reason) return true;
+  if (!taskVersionMatches(task, entry, taskStatus)) {
+    noAttemptLogCache.delete(task.id);
+    scheduleRecoveryCacheSave();
+    return true;
+  }
+  return Date.now() - entry.lastLogAt >= recoveryLogDedupMs;
+}
+
+function recordNoAttemptLog(task, taskStatus, reason) {
+  if (!recoveryCacheEnabled) return;
+  const updatedAt = getTaskUpdatedAt(task);
+  if (!updatedAt) return;
+  noAttemptLogCache.set(task.id, {
+    lastLogAt: Date.now(),
+    updatedAt,
+    status: taskStatus,
+    reason,
+  });
+  scheduleRecoveryCacheSave();
+}
+
+/** Maximum number of tasks to process per sweep (0 = unlimited) */
+const MERGE_CHECK_BATCH_SIZE = 0;
+
+/** Small delay between GitHub API calls to avoid rate-limiting (ms) */
+const MERGE_CHECK_THROTTLE_MS = 1500;
+
 const STALE_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 const STALE_MAX_STRIKES = 2; // move to todo after this many stale checks
 
@@ -2202,15 +2389,10 @@ const STALE_TASK_AGE_MS = STALE_TASK_AGE_HOURS * 60 * 60 * 1000;
 const conflictResolutionCooldown = new Map();
 const CONFLICT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
-/**
- * Cache for tasks whose recovery was a no-op (already todo/cancelled/done).
- * Prevents redundant VK API calls, branch/PR checks, and log spam every cycle.
- * Key = task ID, Value = { resolvedStatus: string, timestamp: number }.
- * Expires after RECOVERY_SKIP_CACHE_MS so we re-check periodically.
- * @type {Map<string, {resolvedStatus: string, timestamp: number}>}
- */
-const recoverySkipCache = new Map();
 const RECOVERY_SKIP_CACHE_MS = 30 * 60 * 1000; // 30 minutes
+
+// Load recovery cache on startup (after constants initialize)
+loadRecoveryCache();
 
 /**
  * Periodic check: find tasks in "inreview" status, check if their PRs
@@ -2304,9 +2486,12 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
           );
         } else {
-          console.log(
-            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
-          );
+          if (shouldLogNoAttempt(task, taskStatus, "no_attempt")) {
+            console.log(
+              `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+            );
+            recordNoAttemptLog(task, taskStatus, "no_attempt");
+          }
         }
       }
       const branch =
@@ -2337,17 +2522,24 @@ async function checkMergedPRsAndUpdateTasks() {
       // safeRecoverTask caches tasks that are already todo/cancelled/done,
       // so we skip the entire branch/PR lookup and recovery attempt.
       const skipEntry = recoverySkipCache.get(task.id);
-      if (
-        skipEntry &&
-        Date.now() - skipEntry.timestamp < RECOVERY_SKIP_CACHE_MS
-      ) {
-        continue;
+      if (skipEntry) {
+        if (!taskVersionMatches(task, skipEntry, taskStatus)) {
+          recoverySkipCache.delete(task.id);
+          scheduleRecoveryCacheSave();
+        } else if (Date.now() - skipEntry.timestamp < RECOVERY_SKIP_CACHE_MS) {
+          continue;
+        }
       }
 
       // ── Stale cooldown: skip tasks we already checked recently ──
       const staleEntry = staleBranchCooldown.get(task.id);
-      if (staleEntry && Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS) {
-        continue;
+      if (staleEntry) {
+        if (!taskVersionMatches(task, staleEntry, taskStatus)) {
+          staleBranchCooldown.delete(task.id);
+          scheduleRecoveryCacheSave();
+        } else if (Date.now() - staleEntry.lastCheck < STALE_COOLDOWN_MS) {
+          continue;
+        }
       }
 
       // ── Gather ALL attempts for this task (local + VK API) ──
@@ -2403,14 +2595,23 @@ async function checkMergedPRsAndUpdateTasks() {
         pr_url: task?.pr_url,
       });
 
+      if (candidates.length > 0) {
+        if (noAttemptLogCache.delete(task.id)) {
+          scheduleRecoveryCacheSave();
+        }
+      }
+
       if (candidates.length === 0) {
         // ── Only recover idle inprogress tasks — never inreview ──
         // inreview tasks are monitored by merge/conflict checks.
         // inprogress tasks with an active agent should not be touched.
         if (taskStatus !== "inprogress") {
-          console.log(
-            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) in ${taskStatus} — skipping (only idle inprogress tasks are recovered)`,
-          );
+          if (shouldLogNoAttempt(task, taskStatus, "no_attempt_skip_status")) {
+            console.log(
+              `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) in ${taskStatus} — skipping (only idle inprogress tasks are recovered)`,
+            );
+            recordNoAttemptLog(task, taskStatus, "no_attempt_skip_status");
+          }
           continue;
         }
 
@@ -2442,13 +2643,20 @@ async function checkMergedPRsAndUpdateTasks() {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
+            scheduleRecoveryCacheSave();
           }
           continue;
         }
 
         const prev = staleBranchCooldown.get(task.id);
         const strikes = (prev?.strikes || 0) + 1;
-        staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+        staleBranchCooldown.set(task.id, {
+          lastCheck: Date.now(),
+          strikes,
+          updatedAt: getTaskUpdatedAt(task),
+          status: taskStatus,
+        });
+        scheduleRecoveryCacheSave();
         console.log(
           `[monitor] No attempt found for idle task "${task.title}" (${task.id.substring(0, 8)}...) — strike ${strikes}/${STALE_MAX_STRIKES}`,
         );
@@ -2462,6 +2670,7 @@ async function checkMergedPRsAndUpdateTasks() {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
+            scheduleRecoveryCacheSave();
           }
         }
         continue;
@@ -2712,12 +2921,19 @@ async function checkMergedPRsAndUpdateTasks() {
             movedTodoCount++;
             recoveredTaskNames.push(task.title);
             staleBranchCooldown.delete(task.id);
+            scheduleRecoveryCacheSave();
           }
         } else {
           // Not old enough — use the strike-based system
           const prev = staleBranchCooldown.get(task.id);
           const strikes = (prev?.strikes || 0) + 1;
-          staleBranchCooldown.set(task.id, { lastCheck: Date.now(), strikes });
+          staleBranchCooldown.set(task.id, {
+            lastCheck: Date.now(),
+            strikes,
+            updatedAt: getTaskUpdatedAt(task),
+            status: taskStatus,
+          });
+          scheduleRecoveryCacheSave();
           console.log(
             `[monitor] Idle task "${task.title}" (${task.id.substring(0, 8)}...): no branch, no PR (strike ${strikes}/${STALE_MAX_STRIKES})`,
           );
@@ -2731,6 +2947,7 @@ async function checkMergedPRsAndUpdateTasks() {
               movedTodoCount++;
               recoveredTaskNames.push(task.title);
               staleBranchCooldown.delete(task.id);
+              scheduleRecoveryCacheSave();
             }
           }
         }

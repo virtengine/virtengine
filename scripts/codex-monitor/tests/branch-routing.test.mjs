@@ -25,15 +25,15 @@ describe("extractScopeFromTitle", () => {
   });
 
   it("extracts scope with priority prefix", () => {
-    expect(
-      extractScopeFromTitle("[P1] feat(codex-monitor): add caching"),
-    ).toBe("codex-monitor");
+    expect(extractScopeFromTitle("[P1] feat(codex-monitor): add caching")).toBe(
+      "codex-monitor",
+    );
   });
 
   it("extracts scope with [P2] prefix", () => {
-    expect(
-      extractScopeFromTitle("[P2] fix(escrow): missing validation"),
-    ).toBe("escrow");
+    expect(extractScopeFromTitle("[P2] fix(escrow): missing validation")).toBe(
+      "escrow",
+    );
   });
 
   it("returns null for title without scope", () => {
@@ -75,9 +75,9 @@ describe("extractScopeFromTitle", () => {
   });
 
   it("handles hyphenated scopes", () => {
-    expect(
-      extractScopeFromTitle("feat(codex-monitor): branch routing"),
-    ).toBe("codex-monitor");
+    expect(extractScopeFromTitle("feat(codex-monitor): branch routing")).toBe(
+      "codex-monitor",
+    );
   });
 
   it("handles underscored scopes", () => {
@@ -136,9 +136,7 @@ describe("extractDecisionJson", () => {
 
   it("returns null for text without valid action", () => {
     expect(extractDecisionJson("just some text")).toBeNull();
-    expect(
-      extractDecisionJson('{"notaction":"merge"}'),
-    ).toBeNull();
+    expect(extractDecisionJson('{"notaction":"merge"}')).toBeNull();
   });
 
   it("handles JSON with whitespace", () => {
@@ -153,7 +151,7 @@ describe("extractDecisionJson", () => {
   });
 
   it("extracts from fenced block without json tag", () => {
-    const raw = "```\n{\"action\":\"noop\",\"reason\":\"nothing\"}\n```";
+    const raw = '```\n{"action":"noop","reason":"nothing"}\n```';
     const result = extractDecisionJson(raw);
     expect(result.action).toBe("noop");
   });

@@ -565,6 +565,7 @@ function Get-OrchestratorState {
             last_submitted_at       = $null
             last_ci_sweep_completed = 0
             last_ci_sweep_at        = $null
+            last_completed_archive_at = $null
             total_tasks_completed   = 0
             vk_project_id           = $null
             vk_repo_id              = $null
@@ -583,6 +584,7 @@ function Get-OrchestratorState {
                 last_submitted_at       = $null
                 last_ci_sweep_completed = 0
                 last_ci_sweep_at        = $null
+                last_completed_archive_at = $null
                 total_tasks_completed   = 0
                 vk_project_id           = $null
                 vk_repo_id              = $null
@@ -601,6 +603,7 @@ function Get-OrchestratorState {
             last_submitted_at       = $state.last_submitted_at
             last_ci_sweep_completed = $lastSweep
             last_ci_sweep_at        = $state.last_ci_sweep_at
+            last_completed_archive_at = $state.last_completed_archive_at
             total_tasks_completed   = $totalCompleted
             vk_project_id           = $state.vk_project_id
             vk_repo_id              = $state.vk_repo_id
@@ -617,6 +620,7 @@ function Get-OrchestratorState {
             last_submitted_at       = $null
             last_ci_sweep_completed = 0
             last_ci_sweep_at        = $null
+            last_completed_archive_at = $null
             total_tasks_completed   = 0
             vk_project_id           = $null
             vk_repo_id              = $null
@@ -643,6 +647,20 @@ function Initialize-CISweepConfig {
     $script:CiSweepEvery = Get-EnvInt -Name "VE_CI_SWEEP_EVERY" -Default 15 -Min 0
     $script:CiSweepPrBackupEnabled = Get-EnvBool -Name "VE_CI_SWEEP_PR_BACKUP" -Default $true
     $script:CiSweepPrEvery = Get-EnvInt -Name "VE_CI_SWEEP_PR_EVERY" -Default $script:CiSweepEvery -Min 0
+}
+
+function Initialize-CompletedArchiveConfig {
+    $script:CompletedArchiveEnabled = Get-EnvBool -Name "VE_COMPLETED_TASK_ARCHIVE_ENABLED" -Default $true
+    $script:CompletedArchiveAgeHours = Get-EnvInt -Name "VE_COMPLETED_TASK_ARCHIVE_AGE_HOURS" -Default 24 -Min 1
+    $script:CompletedArchiveIntervalMin = Get-EnvInt -Name "VE_COMPLETED_TASK_ARCHIVE_INTERVAL_MIN" -Default 30 -Min 0
+    $script:CompletedArchiveMax = Get-EnvInt -Name "VE_COMPLETED_TASK_ARCHIVE_MAX" -Default 200 -Min 1
+    $script:CompletedArchiveDryRun = Get-EnvBool -Name "VE_COMPLETED_TASK_ARCHIVE_DRY_RUN" -Default $false
+    $script:CompletedArchiveScriptPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) "scripts\\archive-completed-tasks.ps1"
+}
+
+function Initialize-CompletedArchiveState {
+    $state = Get-OrchestratorState
+    $script:LastCompletedArchiveAt = $state.last_completed_archive_at
 }
 
 function Initialize-CISweepState {
@@ -703,6 +721,39 @@ function Update-CISweepState {
     if ($PSBoundParameters.ContainsKey("LastSweepCompleted")) {
         $state.last_ci_sweep_completed = $LastSweepCompleted
     }
+    Save-OrchestratorState -State $state
+}
+
+function Invoke-CompletedTaskArchive {
+    if (-not $script:CompletedArchiveEnabled) { return }
+    if (-not (Test-Path -LiteralPath $script:CompletedArchiveScriptPath)) {
+        Write-Log "Completed task archive script not found: $script:CompletedArchiveScriptPath" -Level "WARN"
+        return
+    }
+
+    $now = Get-Date
+    if ($script:LastCompletedArchiveAt) {
+        try {
+            $last = [datetime]$script:LastCompletedArchiveAt
+            $elapsedMin = ($now.ToUniversalTime() - $last.ToUniversalTime()).TotalMinutes
+            if ($elapsedMin -lt $script:CompletedArchiveIntervalMin) { return }
+        }
+        catch {
+            # ignore parse errors, run anyway
+        }
+    }
+
+    Write-Log "Archiving completed tasks older than $($script:CompletedArchiveAgeHours)h..." -Level "ACTION"
+    try {
+        & $script:CompletedArchiveScriptPath -AgeHours $script:CompletedArchiveAgeHours -MinIntervalMinutes $script:CompletedArchiveIntervalMin -MaxTasks $script:CompletedArchiveMax -DryRun:$script:CompletedArchiveDryRun
+    }
+    catch {
+        Write-Log "Completed task archive failed: $($_.Exception.Message)" -Level "WARN"
+    }
+
+    $script:LastCompletedArchiveAt = $now.ToUniversalTime().ToString("o")
+    $state = Get-OrchestratorState
+    $state.last_completed_archive_at = $script:LastCompletedArchiveAt
     Save-OrchestratorState -State $state
 }
 
@@ -3268,7 +3319,9 @@ function Start-Orchestrator {
     Write-Banner
     Ensure-GitIdentity
     Initialize-CISweepConfig
+    Initialize-CompletedArchiveConfig
     Initialize-CISweepState
+    Initialize-CompletedArchiveState
     Restore-CycleState
 
     # Validate prerequisites
@@ -3413,6 +3466,10 @@ function Start-Orchestrator {
 
             # Step 3: Process completed attempts (check PRs, merge, mark done)
             Process-CompletedAttempts
+            if (Test-OrchestratorStop) { break }
+
+            # Step 3a: Archive completed tasks older than threshold
+            Invoke-CompletedTaskArchive
             if (Test-OrchestratorStop) { break }
 
             # Step 3b: Send queued follow-ups before starting new tasks
