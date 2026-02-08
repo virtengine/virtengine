@@ -122,10 +122,6 @@ let {
   preflightRetryMs: configPreflightRetryMs,
   primaryAgent,
   primaryAgentEnabled,
-  preflightEnabled: configPreflightEnabled,
-  preflightRetryMs: configPreflightRetryMs,
-  primaryAgent,
-  primaryAgentEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -2847,6 +2843,7 @@ Return a short summary of what you did.`;
         );
       }
     }
+  }
   } catch (err) {
     console.warn(`[monitor] ${tag}: error — ${err.message || err}`);
   }
