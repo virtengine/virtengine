@@ -158,8 +158,6 @@ let {
   telegramVerbosity,
 } = config;
 
-void initPrimaryAgent(config);
-
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
@@ -167,8 +165,6 @@ console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
 console.log(`[monitor] task planner mode: ${plannerMode}`);
-let primaryAgentName = primaryAgent;
-let primaryAgentReady = primaryAgentEnabled;
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -177,12 +173,10 @@ let codexDisabledReason = codexEnabled
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
 setPrimaryAgent(primaryAgentName);
-void initPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
-setPrimaryAgent(primaryAgentName);
 if (primaryAgentReady) {
-  void initPrimaryAgent(config);
+  void initPrimaryAgent(primaryAgentName);
 }
 
 // Merge strategy: Codex-powered merge decision analysis
@@ -2598,35 +2592,9 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → inreview`,
           );
         }
-<<<<<<< HEAD
       } else if (!hasOpenPR) {
         // ── Only recover idle inprogress tasks — never inreview ──
         if (taskStatus !== "inprogress") {
-=======
-      }
-
-      if (!branch) {
-        continue;
-      }
-
-      // Throttle between GitHub API calls to avoid rate-limiting
-      if (MERGE_CHECK_THROTTLE_MS > 0) {
-        await new Promise((r) => setTimeout(r, MERGE_CHECK_THROTTLE_MS));
-      }
-
-      // Check if the branch has been merged
-      const merged = await isBranchMerged(branch);
-      if (merged) {
-        console.log(
-          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch, updating to done`,
-        );
-
-        const success = await updateTaskStatus(task.id, "done");
-        if (success) {
-          movedCount++;
-          mergedTaskCache.add(task.id);
-          saveMergedTaskCache();
->>>>>>> 7a923e03 (fix(monitor): persist merged-task cache to disk + fix codex exec prompt)
           console.log(
             `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...): no open PR but status=${taskStatus} — skipping recovery`,
           );
