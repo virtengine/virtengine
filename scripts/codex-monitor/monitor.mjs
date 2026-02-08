@@ -69,36 +69,7 @@ import {
   detectMaintenanceMode,
   formatFleetSummary,
   persistFleetState,
-  shouldAutoGenerateTasks,
-  markAutoGenTriggered,
-  publishTaskList,
-  bootstrapFromPeer,
 } from "./fleet-coordinator.mjs";
-import {
-  resolveExecutorForTask,
-  formatComplexityDecision,
-  getComplexityMatrix,
-  assessCompletionConfidence,
-  classifyComplexity,
-  COMPLEXITY_TIERS,
-  DEFAULT_MODEL_PROFILES,
-} from "./task-complexity.mjs";
-import {
-  getDirtyTasks,
-  prioritizeDirtyTasks,
-  shouldReserveDirtySlot,
-  getDirtySlotReservation,
-  buildConflictResolutionPrompt,
-  isFileOverlapWithDirtyPR,
-  registerDirtyTask,
-  clearDirtyTask,
-  isDirtyTask,
-  getHighTierForDirty,
-  isOnResolutionCooldown,
-  recordResolutionAttempt,
-  formatDirtyTaskSummary,
-  DIRTY_TASK_DEFAULTS,
-} from "./conflict-resolver.mjs";
 import {
   initSharedKnowledge,
   buildKnowledgeEntry,
@@ -3117,7 +3088,6 @@ async function checkMergedPRsAndUpdateTasks() {
       );
       if (knownBranch) {
         mergedTaskCache.add(task.id);
-        clearDirtyTask(task.id);
         // Cache all branches for this task
         for (const c of candidates) {
           if (c.branch) mergedBranchCache.add(c.branch);
@@ -3166,7 +3136,6 @@ async function checkMergedPRsAndUpdateTasks() {
             );
             const success = await updateTaskStatus(task.id, "done");
             movedCount++;
-            clearDirtyTask(task.id);
             mergedTaskCache.add(task.id);
             for (const c of candidates) {
               if (c.branch) mergedBranchCache.add(c.branch);
@@ -3207,14 +3176,6 @@ async function checkMergedPRsAndUpdateTasks() {
                 attemptId: cand.attemptId,
                 branch: cand.branch,
               });
-              // Register as a dirty task for slot reservation + file-overlap guard
-              registerDirtyTask({
-                taskId: task.id,
-                prNumber: cand.prNumber,
-                branch: cand.branch,
-                title: task.title,
-                files: prInfo?.files?.map((f) => f.filename || f) || [],
-              });
             }
           }
         }
@@ -3234,7 +3195,6 @@ async function checkMergedPRsAndUpdateTasks() {
           );
           const success = await updateTaskStatus(task.id, "done");
           movedCount++;
-          clearDirtyTask(task.id);
           mergedTaskCache.add(task.id);
           for (const c of candidates) {
             if (c.branch) mergedBranchCache.add(c.branch);
@@ -3308,9 +3268,7 @@ async function checkMergedPRsAndUpdateTasks() {
         const onCooldown =
           lastConflictCheck &&
           Date.now() - lastConflictCheck < CONFLICT_COOLDOWN_MS;
-        // Also check dirty-specific cooldown (shorter, for prioritized resolution)
-        const onDirtyCooldown = isOnResolutionCooldown(task.id);
-        if (!onCooldown && !onDirtyCooldown) {
+        if (!onCooldown) {
           const cc = conflictCandidates[0];
           // Find the attempt ID — prefer the one on the candidate, else search
           let resolveAttemptId = cc.attemptId;
@@ -3322,28 +3280,16 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
-            // ── Force HIGH complexity tier for dirty/conflict tasks ──
-            const dirtyComplexity = classifyComplexity({
-              sizeLabel: "xl",
-              title: `[CONFLICT] ${task.title}`,
-              description: "Merge conflict resolution — forced HIGH tier",
-            });
-            const dirtyProfile = resolveExecutorForTask(
-              { ...task, title: `[CONFLICT] ${task.title}` },
-              { executor: "CODEX", variant: "GPT51_CODEX_MAX" },
-              config.complexityRouting,
-            );
-            const complexityLog = formatComplexityDecision(dirtyProfile);
             console.log(
-              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution [${complexityLog}]`,
+              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution`,
             );
             conflictResolutionCooldown.set(task.id, Date.now());
-            recordResolutionAttempt(task.id);
+            conflictsTriggered++;
             // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
             void smartPRFlow(resolveAttemptId, shortId, "conflict");
             if (telegramToken && telegramChatId) {
               void sendTelegramMessage(
-                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution [${dirtyComplexity.tier}]`,
+                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution`,
               );
             }
           } else {
@@ -3855,19 +3801,12 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
       ? statusData.active_attempts
       : Object.values(statusData?.attempts || {});
 
-    // Also fetch VK task-attempts as fallback (filter to active attempts only)
+    // Also fetch VK task-attempts as fallback
     let vkAttempts = [];
     try {
       const vkRes = await fetchVk("/api/task-attempts");
       const vkData = vkRes?.data ?? vkRes;
-      if (Array.isArray(vkData)) {
-        // CRITICAL: Only include attempts for active tasks (inprogress/inreview)
-        // Ignore attempts for completed/done/cancelled/succeeded tasks
-        const activeTaskIds = new Set(allTasks.map((t) => t.id));
-        vkAttempts = vkData.filter((attempt) => {
-          return attempt?.task_id && activeTaskIds.has(attempt.task_id);
-        });
-      }
+      if (Array.isArray(vkData)) vkAttempts = vkData;
     } catch {
       /* best-effort */
     }
@@ -3902,14 +3841,6 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
 
       if (!attempt || attempt.id === excludeAttemptId) continue;
       if (!attempt.branch) continue;
-
-      // Skip archived or completed attempts (safety check)
-      if (attempt.status === "archived" || attempt.archived_at) {
-        console.log(
-          `[${tag}] skipping archived attempt "${task.title}" (${attempt.id.substring(0, 8)})`,
-        );
-        continue;
-      }
 
       console.log(
         `[${tag}] rebasing task "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
@@ -4551,16 +4482,41 @@ async function smartPRFlow(attemptId, shortId, status) {
             console.warn(
               `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
             );
-            // Use standardized conflict resolution prompt from conflict-resolver module
-            const prompt = buildConflictResolutionPrompt({
-              attemptId,
-              shortId,
-              taskTitle: attempt?.task_title || shortId,
-              taskDescription: attempt?.task_description || "",
-              conflictedFiles: files,
-              worktreeDir,
-              targetBranch,
-            });
+            const classification = classifyConflictedFiles(files);
+            const fileGuidance = files
+              .map((f) => {
+                const fn = f.split("/").pop();
+                if (
+                  AUTO_RESOLVE_THEIRS.includes(fn) ||
+                  AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))
+                ) {
+                  return `  - ${f}: Accept THEIRS (upstream version — lock/generated file)`;
+                }
+                if (AUTO_RESOLVE_OURS.includes(fn)) {
+                  return `  - ${f}: Accept OURS (keep our version)`;
+                }
+                return `  - ${f}: Resolve MANUALLY (inspect both sides, merge intelligently)`;
+              })
+              .join("\n");
+            const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
+Worktree: ${worktreeDir || "(unknown)"}
+Attempt: ${shortId}
+Conflicted files: ${files.join(", ") || "(unknown)"}
+
+Per-file resolution strategy:
+${fileGuidance}
+
+Instructions:
+1) cd into the worktree directory.
+2) For each conflicted file, apply the strategy above:
+   - THEIRS: git checkout --theirs -- <file> && git add <file>
+   - OURS: git checkout --ours -- <file> && git add <file>
+   - MANUAL: Open the file, remove conflict markers (<<<< ==== >>>>), merge both sides intelligently, then git add <file>
+3) After resolving all files, run: git rebase --continue
+4) If more conflicts appear, repeat steps 2-3.
+5) Once rebase completes, push the branch: git push --force-with-lease
+6) Verify the build still passes if possible.
+Return a short summary of what you did and any files that needed manual resolution.`;
             const codexResult = await runCodexExec(
               prompt,
               worktreeDir || repoRoot,
@@ -4595,49 +4551,21 @@ async function smartPRFlow(attemptId, shortId, status) {
               );
             }
           }
-          // Auto-resolve failed — ALWAYS start fresh session for conflict resolution
-          // Never reuse context — dirty conflicts need a clean slate with full context
+          // Auto-resolve failed — ask agent to fix
           console.warn(
-            `[monitor] ${tag}: auto-resolve failed — starting FRESH conflict resolution session`,
+            `[monitor] ${tag}: auto-resolve failed — prompting agent`,
           );
-
-          // Build structured conflict resolution prompt
-          const conflictPrompt = buildConflictResolutionPrompt({
-            attemptId,
-            shortId,
-            taskTitle: attempt?.task_title || shortId,
-            taskDescription: attempt?.task_description || "",
-            conflictedFiles: files,
-            worktreeDir: attempt?.worktree_dir || attempt?.worktree || null,
-            targetBranch,
-          });
-
           if (telegramToken && telegramChatId) {
             void sendTelegramMessage(
-              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}.\n` +
-                `🔄 Starting fresh conflict resolution session (HIGH tier).`,
+              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-
-          // Force a new session — never reuse context for conflict resolution
-          const freshStarted = await startFreshSession(
-            conflictPrompt,
-            `conflict_resolution_${shortId}`,
-          );
-          if (freshStarted) {
-            console.log(
-              `[monitor] ${tag}: fresh conflict resolution session started`,
+          if (primaryAgentReady && !isPrimaryBusy()) {
+            void execPrimaryPrompt(
+              `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
+                `Please resolve the conflicts, commit, push, and create a PR.`,
+              { timeoutMs: 15 * 60 * 1000 },
             );
-          } else {
-            // Fallback: try primary agent if fresh session failed
-            console.warn(
-              `[monitor] ${tag}: fresh session failed — falling back to primary agent prompt`,
-            );
-            if (primaryAgentReady && !isPrimaryBusy()) {
-              void execPrimaryPrompt(conflictPrompt, {
-                timeoutMs: 15 * 60 * 1000,
-              });
-            }
           }
           return;
         }
@@ -5968,11 +5896,9 @@ async function triggerTaskPlannerViaKanban(
     // Double-check status client-side — VK API filter may not work reliably
     if (t.status && t.status !== "todo") return false;
     const title = (t.title || "").toLowerCase();
-    // Match both old format "Plan next tasks (...)" and new "[xs] Plan next tasks (...)"
-    const stripped = title.replace(/^\[(?:xs|s|m|l|xl|xxl)\]\s*/i, "");
+    // Only match the exact title format we create: "Plan next tasks (...)"
     return (
-      stripped.startsWith("plan next tasks") ||
-      stripped.startsWith("plan next phase")
+      title.startsWith("plan next tasks") || title.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
@@ -7502,7 +7428,6 @@ try {
 } catch (err) {
   console.warn(`[monitor] complexity matrix log failed: ${err.message}`);
 }
-
 startProcess();
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
