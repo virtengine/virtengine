@@ -61,6 +61,8 @@ function showHelp() {
   AI / CODEX
     --no-codex                  Disable Codex SDK analysis
     --no-autofix                Disable automatic error fixing
+    --primary-agent <name>      Override primary agent (codex|copilot|claude)
+    --shell, --interactive      Enable interactive shell mode in monitor
 
   TELEGRAM
     --no-telegram-bot           Disable the interactive Telegram bot

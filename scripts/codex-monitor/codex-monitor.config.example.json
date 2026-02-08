@@ -16,6 +16,7 @@
       "fallbackToInteractive": true
     }
   },
+  "interactiveShellEnabled": false,
   "executors": [
     {
       "name": "codex-default",
