@@ -48,7 +48,9 @@
     "./restart-controller": "./restart-controller.mjs",
     "./fleet-coordinator": "./fleet-coordinator.mjs",
     "./shared-knowledge": "./shared-knowledge.mjs",
-    "./presence": "./presence.mjs"
+    "./task-complexity": "./task-complexity.mjs",
+    "./presence": "./presence.mjs",
+    "./task-archiver": "./task-archiver.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",

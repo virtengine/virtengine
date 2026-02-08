@@ -695,7 +695,7 @@ var (
 	PrefixSSONonceExpiry = []byte{0x8E}
 
 	// ============================================================================
-	// Security Hardening Prefixes (0x8F-0x96) — Task 22A
+	// Security Hardening Prefixes (0x8F-0x95) — Task 22A
 	// ============================================================================
 
 	// PrefixTrustedSetupCeremony stores trusted setup ceremony records
@@ -725,6 +725,26 @@ var (
 	// PrefixPrivilegeAudit stores privilege escalation audit records
 	// Key: PrefixPrivilegeAudit | height | operation -> PrivilegeAuditRecord
 	PrefixPrivilegeAudit = []byte{0x95}
+
+	// ============================================================================
+	// Consent Tracking Prefixes (GDPR Consent)
+	// ============================================================================
+
+	// PrefixConsentRecord stores consent records
+	// Key: PrefixConsentRecord | consent_id -> ConsentRecord
+	PrefixConsentRecord = []byte{0x96}
+
+	// PrefixConsentRecordBySubject stores consent record IDs by subject
+	// Key: PrefixConsentRecordBySubject | account_address -> []consent_id
+	PrefixConsentRecordBySubject = []byte{0x97}
+
+	// PrefixConsentEvent stores consent audit events
+	// Key: PrefixConsentEvent | event_id -> ConsentEvent
+	PrefixConsentEvent = []byte{0x98}
+
+	// PrefixConsentEventBySubject stores consent event IDs by subject
+	// Key: PrefixConsentEventBySubject | account_address -> []event_id
+	PrefixConsentEventBySubject = []byte{0x99}
 )
 
 // IdentityRecordKey returns the store key for an identity record
@@ -865,6 +885,40 @@ func WalletByIDKey(walletID string) []byte {
 	key := make([]byte, 0, len(PrefixWalletByID)+len(walletIDBytes))
 	key = append(key, PrefixWalletByID...)
 	key = append(key, walletIDBytes...)
+	return key
+}
+
+// ConsentRecordKey returns the store key for a consent record.
+func ConsentRecordKey(consentID string) []byte {
+	idBytes := []byte(consentID)
+	key := make([]byte, 0, len(PrefixConsentRecord)+len(idBytes))
+	key = append(key, PrefixConsentRecord...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// ConsentRecordBySubjectKey returns the store key for consent records by subject.
+func ConsentRecordBySubjectKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixConsentRecordBySubject)+len(address))
+	key = append(key, PrefixConsentRecordBySubject...)
+	key = append(key, address...)
+	return key
+}
+
+// ConsentEventKey returns the store key for a consent event.
+func ConsentEventKey(eventID string) []byte {
+	idBytes := []byte(eventID)
+	key := make([]byte, 0, len(PrefixConsentEvent)+len(idBytes))
+	key = append(key, PrefixConsentEvent...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// ConsentEventBySubjectKey returns the store key for consent events by subject.
+func ConsentEventBySubjectKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixConsentEventBySubject)+len(address))
+	key = append(key, PrefixConsentEventBySubject...)
+	key = append(key, address...)
 	return key
 }
 

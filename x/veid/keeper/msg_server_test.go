@@ -382,6 +382,18 @@ func (kp testKeyPair) signRevokeScope(sender, scopeID string) []byte {
 	return kp.signMessage(msg)
 }
 
+func (s *MsgServerTestSuite) grantScopeConsent(address sdk.AccAddress, scopeID, purpose string, kp testKeyPair) {
+	update := types.ConsentUpdateRequest{
+		ScopeID:      scopeID,
+		GrantConsent: true,
+		Purpose:      purpose,
+	}
+	consentMsg := []byte("VEID_CONSENT_UPDATE:" + address.String() + ":" + scopeID + ":grant")
+	consentSig := kp.signMessage(consentMsg)
+	err := s.keeper.UpdateConsent(s.ctx, address, update, consentSig)
+	s.Require().NoError(err)
+}
+
 // signConsentUpdate signs the consent update message: "VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grant/revoke
 func (kp testKeyPair) signConsentUpdate(sender, scopeID string, grant bool) []byte {
 	grantStr := "revoke"
@@ -435,6 +447,8 @@ func (s *MsgServerTestSuite) TestMsgAddScopeToWallet_Success() {
 	envelopeHash := sha256.Sum256([]byte("test-envelope"))
 	userSig := kp.signAddScope(address.String(), scopeID)
 
+	s.grantScopeConsent(address, scopeID, "Identity verification", kp)
+
 	msg := &types.MsgAddScopeToWallet{
 		Sender:        address.String(),
 		ScopeId:       scopeID,
@@ -473,6 +487,8 @@ func (s *MsgServerTestSuite) TestMsgRevokeScopeFromWallet_Success() {
 	scopeID := "scope-wallet-revoke"
 	envelopeHash := sha256.Sum256([]byte("test-envelope-revoke"))
 	addSig := kp.signAddScope(address.String(), scopeID)
+
+	s.grantScopeConsent(address, scopeID, "Identity verification", kp)
 
 	addMsg := &types.MsgAddScopeToWallet{
 		Sender:        address.String(),

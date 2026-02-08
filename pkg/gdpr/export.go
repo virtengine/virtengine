@@ -1,0 +1,182 @@
+package gdpr
+
+import (
+	"bytes"
+	"context"
+	"encoding/csv"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// IdentityExport captures a minimal identity snapshot for export.
+type IdentityExport struct {
+	Address    string    `json:"address"`
+	TrustScore float64   `json:"trust_score,omitempty"`
+	TierLevel  string    `json:"tier_level,omitempty"`
+	CreatedAt  time.Time `json:"created_at,omitempty"`
+}
+
+// ConsentExport captures a consent snapshot for export.
+type ConsentExport struct {
+	ID          string     `json:"id"`
+	ScopeID     string     `json:"scope_id,omitempty"`
+	Purpose     string     `json:"purpose,omitempty"`
+	Status      string     `json:"status,omitempty"`
+	GrantedAt   *time.Time `json:"granted_at,omitempty"`
+	WithdrawnAt *time.Time `json:"withdrawn_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	Version     string     `json:"version,omitempty"`
+}
+
+// TransactionExport represents a transaction entry in export output.
+type TransactionExport struct {
+	TxHash    string    `json:"tx_hash"`
+	Timestamp time.Time `json:"timestamp"`
+	Details   string    `json:"details,omitempty"`
+}
+
+// EscrowExport represents an escrow record in export output.
+type EscrowExport struct {
+	ID        string    `json:"id"`
+	Status    string    `json:"status"`
+	Amount    string    `json:"amount,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
+func (s *DataRightsService) processExport(ctx context.Context, req *DataExportRequest) {
+	s.mu.Lock()
+	req.Status = ExportProcessing
+	_ = s.store.SaveExportRequest(ctx, req)
+	s.mu.Unlock()
+
+	data := s.buildExportPayload(ctx, req.DataSubject)
+	payload, err := s.serializeExport(req.Format, data)
+	if err != nil {
+		s.failExport(ctx, req, err)
+		return
+	}
+
+	if err := s.store.SaveExportData(ctx, req.ID, payload); err != nil {
+		s.failExport(ctx, req, err)
+		return
+	}
+
+	expiresAt := s.clock().Add(7 * 24 * time.Hour)
+	req.Status = ExportReady
+	req.DownloadURL = fmt.Sprintf("export://%s", req.ID)
+	req.ExpiresAt = &expiresAt
+	req.Error = ""
+
+	if err := s.store.SaveExportRequest(ctx, req); err != nil {
+		return
+	}
+
+	_ = s.audit.Log(ctx, AuditEvent{
+		Action:      AuditExportReady,
+		RequestID:   req.ID,
+		DataSubject: req.DataSubject,
+		Timestamp:   s.clock(),
+	})
+
+	_ = s.notifier.NotifyExportReady(ctx, req)
+}
+
+func (s *DataRightsService) failExport(ctx context.Context, req *DataExportRequest, err error) {
+	req.Status = ExportFailed
+	req.Error = err.Error()
+	_ = s.store.SaveExportRequest(ctx, req)
+	_ = s.audit.Log(ctx, AuditEvent{
+		Action:      AuditExportFailed,
+		RequestID:   req.ID,
+		DataSubject: req.DataSubject,
+		Timestamp:   s.clock(),
+		Details: map[string]string{
+			"error": err.Error(),
+		},
+	})
+}
+
+func (s *DataRightsService) buildExportPayload(ctx context.Context, dataSubject string) *UserDataExport {
+	payload := &UserDataExport{
+		ExportedAt:  s.clock(),
+		DataSubject: dataSubject,
+	}
+
+	if s.identity != nil {
+		identity, err := s.identity.GetIdentity(ctx, dataSubject)
+		if err == nil {
+			payload.Identity = identity
+		}
+	}
+
+	if s.consents != nil {
+		consents, err := s.consents.ListConsents(ctx, dataSubject)
+		if err == nil {
+			payload.Consents = consents
+		}
+	}
+
+	if s.escrow != nil {
+		escrows, err := s.escrow.GetUserEscrows(ctx, dataSubject)
+		if err == nil {
+			payload.EscrowRecords = escrows
+		}
+	}
+
+	payload.Transactions = []TransactionExport{}
+	return payload
+}
+
+func (s *DataRightsService) serializeExport(format ExportFormat, payload *UserDataExport) ([]byte, error) {
+	switch format {
+	case FormatCSV:
+		return toCSV(payload)
+	default:
+		return json.MarshalIndent(payload, "", "  ")
+	}
+}
+
+func toCSV(payload *UserDataExport) ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	writer := csv.NewWriter(buffer)
+
+	if err := writer.Write([]string{"section", "field", "value"}); err != nil {
+		return nil, err
+	}
+
+	write := func(section, field, value string) {
+		_ = writer.Write([]string{section, field, value})
+	}
+
+	write("meta", "exported_at", payload.ExportedAt.Format(time.RFC3339))
+	write("meta", "data_subject", payload.DataSubject)
+
+	if payload.Identity != nil {
+		write("identity", "address", payload.Identity.Address)
+		write("identity", "trust_score", fmt.Sprintf("%0.2f", payload.Identity.TrustScore))
+		write("identity", "tier_level", payload.Identity.TierLevel)
+		write("identity", "created_at", payload.Identity.CreatedAt.Format(time.RFC3339))
+	}
+
+	for _, consent := range payload.Consents {
+		write("consent", "id", consent.ID)
+		write("consent", "scope_id", consent.ScopeID)
+		write("consent", "purpose", consent.Purpose)
+		write("consent", "status", consent.Status)
+	}
+
+	for _, escrow := range payload.EscrowRecords {
+		write("escrow", "id", escrow.ID)
+		write("escrow", "status", escrow.Status)
+		write("escrow", "amount", escrow.Amount)
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, err
+	}
+
+	return []byte(strings.TrimSpace(buffer.String())), nil
+}

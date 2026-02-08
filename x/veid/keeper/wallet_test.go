@@ -99,6 +99,20 @@ func (ts *testWalletSetup) signWalletBinding(walletID string) []byte {
 	return ed25519.Sign(ts.privKey, msg)
 }
 
+func grantScopeConsent(t *testing.T, ts *testWalletSetup, scopeID string) {
+	t.Helper()
+
+	update := types.ConsentUpdateRequest{
+		ScopeID:      scopeID,
+		GrantConsent: true,
+		Purpose:      "KYC verification",
+	}
+	consentMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":grant")
+	consentSig := ts.signMessage(consentMsg)
+	err := ts.keeper.UpdateConsent(ts.ctx, ts.address, update, consentSig)
+	require.NoError(t, err)
+}
+
 func TestCreateWallet(t *testing.T) {
 	ts := setupWalletTest(t)
 
@@ -184,6 +198,8 @@ func TestAddScopeToWallet(t *testing.T) {
 		ConsentGranted: false,
 	}
 
+	grantScopeConsent(t, ts, scopeID)
+
 	// Create signature for adding scope
 	addScopeMsg := types.GetAddScopeSigningMessage(ts.address.String(), scopeID)
 	addScopeSig := ts.signMessage(addScopeMsg)
@@ -232,6 +248,8 @@ func TestAddScopeToWallet_InvalidSignature(t *testing.T) {
 		Status:       types.ScopeRefStatusPending,
 	}
 
+	grantScopeConsent(t, ts, testScopeID)
+
 	// Invalid signature
 	invalidSig := make([]byte, 64)
 	_, _ = rand.Read(invalidSig)
@@ -259,6 +277,8 @@ func TestAddScopeToWallet_DuplicateScope(t *testing.T) {
 		AddedAt:      time.Now(),
 		Status:       types.ScopeRefStatusPending,
 	}
+
+	grantScopeConsent(t, ts, scopeID)
 
 	addScopeMsg := types.GetAddScopeSigningMessage(ts.address.String(), scopeID)
 	addScopeSig := ts.signMessage(addScopeMsg)
@@ -291,6 +311,8 @@ func TestRevokeScopeFromWallet(t *testing.T) {
 		AddedAt:      time.Now(),
 		Status:       types.ScopeRefStatusActive,
 	}
+
+	grantScopeConsent(t, ts, scopeID)
 
 	addScopeMsg := types.GetAddScopeSigningMessage(ts.address.String(), scopeID)
 	addScopeSig := ts.signMessage(addScopeMsg)
@@ -347,6 +369,8 @@ func TestRevokeScopeFromWallet_InvalidSignature(t *testing.T) {
 		AddedAt:      time.Now(),
 		Status:       types.ScopeRefStatusActive,
 	}
+
+	grantScopeConsent(t, ts, scopeID)
 
 	addScopeMsg := types.GetAddScopeSigningMessage(ts.address.String(), scopeID)
 	addScopeSig := ts.signMessage(addScopeMsg)
@@ -622,6 +646,8 @@ func TestWalletConsentFlow(t *testing.T) {
 		AddedAt:      time.Now(),
 		Status:       types.ScopeRefStatusActive,
 	}
+
+	grantScopeConsent(t, ts, scopeID)
 
 	addScopeMsg := types.GetAddScopeSigningMessage(ts.address.String(), scopeID)
 	addScopeSig := ts.signMessage(addScopeMsg)
