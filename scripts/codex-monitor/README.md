@@ -84,6 +84,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
 - **Live Telegram digest** — One continuously-edited message per time window shows events as they happen, like a real-time log
 - **Telegram chatbot** — Real-time notifications + interactive commands
+- **Distributed task claiming** — Idempotent task claiming across multiple workstations with deterministic conflict resolution
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
 - **Task planner** — Detects empty backlog and auto-generates new tasks via AI
@@ -500,6 +501,59 @@ Telegram commands:
 - `/shared-workspaces` — list shared workspace availability
 - `/claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]`
 - `/release <id> [--owner <id>] [--reason <text>] [--force]`
+
+### Distributed Task Claiming
+
+When multiple codex-monitor instances run across workstations (coordinated via Telegram or VK channel), they use distributed task claiming to prevent duplicate work. The claiming system provides:
+
+**Idempotent Claims** — Multiple claim attempts with the same token return the same result, preventing race conditions.
+
+**Deterministic Conflict Resolution** — When two instances claim the same task, conflicts are resolved by:
+1. Coordinator priority (coordinator always wins)
+2. Coordinator priority number (lower wins)
+3. Timestamp (earlier claim wins)
+4. Instance ID (lexicographic comparison for determinism)
+
+**Persistent Claim Tokens** — Each claim has a unique UUID token for idempotency and verification.
+
+**Claim Lifecycle:**
+- **Claim** — Instance reserves a task for a TTL period (default: 60 minutes)
+- **Renew** — Extend the claim TTL before it expires
+- **Release** — Release the claim when work is complete or abandoned
+- **Auto-sweep** — Expired claims are automatically cleaned up
+
+**Storage:**
+- Registry: `.cache/codex-monitor/task-claims.json`
+- Audit log: `.cache/codex-monitor/task-claims-audit.jsonl`
+
+**Programmatic API:**
+
+```javascript
+import { claimTask, releaseTask, renewClaim, listClaims } from './task-claims.mjs';
+
+// Claim a task
+const result = await claimTask({
+  taskId: 'abc123',
+  instanceId: 'workstation-1',
+  ttlMinutes: 60,
+  metadata: { branch: 've/task', agent: 'codex' }
+});
+
+if (result.success) {
+  // Work on task...
+  
+  // Renew if needed
+  await renewClaim({ taskId: 'abc123', claimToken: result.token });
+  
+  // Release when done
+  await releaseTask({ taskId: 'abc123', claimToken: result.token });
+}
+
+// List all claims
+const claims = await listClaims({ instanceId: 'workstation-1' });
+```
+
+**Integration:** The orchestrator automatically claims tasks before starting work and releases them upon completion. Claims are announced in the configured Telegram or VK channel for fleet visibility.
 
 ### Agent SDK Selection (config.toml)
 
