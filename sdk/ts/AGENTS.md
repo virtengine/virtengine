@@ -1,6 +1,6 @@
 # Chain SDK (sdk/ts) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: TypeScript SDK for VirtEngine chain APIs, gRPC clients, wallet helpers, and provider SDK access (`sdk/ts/package.json:2`).
 - Use this package for TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
 - Key exports / public API surface:
@@ -64,12 +64,6 @@ const providerSDK = createProviderSDK({
   - Do not hardcode endpoint URLs inside SDK factories; always accept them via options.
   - Do not bypass generated patches when composing SDKs (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:36`).
 
-## Configuration
-- Runtime configuration is provided through factory options (baseUrl, auth, TLS).
-- Package-level settings live in `sdk/ts/package.json:1` (exports, engines, scripts).
-- Avoid storing secrets in source; use environment variables in apps that consume
-  the SDK.
-
 ## API Reference
 - `createChainNodeSDK(options: ChainNodeSDKOptions)` (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:17`).
 - `createChainNodeWebSDK(options: ChainNodeWebSDKOptions)` (`sdk/ts/src/sdk/chain/createChainNodeWebSDK.ts:15`).
@@ -86,11 +80,3 @@ const providerSDK = createProviderSDK({
 - Commands:
   - `npm test` (runs Jest, `sdk/ts/package.json:41`).
   - `npm run test:unit` and `npm run test:functional` for focused suites.
-
-## Troubleshooting
-- `ERR_MODULE_NOT_FOUND` or missing generated clients
-  - Cause: generated files not built or missing in dist.
-  - Fix: run the SDK build/generate step and re-check `sdk/ts/src/generated/`.
-- gRPC endpoint failures
-  - Cause: wrong baseUrl or network restrictions.
-  - Fix: verify endpoint and use `createChainNodeWebSDK` for HTTP gateway APIs.
