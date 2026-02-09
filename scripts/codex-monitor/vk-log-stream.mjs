@@ -68,6 +68,9 @@ export class VkLogStream {
   /** @type {boolean} Whether to echo log lines to console */
   #echo;
 
+  /** @type {((line: string, meta: {processId: string, stream: string}) => boolean)|null} */
+  #filterLine;
+
   /** @type {((line: string, meta: {processId: string, stream: string}) => void)|null} */
   #onLine;
 
@@ -114,6 +117,7 @@ export class VkLogStream {
    * @param {string} [opts.logDir] - Directory for per-process log files
    * @param {string} [opts.sessionLogDir] - Directory for structured session logs (codex-exec style)
    * @param {boolean} [opts.echo=false] - Echo log lines to console
+   * @param {(line: string, meta: {processId: string, stream: string}) => boolean} [opts.filterLine] - Return false to drop noisy lines
    * @param {(line: string, meta: {processId: string, stream: string}) => void} [opts.onLine] - Callback per log line
    * @param {(processId: string, meta: {sessionId?: string}) => void} [opts.onProcessConnected] - Callback when new process discovered
    */
@@ -125,6 +129,7 @@ export class VkLogStream {
     this.#logDir = opts.logDir || null;
     this.#sessionLogDir = opts.sessionLogDir || null;
     this.#echo = opts.echo || false;
+    this.#filterLine = typeof opts.filterLine === "function" ? opts.filterLine : null;
     this.#onLine = opts.onLine || null;
     this.#onProcessConnected = opts.onProcessConnected || null;
 
@@ -673,6 +678,11 @@ export class VkLogStream {
     if (!line) return;
 
     const shortId = processId.slice(0, 8);
+
+    // Apply noise filter (drop if false)
+    if (this.#filterLine && !this.#filterLine(line, { processId, stream })) {
+      return;
+    }
 
     // Write to per-process log file (raw)
     this.#writeToFile(processId, `[${stream}] ${line}\n`);

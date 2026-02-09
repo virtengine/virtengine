@@ -114,10 +114,22 @@ import {
 } from "./shared-knowledge.mjs";
 import { WorkspaceMonitor } from "./workspace-monitor.mjs";
 import { VkLogStream } from "./vk-log-stream.mjs";
+import { createAnomalyDetector } from "./anomaly-detector.mjs";
+import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Configure logging before anything else ──────────────────────────────────
+configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
+
+// Install console interceptor with log file (after config provides logDir)
+{
+  const _logDir = config.logDir || resolve(__dirname, "logs");
+  const _logFile = resolve(_logDir, "monitor.log");
+  installConsoleInterceptor({ logFile: _logFile });
+}
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -451,6 +463,9 @@ let vkLogStream = null;
 let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
+
+// ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
+let anomalyDetector = null;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -1510,16 +1525,77 @@ function restartVibeKanbanProcess() {
 function ensureVkLogStream() {
   if (vkLogStream) return;
   console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
+
+  // Initialize anomaly detector if not already running
+  if (!anomalyDetector) {
+    anomalyDetector = createAnomalyDetector({
+      onAnomaly: (anomaly) => {
+        const icon =
+          anomaly.severity === "CRITICAL"
+            ? "🔴"
+            : anomaly.severity === "HIGH"
+              ? "🟠"
+              : "🟡";
+        console.warn(
+          `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
+        );
+      },
+      notify: (text, options) => {
+        sendTelegramMessage(text, options).catch(() => {});
+      },
+    });
+    console.log("[monitor] anomaly detector started");
+  }
+
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
   const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
   vkLogStream = new VkLogStream(vkEndpointUrl, {
     logDir: agentLogDir,
     sessionLogDir,
-    echo: echoLogs,
-    onLine: (_line, _meta) => {
-      // Log lines are now written by VkLogStream internally to both raw and
-      // structured session log files. The onLine callback is kept for future
-      // extensions (e.g. error pattern detection, autofix triggers).
+    // Always keep VK log streaming silent in the CLI.
+    echo: false,
+    filterLine: (line) => {
+      // Drop verbose VK/Codex event chatter and token streams.
+      if (!line) return false;
+      if (line.length > 6000) return false;
+      if (line.startsWith("{\"method\":\"codex/event/")) return false;
+      if (line.startsWith("{\"method\":\"item/")) return false;
+      if (line.startsWith("{\"method\":\"thread/")) return false;
+      if (line.startsWith("{\"method\":\"account/")) return false;
+      if (line.includes("\"type\":\"reasoning_content_delta\"")) return false;
+      if (line.includes("\"type\":\"agent_reasoning_delta\"")) return false;
+      if (line.includes("\"type\":\"token_count\"")) return false;
+      if (line.includes("\"type\":\"item_started\"")) return false;
+      if (line.includes("\"type\":\"item_completed\"")) return false;
+      if (line.includes("\"type\":\"exec_command_begin\"")) return false;
+      if (line.includes("\"type\":\"exec_command_output_delta\"")) return false;
+      if (line.includes("\"type\":\"exec_command_end\"")) return false;
+      if (line.includes("\"method\":\"codex/event/reasoning_content_delta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/agent_reasoning_delta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/token_count\"")) return false;
+      if (line.includes("\"method\":\"codex/event/item_started\"")) return false;
+      if (line.includes("\"method\":\"codex/event/item_completed\"")) return false;
+      if (line.includes("\"method\":\"codex/event/exec_command_")) return false;
+      if (line.includes("\"method\":\"item/reasoning/summaryTextDelta\""))
+        return false;
+      if (line.includes("\"method\":\"item/commandExecution/outputDelta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/agent_reasoning\""))
+        return false;
+      return true;
+    },
+    onLine: (line, meta) => {
+      // Feed every agent log line to the anomaly detector for real-time
+      // pattern matching (death loops, token overflow, stalls, etc.).
+      if (anomalyDetector) {
+        try {
+          anomalyDetector.processLine(line, meta);
+        } catch {
+          /* detector error — non-fatal */
+        }
+      }
     },
     onProcessConnected: (processId, meta) => {
       // When a new execution process is discovered via the session stream,
@@ -8049,6 +8125,10 @@ injectMonitorFunctions({
   triggerTaskPlanner,
   reconcileTaskStatuses,
   onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
+  getAnomalyReport: () =>
+    anomalyDetector
+      ? anomalyDetector.getStatusReport()
+      : "Anomaly detector not running.",
 });
 if (telegramBotEnabled) {
   void startTelegramBot();

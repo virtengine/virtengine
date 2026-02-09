@@ -252,6 +252,7 @@ let _getActiveAttemptInfo = null;
 let _triggerTaskPlanner = null;
 let _reconcileTaskStatuses = null;
 let _onDigestSealed = null;
+let _getAnomalyReport = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -273,6 +274,7 @@ export function injectMonitorFunctions({
   triggerTaskPlanner,
   reconcileTaskStatuses,
   onDigestSealed,
+  getAnomalyReport,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -289,6 +291,7 @@ export function injectMonitorFunctions({
   _triggerTaskPlanner = triggerTaskPlanner;
   _reconcileTaskStatuses = reconcileTaskStatuses;
   _onDigestSealed = onDigestSealed || null;
+  _getAnomalyReport = getAnomalyReport || null;
 }
 
 /**
@@ -1083,6 +1086,10 @@ const COMMANDS = {
     handler: cmdHealth,
     desc: "Executor health status & model routing",
   },
+  "/anomalies": {
+    handler: cmdAnomalies,
+    desc: "Agent anomaly detector status & active concerns",
+  },
   "/model": {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
@@ -1550,6 +1557,19 @@ async function cmdStatus(chatId) {
   }
 
   await sendReply(chatId, statusText);
+}
+
+async function cmdAnomalies(chatId) {
+  if (!_getAnomalyReport) {
+    await sendReply(chatId, "Anomaly detector not initialized.");
+    return;
+  }
+  try {
+    const report = _getAnomalyReport();
+    await sendReply(chatId, report, { parseMode: "HTML" });
+  } catch (err) {
+    await sendReply(chatId, `Error getting anomaly report: ${err.message}`);
+  }
 }
 
 async function cmdTasks(chatId) {
