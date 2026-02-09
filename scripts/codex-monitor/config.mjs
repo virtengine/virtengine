@@ -930,6 +930,13 @@ export function loadConfig(argv = process.argv, options = {}) {
     : configData.autoFixEnabled !== undefined
       ? configData.autoFixEnabled
       : true;
+  const interactiveShellEnabled =
+    flags.has("shell") ||
+    flags.has("interactive") ||
+    process.env.CODEX_MONITOR_SHELL === "1" ||
+    process.env.CODEX_MONITOR_INTERACTIVE === "1" ||
+    configData.interactiveShellEnabled === true ||
+    configData.shellEnabled === true;
   const preflightEnabled = flags.has("no-preflight")
     ? false
     : configData.preflightEnabled !== undefined
@@ -949,7 +956,9 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.CODEX_SDK_DISABLED !== "1" &&
     agentSdk.primary === "codex";
   const primaryAgent = normalizePrimaryAgent(
-    process.env.PRIMARY_AGENT ||
+    cli["primary-agent"] ||
+      cli.agent ||
+      process.env.PRIMARY_AGENT ||
       process.env.PRIMARY_AGENT_SDK ||
       configData.primaryAgent ||
       "codex-sdk",
@@ -1231,6 +1240,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     watchPath,
     echoLogs,
     autoFixEnabled,
+    interactiveShellEnabled,
     preflightEnabled,
     preflightRetryMs,
     codexEnabled,

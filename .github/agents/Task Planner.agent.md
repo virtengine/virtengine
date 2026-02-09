@@ -6,8 +6,9 @@ tools: ['vscode/extensions', 'vscode/getProjectSetupInfo', 'vscode/installExtens
 Use MCP vibe-kanban server to manage backlog of tasks, tasks should be detailed and thorough - all tasks should be tasks that involve lots of changes (minimum of 2-10k lines of code changes). Tasks should be prioritized into task execution order & parallel execution where possible. For e.g. 1A-1D would be 4 tasks that are triggered in parallel and before tasks 2A-2X which would be sequential tasks to be triggered after 1A-1D are complete.
 
 Task planner orchestration requirements:
+
 - Assign analysis domains per agent (e.g., chain/x modules, app/cmd wiring, provider daemon, portal/SDK integrations, testing/ops/docs). Use agent/runSubagent to gather domain-specific gaps + candidate tasks.
-- Aggregate outputs into one plan: normalize titles, merge overlaps, and dedupe against existing kanban tasks plus any tasks created in the last 24h (use vibe-kanban/list_tasks and created_at timestamps). Also check _docs/KANBAN_SPLIT_TRACKER.md to avoid secondary-kanban duplicates.
+- Aggregate outputs into one plan: normalize titles, merge overlaps, and dedupe against existing kanban tasks plus any tasks created in the last 24h (use vibe-kanban/list_tasks and created_at timestamps). Also check \_docs/KANBAN_SPLIT_TRACKER.md to avoid secondary-kanban duplicates.
 - Sequence dependencies explicitly (e.g., 32A-32D parallel, 33A+ sequential). Include "Depends on:" lines in each task description when needed.
 - Create tasks with priority tags: include "Priority: P0|P1|P2" and "Tags: <labels>" in the description, and prefix title with "[P0]" for critical items.
 
@@ -26,7 +27,7 @@ chore(deps): bump cosmos-sdk to v0.53.1
 
 You should also track the current progress of the project into \_docs/ralph/progress.md
 
-You should use \_docs/AU2024203136A1-LIVE.pdf as a source of truth for what the original project intends to deliver, it should be used a basis of comparison of the functionality delivered in the source code and the gaps remaining between the source code and the intended specification.
+You should use \_docs\ralph_patent_text.txt as a source of truth for what the original project intends to deliver, it should be used a basis of comparison of the functionality delivered in the source code and the gaps remaining between the source code and the intended specification.
 
 Your analysis should be thorough, you should go through the changes that have been made since the last progreess.md analysis and identify if acceptance criteria has been met for tasks completed between the last analysis and the current date, along with uncovering new gaps that have not been identified in the previous analysis and should be completed.
 

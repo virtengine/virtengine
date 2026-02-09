@@ -1016,6 +1016,7 @@ async function handleUpdate(update) {
 
 const COMMANDS = {
   "/help": { handler: cmdHelp, desc: "Show available commands" },
+  "/ask": { handler: cmdAsk, desc: "Send prompt to agent: /ask <prompt>" },
   "/status": { handler: cmdStatus, desc: "Detailed orchestrator status" },
   "/tasks": {
     handler: cmdTasks,
@@ -1449,6 +1450,15 @@ async function cmdHelp(chatId) {
     "Any other text → sent to the primary agent (full repo + MCP access)",
   );
   await sendReply(chatId, lines.join("\n"));
+}
+
+async function cmdAsk(chatId, args) {
+  const prompt = String(args || "").trim();
+  if (!prompt) {
+    await sendReply(chatId, "Usage: /ask <prompt>");
+    return;
+  }
+  enqueueAgentTask(() => handleFreeText(prompt, chatId));
 }
 
 async function cmdStatus(chatId) {

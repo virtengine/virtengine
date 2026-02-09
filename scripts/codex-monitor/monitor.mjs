@@ -1,5 +1,11 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, watch, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  watch,
+  writeFileSync,
+  appendFileSync,
+} from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -8,6 +14,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
+import { clearLine, createInterface, cursorTo } from "node:readline";
 import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +38,8 @@ import {
   isPrimaryBusy,
   initPrimaryAgent,
   setPrimaryAgent,
+  getPrimaryAgentName,
+  switchPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -68,8 +77,6 @@ import {
   persistFleetState,
 } from "./fleet-coordinator.mjs";
 import {
-  resolveExecutorForTask,
-  formatComplexityDecision,
   getComplexityMatrix,
   assessCompletionConfidence,
   classifyComplexity,
@@ -92,6 +99,12 @@ import {
   formatDirtyTaskSummary,
   DIRTY_TASK_DEFAULTS,
 } from "./conflict-resolver.mjs";
+import {
+  resolveConflictsWithSDK,
+  isSDKResolutionOnCooldown,
+  isSDKResolutionExhausted,
+  clearSDKResolutionState,
+} from "./sdk-conflict-resolver.mjs";
 import {
   initSharedKnowledge,
   buildKnowledgeEntry,
@@ -153,6 +166,346 @@ async function releaseTelegramPollLock() {
   }
 }
 
+// ── Interactive shell helpers ───────────────────────────────────────────────
+
+function shellClearLine() {
+  if (!shellState.rl || !shellIsTTY) return;
+  try {
+    clearLine(process.stdout, 0);
+    cursorTo(process.stdout, 0);
+  } catch {
+    /* best effort */
+  }
+}
+
+function shellWriteRaw(chunk) {
+  if (!shellState.rl) {
+    process.stdout.write(chunk);
+    return;
+  }
+  shellClearLine();
+  process.stdout.write(chunk);
+  shellState.rl.prompt(true);
+}
+
+function shellWriteLine(text) {
+  if (!shellState.rl) {
+    process.stdout.write(`${text}\n`);
+    return;
+  }
+  shellClearLine();
+  process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
+  shellState.rl.prompt(true);
+}
+
+function shellWriteInfo(text) {
+  shellWriteLine(`${shellInfoPrefix}${text}`);
+}
+
+function shellWriteWarn(text) {
+  shellWriteLine(`${shellAnsi.yellow("[shell]")} ${text}`);
+}
+
+function shellWriteError(text) {
+  shellWriteLine(`${shellAnsi.red("[shell]")} ${text}`);
+}
+
+function shellBeginAgentStream() {
+  shellState.agentStreaming = true;
+  shellState.agentStreamed = false;
+  shellState.agentPrefixPrinted = false;
+}
+
+function shellWriteAgentChunk(text) {
+  if (!text) return;
+  if (!shellState.rl) {
+    process.stdout.write(text);
+    return;
+  }
+  if (!shellState.agentPrefixPrinted) {
+    shellClearLine();
+    process.stdout.write(shellPromptText);
+    shellState.agentPrefixPrinted = true;
+  }
+  process.stdout.write(text);
+  shellState.agentStreamed = true;
+}
+
+function shellEndAgentStream() {
+  if (!shellState.rl) {
+    process.stdout.write("\n");
+    return;
+  }
+  if (shellState.agentPrefixPrinted) {
+    process.stdout.write("\n");
+  }
+  shellState.agentStreaming = false;
+  shellState.agentPrefixPrinted = false;
+  shellState.rl.prompt(true);
+}
+
+function normalizeShellAgentName(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "";
+  if (["codex", "codex-sdk", "codexsdk"].includes(raw)) return "codex-sdk";
+  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
+    return "copilot-sdk";
+  if (["claude", "claude-sdk", "claude-code", "claude_code"].includes(raw))
+    return "claude-sdk";
+  return raw;
+}
+
+function executorToAgent(executor) {
+  const normalized = String(executor || "").toUpperCase();
+  if (normalized === "COPILOT") return "copilot-sdk";
+  if (normalized === "CLAUDE") return "claude-sdk";
+  return "codex-sdk";
+}
+
+function getAvailableShellAgents() {
+  const agents = new Map();
+  const executors = config?.executorConfig?.executors || [];
+  for (const exec of executors) {
+    const mapped = executorToAgent(exec.executor);
+    if (!agents.has(mapped)) {
+      agents.set(mapped, exec);
+    }
+  }
+  if (!agents.size) {
+    agents.set(primaryAgentName || "codex-sdk", null);
+  }
+  return agents;
+}
+
+function extractAgentDeltaText(event) {
+  if (!event) return null;
+  // Copilot SDK streaming
+  if (event.type === "assistant.message_delta" && event.data?.deltaContent) {
+    return event.data.deltaContent;
+  }
+  if (event.type === "assistant.message" && event.data?.content) {
+    return event.data.content;
+  }
+
+  // Codex SDK streaming (best-effort — handles multiple event shapes)
+  if (event.type === "item.delta" || event.type?.includes("delta")) {
+    const delta =
+      event.delta ||
+      event.data?.delta ||
+      event.item?.delta ||
+      event.message?.delta ||
+      null;
+    if (delta) {
+      if (typeof delta.text === "string") return delta.text;
+      if (typeof delta.content === "string") return delta.content;
+      if (Array.isArray(delta.content)) {
+        const textParts = delta.content
+          .map((part) => part?.text || part?.value || "")
+          .filter(Boolean);
+        if (textParts.length) return textParts.join("");
+      }
+    }
+    if (typeof event.text === "string") return event.text;
+  }
+
+  return null;
+}
+
+async function buildShellContext() {
+  const statusData = await readStatusData();
+  const summary = await readStatusSummary();
+  const logTail = stripAnsi(logRemainder || "")
+    .slice(-2000)
+    .trim();
+  const errorLine = stripAnsi(lastErrorLine || "").trim();
+
+  const blocks = [];
+  if (summary?.text) {
+    blocks.push(`## Orchestrator Summary\n${summary.text}`);
+  }
+  if (errorLine) {
+    const errorAt = lastErrorAt ? new Date(lastErrorAt).toISOString() : "";
+    const header = errorAt ? `## Recent Error (${errorAt})` : "## Recent Error";
+    blocks.push(`${header}\n${errorLine}`);
+  }
+  if (logTail) {
+    blocks.push(`## Recent Logs\n${logTail}`);
+  }
+
+  return {
+    statusData,
+    contextText: blocks.join("\n\n").trim(),
+  };
+}
+
+function buildShellUserPrompt(input, contextText) {
+  if (!contextText) return input;
+  return `${contextText}\n\n## Operator Prompt\n${input}`.trim();
+}
+
+async function handleShellCommand(command, argText) {
+  const cmd = command.toLowerCase();
+  if (cmd === "/help" || cmd === ":help") {
+    const agents = Array.from(getAvailableShellAgents().keys());
+    shellWriteInfo(
+      [
+        "Commands:",
+        "  /help                 Show this help",
+        "  /agent [name]         Show or switch agent (codex|copilot|claude)",
+        "  /status               Print current orchestrator summary",
+        "  /context              Show injected context summary",
+        "  /stop                 Stop the active agent run",
+        "  /exit                 Close the interactive shell",
+        "",
+        `Available agents: ${agents.join(", ") || "none"}`,
+      ].join("\n"),
+    );
+    return;
+  }
+  if (cmd === "/exit" || cmd === "/quit" || cmd === ":quit") {
+    shellWriteInfo("Closing interactive shell.");
+    if (shellState.rl) shellState.rl.close();
+    return;
+  }
+  if (cmd === "/status") {
+    const summary = await readStatusSummary();
+    shellWriteLine(summary?.text || "Status unavailable.");
+    return;
+  }
+  if (cmd === "/context") {
+    const ctx = await buildShellContext();
+    if (!ctx.contextText) {
+      shellWriteInfo("No context available.");
+      return;
+    }
+    shellWriteLine(ctx.contextText);
+    return;
+  }
+  if (cmd === "/stop") {
+    if (shellState.abortController) {
+      shellState.abortController.abort("user_stop");
+      shellWriteInfo("Stop requested.");
+    } else {
+      shellWriteInfo("No active agent run to stop.");
+    }
+    return;
+  }
+  if (cmd === "/agent") {
+    const desiredRaw = (argText || "").trim();
+    const normalized = normalizeShellAgentName(desiredRaw);
+    if (!normalized) {
+      shellWriteInfo(`Current agent: ${getPrimaryAgentName()}`);
+      return;
+    }
+    const available = getAvailableShellAgents();
+    if (!available.has(normalized)) {
+      shellWriteWarn(
+        `Agent "${normalized}" not in configured executors. Available: ${Array.from(available.keys()).join(", ")}`,
+      );
+      return;
+    }
+    const result = await switchPrimaryAgent(normalized);
+    if (result?.ok) {
+      shellWriteInfo(`Active agent switched to ${result.name}.`);
+    } else {
+      shellWriteWarn(
+        `Failed to switch agent: ${result?.reason || "unknown error"}`,
+      );
+    }
+    return;
+  }
+  shellWriteWarn(`Unknown shell command: ${command}`);
+}
+
+async function runShellPrompt(input) {
+  if (!input.trim()) return;
+  if (isPrimaryBusy()) {
+    shellWriteWarn("Primary agent is busy. Try again shortly or /stop.");
+    return;
+  }
+  shellBeginAgentStream();
+  const abortController = new AbortController();
+  shellState.abortController = abortController;
+
+  try {
+    const { statusData, contextText } = await buildShellContext();
+    const prompt = buildShellUserPrompt(input, contextText);
+
+    const onEvent = async (_formatted, rawEvent) => {
+      const delta = extractAgentDeltaText(rawEvent);
+      if (delta) {
+        shellWriteAgentChunk(delta);
+      }
+    };
+
+    const result = await execPrimaryPrompt(prompt, {
+      statusData,
+      onEvent,
+      sendRawEvents: true,
+      abortController,
+    });
+
+    if (!shellState.agentStreamed && result?.finalResponse) {
+      shellWriteLine(`${shellPromptText}${result.finalResponse}`);
+    }
+  } catch (err) {
+    shellWriteError(err?.message || String(err));
+  } finally {
+    shellState.abortController = null;
+    shellEndAgentStream();
+  }
+}
+
+function startInteractiveShell() {
+  if (!shellState.enabled) return;
+  if (!shellIsTTY) {
+    shellWriteWarn(
+      "Interactive shell requested but no TTY detected; skipping.",
+    );
+    return;
+  }
+  if (shellState.rl) return;
+  shellState.prompt = shellPromptText;
+  shellState.rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+    historySize: Number(process.env.CODEX_MONITOR_SHELL_HISTORY || "200"),
+  });
+  shellState.active = true;
+  shellState.rl.setPrompt(shellState.prompt);
+  shellWriteInfo("Interactive shell enabled. Type /help for commands.");
+  shellState.rl.prompt();
+
+  shellState.rl.on("line", (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      shellState.rl.prompt();
+      return;
+    }
+    if (trimmed.startsWith("/") || trimmed.startsWith(":")) {
+      const [cmd, ...rest] = trimmed.split(/\s+/);
+      shellState.queue = shellState.queue
+        .then(() => handleShellCommand(cmd, rest.join(" ")))
+        .catch((err) =>
+          shellWriteError(err?.message || "Shell command failed"),
+        );
+      return;
+    }
+    shellState.queue = shellState.queue
+      .then(() => runShellPrompt(trimmed))
+      .catch((err) => shellWriteError(err?.message || "Shell prompt failed"));
+  });
+
+  shellState.rl.on("close", () => {
+    shellState.active = false;
+    shellState.rl = null;
+    shellWriteInfo("Interactive shell closed.");
+  });
+}
+
 let {
   projectName,
   scriptPath,
@@ -165,6 +518,7 @@ let {
   watchEnabled,
   watchPath: configWatchPath,
   echoLogs,
+  interactiveShellEnabled,
   autoFixEnabled,
   preflightEnabled: configPreflightEnabled,
   preflightRetryMs: configPreflightRetryMs,
@@ -214,6 +568,29 @@ let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+
+// ── Interactive shell state ────────────────────────────────────────────────
+const shellState = {
+  enabled: !!interactiveShellEnabled,
+  active: false,
+  rl: null,
+  prompt: "",
+  agentStreaming: false,
+  agentStreamed: false,
+  agentPrefixPrinted: false,
+  abortController: null,
+  queue: Promise.resolve(),
+};
+const shellIsTTY = process.stdin.isTTY && process.stdout.isTTY;
+const shellAnsi = {
+  cyan: (s) => (process.stdout.isTTY ? `\x1b[36m${s}\x1b[0m` : s),
+  green: (s) => (process.stdout.isTTY ? `\x1b[32m${s}\x1b[0m` : s),
+  yellow: (s) => (process.stdout.isTTY ? `\x1b[33m${s}\x1b[0m` : s),
+  dim: (s) => (process.stdout.isTTY ? `\x1b[2m${s}\x1b[22m` : s),
+  red: (s) => (process.stdout.isTTY ? `\x1b[31m${s}\x1b[0m` : s),
+};
+const shellPromptText = shellAnsi.cyan("[agent]") + " > ";
+const shellInfoPrefix = shellAnsi.dim("[shell]") + " ";
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let codexDisabledReason = codexEnabled
   ? ""
@@ -346,6 +723,8 @@ let orchestratorResumeTimer = null;
 const restartController = new RestartController();
 
 let logRemainder = "";
+let lastErrorLine = "";
+let lastErrorAt = 0;
 const mergeNotified = new Set();
 const pendingMerges = new Set();
 const errorNotified = new Map();
@@ -890,7 +1269,28 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 const errorFrequency = new Map();
 let loopFixInProgress = false;
 
+// Infrastructure error patterns that should NEVER trigger loop-fix autofix.
+// These are transient git/rebase failures handled by persistent cooldowns.
+const infraErrorPatterns = [
+  /Direct rebase failed/i,
+  /checkout failed/i,
+  /rebase cooldown/i,
+  /worktree.*has (rebase in progress|uncommitted changes)/i,
+  /No worktree found/i,
+  /VK rebase (failed|unavailable)/i,
+  /git fetch failed in worktree/i,
+  /Cannot rebase/i,
+  /merge conflict.*not auto-resolvable/i,
+];
+
+function isInfraError(line) {
+  return infraErrorPatterns.some((p) => p.test(line));
+}
+
 function trackErrorFrequency(line) {
+  // Skip infrastructure errors — they have their own cooldown/retry logic
+  if (isInfraError(line)) return;
+
   const fingerprint = getErrorFingerprint(line);
   if (!fingerprint) return;
 
@@ -1004,6 +1404,20 @@ const errorNoisePatterns = [
   // Telegram 409 conflicts (harmless, handled by auto-disable)
   /telegram getUpdates failed: 409/i,
   /getUpdates failed: 409/i,
+  // ── Infrastructure failures: rebase/checkout/worktree issues ──
+  // These are transient git infra failures, NOT code bugs.
+  // The orchestrator handles them with cooldowns; do NOT trigger autofix.
+  /Direct rebase failed:.*checkout failed/i,
+  /Direct rebase failed:.*merge conflict/i,
+  /Direct rebase failed:.*push failed/i,
+  /Direct rebase failed:.*setting cooldown/i,
+  /Direct merge-rebase (succeeded|failed)/i,
+  /Branch .* is on rebase cooldown/i,
+  /Worktree .* has (rebase in progress|uncommitted changes)/i,
+  /No worktree found for .* — using VK API/i,
+  /Cannot rebase: (working tree is dirty|git rebase already in progress)/i,
+  /VK rebase (failed|requested|unavailable)/i,
+  /git fetch failed in worktree/i,
 ];
 
 const vkErrorPatterns = [
@@ -1411,6 +1825,44 @@ async function getAttemptInfo(attemptId) {
 function ghAvailable() {
   const res = spawnSync("gh", ["--version"], { stdio: "ignore" });
   return res.status === 0;
+}
+
+/**
+ * Find the worktree path for a given branch by parsing `git worktree list`.
+ * Returns null if no worktree is found.
+ */
+function findWorktreeForBranch(branch) {
+  if (!branch) return null;
+  try {
+    const result = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 10000,
+      encoding: "utf8",
+      shell: process.platform === "win32",
+    });
+    if (result.status !== 0 || !result.stdout) return null;
+
+    const lines = result.stdout.split("\n");
+    let currentPath = null;
+    for (const line of lines) {
+      if (line.startsWith("worktree ")) {
+        currentPath = line.slice(9).trim();
+      } else if (line.startsWith("branch ") && currentPath) {
+        const branchRef = line.slice(7).trim();
+        // branchRef is like "refs/heads/ve/40fa-m-interactive-co"
+        const branchName = branchRef.replace(/^refs\/heads\//, "");
+        if (branchName === branch) {
+          return currentPath;
+        }
+      } else if (line.trim() === "") {
+        currentPath = null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function findExistingPrForBranch(branch) {
@@ -2746,7 +3198,6 @@ async function checkMergedPRsAndUpdateTasks() {
       );
       if (knownBranch) {
         mergedTaskCache.add(task.id);
-        clearDirtyTask(task.id);
         // Cache all branches for this task
         for (const c of candidates) {
           if (c.branch) mergedBranchCache.add(c.branch);
@@ -2795,7 +3246,6 @@ async function checkMergedPRsAndUpdateTasks() {
             );
             const success = await updateTaskStatus(task.id, "done");
             movedCount++;
-            clearDirtyTask(task.id);
             mergedTaskCache.add(task.id);
             for (const c of candidates) {
               if (c.branch) mergedBranchCache.add(c.branch);
@@ -2836,14 +3286,6 @@ async function checkMergedPRsAndUpdateTasks() {
                 attemptId: cand.attemptId,
                 branch: cand.branch,
               });
-              // Register as a dirty task for slot reservation + file-overlap guard
-              registerDirtyTask({
-                taskId: task.id,
-                prNumber: cand.prNumber,
-                branch: cand.branch,
-                title: task.title,
-                files: prInfo?.files?.map((f) => f.filename || f) || [],
-              });
             }
           }
         }
@@ -2863,7 +3305,6 @@ async function checkMergedPRsAndUpdateTasks() {
           );
           const success = await updateTaskStatus(task.id, "done");
           movedCount++;
-          clearDirtyTask(task.id);
           mergedTaskCache.add(task.id);
           for (const c of candidates) {
             if (c.branch) mergedBranchCache.add(c.branch);
@@ -2906,15 +3347,7 @@ async function checkMergedPRsAndUpdateTasks() {
               const fullPrInfo = await getPullRequestByNumber(branchPr.number);
               const isConflicting =
                 fullPrInfo?.mergeable === "CONFLICTING" ||
-                ful
-                // Register as dirty for slot reservation + file-overlap
-                registerDirtyTask({
-                  taskId: task.id,
-                  prNumber: branchPr.number,
-                  branch: cand.branch,
-                  title: task.title,
-                  files: fullPrInfo?.files?.map((f) => f.filename || f) || [],
-                });lPrInfo?.mergeable === false ||
+                fullPrInfo?.mergeable === false ||
                 fullPrInfo?.mergeable_state === "dirty" ||
                 fullPrInfo?.mergeStateStatus === "DIRTY";
               if (isConflicting) {
@@ -2940,16 +3373,22 @@ async function checkMergedPRsAndUpdateTasks() {
       if (resolved) continue;
 
       // ── Conflict resolution for open PRs with merge conflicts ──
+      // STRATEGY: The monitor now owns SDK-based conflict resolution.
+      // When conflicts are detected:
+      //  1. Auto-resolvable files (lockfiles, generated) are handled mechanically
+      //  2. Semantic conflicts are dispatched to an SDK agent (Codex/Copilot)
+      //     with FULL worktree access — the agent reads both sides, understands
+      //     the code, and writes the correct resolution
+      //  3. The orchestrator still handles simple rebases (behind/stale)
+      //     but DOES NOT own conflict resolution anymore
       if (conflictCandidates.length > 0) {
         const lastConflictCheck = conflictResolutionCooldown.get(task.id);
         const onCooldown =
           lastConflictCheck &&
           Date.now() - lastConflictCheck < CONFLICT_COOLDOWN_MS;
-        // Also check dirty-specific cooldown (shorter, for prioritized resolution)
         const onDirtyCooldown = isOnResolutionCooldown(task.id);
         if (!onCooldown && !onDirtyCooldown) {
           const cc = conflictCandidates[0];
-          // Find the attempt ID — prefer the one on the candidate, else search
           let resolveAttemptId = cc.attemptId;
           if (!resolveAttemptId) {
             const matchAttempt = allVkAttempts.find(
@@ -2959,29 +3398,93 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
-            // ── Force HIGH complexity tier for dirty/conflict tasks ──
-            const dirtyComplexity = classifyComplexity({
-              sizeLabel: "xl",
-              title: `[CONFLICT] ${task.title}`,
-              description: "Merge conflict resolution — forced HIGH tier",
-            });
-            const dirtyProfile = resolveExecutorForTask(
-              { ...task, title: `[CONFLICT] ${task.title}` },
-              { executor: "CODEX", variant: "GPT51_CODEX_MAX" },
-              config.complexityRouting,
-            );
-            const complexityLog = formatComplexityDecision(dirtyProfile);
-            console.log(
-              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution [${complexityLog}]`,
-            );
             conflictResolutionCooldown.set(task.id, Date.now());
             recordResolutionAttempt(task.id);
-            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
-            void smartPRFlow(resolveAttemptId, shortId, "conflict");
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution [${dirtyComplexity.tier}]`,
+
+            // Check if SDK resolution is available and not exhausted
+            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
+            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
+
+            if (!sdkOnCooldown && !sdkExhausted) {
+              // ── SDK-based conflict resolution (primary path) ──
+              console.log(
+                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
               );
+
+              // Discover worktree path from attempt data
+              let worktreePath = null;
+              const attemptInfo = await getAttemptInfo(resolveAttemptId);
+              worktreePath =
+                attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+
+              // Fallback: try git worktree list to find the branch's worktree
+              if (!worktreePath) {
+                worktreePath = findWorktreeForBranch(cc.branch);
+              }
+
+              if (worktreePath) {
+                // Fire-and-forget: launch SDK resolver in background
+                void (async () => {
+                  try {
+                    const result = await resolveConflictsWithSDK({
+                      worktreePath,
+                      branch: cc.branch,
+                      baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
+                      prNumber: cc.prNumber,
+                      taskTitle: task.title,
+                      taskDescription: task.description || "",
+                      logDir: logDir,
+                    });
+                    if (result.success) {
+                      console.log(
+                        `[monitor] ✅ SDK resolved conflicts for PR #${cc.prNumber} (${result.resolvedFiles.length} files)`,
+                      );
+                      clearDirtyTask(task.id);
+                      clearSDKResolutionState(cc.branch);
+                      if (telegramToken && telegramChatId) {
+                        void sendTelegramMessage(
+                          `✅ SDK resolved merge conflicts for PR #${cc.prNumber} "${task.title}" (${result.resolvedFiles.length} files)`,
+                        );
+                      }
+                    } else {
+                      console.warn(
+                        `[monitor] ❌ SDK conflict resolution failed for PR #${cc.prNumber}: ${result.error}`,
+                      );
+                      if (telegramToken && telegramChatId) {
+                        void sendTelegramMessage(
+                          `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
+                        );
+                      }
+                    }
+                  } catch (err) {
+                    console.warn(
+                      `[monitor] SDK conflict resolution threw: ${err.message}`,
+                    );
+                  }
+                })();
+              } else {
+                console.warn(
+                  `[monitor] No worktree found for ${cc.branch} — deferring to orchestrator`,
+                );
+                if (telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
+                  );
+                }
+              }
+            } else {
+              // SDK exhausted or on cooldown — fall back to orchestrator
+              const reason = sdkExhausted
+                ? "SDK attempts exhausted"
+                : "SDK on cooldown";
+              console.log(
+                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — ${reason}, deferring to orchestrator (attempt ${shortId})`,
+              );
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
+                );
+              }
             }
           } else {
             console.warn(
@@ -3492,19 +3995,12 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
       ? statusData.active_attempts
       : Object.values(statusData?.attempts || {});
 
-    // Also fetch VK task-attempts as fallback (filter to active attempts only)
+    // Also fetch VK task-attempts as fallback
     let vkAttempts = [];
     try {
       const vkRes = await fetchVk("/api/task-attempts");
       const vkData = vkRes?.data ?? vkRes;
-      if (Array.isArray(vkData)) {
-        // CRITICAL: Only include attempts for active tasks (inprogress/inreview)
-        // Ignore attempts for completed/done/cancelled/succeeded tasks
-        const activeTaskIds = new Set(allTasks.map((t) => t.id));
-        vkAttempts = vkData.filter((attempt) => {
-          return attempt?.task_id && activeTaskIds.has(attempt.task_id);
-        });
-      }
+      if (Array.isArray(vkData)) vkAttempts = vkData;
     } catch {
       /* best-effort */
     }
@@ -3539,14 +4035,6 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
 
       if (!attempt || attempt.id === excludeAttemptId) continue;
       if (!attempt.branch) continue;
-
-      // Skip archived or completed attempts (safety check)
-      if (attempt.status === "archived" || attempt.archived_at) {
-        console.log(
-          `[${tag}] skipping archived attempt "${task.title}" (${attempt.id.substring(0, 8)})`,
-        );
-        continue;
-      }
 
       console.log(
         `[${tag}] rebasing task "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
@@ -4188,16 +4676,41 @@ async function smartPRFlow(attemptId, shortId, status) {
             console.warn(
               `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
             );
-            // Use standardized conflict resolution prompt from conflict-resolver module
-            const prompt = buildConflictResolutionPrompt({
-              attemptId,
-              shortId,
-              taskTitle: attempt?.task_title || shortId,
-              taskDescription: attempt?.task_description || "",
-              conflictedFiles: files,
-              worktreeDir,
-              targetBranch,
-            });
+            const classification = classifyConflictedFiles(files);
+            const fileGuidance = files
+              .map((f) => {
+                const fn = f.split("/").pop();
+                if (
+                  AUTO_RESOLVE_THEIRS.includes(fn) ||
+                  AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))
+                ) {
+                  return `  - ${f}: Accept THEIRS (upstream version — lock/generated file)`;
+                }
+                if (AUTO_RESOLVE_OURS.includes(fn)) {
+                  return `  - ${f}: Accept OURS (keep our version)`;
+                }
+                return `  - ${f}: Resolve MANUALLY (inspect both sides, merge intelligently)`;
+              })
+              .join("\n");
+            const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
+Worktree: ${worktreeDir || "(unknown)"}
+Attempt: ${shortId}
+Conflicted files: ${files.join(", ") || "(unknown)"}
+
+Per-file resolution strategy:
+${fileGuidance}
+
+Instructions:
+1) cd into the worktree directory.
+2) For each conflicted file, apply the strategy above:
+   - THEIRS: git checkout --theirs -- <file> && git add <file>
+   - OURS: git checkout --ours -- <file> && git add <file>
+   - MANUAL: Open the file, remove conflict markers (<<<< ==== >>>>), merge both sides intelligently, then git add <file>
+3) After resolving all files, run: git rebase --continue
+4) If more conflicts appear, repeat steps 2-3.
+5) Once rebase completes, push the branch: git push --force-with-lease
+6) Verify the build still passes if possible.
+Return a short summary of what you did and any files that needed manual resolution.`;
             const codexResult = await runCodexExec(
               prompt,
               worktreeDir || repoRoot,
@@ -4232,49 +4745,21 @@ async function smartPRFlow(attemptId, shortId, status) {
               );
             }
           }
-          // Auto-resolve failed — ALWAYS start fresh session for conflict resolution
-          // Never reuse context — dirty conflicts need a clean slate with full context
+          // Auto-resolve failed — ask agent to fix
           console.warn(
-            `[monitor] ${tag}: auto-resolve failed — starting FRESH conflict resolution session`,
+            `[monitor] ${tag}: auto-resolve failed — prompting agent`,
           );
-
-          // Build structured conflict resolution prompt
-          const conflictPrompt = buildConflictResolutionPrompt({
-            attemptId,
-            shortId,
-            taskTitle: attempt?.task_title || shortId,
-            taskDescription: attempt?.task_description || "",
-            conflictedFiles: files,
-            worktreeDir: attempt?.worktree_dir || attempt?.worktree || null,
-            targetBranch,
-          });
-
           if (telegramToken && telegramChatId) {
             void sendTelegramMessage(
-              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}.\n` +
-                `🔄 Starting fresh conflict resolution session (HIGH tier).`,
+              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-
-          // Force a new session — never reuse context for conflict resolution
-          const freshStarted = await startFreshSession(
-            conflictPrompt,
-            `conflict_resolution_${shortId}`,
-          );
-          if (freshStarted) {
-            console.log(
-              `[monitor] ${tag}: fresh conflict resolution session started`,
+          if (primaryAgentReady && !isPrimaryBusy()) {
+            void execPrimaryPrompt(
+              `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
+                `Please resolve the conflicts, commit, push, and create a PR.`,
+              { timeoutMs: 15 * 60 * 1000 },
             );
-          } else {
-            // Fallback: try primary agent if fresh session failed
-            console.warn(
-              `[monitor] ${tag}: fresh session failed — falling back to primary agent prompt`,
-            );
-            if (primaryAgentReady && !isPrimaryBusy()) {
-              void execPrimaryPrompt(conflictPrompt, {
-                timeoutMs: 15 * 60 * 1000,
-              });
-            }
           }
           return;
         }
@@ -5588,7 +6073,7 @@ async function triggerTaskPlannerViaKanban(
       ? taskCount
       : defaultPlannerTaskCount;
   const plannerTaskSizeLabel = String(
-    process.env.TASK_PLANNER_TASK_SIZE_LABEL || "xl",
+    process.env.TASK_PLANNER_TASK_SIZE_LABEL || "m",
   ).toLowerCase();
   // Get project ID using the name-matched helper
   const projectId = await findVkProjectId();
@@ -5635,6 +6120,7 @@ async function triggerTaskPlannerViaKanban(
       "- If a placeholder is unavoidable, create a paired follow-up task immediately",
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
+      "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
     ].join("\n");
     // Best-effort: keep backlog task aligned with current requirements
     if (
@@ -5697,6 +6183,7 @@ async function triggerTaskPlannerViaKanban(
       "- If a placeholder is unavoidable, create a paired follow-up task immediately",
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
+      "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
     ].join("\n"),
     status: "todo",
     project_id: projectId,
@@ -6140,6 +6627,26 @@ async function handleExit(code, signal, logPath) {
     return;
   }
 
+  // ── Benign exit 1: orchestrator ran normally but PowerShell propagated a
+  // non-zero $LASTEXITCODE from the last native command (git/gh).  Detect by
+  // checking that the log has no actual errors — just normal cycle messages.
+  if (
+    code === 1 &&
+    !signal &&
+    logText.length > 200 &&
+    !logText.includes("ERROR") &&
+    !logText.includes("FATAL") &&
+    !logText.includes("Unhandled exception") &&
+    (logText.includes("Sleeping") || logText.includes("next cycle"))
+  ) {
+    console.log(
+      `[monitor] benign exit 1 detected (no errors in log, normal cycles) — restarting without autofix`,
+    );
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
+    return;
+  }
+
   // ── Clean exit: skip autofix/analysis, handle backlog-empty gracefully ──
   if (isCleanExit) {
     const isEmptyBacklog =
@@ -6370,6 +6877,42 @@ async function startProcess() {
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
   const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
 
+  // ── Agent log streaming: fan out per-attempt log lines to .cache/agent-logs/ ──
+  const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
+  try {
+    await mkdir(agentLogDir, { recursive: true });
+  } catch {
+    /* best effort */
+  }
+  /** @type {Map<string, import('fs').WriteStream>} */
+  const agentLogStreams = new Map();
+  const AGENT_LOG_PATTERN =
+    /\b([0-9a-f]{8})(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\b/i;
+
+  /**
+   * Stream a log line to the per-attempt log file if it contains an attempt short ID.
+   * @param {string} line - The log line
+   */
+  function streamToAgentLog(line) {
+    const match = line.match(AGENT_LOG_PATTERN);
+    if (!match) return;
+    const shortId = match[1].toLowerCase();
+    // Filter out common false positives (git SHAs in non-attempt context)
+    if (
+      line.includes("HEAD") ||
+      line.includes("commit ") ||
+      line.includes("Deleted branch")
+    ) {
+      return;
+    }
+    const logPath = resolve(agentLogDir, `${shortId}.log`);
+    try {
+      appendFileSync(logPath, `${line}\n`);
+    } catch {
+      /* best effort — non-critical */
+    }
+  }
+
   // Guard: verify script exists before spawning to avoid cryptic exit 64
   if (!existsSync(scriptPath)) {
     console.error(
@@ -6394,7 +6937,7 @@ async function startProcess() {
   const append = async (chunk) => {
     if (echoLogs) {
       try {
-        process.stdout.write(chunk);
+        shellWriteRaw(chunk);
       } catch {
         /* EPIPE — ignore */
       }
@@ -6409,7 +6952,11 @@ async function startProcess() {
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
     for (const line of lines) {
+      // ── Agent log streaming: fan out to per-attempt log files ──
+      streamToAgentLog(line);
       if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
+        lastErrorLine = line;
+        lastErrorAt = Date.now();
         notifyErrorLine(line);
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
@@ -6733,6 +7280,7 @@ function applyConfig(nextConfig, options = {}) {
   watchPath = resolve(nextConfig.watchPath);
   echoLogs = nextConfig.echoLogs;
   autoFixEnabled = nextConfig.autoFixEnabled;
+  shellState.enabled = !!nextConfig.interactiveShellEnabled;
   preflightEnabled = nextConfig.preflightEnabled;
   preflightRetryMs = nextConfig.preflightRetryMs;
   repoRoot = nextConfig.repoRoot;
@@ -6818,6 +7366,12 @@ function applyConfig(nextConfig, options = {}) {
   if (prevPreflightEnabled && !preflightEnabled && preflightRetryTimer) {
     clearTimeout(preflightRetryTimer);
     preflightRetryTimer = null;
+  }
+
+  if (shellState.enabled && !shellState.active) {
+    startInteractiveShell();
+  } else if (!shellState.enabled && shellState.active && shellState.rl) {
+    shellState.rl.close();
   }
 
   const nextArgs = scriptArgs?.join(" ") || "";
@@ -7089,6 +7643,7 @@ startAutoUpdateLoop({
 startWatcher();
 startEnvWatchers();
 startSelfWatcher();
+startInteractiveShell();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }

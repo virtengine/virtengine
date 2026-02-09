@@ -156,6 +156,8 @@ $script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".ca
 $script:CopilotStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-copilot.json"
 $script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-status.json"
 $script:StopFilePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-stop"
+$script:RebaseCooldownPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-rebase-cooldown.json"
+$script:AgentLogDir = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\agent-logs"
 $script:CompletedTasks = @()
 $script:SubmittedTasks = @()
 $script:FollowUpEvents = @()
@@ -215,12 +217,14 @@ function Get-EnvFallback {
     try {
         $value = [Environment]::GetEnvironmentVariable($Name)
         if ($value) { return $value }
-    } catch { }
+    }
+    catch { }
 
     try {
         $item = Get-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue
         if ($item -and $item.Value) { return $item.Value }
-    } catch { }
+    }
+    catch { }
 
     try {
         $all = [Environment]::GetEnvironmentVariables()
@@ -228,7 +232,8 @@ function Get-EnvFallback {
             $value = $all[$Name]
             if ($value) { return $value }
         }
-    } catch { }
+    }
+    catch { }
 
     return $null
 }
@@ -245,14 +250,17 @@ function Set-EnvValue {
     try {
         if ($null -eq $Value -or $Value -eq "") {
             Remove-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue | Out-Null
-        } else {
+        }
+        else {
             Set-Item -Path ("Env:{0}" -f $Name) -Value $Value -ErrorAction SilentlyContinue | Out-Null
         }
-    } catch { }
+    }
+    catch { }
 
     try {
         [Environment]::SetEnvironmentVariable($Name, $Value)
-    } catch { }
+    }
+    catch { }
 }
 
 function Get-EnvInt {
@@ -1584,7 +1592,7 @@ $script:ComplexityModels = @{
     "CODEX"   = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
         "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.1-codex-max"; variant = "GPT51_CODEX_MAX"; reasoningEffort = "high" }
+        "high"   = @{ model = "gpt-5.3-codex"; variant = "DEFAULT"; reasoningEffort = "high" }
     }
     "COPILOT" = @{
         "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
@@ -2635,11 +2643,128 @@ function Resolve-PRBaseBranch {
     return $base
 }
 
+# ── Persistent rebase cooldown (survives orchestrator restarts) ──────────────
+function Get-RebaseCooldownState {
+    <#
+    .SYNOPSIS Load rebase cooldown state from disk.
+             Returns hashtable of branch → { attempted_at, cooldown_until }.
+    #>
+    if (-not (Test-Path $script:RebaseCooldownPath)) { return @{} }
+    try {
+        $raw = Get-Content $script:RebaseCooldownPath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $state = @{}
+        foreach ($prop in $raw.PSObject.Properties) {
+            $state[$prop.Name] = @{
+                attempted_at   = $prop.Value.attempted_at
+                cooldown_until = $prop.Value.cooldown_until
+            }
+        }
+        return $state
+    }
+    catch {
+        return @{}
+    }
+}
+
+function Set-RebaseCooldownState {
+    param([hashtable]$State)
+    try {
+        $dir = Split-Path $script:RebaseCooldownPath -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $State | ConvertTo-Json -Depth 3 | Set-Content $script:RebaseCooldownPath -Encoding UTF8 -Force
+    }
+    catch {
+        Write-Log "Failed to persist rebase cooldown: $($_.Exception.Message)" -Level "WARN"
+    }
+}
+
+function Test-RebaseCooldown {
+    <#
+    .SYNOPSIS Check if a branch is on rebase cooldown (persisted to disk).
+             Returns $true if the branch should NOT be rebased yet.
+    #>
+    param([Parameter(Mandatory)][string]$Branch)
+    $state = Get-RebaseCooldownState
+    if (-not $state.ContainsKey($Branch)) { return $false }
+    $entry = $state[$Branch]
+    $until = [DateTime]::Parse($entry.cooldown_until)
+    return ([DateTime]::UtcNow -lt $until)
+}
+
+function Set-RebaseCooldown {
+    <#
+    .SYNOPSIS Mark a branch as recently rebased (30-min cooldown, persisted to disk).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [int]$CooldownMinutes = 30
+    )
+    $state = Get-RebaseCooldownState
+    $state[$Branch] = @{
+        attempted_at   = [DateTime]::UtcNow.ToString("o")
+        cooldown_until = [DateTime]::UtcNow.AddMinutes($CooldownMinutes).ToString("o")
+    }
+    # Prune entries older than 24h
+    $cutoff = [DateTime]::UtcNow.AddHours(-24)
+    $pruned = @{}
+    foreach ($key in $state.Keys) {
+        try {
+            $until = [DateTime]::Parse($state[$key].cooldown_until)
+            if ($until -gt $cutoff) { $pruned[$key] = $state[$key] }
+        }
+        catch { $pruned[$key] = $state[$key] }
+    }
+    Set-RebaseCooldownState -State $pruned
+}
+
+# ── Worktree path resolution ────────────────────────────────────────────────
+function Get-WorktreePathForBranch {
+    <#
+    .SYNOPSIS Find the worktree directory for a given branch name.
+             Returns $null if no worktree exists for that branch.
+    #>
+    param([Parameter(Mandatory)][string]$Branch)
+    $porcelain = git worktree list --porcelain 2>&1
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $currentWorktree = $null
+    foreach ($line in $porcelain) {
+        $lineStr = $line.ToString().Trim()
+        if ($lineStr -match '^worktree (.+)$') {
+            $currentWorktree = $Matches[1].Trim()
+        }
+        elseif ($lineStr -match '^branch refs/heads/(.+)$') {
+            $branchName = $Matches[1].Trim()
+            if ($branchName -eq $Branch -and $currentWorktree) {
+                return $currentWorktree
+            }
+        }
+    }
+    return $null
+}
+
+function Test-GitRebaseInProgress {
+    <#
+    .SYNOPSIS Check if a git rebase is in progress in a given directory.
+    #>
+    param([string]$RepoPath = ".")
+    $gitDir = git -C $RepoPath rev-parse --git-dir 2>&1
+    if ($LASTEXITCODE -ne 0) { return $false }
+    $gitDirStr = $gitDir.ToString().Trim()
+    # Resolve relative to repo path
+    if (-not [System.IO.Path]::IsPathRooted($gitDirStr)) {
+        $gitDirStr = Join-Path $RepoPath $gitDirStr
+    }
+    return ((Test-Path (Join-Path $gitDirStr "rebase-merge")) -or (Test-Path (Join-Path $gitDirStr "rebase-apply")))
+}
+
 function Invoke-DirectRebase {
     <#
     .SYNOPSIS Smart rebase of a PR branch onto its base branch.
+              Uses the worktree (if available) instead of the main repo checkout.
+              Uses merge-based approach for reliability.
               Handles auto-resolvable conflicts (lock files, generated files)
               before falling back to VK rebase.
+              Includes persistent cooldown to prevent retry storms across restarts.
     #>
     [CmdletBinding()]
     param(
@@ -2650,67 +2775,94 @@ function Invoke-DirectRebase {
 
     Write-Log "Attempting direct rebase of $Branch onto $BaseBranch" -Level "ACTION"
 
-    # Save current branch so we can restore
-    $originalBranch = (git rev-parse --abbrev-ref HEAD 2>&1).ToString().Trim()
-
-    # Fetch latest
-    $fetchOut = git fetch origin $BaseBranch 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "git fetch failed: $fetchOut" -Level "WARN"
-        if ($AttemptId) {
-            return Rebase-VKAttempt -AttemptId $AttemptId
-        }
+    # ── Guard 1: Persistent cooldown check (survives restarts) ──────────
+    if (Test-RebaseCooldown -Branch $Branch) {
+        Write-Log "Branch $Branch is on rebase cooldown — skipping" -Level "INFO"
         return $false
     }
 
-    $fetchBranch = git fetch origin "${Branch}:refs/remotes/origin/${Branch}" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "git fetch branch failed: $fetchBranch" -Level "WARN"
-        if ($AttemptId) {
-            return Rebase-VKAttempt -AttemptId $AttemptId
+    # ── Guard 2: Find the correct working directory ─────────────────────
+    $worktreePath = Get-WorktreePathForBranch -Branch $Branch
+    $useWorktree = $false
+    if ($worktreePath -and (Test-Path $worktreePath)) {
+        # ── Guard 3: Check for in-progress rebase in the worktree ───────
+        if (Test-GitRebaseInProgress -RepoPath $worktreePath) {
+            Write-Log "Worktree $worktreePath has rebase in progress — aborting it first" -Level "WARN"
+            git -C $worktreePath rebase --abort 2>&1 | Out-Null
         }
+        # ── Guard 4: Check for dirty working tree ───────────────────────
+        $status = git -C $worktreePath status --porcelain 2>&1
+        if ($status) {
+            Write-Log "Worktree $worktreePath has uncommitted changes — cannot rebase" -Level "WARN"
+            Set-RebaseCooldown -Branch $Branch -CooldownMinutes 15
+            if ($AttemptId) { return Rebase-VKAttempt -AttemptId $AttemptId }
+            return $false
+        }
+        $useWorktree = $true
+        Write-Log "Using worktree at $worktreePath for rebase" -Level "INFO"
+    }
+    else {
+        # No worktree — fall back to VK API rebase (do NOT use main repo checkout)
+        Write-Log "No worktree found for $Branch — using VK API rebase only" -Level "INFO"
+        Set-RebaseCooldown -Branch $Branch -CooldownMinutes 30
+        if ($AttemptId) { return Rebase-VKAttempt -AttemptId $AttemptId }
         return $false
     }
 
-    # Create a temp local branch, rebase, force-push
-    $tempBranch = "rebase-temp-$(Get-Random)"
+    # ── Perform merge-based update in the worktree ──────────────────────
     try {
-        git checkout -b $tempBranch "origin/$Branch" 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "checkout failed" }
-
-        $rebaseOut = git rebase "origin/$BaseBranch" 2>&1
+        # Fetch latest from origin
+        $fetchOut = git -C $worktreePath fetch origin $BaseBranch 2>&1
         if ($LASTEXITCODE -ne 0) {
-            # Rebase hit conflicts — try auto-resolving
-            $resolved = Resolve-RebaseConflicts -BaseBranch $BaseBranch
-            if (-not $resolved) {
-                git rebase --abort 2>&1 | Out-Null
-                throw "rebase conflict (not auto-resolvable): $rebaseOut"
-            }
-            Write-Log "Auto-resolved rebase conflicts for $Branch" -Level "OK"
+            Write-Log "git fetch failed in worktree: $fetchOut" -Level "WARN"
+            Set-RebaseCooldown -Branch $Branch -CooldownMinutes 10
+            if ($AttemptId) { return Rebase-VKAttempt -AttemptId $AttemptId }
+            return $false
         }
 
-        $pushOut = git push origin "${tempBranch}:${Branch}" --force-with-lease 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "push failed: $pushOut" }
+        # Use merge instead of rebase — less conflict-prone, preserves commit history
+        $mergeOut = git -C $worktreePath merge "origin/$BaseBranch" --no-edit 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            # Merge hit conflicts — try auto-resolving
+            Write-Log "Merge conflicts detected — attempting auto-resolve" -Level "INFO"
+            Push-Location $worktreePath
+            try {
+                $resolved = Resolve-MergeConflicts
+                if (-not $resolved) {
+                    # ── SDK resolver mode: leave merge in progress ──────────
+                    # Instead of aborting the merge, leave it in progress so
+                    # the monitor's SDK resolver (sdk-conflict-resolver.mjs)
+                    # can read conflict markers and resolve semantically.
+                    Write-Log "Merge has semantic conflicts — leaving merge in progress for SDK resolver (worktree: $worktreePath)" -Level "INFO"
+                    Set-RebaseCooldown -Branch $Branch -CooldownMinutes 5
+                    return "sdk_needed"
+                }
+                Write-Log "Auto-resolved merge conflicts for $Branch" -Level "OK"
+            }
+            finally {
+                Pop-Location
+            }
+        }
 
-        Write-Log "Direct rebase succeeded for $Branch onto $BaseBranch" -Level "OK"
+        # Push the merged result
+        $pushOut = git -C $worktreePath push origin "HEAD:$Branch" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $pushOut2 = git -C $worktreePath push origin "HEAD:$Branch" --force-with-lease 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "push failed: $pushOut2"
+            }
+        }
+
+        Write-Log "Direct merge-rebase succeeded for $Branch onto $BaseBranch" -Level "OK"
         return $true
     }
     catch {
-        Write-Log "Direct rebase failed: $($_.Exception.Message) — falling back to VK rebase" -Level "WARN"
+        Write-Log "Direct rebase failed: $($_.Exception.Message) — setting cooldown" -Level "WARN"
+        Set-RebaseCooldown -Branch $Branch -CooldownMinutes 30
         if ($AttemptId) {
             return Rebase-VKAttempt -AttemptId $AttemptId
         }
         return $false
-    }
-    finally {
-        # Clean up temp branch — restore original working state
-        if ($originalBranch -and $originalBranch -ne $tempBranch -and $originalBranch -ne "HEAD") {
-            git checkout $originalBranch 2>&1 | Out-Null
-        }
-        else {
-            git checkout - 2>&1 | Out-Null
-        }
-        git branch -D $tempBranch 2>&1 | Out-Null
     }
 }
 
@@ -2835,6 +2987,46 @@ function Resolve-RebaseConflicts {
     }
     Write-Log "Auto-resolve exhausted $maxIterations iterations" -Level "WARN"
     return $false
+}
+
+function Resolve-MergeConflicts {
+    <#
+    .SYNOPSIS Attempt to auto-resolve merge conflicts (non-rebase context).
+              Resolves lock files as "theirs", changelog as "ours", etc.
+              If any file is NOT auto-resolvable, returns $false.
+    #>
+    $conflicted = @(git diff --name-only --diff-filter=U 2>&1)
+    if ($LASTEXITCODE -ne 0 -or $conflicted.Count -eq 0) {
+        return $true  # No conflicts
+    }
+
+    foreach ($file in $conflicted) {
+        $file = $file.ToString().Trim()
+        if ([string]::IsNullOrWhiteSpace($file)) { continue }
+        $strategy = Test-AutoResolvable -FilePath $file
+        if (-not $strategy) {
+            Write-Log "Cannot auto-resolve merge conflict: $file (manual resolution needed)" -Level "WARN"
+            return $false
+        }
+        if ($strategy -eq "theirs") {
+            git checkout --theirs -- $file 2>&1 | Out-Null
+        }
+        else {
+            git checkout --ours -- $file 2>&1 | Out-Null
+        }
+        git add $file 2>&1 | Out-Null
+        Write-Log "Auto-resolved merge conflict ($strategy): $file" -Level "INFO"
+    }
+
+    # Commit the merge resolution
+    $env:GIT_EDITOR = "true"
+    git commit --no-edit 2>&1 | Out-Null
+    $env:GIT_EDITOR = $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "Failed to commit merge resolution" -Level "WARN"
+        return $false
+    }
+    return $true
 }
 
 function Get-MergeFailureInfo {
@@ -3526,18 +3718,40 @@ function Process-CompletedAttempts {
             Write-Log "PR #$($pr.number) has merge conflicts ($mergeState)" -Level "WARN"
             $info.status = "review"
 
-            # ── Try direct rebase first (uses correct base branch) ────────
-            if (-not $info.conflict_rebase_attempted) {
-                $info.conflict_rebase_attempted = $true
+            # ── Try direct rebase first (uses persistent disk-based cooldown) ────────
+            # The old in-memory flag ($info.conflict_rebase_attempted) was lost on restart.
+            # Now we use Test-RebaseCooldown which persists to .cache/ve-rebase-cooldown.json.
+            if (-not (Test-RebaseCooldown -Branch $branch)) {
+                Set-RebaseCooldown -Branch $branch -CooldownMinutes 30
                 $rebaseBase = Resolve-PRBaseBranch -Info $info -PRDetails $prDetails
                 Write-Log "Attempting direct rebase for conflicting PR #$($pr.number) onto $rebaseBase" -Level "ACTION"
                 $rebaseOk = Invoke-DirectRebase -Branch $branch -BaseBranch $rebaseBase -AttemptId $attemptId
-                if ($rebaseOk) {
+                if ($rebaseOk -eq $true) {
                     Write-Log "Direct rebase resolved conflicts for PR #$($pr.number)" -Level "OK"
                     $info.conflict_notified = $false
                     continue  # Re-check merge state next cycle
                 }
+                if ($rebaseOk -eq "sdk_needed") {
+                    # Merge is left in progress for the monitor's SDK resolver
+                    # Set a short cooldown so the SDK resolver gets a chance before @copilot
+                    Write-Log "Merge left in progress for SDK resolver — PR #$($pr.number)" -Level "INFO"
+                    $info.sdk_resolution_pending = $true
+                    $info.sdk_resolution_started = (Get-Date).ToString("o")
+                    continue  # Skip @copilot notification — let SDK resolver attempt first
+                }
                 Write-Log "Direct rebase failed for PR #$($pr.number) — proceeding to notification" -Level "WARN"
+            }
+
+            # ── Guard: if SDK resolution was recently requested, give it time ────────
+            if ($info.sdk_resolution_pending) {
+                $sdkStart = [datetime]::Parse($info.sdk_resolution_started)
+                $sdkElapsed = (Get-Date) - $sdkStart
+                if ($sdkElapsed.TotalMinutes -lt 15) {
+                    Write-Log "SDK resolver active for PR #$($pr.number) ($([int]$sdkElapsed.TotalMinutes)m elapsed) — skipping @copilot" -Level "INFO"
+                    continue
+                }
+                Write-Log "SDK resolver timed out for PR #$($pr.number) ($([int]$sdkElapsed.TotalMinutes)m) — falling back to @copilot" -Level "WARN"
+                $info.sdk_resolution_pending = $false
             }
 
             if (-not $info.conflict_notified) {
@@ -4679,20 +4893,20 @@ function Test-DirtyPRFileOverlap {
     if ($dirtyTasks.Count -eq 0) { return $false }
 
     $modulePatterns = @{
-        'portal'     = @('portal/', 'lib/portal/', 'lib/capture/', 'lib/admin/', 'pnpm-lock.yaml')
-        'veid'       = @('x/veid/', 'pkg/inference/')
-        'market'     = @('x/market/')
-        'escrow'     = @('x/escrow/')
-        'mfa'        = @('x/mfa/')
-        'encryption' = @('x/encryption/')
-        'provider'   = @('pkg/provider_daemon/', 'cmd/provider-daemon/')
-        'hpc'        = @('x/hpc/')
-        'roles'      = @('x/roles/')
-        'sdk'        = @('sdk/')
-        'app'        = @('app/')
-        'ci'         = @('.github/', 'Makefile', 'make/')
-        'ml'         = @('ml/')
-        'deps'       = @('go.mod', 'go.sum', 'vendor/')
+        'portal'       = @('portal/', 'lib/portal/', 'lib/capture/', 'lib/admin/', 'pnpm-lock.yaml')
+        'veid'         = @('x/veid/', 'pkg/inference/')
+        'market'       = @('x/market/')
+        'escrow'       = @('x/escrow/')
+        'mfa'          = @('x/mfa/')
+        'encryption'   = @('x/encryption/')
+        'provider'     = @('pkg/provider_daemon/', 'cmd/provider-daemon/')
+        'hpc'          = @('x/hpc/')
+        'roles'        = @('x/roles/')
+        'sdk'          = @('sdk/')
+        'app'          = @('app/')
+        'ci'           = @('.github/', 'Makefile', 'make/')
+        'ml'           = @('ml/')
+        'deps'         = @('go.mod', 'go.sum', 'vendor/')
         'codexmonitor' = @('scripts/codex-monitor/')
     }
 
@@ -4768,8 +4982,8 @@ function Get-DirtySlotReservation {
 
     # Count how many dirty tasks are already being resolved
     $activeDirtyCount = @($script:TrackedAttempts.Values | Where-Object {
-        $_.status -eq "running" -and $_.is_dirty_resolution -eq $true
-    }).Count
+            $_.status -eq "running" -and $_.is_dirty_resolution -eq $true
+        }).Count
 
     if ($activeDirtyCount -ge $script:DIRTY_MAX_CONCURRENT) {
         return @{
@@ -4935,7 +5149,8 @@ function Fill-ParallelSlots {
             $dirtyExec = Resolve-ExecutorForDirtyTask -Task $task -BaseProfile $baseExec
             Write-Log "DIRTY TASK: $shortTitle — forcing HIGH model [$($dirtyExec.executor)/$($dirtyExec.model)]" -Level "WARN"
             $dirtyExec
-        } else {
+        }
+        else {
             Resolve-ExecutorForComplexity -Task $task -BaseProfile $baseExec
         }
         $complexityTag = if ($nextExec.complexity) { " complexity=$($nextExec.complexity.tier)" } else { "" }
@@ -5251,3 +5466,8 @@ function Start-Orchestrator {
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 Start-Orchestrator
+
+# Ensure clean exit code — without this, PowerShell propagates $LASTEXITCODE
+# from the last native command (git, gh) which may be non-zero even on normal
+# orchestrator shutdown, causing the monitor to trigger autofix unnecessarily.
+exit 0
