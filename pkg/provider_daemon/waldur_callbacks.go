@@ -553,7 +553,7 @@ func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callbac
 
 		// Create lifecycle callback from Waldur callback
 		state := callback.Payload["state"]
-		success := state == "completed" || state == "OK"
+		success := state == string(HPCJobStateCompleted) || state == "OK"
 		if payloadSuccess, ok := callback.Payload["success"]; ok {
 			success = payloadSuccess == "true"
 		}
@@ -687,7 +687,7 @@ func (h *WaldurCallbackHandler) createChainCallback(lc *marketplace.LifecycleCal
 	callback.Payload["operation_id"] = lc.OperationID
 	callback.Payload["action"] = string(lc.Action)
 	if lc.Success {
-		callback.Payload["event_type"] = "completed"
+		callback.Payload["event_type"] = string(HPCJobStateCompleted)
 	} else {
 		callback.Payload["event_type"] = "failed"
 	}
@@ -727,7 +727,7 @@ func (h *WaldurCallbackHandler) signAndSubmitCallback(ctx context.Context, callb
 // mapWaldurStateToAllocationState maps Waldur state to allocation state
 func mapWaldurStateToAllocationState(state string) marketplace.AllocationState {
 	switch state {
-	case "OK", "done", "completed", "active":
+	case "OK", "done", string(HPCJobStateCompleted), "active":
 		return marketplace.AllocationStateActive
 	case "stopped", "Stopped":
 		return marketplace.AllocationStateSuspended
