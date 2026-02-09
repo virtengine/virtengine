@@ -24,6 +24,17 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 ensure_direnv_env
 
+# =========================================================================
+# Skip lint during merge/rebase — staged files include both sides and may
+# have pre-existing issues unrelated to the current branch's changes.
+# Formatting (gofmt, prettier) still runs so the merge commit is clean.
+# =========================================================================
+GIT_DIR="$(git rev-parse --git-dir)"
+if [ -f "$GIT_DIR/MERGE_HEAD" ] || [ -d "$GIT_DIR/rebase-merge" ] || [ -d "$GIT_DIR/rebase-apply" ]; then
+    export VE_HOOK_SKIP_LINT="${VE_HOOK_SKIP_LINT:-1}"
+    hook_warn "[pre-commit] Merge/rebase in progress — skipping lint (golangci-lint). Formatting still runs."
+fi
+
 STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACM)"
 STAGED_GO_FILES="$(echo "$STAGED_FILES" | grep -E '\.go$' | grep -v '^vendor/' || true)"
 
