@@ -141,6 +141,24 @@ function Ensure-VeKanbanLibraryLoaded {
 
 Ensure-VeKanbanLibraryLoaded -RequiredFunctions $requiredFunctions | Out-Null
 
+# ─── Agent Work Logger ───────────────────────────────────────────────────────
+$script:AgentWorkLoggerPath = Join-Path $PSScriptRoot "lib\agent-work-logger.ps1"
+if (Test-Path $script:AgentWorkLoggerPath) {
+    try {
+        . $script:AgentWorkLoggerPath
+        $script:AgentWorkLoggerEnabled = $true
+        Write-Host "[orchestrator] Agent work logger loaded from $($script:AgentWorkLoggerPath)" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Warning "[orchestrator] Failed to load agent-work-logger: $($_.Exception.Message)"
+        $script:AgentWorkLoggerEnabled = $false
+    }
+}
+else {
+    Write-Warning "[orchestrator] Agent work logger not found at $($script:AgentWorkLoggerPath)"
+    $script:AgentWorkLoggerEnabled = $false
+}
+
 # ─── State tracking ──────────────────────────────────────────────────────────
 $script:CycleCount = 0
 $script:TasksCompleted = 0
@@ -2395,6 +2413,19 @@ function Try-SendFollowUp {
     $Info.pending_followup = $null
     $Info.status = "running"
     $taskUrl = if ($Info.task_id) { Get-TaskUrl -TaskId $Info.task_id } else { $null }
+
+    # ── Agent Work Logger: log followup ──
+    if ($script:AgentWorkLoggerEnabled) {
+        try {
+            Write-AgentFollowup -AttemptId $AttemptId `
+                -Message $finalMessage.Substring(0, [Math]::Min(500, $finalMessage.Length)) `
+                -Reason $Reason
+        }
+        catch {
+            # best effort — non-critical
+        }
+    }
+
     Add-RecentItem -ListName "FollowUpEvents" -Item @{
         task_id     = $Info.task_id
         task_title  = $Info.name
@@ -3436,6 +3467,27 @@ function Sync-TrackedAttempts {
                 conflict_rebase_attempted     = $false
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
+
+            # ── Agent Work Logger: start session ──
+            if ($script:AgentWorkLoggerEnabled) {
+                try {
+                    Start-AgentSession -AttemptId $a.id `
+                        -TaskMetadata @{
+                            task_id = $a.task_id
+                            task_title = $a.name
+                        } `
+                        -ExecutorInfo @{
+                            executor = if ($execProfile) { $execProfile.executor } else { "unknown" }
+                            executor_variant = if ($execProfile) { $execProfile.variant } else { $null }
+                        } `
+                        -GitContext @{
+                            branch = $a.branch
+                        }
+                }
+                catch {
+                    Write-Log "Agent work logger Start-AgentSession failed: $($_.Exception.Message)" -Level "WARN"
+                }
+            }
         }
         else {
             $script:TrackedAttempts[$a.id].updated_at = $a.updated_at
@@ -3474,11 +3526,34 @@ function Sync-TrackedAttempts {
                         Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
                     }
                     $tracked.review_marked = $true
+
+                    # ── Agent Work Logger: stop session ──
+                    if ($script:AgentWorkLoggerEnabled) {
+                        try {
+                            $completionStatus = if ($summary.latest_process_status -eq "completed") { "success" } else { "failed" }
+                            Stop-AgentSession -AttemptId $a.id -CompletionStatus $completionStatus
+                        }
+                        catch {
+                            Write-Log "Agent work logger Stop-AgentSession failed: $($_.Exception.Message)" -Level "WARN"
+                        }
+                    }
                 }
                 if ($summary.latest_process_status -eq "failed" -and -not $tracked.error_notified) {
                     Write-Log "Attempt $($a.id.Substring(0,8)) failed in workspace — requires agent attention" -Level "WARN"
                     $tracked.error_notified = $true
                     $tracked.status = "error"
+
+                    # ── Agent Work Logger: log error ──
+                    if ($script:AgentWorkLoggerEnabled) {
+                        try {
+                            Write-AgentError -AttemptId $a.id `
+                                -ErrorMessage "Agent workspace process failed" `
+                                -ErrorCategory "workspace_failure"
+                        }
+                        catch {
+                            # best effort
+                        }
+                    }
                 }
 
                 if ($summary.latest_process_status -eq "failed") {

@@ -503,7 +503,7 @@ function Show-AgentWorkSummary {
         $count = $group.Count
         $successRate = ($group.Group | Where-Object { $_.outcome.status -eq 'completed' }).Count * 100.0 / $count
 
-        Write-Host "  $executor: $count sessions, $([math]::Round($successRate, 1))% success"
+        Write-Host "  ${executor}: $count sessions, $([math]::Round($successRate, 1))% success"
     }
 
     # Top errors
@@ -521,15 +521,18 @@ function Show-AgentWorkSummary {
 }
 
 # ── Exports ─────────────────────────────────────────────────────────────────
-
-Export-ModuleMember -Function @(
-    'Write-AgentWorkLog',
-    'Start-AgentSession',
-    'Stop-AgentSession',
-    'Write-AgentError',
-    'Write-AgentFollowup',
-    'Write-AgentStatusChange',
-    'Get-SessionMetrics',
-    'Get-ErrorClusters',
-    'Show-AgentWorkSummary'
-)
+# Only call Export-ModuleMember when loaded as a module (Import-Module).
+# When dot-sourced, all functions are already visible in the caller's scope.
+if ($MyInvocation.MyCommand.ScriptBlock.Module) {
+    Export-ModuleMember -Function @(
+        'Write-AgentWorkLog',
+        'Start-AgentSession',
+        'Stop-AgentSession',
+        'Write-AgentError',
+        'Write-AgentFollowup',
+        'Write-AgentStatusChange',
+        'Get-SessionMetrics',
+        'Get-ErrorClusters',
+        'Show-AgentWorkSummary'
+    )
+}

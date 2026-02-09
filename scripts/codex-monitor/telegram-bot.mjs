@@ -112,8 +112,8 @@ const liveDigestEnabled = !["0", "false", "no"].includes(
   String(process.env.TELEGRAM_LIVE_DIGEST || "true").toLowerCase(),
 );
 const liveDigestWindowSec = Number(
-  process.env.TELEGRAM_LIVE_DIGEST_WINDOW_SEC || "600",
-); // 10 minutes default
+  process.env.TELEGRAM_LIVE_DIGEST_WINDOW_SEC || "1200",
+); // 20 minutes default
 const liveDigestEditDebounceMs = Number(
   process.env.TELEGRAM_LIVE_DIGEST_DEBOUNCE_MS || "3000",
 ); // 3 second debounce on edits
@@ -251,6 +251,7 @@ let _buildRetryPrompt = null;
 let _getActiveAttemptInfo = null;
 let _triggerTaskPlanner = null;
 let _reconcileTaskStatuses = null;
+let _onDigestSealed = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -271,6 +272,7 @@ export function injectMonitorFunctions({
   getActiveAttemptInfo,
   triggerTaskPlanner,
   reconcileTaskStatuses,
+  onDigestSealed,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -286,6 +288,7 @@ export function injectMonitorFunctions({
   _getActiveAttemptInfo = getActiveAttemptInfo;
   _triggerTaskPlanner = triggerTaskPlanner;
   _reconcileTaskStatuses = reconcileTaskStatuses;
+  _onDigestSealed = onDigestSealed || null;
 }
 
 /**
@@ -3776,6 +3779,11 @@ function sealLiveDigest() {
     resetLiveDigest();
     return;
   }
+
+  // Snapshot entries before sealing (for devmode auto code fix callback)
+  const sealedEntries = [...d.entries];
+  const sealedText = buildLiveDigestText();
+
   d.sealed = true;
   // Flush one last edit to mark it sealed
   if (d.editTimer) clearTimeout(d.editTimer);
@@ -3783,6 +3791,18 @@ function sealLiveDigest() {
   if (d.messageId && d.chatId) {
     editDirect(d.chatId, d.messageId, text).catch(() => {});
   }
+
+  // Fire digest sealed callback (used by devmode auto code fix)
+  if (_onDigestSealed) {
+    try {
+      _onDigestSealed({ entries: sealedEntries, text: sealedText });
+    } catch (err) {
+      console.warn(
+        `[telegram-bot] onDigestSealed callback error: ${err.message}`,
+      );
+    }
+  }
+
   // Reset for next window
   resetLiveDigest();
 }
@@ -4225,4 +4245,16 @@ export function stopTelegramBot(options = {}) {
  */
 export function notify(text, priority = 4, options = {}) {
   return queueNotification(text, priority, options);
+}
+
+/**
+ * Get a snapshot of the current live digest entries.
+ * Useful for external consumers that need to read digest state.
+ */
+export function getDigestSnapshot() {
+  return {
+    entries: [...liveDigest.entries],
+    startedAt: liveDigest.startedAt,
+    sealed: liveDigest.sealed,
+  };
 }
