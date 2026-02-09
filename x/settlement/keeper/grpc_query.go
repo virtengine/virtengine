@@ -1,66 +1,66 @@
 package keeper
 
 import (
+	"context"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // GRPCQuerier is used as Keeper will have duplicate methods if used directly
+// and implements the generated gRPC query interface.
 type GRPCQuerier struct {
-	Keeper
+	IKeeper
 }
 
+var _ settlementv1.QueryServer = GRPCQuerier{}
+
 // Escrow returns an escrow account by ID
-func (q GRPCQuerier) Escrow(ctx sdk.Context, req *types.QueryEscrowRequest) (*types.QueryEscrowResponse, error) {
+func (q GRPCQuerier) Escrow(ctx context.Context, req *settlementv1.QueryEscrowRequest) (*settlementv1.QueryEscrowResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.EscrowID == "" {
+	if req.EscrowId == "" {
 		return nil, status.Error(codes.InvalidArgument, "escrow_id cannot be empty")
 	}
 
-	escrow, found := q.GetEscrow(ctx, req.EscrowID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	escrow, found := q.GetEscrow(sdkCtx, req.EscrowId)
 	if !found {
-		return &types.QueryEscrowResponse{
-			Escrow: nil,
-		}, nil
+		return &settlementv1.QueryEscrowResponse{Escrow: nil}, nil
 	}
 
-	return &types.QueryEscrowResponse{
-		Escrow: &escrow,
-	}, nil
+	protoEscrow := toProtoEscrowAccount(escrow)
+	return &settlementv1.QueryEscrowResponse{Escrow: &protoEscrow}, nil
 }
 
 // EscrowsByOrder returns escrows for an order
-func (q GRPCQuerier) EscrowsByOrder(ctx sdk.Context, req *types.QueryEscrowsByOrderRequest) (*types.QueryEscrowsByOrderResponse, error) {
+func (q GRPCQuerier) EscrowsByOrder(ctx context.Context, req *settlementv1.QueryEscrowsByOrderRequest) (*settlementv1.QueryEscrowsByOrderResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.OrderID == "" {
+	if req.OrderId == "" {
 		return nil, status.Error(codes.InvalidArgument, "order_id cannot be empty")
 	}
 
-	escrow, found := q.GetEscrowByOrder(ctx, req.OrderID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	escrow, found := q.GetEscrowByOrder(sdkCtx, req.OrderId)
 	if !found {
-		return &types.QueryEscrowsByOrderResponse{
-			Escrows: []types.EscrowAccount{},
-		}, nil
+		return &settlementv1.QueryEscrowsByOrderResponse{Escrows: []settlementv1.EscrowAccount{}}, nil
 	}
 
-	return &types.QueryEscrowsByOrderResponse{
-		Escrows: []types.EscrowAccount{escrow},
-	}, nil
+	return &settlementv1.QueryEscrowsByOrderResponse{Escrows: []settlementv1.EscrowAccount{toProtoEscrowAccount(escrow)}}, nil
 }
 
 // EscrowsByState returns escrows in a specific state
-func (q GRPCQuerier) EscrowsByState(ctx sdk.Context, req *types.QueryEscrowsByStateRequest) (*types.QueryEscrowsByStateResponse, error) {
+func (q GRPCQuerier) EscrowsByState(ctx context.Context, req *settlementv1.QueryEscrowsByStateRequest) (*settlementv1.QueryEscrowsByStateResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -74,97 +74,98 @@ func (q GRPCQuerier) EscrowsByState(ctx sdk.Context, req *types.QueryEscrowsBySt
 		return nil, status.Error(codes.InvalidArgument, "invalid escrow state")
 	}
 
-	var escrows []types.EscrowAccount
-	q.WithEscrowsByState(ctx, state, func(escrow types.EscrowAccount) bool {
-		escrows = append(escrows, escrow)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	var escrows []settlementv1.EscrowAccount
+	q.WithEscrowsByState(sdkCtx, state, func(escrow types.EscrowAccount) bool {
+		escrows = append(escrows, toProtoEscrowAccount(escrow))
 		return false
 	})
 
-	return &types.QueryEscrowsByStateResponse{
-		Escrows: escrows,
-	}, nil
+	return &settlementv1.QueryEscrowsByStateResponse{Escrows: escrows}, nil
 }
 
 // Settlement returns a settlement record by ID
-func (q GRPCQuerier) Settlement(ctx sdk.Context, req *types.QuerySettlementRequest) (*types.QuerySettlementResponse, error) {
+func (q GRPCQuerier) Settlement(ctx context.Context, req *settlementv1.QuerySettlementRequest) (*settlementv1.QuerySettlementResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.SettlementID == "" {
+	if req.SettlementId == "" {
 		return nil, status.Error(codes.InvalidArgument, "settlement_id cannot be empty")
 	}
 
-	settlement, found := q.GetSettlement(ctx, req.SettlementID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	settlement, found := q.GetSettlement(sdkCtx, req.SettlementId)
 	if !found {
-		return &types.QuerySettlementResponse{
-			Settlement: nil,
-		}, nil
+		return &settlementv1.QuerySettlementResponse{Settlement: nil}, nil
 	}
 
-	return &types.QuerySettlementResponse{
-		Settlement: &settlement,
-	}, nil
+	protoSettlement := toProtoSettlementRecord(settlement)
+	return &settlementv1.QuerySettlementResponse{Settlement: &protoSettlement}, nil
 }
 
 // SettlementsByOrder returns settlements for an order
-func (q GRPCQuerier) SettlementsByOrder(ctx sdk.Context, req *types.QuerySettlementsByOrderRequest) (*types.QuerySettlementsByOrderResponse, error) {
+func (q GRPCQuerier) SettlementsByOrder(ctx context.Context, req *settlementv1.QuerySettlementsByOrderRequest) (*settlementv1.QuerySettlementsByOrderResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.OrderID == "" {
+	if req.OrderId == "" {
 		return nil, status.Error(codes.InvalidArgument, "order_id cannot be empty")
 	}
 
-	settlements := q.GetSettlementsByOrder(ctx, req.OrderID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	settlements := q.GetSettlementsByOrder(sdkCtx, req.OrderId)
+	resp := make([]settlementv1.SettlementRecord, 0, len(settlements))
+	for _, settlement := range settlements {
+		resp = append(resp, toProtoSettlementRecord(settlement))
+	}
 
-	return &types.QuerySettlementsByOrderResponse{
-		Settlements: settlements,
-	}, nil
+	return &settlementv1.QuerySettlementsByOrderResponse{Settlements: resp}, nil
 }
 
 // UsageRecord returns a usage record by ID
-func (q GRPCQuerier) UsageRecord(ctx sdk.Context, req *types.QueryUsageRecordRequest) (*types.QueryUsageRecordResponse, error) {
+func (q GRPCQuerier) UsageRecord(ctx context.Context, req *settlementv1.QueryUsageRecordRequest) (*settlementv1.QueryUsageRecordResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.UsageID == "" {
+	if req.UsageId == "" {
 		return nil, status.Error(codes.InvalidArgument, "usage_id cannot be empty")
 	}
 
-	usage, found := q.GetUsageRecord(ctx, req.UsageID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	usage, found := q.GetUsageRecord(sdkCtx, req.UsageId)
 	if !found {
-		return &types.QueryUsageRecordResponse{
-			UsageRecord: nil,
-		}, nil
+		return &settlementv1.QueryUsageRecordResponse{UsageRecord: nil}, nil
 	}
 
-	return &types.QueryUsageRecordResponse{
-		UsageRecord: &usage,
-	}, nil
+	protoUsage := toProtoUsageRecord(usage)
+	return &settlementv1.QueryUsageRecordResponse{UsageRecord: &protoUsage}, nil
 }
 
 // UsageRecordsByOrder returns usage records for an order
-func (q GRPCQuerier) UsageRecordsByOrder(ctx sdk.Context, req *types.QueryUsageRecordsByOrderRequest) (*types.QueryUsageRecordsByOrderResponse, error) {
+func (q GRPCQuerier) UsageRecordsByOrder(ctx context.Context, req *settlementv1.QueryUsageRecordsByOrderRequest) (*settlementv1.QueryUsageRecordsByOrderResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.OrderID == "" {
+	if req.OrderId == "" {
 		return nil, status.Error(codes.InvalidArgument, "order_id cannot be empty")
 	}
 
-	usages := q.GetUsageRecordsByOrder(ctx, req.OrderID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	usages := q.GetUsageRecordsByOrder(sdkCtx, req.OrderId)
+	resp := make([]settlementv1.UsageRecord, 0, len(usages))
+	for _, usage := range usages {
+		resp = append(resp, toProtoUsageRecord(usage))
+	}
 
-	return &types.QueryUsageRecordsByOrderResponse{
-		UsageRecords: usages,
-	}, nil
+	return &settlementv1.QueryUsageRecordsByOrderResponse{UsageRecords: resp}, nil
 }
 
 // UsageSummary returns usage summary for an order/provider and period.
-func (q GRPCQuerier) UsageSummary(ctx sdk.Context, req *types.QueryUsageSummaryRequest) (*types.QueryUsageSummaryResponse, error) {
+func (q GRPCQuerier) UsageSummary(ctx context.Context, req *settlementv1.QueryUsageSummaryRequest) (*settlementv1.QueryUsageSummaryResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -177,69 +178,74 @@ func (q GRPCQuerier) UsageSummary(ctx sdk.Context, req *types.QueryUsageSummaryR
 		end = time.Unix(req.PeriodEnd, 0).UTC()
 	}
 
-	summary, err := q.BuildUsageSummary(ctx, req.OrderID, req.Provider, start, end)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	summary, err := q.BuildUsageSummary(sdkCtx, req.OrderId, req.Provider, start, end)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	return &types.QueryUsageSummaryResponse{
-		Summary: summary,
-	}, nil
+	protoSummary := toProtoUsageSummary(summary)
+	return &settlementv1.QueryUsageSummaryResponse{Summary: protoSummary}, nil
 }
 
 // RewardDistribution returns a reward distribution by ID
-func (q GRPCQuerier) RewardDistribution(ctx sdk.Context, req *types.QueryRewardDistributionRequest) (*types.QueryRewardDistributionResponse, error) {
+func (q GRPCQuerier) RewardDistribution(ctx context.Context, req *settlementv1.QueryRewardDistributionRequest) (*settlementv1.QueryRewardDistributionResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.DistributionID == "" {
+	if req.DistributionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "distribution_id cannot be empty")
 	}
 
-	dist, found := q.GetRewardDistribution(ctx, req.DistributionID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	dist, found := q.GetRewardDistribution(sdkCtx, req.DistributionId)
 	if !found {
-		return &types.QueryRewardDistributionResponse{
-			Distribution: nil,
-		}, nil
+		return &settlementv1.QueryRewardDistributionResponse{Distribution: nil}, nil
 	}
 
-	return &types.QueryRewardDistributionResponse{
-		Distribution: &dist,
-	}, nil
+	protoDist := toProtoRewardDistribution(dist)
+	return &settlementv1.QueryRewardDistributionResponse{Distribution: &protoDist}, nil
 }
 
 // RewardsByEpoch returns reward distributions for an epoch
-func (q GRPCQuerier) RewardsByEpoch(ctx sdk.Context, req *types.QueryRewardsByEpochRequest) (*types.QueryRewardsByEpochResponse, error) {
+func (q GRPCQuerier) RewardsByEpoch(ctx context.Context, req *settlementv1.QueryRewardsByEpochRequest) (*settlementv1.QueryRewardsByEpochResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	distributions := q.GetRewardsByEpoch(ctx, req.EpochNumber)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	distributions := q.GetRewardsByEpoch(sdkCtx, req.EpochNumber)
+	resp := make([]settlementv1.RewardDistribution, 0, len(distributions))
+	for _, dist := range distributions {
+		resp = append(resp, toProtoRewardDistribution(dist))
+	}
 
-	return &types.QueryRewardsByEpochResponse{
-		Distributions: distributions,
-	}, nil
+	return &settlementv1.QueryRewardsByEpochResponse{Distributions: resp}, nil
 }
 
 // RewardHistory returns reward history for an address.
-func (q GRPCQuerier) RewardHistory(ctx sdk.Context, req *types.QueryRewardHistoryRequest) (*types.QueryRewardHistoryResponse, error) {
+func (q GRPCQuerier) RewardHistory(ctx context.Context, req *settlementv1.QueryRewardHistoryRequest) (*settlementv1.QueryRewardHistoryResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	entries, err := q.GetRewardHistory(ctx, req.Address, req.Source, req.Limit, req.Offset)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	entries, err := q.GetRewardHistory(sdkCtx, req.Address, req.Source, req.Limit, req.Offset)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	return &types.QueryRewardHistoryResponse{
-		Entries: entries,
-	}, nil
+	resp := make([]settlementv1.RewardHistoryEntry, 0, len(entries))
+	for _, entry := range entries {
+		resp = append(resp, toProtoRewardHistoryEntry(entry))
+	}
+
+	return &settlementv1.QueryRewardHistoryResponse{Entries: resp}, nil
 }
 
 // ClaimableRewards returns claimable rewards for an address
-func (q GRPCQuerier) ClaimableRewards(ctx sdk.Context, req *types.QueryClaimableRewardsRequest) (*types.QueryClaimableRewardsResponse, error) {
+func (q GRPCQuerier) ClaimableRewards(ctx context.Context, req *settlementv1.QueryClaimableRewardsRequest) (*settlementv1.QueryClaimableRewardsResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -253,42 +259,38 @@ func (q GRPCQuerier) ClaimableRewards(ctx sdk.Context, req *types.QueryClaimable
 		return nil, status.Error(codes.InvalidArgument, "invalid address")
 	}
 
-	rewards, found := q.GetClaimableRewards(ctx, address)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	rewards, found := q.GetClaimableRewards(sdkCtx, address)
 	if !found {
-		return &types.QueryClaimableRewardsResponse{
-			Rewards: nil,
-		}, nil
+		return &settlementv1.QueryClaimableRewardsResponse{Rewards: nil}, nil
 	}
 
-	return &types.QueryClaimableRewardsResponse{
-		Rewards: &rewards,
-	}, nil
+	protoRewards := toProtoClaimableRewards(rewards)
+	return &settlementv1.QueryClaimableRewardsResponse{Rewards: &protoRewards}, nil
 }
 
 // Payout returns a payout record by ID.
-func (q GRPCQuerier) Payout(ctx sdk.Context, req *types.QueryPayoutRequest) (*types.QueryPayoutResponse, error) {
+func (q GRPCQuerier) Payout(ctx context.Context, req *settlementv1.QueryPayoutRequest) (*settlementv1.QueryPayoutResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	if req.PayoutID == "" {
+	if req.PayoutId == "" {
 		return nil, status.Error(codes.InvalidArgument, "payout_id cannot be empty")
 	}
 
-	payout, found := q.GetPayout(ctx, req.PayoutID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	payout, found := q.GetPayout(sdkCtx, req.PayoutId)
 	if !found {
-		return &types.QueryPayoutResponse{
-			Payout: nil,
-		}, nil
+		return &settlementv1.QueryPayoutResponse{Payout: nil}, nil
 	}
 
-	return &types.QueryPayoutResponse{
-		Payout: &payout,
-	}, nil
+	protoPayout := toProtoPayoutRecord(payout)
+	return &settlementv1.QueryPayoutResponse{Payout: &protoPayout}, nil
 }
 
 // PayoutsByProvider returns payouts for a provider.
-func (q GRPCQuerier) PayoutsByProvider(ctx sdk.Context, req *types.QueryPayoutsByProviderRequest) (*types.QueryPayoutsByProviderResponse, error) {
+func (q GRPCQuerier) PayoutsByProvider(ctx context.Context, req *settlementv1.QueryPayoutsByProviderRequest) (*settlementv1.QueryPayoutsByProviderResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -297,44 +299,50 @@ func (q GRPCQuerier) PayoutsByProvider(ctx sdk.Context, req *types.QueryPayoutsB
 		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
 	}
 
-	payouts := q.GetPayoutsByProvider(ctx, req.Provider)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	payouts := q.GetPayoutsByProvider(sdkCtx, req.Provider)
+	resp := make([]settlementv1.PayoutRecord, 0, len(payouts))
+	for _, payout := range payouts {
+		resp = append(resp, toProtoPayoutRecord(payout))
+	}
 
-	return &types.QueryPayoutsByProviderResponse{
-		Payouts: payouts,
-	}, nil
+	return &settlementv1.QueryPayoutsByProviderResponse{Payouts: resp}, nil
 }
 
 // Params returns the module parameters
-func (q GRPCQuerier) Params(ctx sdk.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
+func (q GRPCQuerier) Params(ctx context.Context, req *settlementv1.QueryParamsRequest) (*settlementv1.QueryParamsResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	params := q.GetParams(ctx)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	params := q.GetParams(sdkCtx)
 
-	return &types.QueryParamsResponse{
-		Params: params,
-	}, nil
+	protoParams := toProtoParams(params)
+	return &settlementv1.QueryParamsResponse{Params: protoParams}, nil
 }
 
 // FiatConversion returns a fiat conversion by ID.
-func (q GRPCQuerier) FiatConversion(ctx sdk.Context, req *types.QueryFiatConversionRequest) (*types.QueryFiatConversionResponse, error) {
+func (q GRPCQuerier) FiatConversion(ctx context.Context, req *settlementv1.QueryFiatConversionRequest) (*settlementv1.QueryFiatConversionResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
-	if req.ConversionID == "" {
+	if req.ConversionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "conversion_id cannot be empty")
 	}
 
-	conversion, found := q.GetFiatConversion(ctx, req.ConversionID)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	conversion, found := q.GetFiatConversion(sdkCtx, req.ConversionId)
 	if !found {
-		return &types.QueryFiatConversionResponse{Conversion: nil}, nil
+		return &settlementv1.QueryFiatConversionResponse{Conversion: nil}, nil
 	}
-	return &types.QueryFiatConversionResponse{Conversion: &conversion}, nil
+
+	protoConversion := toProtoFiatConversionRecord(conversion)
+	return &settlementv1.QueryFiatConversionResponse{Conversion: &protoConversion}, nil
 }
 
 // FiatConversionsByProvider returns conversions for a provider.
-func (q GRPCQuerier) FiatConversionsByProvider(ctx sdk.Context, req *types.QueryFiatConversionsByProviderRequest) (*types.QueryFiatConversionsByProviderResponse, error) {
+func (q GRPCQuerier) FiatConversionsByProvider(ctx context.Context, req *settlementv1.QueryFiatConversionsByProviderRequest) (*settlementv1.QueryFiatConversionsByProviderResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -342,19 +350,20 @@ func (q GRPCQuerier) FiatConversionsByProvider(ctx sdk.Context, req *types.Query
 		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
 	}
 
-	var conversions []types.FiatConversionRecord
-	q.WithFiatConversions(ctx, func(conversion types.FiatConversionRecord) bool {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	var conversions []settlementv1.FiatConversionRecord
+	q.WithFiatConversions(sdkCtx, func(conversion types.FiatConversionRecord) bool {
 		if conversion.Provider == req.Provider {
-			conversions = append(conversions, conversion)
+			conversions = append(conversions, toProtoFiatConversionRecord(conversion))
 		}
 		return false
 	})
 
-	return &types.QueryFiatConversionsByProviderResponse{Conversions: conversions}, nil
+	return &settlementv1.QueryFiatConversionsByProviderResponse{Conversions: conversions}, nil
 }
 
 // FiatPayoutPreference returns payout preference for a provider.
-func (q GRPCQuerier) FiatPayoutPreference(ctx sdk.Context, req *types.QueryFiatPayoutPreferenceRequest) (*types.QueryFiatPayoutPreferenceResponse, error) {
+func (q GRPCQuerier) FiatPayoutPreference(ctx context.Context, req *settlementv1.QueryFiatPayoutPreferenceRequest) (*settlementv1.QueryFiatPayoutPreferenceResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -362,9 +371,12 @@ func (q GRPCQuerier) FiatPayoutPreference(ctx sdk.Context, req *types.QueryFiatP
 		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
 	}
 
-	pref, found := q.GetFiatPayoutPreference(ctx, req.Provider)
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	pref, found := q.GetFiatPayoutPreference(sdkCtx, req.Provider)
 	if !found {
-		return &types.QueryFiatPayoutPreferenceResponse{Preference: nil}, nil
+		return &settlementv1.QueryFiatPayoutPreferenceResponse{Preference: nil}, nil
 	}
-	return &types.QueryFiatPayoutPreferenceResponse{Preference: &pref}, nil
+
+	protoPref := toProtoFiatPayoutPreference(pref)
+	return &settlementv1.QueryFiatPayoutPreferenceResponse{Preference: &protoPref}, nil
 }

@@ -247,57 +247,24 @@ export function createLogger(module) {
 /** @type {boolean} */
 let interceptorInstalled = false;
 
-// Keywords that indicate a message should be shown at INFO even inside a tagged module
+// Keywords that promote a tagged message to INFO — MUST be narrow.
+// Only truly human-critical events that require operator attention.
 const INFO_KEYWORDS = [
-  "task planner mode",
-  "enabled",
-  "disabled",
-  "started",
-  "completed",
-  "created",
-  "merged",
-  "failed",
   "fatal",
   "crash",
   "circuit breaker",
   "self-restart",
-  "restarting",
   "shutting down",
-  "shutdown",
-  "killing",
-  "spawning",
-  "preflight",
-  "ready",
-  "listening",
-  "connected",
-  "ENABLED",
-  "DISABLED",
-  "PR #",
-  "task complete",
+  "all tasks complete",
   "stuck",
-  "anomaly",
-  "assigned",
-  "scheduling",
-  "recovering",
-  "log rotation",
-  "feature toggle",
-  "devmode auto code fix",
-  "updated ~/.codex",
-  "primary agent",
-  "auto-update",
-  "worktree",
-  "workspace #",
-  "branch conflict",
-  "fleet mode",
-  "conflict resolution",
-  "dirty task",
-  "escalating",
-  "submitted",
-  "orchestrator",
-  "cooldown",
+  "preflight failed",
+  "manual resolution",
+  "backlog empty",
+  "permanently failed",
+  "retries exhausted",
 ];
 
-// Keywords that push a message from DEBUG down to TRACE
+// Keywords that push a tagged message down to TRACE (very noisy internals)
 const TRACE_KEYWORDS = [
   "skipping",
   "dedup",
@@ -307,6 +274,7 @@ const TRACE_KEYWORDS = [
   "no change",
   "unchanged",
   "cache miss",
+  "cache hit",
   "nothing to",
   "same as last",
   "too soon",
@@ -319,6 +287,10 @@ const TRACE_KEYWORDS = [
   "cursor",
   "checking port",
   "line count",
+  "no old completed",
+  "cooldown",
+  "score:",
+  "attempt ",
 ];
 
 // Modules whose tagged messages default to DEBUG unless INFO_KEYWORDS match

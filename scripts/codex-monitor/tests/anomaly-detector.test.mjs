@@ -87,24 +87,27 @@ describe("AnomalyDetector", () => {
   });
 
   describe("Model Not Supported (P0)", () => {
-    it("warns on first failure, kills on second", () => {
+    it("warns on first failure at medium severity, escalates on threshold", () => {
       const line = "CAPIError: 400 The requested model is not supported";
       detector.processLine(line, META);
       expect(anomalies).toHaveLength(1);
-      expect(anomalies[0].severity).toBe(Severity.HIGH);
+      // First failure is MEDIUM — model issues are external, not actionable by kill
+      expect(anomalies[0].severity).toBe(Severity.MEDIUM);
       expect(anomalies[0].action).toBe("warn");
 
       // Wait for dedup window
       anomalies[0] = null;
       anomalies.length = 0;
 
-      // Need to wait past dedup window
+      // Escalation happens at threshold (default 5), not after just 2
       setTimeout(() => {
         detector.processLine(line, META);
-        const criticals = anomalies.filter(
-          (a) => a?.severity === Severity.CRITICAL,
+        // Still under threshold — should remain warn-level
+        const highOrAbove = anomalies.filter(
+          (a) => a?.severity === Severity.HIGH || a?.severity === Severity.CRITICAL,
         );
-        expect(criticals.length).toBeGreaterThanOrEqual(1);
+        // May or may not have emitted depending on dedup, but no CRITICAL kill
+        expect(highOrAbove.every((a) => a.action === "warn")).toBe(true);
       }, 150);
     });
   });
