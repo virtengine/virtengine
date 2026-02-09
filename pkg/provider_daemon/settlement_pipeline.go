@@ -1001,6 +1001,7 @@ func (p *SettlementPipeline) getPrimaryRate(record *UsageRecord, usageType strin
 
 	return sdk.NewDecCoinFromDec("uvirt", rate)
 }
+
 // runLoop runs the settlement pipeline loop.
 func (p *SettlementPipeline) runLoop(ctx context.Context) {
 	settleTicker := time.NewTicker(p.cfg.SettlementInterval)
