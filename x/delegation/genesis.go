@@ -97,8 +97,8 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		Redelegations:        redelegations,
 		ValidatorShares:      validatorShares,
 		DelegatorRewards:     delegatorRewards,
-		DelegationSequence:   1, // Would need to track this
-		UnbondingSequence:    1,
-		RedelegationSequence: 1,
+		DelegationSequence:   k.GetDelegationSequence(ctx),
+		UnbondingSequence:    k.GetUnbondingSequence(ctx),
+		RedelegationSequence: k.GetRedelegationSequence(ctx),
 	}
 }
