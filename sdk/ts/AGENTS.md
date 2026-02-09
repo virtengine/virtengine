@@ -1,6 +1,6 @@
 # Chain SDK (sdk/ts) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: TypeScript SDK for VirtEngine chain APIs, gRPC clients, wallet helpers, and provider SDK access (`sdk/ts/package.json:2`).
 - Use this package for TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
 - Key exports / public API surface:
