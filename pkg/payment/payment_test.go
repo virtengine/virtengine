@@ -31,6 +31,8 @@ func TestGatewayType_IsValid(t *testing.T) {
 	}{
 		{"stripe valid", GatewayStripe, true},
 		{"adyen valid", GatewayAdyen, true},
+		{"paypal valid", GatewayPayPal, true},
+		{"ach valid", GatewayACH, true},
 		{"invalid gateway", GatewayType("invalid"), false},
 		{"empty gateway", GatewayType(""), false},
 	}

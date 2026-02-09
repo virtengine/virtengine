@@ -63,6 +63,9 @@ var (
 	// ErrAmountAboveMaximum is returned when amount exceeds limits
 	ErrAmountAboveMaximum = errors.New("amount above maximum threshold")
 
+	// ErrInvalidAmount is returned when amount formatting is invalid
+	ErrInvalidAmount = errors.New("invalid amount")
+
 	// ErrRateLimitExceeded is returned when rate limit is hit
 	ErrRateLimitExceeded = errors.New("rate limit exceeded")
 
@@ -89,6 +92,12 @@ const (
 
 	// GatewayAdyen represents Adyen payment gateway
 	GatewayAdyen GatewayType = "adyen"
+
+	// GatewayPayPal represents PayPal payment gateway
+	GatewayPayPal GatewayType = "paypal"
+
+	// GatewayACH represents ACH direct debit gateway
+	GatewayACH GatewayType = "ach"
 )
 
 // String returns the string representation
@@ -99,7 +108,7 @@ func (g GatewayType) String() string {
 // IsValid checks if the gateway type is valid
 func (g GatewayType) IsValid() bool {
 	switch g {
-	case GatewayStripe, GatewayAdyen:
+	case GatewayStripe, GatewayAdyen, GatewayPayPal, GatewayACH:
 		return true
 	default:
 		return false

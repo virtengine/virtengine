@@ -80,6 +80,10 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 		gw, err = NewStripeAdapter(cfg.StripeConfig)
 	case GatewayAdyen:
 		gw, err = NewAdyenAdapter(cfg.AdyenConfig)
+	case GatewayPayPal:
+		gw, err = NewPayPalAdapter(cfg.PayPalConfig)
+	case GatewayACH:
+		gw, err = NewACHAdapter(cfg.ACHConfig)
 	default:
 		return nil, ErrGatewayNotConfigured
 	}

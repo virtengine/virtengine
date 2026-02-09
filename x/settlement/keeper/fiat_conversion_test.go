@@ -84,7 +84,7 @@ func (s *KeeperTestSuite) configureFiatConversionDeps(t *testing.T, swapExec kee
 	params.FiatConversionStableDenom = "uusdc"
 	params.FiatConversionStableSymbol = "USDC"
 	params.FiatConversionStableDecimals = 6
-	params.FiatConversionMaxSlippage = "0.05"
+	params.FiatConversionMaxSlippage = rate005
 	params.FiatConversionMinComplianceStatus = "CLEARED"
 	require.NoError(t, s.keeper.SetParams(s.ctx, params))
 
