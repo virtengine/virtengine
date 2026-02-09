@@ -17,7 +17,7 @@
  *  - 5-minute cooldown between fix attempts (prevents rapid crash loops)
  *  - Tracks all attempts for audit (autofix-*.log in log dir)
  *  - Won't retry the same error more than 3 times (gives up → Telegram alert)
- *  - Timeout guard on codex exec (2 min default, prevents hangs)
+ *  - Timeout guard on codex exec (30 min default, lets the agent finish its work)
  *
  * Error formats handled:
  *  - Standard PS errors: ErrorType: filepath:line:col
@@ -28,7 +28,7 @@
  */
 
 import { spawn, execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, createWriteStream } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -388,24 +388,46 @@ export function getFixAttemptCount(signature) {
 
 /**
  * Run `codex exec --full-auto` with a fix prompt.
- * Returns { success, output } — Codex will write fixes directly to disk.
+ * Returns { success, output, logPath } — Codex will write fixes directly to disk.
+ *
+ * Full Codex SDK streams are logged to logs/codex-sdk/ for debugging.
  *
  * Guards against common crash scenarios:
  *  - ENOENT: codex binary not found
  *  - Timeout: kills child after timeoutMs
  *  - Process spawn errors
  */
-export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
-  return new Promise((resolve) => {
+export function runCodexExec(
+  prompt,
+  cwd,
+  timeoutMs = 1_800_000,
+  logDir = null,
+) {
+  // Capture path.resolve before the Promise executor shadows it
+  const pathResolve = resolve;
+  return new Promise((promiseResolve) => {
+    // ── Setup Codex SDK log directory ──────────────────────────────────
+    const codexLogDir = logDir
+      ? pathResolve(logDir, "codex-sdk")
+      : pathResolve(__dirname, "logs", "codex-sdk");
+
+    if (!existsSync(codexLogDir)) {
+      mkdirSync(codexLogDir, { recursive: true });
+    }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const logPath = pathResolve(codexLogDir, `codex-exec-${stamp}.log`);
+
     let args;
     try {
       // Pass prompt via stdin (no positional arg) to avoid shell word-splitting
       args = ["exec", "--full-auto", "-C", cwd];
     } catch (err) {
-      return resolve({
+      return promiseResolve({
         success: false,
         output: "",
         error: `Failed to build args: ${err.message}`,
+        logPath,
       });
     }
 
@@ -415,14 +437,16 @@ export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
         shell: true,
-        timeout: timeoutMs,
+        // Do NOT set spawn timeout — we manage our own setTimeout to avoid
+        // Node double-killing the child with SIGTERM before our handler runs.
         env: { ...process.env },
       });
     } catch (err) {
-      return resolve({
+      return promiseResolve({
         success: false,
         output: "",
         error: `spawn failed: ${err.message}`,
+        logPath,
       });
     }
 
@@ -436,42 +460,76 @@ export function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
 
     let stdout = "";
     let stderr = "";
+    const stream = createWriteStream(logPath, { flags: "w" });
+    stream.write(
+      [
+        `# Codex SDK execution log`,
+        `# Timestamp: ${new Date().toISOString()}`,
+        `# Working directory: ${cwd}`,
+        `# Command: codex ${args.join(" ")}`,
+        `# Timeout: ${timeoutMs}ms`,
+        ``,
+        `## Prompt sent to Codex:`,
+        prompt,
+        ``,
+        `## Codex SDK output stream:`,
+        ``,
+      ].join("\n"),
+    );
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      const text = chunk.toString();
+      stdout += text;
+      stream.write(text);
+      // Stream live to console so the operator can see agent progress
+      process.stdout.write(text);
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      const text = chunk.toString();
+      stderr += text;
+      stream.write(`[stderr] ${text}`);
+      // Stream stderr live so MCP startup, model info, and exec logs are visible
+      process.stderr.write(text);
     });
 
     const timer = setTimeout(() => {
+      stream.write(`\n\n## TIMEOUT after ${timeoutMs}ms\n`);
       try {
         child.kill("SIGTERM");
       } catch {
         /* best effort */
       }
-      resolve({
+      stream.end();
+      promiseResolve({
         success: false,
         output: stdout,
         error: "timeout after " + timeoutMs + "ms",
+        logPath,
       });
     }, timeoutMs);
 
     child.on("error", (err) => {
       clearTimeout(timer);
-      resolve({
+      stream.write(`\n\n## ERROR: ${err.message}\n`);
+      stream.end();
+      promiseResolve({
         success: false,
         output: stdout,
         error: err.message,
+        logPath,
       });
     });
 
     child.on("exit", (code) => {
       clearTimeout(timer);
-      resolve({
+      stream.write(`\n\n## Exit code: ${code}\n`);
+      stream.write(`\n## stderr:\n${stderr}\n`);
+      stream.end();
+      promiseResolve({
         success: code === 0,
         output: stdout + (stderr ? "\n" + stderr : ""),
         error: code !== 0 ? `exit code ${code}` : null,
+        logPath,
       });
     });
   });
@@ -655,7 +713,7 @@ export async function attemptAutoFix(opts) {
 
     // ── DEV mode: execute fix via Codex ──────────────────────────────
     const filesBefore = detectChangedFiles(repoRoot);
-    const result = await runCodexExec(prompt, repoRoot);
+    const result = await runCodexExec(prompt, repoRoot, 1_800_000, logDir);
     const filesAfter = detectChangedFiles(repoRoot);
 
     // Detect new changes
@@ -667,6 +725,7 @@ export async function attemptAutoFix(opts) {
       [
         "",
         `## Mode: EXECUTE (dev mode)`,
+        `## Codex SDK full log: ${result.logPath || "N/A"}`,
         `## Codex result (success=${result.success}):`,
         result.output || "(no output)",
         result.error ? `## Error: ${result.error}` : "",
@@ -679,8 +738,10 @@ export async function attemptAutoFix(opts) {
       const outcomeMsg =
         `🔧 Auto-fix applied (raw fallback, attempt #${attemptNum}):\n` +
         `Crash: ${reason}\n` +
-        `Changes:\n${changeSummary}`;
+        `Changes:\n${changeSummary}\n` +
+        `Codex SDK log: ${result.logPath}`;
       console.log(`[autofix] fallback fix applied: ${newChanges.join(", ")}`);
+      console.log(`[autofix] Codex SDK full log: ${result.logPath}`);
       if (onTelegram) onTelegram(outcomeMsg);
       return {
         fixed: true,
@@ -692,8 +753,10 @@ export async function attemptAutoFix(opts) {
       const outcomeMsg =
         `🔧 Auto-fix fallback failed (attempt #${attemptNum}):\n` +
         `Crash: ${reason}\n` +
-        `Codex: ${result.error || "no changes written"}`;
+        `Codex: ${result.error || "no changes written"}\n` +
+        `Codex SDK log: ${result.logPath}`;
       console.warn(`[autofix] fallback codex exec failed: ${result.error}`);
+      console.log(`[autofix] Codex SDK full log: ${result.logPath}`);
       if (onTelegram) onTelegram(outcomeMsg);
       return {
         fixed: false,

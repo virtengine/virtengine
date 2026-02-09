@@ -173,18 +173,41 @@ RUN_TERRAFORM_FMT=false
 RUN_CODEX_MONITOR_SYNTAX=false
 RUN_CODEX_MONITOR_TEST=false
 
+# Go checks: Only if .go files or go.mod/sum/work changed
 if $HAS_GO || $HAS_DEPS_GO; then
     RUN_GO_VET=true; RUN_GOFMT=true; RUN_GO_LINT=true
     RUN_GO_BUILD=true; RUN_GO_TEST=true
 fi
 $HAS_DEPS_GO && RUN_MOD_VENDOR=true
 
-if $HAS_PORTAL || $HAS_DEPS_JS; then
+# Portal checks: Only if portal/lib files changed OR if portal/lib/sdk package.json changed
+# Don't run portal checks just because scripts/codex-monitor or other unrelated packages changed
+if $HAS_PORTAL; then
     RUN_PRETTIER=true; RUN_PORTAL_LINT=true
     RUN_PORTAL_TYPECHECK=true; RUN_PORTAL_TEST=true; RUN_PORTAL_BUILD=true
 fi
-$HAS_DEPS_JS && RUN_PNPM_LOCK=true
+
+# JS dependency checks: Only if workspace-level or portal-related package files changed
+if $HAS_DEPS_JS; then
+    # If portal/lib files also changed, we already enabled all portal checks above
+    # If ONLY deps changed (no portal file changes), run a limited check
+    if ! $HAS_PORTAL; then
+        RUN_PNPM_LOCK=true
+        # Only run portal linting if root/portal/lib package files changed (not scripts/codex-monitor)
+        PORTAL_PKG_FILES=$(echo "$JS_DEP_FILES" | grep -E '^(package\.json|portal/package\.json|lib/.*/package\.json|pnpm-lock\.yaml)' || true)
+        if [ -n "$PORTAL_PKG_FILES" ]; then
+            hook_step "Portal package files changed — running portal checks"
+            RUN_PORTAL_LINT=true
+            RUN_PORTAL_TYPECHECK=true
+            RUN_PORTAL_TEST=true
+        fi
+    fi
+fi
+
+# Terraform formatting
 $HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
+
+# Codex Monitor checks: Only if scripts/codex-monitor changed
 if $HAS_CODEX_MONITOR; then
     RUN_CODEX_MONITOR_SYNTAX=true
     RUN_CODEX_MONITOR_TEST=true

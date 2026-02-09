@@ -197,14 +197,14 @@ describe("getModelForComplexity", () => {
   it("returns correct COPILOT model for LOW", () => {
     const result = getModelForComplexity("low", "COPILOT");
     expect(result.model).toBe("haiku-4.5");
-    expect(result.variant).toBe("HAIKU_4_5");
+    expect(result.variant).toBe("CLAUDE_HAIKU_4_5");
     expect(result.reasoningEffort).toBe("low");
   });
 
   it("returns correct COPILOT model for MEDIUM", () => {
     const result = getModelForComplexity("medium", "COPILOT");
     expect(result.model).toBe("sonnet-4.5");
-    expect(result.variant).toBe("SONNET_4_5");
+    expect(result.variant).toBe("CLAUDE_SONNET_4_5");
     expect(result.reasoningEffort).toBe("medium");
   });
 
@@ -302,7 +302,7 @@ describe("resolveExecutorForTask", () => {
     const task = { title: "update readme", size: "s" };
     const result = resolveExecutorForTask(task, baseCopilotProfile);
     expect(result.model).toBe("haiku-4.5");
-    expect(result.variant).toBe("HAIKU_4_5");
+    expect(result.variant).toBe("CLAUDE_HAIKU_4_5");
     expect(result.complexity.tier).toBe("low");
   });
 
@@ -593,11 +593,11 @@ describe("constants", () => {
     });
     expect(MODEL_ALIASES["sonnet-4.5"]).toEqual({
       executor: "COPILOT",
-      variant: "SONNET_4_5",
+      variant: "CLAUDE_SONNET_4_5",
     });
     expect(MODEL_ALIASES["haiku-4.5"]).toEqual({
       executor: "COPILOT",
-      variant: "HAIKU_4_5",
+      variant: "CLAUDE_HAIKU_4_5",
     });
     expect(MODEL_ALIASES["claude-code"]).toEqual({
       executor: "COPILOT",

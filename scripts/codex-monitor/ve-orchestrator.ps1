@@ -53,6 +53,8 @@ param(
     [int]$GitHubCommandTimeoutSec = 120,
     [int]$IdleTimeoutMin = 60,
     [int]$IdleConfirmMin = 15,
+    [int]$StaleRunningTimeoutMin = 90,
+    [int]$SetupTimeoutMin = 30,
     [int]$CiWaitMin = 15,
     [int]$MaxRetries = 5,
     [switch]$UseAutoMerge,
@@ -141,6 +143,24 @@ function Ensure-VeKanbanLibraryLoaded {
 
 Ensure-VeKanbanLibraryLoaded -RequiredFunctions $requiredFunctions | Out-Null
 
+# ─── Agent Work Logger ───────────────────────────────────────────────────────
+$script:AgentWorkLoggerPath = Join-Path $PSScriptRoot "lib\agent-work-logger.ps1"
+if (Test-Path $script:AgentWorkLoggerPath) {
+    try {
+        . $script:AgentWorkLoggerPath
+        $script:AgentWorkLoggerEnabled = $true
+        Write-Host "[orchestrator] Agent work logger loaded from $($script:AgentWorkLoggerPath)" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Warning "[orchestrator] Failed to load agent-work-logger: $($_.Exception.Message)"
+        $script:AgentWorkLoggerEnabled = $false
+    }
+}
+else {
+    Write-Warning "[orchestrator] Agent work logger not found at $($script:AgentWorkLoggerPath)"
+    $script:AgentWorkLoggerEnabled = $false
+}
+
 # ─── State tracking ──────────────────────────────────────────────────────────
 $script:CycleCount = 0
 $script:TasksCompleted = 0
@@ -186,6 +206,12 @@ $script:StopReason = $null
 # Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status, executor }
 $script:TrackedAttempts = @{}
 
+# Exclusion set: attempts fully processed but unable to archive server-side (HTTP 405/409).
+# Prevents infinite re-tracking when Get-VKAttempts keeps returning un-archivable attempts.
+# Persisted to disk so it survives orchestrator restarts.
+$script:ProcessedAttemptIds = [System.Collections.Generic.HashSet[string]]::new()
+$script:ProcessedAttemptIdsPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-processed-attempt-ids.json"
+
 # Merge gate: track tasks that completed their PR but haven't been merged yet
 # This ensures we don't start new tasks until previous ones are merged & confirmed
 $script:PendingMerges = @{}
@@ -203,6 +229,47 @@ function Write-Log {
         default { "Gray" }
     }
     Write-Host "  [$ts] $Message" -ForegroundColor $color
+}
+
+# ─── ProcessedAttemptIds persistence ──────────────────────────────────────────
+function Save-ProcessedAttemptIds {
+    <#
+    .SYNOPSIS Persist the ProcessedAttemptIds set to disk as a JSON array.
+    #>
+    try {
+        $ids = @($script:ProcessedAttemptIds)
+        $dir = Split-Path $script:ProcessedAttemptIdsPath -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $ids | ConvertTo-Json -Compress | Set-Content -Path $script:ProcessedAttemptIdsPath -Encoding UTF8 -Force
+    }
+    catch {
+        Write-Log "Failed to save ProcessedAttemptIds: $_" -Level "WARN"
+    }
+}
+
+function Load-ProcessedAttemptIds {
+    <#
+    .SYNOPSIS Load previously persisted ProcessedAttemptIds from disk.
+    #>
+    if (-not (Test-Path $script:ProcessedAttemptIdsPath)) { return }
+    try {
+        $raw = Get-Content -Path $script:ProcessedAttemptIdsPath -Raw -ErrorAction Stop
+        $ids = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($ids -is [string]) { $ids = @($ids) }
+        $loaded = 0
+        foreach ($id in $ids) {
+            if ($id -and $id -is [string]) {
+                $script:ProcessedAttemptIds.Add($id) | Out-Null
+                $loaded++
+            }
+        }
+        if ($loaded -gt 0) {
+            Write-Log "Loaded $loaded processed attempt IDs from disk" -Level "INFO"
+        }
+    }
+    catch {
+        Write-Log "Failed to load ProcessedAttemptIds: $_" -Level "WARN"
+    }
 }
 
 function Get-EnvFallback {
@@ -574,6 +641,101 @@ function Invoke-GhWithTimeout {
         output    = $output
         error     = $error
     }
+}
+
+function Test-BranchMergedIntoBase {
+    <#
+    .SYNOPSIS Check if a branch's work was already merged into the base branch.
+    .DESCRIPTION Uses GitHub CLI to check for merged PRs with this head branch,
+                 then falls back to git merge-base --is-ancestor if local refs exist.
+                 This catches the case where a task was completed, merged, and the
+                 remote branch was deleted — preventing infinite retry loops.
+    .PARAMETER Branch The branch name to check (e.g. "ve/359f-docs-portal-adr")
+    .PARAMETER BaseBranch The base branch to check against (default: $script:VK_TARGET_BRANCH)
+    .OUTPUTS Boolean — $true if the branch was definitively merged into base
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+
+    # Strategy 1: Check GitHub for a merged PR with this head branch (most reliable)
+    try {
+        $ghResult = gh pr list --head $Branch --state merged --json number, mergedAt --limit 1 2>$null
+        if ($LASTEXITCODE -eq 0 -and $ghResult) {
+            $mergedPRs = $ghResult | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($mergedPRs -and @($mergedPRs).Count -gt 0) {
+                $prNum = $mergedPRs[0].number
+                Write-Log "Branch $Branch has merged PR #$prNum on GitHub — already completed" -Level "OK"
+                return $true
+            }
+        }
+    }
+    catch {
+        # gh CLI not available or rate-limited — fall through to git check
+    }
+
+    # Strategy 2: Check if local branch tip is an ancestor of base (works if refs exist)
+    try {
+        $branchRef = $Branch
+        $baseRef = if ($BaseBranch -like "origin/*") { $BaseBranch } else { "origin/$BaseBranch" }
+
+        # Check if the branch ref exists locally
+        git rev-parse --verify --quiet $branchRef 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { return $false }
+
+        git merge-base --is-ancestor $branchRef $baseRef 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log "Branch $Branch is ancestor of $baseRef — already merged" -Level "OK"
+            return $true
+        }
+    }
+    catch {
+        # Git check failed — not conclusive
+    }
+
+    return $false
+}
+
+function Test-TaskDescriptionAlreadyComplete {
+    <#
+    .SYNOPSIS Check if a task's description indicates it's already completed/superseded.
+    .DESCRIPTION Looks for common patterns in task descriptions that indicate the work
+                 is already done. Used to skip tasks that were completed in a previous
+                 session but still have active (non-archived) attempts.
+    .PARAMETER TaskId The VK task ID to check
+    .OUTPUTS Boolean — $true if the task description indicates it's already done
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TaskId
+    )
+    try {
+        $task = Get-VKTask -TaskId $TaskId -ErrorAction SilentlyContinue
+        if (-not $task -or -not $task.description) { return $false }
+        $desc = $task.description.ToLower()
+        $completionPatterns = @(
+            "superseded by",
+            "already completed",
+            "this task has been completed",
+            "merged in",
+            "completed via",
+            "no longer needed",
+            "has been completed via",
+            "already merged"
+        )
+        foreach ($pattern in $completionPatterns) {
+            if ($desc -match [regex]::Escape($pattern)) {
+                Write-Log "Task $($TaskId.Substring(0,8)) description indicates already completed ('$pattern')" -Level "INFO"
+                return $true
+            }
+        }
+    }
+    catch {
+        # Best effort — don't block on API errors
+    }
+    return $false
 }
 
 function Get-CommitsAhead {
@@ -1207,7 +1369,7 @@ function Save-StatusSnapshot {
         New-Item -ItemType Directory -Path $dir | Out-Null
     }
     $capacityInfo = Get-AvailableSlotCapacity
-    Update-SlotMetrics -Capacity $capacityInfo.capacity -ActiveWeight $capacityInfo.active_weight -WorkstationInfo $capacityInfo.workstation
+    Update-SlotMetrics -Capacity $capacityInfo.capacity -ActiveCount $capacityInfo.active_count -ActiveWeight $capacityInfo.active_weight -WorkstationInfo $capacityInfo.workstation
     $slotMetrics = Get-SlotMetricsSnapshot
     $attempts = @{}
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
@@ -1592,11 +1754,11 @@ $script:ComplexityModels = @{
     "CODEX"   = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
         "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.3-codex"; variant = "DEFAULT"; reasoningEffort = "high" }
+        "high"   = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "high" }
     }
     "COPILOT" = @{
-        "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
-        "medium" = @{ model = "sonnet-4.5"; variant = "SONNET_4_5"; reasoningEffort = "medium" }
+        "low"    = @{ model = "haiku-4.5"; variant = "CLAUDE_HAIKU_4_5"; reasoningEffort = "low" }
+        "medium" = @{ model = "sonnet-4.5"; variant = "CLAUDE_SONNET_4_5"; reasoningEffort = "medium" }
         "high"   = @{ model = "opus-4.6"; variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
     }
 }
@@ -1802,8 +1964,12 @@ function Get-WorkstationAvailability {
 
 function Get-EffectiveParallelCapacity {
     $availability = Get-WorkstationAvailability
-    $capacity = [math]::Min($MaxParallel, $availability.capacity)
-    if ($capacity -le 0) { $capacity = $MaxParallel }
+    # MaxParallel takes precedence when explicitly set — workstation count is
+    # informational (for multi-machine setups) and should NOT cap a single
+    # machine that can handle more concurrent agents.
+    $capacity = $MaxParallel
+    if ($capacity -le 0) { $capacity = $availability.capacity }
+    if ($capacity -le 0) { $capacity = 2 }
     return @{
         capacity    = $capacity
         workstation = $availability
@@ -1823,10 +1989,13 @@ function Get-ActiveSlotWeight {
 function Get-AvailableSlotCapacity {
     $capacityInfo = Get-EffectiveParallelCapacity
     $capacity = [double]$capacityInfo.capacity
+    $activeCount = Get-ActiveAgentCount
     $activeWeight = Get-ActiveSlotWeight
-    $remaining = [math]::Max(0.0, $capacity - $activeWeight)
+    # Use actual task count, not weight, for slot availability
+    $remaining = [math]::Max(0.0, $capacity - $activeCount)
     return @{
         capacity      = $capacity
+        active_count  = $activeCount
         active_weight = $activeWeight
         remaining     = $remaining
         workstation   = $capacityInfo.workstation
@@ -1836,6 +2005,7 @@ function Get-AvailableSlotCapacity {
 function Update-SlotMetrics {
     param(
         [double]$Capacity,
+        [int]$ActiveCount,
         [double]$ActiveWeight,
         [hashtable]$WorkstationInfo
     )
@@ -1847,14 +2017,15 @@ function Update-SlotMetrics {
     if ($script:SlotMetrics.last_sample_at) {
         $elapsed = ($now - $script:SlotMetrics.last_sample_at).TotalSeconds
         if ($elapsed -gt 0) {
-            $idle = [math]::Max(0.0, $Capacity - $ActiveWeight)
+            # Track idle slots based on actual count, not weight
+            $idle = [math]::Max(0.0, $Capacity - $ActiveCount)
             $script:SlotMetrics.total_idle_seconds += ($idle * $elapsed)
             $script:SlotMetrics.total_capacity_seconds += ($Capacity * $elapsed)
         }
     }
     $script:SlotMetrics.last_sample_at = $now
-    $idleNow = [math]::Max(0.0, $Capacity - $ActiveWeight)
-    $utilizationNow = if ($Capacity -gt 0) { [math]::Round(($ActiveWeight / $Capacity) * 100, 1) } else { 0 }
+    $idleNow = [math]::Max(0.0, $Capacity - $ActiveCount)
+    $utilizationNow = if ($Capacity -gt 0) { [math]::Round(($ActiveCount / $Capacity) * 100, 1) } else { 0 }
     $cumulativeUtilization = if ($script:SlotMetrics.total_capacity_seconds -gt 0) {
         [math]::Round((1 - ($script:SlotMetrics.total_idle_seconds / $script:SlotMetrics.total_capacity_seconds)) * 100, 1)
     }
@@ -1862,7 +2033,8 @@ function Update-SlotMetrics {
     $script:SlotMetrics.last_snapshot = @{
         sampled_at                 = $now.ToString("o")
         capacity_slots             = $Capacity
-        active_slots               = $ActiveWeight
+        active_slots               = $ActiveCount
+        active_weight              = $ActiveWeight
         idle_slots                 = $idleNow
         utilization_percent        = $utilizationNow
         total_idle_seconds         = [math]::Round($script:SlotMetrics.total_idle_seconds, 1)
@@ -1882,6 +2054,7 @@ function Get-SlotMetricsSnapshot {
         sampled_at                 = $null
         capacity_slots             = 0
         active_slots               = 0
+        active_weight              = 0
         idle_slots                 = 0
         utilization_percent        = 0
         total_idle_seconds         = 0
@@ -1895,7 +2068,11 @@ function Get-SlotMetricsSnapshot {
 
 function Get-OrderedTodoTasks {
     <#
-    .SYNOPSIS Return todo tasks ordered by priority queues, sequence, then size/created_at.
+    .SYNOPSIS Return todo tasks ordered by priority queues, then sequence number (e.g., 37A < 37B < 38A), then size/created_at.
+    Sequence numbers in task titles (like "37A", "38D", "45B") drive execution order:
+      - 37A (seq=3701) runs before 38A (seq=3801) which runs before 45B (seq=4502)
+      - Within a priority group, tasks are sorted by sequence ascending
+      - Tasks without sequence numbers are sorted by size (smallest first) then created_at
     #>
     [CmdletBinding()]
     param([int]$Count = 1)
@@ -2182,6 +2359,48 @@ function Get-ModelErrorRecoveryMessage {
     return ($parts -join "`n`n")
 }
 
+function Try-ArchiveAttempt {
+    <#
+    .SYNOPSIS Safely archive an attempt, handling already-archived cases and HTTP errors gracefully.
+    .DESCRIPTION
+    Checks if attempt is already archived in VK before calling the archive API.
+    Treats 404/405/409 HTTP errors as "already handled" (DEBUG level) instead of failures.
+    .OUTPUTS $true if archived or already archived, $false if hard failure
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AttemptId,
+        [object]$AttemptObject = $null  # Optional: pass the attempt object to check archived status
+    )
+
+    # Check if attempt is already archived (if we have the object)
+    if ($AttemptObject -and $AttemptObject.archived) {
+        Write-Log "Attempt $($AttemptId.Substring(0,8)) already archived in VK — skipping" -Level "DEBUG"
+        return $true
+    }
+
+    $vkBaseUrl = Get-VKBaseUrl
+    $archiveUrl = "$vkBaseUrl/api/task-attempts/$AttemptId/archive"
+
+    try {
+        Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction Stop | Out-Null
+        Write-Log "Archived attempt $($AttemptId.Substring(0,8))" -Level "OK"
+        return $true
+    }
+    catch {
+        $statusCode = $_.Exception.Response.StatusCode.value__
+        if ($statusCode -in @(404, 405, 409)) {
+            # 404 = not found (already deleted?), 405 = method not allowed (can't archive in current state), 409 = conflict (already archived)
+            Write-Log "Attempt $($AttemptId.Substring(0,8)) cannot be archived (HTTP $statusCode) — likely already handled or in non-archivable state" -Level "DEBUG"
+            return $true  # Treat as success (already handled)
+        }
+        else {
+            Write-Log "Failed to archive attempt $($AttemptId.Substring(0,8)): $_" -Level "WARN"
+            return $false
+        }
+    }
+}
+
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
@@ -2194,6 +2413,25 @@ function Try-SendFollowUp {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+
+    # ── Global follow-up cap: prevent infinite loops per task ──────────────
+    $taskKey = if ($Info.task_id) { $Info.task_id } else { $AttemptId }
+    if (-not $script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+        $script:TaskFollowUpCounts[$taskKey] = 0
+    }
+    $script:TaskFollowUpCounts[$taskKey]++
+    $followUpCount = $script:TaskFollowUpCounts[$taskKey]
+    if ($followUpCount -gt $script:MAX_FOLLOWUPS_PER_TASK) {
+        Write-Log "Follow-up cap ($script:MAX_FOLLOWUPS_PER_TASK) exceeded for task $($taskKey.Substring(0,8)) ($followUpCount follow-ups) — marking manual_review" -Level "WARN"
+        $Info.status = "manual_review"
+        $Info.followup_cap_exceeded = $true
+        $Info.pending_followup = $null
+        $script:TasksFailed++
+        Save-SuccessMetrics
+        Try-ArchiveAttempt -AttemptId $AttemptId | Out-Null
+        return $false
+    }
+
     if ($Info.force_new_session) {
         return (Try-SendFollowUpNewSession -AttemptId $AttemptId -Info $Info -Message $Message -Reason $Reason -IncludeTaskContext:$IncludeTaskContext)
     }
@@ -2224,6 +2462,19 @@ function Try-SendFollowUp {
     $Info.pending_followup = $null
     $Info.status = "running"
     $taskUrl = if ($Info.task_id) { Get-TaskUrl -TaskId $Info.task_id } else { $null }
+
+    # ── Agent Work Logger: log followup ──
+    if ($script:AgentWorkLoggerEnabled) {
+        try {
+            Write-AgentFollowup -AttemptId $AttemptId `
+                -Message $finalMessage.Substring(0, [Math]::Min(500, $finalMessage.Length)) `
+                -Reason $Reason
+        }
+        catch {
+            # best effort — non-critical
+        }
+    }
+
     Add-RecentItem -ListName "FollowUpEvents" -Item @{
         task_id     = $Info.task_id
         task_title  = $Info.name
@@ -2431,6 +2682,11 @@ function Get-AttemptFailureCategory {
         }
     }
 
+    # Check for NO_CHANGES response from agent (indicates task requires no code changes)
+    if ($combined -match "(?:^|\n|\s)NO_CHANGES(?:\s|\n|$)") {
+        return @{ category = "no_changes"; status = $latestStatus; detail = "agent reported NO_CHANGES" }
+    }
+
     if ($latestStatus -in @("failed", "killed", "crashed", "error", "aborted")) {
         return @{ category = "agent_failed"; status = $latestStatus; detail = $latestStatus }
     }
@@ -2474,6 +2730,25 @@ function Try-SendFollowUpNewSession {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+
+    # ── Global follow-up cap: prevent infinite loops per task ──────────────
+    $taskKey = if ($Info.task_id) { $Info.task_id } else { $AttemptId }
+    if (-not $script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+        $script:TaskFollowUpCounts[$taskKey] = 0
+    }
+    $script:TaskFollowUpCounts[$taskKey]++
+    $followUpCount = $script:TaskFollowUpCounts[$taskKey]
+    if ($followUpCount -gt $script:MAX_FOLLOWUPS_PER_TASK) {
+        Write-Log "Follow-up cap ($script:MAX_FOLLOWUPS_PER_TASK) exceeded for task $($taskKey.Substring(0,8)) ($followUpCount follow-ups, new session) — marking manual_review" -Level "WARN"
+        $Info.status = "manual_review"
+        $Info.followup_cap_exceeded = $true
+        $Info.pending_followup = $null
+        $script:TasksFailed++
+        Save-SuccessMetrics
+        Try-ArchiveAttempt -AttemptId $AttemptId | Out-Null
+        return $false
+    }
+
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping new-session follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
@@ -3194,6 +3469,8 @@ function Sync-TrackedAttempts {
 
     foreach ($a in $apiAttempts) {
         if (-not $a.branch) { continue }
+        # Skip attempts we already fully processed (prevents re-tracking when archive fails with 405)
+        if ($script:ProcessedAttemptIds.Contains($a.id)) { continue }
         $execProfile = Get-AttemptExecutorProfile -Attempt $a
         if (-not $script:TrackedAttempts.ContainsKey($a.id)) {
             # Newly discovered active attempt
@@ -3239,8 +3516,30 @@ function Sync-TrackedAttempts {
                 copilot_fix_merged_at         = $null
                 no_commits_retries            = 0
                 conflict_rebase_attempted     = $false
+                stale_running_detected_at     = $null
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
+
+            # ── Agent Work Logger: start session ──
+            if ($script:AgentWorkLoggerEnabled) {
+                try {
+                    Start-AgentSession -AttemptId $a.id `
+                        -TaskMetadata @{
+                        task_id    = $a.task_id
+                        task_title = $a.name
+                    } `
+                        -ExecutorInfo @{
+                        executor         = if ($execProfile) { $execProfile.executor } else { "unknown" }
+                        executor_variant = if ($execProfile) { $execProfile.variant } else { $null }
+                    } `
+                        -GitContext @{
+                        branch = $a.branch
+                    }
+                }
+                catch {
+                    Write-Log "Agent work logger Start-AgentSession failed: $($_.Exception.Message)" -Level "WARN"
+                }
+            }
         }
         else {
             $script:TrackedAttempts[$a.id].updated_at = $a.updated_at
@@ -3268,6 +3567,7 @@ function Sync-TrackedAttempts {
                 $tracked.error_notified = $false
                 $tracked.ci_notified = $false
                 $tracked.pending_followup = $null
+                $tracked.stale_running_detected_at = $null  # Reset stale timer — agent is alive
             }
             elseif ($summary.latest_process_status -in @("completed", "failed")) {
                 if ($tracked.status -eq "running") {
@@ -3279,11 +3579,34 @@ function Sync-TrackedAttempts {
                         Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
                     }
                     $tracked.review_marked = $true
+
+                    # ── Agent Work Logger: stop session ──
+                    if ($script:AgentWorkLoggerEnabled) {
+                        try {
+                            $completionStatus = if ($summary.latest_process_status -eq "completed") { "success" } else { "failed" }
+                            Stop-AgentSession -AttemptId $a.id -CompletionStatus $completionStatus
+                        }
+                        catch {
+                            Write-Log "Agent work logger Stop-AgentSession failed: $($_.Exception.Message)" -Level "WARN"
+                        }
+                    }
                 }
                 if ($summary.latest_process_status -eq "failed" -and -not $tracked.error_notified) {
                     Write-Log "Attempt $($a.id.Substring(0,8)) failed in workspace — requires agent attention" -Level "WARN"
                     $tracked.error_notified = $true
                     $tracked.status = "error"
+
+                    # ── Agent Work Logger: log error ──
+                    if ($script:AgentWorkLoggerEnabled) {
+                        try {
+                            Write-AgentError -AttemptId $a.id `
+                                -ErrorMessage "Agent workspace process failed" `
+                                -ErrorCategory "workspace_failure"
+                        }
+                        catch {
+                            # best effort
+                        }
+                    }
                 }
 
                 if ($summary.latest_process_status -eq "failed") {
@@ -3343,6 +3666,8 @@ function Sync-TrackedAttempts {
                     Clear-PendingFollowUp -Info $tracked -Reason "duplicate_attempt"
                 }
                 $script:TrackedAttempts.Remove($dup.id)
+                $script:ProcessedAttemptIds.Add($dup.id) | Out-Null
+                Save-ProcessedAttemptIds
             }
         }
     }
@@ -3399,6 +3724,128 @@ function Sync-TrackedAttempts {
 
         # Do not archive idle attempts; they are already in review
         Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — awaiting PR" -Level "WARN"
+    }
+
+    # ── Stale running detection (stateless — crash-restart-safe) ───────────
+    # Detect "running" attempts that have been stuck too long with no process
+    # completion. Uses absolute time thresholds from VK data so detection
+    # survives orchestrator restarts without needing in-memory state.
+    #
+    # Two paths:
+    # 1. Setup-failure fast path: If VK never launched an agent process
+    #    (latest_session_id and latest_process_status both null), the setup
+    #    script failed or hung. Use shorter SetupTimeoutMin (default 30m).
+    # 2. General stale: Agent ran but hasn't completed. Use StaleRunningTimeoutMin
+    #    + IdleConfirmMin as combined absolute threshold.
+    foreach ($a in $apiAttempts) {
+        $tracked = $script:TrackedAttempts[$a.id]
+        if (-not $tracked) { continue }
+        if ($tracked.status -ne "running") { continue }
+
+        $summary = $summaryMap[$a.id]
+
+        # Determine how long this attempt has been "running" with no output.
+        # Use the summary's process completion time if available, otherwise
+        # fall back to the VK attempt updated_at timestamp (set when the
+        # attempt was created or last modified by VK).
+        $activityTime = $null
+
+        if ($summary -and $summary.latest_process_completed_at) {
+            try { $activityTime = ([datetimeoffset]::Parse($summary.latest_process_completed_at)).ToLocalTime().DateTime } catch { }
+        }
+
+        if (-not $activityTime -and $a.updated_at) {
+            try { $activityTime = ([datetimeoffset]::Parse($a.updated_at)).ToLocalTime().DateTime } catch { }
+        }
+
+        if (-not $activityTime -and $tracked.updated_at) {
+            try { $activityTime = ([datetimeoffset]::Parse($tracked.updated_at)).ToLocalTime().DateTime } catch { }
+        }
+
+        if (-not $activityTime) { continue }
+
+        $staleMinutes = ((Get-Date) - $activityTime).TotalMinutes
+
+        # ── Path 1: Setup-failure fast path ─────────────────────────────────
+        # If no session and no process status, VK never launched an agent.
+        # The setup script either failed or is hanging. Use shorter timeout
+        # with no confirm window — there's nothing to confirm, no agent ran.
+        $isSetupFailure = $summary -and
+            (-not $summary.latest_session_id) -and
+            (-not $summary.latest_process_status)
+
+        if ($isSetupFailure) {
+            if ($staleMinutes -lt $SetupTimeoutMin) {
+                if ($staleMinutes -ge ($SetupTimeoutMin * 0.5)) {
+                    Write-Log "Attempt $($a.id.Substring(0,8)) setup pending for $([math]::Round($staleMinutes))m (no session/process) — will archive at ${SetupTimeoutMin}m" -Level "WARN"
+                }
+                continue
+            }
+
+            Write-Log "Attempt $($a.id.Substring(0,8)) setup never completed ($([math]::Round($staleMinutes))m, no session/process) — archiving (branch: $($tracked.branch))" -Level "ERROR"
+            if (-not $DryRun) {
+                $archived = Try-ArchiveAttempt -AttemptId $a.id -AttemptObject $a
+                if ($archived) {
+                    try {
+                        Update-VKTaskStatus -TaskId $tracked.task_id -Status "todo" | Out-Null
+                        Write-Log "Reset task $($tracked.task_id.Substring(0,8)) to todo for reattempt (setup failed)" -Level "INFO"
+                    }
+                    catch {
+                        Write-Log "Failed to reset task $($tracked.task_id.Substring(0,8)) status: $_" -Level "WARN"
+                    }
+
+                    if ($script:AgentWorkLoggerEnabled) {
+                        try { Stop-AgentSession -AttemptId $a.id -CompletionStatus "setup_failed" } catch { }
+                    }
+
+                    Clear-PendingFollowUp -Info $tracked -Reason "setup_failed_archived"
+                    $script:TrackedAttempts.Remove($a.id)
+                    $script:ProcessedAttemptIds.Add($a.id) | Out-Null
+                    Save-ProcessedAttemptIds
+                }
+            }
+            continue
+        }
+
+        # ── Path 2: General stale running ───────────────────────────────────
+        # Agent may have started but is stuck. Use absolute threshold with
+        # built-in confirm window (StaleRunningTimeoutMin + IdleConfirmMin).
+        # This is stateless — no in-memory timer that resets on restart.
+        $archiveThreshold = $StaleRunningTimeoutMin + $IdleConfirmMin
+
+        if ($staleMinutes -lt $StaleRunningTimeoutMin) { continue }
+
+        if ($staleMinutes -lt $archiveThreshold) {
+            $remaining = [math]::Ceiling($archiveThreshold - $staleMinutes)
+            Write-Log "Attempt $($a.id.Substring(0,8)) stale-running for $([math]::Round($staleMinutes))m — will archive in ${remaining}m" -Level "WARN"
+            continue
+        }
+
+        # Archive the zombie attempt and free the slot
+        Write-Log "Attempt $($a.id.Substring(0,8)) stale-running for $([math]::Round($staleMinutes))m — archiving to free slot (branch: $($tracked.branch))" -Level "ERROR"
+        if (-not $DryRun) {
+            $archived = Try-ArchiveAttempt -AttemptId $a.id -AttemptObject $a
+            if ($archived) {
+                # Reset task to todo so it will be reattempted
+                try {
+                    Update-VKTaskStatus -TaskId $tracked.task_id -Status "todo" | Out-Null
+                    Write-Log "Reset task $($tracked.task_id.Substring(0,8)) to todo for reattempt" -Level "INFO"
+                }
+                catch {
+                    Write-Log "Failed to reset task $($tracked.task_id.Substring(0,8)) status: $_" -Level "WARN"
+                }
+
+                # ── Agent Work Logger: stop session ──
+                if ($script:AgentWorkLoggerEnabled) {
+                    try { Stop-AgentSession -AttemptId $a.id -CompletionStatus "stale_timeout" } catch { }
+                }
+
+                Clear-PendingFollowUp -Info $tracked -Reason "stale_running_archived"
+                $script:TrackedAttempts.Remove($a.id)
+                $script:ProcessedAttemptIds.Add($a.id) | Out-Null
+                Save-ProcessedAttemptIds
+            }
+        }
     }
 
     foreach ($a in $apiAttempts) {
@@ -3532,12 +3979,68 @@ function Process-CompletedAttempts {
         if (-not $pr) {
             if ($info.status -in @("review", "error")) {
                 if (-not (Test-RemoteBranchExists -Branch $branch)) {
-                    Write-Log "No remote branch for $branch — agent must push before PR" -Level "WARN"
+                    Write-Log "No remote branch for $branch — checking if already merged" -Level "INFO"
+
+                    # ── Check if branch was already merged into base (prevents infinite retry) ──
+                    if (Test-BranchMergedIntoBase -Branch $branch) {
+                        Write-Log "Branch $branch was already merged into base — completing task" -Level "OK"
+                        $info.status = "done"
+                        $info.already_merged = $true
+                        $script:TasksCompleted++
+                        $script:TotalTasksCompleted++
+                        Save-SuccessMetrics
+                        try {
+                            if ($info.task_id) {
+                                Update-VKTaskStatus -TaskId $info.task_id -Status "done" | Out-Null
+                                Write-Log "Marked already-merged task $($info.task_id.Substring(0,8)) as done" -Level "OK"
+                            }
+
+                            # Archive the attempt (handles already-archived cases gracefully)
+                            $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                            Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                        }
+                        catch {
+                            Write-Log "Failed to complete already-merged task $($info.task_id.Substring(0,8)): $_" -Level "WARN"
+                        }
+                        $processed += $attemptId
+                        continue
+                    }
+
+                    # ── Check if task description says it's already completed ──
+                    if ($info.task_id -and (Test-TaskDescriptionAlreadyComplete -TaskId $info.task_id)) {
+                        Write-Log "Task $($info.task_id.Substring(0,8)) description says already completed — archiving attempt" -Level "OK"
+                        $info.status = "done"
+                        $info.description_complete = $true
+                        try {
+                            Update-VKTaskStatus -TaskId $info.task_id -Status "done" | Out-Null
+                            $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                            Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                        }
+                        catch {
+                            Write-Log "Failed to complete description-complete task $($info.task_id.Substring(0,8)): $_" -Level "WARN"
+                        }
+                        $processed += $attemptId
+                        continue
+                    }
+
                     $summary = $script:AttemptSummaries[$attemptId]
                     $failure = Get-AttemptFailureCategory -Summary $summary -Info $info
                     $recentFollowup = $false
                     if ($info.last_followup_at) {
                         $recentFollowup = (((Get-Date) - $info.last_followup_at).TotalMinutes -lt 10)
+                    }
+
+                    # ── Handle NO_CHANGES response (agent says task needs no code changes) ────
+                    if ($failure.category -eq "no_changes") {
+                        Write-Log "Agent responded NO_CHANGES for $branch — task genuinely requires no code changes" -Level "INFO"
+                        $info.status = "done"
+                        $info.no_changes = $true
+                        $script:TasksFailed++
+                        Save-SuccessMetrics
+                        $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                        Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                        $processed += $attemptId
+                        continue
                     }
 
                     if (-not $recentFollowup) {
@@ -3585,14 +4088,8 @@ function Process-CompletedAttempts {
                                 $info.fresh_task_failed = $true
                                 $script:TasksFailed++
                                 Save-SuccessMetrics
-                                try {
-                                    $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
-                                    Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
-                                    Write-Log "Archived failed fresh task attempt $($attemptId.Substring(0,8))" -Level "INFO"
-                                }
-                                catch {
-                                    Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
-                                }
+                                $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                                Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
                                 $processed += $attemptId
                                 continue
                             }
@@ -3602,22 +4099,93 @@ function Process-CompletedAttempts {
                             continue
                         }
                         elseif ($commitsAhead -gt 0) {
-                            # Has commits locally but not pushed — ask agent to push
-                            Write-Log "Branch $branch has $commitsAhead commit(s) but remote is missing — asking agent to push" -Level "INFO"
-                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "missing_branch"
-                            if ($count -ge 2) {
-                                $msg = "You have $commitsAhead local commit(s) on branch $branch that aren't pushed to remote. Please run: git push -u origin $branch`n`nIf push fails or there's an issue, describe the problem so I can help."
-                                $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "push_commits_new_session"
+                            # Has commits locally but not pushed — push directly via CLI (never ask agent)
+                            Write-Log "Branch $branch has $commitsAhead commit(s) but remote is missing — pushing via CLI" -Level "ACTION"
+                            $worktreePath = Get-WorktreePathForBranch -Branch $branch
+                            $pushSuccess = $false
+                            if ($worktreePath) {
+                                try {
+                                    $pushOut = git -C $worktreePath push -u origin $branch 2>&1
+                                    if ($LASTEXITCODE -eq 0) {
+                                        $pushSuccess = $true
+                                        Write-Log "CLI push succeeded for $branch ($commitsAhead commits)" -Level "OK"
+                                    }
+                                    else {
+                                        # Try force-with-lease as fallback
+                                        $pushOut2 = git -C $worktreePath push -u origin $branch --force-with-lease --no-verify 2>&1
+                                        if ($LASTEXITCODE -eq 0) {
+                                            $pushSuccess = $true
+                                            Write-Log "CLI push (force-with-lease, no-verify) succeeded for $branch" -Level "OK"
+                                        }
+                                        else {
+                                            Write-Log "CLI push failed for $branch — $pushOut2" -Level "WARN"
+                                        }
+                                    }
+                                }
+                                catch {
+                                    Write-Log "CLI push threw for $branch — $($_.Exception.Message)" -Level "WARN"
+                                }
                             }
                             else {
-                                $msg = "Branch $branch has $commitsAhead commit(s) locally but remote branch is missing. Please push: git push -u origin $branch"
-                                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "push_commits"
+                                Write-Log "No worktree found for $branch — cannot push via CLI" -Level "WARN"
+                            }
+
+                            if ($pushSuccess) {
+                                # Branch is now upstream — create PR automatically
+                                $title = if ($info.name) { $info.name } else { "Automated task PR" }
+                                $created = Create-PRForBranchSafe -Branch $branch -Title $title -Body "Automated PR created by ve-orchestrator (CLI push)"
+                                if (Test-GithubRateLimit) { return }
+                                if ($created -and $created -ne "no_commits") {
+                                    Write-Log "PR created for $branch after CLI push" -Level "OK"
+                                    $pr = Get-PRForBranch -Branch $branch
+                                    if ($pr) { $info.pr_number = $pr.number }
+                                }
+                                elseif ($created -eq "no_commits") {
+                                    Write-Log "Branch $branch pushed but has no diff vs base — marking manual_review" -Level "WARN"
+                                    $info.status = "manual_review"
+                                    $info.no_commits = $true
+                                }
+                            }
+                            else {
+                                # CLI push failed — mark for manual review instead of asking agent
+                                $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "push_failed"
+                                if ($count -ge 2) {
+                                    Write-Log "CLI push failed $count times for $branch — marking manual_review" -Level "WARN"
+                                    $info.status = "manual_review"
+                                    $info.push_failed = $true
+                                    $script:TasksFailed++
+                                    Save-SuccessMetrics
+                                }
+                                else {
+                                    Write-Log "CLI push failed for $branch — will retry next cycle" -Level "INFO"
+                                }
                             }
                             $info.push_notified = $true
                             continue
                         }
                         else {
-                            # commitsAhead == -1 (branch doesn't exist) — should not happen at this point
+                            # commitsAhead == -1 (branch doesn't exist locally)
+                            # Could be an already-merged task where local ref was cleaned up
+                            if (Test-BranchMergedIntoBase -Branch $branch) {
+                                Write-Log "Branch $branch doesn't exist locally but was merged into base — completing task" -Level "OK"
+                                $info.status = "done"
+                                $info.already_merged = $true
+                                $script:TasksCompleted++
+                                $script:TotalTasksCompleted++
+                                Save-SuccessMetrics
+                                try {
+                                    if ($info.task_id) {
+                                        Update-VKTaskStatus -TaskId $info.task_id -Status "done" | Out-Null
+                                    }
+                                    $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                                    Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                                }
+                                catch {
+                                    Write-Log "Failed to complete already-merged task: $_" -Level "WARN"
+                                }
+                                $processed += $attemptId
+                                continue
+                            }
                             Write-Log "Branch $branch doesn't exist locally despite being tracked — this is unexpected" -Level "ERROR"
                             $info.status = "manual_review"
                             $info.branch_missing = $true
@@ -3645,14 +4213,8 @@ function Process-CompletedAttempts {
                             $info.no_commits = $true
                             $script:TasksFailed++
                             Save-SuccessMetrics
-                            try {
-                                $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
-                                Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
-                                Write-Log "Archived stale no_commits attempt $($attemptId.Substring(0,8))" -Level "INFO"
-                            }
-                            catch {
-                                Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
-                            }
+                            $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                            Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
                             $processed += $attemptId
                             continue
                         }
@@ -4129,7 +4691,9 @@ $summary
     # Clean up completed attempts from tracking
     foreach ($id in $processed) {
         $script:TrackedAttempts.Remove($id)
+        $script:ProcessedAttemptIds.Add($id) | Out-Null
     }
+    if ($processed.Count -gt 0) { Save-ProcessedAttemptIds }
     Save-StatusSnapshot
 }
 
@@ -4397,6 +4961,18 @@ function Invoke-DownstreamRebase {
         [Parameter(Mandatory)][string]$UpstreamBranch,
         [string]$ExcludeAttemptId
     )
+
+    # Prune stale worktrees first to avoid "already used by worktree" errors
+    try {
+        $pruneOutput = git worktree prune -v 2>&1
+        if ($pruneOutput -and $pruneOutput -ne "") {
+            Write-Log "Pruned stale worktrees before rebase: $pruneOutput" -Level "DEBUG"
+        }
+    }
+    catch {
+        Write-Log "Failed to prune worktrees before rebase: $_" -Level "WARN"
+    }
+
     $rebaseTargets = @()
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
         $aid = $entry.Key
@@ -4427,7 +5003,20 @@ function Invoke-DownstreamRebase {
         try {
             $branch = $target.Info.branch ?? "ve/$shortId"
             Write-Log "Rebasing downstream task $shortId (branch: $branch) onto $UpstreamBranch" -Level "INFO"
-            $result = & git rebase $UpstreamBranch $branch 2>&1
+
+            # Find the worktree path for this branch (if it exists)
+            $worktreePath = Get-WorktreePathForBranch -Branch $branch
+
+            if ($worktreePath -and (Test-Path $worktreePath)) {
+                # Rebase within the worktree to avoid "already used by worktree" errors
+                Write-Log "Rebasing within worktree: $worktreePath" -Level "DEBUG"
+                $result = git -C $worktreePath rebase $UpstreamBranch 2>&1
+            }
+            else {
+                # No worktree exists, use standard rebase
+                $result = & git rebase $UpstreamBranch $branch 2>&1
+            }
+
             if ($LASTEXITCODE -eq 0) {
                 $rebased++
                 Write-Log "Rebased $shortId successfully" -Level "OK"
@@ -4435,13 +5024,25 @@ function Invoke-DownstreamRebase {
             else {
                 $failed++
                 Write-Log "Rebase failed for $shortId - may need manual resolution: $result" -Level "WARN"
-                & git rebase --abort 2>&1 | Out-Null
+                if ($worktreePath -and (Test-Path $worktreePath)) {
+                    git -C $worktreePath rebase --abort 2>&1 | Out-Null
+                }
+                else {
+                    & git rebase --abort 2>&1 | Out-Null
+                }
             }
         }
         catch {
             $failed++
             Write-Log "Error rebasing $shortId`: $_" -Level "ERROR"
-            & git rebase --abort 2>&1 | Out-Null
+            $branch = $target.Info.branch ?? "ve/$shortId"
+            $worktreePath = Get-WorktreePathForBranch -Branch $branch
+            if ($worktreePath -and (Test-Path $worktreePath)) {
+                git -C $worktreePath rebase --abort 2>&1 | Out-Null
+            }
+            else {
+                & git rebase --abort 2>&1 | Out-Null
+            }
         }
     }
     if ($rebased -gt 0 -or $failed -gt 0) {
@@ -5063,11 +5664,12 @@ function Fill-ParallelSlots {
     $capacityInfo = Get-AvailableSlotCapacity
     $remainingCapacity = $capacityInfo.remaining
     $capacity = $capacityInfo.capacity
+    $activeCount = $capacityInfo.active_count
     $activeWeight = $capacityInfo.active_weight
 
     # ── Dirty/Conflict Slot Reservation ──────────────────────────────────────
     # Reserve slot(s) for dirty/conflict tasks so new tasks don't fill ALL capacity
-    $dirtyReservation = Get-DirtySlotReservation -TotalCapacity $capacity -ActiveWeight $activeWeight
+    $dirtyReservation = Get-DirtySlotReservation -TotalCapacity $capacity -ActiveWeight $activeCount
     if ($dirtyReservation.hasDirtyTasks) {
         $effectiveCap = $dirtyReservation.effectiveCapacity
         $reservedSlots = $dirtyReservation.reservedForDirty
@@ -5075,16 +5677,16 @@ function Fill-ParallelSlots {
         Write-Log ("Dirty/conflict tasks: {0} detected — reserving {1} slot(s) for resolution (effective capacity for new tasks: {2})" -f `
                 $dirtyCount, $reservedSlots, [math]::Round($effectiveCap, 2)) -Level "WARN"
         # Reduce remaining capacity for new tasks (dirty tasks get their own path)
-        $remainingCapacity = [math]::Max(0, $effectiveCap - $activeWeight)
+        $remainingCapacity = [math]::Max(0, $effectiveCap - $activeCount)
     }
 
     if ($remainingCapacity -lt 0.75) {
-        Write-Log "All slots occupied (capacity: $capacity, active weight: $([math]::Round($activeWeight, 2)))" -Level "INFO"
+        Write-Log "All slots occupied (capacity: $capacity, active: $activeCount tasks, weight: $([math]::Round($activeWeight, 2)))" -Level "INFO"
         return
     }
 
-    Write-Log ("{0} slot capacity available (capacity: {1}, active weight: {2})" -f `
-            [math]::Round($remainingCapacity, 2), $capacity, [math]::Round($activeWeight, 2)) -Level "ACTION"
+    Write-Log ("{0} slot(s) available (capacity: {1}, active: {2} tasks, weight: {3})" -f `
+            [math]::Floor($remainingCapacity), $capacity, $activeCount, [math]::Round($activeWeight, 2)) -Level "ACTION"
 
     $maxCandidates = [math]::Min(50, [math]::Max(10, [int][math]::Ceiling($capacity * 4)))
     $nextTasks = Get-OrderedTodoTasks -Count $maxCandidates
@@ -5092,6 +5694,15 @@ function Fill-ParallelSlots {
         Write-Log "No more todo tasks in backlog" -Level "WARN"
         return
     }
+
+    # Log the sequence-based ordering for visibility
+    $topCandidates = @($nextTasks | Select-Object -First 5)
+    $candidateNames = @($topCandidates | ForEach-Object {
+            $seq = if ($_.title) { Get-SequenceValue -Title $_.title } else { $null }
+            $short = if ($_.title) { $_.title.Substring(0, [Math]::Min(50, $_.title.Length)) } else { "(untitled)" }
+            if ($seq) { "$short (seq=$seq)" } else { "$short (no-seq)" }
+        })
+    Write-Log ("Task queue (top {0}): {1}" -f $candidateNames.Count, ($candidateNames -join " > ")) -Level "INFO"
 
     $started = 0
     foreach ($task in $nextTasks) {
@@ -5101,6 +5712,31 @@ function Fill-ParallelSlots {
         $existingAttempt = $script:TrackedAttempts.Values | Where-Object { $_.task_id -eq $task.id -and $_.status -ne "done" }
         if ($existingAttempt) {
             Write-Log "Task $($task.id.Substring(0,8)) already has active attempt, skipping" -Level "INFO"
+            continue
+        }
+
+        # ── Check if task description indicates it's already completed ──────────────
+        $taskDesc = if ($task.description) { $task.description.ToLower() } else { "" }
+        $completionPatterns = @("superseded by", "already completed", "this task has been completed", "merged in", "completed via", "no longer needed")
+        $isAlreadyComplete = $false
+        foreach ($pattern in $completionPatterns) {
+            if ($taskDesc -match [regex]::Escape($pattern)) {
+                $isAlreadyComplete = $true
+                break
+            }
+        }
+        if ($isAlreadyComplete) {
+            Write-Log "Task $($task.id.Substring(0,8)) marked as already completed in description — archiving" -Level "INFO"
+            if (-not $DryRun) {
+                try {
+                    # Move to done status instead of cancelled
+                    Update-VKTaskStatus -TaskId $task.id -Status "done" | Out-Null
+                    Write-Log "Marked completed task $($task.id.Substring(0,8)) as done" -Level "OK"
+                }
+                catch {
+                    Write-Log "Failed to mark task $($task.id.Substring(0,8)) as done: $_" -Level "WARN"
+                }
+            }
             continue
         }
 
@@ -5122,16 +5758,17 @@ function Fill-ParallelSlots {
         $isDirtyTask = $script:DirtyPRTasks.ContainsKey($task.id)
 
         $sizeInfo = Get-TaskSizeInfo -Task $task
-        $requiredWeight = [double]$sizeInfo.weight
-        if ($requiredWeight -gt $remainingCapacity) {
+        # Weight is used for complexity routing / model selection only — NOT for scheduling capacity.
+        # Each task consumes exactly 1 slot regardless of weight. MaxParallel=N means N concurrent agents.
+        if ($remainingCapacity -lt 1) {
             # Dirty tasks get priority even when capacity is tight (use reserved slot)
             if (-not $isDirtyTask) {
-                Write-Log ("Deferring task {0} — size {1} (weight {2}) exceeds remaining capacity {3}" -f `
-                        $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight, [math]::Round($remainingCapacity, 2)) -Level "INFO"
+                Write-Log ("Deferring task {0} — no remaining slot capacity ({1})" -f `
+                        $task.id.Substring(0, 8), [math]::Round($remainingCapacity, 2)) -Level "INFO"
                 continue
             }
             Write-Log ("Dirty task {0} using reserved slot — size {1} (weight {2})" -f `
-                    $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight) -Level "WARN"
+                    $task.id.Substring(0, 8), $sizeInfo.label, $sizeInfo.weight) -Level "WARN"
         }
 
         $title = if ([string]::IsNullOrWhiteSpace($task.title)) {
@@ -5200,7 +5837,7 @@ function Fill-ParallelSlots {
                 $state.last_submitted_at = (Get-Date).ToString("o")
                 Save-OrchestratorState -State $state
                 $script:TasksSubmitted++
-                $remainingCapacity -= $requiredWeight
+                $remainingCapacity -= 1  # Each task = 1 slot, weight only for model routing
                 $started++
             }
         }
@@ -5208,7 +5845,7 @@ function Fill-ParallelSlots {
             Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor)/$($nextExec.model)$complexityTag (base: $targetBranch)" -Level "ACTION"
             # Still advance the cycling index in dry-run for accurate preview
             $null = Get-NextExecutorProfile
-            $remainingCapacity -= $requiredWeight
+            $remainingCapacity -= 1  # Each task = 1 slot, weight only for model routing
             $started++
         }
     }
@@ -5339,6 +5976,9 @@ function Start-Orchestrator {
     # Log executor cycling setup
     Write-Log "Executors: $(($script:VK_EXECUTORS | ForEach-Object { "$($_.executor)/$($_.variant)" }) -join ' ⇄ ')" -Level "INFO"
 
+    # Load persisted exclusion list from prior runs (prevents stale re-tracking after restart)
+    Load-ProcessedAttemptIds
+
     # Initial sync
     Sync-TrackedAttempts
     $initialCounts = Get-TrackedStatusCounts
@@ -5370,6 +6010,8 @@ function Start-Orchestrator {
                     if ($candidate.attempt_id -and $candidate.task_id) {
                         Complete-Task -AttemptId $candidate.attempt_id -TaskId $candidate.task_id -PRNumber $candidate.pr_number
                         $script:TrackedAttempts.Remove($candidate.attempt_id)
+                        $script:ProcessedAttemptIds.Add($candidate.attempt_id) | Out-Null
+                        Save-ProcessedAttemptIds
                     }
                     else {
                         Write-Log "Merged PR #$($candidate.pr_number) (no tracked attempt)" -Level "OK"

@@ -64,12 +64,12 @@
       "COPILOT": {
         "low": {
           "model": "haiku-4.5",
-          "variant": "HAIKU_4_5",
+          "variant": "CLAUDE_HAIKU_4_5",
           "reasoningEffort": "low"
         },
         "medium": {
           "model": "sonnet-4.5",
-          "variant": "SONNET_4_5",
+          "variant": "CLAUDE_SONNET_4_5",
           "reasoningEffort": "medium"
         },
         "high": {

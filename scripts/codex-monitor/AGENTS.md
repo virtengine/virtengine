@@ -6,7 +6,7 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 
 ## Module Overview
 
-**Purpose:** codex-monitor supervises VirtEngine’s autonomous coding fleet — it schedules task attempts, runs PR automation, self-heals failures, and reports status via Telegram. The core supervisor (`monitor.mjs`) wires configuration, executor selection, fleet coordination, Telegram notifications, autofix, and maintenance sweeps into a single process loop.  
+**Purpose:** codex-monitor supervises VirtEngine's autonomous coding fleet — it schedules task attempts, runs PR automation, self-heals failures, and reports status via Telegram. The core supervisor (`monitor.mjs`) wires configuration, executor selection, fleet coordination, Telegram notifications, autofix, and maintenance sweeps into a single process loop.
 **Primary entrypoints:** `cli.mjs` → `monitor.mjs` (supervisor), `ve-orchestrator.ps1` (task runner), `ve-kanban.ps1` (VK API wrapper).
 
 **Code references:**
@@ -18,7 +18,15 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 
 ---
 
-## Architecture
+### Start codex-monitor with defaults
+
+```bash
+node scripts/codex-monitor/cli.mjs
+```
+
+---
+
+## 2. Architecture & Components
 
 | Component                 | Role                                                                     | Key references                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
@@ -34,7 +42,7 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 
 ---
 
-## Core Concepts
+## 3. Critical Workflows
 
 ### Task lifecycle (creation → completion)
 
@@ -81,64 +89,67 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 
 ---
 
-## Usage Examples
+## 4. Known Gotchas & Bug Patterns
 
-### Start codex-monitor with defaults
-```bash
-node scripts/codex-monitor/cli.mjs
-```
+Each gotcha includes root cause + fix location.
 
-### Run setup wizard
-```bash
-node scripts/codex-monitor/cli.mjs --setup
-```
+1. **NO_CHANGES infinite loop** ✅ FIXED
+   - **Root cause:** orchestrator asked agents to reply "NO_CHANGES" if no work needed, but never actually parsed the response.
+   - **Original issue:** fresh tasks with no commits were repeatedly prompted; agent responded NO_CHANGES but orchestrator ignored it and kept looping.
+   - **Fix:** `Get-AttemptFailureCategory` now detects NO_CHANGES in agent output and immediately archives the attempt. Task descriptions with "superseded by", "already completed", etc. are detected during task selection and skipped entirely.
+   - References: `ve-orchestrator.ps1:L2449-L2452` (detection), `ve-orchestrator.ps1:L3563-L3580` (archive on NO_CHANGES), `ve-orchestrator.ps1:L5206-L5229` (task description check)
 
-### Configure via environment
-```bash
-export TELEGRAM_BOT_TOKEN=...
-export TELEGRAM_CHAT_ID=...
-export VK_BASE_URL=http://127.0.0.1:54089
-node scripts/codex-monitor/cli.mjs --args "-MaxParallel 6"
-```
+2. **Already-merged task infinite retry loop** ✅ FIXED
+   - **Root cause:** when a task was completed and merged (or committed directly to main) and the remote branch was deleted, the orchestrator entered the "no remote branch" retry path instead of detecting the task was already done. Four compounding gaps caused infinite loops:
+     1. No "already merged into base" check before entering retry path
+     2. `$script:TaskFollowUpCounts` (global safety cap) was declared but never incremented — dead code
+     3. Task description "superseded by" check only ran at task selection, not for existing tracked attempts
+     4. `monitor.mjs` also reacted to orchestrator's "No remote branch" log, causing dual-trigger
+   - **Fix (orchestrator):**
+     - `Test-BranchMergedIntoBase` function checks GitHub for merged PRs + `git merge-base --is-ancestor` fallback
+     - `Test-TaskDescriptionAlreadyComplete` checks task description for "superseded by", "already completed", etc.
+     - Both checks run in `Process-CompletedAttempts` before the retry logic
+     - The "branch doesn't exist locally" fallback also checks for already-merged before marking `manual_review`
+     - References: `ve-orchestrator.ps1` — `Test-BranchMergedIntoBase`, `Test-TaskDescriptionAlreadyComplete`, `Process-CompletedAttempts`
+   - **Fix (follow-up cap):**
+     - `$script:TaskFollowUpCounts` now wired up in both `Try-SendFollowUp` and `Try-SendFollowUpNewSession`
+     - After `MAX_FOLLOWUPS_PER_TASK` (6) follow-ups, the attempt is archived and marked `manual_review`
+     - References: `ve-orchestrator.ps1` — `Try-SendFollowUp`, `Try-SendFollowUpNewSession`
+   - **Fix (monitor.mjs):**
+     - `resolveAndTriggerSmartPR` checks `mergedBranchCache` + `isBranchMerged()` before triggering `smartPRFlow`
+     - `smartPRFlow` Step 0 checks for merged branch and task description completion signals before any work
+     - References: `monitor.mjs` — `resolveAndTriggerSmartPR`, `smartPRFlow`
 
-### config.json executor override
-```json
-{
-  "executors": [
-    { "name": "copilot-claude", "executor": "COPILOT", "variant": "CLAUDE_OPUS_4_6", "weight": 50, "role": "primary" },
-    { "name": "codex-default", "executor": "CODEX", "variant": "DEFAULT", "weight": 50, "role": "backup" }
-  ],
-  "distribution": "weighted"
-}
-```
+3. **Zombie workspace cleanup**
+   - **Root cause:** completed/cancelled tasks left temp worktrees behind, causing “ghost” workspaces and stale git metadata.
+   - **Fix:** prune git worktrees and remove VK worktree directories on completion.
+   - References: `ve-orchestrator.ps1:L3223-L3304`
 
-## Implementation Patterns
-- Add new config fields by updating `scripts/codex-monitor/config.mjs:716`, the schema (`scripts/codex-monitor/codex-monitor.schema.json`), and `.env.example` if exposed.
-- Add new CLI flags in `scripts/codex-monitor/cli.mjs:35` and plumb them through `loadConfig`.
-- For new runtime behaviors, prefer non-blocking async operations in `monitor.mjs` and keep error handling centralized.
-- Tests live in `scripts/codex-monitor/tests/` and should mirror new behaviors or edge cases.
-- Anti-patterns:
-  - Do not block the main supervisor loop with long synchronous work.
-  - Do not mutate config after it is frozen by `loadConfig` (`scripts/codex-monitor/config.mjs:716`).
+4. **Stale worktree path corruption**
+   - **Root cause:** worktree directories deleted without pruning `.git/worktrees` metadata, causing path resolution errors.
+   - **Fix:** setup scripts prune worktrees and note that VK worktree paths live under `.git/worktrees/` or `vibe-kanban`.
+   - References: `setup.mjs:L530-L539`, `ve-orchestrator.ps1:L2099-L2104`
 
-## API Reference
-- CLI binary: `codex-monitor` (`scripts/codex-monitor/package.json:55`, `scripts/codex-monitor/cli.mjs:1`).
-- Main runtime entry: `monitor.mjs` (package export `"."`, `scripts/codex-monitor/package.json:33`).
-- Config loader: `loadConfig(argv?, options?)` (`scripts/codex-monitor/config.mjs:716`).
-- Exported modules: `./config`, `./autofix`, `./primary-agent`, `./fleet-coordinator`, `./task-complexity` (`scripts/codex-monitor/package.json:33`).
+5. **Credential helper corruption**
+   - **Root cause:** VK containers run `gh auth setup-git`, writing a container-only helper path to `.git/config`.
+   - **Fix:** remove local helper overrides on startup; rely on global helper or GH_TOKEN.
+   - References: `ve-orchestrator.ps1:L461-L475`, `setup.mjs:L518-L527`
 
-## Dependencies & Environment
-- Runtime deps: `@openai/codex-sdk`, `@github/copilot-sdk`, `@anthropic-ai/claude-agent-sdk`, `vibe-kanban` (`scripts/codex-monitor/package.json:116`).
-- Node.js engine: `>=18` (`scripts/codex-monitor/package.json:125`).
-- Primary env vars are documented in `.env.example` (`scripts/codex-monitor/.env.example:11`).
+6. **Fresh vs crashed task detection**
+   - **Root cause:** no distinction between “fresh task (0 commits)” and “crashed task (commits exist but not pushed)”.
+   - **Fix:** check commit counts, restart fresh tasks, or prompt push for crashed ones.
+   - References: `ve-orchestrator.ps1:L571-L605`, `ve-orchestrator.ps1:L3383-L3424`
 
-## Configuration
-- Configuration layers: CLI args, env vars, `.env`, config JSON, defaults (`scripts/codex-monitor/config.mjs:3`).
-- Add config options by updating schema, defaults, and `.env.example` (`scripts/codex-monitor/codex-monitor.schema.json:1`, `scripts/codex-monitor/config.mjs:716`).
+7. **Rebase spam on completed tasks**
+   - **Root cause:** downstream rebases attempted on archived/completed tasks.
+   - **Fix:** filter VK attempts to active tasks only; skip archived attempts before rebase.
+   - References: `monitor.mjs:L3495-L3506`, `monitor.mjs:L3543-L3548`
 
-## Configuration
+---
 
-**Config loading order:** CLI → env vars → `.env` → `codex-monitor.config.json` → defaults.  
+## 5. Configuration & Environment
+
+**Config loading order:** CLI → env vars → `.env` → `codex-monitor.config.json` → defaults.
 References: `config.mjs:L4-L14`, `config.mjs:L81-L101`
 
 **Required env vars (core):**
@@ -166,7 +177,7 @@ References: `config.mjs:L4-L14`, `config.mjs:L81-L101`
 
 ---
 
-### State Management
+## 6. State Management
 
 **Orchestrator state & metrics:**
 
@@ -187,7 +198,7 @@ References: `config.mjs:L4-L14`, `config.mjs:L81-L101`
 
 ---
 
-## Testing
+## 7. Testing
 
 **Test runner:** Vitest with Node environment and `tests/**/*.test.mjs` pattern.
 
@@ -203,7 +214,7 @@ Use `npm run test` from `scripts/codex-monitor/`.
 
 ---
 
-## Implementation Patterns
+## 8. Implementation Patterns
 
 ### Adding a new executor
 
