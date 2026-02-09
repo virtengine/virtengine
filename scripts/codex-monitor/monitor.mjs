@@ -1076,7 +1076,7 @@ function trackErrorFrequency(line) {
   }
 }
 
-async function triggerLoopFix(errorLine, repeatCount) {
+function triggerLoopFix(errorLine, repeatCount) {
   if (!autoFixEnabled) return;
   loopFixInProgress = true;
 
@@ -1085,29 +1085,36 @@ async function triggerLoopFix(errorLine, repeatCount) {
       ? (msg) => void sendTelegramMessage(msg)
       : null;
 
-  try {
-    const result = await fixLoopingError({
-      errorLine,
-      repeatCount,
-      repoRoot,
-      logDir,
-      onTelegram: telegramFn,
-      recentMessages: getTelegramHistory(),
-    });
+  // Fire-and-forget: never block the stdout pipeline
+  void (async () => {
+    try {
+      const result = await fixLoopingError({
+        errorLine,
+        repeatCount,
+        repoRoot,
+        logDir,
+        onTelegram: telegramFn,
+        recentMessages: getTelegramHistory(),
+      });
 
-    if (result.fixed) {
-      console.log(
-        "[monitor] loop fix applied — file watcher will restart orchestrator",
-      );
+      if (result.fixed) {
+        console.log(
+          "[monitor] loop fix applied — file watcher will restart orchestrator",
+        );
+      } else {
+        console.log(
+          `[monitor] loop fix returned no changes: ${result.outcome || "no-fix"}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] loop fix error: ${err.message || err}`);
+      if (telegramFn) {
+        telegramFn(`🔁 Loop fix crashed: ${err.message || err}`);
+      }
+    } finally {
+      loopFixInProgress = false;
     }
-  } catch (err) {
-    console.warn(`[monitor] loop fix error: ${err.message || err}`);
-    if (telegramFn) {
-      telegramFn(`🔁 Loop fix crashed: ${err.message || err}`);
-    }
-  } finally {
-    loopFixInProgress = false;
-  }
+  })();
 }
 
 const contextPatterns = [
@@ -1585,8 +1592,14 @@ function ensureVkLogStream() {
             { signal: AbortSignal.timeout(10_000) },
           );
           if (!sessRes.ok) continue;
-          const sessions = await sessRes.json();
-          if (!Array.isArray(sessions) || sessions.length === 0) continue;
+          const sessBody = await sessRes.json();
+          // VK wraps responses in { success, data } envelope
+          const sessions = Array.isArray(sessBody)
+            ? sessBody
+            : Array.isArray(sessBody?.data)
+              ? sessBody.data
+              : [];
+          if (sessions.length === 0) continue;
           // Connect to the most recent session
           const sorted = sessions.sort(
             (a, b) =>
@@ -6771,82 +6784,81 @@ async function handleExit(code, signal, logPath) {
     return;
   }
 
-  // ── Auto-fix: try to fix the crash automatically ──────────────────────
-  if (autoFixEnabled && logText.length > 0) {
+  // ── Auto-fix: run in BACKGROUND — do NOT block orchestrator restart ──
+  // The orchestrator restarts immediately below. If autofix writes changes,
+  // the devmode file watcher will trigger a clean restart automatically.
+  // If no changes are needed, autofix just logs the outcome — no restart.
+  const hasRealErrors = logText.includes("ERROR") ||
+    logText.includes("FATAL") ||
+    logText.includes("Unhandled exception") ||
+    logText.includes("Exception") ||
+    logText.includes("Traceback");
+
+  if (autoFixEnabled && logText.length > 0 && hasRealErrors) {
     const telegramFn =
       telegramToken && telegramChatId
         ? (msg) => void sendTelegramMessage(msg)
         : null;
 
-    try {
-      const result = await attemptAutoFix({
-        logText: logText.slice(-15000),
-        reason,
-        repoRoot,
-        logDir,
-        onTelegram: telegramFn,
-        recentMessages: getTelegramHistory(),
-      });
+    // Fire-and-forget: autofix runs in background, orchestrator restarts now
+    void (async () => {
+      try {
+        const result = await attemptAutoFix({
+          logText: logText.slice(-15000),
+          reason,
+          repoRoot,
+          logDir,
+          onTelegram: telegramFn,
+          recentMessages: getTelegramHistory(),
+        });
 
-      if (result.fixed) {
-        // Fix was written to disk — the file watcher will restart us.
-        // Don't call startProcess() manually — let the watcher handle it.
-        console.log(
-          "[monitor] auto-fix applied, waiting for file watcher to restart",
-        );
-        return;
-      }
+        if (result.fixed) {
+          console.log(
+            "[monitor] background auto-fix applied — file watcher will restart orchestrator if needed",
+          );
+          return;
+        }
 
-      // Not fixed — notify that autofix tried but couldn't help
-      if (
-        result.outcome &&
-        result.outcome !== "clean-exit-skip" &&
-        telegramFn
-      ) {
-        // Only notify if we haven't already (attemptAutoFix sends its own notifications)
-        // but ensure the user knows the fallback path is happening
-        console.log(
-          `[monitor] auto-fix outcome: ${result.outcome.slice(0, 100)}`,
-        );
-      }
-    } catch (err) {
-      console.warn(`[monitor] auto-fix error: ${err.message || err}`);
-      if (telegramToken && telegramChatId) {
-        void sendTelegramMessage(
-          `🔧 Auto-fix crashed: ${err.message || err}\nFalling back to Codex analysis.`,
-        );
-      }
-    }
-  }
+        if (result.outcome && result.outcome !== "clean-exit-skip") {
+          console.log(
+            `[monitor] background auto-fix outcome: ${result.outcome.slice(0, 100)}`,
+          );
+        }
 
-  // ── Fallback: Codex SDK analysis (diagnosis only) ─────────────────────
-  if (telegramToken && telegramChatId) {
-    void sendTelegramMessage(
-      `🔍 Codex analysis triggered (${reason}):\nAuto-fix was unable to resolve the crash — running diagnostic analysis.`,
+        // Auto-fix couldn't help — run diagnostic analysis in background too
+        console.log("[monitor] auto-fix unsuccessful — running background Codex analysis");
+        await analyzeWithCodex(logPath, logText.slice(-15000), reason);
+      } catch (err) {
+        console.warn(`[monitor] background auto-fix error: ${err.message || err}`);
+      }
+    })();
+  } else if (autoFixEnabled && logText.length > 0 && !hasRealErrors) {
+    // No real errors in log — skip autofix entirely, just log
+    console.log(
+      `[monitor] exit ${reason} has no real errors in log — skipping autofix`,
     );
   }
-  await analyzeWithCodex(logPath, logText.slice(-15000), reason);
 
+  // ── Context window exhaustion: attempt fresh session (non-blocking) ───
   if (hasContextWindowError(logText)) {
     console.log(
-      "[monitor] context window exhaustion detected — attempting fresh session",
+      "[monitor] context window exhaustion detected — attempting fresh session in background",
     );
-    const freshStarted = await attemptFreshSessionRetry(
-      "context_window_exhausted",
-      logText.slice(-3000),
-    );
-    if (freshStarted) {
-      // Fresh session created — do NOT restart the current process.
-      // The new session will handle the task in the same workspace.
-      console.log("[monitor] fresh session handles task — skipping restart");
-      return;
-    }
-    // Fallback: leave the hint file for manual recovery
-    await writeFile(
-      logPath.replace(/\.log$/, "-context.txt"),
-      "Detected context window error. Fresh session retry failed — consider manual recovery.\n",
-      "utf8",
-    );
+    void (async () => {
+      const freshStarted = await attemptFreshSessionRetry(
+        "context_window_exhausted",
+        logText.slice(-3000),
+      );
+      if (freshStarted) {
+        console.log("[monitor] fresh session started for context-exhausted task");
+      } else {
+        await writeFile(
+          logPath.replace(/\.log$/, "-context.txt"),
+          "Detected context window error. Fresh session retry failed — consider manual recovery.\n",
+          "utf8",
+        );
+      }
+    })();
   }
 
   if (isAbnormalExit) {
@@ -6866,46 +6878,50 @@ async function handleExit(code, signal, logPath) {
         }
         if (telegramToken && telegramChatId) {
           void sendTelegramMessage(
-            `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
+            `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes. Background fix running.`,
           );
         }
+        // ── Background crash-loop fix: runs while orchestrator is paused ──
+        // Does NOT block handleExit. If it writes changes, file watcher restarts.
+        // If it fails, the pause timer will restart the orchestrator anyway.
         if (!orchestratorLoopFixInProgress) {
           orchestratorLoopFixInProgress = true;
-          const fixResult = await attemptCrashLoopFix({
-            reason,
-            logText,
-          }).catch((err) => ({
-            fixed: false,
-            outcome: err?.message || "crash-loop-fix-error",
-          }));
-          orchestratorLoopFixInProgress = false;
-          if (fixResult.fixed) {
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `🛠️ Crash-loop fix applied. Orchestrator will retry after cooldown.\n${fixResult.outcome}`,
-              );
-            }
-          } else {
-            // Crash loop fix failed — try a fresh session as last resort
-            console.log(
-              "[monitor] crash loop fix failed — attempting fresh session",
-            );
-            const freshStarted = await attemptFreshSessionRetry(
-              "crash_loop_unresolvable",
-              logText.slice(-3000),
-            );
-            if (freshStarted) {
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `🔄 Crash-loop fix failed but fresh session started. New agent will retry.`,
+          void (async () => {
+            try {
+              const fixResult = await attemptCrashLoopFix({
+                reason,
+                logText,
+              });
+              if (fixResult.fixed) {
+                console.log("[monitor] background crash-loop fix applied — file watcher will handle restart");
+                if (telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🛠️ Crash-loop fix applied. File watcher will restart orchestrator.\n${fixResult.outcome}`,
+                  );
+                }
+              } else {
+                console.log(`[monitor] background crash-loop fix unsuccessful: ${fixResult.outcome}`);
+                // Try fresh session as background last resort
+                const freshStarted = await attemptFreshSessionRetry(
+                  "crash_loop_unresolvable",
+                  logText.slice(-3000),
                 );
+                if (freshStarted && telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🔄 Crash-loop fix failed but fresh session started. New agent will retry.`,
+                  );
+                } else if (!freshStarted && telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `⚠️ Crash-loop fix failed: ${fixResult.outcome}. Orchestrator will resume after ${pauseMin}m pause.`,
+                  );
+                }
               }
-            } else if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `⚠️ Crash-loop fix attempt failed: ${fixResult.outcome}. Fresh session also failed. Orchestrator remains paused.`,
-              );
+            } catch (err) {
+              console.warn(`[monitor] background crash-loop fix error: ${err.message || err}`);
+            } finally {
+              orchestratorLoopFixInProgress = false;
             }
-          }
+          })();
         }
       }
       return;
@@ -7986,8 +8002,13 @@ if (
                 { signal: AbortSignal.timeout(10_000) },
               );
               if (!sessRes.ok) continue;
-              const sessions = await sessRes.json();
-              if (!Array.isArray(sessions) || sessions.length === 0) continue;
+              const sessBody = await sessRes.json();
+              const sessions = Array.isArray(sessBody)
+                ? sessBody
+                : Array.isArray(sessBody?.data)
+                  ? sessBody.data
+                  : [];
+              if (sessions.length === 0) continue;
               const sorted = sessions.sort(
                 (a, b) =>
                   new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
