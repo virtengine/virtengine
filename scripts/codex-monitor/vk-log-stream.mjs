@@ -289,6 +289,26 @@ export class VkLogStream {
     };
   }
 
+  /**
+   * Close the WebSocket for a specific process, effectively killing the log stream.
+   * @param {string} processId
+   * @param {string} [reason="killed by anomaly detector"]
+   * @returns {boolean} True if a connection was found and closed.
+   */
+  killProcess(processId, reason = "killed by anomaly detector") {
+    const ws = this.#connections.get(processId);
+    if (!ws) return false;
+    const shortId = processId.slice(0, 8);
+    console.warn(`[vk-log-stream:${shortId}] killing process: ${reason}`);
+    try {
+      ws.close(1000, reason);
+    } catch {
+      /* best effort */
+    }
+    this.#connections.delete(processId);
+    return true;
+  }
+
   // ── Private methods ────────────────────────────────────────────────────────
 
   /**
@@ -679,7 +699,18 @@ export class VkLogStream {
 
     const shortId = processId.slice(0, 8);
 
-    // Apply noise filter (drop if false)
+    // ALWAYS invoke onLine callback BEFORE filtering so the anomaly detector
+    // sees every line — including errors wrapped in codex/event/ JSON envelopes
+    // that filterLine would otherwise drop.
+    if (this.#onLine) {
+      try {
+        this.#onLine(line, { processId, stream, ...meta });
+      } catch {
+        /* callback error — ignore */
+      }
+    }
+
+    // Apply noise filter (drop if false) — only affects file/console output
     if (this.#filterLine && !this.#filterLine(line, { processId, stream })) {
       return;
     }
@@ -697,15 +728,6 @@ export class VkLogStream {
         process.stdout.write(`[vk:${shortId}:${prefix}] ${line}\n`);
       } catch {
         /* EPIPE */
-      }
-    }
-
-    // Callback
-    if (this.#onLine) {
-      try {
-        this.#onLine(line, { processId, stream, ...meta });
-      } catch {
-        /* callback error — ignore */
       }
     }
   }

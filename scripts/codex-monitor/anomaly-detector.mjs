@@ -75,8 +75,8 @@ const DEFAULT_THRESHOLDS = {
   thoughtSpinWarn: 25,
   thoughtSpinKill: 50,
 
-  // Model-not-supported failures before kill
-  modelFailureKill: 2,
+  // Model-not-supported failures before kill (high threshold — external issue)
+  modelFailureKill: 5,
 
   // Repeated error fingerprint threshold
   repeatedErrorWarn: 5,
@@ -487,6 +487,8 @@ export class AnomalyDetector {
 
   /**
    * P0: Model not supported — subagent dies, parent wastes ~90s retrying.
+   * This is an external issue (Azure/model config), so we warn aggressively
+   * but don't kill — killing won't fix an external config problem.
    */
   #detectModelNotSupported(line, state) {
     if (!line.includes(STR_MODEL_NOT_SUPPORTED)) return;
@@ -496,18 +498,18 @@ export class AnomalyDetector {
     if (state.modelFailureCount >= this.#thresholds.modelFailureKill) {
       this.#emit({
         type: AnomalyType.MODEL_NOT_SUPPORTED,
-        severity: Severity.CRITICAL,
+        severity: Severity.HIGH,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
         message: `Model not supported — ${state.modelFailureCount} failures, each wasting ~90s in retries`,
         data: { failureCount: state.modelFailureCount },
-        action: "kill",
+        action: "warn",
       });
     } else {
       this.#emit({
         type: AnomalyType.MODEL_NOT_SUPPORTED,
-        severity: Severity.HIGH,
+        severity: Severity.MEDIUM,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,

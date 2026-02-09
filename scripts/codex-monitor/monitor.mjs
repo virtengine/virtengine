@@ -41,6 +41,7 @@ import {
   setPrimaryAgent,
   getPrimaryAgentName,
   switchPrimaryAgent,
+  resetPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -1155,7 +1156,9 @@ const errorPatterns = [
   /SetValueInvocationException/i,
   /Cannot bind argument/i,
   /Unhandled/i,
-  /\bFailed\b/i,
+  /\bFailed to compile\b/i,
+  /\bFailed to start\b/i,
+  /\bFATAL\b/i,
   /Copilot assignment failed/i,
 ];
 
@@ -1539,6 +1542,31 @@ function ensureVkLogStream() {
         console.warn(
           `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
         );
+
+        // Act on kill/restart actions — kill the specific process, NOT the whole monitor.
+        // Circuit breaker is reserved for actual repeated monitor crashes, not per-process anomalies.
+        if (anomaly.action === "kill" || anomaly.action === "restart") {
+          console.warn(
+            `[anomaly-detector] executing action="${anomaly.action}" for ${anomaly.type} on process ${anomaly.shortId}`,
+          );
+
+          // 1. Kill the specific VK execution process log stream
+          if (vkLogStream && anomaly.processId) {
+            vkLogStream.killProcess(anomaly.processId, `anomaly-detector: ${anomaly.type}`);
+          }
+
+          // 2. Reset the primary agent session only for truly fatal anomalies
+          //    (token overflow, stream death) — NOT for model-not-supported or push loops
+          //    since those are external/transient issues.
+          if (
+            anomaly.type === "TOKEN_OVERFLOW" ||
+            anomaly.type === "STREAM_DEATH"
+          ) {
+            void resetPrimaryAgent().catch((err) => {
+              console.warn(`[anomaly-detector] resetPrimaryAgent failed: ${err.message}`);
+            });
+          }
+        }
       },
       notify: (text, options) => {
         sendTelegramMessage(text, options).catch(() => {});
@@ -1558,32 +1586,31 @@ function ensureVkLogStream() {
       // Drop verbose VK/Codex event chatter and token streams.
       if (!line) return false;
       if (line.length > 6000) return false;
-      if (line.startsWith("{\"method\":\"codex/event/")) return false;
-      if (line.startsWith("{\"method\":\"item/")) return false;
-      if (line.startsWith("{\"method\":\"thread/")) return false;
-      if (line.startsWith("{\"method\":\"account/")) return false;
-      if (line.includes("\"type\":\"reasoning_content_delta\"")) return false;
-      if (line.includes("\"type\":\"agent_reasoning_delta\"")) return false;
-      if (line.includes("\"type\":\"token_count\"")) return false;
-      if (line.includes("\"type\":\"item_started\"")) return false;
-      if (line.includes("\"type\":\"item_completed\"")) return false;
-      if (line.includes("\"type\":\"exec_command_begin\"")) return false;
-      if (line.includes("\"type\":\"exec_command_output_delta\"")) return false;
-      if (line.includes("\"type\":\"exec_command_end\"")) return false;
-      if (line.includes("\"method\":\"codex/event/reasoning_content_delta\""))
+      if (line.startsWith('{"method":"codex/event/')) return false;
+      if (line.startsWith('{"method":"item/')) return false;
+      if (line.startsWith('{"method":"thread/')) return false;
+      if (line.startsWith('{"method":"account/')) return false;
+      if (line.includes('"type":"reasoning_content_delta"')) return false;
+      if (line.includes('"type":"agent_reasoning_delta"')) return false;
+      if (line.includes('"type":"token_count"')) return false;
+      if (line.includes('"type":"item_started"')) return false;
+      if (line.includes('"type":"item_completed"')) return false;
+      if (line.includes('"type":"exec_command_begin"')) return false;
+      if (line.includes('"type":"exec_command_output_delta"')) return false;
+      if (line.includes('"type":"exec_command_end"')) return false;
+      if (line.includes('"method":"codex/event/reasoning_content_delta"'))
         return false;
-      if (line.includes("\"method\":\"codex/event/agent_reasoning_delta\""))
+      if (line.includes('"method":"codex/event/agent_reasoning_delta"'))
         return false;
-      if (line.includes("\"method\":\"codex/event/token_count\"")) return false;
-      if (line.includes("\"method\":\"codex/event/item_started\"")) return false;
-      if (line.includes("\"method\":\"codex/event/item_completed\"")) return false;
-      if (line.includes("\"method\":\"codex/event/exec_command_")) return false;
-      if (line.includes("\"method\":\"item/reasoning/summaryTextDelta\""))
+      if (line.includes('"method":"codex/event/token_count"')) return false;
+      if (line.includes('"method":"codex/event/item_started"')) return false;
+      if (line.includes('"method":"codex/event/item_completed"')) return false;
+      if (line.includes('"method":"codex/event/exec_command_')) return false;
+      if (line.includes('"method":"item/reasoning/summaryTextDelta"'))
         return false;
-      if (line.includes("\"method\":\"item/commandExecution/outputDelta\""))
+      if (line.includes('"method":"item/commandExecution/outputDelta"'))
         return false;
-      if (line.includes("\"method\":\"codex/event/agent_reasoning\""))
-        return false;
+      if (line.includes('"method":"codex/event/agent_reasoning"')) return false;
       return true;
     },
     onLine: (line, meta) => {
@@ -4802,11 +4829,17 @@ async function smartPRFlow(attemptId, shortId, status) {
           console.log(`[monitor] ${tag}: conflicts resolved via VK API`);
         } else {
           const attemptInfo = await getAttemptInfo(attemptId);
-          const worktreeDir =
+          let worktreeDir =
             attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+          // Fallback: look up worktree by branch name from git
+          if (!worktreeDir && (attemptInfo?.branch || attempt?.branch)) {
+            worktreeDir = findWorktreeForBranch(
+              attemptInfo?.branch || attempt?.branch,
+            );
+          }
           if (codexResolveConflictsEnabled) {
             console.warn(
-              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
+              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution (worktree: ${worktreeDir || "UNKNOWN"})`,
             );
             const classification = classifyConflictedFiles(files);
             const fileGuidance = files
@@ -6855,18 +6888,29 @@ async function handleExit(code, signal, logPath) {
     return;
   }
 
-  // ── Auto-fix: run in BACKGROUND — do NOT block orchestrator restart ──
-  // The orchestrator restarts immediately below. If autofix writes changes,
-  // the devmode file watcher will trigger a clean restart automatically.
+  // ── Auto-fix: runs in BACKGROUND only for genuine monitor/orchestrator crashes ──
+  // STRICT trigger: only fire when the orchestrator ITSELF crashed (unhandled
+  // exception, stack trace from our code, import error, etc.) — NOT when the
+  // log merely contains "ERROR" from normal task lifecycle messages.
+  //
+  // If autofix writes changes, the devmode file watcher triggers a clean restart.
   // If no changes are needed, autofix just logs the outcome — no restart.
-  const hasRealErrors =
-    logText.includes("ERROR") ||
-    logText.includes("FATAL") ||
+  const hasMonitorCrash =
     logText.includes("Unhandled exception") ||
-    logText.includes("Exception") ||
-    logText.includes("Traceback");
+    logText.includes("Unhandled rejection") ||
+    logText.includes("SyntaxError:") ||
+    logText.includes("ReferenceError:") ||
+    logText.includes("TypeError:") ||
+    logText.includes("Cannot find module") ||
+    logText.includes("FATAL ERROR") ||
+    logText.includes("Traceback (most recent call last)") ||
+    // PowerShell internal crash
+    logText.includes("TerminatingError") ||
+    logText.includes("script block termination") ||
+    // Very short runtime with high exit code = likely startup crash
+    (code > 1 && runDurationMs < 30_000);
 
-  if (autoFixEnabled && logText.length > 0 && hasRealErrors) {
+  if (autoFixEnabled && logText.length > 0 && hasMonitorCrash) {
     const telegramFn =
       telegramToken && telegramChatId
         ? (msg) => void sendTelegramMessage(msg)
@@ -6908,10 +6952,10 @@ async function handleExit(code, signal, logPath) {
         );
       }
     })();
-  } else if (autoFixEnabled && logText.length > 0 && !hasRealErrors) {
-    // No real errors in log — skip autofix entirely, just log
+  } else if (autoFixEnabled && logText.length > 0 && !hasMonitorCrash) {
+    // Not a monitor crash — normal exit with task errors. Skip autofix entirely.
     console.log(
-      `[monitor] exit ${reason} has no real errors in log — skipping autofix`,
+      `[monitor] exit ${reason} — no monitor crash detected — skipping autofix`,
     );
   }
 

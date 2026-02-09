@@ -956,11 +956,13 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.watchPath ||
       scriptPath,
   );
-  const echoLogs = flags.has("no-echo-logs")
-    ? false
-    : configData.echoLogs !== undefined
-      ? configData.echoLogs
-      : true;
+  const echoLogs = flags.has("echo-logs")
+    ? true
+    : flags.has("no-echo-logs")
+      ? false
+      : configData.echoLogs !== undefined
+        ? configData.echoLogs
+        : false;
   const autoFixEnabled = flags.has("no-autofix")
     ? false
     : configData.autoFixEnabled !== undefined
@@ -1149,9 +1151,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   // and conflict-aware ordering.
   const fleetEnabled = !["0", "false", "no"].includes(
     String(
-      process.env.FLEET_ENABLED ??
-        configData.fleetEnabled ??
-        "true",
+      process.env.FLEET_ENABLED ?? configData.fleetEnabled ?? "true",
     ).toLowerCase(),
   );
   const fleetBufferMultiplier = Number(
