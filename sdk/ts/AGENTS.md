@@ -1,6 +1,6 @@
 # Chain SDK (sdk/ts) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: TypeScript SDK for VirtEngine chain APIs, gRPC clients, wallet helpers, and provider SDK access (`sdk/ts/package.json:2`).
 - Use this package for TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
 - Key exports / public API surface:
@@ -75,8 +75,20 @@ const providerSDK = createProviderSDK({
 - Key deps: `@connectrpc/*`, `@cosmjs/*`, `jsrsasign`, `long` (`sdk/ts/package.json:60`).
 - Build outputs live in `sdk/ts/dist` (package `files` list, `sdk/ts/package.json:34`).
 
+## Configuration
+- Configure endpoints via SDK factory options (baseUrl, auth settings).
+- No required environment variables for the SDK itself.
+
 ## Testing
 - Tests live in `sdk/ts/test/` (unit + functional).
 - Commands:
   - `npm test` (runs Jest, `sdk/ts/package.json:41`).
   - `npm run test:unit` and `npm run test:functional` for focused suites.
+
+## Troubleshooting
+- gRPC transport errors:
+  - Cause: Incorrect baseUrl or missing gateway endpoints.
+  - Fix: Verify the query baseUrl matches the environment (testnet vs mainnet).
+- Auth failures on provider SDK:
+  - Cause: Missing or invalid mTLS certs.
+  - Fix: Re-check `authentication` options and cert/key formatting.
