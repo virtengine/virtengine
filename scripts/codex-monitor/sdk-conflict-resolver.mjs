@@ -77,7 +77,12 @@ function gitExec(args, cwd, timeoutMs = 30_000) {
       resolve({ success: false, stdout, stderr: err.message }),
     );
     child.on("exit", (code) =>
-      resolve({ success: code === 0, stdout: stdout.trim(), stderr: stderr.trim(), code }),
+      resolve({
+        success: code === 0,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        code,
+      }),
     );
   });
 }
@@ -127,16 +132,13 @@ async function getConflictDiffs(worktreePath, files) {
   const diffs = {};
   for (const file of files.slice(0, 10)) {
     // Cap at 10 files to avoid prompt explosion
-    const result = await gitExec(
-      ["diff", "--", file],
-      worktreePath,
-      15_000,
-    );
+    const result = await gitExec(["diff", "--", file], worktreePath, 15_000);
     if (result.stdout) {
       // Truncate very large diffs
-      diffs[file] = result.stdout.length > 4000
-        ? result.stdout.slice(0, 4000) + "\n... (truncated)"
-        : result.stdout;
+      diffs[file] =
+        result.stdout.length > 4000
+          ? result.stdout.slice(0, 4000) + "\n... (truncated)"
+          : result.stdout;
     }
   }
   return diffs;
@@ -272,13 +274,13 @@ export function buildSDKConflictPrompt({
   // Auto-resolvable files
   if (autoFiles.length > 0) {
     lines.push(`## Auto-Resolvable Files (handle these first)`);
-    lines.push(
-      `These files can be resolved mechanically. Run these commands:`,
-    );
+    lines.push(`These files can be resolved mechanically. Run these commands:`);
     lines.push("```bash");
     lines.push(`cd "${worktreePath}"`);
     for (const { file, strategy } of autoFiles) {
-      lines.push(`git checkout --${strategy} -- "${file}" && git add "${file}"`);
+      lines.push(
+        `git checkout --${strategy} -- "${file}" && git add "${file}"`,
+      );
     }
     lines.push("```");
     lines.push("");
@@ -326,9 +328,7 @@ export function buildSDKConflictPrompt({
   // Resolution instructions
   lines.push(`## After Resolving All Files`);
   lines.push(`1. Verify NO conflict markers remain:`);
-  lines.push(
-    "   ```bash",
-  );
+  lines.push("   ```bash");
   lines.push(
     `   git grep -n "^<<<<<<<\\|^=======\\|^>>>>>>>" -- . || echo "Clean"`,
   );
@@ -346,12 +346,8 @@ export function buildSDKConflictPrompt({
   lines.push(
     `- Do NOT abort the merge. Resolve the conflicts and complete it.`,
   );
-  lines.push(
-    `- Do NOT run \`git merge\` again — one is already in progress.`,
-  );
-  lines.push(
-    `- Do NOT use \`git rebase\` — we use merge-based updates.`,
-  );
+  lines.push(`- Do NOT run \`git merge\` again — one is already in progress.`);
+  lines.push(`- Do NOT use \`git rebase\` — we use merge-based updates.`);
   lines.push(
     `- When in doubt about conflicting code, keep BOTH sides and deduplicate imports/declarations.`,
   );
@@ -412,7 +408,9 @@ export async function resolveConflictsWithSDK({
 
   // ── Guard: max attempts ─────────────────────────────────────────
   if (isSDKResolutionExhausted(branch)) {
-    console.log(`${tag} max attempts (${SDK_CONFLICT_MAX_ATTEMPTS}) reached — manual intervention needed`);
+    console.log(
+      `${tag} max attempts (${SDK_CONFLICT_MAX_ATTEMPTS}) reached — manual intervention needed`,
+    );
     return {
       success: false,
       resolvedFiles: [],
@@ -435,7 +433,9 @@ export async function resolveConflictsWithSDK({
   // ── Step 1: Check merge state ───────────────────────────────────
   const mergeActive = await isMergeInProgress(worktreePath);
   if (!mergeActive) {
-    console.log(`${tag} no merge in progress — starting merge of origin/${baseBranch}`);
+    console.log(
+      `${tag} no merge in progress — starting merge of origin/${baseBranch}`,
+    );
     // Fetch and start the merge
     await gitExec(["fetch", "origin", baseBranch], worktreePath);
     const mergeResult = await gitExec(
@@ -448,7 +448,11 @@ export async function resolveConflictsWithSDK({
       // Push the merge
       await gitExec(["push", "origin", `HEAD:${branch}`], worktreePath, 60_000);
       recordSDKAttempt(branch, true);
-      return { success: true, resolvedFiles: [], log: "Merge completed cleanly" };
+      return {
+        success: true,
+        resolvedFiles: [],
+        log: "Merge completed cleanly",
+      };
     }
     // Merge failed due to conflicts — continue to resolution
   }
@@ -529,7 +533,9 @@ export async function resolveConflictsWithSDK({
   // ── Step 7: Log the result ──────────────────────────────────────
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const effectiveLogDir =
-    logDir || resolve(worktreePath, "..", "..", "logs") || resolve(worktreePath, "logs");
+    logDir ||
+    resolve(worktreePath, "..", "..", "logs") ||
+    resolve(worktreePath, "logs");
   try {
     await mkdir(effectiveLogDir, { recursive: true });
     const logPath = resolve(
@@ -611,14 +617,18 @@ async function launchSDKAgent(prompt, cwd, timeoutMs) {
   }
 
   // No SDK available — fall back to the primary agent module
-  console.warn("[sdk-resolve] no CLI SDK available — trying primary agent module");
+  console.warn(
+    "[sdk-resolve] no CLI SDK available — trying primary agent module",
+  );
   try {
     const { execPrimaryPrompt } = await import("./primary-agent.mjs");
     const result = await execPrimaryPrompt(prompt, { timeoutMs });
     return {
       success: !!result?.finalResponse,
       output: result?.finalResponse || "",
-      error: result?.finalResponse ? null : "Primary agent returned no response",
+      error: result?.finalResponse
+        ? null
+        : "Primary agent returned no response",
     };
   } catch (err) {
     return {
@@ -711,17 +721,13 @@ function launchCopilotExec(prompt, cwd, timeoutMs) {
   return new Promise((resolvePromise) => {
     let child;
     try {
-      child = spawn(
-        "github-copilot-cli",
-        ["--prompt", prompt],
-        {
-          cwd,
-          stdio: ["ignore", "pipe", "pipe"],
-          shell: process.platform === "win32",
-          timeout: timeoutMs,
-          env: { ...process.env },
-        },
-      );
+      child = spawn("github-copilot-cli", ["--prompt", prompt], {
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: process.platform === "win32",
+        timeout: timeoutMs,
+        env: { ...process.env },
+      });
     } catch (err) {
       return resolvePromise({
         success: false,

@@ -1,5 +1,11 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, watch, writeFileSync, appendFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  watch,
+  writeFileSync,
+  appendFileSync,
+} from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -8,6 +14,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
+import { clearLine, createInterface, cursorTo } from "node:readline";
 import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +38,8 @@ import {
   isPrimaryBusy,
   initPrimaryAgent,
   setPrimaryAgent,
+  getPrimaryAgentName,
+  switchPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -157,6 +166,346 @@ async function releaseTelegramPollLock() {
   }
 }
 
+// ── Interactive shell helpers ───────────────────────────────────────────────
+
+function shellClearLine() {
+  if (!shellState.rl || !shellIsTTY) return;
+  try {
+    clearLine(process.stdout, 0);
+    cursorTo(process.stdout, 0);
+  } catch {
+    /* best effort */
+  }
+}
+
+function shellWriteRaw(chunk) {
+  if (!shellState.rl) {
+    process.stdout.write(chunk);
+    return;
+  }
+  shellClearLine();
+  process.stdout.write(chunk);
+  shellState.rl.prompt(true);
+}
+
+function shellWriteLine(text) {
+  if (!shellState.rl) {
+    process.stdout.write(`${text}\n`);
+    return;
+  }
+  shellClearLine();
+  process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
+  shellState.rl.prompt(true);
+}
+
+function shellWriteInfo(text) {
+  shellWriteLine(`${shellInfoPrefix}${text}`);
+}
+
+function shellWriteWarn(text) {
+  shellWriteLine(`${shellAnsi.yellow("[shell]")} ${text}`);
+}
+
+function shellWriteError(text) {
+  shellWriteLine(`${shellAnsi.red("[shell]")} ${text}`);
+}
+
+function shellBeginAgentStream() {
+  shellState.agentStreaming = true;
+  shellState.agentStreamed = false;
+  shellState.agentPrefixPrinted = false;
+}
+
+function shellWriteAgentChunk(text) {
+  if (!text) return;
+  if (!shellState.rl) {
+    process.stdout.write(text);
+    return;
+  }
+  if (!shellState.agentPrefixPrinted) {
+    shellClearLine();
+    process.stdout.write(shellPromptText);
+    shellState.agentPrefixPrinted = true;
+  }
+  process.stdout.write(text);
+  shellState.agentStreamed = true;
+}
+
+function shellEndAgentStream() {
+  if (!shellState.rl) {
+    process.stdout.write("\n");
+    return;
+  }
+  if (shellState.agentPrefixPrinted) {
+    process.stdout.write("\n");
+  }
+  shellState.agentStreaming = false;
+  shellState.agentPrefixPrinted = false;
+  shellState.rl.prompt(true);
+}
+
+function normalizeShellAgentName(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "";
+  if (["codex", "codex-sdk", "codexsdk"].includes(raw)) return "codex-sdk";
+  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
+    return "copilot-sdk";
+  if (["claude", "claude-sdk", "claude-code", "claude_code"].includes(raw))
+    return "claude-sdk";
+  return raw;
+}
+
+function executorToAgent(executor) {
+  const normalized = String(executor || "").toUpperCase();
+  if (normalized === "COPILOT") return "copilot-sdk";
+  if (normalized === "CLAUDE") return "claude-sdk";
+  return "codex-sdk";
+}
+
+function getAvailableShellAgents() {
+  const agents = new Map();
+  const executors = config?.executorConfig?.executors || [];
+  for (const exec of executors) {
+    const mapped = executorToAgent(exec.executor);
+    if (!agents.has(mapped)) {
+      agents.set(mapped, exec);
+    }
+  }
+  if (!agents.size) {
+    agents.set(primaryAgentName || "codex-sdk", null);
+  }
+  return agents;
+}
+
+function extractAgentDeltaText(event) {
+  if (!event) return null;
+  // Copilot SDK streaming
+  if (event.type === "assistant.message_delta" && event.data?.deltaContent) {
+    return event.data.deltaContent;
+  }
+  if (event.type === "assistant.message" && event.data?.content) {
+    return event.data.content;
+  }
+
+  // Codex SDK streaming (best-effort — handles multiple event shapes)
+  if (event.type === "item.delta" || event.type?.includes("delta")) {
+    const delta =
+      event.delta ||
+      event.data?.delta ||
+      event.item?.delta ||
+      event.message?.delta ||
+      null;
+    if (delta) {
+      if (typeof delta.text === "string") return delta.text;
+      if (typeof delta.content === "string") return delta.content;
+      if (Array.isArray(delta.content)) {
+        const textParts = delta.content
+          .map((part) => part?.text || part?.value || "")
+          .filter(Boolean);
+        if (textParts.length) return textParts.join("");
+      }
+    }
+    if (typeof event.text === "string") return event.text;
+  }
+
+  return null;
+}
+
+async function buildShellContext() {
+  const statusData = await readStatusData();
+  const summary = await readStatusSummary();
+  const logTail = stripAnsi(logRemainder || "")
+    .slice(-2000)
+    .trim();
+  const errorLine = stripAnsi(lastErrorLine || "").trim();
+
+  const blocks = [];
+  if (summary?.text) {
+    blocks.push(`## Orchestrator Summary\n${summary.text}`);
+  }
+  if (errorLine) {
+    const errorAt = lastErrorAt ? new Date(lastErrorAt).toISOString() : "";
+    const header = errorAt ? `## Recent Error (${errorAt})` : "## Recent Error";
+    blocks.push(`${header}\n${errorLine}`);
+  }
+  if (logTail) {
+    blocks.push(`## Recent Logs\n${logTail}`);
+  }
+
+  return {
+    statusData,
+    contextText: blocks.join("\n\n").trim(),
+  };
+}
+
+function buildShellUserPrompt(input, contextText) {
+  if (!contextText) return input;
+  return `${contextText}\n\n## Operator Prompt\n${input}`.trim();
+}
+
+async function handleShellCommand(command, argText) {
+  const cmd = command.toLowerCase();
+  if (cmd === "/help" || cmd === ":help") {
+    const agents = Array.from(getAvailableShellAgents().keys());
+    shellWriteInfo(
+      [
+        "Commands:",
+        "  /help                 Show this help",
+        "  /agent [name]         Show or switch agent (codex|copilot|claude)",
+        "  /status               Print current orchestrator summary",
+        "  /context              Show injected context summary",
+        "  /stop                 Stop the active agent run",
+        "  /exit                 Close the interactive shell",
+        "",
+        `Available agents: ${agents.join(", ") || "none"}`,
+      ].join("\n"),
+    );
+    return;
+  }
+  if (cmd === "/exit" || cmd === "/quit" || cmd === ":quit") {
+    shellWriteInfo("Closing interactive shell.");
+    if (shellState.rl) shellState.rl.close();
+    return;
+  }
+  if (cmd === "/status") {
+    const summary = await readStatusSummary();
+    shellWriteLine(summary?.text || "Status unavailable.");
+    return;
+  }
+  if (cmd === "/context") {
+    const ctx = await buildShellContext();
+    if (!ctx.contextText) {
+      shellWriteInfo("No context available.");
+      return;
+    }
+    shellWriteLine(ctx.contextText);
+    return;
+  }
+  if (cmd === "/stop") {
+    if (shellState.abortController) {
+      shellState.abortController.abort("user_stop");
+      shellWriteInfo("Stop requested.");
+    } else {
+      shellWriteInfo("No active agent run to stop.");
+    }
+    return;
+  }
+  if (cmd === "/agent") {
+    const desiredRaw = (argText || "").trim();
+    const normalized = normalizeShellAgentName(desiredRaw);
+    if (!normalized) {
+      shellWriteInfo(`Current agent: ${getPrimaryAgentName()}`);
+      return;
+    }
+    const available = getAvailableShellAgents();
+    if (!available.has(normalized)) {
+      shellWriteWarn(
+        `Agent "${normalized}" not in configured executors. Available: ${Array.from(available.keys()).join(", ")}`,
+      );
+      return;
+    }
+    const result = await switchPrimaryAgent(normalized);
+    if (result?.ok) {
+      shellWriteInfo(`Active agent switched to ${result.name}.`);
+    } else {
+      shellWriteWarn(
+        `Failed to switch agent: ${result?.reason || "unknown error"}`,
+      );
+    }
+    return;
+  }
+  shellWriteWarn(`Unknown shell command: ${command}`);
+}
+
+async function runShellPrompt(input) {
+  if (!input.trim()) return;
+  if (isPrimaryBusy()) {
+    shellWriteWarn("Primary agent is busy. Try again shortly or /stop.");
+    return;
+  }
+  shellBeginAgentStream();
+  const abortController = new AbortController();
+  shellState.abortController = abortController;
+
+  try {
+    const { statusData, contextText } = await buildShellContext();
+    const prompt = buildShellUserPrompt(input, contextText);
+
+    const onEvent = async (_formatted, rawEvent) => {
+      const delta = extractAgentDeltaText(rawEvent);
+      if (delta) {
+        shellWriteAgentChunk(delta);
+      }
+    };
+
+    const result = await execPrimaryPrompt(prompt, {
+      statusData,
+      onEvent,
+      sendRawEvents: true,
+      abortController,
+    });
+
+    if (!shellState.agentStreamed && result?.finalResponse) {
+      shellWriteLine(`${shellPromptText}${result.finalResponse}`);
+    }
+  } catch (err) {
+    shellWriteError(err?.message || String(err));
+  } finally {
+    shellState.abortController = null;
+    shellEndAgentStream();
+  }
+}
+
+function startInteractiveShell() {
+  if (!shellState.enabled) return;
+  if (!shellIsTTY) {
+    shellWriteWarn(
+      "Interactive shell requested but no TTY detected; skipping.",
+    );
+    return;
+  }
+  if (shellState.rl) return;
+  shellState.prompt = shellPromptText;
+  shellState.rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+    historySize: Number(process.env.CODEX_MONITOR_SHELL_HISTORY || "200"),
+  });
+  shellState.active = true;
+  shellState.rl.setPrompt(shellState.prompt);
+  shellWriteInfo("Interactive shell enabled. Type /help for commands.");
+  shellState.rl.prompt();
+
+  shellState.rl.on("line", (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      shellState.rl.prompt();
+      return;
+    }
+    if (trimmed.startsWith("/") || trimmed.startsWith(":")) {
+      const [cmd, ...rest] = trimmed.split(/\s+/);
+      shellState.queue = shellState.queue
+        .then(() => handleShellCommand(cmd, rest.join(" ")))
+        .catch((err) =>
+          shellWriteError(err?.message || "Shell command failed"),
+        );
+      return;
+    }
+    shellState.queue = shellState.queue
+      .then(() => runShellPrompt(trimmed))
+      .catch((err) => shellWriteError(err?.message || "Shell prompt failed"));
+  });
+
+  shellState.rl.on("close", () => {
+    shellState.active = false;
+    shellState.rl = null;
+    shellWriteInfo("Interactive shell closed.");
+  });
+}
+
 let {
   projectName,
   scriptPath,
@@ -169,6 +518,7 @@ let {
   watchEnabled,
   watchPath: configWatchPath,
   echoLogs,
+  interactiveShellEnabled,
   autoFixEnabled,
   preflightEnabled: configPreflightEnabled,
   preflightRetryMs: configPreflightRetryMs,
@@ -218,6 +568,29 @@ let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+
+// ── Interactive shell state ────────────────────────────────────────────────
+const shellState = {
+  enabled: !!interactiveShellEnabled,
+  active: false,
+  rl: null,
+  prompt: "",
+  agentStreaming: false,
+  agentStreamed: false,
+  agentPrefixPrinted: false,
+  abortController: null,
+  queue: Promise.resolve(),
+};
+const shellIsTTY = process.stdin.isTTY && process.stdout.isTTY;
+const shellAnsi = {
+  cyan: (s) => (process.stdout.isTTY ? `\x1b[36m${s}\x1b[0m` : s),
+  green: (s) => (process.stdout.isTTY ? `\x1b[32m${s}\x1b[0m` : s),
+  yellow: (s) => (process.stdout.isTTY ? `\x1b[33m${s}\x1b[0m` : s),
+  dim: (s) => (process.stdout.isTTY ? `\x1b[2m${s}\x1b[22m` : s),
+  red: (s) => (process.stdout.isTTY ? `\x1b[31m${s}\x1b[0m` : s),
+};
+const shellPromptText = shellAnsi.cyan("[agent]") + " > ";
+const shellInfoPrefix = shellAnsi.dim("[shell]") + " ";
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let codexDisabledReason = codexEnabled
   ? ""
@@ -350,6 +723,8 @@ let orchestratorResumeTimer = null;
 const restartController = new RestartController();
 
 let logRemainder = "";
+let lastErrorLine = "";
+let lastErrorAt = 0;
 const mergeNotified = new Set();
 const pendingMerges = new Set();
 const errorNotified = new Map();
@@ -2823,7 +3198,6 @@ async function checkMergedPRsAndUpdateTasks() {
       );
       if (knownBranch) {
         mergedTaskCache.add(task.id);
-        clearDirtyTask(task.id);
         // Cache all branches for this task
         for (const c of candidates) {
           if (c.branch) mergedBranchCache.add(c.branch);
@@ -2872,7 +3246,6 @@ async function checkMergedPRsAndUpdateTasks() {
             );
             const success = await updateTaskStatus(task.id, "done");
             movedCount++;
-            clearDirtyTask(task.id);
             mergedTaskCache.add(task.id);
             for (const c of candidates) {
               if (c.branch) mergedBranchCache.add(c.branch);
@@ -2913,14 +3286,6 @@ async function checkMergedPRsAndUpdateTasks() {
                 attemptId: cand.attemptId,
                 branch: cand.branch,
               });
-              // Register as a dirty task for slot reservation + file-overlap guard
-              registerDirtyTask({
-                taskId: task.id,
-                prNumber: cand.prNumber,
-                branch: cand.branch,
-                title: task.title,
-                files: prInfo?.files?.map((f) => f.filename || f) || [],
-              });
             }
           }
         }
@@ -2940,7 +3305,6 @@ async function checkMergedPRsAndUpdateTasks() {
           );
           const success = await updateTaskStatus(task.id, "done");
           movedCount++;
-          clearDirtyTask(task.id);
           mergedTaskCache.add(task.id);
           for (const c of candidates) {
             if (c.branch) mergedBranchCache.add(c.branch);
@@ -3065,10 +3429,7 @@ async function checkMergedPRsAndUpdateTasks() {
                     const result = await resolveConflictsWithSDK({
                       worktreePath,
                       branch: cc.branch,
-                      baseBranch: resolveAttemptTargetBranch(
-                        attemptInfo,
-                        task,
-                      ),
+                      baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
                       prNumber: cc.prNumber,
                       taskTitle: task.title,
                       taskDescription: task.description || "",
@@ -3634,19 +3995,12 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
       ? statusData.active_attempts
       : Object.values(statusData?.attempts || {});
 
-    // Also fetch VK task-attempts as fallback (filter to active attempts only)
+    // Also fetch VK task-attempts as fallback
     let vkAttempts = [];
     try {
       const vkRes = await fetchVk("/api/task-attempts");
       const vkData = vkRes?.data ?? vkRes;
-      if (Array.isArray(vkData)) {
-        // CRITICAL: Only include attempts for active tasks (inprogress/inreview)
-        // Ignore attempts for completed/done/cancelled/succeeded tasks
-        const activeTaskIds = new Set(allTasks.map((t) => t.id));
-        vkAttempts = vkData.filter((attempt) => {
-          return attempt?.task_id && activeTaskIds.has(attempt.task_id);
-        });
-      }
+      if (Array.isArray(vkData)) vkAttempts = vkData;
     } catch {
       /* best-effort */
     }
@@ -3681,14 +4035,6 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
 
       if (!attempt || attempt.id === excludeAttemptId) continue;
       if (!attempt.branch) continue;
-
-      // Skip archived or completed attempts (safety check)
-      if (attempt.status === "archived" || attempt.archived_at) {
-        console.log(
-          `[${tag}] skipping archived attempt "${task.title}" (${attempt.id.substring(0, 8)})`,
-        );
-        continue;
-      }
 
       console.log(
         `[${tag}] rebasing task "${task.title}" (${attempt.id.substring(0, 8)}) onto ${mergedUpstreamBranch}`,
@@ -4330,16 +4676,41 @@ async function smartPRFlow(attemptId, shortId, status) {
             console.warn(
               `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
             );
-            // Use standardized conflict resolution prompt from conflict-resolver module
-            const prompt = buildConflictResolutionPrompt({
-              attemptId,
-              shortId,
-              taskTitle: attempt?.task_title || shortId,
-              taskDescription: attempt?.task_description || "",
-              conflictedFiles: files,
-              worktreeDir,
-              targetBranch,
-            });
+            const classification = classifyConflictedFiles(files);
+            const fileGuidance = files
+              .map((f) => {
+                const fn = f.split("/").pop();
+                if (
+                  AUTO_RESOLVE_THEIRS.includes(fn) ||
+                  AUTO_RESOLVE_LOCK_EXTENSIONS.some((ext) => fn.endsWith(ext))
+                ) {
+                  return `  - ${f}: Accept THEIRS (upstream version — lock/generated file)`;
+                }
+                if (AUTO_RESOLVE_OURS.includes(fn)) {
+                  return `  - ${f}: Accept OURS (keep our version)`;
+                }
+                return `  - ${f}: Resolve MANUALLY (inspect both sides, merge intelligently)`;
+              })
+              .join("\n");
+            const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
+Worktree: ${worktreeDir || "(unknown)"}
+Attempt: ${shortId}
+Conflicted files: ${files.join(", ") || "(unknown)"}
+
+Per-file resolution strategy:
+${fileGuidance}
+
+Instructions:
+1) cd into the worktree directory.
+2) For each conflicted file, apply the strategy above:
+   - THEIRS: git checkout --theirs -- <file> && git add <file>
+   - OURS: git checkout --ours -- <file> && git add <file>
+   - MANUAL: Open the file, remove conflict markers (<<<< ==== >>>>), merge both sides intelligently, then git add <file>
+3) After resolving all files, run: git rebase --continue
+4) If more conflicts appear, repeat steps 2-3.
+5) Once rebase completes, push the branch: git push --force-with-lease
+6) Verify the build still passes if possible.
+Return a short summary of what you did and any files that needed manual resolution.`;
             const codexResult = await runCodexExec(
               prompt,
               worktreeDir || repoRoot,
@@ -4374,49 +4745,21 @@ async function smartPRFlow(attemptId, shortId, status) {
               );
             }
           }
-          // Auto-resolve failed — ALWAYS start fresh session for conflict resolution
-          // Never reuse context — dirty conflicts need a clean slate with full context
+          // Auto-resolve failed — ask agent to fix
           console.warn(
-            `[monitor] ${tag}: auto-resolve failed — starting FRESH conflict resolution session`,
+            `[monitor] ${tag}: auto-resolve failed — prompting agent`,
           );
-
-          // Build structured conflict resolution prompt
-          const conflictPrompt = buildConflictResolutionPrompt({
-            attemptId,
-            shortId,
-            taskTitle: attempt?.task_title || shortId,
-            taskDescription: attempt?.task_description || "",
-            conflictedFiles: files,
-            worktreeDir: attempt?.worktree_dir || attempt?.worktree || null,
-            targetBranch,
-          });
-
           if (telegramToken && telegramChatId) {
             void sendTelegramMessage(
-              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}.\n` +
-                `🔄 Starting fresh conflict resolution session (HIGH tier).`,
+              `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-
-          // Force a new session — never reuse context for conflict resolution
-          const freshStarted = await startFreshSession(
-            conflictPrompt,
-            `conflict_resolution_${shortId}`,
-          );
-          if (freshStarted) {
-            console.log(
-              `[monitor] ${tag}: fresh conflict resolution session started`,
+          if (primaryAgentReady && !isPrimaryBusy()) {
+            void execPrimaryPrompt(
+              `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
+                `Please resolve the conflicts, commit, push, and create a PR.`,
+              { timeoutMs: 15 * 60 * 1000 },
             );
-          } else {
-            // Fallback: try primary agent if fresh session failed
-            console.warn(
-              `[monitor] ${tag}: fresh session failed — falling back to primary agent prompt`,
-            );
-            if (primaryAgentReady && !isPrimaryBusy()) {
-              void execPrimaryPrompt(conflictPrompt, {
-                timeoutMs: 15 * 60 * 1000,
-              });
-            }
           }
           return;
         }
@@ -6572,7 +6915,7 @@ async function startProcess() {
   const append = async (chunk) => {
     if (echoLogs) {
       try {
-        process.stdout.write(chunk);
+        shellWriteRaw(chunk);
       } catch {
         /* EPIPE — ignore */
       }
@@ -6590,6 +6933,8 @@ async function startProcess() {
       // ── Agent log streaming: fan out to per-attempt log files ──
       streamToAgentLog(line);
       if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
+        lastErrorLine = line;
+        lastErrorAt = Date.now();
         notifyErrorLine(line);
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
@@ -6913,6 +7258,7 @@ function applyConfig(nextConfig, options = {}) {
   watchPath = resolve(nextConfig.watchPath);
   echoLogs = nextConfig.echoLogs;
   autoFixEnabled = nextConfig.autoFixEnabled;
+  shellState.enabled = !!nextConfig.interactiveShellEnabled;
   preflightEnabled = nextConfig.preflightEnabled;
   preflightRetryMs = nextConfig.preflightRetryMs;
   repoRoot = nextConfig.repoRoot;
@@ -6998,6 +7344,12 @@ function applyConfig(nextConfig, options = {}) {
   if (prevPreflightEnabled && !preflightEnabled && preflightRetryTimer) {
     clearTimeout(preflightRetryTimer);
     preflightRetryTimer = null;
+  }
+
+  if (shellState.enabled && !shellState.active) {
+    startInteractiveShell();
+  } else if (!shellState.enabled && shellState.active && shellState.rl) {
+    shellState.rl.close();
   }
 
   const nextArgs = scriptArgs?.join(" ") || "";
@@ -7269,6 +7621,7 @@ startAutoUpdateLoop({
 startWatcher();
 startEnvWatchers();
 startSelfWatcher();
+startInteractiveShell();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }

@@ -217,12 +217,14 @@ function Get-EnvFallback {
     try {
         $value = [Environment]::GetEnvironmentVariable($Name)
         if ($value) { return $value }
-    } catch { }
+    }
+    catch { }
 
     try {
         $item = Get-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue
         if ($item -and $item.Value) { return $item.Value }
-    } catch { }
+    }
+    catch { }
 
     try {
         $all = [Environment]::GetEnvironmentVariables()
@@ -230,7 +232,8 @@ function Get-EnvFallback {
             $value = $all[$Name]
             if ($value) { return $value }
         }
-    } catch { }
+    }
+    catch { }
 
     return $null
 }
@@ -247,14 +250,17 @@ function Set-EnvValue {
     try {
         if ($null -eq $Value -or $Value -eq "") {
             Remove-Item -Path ("Env:{0}" -f $Name) -ErrorAction SilentlyContinue | Out-Null
-        } else {
+        }
+        else {
             Set-Item -Path ("Env:{0}" -f $Name) -Value $Value -ErrorAction SilentlyContinue | Out-Null
         }
-    } catch { }
+    }
+    catch { }
 
     try {
         [Environment]::SetEnvironmentVariable($Name, $Value)
-    } catch { }
+    }
+    catch { }
 }
 
 function Get-EnvInt {
@@ -1586,7 +1592,7 @@ $script:ComplexityModels = @{
     "CODEX"   = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
         "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.1-codex-max"; variant = "GPT51_CODEX_MAX"; reasoningEffort = "high" }
+        "high"   = @{ model = "gpt-5.3-codex"; variant = "DEFAULT"; reasoningEffort = "high" }
     }
     "COPILOT" = @{
         "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
@@ -2649,12 +2655,13 @@ function Get-RebaseCooldownState {
         $state = @{}
         foreach ($prop in $raw.PSObject.Properties) {
             $state[$prop.Name] = @{
-                attempted_at  = $prop.Value.attempted_at
+                attempted_at   = $prop.Value.attempted_at
                 cooldown_until = $prop.Value.cooldown_until
             }
         }
         return $state
-    } catch {
+    }
+    catch {
         return @{}
     }
 }
@@ -2665,7 +2672,8 @@ function Set-RebaseCooldownState {
         $dir = Split-Path $script:RebaseCooldownPath -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
         $State | ConvertTo-Json -Depth 3 | Set-Content $script:RebaseCooldownPath -Encoding UTF8 -Force
-    } catch {
+    }
+    catch {
         Write-Log "Failed to persist rebase cooldown: $($_.Exception.Message)" -Level "WARN"
     }
 }
@@ -2703,7 +2711,8 @@ function Set-RebaseCooldown {
         try {
             $until = [DateTime]::Parse($state[$key].cooldown_until)
             if ($until -gt $cutoff) { $pruned[$key] = $state[$key] }
-        } catch { $pruned[$key] = $state[$key] }
+        }
+        catch { $pruned[$key] = $state[$key] }
     }
     Set-RebaseCooldownState -State $pruned
 }
@@ -2791,7 +2800,8 @@ function Invoke-DirectRebase {
         }
         $useWorktree = $true
         Write-Log "Using worktree at $worktreePath for rebase" -Level "INFO"
-    } else {
+    }
+    else {
         # No worktree — fall back to VK API rebase (do NOT use main repo checkout)
         Write-Log "No worktree found for $Branch — using VK API rebase only" -Level "INFO"
         Set-RebaseCooldown -Branch $Branch -CooldownMinutes 30
@@ -2828,7 +2838,8 @@ function Invoke-DirectRebase {
                     return "sdk_needed"
                 }
                 Write-Log "Auto-resolved merge conflicts for $Branch" -Level "OK"
-            } finally {
+            }
+            finally {
                 Pop-Location
             }
         }
@@ -2999,7 +3010,8 @@ function Resolve-MergeConflicts {
         }
         if ($strategy -eq "theirs") {
             git checkout --theirs -- $file 2>&1 | Out-Null
-        } else {
+        }
+        else {
             git checkout --ours -- $file 2>&1 | Out-Null
         }
         git add $file 2>&1 | Out-Null
@@ -4881,20 +4893,20 @@ function Test-DirtyPRFileOverlap {
     if ($dirtyTasks.Count -eq 0) { return $false }
 
     $modulePatterns = @{
-        'portal'     = @('portal/', 'lib/portal/', 'lib/capture/', 'lib/admin/', 'pnpm-lock.yaml')
-        'veid'       = @('x/veid/', 'pkg/inference/')
-        'market'     = @('x/market/')
-        'escrow'     = @('x/escrow/')
-        'mfa'        = @('x/mfa/')
-        'encryption' = @('x/encryption/')
-        'provider'   = @('pkg/provider_daemon/', 'cmd/provider-daemon/')
-        'hpc'        = @('x/hpc/')
-        'roles'      = @('x/roles/')
-        'sdk'        = @('sdk/')
-        'app'        = @('app/')
-        'ci'         = @('.github/', 'Makefile', 'make/')
-        'ml'         = @('ml/')
-        'deps'       = @('go.mod', 'go.sum', 'vendor/')
+        'portal'       = @('portal/', 'lib/portal/', 'lib/capture/', 'lib/admin/', 'pnpm-lock.yaml')
+        'veid'         = @('x/veid/', 'pkg/inference/')
+        'market'       = @('x/market/')
+        'escrow'       = @('x/escrow/')
+        'mfa'          = @('x/mfa/')
+        'encryption'   = @('x/encryption/')
+        'provider'     = @('pkg/provider_daemon/', 'cmd/provider-daemon/')
+        'hpc'          = @('x/hpc/')
+        'roles'        = @('x/roles/')
+        'sdk'          = @('sdk/')
+        'app'          = @('app/')
+        'ci'           = @('.github/', 'Makefile', 'make/')
+        'ml'           = @('ml/')
+        'deps'         = @('go.mod', 'go.sum', 'vendor/')
         'codexmonitor' = @('scripts/codex-monitor/')
     }
 
@@ -4970,8 +4982,8 @@ function Get-DirtySlotReservation {
 
     # Count how many dirty tasks are already being resolved
     $activeDirtyCount = @($script:TrackedAttempts.Values | Where-Object {
-        $_.status -eq "running" -and $_.is_dirty_resolution -eq $true
-    }).Count
+            $_.status -eq "running" -and $_.is_dirty_resolution -eq $true
+        }).Count
 
     if ($activeDirtyCount -ge $script:DIRTY_MAX_CONCURRENT) {
         return @{
@@ -5137,7 +5149,8 @@ function Fill-ParallelSlots {
             $dirtyExec = Resolve-ExecutorForDirtyTask -Task $task -BaseProfile $baseExec
             Write-Log "DIRTY TASK: $shortTitle — forcing HIGH model [$($dirtyExec.executor)/$($dirtyExec.model)]" -Level "WARN"
             $dirtyExec
-        } else {
+        }
+        else {
             Resolve-ExecutorForComplexity -Task $task -BaseProfile $baseExec
         }
         $complexityTag = if ($nextExec.complexity) { " complexity=$($nextExec.complexity.tier)" } else { "" }

@@ -72,7 +72,8 @@ describe("buildSDKConflictPrompt", () => {
       branch: "ve/test",
       conflictedFiles: ["src/handler.ts"],
       conflictDiffs: {
-        "src/handler.ts": "diff --git a/src/handler.ts\n<<<<<<< HEAD\nfoo\n=======\nbar\n>>>>>>>",
+        "src/handler.ts":
+          "diff --git a/src/handler.ts\n<<<<<<< HEAD\nfoo\n=======\nbar\n>>>>>>>",
       },
     });
     expect(prompt).toContain("```diff");
