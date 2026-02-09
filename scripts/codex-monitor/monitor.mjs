@@ -111,7 +111,15 @@ import {
   appendKnowledgeEntry,
   formatKnowledgeSummary,
 } from "./shared-knowledge.mjs";
-import { WorkspaceMonitor } from "./workspace-monitor.mjs";
+import {
+  classifyComplexity,
+  assessCompletionConfidence,
+  getComplexityMatrix,
+} from "./task-complexity.mjs";
+import {
+  registerDirtyTask,
+  formatDirtyTaskSummary,
+} from "./conflict-resolver.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -143,11 +151,6 @@ async function acquireTelegramPollLock(owner) {
     if (err && err.code === "EEXIST") {
       try {
         const raw = await readFile(telegramPollLockPath, "utf8");
-        if (!raw || !raw.trim()) {
-          // Empty/corrupt lock file — treat as stale
-          await unlink(telegramPollLockPath);
-          return await acquireTelegramPollLock(owner);
-        }
         const data = JSON.parse(raw);
         const pid = Number(data?.pid);
         if (!canSignalProcess(pid)) {
@@ -155,13 +158,7 @@ async function acquireTelegramPollLock(owner) {
           return await acquireTelegramPollLock(owner);
         }
       } catch {
-        // Lock file is corrupt/unparseable — remove and retry
-        try {
-          await unlink(telegramPollLockPath);
-        } catch {
-          /* ignore */
-        }
-        return await acquireTelegramPollLock(owner);
+        /* best effort */
       }
     }
     return false;
@@ -176,346 +173,6 @@ async function releaseTelegramPollLock() {
   } catch {
     /* best effort */
   }
-}
-
-// ── Interactive shell helpers ───────────────────────────────────────────────
-
-function shellClearLine() {
-  if (!shellState.rl || !shellIsTTY) return;
-  try {
-    clearLine(process.stdout, 0);
-    cursorTo(process.stdout, 0);
-  } catch {
-    /* best effort */
-  }
-}
-
-function shellWriteRaw(chunk) {
-  if (!shellState.rl) {
-    process.stdout.write(chunk);
-    return;
-  }
-  shellClearLine();
-  process.stdout.write(chunk);
-  shellState.rl.prompt(true);
-}
-
-function shellWriteLine(text) {
-  if (!shellState.rl) {
-    process.stdout.write(`${text}\n`);
-    return;
-  }
-  shellClearLine();
-  process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
-  shellState.rl.prompt(true);
-}
-
-function shellWriteInfo(text) {
-  shellWriteLine(`${shellInfoPrefix}${text}`);
-}
-
-function shellWriteWarn(text) {
-  shellWriteLine(`${shellAnsi.yellow("[shell]")} ${text}`);
-}
-
-function shellWriteError(text) {
-  shellWriteLine(`${shellAnsi.red("[shell]")} ${text}`);
-}
-
-function shellBeginAgentStream() {
-  shellState.agentStreaming = true;
-  shellState.agentStreamed = false;
-  shellState.agentPrefixPrinted = false;
-}
-
-function shellWriteAgentChunk(text) {
-  if (!text) return;
-  if (!shellState.rl) {
-    process.stdout.write(text);
-    return;
-  }
-  if (!shellState.agentPrefixPrinted) {
-    shellClearLine();
-    process.stdout.write(shellPromptText);
-    shellState.agentPrefixPrinted = true;
-  }
-  process.stdout.write(text);
-  shellState.agentStreamed = true;
-}
-
-function shellEndAgentStream() {
-  if (!shellState.rl) {
-    process.stdout.write("\n");
-    return;
-  }
-  if (shellState.agentPrefixPrinted) {
-    process.stdout.write("\n");
-  }
-  shellState.agentStreaming = false;
-  shellState.agentPrefixPrinted = false;
-  shellState.rl.prompt(true);
-}
-
-function normalizeShellAgentName(value) {
-  const raw = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return "";
-  if (["codex", "codex-sdk", "codexsdk"].includes(raw)) return "codex-sdk";
-  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
-    return "copilot-sdk";
-  if (["claude", "claude-sdk", "claude-code", "claude_code"].includes(raw))
-    return "claude-sdk";
-  return raw;
-}
-
-function executorToAgent(executor) {
-  const normalized = String(executor || "").toUpperCase();
-  if (normalized === "COPILOT") return "copilot-sdk";
-  if (normalized === "CLAUDE") return "claude-sdk";
-  return "codex-sdk";
-}
-
-function getAvailableShellAgents() {
-  const agents = new Map();
-  const executors = config?.executorConfig?.executors || [];
-  for (const exec of executors) {
-    const mapped = executorToAgent(exec.executor);
-    if (!agents.has(mapped)) {
-      agents.set(mapped, exec);
-    }
-  }
-  if (!agents.size) {
-    agents.set(primaryAgentName || "codex-sdk", null);
-  }
-  return agents;
-}
-
-function extractAgentDeltaText(event) {
-  if (!event) return null;
-  // Copilot SDK streaming
-  if (event.type === "assistant.message_delta" && event.data?.deltaContent) {
-    return event.data.deltaContent;
-  }
-  if (event.type === "assistant.message" && event.data?.content) {
-    return event.data.content;
-  }
-
-  // Codex SDK streaming (best-effort — handles multiple event shapes)
-  if (event.type === "item.delta" || event.type?.includes("delta")) {
-    const delta =
-      event.delta ||
-      event.data?.delta ||
-      event.item?.delta ||
-      event.message?.delta ||
-      null;
-    if (delta) {
-      if (typeof delta.text === "string") return delta.text;
-      if (typeof delta.content === "string") return delta.content;
-      if (Array.isArray(delta.content)) {
-        const textParts = delta.content
-          .map((part) => part?.text || part?.value || "")
-          .filter(Boolean);
-        if (textParts.length) return textParts.join("");
-      }
-    }
-    if (typeof event.text === "string") return event.text;
-  }
-
-  return null;
-}
-
-async function buildShellContext() {
-  const statusData = await readStatusData();
-  const summary = await readStatusSummary();
-  const logTail = stripAnsi(logRemainder || "")
-    .slice(-2000)
-    .trim();
-  const errorLine = stripAnsi(lastErrorLine || "").trim();
-
-  const blocks = [];
-  if (summary?.text) {
-    blocks.push(`## Orchestrator Summary\n${summary.text}`);
-  }
-  if (errorLine) {
-    const errorAt = lastErrorAt ? new Date(lastErrorAt).toISOString() : "";
-    const header = errorAt ? `## Recent Error (${errorAt})` : "## Recent Error";
-    blocks.push(`${header}\n${errorLine}`);
-  }
-  if (logTail) {
-    blocks.push(`## Recent Logs\n${logTail}`);
-  }
-
-  return {
-    statusData,
-    contextText: blocks.join("\n\n").trim(),
-  };
-}
-
-function buildShellUserPrompt(input, contextText) {
-  if (!contextText) return input;
-  return `${contextText}\n\n## Operator Prompt\n${input}`.trim();
-}
-
-async function handleShellCommand(command, argText) {
-  const cmd = command.toLowerCase();
-  if (cmd === "/help" || cmd === ":help") {
-    const agents = Array.from(getAvailableShellAgents().keys());
-    shellWriteInfo(
-      [
-        "Commands:",
-        "  /help                 Show this help",
-        "  /agent [name]         Show or switch agent (codex|copilot|claude)",
-        "  /status               Print current orchestrator summary",
-        "  /context              Show injected context summary",
-        "  /stop                 Stop the active agent run",
-        "  /exit                 Close the interactive shell",
-        "",
-        `Available agents: ${agents.join(", ") || "none"}`,
-      ].join("\n"),
-    );
-    return;
-  }
-  if (cmd === "/exit" || cmd === "/quit" || cmd === ":quit") {
-    shellWriteInfo("Closing interactive shell.");
-    if (shellState.rl) shellState.rl.close();
-    return;
-  }
-  if (cmd === "/status") {
-    const summary = await readStatusSummary();
-    shellWriteLine(summary?.text || "Status unavailable.");
-    return;
-  }
-  if (cmd === "/context") {
-    const ctx = await buildShellContext();
-    if (!ctx.contextText) {
-      shellWriteInfo("No context available.");
-      return;
-    }
-    shellWriteLine(ctx.contextText);
-    return;
-  }
-  if (cmd === "/stop") {
-    if (shellState.abortController) {
-      shellState.abortController.abort("user_stop");
-      shellWriteInfo("Stop requested.");
-    } else {
-      shellWriteInfo("No active agent run to stop.");
-    }
-    return;
-  }
-  if (cmd === "/agent") {
-    const desiredRaw = (argText || "").trim();
-    const normalized = normalizeShellAgentName(desiredRaw);
-    if (!normalized) {
-      shellWriteInfo(`Current agent: ${getPrimaryAgentName()}`);
-      return;
-    }
-    const available = getAvailableShellAgents();
-    if (!available.has(normalized)) {
-      shellWriteWarn(
-        `Agent "${normalized}" not in configured executors. Available: ${Array.from(available.keys()).join(", ")}`,
-      );
-      return;
-    }
-    const result = await switchPrimaryAgent(normalized);
-    if (result?.ok) {
-      shellWriteInfo(`Active agent switched to ${result.name}.`);
-    } else {
-      shellWriteWarn(
-        `Failed to switch agent: ${result?.reason || "unknown error"}`,
-      );
-    }
-    return;
-  }
-  shellWriteWarn(`Unknown shell command: ${command}`);
-}
-
-async function runShellPrompt(input) {
-  if (!input.trim()) return;
-  if (isPrimaryBusy()) {
-    shellWriteWarn("Primary agent is busy. Try again shortly or /stop.");
-    return;
-  }
-  shellBeginAgentStream();
-  const abortController = new AbortController();
-  shellState.abortController = abortController;
-
-  try {
-    const { statusData, contextText } = await buildShellContext();
-    const prompt = buildShellUserPrompt(input, contextText);
-
-    const onEvent = async (_formatted, rawEvent) => {
-      const delta = extractAgentDeltaText(rawEvent);
-      if (delta) {
-        shellWriteAgentChunk(delta);
-      }
-    };
-
-    const result = await execPrimaryPrompt(prompt, {
-      statusData,
-      onEvent,
-      sendRawEvents: true,
-      abortController,
-    });
-
-    if (!shellState.agentStreamed && result?.finalResponse) {
-      shellWriteLine(`${shellPromptText}${result.finalResponse}`);
-    }
-  } catch (err) {
-    shellWriteError(err?.message || String(err));
-  } finally {
-    shellState.abortController = null;
-    shellEndAgentStream();
-  }
-}
-
-function startInteractiveShell() {
-  if (!shellState.enabled) return;
-  if (!shellIsTTY) {
-    shellWriteWarn(
-      "Interactive shell requested but no TTY detected; skipping.",
-    );
-    return;
-  }
-  if (shellState.rl) return;
-  shellState.prompt = shellPromptText;
-  shellState.rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true,
-    historySize: Number(process.env.CODEX_MONITOR_SHELL_HISTORY || "200"),
-  });
-  shellState.active = true;
-  shellState.rl.setPrompt(shellState.prompt);
-  shellWriteInfo("Interactive shell enabled. Type /help for commands.");
-  shellState.rl.prompt();
-
-  shellState.rl.on("line", (line) => {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      shellState.rl.prompt();
-      return;
-    }
-    if (trimmed.startsWith("/") || trimmed.startsWith(":")) {
-      const [cmd, ...rest] = trimmed.split(/\s+/);
-      shellState.queue = shellState.queue
-        .then(() => handleShellCommand(cmd, rest.join(" ")))
-        .catch((err) =>
-          shellWriteError(err?.message || "Shell command failed"),
-        );
-      return;
-    }
-    shellState.queue = shellState.queue
-      .then(() => runShellPrompt(trimmed))
-      .catch((err) => shellWriteError(err?.message || "Shell prompt failed"));
-  });
-
-  shellState.rl.on("close", () => {
-    shellState.active = false;
-    shellState.rl = null;
-    shellWriteInfo("Interactive shell closed.");
-  });
 }
 
 let {
@@ -634,33 +291,6 @@ const conflictResolutionTimeoutMs = Number(
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
-
-// ── Workspace Monitor — streams logs, detects stuck agents ──────────────────
-const workspaceMonitor = new WorkspaceMonitor({
-  cacheDir: resolve(
-    config.cacheDir || resolve(config.repoRoot, ".cache"),
-    "workspace-logs",
-  ),
-  repoRoot,
-  onStuckDetected: ({ attemptId, reason, recommendation, state }) => {
-    const shortId = attemptId.substring(0, 8);
-    console.warn(
-      `[workspace-monitor] ⚠️ Agent ${shortId} stuck: ${reason} — ${recommendation}`,
-    );
-    if (telegramToken && telegramChatId) {
-      void sendTelegramMessage(
-        `⚠️ Agent <code>${shortId}</code> stuck: ${reason}\n${recommendation}`,
-      );
-    }
-  },
-  onProgressUpdate: ({ attemptId, gitState }) => {
-    // Silently track — logged to workspace log files
-  },
-});
-void workspaceMonitor.init().catch((err) => {
-  console.warn(`[workspace-monitor] init failed: ${err.message}`);
-});
-
 let preflightInProgress = false;
 let preflightLastResult = null;
 let preflightLastRunAt = 0;
@@ -3412,14 +3042,11 @@ async function checkMergedPRsAndUpdateTasks() {
       if (resolved) continue;
 
       // ── Conflict resolution for open PRs with merge conflicts ──
-      // STRATEGY: The monitor now owns SDK-based conflict resolution.
-      // When conflicts are detected:
-      //  1. Auto-resolvable files (lockfiles, generated) are handled mechanically
-      //  2. Semantic conflicts are dispatched to an SDK agent (Codex/Copilot)
-      //     with FULL worktree access — the agent reads both sides, understands
-      //     the code, and writes the correct resolution
-      //  3. The orchestrator still handles simple rebases (behind/stale)
-      //     but DOES NOT own conflict resolution anymore
+      // DEDUPLICATION: The PS1 orchestrator owns direct rebase with persistent
+      // disk-based cooldowns (survives restarts). monitor.mjs only defers to
+      // the orchestrator by logging and registering the dirty task for slot
+      // reservation. We do NOT trigger smartPRFlow("conflict") here to avoid
+      // the thundering herd where both systems race to fix the same PR.
       if (conflictCandidates.length > 0) {
         const lastConflictCheck = conflictResolutionCooldown.get(task.id);
         const onCooldown =
@@ -3437,17 +3064,16 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
+            console.log(
+              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution`,
+            );
             conflictResolutionCooldown.set(task.id, Date.now());
-            recordResolutionAttempt(task.id);
-
-            // Check if SDK resolution is available and not exhausted
-            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
-            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
-
-            if (!sdkOnCooldown && !sdkExhausted) {
-              // ── SDK-based conflict resolution (primary path) ──
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+            conflictsTriggered++;
+            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
+            void smartPRFlow(resolveAttemptId, shortId, "conflict");
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution`,
               );
 
               // Discover worktree path from attempt data
@@ -3691,59 +3317,7 @@ async function checkMergedPRsAndUpdateTasks() {
 
 async function reconcileTaskStatuses(reason = "manual") {
   console.log(`[monitor] Reconciling VK tasks (${reason})...`);
-  const result = await checkMergedPRsAndUpdateTasks();
-  // After reconciliation, sync workspace monitoring for running attempts
-  void syncWorkspaceMonitoring().catch((err) => {
-    console.warn(`[workspace-monitor] sync failed: ${err.message}`);
-  });
-  return result;
-}
-
-// ── Workspace Monitor Sync ──────────────────────────────────────────────────
-/**
- * Sync workspace monitoring: start monitoring for running attempts with
- * discovered worktrees, stop monitoring for completed/removed attempts.
- */
-async function syncWorkspaceMonitoring() {
-  const statusData = await readStatusData();
-  if (!statusData) return;
-
-  const attempts = Array.isArray(statusData?.active_attempts)
-    ? statusData.active_attempts
-    : Object.values(statusData?.attempts || {});
-
-  const runningAttempts = attempts.filter((a) => a && a.status === "running");
-
-  // Start monitoring new running attempts that have worktree paths
-  for (const attempt of runningAttempts) {
-    const attemptId = attempt.id || attempt.attempt_id;
-    if (!attemptId) continue;
-    if (workspaceMonitor.getState(attemptId)) continue; // already monitoring
-
-    // Discover worktree path
-    let worktreePath =
-      attempt.worktree_dir || attempt.worktree || attempt.workspace_dir || null;
-    if (!worktreePath && attempt.branch) {
-      worktreePath = findWorktreeForBranch(attempt.branch);
-    }
-
-    if (worktreePath && existsSync(worktreePath)) {
-      await workspaceMonitor.startMonitoring(attemptId, worktreePath, {
-        taskId: attempt.task_id,
-        executor: attempt.executor,
-      });
-    }
-  }
-
-  // Stop monitoring attempts that are no longer running
-  const runningIds = new Set(
-    runningAttempts.map((a) => a.id || a.attempt_id).filter(Boolean),
-  );
-  for (const state of workspaceMonitor.getAllStates()) {
-    if (!runningIds.has(state.attemptId)) {
-      await workspaceMonitor.stopMonitoring(state.attemptId, "task_finished");
-    }
-  }
+  return await checkMergedPRsAndUpdateTasks();
 }
 
 // ── Dependabot / Bot PR Auto-Merge ──────────────────────────────────────────
@@ -4674,75 +4248,23 @@ async function smartPRFlow(attemptId, shortId, status) {
       return;
     }
 
-    // Uncommitted changes but no commits → commit + push via CLI
+    // Uncommitted changes but no commits → agent didn't commit
     if (has_uncommitted_changes && commits_ahead === 0) {
       console.log(
-        `[monitor] ${tag}: uncommitted changes but no commits — committing + pushing via CLI`,
+        `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
-      const attemptInfo = await getAttemptInfo(attemptId);
-      let worktreeDir =
-        attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
-      if (!worktreeDir && attemptInfo?.branch) {
-        worktreeDir = findWorktreeForBranch(attemptInfo.branch);
-      }
-      if (worktreeDir && existsSync(worktreeDir)) {
-        try {
-          // Stage all, commit, and push
-          spawnSync("git", ["-C", worktreeDir, "add", "-A"], {
-            timeout: 30000,
-            shell: process.platform === "win32",
-          });
-          const taskTitle =
-            attemptInfo?.task_title || attemptInfo?.branch || shortId;
-          spawnSync(
-            "git",
-            [
-              "-C",
-              worktreeDir,
-              "commit",
-              "-m",
-              `chore: auto-commit uncommitted changes for ${taskTitle}`,
-              "--no-verify",
-            ],
-            { timeout: 60000, shell: process.platform === "win32" },
-          );
-          const branchName = attemptInfo?.branch || shortId;
-          const pushResult = spawnSync(
-            "git",
-            [
-              "-C",
-              worktreeDir,
-              "push",
-              "-u",
-              "origin",
-              branchName,
-              "--no-verify",
-            ],
-            { timeout: 120000, shell: process.platform === "win32" },
-          );
-          if (pushResult.status === 0) {
-            console.log(
-              `[monitor] ${tag}: CLI commit + push succeeded — proceeding to PR creation`,
-            );
-          } else {
-            console.warn(
-              `[monitor] ${tag}: CLI push failed after commit — will retry next cycle`,
-            );
-            return;
-          }
-        } catch (err) {
-          console.warn(
-            `[monitor] ${tag}: CLI commit+push failed: ${err.message}`,
-          );
-          return;
-        }
-      } else {
-        console.warn(
-          `[monitor] ${tag}: no worktree found — cannot commit/push via CLI`,
+      // Ask the agent to commit via primary agent
+      if (primaryAgentReady && !isPrimaryBusy()) {
+        void execPrimaryPrompt(
+          `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
+            `Please navigate to the worktree for this attempt and:\n` +
+            `1. Stage all changes: git add -A\n` +
+            `2. Create a conventional commit\n` +
+            `3. Push and create a PR`,
+          { timeoutMs: 10 * 60 * 1000 },
         );
-        return;
       }
-      // Fall through to PR creation below (commits_ahead is now > 0)
+      return;
     }
 
     // ── Resolve target branch (task-level upstream overrides) ───
@@ -5018,192 +4540,52 @@ Return a short summary of what you did and any files that needed manual resoluti
     }
 
     if (isFastFail) {
-      // Instant failure — worktree issue. Push directly via CLI (never ask agent).
+      // Instant failure — worktree issue, ask agent to handle everything
       console.warn(
-        `[monitor] ${tag}: PR creation fast-failed (${elapsed}ms) — attempting CLI push`,
+        `[monitor] ${tag}: PR creation fast-failed (${elapsed}ms) — worktree/config issue`,
       );
-      const branchName = attempt?.branch || shortId;
-      let worktreeDir = attempt?.worktree_dir || attempt?.worktree || null;
-      if (!worktreeDir) {
-        worktreeDir = findWorktreeForBranch(branchName);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
+        );
       }
-      if (worktreeDir && existsSync(worktreeDir)) {
-        const pushResult = spawnSync(
-          "git",
-          [
-            "-C",
-            worktreeDir,
-            "push",
-            "-u",
-            "origin",
-            branchName,
-            "--no-verify",
-          ],
-          { timeout: 120000, shell: process.platform === "win32" },
+      if (primaryAgentReady && !isPrimaryBusy()) {
+        void execPrimaryPrompt(
+          `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
+            `failed instantly (worktree or config issue).\n` +
+            `Branch: ${attempt?.branch || shortId}\n\n` +
+            `Please:\n` +
+            `1. Navigate to the worktree\n` +
+            `2. Ensure git status is clean and commits exist\n` +
+            `3. Run: git push --set-upstream origin ${attempt?.branch || shortId}\n` +
+            `4. Create a PR targeting main`,
+          { timeoutMs: 15 * 60 * 1000 },
         );
-        if (pushResult.status === 0) {
-          console.log(
-            `[monitor] ${tag}: CLI push succeeded — creating PR via gh`,
-          );
-          // Create PR directly with gh CLI
-          const prCreateResult = spawnSync(
-            "gh",
-            [
-              "pr",
-              "create",
-              "--repo",
-              `${process.env.GH_OWNER || "virtengine"}/${process.env.GH_REPO || "virtengine"}`,
-              "--head",
-              branchName,
-              "--base",
-              targetBranch || "main",
-              "--title",
-              prTitle,
-              "--body",
-              prDescription || "Auto-created by codex-monitor (CLI fallback)",
-            ],
-            {
-              timeout: 60000,
-              shell: process.platform === "win32",
-              encoding: "utf8",
-            },
-          );
-          if (prCreateResult.status === 0) {
-            console.log(`[monitor] ${tag}: PR created via gh CLI`);
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `✅ CLI push + PR created for ${shortId} (fast-fail recovery)`,
-              );
-            }
-          } else {
-            const stderr = (prCreateResult.stderr || "").trim();
-            if (stderr.includes("already exists")) {
-              console.log(
-                `[monitor] ${tag}: PR already exists for ${branchName}`,
-              );
-            } else {
-              console.warn(`[monitor] ${tag}: gh pr create failed: ${stderr}`);
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `⚠️ CLI push OK for ${shortId} but PR creation failed: ${stderr}`,
-                );
-              }
-            }
-          }
-        } else {
-          console.warn(
-            `[monitor] ${tag}: CLI push also failed — marking for manual review`,
-          );
-          if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `⚠️ Auto-PR for ${shortId} failed (fast-fail + CLI push failed). Needs manual review.`,
-            );
-          }
-        }
-      } else {
-        console.warn(
-          `[monitor] ${tag}: no worktree found for CLI push — marking manual review`,
-        );
-        if (telegramToken && telegramChatId) {
-          void sendTelegramMessage(
-            `⚠️ Auto-PR for ${shortId} fast-failed and no worktree found. Needs manual review.`,
-          );
-        }
       }
     } else {
-      // Slow failure — prepush hooks failed. Push with --no-verify via CLI.
+      // Slow failure — prepush hooks failed (lint/test/build)
       console.warn(
-        `[monitor] ${tag}: PR creation slow-failed (${Math.round(elapsed / 1000)}s) — bypassing hooks with CLI push`,
+        `[monitor] ${tag}: PR creation slow-failed (${Math.round(elapsed / 1000)}s) — prepush hook failure`,
       );
-      const branchName = attempt?.branch || shortId;
-      let worktreeDir = attempt?.worktree_dir || attempt?.worktree || null;
-      if (!worktreeDir) {
-        worktreeDir = findWorktreeForBranch(branchName);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
+        );
       }
-      if (worktreeDir && existsSync(worktreeDir)) {
-        const pushResult = spawnSync(
-          "git",
-          [
-            "-C",
-            worktreeDir,
-            "push",
-            "-u",
-            "origin",
-            branchName,
-            "--no-verify",
-          ],
-          { timeout: 120000, shell: process.platform === "win32" },
+      if (primaryAgentReady && !isPrimaryBusy()) {
+        void execPrimaryPrompt(
+          `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
+            `when trying to create a PR.\n` +
+            `Branch: ${attempt?.branch || shortId}\n\n` +
+            `Please:\n` +
+            `1. Navigate to the worktree for this branch\n` +
+            `2. Fix any lint, test, or build errors\n` +
+            `3. Commit the fixes\n` +
+            `4. Rebase onto main: git pull --rebase origin main\n` +
+            `5. Push: git push --set-upstream origin ${attempt?.branch || shortId}\n` +
+            `6. Create a PR targeting main`,
+          { timeoutMs: 15 * 60 * 1000 },
         );
-        if (pushResult.status === 0) {
-          console.log(
-            `[monitor] ${tag}: CLI push (--no-verify) succeeded — creating PR`,
-          );
-          const prCreateResult = spawnSync(
-            "gh",
-            [
-              "pr",
-              "create",
-              "--repo",
-              `${process.env.GH_OWNER || "virtengine"}/${process.env.GH_REPO || "virtengine"}`,
-              "--head",
-              branchName,
-              "--base",
-              targetBranch || "main",
-              "--title",
-              prTitle,
-              "--body",
-              prDescription ||
-                "Auto-created by codex-monitor (CLI fallback, hooks bypassed)",
-            ],
-            {
-              timeout: 60000,
-              shell: process.platform === "win32",
-              encoding: "utf8",
-            },
-          );
-          if (prCreateResult.status === 0) {
-            console.log(
-              `[monitor] ${tag}: PR created via gh CLI (hooks bypassed)`,
-            );
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `✅ CLI push (--no-verify) + PR created for ${shortId}. Note: prepush hooks were bypassed.`,
-              );
-            }
-          } else {
-            const stderr = (prCreateResult.stderr || "").trim();
-            if (stderr.includes("already exists")) {
-              console.log(
-                `[monitor] ${tag}: PR already exists for ${branchName}`,
-              );
-            } else {
-              console.warn(`[monitor] ${tag}: gh pr create failed: ${stderr}`);
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `⚠️ CLI push OK (hooks bypassed) for ${shortId} but PR creation failed: ${stderr}`,
-                );
-              }
-            }
-          }
-        } else {
-          console.warn(
-            `[monitor] ${tag}: CLI push (--no-verify) also failed — hooks aren't the issue`,
-          );
-          if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `⚠️ Auto-PR for ${shortId} failed even with --no-verify. Needs manual review.`,
-            );
-          }
-        }
-      } else {
-        console.warn(
-          `[monitor] ${tag}: no worktree for CLI push fallback — needs manual review`,
-        );
-        if (telegramToken && telegramChatId) {
-          void sendTelegramMessage(
-            `⚠️ Auto-PR for ${shortId} slow-failed and no worktree found. Needs manual review.`,
-          );
-        }
       }
     }
   } catch (err) {
@@ -6348,7 +5730,6 @@ async function triggerTaskPlannerViaKanban(
   reason,
   { taskCount, notify = true } = {},
 ) {
-  const plannerPrompt = agentPrompts.planner;
   const defaultPlannerTaskCount = Number(
     process.env.TASK_PLANNER_DEFAULT_COUNT || "30",
   );
@@ -6405,10 +5786,6 @@ async function triggerTaskPlannerViaKanban(
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
       "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
-      "- **CRITICAL CREATION ORDER:** Create tasks in REVERSE sequence order (highest number first,",
-      "  e.g., 45B → 45A → 44D → ... → 37A). Vibe-kanban shows newest tasks at the top of the",
-      "  backlog. Creating highest-priority tasks LAST puts them at the TOP for human review.",
-      "  The orchestrator sorts by sequence number regardless, but visual order matters.",
     ].join("\n");
     // Best-effort: keep backlog task aligned with current requirements
     if (
@@ -6448,6 +5825,7 @@ async function triggerTaskPlannerViaKanban(
     };
   }
 
+  const plannerPrompt = agentPrompts.planner;
   const taskBody = {
     title: `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`,
     description: [
@@ -6471,10 +5849,6 @@ async function triggerTaskPlannerViaKanban(
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
       "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
-      "- **CRITICAL CREATION ORDER:** Create tasks in REVERSE sequence order (highest number first,",
-      "  e.g., 45B → 45A → 44D → ... → 37A). Vibe-kanban shows newest tasks at the top of the",
-      "  backlog. Creating highest-priority tasks LAST puts them at the TOP for human review.",
-      "  The orchestrator sorts by sequence number regardless, but visual order matters.",
     ].join("\n"),
     status: "todo",
     project_id: projectId,
@@ -7704,7 +7078,6 @@ process.on("SIGINT", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
-  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   process.exit(0);
 });
@@ -7726,7 +7099,6 @@ process.on("SIGTERM", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
-  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   stopTelegramBot();
   process.exit(0);
@@ -7840,10 +7212,6 @@ setInterval(() => {
 const mergedPRCheckIntervalMs = 10 * 60 * 1000;
 setInterval(() => {
   void checkMergedPRsAndUpdateTasks();
-  // Also sync workspace monitoring for stuck agent detection
-  void syncWorkspaceMonitoring().catch((err) => {
-    console.warn(`[workspace-monitor] periodic sync failed: ${err.message}`);
-  });
 }, mergedPRCheckIntervalMs);
 
 // ── Log rotation: truncate oldest logs when folder exceeds size limit ───────
@@ -7867,10 +7235,6 @@ if (logMaxSizeMb > 0) {
 setTimeout(() => {
   void checkMergedPRsAndUpdateTasks();
   void checkAndMergeDependabotPRs();
-  // Initial workspace monitoring sync — pick up already-running agents
-  void syncWorkspaceMonitoring().catch((err) => {
-    console.warn(`[workspace-monitor] initial sync failed: ${err.message}`);
-  });
 }, 30 * 1000);
 
 // ── Fleet Coordination ───────────────────────────────────────────────────────

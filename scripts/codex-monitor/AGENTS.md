@@ -4,9 +4,9 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 
 ---
 
-## 1. Module Overview
+## Module Overview
 
-**Purpose:** codex-monitor supervises VirtEngine’s autonomous coding fleet — it schedules task attempts, runs PR automation, self-heals failures, and reports status via Telegram. The core supervisor (`monitor.mjs`) wires configuration, executor selection, fleet coordination, Telegram notifications, autofix, and maintenance sweeps into a single process loop.  
+**Purpose:** codex-monitor supervises VirtEngine's autonomous coding fleet — it schedules task attempts, runs PR automation, self-heals failures, and reports status via Telegram. The core supervisor (`monitor.mjs`) wires configuration, executor selection, fleet coordination, Telegram notifications, autofix, and maintenance sweeps into a single process loop.
 **Primary entrypoints:** `cli.mjs` → `monitor.mjs` (supervisor), `ve-orchestrator.ps1` (task runner), `ve-kanban.ps1` (VK API wrapper).
 
 **Code references:**
@@ -15,6 +15,14 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 - Task planner and preflight gating in monitor: `monitor.mjs:L400-L509`
 - Orchestrator state + loop metrics: `ve-orchestrator.ps1:L144-L189`
 - VK API wrapper and task attempt submission: `ve-kanban.ps1:L1-L45`, `ve-kanban.ps1:L310-L345`
+
+---
+
+### Start codex-monitor with defaults
+
+```bash
+node scripts/codex-monitor/cli.mjs
+```
 
 ---
 
@@ -119,7 +127,7 @@ Each gotcha includes root cause + fix location.
 
 ## 5. Configuration & Environment
 
-**Config loading order:** CLI → env vars → `.env` → `codex-monitor.config.json` → defaults.  
+**Config loading order:** CLI → env vars → `.env` → `codex-monitor.config.json` → defaults.
 References: `config.mjs:L4-L14`, `config.mjs:L81-L101`
 
 **Required env vars (core):**
@@ -168,7 +176,7 @@ References: `config.mjs:L4-L14`, `config.mjs:L81-L101`
 
 ---
 
-## 7. Testing & Validation
+## 7. Testing
 
 **Test runner:** Vitest with Node environment and `tests/**/*.test.mjs` pattern.
 
@@ -184,7 +192,7 @@ Use `npm run test` from `scripts/codex-monitor/`.
 
 ---
 
-## 8. Common Modification Patterns
+## 8. Implementation Patterns
 
 ### Adding a new executor
 

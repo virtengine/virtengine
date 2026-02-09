@@ -11,6 +11,7 @@ This index lists every AGENTS.md file in the repo and highlights how modules rel
 | Provider module | [x/provider/AGENTS.md](../x/provider/AGENTS.md) | On-chain provider lifecycle, domain verification, and keys. |
 | Chain SDK (TS) | [sdk/ts/AGENTS.md](../sdk/ts/AGENTS.md) | TypeScript SDK for chain and provider clients. |
 | Codex monitor | [scripts/codex-monitor/AGENTS.md](../scripts/codex-monitor/AGENTS.md) | Multi-agent orchestration supervisor and tooling. |
+| Scripts | [scripts/AGENTS.md](../scripts/AGENTS.md) | Operational scripts, automation, and developer utilities. |
 
 ## Dependency Graph
 
