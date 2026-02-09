@@ -1,6 +1,6 @@
 # Codex Monitor Orchestrator (scripts/codex-monitor) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: Node.js orchestrator supervisor that manages agent executors with failover, auto-restarts the orchestrator script, and integrates with Vibe-Kanban + Telegram for automation (`scripts/codex-monitor/package.json:2`).
 - Use this package to run multi-agent task orchestration locally or in CI; use chain modules (e.g., `x/provider`) for on-chain logic.
 - Key exports / public API surface:
@@ -87,8 +87,20 @@ node scripts/codex-monitor/cli.mjs --args "-MaxParallel 6"
 - Node.js engine: `>=18` (`scripts/codex-monitor/package.json:125`).
 - Primary env vars are documented in `.env.example` (`scripts/codex-monitor/.env.example:11`).
 
+## Configuration
+- Configure executors and scheduling via CLI args, env vars, or config JSON (`scripts/codex-monitor/config.mjs:3`).
+- Update `.env.example` when new environment variables are required.
+
 ## Testing
 - Tests: `scripts/codex-monitor/tests/*.test.mjs`.
 - Commands:
   - `npm test` (runs `vitest`, `scripts/codex-monitor/package.json:69`).
   - `npm run syntax:check` (fast syntax validation, `scripts/codex-monitor/package.json:67`).
+
+## Troubleshooting
+- Monitor restarts unexpectedly:
+  - Cause: Non-zero exit or config errors in `monitor.mjs`.
+  - Fix: Check logs and validate config schema in `codex-monitor.schema.json`.
+- Vibe-Kanban connection failures:
+  - Cause: Missing `VK_BASE_URL` or API access.
+  - Fix: Set environment variables from `.env.example` and verify connectivity.
