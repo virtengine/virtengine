@@ -221,7 +221,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 		UserAgent:      "Test Agent",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400, // Expires in 24 hours
 	}
-	err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Set policy to allow device bypass
@@ -263,7 +263,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_ExpiredDevice() {
 		UserAgent:      "Expired Agent",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() - 3600, // Already expired
 	}
-	err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "expired-device-fp")
@@ -288,7 +288,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_PolicyDisallows() {
 		UserAgent:      "Device",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400,
 	}
-	err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Set policy that disallows bypass (TrustedDeviceRule not enabled)
@@ -386,7 +386,7 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 		UserAgent:      "Trusted Device",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400,
 	}
-	err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Check with trusted device fingerprint - should allow bypass

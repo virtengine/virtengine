@@ -403,7 +403,7 @@ func (s *MsgServerTestSuite) TestRemoveTrustedDevice_Success() {
 		Fingerprint: "device-to-remove",
 		UserAgent:   "Old Device",
 	}
-	err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	msg := &types.MsgRemoveTrustedDevice{

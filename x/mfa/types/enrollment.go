@@ -130,6 +130,9 @@ type DeviceInfo struct {
 
 	// TrustExpiresAt is when the device trust expires
 	TrustExpiresAt int64 `json:"trust_expires_at"`
+
+	// TrustTokenHash is the bcrypt hash of the trust token for this device
+	TrustTokenHash string `json:"trust_token_hash,omitempty"`
 }
 
 // FIDO2CredentialInfo contains FIDO2-specific credential information
