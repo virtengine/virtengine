@@ -1583,15 +1583,15 @@ $script:SizeToComplexity = @{
 
 # Default model profiles per complexity tier and executor type
 $script:ComplexityModels = @{
-    "CODEX"   = @{
+    "CODEX" = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
-        "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.1-codex-max"; variant = "GPT51_CODEX_MAX"; reasoningEffort = "high" }
+        "medium" = @{ model = "gpt-5.2-codex";      variant = "DEFAULT";           reasoningEffort = "medium" }
+        "high"   = @{ model = "gpt-5.3-codex";      variant = "DEFAULT";           reasoningEffort = "high" }
     }
     "COPILOT" = @{
-        "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
-        "medium" = @{ model = "sonnet-4.5"; variant = "SONNET_4_5"; reasoningEffort = "medium" }
-        "high"   = @{ model = "opus-4.6"; variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
+        "low"    = @{ model = "haiku-4.5";   variant = "HAIKU_4_5";       reasoningEffort = "low" }
+        "medium" = @{ model = "sonnet-4.5";  variant = "SONNET_4_5";      reasoningEffort = "medium" }
+        "high"   = @{ model = "opus-4.6";    variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
     }
 }
 
@@ -1714,7 +1714,7 @@ function Resolve-ExecutorForComplexity {
     }
 
     Write-Log ("Complexity routing: {0} (size={1}, complexity={2}, model={3}, reasoning={4})" -f `
-            $title.Substring(0, [Math]::Min(50, $title.Length)),
+        $title.Substring(0, [Math]::Min(50, $title.Length)),
         $sizeInfo.label, $complexity.tier, $result.model, $result.reasoningEffort) -Level "INFO"
 
     return $result
@@ -3443,7 +3443,7 @@ function Prune-CompletedTaskWorkspaces {
         # VK workspace pattern: <taskid-prefix>-<slug>/
         $taskPrefix = $task.id.Substring(0, [Math]::Min(4, $task.id.Length))
         $workspaceDirs = Get-ChildItem -Path $vkWorkspaceBase -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -like "$taskPrefix-*" }
+            Where-Object { $_.Name -like "$taskPrefix-*" }
 
         foreach ($dir in $workspaceDirs) {
             $fullPath = $dir.FullName

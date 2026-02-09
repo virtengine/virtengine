@@ -40,6 +40,18 @@ codex-monitor          # auto-detects first run → launches setup wizard
 
 That's it. On first run, the setup wizard walks you through everything: executors, AI provider, Telegram, Vibe-Kanban, and agent templates.
 
+## Interactive Shell
+
+Start the monitor with a local REPL for ad-hoc agent prompts:
+
+```bash
+codex-monitor --shell
+```
+
+You can switch agents with `/agent codex` or `/agent copilot`, inspect context with `/context`, and exit with `/exit`.
+
+Telegram users can also send explicit prompts with `/ask <prompt>` (free-text still routes to the agent by default).
+
 ## How It Works
 
 ```
@@ -84,6 +96,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
 - **Live Telegram digest** — One continuously-edited message per time window shows events as they happen, like a real-time log
 - **Telegram chatbot** — Real-time notifications + interactive commands
+- **Interactive shell** — REPL-style agent prompts inside the monitor terminal (`--shell`)
 - **Distributed task claiming** — Idempotent task claiming across multiple workstations with deterministic conflict resolution
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
