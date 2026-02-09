@@ -684,7 +684,8 @@ func (k Keeper) WithDelegatorSlashingEvents(ctx sdk.Context, fn func(types.Deleg
 // GetDelegatorSlashingEvents returns all slashing events for a delegator
 func (k Keeper) GetDelegatorSlashingEvents(ctx sdk.Context, delegatorAddr string) []types.DelegatorSlashingEvent {
 	var events []types.DelegatorSlashingEvent
-	prefixKey := append(types.DelegatorSlashingEventPrefix, []byte(delegatorAddr+":")...)
+	prefixKey := append([]byte{}, types.DelegatorSlashingEventPrefix...)
+	prefixKey = append(prefixKey, []byte(delegatorAddr+":")...)
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, prefixKey)
 	defer iter.Close()

@@ -474,7 +474,8 @@ func (q *Querier) SlashingEvents(ctx context.Context, req *delegationv1.QuerySla
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	prefixKey := append(delegationtypes.DelegatorSlashingEventPrefix, []byte(req.DelegatorAddress+":")...)
+	prefixKey := append([]byte{}, delegationtypes.DelegatorSlashingEventPrefix...)
+	prefixKey = append(prefixKey, []byte(req.DelegatorAddress+":")...)
 	store := prefix.NewStore(sdkCtx.KVStore(q.skey), prefixKey)
 
 	events := make([]delegationv1.DelegatorSlashingEvent, 0)
