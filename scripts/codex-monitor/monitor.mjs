@@ -91,6 +91,12 @@ import {
   DIRTY_TASK_DEFAULTS,
 } from "./conflict-resolver.mjs";
 import {
+  resolveConflictsWithSDK,
+  isSDKResolutionOnCooldown,
+  isSDKResolutionExhausted,
+  clearSDKResolutionState,
+} from "./sdk-conflict-resolver.mjs";
+import {
   initSharedKnowledge,
   buildKnowledgeEntry,
   appendKnowledgeEntry,
@@ -1444,6 +1450,44 @@ async function getAttemptInfo(attemptId) {
 function ghAvailable() {
   const res = spawnSync("gh", ["--version"], { stdio: "ignore" });
   return res.status === 0;
+}
+
+/**
+ * Find the worktree path for a given branch by parsing `git worktree list`.
+ * Returns null if no worktree is found.
+ */
+function findWorktreeForBranch(branch) {
+  if (!branch) return null;
+  try {
+    const result = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 10000,
+      encoding: "utf8",
+      shell: process.platform === "win32",
+    });
+    if (result.status !== 0 || !result.stdout) return null;
+
+    const lines = result.stdout.split("\n");
+    let currentPath = null;
+    for (const line of lines) {
+      if (line.startsWith("worktree ")) {
+        currentPath = line.slice(9).trim();
+      } else if (line.startsWith("branch ") && currentPath) {
+        const branchRef = line.slice(7).trim();
+        // branchRef is like "refs/heads/ve/40fa-m-interactive-co"
+        const branchName = branchRef.replace(/^refs\/heads\//, "");
+        if (branchName === branch) {
+          return currentPath;
+        }
+      } else if (line.trim() === "") {
+        currentPath = null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function findExistingPrForBranch(branch) {
@@ -2965,21 +3009,22 @@ async function checkMergedPRsAndUpdateTasks() {
       if (resolved) continue;
 
       // ── Conflict resolution for open PRs with merge conflicts ──
-      // DEDUPLICATION: The PS1 orchestrator owns direct rebase with persistent
-      // disk-based cooldowns (survives restarts). monitor.mjs only defers to
-      // the orchestrator by logging and registering the dirty task for slot
-      // reservation. We do NOT trigger smartPRFlow("conflict") here to avoid
-      // the thundering herd where both systems race to fix the same PR.
+      // STRATEGY: The monitor now owns SDK-based conflict resolution.
+      // When conflicts are detected:
+      //  1. Auto-resolvable files (lockfiles, generated) are handled mechanically
+      //  2. Semantic conflicts are dispatched to an SDK agent (Codex/Copilot)
+      //     with FULL worktree access — the agent reads both sides, understands
+      //     the code, and writes the correct resolution
+      //  3. The orchestrator still handles simple rebases (behind/stale)
+      //     but DOES NOT own conflict resolution anymore
       if (conflictCandidates.length > 0) {
         const lastConflictCheck = conflictResolutionCooldown.get(task.id);
         const onCooldown =
           lastConflictCheck &&
           Date.now() - lastConflictCheck < CONFLICT_COOLDOWN_MS;
-        // Also check dirty-specific cooldown (shorter, for prioritized resolution)
         const onDirtyCooldown = isOnResolutionCooldown(task.id);
         if (!onCooldown && !onDirtyCooldown) {
           const cc = conflictCandidates[0];
-          // Find the attempt ID — prefer the one on the candidate, else search
           let resolveAttemptId = cc.attemptId;
           if (!resolveAttemptId) {
             const matchAttempt = allVkAttempts.find(
@@ -2989,19 +3034,96 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
-            console.log(
-              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — deferring to orchestrator (persistent cooldown)`,
-            );
             conflictResolutionCooldown.set(task.id, Date.now());
             recordResolutionAttempt(task.id);
-            // Do NOT call smartPRFlow("conflict") here — the PS1 orchestrator
-            // handles rebase with persistent disk-based cooldowns. Calling both
-            // creates a thundering herd that compounds failures.
-            // The orchestrator will pick this up in its next Sync-TrackedAttempts cycle.
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — orchestrator will handle rebase (attempt ${shortId})`,
+
+            // Check if SDK resolution is available and not exhausted
+            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
+            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
+
+            if (!sdkOnCooldown && !sdkExhausted) {
+              // ── SDK-based conflict resolution (primary path) ──
+              console.log(
+                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
               );
+
+              // Discover worktree path from attempt data
+              let worktreePath = null;
+              const attemptInfo = await getAttemptInfo(resolveAttemptId);
+              worktreePath =
+                attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+
+              // Fallback: try git worktree list to find the branch's worktree
+              if (!worktreePath) {
+                worktreePath = findWorktreeForBranch(cc.branch);
+              }
+
+              if (worktreePath) {
+                // Fire-and-forget: launch SDK resolver in background
+                void (async () => {
+                  try {
+                    const result = await resolveConflictsWithSDK({
+                      worktreePath,
+                      branch: cc.branch,
+                      baseBranch: resolveAttemptTargetBranch(
+                        attemptInfo,
+                        task,
+                      ),
+                      prNumber: cc.prNumber,
+                      taskTitle: task.title,
+                      taskDescription: task.description || "",
+                      logDir: logDir,
+                    });
+                    if (result.success) {
+                      console.log(
+                        `[monitor] ✅ SDK resolved conflicts for PR #${cc.prNumber} (${result.resolvedFiles.length} files)`,
+                      );
+                      clearDirtyTask(task.id);
+                      clearSDKResolutionState(cc.branch);
+                      if (telegramToken && telegramChatId) {
+                        void sendTelegramMessage(
+                          `✅ SDK resolved merge conflicts for PR #${cc.prNumber} "${task.title}" (${result.resolvedFiles.length} files)`,
+                        );
+                      }
+                    } else {
+                      console.warn(
+                        `[monitor] ❌ SDK conflict resolution failed for PR #${cc.prNumber}: ${result.error}`,
+                      );
+                      if (telegramToken && telegramChatId) {
+                        void sendTelegramMessage(
+                          `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
+                        );
+                      }
+                    }
+                  } catch (err) {
+                    console.warn(
+                      `[monitor] SDK conflict resolution threw: ${err.message}`,
+                    );
+                  }
+                })();
+              } else {
+                console.warn(
+                  `[monitor] No worktree found for ${cc.branch} — deferring to orchestrator`,
+                );
+                if (telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
+                  );
+                }
+              }
+            } else {
+              // SDK exhausted or on cooldown — fall back to orchestrator
+              const reason = sdkExhausted
+                ? "SDK attempts exhausted"
+                : "SDK on cooldown";
+              console.log(
+                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — ${reason}, deferring to orchestrator (attempt ${shortId})`,
+              );
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
+                );
+              }
             }
           } else {
             console.warn(

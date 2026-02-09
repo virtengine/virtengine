@@ -2819,8 +2819,13 @@ function Invoke-DirectRebase {
             try {
                 $resolved = Resolve-MergeConflicts
                 if (-not $resolved) {
-                    git merge --abort 2>&1 | Out-Null
-                    throw "merge conflict (not auto-resolvable): $mergeOut"
+                    # ── SDK resolver mode: leave merge in progress ──────────
+                    # Instead of aborting the merge, leave it in progress so
+                    # the monitor's SDK resolver (sdk-conflict-resolver.mjs)
+                    # can read conflict markers and resolve semantically.
+                    Write-Log "Merge has semantic conflicts — leaving merge in progress for SDK resolver (worktree: $worktreePath)" -Level "INFO"
+                    Set-RebaseCooldown -Branch $Branch -CooldownMinutes 5
+                    return "sdk_needed"
                 }
                 Write-Log "Auto-resolved merge conflicts for $Branch" -Level "OK"
             } finally {
@@ -3709,12 +3714,32 @@ function Process-CompletedAttempts {
                 $rebaseBase = Resolve-PRBaseBranch -Info $info -PRDetails $prDetails
                 Write-Log "Attempting direct rebase for conflicting PR #$($pr.number) onto $rebaseBase" -Level "ACTION"
                 $rebaseOk = Invoke-DirectRebase -Branch $branch -BaseBranch $rebaseBase -AttemptId $attemptId
-                if ($rebaseOk) {
+                if ($rebaseOk -eq $true) {
                     Write-Log "Direct rebase resolved conflicts for PR #$($pr.number)" -Level "OK"
                     $info.conflict_notified = $false
                     continue  # Re-check merge state next cycle
                 }
+                if ($rebaseOk -eq "sdk_needed") {
+                    # Merge is left in progress for the monitor's SDK resolver
+                    # Set a short cooldown so the SDK resolver gets a chance before @copilot
+                    Write-Log "Merge left in progress for SDK resolver — PR #$($pr.number)" -Level "INFO"
+                    $info.sdk_resolution_pending = $true
+                    $info.sdk_resolution_started = (Get-Date).ToString("o")
+                    continue  # Skip @copilot notification — let SDK resolver attempt first
+                }
                 Write-Log "Direct rebase failed for PR #$($pr.number) — proceeding to notification" -Level "WARN"
+            }
+
+            # ── Guard: if SDK resolution was recently requested, give it time ────────
+            if ($info.sdk_resolution_pending) {
+                $sdkStart = [datetime]::Parse($info.sdk_resolution_started)
+                $sdkElapsed = (Get-Date) - $sdkStart
+                if ($sdkElapsed.TotalMinutes -lt 15) {
+                    Write-Log "SDK resolver active for PR #$($pr.number) ($([int]$sdkElapsed.TotalMinutes)m elapsed) — skipping @copilot" -Level "INFO"
+                    continue
+                }
+                Write-Log "SDK resolver timed out for PR #$($pr.number) ($([int]$sdkElapsed.TotalMinutes)m) — falling back to @copilot" -Level "WARN"
+                $info.sdk_resolution_pending = $false
             }
 
             if (-not $info.conflict_notified) {
