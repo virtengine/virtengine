@@ -13,6 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/virtengine/virtengine/pkg/security"
+
 	cmtcfg "github.com/cometbft/cometbft/config"
 	tmrand "github.com/cometbft/cometbft/libs/rand"
 	cmtypes "github.com/cometbft/cometbft/types"
@@ -217,9 +219,7 @@ func downloadGenesis(config *cmtcfg.Config, chainID string) error {
 	genFilePath := config.GenesisFile()
 
 	// Create a new HTTP client with a 30-second timeout
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second))
 
 	// Create a new GET request
 	req, err := http.NewRequest("GET", genesisURL, nil)

@@ -5,7 +5,6 @@ package provider_daemon
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -94,7 +95,7 @@ func DefaultDomainVerificationCheckerConfig() DomainVerificationCheckerConfig {
 		InitialBackoff:      DefaultInitialBackoff,
 		MaxBackoff:          DefaultMaxBackoff,
 		ExpiryCheckInterval: DefaultExpiryCheckInterval,
-		HTTPClient:          &http.Client{Timeout: DefaultVerificationTimeout},
+		HTTPClient:          security.NewSecureHTTPClient(security.WithTimeout(DefaultVerificationTimeout)),
 	}
 }
 
@@ -183,15 +184,7 @@ func NewDomainVerificationChecker(
 	if cfg.HTTPClient != nil {
 		checker.httpClient = cfg.HTTPClient
 	} else {
-		// #nosec G402 - TLS 1.2+ required by transport defaults
-		checker.httpClient = &http.Client{
-			Timeout: cfg.VerificationTimeout,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-				},
-			},
-		}
+		checker.httpClient = security.NewSecureHTTPClient(security.WithTimeout(cfg.VerificationTimeout))
 	}
 
 	// Set up RPC client if not using injected chain client

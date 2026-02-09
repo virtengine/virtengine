@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/virtengine/virtengine/pkg/security"
 
 	"github.com/virtengine/virtengine/pkg/verification/audit"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -74,7 +75,7 @@ func NewDefaultVerifier(
 	v := &DefaultVerifier{
 		config:         config,
 		jwksManager:    NewJWKSManager(jwksConfig, logger),
-		httpClient:     &http.Client{Timeout: time.Duration(config.HTTPClientTimeoutSeconds) * time.Second},
+		httpClient:     security.NewSecureHTTPClient(security.WithTimeout(time.Duration(config.HTTPClientTimeoutSeconds) * time.Second)),
 		auditor:        auditor,
 		logger:         logger.With().Str("component", "oidc_verifier").Logger(),
 		discoveryCache: make(map[string]*OIDCDiscoveryDocument),

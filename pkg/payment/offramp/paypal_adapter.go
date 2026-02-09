@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -41,10 +43,8 @@ func NewPayPalAdapter(config PayPalConfig) (*PayPalAdapter, error) {
 	}
 
 	return &PayPalAdapter{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}, nil
 }
 

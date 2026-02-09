@@ -8,8 +8,9 @@ import (
 
 	"cosmossdk.io/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/pkg/servicedesk"
 )
 
@@ -107,7 +108,10 @@ func NewSupportService(cfg SupportServiceConfig, keyManager *KeyManager, logger 
 
 	var grpcConn *grpc.ClientConn
 	if cfg.GRPCEndpoint != "" {
-		conn, err := grpc.NewClient(cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient(
+			cfg.GRPCEndpoint,
+			grpc.WithTransportCredentials(credentials.NewTLS(security.SecureTLSConfig())),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("connect support grpc: %w", err)
 		}
