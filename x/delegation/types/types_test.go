@@ -303,6 +303,7 @@ func TestDelegatorRewardValidation(t *testing.T) {
 				"1000000000000000000",
 				"10000000000000000000",
 				now,
+				100,
 			),
 			expectError: false,
 		},

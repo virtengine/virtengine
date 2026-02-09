@@ -160,6 +160,13 @@ func (msg *MsgClaimRewards) ValidateBasic() error {
 		return ErrInvalidAddress.Wrapf("invalid validator address: %v", err)
 	}
 
+	if msg.StartHeight < 0 || msg.EndHeight < 0 {
+		return ErrInvalidAmount.Wrap("start_height and end_height must be non-negative")
+	}
+	if msg.EndHeight != 0 && msg.StartHeight > msg.EndHeight {
+		return ErrInvalidAmount.Wrap("start_height cannot be greater than end_height")
+	}
+
 	return nil
 }
 

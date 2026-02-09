@@ -151,8 +151,8 @@ func (ms msgServer) ClaimRewards(goCtx context.Context, msg *types.MsgClaimRewar
 		return nil, types.ErrInvalidValidator.Wrap(errMsgInvalidValidatorAddr)
 	}
 
-	// Claim rewards through the keeper
-	rewards, err := ms.keeper.ClaimRewards(ctx, msg.Delegator, msg.Validator)
+	// Claim rewards through the keeper (range-aware)
+	rewards, err := ms.keeper.ClaimRewardsInRange(ctx, msg.Delegator, msg.Validator, msg.StartHeight, msg.EndHeight)
 	if err != nil {
 		return nil, err
 	}

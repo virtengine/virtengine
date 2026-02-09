@@ -324,6 +324,12 @@ message DelegatorReward {
     (gogoproto.moretags) = "yaml:\"calculated_at\""
   ];
 
+  // height is the block height when the reward was calculated
+  int64 height = 10 [
+    (gogoproto.jsontag) = "height",
+    (gogoproto.moretags) = "yaml:\"height\""
+  ];
+
   // claimed indicates if the reward has been claimed
   bool claimed = 8 [
     (gogoproto.jsontag) = "claimed",
@@ -335,6 +341,69 @@ message DelegatorReward {
     (gogoproto.stdtime) = true,
     (gogoproto.jsontag) = "claimed_at,omitempty",
     (gogoproto.moretags) = "yaml:\"claimed_at\""
+  ];
+}
+
+// DelegatorSlashingEvent represents a slashing event applied to a delegator
+message DelegatorSlashingEvent {
+  option (gogoproto.equal) = true;
+
+  // id is the unique slashing event ID
+  string id = 1 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+
+  // delegator_address is the delegator's address
+  string delegator_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "delegator_address",
+    (gogoproto.moretags) = "yaml:\"delegator_address\""
+  ];
+
+  // validator_address is the validator's address
+  string validator_address = 3 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // slash_fraction is the applied slash fraction
+  string slash_fraction = 4 [
+    (gogoproto.jsontag) = "slash_fraction",
+    (gogoproto.moretags) = "yaml:\"slash_fraction\""
+  ];
+
+  // slash_amount is the total amount slashed
+  string slash_amount = 5 [
+    (gogoproto.jsontag) = "slash_amount",
+    (gogoproto.moretags) = "yaml:\"slash_amount\""
+  ];
+
+  // shares_slashed is the total shares slashed
+  string shares_slashed = 6 [
+    (gogoproto.jsontag) = "shares_slashed",
+    (gogoproto.moretags) = "yaml:\"shares_slashed\""
+  ];
+
+  // infraction_height is the height at which the infraction occurred
+  int64 infraction_height = 7 [
+    (gogoproto.jsontag) = "infraction_height",
+    (gogoproto.moretags) = "yaml:\"infraction_height\""
+  ];
+
+  // block_height is the height at which the slash was applied
+  int64 block_height = 8 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+
+  // block_time is the time at which the slash was applied
+  google.protobuf.Timestamp block_time = 9 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "block_time",
+    (gogoproto.moretags) = "yaml:\"block_time\""
   ];
 }
 

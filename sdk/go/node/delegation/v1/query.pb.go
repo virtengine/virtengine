@@ -874,6 +874,55 @@ func (m *QueryDelegatorRedelegationsResponse) GetPagination() *query.PageRespons
 	return nil
 }
 
+// QueryRedelegationsRequest is the request for QueryRedelegations
+type QueryRedelegationsRequest struct {
+	// pagination is optional pagination parameters
+	Pagination *query.PageRequest `protobuf:"bytes,1,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryRedelegationsRequest) Reset()         { *m = QueryRedelegationsRequest{} }
+func (m *QueryRedelegationsRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryRedelegationsRequest) ProtoMessage()    {}
+func (*QueryRedelegationsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_d08a99d24a3c8c62, []int{99}
+}
+
+func (m *QueryRedelegationsRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+// QueryRedelegationsResponse is the response for QueryRedelegations
+type QueryRedelegationsResponse struct {
+	// redelegations are the active redelegation records
+	Redelegations []Redelegation `protobuf:"bytes,1,rep,name=redelegations,proto3" json:"redelegations" yaml:"redelegations"`
+	// pagination is the pagination response
+	Pagination *query.PageResponse `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryRedelegationsResponse) Reset()         { *m = QueryRedelegationsResponse{} }
+func (m *QueryRedelegationsResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryRedelegationsResponse) ProtoMessage()    {}
+func (*QueryRedelegationsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_d08a99d24a3c8c62, []int{100}
+}
+
+func (m *QueryRedelegationsResponse) GetRedelegations() []Redelegation {
+	if m != nil {
+		return m.Redelegations
+	}
+	return nil
+}
+
+func (m *QueryRedelegationsResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
 // QueryDelegatorRewardsRequest is the request for QueryDelegatorRewards
 type QueryDelegatorRewardsRequest struct {
 	// delegator_address is the delegator's address
@@ -982,6 +1031,158 @@ func (m *QueryDelegatorRewardsResponse) GetTotalReward() string {
 		return m.TotalReward
 	}
 	return ""
+}
+
+// QueryHistoricalRewardsRequest is the request for QueryHistoricalRewards
+type QueryHistoricalRewardsRequest struct {
+	// delegator_address is the delegator's address
+	DelegatorAddress string `protobuf:"bytes,1,opt,name=delegator_address,json=delegatorAddress,proto3" json:"delegator_address" yaml:"delegator_address"`
+	// validator_address is the validator's address
+	ValidatorAddress string `protobuf:"bytes,2,opt,name=validator_address,json=validatorAddress,proto3" json:"validator_address" yaml:"validator_address"`
+	// start_height is the starting block height (inclusive)
+	StartHeight int64 `protobuf:"varint,3,opt,name=start_height,json=startHeight,proto3" json:"start_height,omitempty" yaml:"start_height"`
+	// end_height is the ending block height (inclusive)
+	EndHeight int64 `protobuf:"varint,4,opt,name=end_height,json=endHeight,proto3" json:"end_height,omitempty" yaml:"end_height"`
+	// pagination is optional pagination parameters
+	Pagination *query.PageRequest `protobuf:"bytes,5,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryHistoricalRewardsRequest) Reset()         { *m = QueryHistoricalRewardsRequest{} }
+func (m *QueryHistoricalRewardsRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryHistoricalRewardsRequest) ProtoMessage()    {}
+func (*QueryHistoricalRewardsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_d08a99d24a3c8c62, []int{101}
+}
+
+func (m *QueryHistoricalRewardsRequest) GetDelegatorAddress() string {
+	if m != nil {
+		return m.DelegatorAddress
+	}
+	return ""
+}
+
+func (m *QueryHistoricalRewardsRequest) GetValidatorAddress() string {
+	if m != nil {
+		return m.ValidatorAddress
+	}
+	return ""
+}
+
+func (m *QueryHistoricalRewardsRequest) GetStartHeight() int64 {
+	if m != nil {
+		return m.StartHeight
+	}
+	return 0
+}
+
+func (m *QueryHistoricalRewardsRequest) GetEndHeight() int64 {
+	if m != nil {
+		return m.EndHeight
+	}
+	return 0
+}
+
+func (m *QueryHistoricalRewardsRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+// QueryHistoricalRewardsResponse is the response for QueryHistoricalRewards
+type QueryHistoricalRewardsResponse struct {
+	// rewards are the historical reward records
+	Rewards []DelegatorReward `protobuf:"bytes,1,rep,name=rewards,proto3" json:"rewards" yaml:"rewards"`
+	// total_reward is the sum of all unclaimed rewards in the range
+	TotalReward string `protobuf:"bytes,2,opt,name=total_reward,json=totalReward,proto3" json:"total_reward,omitempty" yaml:"total_reward"`
+	// pagination is the pagination response
+	Pagination *query.PageResponse `protobuf:"bytes,3,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryHistoricalRewardsResponse) Reset()         { *m = QueryHistoricalRewardsResponse{} }
+func (m *QueryHistoricalRewardsResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryHistoricalRewardsResponse) ProtoMessage()    {}
+func (*QueryHistoricalRewardsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_d08a99d24a3c8c62, []int{102}
+}
+
+func (m *QueryHistoricalRewardsResponse) GetRewards() []DelegatorReward {
+	if m != nil {
+		return m.Rewards
+	}
+	return nil
+}
+
+func (m *QueryHistoricalRewardsResponse) GetTotalReward() string {
+	if m != nil {
+		return m.TotalReward
+	}
+	return ""
+}
+
+func (m *QueryHistoricalRewardsResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+// QuerySlashingEventsRequest is the request for QuerySlashingEvents
+type QuerySlashingEventsRequest struct {
+	// delegator_address is the delegator's address
+	DelegatorAddress string `protobuf:"bytes,1,opt,name=delegator_address,json=delegatorAddress,proto3" json:"delegator_address" yaml:"delegator_address"`
+	// pagination is optional pagination parameters
+	Pagination *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QuerySlashingEventsRequest) Reset()         { *m = QuerySlashingEventsRequest{} }
+func (m *QuerySlashingEventsRequest) String() string { return proto.CompactTextString(m) }
+func (*QuerySlashingEventsRequest) ProtoMessage()    {}
+func (*QuerySlashingEventsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_d08a99d24a3c8c62, []int{103}
+}
+
+func (m *QuerySlashingEventsRequest) GetDelegatorAddress() string {
+	if m != nil {
+		return m.DelegatorAddress
+	}
+	return ""
+}
+
+func (m *QuerySlashingEventsRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+// QuerySlashingEventsResponse is the response for QuerySlashingEvents
+type QuerySlashingEventsResponse struct {
+	// events are the delegator slashing events
+	Events []DelegatorSlashingEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events" yaml:"events"`
+	// pagination is the pagination response
+	Pagination *query.PageResponse `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QuerySlashingEventsResponse) Reset()         { *m = QuerySlashingEventsResponse{} }
+func (m *QuerySlashingEventsResponse) String() string { return proto.CompactTextString(m) }
+func (*QuerySlashingEventsResponse) ProtoMessage()    {}
+func (*QuerySlashingEventsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_d08a99d24a3c8c62, []int{104}
+}
+
+func (m *QuerySlashingEventsResponse) GetEvents() []DelegatorSlashingEvent {
+	if m != nil {
+		return m.Events
+	}
+	return nil
+}
+
+func (m *QuerySlashingEventsResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
 }
 
 // QueryDelegatorAllRewardsRequest is the request for QueryDelegatorAllRewards
@@ -1221,8 +1422,14 @@ func init() {
 	proto.RegisterType((*QueryRedelegationResponse)(nil), "virtengine.delegation.v1.QueryRedelegationResponse")
 	proto.RegisterType((*QueryDelegatorRedelegationsRequest)(nil), "virtengine.delegation.v1.QueryDelegatorRedelegationsRequest")
 	proto.RegisterType((*QueryDelegatorRedelegationsResponse)(nil), "virtengine.delegation.v1.QueryDelegatorRedelegationsResponse")
+	proto.RegisterType((*QueryRedelegationsRequest)(nil), "virtengine.delegation.v1.QueryRedelegationsRequest")
+	proto.RegisterType((*QueryRedelegationsResponse)(nil), "virtengine.delegation.v1.QueryRedelegationsResponse")
 	proto.RegisterType((*QueryDelegatorRewardsRequest)(nil), "virtengine.delegation.v1.QueryDelegatorRewardsRequest")
 	proto.RegisterType((*QueryDelegatorRewardsResponse)(nil), "virtengine.delegation.v1.QueryDelegatorRewardsResponse")
+	proto.RegisterType((*QueryHistoricalRewardsRequest)(nil), "virtengine.delegation.v1.QueryHistoricalRewardsRequest")
+	proto.RegisterType((*QueryHistoricalRewardsResponse)(nil), "virtengine.delegation.v1.QueryHistoricalRewardsResponse")
+	proto.RegisterType((*QuerySlashingEventsRequest)(nil), "virtengine.delegation.v1.QuerySlashingEventsRequest")
+	proto.RegisterType((*QuerySlashingEventsResponse)(nil), "virtengine.delegation.v1.QuerySlashingEventsResponse")
 	proto.RegisterType((*QueryDelegatorAllRewardsRequest)(nil), "virtengine.delegation.v1.QueryDelegatorAllRewardsRequest")
 	proto.RegisterType((*QueryDelegatorAllRewardsResponse)(nil), "virtengine.delegation.v1.QueryDelegatorAllRewardsResponse")
 	proto.RegisterType((*QueryValidatorSharesRequest)(nil), "virtengine.delegation.v1.QueryValidatorSharesRequest")
@@ -1370,10 +1577,22 @@ type QueryClient interface {
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	DelegatorRedelegations(ctx context.Context, in *QueryDelegatorRedelegationsRequest, opts ...grpc.CallOption) (*QueryDelegatorRedelegationsResponse, error)
+	// Redelegations queries all active redelegations
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	Redelegations(ctx context.Context, in *QueryRedelegationsRequest, opts ...grpc.CallOption) (*QueryRedelegationsResponse, error)
 	// DelegatorRewards queries unclaimed rewards for a delegator from a specific validator
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	DelegatorRewards(ctx context.Context, in *QueryDelegatorRewardsRequest, opts ...grpc.CallOption) (*QueryDelegatorRewardsResponse, error)
+	// HistoricalRewards queries historical rewards for a delegator from a validator
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	HistoricalRewards(ctx context.Context, in *QueryHistoricalRewardsRequest, opts ...grpc.CallOption) (*QueryHistoricalRewardsResponse, error)
+	// SlashingEvents queries slashing events for a delegator
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	SlashingEvents(ctx context.Context, in *QuerySlashingEventsRequest, opts ...grpc.CallOption) (*QuerySlashingEventsResponse, error)
 	// DelegatorAllRewards queries all unclaimed rewards for a delegator
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
@@ -1464,9 +1683,36 @@ func (c *queryClient) DelegatorRedelegations(ctx context.Context, in *QueryDeleg
 	return out, nil
 }
 
+func (c *queryClient) Redelegations(ctx context.Context, in *QueryRedelegationsRequest, opts ...grpc.CallOption) (*QueryRedelegationsResponse, error) {
+	out := new(QueryRedelegationsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.delegation.v1.Query/Redelegations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *queryClient) DelegatorRewards(ctx context.Context, in *QueryDelegatorRewardsRequest, opts ...grpc.CallOption) (*QueryDelegatorRewardsResponse, error) {
 	out := new(QueryDelegatorRewardsResponse)
 	err := c.cc.Invoke(ctx, "/virtengine.delegation.v1.Query/DelegatorRewards", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) HistoricalRewards(ctx context.Context, in *QueryHistoricalRewardsRequest, opts ...grpc.CallOption) (*QueryHistoricalRewardsResponse, error) {
+	out := new(QueryHistoricalRewardsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.delegation.v1.Query/HistoricalRewards", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) SlashingEvents(ctx context.Context, in *QuerySlashingEventsRequest, opts ...grpc.CallOption) (*QuerySlashingEventsResponse, error) {
+	out := new(QuerySlashingEventsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.delegation.v1.Query/SlashingEvents", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1525,10 +1771,22 @@ type QueryServer interface {
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	DelegatorRedelegations(context.Context, *QueryDelegatorRedelegationsRequest) (*QueryDelegatorRedelegationsResponse, error)
+	// Redelegations queries all active redelegations
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	Redelegations(context.Context, *QueryRedelegationsRequest) (*QueryRedelegationsResponse, error)
 	// DelegatorRewards queries unclaimed rewards for a delegator from a specific validator
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
 	DelegatorRewards(context.Context, *QueryDelegatorRewardsRequest) (*QueryDelegatorRewardsResponse, error)
+	// HistoricalRewards queries historical rewards for a delegator from a validator
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	HistoricalRewards(context.Context, *QueryHistoricalRewardsRequest) (*QueryHistoricalRewardsResponse, error)
+	// SlashingEvents queries slashing events for a delegator
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+	SlashingEvents(context.Context, *QuerySlashingEventsRequest) (*QuerySlashingEventsResponse, error)
 	// DelegatorAllRewards queries all unclaimed rewards for a delegator
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
@@ -1567,8 +1825,17 @@ func (*UnimplementedQueryServer) Redelegation(ctx context.Context, req *QueryRed
 func (*UnimplementedQueryServer) DelegatorRedelegations(ctx context.Context, req *QueryDelegatorRedelegationsRequest) (*QueryDelegatorRedelegationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DelegatorRedelegations not implemented")
 }
+func (*UnimplementedQueryServer) Redelegations(ctx context.Context, req *QueryRedelegationsRequest) (*QueryRedelegationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Redelegations not implemented")
+}
 func (*UnimplementedQueryServer) DelegatorRewards(ctx context.Context, req *QueryDelegatorRewardsRequest) (*QueryDelegatorRewardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DelegatorRewards not implemented")
+}
+func (*UnimplementedQueryServer) HistoricalRewards(ctx context.Context, req *QueryHistoricalRewardsRequest) (*QueryHistoricalRewardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HistoricalRewards not implemented")
+}
+func (*UnimplementedQueryServer) SlashingEvents(ctx context.Context, req *QuerySlashingEventsRequest) (*QuerySlashingEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SlashingEvents not implemented")
 }
 func (*UnimplementedQueryServer) DelegatorAllRewards(ctx context.Context, req *QueryDelegatorAllRewardsRequest) (*QueryDelegatorAllRewardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DelegatorAllRewards not implemented")
@@ -1725,6 +1992,24 @@ func _Query_DelegatorRedelegations_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_Redelegations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryRedelegationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Redelegations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.delegation.v1.Query/Redelegations",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Redelegations(ctx, req.(*QueryRedelegationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Query_DelegatorRewards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryDelegatorRewardsRequest)
 	if err := dec(in); err != nil {
@@ -1739,6 +2024,42 @@ func _Query_DelegatorRewards_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(QueryServer).DelegatorRewards(ctx, req.(*QueryDelegatorRewardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_HistoricalRewards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryHistoricalRewardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).HistoricalRewards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.delegation.v1.Query/HistoricalRewards",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).HistoricalRewards(ctx, req.(*QueryHistoricalRewardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_SlashingEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuerySlashingEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).SlashingEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.delegation.v1.Query/SlashingEvents",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).SlashingEvents(ctx, req.(*QuerySlashingEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1817,8 +2138,20 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Query_DelegatorRedelegations_Handler,
 		},
 		{
+			MethodName: "Redelegations",
+			Handler:    _Query_Redelegations_Handler,
+		},
+		{
 			MethodName: "DelegatorRewards",
 			Handler:    _Query_DelegatorRewards_Handler,
+		},
+		{
+			MethodName: "HistoricalRewards",
+			Handler:    _Query_HistoricalRewards_Handler,
+		},
+		{
+			MethodName: "SlashingEvents",
+			Handler:    _Query_SlashingEvents_Handler,
 		},
 		{
 			MethodName: "DelegatorAllRewards",
