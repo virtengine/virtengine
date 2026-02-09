@@ -93,7 +93,6 @@ node scripts/codex-monitor/cli.mjs
 node scripts/codex-monitor/cli.mjs --setup
 ```
 
-<<<<<<< HEAD
 ### Configure via environment
 ```bash
 export TELEGRAM_BOT_TOKEN=...
@@ -240,4 +239,3 @@ Use `npm run test` from `scripts/codex-monitor/`.
 - Review orchestrator slot fill + PR completion (`ve-orchestrator.ps1:L4841-L4924`, `ve-orchestrator.ps1:L3306-L3504`).
 - Check Telegram batching and bot queues (`telegram-bot.mjs:L95-L206`).
 - Run `npm run test` in `scripts/codex-monitor/` to validate changes (`package.json:L62-L70`).
->>>>>>> a3d44114 (docs(cli): align codex-monitor AGENTS headings)
