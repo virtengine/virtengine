@@ -55,6 +55,56 @@ defer goleak.VerifyNoLeaks(t)
 
 at the very beginning of the test, and it will fail the test if it detects goroutines that were opened but never cleaned up at the end of the test.
 
+#### Required Checks and Branch Protection
+
+All pull requests must pass the following required checks before merge:
+
+**Quality Gate (quality-gate.yaml):**
+- ✅ **quality-gate / lint** - golangci-lint with all enabled linters
+- ✅ **quality-gate / vet** - go vet on all packages
+- ✅ **quality-gate / build** - all binaries must build successfully
+- ✅ **quality-gate / test-go** - core package tests must pass
+- ✅ **quality-gate / gosec-scan** - gosec with severity gating (if Go files changed)
+- ✅ **quality-gate / gitleaks-scan** - gitleaks on full PR diff (blocking)
+- ⚠️ **quality-gate / agents-docs** - AGENTS docs validation (warning only)
+
+**ML Determinism (quality-gate.yaml):** (if ML code changed)
+- ✅ **quality-gate / ml-determinism-check** - Go inference determinism verification
+
+**Portal CI (quality-gate.yaml):** (if portal code changed)
+- ✅ **quality-gate / portal-lint** - ESLint and TypeScript checks
+- ✅ **quality-gate / portal-test** - Unit tests
+- ✅ **quality-gate / portal-build** - Next.js build
+
+**Security Details:**
+
+- **gosec baseline**: New high/critical severity findings fail the build. Medium findings generate warnings. Baseline is tracked in `.gosec-baseline.json`.
+- **gitleaks**: Scans full PR diff (not just last commit). Allowlist for known false positives in `.gitleaks.toml`.
+- **ML determinism**: Critical for blockchain consensus - ensures inference is reproducible across platforms with CPU-only mode and fixed seed.
+
+**Setting Up Branch Protection:**
+
+Repository maintainers should configure branch protection for `main` and `mainnet/main` with:
+
+```
+Required status checks:
+- quality-gate / lint
+- quality-gate / vet
+- quality-gate / build
+- quality-gate / test-go
+- quality-gate / gosec-scan (if Go files changed)
+- quality-gate / gitleaks-scan
+- quality-gate / ml-determinism-check (if ML files changed)
+- quality-gate / portal-lint (if portal changed)
+- quality-gate / portal-test (if portal changed)
+- quality-gate / portal-build (if portal changed)
+
+Require branches to be up to date before merging: Yes
+Require linear history: Yes (recommended)
+```
+
+If you don't have permissions to configure branch protection via the GitHub API, ensure the repository admin manually configures these settings via GitHub Settings → Branches → Branch protection rules.
+
 #### I have a question, a suggestion or need help
 
 If you have a simple question you can [join the VirtEngine community](https://virtengine.com/community) and ask there, but please bear in mind that contributors may live in a different timezone or be working to a different timeline to you. If you have an urgent request then let them know about this.
