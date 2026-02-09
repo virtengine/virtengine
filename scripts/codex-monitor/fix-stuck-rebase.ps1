@@ -124,7 +124,7 @@ try {
         }
 
         # Create squash message
-        $squashMsg = "$prefix: " + (Read-Host -Prompt "Enter summary for squashed commits")
+        $squashMsg = "${prefix}: " + (Read-Host -Prompt "Enter summary for squashed commits")
 
         # Squash all commits
         git reset --soft "origin/$BaseBranch"
