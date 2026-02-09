@@ -336,6 +336,9 @@ export class AnomalyDetector {
 
     // Get or create per-process state
     const pid = meta.processId;
+    if (this.#completedProcesses.has(pid)) {
+      return;
+    }
     let state = this.#processes.get(pid);
     if (!state) {
       state = createProcessState(pid);
@@ -371,6 +374,12 @@ export class AnomalyDetector {
     this.#detectSelfDebugLoop(line, state);
     this.#detectRepeatedErrors(line, state);
     this.#detectSessionCompletion(line, state);
+
+    // Move completed processes out of the active map immediately so stats reflect completion.
+    if (state.isDead && this.#processes.has(pid)) {
+      this.#completedProcesses.set(pid, state);
+      this.#processes.delete(pid);
+    }
   }
 
   /**
@@ -383,6 +392,7 @@ export class AnomalyDetector {
       totalLinesProcessed: this.#totalLines,
       activeProcesses: this.#processes.size,
       completedProcesses: this.#completedProcesses.size,
+      deadProcesses: this.#completedProcesses.size,
       anomalyCounts: Object.fromEntries(this.#globalCounts),
       processes: /** @type {object[]} */ ([]),
     };
