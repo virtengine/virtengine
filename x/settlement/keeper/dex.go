@@ -602,9 +602,15 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 	if err != nil {
 		return types.ErrFiatConversionFailed.Wrapf("swap quote failed: %s", err)
 	}
+	if !swapQuote.ExpiresAt.IsZero() && ctx.BlockTime().After(swapQuote.ExpiresAt) {
+		return types.ErrFiatConversionFailed.Wrap("swap quote expired")
+	}
 	expectedOut, err := swapQuoteOutputAmount(swapQuote)
 	if err != nil {
 		return types.ErrFiatConversionFailed.Wrap(err.Error())
+	}
+	if !expectedOut.IsPositive() {
+		return types.ErrFiatConversionFailed.Wrap("swap quote output must be positive")
 	}
 	if err := k.validateConversionLimits(ctx, conversion.Provider, expectedOut); err != nil {
 		return err
