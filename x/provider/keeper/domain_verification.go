@@ -36,6 +36,7 @@ const (
 	DNSVerificationPrefix = "_virtengine-verification"
 
 	// HTTPWellKnownPath is the path for HTTP well-known verification
+	// #nosec G101 -- This is a well-known URL path constant, not a credential
 	HTTPWellKnownPath = "/.well-known/virtengine-verification"
 )
 

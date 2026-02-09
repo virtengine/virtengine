@@ -38,13 +38,16 @@ description = "Test fixtures containing private keys for testing"
 
 # Global allowlist for specific patterns
 [allowlist]
-# Exclude generated files
+# Exclude generated files and documentation
 paths = [
   '''.*\.pb\.go''',
   '''.*\.pb\.gw\.go''',
   '''vendor/.*''',
   '''node_modules/.*''',
   '''\.git/.*''',
+  '''\.cache/.*''',
+  '''_build/.*''',
+  '''_docs/.*''',
 ]
 
 # Exclude specific commits (if needed)
@@ -52,8 +55,8 @@ paths = [
 
 # Exclude specific regexes that match content
 regexes = [
-  # Example base64 in test fixtures (if needed)
-  # '''test[_-]?secret[_-]?value''',
+  '''dev-portal-key''',  # Example API key in documentation
+  '''cafebabe:deadbeef''',  # Example credentials in docs/README
 ]
 
 # Stop words that indicate false positives
