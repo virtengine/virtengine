@@ -99,27 +99,48 @@ Each gotcha includes root cause + fix location.
    - **Fix:** `Get-AttemptFailureCategory` now detects NO_CHANGES in agent output and immediately archives the attempt. Task descriptions with "superseded by", "already completed", etc. are detected during task selection and skipped entirely.
    - References: `ve-orchestrator.ps1:L2449-L2452` (detection), `ve-orchestrator.ps1:L3563-L3580` (archive on NO_CHANGES), `ve-orchestrator.ps1:L5206-L5229` (task description check)
 
-2. **Zombie workspace cleanup**
+2. **Already-merged task infinite retry loop** ✅ FIXED
+   - **Root cause:** when a task was completed and merged (or committed directly to main) and the remote branch was deleted, the orchestrator entered the "no remote branch" retry path instead of detecting the task was already done. Four compounding gaps caused infinite loops:
+     1. No "already merged into base" check before entering retry path
+     2. `$script:TaskFollowUpCounts` (global safety cap) was declared but never incremented — dead code
+     3. Task description "superseded by" check only ran at task selection, not for existing tracked attempts
+     4. `monitor.mjs` also reacted to orchestrator's "No remote branch" log, causing dual-trigger
+   - **Fix (orchestrator):**
+     - `Test-BranchMergedIntoBase` function checks GitHub for merged PRs + `git merge-base --is-ancestor` fallback
+     - `Test-TaskDescriptionAlreadyComplete` checks task description for "superseded by", "already completed", etc.
+     - Both checks run in `Process-CompletedAttempts` before the retry logic
+     - The "branch doesn't exist locally" fallback also checks for already-merged before marking `manual_review`
+     - References: `ve-orchestrator.ps1` — `Test-BranchMergedIntoBase`, `Test-TaskDescriptionAlreadyComplete`, `Process-CompletedAttempts`
+   - **Fix (follow-up cap):**
+     - `$script:TaskFollowUpCounts` now wired up in both `Try-SendFollowUp` and `Try-SendFollowUpNewSession`
+     - After `MAX_FOLLOWUPS_PER_TASK` (6) follow-ups, the attempt is archived and marked `manual_review`
+     - References: `ve-orchestrator.ps1` — `Try-SendFollowUp`, `Try-SendFollowUpNewSession`
+   - **Fix (monitor.mjs):**
+     - `resolveAndTriggerSmartPR` checks `mergedBranchCache` + `isBranchMerged()` before triggering `smartPRFlow`
+     - `smartPRFlow` Step 0 checks for merged branch and task description completion signals before any work
+     - References: `monitor.mjs` — `resolveAndTriggerSmartPR`, `smartPRFlow`
+
+3. **Zombie workspace cleanup**
    - **Root cause:** completed/cancelled tasks left temp worktrees behind, causing “ghost” workspaces and stale git metadata.
    - **Fix:** prune git worktrees and remove VK worktree directories on completion.
    - References: `ve-orchestrator.ps1:L3223-L3304`
 
-3. **Stale worktree path corruption**
+4. **Stale worktree path corruption**
    - **Root cause:** worktree directories deleted without pruning `.git/worktrees` metadata, causing path resolution errors.
    - **Fix:** setup scripts prune worktrees and note that VK worktree paths live under `.git/worktrees/` or `vibe-kanban`.
    - References: `setup.mjs:L530-L539`, `ve-orchestrator.ps1:L2099-L2104`
 
-4. **Credential helper corruption**
+5. **Credential helper corruption**
    - **Root cause:** VK containers run `gh auth setup-git`, writing a container-only helper path to `.git/config`.
    - **Fix:** remove local helper overrides on startup; rely on global helper or GH_TOKEN.
    - References: `ve-orchestrator.ps1:L461-L475`, `setup.mjs:L518-L527`
 
-5. **Fresh vs crashed task detection**
+6. **Fresh vs crashed task detection**
    - **Root cause:** no distinction between “fresh task (0 commits)” and “crashed task (commits exist but not pushed)”.
    - **Fix:** check commit counts, restart fresh tasks, or prompt push for crashed ones.
    - References: `ve-orchestrator.ps1:L571-L605`, `ve-orchestrator.ps1:L3383-L3424`
 
-6. **Rebase spam on completed tasks**
+7. **Rebase spam on completed tasks**
    - **Root cause:** downstream rebases attempted on archived/completed tasks.
    - **Fix:** filter VK attempts to active tasks only; skip archived attempts before rebase.
    - References: `monitor.mjs:L3495-L3506`, `monitor.mjs:L3543-L3548`

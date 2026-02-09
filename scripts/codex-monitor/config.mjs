@@ -14,7 +14,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { resolve, dirname, basename } from "node:path";
+import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
@@ -26,6 +26,31 @@ const CONFIG_FILES = [
   ".codex-monitor.json",
   "codex-monitor.json",
 ];
+
+function hasSetupMarkers(dir) {
+  const markers = [".env", ...CONFIG_FILES];
+  return markers.some((name) => existsSync(resolve(dir, name)));
+}
+
+function isPathInside(parent, child) {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function resolveConfigDir(repoRoot) {
+  const repoPath = resolve(repoRoot || process.cwd());
+  const packageDir = resolve(__dirname);
+  if (isPathInside(repoPath, packageDir) || hasSetupMarkers(packageDir)) {
+    return packageDir;
+  }
+  const baseDir =
+    process.env.APPDATA ||
+    process.env.LOCALAPPDATA ||
+    process.env.HOME ||
+    process.env.USERPROFILE ||
+    process.cwd();
+  return resolve(baseDir, "codex-monitor");
+}
 
 // ── .env loader ──────────────────────────────────────────────────────────────
 
@@ -725,9 +750,12 @@ export function loadConfig(argv = process.argv, options = {}) {
   const { reloadEnv = false } = options;
   const cli = parseArgs(argv);
 
-  // Determine config directory (where codex-monitor lives)
+  const repoRootForConfig = detectRepoRoot();
+  // Determine config directory (where codex-monitor stores its config)
   const configDir =
-    cli["config-dir"] || process.env.CODEX_MONITOR_DIR || __dirname;
+    cli["config-dir"] ||
+    process.env.CODEX_MONITOR_DIR ||
+    resolveConfigDir(repoRootForConfig);
 
   const configFile = loadConfigFile(configDir);
   let configData = configFile.data || {};
@@ -1216,8 +1244,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const agentPrompts = loadAgentPrompts(configDir, repoRoot, configData);
 
   // ── First-run detection ──────────────────────────────────
-  const isFirstRun =
-    !existsSync(resolve(configDir, ".env")) && !configFile.path;
+  const isFirstRun = !hasSetupMarkers(configDir);
 
   const config = {
     // Identity

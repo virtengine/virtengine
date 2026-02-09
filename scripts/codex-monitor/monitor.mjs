@@ -251,6 +251,62 @@ const shellAnsi = {
 const shellPromptText = shellAnsi.cyan("[agent]") + " > ";
 const shellInfoPrefix = shellAnsi.dim("[shell]") + " ";
 console.log(`[monitor] task planner mode: ${plannerMode}`);
+
+function shellWriteRaw(chunk) {
+  try {
+    process.stdout.write(chunk);
+  } catch {
+    /* ignore write failures */
+  }
+}
+
+function shellWriteLine(text) {
+  shellWriteRaw(`${shellInfoPrefix}${text}\n`);
+}
+
+function startInteractiveShell() {
+  if (!shellIsTTY || shellState.active) {
+    return;
+  }
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: shellPromptText,
+    terminal: true,
+  });
+  shellState.rl = rl;
+  shellState.active = true;
+  rl.on("line", (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      rl.prompt();
+      return;
+    }
+    if (["exit", "quit"].includes(trimmed.toLowerCase())) {
+      rl.close();
+      return;
+    }
+    shellState.queue = shellState.queue
+      .then(async () => {
+        if (!primaryAgentReady) {
+          shellWriteLine("Primary agent not ready.");
+          return;
+        }
+        await execPrimaryPrompt(trimmed, { timeoutMs: 15 * 60 * 1000 });
+      })
+      .catch((err) => {
+        shellWriteLine(`Error: ${err.message || err}`);
+      })
+      .finally(() => {
+        rl.prompt();
+      });
+  });
+  rl.on("close", () => {
+    shellState.active = false;
+    shellState.rl = null;
+  });
+  rl.prompt();
+}
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -4209,6 +4265,65 @@ function resolveAttemptTargetBranch(attempt, task) {
 async function smartPRFlow(attemptId, shortId, status) {
   const tag = `smartPR(${shortId})`;
   try {
+    // ── Step 0: Check if task/branch is already merged ───────────
+    // Prevents infinite retry loops for tasks that were completed in previous sessions
+    const attemptInfo = await getAttemptInfo(attemptId);
+    if (attemptInfo?.branch) {
+      if (mergedBranchCache.has(attemptInfo.branch)) {
+        console.log(
+          `[monitor] ${tag}: branch already in merged cache — archiving`,
+        );
+        await archiveAttempt(attemptId);
+        return;
+      }
+      const merged = await isBranchMerged(attemptInfo.branch);
+      if (merged) {
+        console.log(
+          `[monitor] ${tag}: branch ${attemptInfo.branch} confirmed merged — completing task`,
+        );
+        mergedBranchCache.add(attemptInfo.branch);
+        if (attemptInfo.task_id) {
+          mergedTaskCache.add(attemptInfo.task_id);
+          void updateTaskStatus(attemptInfo.task_id, "done");
+        }
+        await archiveAttempt(attemptId);
+        saveMergedTaskCache();
+        return;
+      }
+    }
+
+    // ── Step 0b: Check task description for "already completed" signals ──
+    if (attemptInfo?.task_id) {
+      try {
+        const taskRes = await fetchVk(`/api/tasks/${attemptInfo.task_id}`);
+        const desc = (
+          taskRes?.data?.description ||
+          taskRes?.data?.body ||
+          ""
+        ).toLowerCase();
+        const completionSignals = [
+          "superseded by",
+          "already completed",
+          "this task has been completed",
+          "merged in",
+          "completed via",
+          "no longer needed",
+          "already merged",
+        ];
+        const isDescComplete = completionSignals.some((s) => desc.includes(s));
+        if (isDescComplete) {
+          console.log(
+            `[monitor] ${tag}: task description indicates already completed — archiving`,
+          );
+          void updateTaskStatus(attemptInfo.task_id, "done");
+          await archiveAttempt(attemptId);
+          return;
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+
     // ── Step 1: Check branch status ─────────────────────────────
     const branchStatus = await fetchBranchStatus(attemptId);
     if (!branchStatus) {
@@ -4619,6 +4734,33 @@ async function resolveAndTriggerSmartPR(shortId, status) {
     const statusData = await readStatusData();
     const attempts = statusData?.active_attempts || [];
     const match = attempts.find((a) => a.id?.startsWith(shortId));
+
+    // ── Early merged-branch check: skip if branch is already merged ──
+    const resolvedAttempt = match;
+    if (resolvedAttempt?.branch) {
+      if (mergedBranchCache.has(resolvedAttempt.branch)) {
+        console.log(
+          `[monitor] smartPR(${shortId}): branch ${resolvedAttempt.branch} already in mergedBranchCache — skipping`,
+        );
+        return;
+      }
+      // Check GitHub for a merged PR with this head branch
+      const merged = await isBranchMerged(resolvedAttempt.branch);
+      if (merged) {
+        console.log(
+          `[monitor] smartPR(${shortId}): branch ${resolvedAttempt.branch} confirmed merged — completing task and skipping PR flow`,
+        );
+        mergedBranchCache.add(resolvedAttempt.branch);
+        if (resolvedAttempt.task_id) {
+          mergedTaskCache.add(resolvedAttempt.task_id);
+          void updateTaskStatus(resolvedAttempt.task_id, "done");
+        }
+        await archiveAttempt(resolvedAttempt.id || shortId);
+        saveMergedTaskCache();
+        return;
+      }
+    }
+
     if (!match) {
       // Try the full list via VK API
       const allAttempts = await fetchVk(
@@ -6237,6 +6379,8 @@ async function handleExit(code, signal, logPath) {
 
   const logText = await readFile(logPath, "utf8").catch(() => "");
   const reason = signal ? `signal ${signal}` : `exit ${code}`;
+
+  // ── Check if this is an intentional restart BEFORE clearing flags ──
   const isFileChangeRestart = pendingRestart && skipNextAnalyze;
   const isAbnormalExit = Boolean(signal) || code !== 0;
   const isCleanExit = !isAbnormalExit; // exit code 0, no signal
@@ -6251,6 +6395,9 @@ async function handleExit(code, signal, logPath) {
 
     // File-change restarts don't need analysis or auto-fix
     if (isFileChangeRestart) {
+      console.log(
+        `[monitor] intentional restart (${reason}) — skipping autofix`,
+      );
       startProcess();
       return;
     }

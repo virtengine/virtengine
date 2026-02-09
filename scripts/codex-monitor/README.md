@@ -136,7 +136,7 @@ Configuration loads from (highest priority first):
 
 1. **CLI flags** (`--script ./myorch.ps1`)
 2. **Environment variables** (`ORCHESTRATOR_SCRIPT=...`)
-3. **`.env` file** (in codex-monitor directory)
+3. **`.env` file** (config directory: codex-monitor folder for repo installs, user config dir for global installs)
 4. **`codex-monitor.config.json`** (project config)
 5. **Built-in defaults**
 
@@ -1030,7 +1030,7 @@ pwsh ve-orchestrator.ps1 -MaxParallel 6 -PollIntervalSec 90
 
 ### First-run setup doesn't launch
 
-The auto-detection checks for `.env` or `codex-monitor.config.json`. If either exists, setup won't auto-launch. Run `codex-monitor --setup` manually.
+The auto-detection checks for `.env` or `codex-monitor.config.json` in the config directory (repo install: codex-monitor folder; global install: user config dir). If either exists, setup won't auto-launch. Run `codex-monitor --setup` manually.
 
 ### Telegram 409 errors
 

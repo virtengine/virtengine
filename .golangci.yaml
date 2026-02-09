@@ -16,6 +16,8 @@ linters:
     - staticcheck
     - unparam
     - unused
+  disable:
+    - gofmt  # Handled by pre-commit hook
   settings:
     gocritic:
       disabled-checks:
@@ -35,12 +37,5 @@ linters:
       - third_party$
       - builtin$
       - examples$
-formatters:
-  enable:
-    - gofmt
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+# Formatting handled by pre-commit hook (.git/hooks/pre-commit)
+# golangci-lint only checks non-auto-fixable issues

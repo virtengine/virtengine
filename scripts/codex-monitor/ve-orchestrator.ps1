@@ -576,6 +576,101 @@ function Invoke-GhWithTimeout {
     }
 }
 
+function Test-BranchMergedIntoBase {
+    <#
+    .SYNOPSIS Check if a branch's work was already merged into the base branch.
+    .DESCRIPTION Uses GitHub CLI to check for merged PRs with this head branch,
+                 then falls back to git merge-base --is-ancestor if local refs exist.
+                 This catches the case where a task was completed, merged, and the
+                 remote branch was deleted — preventing infinite retry loops.
+    .PARAMETER Branch The branch name to check (e.g. "ve/359f-docs-portal-adr")
+    .PARAMETER BaseBranch The base branch to check against (default: $script:VK_TARGET_BRANCH)
+    .OUTPUTS Boolean — $true if the branch was definitively merged into base
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$BaseBranch = $script:VK_TARGET_BRANCH
+    )
+
+    # Strategy 1: Check GitHub for a merged PR with this head branch (most reliable)
+    try {
+        $ghResult = gh pr list --head $Branch --state merged --json number,mergedAt --limit 1 2>$null
+        if ($LASTEXITCODE -eq 0 -and $ghResult) {
+            $mergedPRs = $ghResult | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($mergedPRs -and @($mergedPRs).Count -gt 0) {
+                $prNum = $mergedPRs[0].number
+                Write-Log "Branch $Branch has merged PR #$prNum on GitHub — already completed" -Level "OK"
+                return $true
+            }
+        }
+    }
+    catch {
+        # gh CLI not available or rate-limited — fall through to git check
+    }
+
+    # Strategy 2: Check if local branch tip is an ancestor of base (works if refs exist)
+    try {
+        $branchRef = $Branch
+        $baseRef = if ($BaseBranch -like "origin/*") { $BaseBranch } else { "origin/$BaseBranch" }
+
+        # Check if the branch ref exists locally
+        git rev-parse --verify --quiet $branchRef 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { return $false }
+
+        git merge-base --is-ancestor $branchRef $baseRef 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log "Branch $Branch is ancestor of $baseRef — already merged" -Level "OK"
+            return $true
+        }
+    }
+    catch {
+        # Git check failed — not conclusive
+    }
+
+    return $false
+}
+
+function Test-TaskDescriptionAlreadyComplete {
+    <#
+    .SYNOPSIS Check if a task's description indicates it's already completed/superseded.
+    .DESCRIPTION Looks for common patterns in task descriptions that indicate the work
+                 is already done. Used to skip tasks that were completed in a previous
+                 session but still have active (non-archived) attempts.
+    .PARAMETER TaskId The VK task ID to check
+    .OUTPUTS Boolean — $true if the task description indicates it's already done
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TaskId
+    )
+    try {
+        $task = Get-VKTask -TaskId $TaskId -ErrorAction SilentlyContinue
+        if (-not $task -or -not $task.description) { return $false }
+        $desc = $task.description.ToLower()
+        $completionPatterns = @(
+            "superseded by",
+            "already completed",
+            "this task has been completed",
+            "merged in",
+            "completed via",
+            "no longer needed",
+            "has been completed via",
+            "already merged"
+        )
+        foreach ($pattern in $completionPatterns) {
+            if ($desc -match [regex]::Escape($pattern)) {
+                Write-Log "Task $($TaskId.Substring(0,8)) description indicates already completed ('$pattern')" -Level "INFO"
+                return $true
+            }
+        }
+    }
+    catch {
+        # Best effort — don't block on API errors
+    }
+    return $false
+}
+
 function Get-CommitsAhead {
     <#
     .SYNOPSIS Check how many commits a branch has compared to base branch.
@@ -2197,6 +2292,48 @@ function Get-ModelErrorRecoveryMessage {
     return ($parts -join "`n`n")
 }
 
+function Try-ArchiveAttempt {
+    <#
+    .SYNOPSIS Safely archive an attempt, handling already-archived cases and HTTP errors gracefully.
+    .DESCRIPTION
+    Checks if attempt is already archived in VK before calling the archive API.
+    Treats 404/405/409 HTTP errors as "already handled" (DEBUG level) instead of failures.
+    .OUTPUTS $true if archived or already archived, $false if hard failure
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AttemptId,
+        [object]$AttemptObject = $null  # Optional: pass the attempt object to check archived status
+    )
+
+    # Check if attempt is already archived (if we have the object)
+    if ($AttemptObject -and $AttemptObject.archived) {
+        Write-Log "Attempt $($AttemptId.Substring(0,8)) already archived in VK — skipping" -Level "DEBUG"
+        return $true
+    }
+
+    $vkBaseUrl = Get-VKBaseUrl
+    $archiveUrl = "$vkBaseUrl/api/task-attempts/$AttemptId/archive"
+
+    try {
+        Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction Stop | Out-Null
+        Write-Log "Archived attempt $($AttemptId.Substring(0,8))" -Level "OK"
+        return $true
+    }
+    catch {
+        $statusCode = $_.Exception.Response.StatusCode.value__
+        if ($statusCode -in @(404, 405, 409)) {
+            # 404 = not found (already deleted?), 405 = method not allowed (can't archive in current state), 409 = conflict (already archived)
+            Write-Log "Attempt $($AttemptId.Substring(0,8)) cannot be archived (HTTP $statusCode) — likely already handled or in non-archivable state" -Level "DEBUG"
+            return $true  # Treat as success (already handled)
+        }
+        else {
+            Write-Log "Failed to archive attempt $($AttemptId.Substring(0,8)): $_" -Level "WARN"
+            return $false
+        }
+    }
+}
+
 function Try-SendFollowUp {
     <#
     .SYNOPSIS Send a follow-up only when the agent is idle and slots are available.
@@ -2209,6 +2346,25 @@ function Try-SendFollowUp {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+
+    # ── Global follow-up cap: prevent infinite loops per task ──────────────
+    $taskKey = if ($Info.task_id) { $Info.task_id } else { $AttemptId }
+    if (-not $script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+        $script:TaskFollowUpCounts[$taskKey] = 0
+    }
+    $script:TaskFollowUpCounts[$taskKey]++
+    $followUpCount = $script:TaskFollowUpCounts[$taskKey]
+    if ($followUpCount -gt $script:MAX_FOLLOWUPS_PER_TASK) {
+        Write-Log "Follow-up cap ($script:MAX_FOLLOWUPS_PER_TASK) exceeded for task $($taskKey.Substring(0,8)) ($followUpCount follow-ups) — marking manual_review" -Level "WARN"
+        $Info.status = "manual_review"
+        $Info.followup_cap_exceeded = $true
+        $Info.pending_followup = $null
+        $script:TasksFailed++
+        Save-SuccessMetrics
+        Try-ArchiveAttempt -AttemptId $AttemptId | Out-Null
+        return $false
+    }
+
     if ($Info.force_new_session) {
         return (Try-SendFollowUpNewSession -AttemptId $AttemptId -Info $Info -Message $Message -Reason $Reason -IncludeTaskContext:$IncludeTaskContext)
     }
@@ -2494,6 +2650,25 @@ function Try-SendFollowUpNewSession {
         [string]$Reason,
         [switch]$IncludeTaskContext = $true
     )
+
+    # ── Global follow-up cap: prevent infinite loops per task ──────────────
+    $taskKey = if ($Info.task_id) { $Info.task_id } else { $AttemptId }
+    if (-not $script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+        $script:TaskFollowUpCounts[$taskKey] = 0
+    }
+    $script:TaskFollowUpCounts[$taskKey]++
+    $followUpCount = $script:TaskFollowUpCounts[$taskKey]
+    if ($followUpCount -gt $script:MAX_FOLLOWUPS_PER_TASK) {
+        Write-Log "Follow-up cap ($script:MAX_FOLLOWUPS_PER_TASK) exceeded for task $($taskKey.Substring(0,8)) ($followUpCount follow-ups, new session) — marking manual_review" -Level "WARN"
+        $Info.status = "manual_review"
+        $Info.followup_cap_exceeded = $true
+        $Info.pending_followup = $null
+        $script:TasksFailed++
+        Save-SuccessMetrics
+        Try-ArchiveAttempt -AttemptId $AttemptId | Out-Null
+        return $false
+    }
+
     if ($Info.status -eq "running" -or $Info.last_process_status -eq "running") {
         Write-Log "Skipping new-session follow-up for $($Info.branch): agent active" -Level "INFO"
         return $false
@@ -3552,7 +3727,50 @@ function Process-CompletedAttempts {
         if (-not $pr) {
             if ($info.status -in @("review", "error")) {
                 if (-not (Test-RemoteBranchExists -Branch $branch)) {
-                    Write-Log "No remote branch for $branch — agent must push before PR" -Level "WARN"
+                    Write-Log "No remote branch for $branch — checking if already merged" -Level "INFO"
+
+                    # ── Check if branch was already merged into base (prevents infinite retry) ──
+                    if (Test-BranchMergedIntoBase -Branch $branch) {
+                        Write-Log "Branch $branch was already merged into base — completing task" -Level "OK"
+                        $info.status = "done"
+                        $info.already_merged = $true
+                        $script:TasksCompleted++
+                        $script:TotalTasksCompleted++
+                        Save-SuccessMetrics
+                        try {
+                            if ($info.task_id) {
+                                Update-VKTaskStatus -TaskId $info.task_id -Status "done" | Out-Null
+                                Write-Log "Marked already-merged task $($info.task_id.Substring(0,8)) as done" -Level "OK"
+                            }
+
+                            # Archive the attempt (handles already-archived cases gracefully)
+                            $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                            Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                        }
+                        catch {
+                            Write-Log "Failed to complete already-merged task $($info.task_id.Substring(0,8)): $_" -Level "WARN"
+                        }
+                        $processed += $attemptId
+                        continue
+                    }
+
+                    # ── Check if task description says it's already completed ──
+                    if ($info.task_id -and (Test-TaskDescriptionAlreadyComplete -TaskId $info.task_id)) {
+                        Write-Log "Task $($info.task_id.Substring(0,8)) description says already completed — archiving attempt" -Level "OK"
+                        $info.status = "done"
+                        $info.description_complete = $true
+                        try {
+                            Update-VKTaskStatus -TaskId $info.task_id -Status "done" | Out-Null
+                            $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                            Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                        }
+                        catch {
+                            Write-Log "Failed to complete description-complete task $($info.task_id.Substring(0,8)): $_" -Level "WARN"
+                        }
+                        $processed += $attemptId
+                        continue
+                    }
+
                     $summary = $script:AttemptSummaries[$attemptId]
                     $failure = Get-AttemptFailureCategory -Summary $summary -Info $info
                     $recentFollowup = $false
@@ -3567,14 +3785,8 @@ function Process-CompletedAttempts {
                         $info.no_changes = $true
                         $script:TasksFailed++
                         Save-SuccessMetrics
-                        try {
-                            $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
-                            Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
-                            Write-Log "Archived NO_CHANGES attempt $($attemptId.Substring(0,8))" -Level "INFO"
-                        }
-                        catch {
-                            Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
-                        }
+                        $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                        Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
                         $processed += $attemptId
                         continue
                     }
@@ -3624,14 +3836,8 @@ function Process-CompletedAttempts {
                                 $info.fresh_task_failed = $true
                                 $script:TasksFailed++
                                 Save-SuccessMetrics
-                                try {
-                                    $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
-                                    Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
-                                    Write-Log "Archived failed fresh task attempt $($attemptId.Substring(0,8))" -Level "INFO"
-                                }
-                                catch {
-                                    Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
-                                }
+                                $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                                Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
                                 $processed += $attemptId
                                 continue
                             }
@@ -3706,7 +3912,28 @@ function Process-CompletedAttempts {
                             continue
                         }
                         else {
-                            # commitsAhead == -1 (branch doesn't exist) — should not happen at this point
+                            # commitsAhead == -1 (branch doesn't exist locally)
+                            # Could be an already-merged task where local ref was cleaned up
+                            if (Test-BranchMergedIntoBase -Branch $branch) {
+                                Write-Log "Branch $branch doesn't exist locally but was merged into base — completing task" -Level "OK"
+                                $info.status = "done"
+                                $info.already_merged = $true
+                                $script:TasksCompleted++
+                                $script:TotalTasksCompleted++
+                                Save-SuccessMetrics
+                                try {
+                                    if ($info.task_id) {
+                                        Update-VKTaskStatus -TaskId $info.task_id -Status "done" | Out-Null
+                                    }
+                                    $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                                    Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
+                                }
+                                catch {
+                                    Write-Log "Failed to complete already-merged task: $_" -Level "WARN"
+                                }
+                                $processed += $attemptId
+                                continue
+                            }
                             Write-Log "Branch $branch doesn't exist locally despite being tracked — this is unexpected" -Level "ERROR"
                             $info.status = "manual_review"
                             $info.branch_missing = $true
@@ -3734,14 +3961,8 @@ function Process-CompletedAttempts {
                             $info.no_commits = $true
                             $script:TasksFailed++
                             Save-SuccessMetrics
-                            try {
-                                $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
-                                Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
-                                Write-Log "Archived stale no_commits attempt $($attemptId.Substring(0,8))" -Level "INFO"
-                            }
-                            catch {
-                                Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
-                            }
+                            $attempt = $apiAttempts | Where-Object { $_.id -eq $attemptId } | Select-Object -First 1
+                            Try-ArchiveAttempt -AttemptId $attemptId -AttemptObject $attempt | Out-Null
                             $processed += $attemptId
                             continue
                         }
@@ -4486,6 +4707,18 @@ function Invoke-DownstreamRebase {
         [Parameter(Mandatory)][string]$UpstreamBranch,
         [string]$ExcludeAttemptId
     )
+
+    # Prune stale worktrees first to avoid "already used by worktree" errors
+    try {
+        $pruneOutput = git worktree prune -v 2>&1
+        if ($pruneOutput -and $pruneOutput -ne "") {
+            Write-Log "Pruned stale worktrees before rebase: $pruneOutput" -Level "DEBUG"
+        }
+    }
+    catch {
+        Write-Log "Failed to prune worktrees before rebase: $_" -Level "WARN"
+    }
+
     $rebaseTargets = @()
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
         $aid = $entry.Key
@@ -4516,7 +4749,20 @@ function Invoke-DownstreamRebase {
         try {
             $branch = $target.Info.branch ?? "ve/$shortId"
             Write-Log "Rebasing downstream task $shortId (branch: $branch) onto $UpstreamBranch" -Level "INFO"
-            $result = & git rebase $UpstreamBranch $branch 2>&1
+
+            # Find the worktree path for this branch (if it exists)
+            $worktreePath = Get-WorktreePathForBranch -Branch $branch
+
+            if ($worktreePath -and (Test-Path $worktreePath)) {
+                # Rebase within the worktree to avoid "already used by worktree" errors
+                Write-Log "Rebasing within worktree: $worktreePath" -Level "DEBUG"
+                $result = git -C $worktreePath rebase $UpstreamBranch 2>&1
+            }
+            else {
+                # No worktree exists, use standard rebase
+                $result = & git rebase $UpstreamBranch $branch 2>&1
+            }
+
             if ($LASTEXITCODE -eq 0) {
                 $rebased++
                 Write-Log "Rebased $shortId successfully" -Level "OK"
@@ -4524,13 +4770,25 @@ function Invoke-DownstreamRebase {
             else {
                 $failed++
                 Write-Log "Rebase failed for $shortId - may need manual resolution: $result" -Level "WARN"
-                & git rebase --abort 2>&1 | Out-Null
+                if ($worktreePath -and (Test-Path $worktreePath)) {
+                    git -C $worktreePath rebase --abort 2>&1 | Out-Null
+                }
+                else {
+                    & git rebase --abort 2>&1 | Out-Null
+                }
             }
         }
         catch {
             $failed++
             Write-Log "Error rebasing $shortId`: $_" -Level "ERROR"
-            & git rebase --abort 2>&1 | Out-Null
+            $branch = $target.Info.branch ?? "ve/$shortId"
+            $worktreePath = Get-WorktreePathForBranch -Branch $branch
+            if ($worktreePath -and (Test-Path $worktreePath)) {
+                git -C $worktreePath rebase --abort 2>&1 | Out-Null
+            }
+            else {
+                & git rebase --abort 2>&1 | Out-Null
+            }
         }
     }
     if ($rebased -gt 0 -or $failed -gt 0) {

@@ -12,6 +12,8 @@ const MONITOR_INTERVAL_MS = 30_000; // Check every 30 seconds
 const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes without progress
 const REBASE_COMMIT_THRESHOLD = 20; // If rebasing >20 commits, consider merge instead
 const MAX_DUPLICATE_COMMITS = 5; // Flag if >5 commits with same message
+const ERROR_LOOP_THRESHOLD = 3; // Same error 3 times = loop
+const ERROR_LOOP_WINDOW_MS = 15 * 60 * 1000; // Within 15 minutes
 
 // ── Workspace State Cache ─────────────────────────────────────────────────────
 
@@ -52,10 +54,17 @@ class WorkspaceMonitor {
       gitState: null,
       commitHistory: [],
       fileChanges: [],
+      errorHistory: [], // Track errors for loop detection
+      rebaseAttempts: 0, // Count rebase attempts
+      conflictCount: 0, // Count conflicts encountered
+      lastError: null, // Last error fingerprint
+      lastErrorAt: null, // When last error occurred
       logFilePath: resolve(this.cacheDir, `${attemptId}.log`),
       stateFilePath: resolve(this.cacheDir, `${attemptId}.state.json`),
       stuck: false,
       stuckReason: null,
+      errorLoop: false, // Detected error loop
+      errorLoopType: null, // Type of loop (rebase, conflict, command)
     };
 
     this.workspaces.set(attemptId, state);

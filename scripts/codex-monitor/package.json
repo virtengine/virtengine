@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "Apache 2.0",
@@ -114,13 +114,13 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@github/copilot-sdk": "0.1.19",
     "@anthropic-ai/claude-agent-sdk": "0.2.37",
+    "@github/copilot-sdk": "0.1.19",
     "@openai/codex-sdk": "0.99.0-alpha.6",
     "vibe-kanban": "0.1.6"
   },
   "devDependencies": {
-    "vitest": "2.1.9"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18"
