@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/Table';
 import { useAdminStore } from '@/stores/adminStore';
 import { formatDateTime } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 const severityStyle: Record<string, string> = {
   info: 'bg-blue-100 text-blue-700',
@@ -27,6 +28,7 @@ const severityStyle: Record<string, string> = {
 };
 
 export default function AdminAuditPage() {
+  const { t } = useTranslation();
   const auditLogs = useAdminStore((s) => s.auditLogs);
   const [search, setSearch] = useState('');
 
@@ -47,20 +49,20 @@ export default function AdminAuditPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Audit Logs</h1>
-          <p className="mt-1 text-muted-foreground">Admin actions and security events</p>
+          <h1 className="text-3xl font-bold">{t('Audit Logs')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('Admin actions and security events')}</p>
         </div>
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by actor or action"
+          placeholder={t('Search by actor or action')}
           className="w-full sm:w-72"
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle>{t('Recent Activity')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

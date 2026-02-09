@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import type { DataExportRequest, DeletionRequest } from '@/types/consent';
+import { useTranslation } from 'react-i18next';
 
 type RequestResponse = {
   exports: DataExportRequest[];
@@ -12,6 +13,7 @@ type RequestResponse = {
 };
 
 export function DataExportStatus({ dataSubject }: { dataSubject: string }) {
+  const { t } = useTranslation();
   const [requests, setRequests] = useState<RequestResponse>({ exports: [], deletions: [] });
   const [loading, setLoading] = useState(true);
 
@@ -55,31 +57,33 @@ export function DataExportStatus({ dataSubject }: { dataSubject: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Your data rights</CardTitle>
-        <CardDescription>Request exports or deletions under GDPR Articles 15–20.</CardDescription>
+        <CardTitle>{t('Your data rights')}</CardTitle>
+        <CardDescription>
+          {t('Request exports or deletions under GDPR Articles 15–20.')}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={() => handleExport('json')}>
-            Request JSON export
+            {t('Request JSON export')}
           </Button>
           <Button variant="secondary" onClick={() => handleExport('csv')}>
-            Request CSV export
+            {t('Request CSV export')}
           </Button>
           <Button variant="destructive" onClick={handleDeletion}>
-            Request deletion
+            {t('Request deletion')}
           </Button>
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading export status…</p>
+          <p className="text-sm text-muted-foreground">{t('Loading export status…')}</p>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <p className="text-sm font-semibold">Export requests</p>
+              <p className="text-sm font-semibold">{t('Export requests')}</p>
               <div className="mt-3 space-y-2 text-sm">
                 {requests.exports.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No export requests yet.</p>
+                  <p className="text-xs text-muted-foreground">{t('No export requests yet.')}</p>
                 ) : (
                   requests.exports.map((item) => (
                     <div key={item.id} className="flex items-center justify-between">
@@ -97,10 +101,10 @@ export function DataExportStatus({ dataSubject }: { dataSubject: string }) {
             </div>
 
             <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <p className="text-sm font-semibold">Deletion requests</p>
+              <p className="text-sm font-semibold">{t('Deletion requests')}</p>
               <div className="mt-3 space-y-2 text-sm">
                 {requests.deletions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No deletion requests yet.</p>
+                  <p className="text-xs text-muted-foreground">{t('No deletion requests yet.')}</p>
                 ) : (
                   requests.deletions.map((item) => (
                     <div key={item.id} className="flex items-center justify-between">

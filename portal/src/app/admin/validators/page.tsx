@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/Progress';
 import { useAdminStore } from '@/stores/adminStore';
 import { formatDate, formatTokenAmount } from '@/lib/utils';
 import type { ValidatorStatus } from '@/types/admin';
+import { useTranslation } from 'react-i18next';
 
 const statusStyles: Record<ValidatorStatus, string> = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -23,6 +24,7 @@ const statusStyles: Record<ValidatorStatus, string> = {
 };
 
 export default function AdminValidatorsPage() {
+  const { t } = useTranslation();
   const validators = useAdminStore((s) => s.validators);
 
   const activeCount = validators.filter((v) => v.status === 'active').length;
@@ -32,9 +34,9 @@ export default function AdminValidatorsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">Validators</h1>
+        <h1 className="text-3xl font-bold">{t('Validators')}</h1>
         <p className="mt-1 text-muted-foreground">
-          Monitor validator set status and slashing events
+          {t('Monitor validator set status and slashing events')}
         </p>
       </div>
 
@@ -67,7 +69,7 @@ export default function AdminValidatorsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Validator Set</CardTitle>
+          <CardTitle>{t('Validator Set')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

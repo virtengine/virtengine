@@ -12,6 +12,7 @@ import {
   selectUrgentTickets,
 } from '@/stores/adminStore';
 import { formatRelativeTime } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 const alertStyles = {
   info: 'bg-blue-100 text-blue-700',
@@ -20,6 +21,7 @@ const alertStyles = {
 };
 
 export default function AdminDashboardPage() {
+  const { t } = useTranslation();
   const proposals = useAdminStore(selectActiveProposals);
   const validators = useAdminStore(selectActiveValidators);
   const openTickets = useAdminStore(selectOpenTickets);
@@ -40,8 +42,10 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">Network health and operational readiness</p>
+        <h1 className="text-3xl font-bold">{t('Admin Dashboard')}</h1>
+        <p className="mt-1 text-muted-foreground">
+          {t('Network health and operational readiness')}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -101,7 +105,7 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Resource Utilization</CardTitle>
+            <CardTitle>{t('Resource Utilization')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {resourceUtilization.map((resource) => {
@@ -124,7 +128,7 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>System Alerts</CardTitle>
+            <CardTitle>{t('System Alerts')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {networkAlerts.map((alert) => (
@@ -149,7 +153,7 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Blocks</CardTitle>
+            <CardTitle>{t('Recent Blocks')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentBlocks.map((block) => (
@@ -173,7 +177,7 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Open Support Tickets</CardTitle>
+            <CardTitle>{t('Open Support Tickets')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {openTickets.slice(0, 3).map((ticket) => (
@@ -214,7 +218,7 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Governance Proposals</CardTitle>
+            <CardTitle>{t('Governance Proposals')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {proposals.slice(0, 3).map((proposal) => {
@@ -246,7 +250,7 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Validator Health</CardTitle>
+            <CardTitle>{t('Validator Health')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {validators.map((validator) => (
