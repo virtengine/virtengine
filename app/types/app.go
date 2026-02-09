@@ -657,6 +657,8 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.Cosmos.Bank,
 	)
 
+	app.Keepers.VirtEngine.Settlement.SetOracleKeeper(app.Keepers.VirtEngine.Oracle)
+
 	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(settlementkeeper.BillingKeeper); ok {
 		app.Keepers.VirtEngine.Settlement.SetBillingKeeper(billingKeeper)
 	}
