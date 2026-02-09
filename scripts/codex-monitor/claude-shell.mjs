@@ -448,6 +448,15 @@ export async function execClaudePrompt(userMessage, options = {}) {
   activeTurn = true;
   toolUseById.clear();
 
+  // Always start a fresh session for each task to prevent token overflow
+  // from accumulated context across multiple tasks.
+  if (activeSessionId) {
+    console.log(
+      `[claude-shell] discarding previous session ${activeSessionId} — creating fresh session per task`,
+    );
+    activeSessionId = null;
+  }
+
   const controller = abortController || new AbortController();
   let abortReason = null;
   const onAbort = () => {
@@ -482,9 +491,8 @@ export async function execClaudePrompt(userMessage, options = {}) {
     queue.push(makeUserMessage(buildPrompt(userMessage, statusData)));
 
     const optionsPayload = buildOptions();
-    if (activeSessionId) {
-      optionsPayload.resume = activeSessionId;
-    }
+    // Never resume — always start fresh to avoid token overflow.
+    // activeSessionId is only used for tracking, not for resume.
 
     activeQuery = query({
       prompt: queue.iterator(),
