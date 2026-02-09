@@ -85,3 +85,57 @@ message EventProviderDomainVerified {
     (gogoproto.moretags) = "yaml:\"domain\""
   ];
 }
+
+// EventProviderDomainVerificationRequested defines an SDK message for when domain verification is requested
+message EventProviderDomainVerificationRequested {
+  option (gogoproto.equal) = true;
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+  string method = 3 [
+    (gogoproto.jsontag)  = "method",
+    (gogoproto.moretags) = "yaml:\"method\""
+  ];
+  string token = 4 [
+    (gogoproto.jsontag)  = "token",
+    (gogoproto.moretags) = "yaml:\"token\""
+  ];
+}
+
+// EventProviderDomainVerificationConfirmed defines an SDK message for when domain verification is confirmed
+message EventProviderDomainVerificationConfirmed {
+  option (gogoproto.equal) = true;
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+  string method = 3 [
+    (gogoproto.jsontag)  = "method",
+    (gogoproto.moretags) = "yaml:\"method\""
+  ];
+}
+
+// EventProviderDomainVerificationRevoked defines an SDK message for when domain verification is revoked
+message EventProviderDomainVerificationRevoked {
+  option (gogoproto.equal) = true;
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+}
