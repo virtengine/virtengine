@@ -596,6 +596,8 @@ type DelegatorReward struct {
 	ValidatorTotalSharesAtEpoch string `protobuf:"bytes,6,opt,name=validator_total_shares_at_epoch,json=validatorTotalSharesAtEpoch,proto3" json:"validator_total_shares_at_epoch" yaml:"validator_total_shares_at_epoch"`
 	// calculated_at is when the reward was calculated
 	CalculatedAt time.Time `protobuf:"bytes,7,opt,name=calculated_at,json=calculatedAt,proto3,stdtime" json:"calculated_at" yaml:"calculated_at"`
+	// height is the block height when the reward was calculated
+	Height int64 `protobuf:"varint,10,opt,name=height,proto3" json:"height" yaml:"height"`
 	// claimed indicates if the reward has been claimed
 	Claimed bool `protobuf:"varint,8,opt,name=claimed,proto3" json:"claimed" yaml:"claimed"`
 	// claimed_at is when the reward was claimed (optional)
@@ -684,6 +686,13 @@ func (m *DelegatorReward) GetCalculatedAt() time.Time {
 	return time.Time{}
 }
 
+func (m *DelegatorReward) GetHeight() int64 {
+	if m != nil {
+		return m.Height
+	}
+	return 0
+}
+
 func (m *DelegatorReward) GetClaimed() bool {
 	if m != nil {
 		return m.Claimed
@@ -696,6 +705,98 @@ func (m *DelegatorReward) GetClaimedAt() *time.Time {
 		return m.ClaimedAt
 	}
 	return nil
+}
+
+// DelegatorSlashingEvent represents a slashing event applied to a delegator
+type DelegatorSlashingEvent struct {
+	// id is the unique slashing event ID
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty" yaml:"id"`
+	// delegator_address is the delegator's address
+	DelegatorAddress string `protobuf:"bytes,2,opt,name=delegator_address,json=delegatorAddress,proto3" json:"delegator_address,omitempty" yaml:"delegator_address"`
+	// validator_address is the validator's address
+	ValidatorAddress string `protobuf:"bytes,3,opt,name=validator_address,json=validatorAddress,proto3" json:"validator_address,omitempty" yaml:"validator_address"`
+	// slash_fraction is the applied slash fraction
+	SlashFraction string `protobuf:"bytes,4,opt,name=slash_fraction,json=slashFraction,proto3" json:"slash_fraction,omitempty" yaml:"slash_fraction"`
+	// slash_amount is the total amount slashed
+	SlashAmount string `protobuf:"bytes,5,opt,name=slash_amount,json=slashAmount,proto3" json:"slash_amount,omitempty" yaml:"slash_amount"`
+	// shares_slashed is the total shares slashed
+	SharesSlashed string `protobuf:"bytes,6,opt,name=shares_slashed,json=sharesSlashed,proto3" json:"shares_slashed,omitempty" yaml:"shares_slashed"`
+	// infraction_height is the height at which the infraction occurred
+	InfractionHeight int64 `protobuf:"varint,7,opt,name=infraction_height,json=infractionHeight,proto3" json:"infraction_height,omitempty" yaml:"infraction_height"`
+	// block_height is the height at which the slash was applied
+	BlockHeight int64 `protobuf:"varint,8,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty" yaml:"block_height"`
+	// block_time is the time at which the slash was applied
+	BlockTime time.Time `protobuf:"bytes,9,opt,name=block_time,json=blockTime,proto3,stdtime" json:"block_time" yaml:"block_time"`
+}
+
+func (m *DelegatorSlashingEvent) Reset()         { *m = DelegatorSlashingEvent{} }
+func (m *DelegatorSlashingEvent) String() string { return proto.CompactTextString(m) }
+func (*DelegatorSlashingEvent) ProtoMessage()    {}
+func (*DelegatorSlashingEvent) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e4d1a1b40829db99, []int{8}
+}
+
+func (m *DelegatorSlashingEvent) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *DelegatorSlashingEvent) GetDelegatorAddress() string {
+	if m != nil {
+		return m.DelegatorAddress
+	}
+	return ""
+}
+
+func (m *DelegatorSlashingEvent) GetValidatorAddress() string {
+	if m != nil {
+		return m.ValidatorAddress
+	}
+	return ""
+}
+
+func (m *DelegatorSlashingEvent) GetSlashFraction() string {
+	if m != nil {
+		return m.SlashFraction
+	}
+	return ""
+}
+
+func (m *DelegatorSlashingEvent) GetSlashAmount() string {
+	if m != nil {
+		return m.SlashAmount
+	}
+	return ""
+}
+
+func (m *DelegatorSlashingEvent) GetSharesSlashed() string {
+	if m != nil {
+		return m.SharesSlashed
+	}
+	return ""
+}
+
+func (m *DelegatorSlashingEvent) GetInfractionHeight() int64 {
+	if m != nil {
+		return m.InfractionHeight
+	}
+	return 0
+}
+
+func (m *DelegatorSlashingEvent) GetBlockHeight() int64 {
+	if m != nil {
+		return m.BlockHeight
+	}
+	return 0
+}
+
+func (m *DelegatorSlashingEvent) GetBlockTime() time.Time {
+	if m != nil {
+		return m.BlockTime
+	}
+	return time.Time{}
 }
 
 // Params defines the parameters for the delegation module
@@ -807,6 +908,7 @@ func init() {
 	proto.RegisterType((*Redelegation)(nil), "virtengine.delegation.v1.Redelegation")
 	proto.RegisterType((*ValidatorShares)(nil), "virtengine.delegation.v1.ValidatorShares")
 	proto.RegisterType((*DelegatorReward)(nil), "virtengine.delegation.v1.DelegatorReward")
+	proto.RegisterType((*DelegatorSlashingEvent)(nil), "virtengine.delegation.v1.DelegatorSlashingEvent")
 	proto.RegisterType((*Params)(nil), "virtengine.delegation.v1.Params")
 }
 
@@ -1671,6 +1773,11 @@ func (m *DelegatorReward) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i = encodeVarintTypes(dAtA, i, uint64(n9))
 	i--
 	dAtA[i] = 0x3a
+	if m.Height != 0 {
+		i = encodeVarintTypes(dAtA, i, uint64(m.Height))
+		i--
+		dAtA[i] = 0x50
+	}
 	if len(m.ValidatorTotalSharesAtEpoch) > 0 {
 		i -= len(m.ValidatorTotalSharesAtEpoch)
 		copy(dAtA[i:], m.ValidatorTotalSharesAtEpoch)
@@ -1989,6 +2096,9 @@ func (m *DelegatorReward) Size() (n int) {
 	}
 	l = github_com_cosmos_gogoproto_types.SizeOfStdTime(m.CalculatedAt)
 	n += 1 + l + sovTypes(uint64(l))
+	if m.Height != 0 {
+		n += 1 + sovTypes(uint64(m.Height))
+	}
 	if m.Claimed {
 		n += 2
 	}
@@ -3636,6 +3746,25 @@ func (m *DelegatorReward) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
+			}
+			m.Height = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Height |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipTypes(dAtA[iNdEx:])

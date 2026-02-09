@@ -88,6 +88,12 @@ message MsgClaimRewards {
 
   string delegator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
   string validator = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // start_height is the starting block height (inclusive) for reward claims
+  int64 start_height = 3;
+
+  // end_height is the ending block height (inclusive) for reward claims
+  int64 end_height = 4;
 }
 
 // MsgClaimRewardsResponse is the response for MsgClaimRewards

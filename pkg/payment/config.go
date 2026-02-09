@@ -22,6 +22,12 @@ type Config struct {
 	// AdyenConfig is configuration for Adyen gateway
 	AdyenConfig AdyenConfig `json:"adyen_config,omitempty"`
 
+	// PayPalConfig is configuration for PayPal gateway
+	PayPalConfig PayPalConfig `json:"paypal_config,omitempty"`
+
+	// ACHConfig is configuration for ACH gateway
+	ACHConfig ACHConfig `json:"ach_config,omitempty"`
+
 	// WebhookConfig is configuration for webhook handling
 	WebhookConfig WebhookConfig `json:"webhook_config"`
 
@@ -191,6 +197,12 @@ func DefaultConfig() Config {
 		AdyenConfig: AdyenConfig{
 			Environment: "test",
 		},
+		PayPalConfig: PayPalConfig{
+			Environment: "sandbox",
+		},
+		ACHConfig: ACHConfig{
+			Environment: "sandbox",
+		},
 		WebhookConfig: WebhookConfig{
 			Enabled:               true,
 			Path:                  "/webhooks/payment",
@@ -239,6 +251,70 @@ func DefaultConfig() Config {
 	}
 }
 
+// ============================================================================
+// PayPal Configuration
+// ============================================================================
+
+// PayPalConfig contains PayPal-specific configuration
+type PayPalConfig struct {
+	// ClientID is the PayPal client ID
+	ClientID string `json:"client_id"`
+
+	// ClientSecret is the PayPal client secret
+	ClientSecret string `json:"client_secret"`
+
+	// WebhookID is the PayPal webhook ID
+	WebhookID string `json:"webhook_id"`
+
+	// Environment is "sandbox" or "live"
+	Environment string `json:"environment"`
+
+	// BaseURL is the PayPal API base URL
+	BaseURL string `json:"base_url,omitempty"`
+}
+
+// GetBaseURL returns the appropriate base URL
+func (c PayPalConfig) GetBaseURL() string {
+	if c.BaseURL != "" {
+		return c.BaseURL
+	}
+	if c.Environment == environmentLive {
+		return "https://api-m.paypal.com"
+	}
+	return "https://api-m.sandbox.paypal.com"
+}
+
+// ============================================================================
+// ACH Configuration
+// ============================================================================
+
+// ACHConfig contains ACH-specific configuration
+type ACHConfig struct {
+	// Provider is the ACH provider (e.g., "stripe", "dwolla")
+	Provider string `json:"provider"`
+
+	// SecretKey is the provider secret key
+	SecretKey string `json:"secret_key"`
+
+	// WebhookSecret is the webhook signing secret
+	WebhookSecret string `json:"webhook_secret"`
+
+	// SourceAccountID is the source account ID
+	SourceAccountID string `json:"source_account_id"`
+
+	// ProcessingDays is the expected processing time in days
+	ProcessingDays int `json:"processing_days"`
+
+	// EnableSameDayACH enables same-day ACH (higher fees)
+	EnableSameDayACH bool `json:"enable_same_day_ach"`
+
+	// Environment is "sandbox" or "live"
+	Environment string `json:"environment"`
+
+	// BaseURL overrides the provider base URL (primarily for testing)
+	BaseURL string `json:"base_url,omitempty"`
+}
+
 // Validate validates the configuration
 func (c Config) Validate() error {
 	if !c.Gateway.IsValid() {
@@ -252,6 +328,14 @@ func (c Config) Validate() error {
 		}
 	case GatewayAdyen:
 		if c.AdyenConfig.APIKey == "" || c.AdyenConfig.MerchantAccount == "" {
+			return ErrGatewayNotConfigured
+		}
+	case GatewayPayPal:
+		if c.PayPalConfig.ClientID == "" || c.PayPalConfig.ClientSecret == "" {
+			return ErrGatewayNotConfigured
+		}
+	case GatewayACH:
+		if c.ACHConfig.SecretKey == "" {
 			return ErrGatewayNotConfigured
 		}
 	}

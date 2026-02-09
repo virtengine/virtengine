@@ -139,6 +139,8 @@ type Keeper struct {
 	dexSwap          DexSwapExecutor
 	offRampBridge    OffRampBridge
 	complianceKeeper ComplianceKeeper
+	oracleKeeper     OracleKeeper
+	priceFeeds       map[types.OracleSourceType]PriceFeed
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
@@ -156,7 +158,7 @@ type BankKeeper interface {
 
 // NewKeeper creates and returns an instance for settlement keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string) Keeper {
-	return Keeper{
+	keeper := Keeper{
 		cdc:              cdc,
 		skey:             skey,
 		bankKeeper:       bankKeeper,
@@ -164,8 +166,11 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankK
 		dexSwap:          nil,
 		offRampBridge:    nil,
 		complianceKeeper: nil,
+		oracleKeeper:     nil,
+		priceFeeds:       make(map[types.OracleSourceType]PriceFeed),
 		authority:        authority,
 	}
+	return keeper
 }
 
 // SetBillingKeeper configures the billing integration keeper.
@@ -186,6 +191,22 @@ func (k *Keeper) SetOffRampBridge(bridge OffRampBridge) {
 // SetComplianceKeeper configures compliance checks.
 func (k *Keeper) SetComplianceKeeper(keeper ComplianceKeeper) {
 	k.complianceKeeper = keeper
+}
+
+// SetOracleKeeper configures the oracle keeper and Cosmos oracle price feed.
+func (k *Keeper) SetOracleKeeper(oracleKeeper OracleKeeper) {
+	k.oracleKeeper = oracleKeeper
+	if oracleKeeper != nil {
+		k.priceFeeds[types.OracleSourceTypeCosmosOracle] = NewCosmosOraclePriceFeed(oracleKeeper)
+	}
+}
+
+// SetPriceFeed configures a custom price feed for a given source type.
+func (k *Keeper) SetPriceFeed(sourceType types.OracleSourceType, feed PriceFeed) {
+	if k.priceFeeds == nil {
+		k.priceFeeds = make(map[types.OracleSourceType]PriceFeed)
+	}
+	k.priceFeeds[sourceType] = feed
 }
 
 // Codec returns keeper codec

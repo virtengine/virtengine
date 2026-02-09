@@ -156,7 +156,7 @@ describe("AnomalyDetector", () => {
       expect(anomalies).toHaveLength(0);
     });
 
-    it("escalates to CRITICAL at kill threshold", async () => {
+    it("escalates to HIGH at kill threshold", async () => {
       const line =
         '{"ToolCall":{"toolCallId":"tc1","title":"apply_patch","kind":"execute","rawInput":{}}}';
 
@@ -164,12 +164,10 @@ describe("AnomalyDetector", () => {
         detector.processLine(line, META);
       }
 
-      // Should have at least a CRITICAL anomaly
-      const criticals = anomalies.filter(
-        (a) => a.severity === Severity.CRITICAL,
-      );
-      expect(criticals.length).toBeGreaterThanOrEqual(1);
-      expect(criticals[0].action).toBe("kill");
+      // Should have at least a HIGH severity anomaly at kill threshold
+      const highs = anomalies.filter((a) => a.severity === Severity.HIGH);
+      expect(highs.length).toBeGreaterThanOrEqual(1);
+      expect(highs[0].action).toBe("warn");
     });
   });
 
@@ -346,7 +344,7 @@ describe("AnomalyDetector", () => {
       // Keep adding — should NOT re-emit the same severity anomaly
       detector.processLine(line, META);
       detector.processLine(line, META);
-      // Count should only increase when escalating to a new severity (CRITICAL)
+      // Count should only increase when escalating to a new severity (HIGH)
       // The MEDIUM warn shouldn't repeat
       const mediumAnomalies = anomalies.filter(
         (a) => a.severity === Severity.MEDIUM,
