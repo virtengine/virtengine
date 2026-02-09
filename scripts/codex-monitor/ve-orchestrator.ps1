@@ -1207,7 +1207,7 @@ function Save-StatusSnapshot {
         New-Item -ItemType Directory -Path $dir | Out-Null
     }
     $capacityInfo = Get-AvailableSlotCapacity
-    Update-SlotMetrics -Capacity $capacityInfo.capacity -ActiveWeight $capacityInfo.active_weight -WorkstationInfo $capacityInfo.workstation
+    Update-SlotMetrics -Capacity $capacityInfo.capacity -ActiveCount $capacityInfo.active_count -ActiveWeight $capacityInfo.active_weight -WorkstationInfo $capacityInfo.workstation
     $slotMetrics = Get-SlotMetricsSnapshot
     $attempts = @{}
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
@@ -1823,10 +1823,13 @@ function Get-ActiveSlotWeight {
 function Get-AvailableSlotCapacity {
     $capacityInfo = Get-EffectiveParallelCapacity
     $capacity = [double]$capacityInfo.capacity
+    $activeCount = Get-ActiveAgentCount
     $activeWeight = Get-ActiveSlotWeight
-    $remaining = [math]::Max(0.0, $capacity - $activeWeight)
+    # Use actual task count, not weight, for slot availability
+    $remaining = [math]::Max(0.0, $capacity - $activeCount)
     return @{
         capacity      = $capacity
+        active_count  = $activeCount
         active_weight = $activeWeight
         remaining     = $remaining
         workstation   = $capacityInfo.workstation
@@ -1836,6 +1839,7 @@ function Get-AvailableSlotCapacity {
 function Update-SlotMetrics {
     param(
         [double]$Capacity,
+        [int]$ActiveCount,
         [double]$ActiveWeight,
         [hashtable]$WorkstationInfo
     )
@@ -1847,14 +1851,15 @@ function Update-SlotMetrics {
     if ($script:SlotMetrics.last_sample_at) {
         $elapsed = ($now - $script:SlotMetrics.last_sample_at).TotalSeconds
         if ($elapsed -gt 0) {
-            $idle = [math]::Max(0.0, $Capacity - $ActiveWeight)
+            # Track idle slots based on actual count, not weight
+            $idle = [math]::Max(0.0, $Capacity - $ActiveCount)
             $script:SlotMetrics.total_idle_seconds += ($idle * $elapsed)
             $script:SlotMetrics.total_capacity_seconds += ($Capacity * $elapsed)
         }
     }
     $script:SlotMetrics.last_sample_at = $now
-    $idleNow = [math]::Max(0.0, $Capacity - $ActiveWeight)
-    $utilizationNow = if ($Capacity -gt 0) { [math]::Round(($ActiveWeight / $Capacity) * 100, 1) } else { 0 }
+    $idleNow = [math]::Max(0.0, $Capacity - $ActiveCount)
+    $utilizationNow = if ($Capacity -gt 0) { [math]::Round(($ActiveCount / $Capacity) * 100, 1) } else { 0 }
     $cumulativeUtilization = if ($script:SlotMetrics.total_capacity_seconds -gt 0) {
         [math]::Round((1 - ($script:SlotMetrics.total_idle_seconds / $script:SlotMetrics.total_capacity_seconds)) * 100, 1)
     }
@@ -1862,7 +1867,8 @@ function Update-SlotMetrics {
     $script:SlotMetrics.last_snapshot = @{
         sampled_at                 = $now.ToString("o")
         capacity_slots             = $Capacity
-        active_slots               = $ActiveWeight
+        active_slots               = $ActiveCount
+        active_weight              = $ActiveWeight
         idle_slots                 = $idleNow
         utilization_percent        = $utilizationNow
         total_idle_seconds         = [math]::Round($script:SlotMetrics.total_idle_seconds, 1)
@@ -1882,6 +1888,7 @@ function Get-SlotMetricsSnapshot {
         sampled_at                 = $null
         capacity_slots             = 0
         active_slots               = 0
+        active_weight              = 0
         idle_slots                 = 0
         utilization_percent        = 0
         total_idle_seconds         = 0
@@ -1895,7 +1902,11 @@ function Get-SlotMetricsSnapshot {
 
 function Get-OrderedTodoTasks {
     <#
-    .SYNOPSIS Return todo tasks ordered by priority queues, sequence, then size/created_at.
+    .SYNOPSIS Return todo tasks ordered by priority queues, then sequence number (e.g., 37A < 37B < 38A), then size/created_at.
+    Sequence numbers in task titles (like "37A", "38D", "45B") drive execution order:
+      - 37A (seq=3701) runs before 38A (seq=3801) which runs before 45B (seq=4502)
+      - Within a priority group, tasks are sorted by sequence ascending
+      - Tasks without sequence numbers are sorted by size (smallest first) then created_at
     #>
     [CmdletBinding()]
     param([int]$Count = 1)
@@ -5063,11 +5074,12 @@ function Fill-ParallelSlots {
     $capacityInfo = Get-AvailableSlotCapacity
     $remainingCapacity = $capacityInfo.remaining
     $capacity = $capacityInfo.capacity
+    $activeCount = $capacityInfo.active_count
     $activeWeight = $capacityInfo.active_weight
 
     # ── Dirty/Conflict Slot Reservation ──────────────────────────────────────
     # Reserve slot(s) for dirty/conflict tasks so new tasks don't fill ALL capacity
-    $dirtyReservation = Get-DirtySlotReservation -TotalCapacity $capacity -ActiveWeight $activeWeight
+    $dirtyReservation = Get-DirtySlotReservation -TotalCapacity $capacity -ActiveWeight $activeCount
     if ($dirtyReservation.hasDirtyTasks) {
         $effectiveCap = $dirtyReservation.effectiveCapacity
         $reservedSlots = $dirtyReservation.reservedForDirty
@@ -5075,16 +5087,16 @@ function Fill-ParallelSlots {
         Write-Log ("Dirty/conflict tasks: {0} detected — reserving {1} slot(s) for resolution (effective capacity for new tasks: {2})" -f `
                 $dirtyCount, $reservedSlots, [math]::Round($effectiveCap, 2)) -Level "WARN"
         # Reduce remaining capacity for new tasks (dirty tasks get their own path)
-        $remainingCapacity = [math]::Max(0, $effectiveCap - $activeWeight)
+        $remainingCapacity = [math]::Max(0, $effectiveCap - $activeCount)
     }
 
     if ($remainingCapacity -lt 0.75) {
-        Write-Log "All slots occupied (capacity: $capacity, active weight: $([math]::Round($activeWeight, 2)))" -Level "INFO"
+        Write-Log "All slots occupied (capacity: $capacity, active: $activeCount tasks, weight: $([math]::Round($activeWeight, 2)))" -Level "INFO"
         return
     }
 
-    Write-Log ("{0} slot capacity available (capacity: {1}, active weight: {2})" -f `
-            [math]::Round($remainingCapacity, 2), $capacity, [math]::Round($activeWeight, 2)) -Level "ACTION"
+    Write-Log ("{0} slot(s) available (capacity: {1}, active: {2} tasks, weight: {3})" -f `
+            [math]::Floor($remainingCapacity), $capacity, $activeCount, [math]::Round($activeWeight, 2)) -Level "ACTION"
 
     $maxCandidates = [math]::Min(50, [math]::Max(10, [int][math]::Ceiling($capacity * 4)))
     $nextTasks = Get-OrderedTodoTasks -Count $maxCandidates
@@ -5092,6 +5104,15 @@ function Fill-ParallelSlots {
         Write-Log "No more todo tasks in backlog" -Level "WARN"
         return
     }
+
+    # Log the sequence-based ordering for visibility
+    $topCandidates = @($nextTasks | Select-Object -First 5)
+    $candidateNames = @($topCandidates | ForEach-Object {
+        $seq = if ($_.title) { Get-SequenceValue -Title $_.title } else { $null }
+        $short = if ($_.title) { $_.title.Substring(0, [Math]::Min(50, $_.title.Length)) } else { "(untitled)" }
+        if ($seq) { "$short (seq=$seq)" } else { "$short (no-seq)" }
+    })
+    Write-Log ("Task queue (top {0}): {1}" -f $candidateNames.Count, ($candidateNames -join " > ")) -Level "INFO"
 
     $started = 0
     foreach ($task in $nextTasks) {

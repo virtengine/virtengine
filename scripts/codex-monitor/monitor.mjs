@@ -6065,6 +6065,7 @@ async function triggerTaskPlannerViaKanban(
   reason,
   { taskCount, notify = true } = {},
 ) {
+  const plannerPrompt = agentPrompts.planner;
   const defaultPlannerTaskCount = Number(
     process.env.TASK_PLANNER_DEFAULT_COUNT || "30",
   );
@@ -6121,6 +6122,10 @@ async function triggerTaskPlannerViaKanban(
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
       "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
+      "- **CRITICAL CREATION ORDER:** Create tasks in REVERSE sequence order (highest number first,",
+      "  e.g., 45B → 45A → 44D → ... → 37A). Vibe-kanban shows newest tasks at the top of the",
+      "  backlog. Creating highest-priority tasks LAST puts them at the TOP for human review.",
+      "  The orchestrator sorts by sequence number regardless, but visual order matters.",
     ].join("\n");
     // Best-effort: keep backlog task aligned with current requirements
     if (
@@ -6160,7 +6165,6 @@ async function triggerTaskPlannerViaKanban(
     };
   }
 
-  const plannerPrompt = agentPrompts.planner;
   const taskBody = {
     title: `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`,
     description: [
@@ -6184,6 +6188,10 @@ async function triggerTaskPlannerViaKanban(
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
       "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
+      "- **CRITICAL CREATION ORDER:** Create tasks in REVERSE sequence order (highest number first,",
+      "  e.g., 45B → 45A → 44D → ... → 37A). Vibe-kanban shows newest tasks at the top of the",
+      "  backlog. Creating highest-priority tasks LAST puts them at the TOP for human review.",
+      "  The orchestrator sorts by sequence number regardless, but visual order matters.",
     ].join("\n"),
     status: "todo",
     project_id: projectId,

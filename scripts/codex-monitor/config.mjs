@@ -633,6 +633,14 @@ You are an autonomous task planner. When the task backlog is low, you analyze th
 - Prioritize bug fixes and test coverage over new features
 - Consider technical debt and code quality improvements
 - Check for existing similar tasks to avoid duplicates
+
+## CRITICAL: Task Creation Order
+
+**Create tasks in REVERSE sequence order** (highest number first, e.g., 45B → 45A → 44D → ... → 37A).
+Vibe-kanban displays newest tasks at the top of the backlog. By creating the highest-priority
+tasks LAST, they appear at the TOP of the backlog for both the orchestrator and human review.
+The orchestrator uses sequence numbers (like 37A, 38B) to determine execution order regardless
+of creation order, but the visual backlog order matters for human-in-the-loop understanding.
 `;
 
 function loadAgentPrompts(configDir, repoRoot, configData) {
