@@ -116,11 +116,6 @@ import {
   assessCompletionConfidence,
   getComplexityMatrix,
 } from "./task-complexity.mjs";
-import {
-  registerDirtyTask,
-  formatDirtyTaskSummary,
-} from "./conflict-resolver.mjs";
-
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Load unified configuration ──────────────────────────────────────────────
