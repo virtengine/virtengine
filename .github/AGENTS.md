@@ -23,8 +23,9 @@
 | pnpm | 10.28.2 | `portal-ci.yaml`, `portal-deploy-pages.yaml`, `smoke-test.yml` | Set in `PNPM_VERSION` env var |
 | Python | 3.11 | `ci.yaml`, `security.yaml`, `ml-model-verify.yaml` | Set in `PYTHON_VERSION` env var |
 | Docker Buildx | latest | `release.yaml`, `ci.yaml` | Multi-arch builds |
-| Terraform | latest | `infrastructure.yaml`, `multi-region-deploy.yaml` | IaC deployments |
-| GoReleaser | latest | `release.yaml` | Release automation |
+| Terraform (infra) | 1.6.6 | `infrastructure.yaml` | IaC deployments |
+| Terraform (multi-region) | 1.6.0 | `multi-region-deploy.yaml` | Multi-region IaC deployments |
+| GoReleaser (via make release) | latest | `release.yaml` | Release automation |
 
 ## Module Overview
 - Purpose: GitHub Actions CI/CD for VirtEngine testing, security scanning, and releases.
@@ -116,6 +117,8 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 | `NODE_VERSION` | `ci.yaml`, `portal-ci.yaml` | Node toolchain | `20` | Update with LTS releases |
 | `PNPM_VERSION` | `ci.yaml`, `portal-ci.yaml` | pnpm toolchain | `10.28.2` | Update quarterly |
 | `PYTHON_VERSION` | `ci.yaml`, `security.yaml` | Python toolchain | `3.11` | Update with minor releases |
+| `GO_TEST_TIMEOUT_UNIT` | `ci.yaml` | Unit timeout | `30m` | Adjust based on runner perf |
+| `GO_TEST_TIMEOUT_INTEGRATION` | `ci.yaml` | Integration timeout | `40m` | Adjust based on runner perf |
 | `GO_TEST_TIMEOUT_E2E` | `ci.yaml` | E2E timeout | `45m` | Adjust based on runner perf |
 
 **OIDC Usage:**
@@ -129,10 +132,11 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 ### Execution Ordering
 1. **Lint & Static Analysis** (parallel): `lint`, `vet`, `lint-shell`, `agents-docs`
 2. **Unit Tests** (parallel): `test-go`, `test-python`, `test-portal`
-3. **Build** (depends on tests): `build`, `build-macos`
-4. **Integration & E2E** (depends on build): `integration`, `hpc-provider-e2e`, `veid-e2e`, `staging-e2e`
-5. **Security Scans** (parallel with integration): `container-security`, CodeQL, Trivy
-6. **Simulations** (post-integration): `sims`, `network-upgrade`, `chaos-test`
+3. **Build** (parallel with lint/test-go): `build`, `build-macos`
+4. **Integration & E2E** (depends on build): `integration`, `veid-e2e`, `staging-e2e`
+5. **HPC Provider E2E** (post-integration): `hpc-provider-e2e`
+6. **Security Scans** (parallel with integration): `container-security`, CodeQL, Trivy
+7. **Simulations** (post-integration): `sims`, `network-upgrade`, `chaos-test`
 
 ### Parallelization Strategy
 - Lint jobs run concurrently (no dependencies)
@@ -143,21 +147,15 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Caching
 - **Go**: `actions/cache@v4` with `~/go/pkg/mod` and `~/.cache/go-build` keys
-- **Node**: `pnpm/action-setup@v4` with built-in store caching
+- **Node**: `pnpm/action-setup@v2` with built-in store caching
 - **Python**: `actions/setup-python@v5` with `pip` cache
-- **Docker layers**: `docker/build-push-action@v6` with `cache-from`/`cache-to` registry cache
-- **Protobuf**: Cache `buf` dependencies and generated code
-
 ### Coverage Gates
-- **Go**: 75% coverage threshold (`ci.yaml`, `quality-gate.yaml`) via `go test -coverprofile`
-- **Python**: 70% coverage threshold via `pytest --cov` (ML modules exempt)
-- **Portal**: 80% coverage threshold via Vitest
-- Coverage reports uploaded to Codecov with `codecov/codecov-action@v4`
-- Quality gate fails if coverage drops below threshold or decreases >2% from base branch
+- **Go**: 80% coverage threshold (`ci.yaml`) via `go test -coverprofile`
+- Coverage reports uploaded to Codecov with `codecov/codecov-action@v4`, with PR security advisory summaries in `pr-security-check.yaml`
 
 ### Test Timeouts
-- Unit tests: 10m default (`go test -timeout=10m`)
-- Integration tests: 30m (`GO_TEST_TIMEOUT=30m`)
+- Unit tests: 30m (`GO_TEST_TIMEOUT_UNIT=30m`)
+- Integration tests: 40m (`GO_TEST_TIMEOUT_INTEGRATION=40m`)
 - E2E tests: 45m (`GO_TEST_TIMEOUT_E2E=45m`)
 - Chaos tests: 60m (best-effort, non-blocking)
 
@@ -172,8 +170,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 **Artifacts:**
 - GitHub Release with binaries + checksums
-- Docker images pushed to ghcr.io/virtengine/virtengine:latest and :vX.Y.Z
-- SBOM and provenance attestations (SLSA L3)
+- See `.goreleaser.yaml` for images/packages published by GoReleaser
 
 **Rollback:** See `RELEASE.md` § "Rollback Procedure" for binary reversion, state export, and rollback transaction submission.
 
@@ -190,19 +187,20 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 **Trigger:** push/PR to main (infra/** paths), `workflow_dispatch`
 **Jobs:**
 1. `validate`: Terraform fmt check, validate
-2. `security`: tfsec, checkov scans
+2. `security`: checkov + trivy scans
 3. `plan`: Terraform plan for each environment (dev, staging, prod)
 4. `apply-dev`, `apply-staging`, `apply-prod`: Sequential applies with manual approval gates
 5. `argocd-sync`: Sync ArgoCD apps post-apply
-6. `test`: Trigger `smoke-test.yml` and `staging-e2e.yml` via workflow_run
 
 **Artifacts:** Terraform plans saved to GitHub artifacts
 
+**Post-deploy testing:** `smoke-test.yml` and `staging-e2e.yml` run via workflow_run or workflow_dispatch after infrastructure deployment completes.
+
 ### Multi-Region Deployment (`multi-region-deploy.yaml`)
-**Trigger:** `workflow_dispatch` with region selection (us-east-1, us-west-2, eu-west-1, ap-southeast-1)
+**Trigger:** `workflow_dispatch` with region selection (us-east-1, eu-west-1, ap-southeast-1)
 **Jobs:**
 1. `plan`: Terraform plan per selected region
-2. `deploy`: Terraform apply per region (parallel execution with max 2 concurrent)
+2. `deploy`: Terraform apply per region (parallel execution)
 
 **Auth:** Uses `AWS_DEPLOY_ROLE_ARN` (OIDC) for cross-region deployments
 
@@ -399,12 +397,12 @@ gh run view <run-id> --log
 gh run view <run-id> --log-failed  # failed jobs only
 ```
 
-### Coverage Drops
-**Symptom:** Quality gate fails with "Coverage decreased by X%"
+### Coverage Shortfalls
+**Symptom:** `ci.yaml` fails due to Go coverage below threshold
 **Fix:**
 1. Check Codecov report for uncovered lines: `gh run view <run-id> --log | grep "Coverage"`
 2. Add tests for new code paths
-3. If intentional (refactor), update threshold in `ci.yaml`/`quality-gate.yaml`
+3. If intentional (refactor), update threshold in `ci.yaml`
 
 ### Timeout Issues
 **Symptom:** Job times out (default 360 minutes)
