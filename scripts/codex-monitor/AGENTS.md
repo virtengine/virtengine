@@ -1,9 +1,9 @@
 # Codex Monitor Orchestrator (scripts/codex-monitor) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: Node.js orchestrator supervisor that manages agent executors with failover, auto-restarts the orchestrator script, and integrates with Vibe-Kanban + Telegram for automation (`scripts/codex-monitor/package.json:2`).
-- Use this package to run multi-agent task orchestration locally or in CI; use chain modules (e.g., `x/provider`) for on-chain logic.
-- Key exports / public API surface:
+- Use when: Running multi-agent task orchestration locally or in CI; use chain modules (e.g., `x/provider`) for on-chain logic.
+- Key entry points:
   - CLI entry: `codex-monitor` binary (`scripts/codex-monitor/package.json:55`, `scripts/codex-monitor/cli.mjs:1`).
   - Core monitor runtime: `scripts/codex-monitor/monitor.mjs:1`.
   - Config loader: `loadConfig` in `scripts/codex-monitor/config.mjs:716`.
@@ -87,8 +87,17 @@ node scripts/codex-monitor/cli.mjs --args "-MaxParallel 6"
 - Node.js engine: `>=18` (`scripts/codex-monitor/package.json:125`).
 - Primary env vars are documented in `.env.example` (`scripts/codex-monitor/.env.example:11`).
 
+## Configuration
+- Configuration layers: CLI args, env vars, `.env`, config JSON, defaults (`scripts/codex-monitor/config.mjs:3`).
+- Add config options by updating schema, defaults, and `.env.example` (`scripts/codex-monitor/codex-monitor.schema.json:1`, `scripts/codex-monitor/config.mjs:716`).
+
 ## Testing
 - Tests: `scripts/codex-monitor/tests/*.test.mjs`.
 - Commands:
   - `npm test` (runs `vitest`, `scripts/codex-monitor/package.json:69`).
   - `npm run syntax:check` (fast syntax validation, `scripts/codex-monitor/package.json:67`).
+
+## Troubleshooting
+- CLI exits immediately after start
+  - Cause: Missing required env vars or invalid config schema.
+  - Fix: Run `node scripts/codex-monitor/cli.mjs --setup` and re-check `.env.example`.
