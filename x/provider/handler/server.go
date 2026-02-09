@@ -220,3 +220,119 @@ func (ms msgServer) VerifyProviderDomain(goCtx context.Context, msg *types.MsgVe
 		Verified: true,
 	}, nil
 }
+
+func (ms msgServer) RequestDomainVerification(goCtx context.Context, msg *types.MsgRequestDomainVerification) (*types.MsgRequestDomainVerificationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+
+	if _, ok := ms.provider.Get(ctx, owner); !ok {
+		return nil, types.ErrProviderNotFound.Wrapf("provider not found: %s", msg.Owner)
+	}
+
+	record, verificationTarget, err := ms.provider.RequestDomainVerification(ctx, owner, msg.Domain, msg.Method)
+	if err != nil {
+		return nil, err
+	}
+
+	methodStr := ""
+	switch msg.Method {
+	case types.VERIFICATION_METHOD_DNS_TXT:
+		methodStr = "dns_txt"
+	case types.VERIFICATION_METHOD_DNS_CNAME:
+		methodStr = "dns_cname"
+	case types.VERIFICATION_METHOD_HTTP_WELL_KNOWN:
+		methodStr = "http_well_known"
+	default:
+		methodStr = "unknown"
+	}
+
+	_ = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderDomainVerificationRequested{
+			Owner:  msg.Owner,
+			Domain: msg.Domain,
+			Method: methodStr,
+			Token:  record.Token,
+		},
+	)
+
+	return &types.MsgRequestDomainVerificationResponse{
+		Token:              record.Token,
+		ExpiresAt:          record.ExpiresAt,
+		VerificationTarget: verificationTarget,
+	}, nil
+}
+
+func (ms msgServer) ConfirmDomainVerification(goCtx context.Context, msg *types.MsgConfirmDomainVerification) (*types.MsgConfirmDomainVerificationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+
+	if _, ok := ms.provider.Get(ctx, owner); !ok {
+		return nil, types.ErrProviderNotFound.Wrapf("provider not found: %s", msg.Owner)
+	}
+
+	err := ms.provider.ConfirmDomainVerification(ctx, owner, msg.Proof)
+	if err != nil {
+		return &types.MsgConfirmDomainVerificationResponse{
+			Verified: false,
+		}, err
+	}
+
+	record, _ := ms.provider.GetDomainVerificationRecord(ctx, owner)
+
+	methodStr := string(record.Method)
+	_ = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderDomainVerificationConfirmed{
+			Owner:  msg.Owner,
+			Domain: record.Domain,
+			Method: methodStr,
+		},
+	)
+
+	return &types.MsgConfirmDomainVerificationResponse{
+		Verified:   true,
+		VerifiedAt: record.VerifiedAt,
+	}, nil
+}
+
+func (ms msgServer) RevokeDomainVerification(goCtx context.Context, msg *types.MsgRevokeDomainVerification) (*types.MsgRevokeDomainVerificationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+
+	if _, ok := ms.provider.Get(ctx, owner); !ok {
+		return nil, types.ErrProviderNotFound.Wrapf("provider not found: %s", msg.Owner)
+	}
+
+	record, found := ms.provider.GetDomainVerificationRecord(ctx, owner)
+	if !found {
+		return nil, types.ErrDomainVerificationNotFound.Wrapf("no verification record for provider: %s", msg.Owner)
+	}
+
+	err := ms.provider.RevokeDomainVerification(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderDomainVerificationRevoked{
+			Owner:  msg.Owner,
+			Domain: record.Domain,
+		},
+	)
+
+	return &types.MsgRevokeDomainVerificationResponse{}, nil
+}

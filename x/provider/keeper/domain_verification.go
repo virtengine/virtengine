@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ const (
 	DomainVerificationVerified DomainVerificationStatus = "verified"
 	DomainVerificationFailed   DomainVerificationStatus = "failed"
 	DomainVerificationExpired  DomainVerificationStatus = "expired"
+	DomainVerificationRevoked  DomainVerificationStatus = "revoked"
 
 	// VerificationTokenLength is the length of the verification token in bytes
 	VerificationTokenLength = 32
@@ -29,8 +29,24 @@ const (
 	// TokenExpirationDays is the number of days before a verification token expires
 	TokenExpirationDays = 7
 
+	// VerificationRenewalDays is the number of days before expiry to allow renewal
+	VerificationRenewalDays = 30
+
 	// DNSVerificationPrefix is the subdomain prefix for verification TXT records
 	DNSVerificationPrefix = "_virtengine-verification"
+
+	// HTTPWellKnownPath is the path for HTTP well-known verification
+	HTTPWellKnownPath = "/.well-known/virtengine-verification"
+)
+
+// VerificationMethodType represents the method used for domain verification
+type VerificationMethodType string
+
+const (
+	VerificationMethodUnknown       VerificationMethodType = "unknown"
+	VerificationMethodDNSTXT        VerificationMethodType = "dns_txt"
+	VerificationMethodDNSCNAME      VerificationMethodType = "dns_cname"
+	VerificationMethodHTTPWellKnown VerificationMethodType = "http_well_known"
 )
 
 // DomainVerificationRecord stores domain verification data for a provider
@@ -38,23 +54,41 @@ type DomainVerificationRecord struct {
 	ProviderAddress string                   `json:"provider_address"`
 	Domain          string                   `json:"domain"`
 	Token           string                   `json:"token"`
+	Method          VerificationMethodType   `json:"method"`
+	Proof           string                   `json:"proof,omitempty"`
 	Status          DomainVerificationStatus `json:"status"`
 	GeneratedAt     int64                    `json:"generated_at"`
 	VerifiedAt      int64                    `json:"verified_at,omitempty"`
 	ExpiresAt       int64                    `json:"expires_at"`
+	RenewalAt       int64                    `json:"renewal_at,omitempty"`
 }
 
-// GenerateDomainVerificationToken generates a new verification token for a provider's domain
-func (k Keeper) GenerateDomainVerificationToken(ctx sdk.Context, providerAddr sdk.AccAddress, domain string) (*DomainVerificationRecord, error) {
-	// Validate domain format
+// RequestDomainVerification requests domain verification with specified method (replaces GenerateDomainVerificationToken)
+func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, domain string, method types.VerificationMethod) (*DomainVerificationRecord, string, error) {
 	if err := validateDomain(domain); err != nil {
-		return nil, types.ErrInvalidDomain.Wrapf("invalid domain: %v", err)
+		return nil, "", types.ErrInvalidDomain.Wrapf("invalid domain: %v", err)
 	}
 
-	// Generate random token
+	var methodType VerificationMethodType
+	var verificationTarget string
+
+	switch method {
+	case types.VERIFICATION_METHOD_DNS_TXT:
+		methodType = VerificationMethodDNSTXT
+		verificationTarget = fmt.Sprintf("%s.%s", DNSVerificationPrefix, domain)
+	case types.VERIFICATION_METHOD_DNS_CNAME:
+		methodType = VerificationMethodDNSCNAME
+		verificationTarget = fmt.Sprintf("%s.%s", DNSVerificationPrefix, domain)
+	case types.VERIFICATION_METHOD_HTTP_WELL_KNOWN:
+		methodType = VerificationMethodHTTPWellKnown
+		verificationTarget = fmt.Sprintf("https://%s%s", domain, HTTPWellKnownPath)
+	default:
+		return nil, "", types.ErrInvalidDomain.Wrap("unsupported verification method")
+	}
+
 	tokenBytes := make([]byte, VerificationTokenLength)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return nil, types.ErrInternal.Wrapf("failed to generate token: %v", err)
+		return nil, "", types.ErrInternal.Wrapf("failed to generate token: %v", err)
 	}
 	token := hex.EncodeToString(tokenBytes)
 
@@ -65,76 +99,97 @@ func (k Keeper) GenerateDomainVerificationToken(ctx sdk.Context, providerAddr sd
 		ProviderAddress: providerAddr.String(),
 		Domain:          domain,
 		Token:           token,
+		Method:          methodType,
 		Status:          DomainVerificationPending,
 		GeneratedAt:     now,
 		ExpiresAt:       expiresAt,
 	}
 
-	// Store the record
 	if err := k.setDomainVerificationRecord(ctx, record); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return record, nil
+	return record, verificationTarget, nil
 }
 
-// VerifyProviderDomain verifies a provider's domain by checking DNS TXT records
-func (k Keeper) VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddress) error {
+// ConfirmDomainVerification confirms domain verification with off-chain proof
+func (k Keeper) ConfirmDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, proof string) error {
 	record, found := k.GetDomainVerificationRecord(ctx, providerAddr)
 	if !found {
 		return types.ErrDomainVerificationNotFound.Wrapf("no verification record for provider: %s", providerAddr.String())
 	}
 
-	// Check if token is expired
 	if ctx.BlockTime().Unix() > record.ExpiresAt {
 		record.Status = DomainVerificationExpired
 		_ = k.setDomainVerificationRecord(ctx, record)
 		return types.ErrDomainVerificationExpired.Wrap("verification token has expired")
 	}
 
-	// Perform DNS TXT record lookup
-	expectedRecord := fmt.Sprintf("%s.%s", DNSVerificationPrefix, record.Domain)
-
-	// Query DNS TXT records
-	txtRecords, err := net.LookupTXT(expectedRecord)
-	if err != nil {
-		record.Status = DomainVerificationFailed
-		_ = k.setDomainVerificationRecord(ctx, record)
-		return types.ErrDomainVerificationFailed.Wrapf("DNS lookup failed: %v", err)
+	if record.Status == DomainVerificationVerified {
+		return types.ErrDomainVerificationFailed.Wrap("domain already verified")
 	}
 
-	// Check if any TXT record matches the token
-	found = false
-	for _, txt := range txtRecords {
-		if strings.TrimSpace(txt) == record.Token {
-			found = true
-			break
-		}
+	if proof == "" {
+		return types.ErrDomainVerificationFailed.Wrap("proof cannot be empty")
 	}
 
-	if !found {
-		record.Status = DomainVerificationFailed
-		_ = k.setDomainVerificationRecord(ctx, record)
-		return types.ErrDomainVerificationFailed.Wrap("verification token not found in DNS TXT records")
-	}
-
-	// Mark as verified
 	record.Status = DomainVerificationVerified
 	record.VerifiedAt = ctx.BlockTime().Unix()
+	record.Proof = proof
+	record.RenewalAt = ctx.BlockTime().Add((TokenExpirationDays - VerificationRenewalDays) * 24 * time.Hour).Unix()
 
 	if err := k.setDomainVerificationRecord(ctx, record); err != nil {
 		return err
 	}
 
-	// Emit verification success event
-	_ = ctx.EventManager().EmitTypedEvent(
-		&types.EventProviderDomainVerified{
-			Owner:  record.ProviderAddress,
-			Domain: record.Domain,
-		},
-	)
+	return nil
+}
+
+// RevokeDomainVerification revokes a provider's domain verification
+func (k Keeper) RevokeDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress) error {
+	record, found := k.GetDomainVerificationRecord(ctx, providerAddr)
+	if !found {
+		return types.ErrDomainVerificationNotFound.Wrapf("no verification record for provider: %s", providerAddr.String())
+	}
+
+	record.Status = DomainVerificationRevoked
+	if err := k.setDomainVerificationRecord(ctx, record); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+// GenerateDomainVerificationToken generates a new verification token for a provider's domain (legacy - kept for compatibility)
+func (k Keeper) GenerateDomainVerificationToken(ctx sdk.Context, providerAddr sdk.AccAddress, domain string) (*DomainVerificationRecord, error) {
+	record, _, err := k.RequestDomainVerification(ctx, providerAddr, domain, types.VERIFICATION_METHOD_DNS_TXT)
+	return record, err
+}
+
+// VerifyProviderDomain verifies a provider's domain (legacy - DNS check removed, kept for compatibility)
+func (k Keeper) VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddress) error {
+	record, found := k.GetDomainVerificationRecord(ctx, providerAddr)
+	if !found {
+		return types.ErrDomainVerificationNotFound.Wrapf("no verification record for provider: %s", providerAddr.String())
+	}
+
+	if ctx.BlockTime().Unix() > record.ExpiresAt {
+		record.Status = DomainVerificationExpired
+		_ = k.setDomainVerificationRecord(ctx, record)
+		return types.ErrDomainVerificationExpired.Wrap("verification token has expired")
+	}
+
+	if record.Status == DomainVerificationVerified {
+		_ = ctx.EventManager().EmitTypedEvent(
+			&types.EventProviderDomainVerified{
+				Owner:  record.ProviderAddress,
+				Domain: record.Domain,
+			},
+		)
+		return nil
+	}
+
+	return types.ErrDomainVerificationFailed.Wrap("domain not verified - use ConfirmDomainVerification with off-chain proof")
 }
 
 // GetDomainVerificationRecord retrieves the domain verification record for a provider

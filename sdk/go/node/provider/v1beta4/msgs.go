@@ -20,6 +20,9 @@ var (
 	msgTypeDeleteProvider                  = ""
 	msgTypeGenerateDomainVerificationToken = ""
 	msgTypeVerifyProviderDomain            = ""
+	msgTypeRequestDomainVerification       = ""
+	msgTypeConfirmDomainVerification       = ""
+	msgTypeRevokeDomainVerification        = ""
 )
 
 var (
@@ -28,6 +31,9 @@ var (
 	_ sdk.Msg = &MsgDeleteProvider{}
 	_ sdk.Msg = &MsgGenerateDomainVerificationToken{}
 	_ sdk.Msg = &MsgVerifyProviderDomain{}
+	_ sdk.Msg = &MsgRequestDomainVerification{}
+	_ sdk.Msg = &MsgConfirmDomainVerification{}
+	_ sdk.Msg = &MsgRevokeDomainVerification{}
 )
 
 var (
@@ -40,6 +46,9 @@ func init() {
 	msgTypeDeleteProvider = reflect.TypeOf(&MsgDeleteProvider{}).Elem().Name()
 	msgTypeGenerateDomainVerificationToken = reflect.TypeOf(&MsgGenerateDomainVerificationToken{}).Elem().Name()
 	msgTypeVerifyProviderDomain = reflect.TypeOf(&MsgVerifyProviderDomain{}).Elem().Name()
+	msgTypeRequestDomainVerification = reflect.TypeOf(&MsgRequestDomainVerification{}).Elem().Name()
+	msgTypeConfirmDomainVerification = reflect.TypeOf(&MsgConfirmDomainVerification{}).Elem().Name()
+	msgTypeRevokeDomainVerification = reflect.TypeOf(&MsgRevokeDomainVerification{}).Elem().Name()
 }
 
 // NewMsgCreateProvider creates a new MsgCreateProvider instance
@@ -202,6 +211,102 @@ func (msg *MsgVerifyProviderDomain) ValidateBasic() error {
 
 // GetSigners defines whose signature is required
 func (msg *MsgVerifyProviderDomain) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+
+	return []sdk.AccAddress{owner}
+}
+
+// NewMsgRequestDomainVerification creates a new MsgRequestDomainVerification instance
+func NewMsgRequestDomainVerification(owner sdk.AccAddress, domain string, method VerificationMethod) *MsgRequestDomainVerification {
+	return &MsgRequestDomainVerification{
+		Owner:  owner.String(),
+		Domain: domain,
+		Method: method,
+	}
+}
+
+// Type implements the sdk.Msg interface
+func (msg *MsgRequestDomainVerification) Type() string { return msgTypeRequestDomainVerification }
+
+// ValidateBasic does basic validation for domain verification requests
+func (msg *MsgRequestDomainVerification) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "MsgRequestDomainVerification: Invalid Provider Address")
+	}
+	if err := validateDomain(msg.Domain); err != nil {
+		return ErrInvalidDomain.Wrapf("invalid domain: %v", err)
+	}
+	if msg.Method == VERIFICATION_METHOD_UNKNOWN {
+		return ErrInvalidDomain.Wrap("verification method cannot be unknown")
+	}
+	return nil
+}
+
+// GetSigners defines whose signature is required
+func (msg *MsgRequestDomainVerification) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+
+	return []sdk.AccAddress{owner}
+}
+
+// NewMsgConfirmDomainVerification creates a new MsgConfirmDomainVerification instance
+func NewMsgConfirmDomainVerification(owner sdk.AccAddress, proof string) *MsgConfirmDomainVerification {
+	return &MsgConfirmDomainVerification{
+		Owner: owner.String(),
+		Proof: proof,
+	}
+}
+
+// Type implements the sdk.Msg interface
+func (msg *MsgConfirmDomainVerification) Type() string { return msgTypeConfirmDomainVerification }
+
+// ValidateBasic does basic validation for domain verification confirmation
+func (msg *MsgConfirmDomainVerification) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "MsgConfirmDomainVerification: Invalid Provider Address")
+	}
+	if msg.Proof == "" {
+		return ErrDomainVerificationFailed.Wrap("proof cannot be empty")
+	}
+	return nil
+}
+
+// GetSigners defines whose signature is required
+func (msg *MsgConfirmDomainVerification) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+
+	return []sdk.AccAddress{owner}
+}
+
+// NewMsgRevokeDomainVerification creates a new MsgRevokeDomainVerification instance
+func NewMsgRevokeDomainVerification(owner sdk.AccAddress) *MsgRevokeDomainVerification {
+	return &MsgRevokeDomainVerification{
+		Owner: owner.String(),
+	}
+}
+
+// Type implements the sdk.Msg interface
+func (msg *MsgRevokeDomainVerification) Type() string { return msgTypeRevokeDomainVerification }
+
+// ValidateBasic does basic validation for domain verification revocation
+func (msg *MsgRevokeDomainVerification) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "MsgRevokeDomainVerification: Invalid Provider Address")
+	}
+	return nil
+}
+
+// GetSigners defines whose signature is required
+func (msg *MsgRevokeDomainVerification) GetSigners() []sdk.AccAddress {
 	owner, err := sdk.AccAddressFromBech32(msg.Owner)
 	if err != nil {
 		panic(err)

@@ -25,4 +25,13 @@ service Msg {
 
   // VerifyProviderDomain verifies a provider's domain via DNS TXT record.
   rpc VerifyProviderDomain(MsgVerifyProviderDomain) returns (MsgVerifyProviderDomainResponse);
+
+  // RequestDomainVerification requests domain verification with specified method.
+  rpc RequestDomainVerification(MsgRequestDomainVerification) returns (MsgRequestDomainVerificationResponse);
+
+  // ConfirmDomainVerification confirms domain verification with off-chain proof.
+  rpc ConfirmDomainVerification(MsgConfirmDomainVerification) returns (MsgConfirmDomainVerificationResponse);
+
+  // RevokeDomainVerification revokes a provider's domain verification.
+  rpc RevokeDomainVerification(MsgRevokeDomainVerification) returns (MsgRevokeDomainVerificationResponse);
 }
