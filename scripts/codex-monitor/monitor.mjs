@@ -1509,6 +1509,7 @@ function restartVibeKanbanProcess() {
  */
 function ensureVkLogStream() {
   if (vkLogStream) return;
+  console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
   const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
   vkLogStream = new VkLogStream(vkEndpointUrl, {
@@ -1561,65 +1562,6 @@ function ensureVkLogStream() {
   // Discover any active sessions immediately and keep polling for new sessions
   void refreshVkSessionStreams("startup");
   ensureVkSessionDiscoveryLoop();
-
-  // Connect to any existing active sessions and enrich with task metadata
-  void (async () => {
-    try {
-      const statusData = await readStatusData();
-      // Enrich processes with task metadata from orchestrator status
-      const attempts = statusData?.attempts || {};
-      for (const [attemptId, info] of Object.entries(attempts)) {
-        if (!info || info.status === "completed") continue;
-        // Set metadata so structured session logs get headers with task context
-        vkLogStream.setProcessMeta(attemptId, {
-          attemptId,
-          taskId: info.task_id,
-          taskTitle: info.task_title || info.name,
-          branch: info.branch,
-          executor: info.executor,
-          executorVariant: info.executor_variant,
-        });
-      }
-
-      // Connect to running sessions by querying VK API for each attempt's sessions
-      const attemptList = Object.entries(attempts)
-        .filter(([, v]) => v && v.status === "running")
-        .map(([id, v]) => ({ id, ...v }));
-      for (const attempt of attemptList) {
-        try {
-          const sessRes = await fetch(
-            `${vkEndpointUrl}/api/sessions?workspace_id=${attempt.id}`,
-            { signal: AbortSignal.timeout(10_000) },
-          );
-          if (!sessRes.ok) continue;
-          const sessBody = await sessRes.json();
-          // VK wraps responses in { success, data } envelope
-          const sessions = Array.isArray(sessBody)
-            ? sessBody
-            : Array.isArray(sessBody?.data)
-              ? sessBody.data
-              : [];
-          if (sessions.length === 0) continue;
-          // Connect to the most recent session
-          const sorted = sessions.sort(
-            (a, b) =>
-              new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
-          );
-          const latest = sorted[0];
-          if (latest?.id) {
-            console.log(
-              `[monitor] VK log stream: connecting to session ${latest.id.slice(0, 8)} for attempt ${attempt.id.slice(0, 8)}`,
-            );
-            vkLogStream.connectToSession(latest.id);
-          }
-        } catch {
-          /* best effort — skip this attempt */
-        }
-      }
-    } catch {
-      /* best effort — sessions will be connected as they're created */
-    }
-  })();
 }
 
 function ensureVkSessionDiscoveryLoop() {
@@ -1631,7 +1573,10 @@ function ensureVkSessionDiscoveryLoop() {
 }
 
 async function refreshVkSessionStreams(reason = "manual") {
-  if (!vkLogStream) return;
+  if (!vkLogStream) {
+    console.log(`[monitor] refreshVkSessionStreams(${reason}): no vkLogStream`);
+    return;
+  }
   if (vkSessionDiscoveryInFlight) return;
   vkSessionDiscoveryInFlight = true;
 
@@ -1640,6 +1585,10 @@ async function refreshVkSessionStreams(reason = "manual") {
     const attempts = statusData?.attempts || {};
     const runningAttempts = Object.entries(attempts).filter(
       ([, info]) => info && info.status === "running",
+    );
+
+    console.log(
+      `[monitor] refreshVkSessionStreams(${reason}): ${runningAttempts.length} running attempts`,
     );
 
     for (const [attemptId, info] of runningAttempts) {
@@ -1651,10 +1600,18 @@ async function refreshVkSessionStreams(reason = "manual") {
         sessionId = await fetchLatestVkSessionId(attemptId);
         if (sessionId) {
           vkSessionCache.set(attemptId, sessionId);
+          console.log(
+            `[monitor] refreshVkSessionStreams: discovered session ${sessionId.slice(0, 8)} for attempt ${attemptId.slice(0, 8)}`,
+          );
         }
       }
 
-      if (!sessionId) continue;
+      if (!sessionId) {
+        console.log(
+          `[monitor] refreshVkSessionStreams: no session found for attempt ${attemptId.slice(0, 8)}`,
+        );
+        continue;
+      }
 
       vkLogStream.setProcessMeta(attemptId, {
         attemptId,
@@ -1668,11 +1625,9 @@ async function refreshVkSessionStreams(reason = "manual") {
       vkLogStream.connectToSession(sessionId);
     }
   } catch (err) {
-    if (reason !== "periodic") {
-      console.warn(
-        `[monitor] VK session discovery (${reason}) failed: ${err.message || err}`,
-      );
-    }
+    console.warn(
+      `[monitor] VK session discovery (${reason}) failed: ${err.message || err}`,
+    );
   } finally {
     vkSessionDiscoveryInFlight = false;
   }
@@ -7808,8 +7763,6 @@ try {
   const vkBaseUrl = config.vkEndpointUrl || `http://127.0.0.1:${vkPort}`;
   const tomlResult = ensureCodexConfig({
     vkBaseUrl,
-    vkPort,
-    vkHost: "127.0.0.1",
   });
   if (!tomlResult.noChanges) {
     console.log("[monitor] updated ~/.codex/config.toml:");
@@ -7973,8 +7926,8 @@ if (
     void ensureVibeKanbanRunning();
   }, vkEnsureIntervalMs);
 }
-// Periodically reconnect log stream for externally-managed VK (e.g. after VK restart)
-// Also discover new sessions for running attempts so VK agent logs are captured.
+// Periodically reconnect log stream for externally-managed VK (e.g. after VK restart).
+// Session discovery is handled by ensureVkSessionDiscoveryLoop() inside ensureVkLogStream().
 if (
   !vkSpawnEnabled &&
   vkEndpointUrl &&
@@ -7986,55 +7939,6 @@ if (
       void isVibeKanbanOnline().then((online) => {
         if (online) ensureVkLogStream();
       });
-    } else {
-      // Discover sessions for running attempts that aren't already tracked
-      void (async () => {
-        try {
-          const statusData = await readStatusData();
-          const attempts = statusData?.attempts || {};
-          const running = Object.entries(attempts)
-            .filter(([, v]) => v && v.status === "running")
-            .map(([id, v]) => ({ id, ...v }));
-          for (const attempt of running) {
-            try {
-              const sessRes = await fetch(
-                `${vkEndpointUrl}/api/sessions?workspace_id=${attempt.id}`,
-                { signal: AbortSignal.timeout(10_000) },
-              );
-              if (!sessRes.ok) continue;
-              const sessBody = await sessRes.json();
-              const sessions = Array.isArray(sessBody)
-                ? sessBody
-                : Array.isArray(sessBody?.data)
-                  ? sessBody.data
-                  : [];
-              if (sessions.length === 0) continue;
-              const sorted = sessions.sort(
-                (a, b) =>
-                  new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
-              );
-              const latest = sorted[0];
-              if (latest?.id) {
-                // connectToSession is idempotent — skips already-tracked sessions
-                vkLogStream.connectToSession(latest.id);
-                // Ensure process metadata is set
-                vkLogStream.setProcessMeta(attempt.id, {
-                  attemptId: attempt.id,
-                  taskId: attempt.task_id,
-                  taskTitle: attempt.task_title || attempt.name,
-                  branch: attempt.branch,
-                  executor: attempt.executor,
-                  executorVariant: attempt.executor_variant,
-                });
-              }
-            } catch {
-              /* skip this attempt */
-            }
-          }
-        } catch {
-          /* best effort */
-        }
-      })();
     }
   }, vkEnsureIntervalMs);
 }

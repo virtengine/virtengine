@@ -1471,12 +1471,9 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
 
   const vkPort = env.VK_RECOVERY_PORT || "54089";
   const vkBaseUrl = env.VK_BASE_URL || `http://127.0.0.1:${vkPort}`;
-  const vkHost = "127.0.0.1";
 
   const tomlResult = ensureCodexConfig({
     vkBaseUrl,
-    vkPort,
-    vkHost,
     dryRun: false,
   });
   printConfigSummary(tomlResult, (msg) => console.log(msg));

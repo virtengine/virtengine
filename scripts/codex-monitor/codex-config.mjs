@@ -11,8 +11,26 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * Read the vibe-kanban version from the local package.json dependency.
+ * Falls back to "latest" if not found (shouldn't happen in normal usage).
+ */
+function getVibeKanbanVersion() {
+  try {
+    const pkgPath = resolve(__dirname, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    return pkg.dependencies?.["vibe-kanban"] || "latest";
+  } catch {
+    return "latest";
+  }
+}
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -104,23 +122,28 @@ export function buildAgentSdkBlock() {
 /**
  * Build the vibe_kanban MCP server block (including env vars).
  *
+ * The version is pinned from the local package.json dependency to avoid
+ * slow npx re-downloads when @latest resolves to a new version.
+ *
+ * Only VK_BASE_URL and VK_ENDPOINT_URL are set — the MCP server reads
+ * the backend port from the VK port file, so PORT/HOST env vars are not
+ * needed and were removed to avoid confusion.
+ *
  * @param {object} opts
  * @param {string} opts.vkBaseUrl   e.g. "http://127.0.0.1:54089"
- * @param {string} opts.vkPort      e.g. "54089"
- * @param {string} opts.vkHost      e.g. "127.0.0.1"
  */
 export function buildVibeKanbanBlock({
   vkBaseUrl = "http://127.0.0.1:54089",
-  vkPort = "54089",
-  vkHost = "127.0.0.1",
 } = {}) {
+  const vkVersion = getVibeKanbanVersion();
   return [
     "",
     "# ── Vibe-Kanban MCP (added by codex-monitor) ──",
     "[mcp_servers.vibe_kanban]",
+    "startup_timeout_sec = 120",
     "args = [",
     '    "-y",',
-    '    "vibe-kanban@latest",',
+    `    "vibe-kanban@${vkVersion}",`,
     '    "--mcp",',
     "]",
     'command = "npx"',
@@ -130,10 +153,6 @@ export function buildVibeKanbanBlock({
     "# Ensure MCP always targets the correct VK API endpoint.",
     `VK_BASE_URL = "${vkBaseUrl}"`,
     `VK_ENDPOINT_URL = "${vkBaseUrl}"`,
-    `VK_RECOVERY_PORT = "${vkPort}"`,
-    "# Also bind the MCP-hosted VK instance to the expected port if it starts one.",
-    `PORT = "${vkPort}"`,
-    `HOST = "${vkHost}"`,
     "",
   ].join("\n");
 }
@@ -281,14 +300,10 @@ export function ensureRetrySettings(toml, providerName) {
  *
  * @param {object} opts
  * @param {string} [opts.vkBaseUrl]
- * @param {string} [opts.vkPort]
- * @param {string} [opts.vkHost]
  * @param {boolean} [opts.dryRun]  If true, returns result without writing
  */
 export function ensureCodexConfig({
   vkBaseUrl = "http://127.0.0.1:54089",
-  vkPort = "54089",
-  vkHost = "127.0.0.1",
   dryRun = false,
 } = {}) {
   const result = {
@@ -320,7 +335,7 @@ export function ensureCodexConfig({
   // ── 1. Ensure vibe_kanban MCP server ──────────────────────
 
   if (!hasVibeKanbanMcp(toml)) {
-    toml += buildVibeKanbanBlock({ vkBaseUrl, vkPort, vkHost });
+    toml += buildVibeKanbanBlock({ vkBaseUrl });
     result.vkAdded = true;
   } else {
     // MCP section exists — ensure env vars are up to date
@@ -332,10 +347,6 @@ export function ensureCodexConfig({
         "# Ensure MCP always targets the correct VK API endpoint.",
         `VK_BASE_URL = "${vkBaseUrl}"`,
         `VK_ENDPOINT_URL = "${vkBaseUrl}"`,
-        `VK_RECOVERY_PORT = "${vkPort}"`,
-        "# Also bind the MCP-hosted VK instance to the expected port if it starts one.",
-        `PORT = "${vkPort}"`,
-        `HOST = "${vkHost}"`,
         "",
       ].join("\n");
 
@@ -360,9 +371,6 @@ export function ensureCodexConfig({
       const envVars = {
         VK_BASE_URL: vkBaseUrl,
         VK_ENDPOINT_URL: vkBaseUrl,
-        VK_RECOVERY_PORT: vkPort,
-        PORT: vkPort,
-        HOST: vkHost,
       };
       const before = toml;
       toml = updateVibeKanbanEnv(toml, envVars);
