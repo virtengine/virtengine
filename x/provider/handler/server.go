@@ -234,7 +234,7 @@ func (ms msgServer) RequestDomainVerification(goCtx context.Context, msg *types.
 		return nil, types.ErrProviderNotFound.Wrapf("provider not found: %s", msg.Owner)
 	}
 
-	record, verificationTarget, err := ms.provider.RequestDomainVerification(ctx, owner, msg.Domain, int32(msg.Method))
+	record, verificationTarget, err := ms.provider.RequestDomainVerification(ctx, owner, msg.Domain, msg.Method)
 	if err != nil {
 		return nil, err
 	}
