@@ -913,6 +913,7 @@ func parseUnitPrice(rateStr string) sdk.DecCoin {
 }
 
 // calculateUsageUnits calculates usage units from a record.
+//nolint:unused // reserved for upcoming usage aggregation path
 func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 	var units uint64
 
@@ -946,6 +947,7 @@ func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 }
 
 // determineUsageType determines the primary usage type.
+//nolint:unused // reserved for upcoming usage aggregation path
 func (p *SettlementPipeline) determineUsageType(record *UsageRecord) string {
 	// Return the type with highest usage
 	maxUsage := record.Metrics.CPUMilliSeconds
@@ -968,6 +970,7 @@ func (p *SettlementPipeline) determineUsageType(record *UsageRecord) string {
 }
 
 // getPrimaryRate gets the unit price for the primary usage type.
+//nolint:unused // reserved for upcoming usage aggregation path
 func (p *SettlementPipeline) getPrimaryRate(record *UsageRecord, usageType string) sdk.DecCoin {
 	var rateStr string
 
