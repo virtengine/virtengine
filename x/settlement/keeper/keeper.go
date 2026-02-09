@@ -39,6 +39,7 @@ type IKeeper interface {
 	GetUsageRecord(ctx sdk.Context, usageID string) (types.UsageRecord, bool)
 	GetUsageRecordsByOrder(ctx sdk.Context, orderID string) []types.UsageRecord
 	GetUnsettledUsageRecords(ctx sdk.Context, orderID string) []types.UsageRecord
+	BuildUsageSummary(ctx sdk.Context, orderID string, provider string, periodStart time.Time, periodEnd time.Time) (types.UsageSummary, error)
 
 	// Rewards
 	DistributeStakingRewards(ctx sdk.Context, epoch uint64) (*types.RewardDistribution, error)
@@ -51,12 +52,14 @@ type IKeeper interface {
 	ClaimRewards(ctx sdk.Context, claimer sdk.AccAddress, source string) (sdk.Coins, error)
 	GetRewardDistribution(ctx sdk.Context, distributionID string) (types.RewardDistribution, bool)
 	GetRewardsByEpoch(ctx sdk.Context, epoch uint64) []types.RewardDistribution
+	GetRewardHistory(ctx sdk.Context, address string, source string, limit uint32, offset uint32) ([]types.RewardHistoryEntry, error)
 
 	// Payout management
 	ExecutePayout(ctx sdk.Context, invoiceID string, settlementID string) (*types.PayoutRecord, error)
 	GetPayout(ctx sdk.Context, payoutID string) (types.PayoutRecord, bool)
 	GetPayoutByInvoice(ctx sdk.Context, invoiceID string) (types.PayoutRecord, bool)
 	GetPayoutBySettlement(ctx sdk.Context, settlementID string) (types.PayoutRecord, bool)
+	GetPayoutsByProvider(ctx sdk.Context, provider string) []types.PayoutRecord
 	HoldPayout(ctx sdk.Context, payoutID string, disputeID string, reason string) error
 	ReleasePayoutHold(ctx sdk.Context, payoutID string) error
 	RefundPayout(ctx sdk.Context, payoutID string, reason string) error
