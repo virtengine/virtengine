@@ -313,6 +313,28 @@ func FilterEligibleClusters(clusters []types.HPCCluster, resources types.JobReso
 			continue
 		}
 
+		// Optional resource checks when cluster metadata is available
+		if resources.CPUCoresPerNode > 0 && cluster.ClusterMetadata.TotalCPUCores > 0 {
+			requiredCores := int64(resources.CPUCoresPerNode) * int64(resources.Nodes)
+			if requiredCores > cluster.ClusterMetadata.TotalCPUCores {
+				continue
+			}
+		}
+
+		if resources.MemoryGBPerNode > 0 && cluster.ClusterMetadata.TotalMemoryGB > 0 {
+			requiredMemory := int64(resources.MemoryGBPerNode) * int64(resources.Nodes)
+			if requiredMemory > cluster.ClusterMetadata.TotalMemoryGB {
+				continue
+			}
+		}
+
+		if resources.GPUsPerNode > 0 {
+			requiredGPUs := int64(resources.GPUsPerNode) * int64(resources.Nodes)
+			if requiredGPUs > cluster.ClusterMetadata.TotalGPUs {
+				continue
+			}
+		}
+
 		eligible = append(eligible, cluster)
 	}
 
