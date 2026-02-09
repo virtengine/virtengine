@@ -35,17 +35,21 @@ func (k Keeper) CreateSSOLinkage(ctx sdk.Context, msg *types.MsgCreateSSOLinkage
 	// Create linkage metadata
 	now := ctx.BlockTime()
 	linkage := &types.SSOLinkageMetadata{
-		Version:          types.SSOVerificationVersion,
-		LinkageID:        msg.LinkageID,
-		Provider:         msg.Provider,
-		Issuer:           msg.Issuer,
-		SubjectHash:      msg.SubjectHash,
-		Nonce:            msg.Nonce,
-		VerifiedAt:       now,
-		Status:           types.SSOStatusVerified,
-		AccountSignature: msg.AccountSignature,
-		EmailDomainHash:  msg.EmailDomainHash,
-		OrgIDHash:        msg.TenantIDHash,
+		Version:                types.SSOVerificationVersion,
+		LinkageID:              msg.LinkageID,
+		Provider:               msg.Provider,
+		Issuer:                 msg.Issuer,
+		SubjectHash:            msg.SubjectHash,
+		Nonce:                  msg.Nonce,
+		VerifiedAt:             now,
+		Status:                 types.SSOStatusVerified,
+		AccountSignature:       msg.AccountSignature,
+		EmailDomainHash:        msg.EmailDomainHash,
+		OrgIDHash:              msg.TenantIDHash,
+		EvidenceHash:           msg.EvidenceHash,
+		EvidenceStorageBackend: msg.EvidenceStorageBackend,
+		EvidenceStorageRef:     msg.EvidenceStorageRef,
+		EvidenceMetadata:       msg.EvidenceMetadata,
 	}
 
 	if msg.ExpiresAt != nil {

@@ -122,6 +122,7 @@ type WaldurBridge struct {
 	lifecycleClient *waldur.LifecycleClient
 	rpcClient       *rpchttp.HTTP
 	stateMu         sync.RWMutex
+	lifecycleMgr    *ResourceLifecycleManager
 
 	// VE-2D: Offering sync worker for automatic chain-to-Waldur synchronization
 	offeringSyncWorker *OfferingSyncWorker
@@ -171,6 +172,11 @@ func NewWaldurBridge(cfg WaldurBridgeConfig, keyManager *KeyManager, callbackSin
 		stateStore:      NewWaldurBridgeStateStore(cfg.StateFile),
 		checkpointStore: mustNewEventCheckpointStore(cfg.CheckpointFile),
 	}, nil
+}
+
+// SetLifecycleManager attaches a lifecycle manager for resource state updates.
+func (b *WaldurBridge) SetLifecycleManager(mgr *ResourceLifecycleManager) {
+	b.lifecycleMgr = mgr
 }
 
 // mustNewEventCheckpointStore creates a checkpoint store, panicking on validation error.
@@ -851,6 +857,8 @@ func (b *WaldurBridge) ensureAllocationMapping(ctx context.Context, event market
 		return nil, fmt.Errorf("save mapping: %w", err)
 	}
 
+	b.registerLifecycleResource(ctx, mapping)
+
 	return mapping, nil
 }
 
@@ -872,8 +880,36 @@ func (b *WaldurBridge) refreshAllocationMapping(ctx context.Context, mapping *Wa
 		b.state.Mappings[mapping.AllocationID] = mapping
 		_ = b.stateStore.Save(b.state)
 		b.stateMu.Unlock()
+		b.registerLifecycleResource(ctx, mapping)
 	}
 	return mapping
+}
+
+func (b *WaldurBridge) registerLifecycleResource(ctx context.Context, mapping *WaldurAllocationMapping) {
+	if b.lifecycleMgr == nil || mapping == nil || mapping.ResourceUUID == "" {
+		return
+	}
+
+	waldurState := waldur.ResourceStateOK
+	if b.lifecycleClient != nil {
+		if state, err := b.lifecycleClient.GetResourceState(ctx, mapping.ResourceUUID); err == nil {
+			waldurState = state
+		}
+	}
+
+	info := &ResourceInfo{
+		AllocationID:       mapping.AllocationID,
+		WaldurResourceUUID: mapping.ResourceUUID,
+		ResourceType:       "compute",
+		CurrentState:       mapWaldurStateToAllocationState(string(waldurState)),
+		WaldurState:        waldurState,
+		ProviderAddress:    b.cfg.ProviderAddress,
+		Metadata: map[string]string{
+			"order_uuid":    mapping.OrderUUID,
+			"offering_uuid": mapping.OfferingUUID,
+		},
+	}
+	_ = b.lifecycleMgr.RegisterResource(info)
 }
 
 func (b *WaldurBridge) resolveResourceUUID(ctx context.Context, allocationID string) (string, error) {

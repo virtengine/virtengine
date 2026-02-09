@@ -62,6 +62,18 @@ type MsgCreateSSOLinkage struct {
 
 	// TenantIDHash is the hash of the tenant ID (optional)
 	TenantIDHash string `json:"tenant_id_hash,omitempty"`
+
+	// EvidenceHash is the hash of the verification evidence payload
+	EvidenceHash string `json:"evidence_hash,omitempty"`
+
+	// EvidenceStorageBackend indicates where the encrypted evidence is stored
+	EvidenceStorageBackend string `json:"evidence_storage_backend,omitempty"`
+
+	// EvidenceStorageRef is a backend-specific reference to the encrypted evidence
+	EvidenceStorageRef string `json:"evidence_storage_ref,omitempty"`
+
+	// EvidenceMetadata contains optional evidence metadata
+	EvidenceMetadata map[string]string `json:"evidence_metadata,omitempty"`
 }
 
 // Route implements sdk.Msg
@@ -123,6 +135,10 @@ func (msg MsgCreateSSOLinkage) ValidateBasic() error {
 
 	if len(msg.AccountSignature) == 0 {
 		return ErrInvalidBindingSignature.Wrap("account_signature cannot be empty")
+	}
+
+	if err := validateEvidencePointer(msg.EvidenceHash, msg.EvidenceStorageBackend, msg.EvidenceStorageRef, true); err != nil {
+		return ErrInvalidSSO.Wrap(err.Error())
 	}
 
 	return nil

@@ -10,6 +10,9 @@ var (
 	_ sdk.Msg = &MsgRequestVerification{}
 	_ sdk.Msg = &MsgUpdateVerificationStatus{}
 	_ sdk.Msg = &MsgUpdateScore{}
+	_ sdk.Msg = &MsgSubmitSSOVerificationProof{}
+	_ sdk.Msg = &MsgSubmitEmailVerificationProof{}
+	_ sdk.Msg = &MsgSubmitSMSVerificationProof{}
 )
 
 // Route returns the route for the message
@@ -190,5 +193,107 @@ func (msg *MsgUpdateScore) ValidateBasic() error {
 // GetSigners returns the signers for the message
 func (msg *MsgUpdateScore) GetSigners() []sdk.AccAddress {
 	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{signer}
+}
+
+// Route returns the route for the message
+func (msg *MsgSubmitSSOVerificationProof) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg *MsgSubmitSSOVerificationProof) Type() string { return "submit_sso_verification_proof" }
+
+// ValidateBasic validates the message
+func (msg *MsgSubmitSSOVerificationProof) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.AccountAddress); err != nil {
+		return ErrInvalidAddress.Wrap("invalid account address")
+	}
+	if msg.LinkageId == "" {
+		return ErrInvalidSSO.Wrap("linkage_id cannot be empty")
+	}
+	if len(msg.AttestationData) == 0 {
+		return ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
+	}
+	if msg.EvidenceStorageRef == "" {
+		return ErrInvalidPayload.Wrap("evidence_storage_ref cannot be empty")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg *MsgSubmitSSOVerificationProof) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.AccountAddress)
+	return []sdk.AccAddress{signer}
+}
+
+// Route returns the route for the message
+func (msg *MsgSubmitEmailVerificationProof) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg *MsgSubmitEmailVerificationProof) Type() string { return "submit_email_verification_proof" }
+
+// ValidateBasic validates the message
+func (msg *MsgSubmitEmailVerificationProof) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.AccountAddress); err != nil {
+		return ErrInvalidAddress.Wrap("invalid account address")
+	}
+	if msg.VerificationId == "" {
+		return ErrInvalidEmail.Wrap("verification_id cannot be empty")
+	}
+	if msg.EmailHash == "" {
+		return ErrInvalidEmail.Wrap("email_hash cannot be empty")
+	}
+	if msg.Nonce == "" {
+		return ErrInvalidEmail.Wrap("nonce cannot be empty")
+	}
+	if len(msg.AttestationData) == 0 {
+		return ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
+	}
+	if len(msg.AccountSignature) == 0 {
+		return ErrInvalidBindingSignature.Wrap("account_signature cannot be empty")
+	}
+	if msg.EvidenceStorageRef == "" {
+		return ErrInvalidPayload.Wrap("evidence_storage_ref cannot be empty")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg *MsgSubmitEmailVerificationProof) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.AccountAddress)
+	return []sdk.AccAddress{signer}
+}
+
+// Route returns the route for the message
+func (msg *MsgSubmitSMSVerificationProof) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg *MsgSubmitSMSVerificationProof) Type() string { return "submit_sms_verification_proof" }
+
+// ValidateBasic validates the message
+func (msg *MsgSubmitSMSVerificationProof) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.AccountAddress); err != nil {
+		return ErrInvalidAddress.Wrap("invalid account address")
+	}
+	if msg.VerificationId == "" {
+		return ErrInvalidPhone.Wrap("verification_id cannot be empty")
+	}
+	if msg.PhoneHash == "" || msg.PhoneHashSalt == "" {
+		return ErrInvalidPhone.Wrap("phone_hash and phone_hash_salt cannot be empty")
+	}
+	if len(msg.AttestationData) == 0 {
+		return ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
+	}
+	if len(msg.AccountSignature) == 0 {
+		return ErrInvalidBindingSignature.Wrap("account_signature cannot be empty")
+	}
+	if msg.EvidenceStorageRef == "" {
+		return ErrInvalidPayload.Wrap("evidence_storage_ref cannot be empty")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg *MsgSubmitSMSVerificationProof) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.AccountAddress)
 	return []sdk.AccAddress{signer}
 }

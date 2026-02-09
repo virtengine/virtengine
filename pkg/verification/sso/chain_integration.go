@@ -12,11 +12,11 @@ import (
 
 // ChainClient defines the minimal interface for on-chain submissions.
 type ChainClient interface {
-	SubmitSSOLinkage(ctx context.Context, msg *veidtypes.MsgCreateSSOLinkage) error
+	SubmitSSOVerificationProof(ctx context.Context, msg *veidtypes.MsgSubmitSSOVerificationProof) error
 }
 
-// SubmitSSOLinkage submits the SSO linkage on-chain if a client is configured.
-func SubmitSSOLinkage(ctx context.Context, chainClient ChainClient, attestation *veidtypes.SSOAttestation, linkageID string, auditor audit.AuditLogger) error {
+// SubmitSSOVerificationProof submits the SSO verification proof on-chain if a client is configured.
+func SubmitSSOVerificationProof(ctx context.Context, chainClient ChainClient, attestation *veidtypes.SSOAttestation, linkageID string, auditor audit.AuditLogger) error {
 	if attestation == nil {
 		return fmt.Errorf("%w: nil attestation", ErrOnChainSubmissionFailed)
 	}
@@ -30,32 +30,18 @@ func SubmitSSOLinkage(ctx context.Context, chainClient ChainClient, attestation 
 		return fmt.Errorf("%w: marshal attestation: %v", ErrOnChainSubmissionFailed, err)
 	}
 
-	attestationSignature, err := attestation.GetProofBytes()
-	if err != nil {
-		return fmt.Errorf("%w: attestation signature: %v", ErrOnChainSubmissionFailed, err)
+	metadata := attestation.Metadata
+	if metadata == nil {
+		metadata = map[string]string{}
 	}
 
-	msg := &veidtypes.MsgCreateSSOLinkage{
-		AccountAddress:       attestation.LinkedAccountAddress,
-		LinkageID:            linkageID,
-		Provider:             attestation.ProviderType,
-		Issuer:               attestation.OIDCIssuer,
-		SubjectHash:          attestation.SubjectHash,
-		Nonce:                attestation.OIDCNonce,
-		AttestationData:      attestationBytes,
-		AttestationSignature: attestationSignature,
-		SignerFingerprint:    attestation.Issuer.KeyFingerprint,
-		AccountSignature:     attestation.LinkageSignature,
-	}
-
-	if !attestation.ExpiresAt.IsZero() {
-		msg.ExpiresAt = &attestation.ExpiresAt
-	}
-	if attestation.EmailDomainHash != "" {
-		msg.EmailDomainHash = attestation.EmailDomainHash
-	}
-	if attestation.TenantIDHash != "" {
-		msg.TenantIDHash = attestation.TenantIDHash
+	msg := &veidtypes.MsgSubmitSSOVerificationProof{
+		AccountAddress:         attestation.LinkedAccountAddress,
+		LinkageId:              linkageID,
+		AttestationData:        attestationBytes,
+		EvidenceStorageRef:     metadata["evidence_storage_ref"],
+		EvidenceStorageBackend: metadata["evidence_storage_backend"],
+		EvidenceMetadata:       metadata,
 	}
 
 	if err := msg.ValidateBasic(); err != nil {
@@ -67,13 +53,13 @@ func SubmitSSOLinkage(ctx context.Context, chainClient ChainClient, attestation 
 			Type:      audit.EventTypeVerificationStarted,
 			Timestamp: time.Now(),
 			Actor:     msg.AccountAddress,
-			Resource:  string(msg.Provider),
+			Resource:  string(attestation.ProviderType),
 			Action:    "submit_sso_linkage",
 			Outcome:   audit.OutcomePending,
 			Details: map[string]interface{}{
-				"issuer":       msg.Issuer,
-				"subject_hash": msg.SubjectHash,
-				"linkage_id":   msg.LinkageID,
+				"issuer":       attestation.OIDCIssuer,
+				"subject_hash": attestation.SubjectHash,
+				"linkage_id":   linkageID,
 			},
 		})
 	}
@@ -84,7 +70,7 @@ func SubmitSSOLinkage(ctx context.Context, chainClient ChainClient, attestation 
 				Type:      audit.EventTypeError,
 				Timestamp: time.Now(),
 				Actor:     msg.AccountAddress,
-				Resource:  string(msg.Provider),
+				Resource:  string(attestation.ProviderType),
 				Action:    "submit_sso_linkage",
 				Outcome:   audit.OutcomeFailure,
 				Details: map[string]interface{}{
@@ -95,13 +81,13 @@ func SubmitSSOLinkage(ctx context.Context, chainClient ChainClient, attestation 
 		return ErrChainClientNotConfigured
 	}
 
-	if err := chainClient.SubmitSSOLinkage(ctx, msg); err != nil {
+	if err := chainClient.SubmitSSOVerificationProof(ctx, msg); err != nil {
 		if auditor != nil {
 			auditor.Log(ctx, audit.Event{
 				Type:      audit.EventTypeVerificationFailed,
 				Timestamp: time.Now(),
 				Actor:     msg.AccountAddress,
-				Resource:  string(msg.Provider),
+				Resource:  string(attestation.ProviderType),
 				Action:    "submit_sso_linkage",
 				Outcome:   audit.OutcomeFailure,
 				Details: map[string]interface{}{
@@ -117,11 +103,11 @@ func SubmitSSOLinkage(ctx context.Context, chainClient ChainClient, attestation 
 			Type:      audit.EventTypeVerificationCompleted,
 			Timestamp: time.Now(),
 			Actor:     msg.AccountAddress,
-			Resource:  string(msg.Provider),
+			Resource:  string(attestation.ProviderType),
 			Action:    "submit_sso_linkage",
 			Outcome:   audit.OutcomeSuccess,
 			Details: map[string]interface{}{
-				"linkage_id": msg.LinkageID,
+				"linkage_id": linkageID,
 			},
 		})
 	}

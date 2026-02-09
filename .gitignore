@@ -78,8 +78,11 @@ nul
 _docs/ralph/tasks/
 .localnet*
 scripts/codex-monitor/logs/*
+scripts/codex-monitor/.cache/
 scripts/codex-monitor/codex-monitor.config.json
 scripts/codex-monitor/.codex-monitor.json
 scripts/codex-monitor/codex-monitor.json
 scripts/codex-monitor/.cache/
 pkg/provider_daemon/audit.log
+scripts/.cache/ve-orchestrator-copilot.json
+scripts/.cache/*

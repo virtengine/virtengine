@@ -137,6 +137,18 @@ type SSOLinkageMetadata struct {
 
 	// OrgIDHash is a hash of the organization ID if applicable (Microsoft tenant, etc.)
 	OrgIDHash string `json:"org_id_hash,omitempty"`
+
+	// EvidenceHash is the SHA256 hash of the verification evidence payload
+	EvidenceHash string `json:"evidence_hash,omitempty"`
+
+	// EvidenceStorageBackend indicates where the encrypted evidence is stored
+	EvidenceStorageBackend string `json:"evidence_storage_backend,omitempty"`
+
+	// EvidenceStorageRef is a backend-specific reference to the encrypted evidence
+	EvidenceStorageRef string `json:"evidence_storage_ref,omitempty"`
+
+	// EvidenceMetadata contains optional evidence metadata (non-sensitive)
+	EvidenceMetadata map[string]string `json:"evidence_metadata,omitempty"`
 }
 
 // NewSSOLinkageMetadata creates a new SSO linkage metadata record
@@ -149,14 +161,15 @@ func NewSSOLinkageMetadata(
 	verifiedAt time.Time,
 ) *SSOLinkageMetadata {
 	return &SSOLinkageMetadata{
-		Version:     SSOVerificationVersion,
-		LinkageID:   linkageID,
-		Provider:    provider,
-		Issuer:      issuer,
-		SubjectHash: HashSubjectID(subjectID),
-		Nonce:       nonce,
-		VerifiedAt:  verifiedAt,
-		Status:      SSOStatusVerified,
+		Version:          SSOVerificationVersion,
+		LinkageID:        linkageID,
+		Provider:         provider,
+		Issuer:           issuer,
+		SubjectHash:      HashSubjectID(subjectID),
+		Nonce:            nonce,
+		VerifiedAt:       verifiedAt,
+		Status:           SSOStatusVerified,
+		EvidenceMetadata: make(map[string]string),
 	}
 }
 
@@ -208,6 +221,10 @@ func (m *SSOLinkageMetadata) Validate() error {
 
 	if !IsValidSSOVerificationStatus(m.Status) {
 		return ErrInvalidSSO.Wrapf("invalid status: %s", m.Status)
+	}
+
+	if err := validateEvidencePointer(m.EvidenceHash, m.EvidenceStorageBackend, m.EvidenceStorageRef, m.Status == SSOStatusVerified); err != nil {
+		return ErrInvalidSSO.Wrap(err.Error())
 	}
 
 	return nil

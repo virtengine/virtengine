@@ -52,6 +52,8 @@ import (
 	"github.com/virtengine/virtengine/x/oracle"
 	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
 	"github.com/virtengine/virtengine/x/provider"
+	"github.com/virtengine/virtengine/x/resources"
+	resourcestypes "github.com/virtengine/virtengine/x/resources/types"
 	"github.com/virtengine/virtengine/x/review"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	"github.com/virtengine/virtengine/x/roles"
@@ -85,6 +87,7 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		mfa.AppModuleBasic{},
 		config.AppModuleBasic{},
 		hpc.AppModuleBasic{},
+		resources.AppModuleBasic{},
 		benchmark.AppModuleBasic{},
 		enclave.AppModuleBasic{},
 		settlement.AppModuleBasic{},
@@ -138,6 +141,7 @@ func OrderInitGenesis(_ []string) []string {
 		mfatypes.ModuleName,
 		configtypes.ModuleName,
 		hpctypes.ModuleName,
+		resourcestypes.ModuleName,
 		benchmarktypes.ModuleName,
 		enclavetypes.ModuleName,
 		settlementtypes.ModuleName,

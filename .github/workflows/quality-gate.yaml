@@ -132,3 +132,18 @@ jobs:
             ./pkg/workflow/... \
             ./x/enclave/... \
             ./x/encryption/...
+
+  agents-docs:
+    name: agents-docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate AGENTS documentation
+        run: node scripts/validate-agents-docs.mjs

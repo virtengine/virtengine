@@ -229,6 +229,120 @@ func (q GRPCQuerier) Params(goCtx context.Context, req *types.QueryParamsRequest
 	}, nil
 }
 
+// SSOLinkage returns the SSO linkage metadata for an account or linkage ID.
+func (q GRPCQuerier) SSOLinkage(goCtx context.Context, req *types.QuerySSOLinkageRequest) (*types.QuerySSOLinkageResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	var linkage *types.SSOLinkageMetadata
+	var found bool
+
+	if req.LinkageId != "" {
+		linkage, found = q.GetSSOLinkage(ctx, req.LinkageId)
+	} else {
+		if req.AccountAddress == "" {
+			return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+		}
+		if req.Provider == "" {
+			return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
+		}
+		if _, err := sdk.AccAddressFromBech32(req.AccountAddress); err != nil {
+			return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+		}
+		linkageID := q.GetSSOLinkageByAccountAndProvider(ctx, req.AccountAddress, types.SSOProviderType(req.Provider))
+		if linkageID != "" {
+			linkage, found = q.GetSSOLinkage(ctx, linkageID)
+		}
+	}
+
+	if !found || linkage == nil {
+		return &types.QuerySSOLinkageResponse{Linkage: nil}, nil
+	}
+
+	return &types.QuerySSOLinkageResponse{
+		Linkage: types.SSOLinkageToProto(linkage),
+	}, nil
+}
+
+// EmailVerification returns the email verification record by ID or account/email hash.
+func (q GRPCQuerier) EmailVerification(goCtx context.Context, req *types.QueryEmailVerificationRequest) (*types.QueryEmailVerificationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	var record *types.EmailVerificationRecord
+	var found bool
+
+	if req.VerificationId != "" {
+		record, found = q.GetEmailVerificationRecord(ctx, req.VerificationId)
+	} else {
+		if req.AccountAddress == "" {
+			return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+		}
+		if req.EmailHash == "" {
+			return nil, status.Error(codes.InvalidArgument, "email_hash cannot be empty")
+		}
+		if _, err := sdk.AccAddressFromBech32(req.AccountAddress); err != nil {
+			return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+		}
+		verificationID, ok := q.GetEmailVerificationByAccountAndHash(ctx, req.AccountAddress, req.EmailHash)
+		if ok {
+			record, found = q.GetEmailVerificationRecord(ctx, verificationID)
+		}
+	}
+
+	if !found || record == nil {
+		return &types.QueryEmailVerificationResponse{Record: nil}, nil
+	}
+
+	return &types.QueryEmailVerificationResponse{
+		Record: types.EmailVerificationRecordToProto(record),
+	}, nil
+}
+
+// SMSVerification returns the SMS verification record by ID or account/phone hash.
+func (q GRPCQuerier) SMSVerification(goCtx context.Context, req *types.QuerySMSVerificationRequest) (*types.QuerySMSVerificationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	var record *types.SMSVerificationRecord
+	var found bool
+
+	if req.VerificationId != "" {
+		record, found = q.GetSMSVerificationRecord(ctx, req.VerificationId)
+	} else {
+		if req.AccountAddress == "" {
+			return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+		}
+		if req.PhoneHash == "" {
+			return nil, status.Error(codes.InvalidArgument, "phone_hash cannot be empty")
+		}
+		if _, err := sdk.AccAddressFromBech32(req.AccountAddress); err != nil {
+			return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+		}
+		verificationID, ok := q.GetSMSVerificationByAccountAndHash(ctx, req.AccountAddress, req.PhoneHash)
+		if ok {
+			record, found = q.GetSMSVerificationRecord(ctx, verificationID)
+		}
+	}
+
+	if !found || record == nil {
+		return &types.QuerySMSVerificationResponse{Record: nil}, nil
+	}
+
+	return &types.QuerySMSVerificationResponse{
+		Record: types.SMSVerificationRecordToProto(record),
+	}, nil
+}
+
 // IdentityWallet returns the identity wallet for an address
 func (q GRPCQuerier) IdentityWallet(goCtx context.Context, req *types.QueryIdentityWalletRequest) (*types.QueryIdentityWalletResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)

@@ -17,6 +17,14 @@ import (
 
 func TestSSOLinkageMetadata_Validate(t *testing.T) {
 	now := time.Now()
+	evidenceHash := strings.Repeat("a", 64)
+
+	withEvidence := func(metadata *types.SSOLinkageMetadata) *types.SSOLinkageMetadata {
+		metadata.EvidenceHash = evidenceHash
+		metadata.EvidenceStorageBackend = string(types.StorageBackendWaldur)
+		metadata.EvidenceStorageRef = "vault://evidence/sso"
+		return metadata
+	}
 
 	tests := []struct {
 		name     string
@@ -25,50 +33,50 @@ func TestSSOLinkageMetadata_Validate(t *testing.T) {
 	}{
 		{
 			name: "valid Google SSO",
-			metadata: types.NewSSOLinkageMetadata(
+			metadata: withEvidence(types.NewSSOLinkageMetadata(
 				"linkage-123",
 				types.SSOProviderGoogle,
 				"https://accounts.google.com",
 				"123456789",
 				"random-nonce",
 				now,
-			),
+			)),
 			wantErr: false,
 		},
 		{
 			name: "valid Microsoft SSO",
-			metadata: types.NewSSOLinkageMetadata(
+			metadata: withEvidence(types.NewSSOLinkageMetadata(
 				"linkage-456",
 				types.SSOProviderMicrosoft,
 				"https://login.microsoftonline.com/tenant",
 				"user-oid-12345",
 				"nonce-abc",
 				now,
-			),
+			)),
 			wantErr: false,
 		},
 		{
 			name: "valid GitHub SSO",
-			metadata: types.NewSSOLinkageMetadata(
+			metadata: withEvidence(types.NewSSOLinkageMetadata(
 				"linkage-789",
 				types.SSOProviderGitHub,
 				"https://github.com",
 				"12345678",
 				"nonce-def",
 				now,
-			),
+			)),
 			wantErr: false,
 		},
 		{
 			name: "valid custom OIDC provider",
-			metadata: types.NewSSOLinkageMetadata(
+			metadata: withEvidence(types.NewSSOLinkageMetadata(
 				"linkage-custom",
 				types.SSOProviderOIDC,
 				"https://auth.custom.com",
 				"custom-sub-123",
 				"nonce-ghi",
 				now,
-			),
+			)),
 			wantErr: false,
 		},
 		{

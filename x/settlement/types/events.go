@@ -24,6 +24,12 @@ const (
 	EventTypeStakingRewardsDistributed      = "staking_rewards_distributed"
 	EventTypeProviderRewardsDistributed     = "provider_rewards_distributed"
 	EventTypeVerificationRewardsDistributed = "verification_rewards_distributed"
+
+	// Fiat conversion events
+	EventTypeFiatConversionRequested  = "fiat_conversion_requested"
+	EventTypeFiatConversionCompleted  = "fiat_conversion_completed"
+	EventTypeFiatConversionFailed     = "fiat_conversion_failed"
+	EventTypeFiatConversionReconciled = "fiat_conversion_reconciled"
 )
 
 // Event attribute keys
@@ -73,6 +79,12 @@ const (
 	AttributeKeySettlementType = "settlement_type"
 	AttributeKeyIsFinal        = "is_final"
 	AttributeKeyBlockHeight    = "block_height"
+
+	// Fiat conversion attributes
+	AttributeKeyConversionID  = "conversion_id"
+	AttributeKeyFiatCurrency  = "fiat_currency"
+	AttributeKeyFiatAmount    = "fiat_amount"
+	AttributeKeyPaymentMethod = "payment_method"
 )
 
 // EventEscrowCreated is emitted when an escrow is created
@@ -157,6 +169,42 @@ type EventUsageRecorded struct {
 	RecordedAt int64  `json:"recorded_at"`
 }
 
+// EventFiatConversionRequested is emitted when a fiat conversion is requested
+type EventFiatConversionRequested struct {
+	ConversionID  string `json:"conversion_id"`
+	InvoiceID     string `json:"invoice_id,omitempty"`
+	SettlementID  string `json:"settlement_id,omitempty"`
+	Provider      string `json:"provider"`
+	FiatCurrency  string `json:"fiat_currency"`
+	PaymentMethod string `json:"payment_method"`
+	RequestedAt   int64  `json:"requested_at"`
+}
+
+// EventFiatConversionCompleted is emitted when conversion completes
+type EventFiatConversionCompleted struct {
+	ConversionID string `json:"conversion_id"`
+	Provider     string `json:"provider"`
+	FiatCurrency string `json:"fiat_currency"`
+	FiatAmount   string `json:"fiat_amount"`
+	CompletedAt  int64  `json:"completed_at"`
+}
+
+// EventFiatConversionFailed is emitted when conversion fails
+type EventFiatConversionFailed struct {
+	ConversionID string `json:"conversion_id"`
+	Provider     string `json:"provider"`
+	Reason       string `json:"reason"`
+	FailedAt     int64  `json:"failed_at"`
+}
+
+// EventFiatConversionReconciled is emitted when conversion status is reconciled
+type EventFiatConversionReconciled struct {
+	ConversionID string `json:"conversion_id"`
+	Provider     string `json:"provider"`
+	State        string `json:"state"`
+	ReconciledAt int64  `json:"reconciled_at"`
+}
+
 // EventRewardsDistributed is emitted when rewards are distributed
 type EventRewardsDistributed struct {
 	DistributionID string `json:"distribution_id"`
@@ -176,28 +224,42 @@ type EventRewardsClaimed struct {
 }
 
 // ProtoMessage stubs for Event types
-func (*EventEscrowCreated) ProtoMessage()      {}
-func (*EventEscrowActivated) ProtoMessage()    {}
-func (*EventEscrowReleased) ProtoMessage()     {}
-func (*EventEscrowRefunded) ProtoMessage()     {}
-func (*EventEscrowDisputed) ProtoMessage()     {}
-func (*EventEscrowExpired) ProtoMessage()      {}
-func (*EventRewardsDistributed) ProtoMessage() {}
-func (*EventRewardsClaimed) ProtoMessage()     {}
-func (*EventOrderSettled) ProtoMessage()       {}
-func (*EventUsageRecorded) ProtoMessage()      {}
+func (*EventEscrowCreated) ProtoMessage()            {}
+func (*EventEscrowActivated) ProtoMessage()          {}
+func (*EventEscrowReleased) ProtoMessage()           {}
+func (*EventEscrowRefunded) ProtoMessage()           {}
+func (*EventEscrowDisputed) ProtoMessage()           {}
+func (*EventEscrowExpired) ProtoMessage()            {}
+func (*EventRewardsDistributed) ProtoMessage()       {}
+func (*EventRewardsClaimed) ProtoMessage()           {}
+func (*EventOrderSettled) ProtoMessage()             {}
+func (*EventUsageRecorded) ProtoMessage()            {}
+func (*EventFiatConversionRequested) ProtoMessage()  {}
+func (*EventFiatConversionCompleted) ProtoMessage()  {}
+func (*EventFiatConversionFailed) ProtoMessage()     {}
+func (*EventFiatConversionReconciled) ProtoMessage() {}
 
 // Reset stubs for Event types
-func (e *EventEscrowCreated) Reset()      { *e = EventEscrowCreated{} }
-func (e *EventEscrowActivated) Reset()    { *e = EventEscrowActivated{} }
-func (e *EventEscrowReleased) Reset()     { *e = EventEscrowReleased{} }
-func (e *EventEscrowRefunded) Reset()     { *e = EventEscrowRefunded{} }
-func (e *EventEscrowDisputed) Reset()     { *e = EventEscrowDisputed{} }
-func (e *EventEscrowExpired) Reset()      { *e = EventEscrowExpired{} }
-func (e *EventRewardsDistributed) Reset() { *e = EventRewardsDistributed{} }
-func (e *EventRewardsClaimed) Reset()     { *e = EventRewardsClaimed{} }
-func (e *EventOrderSettled) Reset()       { *e = EventOrderSettled{} }
-func (e *EventUsageRecorded) Reset()      { *e = EventUsageRecorded{} }
+func (e *EventEscrowCreated) Reset()            { *e = EventEscrowCreated{} }
+func (e *EventEscrowActivated) Reset()          { *e = EventEscrowActivated{} }
+func (e *EventEscrowReleased) Reset()           { *e = EventEscrowReleased{} }
+func (e *EventEscrowRefunded) Reset()           { *e = EventEscrowRefunded{} }
+func (e *EventEscrowDisputed) Reset()           { *e = EventEscrowDisputed{} }
+func (e *EventEscrowExpired) Reset()            { *e = EventEscrowExpired{} }
+func (e *EventRewardsDistributed) Reset()       { *e = EventRewardsDistributed{} }
+func (e *EventRewardsClaimed) Reset()           { *e = EventRewardsClaimed{} }
+func (e *EventOrderSettled) Reset()             { *e = EventOrderSettled{} }
+func (e *EventUsageRecorded) Reset()            { *e = EventUsageRecorded{} }
+func (e *EventFiatConversionRequested) Reset()  { *e = EventFiatConversionRequested{} }
+func (e *EventFiatConversionCompleted) Reset()  { *e = EventFiatConversionCompleted{} }
+func (e *EventFiatConversionFailed) Reset()     { *e = EventFiatConversionFailed{} }
+func (e *EventFiatConversionReconciled) Reset() { *e = EventFiatConversionReconciled{} }
+
+// String stubs for Fiat Conversion Event types
+func (e *EventFiatConversionRequested) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventFiatConversionCompleted) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventFiatConversionFailed) String() string     { return fmt.Sprintf("%+v", *e) }
+func (e *EventFiatConversionReconciled) String() string { return fmt.Sprintf("%+v", *e) }
 
 // String stubs for Event types
 func (e *EventEscrowCreated) String() string      { return fmt.Sprintf("%+v", *e) }

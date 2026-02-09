@@ -225,6 +225,12 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 			return nil, err
 		}
 
+		if pref, ok := k.GetFiatPayoutPreference(ctx, settlement.Provider); ok && pref.Enabled {
+			if _, err := k.createConversionFromPreference(ctx, *settlement, invoiceID, pref); err != nil {
+				return nil, err
+			}
+		}
+
 		if _, err := k.ExecutePayout(ctx, invoiceID, settlement.SettlementID); err != nil {
 			return nil, err
 		}

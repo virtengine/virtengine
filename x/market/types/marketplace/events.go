@@ -345,6 +345,12 @@ type ProvisionRequestedEvent struct {
 
 	// EncryptedConfigRef is a reference to the encrypted configuration
 	EncryptedConfigRef string `json:"encrypted_config_ref,omitempty"`
+
+	// ServiceType is the standardized service type (vm/container)
+	ServiceType string `json:"service_type,omitempty"`
+
+	// Specifications contains standardized service specifications
+	Specifications map[string]string `json:"specifications,omitempty"`
 }
 
 // NewProvisionRequestedEvent creates a new ProvisionRequestedEvent
@@ -505,6 +511,58 @@ func NewOrderStateChangedEventAt(order *Order, oldState OrderState, reason strin
 		OfferingID:      order.OfferingID.String(),
 		OldState:        oldState.String(),
 		NewState:        order.State.String(),
+		Reason:          reason,
+	}
+}
+
+// AllocationStateChangedEvent is emitted when allocation state changes.
+type AllocationStateChangedEvent struct {
+	BaseMarketplaceEvent
+
+	// AllocationID is the allocation ID.
+	AllocationID string `json:"allocation_id"`
+
+	// OrderID is the order ID.
+	OrderID string `json:"order_id"`
+
+	// ProviderAddress is the provider address.
+	ProviderAddress string `json:"provider_address"`
+
+	// OfferingID is the offering ID.
+	OfferingID string `json:"offering_id"`
+
+	// OldState is the previous state.
+	OldState string `json:"old_state"`
+
+	// NewState is the new state.
+	NewState string `json:"new_state"`
+
+	// Reason is the state change reason.
+	Reason string `json:"reason,omitempty"`
+}
+
+// NewAllocationStateChangedEvent creates a new AllocationStateChangedEvent.
+func NewAllocationStateChangedEvent(allocation *Allocation, oldState AllocationState, reason string, blockHeight int64, sequence uint64) *AllocationStateChangedEvent {
+	return NewAllocationStateChangedEventAt(allocation, oldState, reason, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewAllocationStateChangedEventAt creates a new AllocationStateChangedEvent at a specific time.
+func NewAllocationStateChangedEventAt(allocation *Allocation, oldState AllocationState, reason string, blockHeight int64, sequence uint64, now time.Time) *AllocationStateChangedEvent {
+	timestamp := now.UTC()
+	return &AllocationStateChangedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventAllocationStateChanged,
+			EventID:     fmt.Sprintf("evt_allocation_state_%s_%d", allocation.ID.String(), sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		AllocationID:    allocation.ID.String(),
+		OrderID:         allocation.ID.OrderID.String(),
+		ProviderAddress: allocation.ProviderAddress,
+		OfferingID:      allocation.OfferingID.String(),
+		OldState:        oldState.String(),
+		NewState:        allocation.State.String(),
 		Reason:          reason,
 	}
 }

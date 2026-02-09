@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 
 	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
+	"github.com/virtengine/virtengine/x/settlement/client/cli"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -86,7 +87,7 @@ func (AppModuleBasic) GetTxCmd() *cobra.Command {
 
 // GetQueryCmd returns the root query command for the settlement module.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetQueryCmd()
 }
 
 // AppModule implements an application module for the settlement module.

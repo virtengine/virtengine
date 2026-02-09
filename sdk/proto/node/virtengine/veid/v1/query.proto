@@ -119,6 +119,27 @@ service Query {
     option (google.api.http).get = "/virtengine/veid/v1/params";
   }
 
+  // SSOLinkage queries SSO linkage metadata
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SSOLinkage(QuerySSOLinkageRequest) returns (QuerySSOLinkageResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/sso/linkage/{linkage_id}";
+  }
+
+  // EmailVerification queries an email verification record
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc EmailVerification(QueryEmailVerificationRequest) returns (QueryEmailVerificationResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/email/{verification_id}";
+  }
+
+  // SMSVerification queries an SMS verification record
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SMSVerification(QuerySMSVerificationRequest) returns (QuerySMSVerificationResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/sms/{verification_id}";
+  }
+
   // BorderlineParams queries the borderline parameters
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
@@ -1280,5 +1301,90 @@ message QueryModelParamsResponse {
     (gogoproto.nullable) = false,
     (gogoproto.jsontag) = "params",
     (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// ======================================================================
+// Web-Scope Verification Query Messages
+// ======================================================================
+
+// QuerySSOLinkageRequest is the request type for querying SSO linkage metadata.
+message QuerySSOLinkageRequest {
+  string linkage_id = 1 [
+    (gogoproto.jsontag) = "linkage_id",
+    (gogoproto.moretags) = "yaml:\"linkage_id\""
+  ];
+
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string provider = 3 [
+    (gogoproto.jsontag) = "provider",
+    (gogoproto.moretags) = "yaml:\"provider\""
+  ];
+}
+
+// QuerySSOLinkageResponse is the response type for querying SSO linkage metadata.
+message QuerySSOLinkageResponse {
+  SSOLinkageMetadata linkage = 1 [
+    (gogoproto.jsontag) = "linkage",
+    (gogoproto.moretags) = "yaml:\"linkage\""
+  ];
+}
+
+// QueryEmailVerificationRequest is the request type for email verification queries.
+message QueryEmailVerificationRequest {
+  string verification_id = 1 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string email_hash = 3 [
+    (gogoproto.jsontag) = "email_hash",
+    (gogoproto.moretags) = "yaml:\"email_hash\""
+  ];
+}
+
+// QueryEmailVerificationResponse is the response type for email verification queries.
+message QueryEmailVerificationResponse {
+  EmailVerificationRecord record = 1 [
+    (gogoproto.jsontag) = "record",
+    (gogoproto.moretags) = "yaml:\"record\""
+  ];
+}
+
+// QuerySMSVerificationRequest is the request type for SMS verification queries.
+message QuerySMSVerificationRequest {
+  string verification_id = 1 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string phone_hash = 3 [
+    (gogoproto.jsontag) = "phone_hash",
+    (gogoproto.moretags) = "yaml:\"phone_hash\""
+  ];
+}
+
+// QuerySMSVerificationResponse is the response type for SMS verification queries.
+message QuerySMSVerificationResponse {
+  SMSVerificationRecord record = 1 [
+    (gogoproto.jsontag) = "record",
+    (gogoproto.moretags) = "yaml:\"record\""
   ];
 }

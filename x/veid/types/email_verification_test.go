@@ -156,6 +156,26 @@ func TestEmailVerificationRecord_Validate(t *testing.T) {
 	}
 }
 
+func TestEmailVerificationRecord_EvidenceRequiredForVerified(t *testing.T) {
+	now := time.Now()
+	record := types.NewEmailVerificationRecord(
+		"email-verified",
+		"cosmos1abc...",
+		"user@example.com",
+		"nonce-12345",
+		now,
+	)
+	record.Status = types.EmailStatusVerified
+	record.VerifiedAt = &now
+
+	require.Error(t, record.Validate())
+
+	record.EvidenceHash = strings.Repeat("a", 64)
+	record.EvidenceStorageBackend = string(types.StorageBackendWaldur)
+	record.EvidenceStorageRef = "vault://email/evidence"
+	require.NoError(t, record.Validate())
+}
+
 func TestHashEmail(t *testing.T) {
 	tests := []struct {
 		name  string

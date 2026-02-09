@@ -97,6 +97,21 @@ var (
 	// ErrValidatorOnly is returned when a non-validator attempts a validator-only action
 	ErrValidatorOnly = errorsmod.Register(ModuleName, 1029, "action restricted to validators")
 
+	// ErrInvalidBindingSignature is returned when wallet binding signature is invalid
+	ErrInvalidBindingSignature = errorsmod.Register(ModuleName, 1046, "invalid wallet binding signature")
+
+	// ErrInvalidSSO is returned for SSO verification errors
+	ErrInvalidSSO = errorsmod.Register(ModuleName, 1078, "invalid SSO verification")
+
+	// ErrInvalidEmail is returned for email verification errors
+	ErrInvalidEmail = errorsmod.Register(ModuleName, 1086, "invalid email verification")
+
+	// ErrInvalidPhone is returned for phone/SMS verification errors
+	ErrInvalidPhone = errorsmod.Register(ModuleName, 1113, "invalid phone verification")
+
+	// ErrInvalidAttestation is returned when an attestation is malformed or invalid
+	ErrInvalidAttestation = errorsmod.Register(ModuleName, 1240, "invalid verification attestation")
+
 	// ============================================================================
 	// Extended SDK Errors (1300+) - for appeal, compliance, model, wallet, borderline
 	// These use 1300+ range to avoid conflicts with x/veid/types errors (1030-1299)

@@ -14,6 +14,8 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/testutil"
 )
 
+const testValidatorAddress = "virtengine1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd7fy4f"
+
 func (s *EnclaveCLITestSuite) mockQueryContext(msg proto.Message) client.Context {
 	bz, _ := s.encCfg.Codec.Marshal(msg)
 	c := testutil.NewMockCometRPC(abci.ResponseQuery{Value: bz})
@@ -21,8 +23,6 @@ func (s *EnclaveCLITestSuite) mockQueryContext(msg proto.Message) client.Context
 }
 
 func (s *EnclaveCLITestSuite) TestQueryEnclaveIdentityCmd() {
-	validator := "virtengine1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd7fy4f"
-
 	testCases := []struct {
 		name      string
 		ctxGen    func() client.Context
@@ -39,11 +39,11 @@ func (s *EnclaveCLITestSuite) TestQueryEnclaveIdentityCmd() {
 			"valid query",
 			func() client.Context {
 				return s.mockQueryContext(&enclavetypes.QueryEnclaveIdentityResponse{
-					Identity: &enclavetypes.EnclaveIdentity{ValidatorAddress: validator},
+					Identity: &enclavetypes.EnclaveIdentity{ValidatorAddress: testValidatorAddress},
 				})
 			},
 			cli.TestFlags().
-				With(validator).
+				With(testValidatorAddress).
 				WithOutputJSON(),
 			false,
 		},
