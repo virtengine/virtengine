@@ -26,8 +26,9 @@ Last updated: 2026-02-09
 - Market query/indexing has TODO stubs and incomplete gRPC coverage.
 - Settlement lacks partial refund/dispute handling and full usage acknowledgment lifecycles.
 - HPC billing penalties and node-level reward distribution are stubbed.
-- Security remediation backlog (command injection, path traversal, TLS, weak crypto, math/rand, unsafe pointers) remains open.
+- Security remediation backlog (command injection, path traversal, TLS, weak crypto, math/rand, unsafe pointers, bulk alerts) remains open.
 - Provider daemon lifecycle queue needs verification against doc and durability tests.
+- Additional module gaps noted: MFA genesis validation/tests, staking types tests, gov router bug, simulation config cleanup, provider adapter wiring consistency, ops/compliance runbook coverage.
 
 ## Backlog Tasks Added (Planned)
 - [xl] feat(enclave): measurement allowlist governance & attestation integration 50A — planned
