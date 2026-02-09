@@ -6,6 +6,7 @@ use (
 	./infra/terraform/tests
 	./infra/dr/tests
 	./sdk/go
+	./sdk/github.com/virtengine/virtengine/sdk
 	./sdk/specs
 )
 
