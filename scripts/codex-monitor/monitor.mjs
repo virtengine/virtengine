@@ -1,5 +1,5 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, watch, writeFileSync, appendFileSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -68,8 +68,6 @@ import {
   persistFleetState,
 } from "./fleet-coordinator.mjs";
 import {
-  resolveExecutorForTask,
-  formatComplexityDecision,
   getComplexityMatrix,
   assessCompletionConfidence,
   classifyComplexity,
@@ -890,7 +888,28 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 const errorFrequency = new Map();
 let loopFixInProgress = false;
 
+// Infrastructure error patterns that should NEVER trigger loop-fix autofix.
+// These are transient git/rebase failures handled by persistent cooldowns.
+const infraErrorPatterns = [
+  /Direct rebase failed/i,
+  /checkout failed/i,
+  /rebase cooldown/i,
+  /worktree.*has (rebase in progress|uncommitted changes)/i,
+  /No worktree found/i,
+  /VK rebase (failed|unavailable)/i,
+  /git fetch failed in worktree/i,
+  /Cannot rebase/i,
+  /merge conflict.*not auto-resolvable/i,
+];
+
+function isInfraError(line) {
+  return infraErrorPatterns.some((p) => p.test(line));
+}
+
 function trackErrorFrequency(line) {
+  // Skip infrastructure errors — they have their own cooldown/retry logic
+  if (isInfraError(line)) return;
+
   const fingerprint = getErrorFingerprint(line);
   if (!fingerprint) return;
 
@@ -1004,6 +1023,20 @@ const errorNoisePatterns = [
   // Telegram 409 conflicts (harmless, handled by auto-disable)
   /telegram getUpdates failed: 409/i,
   /getUpdates failed: 409/i,
+  // ── Infrastructure failures: rebase/checkout/worktree issues ──
+  // These are transient git infra failures, NOT code bugs.
+  // The orchestrator handles them with cooldowns; do NOT trigger autofix.
+  /Direct rebase failed:.*checkout failed/i,
+  /Direct rebase failed:.*merge conflict/i,
+  /Direct rebase failed:.*push failed/i,
+  /Direct rebase failed:.*setting cooldown/i,
+  /Direct merge-rebase (succeeded|failed)/i,
+  /Branch .* is on rebase cooldown/i,
+  /Worktree .* has (rebase in progress|uncommitted changes)/i,
+  /No worktree found for .* — using VK API/i,
+  /Cannot rebase: (working tree is dirty|git rebase already in progress)/i,
+  /VK rebase (failed|requested|unavailable)/i,
+  /git fetch failed in worktree/i,
 ];
 
 const vkErrorPatterns = [
@@ -2906,15 +2939,7 @@ async function checkMergedPRsAndUpdateTasks() {
               const fullPrInfo = await getPullRequestByNumber(branchPr.number);
               const isConflicting =
                 fullPrInfo?.mergeable === "CONFLICTING" ||
-                ful
-                // Register as dirty for slot reservation + file-overlap
-                registerDirtyTask({
-                  taskId: task.id,
-                  prNumber: branchPr.number,
-                  branch: cand.branch,
-                  title: task.title,
-                  files: fullPrInfo?.files?.map((f) => f.filename || f) || [],
-                });lPrInfo?.mergeable === false ||
+                fullPrInfo?.mergeable === false ||
                 fullPrInfo?.mergeable_state === "dirty" ||
                 fullPrInfo?.mergeStateStatus === "DIRTY";
               if (isConflicting) {
@@ -2940,6 +2965,11 @@ async function checkMergedPRsAndUpdateTasks() {
       if (resolved) continue;
 
       // ── Conflict resolution for open PRs with merge conflicts ──
+      // DEDUPLICATION: The PS1 orchestrator owns direct rebase with persistent
+      // disk-based cooldowns (survives restarts). monitor.mjs only defers to
+      // the orchestrator by logging and registering the dirty task for slot
+      // reservation. We do NOT trigger smartPRFlow("conflict") here to avoid
+      // the thundering herd where both systems race to fix the same PR.
       if (conflictCandidates.length > 0) {
         const lastConflictCheck = conflictResolutionCooldown.get(task.id);
         const onCooldown =
@@ -2959,28 +2989,18 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
-            // ── Force HIGH complexity tier for dirty/conflict tasks ──
-            const dirtyComplexity = classifyComplexity({
-              sizeLabel: "xl",
-              title: `[CONFLICT] ${task.title}`,
-              description: "Merge conflict resolution — forced HIGH tier",
-            });
-            const dirtyProfile = resolveExecutorForTask(
-              { ...task, title: `[CONFLICT] ${task.title}` },
-              { executor: "CODEX", variant: "GPT51_CODEX_MAX" },
-              config.complexityRouting,
-            );
-            const complexityLog = formatComplexityDecision(dirtyProfile);
             console.log(
-              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution [${complexityLog}]`,
+              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — deferring to orchestrator (persistent cooldown)`,
             );
             conflictResolutionCooldown.set(task.id, Date.now());
             recordResolutionAttempt(task.id);
-            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
-            void smartPRFlow(resolveAttemptId, shortId, "conflict");
+            // Do NOT call smartPRFlow("conflict") here — the PS1 orchestrator
+            // handles rebase with persistent disk-based cooldowns. Calling both
+            // creates a thundering herd that compounds failures.
+            // The orchestrator will pick this up in its next Sync-TrackedAttempts cycle.
             if (telegramToken && telegramChatId) {
               void sendTelegramMessage(
-                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution [${dirtyComplexity.tier}]`,
+                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — orchestrator will handle rebase (attempt ${shortId})`,
               );
             }
           } else {
@@ -6370,6 +6390,42 @@ async function startProcess() {
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
   const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
 
+  // ── Agent log streaming: fan out per-attempt log lines to .cache/agent-logs/ ──
+  const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
+  try {
+    await mkdir(agentLogDir, { recursive: true });
+  } catch {
+    /* best effort */
+  }
+  /** @type {Map<string, import('fs').WriteStream>} */
+  const agentLogStreams = new Map();
+  const AGENT_LOG_PATTERN =
+    /\b([0-9a-f]{8})(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\b/i;
+
+  /**
+   * Stream a log line to the per-attempt log file if it contains an attempt short ID.
+   * @param {string} line - The log line
+   */
+  function streamToAgentLog(line) {
+    const match = line.match(AGENT_LOG_PATTERN);
+    if (!match) return;
+    const shortId = match[1].toLowerCase();
+    // Filter out common false positives (git SHAs in non-attempt context)
+    if (
+      line.includes("HEAD") ||
+      line.includes("commit ") ||
+      line.includes("Deleted branch")
+    ) {
+      return;
+    }
+    const logPath = resolve(agentLogDir, `${shortId}.log`);
+    try {
+      appendFileSync(logPath, `${line}\n`);
+    } catch {
+      /* best effort — non-critical */
+    }
+  }
+
   // Guard: verify script exists before spawning to avoid cryptic exit 64
   if (!existsSync(scriptPath)) {
     console.error(
@@ -6409,6 +6465,8 @@ async function startProcess() {
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
     for (const line of lines) {
+      // ── Agent log streaming: fan out to per-attempt log files ──
+      streamToAgentLog(line);
       if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
         notifyErrorLine(line);
       }
