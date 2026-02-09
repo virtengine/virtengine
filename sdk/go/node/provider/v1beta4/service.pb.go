@@ -77,6 +77,12 @@ type MsgClient interface {
 	GenerateDomainVerificationToken(ctx context.Context, in *MsgGenerateDomainVerificationToken, opts ...grpc.CallOption) (*MsgGenerateDomainVerificationTokenResponse, error)
 	// VerifyProviderDomain verifies a provider's domain via DNS TXT record.
 	VerifyProviderDomain(ctx context.Context, in *MsgVerifyProviderDomain, opts ...grpc.CallOption) (*MsgVerifyProviderDomainResponse, error)
+	// RequestDomainVerification requests a verification token for a provider domain.
+	RequestDomainVerification(ctx context.Context, in *MsgRequestDomainVerification, opts ...grpc.CallOption) (*MsgRequestDomainVerificationResponse, error)
+	// ConfirmDomainVerification confirms a verification proof for a provider domain.
+	ConfirmDomainVerification(ctx context.Context, in *MsgConfirmDomainVerification, opts ...grpc.CallOption) (*MsgConfirmDomainVerificationResponse, error)
+	// RevokeDomainVerification revokes a provider domain verification.
+	RevokeDomainVerification(ctx context.Context, in *MsgRevokeDomainVerification, opts ...grpc.CallOption) (*MsgRevokeDomainVerificationResponse, error)
 }
 
 type msgClient struct {
@@ -132,6 +138,33 @@ func (c *msgClient) VerifyProviderDomain(ctx context.Context, in *MsgVerifyProvi
 	return out, nil
 }
 
+func (c *msgClient) RequestDomainVerification(ctx context.Context, in *MsgRequestDomainVerification, opts ...grpc.CallOption) (*MsgRequestDomainVerificationResponse, error) {
+	out := new(MsgRequestDomainVerificationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.provider.v1beta4.Msg/RequestDomainVerification", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) ConfirmDomainVerification(ctx context.Context, in *MsgConfirmDomainVerification, opts ...grpc.CallOption) (*MsgConfirmDomainVerificationResponse, error) {
+	out := new(MsgConfirmDomainVerificationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.provider.v1beta4.Msg/ConfirmDomainVerification", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) RevokeDomainVerification(ctx context.Context, in *MsgRevokeDomainVerification, opts ...grpc.CallOption) (*MsgRevokeDomainVerificationResponse, error) {
+	out := new(MsgRevokeDomainVerificationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.provider.v1beta4.Msg/RevokeDomainVerification", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 type MsgServer interface {
 	// CreateProvider defines a method that creates a provider given the proper inputs.
@@ -144,6 +177,12 @@ type MsgServer interface {
 	GenerateDomainVerificationToken(context.Context, *MsgGenerateDomainVerificationToken) (*MsgGenerateDomainVerificationTokenResponse, error)
 	// VerifyProviderDomain verifies a provider's domain via DNS TXT record.
 	VerifyProviderDomain(context.Context, *MsgVerifyProviderDomain) (*MsgVerifyProviderDomainResponse, error)
+	// RequestDomainVerification requests a verification token for a provider domain.
+	RequestDomainVerification(context.Context, *MsgRequestDomainVerification) (*MsgRequestDomainVerificationResponse, error)
+	// ConfirmDomainVerification confirms a verification proof for a provider domain.
+	ConfirmDomainVerification(context.Context, *MsgConfirmDomainVerification) (*MsgConfirmDomainVerificationResponse, error)
+	// RevokeDomainVerification revokes a provider domain verification.
+	RevokeDomainVerification(context.Context, *MsgRevokeDomainVerification) (*MsgRevokeDomainVerificationResponse, error)
 }
 
 // UnimplementedMsgServer can be embedded to have forward compatible implementations.
@@ -164,6 +203,15 @@ func (*UnimplementedMsgServer) GenerateDomainVerificationToken(ctx context.Conte
 }
 func (*UnimplementedMsgServer) VerifyProviderDomain(ctx context.Context, req *MsgVerifyProviderDomain) (*MsgVerifyProviderDomainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyProviderDomain not implemented")
+}
+func (*UnimplementedMsgServer) RequestDomainVerification(ctx context.Context, req *MsgRequestDomainVerification) (*MsgRequestDomainVerificationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestDomainVerification not implemented")
+}
+func (*UnimplementedMsgServer) ConfirmDomainVerification(ctx context.Context, req *MsgConfirmDomainVerification) (*MsgConfirmDomainVerificationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmDomainVerification not implemented")
+}
+func (*UnimplementedMsgServer) RevokeDomainVerification(ctx context.Context, req *MsgRevokeDomainVerification) (*MsgRevokeDomainVerificationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RevokeDomainVerification not implemented")
 }
 
 func RegisterMsgServer(s grpc1.Server, srv MsgServer) {
@@ -260,6 +308,60 @@ func _Msg_VerifyProviderDomain_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_RequestDomainVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgRequestDomainVerification)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).RequestDomainVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.provider.v1beta4.Msg/RequestDomainVerification",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).RequestDomainVerification(ctx, req.(*MsgRequestDomainVerification))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_ConfirmDomainVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgConfirmDomainVerification)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ConfirmDomainVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.provider.v1beta4.Msg/ConfirmDomainVerification",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ConfirmDomainVerification(ctx, req.(*MsgConfirmDomainVerification))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_RevokeDomainVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgRevokeDomainVerification)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).RevokeDomainVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.provider.v1beta4.Msg/RevokeDomainVerification",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).RevokeDomainVerification(ctx, req.(*MsgRevokeDomainVerification))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var Msg_serviceDesc = _Msg_serviceDesc
 var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "virtengine.provider.v1beta4.Msg",
@@ -284,6 +386,18 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyProviderDomain",
 			Handler:    _Msg_VerifyProviderDomain_Handler,
+		},
+		{
+			MethodName: "RequestDomainVerification",
+			Handler:    _Msg_RequestDomainVerification_Handler,
+		},
+		{
+			MethodName: "ConfirmDomainVerification",
+			Handler:    _Msg_ConfirmDomainVerification_Handler,
+		},
+		{
+			MethodName: "RevokeDomainVerification",
+			Handler:    _Msg_RevokeDomainVerification_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
