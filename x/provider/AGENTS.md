@@ -1,6 +1,6 @@
 # Provider Module (x/provider) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: chain module that owns provider registration, lifecycle management, domain verification, and provider public-key management.
 - Use this module when you need on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
 - Key exports / public API surface:
@@ -85,10 +85,6 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Uses DNS lookups for domain verification (`x/provider/keeper/domain_verification.go:95`); ensure DNS access in integration tests.
 - No package-specific environment variables.
 
-## Configuration
-- Provider behavior is governed by on-chain parameters and module constants.
-- No module-specific environment variables are required.
-
 ## Testing
 - Unit tests:
   - `x/provider/handler/handler_test.go`
@@ -97,11 +93,3 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Recommended commands:
   - `go test ./x/provider/... -count=1`
   - `go test ./sdk/go/node/provider/v1beta4 -count=1`
-
-## Troubleshooting
-- Domain verification fails:
-  - Cause: Missing DNS TXT record or expired token.
-  - Fix: Re-generate token and confirm `_virtengine-verification` record exists.
-- MsgServer errors about invalid keys:
-  - Cause: Unsupported key type or mismatched encoding.
-  - Fix: Confirm key type is `ed25519`, `x25519`, or `secp256k1`.
