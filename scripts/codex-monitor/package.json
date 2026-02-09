@@ -49,7 +49,8 @@
     "./restart-controller": "./restart-controller.mjs",
     "./fleet-coordinator": "./fleet-coordinator.mjs",
     "./shared-knowledge": "./shared-knowledge.mjs",
-    "./presence": "./presence.mjs"
+    "./presence": "./presence.mjs",
+    "./vk-log-stream": "./vk-log-stream.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -107,6 +108,7 @@
     "task-complexity.mjs",
     "conflict-resolver.mjs",
     "task-archiver.mjs",
+    "vk-log-stream.mjs",
     ".env.example",
     "codex-monitor.config.example.json",
     "codex-monitor.schema.json",

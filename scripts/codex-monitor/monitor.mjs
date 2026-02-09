@@ -32,6 +32,7 @@ import {
   injectMonitorFunctions,
   notify,
   restoreLiveDigest,
+  getDigestSnapshot,
 } from "./telegram-bot.mjs";
 import {
   execPrimaryPrompt,
@@ -111,6 +112,8 @@ import {
   appendKnowledgeEntry,
   formatKnowledgeSummary,
 } from "./shared-knowledge.mjs";
+import { WorkspaceMonitor } from "./workspace-monitor.mjs";
+import { VkLogStream } from "./vk-log-stream.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Load unified configuration ──────────────────────────────────────────────
@@ -227,6 +230,39 @@ let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+
+// ── Workspace monitor: track agent workspaces with git state + stuck detection ──
+const workspaceMonitor = new WorkspaceMonitor({
+  cacheDir: resolve(repoRoot, ".cache", "workspace-logs"),
+  repoRoot,
+  onStuckDetected: ({ attemptId, reason, recommendation }) => {
+    const msg = `⚠️ Agent ${attemptId.substring(0, 8)} stuck: ${reason}\nRecommendation: ${recommendation}`;
+    console.warn(`[workspace-monitor] ${msg}`);
+    void notify?.(msg, { dedupKey: `stuck-${attemptId.substring(0, 8)}` });
+  },
+});
+
+// ── Devmode Auto Code Fix: background agent that fixes issues from digest ──
+const devmodeAutoCodeFix = {
+  enabled: ["1", "true", "yes"].includes(
+    String(process.env.DEVMODE_AUTO_CODE_FIX || "").toLowerCase(),
+  ),
+  cycleCount: 0,
+  cycleInterval: Math.max(
+    1,
+    Number(process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL || "2"),
+  ),
+  timeoutMs: Number(process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS || "300000"), // 5 min
+  running: false,
+  lastRunAt: 0,
+  lastDigestText: "",
+  branch: process.env.DEVMODE_AUTO_CODE_FIX_BRANCH || "",
+};
+if (devmodeAutoCodeFix.enabled) {
+  console.log(
+    `[monitor] devmode auto code fix ENABLED (every ${devmodeAutoCodeFix.cycleInterval} digest cycle(s), timeout ${devmodeAutoCodeFix.timeoutMs}ms)`,
+  );
+}
 
 // ── Interactive shell state ────────────────────────────────────────────────
 const shellState = {
@@ -409,6 +445,9 @@ let vkRecoveryLastAt = 0;
 let vkNonJsonNotifiedAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
+
+// ── VK WebSocket log stream — captures real-time agent logs from execution processes ──
+let vkLogStream = null;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -932,7 +971,7 @@ Constraints:
 4) Prefer small guardrails over big rewrites.`;
 
   const filesBefore = detectChangedFiles(repoRoot);
-  const result = await runCodexExec(prompt, repoRoot, 180_000);
+  const result = await runCodexExec(prompt, repoRoot, 1_800_000);
   const filesAfter = detectChangedFiles(repoRoot);
   const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
   const changeSummary = getChangeSummary(repoRoot, newChanges);
@@ -1109,6 +1148,9 @@ const errorNoisePatterns = [
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
   // Stats summary line (contains "Failed" as a counter, not an error)
   /First-shot:.*Failed:/i,
+  // Attempt lifecycle lines that include "failed" but are normal status updates
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} finished \(failed\)\s+—\s+marking review/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} failed in workspace — requires agent attention/i,
   // Box-drawing cycle summary lines
   /^\s*[│┃|]\s*(Elapsed|Submitted|Tracked|First-shot):/i,
   /^\s*[─┄╌═]+/,
@@ -1388,6 +1430,8 @@ async function ensureVibeKanbanRunning() {
   if (await isVibeKanbanOnline()) {
     // Reset restart counter on successful health check
     vkRestartCount = 0;
+    // Start VK log stream if not already running
+    ensureVkLogStream();
     return;
   }
   // If process is alive, give it 15s grace to start up
@@ -1415,6 +1459,11 @@ function restartVibeKanbanProcess() {
   if (!vkSpawnEnabled) {
     return;
   }
+  // Stop log stream — will restart when VK comes back online
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   // Just kill the process — the exit handler will auto-restart it
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     try {
@@ -1425,6 +1474,56 @@ function restartVibeKanbanProcess() {
   } else {
     void startVibeKanbanProcess();
   }
+}
+
+/**
+ * Ensure the VK log stream is running. Creates a new VkLogStream instance
+ * if one doesn't exist, connecting to VK's execution-process WebSocket
+ * endpoints to capture real-time agent stdout/stderr.
+ *
+ * Discovery model: No REST list endpoint exists for execution processes.
+ * Instead, connectToSession(sessionId) is called when sessions are created
+ * (see startFreshSession). On startup, we also scan active_attempts for any
+ * existing session IDs to connect to.
+ */
+function ensureVkLogStream() {
+  if (vkLogStream) return;
+  const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
+  vkLogStream = new VkLogStream(vkEndpointUrl, {
+    logDir: agentLogDir,
+    echo: echoLogs,
+    onLine: (line, meta) => {
+      // Feed VK agent log lines into the same agent-log streaming pipeline
+      // that the orchestrator uses, so they appear in per-attempt logs
+      if (meta.processId) {
+        const shortId = meta.processId.slice(0, 8);
+        const prefix = meta.stream === "stderr" ? "ERR" : "OUT";
+        const logPath = resolve(agentLogDir, `${shortId}.log`);
+        try {
+          appendFileSync(logPath, `[${prefix}] ${line}\n`);
+        } catch {
+          /* best effort */
+        }
+      }
+    },
+  });
+  vkLogStream.start();
+
+  // Connect to any existing active sessions from VK status data
+  void (async () => {
+    try {
+      const statusData = await readStatusData();
+      const attempts = statusData?.active_attempts || [];
+      for (const attempt of attempts) {
+        const sid = attempt.session_id;
+        if (sid && attempt.status === "running") {
+          vkLogStream.connectToSession(sid);
+        }
+      }
+    } catch {
+      /* best effort — sessions will be connected as they're created */
+    }
+  })();
 }
 
 async function triggerVibeKanbanRecovery(reason) {
@@ -2032,6 +2131,11 @@ async function startFreshSession(workspaceId, prompt, taskId) {
     console.log(
       `[monitor] ✅ Fresh session started: ${session.id} (retry #${freshSessionCount})`,
     );
+
+    // Connect the VK log stream to this session for real-time log capture
+    if (vkLogStream) {
+      vkLogStream.connectToSession(session.id);
+    }
 
     return { success: true, sessionId: session.id };
   } catch (err) {
@@ -6260,7 +6364,7 @@ ${logTail}
 
   try {
     // Use runCodexExec from autofix.mjs — gives Codex workspace access
-    const result = await runCodexExec(prompt, repoRoot, 90_000);
+    const result = await runCodexExec(prompt, repoRoot, 1_800_000);
 
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
     const analysisText = result.output || result.error || "(no output)";
@@ -6648,6 +6752,155 @@ async function handleExit(code, signal, logPath) {
   setTimeout(startProcess, restartDelayMs);
 }
 
+// ── Devmode Auto Code Fix: background agent triggered after digest seal ──────
+
+/**
+ * Called when a Live Digest window is sealed. Collects errors/warnings from the
+ * digest, then dispatches a background Codex/Copilot agent to fix the issues.
+ *
+ * Only active when DEVMODE_AUTO_CODE_FIX=true env var is set.
+ * Runs every N digest cycles (default 2) to allow the agent time to fix before
+ * the next cycle's changes are picked up by the self-watcher.
+ */
+async function handleDigestSealed({ entries, text }) {
+  if (!devmodeAutoCodeFix.enabled) return;
+
+  devmodeAutoCodeFix.cycleCount++;
+  const cycle = devmodeAutoCodeFix.cycleCount;
+  const interval = devmodeAutoCodeFix.cycleInterval;
+
+  // Only run every N cycles
+  if (cycle % interval !== 0) {
+    console.log(
+      `[devmode-fix] digest cycle ${cycle} — skipping (runs every ${interval} cycles)`,
+    );
+    return;
+  }
+
+  // Don't run if already running
+  if (devmodeAutoCodeFix.running) {
+    console.log(`[devmode-fix] skipping — previous run still in progress`);
+    return;
+  }
+
+  // Filter to error and warning entries only
+  const actionableEntries = entries.filter((e) => e.priority <= 3);
+  if (actionableEntries.length === 0) {
+    console.log(
+      `[devmode-fix] digest cycle ${cycle} — no errors/warnings, skipping`,
+    );
+    return;
+  }
+
+  // Build the digest summary for the agent
+  const errorLines = actionableEntries
+    .map((e) => `${e.time} ${e.emoji} ${e.text}`)
+    .join("\n");
+
+  // Read recent orchestrator log tail for additional context
+  let recentLogTail = "";
+  try {
+    const activeLogPath = resolve(logDir, "orchestrator-active.log");
+    if (existsSync(activeLogPath)) {
+      const logContent = readFileSync(activeLogPath, "utf8");
+      const logLines = logContent.split("\n");
+      recentLogTail = logLines.slice(-100).join("\n");
+    }
+  } catch {
+    /* best effort */
+  }
+
+  // Determine target branch
+  const targetBranch = devmodeAutoCodeFix.branch || "";
+  const branchInstruction = targetBranch
+    ? `Work on the existing branch: ${targetBranch}. Do NOT create a new branch.`
+    : "Work on the current branch.";
+
+  const prompt = [
+    "You are a background debugging agent for the VirtEngine codex-monitor orchestration system.",
+    "The following errors and warnings were collected from the most recent Live Digest cycle.",
+    "Your job is to identify the root causes and fix them by modifying the source code.",
+    "",
+    "## IMPORTANT RULES",
+    "- Do NOT commit your changes. Only modify files.",
+    "- Do NOT run git push or create PRs.",
+    `- ${branchInstruction}`,
+    "- Focus on fixing the ROOT CAUSE, not symptoms.",
+    "- The codex-monitor source code is in: scripts/codex-monitor/",
+    "- The orchestrator is: scripts/codex-monitor/ve-orchestrator.ps1",
+    "- The monitor is: scripts/codex-monitor/monitor.mjs",
+    "- After you make changes, the monitor will auto-restart (file watcher).",
+    "",
+    "## Live Digest Errors/Warnings",
+    "",
+    errorLines,
+    "",
+    "## Recent Orchestrator Log (last 100 lines)",
+    "",
+    recentLogTail,
+    "",
+    "## Instructions",
+    "",
+    "1. Analyze the errors above to identify root causes",
+    "2. Search the codebase for relevant code",
+    "3. Make targeted fixes to resolve the issues",
+    "4. Do NOT commit — the file watcher will auto-restart the monitor",
+  ].join("\n");
+
+  console.log(
+    `[devmode-fix] digest cycle ${cycle} — dispatching background agent (${actionableEntries.length} actionable entries)`,
+  );
+  devmodeAutoCodeFix.running = true;
+  devmodeAutoCodeFix.lastRunAt = Date.now();
+  devmodeAutoCodeFix.lastDigestText = text;
+
+  // Log the dispatch
+  try {
+    const fixLogDir = resolve(repoRoot, ".cache", "devmode-fix-logs");
+    await mkdir(fixLogDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    await writeFile(
+      resolve(fixLogDir, `devmode-fix-${stamp}.prompt.md`),
+      prompt,
+      "utf8",
+    );
+  } catch {
+    /* best effort */
+  }
+
+  // Dispatch to Codex SDK in background
+  try {
+    const result = await runCodexExec(
+      prompt,
+      repoRoot,
+      devmodeAutoCodeFix.timeoutMs,
+      resolve(repoRoot, ".cache", "devmode-fix-logs"),
+    );
+
+    if (result.success) {
+      console.log(`[devmode-fix] background agent completed successfully`);
+      void notify?.(
+        `🔧 Devmode auto-fix completed (cycle ${cycle}). ${actionableEntries.length} issues addressed. Monitor will auto-restart.`,
+        4,
+        { dedupKey: "devmode-fix-complete" },
+      );
+    } else {
+      console.warn(
+        `[devmode-fix] background agent failed: ${result.error || "unknown"}`,
+      );
+      void notify?.(
+        `⚠️ Devmode auto-fix failed (cycle ${cycle}): ${result.error || "no output"}`,
+        3,
+        { dedupKey: "devmode-fix-failed" },
+      );
+    }
+  } catch (err) {
+    console.error(`[devmode-fix] dispatch error: ${err.message}`);
+  } finally {
+    devmodeAutoCodeFix.running = false;
+  }
+}
+
 async function startProcess() {
   const now = Date.now();
 
@@ -6683,6 +6936,13 @@ async function startProcess() {
   const activeLogPath = resolve(logDir, "orchestrator-active.log");
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
   const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
+
+  // ── Workspace monitor: initialize for this process session ──
+  try {
+    await workspaceMonitor.init();
+  } catch (err) {
+    console.warn(`[monitor] workspace monitor init failed: ${err.message}`);
+  }
 
   // ── Agent log streaming: fan out per-attempt log lines to .cache/agent-logs/ ──
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
@@ -6761,6 +7021,30 @@ async function startProcess() {
     for (const line of lines) {
       // ── Agent log streaming: fan out to per-attempt log files ──
       streamToAgentLog(line);
+
+      // ── Workspace monitoring: detect attempt lifecycle from orchestrator logs ──
+      const trackMatch = line.match(
+        /Tracking new attempt:\s+([0-9a-f]{8})\s*→\s*(\S+)/i,
+      );
+      if (trackMatch) {
+        const shortId = trackMatch[1];
+        const branch = trackMatch[2];
+        const worktreePath = findWorktreeForBranch(branch);
+        if (worktreePath) {
+          void workspaceMonitor
+            .startMonitoring(shortId, worktreePath, {
+              taskId: shortId,
+              executor: "unknown",
+              branch,
+            })
+            .catch((err) =>
+              console.warn(
+                `[workspace-monitor] failed to start for ${shortId}: ${err.message}`,
+              ),
+            );
+        }
+      }
+
       if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
         lastErrorLine = line;
         lastErrorAt = Date.now();
@@ -6782,6 +7066,10 @@ async function startProcess() {
         const shortId = prFlowMatch[1];
         const finishStatus = prFlowMatch[2];
         void resolveAndTriggerSmartPR(shortId, finishStatus);
+        // Stop workspace monitoring for this attempt
+        void workspaceMonitor
+          .stopMonitoring(shortId, finishStatus)
+          .catch(() => {});
       }
       // ── "No remote branch" → trigger VK-based PR flow ──────────
       const noBranchMatch = line.match(
@@ -6883,6 +7171,10 @@ function selfRestartForSourceChange(filename) {
   );
   console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -7211,6 +7503,10 @@ async function reloadConfig(reason) {
 
 process.on("SIGINT", () => {
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopEnvWatchers();
@@ -7220,6 +7516,7 @@ process.on("SIGINT", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   process.exit(0);
 });
@@ -7227,11 +7524,20 @@ process.on("SIGINT", () => {
 // Windows: closing the terminal window doesn't send SIGINT/SIGTERM reliably.
 process.on("exit", () => {
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
+  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
 });
 
 process.on("SIGTERM", () => {
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopEnvWatchers();
@@ -7241,6 +7547,7 @@ process.on("SIGTERM", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   stopTelegramBot();
   process.exit(0);
@@ -7516,6 +7823,7 @@ injectMonitorFunctions({
   getActiveAttemptInfo,
   triggerTaskPlanner,
   reconcileTaskStatuses,
+  onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
