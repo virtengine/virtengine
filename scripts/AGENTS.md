@@ -1,4 +1,4 @@
-# VirtEngine Scripts Guide (AGENTS)
+# Scripts (scripts/) — AGENTS Guide
 
 This document explains the purpose, usage, and modification patterns for the
 scripts/ folder. It is written for human developers and AI agents.
@@ -6,7 +6,96 @@ scripts/ folder. It is written for human developers and AI agents.
 Note: scripts/codex-monitor/ has its own documentation and is intentionally
 excluded from this guide. See scripts/codex-monitor/AGENTS.md.
 
-## 1) Scripts Overview
+## Module Overview
+- Purpose: operational automation, build helpers, migrations, and one-off
+  utilities that are not part of the main application runtime.
+- Use when: you need to bootstrap environments, run localnet, generate
+  artifacts, validate ops procedures, or automate workflows.
+- Key entry points:
+  - scripts/AGENTS.md:1
+  - scripts/agent-preflight.ps1:1
+  - scripts/agent-preflight.sh:1
+  - scripts/localnet.sh:1
+  - scripts/validate-agents-docs.mjs:1
+
+## Architecture
+- Top-level scripts focus on common workflows (localnet, chain init, inference
+  checks, agent tooling).
+- Subfolders group domain-specific automation:
+  - scripts/compliance/ (SOC2 evidence collection)
+  - scripts/dev/ (ad-hoc, task-specific helpers; often hard-coded paths)
+  - scripts/dr/ (disaster recovery automation)
+  - scripts/hpc/ (HPC proto bootstrap helpers and temp proto sources)
+  - scripts/mainnet/ (genesis ceremony and launch validation)
+  - scripts/rollback/ (operational rollback helpers)
+  - scripts/supply-chain/ (dependency and SBOM tooling)
+  - scripts/waldur/ (data artifacts used by ops scripts)
+
+## Core Concepts
+- Scripts are categorized by audience (ops vs dev vs automation) and platform
+  (bash, PowerShell, Go, Node).
+- Naming conventions are verb-first and kebab-case; internal helpers begin with
+  an underscore.
+- Prefer extending existing scripts when the workflow already exists; add new
+  scripts when the change would make existing scripts harder to reason about.
+
+## Usage Examples
+
+### Pre-flight checks before push
+`ash
+pwsh scripts/agent-preflight.ps1
+`
+
+### Localnet orchestration
+`ash
+./scripts/localnet.sh start
+`
+
+### Generate API types
+`ash
+./scripts/generate-api-types.sh
+`
+
+### Run the Telegram codex bot
+`ash
+node scripts/telegram-bot.mjs
+`
+
+## Implementation Patterns
+- Error handling: use set -euo pipefail in bash; use Set-StrictMode -Version
+  Latest in PowerShell when adding new scripts.
+- Logging: prefer log_info/log_warn/log_error helpers in bash or
+  Write-Host with levels in PowerShell.
+- Configuration: support env var overrides and a --dry-run option for
+  scripts that mutate state.
+- Cross-platform: provide .ps1 for Windows, .sh for Linux/WSL; .bat only for
+  short, ad-hoc helpers.
+- Anti-patterns:
+  - Do not hardcode paths outside scripts/dev/.
+  - Do not silently ignore failed dependency checks.
+
+## Configuration
+- Scripts typically read configuration via CLI flags and environment variables.
+- For PowerShell scripts, parameters should mirror environment overrides.
+- Secrets (API keys, tokens) must come from env vars or external secret
+  managers; never commit them to the repo.
+
+## Testing
+- Validate AGENTS docs: 
+ode scripts/validate-agents-docs.mjs.
+- Run pre-flight checks before push:
+  - pwsh scripts/agent-preflight.ps1
+  - ./scripts/agent-preflight.sh
+
+## Troubleshooting
+- Missing dependency: confirm required tools are on PATH (jq, go, docker,
+  kubectl, aws, node).
+- Permission errors: re-run PowerShell scripts as Administrator when required
+  (e.g., install-deps.ps1).
+- Windows path issues: run bash scripts in Git Bash or WSL; avoid cmd.exe for
+  .sh scripts.
+
+## Scripts Overview
 
 Purpose
 - scripts/ holds operational automation, build helpers, migrations, and
@@ -21,12 +110,12 @@ Organization
   - dr/ disaster recovery automation.
   - hpc/ HPC proto bootstrap helpers and temp proto sources.
   - mainnet/ genesis ceremony and launch validation.
-  - ollback/ operational rollback helpers.
+  - rollback/ operational rollback helpers.
   - supply-chain/ dependency and SBOM tooling.
   - waldur/ data artifacts used by ops scripts.
 
 Naming conventions
-- Verbs first: init-*, generate-*, erify-*, ackup-*, estore-*.
+- Verbs first: init-*, generate-*, verify-*, backup-*, restore-*.
 - Leading underscore: internal helpers or one-off maintenance scripts.
 - Use kebab-case for shell scripts, and descriptive filenames in subfolders.
 
@@ -38,7 +127,7 @@ When to add vs modify
 - For temporary, task-specific helpers, prefer scripts/dev/ and document the
   hard-coded paths and context.
 
-## 2) Script Inventory (categorized)
+## Script Inventory (categorized)
 
 ### Core agent + kanban utilities
 
@@ -47,7 +136,7 @@ When to add vs modify
 | scripts/agent-preflight.ps1 | Pre-flight checks before push (Go/Portal). | pwsh scripts/agent-preflight.ps1 | PowerShell 7+, go, pnpm (optional) |
 | scripts/agent-preflight.sh | Bash pre-flight checks before push. | ./scripts/agent-preflight.sh | bash, go, pnpm (optional) |
 | scripts/archive-completed-tasks.ps1 | Archive done VK tasks into _docs/ralph. | pwsh scripts/archive-completed-tasks.ps1 -DryRun | PowerShell, VK CLI wrapper (ve-kanban) |
-| scripts/_check-parse.ps1 | Parse e-orchestrator.ps1 and report errors. | pwsh scripts/_check-parse.ps1 | PowerShell 7+ |
+| scripts/_check-parse.ps1 | Parse ve-orchestrator.ps1 and report errors. | pwsh scripts/_check-parse.ps1 | PowerShell 7+ |
 | scripts/_check-ps1-syntax.ps1 | Syntax check PS1 files (defaults to codex-monitor). | pwsh scripts/_check-ps1-syntax.ps1 -Path scripts/codex-monitor/ve-orchestrator.ps1 | PowerShell 7+ |
 | scripts/_consolidate-refs.ps1 | One-off migration to codex-monitor paths. | pwsh scripts/_consolidate-refs.ps1 | PowerShell, git |
 | scripts/_show-line.ps1 | Print specific line numbers from orchestrator. | pwsh scripts/_show-line.ps1 | PowerShell 7+ |
@@ -136,9 +225,8 @@ When to add vs modify
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
 | scripts/hpc/setup_hpc_proto.sh | Copy HPC proto files; optional generate. | ./scripts/hpc/setup_hpc_proto.sh --generate | bash, buf (opt) |
-| scripts/hpc/setup_hpc_proto.bat | Windows variant of proto copy. | scripts\hpc\setup_hpc_proto.bat | cmd.exe |
-| scripts/hpc/setup_hpc_dirs.js | JS variant for proto copy. | 
-ode scripts/hpc/setup_hpc_dirs.js | node |
+| scripts/hpc/setup_hpc_proto.bat | Windows variant of proto copy. | scripts\\hpc\\setup_hpc_proto.bat | cmd.exe |
+| scripts/hpc/setup_hpc_dirs.js | JS variant for proto copy. | node scripts/hpc/setup_hpc_dirs.js | node |
 | scripts/hpc/create_dirs.go | Go variant for proto copy. | go run scripts/hpc/create_dirs.go | go |
 | scripts/hpc/create_network_security_dirs.py | Python variant for proto copy. | python scripts/hpc/create_network_security_dirs.py | python3 |
 | scripts/hpc/proto/*.proto.txt | Temp proto sources. | Copied by setup scripts. | N/A |
@@ -150,13 +238,13 @@ Update paths before running.
 
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
-| scripts/dev/commit.bat | Commit helper for a specific task. | scripts\dev\commit.bat | git |
-| scripts/dev/run_build.bat | Build e2e tests. | scripts\dev\run_build.bat | go |
-| scripts/dev/run_e2e_build.bat | Build e2e tests to file. | scripts\dev\run_e2e_build.bat | go |
-| scripts/dev/run_tasks.bat | Build, commit, push flow. | scripts\dev\run_tasks.bat | git, go |
-| scripts/dev/run_tests.bat | Build/test and log to esults.txt. | scripts\dev\run_tests.bat | go |
-| scripts/dev/run_commands.bat | Build/test and capture outputs. | scripts\dev\run_commands.bat | go |
-| scripts/dev/_run_go_commands.bat | Simple build/test wrapper. | scripts\dev\_run_go_commands.bat | go |
+| scripts/dev/commit.bat | Commit helper for a specific task. | scripts\\dev\\commit.bat | git |
+| scripts/dev/run_build.bat | Build e2e tests. | scripts\\dev\\run_build.bat | go |
+| scripts/dev/run_e2e_build.bat | Build e2e tests to file. | scripts\\dev\\run_e2e_build.bat | go |
+| scripts/dev/run_tasks.bat | Build, commit, push flow. | scripts\\dev\\run_tasks.bat | git, go |
+| scripts/dev/run_tests.bat | Build/test and log to results.txt. | scripts\\dev\\run_tests.bat | go |
+| scripts/dev/run_commands.bat | Build/test and capture outputs. | scripts\\dev\\run_commands.bat | go |
+| scripts/dev/_run_go_commands.bat | Simple build/test wrapper. | scripts\\dev\\_run_go_commands.bat | go |
 | scripts/dev/run_build.ps1 | Build e2e tests to file. | pwsh scripts/dev/run_build.ps1 | PowerShell, go |
 | scripts/dev/run_build_tests.ps1 | Build + test, write results. | pwsh scripts/dev/run_build_tests.ps1 | PowerShell, go |
 | scripts/dev/run_go_commands.ps1 | Build + test, write results. | pwsh scripts/dev/run_go_commands.ps1 | PowerShell, go |
@@ -168,21 +256,19 @@ Update paths before running.
 | scripts/dev/run_commands.py | Build/test and save results. | python scripts/dev/run_commands.py | python3, go |
 | scripts/dev/_check_build.py | Build check for e2e tests. | python scripts/dev/_check_build.py | python3, go |
 | scripts/dev/_check_status.py | Branch/status + build report. | python scripts/dev/_check_status.py | python3, go |
-| scripts/dev/_check_status.js | Branch/status + build report. | 
-ode scripts/dev/_check_status.js | node, go |
+| scripts/dev/_check_status.js | Branch/status + build report. | node scripts/dev/_check_status.js | node, go |
 
 ### Misc ops + integrations
 
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
-| scripts/telegram-bot.mjs | Telegram bot to trigger codex jobs. | 
-ode scripts/telegram-bot.mjs | node, codex CLI |
+| scripts/telegram-bot.mjs | Telegram bot to trigger codex jobs. | node scripts/telegram-bot.mjs | node, codex CLI |
 | scripts/run_provider_daemon_waldur.ps1 | Start provider-daemon with Waldur integration. | pwsh scripts/run_provider_daemon_waldur.ps1 -WaldurBaseUrl ... | PowerShell, provider-daemon |
 | scripts/migrate-all-modules.ps1 | Bulk error migration (PS). | pwsh scripts/migrate-all-modules.ps1 | PowerShell, go |
 | scripts/migrate-errors.sh | Bulk error migration (bash). | ./scripts/migrate-errors.sh | bash, sed |
 | scripts/waldur/categories.json | Waldur category seed data. | Used by ops tooling. | N/A |
 
-## 3) PowerShell Scripts (.ps1)
+## PowerShell Scripts (.ps1)
 
 Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
 
@@ -191,7 +277,7 @@ Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
   remove tasks/attempts from VK when merged PRs exist.
 - Parameters: -AgeHours, -MinIntervalMinutes, -MaxTasks, -DryRun.
 - Env overrides: VE_COMPLETED_TASK_ARCHIVE_* values for age/interval/max/dry-run.
-- Permissions: VK API access through e-kanban.ps1 (see codex-monitor docs).
+- Permissions: VK API access through ve-kanban.ps1 (see codex-monitor docs).
 - Errors: throws when VK config or ve-kanban wrapper missing; non-zero on failures.
 - Example:
   - pwsh scripts/archive-completed-tasks.ps1 -AgeHours 48 -DryRun
@@ -223,7 +309,7 @@ Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
 - Example: pwsh scripts/_consolidate-refs.ps1
 
 ### scripts/_show-line.ps1
-- Purpose: Dump specific line numbers from e-orchestrator.ps1.
+- Purpose: Dump specific line numbers from ve-orchestrator.ps1.
 - Parameters: none.
 - Errors: standard PowerShell file read errors.
 - Example: pwsh scripts/_show-line.ps1
@@ -259,17 +345,17 @@ Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
 These are ad-hoc and usually hard-coded to a specific worktree path.
 Update paths before running.
 - scripts/dev/run_build.ps1 - build e2e tests; writes output to file.
-- scripts/dev/run_build_tests.ps1 - build + test; writes esults.txt.
-- scripts/dev/run_go_commands.ps1 - build + test; writes esults.txt.
+- scripts/dev/run_build_tests.ps1 - build + test; writes results.txt.
+- scripts/dev/run_go_commands.ps1 - build + test; writes results.txt.
 - scripts/dev/_execute_commands.ps1 - build + test; logs to _command_results.txt.
 - scripts/dev/_run_and_save.ps1 - build + test; logs to _command_results.txt.
 - scripts/dev/_run_build_test.ps1 - build + test; logs to _output.log.
 - scripts/dev/_simple_build.ps1 - minimal build/test log.
 - scripts/dev/_test_script.ps1 - build/test with console output.
 
-## 4) Shell Scripts (.sh)
+## Shell Scripts (.sh)
 
-All .sh scripts assume ash unless stated. On Windows, run in Git Bash or WSL.
+All .sh scripts assume bash unless stated. On Windows, run in Git Bash or WSL.
 
 ### Core/localnet
 - scripts/localnet.sh: Docker compose orchestration (start/stop/update/reset/test).
@@ -315,29 +401,26 @@ All .sh scripts assume ash unless stated. On Windows, run in Git Bash or WSL.
 ### Error migration
 - scripts/migrate-errors.sh: Helper for mass error-handling migration.
 
-## 5) Node.js Utility Scripts (.mjs/.js)
+## Node.js Utility Scripts (.mjs/.js)
 
 ### scripts/telegram-bot.mjs
 - Purpose: Telegram bot that accepts /background <prompt> and spawns a codex
   job in the repo, then posts results back to Telegram.
 - Env: TELEGRAM_BOT_TOKEN (required), TELEGRAM_CHAT_ID (optional),
   TELEGRAM_POLL_TIMEOUT_SEC, TELEGRAM_POLL_INTERVAL_MS.
-- Run: 
-ode scripts/telegram-bot.mjs.
+- Run: node scripts/telegram-bot.mjs.
 - Error behavior: exits if token missing; logs send/poll errors and continues.
 
 ### scripts/hpc/setup_hpc_dirs.js
 - Purpose: Create HPC proto directories and copy temp proto files.
-- Run: 
-ode scripts/hpc/setup_hpc_dirs.js.
+- Run: node scripts/hpc/setup_hpc_dirs.js.
 - Error behavior: warns when source files missing.
 
 ### scripts/dev/_check_status.js
 - Purpose: Ad-hoc status/build check with hard-coded worktree path.
-- Run: 
-ode scripts/dev/_check_status.js after editing paths.
+- Run: node scripts/dev/_check_status.js after editing paths.
 
-## 6) Development Workflows
+## Development Workflows
 
 - Pre-commit/push: use scripts/agent-preflight.sh or .ps1 for a local sanity
   pass before pushing.
@@ -352,17 +435,7 @@ ode scripts/dev/_check_status.js after editing paths.
 - DR/compliance: use scripts/dr/* and scripts/compliance/* in scheduled
   jobs or manually for audits.
 
-## 7) Common Patterns
-
-- Error handling: set -euo pipefail in bash scripts; 
-  in PowerShell.
-- Logging: most bash scripts define log_info/log_warn/log_error with colors.
-- Configuration: environment variables override defaults (see each script header).
-- Cross-platform: bash for Linux/WSL; .ps1 for Windows; .bat for cmd.exe.
-- Dependency checks: scripts typically verify jq, ws, kubectl, go,
-  and irtengine before executing critical steps.
-
-## 8) Adding New Scripts
+## Adding New Scripts
 
 When to create a new script
 - The workflow is new, or existing scripts would become too complex.
@@ -383,4 +456,3 @@ CI/CD integration
 Testing requirements
 - If a script mutates code or data, add a --dry-run option where feasible.
 - Include validation steps and a non-zero exit code on failure.
-
