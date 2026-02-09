@@ -1,6 +1,6 @@
 # Provider Module (x/provider) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: chain module that owns provider registration, lifecycle management, domain verification, and provider public-key management.
 - Use when: Updating on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
 - Key entry points:
@@ -97,8 +97,11 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Recommended commands:
   - `go test ./x/provider/... -count=1`
   - `go test ./sdk/go/node/provider/v1beta4 -count=1`
+<<<<<<< HEAD
 
 ## Troubleshooting
 - Domain verification fails unexpectedly
   - Cause: TXT record missing or cached with old token.
   - Fix: Re-issue token and verify with DNS tools before retrying.
+=======
+>>>>>>> 757ceb4f (docs(provider): add AGENTS guides for core packages)

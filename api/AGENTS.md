@@ -1,6 +1,6 @@
 # API Layer (api/openapi) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: OpenAPI specifications for VirtEngine blockchain and provider portal APIs, used for client generation and documentation.
 - Use when: Updating API definitions, auth headers, or schema metadata for chain or portal clients.
 - Key entry points:
@@ -58,6 +58,7 @@ X-VE-PubKey: <base64_pubkey>
 
 ## Testing
 - Validate specs with your OpenAPI linter or generator before release.
+<<<<<<< HEAD
 
 ## Configuration
 - No runtime configuration; specs are consumed by client generators and docs tooling.
@@ -67,3 +68,5 @@ X-VE-PubKey: <base64_pubkey>
 - OpenAPI lint errors after edits
   - Cause: Missing `components` references or malformed schema blocks.
   - Fix: Re-run the linter and compare against adjacent schemas for required fields.
+=======
+>>>>>>> 757ceb4f (docs(provider): add AGENTS guides for core packages)
