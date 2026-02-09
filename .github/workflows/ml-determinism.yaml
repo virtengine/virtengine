@@ -369,19 +369,35 @@ jobs:
           echo "Config Validation: ${{ needs.config-validation.result }}"
           echo ""
           
-          # Check critical jobs - config-validation is the most critical
-          if [ "${{ needs.config-validation.result }}" = "failure" ]; then
+          # Check critical jobs - ALL must pass for blockchain consensus safety
+          FAILED=0
+          
+          if [ "${{ needs.config-validation.result }}" != "success" ]; then
             echo "::error::Config validation failed - this is critical for consensus!"
-            exit 1
+            FAILED=1
           fi
           
-          # Warn about other failures but don't block
+          if [ "${{ needs.model-hash-verification.result }}" != "success" ]; then
+            echo "::error::Model hash verification failed - this is critical for consensus!"
+            FAILED=1
+          fi
+          
           if [ "${{ needs.go-inference-determinism.result }}" != "success" ]; then
-            echo "::warning::Go inference tests had issues - review artifacts for details"
+            echo "::error::Go inference determinism tests failed - this is critical for consensus!"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.python-ml-determinism.result }}" != "success" ]; then
+            echo "::warning::Python ML tests had issues - review artifacts for details"
           fi
           
           if [ "${{ needs.cross-platform-hashes.result }}" != "success" ]; then
             echo "::warning::Cross-platform hash verification had issues - review report"
+          fi
+          
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::Critical determinism checks failed - cannot proceed"
+            exit 1
           fi
           
           echo "Determinism verification summary complete"
