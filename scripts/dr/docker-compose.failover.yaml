@@ -1,0 +1,47 @@
+name: virtengine-dr-failover
+
+services:
+  virtengine-dr-primary:
+    image: virtengine:dr-test
+    container_name: virtengine-dr-primary
+    hostname: virtengine-dr-primary
+    command: ["virtengine", "start", "--home", "/var/lib/virtengine"]
+    volumes:
+      - ${DR_WORK_DIR}/primary:/var/lib/virtengine
+    ports:
+      - "26657:26657"
+    restart: unless-stopped
+
+  virtengine-dr-secondary:
+    image: virtengine:dr-test
+    container_name: virtengine-dr-secondary
+    hostname: virtengine-dr-secondary
+    command: ["virtengine", "start", "--home", "/var/lib/virtengine"]
+    volumes:
+      - ${DR_WORK_DIR}/secondary:/var/lib/virtengine
+    ports:
+      - "26667:26667"
+    restart: unless-stopped
+
+  virtengine-dr-witness:
+    image: virtengine:dr-test
+    container_name: virtengine-dr-witness
+    hostname: virtengine-dr-witness
+    command: ["virtengine", "start", "--home", "/var/lib/virtengine"]
+    volumes:
+      - ${DR_WORK_DIR}/witness:/var/lib/virtengine
+    ports:
+      - "26677:26677"
+    restart: unless-stopped
+
+  virtengine-dr-restore:
+    image: virtengine:dr-test
+    container_name: virtengine-dr-restore
+    hostname: virtengine-dr-restore
+    profiles: ["restore"]
+    command: ["virtengine", "start", "--home", "/var/lib/virtengine"]
+    volumes:
+      - ${DR_WORK_DIR}/restore:/var/lib/virtengine
+    ports:
+      - "26687:26687"
+    restart: unless-stopped
