@@ -316,3 +316,55 @@ func (q GRPCQuerier) Params(ctx sdk.Context, req *types.QueryParamsRequest) (*ty
 		Params: params,
 	}, nil
 }
+
+// FiatConversion returns a fiat conversion by ID.
+func (q GRPCQuerier) FiatConversion(ctx sdk.Context, req *types.QueryFiatConversionRequest) (*types.QueryFiatConversionResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ConversionID == "" {
+		return nil, status.Error(codes.InvalidArgument, "conversion_id cannot be empty")
+	}
+
+	conversion, found := q.GetFiatConversion(ctx, req.ConversionID)
+	if !found {
+		return &types.QueryFiatConversionResponse{Conversion: nil}, nil
+	}
+	return &types.QueryFiatConversionResponse{Conversion: &conversion}, nil
+}
+
+// FiatConversionsByProvider returns conversions for a provider.
+func (q GRPCQuerier) FiatConversionsByProvider(ctx sdk.Context, req *types.QueryFiatConversionsByProviderRequest) (*types.QueryFiatConversionsByProviderResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.Provider == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
+	}
+
+	var conversions []types.FiatConversionRecord
+	q.WithFiatConversions(ctx, func(conversion types.FiatConversionRecord) bool {
+		if conversion.Provider == req.Provider {
+			conversions = append(conversions, conversion)
+		}
+		return false
+	})
+
+	return &types.QueryFiatConversionsByProviderResponse{Conversions: conversions}, nil
+}
+
+// FiatPayoutPreference returns payout preference for a provider.
+func (q GRPCQuerier) FiatPayoutPreference(ctx sdk.Context, req *types.QueryFiatPayoutPreferenceRequest) (*types.QueryFiatPayoutPreferenceResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.Provider == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
+	}
+
+	pref, found := q.GetFiatPayoutPreference(ctx, req.Provider)
+	if !found {
+		return &types.QueryFiatPayoutPreferenceResponse{Preference: nil}, nil
+	}
+	return &types.QueryFiatPayoutPreferenceResponse{Preference: &pref}, nil
+}

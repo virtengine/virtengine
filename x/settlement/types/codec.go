@@ -223,3 +223,33 @@ type QueryParamsRequest struct{}
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
+
+// QueryFiatConversionRequest is the request for querying a fiat conversion
+type QueryFiatConversionRequest struct {
+	ConversionID string `json:"conversion_id"`
+}
+
+// QueryFiatConversionResponse is the response for querying a fiat conversion
+type QueryFiatConversionResponse struct {
+	Conversion *FiatConversionRecord `json:"conversion"`
+}
+
+// QueryFiatConversionsByProviderRequest is the request for provider conversions
+type QueryFiatConversionsByProviderRequest struct {
+	Provider string `json:"provider"`
+}
+
+// QueryFiatConversionsByProviderResponse is the response for provider conversions
+type QueryFiatConversionsByProviderResponse struct {
+	Conversions []FiatConversionRecord `json:"conversions"`
+}
+
+// QueryFiatPayoutPreferenceRequest is the request for payout preference
+type QueryFiatPayoutPreferenceRequest struct {
+	Provider string `json:"provider"`
+}
+
+// QueryFiatPayoutPreferenceResponse is the response for payout preference
+type QueryFiatPayoutPreferenceResponse struct {
+	Preference *FiatPayoutPreference `json:"preference"`
+}

@@ -120,4 +120,25 @@ var (
 
 	// ErrPayoutExecutionFailed is returned when payout execution fails
 	ErrPayoutExecutionFailed = errorsmod.Register(ModuleName, 1537, "payout execution failed")
+
+	// ErrFiatConversionNotFound is returned when conversion record is missing
+	ErrFiatConversionNotFound = errorsmod.Register(ModuleName, 1538, "fiat conversion not found")
+
+	// ErrFiatConversionNotAllowed is returned when conversion is not permitted
+	ErrFiatConversionNotAllowed = errorsmod.Register(ModuleName, 1539, "fiat conversion not allowed")
+
+	// ErrFiatConversionFailed is returned when conversion fails
+	ErrFiatConversionFailed = errorsmod.Register(ModuleName, 1540, "fiat conversion failed")
+
+	// ErrComplianceRequired is returned when compliance requirements are not met
+	ErrComplianceRequired = errorsmod.Register(ModuleName, 1541, "compliance requirements not met")
+
+	// ErrDexUnavailable is returned when DEX integration is missing
+	ErrDexUnavailable = errorsmod.Register(ModuleName, 1542, "dex integration unavailable")
+
+	// ErrOffRampUnavailable is returned when off-ramp integration is missing
+	ErrOffRampUnavailable = errorsmod.Register(ModuleName, 1543, "off-ramp integration unavailable")
+
+	// ErrFiatLimitExceeded is returned when conversion limits are exceeded
+	ErrFiatLimitExceeded = errorsmod.Register(ModuleName, 1544, "fiat conversion limit exceeded")
 )

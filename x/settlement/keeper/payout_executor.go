@@ -280,17 +280,7 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 	}
 
 	// Calculate holdback (if any)
-	holdbackAmount := sdk.NewCoins()
-	params := k.GetParams(ctx)
-	if params.PayoutHoldbackRate != "" {
-		holdbackRate, err := sdkmath.LegacyNewDecFromStr(params.PayoutHoldbackRate)
-		if err == nil && holdbackRate.IsPositive() {
-			for _, coin := range settlement.TotalAmount {
-				holdbackCoin := sdk.NewCoin(coin.Denom, holdbackRate.MulInt(coin.Amount).TruncateInt())
-				holdbackAmount = holdbackAmount.Add(holdbackCoin)
-			}
-		}
-	}
+	holdbackAmount := k.calculateHoldbackAmount(ctx, settlement.TotalAmount)
 
 	// Generate payout ID
 	seq := k.incrementPayoutSequence(ctx)
@@ -324,7 +314,63 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 		types.PayoutStatePending, types.PayoutStatePending,
 		payout.NetAmount, "payout created", "system")
 
-	// Execute the payout immediately
+	// Check if fiat conversion is requested for this payout
+	conversion, hasConversion := k.GetFiatConversionByInvoice(ctx, invoiceID)
+	if !hasConversion {
+		conversion, hasConversion = k.GetFiatConversionBySettlement(ctx, settlementID)
+	}
+
+	if hasConversion {
+		if len(payout.NetAmount) != 1 {
+			err := types.ErrInvalidAmount.Wrap("fiat conversion requires single denom payout")
+			_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = k.SetPayout(ctx, *payout)
+			k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
+				types.PayoutStatePending, types.PayoutStateFailed,
+				sdk.NewCoins(), fmt.Sprintf("fiat conversion failed: %s", err.Error()), "system")
+			return payout, nil
+		}
+
+		conversion.PayoutID = payout.PayoutID
+		conversion.EscrowID = payout.EscrowID
+		conversion.OrderID = payout.OrderID
+		conversion.LeaseID = payout.LeaseID
+		conversion.CryptoAmount = payout.NetAmount[0]
+		conversion.AddAuditEntry("payout_linked", "system", "", map[string]string{
+			"payout_id": payout.PayoutID,
+		}, ctx.BlockTime())
+
+		if err := k.SetFiatConversion(ctx, conversion); err != nil {
+			return nil, err
+		}
+
+		payout.FiatConversionID = conversion.ConversionID
+		if err := k.SetPayout(ctx, *payout); err != nil {
+			return nil, err
+		}
+
+		if err := k.executeFiatConversion(ctx, payout, &conversion); err != nil {
+			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, conversion)
+			_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = k.SetPayout(ctx, *payout)
+			k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
+				types.PayoutStateProcessing, types.PayoutStateFailed,
+				sdk.NewCoins(), fmt.Sprintf("fiat conversion failed: %s", err.Error()), "system")
+
+			_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionFailed{
+				ConversionID: conversion.ConversionID,
+				Provider:     conversion.Provider,
+				Reason:       err.Error(),
+				FailedAt:     ctx.BlockTime().Unix(),
+			})
+			return payout, nil
+		}
+
+		return payout, nil
+	}
+
+	// Execute the payout immediately (crypto path)
 	if err := k.executePayoutTransfer(ctx, payout); err != nil {
 		// Mark as failed
 		_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
@@ -438,6 +484,27 @@ func (k Keeper) ExecutePayoutByID(ctx sdk.Context, payoutID string) error {
 	}
 
 	return k.executePayoutTransfer(ctx, &payout)
+}
+
+// calculateHoldbackAmount computes holdback coins based on params.
+func (k Keeper) calculateHoldbackAmount(ctx sdk.Context, gross sdk.Coins) sdk.Coins {
+	holdbackAmount := sdk.NewCoins()
+	params := k.GetParams(ctx)
+	if params.PayoutHoldbackRate == "" {
+		return holdbackAmount
+	}
+
+	holdbackRate, err := sdkmath.LegacyNewDecFromStr(params.PayoutHoldbackRate)
+	if err != nil || !holdbackRate.IsPositive() {
+		return holdbackAmount
+	}
+
+	for _, coin := range gross {
+		holdbackCoin := sdk.NewCoin(coin.Denom, holdbackRate.MulInt(coin.Amount).TruncateInt())
+		holdbackAmount = holdbackAmount.Add(holdbackCoin)
+	}
+
+	return holdbackAmount
 }
 
 // checkPayoutIdempotency checks if a payout has already been processed
