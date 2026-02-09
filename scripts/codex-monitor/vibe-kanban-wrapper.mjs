@@ -28,6 +28,12 @@ const args = process.argv.slice(2);
 const child = spawn("node", [vkBin, ...args], {
   stdio: "inherit",
   shell: false,
+  env: {
+    ...process.env,
+    // Prevent git from opening interactive editors (blocks agents if AFK)
+    GIT_EDITOR: "true",
+    GIT_SEQUENCE_EDITOR: "true",
+  },
 });
 
 child.on("exit", (code) => {

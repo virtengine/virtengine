@@ -34,6 +34,7 @@ import {
   restoreLiveDigest,
   getDigestSnapshot,
 } from "./telegram-bot.mjs";
+import { PRCleanupDaemon } from "./pr-cleanup-daemon.mjs";
 import {
   execPrimaryPrompt,
   isPrimaryBusy,
@@ -8176,6 +8177,20 @@ injectMonitorFunctions({
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
+}
+
+// ── Start PR Cleanup Daemon ──────────────────────────────────────────────────
+// Automatically resolves PR conflicts and CI failures every 30 minutes
+let prCleanupDaemon = null;
+if (config.prCleanupEnabled !== false) {
+  console.log("[monitor] Starting PR cleanup daemon...");
+  prCleanupDaemon = new PRCleanupDaemon({
+    intervalMs: 30 * 60 * 1000, // 30 minutes
+    maxConcurrentCleanups: 3,
+    dryRun: false,
+    autoMerge: true,
+  });
+  prCleanupDaemon.start();
 }
 
 // ── Named exports for testing ───────────────────────────────────────────────

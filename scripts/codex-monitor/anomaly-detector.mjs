@@ -14,7 +14,9 @@
  *   - Per-process tracking via ProcessState objects
  *   - Sliding window counters for rate-based detection
  *   - Fingerprinted dedup to avoid alert spam
- *   - Severity levels: CRITICAL (kill), HIGH (alert+escalate), MEDIUM (warn), LOW (info)
+ *   - Severity levels: CRITICAL (kill), HIGH (warn), MEDIUM (warn), LOW (info)
+ *   - KILL action reserved for TOKEN_OVERFLOW only (true unrecoverable state)
+ *   - Active process monitoring only (completed processes archived for analysis)
  *
  * Pattern catalog: See VK_FAILURE_PATTERN_CATALOG.md
  */
@@ -23,8 +25,8 @@ import { normalizeDedupKey, stripAnsi, escapeHtml } from "./utils.mjs";
 
 // ── Severity levels ─────────────────────────────────────────────────────────
 export const Severity = /** @type {const} */ ({
-  CRITICAL: "CRITICAL", // Should kill the process immediately
-  HIGH: "HIGH", // Should alert and likely kill
+  CRITICAL: "CRITICAL", // Reserved for TOKEN_OVERFLOW (unrecoverable)
+  HIGH: "HIGH", // Serious issues requiring attention (but don't kill)
   MEDIUM: "MEDIUM", // Should warn, may need intervention
   LOW: "LOW", // Informational
 });
@@ -237,8 +239,11 @@ const STR_TASK_COMPLETE = "task_complete";
 // ── Main Detector Class ─────────────────────────────────────────────────────
 
 export class AnomalyDetector {
-  /** @type {Map<string, ProcessState>} Per-process state */
+  /** @type {Map<string, ProcessState>} Per-process state (active only) */
   #processes = new Map();
+
+  /** @type {Map<string, ProcessState>} Completed processes (archived for analysis) */
+  #completedProcesses = new Map();
 
   /** @type {(anomaly: Anomaly) => void} */
   #onAnomaly;
@@ -342,8 +347,15 @@ export class AnomalyDetector {
     if (meta.taskTitle && !state.taskTitle) state.taskTitle = meta.taskTitle;
     if (meta.branch && !state.branch) state.branch = meta.branch;
 
-    // Skip further analysis on dead processes
-    if (state.isDead) return;
+    // Skip further analysis on dead/completed processes
+    if (state.isDead) {
+      // Archive completed process on first detection
+      if (this.#processes.has(pid)) {
+        this.#completedProcesses.set(pid, state);
+        this.#processes.delete(pid);
+      }
+      return;
+    }
 
     // ── Run all detectors ───────────────────────────────────────────
     this.#detectTokenOverflow(line, state);
@@ -369,18 +381,13 @@ export class AnomalyDetector {
     const stats = {
       uptimeMs: Date.now() - this.#startedAt,
       totalLinesProcessed: this.#totalLines,
-      activeProcesses: 0,
-      deadProcesses: 0,
+      activeProcesses: this.#processes.size,
+      completedProcesses: this.#completedProcesses.size,
       anomalyCounts: Object.fromEntries(this.#globalCounts),
       processes: /** @type {object[]} */ ([]),
     };
 
     for (const [pid, state] of this.#processes) {
-      if (state.isDead) {
-        stats.deadProcesses++;
-      } else {
-        stats.activeProcesses++;
-      }
       stats.processes.push({
         shortId: state.shortId,
         taskTitle: state.taskTitle || "(unknown)",
@@ -410,7 +417,7 @@ export class AnomalyDetector {
     const lines = [
       `<b>🔍 Anomaly Detector Status</b>`,
       `Uptime: ${uptimeMin}m | Lines: ${s.totalLinesProcessed.toLocaleString()}`,
-      `Active: ${s.activeProcesses} | Dead: ${s.deadProcesses}`,
+      `Active: ${s.activeProcesses} | Completed: ${s.completedProcesses}`,
     ];
 
     const counts = Object.entries(s.anomalyCounts);
@@ -564,13 +571,13 @@ export class AnomalyDetector {
     if (count >= this.#thresholds.toolCallLoopKill) {
       this.#emit({
         type: AnomalyType.TOOL_CALL_LOOP,
-        severity: Severity.CRITICAL,
+        severity: Severity.HIGH,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Tool call death loop: "${title}" called ${count}x consecutively`,
+        message: `Tool call loop detected: "${title}" called ${count}x consecutively`,
         data: { tool: title, count },
-        action: "kill",
+        action: "warn",
       });
     } else if (count >= this.#thresholds.toolCallLoopWarn) {
       this.#emit({
@@ -603,7 +610,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Tool failure cascade: ${state.toolFailureCount} failures in session`,
         data: { count: state.toolFailureCount },
-        action: "kill",
+        action: "warn",
       });
     } else if (state.toolFailureCount >= this.#thresholds.toolFailureWarn) {
       this.#emit({
@@ -635,16 +642,16 @@ export class AnomalyDetector {
     if (state.rebaseCount >= this.#thresholds.rebaseKill) {
       this.#emit({
         type: AnomalyType.REBASE_SPIRAL,
-        severity: Severity.CRITICAL,
+        severity: Severity.HIGH,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Rebase death spiral: ${state.rebaseCount} rebase --continue attempts`,
+        message: `Rebase spiral detected: ${state.rebaseCount} rebase --continue attempts`,
         data: {
           rebaseCount: state.rebaseCount,
           abortCount: state.rebaseAbortCount,
         },
-        action: "kill",
+        action: "warn",
       });
     } else if (state.rebaseCount >= this.#thresholds.rebaseWarn) {
       this.#emit({
@@ -678,9 +685,9 @@ export class AnomalyDetector {
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Git push death loop: ${state.gitPushCount} push attempts`,
+        message: `Git push loop detected: ${state.gitPushCount} push attempts`,
         data: { count: state.gitPushCount },
-        action: "kill",
+        action: "warn",
       });
     } else if (state.gitPushCount >= this.#thresholds.gitPushWarn) {
       this.#emit({
@@ -713,7 +720,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Excessive subagent spawning: ${state.subagentCount} subagents`,
         data: { count: state.subagentCount },
-        action: "kill",
+        action: "warn",
       });
     } else if (state.subagentCount >= this.#thresholds.subagentWarn) {
       this.#emit({
@@ -793,9 +800,9 @@ export class AnomalyDetector {
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Thought spinning: "${thoughtText}" repeated ${count}x — model is looping`,
+        message: `Thought spinning: "${thoughtText}" repeated ${count}x — model may be looping`,
         data: { thought: thoughtText, count },
-        action: "kill",
+        action: "warn",
       });
     } else if (count >= this.#thresholds.thoughtSpinWarn) {
       this.#emit({
@@ -855,7 +862,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Repeated error (${count}x): ${line.slice(0, 150)}`,
         data: { fingerprint, count },
-        action: "kill",
+        action: "warn",
       });
     } else if (count >= this.#thresholds.repeatedErrorWarn) {
       this.#emit({
@@ -901,9 +908,9 @@ export class AnomalyDetector {
           processId: state.processId,
           shortId: state.shortId,
           taskTitle: state.taskTitle,
-          message: `Agent stalled: no output for ${Math.round(idleMs / 1000)}s`,
+          message: `Agent may be stalled: no output for ${Math.round(idleMs / 1000)}s`,
           data: { idleSec: Math.round(idleMs / 1000) },
-          action: "kill",
+          action: "warn",
         });
       } else if (idleMs >= this.#thresholds.idleStallWarnSec * 1000) {
         this.#emit({
@@ -924,12 +931,20 @@ export class AnomalyDetector {
 
   /**
    * Remove process state for processes inactive beyond cleanup threshold.
+   * Cleans both active and completed process archives.
    */
   #cleanupOldProcesses() {
     const now = Date.now();
+    // Clean active processes
     for (const [pid, state] of this.#processes) {
       if (now - state.lastLineAt > this.#thresholds.processCleanupMs) {
         this.#processes.delete(pid);
+      }
+    }
+    // Clean completed process archives
+    for (const [pid, state] of this.#completedProcesses) {
+      if (now - state.lastLineAt > this.#thresholds.processCleanupMs) {
+        this.#completedProcesses.delete(pid);
       }
     }
   }
