@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	delegationv1 "github.com/virtengine/virtengine/sdk/go/node/delegation/v1"
 	"github.com/virtengine/virtengine/x/delegation/keeper"
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
@@ -75,7 +76,10 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the delegation module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// gRPC gateway routes will be registered here when proto definitions are added
+	err := delegationv1.RegisterQueryHandlerClient(context.Background(), mux, delegationv1.NewQueryClient(clientCtx))
+	if err != nil {
+		panic(fmt.Sprintf("couldn't register delegation grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the delegation module.
@@ -118,6 +122,8 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	queryServer := keeper.NewQuerier(am.keeper)
+	delegationv1.RegisterQueryServer(cfg.QueryServer(), queryServer)
 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
