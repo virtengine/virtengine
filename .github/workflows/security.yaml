@@ -313,7 +313,12 @@ jobs:
 
       - name: Run gitleaks
         run: |
-          gitleaks detect --source . --verbose --redact --report-format sarif --report-path gitleaks.sarif || true
+          # Use config file for allowlist
+          if [ -f .gitleaks.toml ]; then
+            gitleaks detect --source . --config .gitleaks.toml --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          else
+            gitleaks detect --source . --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          fi
 
       - name: Upload gitleaks results
         uses: github/codeql-action/upload-sarif@v3
@@ -348,7 +353,40 @@ jobs:
 
       - name: Run gosec
         run: |
-          gosec -fmt sarif -out gosec.sarif -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./... || true
+          # Generate full scan
+          gosec -fmt json -out gosec.json -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...
+          
+          # Also generate SARIF for GitHub Security tab
+          gosec -fmt sarif -out gosec.sarif -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...
+          
+          # Check severity if baseline exists
+          if [ -f .gosec-baseline.json ]; then
+            echo "Running gosec with baseline comparison..."
+            
+            # Count HIGH/CRITICAL severity issues
+            HIGH_CRITICAL=$(cat gosec.json | jq -r '[.Issues[]? | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
+            MEDIUM=$(cat gosec.json | jq -r '[.Issues[]? | select(.severity == "MEDIUM")] | length')
+            
+            echo "Found $HIGH_CRITICAL high/critical severity issues"
+            echo "Found $MEDIUM medium severity issues"
+            
+            if [ "$HIGH_CRITICAL" -gt 0 ]; then
+              echo "::error::Found $HIGH_CRITICAL high/critical severity issues"
+              cat gosec.json | jq -r '.Issues[]? | select(.severity == "HIGH" or .severity == "CRITICAL") | "::error file=\(.file),line=\(.line)::\(.details)"'
+              exit 1
+            fi
+            
+            if [ "$MEDIUM" -gt 0 ]; then
+              echo "::warning::Found $MEDIUM medium severity issues"
+              cat gosec.json | jq -r '.Issues[]? | select(.severity == "MEDIUM") | "::warning file=\(.file),line=\(.line)::\(.details)"'
+            fi
+          else
+            # No baseline - just warn about findings
+            TOTAL=$(cat gosec.json | jq -r '.Issues | length')
+            if [ "$TOTAL" -gt 0 ]; then
+              echo "::warning::Found $TOTAL security issues (no baseline configured)"
+            fi
+          fi
 
       - name: Upload gosec results
         uses: github/codeql-action/upload-sarif@v3
