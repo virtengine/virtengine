@@ -24,6 +24,7 @@ import {
 import { useAdminStore } from '@/stores/adminStore';
 import { formatDate, formatRelativeTime, truncateAddress } from '@/lib/utils';
 import type { AdminRole, UserAccount, VEIDStatus } from '@/types/admin';
+import { useTranslation } from 'react-i18next';
 
 const roleStyles: Record<AdminRole, string> = {
   operator: 'bg-primary/10 text-primary',
@@ -41,6 +42,7 @@ const veidBadge: Record<VEIDStatus, string> = {
 };
 
 export default function AdminUsersPage() {
+  const { t } = useTranslation();
   const users = useAdminStore((s) => s.users);
   const accounts = useAdminStore((s) => s.accounts);
   const userActivity = useAdminStore((s) => s.userActivity);
@@ -87,9 +89,9 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">User Management</h1>
+        <h1 className="text-3xl font-bold">{t('User Management')}</h1>
         <p className="mt-1 text-muted-foreground">
-          Admin roles, VEID oversight, and account operations
+          {t('Admin roles, VEID oversight, and account operations')}
         </p>
       </div>
 

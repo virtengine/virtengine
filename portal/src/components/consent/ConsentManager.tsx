@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import type { ConsentPurpose, ConsentSettingsResponse } from '@/types/consent';
 import { DataExportStatus } from '@/components/consent/DataExportStatus';
+import { useTranslation } from 'react-i18next';
 
 const CONSENT_PURPOSES: Array<{
   key: ConsentPurpose;
@@ -52,6 +53,7 @@ function buildConsentText(purpose: ConsentPurpose) {
 }
 
 export function ConsentManager() {
+  const { t } = useTranslation();
   const wallet = useWallet();
   const account = wallet.accounts[wallet.activeAccountIndex];
   const address = account?.address ?? 'virtengine1demo';
@@ -69,11 +71,11 @@ export function ConsentManager() {
       setSettings(data);
       setError(null);
     } catch (err) {
-      setError('Unable to load consent settings.');
+      setError(t('Unable to load consent settings.'));
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, t]);
 
   useEffect(() => {
     void loadSettings();
@@ -115,7 +117,7 @@ export function ConsentManager() {
       }
       await loadSettings();
     } catch (err) {
-      setError('Unable to update consent right now.');
+      setError(t('Unable to update consent right now.'));
     } finally {
       setUpdating(null);
     }
@@ -130,34 +132,34 @@ export function ConsentManager() {
   }, [settings?.consents]);
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading privacy controls…</p>;
+    return <p className="text-sm text-muted-foreground">{t('Loading privacy controls…')}</p>;
   }
 
   if (!settings) {
-    return <p className="text-sm text-muted-foreground">No privacy data available.</p>;
+    return <p className="text-sm text-muted-foreground">{t('No privacy data available.')}</p>;
   }
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Consent controls</CardTitle>
+          <CardTitle>{t('Consent controls')}</CardTitle>
           <CardDescription>
-            Manage how VirtEngine processes your identity data across the VEID network.
+            {t('Manage how VirtEngine processes your identity data across the VEID network.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-xs text-muted-foreground">Policy version</p>
+              <p className="text-xs text-muted-foreground">{t('Policy version')}</p>
               <p className="text-sm font-semibold">v1.0</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-xs text-muted-foreground">Consent version</p>
+              <p className="text-xs text-muted-foreground">{t('Consent version')}</p>
               <p className="text-sm font-semibold">#{settings.consentVersion}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-xs text-muted-foreground">Last updated</p>
+              <p className="text-xs text-muted-foreground">{t('Last updated')}</p>
               <p className="text-sm font-semibold">
                 {new Date(settings.lastUpdatedAt).toLocaleDateString()}
               </p>
@@ -181,7 +183,7 @@ export function ConsentManager() {
                       <p className="text-sm font-semibold">{entry.title}</p>
                       {entry.required && (
                         <Badge variant="secondary" className="uppercase tracking-wide">
-                          Required
+                          {t('Required')}
                         </Badge>
                       )}
                       <Badge
@@ -200,7 +202,7 @@ export function ConsentManager() {
                     aria-pressed={isActive}
                     disabled={isDisabled}
                   >
-                    {isActive ? 'Withdraw' : 'Grant'}
+                    {isActive ? t('Withdraw') : t('Grant')}
                   </Button>
                 </div>
               );
@@ -211,17 +213,18 @@ export function ConsentManager() {
 
       {withdrawnRequired && (
         <Alert variant="warning">
-          <AlertTitle>Required consent withdrawn</AlertTitle>
+          <AlertTitle>{t('Required consent withdrawn')}</AlertTitle>
           <AlertDescription>
-            Some required consents are currently withdrawn. This may pause VEID verification and
-            restrict marketplace access until re-enabled.
+            {t(
+              'Some required consents are currently withdrawn. This may pause VEID verification and restrict marketplace access until re-enabled.'
+            )}
           </AlertDescription>
         </Alert>
       )}
 
       {error && (
         <Alert variant="destructive">
-          <AlertTitle>Update failed</AlertTitle>
+          <AlertTitle>{t('Update failed')}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}

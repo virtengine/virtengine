@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import {
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -68,6 +69,9 @@ export function DepositModal({ open, onOpenChange, account, fiatRates }: Deposit
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Deposit to Escrow</DialogTitle>
+          <DialogDescription>
+            Transfer funds into escrow to secure settlement before releasing compute resources.
+          </DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
