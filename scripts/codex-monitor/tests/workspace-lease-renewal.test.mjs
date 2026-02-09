@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile, mkdtemp } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   loadSharedWorkspaceRegistry,
   saveSharedWorkspaceRegistry,
@@ -10,12 +11,15 @@ import {
   sweepExpiredLeases,
 } from "../shared-workspace-registry.mjs";
 
-const TEST_DIR = resolve(process.cwd(), ".test-workspace-registry");
-const TEST_REGISTRY_PATH = resolve(TEST_DIR, "test-registry.json");
-const TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
+let TEST_DIR = "";
+let TEST_REGISTRY_PATH = "";
+let TEST_AUDIT_PATH = "";
 
 describe("workspace-registry lease renewal", () => {
   beforeEach(async () => {
+    TEST_DIR = await mkdtemp(resolve(tmpdir(), "codex-workspace-registry-"));
+    TEST_REGISTRY_PATH = resolve(TEST_DIR, "test-registry.json");
+    TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
     await mkdir(TEST_DIR, { recursive: true });
   });
 
