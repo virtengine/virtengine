@@ -160,6 +160,27 @@ type Params struct {
 
 	// FiatConversionMinComplianceStatus is the minimum compliance status required
 	FiatConversionMinComplianceStatus string `json:"fiat_conversion_min_compliance_status"`
+
+	// FiatConversionSpreadBps is the spread applied to fiat conversion rates (basis points)
+	FiatConversionSpreadBps uint32 `json:"fiat_conversion_spread_bps"`
+
+	// OracleSources defines the configured oracle sources
+	OracleSources []OracleSourceConfig `json:"oracle_sources"`
+
+	// OracleStalenessThresholdSeconds defines staleness threshold in seconds
+	OracleStalenessThresholdSeconds uint64 `json:"oracle_staleness_threshold_seconds"`
+
+	// OracleMinSources defines minimum oracle sources required for aggregation
+	OracleMinSources uint32 `json:"oracle_min_sources"`
+
+	// OracleManualPrices defines governance-set emergency prices
+	OracleManualPrices []ManualPriceOverride `json:"oracle_manual_prices"`
+
+	// OracleDeviationThresholdBps defines deviation threshold for alerts (basis points)
+	OracleDeviationThresholdBps uint32 `json:"oracle_deviation_threshold_bps"`
+
+	// OracleDeviationWindowSeconds defines the alert evaluation window in seconds
+	OracleDeviationWindowSeconds uint64 `json:"oracle_deviation_window_seconds"`
 }
 
 // DefaultGenesisState returns the default genesis state
@@ -221,6 +242,18 @@ func DefaultParams() Params {
 		FiatConversionMaxSlippage:              "0.02",
 		FiatConversionRiskScoreThreshold:       75,
 		FiatConversionMinComplianceStatus:      "CLEARED",
+		FiatConversionSpreadBps:                50,
+		OracleSources: []OracleSourceConfig{
+			{ID: "cosmos-oracle", Type: OracleSourceTypeCosmosOracle, Enabled: true, Priority: 1},
+			{ID: "band-ibc", Type: OracleSourceTypeBandIBC, Enabled: true, Priority: 2},
+			{ID: "chainlink-ibc", Type: OracleSourceTypeChainlinkIBC, Enabled: true, Priority: 3},
+			{ID: "manual", Type: OracleSourceTypeManual, Enabled: true, Priority: 100},
+		},
+		OracleStalenessThresholdSeconds: 300,
+		OracleMinSources:                3,
+		OracleManualPrices:              []ManualPriceOverride{},
+		OracleDeviationThresholdBps:     500,
+		OracleDeviationWindowSeconds:    60,
 	}
 }
 
@@ -321,6 +354,19 @@ func (gs GenesisState) Validate() error {
 func (p Params) Validate() error {
 	// Validate fee rates are between 0 and 1
 	// We'll do basic validation here; more sophisticated parsing would be needed in production
+	if p.PlatformFeeRate != "" {
+		fee, err := sdkmath.LegacyNewDecFromStr(p.PlatformFeeRate)
+		if err != nil || fee.IsNegative() || fee.GT(sdkmath.LegacyOneDec()) {
+			return ErrInvalidParams.Wrap("platform_fee_rate must be between 0 and 1")
+		}
+	}
+
+	if p.ValidatorFeeRate != "" {
+		fee, err := sdkmath.LegacyNewDecFromStr(p.ValidatorFeeRate)
+		if err != nil || fee.IsNegative() || fee.GT(sdkmath.LegacyOneDec()) {
+			return ErrInvalidParams.Wrap("validator_fee_rate must be between 0 and 1")
+		}
+	}
 
 	if p.MinEscrowDuration == 0 {
 		return ErrInvalidParams.Wrap("min_escrow_duration must be greater than zero")
@@ -420,6 +466,50 @@ func (p Params) Validate() error {
 
 		if p.FiatConversionMinComplianceStatus == "" {
 			return ErrInvalidParams.Wrap("fiat_conversion_min_compliance_status required")
+		}
+	}
+
+	if p.FiatConversionSpreadBps > 10000 {
+		return ErrInvalidParams.Wrap("fiat_conversion_spread_bps cannot exceed 10000")
+	}
+
+	if p.OracleStalenessThresholdSeconds == 0 {
+		return ErrInvalidParams.Wrap("oracle_staleness_threshold_seconds must be greater than zero")
+	}
+
+	if p.OracleMinSources == 0 {
+		return ErrInvalidParams.Wrap("oracle_min_sources must be greater than zero")
+	}
+
+	if p.OracleDeviationThresholdBps == 0 || p.OracleDeviationThresholdBps > 10000 {
+		return ErrInvalidParams.Wrap("oracle_deviation_threshold_bps must be between 1 and 10000")
+	}
+
+	if p.OracleDeviationWindowSeconds == 0 {
+		return ErrInvalidParams.Wrap("oracle_deviation_window_seconds must be greater than zero")
+	}
+
+	seenOracle := make(map[string]bool)
+	enabledSources := 0
+	for _, source := range p.OracleSources {
+		if err := source.Validate(); err != nil {
+			return err
+		}
+		if seenOracle[source.ID] {
+			return ErrInvalidParams.Wrapf("duplicate oracle source: %s", source.ID)
+		}
+		seenOracle[source.ID] = true
+		if source.Enabled {
+			enabledSources++
+		}
+	}
+	if enabledSources == 0 {
+		return ErrInvalidParams.Wrap("at least one oracle source must be enabled")
+	}
+
+	for _, override := range p.OracleManualPrices {
+		if err := override.Validate(); err != nil {
+			return err
 		}
 	}
 
