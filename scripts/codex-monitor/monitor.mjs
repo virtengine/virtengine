@@ -6073,7 +6073,7 @@ async function triggerTaskPlannerViaKanban(
       ? taskCount
       : defaultPlannerTaskCount;
   const plannerTaskSizeLabel = String(
-    process.env.TASK_PLANNER_TASK_SIZE_LABEL || "xl",
+    process.env.TASK_PLANNER_TASK_SIZE_LABEL || "m",
   ).toLowerCase();
   // Get project ID using the name-matched helper
   const projectId = await findVkProjectId();
@@ -6120,6 +6120,7 @@ async function triggerTaskPlannerViaKanban(
       "- If a placeholder is unavoidable, create a paired follow-up task immediately",
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
+      "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
     ].join("\n");
     // Best-effort: keep backlog task aligned with current requirements
     if (
@@ -6182,6 +6183,7 @@ async function triggerTaskPlannerViaKanban(
       "- If a placeholder is unavoidable, create a paired follow-up task immediately",
       "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
       "  This drives automatic complexity-based model routing for task execution.",
+      "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
     ].join("\n"),
     status: "todo",
     project_id: projectId,
@@ -6622,6 +6624,26 @@ async function handleExit(code, signal, logPath) {
     }
     restartCount += 1;
     setTimeout(startProcess, exitState.backoffMs);
+    return;
+  }
+
+  // ── Benign exit 1: orchestrator ran normally but PowerShell propagated a
+  // non-zero $LASTEXITCODE from the last native command (git/gh).  Detect by
+  // checking that the log has no actual errors — just normal cycle messages.
+  if (
+    code === 1 &&
+    !signal &&
+    logText.length > 200 &&
+    !logText.includes("ERROR") &&
+    !logText.includes("FATAL") &&
+    !logText.includes("Unhandled exception") &&
+    (logText.includes("Sleeping") || logText.includes("next cycle"))
+  ) {
+    console.log(
+      `[monitor] benign exit 1 detected (no errors in log, normal cycles) — restarting without autofix`,
+    );
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
     return;
   }
 

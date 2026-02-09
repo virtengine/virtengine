@@ -5466,3 +5466,8 @@ function Start-Orchestrator {
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 Start-Orchestrator
+
+# Ensure clean exit code — without this, PowerShell propagates $LASTEXITCODE
+# from the last native command (git, gh) which may be non-zero even on normal
+# orchestrator shutdown, causing the monitor to trigger autofix unnecessarily.
+exit 0
