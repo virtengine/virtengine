@@ -1,9 +1,9 @@
 # Provider Module (x/provider) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: chain module that owns provider registration, lifecycle management, domain verification, and provider public-key management.
-- Use this module when you need on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
-- Key exports / public API surface:
+- Use when: Updating on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
+- Key entry points:
   - `AppModuleBasic` and `AppModule` for module wiring in the app (`x/provider/module.go:44`, `x/provider/module.go:49`).
   - `keeper.IKeeper` for cross-module reads/writes (`x/provider/keeper/keeper.go:15`).
   - `handler.NewMsgServerImpl` for MsgServer registration (`x/provider/handler/server.go:34`).
@@ -85,6 +85,10 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Uses DNS lookups for domain verification (`x/provider/keeper/domain_verification.go:95`); ensure DNS access in integration tests.
 - No package-specific environment variables.
 
+## Configuration
+- No module parameters; verification settings are compile-time constants (`x/provider/keeper/domain_verification.go:26`).
+- DNS verification uses `_virtengine-verification` TXT records (`x/provider/keeper/domain_verification.go:33`).
+
 ## Testing
 - Unit tests:
   - `x/provider/handler/handler_test.go`
@@ -93,3 +97,8 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Recommended commands:
   - `go test ./x/provider/... -count=1`
   - `go test ./sdk/go/node/provider/v1beta4 -count=1`
+
+## Troubleshooting
+- Domain verification fails unexpectedly
+  - Cause: TXT record missing or cached with old token.
+  - Fix: Re-issue token and verify with DNS tools before retrying.

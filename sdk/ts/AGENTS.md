@@ -1,9 +1,9 @@
 # Chain SDK (sdk/ts) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: TypeScript SDK for VirtEngine chain APIs, gRPC clients, wallet helpers, and provider SDK access (`sdk/ts/package.json:2`).
-- Use this package for TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
-- Key exports / public API surface:
+- Use when: Building TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
+- Key entry points:
   - Barrel exports from `sdk/ts/src/index.ts:1`.
   - Chain SDK factories: `createChainNodeSDK`, `createChainNodeWebSDK` (`sdk/ts/src/sdk/index.ts:2`).
   - Provider SDK factory: `createProviderSDK` (`sdk/ts/src/sdk/index.ts:4`).
@@ -75,8 +75,17 @@ const providerSDK = createProviderSDK({
 - Key deps: `@connectrpc/*`, `@cosmjs/*`, `jsrsasign`, `long` (`sdk/ts/package.json:60`).
 - Build outputs live in `sdk/ts/dist` (package `files` list, `sdk/ts/package.json:34`).
 
+## Configuration
+- SDK factories accept endpoints, auth, and retry settings via options (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:17`).
+- When adding new options, thread them through to transports and interceptors (`sdk/ts/src/sdk/provider/createProviderSDK.ts:12`).
+
 ## Testing
 - Tests live in `sdk/ts/test/` (unit + functional).
 - Commands:
   - `npm test` (runs Jest, `sdk/ts/package.json:41`).
   - `npm run test:unit` and `npm run test:functional` for focused suites.
+
+## Troubleshooting
+- SDK fails to connect in browser
+  - Cause: Using node gRPC transport instead of gRPC-gateway.
+  - Fix: Use `createChainNodeWebSDK` and provide HTTP base URLs.

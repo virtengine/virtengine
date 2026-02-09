@@ -1,9 +1,9 @@
 # API Layer (api/openapi) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: OpenAPI specifications for VirtEngine blockchain and provider portal APIs, used for client generation and documentation.
-- Use `api/openapi/virtengine-api.yaml` for chain-level queries and transactions; use `api/openapi/portal_api.yaml` for provider portal operations.
-- Key assets:
+- Use when: Updating API definitions, auth headers, or schema metadata for chain or portal clients.
+- Key entry points:
   - `api/openapi/virtengine-api.yaml` entry point (`api/openapi/virtengine-api.yaml:1`).
   - `api/openapi/portal_api.yaml` entry point (`api/openapi/portal_api.yaml:1`).
 
@@ -58,3 +58,12 @@ X-VE-PubKey: <base64_pubkey>
 
 ## Testing
 - Validate specs with your OpenAPI linter or generator before release.
+
+## Configuration
+- No runtime configuration; specs are consumed by client generators and docs tooling.
+- Keep server URLs and security schemes aligned with deployment environments (`api/openapi/virtengine-api.yaml:35`, `api/openapi/portal_api.yaml:37`).
+
+## Troubleshooting
+- OpenAPI lint errors after edits
+  - Cause: Missing `components` references or malformed schema blocks.
+  - Fix: Re-run the linter and compare against adjacent schemas for required fields.
