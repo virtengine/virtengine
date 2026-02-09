@@ -101,7 +101,7 @@ func TestUpgradeV120InitializesNewModules(t *testing.T) {
 		}
 	}
 
-	_, err = up.UpgradeHandler()(sdk.WrapSDKContext(ctx), upgradetypes.Plan{Name: upgradeV120}, fromVM)
+	_, err = up.UpgradeHandler()(ctx, upgradetypes.Plan{Name: upgradeV120}, fromVM)
 	require.NoError(t, err)
 
 	require.Equal(t, veidtypes.DefaultGenesisState().Params, app.Keepers.VirtEngine.VEID.GetParams(ctx))
