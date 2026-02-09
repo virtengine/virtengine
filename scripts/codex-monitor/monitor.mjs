@@ -1552,7 +1552,40 @@ function ensureVkLogStream() {
   vkLogStream = new VkLogStream(vkEndpointUrl, {
     logDir: agentLogDir,
     sessionLogDir,
-    echo: echoLogs,
+    // Always keep VK log streaming silent in the CLI.
+    echo: false,
+    filterLine: (line) => {
+      // Drop verbose VK/Codex event chatter and token streams.
+      if (!line) return false;
+      if (line.length > 6000) return false;
+      if (line.startsWith("{\"method\":\"codex/event/")) return false;
+      if (line.startsWith("{\"method\":\"item/")) return false;
+      if (line.startsWith("{\"method\":\"thread/")) return false;
+      if (line.startsWith("{\"method\":\"account/")) return false;
+      if (line.includes("\"type\":\"reasoning_content_delta\"")) return false;
+      if (line.includes("\"type\":\"agent_reasoning_delta\"")) return false;
+      if (line.includes("\"type\":\"token_count\"")) return false;
+      if (line.includes("\"type\":\"item_started\"")) return false;
+      if (line.includes("\"type\":\"item_completed\"")) return false;
+      if (line.includes("\"type\":\"exec_command_begin\"")) return false;
+      if (line.includes("\"type\":\"exec_command_output_delta\"")) return false;
+      if (line.includes("\"type\":\"exec_command_end\"")) return false;
+      if (line.includes("\"method\":\"codex/event/reasoning_content_delta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/agent_reasoning_delta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/token_count\"")) return false;
+      if (line.includes("\"method\":\"codex/event/item_started\"")) return false;
+      if (line.includes("\"method\":\"codex/event/item_completed\"")) return false;
+      if (line.includes("\"method\":\"codex/event/exec_command_")) return false;
+      if (line.includes("\"method\":\"item/reasoning/summaryTextDelta\""))
+        return false;
+      if (line.includes("\"method\":\"item/commandExecution/outputDelta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/agent_reasoning\""))
+        return false;
+      return true;
+    },
     onLine: (line, meta) => {
       // Feed every agent log line to the anomaly detector for real-time
       // pattern matching (death loops, token overflow, stalls, etc.).
