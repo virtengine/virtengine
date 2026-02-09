@@ -143,6 +143,11 @@ async function acquireTelegramPollLock(owner) {
     if (err && err.code === "EEXIST") {
       try {
         const raw = await readFile(telegramPollLockPath, "utf8");
+        if (!raw || !raw.trim()) {
+          // Empty/corrupt lock file — treat as stale
+          await unlink(telegramPollLockPath);
+          return await acquireTelegramPollLock(owner);
+        }
         const data = JSON.parse(raw);
         const pid = Number(data?.pid);
         if (!canSignalProcess(pid)) {
@@ -150,7 +155,13 @@ async function acquireTelegramPollLock(owner) {
           return await acquireTelegramPollLock(owner);
         }
       } catch {
-        /* best effort */
+        // Lock file is corrupt/unparseable — remove and retry
+        try {
+          await unlink(telegramPollLockPath);
+        } catch {
+          /* ignore */
+        }
+        return await acquireTelegramPollLock(owner);
       }
     }
     return false;
@@ -2008,14 +2019,13 @@ function buildExecutorHealthFromStatus(statusData) {
   for (const info of Object.values(attempts)) {
     if (!info) continue;
     const key = buildExecutorKey(info.executor, info.executor_variant);
-    const entry =
-      metrics.get(key) || {
-        active: 0,
-        failures: 0,
-        successes: 0,
-        timeouts: 0,
-        rate_limits: 0,
-      };
+    const entry = metrics.get(key) || {
+      active: 0,
+      failures: 0,
+      successes: 0,
+      timeouts: 0,
+      rate_limits: 0,
+    };
 
     const processStatus = String(
       info.last_process_status || info.status || "",

@@ -1,6 +1,7 @@
 # VirtEngine AGENTS System — Repo Guide
 
 ## Module Overview
+
 - Purpose: Describe how AGENTS.md files document modules and how agents should work in this repo.
 - Use when: Updating documentation, adding new modules, or onboarding contributors and agents.
 - Key entry points:
@@ -18,13 +19,18 @@ ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task 
 
 When working on a task, do not stop until it is COMPLETELY done. Continue working on this task until it is 100% DONE END-TO-END with no questions asked.
 
-Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
+### Completing a TASK <IMPORTANT GIT INFO>
+
+Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit, such as gofmt, prettier, golangci-lint) & git merge origin <<upstream branch>> & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks! <<upstream branch>> is the default branch that your branch was created from - MAKE sure that you have MERGED any upstream changes before pushing as otherwise there could be an unaddressed CONFLICT. <<URGENT>>
 
 If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
+
 You might notice that your task instructions might have already been implemented by another agent previously - if this is the case, your goal switches to analyzing if the previous agent has completed the task END TO END sufficiently - and if not, fix any issues or problems the previous agent might have missed.
+
 If you notice unexpected modified/untracked files, assume another agent/subagent is working on a separate task; do NOT revert them. Continue with your task and avoid touching those files unless explicitly instructed.
 
 ## Architecture
+
 - AGENTS.md files live alongside modules and summarize key entry points, concepts, and testing steps.
 - System documentation lives in `docs/`:
   - Template: `docs/templates/AGENTS.template.md`
@@ -37,6 +43,7 @@ If you notice unexpected modified/untracked files, assume another agent/subagent
   - `scripts/codex-monitor/AGENTS.md`
 
 ## Core Concepts
+
 - Every module AGENTS.md uses the required sections listed in the template.
 - Code references use `path/to/file.ext:line` format to anchor guidance.
 - Update AGENTS.md in the same PR as code changes to keep documentation in sync.
@@ -44,13 +51,16 @@ If you notice unexpected modified/untracked files, assume another agent/subagent
 ## Usage Examples
 
 ### Find module guidance
+
 1. Open `docs/AGENTS_INDEX.md`.
 2. Jump to the module link you need.
 
 ### Reference a code entry point
+
 - Example: `x/provider/keeper/keeper.go:48`
 
 ## Implementation Patterns
+
 - Adding a new module AGENTS.md:
   1. Copy `docs/templates/AGENTS.template.md` into the module directory.
   2. Replace placeholders with module-specific content.
@@ -62,26 +72,14 @@ If you notice unexpected modified/untracked files, assume another agent/subagent
 If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), you are responsible for **creating the PR** after your push. The **orchestrator handles merges** when CI passes. In this case:
 
 - Focus on code quality, tests, and a clean commit
+- Before commiting - always run auto formatting tools such as prettier, lint, etc.
 - After committing, sometimes a precommit will automatically trigger formatting changes (prettier, lint, etc) - please add these files to a secondary commit.
+- Ensure you consistently merge upstream changes (from the original branch your branch was created from) before any git push, and fix conflicts if they exist <IMPORTANT>
 - Run `gh pr create` after your push to open the PR (do not bypass prepush hooks, if the issue is caused by an upstream branch - fix it)
-- Ensure you consistently merge upstream changes before any git push, and fix conflicts if they exist
 - Do NOT manually run `gh pr merge` (orchestrator merges after CI)
-
-If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
-
-If you are running **inside** vibe-kanban, and your prompt does not contain enough detail - check if the task exists already in _docs/ralph/tasks folder
+  If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
 
 You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages (running test on all packages could need more than 20minute timeout, only run tests on modules you actually changed instead), etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks.
-
-### Agent-Specific Instructions
-
-- **Codex agents:** See `.codex/instructions.md` for Codex-specific tooling, sandbox constraints, and workflow.
-- **Copilot agents:** See `.github/copilot-instructions.md` for VS Code integration, MCP servers, and module patterns.
-
-### Branch Strategy
-
-- `main` - active development (odd minor versions like v0.9.x)
-- `mainnet/main` - stable releases (even minor versions like v0.8.x)
 
 ### Commit Message Conventions
 
@@ -97,7 +95,18 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 
 Valid scopes: `veid`, `mfa`, `encryption`, `market`, `escrow`, `roles`, `hpc`, `provider`, `sdk`, `cli`, `app`, `deps`, `ci`, `api`
 
+### Agent-Specific Instructions
+
+- **Codex agents:** See `.codex/instructions.md` for Codex-specific tooling, sandbox constraints, and workflow.
+- **Copilot agents:** See `.github/copilot-instructions.md` for VS Code integration, MCP servers, and module patterns.
+
+### Branch Strategy
+
+- `main` - active development (odd minor versions like v0.9.x)
+- `mainnet/main` - stable releases (even minor versions like v0.8.x)
+
 ## Configuration
+
 - AGENTS.md files have no runtime configuration.
 - The validator runs from repo root with Node.js and no additional config.
 
@@ -173,7 +182,10 @@ make test-integration
 - Run `node scripts/validate-agents-docs.mjs` before push.
 
 ## Troubleshooting
+
 - Validator fails on missing section: ensure required headings match the template.
 - Validator fails on broken link: update the relative path or anchor.
 - Pre-push hooks fail for portal: ensure `pnpm -C portal install` ran.
 - Pre-push hooks fail for SDK: ensure `pnpm -C sdk/ts install` ran.
+
+## MEMORY FILE

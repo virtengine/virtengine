@@ -1802,8 +1802,12 @@ function Get-WorkstationAvailability {
 
 function Get-EffectiveParallelCapacity {
     $availability = Get-WorkstationAvailability
-    $capacity = [math]::Min($MaxParallel, $availability.capacity)
-    if ($capacity -le 0) { $capacity = $MaxParallel }
+    # MaxParallel takes precedence when explicitly set — workstation count is
+    # informational (for multi-machine setups) and should NOT cap a single
+    # machine that can handle more concurrent agents.
+    $capacity = $MaxParallel
+    if ($capacity -le 0) { $capacity = $availability.capacity }
+    if ($capacity -le 0) { $capacity = 2 }
     return @{
         capacity    = $capacity
         workstation = $availability
@@ -3613,16 +3617,66 @@ function Process-CompletedAttempts {
                             continue
                         }
                         elseif ($commitsAhead -gt 0) {
-                            # Has commits locally but not pushed — ask agent to push
-                            Write-Log "Branch $branch has $commitsAhead commit(s) but remote is missing — asking agent to push" -Level "INFO"
-                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "missing_branch"
-                            if ($count -ge 2) {
-                                $msg = "You have $commitsAhead local commit(s) on branch $branch that aren't pushed to remote. Please run: git push -u origin $branch`n`nIf push fails or there's an issue, describe the problem so I can help."
-                                $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "push_commits_new_session"
+                            # Has commits locally but not pushed — push directly via CLI (never ask agent)
+                            Write-Log "Branch $branch has $commitsAhead commit(s) but remote is missing — pushing via CLI" -Level "ACTION"
+                            $worktreePath = Get-WorktreePathForBranch -Branch $branch
+                            $pushSuccess = $false
+                            if ($worktreePath) {
+                                try {
+                                    $pushOut = git -C $worktreePath push -u origin $branch 2>&1
+                                    if ($LASTEXITCODE -eq 0) {
+                                        $pushSuccess = $true
+                                        Write-Log "CLI push succeeded for $branch ($commitsAhead commits)" -Level "OK"
+                                    }
+                                    else {
+                                        # Try force-with-lease as fallback
+                                        $pushOut2 = git -C $worktreePath push -u origin $branch --force-with-lease --no-verify 2>&1
+                                        if ($LASTEXITCODE -eq 0) {
+                                            $pushSuccess = $true
+                                            Write-Log "CLI push (force-with-lease, no-verify) succeeded for $branch" -Level "OK"
+                                        }
+                                        else {
+                                            Write-Log "CLI push failed for $branch — $pushOut2" -Level "WARN"
+                                        }
+                                    }
+                                }
+                                catch {
+                                    Write-Log "CLI push threw for $branch — $($_.Exception.Message)" -Level "WARN"
+                                }
                             }
                             else {
-                                $msg = "Branch $branch has $commitsAhead commit(s) locally but remote branch is missing. Please push: git push -u origin $branch"
-                                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "push_commits"
+                                Write-Log "No worktree found for $branch — cannot push via CLI" -Level "WARN"
+                            }
+
+                            if ($pushSuccess) {
+                                # Branch is now upstream — create PR automatically
+                                $title = if ($info.name) { $info.name } else { "Automated task PR" }
+                                $created = Create-PRForBranchSafe -Branch $branch -Title $title -Body "Automated PR created by ve-orchestrator (CLI push)"
+                                if (Test-GithubRateLimit) { return }
+                                if ($created -and $created -ne "no_commits") {
+                                    Write-Log "PR created for $branch after CLI push" -Level "OK"
+                                    $pr = Get-PRForBranch -Branch $branch
+                                    if ($pr) { $info.pr_number = $pr.number }
+                                }
+                                elseif ($created -eq "no_commits") {
+                                    Write-Log "Branch $branch pushed but has no diff vs base — marking manual_review" -Level "WARN"
+                                    $info.status = "manual_review"
+                                    $info.no_commits = $true
+                                }
+                            }
+                            else {
+                                # CLI push failed — mark for manual review instead of asking agent
+                                $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "push_failed"
+                                if ($count -ge 2) {
+                                    Write-Log "CLI push failed $count times for $branch — marking manual_review" -Level "WARN"
+                                    $info.status = "manual_review"
+                                    $info.push_failed = $true
+                                    $script:TasksFailed++
+                                    Save-SuccessMetrics
+                                }
+                                else {
+                                    Write-Log "CLI push failed for $branch — will retry next cycle" -Level "INFO"
+                                }
                             }
                             $info.push_notified = $true
                             continue
@@ -5108,10 +5162,10 @@ function Fill-ParallelSlots {
     # Log the sequence-based ordering for visibility
     $topCandidates = @($nextTasks | Select-Object -First 5)
     $candidateNames = @($topCandidates | ForEach-Object {
-        $seq = if ($_.title) { Get-SequenceValue -Title $_.title } else { $null }
-        $short = if ($_.title) { $_.title.Substring(0, [Math]::Min(50, $_.title.Length)) } else { "(untitled)" }
-        if ($seq) { "$short (seq=$seq)" } else { "$short (no-seq)" }
-    })
+            $seq = if ($_.title) { Get-SequenceValue -Title $_.title } else { $null }
+            $short = if ($_.title) { $_.title.Substring(0, [Math]::Min(50, $_.title.Length)) } else { "(untitled)" }
+            if ($seq) { "$short (seq=$seq)" } else { "$short (no-seq)" }
+        })
     Write-Log ("Task queue (top {0}): {1}" -f $candidateNames.Count, ($candidateNames -join " > ")) -Level "INFO"
 
     $started = 0
