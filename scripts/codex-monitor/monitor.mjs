@@ -111,6 +111,15 @@ import {
   appendKnowledgeEntry,
   formatKnowledgeSummary,
 } from "./shared-knowledge.mjs";
+import {
+  classifyComplexity,
+  assessCompletionConfidence,
+  getComplexityMatrix,
+} from "./task-complexity.mjs";
+import {
+  registerDirtyTask,
+  formatDirtyTaskSummary,
+} from "./conflict-resolver.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -164,346 +173,6 @@ async function releaseTelegramPollLock() {
   } catch {
     /* best effort */
   }
-}
-
-// ── Interactive shell helpers ───────────────────────────────────────────────
-
-function shellClearLine() {
-  if (!shellState.rl || !shellIsTTY) return;
-  try {
-    clearLine(process.stdout, 0);
-    cursorTo(process.stdout, 0);
-  } catch {
-    /* best effort */
-  }
-}
-
-function shellWriteRaw(chunk) {
-  if (!shellState.rl) {
-    process.stdout.write(chunk);
-    return;
-  }
-  shellClearLine();
-  process.stdout.write(chunk);
-  shellState.rl.prompt(true);
-}
-
-function shellWriteLine(text) {
-  if (!shellState.rl) {
-    process.stdout.write(`${text}\n`);
-    return;
-  }
-  shellClearLine();
-  process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
-  shellState.rl.prompt(true);
-}
-
-function shellWriteInfo(text) {
-  shellWriteLine(`${shellInfoPrefix}${text}`);
-}
-
-function shellWriteWarn(text) {
-  shellWriteLine(`${shellAnsi.yellow("[shell]")} ${text}`);
-}
-
-function shellWriteError(text) {
-  shellWriteLine(`${shellAnsi.red("[shell]")} ${text}`);
-}
-
-function shellBeginAgentStream() {
-  shellState.agentStreaming = true;
-  shellState.agentStreamed = false;
-  shellState.agentPrefixPrinted = false;
-}
-
-function shellWriteAgentChunk(text) {
-  if (!text) return;
-  if (!shellState.rl) {
-    process.stdout.write(text);
-    return;
-  }
-  if (!shellState.agentPrefixPrinted) {
-    shellClearLine();
-    process.stdout.write(shellPromptText);
-    shellState.agentPrefixPrinted = true;
-  }
-  process.stdout.write(text);
-  shellState.agentStreamed = true;
-}
-
-function shellEndAgentStream() {
-  if (!shellState.rl) {
-    process.stdout.write("\n");
-    return;
-  }
-  if (shellState.agentPrefixPrinted) {
-    process.stdout.write("\n");
-  }
-  shellState.agentStreaming = false;
-  shellState.agentPrefixPrinted = false;
-  shellState.rl.prompt(true);
-}
-
-function normalizeShellAgentName(value) {
-  const raw = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return "";
-  if (["codex", "codex-sdk", "codexsdk"].includes(raw)) return "codex-sdk";
-  if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
-    return "copilot-sdk";
-  if (["claude", "claude-sdk", "claude-code", "claude_code"].includes(raw))
-    return "claude-sdk";
-  return raw;
-}
-
-function executorToAgent(executor) {
-  const normalized = String(executor || "").toUpperCase();
-  if (normalized === "COPILOT") return "copilot-sdk";
-  if (normalized === "CLAUDE") return "claude-sdk";
-  return "codex-sdk";
-}
-
-function getAvailableShellAgents() {
-  const agents = new Map();
-  const executors = config?.executorConfig?.executors || [];
-  for (const exec of executors) {
-    const mapped = executorToAgent(exec.executor);
-    if (!agents.has(mapped)) {
-      agents.set(mapped, exec);
-    }
-  }
-  if (!agents.size) {
-    agents.set(primaryAgentName || "codex-sdk", null);
-  }
-  return agents;
-}
-
-function extractAgentDeltaText(event) {
-  if (!event) return null;
-  // Copilot SDK streaming
-  if (event.type === "assistant.message_delta" && event.data?.deltaContent) {
-    return event.data.deltaContent;
-  }
-  if (event.type === "assistant.message" && event.data?.content) {
-    return event.data.content;
-  }
-
-  // Codex SDK streaming (best-effort — handles multiple event shapes)
-  if (event.type === "item.delta" || event.type?.includes("delta")) {
-    const delta =
-      event.delta ||
-      event.data?.delta ||
-      event.item?.delta ||
-      event.message?.delta ||
-      null;
-    if (delta) {
-      if (typeof delta.text === "string") return delta.text;
-      if (typeof delta.content === "string") return delta.content;
-      if (Array.isArray(delta.content)) {
-        const textParts = delta.content
-          .map((part) => part?.text || part?.value || "")
-          .filter(Boolean);
-        if (textParts.length) return textParts.join("");
-      }
-    }
-    if (typeof event.text === "string") return event.text;
-  }
-
-  return null;
-}
-
-async function buildShellContext() {
-  const statusData = await readStatusData();
-  const summary = await readStatusSummary();
-  const logTail = stripAnsi(logRemainder || "")
-    .slice(-2000)
-    .trim();
-  const errorLine = stripAnsi(lastErrorLine || "").trim();
-
-  const blocks = [];
-  if (summary?.text) {
-    blocks.push(`## Orchestrator Summary\n${summary.text}`);
-  }
-  if (errorLine) {
-    const errorAt = lastErrorAt ? new Date(lastErrorAt).toISOString() : "";
-    const header = errorAt ? `## Recent Error (${errorAt})` : "## Recent Error";
-    blocks.push(`${header}\n${errorLine}`);
-  }
-  if (logTail) {
-    blocks.push(`## Recent Logs\n${logTail}`);
-  }
-
-  return {
-    statusData,
-    contextText: blocks.join("\n\n").trim(),
-  };
-}
-
-function buildShellUserPrompt(input, contextText) {
-  if (!contextText) return input;
-  return `${contextText}\n\n## Operator Prompt\n${input}`.trim();
-}
-
-async function handleShellCommand(command, argText) {
-  const cmd = command.toLowerCase();
-  if (cmd === "/help" || cmd === ":help") {
-    const agents = Array.from(getAvailableShellAgents().keys());
-    shellWriteInfo(
-      [
-        "Commands:",
-        "  /help                 Show this help",
-        "  /agent [name]         Show or switch agent (codex|copilot|claude)",
-        "  /status               Print current orchestrator summary",
-        "  /context              Show injected context summary",
-        "  /stop                 Stop the active agent run",
-        "  /exit                 Close the interactive shell",
-        "",
-        `Available agents: ${agents.join(", ") || "none"}`,
-      ].join("\n"),
-    );
-    return;
-  }
-  if (cmd === "/exit" || cmd === "/quit" || cmd === ":quit") {
-    shellWriteInfo("Closing interactive shell.");
-    if (shellState.rl) shellState.rl.close();
-    return;
-  }
-  if (cmd === "/status") {
-    const summary = await readStatusSummary();
-    shellWriteLine(summary?.text || "Status unavailable.");
-    return;
-  }
-  if (cmd === "/context") {
-    const ctx = await buildShellContext();
-    if (!ctx.contextText) {
-      shellWriteInfo("No context available.");
-      return;
-    }
-    shellWriteLine(ctx.contextText);
-    return;
-  }
-  if (cmd === "/stop") {
-    if (shellState.abortController) {
-      shellState.abortController.abort("user_stop");
-      shellWriteInfo("Stop requested.");
-    } else {
-      shellWriteInfo("No active agent run to stop.");
-    }
-    return;
-  }
-  if (cmd === "/agent") {
-    const desiredRaw = (argText || "").trim();
-    const normalized = normalizeShellAgentName(desiredRaw);
-    if (!normalized) {
-      shellWriteInfo(`Current agent: ${getPrimaryAgentName()}`);
-      return;
-    }
-    const available = getAvailableShellAgents();
-    if (!available.has(normalized)) {
-      shellWriteWarn(
-        `Agent "${normalized}" not in configured executors. Available: ${Array.from(available.keys()).join(", ")}`,
-      );
-      return;
-    }
-    const result = await switchPrimaryAgent(normalized);
-    if (result?.ok) {
-      shellWriteInfo(`Active agent switched to ${result.name}.`);
-    } else {
-      shellWriteWarn(
-        `Failed to switch agent: ${result?.reason || "unknown error"}`,
-      );
-    }
-    return;
-  }
-  shellWriteWarn(`Unknown shell command: ${command}`);
-}
-
-async function runShellPrompt(input) {
-  if (!input.trim()) return;
-  if (isPrimaryBusy()) {
-    shellWriteWarn("Primary agent is busy. Try again shortly or /stop.");
-    return;
-  }
-  shellBeginAgentStream();
-  const abortController = new AbortController();
-  shellState.abortController = abortController;
-
-  try {
-    const { statusData, contextText } = await buildShellContext();
-    const prompt = buildShellUserPrompt(input, contextText);
-
-    const onEvent = async (_formatted, rawEvent) => {
-      const delta = extractAgentDeltaText(rawEvent);
-      if (delta) {
-        shellWriteAgentChunk(delta);
-      }
-    };
-
-    const result = await execPrimaryPrompt(prompt, {
-      statusData,
-      onEvent,
-      sendRawEvents: true,
-      abortController,
-    });
-
-    if (!shellState.agentStreamed && result?.finalResponse) {
-      shellWriteLine(`${shellPromptText}${result.finalResponse}`);
-    }
-  } catch (err) {
-    shellWriteError(err?.message || String(err));
-  } finally {
-    shellState.abortController = null;
-    shellEndAgentStream();
-  }
-}
-
-function startInteractiveShell() {
-  if (!shellState.enabled) return;
-  if (!shellIsTTY) {
-    shellWriteWarn(
-      "Interactive shell requested but no TTY detected; skipping.",
-    );
-    return;
-  }
-  if (shellState.rl) return;
-  shellState.prompt = shellPromptText;
-  shellState.rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true,
-    historySize: Number(process.env.CODEX_MONITOR_SHELL_HISTORY || "200"),
-  });
-  shellState.active = true;
-  shellState.rl.setPrompt(shellState.prompt);
-  shellWriteInfo("Interactive shell enabled. Type /help for commands.");
-  shellState.rl.prompt();
-
-  shellState.rl.on("line", (line) => {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      shellState.rl.prompt();
-      return;
-    }
-    if (trimmed.startsWith("/") || trimmed.startsWith(":")) {
-      const [cmd, ...rest] = trimmed.split(/\s+/);
-      shellState.queue = shellState.queue
-        .then(() => handleShellCommand(cmd, rest.join(" ")))
-        .catch((err) =>
-          shellWriteError(err?.message || "Shell command failed"),
-        );
-      return;
-    }
-    shellState.queue = shellState.queue
-      .then(() => runShellPrompt(trimmed))
-      .catch((err) => shellWriteError(err?.message || "Shell prompt failed"));
-  });
-
-  shellState.rl.on("close", () => {
-    shellState.active = false;
-    shellState.rl = null;
-    shellWriteInfo("Interactive shell closed.");
-  });
 }
 
 let {
@@ -3373,14 +3042,11 @@ async function checkMergedPRsAndUpdateTasks() {
       if (resolved) continue;
 
       // ── Conflict resolution for open PRs with merge conflicts ──
-      // STRATEGY: The monitor now owns SDK-based conflict resolution.
-      // When conflicts are detected:
-      //  1. Auto-resolvable files (lockfiles, generated) are handled mechanically
-      //  2. Semantic conflicts are dispatched to an SDK agent (Codex/Copilot)
-      //     with FULL worktree access — the agent reads both sides, understands
-      //     the code, and writes the correct resolution
-      //  3. The orchestrator still handles simple rebases (behind/stale)
-      //     but DOES NOT own conflict resolution anymore
+      // DEDUPLICATION: The PS1 orchestrator owns direct rebase with persistent
+      // disk-based cooldowns (survives restarts). monitor.mjs only defers to
+      // the orchestrator by logging and registering the dirty task for slot
+      // reservation. We do NOT trigger smartPRFlow("conflict") here to avoid
+      // the thundering herd where both systems race to fix the same PR.
       if (conflictCandidates.length > 0) {
         const lastConflictCheck = conflictResolutionCooldown.get(task.id);
         const onCooldown =
@@ -3398,17 +3064,16 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
+            console.log(
+              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution`,
+            );
             conflictResolutionCooldown.set(task.id, Date.now());
-            recordResolutionAttempt(task.id);
-
-            // Check if SDK resolution is available and not exhausted
-            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
-            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
-
-            if (!sdkOnCooldown && !sdkExhausted) {
-              // ── SDK-based conflict resolution (primary path) ──
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+            conflictsTriggered++;
+            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
+            void smartPRFlow(resolveAttemptId, shortId, "conflict");
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution`,
               );
 
               // Discover worktree path from attempt data

@@ -2,8 +2,8 @@
 
 ## Module Overview
 - Purpose: chain module that owns provider registration, lifecycle management, domain verification, and provider public-key management.
-- Use this module when you need on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
-- Key exports / public API surface:
+- Use when: Updating on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
+- Key entry points:
   - `AppModuleBasic` and `AppModule` for module wiring in the app (`x/provider/module.go:44`, `x/provider/module.go:49`).
   - `keeper.IKeeper` for cross-module reads/writes (`x/provider/keeper/keeper.go:15`).
   - `handler.NewMsgServerImpl` for MsgServer registration (`x/provider/handler/server.go:34`).
@@ -86,8 +86,8 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - No package-specific environment variables.
 
 ## Configuration
-- Provider behavior is governed by on-chain parameters and module constants.
-- No module-specific environment variables are required.
+- No module parameters; verification settings are compile-time constants (`x/provider/keeper/domain_verification.go:26`).
+- DNS verification uses `_virtengine-verification` TXT records (`x/provider/keeper/domain_verification.go:33`).
 
 ## Testing
 - Unit tests:
@@ -99,9 +99,6 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
   - `go test ./sdk/go/node/provider/v1beta4 -count=1`
 
 ## Troubleshooting
-- Domain verification fails:
-  - Cause: Missing DNS TXT record or expired token.
-  - Fix: Re-generate token and confirm `_virtengine-verification` record exists.
-- MsgServer errors about invalid keys:
-  - Cause: Unsupported key type or mismatched encoding.
-  - Fix: Confirm key type is `ed25519`, `x25519`, or `secp256k1`.
+- Domain verification fails unexpectedly
+  - Cause: TXT record missing or cached with old token.
+  - Fix: Re-issue token and verify with DNS tools before retrying.
