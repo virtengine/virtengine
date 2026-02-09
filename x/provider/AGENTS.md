@@ -1,9 +1,9 @@
 # Provider Module (x/provider) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: chain module that owns provider registration, lifecycle management, domain verification, and provider public-key management.
-- Use when: Updating on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
-- Key entry points:
+- Use this module when you need on-chain provider state or provider-facing governance logic; use the TypeScript SDK in `sdk/ts` for off-chain clients.
+- Key exports / public API surface:
   - `AppModuleBasic` and `AppModule` for module wiring in the app (`x/provider/module.go:44`, `x/provider/module.go:49`).
   - `keeper.IKeeper` for cross-module reads/writes (`x/provider/keeper/keeper.go:15`).
   - `handler.NewMsgServerImpl` for MsgServer registration (`x/provider/handler/server.go:34`).
@@ -71,6 +71,12 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
   - Do not bypass `ValidateBasic()` in MsgServer handlers (`x/provider/handler/server.go:50`).
   - Do not write directly to KVStore outside the keeper (`x/provider/keeper/keeper.go:70`).
 
+## Configuration
+- Module identifiers and store keys are defined in
+  `sdk/go/node/provider/v1beta4/key.go:1`.
+- Genesis state for providers lives in `sdk/go/node/provider/v1beta4/genesis.pb.go:1`.
+- No module-specific environment variables are used at runtime.
+
 ## API Reference
 - `provider.NewAppModule(codec.Codec, keeper.IKeeper, govtypes.AccountKeeper, bankkeeper.Keeper, mkeeper.IKeeper, veidkeeper.IKeeper, mfakeeper.IKeeper) AppModule` (`x/provider/module.go:110`).
 - `keeper.NewKeeper(codec.BinaryCodec, storetypes.StoreKey) IKeeper` (`x/provider/keeper/keeper.go:48`).
@@ -85,10 +91,6 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Uses DNS lookups for domain verification (`x/provider/keeper/domain_verification.go:95`); ensure DNS access in integration tests.
 - No package-specific environment variables.
 
-## Configuration
-- No module parameters; verification settings are compile-time constants (`x/provider/keeper/domain_verification.go:26`).
-- DNS verification uses `_virtengine-verification` TXT records (`x/provider/keeper/domain_verification.go:33`).
-
 ## Testing
 - Unit tests:
   - `x/provider/handler/handler_test.go`
@@ -97,11 +99,12 @@ err = providerKeeper.VerifyProviderDomain(ctx, providerAddr)
 - Recommended commands:
   - `go test ./x/provider/... -count=1`
   - `go test ./sdk/go/node/provider/v1beta4 -count=1`
-<<<<<<< HEAD
 
 ## Troubleshooting
-- Domain verification fails unexpectedly
-  - Cause: TXT record missing or cached with old token.
-  - Fix: Re-issue token and verify with DNS tools before retrying.
-=======
->>>>>>> 757ceb4f (docs(provider): add AGENTS guides for core packages)
+- Domain verification fails
+  - Cause: TXT record missing or expired token.
+  - Fix: re-generate the token and ensure `_virtengine-verification.<domain>`
+    exists before re-trying verification.
+- Provider not found
+  - Cause: wrong address or state not committed.
+  - Fix: verify address format and check events emitted in the block.

@@ -1,9 +1,9 @@
 # Chain SDK (sdk/ts) — AGENTS Guide
 
-## Package Overview
+## Module Overview
 - Purpose: TypeScript SDK for VirtEngine chain APIs, gRPC clients, wallet helpers, and provider SDK access (`sdk/ts/package.json:2`).
-- Use when: Building TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
-- Key entry points:
+- Use this package for TypeScript/JS integrations; use Go modules under `x/` for on-chain logic.
+- Key exports / public API surface:
   - Barrel exports from `sdk/ts/src/index.ts:1`.
   - Chain SDK factories: `createChainNodeSDK`, `createChainNodeWebSDK` (`sdk/ts/src/sdk/index.ts:2`).
   - Provider SDK factory: `createProviderSDK` (`sdk/ts/src/sdk/index.ts:4`).
@@ -64,6 +64,12 @@ const providerSDK = createProviderSDK({
   - Do not hardcode endpoint URLs inside SDK factories; always accept them via options.
   - Do not bypass generated patches when composing SDKs (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:36`).
 
+## Configuration
+- Runtime configuration is provided through factory options (baseUrl, auth, TLS).
+- Package-level settings live in `sdk/ts/package.json:1` (exports, engines, scripts).
+- Avoid storing secrets in source; use environment variables in apps that consume
+  the SDK.
+
 ## API Reference
 - `createChainNodeSDK(options: ChainNodeSDKOptions)` (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:17`).
 - `createChainNodeWebSDK(options: ChainNodeWebSDKOptions)` (`sdk/ts/src/sdk/chain/createChainNodeWebSDK.ts:15`).
@@ -75,20 +81,16 @@ const providerSDK = createProviderSDK({
 - Key deps: `@connectrpc/*`, `@cosmjs/*`, `jsrsasign`, `long` (`sdk/ts/package.json:60`).
 - Build outputs live in `sdk/ts/dist` (package `files` list, `sdk/ts/package.json:34`).
 
-## Configuration
-- SDK factories accept endpoints, auth, and retry settings via options (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:17`).
-- When adding new options, thread them through to transports and interceptors (`sdk/ts/src/sdk/provider/createProviderSDK.ts:12`).
-
 ## Testing
 - Tests live in `sdk/ts/test/` (unit + functional).
 - Commands:
   - `npm test` (runs Jest, `sdk/ts/package.json:41`).
   - `npm run test:unit` and `npm run test:functional` for focused suites.
-<<<<<<< HEAD
 
 ## Troubleshooting
-- SDK fails to connect in browser
-  - Cause: Using node gRPC transport instead of gRPC-gateway.
-  - Fix: Use `createChainNodeWebSDK` and provide HTTP base URLs.
-=======
->>>>>>> 757ceb4f (docs(provider): add AGENTS guides for core packages)
+- `ERR_MODULE_NOT_FOUND` or missing generated clients
+  - Cause: generated files not built or missing in dist.
+  - Fix: run the SDK build/generate step and re-check `sdk/ts/src/generated/`.
+- gRPC endpoint failures
+  - Cause: wrong baseUrl or network restrictions.
+  - Fix: verify endpoint and use `createChainNodeWebSDK` for HTTP gateway APIs.
