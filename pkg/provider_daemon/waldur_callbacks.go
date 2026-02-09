@@ -553,7 +553,7 @@ func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callbac
 
 		// Create lifecycle callback from Waldur callback
 		state := callback.Payload["state"]
-		success := state == "completed" || state == "OK"
+		success := state == string(HPCJobStateCompleted) || state == "OK"
 		if payloadSuccess, ok := callback.Payload["success"]; ok {
 			success = payloadSuccess == "true"
 		}
