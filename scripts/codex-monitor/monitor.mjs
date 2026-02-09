@@ -448,6 +448,9 @@ let vibeKanbanStartedAt = 0;
 
 // ── VK WebSocket log stream — captures real-time agent logs from execution processes ──
 let vkLogStream = null;
+let vkSessionDiscoveryTimer = null;
+let vkSessionDiscoveryInFlight = false;
+const vkSessionCache = new Map();
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -1148,6 +1151,12 @@ const errorNoisePatterns = [
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
   // Stats summary line (contains "Failed" as a counter, not an error)
   /First-shot:.*Failed:/i,
+  // Attempt lifecycle lines that include "failed" but are expected status updates
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} finished \(failed\)\s+—\s+marking review/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} failed in workspace — requires agent attention/i,
+  // Agent work logger noise (handled separately, not a monitor crash)
+  /^\s*\[agent-logger\]\s+Session ended:/i,
+  /^\s*\[agent-logger\]\s+Error logged:/i,
   // Attempt lifecycle lines that include "failed" but are normal status updates
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} finished \(failed\)\s+—\s+marking review/i,
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} failed in workspace — requires agent attention/i,
@@ -1542,6 +1551,10 @@ function ensureVkLogStream() {
   });
   vkLogStream.start();
 
+  // Discover any active sessions immediately and keep polling for new sessions
+  void refreshVkSessionStreams("startup");
+  ensureVkSessionDiscoveryLoop();
+
   // Connect to any existing active sessions and enrich with task metadata
   void (async () => {
     try {
@@ -1551,7 +1564,6 @@ function ensureVkLogStream() {
       for (const [attemptId, info] of Object.entries(attempts)) {
         if (!info || info.status === "completed") continue;
         // Set metadata so structured session logs get headers with task context
-        // VK uses the attemptId as the workspace/process ID prefix
         vkLogStream.setProcessMeta(attemptId, {
           attemptId,
           taskId: info.task_id,
@@ -1562,20 +1574,112 @@ function ensureVkLogStream() {
         });
       }
 
-      // Connect to running sessions
+      // Connect to running sessions by querying VK API for each attempt's sessions
       const attemptList = Object.entries(attempts)
         .filter(([, v]) => v && v.status === "running")
         .map(([id, v]) => ({ id, ...v }));
       for (const attempt of attemptList) {
-        // Try connecting to the attempt as a session (VK may use attempt ID)
-        if (attempt.session_id) {
-          vkLogStream.connectToSession(attempt.session_id);
+        try {
+          const sessRes = await fetch(
+            `${vkEndpointUrl}/api/sessions?workspace_id=${attempt.id}`,
+            { signal: AbortSignal.timeout(10_000) },
+          );
+          if (!sessRes.ok) continue;
+          const sessions = await sessRes.json();
+          if (!Array.isArray(sessions) || sessions.length === 0) continue;
+          // Connect to the most recent session
+          const sorted = sessions.sort(
+            (a, b) =>
+              new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
+          );
+          const latest = sorted[0];
+          if (latest?.id) {
+            console.log(
+              `[monitor] VK log stream: connecting to session ${latest.id.slice(0, 8)} for attempt ${attempt.id.slice(0, 8)}`,
+            );
+            vkLogStream.connectToSession(latest.id);
+          }
+        } catch {
+          /* best effort — skip this attempt */
         }
       }
     } catch {
       /* best effort — sessions will be connected as they're created */
     }
   })();
+}
+
+function ensureVkSessionDiscoveryLoop() {
+  if (vkSessionDiscoveryTimer) return;
+  if (!Number.isFinite(vkEnsureIntervalMs) || vkEnsureIntervalMs <= 0) return;
+  vkSessionDiscoveryTimer = setInterval(() => {
+    void refreshVkSessionStreams("periodic");
+  }, vkEnsureIntervalMs);
+}
+
+async function refreshVkSessionStreams(reason = "manual") {
+  if (!vkLogStream) return;
+  if (vkSessionDiscoveryInFlight) return;
+  vkSessionDiscoveryInFlight = true;
+
+  try {
+    const statusData = await readStatusData();
+    const attempts = statusData?.attempts || {};
+    const runningAttempts = Object.entries(attempts).filter(
+      ([, info]) => info && info.status === "running",
+    );
+
+    for (const [attemptId, info] of runningAttempts) {
+      if (!attemptId) continue;
+
+      let sessionId = info.session_id || vkSessionCache.get(attemptId) || null;
+
+      if (!sessionId) {
+        sessionId = await fetchLatestVkSessionId(attemptId);
+        if (sessionId) {
+          vkSessionCache.set(attemptId, sessionId);
+        }
+      }
+
+      if (!sessionId) continue;
+
+      vkLogStream.setProcessMeta(attemptId, {
+        attemptId,
+        taskId: info.task_id,
+        taskTitle: info.task_title || info.name,
+        branch: info.branch,
+        sessionId,
+        executor: info.executor,
+        executorVariant: info.executor_variant,
+      });
+      vkLogStream.connectToSession(sessionId);
+    }
+  } catch (err) {
+    if (reason !== "periodic") {
+      console.warn(
+        `[monitor] VK session discovery (${reason}) failed: ${err.message || err}`,
+      );
+    }
+  } finally {
+    vkSessionDiscoveryInFlight = false;
+  }
+}
+
+async function fetchLatestVkSessionId(workspaceId) {
+  const res = await fetchVk(
+    `/api/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+  if (!res?.success || !Array.isArray(res.data)) return null;
+  const sessions = res.data;
+  if (!sessions.length) return null;
+  const ordered = sessions
+    .slice()
+    .sort((a, b) => {
+      const aTs = Date.parse(a?.updated_at || a?.created_at || 0) || 0;
+      const bTs = Date.parse(b?.updated_at || b?.created_at || 0) || 0;
+      return bTs - aTs;
+    });
+  return ordered[0]?.id || null;
 }
 
 async function triggerVibeKanbanRecovery(reason) {
@@ -6548,6 +6652,7 @@ async function handleExit(code, signal, logPath) {
 
   const logText = await readFile(logPath, "utf8").catch(() => "");
   const reason = signal ? `signal ${signal}` : `exit ${code}`;
+  const isSigKill = signal === "SIGKILL";
 
   // ── Check if this is an intentional restart BEFORE clearing flags ──
   const isFileChangeRestart = pendingRestart && skipNextAnalyze;
@@ -6600,6 +6705,16 @@ async function handleExit(code, signal, logPath) {
     }
     restartCount += 1;
     setTimeout(startProcess, exitState.backoffMs);
+    return;
+  }
+
+  // ── External kill (SIGKILL): treat as non-actionable, restart quietly ──
+  if (isSigKill) {
+    console.warn(
+      `[monitor] orchestrator killed by ${reason} — skipping autofix/analysis`,
+    );
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
     return;
   }
 
@@ -7843,6 +7958,7 @@ if (
   }, vkEnsureIntervalMs);
 }
 // Periodically reconnect log stream for externally-managed VK (e.g. after VK restart)
+// Also discover new sessions for running attempts so VK agent logs are captured.
 if (
   !vkSpawnEnabled &&
   vkEndpointUrl &&
@@ -7854,6 +7970,50 @@ if (
       void isVibeKanbanOnline().then((online) => {
         if (online) ensureVkLogStream();
       });
+    } else {
+      // Discover sessions for running attempts that aren't already tracked
+      void (async () => {
+        try {
+          const statusData = await readStatusData();
+          const attempts = statusData?.attempts || {};
+          const running = Object.entries(attempts)
+            .filter(([, v]) => v && v.status === "running")
+            .map(([id, v]) => ({ id, ...v }));
+          for (const attempt of running) {
+            try {
+              const sessRes = await fetch(
+                `${vkEndpointUrl}/api/sessions?workspace_id=${attempt.id}`,
+                { signal: AbortSignal.timeout(10_000) },
+              );
+              if (!sessRes.ok) continue;
+              const sessions = await sessRes.json();
+              if (!Array.isArray(sessions) || sessions.length === 0) continue;
+              const sorted = sessions.sort(
+                (a, b) =>
+                  new Date(b.updated_at || 0) - new Date(a.updated_at || 0),
+              );
+              const latest = sorted[0];
+              if (latest?.id) {
+                // connectToSession is idempotent — skips already-tracked sessions
+                vkLogStream.connectToSession(latest.id);
+                // Ensure process metadata is set
+                vkLogStream.setProcessMeta(attempt.id, {
+                  attemptId: attempt.id,
+                  taskId: attempt.task_id,
+                  taskTitle: attempt.task_title || attempt.name,
+                  branch: attempt.branch,
+                  executor: attempt.executor,
+                  executorVariant: attempt.executor_variant,
+                });
+              }
+            } catch {
+              /* skip this attempt */
+            }
+          }
+        } catch {
+          /* best effort */
+        }
+      })();
     }
   }, vkEnsureIntervalMs);
 }
