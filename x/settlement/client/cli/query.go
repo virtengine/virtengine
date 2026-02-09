@@ -1,13 +1,12 @@
 package cli
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
@@ -41,27 +40,17 @@ func CmdFiatConversion() *cobra.Command {
 				return err
 			}
 
-			key := types.FiatConversionKey(args[0])
-			bz, _, err := clientCtx.QueryStore(key, types.StoreKey)
+			queryClient := settlementv1.NewQueryClient(clientCtx)
+			resp, err := queryClient.FiatConversion(cmd.Context(), &settlementv1.QueryFiatConversionRequest{ConversionId: args[0]})
 			if err != nil {
 				return err
-			}
-			if len(bz) == 0 {
-				return fmt.Errorf("conversion %s not found", args[0])
 			}
 
-			var conversion types.FiatConversionRecord
-			if err := json.Unmarshal(bz, &conversion); err != nil {
-				return err
-			}
-			out, err := json.MarshalIndent(conversion, "", "  ")
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(out))
-			return err
+			return clientCtx.PrintProto(resp)
 		},
 	}
+
+	flags.AddQueryFlagsToCmd(cmd)
 	return cmd
 }
 
@@ -77,26 +66,16 @@ func CmdFiatPayoutPreference() *cobra.Command {
 				return err
 			}
 
-			key := types.FiatPayoutPreferenceKey(args[0])
-			bz, _, err := clientCtx.QueryStore(key, types.StoreKey)
+			queryClient := settlementv1.NewQueryClient(clientCtx)
+			resp, err := queryClient.FiatPayoutPreference(cmd.Context(), &settlementv1.QueryFiatPayoutPreferenceRequest{Provider: args[0]})
 			if err != nil {
 				return err
-			}
-			if len(bz) == 0 {
-				return fmt.Errorf("preference for %s not found", args[0])
 			}
 
-			var pref types.FiatPayoutPreference
-			if err := json.Unmarshal(bz, &pref); err != nil {
-				return err
-			}
-			out, err := json.MarshalIndent(pref, "", "  ")
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(out))
-			return err
+			return clientCtx.PrintProto(resp)
 		},
 	}
+
+	flags.AddQueryFlagsToCmd(cmd)
 	return cmd
 }

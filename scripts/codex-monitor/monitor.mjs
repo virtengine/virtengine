@@ -114,10 +114,22 @@ import {
 } from "./shared-knowledge.mjs";
 import { WorkspaceMonitor } from "./workspace-monitor.mjs";
 import { VkLogStream } from "./vk-log-stream.mjs";
+import { createAnomalyDetector } from "./anomaly-detector.mjs";
+import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Configure logging before anything else ──────────────────────────────────
+configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
+
+// Install console interceptor with log file (after config provides logDir)
+{
+  const _logDir = config.logDir || resolve(__dirname, "logs");
+  const _logFile = resolve(_logDir, "monitor.log");
+  installConsoleInterceptor({ logFile: _logFile });
+}
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -451,6 +463,9 @@ let vkLogStream = null;
 let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
+
+// ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
+let anomalyDetector = null;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -1510,16 +1525,77 @@ function restartVibeKanbanProcess() {
 function ensureVkLogStream() {
   if (vkLogStream) return;
   console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
+
+  // Initialize anomaly detector if not already running
+  if (!anomalyDetector) {
+    anomalyDetector = createAnomalyDetector({
+      onAnomaly: (anomaly) => {
+        const icon =
+          anomaly.severity === "CRITICAL"
+            ? "🔴"
+            : anomaly.severity === "HIGH"
+              ? "🟠"
+              : "🟡";
+        console.warn(
+          `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
+        );
+      },
+      notify: (text, options) => {
+        sendTelegramMessage(text, options).catch(() => {});
+      },
+    });
+    console.log("[monitor] anomaly detector started");
+  }
+
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
   const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
   vkLogStream = new VkLogStream(vkEndpointUrl, {
     logDir: agentLogDir,
     sessionLogDir,
-    echo: echoLogs,
-    onLine: (_line, _meta) => {
-      // Log lines are now written by VkLogStream internally to both raw and
-      // structured session log files. The onLine callback is kept for future
-      // extensions (e.g. error pattern detection, autofix triggers).
+    // Always keep VK log streaming silent in the CLI.
+    echo: false,
+    filterLine: (line) => {
+      // Drop verbose VK/Codex event chatter and token streams.
+      if (!line) return false;
+      if (line.length > 6000) return false;
+      if (line.startsWith("{\"method\":\"codex/event/")) return false;
+      if (line.startsWith("{\"method\":\"item/")) return false;
+      if (line.startsWith("{\"method\":\"thread/")) return false;
+      if (line.startsWith("{\"method\":\"account/")) return false;
+      if (line.includes("\"type\":\"reasoning_content_delta\"")) return false;
+      if (line.includes("\"type\":\"agent_reasoning_delta\"")) return false;
+      if (line.includes("\"type\":\"token_count\"")) return false;
+      if (line.includes("\"type\":\"item_started\"")) return false;
+      if (line.includes("\"type\":\"item_completed\"")) return false;
+      if (line.includes("\"type\":\"exec_command_begin\"")) return false;
+      if (line.includes("\"type\":\"exec_command_output_delta\"")) return false;
+      if (line.includes("\"type\":\"exec_command_end\"")) return false;
+      if (line.includes("\"method\":\"codex/event/reasoning_content_delta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/agent_reasoning_delta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/token_count\"")) return false;
+      if (line.includes("\"method\":\"codex/event/item_started\"")) return false;
+      if (line.includes("\"method\":\"codex/event/item_completed\"")) return false;
+      if (line.includes("\"method\":\"codex/event/exec_command_")) return false;
+      if (line.includes("\"method\":\"item/reasoning/summaryTextDelta\""))
+        return false;
+      if (line.includes("\"method\":\"item/commandExecution/outputDelta\""))
+        return false;
+      if (line.includes("\"method\":\"codex/event/agent_reasoning\""))
+        return false;
+      return true;
+    },
+    onLine: (line, meta) => {
+      // Feed every agent log line to the anomaly detector for real-time
+      // pattern matching (death loops, token overflow, stalls, etc.).
+      if (anomalyDetector) {
+        try {
+          anomalyDetector.processLine(line, meta);
+        } catch {
+          /* detector error — non-fatal */
+        }
+      }
     },
     onProcessConnected: (processId, meta) => {
       // When a new execution process is discovered via the session stream,
@@ -1581,19 +1657,66 @@ async function refreshVkSessionStreams(reason = "manual") {
   vkSessionDiscoveryInFlight = true;
 
   try {
+    // ── 1. Collect attempts from orchestrator status file ──────────────
     const statusData = await readStatusData();
-    const attempts = statusData?.attempts || {};
-    const runningAttempts = Object.entries(attempts).filter(
-      ([, info]) => info && info.status === "running",
-    );
+    const statusAttempts = statusData?.attempts || {};
+
+    // ── 2. Also query VK directly for all non-archived attempts ────────
+    //    The status file can be stale/incomplete (e.g. after restarts or
+    //    when attempts were submitted in previous orchestrator cycles).
+    let vkAttempts = [];
+    try {
+      const vkRes = await fetchVk("/api/task-attempts?archived=false");
+      if (vkRes?.success && Array.isArray(vkRes.data)) {
+        vkAttempts = vkRes.data;
+      }
+    } catch (err) {
+      console.warn(
+        `[monitor] refreshVkSessionStreams: VK attempt fetch failed: ${err.message}`,
+      );
+    }
+
+    // ── 3. Merge: build unified map of attemptId → metadata ───────────
+    /** @type {Map<string, {task_id?:string, task_title?:string, branch?:string, session_id?:string, executor?:string, executor_variant?:string}>} */
+    const mergedAttempts = new Map();
+
+    // Status file attempts (mark only running ones)
+    for (const [attemptId, info] of Object.entries(statusAttempts)) {
+      if (!attemptId || !info || info.status !== "running") continue;
+      mergedAttempts.set(attemptId, {
+        task_id: info.task_id,
+        task_title: info.task_title || info.name,
+        branch: info.branch,
+        session_id: info.session_id,
+        executor: info.executor,
+        executor_variant: info.executor_variant,
+        source: "status",
+      });
+    }
+
+    // VK API attempts (add any not already present from status file)
+    for (const vkAttempt of vkAttempts) {
+      if (!vkAttempt?.id) continue;
+      if (mergedAttempts.has(vkAttempt.id)) continue; // status file takes precedence
+      mergedAttempts.set(vkAttempt.id, {
+        task_id: vkAttempt.task_id,
+        task_title: vkAttempt.name,
+        branch: vkAttempt.branch,
+        session_id: null,
+        executor: null,
+        executor_variant: null,
+        source: "vk-api",
+      });
+    }
 
     console.log(
-      `[monitor] refreshVkSessionStreams(${reason}): ${runningAttempts.length} running attempts`,
+      `[monitor] refreshVkSessionStreams(${reason}): ${mergedAttempts.size} attempts ` +
+        `(${Object.values(statusAttempts).filter((i) => i?.status === "running").length} status + ` +
+        `${vkAttempts.length} vk-api, merged)`,
     );
 
-    for (const [attemptId, info] of runningAttempts) {
-      if (!attemptId) continue;
-
+    // ── 4. Discover sessions and connect ──────────────────────────────
+    for (const [attemptId, info] of mergedAttempts) {
       let sessionId = info.session_id || vkSessionCache.get(attemptId) || null;
 
       if (!sessionId) {
@@ -1601,22 +1724,17 @@ async function refreshVkSessionStreams(reason = "manual") {
         if (sessionId) {
           vkSessionCache.set(attemptId, sessionId);
           console.log(
-            `[monitor] refreshVkSessionStreams: discovered session ${sessionId.slice(0, 8)} for attempt ${attemptId.slice(0, 8)}`,
+            `[monitor] refreshVkSessionStreams: discovered session ${sessionId.slice(0, 8)} for attempt ${attemptId.slice(0, 8)} (${info.source})`,
           );
         }
       }
 
-      if (!sessionId) {
-        console.log(
-          `[monitor] refreshVkSessionStreams: no session found for attempt ${attemptId.slice(0, 8)}`,
-        );
-        continue;
-      }
+      if (!sessionId) continue; // no session yet — will retry next cycle
 
       vkLogStream.setProcessMeta(attemptId, {
         attemptId,
         taskId: info.task_id,
-        taskTitle: info.task_title || info.name,
+        taskTitle: info.task_title,
         branch: info.branch,
         sessionId,
         executor: info.executor,
@@ -1640,13 +1758,11 @@ async function fetchLatestVkSessionId(workspaceId) {
   if (!res?.success || !Array.isArray(res.data)) return null;
   const sessions = res.data;
   if (!sessions.length) return null;
-  const ordered = sessions
-    .slice()
-    .sort((a, b) => {
-      const aTs = Date.parse(a?.updated_at || a?.created_at || 0) || 0;
-      const bTs = Date.parse(b?.updated_at || b?.created_at || 0) || 0;
-      return bTs - aTs;
-    });
+  const ordered = sessions.slice().sort((a, b) => {
+    const aTs = Date.parse(a?.updated_at || a?.created_at || 0) || 0;
+    const bTs = Date.parse(b?.updated_at || b?.created_at || 0) || 0;
+    return bTs - aTs;
+  });
   return ordered[0]?.id || null;
 }
 
@@ -6743,7 +6859,8 @@ async function handleExit(code, signal, logPath) {
   // The orchestrator restarts immediately below. If autofix writes changes,
   // the devmode file watcher will trigger a clean restart automatically.
   // If no changes are needed, autofix just logs the outcome — no restart.
-  const hasRealErrors = logText.includes("ERROR") ||
+  const hasRealErrors =
+    logText.includes("ERROR") ||
     logText.includes("FATAL") ||
     logText.includes("Unhandled exception") ||
     logText.includes("Exception") ||
@@ -6781,10 +6898,14 @@ async function handleExit(code, signal, logPath) {
         }
 
         // Auto-fix couldn't help — run diagnostic analysis in background too
-        console.log("[monitor] auto-fix unsuccessful — running background Codex analysis");
+        console.log(
+          "[monitor] auto-fix unsuccessful — running background Codex analysis",
+        );
         await analyzeWithCodex(logPath, logText.slice(-15000), reason);
       } catch (err) {
-        console.warn(`[monitor] background auto-fix error: ${err.message || err}`);
+        console.warn(
+          `[monitor] background auto-fix error: ${err.message || err}`,
+        );
       }
     })();
   } else if (autoFixEnabled && logText.length > 0 && !hasRealErrors) {
@@ -6805,7 +6926,9 @@ async function handleExit(code, signal, logPath) {
         logText.slice(-3000),
       );
       if (freshStarted) {
-        console.log("[monitor] fresh session started for context-exhausted task");
+        console.log(
+          "[monitor] fresh session started for context-exhausted task",
+        );
       } else {
         await writeFile(
           logPath.replace(/\.log$/, "-context.txt"),
@@ -6848,14 +6971,18 @@ async function handleExit(code, signal, logPath) {
                 logText,
               });
               if (fixResult.fixed) {
-                console.log("[monitor] background crash-loop fix applied — file watcher will handle restart");
+                console.log(
+                  "[monitor] background crash-loop fix applied — file watcher will handle restart",
+                );
                 if (telegramToken && telegramChatId) {
                   void sendTelegramMessage(
                     `🛠️ Crash-loop fix applied. File watcher will restart orchestrator.\n${fixResult.outcome}`,
                   );
                 }
               } else {
-                console.log(`[monitor] background crash-loop fix unsuccessful: ${fixResult.outcome}`);
+                console.log(
+                  `[monitor] background crash-loop fix unsuccessful: ${fixResult.outcome}`,
+                );
                 // Try fresh session as background last resort
                 const freshStarted = await attemptFreshSessionRetry(
                   "crash_loop_unresolvable",
@@ -6872,7 +6999,9 @@ async function handleExit(code, signal, logPath) {
                 }
               }
             } catch (err) {
-              console.warn(`[monitor] background crash-loop fix error: ${err.message || err}`);
+              console.warn(
+                `[monitor] background crash-loop fix error: ${err.message || err}`,
+              );
             } finally {
               orchestratorLoopFixInProgress = false;
             }
@@ -7996,6 +8125,10 @@ injectMonitorFunctions({
   triggerTaskPlanner,
   reconcileTaskStatuses,
   onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
+  getAnomalyReport: () =>
+    anomalyDetector
+      ? anomalyDetector.getStatusReport()
+      : "Anomaly detector not running.",
 });
 if (telegramBotEnabled) {
   void startTelegramBot();

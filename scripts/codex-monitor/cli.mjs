@@ -57,6 +57,10 @@ function showHelp() {
   LOGGING
     --log-dir <path>            Log directory (default: ./logs)
     --no-echo-logs              Don't echo orchestrator output to console
+    --quiet, -q                 Only show warnings and errors in terminal
+    --verbose, -V               Show debug-level messages in terminal
+    --trace                     Show all messages including trace-level
+    --log-level <level>         Set explicit log level (trace|debug|info|warn|error|silent)
 
   AI / CODEX
     --no-codex                  Disable Codex SDK analysis

@@ -107,8 +107,10 @@
     "shared-knowledge.mjs",
     "task-complexity.mjs",
     "conflict-resolver.mjs",
+    "sdk-conflict-resolver.mjs",
     "task-archiver.mjs",
     "vk-log-stream.mjs",
+    "workspace-monitor.mjs",
     ".env.example",
     "codex-monitor.config.example.json",
     "codex-monitor.schema.json",
@@ -119,7 +121,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.2.37",
     "@github/copilot-sdk": "0.1.19",
     "@openai/codex-sdk": "0.99.0-alpha.6",
-    "vibe-kanban": "0.1.6"
+    "vibe-kanban": "0.1.7"
   },
   "devDependencies": {
     "vitest": "^4.0.18"

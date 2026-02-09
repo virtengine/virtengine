@@ -81,7 +81,7 @@ If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and 
 - Do NOT manually run `gh pr merge` (orchestrator merges after CI)
   If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
 
-You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages (running test on all packages could need more than 20minute timeout, only run tests on modules you actually changed instead), etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks.
+You should have all commands as needed available in shell, for example any powershell commands or any go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages (running test on all packages could need more than 20minute timeout, only run tests on modules you actually changed instead), etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks.
 
 ### Commit Message Conventions
 

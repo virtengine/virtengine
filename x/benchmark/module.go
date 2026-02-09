@@ -78,7 +78,10 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the Benchmark module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// gRPC gateway routes will be registered here when proto definitions are added
+	err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx))
+	if err != nil {
+		panic(fmt.Sprintf("couldn't register benchmark grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the Benchmark module.
@@ -118,8 +121,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-	// Query server registration would go here when implemented
-	// types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
 }
 
 // InitGenesis performs genesis initialization for the Benchmark module.

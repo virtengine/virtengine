@@ -77,7 +77,9 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the settlement module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// gRPC gateway routes will be registered here when proto definitions are added
+	if err := settlementv1.RegisterQueryHandlerClient(context.Background(), mux, settlementv1.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Sprintf("couldn't register settlement grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the settlement module.
@@ -120,6 +122,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	settlementv1.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	settlementv1.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{IKeeper: am.keeper})
 }
 
 // InitGenesis performs genesis initialization for the settlement module.

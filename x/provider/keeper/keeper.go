@@ -37,6 +37,10 @@ type IKeeper interface {
 	GetDomainVerificationRecord(ctx sdk.Context, providerAddr sdk.AccAddress) (*DomainVerificationRecord, bool)
 	IsDomainVerified(ctx sdk.Context, providerAddr sdk.AccAddress) bool
 	DeleteDomainVerificationRecord(ctx sdk.Context, providerAddr sdk.AccAddress)
+	// TODO: Replace int32 with types.VerificationMethod after proto generation
+	RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, domain string, method int32) (*DomainVerificationRecord, string, error)
+	ConfirmDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, proof string) error
+	RevokeDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress) error
 }
 
 // Keeper of the provider store

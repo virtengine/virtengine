@@ -1,0 +1,63 @@
+syntax = "proto3";
+package virtengine.review.v1;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "amino/amino.proto";
+import "cosmos_proto/cosmos.proto";
+
+import "virtengine/review/v1/tx.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/review/v1";
+
+// QueryReviewRequest is the request type for querying a single review.
+message QueryReviewRequest {
+  string review_id = 1;
+}
+
+// QueryReviewResponse is the response type for querying a single review.
+message QueryReviewResponse {
+  Review review = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// QueryReviewsByUserRequest is the request type for querying reviews by reviewer address.
+message QueryReviewsByUserRequest {
+  string reviewer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// QueryReviewsByUserResponse is the response type for querying reviews by reviewer address.
+message QueryReviewsByUserResponse {
+  repeated Review reviews = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// Query defines the gRPC querier service of the review package.
+service Query {
+  // Review queries a single review by ID.
+  rpc Review(QueryReviewRequest) returns (QueryReviewResponse) {
+    option (google.api.http).get = "/virtengine/review/v1/reviews/{review_id}";
+  }
+
+  // ReviewsByUser queries reviews by reviewer address.
+  rpc ReviewsByUser(QueryReviewsByUserRequest) returns (QueryReviewsByUserResponse) {
+    option (google.api.http).get = "/virtengine/review/v1/reviews/by-user/{reviewer}";
+  }
+
+  // Params returns the module parameters.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/review/v1/params";
+  }
+}
