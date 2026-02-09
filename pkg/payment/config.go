@@ -4,6 +4,7 @@
 package payment
 
 import (
+	"strings"
 	"time"
 )
 
@@ -21,6 +22,12 @@ type Config struct {
 
 	// AdyenConfig is configuration for Adyen gateway
 	AdyenConfig AdyenConfig `json:"adyen_config,omitempty"`
+
+	// PayPalConfig is configuration for PayPal gateway
+	PayPalConfig PayPalConfig `json:"paypal_config,omitempty"`
+
+	// ACHConfig is configuration for ACH gateway
+	ACHConfig ACHConfig `json:"ach_config,omitempty"`
 
 	// WebhookConfig is configuration for webhook handling
 	WebhookConfig WebhookConfig `json:"webhook_config"`
@@ -100,6 +107,82 @@ type AdyenConfig struct {
 
 	// LiveEndpointURLPrefix for live mode
 	LiveEndpointURLPrefix string `json:"live_endpoint_url_prefix,omitempty"`
+}
+
+// PayPalConfig contains PayPal-specific configuration
+type PayPalConfig struct {
+	// ClientID is the PayPal client ID
+	ClientID string `json:"client_id"`
+
+	// ClientSecret is the PayPal client secret
+	ClientSecret string `json:"client_secret"`
+
+	// WebhookID is the PayPal webhook ID for signature verification
+	WebhookID string `json:"webhook_id"`
+
+	// Environment is "live" or "sandbox"
+	Environment string `json:"environment"`
+
+	// BaseURL overrides the API base URL (optional)
+	BaseURL string `json:"base_url,omitempty"`
+}
+
+// GetBaseURL returns the PayPal API base URL
+func (c PayPalConfig) GetBaseURL() string {
+	if c.BaseURL != "" {
+		return strings.TrimRight(c.BaseURL, "/")
+	}
+	if strings.EqualFold(c.Environment, "live") {
+		return "https://api-m.paypal.com"
+	}
+	return "https://api-m.sandbox.paypal.com"
+}
+
+// ACHConfig contains ACH-specific configuration
+type ACHConfig struct {
+	// Provider identifies the ACH provider (stripe, dwolla, custom)
+	Provider string `json:"provider,omitempty"`
+
+	// SecretKey is the API key for the ACH provider
+	SecretKey string `json:"secret_key"`
+
+	// WebhookSecret is the webhook signing secret
+	WebhookSecret string `json:"webhook_secret"`
+
+	// Environment is "live" or "sandbox"
+	Environment string `json:"environment"`
+
+	// BaseURL overrides the API base URL (optional)
+	BaseURL string `json:"base_url,omitempty"`
+
+	// NACHAOriginID is the origin ID for NACHA file generation
+	NACHAOriginID string `json:"nacha_origin_id,omitempty"`
+
+	// NACHACompanyName is the company name for NACHA file generation
+	NACHACompanyName string `json:"nacha_company_name,omitempty"`
+
+	// RetryMaxAttempts is the maximum retry attempts for ACH requests
+	RetryMaxAttempts int `json:"retry_max_attempts,omitempty"`
+
+	// RetryInitialDelay is the initial retry delay
+	RetryInitialDelay time.Duration `json:"retry_initial_delay,omitempty"`
+
+	// RetryMaxDelay is the maximum retry delay
+	RetryMaxDelay time.Duration `json:"retry_max_delay,omitempty"`
+
+	// RetryBackoffFactor is the exponential backoff factor
+	RetryBackoffFactor float64 `json:"retry_backoff_factor,omitempty"`
+}
+
+// GetBaseURL returns the ACH API base URL
+func (c ACHConfig) GetBaseURL() string {
+	if c.BaseURL != "" {
+		return strings.TrimRight(c.BaseURL, "/")
+	}
+	if strings.EqualFold(c.Provider, "dwolla") {
+		return "https://api.dwolla.com"
+	}
+	return "https://api.stripe.com/v1"
 }
 
 // WebhookConfig contains webhook handling configuration
@@ -191,6 +274,17 @@ func DefaultConfig() Config {
 		AdyenConfig: AdyenConfig{
 			Environment: "test",
 		},
+		PayPalConfig: PayPalConfig{
+			Environment: "sandbox",
+		},
+		ACHConfig: ACHConfig{
+			Provider:           "stripe",
+			Environment:        "sandbox",
+			RetryMaxAttempts:   3,
+			RetryInitialDelay:  200 * time.Millisecond,
+			RetryMaxDelay:      2 * time.Second,
+			RetryBackoffFactor: 2.0,
+		},
 		WebhookConfig: WebhookConfig{
 			Enabled:               true,
 			Path:                  "/webhooks/payment",
@@ -252,6 +346,14 @@ func (c Config) Validate() error {
 		}
 	case GatewayAdyen:
 		if c.AdyenConfig.APIKey == "" || c.AdyenConfig.MerchantAccount == "" {
+			return ErrGatewayNotConfigured
+		}
+	case GatewayPayPal:
+		if c.PayPalConfig.ClientID == "" || c.PayPalConfig.ClientSecret == "" {
+			return ErrGatewayNotConfigured
+		}
+	case GatewayACH:
+		if c.ACHConfig.SecretKey == "" {
 			return ErrGatewayNotConfigured
 		}
 	}

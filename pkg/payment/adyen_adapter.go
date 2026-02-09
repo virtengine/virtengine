@@ -242,6 +242,15 @@ func (a *RealAdyenAdapter) CreatePaymentIntent(ctx context.Context, req PaymentI
 		reqBody["shopperInteraction"] = "ContAuth"
 		reqBody["recurringProcessingModel"] = "CardOnFile"
 	}
+	if req.PaymentMethodID == "" && req.PaymentMethodType != "" {
+		paymentMethod := map[string]interface{}{
+			"type": req.PaymentMethodType,
+		}
+		for key, value := range req.PaymentMethodData {
+			paymentMethod[key] = value
+		}
+		reqBody["paymentMethod"] = paymentMethod
+	}
 	if req.StatementDescriptor != "" {
 		reqBody["shopperStatement"] = req.StatementDescriptor
 	} else if req.Description != "" {

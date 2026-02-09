@@ -5,6 +5,7 @@ package payment
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -39,6 +40,8 @@ func NewWebhookServer(service Service, config WebhookConfig) *WebhookServer {
 	ws.mux.HandleFunc(config.Path, ws.handleWebhook)
 	ws.mux.HandleFunc(config.Path+"/stripe", ws.handleStripeWebhook)
 	ws.mux.HandleFunc(config.Path+"/adyen", ws.handleAdyenWebhook)
+	ws.mux.HandleFunc(config.Path+"/paypal", ws.handlePayPalWebhook)
+	ws.mux.HandleFunc(config.Path+"/ach", ws.handleACHWebhook)
 
 	return ws
 }
@@ -68,6 +71,8 @@ func (ws *WebhookServer) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		gateway = GatewayStripe
 	} else if r.Header.Get("X-Adyen-Hmac-Signature") != "" {
 		gateway = GatewayAdyen
+	} else if r.Header.Get("PayPal-Transmission-Id") != "" || r.Header.Get("Paypal-Transmission-Id") != "" {
+		gateway = GatewayPayPal
 	} else {
 		http.Error(w, "Unknown gateway", http.StatusBadRequest)
 		return
@@ -108,6 +113,38 @@ func (ws *WebhookServer) handleAdyenWebhook(w http.ResponseWriter, r *http.Reque
 	ws.processWebhook(w, r, body, GatewayAdyen)
 }
 
+// handlePayPalWebhook handles PayPal-specific webhooks
+func (ws *WebhookServer) handlePayPalWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body := make([]byte, r.ContentLength)
+	if _, err := r.Body.Read(body); err != nil && r.ContentLength > 0 {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	ws.processWebhook(w, r, body, GatewayPayPal)
+}
+
+// handleACHWebhook handles ACH-specific webhooks
+func (ws *WebhookServer) handleACHWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body := make([]byte, r.ContentLength)
+	if _, err := r.Body.Read(body); err != nil && r.ContentLength > 0 {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	ws.processWebhook(w, r, body, GatewayACH)
+}
+
 // processWebhook processes a webhook for a specific gateway
 func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, body []byte, gateway GatewayType) {
 	ctx := r.Context()
@@ -119,6 +156,13 @@ func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, 
 		signature = r.Header.Get("Stripe-Signature")
 	case GatewayAdyen:
 		signature = r.Header.Get("X-Adyen-Hmac-Signature")
+	case GatewayPayPal:
+		signature = ws.buildPayPalSignatureEnvelope(r)
+	case GatewayACH:
+		signature = r.Header.Get("Stripe-Signature")
+		if signature == "" {
+			signature = r.Header.Get("ACH-Signature")
+		}
 	}
 
 	// Validate signature
@@ -164,6 +208,36 @@ func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (ws *WebhookServer) buildPayPalSignatureEnvelope(r *http.Request) string {
+	envelope := map[string]string{
+		"transmission_id":   r.Header.Get("PayPal-Transmission-Id"),
+		"transmission_sig":  r.Header.Get("PayPal-Transmission-Sig"),
+		"transmission_time": r.Header.Get("PayPal-Transmission-Time"),
+		"cert_url":          r.Header.Get("PayPal-Cert-Url"),
+		"auth_algo":         r.Header.Get("PayPal-Auth-Algo"),
+	}
+	if envelope["transmission_id"] == "" {
+		envelope["transmission_id"] = r.Header.Get("Paypal-Transmission-Id")
+	}
+	if envelope["transmission_sig"] == "" {
+		envelope["transmission_sig"] = r.Header.Get("Paypal-Transmission-Sig")
+	}
+	if envelope["transmission_time"] == "" {
+		envelope["transmission_time"] = r.Header.Get("Paypal-Transmission-Time")
+	}
+	if envelope["cert_url"] == "" {
+		envelope["cert_url"] = r.Header.Get("Paypal-Cert-Url")
+	}
+	if envelope["auth_algo"] == "" {
+		envelope["auth_algo"] = r.Header.Get("Paypal-Auth-Algo")
+	}
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		return ""
+	}
+	return string(payload)
 }
 
 // isProcessed checks if an event was already processed

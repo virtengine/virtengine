@@ -31,6 +31,8 @@ func TestGatewayType_IsValid(t *testing.T) {
 	}{
 		{"stripe valid", GatewayStripe, true},
 		{"adyen valid", GatewayAdyen, true},
+		{"paypal valid", GatewayPayPal, true},
+		{"ach valid", GatewayACH, true},
 		{"invalid gateway", GatewayType("invalid"), false},
 		{"empty gateway", GatewayType(""), false},
 	}
@@ -269,6 +271,21 @@ func TestConfig_Validate(t *testing.T) {
 		assert.NoError(t, cfg.Validate())
 	})
 
+	t.Run("valid paypal config", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Gateway = GatewayPayPal
+		cfg.PayPalConfig.ClientID = "client_id"
+		cfg.PayPalConfig.ClientSecret = "client_secret"
+		assert.NoError(t, cfg.Validate())
+	})
+
+	t.Run("valid ach config", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Gateway = GatewayACH
+		cfg.ACHConfig.SecretKey = "ach_secret"
+		assert.NoError(t, cfg.Validate())
+	})
+
 	t.Run("invalid gateway", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.Gateway = GatewayType("invalid")
@@ -284,6 +301,18 @@ func TestConfig_Validate(t *testing.T) {
 	t.Run("missing adyen config", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.Gateway = GatewayAdyen
+		assert.ErrorIs(t, cfg.Validate(), ErrGatewayNotConfigured)
+	})
+
+	t.Run("missing paypal config", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Gateway = GatewayPayPal
+		assert.ErrorIs(t, cfg.Validate(), ErrGatewayNotConfigured)
+	})
+
+	t.Run("missing ach config", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Gateway = GatewayACH
 		assert.ErrorIs(t, cfg.Validate(), ErrGatewayNotConfigured)
 	})
 
