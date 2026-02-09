@@ -34,7 +34,7 @@
  *   stream.stop();
  */
 
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // ── Configuration defaults ──────────────────────────────────────────────────
@@ -61,6 +61,9 @@ export class VkLogStream {
 
   /** @type {string} Directory to write per-process log files */
   #logDir;
+
+  /** @type {string|null} Directory for structured VK session logs (like codex-exec) */
+  #sessionLogDir;
 
   /** @type {boolean} Whether to echo log lines to console */
   #echo;
@@ -92,12 +95,27 @@ export class VkLogStream {
   /** @type {Set<string>} Session IDs we're tracking */
   #trackedSessions = new Set();
 
+  /** @type {Map<string, object>} Per-process task metadata (attemptId, taskTitle, branch, etc.) */
+  #processMeta = new Map();
+
+  /** @type {Set<string>} Process IDs that already had their session-log header written */
+  #sessionLogHeaderWritten = new Set();
+
+  /**
+   * Callback invoked when a new execution process is discovered and connected.
+   * The monitor uses this to look up task metadata and call setProcessMeta().
+   * @type {((processId: string, meta: {sessionId?: string, runReason?: string}) => void)|null}
+   */
+  #onProcessConnected;
+
   /**
    * @param {string} vkEndpointUrl - VK API base URL (e.g. http://127.0.0.1:54089)
    * @param {object} [opts]
    * @param {string} [opts.logDir] - Directory for per-process log files
+   * @param {string} [opts.sessionLogDir] - Directory for structured session logs (codex-exec style)
    * @param {boolean} [opts.echo=false] - Echo log lines to console
    * @param {(line: string, meta: {processId: string, stream: string}) => void} [opts.onLine] - Callback per log line
+   * @param {(processId: string, meta: {sessionId?: string}) => void} [opts.onProcessConnected] - Callback when new process discovered
    */
   constructor(vkEndpointUrl, opts = {}) {
     this.#baseUrl = vkEndpointUrl.replace(/\/+$/, "");
@@ -105,8 +123,10 @@ export class VkLogStream {
       .replace(/^http:/, "ws:")
       .replace(/^https:/, "wss:");
     this.#logDir = opts.logDir || null;
+    this.#sessionLogDir = opts.sessionLogDir || null;
     this.#echo = opts.echo || false;
     this.#onLine = opts.onLine || null;
+    this.#onProcessConnected = opts.onProcessConnected || null;
 
     if (this.#logDir) {
       try {
@@ -115,6 +135,57 @@ export class VkLogStream {
         /* best effort */
       }
     }
+    if (this.#sessionLogDir) {
+      try {
+        mkdirSync(this.#sessionLogDir, { recursive: true });
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
+  /**
+   * Set task metadata for a process, used to enrich structured session logs.
+   * Call this before or after connectToProcess/connectToSession — metadata
+   * will be applied whenever the first log line arrives.
+   *
+   * @param {string} processId - The execution process UUID
+   * @param {object} meta - Task context metadata
+   * @param {string} [meta.attemptId] - VK attempt UUID
+   * @param {string} [meta.taskId] - VK task UUID
+   * @param {string} [meta.taskTitle] - Human-readable task title
+   * @param {string} [meta.branch] - Git branch name
+   * @param {string} [meta.sessionId] - VK session UUID
+   * @param {string} [meta.executor] - Executor type (e.g. "codex", "copilot")
+   * @param {string} [meta.executorVariant] - Executor variant
+   */
+  setProcessMeta(processId, meta) {
+    if (!processId) return;
+    const existing = this.#processMeta.get(processId) || {};
+    this.#processMeta.set(processId, { ...existing, ...meta });
+  }
+
+  /**
+   * Get the structured session log path for a process.
+   * Lazily assigns a stable timestamp on first call per process.
+   * @param {string} processId
+   * @returns {string|null}
+   */
+  getSessionLogPath(processId) {
+    if (!this.#sessionLogDir || !processId) return null;
+    const shortId = processId.slice(0, 8);
+    let meta = this.#processMeta.get(processId);
+    if (!meta) {
+      meta = {};
+      this.#processMeta.set(processId, meta);
+    }
+    if (!meta._logStamp) {
+      meta._logStamp = new Date().toISOString().replace(/[:.]/g, "-");
+    }
+    return resolve(
+      this.#sessionLogDir,
+      `vk-session-${meta._logStamp}-${shortId}.log`,
+    );
   }
 
   /**
@@ -255,8 +326,7 @@ export class VkLogStream {
       this.#sessionStreams.delete(sessionId);
       if (!this.#running || !this.#trackedSessions.has(sessionId)) return;
 
-      const attempts =
-        (this.#sessionReconnectCounts.get(sessionId) || 0) + 1;
+      const attempts = (this.#sessionReconnectCounts.get(sessionId) || 0) + 1;
       this.#sessionReconnectCounts.set(sessionId, attempts);
 
       if (attempts > MAX_SESSION_RECONNECT_ATTEMPTS) {
@@ -395,22 +465,28 @@ export class VkLogStream {
     if (!processId) return;
 
     const status = (proc.status || "").toLowerCase();
-    if (
-      status === "completed" ||
-      status === "killed" ||
-      status === "failed"
-    ) {
+    if (status === "completed" || status === "killed" || status === "failed") {
       this.#finished.add(processId);
       return;
     }
 
     if (!this.#connections.has(processId) && !this.#finished.has(processId)) {
       this.#knownProcessIds.add(processId);
-      this.#connectWebSocket(processId, {
+      const connMeta = {
         sessionId,
         runReason: proc.run_reason,
         status,
-      });
+      };
+      this.#connectWebSocket(processId, connMeta);
+
+      // Notify the monitor so it can look up task metadata and call setProcessMeta()
+      if (this.#onProcessConnected) {
+        try {
+          this.#onProcessConnected(processId, connMeta);
+        } catch {
+          /* callback error — ignore */
+        }
+      }
     }
   }
 
@@ -543,11 +619,12 @@ export class VkLogStream {
         }
         this.#connections.delete(processId);
       }
-      // Write final marker to log file
+      // Write final marker to log files (raw + structured session log)
       this.#writeToFile(
         processId,
         `\n--- [vk-log-stream] Process ${shortId} finished at ${new Date().toISOString()} ---\n`,
       );
+      this.#writeSessionLogFooter(processId);
       return;
     }
 
@@ -584,7 +661,7 @@ export class VkLogStream {
   }
 
   /**
-   * Emit a parsed log line to all outputs (file, console, callback).
+   * Emit a parsed log line to all outputs (file, console, session log, callback).
    * @param {string} processId
    * @param {string} content
    * @param {"stdout"|"stderr"} stream
@@ -597,8 +674,11 @@ export class VkLogStream {
 
     const shortId = processId.slice(0, 8);
 
-    // Write to per-process log file
+    // Write to per-process log file (raw)
     this.#writeToFile(processId, `[${stream}] ${line}\n`);
+
+    // Write to structured session log (codex-exec style)
+    this.#writeSessionLog(processId, line, stream);
 
     // Echo to console
     if (this.#echo) {
@@ -631,6 +711,100 @@ export class VkLogStream {
     const logPath = resolve(this.#logDir, `vk-exec-${shortId}.log`);
     try {
       appendFileSync(logPath, text);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /**
+   * Write a log line to the structured session log file (codex-exec style).
+   * On first call per process, writes a metadata header block.
+   *
+   * @param {string} processId
+   * @param {string} line - The log content (no prefix)
+   * @param {"stdout"|"stderr"} stream
+   */
+  #writeSessionLog(processId, line, stream) {
+    if (!this.#sessionLogDir) return;
+
+    // Write header on first line
+    if (!this.#sessionLogHeaderWritten.has(processId)) {
+      this.#writeSessionLogHeader(processId);
+      this.#sessionLogHeaderWritten.add(processId);
+    }
+
+    const logPath = this.getSessionLogPath(processId);
+    if (!logPath) return;
+    const prefix = stream === "stderr" ? "[stderr] " : "";
+    try {
+      appendFileSync(logPath, `${prefix}${line}\n`);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /**
+   * Write the structured header to a session log file.
+   * Mirrors the codex-exec log format with VK-specific metadata.
+   *
+   * @param {string} processId
+   */
+  #writeSessionLogHeader(processId) {
+    // getSessionLogPath lazily assigns _logStamp on first call
+    const logPath = this.getSessionLogPath(processId);
+    if (!logPath) return;
+
+    const meta = this.#processMeta.get(processId) || {};
+    const shortId = processId.slice(0, 8);
+    const now = new Date().toISOString();
+
+    const header = [
+      `# VK Session Execution Log`,
+      `# Timestamp: ${now}`,
+      `# Process ID: ${processId}`,
+      `# Process (short): ${shortId}`,
+      meta.attemptId
+        ? `# Attempt ID: ${meta.attemptId}`
+        : `# Attempt ID: (unknown)`,
+      meta.taskId ? `# Task ID: ${meta.taskId}` : `# Task ID: (unknown)`,
+      meta.taskTitle
+        ? `# Task Title: ${meta.taskTitle}`
+        : `# Task Title: (unknown)`,
+      meta.branch ? `# Branch: ${meta.branch}` : `# Branch: (unknown)`,
+      meta.sessionId
+        ? `# Session ID: ${meta.sessionId}`
+        : `# Session ID: (unknown)`,
+      meta.executor
+        ? `# Executor: ${meta.executor}${meta.executorVariant ? ` (${meta.executorVariant})` : ""}`
+        : `# Executor: (unknown)`,
+      `# VK Endpoint: ${this.#baseUrl}`,
+      ``,
+      `## VK Agent Output Stream:`,
+      ``,
+    ].join("\n");
+
+    try {
+      writeFileSync(logPath, header);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /**
+   * Write a final footer to the structured session log when a process finishes.
+   * @param {string} processId
+   */
+  #writeSessionLogFooter(processId) {
+    if (!this.#sessionLogDir) return;
+    if (!this.#sessionLogHeaderWritten.has(processId)) return; // no log started
+
+    const logPath = this.getSessionLogPath(processId);
+    if (!logPath) return;
+    const now = new Date().toISOString();
+    const shortId = processId.slice(0, 8);
+
+    try {
+      appendFileSync(logPath, `\n\n## Process ${shortId} finished at ${now}\n`);
     } catch {
       /* best effort */
     }

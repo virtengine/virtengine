@@ -53,6 +53,8 @@ param(
     [int]$GitHubCommandTimeoutSec = 120,
     [int]$IdleTimeoutMin = 60,
     [int]$IdleConfirmMin = 15,
+    [int]$StaleRunningTimeoutMin = 90,
+    [int]$SetupTimeoutMin = 30,
     [int]$CiWaitMin = 15,
     [int]$MaxRetries = 5,
     [switch]$UseAutoMerge,
@@ -204,6 +206,12 @@ $script:StopReason = $null
 # Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status, executor }
 $script:TrackedAttempts = @{}
 
+# Exclusion set: attempts fully processed but unable to archive server-side (HTTP 405/409).
+# Prevents infinite re-tracking when Get-VKAttempts keeps returning un-archivable attempts.
+# Persisted to disk so it survives orchestrator restarts.
+$script:ProcessedAttemptIds = [System.Collections.Generic.HashSet[string]]::new()
+$script:ProcessedAttemptIdsPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-processed-attempt-ids.json"
+
 # Merge gate: track tasks that completed their PR but haven't been merged yet
 # This ensures we don't start new tasks until previous ones are merged & confirmed
 $script:PendingMerges = @{}
@@ -221,6 +229,47 @@ function Write-Log {
         default { "Gray" }
     }
     Write-Host "  [$ts] $Message" -ForegroundColor $color
+}
+
+# ─── ProcessedAttemptIds persistence ──────────────────────────────────────────
+function Save-ProcessedAttemptIds {
+    <#
+    .SYNOPSIS Persist the ProcessedAttemptIds set to disk as a JSON array.
+    #>
+    try {
+        $ids = @($script:ProcessedAttemptIds)
+        $dir = Split-Path $script:ProcessedAttemptIdsPath -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $ids | ConvertTo-Json -Compress | Set-Content -Path $script:ProcessedAttemptIdsPath -Encoding UTF8 -Force
+    }
+    catch {
+        Write-Log "Failed to save ProcessedAttemptIds: $_" -Level "WARN"
+    }
+}
+
+function Load-ProcessedAttemptIds {
+    <#
+    .SYNOPSIS Load previously persisted ProcessedAttemptIds from disk.
+    #>
+    if (-not (Test-Path $script:ProcessedAttemptIdsPath)) { return }
+    try {
+        $raw = Get-Content -Path $script:ProcessedAttemptIdsPath -Raw -ErrorAction Stop
+        $ids = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($ids -is [string]) { $ids = @($ids) }
+        $loaded = 0
+        foreach ($id in $ids) {
+            if ($id -and $id -is [string]) {
+                $script:ProcessedAttemptIds.Add($id) | Out-Null
+                $loaded++
+            }
+        }
+        if ($loaded -gt 0) {
+            Write-Log "Loaded $loaded processed attempt IDs from disk" -Level "INFO"
+        }
+    }
+    catch {
+        Write-Log "Failed to load ProcessedAttemptIds: $_" -Level "WARN"
+    }
 }
 
 function Get-EnvFallback {
@@ -3420,6 +3469,8 @@ function Sync-TrackedAttempts {
 
     foreach ($a in $apiAttempts) {
         if (-not $a.branch) { continue }
+        # Skip attempts we already fully processed (prevents re-tracking when archive fails with 405)
+        if ($script:ProcessedAttemptIds.Contains($a.id)) { continue }
         $execProfile = Get-AttemptExecutorProfile -Attempt $a
         if (-not $script:TrackedAttempts.ContainsKey($a.id)) {
             # Newly discovered active attempt
@@ -3465,6 +3516,7 @@ function Sync-TrackedAttempts {
                 copilot_fix_merged_at         = $null
                 no_commits_retries            = 0
                 conflict_rebase_attempted     = $false
+                stale_running_detected_at     = $null
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
 
@@ -3473,16 +3525,16 @@ function Sync-TrackedAttempts {
                 try {
                     Start-AgentSession -AttemptId $a.id `
                         -TaskMetadata @{
-                            task_id = $a.task_id
-                            task_title = $a.name
-                        } `
+                        task_id    = $a.task_id
+                        task_title = $a.name
+                    } `
                         -ExecutorInfo @{
-                            executor = if ($execProfile) { $execProfile.executor } else { "unknown" }
-                            executor_variant = if ($execProfile) { $execProfile.variant } else { $null }
-                        } `
+                        executor         = if ($execProfile) { $execProfile.executor } else { "unknown" }
+                        executor_variant = if ($execProfile) { $execProfile.variant } else { $null }
+                    } `
                         -GitContext @{
-                            branch = $a.branch
-                        }
+                        branch = $a.branch
+                    }
                 }
                 catch {
                     Write-Log "Agent work logger Start-AgentSession failed: $($_.Exception.Message)" -Level "WARN"
@@ -3515,6 +3567,7 @@ function Sync-TrackedAttempts {
                 $tracked.error_notified = $false
                 $tracked.ci_notified = $false
                 $tracked.pending_followup = $null
+                $tracked.stale_running_detected_at = $null  # Reset stale timer — agent is alive
             }
             elseif ($summary.latest_process_status -in @("completed", "failed")) {
                 if ($tracked.status -eq "running") {
@@ -3613,6 +3666,8 @@ function Sync-TrackedAttempts {
                     Clear-PendingFollowUp -Info $tracked -Reason "duplicate_attempt"
                 }
                 $script:TrackedAttempts.Remove($dup.id)
+                $script:ProcessedAttemptIds.Add($dup.id) | Out-Null
+                Save-ProcessedAttemptIds
             }
         }
     }
@@ -3669,6 +3724,128 @@ function Sync-TrackedAttempts {
 
         # Do not archive idle attempts; they are already in review
         Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — awaiting PR" -Level "WARN"
+    }
+
+    # ── Stale running detection (stateless — crash-restart-safe) ───────────
+    # Detect "running" attempts that have been stuck too long with no process
+    # completion. Uses absolute time thresholds from VK data so detection
+    # survives orchestrator restarts without needing in-memory state.
+    #
+    # Two paths:
+    # 1. Setup-failure fast path: If VK never launched an agent process
+    #    (latest_session_id and latest_process_status both null), the setup
+    #    script failed or hung. Use shorter SetupTimeoutMin (default 30m).
+    # 2. General stale: Agent ran but hasn't completed. Use StaleRunningTimeoutMin
+    #    + IdleConfirmMin as combined absolute threshold.
+    foreach ($a in $apiAttempts) {
+        $tracked = $script:TrackedAttempts[$a.id]
+        if (-not $tracked) { continue }
+        if ($tracked.status -ne "running") { continue }
+
+        $summary = $summaryMap[$a.id]
+
+        # Determine how long this attempt has been "running" with no output.
+        # Use the summary's process completion time if available, otherwise
+        # fall back to the VK attempt updated_at timestamp (set when the
+        # attempt was created or last modified by VK).
+        $activityTime = $null
+
+        if ($summary -and $summary.latest_process_completed_at) {
+            try { $activityTime = ([datetimeoffset]::Parse($summary.latest_process_completed_at)).ToLocalTime().DateTime } catch { }
+        }
+
+        if (-not $activityTime -and $a.updated_at) {
+            try { $activityTime = ([datetimeoffset]::Parse($a.updated_at)).ToLocalTime().DateTime } catch { }
+        }
+
+        if (-not $activityTime -and $tracked.updated_at) {
+            try { $activityTime = ([datetimeoffset]::Parse($tracked.updated_at)).ToLocalTime().DateTime } catch { }
+        }
+
+        if (-not $activityTime) { continue }
+
+        $staleMinutes = ((Get-Date) - $activityTime).TotalMinutes
+
+        # ── Path 1: Setup-failure fast path ─────────────────────────────────
+        # If no session and no process status, VK never launched an agent.
+        # The setup script either failed or is hanging. Use shorter timeout
+        # with no confirm window — there's nothing to confirm, no agent ran.
+        $isSetupFailure = $summary -and
+            (-not $summary.latest_session_id) -and
+            (-not $summary.latest_process_status)
+
+        if ($isSetupFailure) {
+            if ($staleMinutes -lt $SetupTimeoutMin) {
+                if ($staleMinutes -ge ($SetupTimeoutMin * 0.5)) {
+                    Write-Log "Attempt $($a.id.Substring(0,8)) setup pending for $([math]::Round($staleMinutes))m (no session/process) — will archive at ${SetupTimeoutMin}m" -Level "WARN"
+                }
+                continue
+            }
+
+            Write-Log "Attempt $($a.id.Substring(0,8)) setup never completed ($([math]::Round($staleMinutes))m, no session/process) — archiving (branch: $($tracked.branch))" -Level "ERROR"
+            if (-not $DryRun) {
+                $archived = Try-ArchiveAttempt -AttemptId $a.id -AttemptObject $a
+                if ($archived) {
+                    try {
+                        Update-VKTaskStatus -TaskId $tracked.task_id -Status "todo" | Out-Null
+                        Write-Log "Reset task $($tracked.task_id.Substring(0,8)) to todo for reattempt (setup failed)" -Level "INFO"
+                    }
+                    catch {
+                        Write-Log "Failed to reset task $($tracked.task_id.Substring(0,8)) status: $_" -Level "WARN"
+                    }
+
+                    if ($script:AgentWorkLoggerEnabled) {
+                        try { Stop-AgentSession -AttemptId $a.id -CompletionStatus "setup_failed" } catch { }
+                    }
+
+                    Clear-PendingFollowUp -Info $tracked -Reason "setup_failed_archived"
+                    $script:TrackedAttempts.Remove($a.id)
+                    $script:ProcessedAttemptIds.Add($a.id) | Out-Null
+                    Save-ProcessedAttemptIds
+                }
+            }
+            continue
+        }
+
+        # ── Path 2: General stale running ───────────────────────────────────
+        # Agent may have started but is stuck. Use absolute threshold with
+        # built-in confirm window (StaleRunningTimeoutMin + IdleConfirmMin).
+        # This is stateless — no in-memory timer that resets on restart.
+        $archiveThreshold = $StaleRunningTimeoutMin + $IdleConfirmMin
+
+        if ($staleMinutes -lt $StaleRunningTimeoutMin) { continue }
+
+        if ($staleMinutes -lt $archiveThreshold) {
+            $remaining = [math]::Ceiling($archiveThreshold - $staleMinutes)
+            Write-Log "Attempt $($a.id.Substring(0,8)) stale-running for $([math]::Round($staleMinutes))m — will archive in ${remaining}m" -Level "WARN"
+            continue
+        }
+
+        # Archive the zombie attempt and free the slot
+        Write-Log "Attempt $($a.id.Substring(0,8)) stale-running for $([math]::Round($staleMinutes))m — archiving to free slot (branch: $($tracked.branch))" -Level "ERROR"
+        if (-not $DryRun) {
+            $archived = Try-ArchiveAttempt -AttemptId $a.id -AttemptObject $a
+            if ($archived) {
+                # Reset task to todo so it will be reattempted
+                try {
+                    Update-VKTaskStatus -TaskId $tracked.task_id -Status "todo" | Out-Null
+                    Write-Log "Reset task $($tracked.task_id.Substring(0,8)) to todo for reattempt" -Level "INFO"
+                }
+                catch {
+                    Write-Log "Failed to reset task $($tracked.task_id.Substring(0,8)) status: $_" -Level "WARN"
+                }
+
+                # ── Agent Work Logger: stop session ──
+                if ($script:AgentWorkLoggerEnabled) {
+                    try { Stop-AgentSession -AttemptId $a.id -CompletionStatus "stale_timeout" } catch { }
+                }
+
+                Clear-PendingFollowUp -Info $tracked -Reason "stale_running_archived"
+                $script:TrackedAttempts.Remove($a.id)
+                $script:ProcessedAttemptIds.Add($a.id) | Out-Null
+                Save-ProcessedAttemptIds
+            }
+        }
     }
 
     foreach ($a in $apiAttempts) {
@@ -4514,7 +4691,9 @@ $summary
     # Clean up completed attempts from tracking
     foreach ($id in $processed) {
         $script:TrackedAttempts.Remove($id)
+        $script:ProcessedAttemptIds.Add($id) | Out-Null
     }
+    if ($processed.Count -gt 0) { Save-ProcessedAttemptIds }
     Save-StatusSnapshot
 }
 
@@ -5797,6 +5976,9 @@ function Start-Orchestrator {
     # Log executor cycling setup
     Write-Log "Executors: $(($script:VK_EXECUTORS | ForEach-Object { "$($_.executor)/$($_.variant)" }) -join ' ⇄ ')" -Level "INFO"
 
+    # Load persisted exclusion list from prior runs (prevents stale re-tracking after restart)
+    Load-ProcessedAttemptIds
+
     # Initial sync
     Sync-TrackedAttempts
     $initialCounts = Get-TrackedStatusCounts
@@ -5828,6 +6010,8 @@ function Start-Orchestrator {
                     if ($candidate.attempt_id -and $candidate.task_id) {
                         Complete-Task -AttemptId $candidate.attempt_id -TaskId $candidate.task_id -PRNumber $candidate.pr_number
                         $script:TrackedAttempts.Remove($candidate.attempt_id)
+                        $script:ProcessedAttemptIds.Add($candidate.attempt_id) | Out-Null
+                        Save-ProcessedAttemptIds
                     }
                     else {
                         Write-Log "Merged PR #$($candidate.pr_number) (no tracked attempt)" -Level "OK"

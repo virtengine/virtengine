@@ -19,6 +19,8 @@ ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task 
 
 When working on a task, do not stop until it is COMPLETELY done. Continue working on this task until it is 100% DONE END-TO-END with no questions asked.
 
+If you are COPILOT & HAVE ACCESS TO COPILOT SUBAGENT: MAKE SURE YOU USE SUBAGENTS, DO NOT MAKE CHANGES DIRECTLY - CONTAIN YOUR CONTEXT AND ACT AS AN ORCHESTRATOR - RUN THEM IN PARALLEL. IF YOU ARE LAUNCHED FROM CODEX, THEN YOU DO NOT HAVE SUBAGENTS - BUT YOU CAN STILL USE CODEX-CLI MCP SERVERS TO LAUNCH SUBAGENTS IF NEEDED.
+
 ### Completing a TASK <IMPORTANT GIT INFO>
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit, such as gofmt, prettier, golangci-lint) & git merge origin <<upstream branch>> & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks! <<upstream branch>> is the default branch that your branch was created from - MAKE sure that you have MERGED any upstream changes before pushing as otherwise there could be an unaddressed CONFLICT. <<URGENT>>

@@ -1481,6 +1481,11 @@ function restartVibeKanbanProcess() {
  * if one doesn't exist, connecting to VK's execution-process WebSocket
  * endpoints to capture real-time agent stdout/stderr.
  *
+ * Two log outputs:
+ *   1. Raw per-process logs → .cache/agent-logs/vk-exec-{shortId}.log
+ *   2. Structured session logs → logs/vk-sessions/vk-session-{stamp}-{shortId}.log
+ *      (mirrors codex-exec format with task metadata headers for autofix analysis)
+ *
  * Discovery model: No REST list endpoint exists for execution processes.
  * Instead, connectToSession(sessionId) is called when sessions are created
  * (see startFreshSession). On startup, we also scan active_attempts for any
@@ -1489,35 +1494,82 @@ function restartVibeKanbanProcess() {
 function ensureVkLogStream() {
   if (vkLogStream) return;
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
+  const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
   vkLogStream = new VkLogStream(vkEndpointUrl, {
     logDir: agentLogDir,
+    sessionLogDir,
     echo: echoLogs,
-    onLine: (line, meta) => {
-      // Feed VK agent log lines into the same agent-log streaming pipeline
-      // that the orchestrator uses, so they appear in per-attempt logs
-      if (meta.processId) {
-        const shortId = meta.processId.slice(0, 8);
-        const prefix = meta.stream === "stderr" ? "ERR" : "OUT";
-        const logPath = resolve(agentLogDir, `${shortId}.log`);
+    onLine: (_line, _meta) => {
+      // Log lines are now written by VkLogStream internally to both raw and
+      // structured session log files. The onLine callback is kept for future
+      // extensions (e.g. error pattern detection, autofix triggers).
+    },
+    onProcessConnected: (processId, meta) => {
+      // When a new execution process is discovered via the session stream,
+      // look up task metadata from status data and enrich the process
+      void (async () => {
         try {
-          appendFileSync(logPath, `[${prefix}] ${line}\n`);
+          const statusData = await readStatusData();
+          const attempts = statusData?.attempts || {};
+          // Find the attempt that matches this session
+          // VK processes belong to sessions which belong to workspaces (= attempts)
+          for (const [attemptId, info] of Object.entries(attempts)) {
+            if (!info) continue;
+            // Match by session_id if available, or if the process was connected
+            // for a session belonging to this attempt
+            if (
+              meta.sessionId &&
+              (info.session_id === meta.sessionId ||
+                attemptId === meta.sessionId)
+            ) {
+              vkLogStream.setProcessMeta(processId, {
+                attemptId,
+                taskId: info.task_id,
+                taskTitle: info.task_title || info.name,
+                branch: info.branch,
+                sessionId: meta.sessionId,
+                executor: info.executor,
+                executorVariant: info.executor_variant,
+              });
+              break;
+            }
+          }
         } catch {
           /* best effort */
         }
-      }
+      })();
     },
   });
   vkLogStream.start();
 
-  // Connect to any existing active sessions from VK status data
+  // Connect to any existing active sessions and enrich with task metadata
   void (async () => {
     try {
       const statusData = await readStatusData();
-      const attempts = statusData?.active_attempts || [];
-      for (const attempt of attempts) {
-        const sid = attempt.session_id;
-        if (sid && attempt.status === "running") {
-          vkLogStream.connectToSession(sid);
+      // Enrich processes with task metadata from orchestrator status
+      const attempts = statusData?.attempts || {};
+      for (const [attemptId, info] of Object.entries(attempts)) {
+        if (!info || info.status === "completed") continue;
+        // Set metadata so structured session logs get headers with task context
+        // VK uses the attemptId as the workspace/process ID prefix
+        vkLogStream.setProcessMeta(attemptId, {
+          attemptId,
+          taskId: info.task_id,
+          taskTitle: info.task_title || info.name,
+          branch: info.branch,
+          executor: info.executor,
+          executorVariant: info.executor_variant,
+        });
+      }
+
+      // Connect to running sessions
+      const attemptList = Object.entries(attempts)
+        .filter(([, v]) => v && v.status === "running")
+        .map(([id, v]) => ({ id, ...v }));
+      for (const attempt of attemptList) {
+        // Try connecting to the attempt as a session (VK may use attempt ID)
+        if (attempt.session_id) {
+          vkLogStream.connectToSession(attempt.session_id);
         }
       }
     } catch {
@@ -2134,6 +2186,19 @@ async function startFreshSession(workspaceId, prompt, taskId) {
 
     // Connect the VK log stream to this session for real-time log capture
     if (vkLogStream) {
+      // Set metadata so structured session logs get proper headers
+      const attemptInfo = await getAttemptInfo(workspaceId);
+      if (attemptInfo) {
+        vkLogStream.setProcessMeta(workspaceId, {
+          attemptId: workspaceId,
+          taskId: attemptInfo.task_id,
+          taskTitle: attemptInfo.task_title || attemptInfo.name,
+          branch: attemptInfo.branch,
+          sessionId: session.id,
+          executor: attemptInfo.executor,
+          executorVariant: attemptInfo.executor_variant,
+        });
+      }
       vkLogStream.connectToSession(session.id);
     }
 
@@ -7761,6 +7826,13 @@ startInteractiveShell();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }
+// When VK is externally managed (not spawned by monitor), still connect the
+// log stream so agent logs are captured to .cache/agent-logs/.
+if (!vkSpawnEnabled && vkEndpointUrl) {
+  void isVibeKanbanOnline().then((online) => {
+    if (online) ensureVkLogStream();
+  });
+}
 if (
   vkSpawnEnabled &&
   Number.isFinite(vkEnsureIntervalMs) &&
@@ -7768,6 +7840,21 @@ if (
 ) {
   setInterval(() => {
     void ensureVibeKanbanRunning();
+  }, vkEnsureIntervalMs);
+}
+// Periodically reconnect log stream for externally-managed VK (e.g. after VK restart)
+if (
+  !vkSpawnEnabled &&
+  vkEndpointUrl &&
+  Number.isFinite(vkEnsureIntervalMs) &&
+  vkEnsureIntervalMs > 0
+) {
+  setInterval(() => {
+    if (!vkLogStream) {
+      void isVibeKanbanOnline().then((online) => {
+        if (online) ensureVkLogStream();
+      });
+    }
   }, vkEnsureIntervalMs);
 }
 void ensureCodexSdkReady().then(() => {
