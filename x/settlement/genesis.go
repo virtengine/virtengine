@@ -53,8 +53,22 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 		}
 	}
 
+	// Import fiat payout preferences
+	for _, pref := range data.FiatPayoutPreferences {
+		if err := k.SetFiatPayoutPreference(ctx, pref); err != nil {
+			panic(err)
+		}
+	}
+
+	// Import fiat conversion records
+	for _, conversion := range data.FiatConversionRecords {
+		if err := k.SetFiatConversion(ctx, conversion); err != nil {
+			panic(err)
+		}
+	}
+
 	// Set the next sequences from the highest existing IDs
-	var maxEscrowSeq, maxSettlementSeq, maxUsageSeq, maxDistributionSeq uint64
+	var maxEscrowSeq, maxSettlementSeq, maxUsageSeq, maxDistributionSeq, maxFiatConversionSeq uint64
 
 	for _, escrow := range data.EscrowAccounts {
 		seq := extractSequenceFromID(escrow.EscrowID)
@@ -84,6 +98,13 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 		}
 	}
 
+	for _, conversion := range data.FiatConversionRecords {
+		seq := extractSequenceFromID(conversion.ConversionID)
+		if seq > maxFiatConversionSeq {
+			maxFiatConversionSeq = seq
+		}
+	}
+
 	// Set sequences (they will be incremented before use)
 	if maxEscrowSeq > 0 {
 		k.SetNextEscrowSequence(ctx, maxEscrowSeq+1)
@@ -96,6 +117,9 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 	}
 	if maxDistributionSeq > 0 {
 		k.SetNextDistributionSequence(ctx, maxDistributionSeq+1)
+	}
+	if maxFiatConversionSeq > 0 {
+		k.SetNextFiatConversionSequence(ctx, maxFiatConversionSeq+1)
 	}
 }
 
@@ -138,13 +162,29 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 		return false
 	})
 
+	// Export fiat conversion records
+	var conversions []types.FiatConversionRecord
+	k.WithFiatConversions(ctx, func(conversion types.FiatConversionRecord) bool {
+		conversions = append(conversions, conversion)
+		return false
+	})
+
+	// Export fiat payout preferences
+	var preferences []types.FiatPayoutPreference
+	k.WithFiatPayoutPreferences(ctx, func(pref types.FiatPayoutPreference) bool {
+		preferences = append(preferences, pref)
+		return false
+	})
+
 	return &types.GenesisState{
-		Params:              params,
-		EscrowAccounts:      escrows,
-		SettlementRecords:   settlements,
-		UsageRecords:        usageRecords,
-		RewardDistributions: rewardDistributions,
-		ClaimableRewards:    claimableRewards,
+		Params:                params,
+		EscrowAccounts:        escrows,
+		SettlementRecords:     settlements,
+		UsageRecords:          usageRecords,
+		RewardDistributions:   rewardDistributions,
+		ClaimableRewards:      claimableRewards,
+		FiatConversionRecords: conversions,
+		FiatPayoutPreferences: preferences,
 	}
 }
 
