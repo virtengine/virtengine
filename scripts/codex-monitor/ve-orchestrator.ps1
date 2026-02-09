@@ -2446,6 +2446,11 @@ function Get-AttemptFailureCategory {
         }
     }
 
+    # Check for NO_CHANGES response from agent (indicates task requires no code changes)
+    if ($combined -match "(?:^|\n|\s)NO_CHANGES(?:\s|\n|$)") {
+        return @{ category = "no_changes"; status = $latestStatus; detail = "agent reported NO_CHANGES" }
+    }
+
     if ($latestStatus -in @("failed", "killed", "crashed", "error", "aborted")) {
         return @{ category = "agent_failed"; status = $latestStatus; detail = $latestStatus }
     }
@@ -3553,6 +3558,25 @@ function Process-CompletedAttempts {
                     $recentFollowup = $false
                     if ($info.last_followup_at) {
                         $recentFollowup = (((Get-Date) - $info.last_followup_at).TotalMinutes -lt 10)
+                    }
+
+                    # ── Handle NO_CHANGES response (agent says task needs no code changes) ────
+                    if ($failure.category -eq "no_changes") {
+                        Write-Log "Agent responded NO_CHANGES for $branch — task genuinely requires no code changes" -Level "INFO"
+                        $info.status = "done"
+                        $info.no_changes = $true
+                        $script:TasksFailed++
+                        Save-SuccessMetrics
+                        try {
+                            $archiveUrl = "$script:VKBaseUrl/api/task-attempts/$attemptId/archive"
+                            Invoke-RestMethod -Uri $archiveUrl -Method POST -ContentType "application/json" -Body "{}" -ErrorAction SilentlyContinue | Out-Null
+                            Write-Log "Archived NO_CHANGES attempt $($attemptId.Substring(0,8))" -Level "INFO"
+                        }
+                        catch {
+                            Write-Log "Failed to archive attempt $($attemptId.Substring(0,8)): $_" -Level "WARN"
+                        }
+                        $processed += $attemptId
+                        continue
                     }
 
                     if (-not $recentFollowup) {
@@ -5176,6 +5200,31 @@ function Fill-ParallelSlots {
         $existingAttempt = $script:TrackedAttempts.Values | Where-Object { $_.task_id -eq $task.id -and $_.status -ne "done" }
         if ($existingAttempt) {
             Write-Log "Task $($task.id.Substring(0,8)) already has active attempt, skipping" -Level "INFO"
+            continue
+        }
+
+        # ── Check if task description indicates it's already completed ──────────────
+        $taskDesc = if ($task.description) { $task.description.ToLower() } else { "" }
+        $completionPatterns = @("superseded by", "already completed", "this task has been completed", "merged in", "completed via", "no longer needed")
+        $isAlreadyComplete = $false
+        foreach ($pattern in $completionPatterns) {
+            if ($taskDesc -match [regex]::Escape($pattern)) {
+                $isAlreadyComplete = $true
+                break
+            }
+        }
+        if ($isAlreadyComplete) {
+            Write-Log "Task $($task.id.Substring(0,8)) marked as already completed in description — archiving" -Level "INFO"
+            if (-not $DryRun) {
+                try {
+                    # Move to done status instead of cancelled
+                    Update-VKTaskStatus -TaskId $task.id -Status "done" | Out-Null
+                    Write-Log "Marked completed task $($task.id.Substring(0,8)) as done" -Level "OK"
+                }
+                catch {
+                    Write-Log "Failed to mark task $($task.id.Substring(0,8)) as done: $_" -Level "WARN"
+                }
+            }
             continue
         }
 

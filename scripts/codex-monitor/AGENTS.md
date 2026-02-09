@@ -93,10 +93,11 @@ node scripts/codex-monitor/cli.mjs
 
 Each gotcha includes root cause + fix location.
 
-1. **NO_CHANGES infinite loop**
-   - **Root cause:** fresh tasks with no commits were treated like crashed tasks and repeatedly prompted to push.
-   - **Fix:** `Get-CommitsAhead` detects 0-commit branches and restarts fresh; after retries it archives/manual-review.
-   - References: `ve-orchestrator.ps1:L571-L605`, `ve-orchestrator.ps1:L3383-L3411`, `ve-orchestrator.ps1:L3440-L3474`
+1. **NO_CHANGES infinite loop** ✅ FIXED
+   - **Root cause:** orchestrator asked agents to reply "NO_CHANGES" if no work needed, but never actually parsed the response.
+   - **Original issue:** fresh tasks with no commits were repeatedly prompted; agent responded NO_CHANGES but orchestrator ignored it and kept looping.
+   - **Fix:** `Get-AttemptFailureCategory` now detects NO_CHANGES in agent output and immediately archives the attempt. Task descriptions with "superseded by", "already completed", etc. are detected during task selection and skipped entirely.
+   - References: `ve-orchestrator.ps1:L2449-L2452` (detection), `ve-orchestrator.ps1:L3563-L3580` (archive on NO_CHANGES), `ve-orchestrator.ps1:L5206-L5229` (task description check)
 
 2. **Zombie workspace cleanup**
    - **Root cause:** completed/cancelled tasks left temp worktrees behind, causing “ghost” workspaces and stale git metadata.

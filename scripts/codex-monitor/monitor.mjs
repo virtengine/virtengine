@@ -3064,31 +3064,31 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
-            console.log(
-              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution`,
-            );
             conflictResolutionCooldown.set(task.id, Date.now());
-            conflictsTriggered++;
-            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
-            void smartPRFlow(resolveAttemptId, shortId, "conflict");
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution`,
-              );
+            recordResolutionAttempt(task.id);
 
-              // Discover worktree path from attempt data
+            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
+            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
+
+            if (!sdkOnCooldown && !sdkExhausted) {
+              console.log(
+                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+              );
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+                );
+              }
+
               let worktreePath = null;
               const attemptInfo = await getAttemptInfo(resolveAttemptId);
               worktreePath =
                 attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
-
-              // Fallback: try git worktree list to find the branch's worktree
               if (!worktreePath) {
                 worktreePath = findWorktreeForBranch(cc.branch);
               }
 
               if (worktreePath) {
-                // Fire-and-forget: launch SDK resolver in background
                 void (async () => {
                   try {
                     const result = await resolveConflictsWithSDK({
@@ -3120,6 +3120,8 @@ async function checkMergedPRsAndUpdateTasks() {
                           `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
                         );
                       }
+                      conflictsTriggered++;
+                      void smartPRFlow(resolveAttemptId, shortId, "conflict");
                     }
                   } catch (err) {
                     console.warn(
@@ -3136,9 +3138,10 @@ async function checkMergedPRsAndUpdateTasks() {
                     `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
                   );
                 }
+                conflictsTriggered++;
+                void smartPRFlow(resolveAttemptId, shortId, "conflict");
               }
             } else {
-              // SDK exhausted or on cooldown — fall back to orchestrator
               const reason = sdkExhausted
                 ? "SDK attempts exhausted"
                 : "SDK on cooldown";
@@ -3150,6 +3153,8 @@ async function checkMergedPRsAndUpdateTasks() {
                   `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
                 );
               }
+              conflictsTriggered++;
+              void smartPRFlow(resolveAttemptId, shortId, "conflict");
             }
           } else {
             console.warn(
