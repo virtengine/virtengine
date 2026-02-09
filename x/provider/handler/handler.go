@@ -31,6 +31,33 @@ func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeep
 			res, err := ms.DeleteProvider(ctx, msg)
 			return sdk.WrapServiceResult(ctx, res, err)
 
+		case *types.MsgGenerateDomainVerificationToken:
+			res, err := ms.GenerateDomainVerificationToken(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+
+		case *types.MsgVerifyProviderDomain:
+			res, err := ms.VerifyProviderDomain(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+
+		case *types.MsgRequestDomainVerification:
+			res, err := ms.RequestDomainVerification(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+
+		case *types.MsgConfirmDomainVerification:
+			res, err := ms.ConfirmDomainVerification(ctx, msg)
+			if err != nil && res != nil {
+				wrapped, wrapErr := sdk.WrapServiceResult(ctx, res, nil)
+				if wrapErr != nil {
+					return nil, wrapErr
+				}
+				return wrapped, err
+			}
+			return sdk.WrapServiceResult(ctx, res, err)
+
+		case *types.MsgRevokeDomainVerification:
+			res, err := ms.RevokeDomainVerification(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+
 		default:
 			return nil, sdkerrors.ErrUnknownRequest.Wrapf("unrecognized bank message type: %T", msg)
 		}
