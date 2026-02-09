@@ -137,6 +137,21 @@ jobs:
           severity: warning
         continue-on-error: true # Don't fail CI on shell lint warnings
 
+  agents-docs:
+    name: AGENTS Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate AGENTS documentation
+        run: node scripts/validate-agents-docs.mjs
+
   # ===========================================================================
   # Go Test Job - Unit Tests
   # ===========================================================================
