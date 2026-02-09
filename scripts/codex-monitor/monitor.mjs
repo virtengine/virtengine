@@ -4709,7 +4709,15 @@ async function smartPRFlow(attemptId, shortId, status) {
           const branchName = attemptInfo?.branch || shortId;
           const pushResult = spawnSync(
             "git",
-            ["-C", worktreeDir, "push", "-u", "origin", branchName, "--no-verify"],
+            [
+              "-C",
+              worktreeDir,
+              "push",
+              "-u",
+              "origin",
+              branchName,
+              "--no-verify",
+            ],
             { timeout: 120000, shell: process.platform === "win32" },
           );
           if (pushResult.status === 0) {
@@ -5015,30 +5023,50 @@ Return a short summary of what you did and any files that needed manual resoluti
         `[monitor] ${tag}: PR creation fast-failed (${elapsed}ms) — attempting CLI push`,
       );
       const branchName = attempt?.branch || shortId;
-      let worktreeDir =
-        attempt?.worktree_dir || attempt?.worktree || null;
+      let worktreeDir = attempt?.worktree_dir || attempt?.worktree || null;
       if (!worktreeDir) {
         worktreeDir = findWorktreeForBranch(branchName);
       }
       if (worktreeDir && existsSync(worktreeDir)) {
         const pushResult = spawnSync(
           "git",
-          ["-C", worktreeDir, "push", "-u", "origin", branchName, "--no-verify"],
+          [
+            "-C",
+            worktreeDir,
+            "push",
+            "-u",
+            "origin",
+            branchName,
+            "--no-verify",
+          ],
           { timeout: 120000, shell: process.platform === "win32" },
         );
         if (pushResult.status === 0) {
-          console.log(`[monitor] ${tag}: CLI push succeeded — creating PR via gh`);
+          console.log(
+            `[monitor] ${tag}: CLI push succeeded — creating PR via gh`,
+          );
           // Create PR directly with gh CLI
           const prCreateResult = spawnSync(
             "gh",
             [
-              "pr", "create", "--repo", `${process.env.GH_OWNER || "virtengine"}/${process.env.GH_REPO || "virtengine"}`,
-              "--head", branchName,
-              "--base", targetBranch || "main",
-              "--title", prTitle,
-              "--body", prDescription || "Auto-created by codex-monitor (CLI fallback)",
+              "pr",
+              "create",
+              "--repo",
+              `${process.env.GH_OWNER || "virtengine"}/${process.env.GH_REPO || "virtengine"}`,
+              "--head",
+              branchName,
+              "--base",
+              targetBranch || "main",
+              "--title",
+              prTitle,
+              "--body",
+              prDescription || "Auto-created by codex-monitor (CLI fallback)",
             ],
-            { timeout: 60000, shell: process.platform === "win32", encoding: "utf8" },
+            {
+              timeout: 60000,
+              shell: process.platform === "win32",
+              encoding: "utf8",
+            },
           );
           if (prCreateResult.status === 0) {
             console.log(`[monitor] ${tag}: PR created via gh CLI`);
@@ -5050,7 +5078,9 @@ Return a short summary of what you did and any files that needed manual resoluti
           } else {
             const stderr = (prCreateResult.stderr || "").trim();
             if (stderr.includes("already exists")) {
-              console.log(`[monitor] ${tag}: PR already exists for ${branchName}`);
+              console.log(
+                `[monitor] ${tag}: PR already exists for ${branchName}`,
+              );
             } else {
               console.warn(`[monitor] ${tag}: gh pr create failed: ${stderr}`);
               if (telegramToken && telegramChatId) {
@@ -5086,32 +5116,55 @@ Return a short summary of what you did and any files that needed manual resoluti
         `[monitor] ${tag}: PR creation slow-failed (${Math.round(elapsed / 1000)}s) — bypassing hooks with CLI push`,
       );
       const branchName = attempt?.branch || shortId;
-      let worktreeDir =
-        attempt?.worktree_dir || attempt?.worktree || null;
+      let worktreeDir = attempt?.worktree_dir || attempt?.worktree || null;
       if (!worktreeDir) {
         worktreeDir = findWorktreeForBranch(branchName);
       }
       if (worktreeDir && existsSync(worktreeDir)) {
         const pushResult = spawnSync(
           "git",
-          ["-C", worktreeDir, "push", "-u", "origin", branchName, "--no-verify"],
+          [
+            "-C",
+            worktreeDir,
+            "push",
+            "-u",
+            "origin",
+            branchName,
+            "--no-verify",
+          ],
           { timeout: 120000, shell: process.platform === "win32" },
         );
         if (pushResult.status === 0) {
-          console.log(`[monitor] ${tag}: CLI push (--no-verify) succeeded — creating PR`);
+          console.log(
+            `[monitor] ${tag}: CLI push (--no-verify) succeeded — creating PR`,
+          );
           const prCreateResult = spawnSync(
             "gh",
             [
-              "pr", "create", "--repo", `${process.env.GH_OWNER || "virtengine"}/${process.env.GH_REPO || "virtengine"}`,
-              "--head", branchName,
-              "--base", targetBranch || "main",
-              "--title", prTitle,
-              "--body", prDescription || "Auto-created by codex-monitor (CLI fallback, hooks bypassed)",
+              "pr",
+              "create",
+              "--repo",
+              `${process.env.GH_OWNER || "virtengine"}/${process.env.GH_REPO || "virtengine"}`,
+              "--head",
+              branchName,
+              "--base",
+              targetBranch || "main",
+              "--title",
+              prTitle,
+              "--body",
+              prDescription ||
+                "Auto-created by codex-monitor (CLI fallback, hooks bypassed)",
             ],
-            { timeout: 60000, shell: process.platform === "win32", encoding: "utf8" },
+            {
+              timeout: 60000,
+              shell: process.platform === "win32",
+              encoding: "utf8",
+            },
           );
           if (prCreateResult.status === 0) {
-            console.log(`[monitor] ${tag}: PR created via gh CLI (hooks bypassed)`);
+            console.log(
+              `[monitor] ${tag}: PR created via gh CLI (hooks bypassed)`,
+            );
             if (telegramToken && telegramChatId) {
               void sendTelegramMessage(
                 `✅ CLI push (--no-verify) + PR created for ${shortId}. Note: prepush hooks were bypassed.`,
@@ -5120,7 +5173,9 @@ Return a short summary of what you did and any files that needed manual resoluti
           } else {
             const stderr = (prCreateResult.stderr || "").trim();
             if (stderr.includes("already exists")) {
-              console.log(`[monitor] ${tag}: PR already exists for ${branchName}`);
+              console.log(
+                `[monitor] ${tag}: PR already exists for ${branchName}`,
+              );
             } else {
               console.warn(`[monitor] ${tag}: gh pr create failed: ${stderr}`);
               if (telegramToken && telegramChatId) {
