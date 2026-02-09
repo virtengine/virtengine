@@ -1,4 +1,30 @@
 {
+    "v1.2.0": {
+        "modules": {
+            "added": [
+                "veid",
+                "mfa",
+                "encryption",
+                "hpc",
+                "settlement",
+                "delegation",
+                "roles",
+                "support",
+                "enclave",
+                "fraud",
+                "benchmark",
+                "resources",
+                "config",
+                "oracle",
+                "review",
+                "bme",
+                "virt_staking"
+            ],
+            "removed": []
+        },
+        "migrations": {
+        }
+    },
     "v1.1.0": {
         "modules": {
         },
