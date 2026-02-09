@@ -5143,16 +5143,17 @@ function Fill-ParallelSlots {
         $isDirtyTask = $script:DirtyPRTasks.ContainsKey($task.id)
 
         $sizeInfo = Get-TaskSizeInfo -Task $task
-        $requiredWeight = [double]$sizeInfo.weight
-        if ($requiredWeight -gt $remainingCapacity) {
+        # Weight is used for complexity routing / model selection only — NOT for scheduling capacity.
+        # Each task consumes exactly 1 slot regardless of weight. MaxParallel=N means N concurrent agents.
+        if ($remainingCapacity -lt 1) {
             # Dirty tasks get priority even when capacity is tight (use reserved slot)
             if (-not $isDirtyTask) {
-                Write-Log ("Deferring task {0} — size {1} (weight {2}) exceeds remaining capacity {3}" -f `
-                        $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight, [math]::Round($remainingCapacity, 2)) -Level "INFO"
+                Write-Log ("Deferring task {0} — no remaining slot capacity ({1})" -f `
+                        $task.id.Substring(0, 8), [math]::Round($remainingCapacity, 2)) -Level "INFO"
                 continue
             }
             Write-Log ("Dirty task {0} using reserved slot — size {1} (weight {2})" -f `
-                    $task.id.Substring(0, 8), $sizeInfo.label, $requiredWeight) -Level "WARN"
+                    $task.id.Substring(0, 8), $sizeInfo.label, $sizeInfo.weight) -Level "WARN"
         }
 
         $title = if ([string]::IsNullOrWhiteSpace($task.title)) {
@@ -5221,7 +5222,7 @@ function Fill-ParallelSlots {
                 $state.last_submitted_at = (Get-Date).ToString("o")
                 Save-OrchestratorState -State $state
                 $script:TasksSubmitted++
-                $remainingCapacity -= $requiredWeight
+                $remainingCapacity -= 1  # Each task = 1 slot, weight only for model routing
                 $started++
             }
         }
@@ -5229,7 +5230,7 @@ function Fill-ParallelSlots {
             Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor)/$($nextExec.model)$complexityTag (base: $targetBranch)" -Level "ACTION"
             # Still advance the cycling index in dry-run for accurate preview
             $null = Get-NextExecutorProfile
-            $remainingCapacity -= $requiredWeight
+            $remainingCapacity -= 1  # Each task = 1 slot, weight only for model routing
             $started++
         }
     }
