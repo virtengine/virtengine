@@ -23,6 +23,14 @@ node scripts/codex-monitor/cli.mjs
 
 ---
 
+### Start codex-monitor with defaults
+
+```bash
+node scripts/codex-monitor/cli.mjs
+```
+
+---
+
 ## 2. Architecture & Components
 
 | Component | Role | Key references |

@@ -24,11 +24,6 @@ import (
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
-// Test address constants for benchmark keeper tests
-const (
-	testBenchProviderAddr = "cosmos1test123456789"
-)
-
 // mockProviderKeeper is a mock implementation of ProviderKeeper
 type mockProviderKeeper struct {
 	providers map[string]bool
@@ -197,7 +192,7 @@ func TestSubmitBenchmarks(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := testMsgServerProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -222,7 +217,7 @@ func TestSubmitBenchmarks_DuplicateRejection(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := testMsgServerProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -244,7 +239,7 @@ func TestSubmitBenchmarks_InvalidSignature(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := testBenchProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -260,7 +255,7 @@ func TestSubmitBenchmarks_UnknownProvider(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1unknown123456789"
+	providerAddr := bech32AddrBenchmark(t)
 	// Not adding provider to mock
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -274,7 +269,7 @@ func TestSubmitBenchmarks_UnknownProvider(t *testing.T) {
 func TestReliabilityScore(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
-	providerAddr := testBenchProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 
 	inputs := types.ReliabilityScoreInputs{
 		BenchmarkSummary:        7000,
@@ -350,7 +345,7 @@ func TestChallenge(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := testMsgServerProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 	mockProvider.AddProvider(providerAddr, pub)
 
 	challenge := &types.BenchmarkChallenge{
@@ -398,7 +393,7 @@ func TestChallenge_Expired(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := testMsgServerProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 	mockProvider.AddProvider(providerAddr, pub)
 
 	challenge := &types.BenchmarkChallenge{
@@ -427,7 +422,7 @@ func TestChallenge_Expired(t *testing.T) {
 func TestAnomalyDetection_SuddenJump(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
-	providerAddr := testBenchProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 
 	previousReport := types.BenchmarkReport{
 		ReportID:        "prev-1",
@@ -481,7 +476,7 @@ func TestAnomalyDetection_SuddenJump(t *testing.T) {
 func TestAnomalyDetection_RepeatedOutput(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
-	providerAddr := testBenchProviderAddr
+	providerAddr := bech32AddrBenchmark(t)
 
 	metrics := types.BenchmarkMetrics{
 		SchemaVersion: types.MetricSchemaVersion,
@@ -531,10 +526,10 @@ func TestAnomalyDetection_RepeatedOutput(t *testing.T) {
 func TestProviderFlag(t *testing.T) {
 	keeper, ctx, _, mockRoles := setupKeeper(t)
 
-	moderatorAddr := testMsgServerProviderAddr
+	moderatorAddr := bech32AddrBenchmark(t)
 	mockRoles.AddModerator(moderatorAddr)
 
-	providerAddr := "cosmos1w3jhxapddamtrt6saykt3pqad4gg3p2c72a4ld"
+	providerAddr := bech32AddrBenchmark(t)
 
 	flag := &types.ProviderFlag{
 		ProviderAddress: providerAddr,
@@ -569,7 +564,7 @@ func TestPruneOldReports(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1test123456789"
+	providerAddr := bech32AddrBenchmark(t)
 	mockProvider.AddProvider(providerAddr, pub)
 
 	// Set a low retention limit

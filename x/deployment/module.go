@@ -141,7 +141,16 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), handler.NewServer(am.keeper, am.mkeeper, am.ekeeper))
+	marketKeeper, ok := am.mkeeper.(keeper.MarketMsgKeeper)
+	if !ok {
+		panic("deployment market keeper does not implement required msg server interface")
+	}
+	escrowKeeper, ok := am.ekeeper.(keeper.EscrowMsgKeeper)
+	if !ok {
+		panic("deployment escrow keeper does not implement required msg server interface")
+	}
+
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServer(am.keeper, marketKeeper, escrowKeeper))
 
 	querier := am.keeper.NewQuerier()
 
