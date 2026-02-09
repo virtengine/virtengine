@@ -1,0 +1,430 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  AnomalyDetector,
+  AnomalyType,
+  Severity,
+  createAnomalyDetector,
+} from "../anomaly-detector.mjs";
+
+// Helper to make a detector with captured anomalies
+function makeDetector(opts = {}) {
+  const anomalies = [];
+  const notifications = [];
+  const detector = new AnomalyDetector({
+    onAnomaly: (a) => anomalies.push(a),
+    notify: (text) => notifications.push(text),
+    thresholds: {
+      // Lower thresholds for faster testing
+      toolCallLoopWarn: 3,
+      toolCallLoopKill: 6,
+      rebaseWarn: 3,
+      rebaseKill: 6,
+      gitPushWarn: 2,
+      gitPushKill: 4,
+      subagentWarn: 3,
+      subagentKill: 6,
+      toolFailureWarn: 3,
+      toolFailureKill: 8,
+      thoughtSpinWarn: 5,
+      thoughtSpinKill: 10,
+      modelFailureKill: 2,
+      repeatedErrorWarn: 3,
+      repeatedErrorKill: 5,
+      idleStallWarnSec: 2,
+      idleStallKillSec: 5,
+      commandFailureRateWarn: 25,
+      alertDedupWindowMs: 100, // Short dedup for tests
+      processCleanupMs: 1000,
+      ...opts,
+    },
+  });
+  return { detector, anomalies, notifications };
+}
+
+const PID = "abcdef12-3456-7890-abcd-ef1234567890";
+const META = { processId: PID, stream: "stdout" };
+
+describe("AnomalyDetector", () => {
+  let detector;
+  let anomalies;
+  let notifications;
+
+  beforeEach(() => {
+    const d = makeDetector();
+    detector = d.detector;
+    anomalies = d.anomalies;
+    notifications = d.notifications;
+  });
+
+  afterEach(() => {
+    detector.stop();
+  });
+
+  describe("Token Overflow (P0)", () => {
+    it("detects token overflow and marks process dead", () => {
+      const line =
+        "Error: CAPIError: 400 prompt token count of 292514 exceeds the limit of 272000";
+      detector.processLine(line, META);
+
+      expect(anomalies).toHaveLength(1);
+      expect(anomalies[0].type).toBe(AnomalyType.TOKEN_OVERFLOW);
+      expect(anomalies[0].severity).toBe(Severity.CRITICAL);
+      expect(anomalies[0].action).toBe("kill");
+      expect(anomalies[0].data.tokenCount).toBe(292514);
+      expect(anomalies[0].data.limit).toBe(272000);
+    });
+
+    it("stops processing lines after token overflow (dead process)", () => {
+      const overflowLine =
+        "CAPIError: 400 prompt token count of 500000 exceeds the limit of 272000";
+      detector.processLine(overflowLine, META);
+      expect(anomalies).toHaveLength(1);
+
+      // Further lines should be ignored
+      detector.processLine('{"ToolCall":{"title":"apply_patch"}}', META);
+      expect(anomalies).toHaveLength(1); // No new anomalies
+    });
+  });
+
+  describe("Model Not Supported (P0)", () => {
+    it("warns on first failure, kills on second", () => {
+      const line = "CAPIError: 400 The requested model is not supported";
+      detector.processLine(line, META);
+      expect(anomalies).toHaveLength(1);
+      expect(anomalies[0].severity).toBe(Severity.HIGH);
+      expect(anomalies[0].action).toBe("warn");
+
+      // Wait for dedup window
+      anomalies[0] = null;
+      anomalies.length = 0;
+
+      // Need to wait past dedup window
+      setTimeout(() => {
+        detector.processLine(line, META);
+        const criticals = anomalies.filter(
+          (a) => a?.severity === Severity.CRITICAL,
+        );
+        expect(criticals.length).toBeGreaterThanOrEqual(1);
+      }, 150);
+    });
+  });
+
+  describe("Stream Death (P1)", () => {
+    it("detects stream completion error", () => {
+      const line = "Stream completed without a response.completed event";
+      detector.processLine(line, META);
+
+      expect(anomalies).toHaveLength(1);
+      expect(anomalies[0].type).toBe(AnomalyType.STREAM_DEATH);
+      expect(anomalies[0].severity).toBe(Severity.HIGH);
+      expect(anomalies[0].action).toBe("restart");
+    });
+  });
+
+  describe("Tool Call Loop (P2)", () => {
+    it("detects consecutive identical tool calls", () => {
+      const line =
+        '{"ToolCall":{"toolCallId":"tc1","title":"apply_patch","kind":"execute","rawInput":{}}}';
+
+      // Below threshold — no anomaly
+      detector.processLine(line, META);
+      detector.processLine(line, META);
+      expect(anomalies).toHaveLength(0);
+
+      // Hit warn threshold (3)
+      detector.processLine(line, META);
+      expect(anomalies).toHaveLength(1);
+      expect(anomalies[0].type).toBe(AnomalyType.TOOL_CALL_LOOP);
+      expect(anomalies[0].severity).toBe(Severity.MEDIUM);
+    });
+
+    it("resets counter when different tool is called", () => {
+      const line1 =
+        '{"ToolCall":{"toolCallId":"tc1","title":"apply_patch","kind":"execute"}}';
+      const line2 =
+        '{"ToolCall":{"toolCallId":"tc2","title":"read_file","kind":"execute"}}';
+
+      detector.processLine(line1, META);
+      detector.processLine(line1, META);
+      detector.processLine(line2, META); // Resets
+      detector.processLine(line2, META);
+
+      // Never hit threshold — no anomalies
+      expect(anomalies).toHaveLength(0);
+    });
+
+    it("escalates to CRITICAL at kill threshold", async () => {
+      const line =
+        '{"ToolCall":{"toolCallId":"tc1","title":"apply_patch","kind":"execute","rawInput":{}}}';
+
+      for (let i = 0; i < 6; i++) {
+        detector.processLine(line, META);
+      }
+
+      // Should have at least a CRITICAL anomaly
+      const criticals = anomalies.filter(
+        (a) => a.severity === Severity.CRITICAL,
+      );
+      expect(criticals.length).toBeGreaterThanOrEqual(1);
+      expect(criticals[0].action).toBe("kill");
+    });
+  });
+
+  describe("Rebase Spiral (P1)", () => {
+    it("detects repeated rebase --continue", () => {
+      const line = '{"command":"git rebase --continue"}';
+
+      for (let i = 0; i < 3; i++) {
+        detector.processLine(line, META);
+      }
+
+      expect(anomalies.length).toBeGreaterThanOrEqual(1);
+      expect(anomalies[0].type).toBe(AnomalyType.REBASE_SPIRAL);
+    });
+
+    it("counts rebase --abort separately", () => {
+      detector.processLine("git rebase --continue", META);
+      detector.processLine("git rebase --abort", META);
+      detector.processLine("git rebase --continue", META);
+
+      // Only 2 rebase continues — below threshold of 3
+      expect(
+        anomalies.filter((a) => a.type === AnomalyType.REBASE_SPIRAL),
+      ).toHaveLength(0);
+    });
+  });
+
+  describe("Git Push Loop (P2)", () => {
+    it("detects repeated git push", () => {
+      detector.processLine("git push --set-upstream origin ve/branch", META);
+      detector.processLine("git push origin main", META);
+
+      const pushAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.GIT_PUSH_LOOP,
+      );
+      expect(pushAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Subagent Waste (P2)", () => {
+    it("detects excessive subagent spawning", () => {
+      const line =
+        '{"ToolCall":{"toolCallId":"tc1","title":"spawn","kind":"execute","rawInput":{"prompt":"do stuff","description":"stuff"}}}';
+
+      for (let i = 0; i < 3; i++) {
+        detector.processLine(line, META);
+      }
+
+      const subagentAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.SUBAGENT_WASTE,
+      );
+      expect(subagentAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Tool Failures (P3)", () => {
+    it("detects cascading tool failures", () => {
+      const line =
+        '{"ToolUpdate":{"toolCallId":"tc1","status":"failed","rawOutput":{"message":"Path does not exist"}}}';
+
+      for (let i = 0; i < 3; i++) {
+        detector.processLine(line, META);
+      }
+
+      const failAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.TOOL_FAILURE_CASCADE,
+      );
+      expect(failAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Thought Spinning (P3)", () => {
+    it("detects repeated identical thoughts", () => {
+      const line = '{"Thought":{"type":"text","text":"Continuing rebase"}}';
+
+      for (let i = 0; i < 5; i++) {
+        detector.processLine(line, META);
+      }
+
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("ignores short thoughts (single tokens)", () => {
+      const line = '{"Thought":{"type":"text","text":"I"}}';
+
+      for (let i = 0; i < 20; i++) {
+        detector.processLine(line, META);
+      }
+
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
+  });
+
+  describe("Session Completion", () => {
+    it("marks process dead on Done event", () => {
+      detector.processLine('{"Done":"end_turn"}', META);
+
+      // Process should be dead — no further anomalies
+      detector.processLine(
+        "CAPIError: 400 prompt token count of 999999 exceeds the limit of 272000",
+        META,
+      );
+
+      // Only the Done line was processed, not the token overflow
+      const overflows = anomalies.filter(
+        (a) => a.type === AnomalyType.TOKEN_OVERFLOW,
+      );
+      expect(overflows).toHaveLength(0);
+    });
+
+    it("marks process dead on task_complete event", () => {
+      detector.processLine('{"method":"codex/event/task_complete"}', META);
+
+      detector.processLine(
+        "Stream completed without a response.completed event",
+        META,
+      );
+      const deaths = anomalies.filter(
+        (a) => a.type === AnomalyType.STREAM_DEATH,
+      );
+      expect(deaths).toHaveLength(0);
+    });
+  });
+
+  describe("getStats()", () => {
+    it("returns correct statistics", () => {
+      detector.processLine("hello", META);
+      detector.processLine("world", META);
+
+      const stats = detector.getStats();
+      expect(stats.totalLinesProcessed).toBe(2);
+      expect(stats.activeProcesses).toBe(1);
+      expect(stats.deadProcesses).toBe(0);
+      expect(stats.processes).toHaveLength(1);
+      expect(stats.processes[0].shortId).toBe("abcdef12");
+      expect(stats.processes[0].lineCount).toBe(2);
+    });
+
+    it("tracks dead processes separately", () => {
+      detector.processLine('{"Done":"end_turn"}', META);
+      const stats = detector.getStats();
+      expect(stats.activeProcesses).toBe(0);
+      expect(stats.deadProcesses).toBe(1);
+    });
+  });
+
+  describe("getStatusReport()", () => {
+    it("returns formatted HTML report", () => {
+      detector.processLine("hello", META);
+      const report = detector.getStatusReport();
+      expect(report).toContain("Anomaly Detector Status");
+      expect(report).toContain("Lines:");
+    });
+  });
+
+  describe("Dedup protection", () => {
+    it("does not emit duplicate anomalies within dedup window", () => {
+      const line =
+        '{"ToolCall":{"toolCallId":"tc1","title":"apply_patch","kind":"execute","rawInput":{}}}';
+
+      // Hit warn threshold
+      for (let i = 0; i < 3; i++) {
+        detector.processLine(line, META);
+      }
+
+      const firstCount = anomalies.length;
+
+      // Keep adding — should NOT re-emit the same severity anomaly
+      detector.processLine(line, META);
+      detector.processLine(line, META);
+      // Count should only increase when escalating to a new severity (CRITICAL)
+      // The MEDIUM warn shouldn't repeat
+      const mediumAnomalies = anomalies.filter(
+        (a) => a.severity === Severity.MEDIUM,
+      );
+      expect(mediumAnomalies.length).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe("Notifications", () => {
+    it("sends Telegram notification for CRITICAL anomalies", () => {
+      const line =
+        "CAPIError: 400 prompt token count of 500000 exceeds the limit of 272000";
+      detector.processLine(line, META);
+
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications[0]).toContain("TOKEN_OVERFLOW");
+    });
+
+    it("does not send notifications for LOW severity", () => {
+      // Self-debug loop is LOW severity
+      const line =
+        '{"method":"item/completed","params":{"item":{"type":"reasoning","summary":["Troubleshooting grep command"]}}}';
+      detector.processLine(line, META);
+
+      // Notifications should be empty (LOW severity doesn't notify)
+      expect(notifications).toHaveLength(0);
+    });
+  });
+
+  describe("Meta enrichment", () => {
+    it("captures taskTitle from metadata", () => {
+      const meta = {
+        ...META,
+        taskTitle: "feat(market): add order books",
+      };
+      detector.processLine(
+        "CAPIError: 400 prompt token count of 300000 exceeds the limit of 272000",
+        meta,
+      );
+
+      expect(anomalies[0].taskTitle).toBe("feat(market): add order books");
+    });
+  });
+
+  describe("resetProcess()", () => {
+    it("clears tracking state for a process", () => {
+      detector.processLine("hello", META);
+      expect(detector.getStats().activeProcesses).toBe(1);
+
+      detector.resetProcess(PID);
+      expect(detector.getStats().activeProcesses).toBe(0);
+    });
+  });
+
+  describe("Command Failure Rate (P3)", () => {
+    it("detects high command failure rate", () => {
+      const fail =
+        '{"method":"item/completed","params":{"item":{"type":"commandExecution","status":"failed","exitCode":1}}}';
+      const success =
+        '{"method":"item/completed","params":{"item":{"type":"commandExecution","status":"completed","exitCode":0}}}';
+
+      // 8 failures, 2 successes = 80% failure rate
+      for (let i = 0; i < 8; i++) {
+        detector.processLine(fail, META);
+      }
+      for (let i = 0; i < 2; i++) {
+        detector.processLine(success, META);
+      }
+
+      const rateAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.COMMAND_FAILURE_RATE,
+      );
+      expect(rateAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+});
+
+describe("createAnomalyDetector factory", () => {
+  it("creates and starts a detector", () => {
+    const detector = createAnomalyDetector();
+    expect(detector).toBeInstanceOf(AnomalyDetector);
+    detector.stop();
+  });
+});
