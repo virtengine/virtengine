@@ -114,10 +114,22 @@ import {
 } from "./shared-knowledge.mjs";
 import { WorkspaceMonitor } from "./workspace-monitor.mjs";
 import { VkLogStream } from "./vk-log-stream.mjs";
+import { createAnomalyDetector } from "./anomaly-detector.mjs";
+import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Configure logging before anything else ──────────────────────────────────
+configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
+
+// Install console interceptor with log file (after config provides logDir)
+{
+  const _logDir = config.logDir || resolve(__dirname, "logs");
+  const _logFile = resolve(_logDir, "monitor.log");
+  installConsoleInterceptor({ logFile: _logFile });
+}
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -451,6 +463,9 @@ let vkLogStream = null;
 let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
+
+// ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
+let anomalyDetector = null;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -1510,16 +1525,44 @@ function restartVibeKanbanProcess() {
 function ensureVkLogStream() {
   if (vkLogStream) return;
   console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
+
+  // Initialize anomaly detector if not already running
+  if (!anomalyDetector) {
+    anomalyDetector = createAnomalyDetector({
+      onAnomaly: (anomaly) => {
+        const icon =
+          anomaly.severity === "CRITICAL"
+            ? "🔴"
+            : anomaly.severity === "HIGH"
+              ? "🟠"
+              : "🟡";
+        console.warn(
+          `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
+        );
+      },
+      notify: (text, options) => {
+        sendTelegramMessage(text, options).catch(() => {});
+      },
+    });
+    console.log("[monitor] anomaly detector started");
+  }
+
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
   const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
   vkLogStream = new VkLogStream(vkEndpointUrl, {
     logDir: agentLogDir,
     sessionLogDir,
     echo: echoLogs,
-    onLine: (_line, _meta) => {
-      // Log lines are now written by VkLogStream internally to both raw and
-      // structured session log files. The onLine callback is kept for future
-      // extensions (e.g. error pattern detection, autofix triggers).
+    onLine: (line, meta) => {
+      // Feed every agent log line to the anomaly detector for real-time
+      // pattern matching (death loops, token overflow, stalls, etc.).
+      if (anomalyDetector) {
+        try {
+          anomalyDetector.processLine(line, meta);
+        } catch {
+          /* detector error — non-fatal */
+        }
+      }
     },
     onProcessConnected: (processId, meta) => {
       // When a new execution process is discovered via the session stream,
@@ -8049,6 +8092,10 @@ injectMonitorFunctions({
   triggerTaskPlanner,
   reconcileTaskStatuses,
   onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
+  getAnomalyReport: () =>
+    anomalyDetector
+      ? anomalyDetector.getStatusReport()
+      : "Anomaly detector not running.",
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
