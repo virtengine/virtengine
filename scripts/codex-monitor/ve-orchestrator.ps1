@@ -3771,8 +3771,8 @@ function Sync-TrackedAttempts {
         # The setup script either failed or is hanging. Use shorter timeout
         # with no confirm window — there's nothing to confirm, no agent ran.
         $isSetupFailure = $summary -and
-            (-not $summary.latest_session_id) -and
-            (-not $summary.latest_process_status)
+        (-not $summary.latest_session_id) -and
+        (-not $summary.latest_process_status)
 
         if ($isSetupFailure) {
             if ($staleMinutes -lt $SetupTimeoutMin) {
