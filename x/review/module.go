@@ -80,7 +80,10 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the Review module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// gRPC gateway routes will be registered here when proto definitions are added
+	err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx))
+	if err != nil {
+		panic(fmt.Sprintf("couldn't register review grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the Review module.
@@ -121,7 +124,8 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Message server and query server registration would go here
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServer(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
 }
 
 // InitGenesis performs genesis initialization for the Review module.

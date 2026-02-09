@@ -1,0 +1,225 @@
+package keeper
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+)
+
+// MarketMsgKeeper exposes market operations needed by the deployment MsgServer.
+type MarketMsgKeeper interface {
+	CreateOrder(ctx sdk.Context, id v1.GroupID, spec types.GroupSpec) (mtypes.Order, error)
+	OnGroupClosed(ctx sdk.Context, id v1.GroupID) error
+}
+
+// EscrowMsgKeeper exposes escrow operations needed by the deployment MsgServer.
+type EscrowMsgKeeper interface {
+	AccountCreate(ctx sdk.Context, id escrowid.Account, owner sdk.AccAddress, deposits []etypes.Depositor) error
+	AccountDeposit(ctx sdk.Context, id escrowid.Account, deposits []etypes.Depositor) error
+	AccountClose(ctx sdk.Context, id escrowid.Account) error
+	AuthorizeDeposits(sctx sdk.Context, msg sdk.Msg) ([]etypes.Depositor, error)
+}
+
+type msgServer struct {
+	deployment IKeeper
+	market     MarketMsgKeeper
+	escrow     EscrowMsgKeeper
+}
+
+// NewMsgServer returns an implementation of the deployment MsgServer interface.
+func NewMsgServer(k IKeeper, mkeeper MarketMsgKeeper, ekeeper EscrowMsgKeeper) types.MsgServer {
+	return &msgServer{
+		deployment: k,
+		market:     mkeeper,
+		escrow:     ekeeper,
+	}
+}
+
+func (ms msgServer) CreateDeployment(goCtx context.Context, msg *types.MsgCreateDeployment) (*types.MsgCreateDeploymentResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	did := msg.ID
+
+	if _, found := ms.deployment.GetDeployment(ctx, did); found {
+		return nil, v1.ErrDeploymentExists
+	}
+
+	params := ms.deployment.GetParams(ctx)
+	if err := params.ValidateDeposit(msg.Deposit.Amount); err != nil {
+		return nil, err
+	}
+
+	deployment := v1.Deployment{
+		ID:        did,
+		State:     v1.DeploymentActive,
+		Hash:      msg.Hash,
+		CreatedAt: ctx.BlockHeight(),
+	}
+
+	if err := types.ValidateDeploymentGroups(msg.Groups); err != nil {
+		return nil, fmt.Errorf("%w: %s", v1.ErrInvalidGroups, err.Error())
+	}
+
+	deposits, err := ms.escrow.AuthorizeDeposits(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	groups := make([]types.Group, 0, len(msg.Groups))
+
+	for idx, spec := range msg.Groups {
+		groups = append(groups, types.Group{
+			ID:        v1.MakeGroupID(deployment.ID, uint32(idx+1)), // nolint gosec
+			State:     types.GroupOpen,
+			GroupSpec: spec,
+			CreatedAt: ctx.BlockHeight(),
+		})
+	}
+
+	if err := ms.deployment.Create(ctx, deployment, groups); err != nil {
+		return nil, fmt.Errorf("%w: %s", v1.ErrInternal, err.Error())
+	}
+
+	for _, group := range groups {
+		if _, err := ms.market.CreateOrder(ctx, group.ID, group.GroupSpec); err != nil {
+			return &types.MsgCreateDeploymentResponse{}, err
+		}
+	}
+
+	owner, _ := sdk.AccAddressFromBech32(did.Owner)
+	if err := ms.escrow.AccountCreate(ctx, deployment.ID.ToEscrowAccountID(), owner, deposits); err != nil {
+		return &types.MsgCreateDeploymentResponse{}, err
+	}
+
+	return &types.MsgCreateDeploymentResponse{}, nil
+}
+
+func (ms msgServer) UpdateDeployment(goCtx context.Context, msg *types.MsgUpdateDeployment) (*types.MsgUpdateDeploymentResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	deployment, found := ms.deployment.GetDeployment(ctx, msg.ID)
+	if !found {
+		return nil, v1.ErrDeploymentNotFound
+	}
+
+	if deployment.State != v1.DeploymentActive {
+		return &types.MsgUpdateDeploymentResponse{}, v1.ErrDeploymentClosed
+	}
+
+	if bytes.Equal(msg.Hash, deployment.Hash) {
+		return &types.MsgUpdateDeploymentResponse{}, v1.ErrInvalidHash
+	}
+
+	deployment.Hash = msg.Hash
+
+	if err := ms.deployment.UpdateDeployment(ctx, deployment); err != nil {
+		return &types.MsgUpdateDeploymentResponse{}, fmt.Errorf("%w: %s", v1.ErrInternal, err.Error())
+	}
+
+	return &types.MsgUpdateDeploymentResponse{}, nil
+}
+
+func (ms msgServer) CloseDeployment(goCtx context.Context, msg *types.MsgCloseDeployment) (*types.MsgCloseDeploymentResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	deployment, found := ms.deployment.GetDeployment(ctx, msg.ID)
+	if !found {
+		return &types.MsgCloseDeploymentResponse{}, v1.ErrDeploymentNotFound
+	}
+
+	if deployment.State != v1.DeploymentActive {
+		return &types.MsgCloseDeploymentResponse{}, v1.ErrDeploymentClosed
+	}
+
+	if err := ms.escrow.AccountClose(ctx, deployment.ID.ToEscrowAccountID()); err != nil {
+		return &types.MsgCloseDeploymentResponse{}, err
+	}
+
+	return &types.MsgCloseDeploymentResponse{}, nil
+}
+
+func (ms msgServer) CloseGroup(goCtx context.Context, msg *types.MsgCloseGroup) (*types.MsgCloseGroupResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	group, found := ms.deployment.GetGroup(ctx, msg.ID)
+	if !found {
+		return nil, v1.ErrGroupNotFound
+	}
+
+	if err := group.ValidateClosable(); err != nil {
+		return nil, err
+	}
+
+	if err := ms.deployment.OnCloseGroup(ctx, group, types.GroupClosed); err != nil {
+		return nil, err
+	}
+	_ = ms.market.OnGroupClosed(ctx, group.ID)
+
+	return &types.MsgCloseGroupResponse{}, nil
+}
+
+func (ms msgServer) PauseGroup(goCtx context.Context, msg *types.MsgPauseGroup) (*types.MsgPauseGroupResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	group, found := ms.deployment.GetGroup(ctx, msg.ID)
+	if !found {
+		return nil, v1.ErrGroupNotFound
+	}
+
+	if err := group.ValidatePausable(); err != nil {
+		return nil, err
+	}
+
+	if err := ms.deployment.OnPauseGroup(ctx, group); err != nil {
+		return nil, err
+	}
+	_ = ms.market.OnGroupClosed(ctx, group.ID)
+
+	return &types.MsgPauseGroupResponse{}, nil
+}
+
+func (ms msgServer) StartGroup(goCtx context.Context, msg *types.MsgStartGroup) (*types.MsgStartGroupResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	group, found := ms.deployment.GetGroup(ctx, msg.ID)
+	if !found {
+		return &types.MsgStartGroupResponse{}, v1.ErrGroupNotFound
+	}
+
+	if err := group.ValidateStartable(); err != nil {
+		return &types.MsgStartGroupResponse{}, err
+	}
+
+	if err := ms.deployment.OnStartGroup(ctx, group); err != nil {
+		return &types.MsgStartGroupResponse{}, err
+	}
+	if _, err := ms.market.CreateOrder(ctx, group.ID, group.GroupSpec); err != nil {
+		return &types.MsgStartGroupResponse{}, err
+	}
+
+	return &types.MsgStartGroupResponse{}, nil
+}
+
+func (ms msgServer) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	if ms.deployment.GetAuthority() != req.Authority {
+		return nil, govtypes.ErrInvalidSigner.Wrapf("invalid authority; expected %s, got %s", ms.deployment.GetAuthority(), req.Authority)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := ms.deployment.SetParams(ctx, req.Params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+var _ types.MsgServer = msgServer{}
