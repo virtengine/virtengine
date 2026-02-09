@@ -3373,14 +3373,11 @@ async function checkMergedPRsAndUpdateTasks() {
       if (resolved) continue;
 
       // ── Conflict resolution for open PRs with merge conflicts ──
-      // STRATEGY: The monitor now owns SDK-based conflict resolution.
-      // When conflicts are detected:
-      //  1. Auto-resolvable files (lockfiles, generated) are handled mechanically
-      //  2. Semantic conflicts are dispatched to an SDK agent (Codex/Copilot)
-      //     with FULL worktree access — the agent reads both sides, understands
-      //     the code, and writes the correct resolution
-      //  3. The orchestrator still handles simple rebases (behind/stale)
-      //     but DOES NOT own conflict resolution anymore
+      // DEDUPLICATION: The PS1 orchestrator owns direct rebase with persistent
+      // disk-based cooldowns (survives restarts). monitor.mjs only defers to
+      // the orchestrator by logging and registering the dirty task for slot
+      // reservation. We do NOT trigger smartPRFlow("conflict") here to avoid
+      // the thundering herd where both systems race to fix the same PR.
       if (conflictCandidates.length > 0) {
         const lastConflictCheck = conflictResolutionCooldown.get(task.id);
         const onCooldown =
@@ -3398,17 +3395,18 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
+            console.log(
+              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — deferring to orchestrator (persistent cooldown)`,
+            );
             conflictResolutionCooldown.set(task.id, Date.now());
             recordResolutionAttempt(task.id);
-
-            // Check if SDK resolution is available and not exhausted
-            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
-            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
-
-            if (!sdkOnCooldown && !sdkExhausted) {
-              // ── SDK-based conflict resolution (primary path) ──
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+            // Do NOT call smartPRFlow("conflict") here — the PS1 orchestrator
+            // handles rebase with persistent disk-based cooldowns. Calling both
+            // creates a thundering herd that compounds failures.
+            // The orchestrator will pick this up in its next Sync-TrackedAttempts cycle.
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — orchestrator will handle rebase (attempt ${shortId})`,
               );
 
               // Discover worktree path from attempt data
