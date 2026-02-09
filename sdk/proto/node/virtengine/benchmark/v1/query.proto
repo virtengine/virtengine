@@ -1,0 +1,80 @@
+syntax = "proto3";
+package virtengine.benchmark.v1;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "amino/amino.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/benchmark/v1";
+
+// BenchmarkReport provides a summarized benchmark report for querying.
+message BenchmarkReport {
+  string report_id = 1;
+  string provider = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string cluster_id = 3;
+  string benchmark_type = 4;
+  string score = 5;
+  int64 timestamp = 6;
+  int64 block_height = 7;
+  string challenge_id = 8;
+}
+
+// QueryBenchmarkRequest is the request type for querying a single benchmark report.
+message QueryBenchmarkRequest {
+  string report_id = 1;
+}
+
+// QueryBenchmarkResponse is the response type for querying a single benchmark report.
+message QueryBenchmarkResponse {
+  BenchmarkReport report = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryBenchmarksByProviderRequest is the request type for querying benchmarks by provider.
+message QueryBenchmarksByProviderRequest {
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// QueryBenchmarksByProviderResponse is the response type for querying benchmarks by provider.
+message QueryBenchmarksByProviderResponse {
+  repeated BenchmarkReport reports = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// BenchmarkParams provides benchmark module parameters for querying.
+message BenchmarkParams {
+  int64 retention_count = 1;
+  int64 default_challenge_deadline_seconds = 2;
+  int64 min_benchmark_interval = 3;
+  int64 max_reports_per_submission = 4;
+  int64 anomaly_threshold_jump_percent = 5;
+  int64 anomaly_threshold_repeat_count = 6;
+}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  BenchmarkParams params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// Query defines the gRPC querier service of the benchmark package.
+service Query {
+  // Benchmark queries a single benchmark report by ID.
+  rpc Benchmark(QueryBenchmarkRequest) returns (QueryBenchmarkResponse) {
+    option (google.api.http).get = "/virtengine/benchmark/v1/benchmarks/{report_id}";
+  }
+
+  // BenchmarksByProvider queries benchmark reports by provider address.
+  rpc BenchmarksByProvider(QueryBenchmarksByProviderRequest) returns (QueryBenchmarksByProviderResponse) {
+    option (google.api.http).get = "/virtengine/benchmark/v1/benchmarks/by-provider/{provider}";
+  }
+
+  // Params returns the module parameters.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/benchmark/v1/params";
+  }
+}

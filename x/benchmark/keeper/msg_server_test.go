@@ -26,12 +26,6 @@ import (
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
-// Test address constants for benchmark MsgServer tests
-const (
-	testMsgServerProviderAddr  = "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	testMsgServerModeratorAddr = "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
-)
-
 // setupMsgServerTest creates a test MsgServer with mocked dependencies
 func setupMsgServerTest(t *testing.T) (types.MsgServer, Keeper, sdk.Context, *mockProviderKeeper, *mockRolesKeeper) {
 	t.Helper()
@@ -166,8 +160,8 @@ func convertReportsToResults(reports []types.BenchmarkReport) []benchmarkv1.Benc
 func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 	msgServer, k, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := testMsgServerProviderAddr
-	moderatorAddr := testMsgServerModeratorAddr
+	providerAddr := bech32AddrBenchmark(t)
+	moderatorAddr := bech32AddrBenchmark(t)
 	pub, priv := generateMsgServerTestKeyPair(t)
 
 	// Add provider to mock
@@ -233,8 +227,8 @@ func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 func TestMsgServer_RequestChallenge(t *testing.T) {
 	msgServer, _, ctx, mockProvider, _ := setupMsgServerTest(t)
 
-	providerAddr := testMsgServerProviderAddr
-	requesterAddr := testMsgServerModeratorAddr
+	providerAddr := bech32AddrBenchmark(t)
+	requesterAddr := bech32AddrBenchmark(t)
 	pub, _ := generateMsgServerTestKeyPair(t)
 
 	// Add provider to mock
@@ -297,8 +291,8 @@ func TestMsgServer_RequestChallenge(t *testing.T) {
 func TestMsgServer_FlagProvider(t *testing.T) {
 	msgServer, _, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := testMsgServerProviderAddr
-	moderatorAddr := testMsgServerModeratorAddr
+	providerAddr := bech32AddrBenchmark(t)
+	moderatorAddr := bech32AddrBenchmark(t)
 	pub, _ := generateMsgServerTestKeyPair(t)
 
 	// Add provider and moderator to mocks
@@ -333,7 +327,7 @@ func TestMsgServer_FlagProvider(t *testing.T) {
 		{
 			name: "non-moderator",
 			msg: &types.MsgFlagProvider{
-				Reporter: "cosmos1w3jhxap3gempvr46xzaqf7ajj5drrjqcpd8n8g",
+				Reporter: bech32AddrBenchmark(t),
 				Provider: providerAddr,
 				Reason:   "test",
 			},
@@ -360,8 +354,8 @@ func TestMsgServer_FlagProvider(t *testing.T) {
 func TestMsgServer_UnflagProvider(t *testing.T) {
 	msgServer, k, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := testMsgServerProviderAddr
-	moderatorAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+	providerAddr := bech32AddrBenchmark(t)
+	moderatorAddr := bech32AddrBenchmark(t)
 	pub, _ := generateMsgServerTestKeyPair(t)
 
 	// Add provider and moderator to mocks
@@ -422,14 +416,16 @@ func TestMsgServer_UnflagProvider(t *testing.T) {
 func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 	msgServer, k, ctx, _, mockRoles := setupMsgServerTest(t)
 
-	moderatorAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+	moderatorAddr := bech32AddrBenchmark(t)
+	providerAddr := bech32AddrBenchmark(t)
+	missingProviderAddr := bech32AddrBenchmark(t)
 	mockRoles.AddModerator(moderatorAddr)
 
 	// Create an anomaly flag to resolve
 	anomalyFlag := &types.AnomalyFlag{
 		FlagID:          "anomaly-1",
 		ReportID:        "report-1",
-		ProviderAddress: testMsgServerProviderAddr,
+		ProviderAddress: providerAddr,
 		Type:            types.AnomalyTypeSuddenJump,
 		Severity:        types.AnomalySeverityMedium,
 		Description:     "Test anomaly",
@@ -448,7 +444,7 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 			name: "valid resolution",
 			msg: &types.MsgResolveAnomalyFlag{
 				Authority:  moderatorAddr,
-				Provider:   testMsgServerProviderAddr,
+				Provider:   providerAddr,
 				Resolution: "Issue investigated and resolved",
 			},
 			wantErr: false,
@@ -457,7 +453,7 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 			name: "invalid authority address",
 			msg: &types.MsgResolveAnomalyFlag{
 				Authority:  "invalid",
-				Provider:   testMsgServerProviderAddr,
+				Provider:   providerAddr,
 				Resolution: "test",
 			},
 			wantErr: true,
@@ -467,7 +463,7 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 			name: "non-existent provider",
 			msg: &types.MsgResolveAnomalyFlag{
 				Authority:  moderatorAddr,
-				Provider:   "cosmos1nonexistent",
+				Provider:   missingProviderAddr,
 				Resolution: "test",
 			},
 			wantErr: true,
