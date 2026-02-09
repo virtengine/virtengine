@@ -180,6 +180,16 @@ func (k Keeper) SetDelegationSequence(ctx sdk.Context, seq uint64) {
 	store.Set(types.SequenceKeyDelegation, bz)
 }
 
+// GetDelegationSequence returns the current delegation sequence
+func (k Keeper) GetDelegationSequence(ctx sdk.Context) uint64 {
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.SequenceKeyDelegation)
+	if bz == nil {
+		return 1
+	}
+	return binary.BigEndian.Uint64(bz)
+}
+
 // SetUnbondingSequence sets the unbonding sequence
 func (k Keeper) SetUnbondingSequence(ctx sdk.Context, seq uint64) {
 	store := ctx.KVStore(k.skey)
@@ -188,12 +198,32 @@ func (k Keeper) SetUnbondingSequence(ctx sdk.Context, seq uint64) {
 	store.Set(types.SequenceKeyUnbonding, bz)
 }
 
+// GetUnbondingSequence returns the current unbonding sequence
+func (k Keeper) GetUnbondingSequence(ctx sdk.Context) uint64 {
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.SequenceKeyUnbonding)
+	if bz == nil {
+		return 1
+	}
+	return binary.BigEndian.Uint64(bz)
+}
+
 // SetRedelegationSequence sets the redelegation sequence
 func (k Keeper) SetRedelegationSequence(ctx sdk.Context, seq uint64) {
 	store := ctx.KVStore(k.skey)
 	bz := make([]byte, 8)
 	binary.BigEndian.PutUint64(bz, seq)
 	store.Set(types.SequenceKeyRedelegation, bz)
+}
+
+// GetRedelegationSequence returns the current redelegation sequence
+func (k Keeper) GetRedelegationSequence(ctx sdk.Context) uint64 {
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.SequenceKeyRedelegation)
+	if bz == nil {
+		return 1
+	}
+	return binary.BigEndian.Uint64(bz)
 }
 
 // generateUnbondingID generates a deterministic unbonding ID

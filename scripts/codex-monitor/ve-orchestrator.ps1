@@ -595,7 +595,7 @@ function Test-BranchMergedIntoBase {
 
     # Strategy 1: Check GitHub for a merged PR with this head branch (most reliable)
     try {
-        $ghResult = gh pr list --head $Branch --state merged --json number,mergedAt --limit 1 2>$null
+        $ghResult = gh pr list --head $Branch --state merged --json number, mergedAt --limit 1 2>$null
         if ($LASTEXITCODE -eq 0 -and $ghResult) {
             $mergedPRs = $ghResult | ConvertFrom-Json -ErrorAction SilentlyContinue
             if ($mergedPRs -and @($mergedPRs).Count -gt 0) {
@@ -1687,11 +1687,11 @@ $script:ComplexityModels = @{
     "CODEX"   = @{
         "low"    = @{ model = "gpt-5.1-codex-mini"; variant = "GPT51_CODEX_MINI"; reasoningEffort = "low" }
         "medium" = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "medium" }
-        "high"   = @{ model = "gpt-5.3-codex"; variant = "DEFAULT"; reasoningEffort = "high" }
+        "high"   = @{ model = "gpt-5.2-codex"; variant = "DEFAULT"; reasoningEffort = "high" }
     }
     "COPILOT" = @{
-        "low"    = @{ model = "haiku-4.5"; variant = "HAIKU_4_5"; reasoningEffort = "low" }
-        "medium" = @{ model = "sonnet-4.5"; variant = "SONNET_4_5"; reasoningEffort = "medium" }
+        "low"    = @{ model = "haiku-4.5"; variant = "CLAUDE_HAIKU_4_5"; reasoningEffort = "low" }
+        "medium" = @{ model = "sonnet-4.5"; variant = "CLAUDE_SONNET_4_5"; reasoningEffort = "medium" }
         "high"   = @{ model = "opus-4.6"; variant = "CLAUDE_OPUS_4_6"; reasoningEffort = "high" }
     }
 }

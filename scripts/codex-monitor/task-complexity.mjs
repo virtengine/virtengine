@@ -75,12 +75,12 @@ export const DEFAULT_MODEL_PROFILES = Object.freeze({
   COPILOT: {
     [COMPLEXITY_TIERS.LOW]: {
       model: "haiku-4.5",
-      variant: "HAIKU_4_5",
+      variant: "CLAUDE_HAIKU_4_5",
       reasoningEffort: "low",
     },
     [COMPLEXITY_TIERS.MEDIUM]: {
       model: "sonnet-4.5",
-      variant: "SONNET_4_5",
+      variant: "CLAUDE_SONNET_4_5",
       reasoningEffort: "medium",
     },
     [COMPLEXITY_TIERS.HIGH]: {
@@ -101,8 +101,8 @@ export const MODEL_ALIASES = Object.freeze({
   "gpt-5.1-codex-max": { executor: "CODEX", variant: "GPT51_CODEX_MAX" },
   "claude-opus-4.6": { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" },
   "opus-4.6": { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6" },
-  "sonnet-4.5": { executor: "COPILOT", variant: "SONNET_4_5" },
-  "haiku-4.5": { executor: "COPILOT", variant: "HAIKU_4_5" },
+  "sonnet-4.5": { executor: "COPILOT", variant: "CLAUDE_SONNET_4_5" },
+  "haiku-4.5": { executor: "COPILOT", variant: "CLAUDE_HAIKU_4_5" },
   "claude-code": { executor: "COPILOT", variant: "CLAUDE_CODE" },
 });
 
