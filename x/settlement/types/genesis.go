@@ -1,6 +1,10 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+
+	sdkmath "cosmossdk.io/math"
+)
 
 // GenesisState is the genesis state for the settlement module
 type GenesisState struct {
@@ -25,6 +29,12 @@ type GenesisState struct {
 	// PayoutRecords are the initial payout records
 	PayoutRecords []PayoutRecord `json:"payout_records"`
 
+	// FiatConversionRecords are the initial fiat conversion records
+	FiatConversionRecords []FiatConversionRecord `json:"fiat_conversion_records"`
+
+	// FiatPayoutPreferences are the initial provider fiat payout preferences
+	FiatPayoutPreferences []FiatPayoutPreference `json:"fiat_payout_preferences"`
+
 	// EscrowSequence is the next escrow sequence number
 	EscrowSequence uint64 `json:"escrow_sequence"`
 
@@ -39,6 +49,9 @@ type GenesisState struct {
 
 	// PayoutSequence is the next payout sequence number
 	PayoutSequence uint64 `json:"payout_sequence"`
+
+	// FiatConversionSequence is the next fiat conversion sequence number
+	FiatConversionSequence uint64 `json:"fiat_conversion_sequence"`
 }
 
 // Params defines the parameters for the settlement module
@@ -111,23 +124,62 @@ type Params struct {
 
 	// UsageRewardUnacknowledgedMultiplierBps is the unacknowledged quality multiplier in basis points
 	UsageRewardUnacknowledgedMultiplierBps uint32 `json:"usage_reward_unack_multiplier_bps"`
+
+	// FiatConversionEnabled enables fiat conversion flow
+	FiatConversionEnabled bool `json:"fiat_conversion_enabled"`
+
+	// FiatConversionMinAmount is the minimum stablecoin amount eligible for conversion
+	FiatConversionMinAmount string `json:"fiat_conversion_min_amount"`
+
+	// FiatConversionMaxAmount is the maximum stablecoin amount eligible for conversion
+	FiatConversionMaxAmount string `json:"fiat_conversion_max_amount"`
+
+	// FiatConversionDailyLimit is the daily stablecoin conversion cap per provider
+	FiatConversionDailyLimit string `json:"fiat_conversion_daily_limit"`
+
+	// FiatConversionStableDenom is the stablecoin denom used for off-ramp
+	FiatConversionStableDenom string `json:"fiat_conversion_stable_denom"`
+
+	// FiatConversionStableSymbol is the stablecoin symbol used for swaps
+	FiatConversionStableSymbol string `json:"fiat_conversion_stable_symbol"`
+
+	// FiatConversionStableDecimals is the stablecoin decimals
+	FiatConversionStableDecimals uint32 `json:"fiat_conversion_stable_decimals"`
+
+	// FiatConversionDefaultFiat is the default fiat currency
+	FiatConversionDefaultFiat string `json:"fiat_conversion_default_fiat"`
+
+	// FiatConversionDefaultMethod is the default payment method
+	FiatConversionDefaultMethod string `json:"fiat_conversion_default_method"`
+
+	// FiatConversionMaxSlippage is the maximum slippage allowed (string decimal)
+	FiatConversionMaxSlippage string `json:"fiat_conversion_max_slippage"`
+
+	// FiatConversionRiskScoreThreshold is the compliance risk score threshold
+	FiatConversionRiskScoreThreshold int32 `json:"fiat_conversion_risk_score_threshold"`
+
+	// FiatConversionMinComplianceStatus is the minimum compliance status required
+	FiatConversionMinComplianceStatus string `json:"fiat_conversion_min_compliance_status"`
 }
 
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params:               DefaultParams(),
-		EscrowAccounts:       []EscrowAccount{},
-		SettlementRecords:    []SettlementRecord{},
-		RewardDistributions:  []RewardDistribution{},
-		UsageRecords:         []UsageRecord{},
-		ClaimableRewards:     []ClaimableRewards{},
-		PayoutRecords:        []PayoutRecord{},
-		EscrowSequence:       1,
-		SettlementSequence:   1,
-		DistributionSequence: 1,
-		UsageSequence:        1,
-		PayoutSequence:       1,
+		Params:                 DefaultParams(),
+		EscrowAccounts:         []EscrowAccount{},
+		SettlementRecords:      []SettlementRecord{},
+		RewardDistributions:    []RewardDistribution{},
+		UsageRecords:           []UsageRecord{},
+		ClaimableRewards:       []ClaimableRewards{},
+		PayoutRecords:          []PayoutRecord{},
+		FiatConversionRecords:  []FiatConversionRecord{},
+		FiatPayoutPreferences:  []FiatPayoutPreference{},
+		EscrowSequence:         1,
+		SettlementSequence:     1,
+		DistributionSequence:   1,
+		UsageSequence:          1,
+		PayoutSequence:         1,
+		FiatConversionSequence: 1,
 	}
 }
 
@@ -157,6 +209,18 @@ func DefaultParams() Params {
 		UsageRewardSLALateMultiplierBps:        8000,     // 0.8x
 		UsageRewardAcknowledgedMultiplierBps:   10000,    // 1.0x
 		UsageRewardUnacknowledgedMultiplierBps: 9000,     // 0.9x
+		FiatConversionEnabled:                  false,
+		FiatConversionMinAmount:                "1000",
+		FiatConversionMaxAmount:                "100000000",
+		FiatConversionDailyLimit:               "1000000000",
+		FiatConversionStableDenom:              "uusdc",
+		FiatConversionStableSymbol:             "USDC",
+		FiatConversionStableDecimals:           6,
+		FiatConversionDefaultFiat:              "USD",
+		FiatConversionDefaultMethod:            "bank_transfer",
+		FiatConversionMaxSlippage:              "0.02",
+		FiatConversionRiskScoreThreshold:       75,
+		FiatConversionMinComplianceStatus:      "CLEARED",
 	}
 }
 
@@ -226,6 +290,30 @@ func (gs GenesisState) Validate() error {
 		seenPayouts[payout.PayoutID] = true
 	}
 
+	// Validate fiat conversion records
+	seenConversions := make(map[string]bool)
+	for _, conversion := range gs.FiatConversionRecords {
+		if err := conversion.Validate(); err != nil {
+			return err
+		}
+		if seenConversions[conversion.ConversionID] {
+			return ErrInvalidSettlement.Wrapf("duplicate conversion_id: %s", conversion.ConversionID)
+		}
+		seenConversions[conversion.ConversionID] = true
+	}
+
+	// Validate fiat payout preferences
+	seenPrefs := make(map[string]bool)
+	for _, pref := range gs.FiatPayoutPreferences {
+		if err := pref.Validate(); err != nil {
+			return err
+		}
+		if seenPrefs[pref.Provider] {
+			return ErrInvalidParams.Wrapf("duplicate fiat payout preference: %s", pref.Provider)
+		}
+		seenPrefs[pref.Provider] = true
+	}
+
 	return nil
 }
 
@@ -280,6 +368,59 @@ func (p Params) Validate() error {
 	}
 	if err := validateRewardMultiplierBps(p.UsageRewardUnacknowledgedMultiplierBps, "usage_reward_unack_multiplier_bps"); err != nil {
 		return err
+	}
+
+	if p.FiatConversionEnabled {
+		if p.FiatConversionStableDenom == "" || p.FiatConversionStableSymbol == "" {
+			return ErrInvalidParams.Wrap("fiat conversion stable token must be configured")
+		}
+
+		if p.FiatConversionStableDecimals > 18 {
+			return ErrInvalidParams.Wrap("fiat conversion stable decimals must be <= 18")
+		}
+
+		minAmount, ok := sdkmath.NewIntFromString(p.FiatConversionMinAmount)
+		if !ok || minAmount.IsNegative() {
+			return ErrInvalidParams.Wrap("fiat_conversion_min_amount must be a valid non-negative integer")
+		}
+
+		maxAmount, ok := sdkmath.NewIntFromString(p.FiatConversionMaxAmount)
+		if !ok || maxAmount.IsNegative() {
+			return ErrInvalidParams.Wrap("fiat_conversion_max_amount must be a valid non-negative integer")
+		}
+
+		if maxAmount.IsPositive() && minAmount.GT(maxAmount) {
+			return ErrInvalidParams.Wrap("fiat_conversion_min_amount cannot exceed max amount")
+		}
+
+		dailyLimit, ok := sdkmath.NewIntFromString(p.FiatConversionDailyLimit)
+		if !ok || dailyLimit.IsNegative() {
+			return ErrInvalidParams.Wrap("fiat_conversion_daily_limit must be a valid non-negative integer")
+		}
+
+		if p.FiatConversionDefaultFiat == "" {
+			return ErrInvalidParams.Wrap("fiat_conversion_default_fiat required")
+		}
+
+		if p.FiatConversionDefaultMethod == "" {
+			return ErrInvalidParams.Wrap("fiat_conversion_default_method required")
+		}
+
+		if p.FiatConversionMaxSlippage == "" {
+			return ErrInvalidParams.Wrap("fiat_conversion_max_slippage required")
+		}
+
+		if _, err := sdkmath.LegacyNewDecFromStr(p.FiatConversionMaxSlippage); err != nil {
+			return ErrInvalidParams.Wrapf("invalid fiat_conversion_max_slippage: %s", err)
+		}
+
+		if p.FiatConversionRiskScoreThreshold < 0 || p.FiatConversionRiskScoreThreshold > 100 {
+			return ErrInvalidParams.Wrap("fiat_conversion_risk_score_threshold must be between 0 and 100")
+		}
+
+		if p.FiatConversionMinComplianceStatus == "" {
+			return ErrInvalidParams.Wrap("fiat_conversion_min_compliance_status required")
+		}
 	}
 
 	return nil

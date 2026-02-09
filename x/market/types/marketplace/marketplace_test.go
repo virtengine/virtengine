@@ -1179,6 +1179,39 @@ func TestNewProvisionRequestedEvent(t *testing.T) {
 	}
 }
 
+func TestNewAllocationStateChangedEvent(t *testing.T) {
+	allocation := NewAllocation(
+		AllocationID{
+			OrderID:  OrderID{CustomerAddress: "cosmos1abc", Sequence: 1},
+			Sequence: 1,
+		},
+		OfferingID{ProviderAddress: "cosmos1xyz", Sequence: 1},
+		"cosmos1xyz",
+		BidID{
+			OrderID:         OrderID{CustomerAddress: "cosmos1abc", Sequence: 1},
+			ProviderAddress: "cosmos1xyz",
+			Sequence:        1,
+		},
+		1000,
+	)
+	oldState := allocation.State
+	_ = allocation.SetStateAt(AllocationStateProvisioning, "provisioning", time.Unix(0, 0))
+
+	event := NewAllocationStateChangedEvent(allocation, oldState, "provisioning", 100, 7)
+	if event.EventType != EventAllocationStateChanged {
+		t.Fatalf("expected event type %s, got %s", EventAllocationStateChanged, event.EventType)
+	}
+	if event.AllocationID != allocation.ID.String() {
+		t.Fatalf("expected allocation id %s, got %s", allocation.ID.String(), event.AllocationID)
+	}
+	if event.OldState != oldState.String() {
+		t.Fatalf("expected old state %s, got %s", oldState.String(), event.OldState)
+	}
+	if event.NewState != allocation.State.String() {
+		t.Fatalf("expected new state %s, got %s", allocation.State.String(), event.NewState)
+	}
+}
+
 func TestNewTerminateRequestedEvent(t *testing.T) {
 	event := NewTerminateRequestedEvent(
 		"alloc_123",

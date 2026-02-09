@@ -66,6 +66,9 @@ type PayoutRecord struct {
 	// PayoutID is the unique identifier for this payout
 	PayoutID string `json:"payout_id"`
 
+	// FiatConversionID links to fiat conversion (optional)
+	FiatConversionID string `json:"fiat_conversion_id,omitempty"`
+
 	// InvoiceID is the linked invoice
 	InvoiceID string `json:"invoice_id"`
 

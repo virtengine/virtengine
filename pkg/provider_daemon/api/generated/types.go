@@ -33,6 +33,7 @@ const (
 	Restart DeploymentActionRequestAction = "restart"
 	Start   DeploymentActionRequestAction = "start"
 	Stop    DeploymentActionRequestAction = "stop"
+	Resize  DeploymentActionRequestAction = "resize"
 )
 
 // Defines values for DeploymentDetailState.
@@ -203,8 +204,10 @@ type DeploymentActionRequestAction string
 
 // DeploymentActionResponse defines model for DeploymentActionResponse.
 type DeploymentActionResponse struct {
-	Message *string `json:"message,omitempty"`
-	Success *bool   `json:"success,omitempty"`
+	Message     *string `json:"message,omitempty"`
+	OperationId *string `json:"operation_id,omitempty"`
+	State       *string `json:"state,omitempty"`
+	Success     *bool   `json:"success,omitempty"`
 }
 
 // DeploymentDetail defines model for DeploymentDetail.

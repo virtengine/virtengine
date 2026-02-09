@@ -22,6 +22,13 @@ type vaultUploadRequest struct {
 	RetentionPolicy string            `json:"retention_policy,omitempty"`
 	ExpiresAt       *string           `json:"expires_at,omitempty"`
 	Tags            map[string]string `json:"tags,omitempty"`
+	Recipients      []vaultRecipient  `json:"recipients,omitempty"`
+}
+
+type vaultRecipient struct {
+	PublicKeyBase64 string `json:"public_key_base64"`
+	KeyID           string `json:"key_id,omitempty"`
+	KeyVersion      uint32 `json:"key_version,omitempty"`
 }
 
 type vaultMetadataResponse struct {
@@ -53,6 +60,17 @@ type vaultRetrieveResponse struct {
 
 type vaultAuditResponse struct {
 	Events []data_vault.AuditEvent `json:"events"`
+}
+
+type vaultKeyMetadataResponse struct {
+	ID           string     `json:"id"`
+	Scope        string     `json:"scope"`
+	Version      uint32     `json:"version"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ActivatedAt  *time.Time `json:"activated_at,omitempty"`
+	DeprecatedAt *time.Time `json:"deprecated_at,omitempty"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
 }
 
 func (s *PortalAPIServer) handleVaultUpload(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +116,23 @@ func (s *PortalAPIServer) handleVaultUpload(w http.ResponseWriter, r *http.Reque
 		expiresAt = &parsed
 	}
 
+	recipients := make([]data_vault.Recipient, 0, len(req.Recipients))
+	for _, rec := range req.Recipients {
+		if strings.TrimSpace(rec.PublicKeyBase64) == "" {
+			continue
+		}
+		pubKey, err := base64.StdEncoding.DecodeString(strings.TrimSpace(rec.PublicKeyBase64))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid recipient public key")
+			return
+		}
+		recipients = append(recipients, data_vault.Recipient{
+			PublicKey:  pubKey,
+			KeyID:      strings.TrimSpace(rec.KeyID),
+			KeyVersion: rec.KeyVersion,
+		})
+	}
+
 	blob, err := s.vault.Upload(r.Context(), &data_vault.UploadRequest{
 		Scope:           scope,
 		Plaintext:       payload,
@@ -106,6 +141,7 @@ func (s *PortalAPIServer) handleVaultUpload(w http.ResponseWriter, r *http.Reque
 		RetentionPolicy: strings.TrimSpace(req.RetentionPolicy),
 		ExpiresAt:       expiresAt,
 		Tags:            req.Tags,
+		Recipients:      recipients,
 	})
 	if err != nil {
 		if errors.Is(err, data_vault.ErrUnauthorized) {
@@ -254,6 +290,89 @@ func (s *PortalAPIServer) handleVaultAuditSearch(w http.ResponseWriter, r *http.
 		}
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *PortalAPIServer) handleVaultKeyList(w http.ResponseWriter, r *http.Request) {
+	principal := principalFromContext(r.Context())
+	if principal == "" {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	scope, err := parseVaultScope(r.URL.Query().Get("scope"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
+
+	keys, err := s.vault.ListKeyMetadata(r.Context(), scope, principal, orgID)
+	if err != nil {
+		if errors.Is(err, data_vault.ErrUnauthorized) {
+			writeJSONError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := make([]vaultKeyMetadataResponse, 0, len(keys))
+	for _, key := range keys {
+		response = append(response, vaultKeyMetadataResponse{
+			ID:           key.ID,
+			Scope:        string(key.Scope),
+			Version:      key.Version,
+			Status:       key.Status,
+			CreatedAt:    key.CreatedAt,
+			ActivatedAt:  key.ActivatedAt,
+			DeprecatedAt: key.DeprecatedAt,
+			RevokedAt:    key.RevokedAt,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *PortalAPIServer) handleVaultKeyMetadata(w http.ResponseWriter, r *http.Request) {
+	principal := principalFromContext(r.Context())
+	if principal == "" {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	scope, err := parseVaultScope(r.URL.Query().Get("scope"))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	keyID := strings.TrimSpace(mux.Vars(r)["keyId"])
+	if keyID == "" {
+		writeJSONError(w, http.StatusBadRequest, "key id required")
+		return
+	}
+	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
+
+	key, err := s.vault.GetKeyMetadata(r.Context(), scope, keyID, principal, orgID)
+	if err != nil {
+		if errors.Is(err, data_vault.ErrUnauthorized) {
+			writeJSONError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, vaultKeyMetadataResponse{
+		ID:           key.ID,
+		Scope:        string(key.Scope),
+		Version:      key.Version,
+		Status:       key.Status,
+		CreatedAt:    key.CreatedAt,
+		ActivatedAt:  key.ActivatedAt,
+		DeprecatedAt: key.DeprecatedAt,
+		RevokedAt:    key.RevokedAt,
+	})
 }
 
 func vaultMetadataFrom(meta *data_vault.BlobMetadata) vaultMetadataResponse {

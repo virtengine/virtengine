@@ -30,6 +30,12 @@ type VaultService interface {
 	// Old keys remain valid for decryption during transition
 	RotateKeys(ctx context.Context, scope Scope) error
 
+	// ListKeyMetadata returns key metadata for a scope
+	ListKeyMetadata(ctx context.Context, scope Scope, requester, orgID string) ([]KeyMetadata, error)
+
+	// GetKeyMetadata returns key metadata for a specific key ID
+	GetKeyMetadata(ctx context.Context, scope Scope, keyID string, requester, orgID string) (*KeyMetadata, error)
+
 	// GetAuditEvents retrieves audit events for a scope or blob
 	GetAuditEvents(ctx context.Context, filter AuditFilter) ([]*AuditEvent, error)
 

@@ -81,6 +81,41 @@ var (
 	// PrefixClaimableRewards is the prefix for claimable rewards by address
 	// Key: PrefixClaimableRewards | address -> ClaimableRewards
 	PrefixClaimableRewards = []byte{0x11}
+
+	// PrefixFiatConversion is the prefix for fiat conversion storage
+	// Key: PrefixFiatConversion | conversion_id -> FiatConversionRecord
+	PrefixFiatConversion = []byte{0x12}
+
+	// PrefixFiatConversionByInvoice is the prefix for conversion lookup by invoice
+	// Key: PrefixFiatConversionByInvoice | invoice_id -> conversion_id
+	PrefixFiatConversionByInvoice = []byte{0x13}
+
+	// PrefixFiatConversionBySettlement is the prefix for conversion lookup by settlement
+	// Key: PrefixFiatConversionBySettlement | settlement_id -> conversion_id
+	PrefixFiatConversionBySettlement = []byte{0x14}
+
+	// PrefixFiatConversionByPayout is the prefix for conversion lookup by payout
+	// Key: PrefixFiatConversionByPayout | payout_id -> conversion_id
+	PrefixFiatConversionByPayout = []byte{0x15}
+
+	// PrefixFiatConversionByProvider is the prefix for conversion lookup by provider
+	// Key: PrefixFiatConversionByProvider | provider | conversion_id -> nil
+	PrefixFiatConversionByProvider = []byte{0x16}
+
+	// PrefixFiatConversionByState is the prefix for conversion lookup by state
+	// Key: PrefixFiatConversionByState | state | conversion_id -> nil
+	PrefixFiatConversionByState = []byte{0x17}
+
+	// PrefixFiatConversionSequence is the prefix for conversion sequence counter
+	PrefixFiatConversionSequence = []byte{0x18}
+
+	// PrefixFiatPayoutPreference stores provider fiat payout preferences
+	// Key: PrefixFiatPayoutPreference | provider -> FiatPayoutPreference
+	PrefixFiatPayoutPreference = []byte{0x19}
+
+	// PrefixFiatDailyTotals stores daily fiat conversion totals
+	// Key: PrefixFiatDailyTotals | provider | yyyymmdd -> sdkmath.Int (bytes)
+	PrefixFiatDailyTotals = []byte{0x1A}
 )
 
 // ParamsKey returns the store key for module parameters
@@ -194,6 +229,101 @@ func ClaimableRewardsKey(address []byte) []byte {
 	key := make([]byte, 0, len(PrefixClaimableRewards)+len(address))
 	key = append(key, PrefixClaimableRewards...)
 	key = append(key, address...)
+	return key
+}
+
+// FiatConversionKey returns the store key for a fiat conversion record
+func FiatConversionKey(conversionID string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversion)+len(conversionID))
+	key = append(key, PrefixFiatConversion...)
+	key = append(key, []byte(conversionID)...)
+	return key
+}
+
+// FiatConversionByInvoiceKey returns the store key for conversion lookup by invoice
+func FiatConversionByInvoiceKey(invoiceID string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversionByInvoice)+len(invoiceID))
+	key = append(key, PrefixFiatConversionByInvoice...)
+	key = append(key, []byte(invoiceID)...)
+	return key
+}
+
+// FiatConversionBySettlementKey returns the store key for conversion lookup by settlement
+func FiatConversionBySettlementKey(settlementID string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversionBySettlement)+len(settlementID))
+	key = append(key, PrefixFiatConversionBySettlement...)
+	key = append(key, []byte(settlementID)...)
+	return key
+}
+
+// FiatConversionByPayoutKey returns the store key for conversion lookup by payout
+func FiatConversionByPayoutKey(payoutID string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversionByPayout)+len(payoutID))
+	key = append(key, PrefixFiatConversionByPayout...)
+	key = append(key, []byte(payoutID)...)
+	return key
+}
+
+// FiatConversionByProviderKey returns the store key for conversion lookup by provider
+func FiatConversionByProviderKey(provider string, conversionID string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversionByProvider)+len(provider)+1+len(conversionID))
+	key = append(key, PrefixFiatConversionByProvider...)
+	key = append(key, []byte(provider)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(conversionID)...)
+	return key
+}
+
+// FiatConversionByProviderPrefixKey returns the prefix for conversion lookup by provider
+func FiatConversionByProviderPrefixKey(provider string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversionByProvider)+len(provider)+1)
+	key = append(key, PrefixFiatConversionByProvider...)
+	key = append(key, []byte(provider)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// FiatConversionByStateKey returns the store key for conversion lookup by state
+func FiatConversionByStateKey(state FiatConversionState, conversionID string) []byte {
+	stateBytes := []byte(state)
+	key := make([]byte, 0, len(PrefixFiatConversionByState)+len(stateBytes)+1+len(conversionID))
+	key = append(key, PrefixFiatConversionByState...)
+	key = append(key, stateBytes...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(conversionID)...)
+	return key
+}
+
+// FiatConversionByStatePrefixKey returns the prefix for conversion lookup by state
+func FiatConversionByStatePrefixKey(state FiatConversionState) []byte {
+	stateBytes := []byte(state)
+	key := make([]byte, 0, len(PrefixFiatConversionByState)+len(stateBytes)+1)
+	key = append(key, PrefixFiatConversionByState...)
+	key = append(key, stateBytes...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// FiatConversionSequenceKey returns the store key for conversion sequence
+func FiatConversionSequenceKey() []byte {
+	return PrefixFiatConversionSequence
+}
+
+// FiatPayoutPreferenceKey returns the store key for provider payout preferences
+func FiatPayoutPreferenceKey(provider string) []byte {
+	key := make([]byte, 0, len(PrefixFiatPayoutPreference)+len(provider))
+	key = append(key, PrefixFiatPayoutPreference...)
+	key = append(key, []byte(provider)...)
+	return key
+}
+
+// FiatDailyTotalKey returns the store key for daily totals
+func FiatDailyTotalKey(provider string, day string) []byte {
+	key := make([]byte, 0, len(PrefixFiatDailyTotals)+len(provider)+1+len(day))
+	key = append(key, PrefixFiatDailyTotals...)
+	key = append(key, []byte(provider)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(day)...)
 	return key
 }
 

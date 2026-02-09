@@ -66,6 +66,21 @@ type IKeeper interface {
 	WithPayouts(ctx sdk.Context, fn func(types.PayoutRecord) bool)
 	WithPayoutsByState(ctx sdk.Context, state types.PayoutState, fn func(types.PayoutRecord) bool)
 
+	// Fiat conversion management
+	RequestFiatConversion(ctx sdk.Context, request types.FiatConversionRequest) (*types.FiatConversionRecord, error)
+	ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*types.FiatConversionRecord, error)
+	GetFiatConversion(ctx sdk.Context, conversionID string) (types.FiatConversionRecord, bool)
+	GetFiatConversionByInvoice(ctx sdk.Context, invoiceID string) (types.FiatConversionRecord, bool)
+	GetFiatConversionBySettlement(ctx sdk.Context, settlementID string) (types.FiatConversionRecord, bool)
+	GetFiatConversionByPayout(ctx sdk.Context, payoutID string) (types.FiatConversionRecord, bool)
+	SetFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error
+	WithFiatConversions(ctx sdk.Context, fn func(types.FiatConversionRecord) bool)
+	WithFiatConversionsByState(ctx sdk.Context, state types.FiatConversionState, fn func(types.FiatConversionRecord) bool)
+	WithFiatPayoutPreferences(ctx sdk.Context, fn func(types.FiatPayoutPreference) bool)
+	SetFiatPayoutPreference(ctx sdk.Context, pref types.FiatPayoutPreference) error
+	GetFiatPayoutPreference(ctx sdk.Context, provider string) (types.FiatPayoutPreference, bool)
+	DeleteFiatPayoutPreference(ctx sdk.Context, provider string) error
+
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
 	SetParams(ctx sdk.Context, params types.Params) error
@@ -85,6 +100,7 @@ type IKeeper interface {
 	SetNextUsageSequence(ctx sdk.Context, seq uint64)
 	SetNextDistributionSequence(ctx sdk.Context, seq uint64)
 	SetNextPayoutSequence(ctx sdk.Context, seq uint64)
+	SetNextFiatConversionSequence(ctx sdk.Context, seq uint64)
 
 	// Block hooks
 	ProcessExpiredEscrows(ctx sdk.Context) error
@@ -113,10 +129,13 @@ type VerificationResult struct {
 
 // Keeper of the settlement store
 type Keeper struct {
-	skey          storetypes.StoreKey
-	cdc           codec.BinaryCodec
-	bankKeeper    BankKeeper
-	billingKeeper BillingKeeper
+	skey             storetypes.StoreKey
+	cdc              codec.BinaryCodec
+	bankKeeper       BankKeeper
+	billingKeeper    BillingKeeper
+	dexSwap          DexSwapExecutor
+	offRampBridge    OffRampBridge
+	complianceKeeper ComplianceKeeper
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
@@ -135,17 +154,35 @@ type BankKeeper interface {
 // NewKeeper creates and returns an instance for settlement keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string) Keeper {
 	return Keeper{
-		cdc:           cdc,
-		skey:          skey,
-		bankKeeper:    bankKeeper,
-		billingKeeper: nil,
-		authority:     authority,
+		cdc:              cdc,
+		skey:             skey,
+		bankKeeper:       bankKeeper,
+		billingKeeper:    nil,
+		dexSwap:          nil,
+		offRampBridge:    nil,
+		complianceKeeper: nil,
+		authority:        authority,
 	}
 }
 
 // SetBillingKeeper configures the billing integration keeper.
 func (k *Keeper) SetBillingKeeper(billingKeeper BillingKeeper) {
 	k.billingKeeper = billingKeeper
+}
+
+// SetDexSwapExecutor configures the DEX swap executor.
+func (k *Keeper) SetDexSwapExecutor(executor DexSwapExecutor) {
+	k.dexSwap = executor
+}
+
+// SetOffRampBridge configures the off-ramp bridge.
+func (k *Keeper) SetOffRampBridge(bridge OffRampBridge) {
+	k.offRampBridge = bridge
+}
+
+// SetComplianceKeeper configures compliance checks.
+func (k *Keeper) SetComplianceKeeper(keeper ComplianceKeeper) {
+	k.complianceKeeper = keeper
 }
 
 // Codec returns keeper codec
