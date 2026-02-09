@@ -258,6 +258,29 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
+
+function startInteractiveShell() {
+  if (shellState.active || !shellState.enabled || !shellIsTTY) {
+    return;
+  }
+
+  if (!shellState.rl) {
+    shellState.rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+    });
+    shellState.rl.on("close", () => {
+      shellState.active = false;
+      shellState.rl = null;
+    });
+  }
+
+  shellState.active = true;
+  shellState.prompt = shellPromptText;
+  shellState.rl.setPrompt(shellPromptText);
+  shellState.rl.prompt();
+}
 setPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
@@ -7396,4 +7419,3 @@ export {
   buildKnowledgeEntry,
   formatKnowledgeSummary,
 };
-
