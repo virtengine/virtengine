@@ -1,6 +1,6 @@
 # Codex Monitor Orchestrator (scripts/codex-monitor) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: Node.js orchestrator supervisor that manages agent executors with failover, auto-restarts the orchestrator script, and integrates with Vibe-Kanban + Telegram for automation (`scripts/codex-monitor/package.json:2`).
 - Use this package to run multi-agent task orchestration locally or in CI; use chain modules (e.g., `x/provider`) for on-chain logic.
 - Key exports / public API surface:
@@ -76,12 +76,6 @@ node scripts/codex-monitor/cli.mjs --args "-MaxParallel 6"
   - Do not block the main supervisor loop with long synchronous work.
   - Do not mutate config after it is frozen by `loadConfig` (`scripts/codex-monitor/config.mjs:716`).
 
-## Configuration
-- Config sources: CLI args, env vars, `.env`, config JSON, defaults
-  (`scripts/codex-monitor/config.mjs:3`).
-- See `scripts/codex-monitor/.env.example:1` for required environment values.
-- Executor distribution and failover live in `config.json` or env overrides.
-
 ## API Reference
 - CLI binary: `codex-monitor` (`scripts/codex-monitor/package.json:55`, `scripts/codex-monitor/cli.mjs:1`).
 - Main runtime entry: `monitor.mjs` (package export `"."`, `scripts/codex-monitor/package.json:33`).
@@ -98,11 +92,3 @@ node scripts/codex-monitor/cli.mjs --args "-MaxParallel 6"
 - Commands:
   - `npm test` (runs `vitest`, `scripts/codex-monitor/package.json:69`).
   - `npm run syntax:check` (fast syntax validation, `scripts/codex-monitor/package.json:67`).
-
-## Troubleshooting
-- Monitor exits with code 75
-  - Cause: orchestrator crash or workspace conflict.
-  - Fix: check logs in `scripts/codex-monitor/` and re-run `node scripts/codex-monitor/cli.mjs`.
-- Telegram integration not sending
-  - Cause: missing TELEGRAM_BOT_TOKEN or chat ID.
-  - Fix: update `.env` values and re-run the CLI.
