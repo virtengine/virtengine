@@ -31,9 +31,10 @@ var (
 	_ sdk.Msg = &MsgDeleteProvider{}
 	_ sdk.Msg = &MsgGenerateDomainVerificationToken{}
 	_ sdk.Msg = &MsgVerifyProviderDomain{}
-	_ sdk.Msg = &MsgRequestDomainVerification{}
-	_ sdk.Msg = &MsgConfirmDomainVerification{}
-	_ sdk.Msg = &MsgRevokeDomainVerification{}
+	// TODO: Uncomment after proto generation
+	// _ sdk.Msg = &MsgRequestDomainVerification{}
+	// _ sdk.Msg = &MsgConfirmDomainVerification{}
+	// _ sdk.Msg = &MsgRevokeDomainVerification{}
 )
 
 var (
@@ -46,9 +47,10 @@ func init() {
 	msgTypeDeleteProvider = reflect.TypeOf(&MsgDeleteProvider{}).Elem().Name()
 	msgTypeGenerateDomainVerificationToken = reflect.TypeOf(&MsgGenerateDomainVerificationToken{}).Elem().Name()
 	msgTypeVerifyProviderDomain = reflect.TypeOf(&MsgVerifyProviderDomain{}).Elem().Name()
-	msgTypeRequestDomainVerification = reflect.TypeOf(&MsgRequestDomainVerification{}).Elem().Name()
-	msgTypeConfirmDomainVerification = reflect.TypeOf(&MsgConfirmDomainVerification{}).Elem().Name()
-	msgTypeRevokeDomainVerification = reflect.TypeOf(&MsgRevokeDomainVerification{}).Elem().Name()
+	// TODO: Uncomment after proto generation
+	// msgTypeRequestDomainVerification = reflect.TypeOf(&MsgRequestDomainVerification{}).Elem().Name()
+	// msgTypeConfirmDomainVerification = reflect.TypeOf(&MsgConfirmDomainVerification{}).Elem().Name()
+	// msgTypeRevokeDomainVerification = reflect.TypeOf(&MsgRevokeDomainVerification{}).Elem().Name()
 }
 
 // NewMsgCreateProvider creates a new MsgCreateProvider instance
@@ -219,7 +221,9 @@ func (msg *MsgVerifyProviderDomain) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{owner}
 }
 
+// TODO: Uncomment after proto generation
 // NewMsgRequestDomainVerification creates a new MsgRequestDomainVerification instance
+/*
 func NewMsgRequestDomainVerification(owner sdk.AccAddress, domain string, method VerificationMethod) *MsgRequestDomainVerification {
 	return &MsgRequestDomainVerification{
 		Owner:  owner.String(),
@@ -314,6 +318,7 @@ func (msg *MsgRevokeDomainVerification) GetSigners() []sdk.AccAddress {
 
 	return []sdk.AccAddress{owner}
 }
+*/
 
 func validateProviderURI(val string) error {
 	u, err := url.Parse(val)
