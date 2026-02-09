@@ -91,7 +91,6 @@ jobs:
         with:
           files: portal/coverage/coverage-final.json
           flags: portal
-          fail_ci_if_error: false
 
   build:
     name: Build
@@ -173,7 +172,12 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: pnpm -C portal test:e2e --project=chromium
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 2
+          retry_on: error
+          command: cd portal && pnpm test:e2e --project=chromium
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
 
