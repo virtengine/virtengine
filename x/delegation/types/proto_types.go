@@ -50,6 +50,9 @@ type ValidatorSharesPB = delegationv1.ValidatorShares
 // DelegatorRewardPB is the generated proto type for delegator rewards
 type DelegatorRewardPB = delegationv1.DelegatorReward
 
+// DelegatorSlashingEventPB is the generated proto type for delegator slashing events
+type DelegatorSlashingEventPB = delegationv1.DelegatorSlashingEvent
+
 // ParamsPB is the generated proto type for module params
 type ParamsPB = delegationv1.Params
 

@@ -22,6 +22,11 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// EndBlocker is called at the end of every block
+func (k Keeper) EndBlocker(ctx sdk.Context) error {
 	// Process mature redelegations
 	matureRedelegations := k.GetMatureRedelegations(ctx)
 	for _, red := range matureRedelegations {
@@ -35,11 +40,5 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 		}
 	}
 
-	return nil
-}
-
-// EndBlocker is called at the end of every block
-func (k Keeper) EndBlocker(ctx sdk.Context) error {
-	// No end block processing currently needed
 	return nil
 }

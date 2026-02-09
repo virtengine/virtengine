@@ -674,6 +674,7 @@ func (app *App) SetupHooks() {
 		stakingtypes.NewMultiStakingHooks(
 			app.Keepers.Cosmos.Distr.Hooks(),
 			app.Keepers.Cosmos.Slashing.Hooks(),
+			app.Keepers.VirtEngine.Delegation.Hooks(),
 		),
 	)
 

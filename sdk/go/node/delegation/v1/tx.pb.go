@@ -352,8 +352,10 @@ func (m *MsgRedelegateResponse) GetCompletionTime() int64 {
 
 // MsgClaimRewards claims rewards from a specific validator
 type MsgClaimRewards struct {
-	Delegator string `protobuf:"bytes,1,opt,name=delegator,proto3" json:"delegator,omitempty"`
-	Validator string `protobuf:"bytes,2,opt,name=validator,proto3" json:"validator,omitempty"`
+	Delegator   string `protobuf:"bytes,1,opt,name=delegator,proto3" json:"delegator,omitempty"`
+	Validator   string `protobuf:"bytes,2,opt,name=validator,proto3" json:"validator,omitempty"`
+	StartHeight int64  `protobuf:"varint,3,opt,name=start_height,json=startHeight,proto3" json:"start_height,omitempty"`
+	EndHeight   int64  `protobuf:"varint,4,opt,name=end_height,json=endHeight,proto3" json:"end_height,omitempty"`
 }
 
 func (m *MsgClaimRewards) Reset()         { *m = MsgClaimRewards{} }
@@ -401,6 +403,20 @@ func (m *MsgClaimRewards) GetValidator() string {
 		return m.Validator
 	}
 	return ""
+}
+
+func (m *MsgClaimRewards) GetStartHeight() int64 {
+	if m != nil {
+		return m.StartHeight
+	}
+	return 0
+}
+
+func (m *MsgClaimRewards) GetEndHeight() int64 {
+	if m != nil {
+		return m.EndHeight
+	}
+	return 0
 }
 
 // MsgClaimRewardsResponse is the response for MsgClaimRewards
@@ -1214,6 +1230,16 @@ func (m *MsgClaimRewards) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.EndHeight != 0 {
+		i = encodeVarintTx(dAtA, i, uint64(m.EndHeight))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.StartHeight != 0 {
+		i = encodeVarintTx(dAtA, i, uint64(m.StartHeight))
+		i--
+		dAtA[i] = 0x18
+	}
 	if len(m.Validator) > 0 {
 		i -= len(m.Validator)
 		copy(dAtA[i:], m.Validator)
@@ -1502,6 +1528,12 @@ func (m *MsgClaimRewards) Size() (n int) {
 	l = len(m.Validator)
 	if l > 0 {
 		n += 1 + l + sovTx(uint64(l))
+	}
+	if m.StartHeight != 0 {
+		n += 1 + sovTx(uint64(m.StartHeight))
+	}
+	if m.EndHeight != 0 {
+		n += 1 + sovTx(uint64(m.EndHeight))
 	}
 	return n
 }
@@ -2329,6 +2361,44 @@ func (m *MsgClaimRewards) Unmarshal(dAtA []byte) error {
 			}
 			m.Validator = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StartHeight", wireType)
+			}
+			m.StartHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StartHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EndHeight", wireType)
+			}
+			m.EndHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.EndHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipTx(dAtA[iNdEx:])

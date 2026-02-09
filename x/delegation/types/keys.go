@@ -46,6 +46,9 @@ var (
 	// RedelegationQueuePrefix is the prefix for redelegation queue
 	RedelegationQueuePrefix = []byte{0x09}
 
+	// DelegatorSlashingEventPrefix is the prefix for delegator slashing events
+	DelegatorSlashingEventPrefix = []byte{0x0A}
+
 	// ParamsKey is the key for module parameters
 	ParamsKey = []byte{0x10}
 
@@ -57,6 +60,9 @@ var (
 
 	// SequenceKeyRedelegation is the sequence key for redelegation IDs
 	SequenceKeyRedelegation = []byte{0x22}
+
+	// SequenceKeySlashingEvent is the sequence key for slashing event IDs
+	SequenceKeySlashingEvent = []byte{0x23}
 )
 
 // GetDelegationKey returns the key for a delegation
@@ -106,6 +112,16 @@ func GetUnbondingQueueKey(completionTime int64) []byte {
 // GetRedelegationQueueKey returns the key for a redelegation queue entry
 func GetRedelegationQueueKey(completionTime int64) []byte {
 	return append(RedelegationQueuePrefix, int64ToBytes(completionTime)...)
+}
+
+// GetDelegatorSlashingEventKey returns the key for a delegator slashing event
+func GetDelegatorSlashingEventKey(delegatorAddr string, blockHeight int64, sequence uint64) []byte {
+	addrPart := delegatorAddr + ":"
+	key := make([]byte, 0, len(DelegatorSlashingEventPrefix)+len(addrPart)+8+8)
+	key = append(key, DelegatorSlashingEventPrefix...)
+	key = append(key, []byte(addrPart)...)
+	key = append(key, int64ToBytes(blockHeight)...)
+	return append(key, uint64ToBytes(sequence)...)
 }
 
 // uint64ToBytes converts uint64 to big-endian bytes
