@@ -1,6 +1,6 @@
 # API Layer (api/openapi) — AGENTS Guide
 
-## Module Overview
+## Package Overview
 - Purpose: OpenAPI specifications for VirtEngine blockchain and provider portal APIs, used for client generation and documentation.
 - Use `api/openapi/virtengine-api.yaml` for chain-level queries and transactions; use `api/openapi/portal_api.yaml` for provider portal operations.
 - Key assets:
@@ -48,12 +48,6 @@ X-VE-PubKey: <base64_pubkey>
   - Do not introduce new auth headers without documenting them in `security` and `description` blocks.
   - Do not add paths without rate-limit metadata for chain endpoints.
 
-## Configuration
-- There are no runtime configuration files in this module; the OpenAPI specs
-  are the configuration source of truth.
-- Ensure `servers` and `security` blocks match deployed environments
-  (`api/openapi/virtengine-api.yaml:35`, `api/openapi/portal_api.yaml:37`).
-
 ## API Reference
 - Chain API metadata: `openapi`, `info`, `servers`, `security`, `tags` (`api/openapi/virtengine-api.yaml:1`).
 - Portal API metadata: auth headers and server variables (`api/openapi/portal_api.yaml:8`).
@@ -64,11 +58,3 @@ X-VE-PubKey: <base64_pubkey>
 
 ## Testing
 - Validate specs with your OpenAPI linter or generator before release.
-
-## Troubleshooting
-- Spec lint fails
-  - Cause: missing required fields (e.g., `operationId`, `responses`).
-  - Fix: update the offending path or schema in the relevant OpenAPI file.
-- Client generation fails
-  - Cause: unsupported schema keywords or mismatched component references.
-  - Fix: simplify schemas or update generator tooling.
