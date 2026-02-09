@@ -111,11 +111,6 @@ import {
   appendKnowledgeEntry,
   formatKnowledgeSummary,
 } from "./shared-knowledge.mjs";
-import {
-  classifyComplexity,
-  assessCompletionConfidence,
-  getComplexityMatrix,
-} from "./task-complexity.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Load unified configuration ──────────────────────────────────────────────
@@ -7401,3 +7396,4 @@ export {
   buildKnowledgeEntry,
   formatKnowledgeSummary,
 };
+
