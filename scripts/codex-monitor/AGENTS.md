@@ -4,6 +4,39 @@ This guide is a fast, code-referenced map of the `scripts/codex-monitor/` module
 
 ---
 
+## Module Overview
+- Purpose: codex-monitor supervises VirtEngine's autonomous coding fleet, coordinating task attempts, PR flow, auto-fix, and notifications.
+- Use when: updating orchestration logic, Telegram reporting, or VK task lifecycle automation.
+- Key entry points: `scripts/codex-monitor/cli.mjs`, `scripts/codex-monitor/monitor.mjs`, `scripts/codex-monitor/ve-orchestrator.ps1`.
+- Detailed notes: see "1. Module Overview" below.
+
+## Architecture
+- High-level component map and file entry points are detailed in "2. Architecture & Components".
+
+## Core Concepts
+- Task attempts, orchestrator slots, and smart PR flow.
+- Fleet coordination state and maintenance sweeps.
+- See "3. Critical Workflows" and "6. State Management" below for detail.
+
+## Usage Examples
+
+### Start codex-monitor with defaults
+```bash
+node scripts/codex-monitor/cli.mjs
+```
+
+## Implementation Patterns
+- Extension guidance and common change patterns are listed in "8. Common Modification Patterns".
+
+## Configuration
+- Environment variables, defaults, and config loading order are documented in "5. Configuration & Environment".
+
+## Testing
+- Test commands and locations are covered in "7. Testing & Validation".
+
+## Troubleshooting
+- Known gotchas, causes, and fixes are captured in "4. Known Gotchas & Bug Patterns".
+
 ## 1. Module Overview
 
 **Purpose:** codex-monitor supervises VirtEngine's autonomous coding fleet — it schedules task attempts, runs PR automation, self-heals failures, and reports status via Telegram. The core supervisor (`monitor.mjs`) wires configuration, executor selection, fleet coordination, Telegram notifications, autofix, and maintenance sweeps into a single process loop.  
