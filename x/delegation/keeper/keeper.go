@@ -172,6 +172,20 @@ func (k Keeper) getNextRedelegationSequence(ctx sdk.Context) uint64 { //nolint:u
 	return seq
 }
 
+// getNextSlashingSequence returns and increments the slashing event sequence
+func (k Keeper) getNextSlashingSequence(ctx sdk.Context) uint64 {
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.SequenceKeySlashingEvent)
+	seq := uint64(1)
+	if bz != nil {
+		seq = binary.BigEndian.Uint64(bz)
+	}
+	bz = make([]byte, 8)
+	binary.BigEndian.PutUint64(bz, seq+1)
+	store.Set(types.SequenceKeySlashingEvent, bz)
+	return seq
+}
+
 // SetDelegationSequence sets the delegation sequence
 func (k Keeper) SetDelegationSequence(ctx sdk.Context, seq uint64) {
 	store := ctx.KVStore(k.skey)
@@ -216,10 +230,28 @@ func (k Keeper) SetRedelegationSequence(ctx sdk.Context, seq uint64) {
 	store.Set(types.SequenceKeyRedelegation, bz)
 }
 
+// SetSlashingSequence sets the slashing event sequence
+func (k Keeper) SetSlashingSequence(ctx sdk.Context, seq uint64) {
+	store := ctx.KVStore(k.skey)
+	bz := make([]byte, 8)
+	binary.BigEndian.PutUint64(bz, seq)
+	store.Set(types.SequenceKeySlashingEvent, bz)
+}
+
 // GetRedelegationSequence returns the current redelegation sequence
 func (k Keeper) GetRedelegationSequence(ctx sdk.Context) uint64 {
 	store := ctx.KVStore(k.skey)
 	bz := store.Get(types.SequenceKeyRedelegation)
+	if bz == nil {
+		return 1
+	}
+	return binary.BigEndian.Uint64(bz)
+}
+
+// GetSlashingSequence returns the current slashing event sequence
+func (k Keeper) GetSlashingSequence(ctx sdk.Context) uint64 {
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.SequenceKeySlashingEvent)
 	if bz == nil {
 		return 1
 	}
@@ -523,6 +555,20 @@ func (k Keeper) GetDelegatorRedelegations(ctx sdk.Context, delegatorAddr string)
 	return redelegations
 }
 
+// GetValidatorUnbondingDelegations returns all unbonding delegations for a validator
+func (k Keeper) GetValidatorUnbondingDelegations(ctx sdk.Context, validatorAddr string) []types.UnbondingDelegation {
+	var unbondings []types.UnbondingDelegation
+
+	k.WithUnbondingDelegations(ctx, func(ubd types.UnbondingDelegation) bool {
+		if ubd.ValidatorAddress == validatorAddr {
+			unbondings = append(unbondings, ubd)
+		}
+		return false
+	})
+
+	return unbondings
+}
+
 // WithRedelegations iterates over all redelegations
 func (k Keeper) WithRedelegations(ctx sdk.Context, fn func(types.Redelegation) bool) {
 	store := ctx.KVStore(k.skey)
@@ -544,9 +590,14 @@ func (k Keeper) WithRedelegations(ctx sdk.Context, fn func(types.Redelegation) b
 func (k Keeper) HasRedelegation(ctx sdk.Context, delegatorAddr, srcValidator string) bool {
 	hasRed := false
 	k.WithRedelegations(ctx, func(red types.Redelegation) bool {
-		if red.DelegatorAddress == delegatorAddr && red.ValidatorSrcAddress == srcValidator {
-			hasRed = true
-			return true
+		if red.DelegatorAddress != delegatorAddr || red.ValidatorSrcAddress != srcValidator {
+			return false
+		}
+		for _, entry := range red.Entries {
+			if entry.CompletionTime.After(ctx.BlockTime()) {
+				hasRed = true
+				return true
+			}
 		}
 		return false
 	})
@@ -557,12 +608,97 @@ func (k Keeper) HasRedelegation(ctx sdk.Context, delegatorAddr, srcValidator str
 func (k Keeper) CountDelegatorRedelegations(ctx sdk.Context, delegatorAddr string) int {
 	count := 0
 	k.WithRedelegations(ctx, func(red types.Redelegation) bool {
-		if red.DelegatorAddress == delegatorAddr {
-			count++
+		if red.DelegatorAddress != delegatorAddr {
+			return false
+		}
+		for _, entry := range red.Entries {
+			if entry.CompletionTime.After(ctx.BlockTime()) {
+				count++
+				break
+			}
 		}
 		return false
 	})
 	return count
+}
+
+// HasRedelegationToValidator checks if there is an active redelegation to the destination validator
+func (k Keeper) HasRedelegationToValidator(ctx sdk.Context, delegatorAddr, dstValidator string) bool {
+	hasRed := false
+	k.WithRedelegations(ctx, func(red types.Redelegation) bool {
+		if red.DelegatorAddress != delegatorAddr || red.ValidatorDstAddress != dstValidator {
+			return false
+		}
+		for _, entry := range red.Entries {
+			if entry.CompletionTime.After(ctx.BlockTime()) {
+				hasRed = true
+				return true
+			}
+		}
+		return false
+	})
+	return hasRed
+}
+
+// ============================================================================
+// Delegator Slashing Events
+// ============================================================================
+
+// SetDelegatorSlashingEvent stores a slashing event
+func (k Keeper) SetDelegatorSlashingEvent(ctx sdk.Context, event types.DelegatorSlashingEvent) error {
+	sequence := k.getNextSlashingSequence(ctx)
+	if event.ID == "" {
+		event.ID = fmt.Sprintf("slash-%d", sequence)
+	}
+	if err := event.Validate(); err != nil {
+		return err
+	}
+
+	store := ctx.KVStore(k.skey)
+	key := types.GetDelegatorSlashingEventKey(event.DelegatorAddress, event.BlockHeight, sequence)
+	bz, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	store.Set(key, bz)
+	return nil
+}
+
+// WithDelegatorSlashingEvents iterates over all slashing events
+func (k Keeper) WithDelegatorSlashingEvents(ctx sdk.Context, fn func(types.DelegatorSlashingEvent) bool) {
+	store := ctx.KVStore(k.skey)
+	iter := storetypes.KVStorePrefixIterator(store, types.DelegatorSlashingEventPrefix)
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var event types.DelegatorSlashingEvent
+		if err := json.Unmarshal(iter.Value(), &event); err != nil {
+			continue
+		}
+		if fn(event) {
+			break
+		}
+	}
+}
+
+// GetDelegatorSlashingEvents returns all slashing events for a delegator
+func (k Keeper) GetDelegatorSlashingEvents(ctx sdk.Context, delegatorAddr string) []types.DelegatorSlashingEvent {
+	var events []types.DelegatorSlashingEvent
+	prefixKey := append([]byte{}, types.DelegatorSlashingEventPrefix...)
+	prefixKey = append(prefixKey, []byte(delegatorAddr+":")...)
+	store := ctx.KVStore(k.skey)
+	iter := storetypes.KVStorePrefixIterator(store, prefixKey)
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var event types.DelegatorSlashingEvent
+		if err := json.Unmarshal(iter.Value(), &event); err != nil {
+			continue
+		}
+		events = append(events, event)
+	}
+
+	return events
 }
 
 // ============================================================================

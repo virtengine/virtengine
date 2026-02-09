@@ -147,6 +147,11 @@ func (k Keeper) Undelegate(ctx sdk.Context, delegatorAddr, validatorAddr string,
 		return time.Time{}, types.ErrValidatorNotFound.Wrapf("validator %s not found", validatorAddr)
 	}
 
+	// Auto-claim rewards for this validator before undelegation
+	if _, err := k.ClaimRewards(ctx, delegatorAddr, validatorAddr); err != nil {
+		return time.Time{}, err
+	}
+
 	// Calculate shares for the amount to undelegate
 	amountStr := amount.Amount.String()
 	sharesToUnbond, err := valShares.CalculateSharesForAmount(amountStr)
@@ -249,6 +254,9 @@ func (k Keeper) Redelegate(ctx sdk.Context, delegatorAddr, srcValidator, dstVali
 	// Check for transitive redelegation (redelegating from a validator that received a redelegation)
 	if k.HasRedelegation(ctx, delegatorAddr, srcValidator) {
 		return time.Time{}, types.ErrTransitiveRedelegation.Wrap("transitive redelegation not allowed")
+	}
+	if k.HasRedelegationToValidator(ctx, delegatorAddr, srcValidator) {
+		return time.Time{}, types.ErrTransitiveRedelegation.Wrap("redelegation from destination validator not allowed during redelegation period")
 	}
 
 	// Check max redelegations using params

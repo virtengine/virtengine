@@ -67,11 +67,32 @@ service Query {
     option (google.api.http).get = "/virtengine/delegation/v1/delegator/{delegator_address}/redelegations";
   }
 
+  // Redelegations queries all active redelegations
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Redelegations(QueryRedelegationsRequest) returns (QueryRedelegationsResponse) {
+    option (google.api.http).get = "/virtengine/delegation/v1/redelegations";
+  }
+
   // DelegatorRewards queries unclaimed rewards for a delegator from a specific validator
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc DelegatorRewards(QueryDelegatorRewardsRequest) returns (QueryDelegatorRewardsResponse) {
     option (google.api.http).get = "/virtengine/delegation/v1/delegator/{delegator_address}/rewards/{validator_address}";
+  }
+
+  // HistoricalRewards queries historical rewards for a delegator from a validator
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc HistoricalRewards(QueryHistoricalRewardsRequest) returns (QueryHistoricalRewardsResponse) {
+    option (google.api.http).get = "/virtengine/delegation/v1/delegator/{delegator_address}/rewards/{validator_address}/history";
+  }
+
+  // SlashingEvents queries slashing events for a delegator
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SlashingEvents(QuerySlashingEventsRequest) returns (QuerySlashingEventsResponse) {
+    option (google.api.http).get = "/virtengine/delegation/v1/delegator/{delegator_address}/slashing";
   }
 
   // DelegatorAllRewards queries all unclaimed rewards for a delegator
@@ -407,5 +428,113 @@ message QueryValidatorSharesResponse {
   bool found = 2 [
     (gogoproto.jsontag) = "found",
     (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryRedelegationsRequest is the request for QueryRedelegations
+message QueryRedelegationsRequest {
+  // pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 1 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryRedelegationsResponse is the response for QueryRedelegations
+message QueryRedelegationsResponse {
+  // redelegations are the active redelegation records
+  repeated Redelegation redelegations = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "redelegations",
+    (gogoproto.moretags) = "yaml:\"redelegations\""
+  ];
+
+  // pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryHistoricalRewardsRequest is the request for QueryHistoricalRewards
+message QueryHistoricalRewardsRequest {
+  // delegator_address is the delegator's address
+  string delegator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "delegator_address",
+    (gogoproto.moretags) = "yaml:\"delegator_address\""
+  ];
+
+  // validator_address is the validator's address
+  string validator_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // start_height is the starting block height (inclusive)
+  int64 start_height = 3 [(gogoproto.jsontag) = "start_height"];
+
+  // end_height is the ending block height (inclusive)
+  int64 end_height = 4 [(gogoproto.jsontag) = "end_height"];
+
+  // pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 5 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryHistoricalRewardsResponse is the response for QueryHistoricalRewards
+message QueryHistoricalRewardsResponse {
+  // rewards are the historical reward records
+  repeated DelegatorReward rewards = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "rewards",
+    (gogoproto.moretags) = "yaml:\"rewards\""
+  ];
+
+  // total_reward is the sum of all unclaimed rewards in the range
+  string total_reward = 2 [
+    (gogoproto.jsontag) = "total_reward",
+    (gogoproto.moretags) = "yaml:\"total_reward\""
+  ];
+
+  // pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 3 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QuerySlashingEventsRequest is the request for QuerySlashingEvents
+message QuerySlashingEventsRequest {
+  // delegator_address is the delegator's address
+  string delegator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "delegator_address",
+    (gogoproto.moretags) = "yaml:\"delegator_address\""
+  ];
+
+  // pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QuerySlashingEventsResponse is the response for QuerySlashingEvents
+message QuerySlashingEventsResponse {
+  // events are the delegator slashing events
+  repeated DelegatorSlashingEvent events = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "events",
+    (gogoproto.moretags) = "yaml:\"events\""
+  ];
+
+  // pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
   ];
 }
