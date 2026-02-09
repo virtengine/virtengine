@@ -22,6 +22,9 @@ var (
 	// ErrKeyRevoked is returned when trying to use a revoked key
 	ErrKeyRevoked = errorsmod.Register(ModuleName, 1304, "key has been revoked")
 
+	// ErrKeyDeprecated is returned when trying to use a deprecated key for new encryption
+	ErrKeyDeprecated = errorsmod.Register(ModuleName, 1323, "key is deprecated")
+
 	// ErrInvalidEnvelope is returned when an envelope is malformed
 	ErrInvalidEnvelope = errorsmod.Register(ModuleName, 1305, "invalid envelope")
 
@@ -54,6 +57,12 @@ var (
 
 	// ErrMaxRecipientsExceeded is returned when too many recipients are specified
 	ErrMaxRecipientsExceeded = errorsmod.Register(ModuleName, 1315, "maximum recipients exceeded")
+
+	// ErrKeyExpired is returned when a key is expired
+	ErrKeyExpired = errorsmod.Register(ModuleName, 1324, "key has expired")
+
+	// ErrReencryptionJobFailed is returned when reencryption job processing fails
+	ErrReencryptionJobFailed = errorsmod.Register(ModuleName, 1325, "reencryption job failed")
 
 	// ============================================================================
 	// Cryptography Agility Errors (VE-227)

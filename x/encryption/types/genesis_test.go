@@ -24,6 +24,9 @@ func TestDefaultParams(t *testing.T) {
 	assert.Equal(t, uint32(5), params.MaxKeysPerAccount)
 	assert.True(t, params.RequireSignature)
 	assert.NotEmpty(t, params.AllowedAlgorithms)
+	assert.Equal(t, uint32(100), params.RotationBatchSize)
+	assert.Equal(t, uint64(604800), params.RevocationGracePeriodSeconds)
+	assert.Equal(t, []uint64{604800, 86400}, params.KeyExpiryWarningSeconds)
 }
 
 func TestGenesisState_Validate(t *testing.T) {
@@ -95,6 +98,7 @@ func TestGenesisState_Validate(t *testing.T) {
 				Params: Params{
 					MaxRecipientsPerEnvelope: 0, // Invalid
 					MaxKeysPerAccount:        5,
+					RotationBatchSize:        100,
 				},
 			},
 			expectErr: true,
@@ -130,6 +134,7 @@ func TestParams_Validate(t *testing.T) {
 			params: Params{
 				MaxRecipientsPerEnvelope: 0,
 				MaxKeysPerAccount:        5,
+				RotationBatchSize:        100,
 			},
 			expectErr: true,
 		},
@@ -138,6 +143,7 @@ func TestParams_Validate(t *testing.T) {
 			params: Params{
 				MaxRecipientsPerEnvelope: 10,
 				MaxKeysPerAccount:        0,
+				RotationBatchSize:        100,
 			},
 			expectErr: true,
 		},
@@ -147,6 +153,7 @@ func TestParams_Validate(t *testing.T) {
 				MaxRecipientsPerEnvelope: 10,
 				MaxKeysPerAccount:        5,
 				AllowedAlgorithms:        []string{"INVALID-ALGO"},
+				RotationBatchSize:        100,
 			},
 			expectErr: true,
 		},
@@ -156,6 +163,7 @@ func TestParams_Validate(t *testing.T) {
 				MaxRecipientsPerEnvelope: 10,
 				MaxKeysPerAccount:        5,
 				AllowedAlgorithms:        []string{AlgorithmX25519XSalsa20Poly1305},
+				RotationBatchSize:        100,
 			},
 			expectErr: false,
 		},
@@ -180,6 +188,7 @@ func TestParams_IsAlgorithmAllowed(t *testing.T) {
 		MaxRecipientsPerEnvelope: 10,
 		MaxKeysPerAccount:        5,
 		AllowedAlgorithms:        []string{},
+		RotationBatchSize:        100,
 	}
 
 	assert.True(t, IsAlgorithmAllowed(&emptyParams, AlgorithmX25519XSalsa20Poly1305))
@@ -190,6 +199,7 @@ func TestParams_IsAlgorithmAllowed(t *testing.T) {
 		MaxRecipientsPerEnvelope: 10,
 		MaxKeysPerAccount:        5,
 		AllowedAlgorithms:        []string{AlgorithmX25519XSalsa20Poly1305},
+		RotationBatchSize:        100,
 	}
 
 	assert.True(t, IsAlgorithmAllowed(&restrictedParams, AlgorithmX25519XSalsa20Poly1305))
