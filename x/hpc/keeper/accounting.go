@@ -20,14 +20,18 @@ import (
 
 // CreateAccountingRecord creates a new accounting record for a job
 func (k Keeper) CreateAccountingRecord(ctx sdk.Context, record *types.HPCAccountingRecord) error {
-	if err := record.Validate(); err != nil {
-		return err
-	}
-
 	// Generate record ID if not set
 	if record.RecordID == "" {
 		seq := k.incrementSequence(ctx, types.SequenceKeyAccountingRecord)
 		record.RecordID = fmt.Sprintf("hpc-acct-%d", seq)
+	}
+
+	if record.Status == "" {
+		record.Status = types.AccountingStatusPending
+	}
+
+	if err := record.Validate(); err != nil {
+		return err
 	}
 
 	// Check for duplicate
@@ -37,8 +41,6 @@ func (k Keeper) CreateAccountingRecord(ctx sdk.Context, record *types.HPCAccount
 
 	record.CreatedAt = ctx.BlockTime()
 	record.BlockHeight = ctx.BlockHeight()
-	record.Status = types.AccountingStatusPending
-
 	if err := k.SetAccountingRecord(ctx, *record); err != nil {
 		return err
 	}
