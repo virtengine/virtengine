@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	stakingv1 "github.com/virtengine/virtengine/sdk/go/node/staking/v1"
 	"github.com/virtengine/virtengine/x/staking/keeper"
 	"github.com/virtengine/virtengine/x/staking/types"
 )
@@ -211,7 +212,8 @@ func formatRecords(records []string) string {
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Message server and query server registration would go here
+	stakingv1.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.Querier{Keeper: am.keeper})
 }
 
 // InitGenesis performs genesis initialization for the staking module.
