@@ -4,7 +4,7 @@ import { InvoiceList } from '@/components/billing/InvoiceList';
 import type { Invoice } from '@virtengine/portal/types/billing';
 
 const downloadFile = vi.fn();
-const generateInvoicesCSV = vi.fn((data: Invoice[]) => 'csv-data');
+const generateInvoicesCSV = vi.fn((_data: Invoice[]) => 'csv-data');
 
 const invoices: Invoice[] = [
   {

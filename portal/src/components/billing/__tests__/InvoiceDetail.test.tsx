@@ -4,7 +4,7 @@ import { InvoiceDetail } from '@/components/billing/InvoiceDetail';
 import type { Invoice } from '@virtengine/portal/types/billing';
 
 const downloadFile = vi.fn();
-const generateInvoiceText = vi.fn((payload: Invoice) => 'invoice-text');
+const generateInvoiceText = vi.fn((_payload: Invoice) => 'invoice-text');
 
 const invoice: Invoice = {
   id: 'inv-10',

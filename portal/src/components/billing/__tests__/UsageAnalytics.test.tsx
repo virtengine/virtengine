@@ -4,7 +4,7 @@ import { UsageAnalytics } from '@/components/billing/UsageAnalytics';
 import type { UsageSummary, UsageHistoryPoint } from '@virtengine/portal/types/billing';
 
 const downloadFile = vi.fn();
-const generateUsageReportCSV = vi.fn((data: UsageHistoryPoint[]) => 'usage-csv');
+const generateUsageReportCSV = vi.fn((_data: UsageHistoryPoint[]) => 'usage-csv');
 
 const usage: UsageSummary = {
   period: { start: new Date('2026-01-01'), end: new Date('2026-01-31') },
