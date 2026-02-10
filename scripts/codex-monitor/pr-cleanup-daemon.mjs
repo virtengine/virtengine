@@ -96,8 +96,9 @@ class PRCleanupDaemon {
       const problematicPRs = [];
 
       for (const pr of allPRs) {
-        // Skip excluded labels
-        if (pr.labels.some(l => this.config.excludeLabels.includes(l.name))) {
+        // Skip excluded labels (guard against missing labels or config)
+        const excludeLabels = this.config.excludeLabels || [];
+        if (Array.isArray(pr.labels) && pr.labels.some(l => l?.name && excludeLabels.includes(l.name))) {
           continue;
         }
 
@@ -112,7 +113,7 @@ class PRCleanupDaemon {
         }
 
         // Check for failing CI
-        if (pr.statusCheckRollup?.some(check => check.conclusion === 'FAILURE')) {
+        if (Array.isArray(pr.statusCheckRollup) && pr.statusCheckRollup.some(check => check?.conclusion === 'FAILURE')) {
           problematicPRs.push({
             ...pr,
             issue: 'ci_failure',
@@ -126,12 +127,13 @@ class PRCleanupDaemon {
       return problematicPRs.sort((a, b) => a.priority - b.priority);
     } catch (err) {
       // Handle rate limiting gracefully
-      if (err.message.includes('HTTP 429') || err.message.includes('rate limit')) {
+      const errMsg = typeof err?.message === 'string' ? err.message : String(err);
+      if (errMsg.includes('HTTP 429') || errMsg.includes('rate limit')) {
         console.warn(`[pr-cleanup-daemon] GitHub API rate limited - will retry next cycle`);
         return [];
       }
       
-      console.error(`[pr-cleanup-daemon] Failed to fetch PRs:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to fetch PRs:`, errMsg);
       return [];
     }
   }
@@ -213,9 +215,10 @@ class PRCleanupDaemon {
     console.log(`[pr-cleanup-daemon] Fixing CI on PR #${pr.number}`);
 
     // Get failing checks
-    const failedChecks = pr.statusCheckRollup.filter(c => c.conclusion === 'FAILURE');
+    const checks = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup : [];
+    const failedChecks = checks.filter(c => c?.conclusion === 'FAILURE');
     console.log(`[pr-cleanup-daemon] PR #${pr.number} has ${failedChecks.length} failed checks:`, 
-      failedChecks.map(c => c.name).join(', '));
+      failedChecks.map(c => c?.name).join(', '));
 
     // For now, just re-trigger CI (future: spawn agent to fix specific failures)
     if (this.config.dryRun) {
@@ -250,7 +253,8 @@ class PRCleanupDaemon {
       return;
     }
 
-    const allGreen = latest.statusCheckRollup.every(c => c.conclusion === 'SUCCESS');
+    const latestChecks = Array.isArray(latest.statusCheckRollup) ? latest.statusCheckRollup : [];
+    const allGreen = latestChecks.length > 0 && latestChecks.every(c => c?.conclusion === 'SUCCESS');
     if (!allGreen) {
       console.log(`[pr-cleanup-daemon] PR #${pr.number} has non-green checks, skipping auto-merge`);
       return;

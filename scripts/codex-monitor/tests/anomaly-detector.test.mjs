@@ -167,7 +167,7 @@ describe("AnomalyDetector", () => {
       // Should have at least a HIGH severity anomaly at kill threshold
       const highs = anomalies.filter((a) => a.severity === Severity.HIGH);
       expect(highs.length).toBeGreaterThanOrEqual(1);
-      expect(highs[0].action).toBe("warn");
+      expect(highs[0].action).toBe("kill");
     });
 
     it("does NOT false-positive on different edits to the same file", () => {
@@ -338,6 +338,23 @@ describe("AnomalyDetector", () => {
       );
       expect(spinAnomalies).toHaveLength(0);
     });
+
+    it("ignores short streaming token fragments (portal, trust)", () => {
+      // These are single-word streaming tokens that accumulate massive counts
+      // in agent logs but are NOT real repeated thoughts
+      const portalLine = '{"Thought":{"type":"text","text":"portal"}}';
+      const trustLine = '{"Thought":{"type":"text","text":" trust"}}';
+
+      for (let i = 0; i < 60; i++) {
+        detector.processLine(portalLine, META);
+        detector.processLine(trustLine, META);
+      }
+
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
   });
 
   describe("Session Completion", () => {
@@ -493,6 +510,83 @@ describe("AnomalyDetector", () => {
       expect(rateAnomalies.length).toBeGreaterThanOrEqual(1);
     });
   });
+  describe("Kill action escalation", () => {
+    it("emits kill action for subagent waste at kill threshold", () => {
+      // Matches RE_SUBAGENT_SPAWN: "ToolCall" with "rawInput":{"prompt":...}
+      const spawnLine = '{"ToolCall":{"toolCallId":"tc1","title":"runSubagent","kind":"invoke","rawInput":{"prompt":"do something"}}}';
+      for (let i = 0; i < 6; i++) {
+        detector.processLine(spawnLine, META);
+      }
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.SUBAGENT_WASTE && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+      expect(kills[0].severity).toBe(Severity.HIGH);
+    });
+
+    it("emits kill action for tool failure cascade at kill threshold", () => {
+      // Matches RE_TOOL_UPDATE_FAILED: "ToolUpdate" with "status":"failed"
+      const failLine = '{"ToolUpdate":{"toolCallId":"tc1","status":"failed","error":"something broke"}}';
+      for (let i = 0; i < 8; i++) {
+        detector.processLine(failLine, META);
+      }
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.TOOL_FAILURE_CASCADE && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("emits kill action for git push loop at kill threshold", () => {
+      const pushLine = "git push --set-upstream origin feature-branch";
+      for (let i = 0; i < 4; i++) {
+        detector.processLine(pushLine, META);
+      }
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.GIT_PUSH_LOOP && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Thought spinning exclusions", () => {
+    it("excludes operational test-running thoughts from spinning detection", () => {
+      // Uses the actual Copilot thought format: "Thought":{"type":"text","text":"..."}
+      const thoughtLine = '{"Thought":{"type":"text","text":"Running integration tests"}}';
+      for (let i = 0; i < 15; i++) {
+        detector.processLine(thoughtLine, META);
+      }
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
+
+    it("excludes 'waiting for' thoughts from spinning detection", () => {
+      const thoughtLine = '{"Thought":{"type":"text","text":"Waiting for tests to complete"}}';
+      for (let i = 0; i < 15; i++) {
+        detector.processLine(thoughtLine, META);
+      }
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
+
+    it("still detects genuine thought spinning (non-operational)", () => {
+      const thoughtLine = '{"Thought":{"type":"text","text":"I need to fix this bug somehow"}}';
+      for (let i = 0; i < 15; i++) {
+        detector.processLine(thoughtLine, META);
+      }
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
 });
 
 describe("createAnomalyDetector factory", () => {

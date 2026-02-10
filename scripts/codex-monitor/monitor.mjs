@@ -1407,11 +1407,14 @@ async function startVibeKanbanProcess() {
     `[monitor] starting vibe-kanban via ${useLocal ? "local bin" : "npx"} (HOST=${vkRecoveryHost} PORT=${vkRecoveryPort}, endpoint=${vkEndpointUrl})`,
   );
 
+  // Use shell: true only when running through npx (string command).
+  // When using the local binary directly, avoid shell to prevent DEP0190
+  // deprecation warning ("Passing args to child process with shell true").
   vibeKanbanProcess = spawn(spawnCmd, spawnArgs, {
     env,
     cwd: repoRoot,
     stdio: "ignore",
-    shell: true,
+    shell: !useLocal,
     detached: true,
   });
   vibeKanbanProcess.unref();

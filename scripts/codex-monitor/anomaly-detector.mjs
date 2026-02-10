@@ -14,8 +14,8 @@
  *   - Per-process tracking via ProcessState objects
  *   - Sliding window counters for rate-based detection
  *   - Fingerprinted dedup to avoid alert spam
- *   - Severity levels: CRITICAL (kill), HIGH (warn), MEDIUM (warn), LOW (info)
- *   - KILL action reserved for TOKEN_OVERFLOW only (true unrecoverable state)
+ *   - Severity levels: CRITICAL (kill), HIGH (kill at threshold/warn), MEDIUM (warn), LOW (info)
+ *   - KILL action triggers at kill thresholds for all anomaly types (not just TOKEN_OVERFLOW)
  *   - Active process monitoring only (completed processes archived for analysis)
  *
  * Pattern catalog: See VK_FAILURE_PATTERN_CATALOG.md
@@ -94,6 +94,32 @@ const DEFAULT_THRESHOLDS = {
   // Process state cleanup: remove tracking after this many ms of inactivity
   processCleanupMs: 30 * 60 * 1000,
 };
+
+// Thought patterns that are legitimate during long-running operations.
+// Agents running test suites, builds, or installations will naturally repeat
+// these status thoughts many times — they're progress indicators, not loops.
+const THOUGHT_SPINNING_EXCLUSIONS = [
+  /^running\s+\w*\s*tests?$/i,           // "Running integration tests", "Running portal tests", "Running unit tests"
+  /^running\s+\w+$/i,                     // "Running prettier", "Running eslint"
+  /^waiting\s+for\s+/i,                   // "Waiting for tests to complete"
+  /^installing\s+/i,                      // "Installing dependencies"
+  /^building\s+/i,                        // "Building the project"
+  /^compiling\s+/i,                       // "Compiling TypeScript"
+  /^testing\s+/i,                         // "Testing the implementation"
+  /^executing\s+/i,                       // "Executing the command"
+  /^checking\s+/i,                        // "Checking test results"
+  /^analyzing\s+/i,                       // "Analyzing test output"
+];
+
+/**
+ * Check if a thought is a legitimate operational status message
+ * that should not count toward thought spinning detection.
+ * @param {string} normalized - Lowercase, trimmed thought text
+ * @returns {boolean}
+ */
+function isOperationalThought(normalized) {
+  return THOUGHT_SPINNING_EXCLUSIONS.some((re) => re.test(normalized));
+}
 
 // ── Per-process state ───────────────────────────────────────────────────────
 
@@ -651,7 +677,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Tool call death loop: "${title}" called ${count}x consecutively (identical content)`,
         data: { tool: title, count, iterative },
-        action: "warn",
+        action: "kill",
       });
     } else if (count >= warnThreshold) {
       this.#emit({
@@ -684,7 +710,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Tool failure cascade: ${state.toolFailureCount} failures in session`,
         data: { count: state.toolFailureCount },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.toolFailureCount >= this.#thresholds.toolFailureWarn) {
       this.#emit({
@@ -725,7 +751,7 @@ export class AnomalyDetector {
           rebaseCount: state.rebaseCount,
           abortCount: state.rebaseAbortCount,
         },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.rebaseCount >= this.#thresholds.rebaseWarn) {
       this.#emit({
@@ -761,7 +787,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Git push loop detected: ${state.gitPushCount} push attempts`,
         data: { count: state.gitPushCount },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.gitPushCount >= this.#thresholds.gitPushWarn) {
       this.#emit({
@@ -794,7 +820,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Excessive subagent spawning: ${state.subagentCount} subagents`,
         data: { count: state.subagentCount },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.subagentCount >= this.#thresholds.subagentWarn) {
       this.#emit({
@@ -861,8 +887,16 @@ export class AnomalyDetector {
 
     // Normalize: lowercase, trim, collapse whitespace
     const normalized = thoughtText.toLowerCase().trim().replace(/\s+/g, " ");
-    // Only track thoughts > 3 chars (skip single tokens like "I" or "the")
-    if (normalized.length <= 3) return;
+    // Skip short fragments — streaming often emits single tokens ("portal",
+    // " trust", "the") that accumulate massive counts but aren't real repeated
+    // thoughts. Require at least 12 chars (~2-3 words) to count as a trackable
+    // thought pattern.
+    if (normalized.length < 12) return;
+
+    // Skip operational status messages — agents running tests, builds, or
+    // installations legitimately repeat status thoughts like "Running integration
+    // tests" many times. These are progress indicators, not loops.
+    if (isOperationalThought(normalized)) return;
 
     const count = (state.thoughtCounts.get(normalized) || 0) + 1;
     state.thoughtCounts.set(normalized, count);
@@ -876,7 +910,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Thought spinning: "${thoughtText}" repeated ${count}x — model may be looping`,
         data: { thought: thoughtText, count },
-        action: "warn",
+        action: "kill",
       });
     } else if (count >= this.#thresholds.thoughtSpinWarn) {
       this.#emit({
@@ -936,7 +970,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Repeated error (${count}x): ${line.slice(0, 150)}`,
         data: { fingerprint, count },
-        action: "warn",
+        action: "kill",
       });
     } else if (count >= this.#thresholds.repeatedErrorWarn) {
       this.#emit({
@@ -984,7 +1018,7 @@ export class AnomalyDetector {
           taskTitle: state.taskTitle,
           message: `Agent may be stalled: no output for ${Math.round(idleMs / 1000)}s`,
           data: { idleSec: Math.round(idleMs / 1000) },
-          action: "warn",
+          action: "kill",
         });
       } else if (idleMs >= this.#thresholds.idleStallWarnSec * 1000) {
         this.#emit({

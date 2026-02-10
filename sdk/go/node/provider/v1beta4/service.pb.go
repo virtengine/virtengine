@@ -253,7 +253,7 @@ func _Msg_UpdateProvider_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: "/virtengine.provider.v1beta4.Msg/UpdateProvider",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateProvider(ctx, req.(*MsgUpdateProvider))  
+		return srv.(MsgServer).UpdateProvider(ctx, req.(*MsgUpdateProvider))
 	}
 	return interceptor(ctx, in, info, handler)
 }

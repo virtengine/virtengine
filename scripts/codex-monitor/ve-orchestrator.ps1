@@ -4054,7 +4054,7 @@ function Process-AnomalySignals {
 
             Write-Log "Anomaly signal: $($signal.type) ($($signal.severity)) for $($info.branch) — action=$($signal.action)" -Level "WARN"
 
-            # For kill/restart actions on completed/review attempts, queue a fresh session follow-up
+            # For kill/restart actions, handle recovery based on attempt status
             if ($signal.action -in @("kill", "restart")) {
                 if ($info.status -in @("review", "error")) {
                     $info.status = "error"
@@ -4064,7 +4064,22 @@ function Process-AnomalySignals {
                     $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_recovery"
                 }
                 elseif ($info.status -eq "running") {
-                    Write-Log "Anomaly for running attempt $($attemptId.Substring(0,8)) — will act when process completes" -Level "INFO"
+                    # CRITICAL anomalies (TOKEN_OVERFLOW, STREAM_DEATH) on running
+                    # processes: mark for immediate termination so the orchestrator
+                    # archives this attempt on the next poll instead of waiting for
+                    # natural completion (which may never come for dead sessions).
+                    if ($signal.severity -eq "CRITICAL") {
+                        Write-Log "CRITICAL anomaly ($($signal.type)) for running attempt $($attemptId.Substring(0,8)) — marking for archive + retry" -Level "WARN"
+                        $info.status = "error"
+                        $info.error_notified = $true
+                        $info.force_new_session = $true
+                        $info.anomaly_killed = $true
+                        $msg = "CRITICAL: $($signal.type) — $($signal.message). Archiving and retrying with a fresh session."
+                        $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_kill"
+                    }
+                    else {
+                        Write-Log "Anomaly for running attempt $($attemptId.Substring(0,8)) — will act when process completes" -Level "INFO"
+                    }
                 }
             }
         }
