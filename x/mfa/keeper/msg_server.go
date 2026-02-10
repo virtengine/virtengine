@@ -398,13 +398,15 @@ func (m *msgServer) AddTrustedDevice(goCtx context.Context, msg *types.MsgAddTru
 	deviceInfo := msg.DeviceInfo
 	deviceInfo.TrustExpiresAt = now + params.TrustedDeviceTTL
 
-	if err := m.Keeper.AddTrustedDevice(ctx, address, &deviceInfo); err != nil {
+	trustToken, err := m.Keeper.AddTrustedDevice(ctx, address, &deviceInfo)
+	if err != nil {
 		return nil, err
 	}
 
 	return &types.MsgAddTrustedDeviceResponse{
 		Success:        true,
 		TrustExpiresAt: deviceInfo.TrustExpiresAt,
+		TrustToken:     trustToken,
 	}, nil
 }
 

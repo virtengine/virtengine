@@ -268,6 +268,7 @@ func convertMsgAddTrustedDeviceResponseToProto(resp *MsgAddTrustedDeviceResponse
 	return &mfav1.MsgAddTrustedDeviceResponse{
 		Success:        resp.Success,
 		TrustExpiresAt: resp.TrustExpiresAt,
+		TrustToken:     resp.TrustToken,
 	}
 }
 
@@ -384,10 +385,12 @@ func convertMFAProofFromProto(proof *mfav1.MFAProof) *MFAProof {
 		factors[i] = factorTypeFromProto(f)
 	}
 	return &MFAProof{
-		SessionID:       proof.SessionId,
-		VerifiedFactors: factors,
-		Timestamp:       proof.Timestamp,
-		Signature:       proof.Signature,
+		SessionID:         proof.SessionId,
+		VerifiedFactors:   factors,
+		Timestamp:         proof.Timestamp,
+		Signature:         proof.Signature,
+		DeviceFingerprint: proof.DeviceFingerprint,
+		TrustToken:        proof.TrustToken,
 	}
 }
 
@@ -400,10 +403,12 @@ func convertMFAProofFromProtoDirect(proof *mfav1.MFAProof) *MFAProof {
 		factors[i] = factorTypeFromProto(f)
 	}
 	return &MFAProof{
-		SessionID:       proof.SessionId,
-		VerifiedFactors: factors,
-		Timestamp:       proof.Timestamp,
-		Signature:       proof.Signature,
+		SessionID:         proof.SessionId,
+		VerifiedFactors:   factors,
+		Timestamp:         proof.Timestamp,
+		Signature:         proof.Signature,
+		DeviceFingerprint: proof.DeviceFingerprint,
+		TrustToken:        proof.TrustToken,
 	}
 }
 
@@ -416,10 +421,12 @@ func convertMFAProofToProto(proof *MFAProof) *mfav1.MFAProof {
 		factors[i] = mfav1.FactorType(f)
 	}
 	return &mfav1.MFAProof{
-		SessionId:       proof.SessionID,
-		VerifiedFactors: factors,
-		Timestamp:       proof.Timestamp,
-		Signature:       proof.Signature,
+		SessionId:         proof.SessionID,
+		VerifiedFactors:   factors,
+		Timestamp:         proof.Timestamp,
+		Signature:         proof.Signature,
+		DeviceFingerprint: proof.DeviceFingerprint,
+		TrustToken:        proof.TrustToken,
 	}
 }
 
@@ -516,6 +523,7 @@ func convertDeviceInfoFromProtoPtr(d *mfav1.DeviceInfo) *DeviceInfo {
 		LastSeenAt:     d.LastSeenAt,
 		IPHash:         d.IpHash,
 		TrustExpiresAt: d.TrustExpiresAt,
+		TrustTokenHash: d.TrustTokenHash,
 	}
 }
 
@@ -621,6 +629,7 @@ func convertDeviceInfoFromProto(d *mfav1.DeviceInfo) DeviceInfo {
 		LastSeenAt:     d.LastSeenAt,
 		IPHash:         d.IpHash,
 		TrustExpiresAt: d.TrustExpiresAt,
+		TrustTokenHash: d.TrustTokenHash,
 	}
 }
 
@@ -766,6 +775,7 @@ func convertDeviceInfoToProtoFromLocal(d *DeviceInfo) *mfav1.DeviceInfo {
 		LastSeenAt:     d.LastSeenAt,
 		IpHash:         d.IPHash,
 		TrustExpiresAt: d.TrustExpiresAt,
+		TrustTokenHash: d.TrustTokenHash,
 	}
 }
 
@@ -879,6 +889,7 @@ func convertDeviceInfoToProto(d *DeviceInfo) *mfav1.DeviceInfo {
 		LastSeenAt:     d.LastSeenAt,
 		IpHash:         d.IPHash,
 		TrustExpiresAt: d.TrustExpiresAt,
+		TrustTokenHash: d.TrustTokenHash,
 	}
 }
 

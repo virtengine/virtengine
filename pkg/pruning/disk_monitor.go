@@ -89,10 +89,21 @@ type GrowthProjection struct {
 
 // NewDiskMonitor creates a new disk monitor.
 func NewDiskMonitor(config DiskMonitorConfig, dataDir string, logger log.Logger) *DiskMonitor {
+	// Validate and clean dataDir path
+	if dataDir == "" {
+		dataDir = "."
+	}
+	cleanPath := filepath.Clean(dataDir)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		// Fall back to cleaned relative path if abs fails
+		absPath = cleanPath
+	}
+
 	return &DiskMonitor{
 		config:     config,
 		logger:     logger.With("module", "disk-monitor"),
-		dataDir:    dataDir,
+		dataDir:    absPath,
 		maxHistory: 1440, // 24 hours at 1-minute intervals or 5 days at 5-minute intervals
 	}
 }

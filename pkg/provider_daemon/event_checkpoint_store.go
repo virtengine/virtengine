@@ -99,6 +99,7 @@ func (s *EventCheckpointStore) Save(state *EventCheckpointState) error {
 	}
 
 	tmp := s.path + ".tmp"
+	// #nosec G304 -- path validated in constructor and cleaned
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write checkpoint tmp: %w", err)
 	}

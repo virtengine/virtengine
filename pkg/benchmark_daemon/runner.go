@@ -272,8 +272,15 @@ func (r *DefaultBenchmarkRunner) runPingTest(ctx context.Context, endpoint strin
 		return 10000
 	}
 
-	//nolint:gosec // G204: Command "ping" and arguments validated by security.PingArgs
-	cmd := exec.CommandContext(ctx, "ping", args...)
+	// Resolve and validate ping executable
+	pingPath, err := security.ResolveAndValidateExecutable("system", "ping")
+	if err != nil {
+		return 10000
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	cmd := exec.CommandContext(ctx, pingPath, args...)
 
 	output, err := cmd.Output()
 	if err != nil {

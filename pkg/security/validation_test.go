@@ -1101,3 +1101,162 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// =============================================================================
+// New Command Argument Validation Tests
+// =============================================================================
+
+func TestKubectlArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{
+			name:    "valid kubectl get pods",
+			args:    []string{"get", "pods"},
+			wantErr: false,
+		},
+		{
+			name:    "valid kubectl apply with flags",
+			args:    []string{"apply", "-f", "-"},
+			wantErr: false,
+		},
+		{
+			name:    "injection attempt with semicolon",
+			args:    []string{"get", "pods; rm -rf /"},
+			wantErr: true,
+		},
+		{
+			name:    "injection attempt with pipe",
+			args:    []string{"get", "pods | cat /etc/passwd"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := KubectlArgs(tt.args...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("KubectlArgs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestHelmArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{
+			name:    "valid helm install",
+			args:    []string{"install", "myapp", "./chart"},
+			wantErr: false,
+		},
+		{
+			name:    "injection attempt",
+			args:    []string{"install", "myapp; id"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := HelmArgs(tt.args...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("HelmArgs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGitArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{
+			name:    "valid git remote get-url",
+			args:    []string{"remote", "get-url", "origin"},
+			wantErr: false,
+		},
+		{
+			name:    "injection attempt",
+			args:    []string{"remote", "get-url", "origin; cat /etc/passwd"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := GitArgs(tt.args...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GitArgs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNitroCliArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{
+			name:    "valid nitro-cli run-enclave",
+			args:    []string{"run-enclave", "--cpu-count", "2"},
+			wantErr: false,
+		},
+		{
+			name:    "injection attempt",
+			args:    []string{"run-enclave", "--cpu-count", "2; id"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := NitroCliArgs(tt.args...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NitroCliArgs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestShellProbeArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		wantErr bool
+	}{
+		{
+			name:    "valid probe command",
+			command: "curl -f http://localhost:8080/health",
+			wantErr: false,
+		},
+		{
+			name:    "empty command",
+			command: "",
+			wantErr: true,
+		},
+		{
+			name:    "too long command",
+			command: strings.Repeat("a", MaxArgumentLength*2+1),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ShellProbeArgs(tt.command)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ShellProbeArgs() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

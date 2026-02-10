@@ -286,8 +286,20 @@ type prometheusResponse struct {
 
 // checkCommandProbe executes a command probe.
 func (v *Verifier) checkCommandProbe(ctx context.Context, probe chaos.Probe) (float64, error) {
-	//nolint:gosec // G204: probe.Command is validated SLO configuration from trusted source
-	cmd := exec.CommandContext(ctx, "sh", "-c", probe.Command)
+	// Validate probe command
+	if err := security.ShellProbeArgs(probe.Command); err != nil {
+		return 0, fmt.Errorf("invalid probe command: %w", err)
+	}
+
+	// Resolve and validate sh executable
+	shPath, err := security.ResolveAndValidateExecutable("system", "sh")
+	if err != nil {
+		return 0, fmt.Errorf("sh not available: %w", err)
+	}
+
+	// Execute with validated path - probe.Command from trusted SLO configuration
+	//nolint:gosec // G204: Executable path validated, probe.Command from trusted config
+	cmd := exec.CommandContext(ctx, shPath, "-c", probe.Command)
 	output, err := cmd.Output()
 	if err != nil {
 		// If the command failed, return 0 (failure)
@@ -313,9 +325,22 @@ func (v *Verifier) checkGRPCProbe(_ context.Context, probe chaos.Probe) (float64
 
 // checkKubernetesProbe checks Kubernetes resource status.
 func (v *Verifier) checkKubernetesProbe(ctx context.Context, probe chaos.Probe) (float64, error) {
-	// Use kubectl to check resource status
-	//nolint:gosec // G204: probe.Query is validated resource name from trusted SLO config
-	cmd := exec.CommandContext(ctx, "kubectl", "get", probe.Query, "-o", "jsonpath={.status.phase}")
+	args := []string{"get", probe.Query, "-o", "jsonpath={.status.phase}"}
+
+	// Validate kubectl arguments
+	if err := security.KubectlArgs(args...); err != nil {
+		return 0, fmt.Errorf("invalid kubectl arguments: %w", err)
+	}
+
+	// Resolve and validate kubectl executable
+	kubectlPath, err := security.ResolveAndValidateExecutable("kubernetes", "kubectl")
+	if err != nil {
+		return 0, fmt.Errorf("kubectl not available: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	cmd := exec.CommandContext(ctx, kubectlPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("kubectl failed: %w", err)

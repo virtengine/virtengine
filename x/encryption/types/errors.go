@@ -88,4 +88,7 @@ var (
 
 	// ErrMigrationFailed is returned when algorithm migration fails
 	ErrMigrationFailed = errorsmod.Register(ModuleName, 1322, "algorithm migration failed")
+
+	// ErrUnauthorizedAccess is returned when access to encrypted data is denied
+	ErrUnauthorizedAccess = errorsmod.Register(ModuleName, 1326, "unauthorized access to encrypted data")
 )

@@ -155,12 +155,12 @@ func (d *NitroHardwareDetector) Detect() error {
 	d.devicePath = NitroDevicePath
 	d.available = true
 
-	// Check for nitro-cli
-	cliPath, found := checkExecutableExists(NitroCLIBinary)
-	if found {
+	// Check for nitro-cli using security validator
+	cliPath, err := security.ResolveAndValidateExecutable("nitro", NitroCLIBinary)
+	if err == nil {
 		d.cliPath = cliPath
 		// Try to get version
-		if version, err := d.getNitroCLIVersion(); err == nil {
+		if version, verErr := d.getNitroCLIVersion(); verErr == nil {
 			d.version = version
 		}
 	}
@@ -174,8 +174,16 @@ func (d *NitroHardwareDetector) getNitroCLIVersion() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	//nolint:gosec // G204: cliPath is validated during initialization
-	cmd := exec.CommandContext(ctx, d.cliPath, "--version")
+	args := []string{"--version"}
+
+	// Validate arguments
+	if err := security.NitroCliArgs(args...); err != nil {
+		return "", fmt.Errorf("invalid nitro-cli arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	cmd := exec.CommandContext(ctx, d.cliPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err

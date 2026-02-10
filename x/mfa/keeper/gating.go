@@ -81,6 +81,13 @@ func (h MFAGatingHooks) ValidateMFAProof(
 		return err
 	}
 
+	// Validate trust token if provided
+	if proof.TrustToken != "" && proof.DeviceFingerprint != "" {
+		if !h.keeper.ValidateTrustToken(ctx, account, proof.DeviceFingerprint, proof.TrustToken) {
+			return types.ErrUnauthorized.Wrap("invalid trust token for device")
+		}
+	}
+
 	// Get the authorization session
 	session, found := h.keeper.GetAuthorizationSession(ctx, proof.SessionID)
 	if !found {
