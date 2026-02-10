@@ -1,6 +1,0 @@
-[core]
-	editor = :
-[merge]
-	autoEdit = false
-[pull]
-	ff = only
