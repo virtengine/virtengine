@@ -203,7 +203,9 @@ function checkToolchain() {
 }
 
 function checkGhAuth() {
-  const tokenPresent = Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN);
+  const tokenPresent = Boolean(
+    process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
+  );
   const auth = runCommand("gh", ["auth", "status", "-h", "github.com"]);
   if (auth.status === 0) {
     return { ok: true, method: "gh" };
@@ -236,7 +238,7 @@ export function runPreflightChecks(options = {}) {
     errors.push({
       title: "Git identity not configured",
       message:
-        "Set git user.name and user.email (git config --global user.name \"Your Name\"; git config --global user.email \"you@example.com\").",
+        'Set git user.name and user.email (git config --global user.name "Your Name"; git config --global user.email "you@example.com").',
     });
   }
 
