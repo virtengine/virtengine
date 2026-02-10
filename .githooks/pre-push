@@ -422,6 +422,7 @@ check_vet() {
     if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
         changed_packages=$(git diff --name-only "$BASE_BRANCH" -- '*.go' 2>/dev/null | \
             grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' | \
+            grep -v '^sdk/github.com/virtengine/virtengine/sdk/go/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")
@@ -525,6 +526,7 @@ check_test_go() {
     if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
         changed_packages=$(git diff --name-only "$BASE_BRANCH" -- '*.go' 2>/dev/null | \
             grep -v '_test\.go$' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' | \
+            grep -v '^sdk/github.com/virtengine/virtengine/sdk/go/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")

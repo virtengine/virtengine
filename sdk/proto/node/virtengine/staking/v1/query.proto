@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package virtengine.staking.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos_proto/cosmos.proto";
+import "virtengine/staking/v1/params.proto";
+import "virtengine/staking/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/staking/v1";
+
+// Query defines the gRPC querier service for the staking module.
+service Query {
+  // Params queries the module parameters.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/params";
+  }
+
+  // ValidatorPerformance queries a validator performance record.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ValidatorPerformance(QueryValidatorPerformanceRequest) returns (QueryValidatorPerformanceResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/validators/{validator_address}/performance/{epoch}";
+  }
+
+  // ValidatorPerformances queries performance records for an epoch.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ValidatorPerformances(QueryValidatorPerformancesRequest) returns (QueryValidatorPerformancesResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/validators/performance/{epoch}";
+  }
+
+  // ValidatorReward queries a validator reward for an epoch.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ValidatorReward(QueryValidatorRewardRequest) returns (QueryValidatorRewardResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/validators/{validator_address}/reward/{epoch}";
+  }
+
+  // ValidatorRewards queries all rewards for a validator.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ValidatorRewards(QueryValidatorRewardsRequest) returns (QueryValidatorRewardsResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/validators/{validator_address}/rewards";
+  }
+
+  // RewardEpoch queries a reward epoch by number.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc RewardEpoch(QueryRewardEpochRequest) returns (QueryRewardEpochResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/reward-epoch/{epoch}";
+  }
+
+  // SlashRecords queries slash records for a validator.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SlashRecords(QuerySlashRecordsRequest) returns (QuerySlashRecordsResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/validators/{validator_address}/slashes";
+  }
+
+  // SigningInfo queries validator signing info.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SigningInfo(QuerySigningInfoRequest) returns (QuerySigningInfoResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/validators/{validator_address}/signing-info";
+  }
+
+  // CurrentEpoch queries the current epoch.
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc CurrentEpoch(QueryCurrentEpochRequest) returns (QueryCurrentEpochResponse) {
+    option (google.api.http).get = "/virtengine/staking/v1/current-epoch";
+  }
+}
+
+// QueryParamsRequest is the request for QueryParams.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response for QueryParams.
+message QueryParamsResponse {
+  Params params = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "params"];
+}
+
+// QueryValidatorPerformanceRequest fetches a validator performance record.
+message QueryValidatorPerformanceRequest {
+  string validator_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "validator_address"];
+  uint64 epoch = 2 [(gogoproto.jsontag) = "epoch"];
+}
+
+// QueryValidatorPerformanceResponse returns a validator performance record.
+message QueryValidatorPerformanceResponse {
+  ValidatorPerformance performance = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "performance"];
+}
+
+// QueryValidatorPerformancesRequest fetches performance records for an epoch.
+message QueryValidatorPerformancesRequest {
+  uint64 epoch = 1 [(gogoproto.jsontag) = "epoch"];
+}
+
+// QueryValidatorPerformancesResponse returns performance records.
+message QueryValidatorPerformancesResponse {
+  repeated ValidatorPerformance performances = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "performances"];
+}
+
+// QueryValidatorRewardRequest fetches a validator reward for an epoch.
+message QueryValidatorRewardRequest {
+  string validator_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "validator_address"];
+  uint64 epoch = 2 [(gogoproto.jsontag) = "epoch"];
+}
+
+// QueryValidatorRewardResponse returns a validator reward.
+message QueryValidatorRewardResponse {
+  ValidatorReward reward = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "reward"];
+}
+
+// QueryValidatorRewardsRequest fetches all rewards for a validator.
+message QueryValidatorRewardsRequest {
+  string validator_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "validator_address"];
+}
+
+// QueryValidatorRewardsResponse returns validator rewards.
+message QueryValidatorRewardsResponse {
+  repeated ValidatorReward rewards = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "rewards"];
+}
+
+// QueryRewardEpochRequest fetches a reward epoch by number.
+message QueryRewardEpochRequest {
+  uint64 epoch = 1 [(gogoproto.jsontag) = "epoch"];
+}
+
+// QueryRewardEpochResponse returns a reward epoch.
+message QueryRewardEpochResponse {
+  RewardEpoch reward_epoch = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "reward_epoch"];
+}
+
+// QuerySlashRecordsRequest fetches slash records for a validator.
+message QuerySlashRecordsRequest {
+  string validator_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "validator_address"];
+}
+
+// QuerySlashRecordsResponse returns slash records for a validator.
+message QuerySlashRecordsResponse {
+  repeated SlashRecord records = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "records"];
+}
+
+// QuerySigningInfoRequest fetches validator signing info.
+message QuerySigningInfoRequest {
+  string validator_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "validator_address"];
+}
+
+// QuerySigningInfoResponse returns validator signing info.
+message QuerySigningInfoResponse {
+  ValidatorSigningInfo info = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "info"];
+}
+
+// QueryCurrentEpochRequest fetches the current epoch.
+message QueryCurrentEpochRequest {}
+
+// QueryCurrentEpochResponse returns the current epoch.
+message QueryCurrentEpochResponse {
+  uint64 epoch = 1 [(gogoproto.jsontag) = "epoch"];
+}
