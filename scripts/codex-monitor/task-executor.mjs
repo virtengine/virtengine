@@ -237,8 +237,21 @@ class TaskExecutor {
           try {
             const projects = await listProjects();
             if (projects && projects.length > 0) {
-              this._resolvedProjectId = projects[0].id || projects[0].project_id;
-              console.log(`${TAG} auto-detected project: ${this._resolvedProjectId}`);
+              // Match by PROJECT_NAME if set, otherwise fall back to first project
+              const wantName = (process.env.PROJECT_NAME || process.env.VK_PROJECT_NAME || "").toLowerCase();
+              let matched;
+              if (wantName) {
+                matched = projects.find(
+                  (p) => (p.name || p.title || "").toLowerCase() === wantName
+                );
+              }
+              if (matched) {
+                this._resolvedProjectId = matched.id || matched.project_id;
+                console.log(`${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`);
+              } else {
+                this._resolvedProjectId = projects[0].id || projects[0].project_id;
+                console.log(`${TAG} auto-detected project (first): ${this._resolvedProjectId}`);
+              }
             } else {
               console.warn(`${TAG} no projects found — skipping poll`);
               return;
