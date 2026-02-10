@@ -30,3 +30,43 @@ func TestGenesisState_CustomParamsValid(t *testing.T) {
 
 	require.NoError(t, take.ValidateGenesis(gs))
 }
+
+func TestGenesisState_InvalidParams(t *testing.T) {
+	gs := &taketype.GenesisState{
+		Params: taketype.Params{
+			DefaultTakeRate: 150,
+			DenomTakeRates: taketype.DenomTakeRates{
+				{Denom: "uve", Rate: 2},
+			},
+		},
+	}
+
+	require.Error(t, take.ValidateGenesis(gs))
+}
+
+func TestGenesisState_MissingUveDenom(t *testing.T) {
+	gs := &taketype.GenesisState{
+		Params: taketype.Params{
+			DefaultTakeRate: 20,
+			DenomTakeRates: taketype.DenomTakeRates{
+				{Denom: "ufoo", Rate: 5},
+			},
+		},
+	}
+
+	require.Error(t, take.ValidateGenesis(gs))
+	require.Contains(t, take.ValidateGenesis(gs).Error(), "uve must be present")
+}
+
+func TestGenesisState_ZeroRates(t *testing.T) {
+	gs := &taketype.GenesisState{
+		Params: taketype.Params{
+			DefaultTakeRate: 0,
+			DenomTakeRates: taketype.DenomTakeRates{
+				{Denom: "uve", Rate: 0},
+			},
+		},
+	}
+
+	require.NoError(t, take.ValidateGenesis(gs))
+}

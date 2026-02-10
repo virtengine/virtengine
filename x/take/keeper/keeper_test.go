@@ -179,3 +179,83 @@ func TestGetSetParams_RoundTrip(t *testing.T) {
 	got := keeper.GetParams(ctx)
 	require.Equal(t, params, got)
 }
+
+func TestKeeperGetters(t *testing.T) {
+	keeper, _ := setupTakeKeeper(t)
+
+	concreteKeeper := keeper.(Keeper)
+
+	require.NotNil(t, concreteKeeper.Codec())
+	require.NotNil(t, concreteKeeper.StoreKey())
+	require.Equal(t, types.StoreKey, concreteKeeper.StoreKey().Name())
+	require.NotEmpty(t, concreteKeeper.GetAuthority())
+	// Authority is the gov module account address
+	require.Contains(t, concreteKeeper.GetAuthority(), "ve1")
+}
+
+func TestNewQuerier(t *testing.T) {
+	keeper, _ := setupTakeKeeper(t)
+
+	querier := keeper.NewQuerier()
+	require.NotNil(t, querier)
+}
+
+func TestSubtractFees_NegativeAmount(t *testing.T) {
+	keeper, ctx := setupTakeKeeper(t)
+
+	params := types.Params{
+		DefaultTakeRate: 20,
+		DenomTakeRates: types.DenomTakeRates{
+			{Denom: "uve", Rate: 2},
+		},
+	}
+	require.NoError(t, keeper.SetParams(ctx, params))
+
+	coin := sdk.Coin{Denom: "uve", Amount: sdkmath.NewInt(100)}
+	earnings, fee, err := keeper.SubtractFees(ctx, coin)
+	require.NoError(t, err)
+	require.Equal(t, sdk.NewInt64Coin("uve", 98), earnings)
+	require.Equal(t, sdk.NewInt64Coin("uve", 2), fee)
+}
+
+func TestSubtractFees_ExactlyOne(t *testing.T) {
+	keeper, ctx := setupTakeKeeper(t)
+
+	params := types.Params{
+		DefaultTakeRate: 50,
+		DenomTakeRates: types.DenomTakeRates{
+			{Denom: "uve", Rate: 50},
+		},
+	}
+	require.NoError(t, keeper.SetParams(ctx, params))
+
+	earnings, fee, err := keeper.SubtractFees(ctx, sdk.NewInt64Coin("uve", 1))
+	require.NoError(t, err)
+	// With amount of 1 and 50% rate, fee is 0 (rounds down) and earnings is 1
+	require.Equal(t, sdk.NewInt64Coin("uve", 1), earnings)
+	require.True(t, fee.IsZero())
+}
+
+func TestSubtractFees_HighRateCloseToMax(t *testing.T) {
+	keeper, ctx := setupTakeKeeper(t)
+
+	params := types.Params{
+		DefaultTakeRate: 99,
+		DenomTakeRates: types.DenomTakeRates{
+			{Denom: "uve", Rate: 99},
+		},
+	}
+	require.NoError(t, keeper.SetParams(ctx, params))
+
+	earnings, fee, err := keeper.SubtractFees(ctx, sdk.NewInt64Coin("uve", 10000))
+	require.NoError(t, err)
+	require.Equal(t, sdk.NewInt64Coin("uve", 100), earnings)
+	require.Equal(t, sdk.NewInt64Coin("uve", 9900), fee)
+}
+
+func TestGetParams_EmptyStore(t *testing.T) {
+	keeper, ctx := setupTakeKeeper(t)
+
+	params := keeper.GetParams(ctx)
+	require.Equal(t, types.Params{}, params)
+}
