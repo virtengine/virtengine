@@ -16,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // AgentConfig contains configuration for the node agent
@@ -56,10 +58,8 @@ func NewAgent(config AgentConfig) *Agent {
 	agent := &Agent{
 		config:           config,
 		metricsCollector: NewMetricsCollector(),
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		stopCh: make(chan struct{}),
+		httpClient:       security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
+		stopCh:           make(chan struct{}),
 	}
 	agent.messageHandler = NewMessageHandler(agent)
 	return agent

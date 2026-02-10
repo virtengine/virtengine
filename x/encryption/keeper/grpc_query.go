@@ -44,9 +44,13 @@ func (q GRPCQuerier) RecipientKey(c context.Context, req *types.QueryRecipientKe
 			Address:        k.Address,
 			PublicKey:      k.PublicKey,
 			KeyFingerprint: k.KeyFingerprint,
+			KeyVersion:     k.KeyVersion,
 			AlgorithmId:    k.AlgorithmID,
 			RegisteredAt:   k.RegisteredAt,
 			RevokedAt:      k.RevokedAt,
+			DeprecatedAt:   k.DeprecatedAt,
+			ExpiresAt:      k.ExpiresAt,
+			PurgeAt:        k.PurgeAt,
 			Label:          k.Label,
 		}
 	}
@@ -74,9 +78,13 @@ func (q GRPCQuerier) KeyByFingerprint(c context.Context, req *types.QueryKeyByFi
 			Address:        key.Address,
 			PublicKey:      key.PublicKey,
 			KeyFingerprint: key.KeyFingerprint,
+			KeyVersion:     key.KeyVersion,
 			AlgorithmId:    key.AlgorithmID,
 			RegisteredAt:   key.RegisteredAt,
 			RevokedAt:      key.RevokedAt,
+			DeprecatedAt:   key.DeprecatedAt,
+			ExpiresAt:      key.ExpiresAt,
+			PurgeAt:        key.PurgeAt,
 			Label:          key.Label,
 		},
 	}, nil

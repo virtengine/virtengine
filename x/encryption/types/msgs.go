@@ -11,9 +11,11 @@ type (
 	MsgRegisterRecipientKey         = encryptionv1.MsgRegisterRecipientKey
 	MsgRevokeRecipientKey           = encryptionv1.MsgRevokeRecipientKey
 	MsgUpdateKeyLabel               = encryptionv1.MsgUpdateKeyLabel
+	MsgRotateKey                    = encryptionv1.MsgRotateKey
 	MsgRegisterRecipientKeyResponse = encryptionv1.MsgRegisterRecipientKeyResponse
 	MsgRevokeRecipientKeyResponse   = encryptionv1.MsgRevokeRecipientKeyResponse
 	MsgUpdateKeyLabelResponse       = encryptionv1.MsgUpdateKeyLabelResponse
+	MsgRotateKeyResponse            = encryptionv1.MsgRotateKeyResponse
 )
 
 // Message type constants
@@ -21,6 +23,7 @@ const (
 	TypeMsgRegisterRecipientKey = "register_recipient_key"
 	TypeMsgRevokeRecipientKey   = "revoke_recipient_key"
 	TypeMsgUpdateKeyLabel       = "update_key_label"
+	TypeMsgRotateKey            = "rotate_key"
 )
 
 // Error message constants
@@ -32,6 +35,7 @@ var (
 	_ sdk.Msg = &MsgRegisterRecipientKey{}
 	_ sdk.Msg = &MsgRevokeRecipientKey{}
 	_ sdk.Msg = &MsgUpdateKeyLabel{}
+	_ sdk.Msg = &MsgRotateKey{}
 )
 
 // NewMsgRegisterRecipientKey creates a new MsgRegisterRecipientKey
@@ -110,6 +114,55 @@ func ValidateMsgUpdateKeyLabel(msg *MsgUpdateKeyLabel) error {
 
 	if len(msg.KeyFingerprint) == 0 {
 		return ErrInvalidKeyFingerprint.Wrap("key fingerprint cannot be empty")
+	}
+
+	return nil
+}
+
+// NewMsgRotateKey creates a new MsgRotateKey
+func NewMsgRotateKey(sender, oldKeyFingerprint string, newPublicKey []byte, newAlgorithmID, newLabel, reason string, newKeyTTLSeconds uint64) *MsgRotateKey {
+	return &MsgRotateKey{
+		Sender:            sender,
+		OldKeyFingerprint: oldKeyFingerprint,
+		NewPublicKey:      newPublicKey,
+		NewAlgorithmId:    newAlgorithmID,
+		NewLabel:          newLabel,
+		Reason:            reason,
+		NewKeyTtlSeconds:  newKeyTTLSeconds,
+	}
+}
+
+// ValidateMsgRotateKey validates the message
+func ValidateMsgRotateKey(msg *MsgRotateKey) error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
+	}
+
+	if len(msg.OldKeyFingerprint) == 0 {
+		return ErrInvalidKeyFingerprint.Wrap("old key fingerprint cannot be empty")
+	}
+
+	if len(msg.NewPublicKey) == 0 {
+		return ErrInvalidPublicKey.Wrap("new public key cannot be empty")
+	}
+
+	algorithmID := msg.NewAlgorithmId
+	if algorithmID == "" {
+		algorithmID = DefaultAlgorithm()
+	}
+
+	if !IsAlgorithmSupported(algorithmID) {
+		return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", algorithmID)
+	}
+
+	algInfo, err := GetAlgorithmInfo(algorithmID)
+	if err != nil {
+		return err
+	}
+
+	if len(msg.NewPublicKey) != algInfo.KeySize {
+		return ErrInvalidPublicKey.Wrapf("public key size must be %d bytes for %s",
+			algInfo.KeySize, algorithmID)
 	}
 
 	return nil

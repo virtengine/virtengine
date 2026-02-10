@@ -140,6 +140,20 @@ service Query {
     option (google.api.http).get = "/virtengine/veid/v1/sms/{verification_id}";
   }
 
+  // SocialMediaScope queries a social media scope by scope ID
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SocialMediaScope(QuerySocialMediaScopeRequest) returns (QuerySocialMediaScopeResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/social/{scope_id}";
+  }
+
+  // SocialMediaScopes queries social media scopes for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SocialMediaScopes(QuerySocialMediaScopesRequest) returns (QuerySocialMediaScopesResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/social/account/{account_address}";
+  }
+
   // BorderlineParams queries the borderline parameters
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
@@ -1386,5 +1400,49 @@ message QuerySMSVerificationResponse {
   SMSVerificationRecord record = 1 [
     (gogoproto.jsontag) = "record",
     (gogoproto.moretags) = "yaml:\"record\""
+  ];
+}
+
+// QuerySocialMediaScopeRequest is the request type for social media scope queries.
+message QuerySocialMediaScopeRequest {
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QuerySocialMediaScopeResponse is the response type for social media scope queries.
+message QuerySocialMediaScopeResponse {
+  SocialMediaScope scope = 1 [
+    (gogoproto.jsontag) = "scope",
+    (gogoproto.moretags) = "yaml:\"scope\""
+  ];
+}
+
+// QuerySocialMediaScopesRequest is the request type for social media scope list queries.
+message QuerySocialMediaScopesRequest {
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string provider = 2 [
+    (gogoproto.jsontag) = "provider",
+    (gogoproto.moretags) = "yaml:\"provider\""
+  ];
+}
+
+// QuerySocialMediaScopesResponse is the response type for social media scope list queries.
+message QuerySocialMediaScopesResponse {
+  repeated SocialMediaScope scopes = 1 [
+    (gogoproto.jsontag) = "scopes",
+    (gogoproto.moretags) = "yaml:\"scopes\""
   ];
 }

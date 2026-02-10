@@ -100,19 +100,58 @@ For blockchain consensus:
 
 ## Legacy Algorithm Exceptions
 
-### SHA-1 in SAML/XML Encryption
+### SHA-1 in SAML/XML Signatures (eduGAIN Federation)
 
 **Files affected:**
-- `pkg/edugain/encryption.go`
+- `pkg/edugain/verification.go` (lines 633-639)
 
-**Justification:** SAML 2.0 XML Encryption specification mandates SHA-1 for certain operations. This is a protocol requirement, not a choice.
+**Justification:** SAML 2.0 XML signature specification defines SHA-1 algorithm URIs. These constants are required to **detect and reject** weak algorithms in incoming SAML metadata. We explicitly validate against these URIs to ensure SHA-256 or stronger is used.
 
 **Mitigation:**
-- Isolated to SAML integration only
-- Not used for any internal security operations
-- Marked with `//nolint:gosec // G401: SHA-1 required by SAML 2.0 spec`
+- Constants defined for detection/rejection only
+- Not used for signature generation
+- Validation explicitly rejects SHA-1 signatures
+- Marked with `//nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec - rejected during validation`
 
-**Migration plan:** When SAML 2.0 successor allows SHA-256, update implementation.
+**Migration plan:** SAML 2.0 successor (if any) that removes SHA-1 URIs from spec → remove these constants.
+
+### HMAC-SHA1 in Twilio Webhooks
+
+**Files affected:**
+- `pkg/verification/sms/gateway.go` (line 497)
+
+**Justification:** Twilio webhook signature validation uses HMAC-SHA1 as defined by their API. This is a third-party service requirement, not a design choice.
+
+**Mitigation:**
+- Isolated to webhook signature validation only
+- Not used for any internal cryptographic operations
+- Marked with `//nolint:gosec // G401: HMAC-SHA1 required by Twilio webhook API`
+
+**Migration plan:** When Twilio provides HMAC-SHA256 webhook signatures → update implementation.
+
+### TOTP SHA-1 (Deprecated as of v0.9.x)
+
+**Previous default:**
+- `x/mfa/keeper/verification.go` used SHA-1 as default TOTP algorithm
+
+**Change (v0.9.x):**
+- Default changed to SHA-256
+- Existing SHA-1 enrollments continue to work (algorithm stored per enrollment)
+- New enrollments use SHA-256 by default
+
+**Migration for users:**
+```go
+// Old default (< v0.9.x)
+DefaultTOTPConfig() // Returned SHA-1
+
+// New default (≥ v0.9.x)
+DefaultTOTPConfig() // Returns SHA-256
+
+// Explicit SHA-1 for backward compatibility (not recommended)
+config := TOTPConfig{
+    Algorithm: "SHA1", // Only for legacy systems
+}
+```
 
 ### MD5 for Non-Security Checksums
 
@@ -230,4 +269,5 @@ For questions about cryptographic policy, contact the security team or open an i
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-10 | 1.1 | Updated legacy exceptions with file paths; documented TOTP SHA-1 → SHA-256 migration |
 | 2026-02-06 | 1.0 | Initial policy document |

@@ -1,7 +1,7 @@
 package simulation
 
 import (
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"

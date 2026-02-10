@@ -8,11 +8,12 @@ import (
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/virtengine/virtengine/pkg/observability"
+	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -49,7 +50,7 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 	if config.GRPCEndpoint != "" {
 		conn, err := grpc.NewClient(
 			config.GRPCEndpoint,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithTransportCredentials(credentials.NewTLS(security.SecureTLSConfig())),
 			grpc.WithStatsHandler(observability.GRPCClientStatsHandler()),
 		)
 		if err != nil {

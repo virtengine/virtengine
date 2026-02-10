@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdir, rm, writeFile, utimes } from "node:fs/promises";
+import { mkdir, rm, writeFile, utimes, mkdtemp } from "node:fs/promises";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   cleanOrphanedWorktrees,
   runReaperSweep,
@@ -13,10 +14,10 @@ import {
   claimSharedWorkspace,
 } from "../shared-workspace-registry.mjs";
 
-const TEST_DIR = resolve(process.cwd(), ".test-reaper");
-const TEST_WORKTREE_BASE = resolve(TEST_DIR, "worktrees");
-const TEST_REGISTRY_PATH = resolve(TEST_DIR, "test-registry.json");
-const TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
+let TEST_DIR = "";
+let TEST_WORKTREE_BASE = "";
+let TEST_REGISTRY_PATH = "";
+let TEST_AUDIT_PATH = "";
 
 async function createTestWorktree(name, options = {}) {
   const worktreePath = resolve(TEST_WORKTREE_BASE, name);
@@ -52,6 +53,10 @@ async function createTestWorktree(name, options = {}) {
 
 describe("workspace-reaper", () => {
   beforeEach(async () => {
+    TEST_DIR = await mkdtemp(resolve(tmpdir(), "codex-workspace-reaper-"));
+    TEST_WORKTREE_BASE = resolve(TEST_DIR, "worktrees");
+    TEST_REGISTRY_PATH = resolve(TEST_DIR, "test-registry.json");
+    TEST_AUDIT_PATH = resolve(TEST_DIR, "test-audit.jsonl");
     await mkdir(TEST_WORKTREE_BASE, { recursive: true });
     await mkdir(TEST_DIR, { recursive: true });
   });

@@ -34,6 +34,7 @@ const (
 	ScopeTypePBADSSO             = veidv1.ScopeTypeADSSO
 	ScopeTypePBBiometricHardware = veidv1.ScopeTypeBiometricHardware
 	ScopeTypePBDeviceAttestation = veidv1.ScopeTypeDeviceAttestation
+	ScopeTypePBSocialMedia       = veidv1.ScopeTypeSocialMedia
 )
 
 // VerificationStatusPB is the protobuf-generated enum for verification status
@@ -119,6 +120,20 @@ type EmailVerificationRecordPB = veidv1.EmailVerificationRecord
 // SMSVerificationRecordPB is the generated proto type for SMS verification records
 type SMSVerificationRecordPB = veidv1.SMSVerificationRecord
 
+// SocialMediaScopePB is the generated proto type for social media scopes
+type SocialMediaScopePB = veidv1.SocialMediaScope
+
+// SocialMediaProviderPB is the protobuf-generated enum for social media providers
+type SocialMediaProviderPB = veidv1.SocialMediaProvider
+
+// Proto enum constants for SocialMediaProvider
+const (
+	SocialMediaProviderPBUnspecified = veidv1.SocialMediaProviderUnspecified
+	SocialMediaProviderPBGoogle      = veidv1.SocialMediaProviderGoogle
+	SocialMediaProviderPBFacebook    = veidv1.SocialMediaProviderFacebook
+	SocialMediaProviderPBMicrosoft   = veidv1.SocialMediaProviderMicrosoft
+)
+
 // PhoneNumberHashPB is the generated proto type for phone hashes
 type PhoneNumberHashPB = veidv1.PhoneNumberHash
 
@@ -189,6 +204,12 @@ type MsgSubmitSMSVerificationProofPB = veidv1.MsgSubmitSMSVerificationProof
 // MsgSubmitSMSVerificationProofResponsePB is the generated proto response type
 type MsgSubmitSMSVerificationProofResponsePB = veidv1.MsgSubmitSMSVerificationProofResponse
 
+// MsgSubmitSocialMediaScopePB is the generated proto type
+type MsgSubmitSocialMediaScopePB = veidv1.MsgSubmitSocialMediaScope
+
+// MsgSubmitSocialMediaScopeResponsePB is the generated proto response type
+type MsgSubmitSocialMediaScopeResponsePB = veidv1.MsgSubmitSocialMediaScopeResponse
+
 // MsgCreateIdentityWalletPB is the generated proto type
 type MsgCreateIdentityWalletPB = veidv1.MsgCreateIdentityWallet
 
@@ -236,6 +257,8 @@ func ScopeTypeToProto(st ScopeType) ScopeTypePB {
 		return ScopeTypePBDomainVerify
 	case ScopeTypeADSSO:
 		return ScopeTypePBADSSO
+	case ScopeTypeSocialMedia:
+		return ScopeTypePBSocialMedia
 	default:
 		return ScopeTypePBUnspecified
 	}
@@ -266,6 +289,36 @@ func ScopeTypeFromProto(st ScopeTypePB) ScopeType {
 		return ScopeTypeDomainVerify
 	case ScopeTypePBADSSO:
 		return ScopeTypeADSSO
+	case ScopeTypePBSocialMedia:
+		return ScopeTypeSocialMedia
+	default:
+		return ""
+	}
+}
+
+// SocialMediaProviderToProto converts local provider to proto enum.
+func SocialMediaProviderToProto(provider SocialMediaProviderType) SocialMediaProviderPB {
+	switch provider {
+	case SocialMediaProviderGoogle:
+		return SocialMediaProviderPBGoogle
+	case SocialMediaProviderFacebook:
+		return SocialMediaProviderPBFacebook
+	case SocialMediaProviderMicrosoft:
+		return SocialMediaProviderPBMicrosoft
+	default:
+		return SocialMediaProviderPBUnspecified
+	}
+}
+
+// SocialMediaProviderFromProto converts proto provider enum to local type.
+func SocialMediaProviderFromProto(provider SocialMediaProviderPB) SocialMediaProviderType {
+	switch provider {
+	case SocialMediaProviderPBGoogle:
+		return SocialMediaProviderGoogle
+	case SocialMediaProviderPBFacebook:
+		return SocialMediaProviderFacebook
+	case SocialMediaProviderPBMicrosoft:
+		return SocialMediaProviderMicrosoft
 	default:
 		return ""
 	}

@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"context"
-
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	gogoproto "github.com/cosmos/gogoproto/proto"
 
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
@@ -14,12 +15,6 @@ import (
 	"github.com/virtengine/virtengine/x/provider/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )
-
-type domainVerificationMsgServer interface {
-	RequestDomainVerification(context.Context, *types.MsgRequestDomainVerification) (*types.MsgRequestDomainVerificationResponse, error)
-	ConfirmDomainVerification(context.Context, *types.MsgConfirmDomainVerification) (*types.MsgConfirmDomainVerificationResponse, error)
-	RevokeDomainVerification(context.Context, *types.MsgRevokeDomainVerification) (*types.MsgRevokeDomainVerificationResponse, error)
-}
 
 // NewHandler returns a handler for "provider" type messages.
 func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeeper.IKeeper, mfakeeper mfakeeper.IKeeper) baseapp.MsgServiceHandler {
@@ -38,33 +33,62 @@ func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeep
 		case *types.MsgDeleteProvider:
 			res, err := ms.DeleteProvider(ctx, msg)
 			return sdk.WrapServiceResult(ctx, res, err)
-		case *types.MsgRequestDomainVerification:
-			server, ok := ms.(domainVerificationMsgServer)
-			if !ok {
-				return nil, sdkerrors.ErrUnknownRequest.Wrapf("domain verification server unavailable for message type: %T", msg)
-			}
-			res, err := server.RequestDomainVerification(ctx, msg)
+
+		case *types.MsgGenerateDomainVerificationToken:
+			res, err := ms.GenerateDomainVerificationToken(ctx, msg)
 			return sdk.WrapServiceResult(ctx, res, err)
+
+		case *types.MsgVerifyProviderDomain:
+			res, err := ms.VerifyProviderDomain(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+
+		case *types.MsgRequestDomainVerification:
+			res, err := ms.RequestDomainVerification(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+
 		case *types.MsgConfirmDomainVerification:
-			server, ok := ms.(domainVerificationMsgServer)
-			if !ok {
-				return nil, sdkerrors.ErrUnknownRequest.Wrapf("domain verification server unavailable for message type: %T", msg)
+			res, err := ms.ConfirmDomainVerification(ctx, msg)
+			if err != nil && res != nil {
+				wrapped, wrapErr := wrapServiceResult(ctx, res)
+				if wrapErr != nil {
+					return nil, wrapErr
+				}
+				return wrapped, err
 			}
-			res, err := server.ConfirmDomainVerification(ctx, msg)
-			if err != nil {
-				return &sdk.Result{Events: ctx.EventManager().ABCIEvents()}, err
-			}
-			return sdk.WrapServiceResult(ctx, res, nil)
+			return sdk.WrapServiceResult(ctx, res, err)
+
 		case *types.MsgRevokeDomainVerification:
-			server, ok := ms.(domainVerificationMsgServer)
-			if !ok {
-				return nil, sdkerrors.ErrUnknownRequest.Wrapf("domain verification server unavailable for message type: %T", msg)
-			}
-			res, err := server.RevokeDomainVerification(ctx, msg)
+			res, err := ms.RevokeDomainVerification(ctx, msg)
 			return sdk.WrapServiceResult(ctx, res, err)
 
 		default:
 			return nil, sdkerrors.ErrUnknownRequest.Wrapf("unrecognized provider message type: %T", msg)
 		}
 	}
+}
+
+func wrapServiceResult(ctx sdk.Context, res gogoproto.Message) (*sdk.Result, error) {
+	any, err := codectypes.NewAnyWithValue(res)
+	if err != nil {
+		return nil, err
+	}
+
+	var data []byte
+	if res != nil {
+		data, err = gogoproto.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var events []abci.Event
+	if evtMgr := ctx.EventManager(); evtMgr != nil {
+		events = evtMgr.ABCIEvents()
+	}
+
+	return &sdk.Result{
+		Data:         data,
+		Events:       events,
+		MsgResponses: []*codectypes.Any{any},
+	}, nil
 }

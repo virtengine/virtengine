@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-const steps = ["Consent", "Document", "Selfie", "Liveness", "Biometric", "Review", "Upload"];
+const steps = ["Consent", "Social", "Document", "Selfie", "Liveness", "Biometric", "Review", "Upload"];
 
 export function ProgressStepper({ activeIndex }: { activeIndex: number }) {
   return (
