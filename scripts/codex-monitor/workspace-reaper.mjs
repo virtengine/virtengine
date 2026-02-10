@@ -16,6 +16,7 @@ import {
  */
 
 const DEFAULT_ORPHAN_THRESHOLD_HOURS = 24;
+const DEFAULT_AGGRESSIVE_THRESHOLD_HOURS = 1; // For completed task cleanup
 const DEFAULT_PROCESS_CHECK_RETRIES = 3;
 const IS_WINDOWS = process.platform === "win32";
 
@@ -263,6 +264,50 @@ export async function cleanOrphanedWorktrees(options = {}) {
   }
   
   return results;
+}
+
+/**
+ * Prune git worktree metadata
+ * Removes stale entries from .git/worktrees/
+ */
+export async function pruneWorktreeMetadata(repoPath, options = {}) {
+  const results = {
+    pruned: 0,
+    errors: [],
+  };
+
+  try {
+    const gitEnv = buildGitEnv();
+    execSync('git worktree prune', {
+      cwd: repoPath,
+      stdio: options.verbose ? 'inherit' : 'pipe',
+      env: { ...gitEnv, GIT_EDITOR: ':', GIT_MERGE_AUTOEDIT: 'no' },
+    });
+    results.pruned++;
+  } catch (err) {
+    results.errors.push(err.message || String(err));
+  }
+
+  return results;
+}
+
+/**
+ * Get worktree count for monitoring
+ */
+export async function getWorktreeCount(repoPath) {
+  try {
+    const gitEnv = buildGitEnv();
+    const output = execSync('git worktree list --porcelain', {
+      cwd: repoPath,
+      encoding: 'utf8',
+      env: gitEnv,
+    });
+    // Count "worktree" lines (one per worktree including main)
+    const count = (output.match(/^worktree /gm) || []).length;
+    return count - 1; // Subtract 1 for main worktree
+  } catch {
+    return 0;
+  }
 }
 
 /**

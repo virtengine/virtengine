@@ -116,6 +116,7 @@ import {
 } from "./shared-knowledge.mjs";
 import { WorkspaceMonitor } from "./workspace-monitor.mjs";
 import { VkLogStream } from "./vk-log-stream.mjs";
+import { VKErrorResolver } from "./vk-error-resolver.mjs";
 import { createAnomalyDetector } from "./anomaly-detector.mjs";
 import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
@@ -462,6 +463,9 @@ let vibeKanbanStartedAt = 0;
 
 // ── VK WebSocket log stream — captures real-time agent logs from execution processes ──
 let vkLogStream = null;
+
+// ── VK Error Resolver — auto-resolves errors from VK logs ──
+let vkErrorResolver = null;
 let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
@@ -1624,6 +1628,15 @@ function ensureVkLogStream() {
           /* detector error — non-fatal */
         }
       }
+      
+      // Feed log lines to VK error resolver for auto-resolution
+      if (vkErrorResolver) {
+        try {
+          void vkErrorResolver.handleLogLine(line);
+        } catch (err) {
+          console.error(`[monitor] vkErrorResolver error: ${err.message}`);
+        }
+      }
     },
     onProcessConnected: (processId, meta) => {
       // When a new execution process is discovered via the session stream,
@@ -1662,6 +1675,25 @@ function ensureVkLogStream() {
     },
   });
   vkLogStream.start();
+
+  // Initialize VK error resolver
+  const vkAutoResolveEnabled = config.vkAutoResolveErrors ?? true;
+  if (vkAutoResolveEnabled) {
+    console.log("[monitor] initializing VK error resolver...");
+    vkErrorResolver = new VKErrorResolver(repoRoot, vkEndpointUrl, {
+      enabled: true,
+      onResolve: (resolution) => {
+        console.log(`[monitor] VK auto-resolution: ${resolution.errorType} - ${resolution.result.success ? '✓ success' : '✗ failed'}`);
+        
+        // Notify via Telegram
+        const emoji = resolution.result.success ? '🤖' : '⚠️';
+        const status = resolution.result.success ? 'resolved' : 'failed';
+        const branch = resolution.context.branch || `PR #${resolution.context.prNumber}`;
+        notify(`${emoji} Auto-${status} ${resolution.errorType} on ${branch}`);
+      },
+    });
+    console.log("[monitor] VK error resolver initialized");
+  }
 
   // Discover any active sessions immediately and keep polling for new sessions
   void refreshVkSessionStreams("startup");
