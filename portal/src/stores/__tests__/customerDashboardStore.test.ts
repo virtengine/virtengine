@@ -11,10 +11,13 @@ vi.mock('@/lib/api/chain', async () => {
   };
 });
 
-class MockMultiProviderClient {
-  initialize = vi.fn().mockResolvedValue(undefined);
-  getClient = vi.fn(() => null);
-}
+const { MockMultiProviderClient } = vi.hoisted(() => {
+  class MockMultiProviderClient {
+    initialize = vi.fn().mockResolvedValue(undefined);
+    getClient = vi.fn(() => null);
+  }
+  return { MockMultiProviderClient };
+});
 
 vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,

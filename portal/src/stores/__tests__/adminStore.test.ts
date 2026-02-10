@@ -19,14 +19,17 @@ vi.mock('@/lib/api-client', () => ({
   },
 }));
 
-class MockMultiProviderClient {
-  initialize = vi.fn().mockResolvedValue(undefined);
-  getAggregatedMetrics = vi.fn().mockResolvedValue({
-    totalCPU: { used: 4, limit: 8 },
-    totalMemory: { used: 16, limit: 32 },
-    totalStorage: { used: 64, limit: 128 },
-  });
-}
+const { MockMultiProviderClient } = vi.hoisted(() => {
+  class MockMultiProviderClient {
+    initialize = vi.fn().mockResolvedValue(undefined);
+    getAggregatedMetrics = vi.fn().mockResolvedValue({
+      totalCPU: { used: 4, limit: 8 },
+      totalMemory: { used: 16, limit: 32 },
+      totalStorage: { used: 64, limit: 128 },
+    });
+  }
+  return { MockMultiProviderClient };
+});
 
 vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,

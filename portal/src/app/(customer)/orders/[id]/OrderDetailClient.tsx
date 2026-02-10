@@ -64,7 +64,11 @@ export default function OrderDetailClient() {
         return { success: false, message: 'No active wallet account.' };
       }
       try {
-        await closeOrder(req.orderId, account.address, wallet);
+        await closeOrder(
+          req.orderId,
+          account.address,
+          wallet as unknown as Parameters<typeof closeOrder>[2]
+        );
         return { success: true, message: 'Order cancellation submitted.' };
       } catch (error) {
         return {

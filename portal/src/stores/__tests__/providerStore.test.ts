@@ -10,18 +10,21 @@ vi.mock('@/lib/api/chain', async () => {
   };
 });
 
-class MockMultiProviderClient {
-  initialize = vi.fn().mockResolvedValue(undefined);
-  getProvider = vi.fn(() => ({ status: 'online', lastHealthCheck: new Date() }));
-  getClient = vi.fn(() => ({
-    listDeployments: vi.fn().mockResolvedValue({ deployments: [{ id: 'dep1' }] }),
-    getDeploymentMetrics: vi.fn().mockResolvedValue({
-      cpu: { usage: 1, limit: 2 },
-      memory: { usage: 2, limit: 4 },
-      storage: { usage: 3, limit: 6 },
-    }),
-  }));
-}
+const { MockMultiProviderClient } = vi.hoisted(() => {
+  class MockMultiProviderClient {
+    initialize = vi.fn().mockResolvedValue(undefined);
+    getProvider = vi.fn(() => ({ status: 'online', lastHealthCheck: new Date() }));
+    getClient = vi.fn(() => ({
+      listDeployments: vi.fn().mockResolvedValue({ deployments: [{ id: 'dep1' }] }),
+      getDeploymentMetrics: vi.fn().mockResolvedValue({
+        cpu: { usage: 1, limit: 2 },
+        memory: { usage: 2, limit: 4 },
+        storage: { usage: 3, limit: 6 },
+      }),
+    }));
+  }
+  return { MockMultiProviderClient };
+});
 
 vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,

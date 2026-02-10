@@ -1,25 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDeploymentStore } from '@/stores/deploymentStore';
 
-class MockMultiProviderClient {
-  initialize = vi.fn().mockResolvedValue(undefined);
-  getDeployment = vi.fn().mockResolvedValue({
-    id: 'deploy-1',
-    providerId: 've1provider',
-    owner: 've1owner',
-    state: 'running',
-    createdAt: '2024-01-01T00:00:00Z',
-  });
-  getClient = vi.fn(() => ({
-    getDeploymentMetrics: vi.fn().mockResolvedValue({
-      cpu: { usage: 1, limit: 2 },
-      memory: { usage: 2, limit: 4 },
-      storage: { usage: 3, limit: 6 },
-    }),
-    getDeploymentLogs: vi.fn().mockResolvedValue(['log line']),
-  }));
-  performAction = vi.fn().mockResolvedValue(undefined);
-}
+const { MockMultiProviderClient } = vi.hoisted(() => {
+  class MockMultiProviderClient {
+    initialize = vi.fn().mockResolvedValue(undefined);
+    getDeployment = vi.fn().mockResolvedValue({
+      id: 'deploy-1',
+      providerId: 've1provider',
+      owner: 've1owner',
+      state: 'running',
+      createdAt: '2024-01-01T00:00:00Z',
+    });
+    getClient = vi.fn(() => ({
+      getDeploymentMetrics: vi.fn().mockResolvedValue({
+        cpu: { usage: 1, limit: 2 },
+        memory: { usage: 2, limit: 4 },
+        storage: { usage: 3, limit: 6 },
+      }),
+      getDeploymentLogs: vi.fn().mockResolvedValue(['log line']),
+    }));
+    performAction = vi.fn().mockResolvedValue(undefined);
+  }
+  return { MockMultiProviderClient };
+});
 
 vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,
