@@ -178,6 +178,9 @@ $script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")
 $script:StopFilePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-stop"
 $script:RebaseCooldownPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-rebase-cooldown.json"
 $script:AgentLogDir = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\agent-logs"
+$script:AnomalySignalPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\anomaly-signals.json"
+$script:CODEX_TAKEOVER_THRESHOLD = 3  # After N failed attempts, switch to Codex SDK CLI
+$script:CodexTakeoverJobs = @{}  # Track Codex CLI takeover jobs
 $script:CompletedTasks = @()
 $script:SubmittedTasks = @()
 $script:FollowUpEvents = @()
@@ -4011,6 +4014,157 @@ function Prune-CompletedTaskWorkspaces {
     }
 }
 
+# ── Anomaly Signal Processing (v0.14.7) ──────────────────────────────────────
+function Process-AnomalySignals {
+    <#
+    .SYNOPSIS Read anomaly signals written by the monitor's anomaly detector
+    and translate kill-worthy events into recovery actions for tracked attempts.
+    #>
+    if (-not (Test-Path $script:AnomalySignalPath)) { return }
+
+    try {
+        $raw = Get-Content $script:AnomalySignalPath -Raw -ErrorAction SilentlyContinue
+        if (-not $raw) { return }
+        $signals = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if (-not $signals -or @($signals).Count -eq 0) { return }
+
+        # Clear the file immediately to avoid re-processing
+        Set-Content $script:AnomalySignalPath -Value "[]" -Force
+
+        foreach ($signal in $signals) {
+            $shortId = $signal.shortId
+            if (-not $shortId) { continue }
+
+            # Find matching tracked attempt
+            $matched = $null
+            foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+                if ($entry.Key.StartsWith($shortId) -or ($entry.Value.branch -and $entry.Value.branch -match $shortId)) {
+                    $matched = $entry
+                    break
+                }
+            }
+
+            if (-not $matched) {
+                Write-Log "Anomaly signal for $shortId — no matching tracked attempt" -Level "WARN"
+                continue
+            }
+
+            $attemptId = $matched.Key
+            $info = $matched.Value
+
+            Write-Log "Anomaly signal: $($signal.type) ($($signal.severity)) for $($info.branch) — action=$($signal.action)" -Level "WARN"
+
+            # For kill/restart actions on completed/review attempts, queue a fresh session follow-up
+            if ($signal.action -in @("kill", "restart")) {
+                if ($info.status -in @("review", "error")) {
+                    $info.status = "error"
+                    $info.error_notified = $true
+                    $msg = "The anomaly detector flagged this task ($($signal.type): $($signal.message)). Starting a fresh session to retry."
+                    $info.force_new_session = $true
+                    $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_recovery"
+                }
+                elseif ($info.status -eq "running") {
+                    Write-Log "Anomaly for running attempt $($attemptId.Substring(0,8)) — will act when process completes" -Level "INFO"
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "Process-AnomalySignals error: $($_.Exception.Message)" -Level "WARN"
+    }
+}
+
+# ── Codex SDK Takeover (v0.14.6) ─────────────────────────────────────────────
+function Process-CodexTakeoverJobs {
+    <#
+    .SYNOPSIS After N failed follow-up attempts, take over with Codex SDK CLI directly.
+    Runs `codex exec --sandbox danger-full-access` against the worktree.
+    #>
+    foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+        $attemptId = $entry.Key
+        $info = $entry.Value
+
+        # Only consider failed tasks that have exceeded the takeover threshold
+        if ($info.status -notin @("error", "review", "manual_review")) { continue }
+
+        $taskKey = if ($info.task_id) { $info.task_id } else { $attemptId }
+        $followUpCount = if ($script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+            $script:TaskFollowUpCounts[$taskKey]
+        }
+        else { 0 }
+
+        if ($followUpCount -lt $script:CODEX_TAKEOVER_THRESHOLD) { continue }
+
+        # Check if we already have an active takeover job
+        if ($script:CodexTakeoverJobs.ContainsKey($attemptId)) {
+            $job = $script:CodexTakeoverJobs[$attemptId]
+            if ($job.State -eq "Running") { continue }
+
+            # Job finished — check result
+            $output = Receive-Job $job -ErrorAction SilentlyContinue
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            $script:CodexTakeoverJobs.Remove($attemptId)
+
+            Write-Log "Codex takeover finished for $($info.branch)" -Level "OK"
+            $info.status = "review"
+            $info.codex_takeover_completed = $true
+            continue
+        }
+
+        # Check if Codex CLI is available
+        $codexPath = Get-Command "codex" -ErrorAction SilentlyContinue
+        if (-not $codexPath) {
+            Write-Log "Codex CLI not available — cannot takeover $($info.branch)" -Level "WARN"
+            continue
+        }
+
+        # Get worktree path for this branch
+        $worktreePath = Get-WorktreePathForBranch -Branch $info.branch
+        if (-not $worktreePath -or -not (Test-Path $worktreePath)) {
+            Write-Log "No worktree for $($info.branch) — cannot takeover" -Level "WARN"
+            continue
+        }
+
+        # Get task description for the prompt
+        $taskDesc = ""
+        if ($info.task_description_cached) {
+            $taskDesc = $info.task_description_cached
+        }
+        elseif ($info.name) {
+            $taskDesc = $info.name
+        }
+
+        $takeoverPrompt = @"
+You are taking over a task that failed after $followUpCount attempts.
+Task: $taskDesc
+Branch: $($info.branch)
+
+COMPLETE THIS TASK END-TO-END:
+1. Check what has been done so far (git log, git status, existing code)
+2. Implement all remaining changes
+3. Write or fix tests
+4. Run formatting (gofmt, prettier as needed)
+5. Commit with conventional commit message
+6. Push to origin
+
+Do NOT ask for confirmation. Just do it.
+"@
+
+        Write-Log "Starting Codex CLI takeover for $($info.branch) (attempt $followUpCount/$($script:CODEX_TAKEOVER_THRESHOLD) threshold reached)" -Level "ACTION"
+
+        if (-not $DryRun) {
+            $job = Start-Job -ScriptBlock {
+                param($codexExe, $prompt, $workDir)
+                & $codexExe exec --sandbox "danger-full-access" -C $workDir --skip-git-repo-check $prompt 2>&1
+            } -ArgumentList @($codexPath.Source, $takeoverPrompt, $worktreePath)
+
+            $script:CodexTakeoverJobs[$attemptId] = $job
+            $info.codex_takeover_started = $true
+            $info.codex_takeover_at = Get-Date
+        }
+    }
+}
+
 function Process-CompletedAttempts {
     <#
     .SYNOPSIS Check tracked attempts for PR status and handle merging.
@@ -6140,6 +6294,14 @@ function Start-Orchestrator {
 
             # Step 3b: Send queued follow-ups before starting new tasks
             Process-PendingFollowUps
+            if (Test-OrchestratorStop) { break }
+
+            # Step 3c: Codex SDK takeover for tasks exceeding follow-up threshold
+            Process-CodexTakeoverJobs
+            if (Test-OrchestratorStop) { break }
+
+            # Step 3d: Process anomaly signals from the monitor's anomaly detector
+            Process-AnomalySignals
             if (Test-OrchestratorStop) { break }
 
             # Step 4: Fill empty parallel slots with new task submissions
