@@ -31,7 +31,7 @@ const SDK_CONFLICT_COOLDOWN_MS = parseInt(
   10,
 ); // 30 min cooldown
 const SDK_CONFLICT_MAX_ATTEMPTS = parseInt(
-  process.env.SDK_CONFLICT_MAX_ATTEMPTS || "2",
+  process.env.SDK_CONFLICT_MAX_ATTEMPTS || "4",
   10,
 );
 

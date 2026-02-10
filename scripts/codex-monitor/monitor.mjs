@@ -414,7 +414,8 @@ const mergeStrategyMode = String(
   process.env.MERGE_STRATEGY_MODE || "smart",
 ).toLowerCase();
 const codexResolveConflictsEnabled =
-  codexEnabled && mergeStrategyMode.includes("codexsdk");
+  codexEnabled &&
+  (process.env.CODEX_RESOLVE_CONFLICTS || "true").toLowerCase() !== "false";
 const conflictResolutionTimeoutMs = Number(
   process.env.MERGE_CONFLICT_RESOLUTION_TIMEOUT_MS || "600000",
 );
@@ -3647,6 +3648,26 @@ async function checkMergedPRsAndUpdateTasks() {
                   worktreePath = findWorktreeForBranch(cc.branch);
                 }
 
+                // Create temporary worktree if none found
+                if (!worktreePath && cc.branch) {
+                  try {
+                    const tmpDir = resolve(repoRoot, ".cache", "worktrees", cc.branch.replace(/\//g, "-"));
+                    const mkResult = spawnSync("git", ["worktree", "add", tmpDir, cc.branch], {
+                      cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"],
+                      timeout: 60000, encoding: "utf8",
+                      shell: process.platform === "win32",
+                    });
+                    if (mkResult.status === 0) {
+                      worktreePath = tmpDir;
+                      console.log(`[monitor] Created temporary worktree for ${cc.branch} at ${tmpDir}`);
+                    } else {
+                      console.warn(`[monitor] Failed to create worktree for ${cc.branch}: ${mkResult.stderr}`);
+                    }
+                  } catch (wErr) {
+                    console.warn(`[monitor] Worktree creation error: ${wErr.message}`);
+                  }
+                }
+
                 if (worktreePath) {
                   void (async () => {
                     try {
@@ -4892,8 +4913,8 @@ async function smartPRFlow(attemptId, shortId, status) {
       );
     }
 
-    // No commits and no changes → archive stale attempt instead of silently skipping
-    if (commits_ahead === 0 && !has_uncommitted_changes) {
+    // No commits and no changes → archive stale attempt (unless called for conflict resolution)
+    if (commits_ahead === 0 && !has_uncommitted_changes && status !== "conflict") {
       console.warn(
         `[monitor] ${tag}: no commits ahead, no changes — archiving stale attempt`,
       );
