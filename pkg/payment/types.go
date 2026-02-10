@@ -496,6 +496,10 @@ type PaymentIntentRequest struct {
 	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
+const (
+	captureMethodManual = "manual"
+)
+
 // ============================================================================
 // 3D Secure / SCA Types
 // ============================================================================

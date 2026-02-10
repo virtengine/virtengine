@@ -33,7 +33,7 @@ type PayPalAdapter struct {
 	tokenExpiry time.Time
 }
 
-const paypalCaptureMethodManual = "manual"
+const paypalCaptureMethodManual = captureMethodManual
 
 // NewPayPalAdapter creates a new PayPal adapter.
 func NewPayPalAdapter(config PayPalConfig) (Gateway, error) {

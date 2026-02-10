@@ -303,7 +303,7 @@ func (a *StripeAdapter) CreatePaymentIntent(ctx context.Context, req PaymentInte
 	}
 
 	// Set capture method based on request
-	if req.CaptureMethod == "manual" {
+	if req.CaptureMethod == captureMethodManual {
 		params.CaptureMethod = stripe.String(string(stripe.PaymentIntentCaptureMethodManual))
 	} else {
 		params.CaptureMethod = stripe.String(string(stripe.PaymentIntentCaptureMethodAutomatic))
