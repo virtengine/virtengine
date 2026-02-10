@@ -300,6 +300,8 @@ export class VkLogStream {
     if (!ws) return false;
     const shortId = processId.slice(0, 8);
     console.warn(`[vk-log-stream:${shortId}] killing process: ${reason}`);
+    // Mark as finished BEFORE closing so the close handler won't reconnect
+    this.#finished.add(processId);
     try {
       ws.close(1000, reason);
     } catch {

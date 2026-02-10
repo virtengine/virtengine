@@ -301,8 +301,9 @@ class PRCleanupDaemon {
    */
   async spawnCodexAgent(opts) {
     return new Promise((resolve, reject) => {
+      const scriptPath = new URL('./codex-shell.mjs', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
       const args = [
-        'scripts/codex-monitor/codex-shell.mjs',
+        scriptPath,
         'spawn-agent',
         JSON.stringify(opts),
       ];
