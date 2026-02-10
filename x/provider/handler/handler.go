@@ -1,12 +1,9 @@
 package handler
 
 import (
-	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	gogoproto "github.com/cosmos/gogoproto/proto"
 
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
@@ -48,13 +45,6 @@ func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeep
 
 		case *types.MsgConfirmDomainVerification:
 			res, err := ms.ConfirmDomainVerification(ctx, msg)
-			if err != nil && res != nil {
-				wrapped, wrapErr := wrapServiceResult(ctx, res)
-				if wrapErr != nil {
-					return nil, wrapErr
-				}
-				return wrapped, err
-			}
 			return sdk.WrapServiceResult(ctx, res, err)
 
 		case *types.MsgRevokeDomainVerification:
@@ -65,30 +55,4 @@ func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeep
 			return nil, sdkerrors.ErrUnknownRequest.Wrapf("unrecognized provider message type: %T", msg)
 		}
 	}
-}
-
-func wrapServiceResult(ctx sdk.Context, res gogoproto.Message) (*sdk.Result, error) {
-	any, err := codectypes.NewAnyWithValue(res)
-	if err != nil {
-		return nil, err
-	}
-
-	var data []byte
-	if res != nil {
-		data, err = gogoproto.Marshal(res)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var events []abci.Event
-	if evtMgr := ctx.EventManager(); evtMgr != nil {
-		events = evtMgr.ABCIEvents()
-	}
-
-	return &sdk.Result{
-		Data:         data,
-		Events:       events,
-		MsgResponses: []*codectypes.Any{any},
-	}, nil
 }
