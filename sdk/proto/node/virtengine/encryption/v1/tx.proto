@@ -20,6 +20,9 @@ service Msg {
 
   // UpdateKeyLabel updates the label of an existing recipient key
   rpc UpdateKeyLabel(MsgUpdateKeyLabel) returns (MsgUpdateKeyLabelResponse);
+
+  // RotateKey rotates a recipient key with a new public key
+  rpc RotateKey(MsgRotateKey) returns (MsgRotateKeyResponse);
 }
 
 // MsgRegisterRecipientKey is the message for registering a recipient public key
@@ -114,3 +117,62 @@ message MsgUpdateKeyLabel {
 
 // MsgUpdateKeyLabelResponse is the response for MsgUpdateKeyLabel
 message MsgUpdateKeyLabelResponse {}
+
+// MsgRotateKey is the message for rotating a recipient public key
+message MsgRotateKey {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "encryption/MsgRotateKey";
+
+  // Sender is the account rotating the key (must own the key or be authority)
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // OldKeyFingerprint is the fingerprint of the key to rotate
+  string old_key_fingerprint = 2 [
+    (gogoproto.jsontag) = "old_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"old_key_fingerprint\""
+  ];
+
+  // NewPublicKey is the new public key bytes
+  bytes new_public_key = 3 [
+    (gogoproto.jsontag) = "new_public_key",
+    (gogoproto.moretags) = "yaml:\"new_public_key\""
+  ];
+
+  // NewAlgorithmId specifies which algorithm this new key is for (optional, defaults to old key algorithm)
+  string new_algorithm_id = 4 [
+    (gogoproto.jsontag) = "new_algorithm_id",
+    (gogoproto.moretags) = "yaml:\"new_algorithm_id\""
+  ];
+
+  // NewLabel is an optional label for the new key
+  string new_label = 5 [
+    (gogoproto.jsontag) = "new_label,omitempty",
+    (gogoproto.moretags) = "yaml:\"new_label\""
+  ];
+
+  // Reason is an optional reason for rotation
+  string reason = 6 [
+    (gogoproto.jsontag) = "reason,omitempty",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+
+  // NewKeyTtlSeconds is the TTL to apply to the new key (0 keeps default)
+  uint64 new_key_ttl_seconds = 7 [
+    (gogoproto.jsontag) = "new_key_ttl_seconds",
+    (gogoproto.moretags) = "yaml:\"new_key_ttl_seconds\""
+  ];
+}
+
+// MsgRotateKeyResponse is the response for MsgRotateKey
+message MsgRotateKeyResponse {
+  // NewKeyFingerprint is the fingerprint of the new key
+  string new_key_fingerprint = 1 [
+    (gogoproto.jsontag) = "new_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"new_key_fingerprint\""
+  ];
+}

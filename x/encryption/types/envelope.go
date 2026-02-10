@@ -380,6 +380,15 @@ type RecipientKeyRecord struct {
 	// RevokedAt is the block time when the key was revoked (0 if active)
 	RevokedAt int64 `json:"revoked_at,omitempty"`
 
+	// DeprecatedAt is the block time when the key was deprecated (0 if not deprecated)
+	DeprecatedAt int64 `json:"deprecated_at,omitempty"`
+
+	// ExpiresAt is the block time when the key expires (0 if no expiry)
+	ExpiresAt int64 `json:"expires_at,omitempty"`
+
+	// PurgeAt is the block time when key material should be purged (0 if not scheduled)
+	PurgeAt int64 `json:"purge_at,omitempty"`
+
 	// Label is an optional human-readable label for the key
 	Label string `json:"label,omitempty"`
 }
@@ -387,6 +396,21 @@ type RecipientKeyRecord struct {
 // IsActive returns true if the key has not been revoked
 func (r *RecipientKeyRecord) IsActive() bool {
 	return r.RevokedAt == 0
+}
+
+// IsDeprecated returns true if the key has been deprecated
+func (r *RecipientKeyRecord) IsDeprecated() bool {
+	return r.DeprecatedAt != 0
+}
+
+// IsExpiredAt returns true if the key is expired at the provided unix timestamp
+func (r *RecipientKeyRecord) IsExpiredAt(at int64) bool {
+	return r.ExpiresAt != 0 && at >= r.ExpiresAt
+}
+
+// ShouldPurgeAt returns true if the key should be purged at the provided unix timestamp
+func (r *RecipientKeyRecord) ShouldPurgeAt(at int64) bool {
+	return r.PurgeAt != 0 && at >= r.PurgeAt
 }
 
 // Validate validates the recipient key record

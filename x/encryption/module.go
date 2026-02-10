@@ -151,7 +151,11 @@ func (am AppModule) BeginBlock(_ context.Context) error {
 }
 
 // EndBlock returns the end blocker for the encryption module.
-func (am AppModule) EndBlock(_ context.Context) error {
+func (am AppModule) EndBlock(ctx context.Context) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	_, _ = am.keeper.HandleKeyExpiry(sdkCtx)
+	_ = am.keeper.PurgeRevokedKeys(sdkCtx)
+	_ = am.keeper.CleanupEphemeralKeys(sdkCtx)
 	return nil
 }
 

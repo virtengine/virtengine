@@ -220,6 +220,7 @@ func (msg *MsgVerifyProviderDomain) GetSigners() []sdk.AccAddress {
 }
 
 // NewMsgRequestDomainVerification creates a new MsgRequestDomainVerification instance
+
 func NewMsgRequestDomainVerification(owner sdk.AccAddress, domain string, method VerificationMethod) *MsgRequestDomainVerification {
 	return &MsgRequestDomainVerification{
 		Owner:  owner.String(),
