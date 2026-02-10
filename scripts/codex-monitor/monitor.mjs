@@ -1582,13 +1582,29 @@ function ensureVkLogStream() {
         );
 
         // Act on kill/restart actions — write signal file for the orchestrator
-        // instead of directly killing WebSocket streams or resetting agents,
-        // since those actions are ineffective for VK workspace agents.
+        // AND directly kill the VK process WebSocket to stop further resource
+        // wastage immediately. The signal file ensures the orchestrator also
+        // archives and retries the attempt on its next loop.
         if (anomaly.action === "kill" || anomaly.action === "restart") {
           console.warn(
             `[anomaly-detector] writing signal for action="${anomaly.action}" ${anomaly.type} on process ${anomaly.shortId}`,
           );
           writeAnomalySignal(anomaly);
+
+          // Directly kill the VK log stream for this process so the agent
+          // stops consuming compute immediately. Don't wait for the
+          // orchestrator's next poll cycle.
+          if (vkLogStream && anomaly.processId) {
+            const killed = vkLogStream.killProcess(
+              anomaly.processId,
+              `anomaly: ${anomaly.type} (${anomaly.action})`,
+            );
+            if (killed) {
+              console.warn(
+                `[anomaly-detector] killed VK process stream ${anomaly.shortId} directly`,
+              );
+            }
+          }
         }
       },
       notify: (text, options) => {
@@ -3099,6 +3115,8 @@ const STALE_TASK_AGE_MS = STALE_TASK_AGE_HOURS * 60 * 60 * 1000;
  */
 const conflictResolutionCooldown = new Map();
 const CONFLICT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+const CONFLICT_MAX_ATTEMPTS = 3; // Max resolution attempts per task before giving up
+const conflictResolutionAttempts = new Map(); // task ID → attempt count
 
 const RECOVERY_SKIP_CACHE_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -3587,112 +3605,122 @@ async function checkMergedPRsAndUpdateTasks() {
           Date.now() - lastConflictCheck < CONFLICT_COOLDOWN_MS;
         const onDirtyCooldown = isOnResolutionCooldown(task.id);
         if (!onCooldown && !onDirtyCooldown) {
-          const cc = conflictCandidates[0];
-          let resolveAttemptId = cc.attemptId;
-          if (!resolveAttemptId) {
-            const matchAttempt = allVkAttempts.find(
-              (a) => a.branch === cc.branch || a.pr_number === cc.prNumber,
+          // Check if we've exhausted max resolution attempts for this task
+          const attempts = conflictResolutionAttempts.get(task.id) || 0;
+          if (attempts >= CONFLICT_MAX_ATTEMPTS) {
+            console.warn(
+              `[monitor] ⚠️ Task "${task.title}" PR #${conflictCandidates[0].prNumber} conflict resolution exhausted (${attempts}/${CONFLICT_MAX_ATTEMPTS} attempts) — skipping`,
             );
-            resolveAttemptId = matchAttempt?.id || localAttempt?.id;
-          }
-          if (resolveAttemptId) {
-            const shortId = resolveAttemptId.substring(0, 8);
-            conflictResolutionCooldown.set(task.id, Date.now());
-            recordResolutionAttempt(task.id);
-
-            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
-            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
-
-            if (!sdkOnCooldown && !sdkExhausted) {
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+          } else {
+            conflictResolutionAttempts.set(task.id, attempts + 1);
+            const cc = conflictCandidates[0];
+            let resolveAttemptId = cc.attemptId;
+            if (!resolveAttemptId) {
+              const matchAttempt = allVkAttempts.find(
+                (a) => a.branch === cc.branch || a.pr_number === cc.prNumber,
               );
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — launching SDK resolver (attempt ${shortId})`,
-                );
-              }
+              resolveAttemptId = matchAttempt?.id || localAttempt?.id;
+            }
+            if (resolveAttemptId) {
+              const shortId = resolveAttemptId.substring(0, 8);
+              conflictResolutionCooldown.set(task.id, Date.now());
+              recordResolutionAttempt(task.id);
 
-              let worktreePath = null;
-              const attemptInfo = await getAttemptInfo(resolveAttemptId);
-              worktreePath =
-                attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
-              if (!worktreePath) {
-                worktreePath = findWorktreeForBranch(cc.branch);
-              }
+              const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
+              const sdkExhausted = isSDKResolutionExhausted(cc.branch);
 
-              if (worktreePath) {
-                void (async () => {
-                  try {
-                    const result = await resolveConflictsWithSDK({
-                      worktreePath,
-                      branch: cc.branch,
-                      baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
-                      prNumber: cc.prNumber,
-                      taskTitle: task.title,
-                      taskDescription: task.description || "",
-                      logDir: logDir,
-                    });
-                    if (result.success) {
-                      console.log(
-                        `[monitor] ✅ SDK resolved conflicts for PR #${cc.prNumber} (${result.resolvedFiles.length} files)`,
-                      );
-                      clearDirtyTask(task.id);
-                      clearSDKResolutionState(cc.branch);
-                      if (telegramToken && telegramChatId) {
-                        void sendTelegramMessage(
-                          `✅ SDK resolved merge conflicts for PR #${cc.prNumber} "${task.title}" (${result.resolvedFiles.length} files)`,
-                        );
-                      }
-                    } else {
-                      console.warn(
-                        `[monitor] ❌ SDK conflict resolution failed for PR #${cc.prNumber}: ${result.error}`,
-                      );
-                      if (telegramToken && telegramChatId) {
-                        void sendTelegramMessage(
-                          `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
-                        );
-                      }
-                      conflictsTriggered++;
-                      void smartPRFlow(resolveAttemptId, shortId, "conflict");
-                    }
-                  } catch (err) {
-                    console.warn(
-                      `[monitor] SDK conflict resolution threw: ${err.message}`,
-                    );
-                  }
-                })();
-              } else {
-                console.warn(
-                  `[monitor] No worktree found for ${cc.branch} — deferring to orchestrator`,
+              if (!sdkOnCooldown && !sdkExhausted) {
+                console.log(
+                  `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
                 );
                 if (telegramToken && telegramChatId) {
                   void sendTelegramMessage(
-                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
+                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+                  );
+                }
+
+                let worktreePath = null;
+                const attemptInfo = await getAttemptInfo(resolveAttemptId);
+                worktreePath =
+                  attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+                if (!worktreePath) {
+                  worktreePath = findWorktreeForBranch(cc.branch);
+                }
+
+                if (worktreePath) {
+                  void (async () => {
+                    try {
+                      const result = await resolveConflictsWithSDK({
+                        worktreePath,
+                        branch: cc.branch,
+                        baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
+                        prNumber: cc.prNumber,
+                        taskTitle: task.title,
+                        taskDescription: task.description || "",
+                        logDir: logDir,
+                      });
+                      if (result.success) {
+                        console.log(
+                          `[monitor] ✅ SDK resolved conflicts for PR #${cc.prNumber} (${result.resolvedFiles.length} files)`,
+                        );
+                        clearDirtyTask(task.id);
+                        clearSDKResolutionState(cc.branch);
+                        conflictResolutionAttempts.delete(task.id); // Reset on success
+                        if (telegramToken && telegramChatId) {
+                          void sendTelegramMessage(
+                            `✅ SDK resolved merge conflicts for PR #${cc.prNumber} "${task.title}" (${result.resolvedFiles.length} files)`,
+                          );
+                        }
+                      } else {
+                        console.warn(
+                          `[monitor] ❌ SDK conflict resolution failed for PR #${cc.prNumber}: ${result.error}`,
+                        );
+                        if (telegramToken && telegramChatId) {
+                          void sendTelegramMessage(
+                            `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
+                          );
+                        }
+                        conflictsTriggered++;
+                        void smartPRFlow(resolveAttemptId, shortId, "conflict");
+                      }
+                    } catch (err) {
+                      console.warn(
+                        `[monitor] SDK conflict resolution threw: ${err.message}`,
+                      );
+                    }
+                  })();
+                } else {
+                  console.warn(
+                    `[monitor] No worktree found for ${cc.branch} — deferring to orchestrator`,
+                  );
+                  if (telegramToken && telegramChatId) {
+                    void sendTelegramMessage(
+                      `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
+                    );
+                  }
+                  conflictsTriggered++;
+                  void smartPRFlow(resolveAttemptId, shortId, "conflict");
+                }
+              } else {
+                const reason = sdkExhausted
+                  ? "SDK attempts exhausted"
+                  : "SDK on cooldown";
+                console.log(
+                  `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — ${reason}, deferring to orchestrator (attempt ${shortId})`,
+                );
+                if (telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
                   );
                 }
                 conflictsTriggered++;
                 void smartPRFlow(resolveAttemptId, shortId, "conflict");
               }
             } else {
-              const reason = sdkExhausted
-                ? "SDK attempts exhausted"
-                : "SDK on cooldown";
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — ${reason}, deferring to orchestrator (attempt ${shortId})`,
+              console.warn(
+                `[monitor] Task "${task.title}" PR #${cc.prNumber} has conflicts but no attempt ID — cannot trigger resolution`,
               );
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
-                );
-              }
-              conflictsTriggered++;
-              void smartPRFlow(resolveAttemptId, shortId, "conflict");
             }
-          } else {
-            console.warn(
-              `[monitor] Task "${task.title}" PR #${cc.prNumber} has conflicts but no attempt ID — cannot trigger resolution`,
-            );
           }
         }
       }

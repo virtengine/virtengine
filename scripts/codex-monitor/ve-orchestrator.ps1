@@ -4064,22 +4064,20 @@ function Process-AnomalySignals {
                     $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_recovery"
                 }
                 elseif ($info.status -eq "running") {
-                    # CRITICAL anomalies (TOKEN_OVERFLOW, STREAM_DEATH) on running
-                    # processes: mark for immediate termination so the orchestrator
-                    # archives this attempt on the next poll instead of waiting for
-                    # natural completion (which may never come for dead sessions).
-                    if ($signal.severity -eq "CRITICAL") {
-                        Write-Log "CRITICAL anomaly ($($signal.type)) for running attempt $($attemptId.Substring(0,8)) — marking for archive + retry" -Level "WARN"
-                        $info.status = "error"
-                        $info.error_notified = $true
-                        $info.force_new_session = $true
-                        $info.anomaly_killed = $true
-                        $msg = "CRITICAL: $($signal.type) — $($signal.message). Archiving and retrying with a fresh session."
-                        $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_kill"
-                    }
-                    else {
-                        Write-Log "Anomaly for running attempt $($attemptId.Substring(0,8)) — will act when process completes" -Level "INFO"
-                    }
+                    # Kill signal on a running process — the anomaly detector
+                    # already decided this process should die (threshold
+                    # exceeded). Act immediately regardless of severity level.
+                    # A HIGH-severity kill is just as actionable as CRITICAL —
+                    # the detector differentiates severity for notification
+                    # purposes, but action="kill" means KILL.
+                    $sevLabel = if ($signal.severity -eq "CRITICAL") { "CRITICAL" } else { "SEVERE" }
+                    Write-Log "$sevLabel anomaly ($($signal.type)) for running attempt $($attemptId.Substring(0,8)) — archiving + retrying (action=$($signal.action))" -Level "WARN"
+                    $info.status = "error"
+                    $info.error_notified = $true
+                    $info.force_new_session = $true
+                    $info.anomaly_killed = $true
+                    $msg = "$sevLabel anomaly: $($signal.type) — $($signal.message). Archiving and retrying with a fresh session."
+                    $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_kill"
                 }
             }
         }

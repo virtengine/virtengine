@@ -148,6 +148,7 @@ function isOperationalThought(normalized) {
  * @property {string|null} branch
  * @property {Set<string>} alertsSent - Dedup keys for alerts already sent
  * @property {Map<string, number>} alertTimestamps - Dedup key → last alert time
+ * @property {Map<string, number>} alertEmitCounts - type → total emit count (for escalation)
  */
 
 /**
@@ -181,6 +182,7 @@ function createProcessState(processId) {
     branch: null,
     alertsSent: new Set(),
     alertTimestamps: new Map(),
+    alertEmitCounts: new Map(),
   };
 }
 
@@ -476,6 +478,8 @@ export class AnomalyDetector {
         consecutiveSameToolCount: state.consecutiveSameToolCount,
         lastToolTitle: state.lastToolTitle,
         idleSec: Math.round((Date.now() - state.lastLineAt) / 1000),
+        alertEmitCounts: Object.fromEntries(state.alertEmitCounts),
+        runtimeMin: Math.round((Date.now() - state.firstLineAt) / 60_000),
       });
     }
 
@@ -523,6 +527,18 @@ export class AnomalyDetector {
       if (proc.idleSec >= this.#thresholds.idleStallWarnSec) {
         concerns.push(`idle ${proc.idleSec}s`);
       }
+      // Show circuit-breaker escalation status
+      const escalated = Object.entries(proc.alertEmitCounts || {}).filter(
+        ([, c]) => c >= 3,
+      );
+      if (escalated.length > 0) {
+        concerns.push(
+          `escalated: ${escalated.map(([t, c]) => `${t}(${c}x)`).join(", ")}`,
+        );
+      }
+      if (proc.runtimeMin >= 60) {
+        concerns.push(`runtime ${proc.runtimeMin}min`);
+      }
       if (concerns.length > 0) {
         lines.push(
           `\n⚠️ <b>${escapeHtml(proc.shortId)}</b> (${escapeHtml(proc.taskTitle || "?")}):`,
@@ -569,8 +585,9 @@ export class AnomalyDetector {
 
   /**
    * P0: Model not supported — subagent dies, parent wastes ~90s retrying.
-   * This is an external issue (Azure/model config), so we warn aggressively
-   * but don't kill — killing won't fix an external config problem.
+   * While this is an external issue (Azure/model config), after enough failures
+   * the agent is wasting compute spinning in retry loops. Kill it so the slot
+   * is freed for a fresh attempt that might succeed after config fixes.
    */
   #detectModelNotSupported(line, state) {
     if (!line.includes(STR_MODEL_NOT_SUPPORTED)) return;
@@ -586,7 +603,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Model not supported — ${state.modelFailureCount} failures, each wasting ~90s in retries`,
         data: { failureCount: state.modelFailureCount },
-        action: "warn",
+        action: "kill",
       });
     } else {
       this.#emit({
@@ -1060,7 +1077,14 @@ export class AnomalyDetector {
   // ── Emission ──────────────────────────────────────────────────────────────
 
   /**
-   * Emit an anomaly event with dedup protection.
+   * Emit an anomaly event with dedup protection and auto-escalation.
+   *
+   * Circuit breaker: When a warn-level anomaly fires 3+ times for the same
+   * process (each separated by the dedup window), auto-escalate to
+   * action="kill". This prevents agents from wasting hours in loops that
+   * individually don't cross kill thresholds but collectively indicate a
+   * stuck process.
+   *
    * @param {Anomaly} anomaly
    */
   #emit(anomaly) {
@@ -1075,6 +1099,25 @@ export class AnomalyDetector {
         return; // Already alerted recently
       }
       state.alertTimestamps.set(dedupKey, now);
+
+      // ── Circuit breaker escalation ─────────────────────────────────
+      // Track how many times this anomaly type has been emitted for this
+      // process. If a warn/info action fires 3+ times, auto-escalate
+      // to kill — the process is stuck and won't recover on its own.
+      const emitKey = anomaly.type;
+      const emitCount = (state.alertEmitCounts.get(emitKey) || 0) + 1;
+      state.alertEmitCounts.set(emitKey, emitCount);
+
+      if (anomaly.action === "warn" || anomaly.action === "info") {
+        if (emitCount >= 3) {
+          console.warn(
+            `[anomaly-detector] circuit breaker: ${anomaly.type} fired ${emitCount}x for ${anomaly.shortId} — escalating to KILL`,
+          );
+          anomaly.action = "kill";
+          anomaly.severity = Severity.HIGH;
+          anomaly.message = `[ESCALATED] ${anomaly.message} (${emitCount} alerts over ${Math.round((now - state.firstLineAt) / 60_000)}min)`;
+        }
+      }
     }
 
     // Increment global counter

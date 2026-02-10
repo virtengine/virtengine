@@ -87,28 +87,22 @@ describe("AnomalyDetector", () => {
   });
 
   describe("Model Not Supported (P0)", () => {
-    it("warns on first failure at medium severity, escalates on threshold", () => {
+    it("warns on first failure at medium severity, kills at threshold", () => {
       const line = "CAPIError: 400 The requested model is not supported";
       detector.processLine(line, META);
       expect(anomalies).toHaveLength(1);
-      // First failure is MEDIUM — model issues are external, not actionable by kill
+      // First failure is MEDIUM — model issues are external, not immediately actionable
       expect(anomalies[0].severity).toBe(Severity.MEDIUM);
       expect(anomalies[0].action).toBe("warn");
 
-      // Wait for dedup window
-      anomalies[0] = null;
-      anomalies.length = 0;
-
-      // Escalation happens at threshold (default 5), not after just 2
-      setTimeout(() => {
-        detector.processLine(line, META);
-        // Still under threshold — should remain warn-level
-        const highOrAbove = anomalies.filter(
-          (a) => a?.severity === Severity.HIGH || a?.severity === Severity.CRITICAL,
-        );
-        // May or may not have emitted depending on dedup, but no CRITICAL kill
-        expect(highOrAbove.every((a) => a.action === "warn")).toBe(true);
-      }, 150);
+      // Second failure hits kill threshold (modelFailureKill=2 in test config)
+      detector.processLine(line, META);
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.MODEL_NOT_SUPPORTED && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+      expect(kills[0].severity).toBe(Severity.HIGH);
     });
   });
 
@@ -594,5 +588,103 @@ describe("createAnomalyDetector factory", () => {
     const detector = createAnomalyDetector();
     expect(detector).toBeInstanceOf(AnomalyDetector);
     detector.stop();
+  });
+});
+
+describe("Circuit breaker escalation", () => {
+  it("escalates warn-only anomalies to kill after 3 dedup cycles", async () => {
+    // Use very short dedup (50ms) so we can cycle quickly
+    const { detector, anomalies } = makeDetector({ alertDedupWindowMs: 50 });
+
+    // MODEL_NOT_SUPPORTED below kill threshold emits action: "warn"
+    // with modelFailureKill=2, the 1st failure is below threshold
+    const msLine = "CAPIError: 400 The requested model is not supported for this operation.";
+    const pid = "circuit-breaker-test-1234-5678-abcdef012345";
+    const meta = { processId: pid, stream: "stdout" };
+
+    // Cycle 1: first failure (warn)
+    detector.processLine(msLine, meta);
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Cycle 2: second failure (but still same dedup key, need to wait)
+    detector.processLine(msLine, meta);
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Cycle 3: third failure
+    detector.processLine(msLine, meta);
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Cycle 4: fourth failure should trigger escalation
+    detector.processLine(msLine, meta);
+
+    const killAnoms = anomalies.filter(
+      (a) =>
+        a.type === AnomalyType.MODEL_NOT_SUPPORTED &&
+        a.action === "kill",
+    );
+    // Should have at least 1 kill: either from threshold escalation (at 2)
+    // or from circuit breaker (after 3 warn cycles)
+    expect(killAnoms.length).toBeGreaterThanOrEqual(1);
+
+    detector.stop();
+  });
+
+  it("escalates git push warn to kill after repeated warnings", async () => {
+    const { detector, anomalies } = makeDetector({
+      alertDedupWindowMs: 50,
+      gitPushWarn: 2,
+      gitPushKill: 100, // High kill threshold so we rely on circuit breaker
+    });
+
+    const pushLine = "git push --set-upstream origin feature-branch";
+    const pid = "gitpush-breaker-1234-5678-abcdef012345";
+    const meta = { processId: pid, stream: "stdout" };
+
+    // Push enough to trigger warn (threshold=2)
+    detector.processLine(pushLine, meta);
+    detector.processLine(pushLine, meta);
+    // First warn emitted
+
+    // Wait for dedup, push again to get 2nd warn
+    await new Promise((r) => setTimeout(r, 60));
+    detector.processLine(pushLine, meta);
+
+    await new Promise((r) => setTimeout(r, 60));
+    detector.processLine(pushLine, meta);
+
+    await new Promise((r) => setTimeout(r, 60));
+    detector.processLine(pushLine, meta);
+
+    // After 3+ warn cycles, circuit breaker should escalate to kill
+    const killAnoms = anomalies.filter(
+      (a) =>
+        a.type === AnomalyType.GIT_PUSH_LOOP &&
+        a.action === "kill",
+    );
+    expect(killAnoms.length).toBeGreaterThanOrEqual(1);
+    // Verify escalation message
+    const escalated = killAnoms.find((a) => a.message.includes("[ESCALATED]"));
+    expect(escalated).toBeDefined();
+
+    detector.stop();
+  });
+});
+
+describe("MODEL_NOT_SUPPORTED kill at threshold", () => {
+  it("emits kill action when model failures hit kill threshold", () => {
+    const { detector, anomalies } = makeDetector({ modelFailureKill: 2 });
+
+    const msLine = "CAPIError: 400 The requested model is not supported for this operation.";
+    detector.processLine(msLine, META);
+    detector.processLine(msLine, META);
+
+    const kills = anomalies.filter(
+      (a) =>
+        a.type === AnomalyType.MODEL_NOT_SUPPORTED &&
+        a.action === "kill",
+    );
+    expect(kills.length).toBeGreaterThanOrEqual(1);
+    expect(kills[0].severity).toBe(Severity.HIGH);
+    expect(kills[0].message).toContain("failures");
   });
 });

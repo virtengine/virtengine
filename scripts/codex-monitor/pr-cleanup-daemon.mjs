@@ -78,7 +78,7 @@ class PRCleanupDaemon {
       console.log(`[pr-cleanup-daemon] Active cleanups: ${this.activeCleanups.size}, Queued: ${this.cleanupQueue.length}`);
     } catch (err) {
       this.stats.errors++;
-      console.error(`[pr-cleanup-daemon] Run failed:`, err.message);
+      console.error(`[pr-cleanup-daemon] Run failed:`, err?.message ?? String(err));
     }
   }
 
@@ -161,7 +161,7 @@ class PRCleanupDaemon {
       }
     } catch (err) {
       this.stats.errors++;
-      console.error(`[pr-cleanup-daemon] Failed to process PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to process PR #${pr.number}:`, err?.message ?? String(err));
     } finally {
       this.activeCleanups.delete(pr.number);
     }
@@ -201,8 +201,8 @@ class PRCleanupDaemon {
       this.stats.conflictsResolved++;
       console.log(`[pr-cleanup-daemon] ✓ Resolved conflicts on PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, err.message);
-      await this.escalate(pr, 'conflict_resolution_failed', { error: err.message });
+      console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, err?.message ?? String(err));
+      await this.escalate(pr, 'conflict_resolution_failed', { error: err?.message ?? String(err) });
       this.stats.escalations++;
     }
   }
@@ -235,7 +235,7 @@ class PRCleanupDaemon {
       this.stats.ciRetriggers++;
       console.log(`[pr-cleanup-daemon] ✓ Re-triggered CI on PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err?.message ?? String(err));
     }
   }
 
@@ -244,9 +244,14 @@ class PRCleanupDaemon {
    * @param {object} pr - PR metadata
    */
   async attemptAutoMerge(pr) {
-    // Re-fetch PR status to check latest state
-    const { stdout } = await exec(`gh pr view ${pr.number} --json mergeable,statusCheckRollup`);
-    const latest = JSON.parse(stdout);
+    let latest;
+    try {
+      const { stdout } = await exec(`gh pr view ${pr.number} --json mergeable,statusCheckRollup`);
+      latest = JSON.parse(stdout);
+    } catch (err) {
+      console.error(`[pr-cleanup-daemon] Failed to fetch PR #${pr.number} status for auto-merge:`, err?.message ?? String(err));
+      return;
+    }
 
     if (latest.mergeable !== 'MERGEABLE') {
       console.log(`[pr-cleanup-daemon] PR #${pr.number} not mergeable: ${latest.mergeable}`);
@@ -270,7 +275,7 @@ class PRCleanupDaemon {
       this.stats.autoMerges++;
       console.log(`[pr-cleanup-daemon] ✓ Auto-merged PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to auto-merge PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to auto-merge PR #${pr.number}:`, err?.message ?? String(err));
     }
   }
 
@@ -285,7 +290,7 @@ class PRCleanupDaemon {
       const { stdout } = await exec(`git diff --check || git diff --name-only --diff-filter=U | wc -l`);
       return parseInt(stdout.trim(), 10);
     } catch (err) {
-      console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, err.message);
+      console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, err?.message ?? String(err));
       return 0; // Assume small if can't determine
     }
   }
@@ -338,7 +343,7 @@ class PRCleanupDaemon {
       try {
         await exec(`curl -s -X POST "https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage" -d chat_id="${process.env.TELEGRAM_CHAT_ID}" -d text="${encodeURIComponent(message)}"`);
       } catch (err) {
-        console.error(`[pr-cleanup-daemon] Failed to send Telegram alert:`, err.message);
+        console.error(`[pr-cleanup-daemon] Failed to send Telegram alert:`, err?.message ?? String(err));
       }
     }
   }
