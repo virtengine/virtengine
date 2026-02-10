@@ -42,6 +42,21 @@ export interface LivenessResult {
   failureReason?: string;
 }
 
+export type SocialMediaProvider = "google" | "facebook" | "microsoft";
+
+export interface SocialMediaProfile {
+  provider: SocialMediaProvider;
+  profileNameHash: string;
+  emailHash?: string;
+  usernameHash?: string;
+  orgHash?: string;
+  accountCreatedAt?: number;
+  accountAgeDays?: number;
+  isVerified: boolean;
+  friendCountRange?: string;
+  connectedAt: number;
+}
+
 export type BiometricModality = "fingerprint" | "iris";
 export type BiometricSensorType = "optical" | "capacitive" | "ultrasonic" | "iris" | "unknown";
 export type BiometricSecurityLevel = "unknown" | "basic" | "strong" | "hardware_backed";
@@ -129,6 +144,7 @@ export interface CaptureSession {
   biometric?: BiometricCapture;
   ocr?: OcrResult;
   deviceAttestation?: DeviceAttestation;
+  socialMedia?: SocialMediaProfile[];
 }
 
 export interface CapturePayload {

@@ -36,7 +36,7 @@ const (
 	DNSVerificationPrefix = "_virtengine-verification"
 
 	// HTTPWellKnownPath is the path for HTTP well-known verification
-	HTTPWellKnownPath = "/.well-known/virtengine-verification"
+	HTTPWellKnownPath = "/.well-known/virtengine-verification" // #nosec G101 -- not a credential
 )
 
 // VerificationMethodType represents the method used for domain verification
@@ -64,8 +64,7 @@ type DomainVerificationRecord struct {
 }
 
 // RequestDomainVerification requests domain verification with specified method (replaces GenerateDomainVerificationToken)
-// TODO: Replace int32 with types.VerificationMethod after proto generation
-func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, domain string, method int32) (*DomainVerificationRecord, string, error) {
+func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, domain string, method types.VerificationMethod) (*DomainVerificationRecord, string, error) {
 	if err := validateDomain(domain); err != nil {
 		return nil, "", types.ErrInvalidDomain.Wrapf("invalid domain: %v", err)
 	}
@@ -73,21 +72,14 @@ func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccA
 	var methodType VerificationMethodType
 	var verificationTarget string
 
-	// Temporary enum values until proto generation
-	const (
-		VERIFICATION_METHOD_DNS_TXT         = 1
-		VERIFICATION_METHOD_DNS_CNAME       = 2
-		VERIFICATION_METHOD_HTTP_WELL_KNOWN = 3
-	)
-
 	switch method {
-	case VERIFICATION_METHOD_DNS_TXT:
+	case types.VERIFICATION_METHOD_DNS_TXT:
 		methodType = VerificationMethodDNSTXT
 		verificationTarget = fmt.Sprintf("%s.%s", DNSVerificationPrefix, domain)
-	case VERIFICATION_METHOD_DNS_CNAME:
+	case types.VERIFICATION_METHOD_DNS_CNAME:
 		methodType = VerificationMethodDNSCNAME
 		verificationTarget = fmt.Sprintf("%s.%s", DNSVerificationPrefix, domain)
-	case VERIFICATION_METHOD_HTTP_WELL_KNOWN:
+	case types.VERIFICATION_METHOD_HTTP_WELL_KNOWN:
 		methodType = VerificationMethodHTTPWellKnown
 		verificationTarget = fmt.Sprintf("https://%s%s", domain, HTTPWellKnownPath)
 	default:

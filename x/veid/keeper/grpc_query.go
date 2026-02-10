@@ -343,6 +343,61 @@ func (q GRPCQuerier) SMSVerification(goCtx context.Context, req *types.QuerySMSV
 	}, nil
 }
 
+// SocialMediaScope returns a social media scope by ID.
+func (q GRPCQuerier) SocialMediaScope(goCtx context.Context, req *types.QuerySocialMediaScopeRequest) (*types.QuerySocialMediaScopeResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+	if req.ScopeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "scope_id cannot be empty")
+	}
+
+	scope, found := q.GetSocialMediaScope(ctx, req.ScopeID)
+	if !found || scope == nil {
+		return &types.QuerySocialMediaScopeResponse{Scope: nil}, nil
+	}
+
+	return &types.QuerySocialMediaScopeResponse{
+		Scope: types.SocialMediaScopeToProto(scope),
+	}, nil
+}
+
+// SocialMediaScopes returns social media scopes for an account.
+func (q GRPCQuerier) SocialMediaScopes(goCtx context.Context, req *types.QuerySocialMediaScopesRequest) (*types.QuerySocialMediaScopesResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+	if _, err := sdk.AccAddressFromBech32(req.AccountAddress); err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	var providerPtr *types.SocialMediaProviderType
+	if req.Provider != "" {
+		provider := types.SocialMediaProviderType(req.Provider)
+		if !types.IsValidSocialMediaProvider(provider) {
+			return nil, status.Error(codes.InvalidArgument, "invalid provider")
+		}
+		providerPtr = &provider
+	}
+
+	records := q.GetSocialMediaScopesByAccount(ctx, req.AccountAddress, providerPtr)
+	resp := make([]types.SocialMediaScopePB, 0, len(records))
+	for i := range records {
+		resp = append(resp, *types.SocialMediaScopeToProto(&records[i]))
+	}
+
+	return &types.QuerySocialMediaScopesResponse{
+		Scopes: resp,
+	}, nil
+}
+
 // IdentityWallet returns the identity wallet for an address
 func (q GRPCQuerier) IdentityWallet(goCtx context.Context, req *types.QueryIdentityWalletRequest) (*types.QueryIdentityWalletResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
