@@ -494,6 +494,7 @@ func (g *TwilioGateway) ParseWebhook(ctx context.Context, payload []byte, signat
 	// Validate signature if webhook secret is configured
 	if g.config.WebhookSecret != "" {
 		// Twilio uses HMAC-SHA1 for webhook validation
+		//nolint:gosec // G401: HMAC-SHA1 required by Twilio webhook API - third-party service requirement
 		// In production, validate X-Twilio-Signature header
 		if signature == "" {
 			return nil, errors.Wrap(ErrWebhookInvalid, "missing signature")
