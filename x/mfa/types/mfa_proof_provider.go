@@ -5,4 +5,5 @@ package types
 type MFAProofProvider interface {
 	GetMFAProof() *MFAProof
 	GetDeviceFingerprint() string
+	GetTrustToken() string
 }

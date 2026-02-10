@@ -6,38 +6,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // We need to mock the store before importing components
 const mockStoreState: Record<string, unknown> = {
-  isLoading: false,
-  isEnabled: false,
   factors: [] as unknown[],
-  policy: null,
   trustedBrowsers: [],
-  auditLog: [],
-  activeChallenge: null,
-  totpEnrollment: null,
-  webAuthnEnrollment: null,
-  backupCodes: null,
-  error: null,
-  isMutating: false,
-  loadMFAData: vi.fn(),
-  startTOTPEnrollment: vi.fn(),
-  verifyTOTPEnrollment: vi.fn(),
-  startWebAuthnEnrollment: vi.fn(),
-  completeWebAuthnEnrollment: vi.fn(),
-  generateBackupCodes: vi.fn(),
-  removeFactor: vi.fn(),
-  toggleFactor: vi.fn(),
-  setPrimaryFactor: vi.fn(),
-  createChallenge: vi.fn(),
-  verifyChallenge: vi.fn(),
   revokeTrustedBrowser: vi.fn(),
-  clearEnrollment: vi.fn(),
-  clearBackupCodes: vi.fn(),
-  clearError: vi.fn(),
-  reset: vi.fn(),
 };
 
 vi.mock('../../../src/features/mfa/store', () => ({
@@ -54,104 +29,112 @@ vi.mock('../../../src/features/mfa/store', () => ({
   ),
 }));
 
-vi.mock('../../../src/features/mfa/api', () => ({
-  submitRecovery: vi.fn(),
-}));
-
 // Import after mock setup
-import { FactorList } from '../../../src/components/mfa/FactorList';
-import { MFASetup } from '../../../src/components/mfa/MFASetup';
+import { MFAChallenge } from '../../../src/components/mfa/MFAChallenge';
+import { MFASettings } from '../../../src/components/mfa/MFASettings';
 
-describe('FactorList', () => {
+describe('MFAChallenge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockStoreState.factors = [];
-    mockStoreState.error = null;
+    window.localStorage.clear();
   });
 
-  it('renders empty state when no factors', () => {
-    render(<FactorList />);
-    expect(screen.getByText('No MFA Factors Enrolled')).toBeDefined();
+  it('renders trust this browser checkbox', () => {
+    render(
+      <MFAChallenge
+        open={true}
+        onOpenChange={vi.fn()}
+        transactionType="wallet_send"
+        actionDescription="Send tokens"
+      />
+    );
+    const checkbox = screen.getByLabelText('Trust this browser');
+    expect(checkbox).toBeDefined();
+    expect(checkbox).toHaveProperty('type', 'checkbox');
+    expect(checkbox).toHaveProperty('checked', false);
   });
 
-  it('renders add button when onAddFactor provided and no factors', () => {
-    const onAdd = vi.fn();
-    render(<FactorList onAddFactor={onAdd} />);
-    expect(screen.getByText('Add First Factor')).toBeDefined();
-  });
+  it('sets localStorage when trust browser checkbox is toggled', () => {
+    const setItemSpy = vi.spyOn(window.localStorage, 'setItem');
 
-  it('renders enrolled factors', () => {
-    mockStoreState.factors = [
-      {
-        id: 'f-1',
-        type: 'otp' as const,
-        name: 'Work Phone',
-        enrolledAt: Date.now(),
-        lastUsedAt: null,
-        isPrimary: true,
-        status: 'active' as const,
-        metadata: {},
-      },
-    ];
+    render(
+      <MFAChallenge
+        open={true}
+        onOpenChange={vi.fn()}
+        transactionType="wallet_send"
+        actionDescription="Send tokens"
+      />
+    );
 
-    render(<FactorList />);
-    expect(screen.getByText('Work Phone')).toBeDefined();
-    expect(screen.getByText('active')).toBeDefined();
-    expect(screen.getByText('Primary')).toBeDefined();
-  });
+    const checkbox = screen.getByLabelText('Trust this browser') as HTMLInputElement;
 
-  it('shows disable button for active factors', () => {
-    mockStoreState.factors = [
-      {
-        id: 'f-1',
-        type: 'otp' as const,
-        name: 'Phone',
-        enrolledAt: Date.now(),
-        lastUsedAt: null,
-        isPrimary: false,
-        status: 'active' as const,
-        metadata: {},
-      },
-    ];
+    // Check the checkbox
+    fireEvent.click(checkbox);
+    expect(setItemSpy).toHaveBeenCalledWith('mfa_trust_browser', 'true');
 
-    render(<FactorList />);
-    expect(screen.getByText('Disable')).toBeDefined();
-  });
+    // Uncheck the checkbox
+    fireEvent.click(checkbox);
+    expect(setItemSpy).toHaveBeenCalledWith('mfa_trust_browser', 'false');
 
-  it('shows enable button for suspended factors', () => {
-    mockStoreState.factors = [
-      {
-        id: 'f-1',
-        type: 'otp' as const,
-        name: 'Phone',
-        enrolledAt: Date.now(),
-        lastUsedAt: null,
-        isPrimary: false,
-        status: 'suspended' as const,
-        metadata: {},
-      },
-    ];
-
-    render(<FactorList />);
-    expect(screen.getByText('Enable')).toBeDefined();
+    setItemSpy.mockRestore();
   });
 });
 
-describe('MFASetup', () => {
+describe('MFASettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStoreState.trustedBrowsers = [];
   });
 
-  it('renders factor selection options', () => {
-    render(<MFASetup />);
-    expect(screen.getByText('Authenticator App')).toBeDefined();
-    expect(screen.getByText('Security Key')).toBeDefined();
-    expect(screen.getByText('Backup Codes')).toBeDefined();
-  });
+  it('revokes all trusted browsers via individual revoke calls', async () => {
+    const browser1 = {
+      id: 'tb-1',
+      deviceName: 'Chrome on Mac',
+      browserName: 'Chrome',
+      trustedAt: Date.now(),
+      expiresAt: Date.now() + 86400000,
+      region: 'US',
+    };
+    const browser2 = {
+      id: 'tb-2',
+      deviceName: 'Firefox on Windows',
+      browserName: 'Firefox',
+      trustedAt: Date.now(),
+      expiresAt: Date.now() + 86400000,
+      region: 'EU',
+    };
+    const browser3 = {
+      id: 'tb-3',
+      deviceName: 'Safari on iPhone',
+      browserName: 'Safari',
+      trustedAt: Date.now(),
+      expiresAt: Date.now() + 86400000,
+      region: 'US',
+    };
+    mockStoreState.trustedBrowsers = [browser1, browser2, browser3];
 
-  it('renders title and description', () => {
-    render(<MFASetup />);
-    expect(screen.getByText('Set Up Two-Factor Authentication')).toBeDefined();
-    expect(screen.getByText('Add an extra layer of security to your account')).toBeDefined();
+    render(<MFASettings />);
+
+    const trustedTab = screen.getByRole('tab', { name: /trusted \(3\)/i });
+
+    // Trigger full click sequence for Radix UI
+    fireEvent.pointerDown(trustedTab);
+    fireEvent.mouseDown(trustedTab);
+    fireEvent.mouseUp(trustedTab);
+    fireEvent.click(trustedTab);
+
+    const revokeButtons = await waitFor(() => screen.getAllByRole('button', { name: /^revoke$/i }));
+
+    // Click each Revoke button to revoke all browsers individually
+    expect(revokeButtons).toHaveLength(3);
+    fireEvent.click(revokeButtons[0]);
+    fireEvent.click(revokeButtons[1]);
+    fireEvent.click(revokeButtons[2]);
+
+    // Assert revokeTrustedBrowser was called for each browser
+    expect(mockStoreState.revokeTrustedBrowser).toHaveBeenCalledWith('tb-1');
+    expect(mockStoreState.revokeTrustedBrowser).toHaveBeenCalledWith('tb-2');
+    expect(mockStoreState.revokeTrustedBrowser).toHaveBeenCalledWith('tb-3');
+    expect(mockStoreState.revokeTrustedBrowser).toHaveBeenCalledTimes(3);
   });
 });

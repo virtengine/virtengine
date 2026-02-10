@@ -759,6 +759,8 @@ type MsgAddTrustedDeviceResponse struct {
 	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success" yaml:"success"`
 	// TrustExpiresAt is when the device trust expires
 	TrustExpiresAt int64 `protobuf:"varint,2,opt,name=trust_expires_at,json=trustExpiresAt,proto3" json:"trust_expires_at" yaml:"trust_expires_at"`
+	// TrustToken is the one-time trust token to be stored by the client
+	TrustToken string `protobuf:"bytes,3,opt,name=trust_token,json=trustToken,proto3" json:"trust_token,omitempty" yaml:"trust_token"`
 }
 
 func (m *MsgAddTrustedDeviceResponse) Reset()         { *m = MsgAddTrustedDeviceResponse{} }

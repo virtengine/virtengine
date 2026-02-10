@@ -241,7 +241,7 @@ func (s *KeeperTestSuite) TestTrustedDevice() {
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400, // 24 hours
 	}
 
-	err := s.keeper.AddTrustedDevice(s.ctx, addr, device)
+	_, err := s.keeper.AddTrustedDevice(s.ctx, addr, device)
 	s.Require().NoError(err)
 
 	// Retrieve all devices
@@ -584,7 +584,7 @@ func TestTrustedDeviceReduction(t *testing.T) {
 		UserAgent:      "My Trusted Laptop",
 		TrustExpiresAt: ctx.BlockTime().Unix() + 86400,
 	}
-	err = k.AddTrustedDevice(ctx, addr, device)
+	_, err = k.AddTrustedDevice(ctx, addr, device)
 	require.NoError(t, err)
 
 	// Check if device is trusted

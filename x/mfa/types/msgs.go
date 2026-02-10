@@ -173,6 +173,9 @@ type MsgAddTrustedDeviceResponse struct {
 
 	// TrustExpiresAt is when the device trust expires
 	TrustExpiresAt int64 `json:"trust_expires_at"`
+
+	// TrustToken is the one-time trust token to be stored by the client
+	TrustToken string `json:"trust_token,omitempty"`
 }
 
 // MsgRemoveTrustedDevice is the message for removing a trusted device
@@ -221,6 +224,12 @@ type MFAProof struct {
 
 	// Signature is the signature over the proof data
 	Signature []byte `json:"signature,omitempty"`
+
+	// DeviceFingerprint identifies the device
+	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
+
+	// TrustToken is the trust token for the device (if trusted device)
+	TrustToken string `json:"trust_token,omitempty"`
 }
 
 // Validate validates the MFA proof

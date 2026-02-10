@@ -376,6 +376,10 @@ type MFAProof struct {
 	Timestamp int64 `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp" yaml:"timestamp"`
 	// Signature is the signature over the proof data
 	Signature []byte `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty" yaml:"signature"`
+	// DeviceFingerprint identifies the device
+	DeviceFingerprint string `protobuf:"bytes,5,opt,name=device_fingerprint,json=deviceFingerprint,proto3" json:"device_fingerprint,omitempty" yaml:"device_fingerprint"`
+	// TrustToken is the trust token for the device (if trusted device)
+	TrustToken string `protobuf:"bytes,6,opt,name=trust_token,json=trustToken,proto3" json:"trust_token,omitempty" yaml:"trust_token"`
 }
 
 func (m *MFAProof) Reset()         { *m = MFAProof{} }
@@ -590,6 +594,8 @@ type DeviceInfo struct {
 	IpHash string `protobuf:"bytes,5,opt,name=ip_hash,json=ipHash,proto3" json:"ip_hash,omitempty" yaml:"ip_hash"`
 	// TrustExpiresAt is when the device trust expires
 	TrustExpiresAt int64 `protobuf:"varint,6,opt,name=trust_expires_at,json=trustExpiresAt,proto3" json:"trust_expires_at" yaml:"trust_expires_at"`
+	// TrustTokenHash is the bcrypt hash of the trust token for this device
+	TrustTokenHash string `protobuf:"bytes,7,opt,name=trust_token_hash,json=trustTokenHash,proto3" json:"trust_token_hash,omitempty" yaml:"trust_token_hash"`
 }
 
 func (m *DeviceInfo) Reset()         { *m = DeviceInfo{} }

@@ -70,6 +70,7 @@ export function MFAChallenge({
   const [selectedFactorId, setSelectedFactorId] = useState<string>('');
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [trustBrowser, setTrustBrowser] = useState(false);
 
   const availableFactors = activeChallenge?.availableFactors?.length
     ? activeChallenge.availableFactors
@@ -87,6 +88,7 @@ export function MFAChallenge({
       setCode('');
       setLocalError(null);
       setSelectedFactorId('');
+      setTrustBrowser(false);
     }
   }, [open]);
 
@@ -261,6 +263,24 @@ export function MFAChallenge({
               </p>
             </div>
           )}
+
+          {/* Trust this browser checkbox */}
+          <div className="flex items-center gap-2">
+            <input
+              id="trust-browser"
+              type="checkbox"
+              checked={trustBrowser}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setTrustBrowser(checked);
+                window.localStorage.setItem('mfa_trust_browser', checked ? 'true' : 'false');
+              }}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <Label htmlFor="trust-browser" className="cursor-pointer text-sm font-normal">
+              Trust this browser
+            </Label>
+          </div>
         </div>
 
         <DialogFooter>

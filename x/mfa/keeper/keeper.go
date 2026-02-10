@@ -2,12 +2,14 @@ package keeper
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/virtengine/virtengine/x/mfa/types"
 )
@@ -55,11 +57,12 @@ type IKeeper interface {
 	IsActionSingleUse(ctx sdk.Context, action types.SensitiveTransactionType) bool
 
 	// Trusted devices
-	AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) error
+	AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) (string, error)
 	RemoveTrustedDevice(ctx sdk.Context, address sdk.AccAddress, fingerprint string) error
 	GetTrustedDevice(ctx sdk.Context, address sdk.AccAddress, fingerprint string) (*types.TrustedDevice, bool)
 	GetTrustedDevices(ctx sdk.Context, address sdk.AccAddress) []types.TrustedDevice
 	IsTrustedDevice(ctx sdk.Context, address sdk.AccAddress, fingerprint string) bool
+	ValidateTrustToken(ctx sdk.Context, address sdk.AccAddress, fingerprint string, token string) bool
 
 	// Sensitive transaction config
 	SetSensitiveTxConfig(ctx sdk.Context, config *types.SensitiveTxConfig) error
@@ -1134,19 +1137,34 @@ type trustedDeviceStore struct {
 }
 
 // AddTrustedDevice adds a trusted device for an account
-func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) error {
+// Returns the plaintext trust token that should be sent to the client
+func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) (string, error) {
 	params := k.GetParams(ctx)
 
 	// Check max trusted devices
 	existing := k.GetTrustedDevices(ctx, address)
 	if safeUint32FromInt(len(existing)) >= params.MaxTrustedDevices {
-		return types.ErrMaxTrustedDevicesReached.Wrapf("maximum %d trusted devices allowed", params.MaxTrustedDevices)
+		return "", types.ErrMaxTrustedDevicesReached.Wrapf("maximum %d trusted devices allowed", params.MaxTrustedDevices)
 	}
 
 	now := ctx.BlockTime().Unix()
 	device.TrustExpiresAt = now + params.TrustedDeviceTTL
 	device.FirstSeenAt = now
 	device.LastSeenAt = now
+
+	// Generate trust token (32 random bytes, base64 encoded)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", types.ErrInvalidEnrollment.Wrapf("failed to generate trust token: %v", err)
+	}
+	trustToken := base64.RawURLEncoding.EncodeToString(tokenBytes)
+
+	// Hash the token with bcrypt before storing
+	hashedToken, err := bcrypt.GenerateFromPassword([]byte(trustToken), bcrypt.DefaultCost)
+	if err != nil {
+		return "", types.ErrInvalidEnrollment.Wrapf("failed to hash trust token: %v", err)
+	}
+	device.TrustTokenHash = string(hashedToken)
 
 	store := ctx.KVStore(k.skey)
 	key := types.TrustedDeviceKey(address, device.Fingerprint)
@@ -1165,7 +1183,7 @@ func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device
 		LastUsedAt:     td.LastUsedAt,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	store.Set(key, bz)
@@ -1179,7 +1197,7 @@ func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device
 		),
 	)
 
-	return nil
+	return trustToken, nil
 }
 
 // RemoveTrustedDevice removes a trusted device
@@ -1256,6 +1274,28 @@ func (k Keeper) IsTrustedDevice(ctx sdk.Context, address sdk.AccAddress, fingerp
 
 	now := ctx.BlockTime().Unix()
 	return device.DeviceInfo.TrustExpiresAt > now
+}
+
+// ValidateTrustToken validates a trust token for a trusted device
+func (k Keeper) ValidateTrustToken(ctx sdk.Context, address sdk.AccAddress, fingerprint string, token string) bool {
+	device, found := k.GetTrustedDevice(ctx, address, fingerprint)
+	if !found {
+		return false
+	}
+
+	// Check if device trust has expired
+	now := ctx.BlockTime().Unix()
+	if device.DeviceInfo.TrustExpiresAt > 0 && now > device.DeviceInfo.TrustExpiresAt {
+		return false
+	}
+
+	// Validate token against stored hash
+	if device.DeviceInfo.TrustTokenHash == "" {
+		return false
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(device.DeviceInfo.TrustTokenHash), []byte(token))
+	return err == nil
 }
 
 // ============================================================================
@@ -1384,7 +1424,7 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 	for _, device := range gs.TrustedDevices {
 		address, _ := sdk.AccAddressFromBech32(device.AccountAddress)
 		info := device.DeviceInfo
-		if err := k.AddTrustedDevice(ctx, address, &info); err != nil {
+		if _, err := k.AddTrustedDevice(ctx, address, &info); err != nil {
 			panic(err)
 		}
 	}
