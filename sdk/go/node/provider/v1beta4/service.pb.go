@@ -81,11 +81,11 @@ type MsgClient interface {
 	GenerateDomainVerificationToken(ctx context.Context, in *MsgGenerateDomainVerificationToken, opts ...grpc.CallOption) (*MsgGenerateDomainVerificationTokenResponse, error)
 	// VerifyProviderDomain verifies a provider's domain via DNS TXT record.
 	VerifyProviderDomain(ctx context.Context, in *MsgVerifyProviderDomain, opts ...grpc.CallOption) (*MsgVerifyProviderDomainResponse, error)
-	// RequestDomainVerification requests domain verification with specified method.
+	// RequestDomainVerification requests a verification token for a provider domain.
 	RequestDomainVerification(ctx context.Context, in *MsgRequestDomainVerification, opts ...grpc.CallOption) (*MsgRequestDomainVerificationResponse, error)
-	// ConfirmDomainVerification confirms domain verification with off-chain proof.
+	// ConfirmDomainVerification confirms a verification proof for a provider domain.
 	ConfirmDomainVerification(ctx context.Context, in *MsgConfirmDomainVerification, opts ...grpc.CallOption) (*MsgConfirmDomainVerificationResponse, error)
-	// RevokeDomainVerification revokes a provider's domain verification.
+	// RevokeDomainVerification revokes a provider domain verification.
 	RevokeDomainVerification(ctx context.Context, in *MsgRevokeDomainVerification, opts ...grpc.CallOption) (*MsgRevokeDomainVerificationResponse, error)
 }
 
@@ -253,7 +253,7 @@ func _Msg_UpdateProvider_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: "/virtengine.provider.v1beta4.Msg/UpdateProvider",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).UpdateProvider(ctx, req.(*MsgUpdateProvider))
+		return srv.(MsgServer).UpdateProvider(ctx, req.(*MsgUpdateProvider))  
 	}
 	return interceptor(ctx, in, info, handler)
 }

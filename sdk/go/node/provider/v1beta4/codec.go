@@ -37,6 +37,8 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgCreateProvider{},
 		&MsgUpdateProvider{},
 		&MsgDeleteProvider{},
+		&MsgGenerateDomainVerificationToken{},
+		&MsgVerifyProviderDomain{},
 		&MsgRequestDomainVerification{},
 		&MsgConfirmDomainVerification{},
 		&MsgRevokeDomainVerification{},
