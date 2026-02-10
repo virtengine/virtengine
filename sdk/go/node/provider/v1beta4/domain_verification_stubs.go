@@ -65,6 +65,32 @@ func (*MsgRevokeDomainVerification) ProtoMessage()      {}
 // MsgRevokeDomainVerificationResponse is the revoke response.
 type MsgRevokeDomainVerificationResponse struct{}
 
+func (msg *MsgRequestDomainVerificationResponse) Reset() {
+	*msg = MsgRequestDomainVerificationResponse{}
+}
+
+func (*MsgRequestDomainVerificationResponse) ProtoMessage() {}
+
+func (msg *MsgConfirmDomainVerificationResponse) Reset() {
+	*msg = MsgConfirmDomainVerificationResponse{}
+}
+
+func (msg *MsgConfirmDomainVerificationResponse) String() string {
+	return "MsgConfirmDomainVerificationResponse"
+}
+
+func (*MsgConfirmDomainVerificationResponse) ProtoMessage() {}
+
+func (msg *MsgRevokeDomainVerificationResponse) Reset() {
+	*msg = MsgRevokeDomainVerificationResponse{}
+}
+
+func (msg *MsgRevokeDomainVerificationResponse) String() string {
+	return "MsgRevokeDomainVerificationResponse"
+}
+
+func (*MsgRevokeDomainVerificationResponse) ProtoMessage() {}
+
 // ValidateBasic validates MsgRequestDomainVerification.
 func (msg *MsgRequestDomainVerification) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
@@ -172,23 +198,23 @@ func (msg *MsgRevokeDomainVerification) Route() string { return RouterKey }
 
 // EventProviderDomainVerificationRequested is emitted when verification is requested.
 type EventProviderDomainVerificationRequested struct {
-	Owner  string `json:"owner"`
-	Domain string `json:"domain"`
-	Method string `json:"method"`
-	Token  string `json:"token"`
+	Owner  string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
+	Method string `protobuf:"bytes,3,opt,name=method,proto3" json:"method,omitempty"`
+	Token  string `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
 }
 
 // EventProviderDomainVerificationConfirmed is emitted when verification is confirmed.
 type EventProviderDomainVerificationConfirmed struct {
-	Owner  string `json:"owner"`
-	Domain string `json:"domain"`
-	Method string `json:"method"`
+	Owner  string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
+	Method string `protobuf:"bytes,3,opt,name=method,proto3" json:"method,omitempty"`
 }
 
 // EventProviderDomainVerificationRevoked is emitted when verification is revoked.
 type EventProviderDomainVerificationRevoked struct {
-	Owner  string `json:"owner"`
-	Domain string `json:"domain"`
+	Owner  string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
 }
 
 func (*EventProviderDomainVerificationRequested) Reset() {}
@@ -226,6 +252,9 @@ func init() {
 	if msgTypeRevokeDomainVerification == "" {
 		msgTypeRevokeDomainVerification = "revoke_domain_verification"
 	}
+	proto.RegisterType((*EventProviderDomainVerificationRequested)(nil), "virtengine.provider.v1beta4.EventProviderDomainVerificationRequested")
+	proto.RegisterType((*EventProviderDomainVerificationConfirmed)(nil), "virtengine.provider.v1beta4.EventProviderDomainVerificationConfirmed")
+	proto.RegisterType((*EventProviderDomainVerificationRevoked)(nil), "virtengine.provider.v1beta4.EventProviderDomainVerificationRevoked")
 }
 
 // String implements fmt.Stringer for responses to avoid nil pointer logging.

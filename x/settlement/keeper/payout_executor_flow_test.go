@@ -268,10 +268,11 @@ func (s *KeeperTestSuite) TestReconcilePayoutAfterRestart() {
 		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
 		FiatCurrency:      "USD",
 		PaymentMethod:     "bank_transfer",
-		Destination:       "acct-token",
+		DestinationHash:   types.HashDestination("acct-token"),
 		SlippageTolerance: 0.01,
 		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
 		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
 	}
 
 	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
@@ -285,7 +286,7 @@ func (s *KeeperTestSuite) TestReconcilePayoutAfterRestart() {
 	require.Equal(t, types.FiatConversionStateOffRampPending, conversion.State)
 	require.Equal(t, types.PayoutStateProcessing, payout.State)
 
-	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, "authority")
+	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, "authority", mockEncryptionKeeper{})
 	restarted.SetDexSwapExecutor(swapExec)
 	restarted.SetOffRampBridge(bridge)
 

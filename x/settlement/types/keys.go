@@ -136,6 +136,10 @@ var (
 	// PrefixSettlementRateQueue stores queued settlement rate locks
 	// Key: PrefixSettlementRateQueue | settlement_id -> SettlementRateLock
 	PrefixSettlementRateQueue = []byte{0x1F}
+
+	// PrefixMigrationAudit stores migration audit entries
+	// Key: PrefixMigrationAudit | record_type | record_id -> MigrationAuditEntry
+	PrefixMigrationAudit = []byte{0x20}
 )
 
 // ParamsKey returns the store key for module parameters
@@ -201,6 +205,16 @@ func SettlementByOrderKey(orderID string) []byte {
 	key := make([]byte, 0, len(PrefixSettlementByOrder)+len(orderID))
 	key = append(key, PrefixSettlementByOrder...)
 	key = append(key, []byte(orderID)...)
+	return key
+}
+
+// MigrationAuditKey returns the store key for a migration audit entry.
+func MigrationAuditKey(recordType, recordID string) []byte {
+	key := make([]byte, 0, len(PrefixMigrationAudit)+len(recordType)+len(recordID)+2)
+	key = append(key, PrefixMigrationAudit...)
+	key = append(key, []byte(recordType)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(recordID)...)
 	return key
 }
 

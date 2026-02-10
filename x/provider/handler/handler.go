@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -12,6 +14,12 @@ import (
 	"github.com/virtengine/virtengine/x/provider/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )
+
+type domainVerificationMsgServer interface {
+	RequestDomainVerification(context.Context, *types.MsgRequestDomainVerification) (*types.MsgRequestDomainVerificationResponse, error)
+	ConfirmDomainVerification(context.Context, *types.MsgConfirmDomainVerification) (*types.MsgConfirmDomainVerificationResponse, error)
+	RevokeDomainVerification(context.Context, *types.MsgRevokeDomainVerification) (*types.MsgRevokeDomainVerificationResponse, error)
+}
 
 // NewHandler returns a handler for "provider" type messages.
 func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeeper.IKeeper, mfakeeper mfakeeper.IKeeper) baseapp.MsgServiceHandler {
@@ -30,9 +38,33 @@ func NewHandler(keeper keeper.IKeeper, mkeeper mkeeper.IKeeper, vkeeper veidkeep
 		case *types.MsgDeleteProvider:
 			res, err := ms.DeleteProvider(ctx, msg)
 			return sdk.WrapServiceResult(ctx, res, err)
+		case *types.MsgRequestDomainVerification:
+			server, ok := ms.(domainVerificationMsgServer)
+			if !ok {
+				return nil, sdkerrors.ErrUnknownRequest.Wrapf("domain verification server unavailable for message type: %T", msg)
+			}
+			res, err := server.RequestDomainVerification(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
+		case *types.MsgConfirmDomainVerification:
+			server, ok := ms.(domainVerificationMsgServer)
+			if !ok {
+				return nil, sdkerrors.ErrUnknownRequest.Wrapf("domain verification server unavailable for message type: %T", msg)
+			}
+			res, err := server.ConfirmDomainVerification(ctx, msg)
+			if err != nil {
+				return &sdk.Result{Events: ctx.EventManager().ABCIEvents()}, err
+			}
+			return sdk.WrapServiceResult(ctx, res, nil)
+		case *types.MsgRevokeDomainVerification:
+			server, ok := ms.(domainVerificationMsgServer)
+			if !ok {
+				return nil, sdkerrors.ErrUnknownRequest.Wrapf("domain verification server unavailable for message type: %T", msg)
+			}
+			res, err := server.RevokeDomainVerification(ctx, msg)
+			return sdk.WrapServiceResult(ctx, res, err)
 
 		default:
-			return nil, sdkerrors.ErrUnknownRequest.Wrapf("unrecognized bank message type: %T", msg)
+			return nil, sdkerrors.ErrUnknownRequest.Wrapf("unrecognized provider message type: %T", msg)
 		}
 	}
 }
