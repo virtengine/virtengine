@@ -25,6 +25,7 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgRegisterRecipientKey{}, "encryption/MsgRegisterRecipientKey")
 	legacy.RegisterAminoMsg(cdc, &MsgRevokeRecipientKey{}, "encryption/MsgRevokeRecipientKey")
 	legacy.RegisterAminoMsg(cdc, &MsgUpdateKeyLabel{}, "encryption/MsgUpdateKeyLabel")
+	legacy.RegisterAminoMsg(cdc, &MsgRotateKey{}, "encryption/MsgRotateKey")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
@@ -33,6 +34,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgRegisterRecipientKey{},
 		&MsgRevokeRecipientKey{},
 		&MsgUpdateKeyLabel{},
+		&MsgRotateKey{},
 	)
 	msgservice.RegisterMsgServiceDesc(registry, &encryptionv1.Msg_serviceDesc)
 }

@@ -81,11 +81,11 @@ type MsgClient interface {
 	GenerateDomainVerificationToken(ctx context.Context, in *MsgGenerateDomainVerificationToken, opts ...grpc.CallOption) (*MsgGenerateDomainVerificationTokenResponse, error)
 	// VerifyProviderDomain verifies a provider's domain via DNS TXT record.
 	VerifyProviderDomain(ctx context.Context, in *MsgVerifyProviderDomain, opts ...grpc.CallOption) (*MsgVerifyProviderDomainResponse, error)
-	// RequestDomainVerification requests a verification token for a provider domain.
+	// RequestDomainVerification requests domain verification with specified method.
 	RequestDomainVerification(ctx context.Context, in *MsgRequestDomainVerification, opts ...grpc.CallOption) (*MsgRequestDomainVerificationResponse, error)
-	// ConfirmDomainVerification confirms a verification proof for a provider domain.
+	// ConfirmDomainVerification confirms domain verification with off-chain proof.
 	ConfirmDomainVerification(ctx context.Context, in *MsgConfirmDomainVerification, opts ...grpc.CallOption) (*MsgConfirmDomainVerificationResponse, error)
-	// RevokeDomainVerification revokes a provider domain verification.
+	// RevokeDomainVerification revokes a provider's domain verification.
 	RevokeDomainVerification(ctx context.Context, in *MsgRevokeDomainVerification, opts ...grpc.CallOption) (*MsgRevokeDomainVerificationResponse, error)
 }
 
