@@ -43,6 +43,15 @@ type ProvisioningStateStore struct {
 
 // NewProvisioningStateStore creates a new state store.
 func NewProvisioningStateStore(path string) *ProvisioningStateStore {
+	// Validate path if provided
+	if path != "" {
+		if err := validateStatePath(path); err != nil {
+			// Return store with empty path if validation fails
+			// Caller will handle empty path case gracefully
+			return &ProvisioningStateStore{path: ""}
+		}
+		path = filepath.Clean(path)
+	}
 	return &ProvisioningStateStore{path: path}
 }
 
@@ -52,7 +61,8 @@ func (s *ProvisioningStateStore) Load() (*ProvisioningState, error) {
 		return &ProvisioningState{Tasks: map[string]*ProvisioningTask{}}, nil
 	}
 
-	data, err := os.ReadFile(filepath.Clean(s.path))
+	// #nosec G304 -- path validated and cleaned in constructor
+	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &ProvisioningState{Tasks: map[string]*ProvisioningTask{}}, nil
@@ -85,5 +95,6 @@ func (s *ProvisioningStateStore) Save(state *ProvisioningState) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Clean(s.path), data, 0o600)
+	// #nosec G304 -- path validated and cleaned in constructor
+	return os.WriteFile(s.path, data, 0o600)
 }

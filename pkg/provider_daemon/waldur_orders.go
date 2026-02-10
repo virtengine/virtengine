@@ -111,6 +111,7 @@ func (s *WaldurOrderStore) Save(state *WaldurOrderState) error {
 	}
 
 	tmp := s.path + ".tmp"
+	// #nosec G304 -- path validated in constructor and cleaned
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write order state tmp: %w", err)
 	}
