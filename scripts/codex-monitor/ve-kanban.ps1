@@ -1170,6 +1170,36 @@ function Invoke-CLI {
     $rest = if ($Arguments.Count -gt 1) { $Arguments[1..($Arguments.Count - 1)] } else { @() }
 
     switch ($command) {
+        "create" {
+            $title = $null
+            $description = $null
+            $descFile = $null
+            $status = "todo"
+            for ($i = 0; $i -lt $rest.Count; $i++) {
+                if ($rest[$i] -in @("--title", "-t") -and ($i + 1) -lt $rest.Count) { $title = $rest[$i + 1] }
+                if ($rest[$i] -in @("--description", "--desc", "-d") -and ($i + 1) -lt $rest.Count) { $description = $rest[$i + 1] }
+                if ($rest[$i] -in @("--description-file", "--desc-file") -and ($i + 1) -lt $rest.Count) { $descFile = $rest[$i + 1] }
+                if ($rest[$i] -in @("--status", "-s") -and ($i + 1) -lt $rest.Count) { $status = $rest[$i + 1] }
+            }
+            if (-not $description -and $descFile) {
+                try { $description = Get-Content -Path $descFile -Raw }
+                catch { Write-Error "Failed to read description file: $descFile"; return }
+            }
+            if (-not $title -or -not $description) {
+                Write-Error "Usage: ve-kanban create --title <title> --description <markdown> [--status todo]"
+                return
+            }
+            $result = Create-VKTask -Title $title -Description $description -Status $status
+            if ($result -and $result.id) {
+                Write-Host "  ✓ Task created: $($result.id) — $title" -ForegroundColor Green
+            }
+            elseif ($result) {
+                Write-Host "  ✓ Task created: $title" -ForegroundColor Green
+            }
+            else {
+                Write-Error "Failed to create task."
+            }
+        }
         "list" {
             $status = "todo"
             for ($i = 0; $i -lt $rest.Count; $i++) {
@@ -1279,6 +1309,8 @@ function Show-Usage {
   ═════════════════════════════════
 
   COMMANDS:
+    create --title <title> --description <md> [--status todo]
+                                  Create a new task
     list [--status <status>]        List tasks (default: todo)
     status                          Show dashboard (active attempts + queues)
     status --verbose | -v            Show dashboard with idle minutes

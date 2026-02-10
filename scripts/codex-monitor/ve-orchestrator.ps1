@@ -3032,6 +3032,37 @@ function Test-GitRebaseInProgress {
     return ((Test-Path (Join-Path $gitDirStr "rebase-merge")) -or (Test-Path (Join-Path $gitDirStr "rebase-apply")))
 }
 
+function Test-GitWorktreeClean {
+    <#
+    .SYNOPSIS Run git status and verify the working tree is clean.
+    .DESCRIPTION Logs a short git status output and returns $true when clean.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$RepoPath,
+        [string]$Label = $RepoPath
+    )
+
+    $statusShort = git -C $RepoPath status --short --branch 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "git status failed for ${Label}: $statusShort" -Level "WARN"
+        return $false
+    }
+    if ($statusShort) {
+        Write-Log "git status [$Label]: $statusShort" -Level "DEBUG"
+    }
+    else {
+        Write-Log "git status [$Label]: (no output)" -Level "DEBUG"
+    }
+
+    $porcelain = git -C $RepoPath status --porcelain 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "git status --porcelain failed for ${Label}: $porcelain" -Level "WARN"
+        return $false
+    }
+    if ($porcelain) { return $false }
+    return $true
+}
+
 function Invoke-DirectRebase {
     <#
     .SYNOPSIS Smart rebase of a PR branch onto its base branch.
@@ -3066,11 +3097,12 @@ function Invoke-DirectRebase {
             git -C $worktreePath rebase --abort 2>&1 | Out-Null
         }
         # ── Guard 4: Check for dirty working tree ───────────────────────
-        $status = git -C $worktreePath status --porcelain 2>&1
-        if ($status) {
-            Write-Log "Worktree $worktreePath has uncommitted changes — cannot rebase" -Level "WARN"
-            Set-RebaseCooldown -Branch $Branch -CooldownMinutes 15
+        if (-not (Test-GitWorktreeClean -RepoPath $worktreePath -Label $worktreePath)) {
+            Write-Log "Worktree $worktreePath has uncommitted changes — falling back to VK API rebase" -Level "INFO"
+            # Don't block background agents — fall back to VK API rebase instead
+            # This allows background agents to continue working even when user has local changes
             if ($AttemptId) { return Rebase-VKAttempt -AttemptId $AttemptId }
+            # No AttemptId means this was called manually — skip for now
             return $false
         }
         $useWorktree = $true
@@ -5047,10 +5079,21 @@ function Invoke-DownstreamRebase {
             if ($worktreePath -and (Test-Path $worktreePath)) {
                 # Rebase within the worktree to avoid "already used by worktree" errors
                 Write-Log "Rebasing within worktree: $worktreePath" -Level "DEBUG"
+                if (-not (Test-GitWorktreeClean -RepoPath $worktreePath -Label $worktreePath)) {
+                    $failed++
+                    Write-Log "Rebase skipped for $shortId — worktree has uncommitted changes" -Level "WARN"
+                    continue
+                }
                 $result = git -C $worktreePath rebase $UpstreamBranch 2>&1
             }
             else {
                 # No worktree exists, use standard rebase
+                $repoPath = (Get-Location).Path
+                if (-not (Test-GitWorktreeClean -RepoPath $repoPath -Label $repoPath)) {
+                    $failed++
+                    Write-Log "Rebase skipped for $shortId — repo has uncommitted changes" -Level "WARN"
+                    continue
+                }
                 $result = & git rebase $UpstreamBranch $branch 2>&1
             }
 

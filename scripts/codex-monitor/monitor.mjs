@@ -1,6 +1,7 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   readFileSync,
   watch,
   writeFileSync,
@@ -42,7 +43,6 @@ import {
   setPrimaryAgent,
   getPrimaryAgentName,
   switchPrimaryAgent,
-  resetPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -119,6 +119,40 @@ import { VkLogStream } from "./vk-log-stream.mjs";
 import { createAnomalyDetector } from "./anomaly-detector.mjs";
 import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
+const ANOMALY_SIGNAL_PATH = resolve(__dirname, "..", ".cache", "anomaly-signals.json");
+
+/**
+ * Write an anomaly signal to the shared signal file for the orchestrator to pick up.
+ * The orchestrator reads this file in Process-AnomalySignals and acts accordingly.
+ */
+function writeAnomalySignal(anomaly) {
+  try {
+    const dir = resolve(__dirname, "..", ".cache");
+    mkdirSync(dir, { recursive: true });
+    let signals = [];
+    try {
+      const raw = readFileSync(ANOMALY_SIGNAL_PATH, "utf8");
+      signals = JSON.parse(raw);
+      if (!Array.isArray(signals)) signals = [];
+    } catch { /* file doesn't exist yet */ }
+    signals.push({
+      type: anomaly.type,
+      severity: anomaly.severity,
+      action: anomaly.action,
+      shortId: anomaly.shortId,
+      processId: anomaly.processId,
+      message: anomaly.message,
+      timestamp: new Date().toISOString(),
+    });
+    // Cap at 50 signals to prevent unbounded growth
+    if (signals.length > 50) signals = signals.slice(-50);
+    writeFileSync(ANOMALY_SIGNAL_PATH, JSON.stringify(signals, null, 2));
+  } catch (err) {
+    console.warn(`[anomaly-detector] writeAnomalySignal failed: ${err.message}`);
+  }
+}
 
 // ── Configure logging before anything else ──────────────────────────────────
 configureFromArgs(process.argv.slice(2));
@@ -1544,29 +1578,14 @@ function ensureVkLogStream() {
           `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
         );
 
-        // Act on kill/restart actions — kill the specific process, NOT the whole monitor.
-        // Circuit breaker is reserved for actual repeated monitor crashes, not per-process anomalies.
+        // Act on kill/restart actions — write signal file for the orchestrator
+        // instead of directly killing WebSocket streams or resetting agents,
+        // since those actions are ineffective for VK workspace agents.
         if (anomaly.action === "kill" || anomaly.action === "restart") {
           console.warn(
-            `[anomaly-detector] executing action="${anomaly.action}" for ${anomaly.type} on process ${anomaly.shortId}`,
+            `[anomaly-detector] writing signal for action="${anomaly.action}" ${anomaly.type} on process ${anomaly.shortId}`,
           );
-
-          // 1. Kill the specific VK execution process log stream
-          if (vkLogStream && anomaly.processId) {
-            vkLogStream.killProcess(anomaly.processId, `anomaly-detector: ${anomaly.type}`);
-          }
-
-          // 2. Reset the primary agent session only for truly fatal anomalies
-          //    (token overflow, stream death) — NOT for model-not-supported or push loops
-          //    since those are external/transient issues.
-          if (
-            anomaly.type === "TOKEN_OVERFLOW" ||
-            anomaly.type === "STREAM_DEATH"
-          ) {
-            void resetPrimaryAgent().catch((err) => {
-              console.warn(`[anomaly-detector] resetPrimaryAgent failed: ${err.message}`);
-            });
-          }
+          writeAnomalySignal(anomaly);
         }
       },
       notify: (text, options) => {
@@ -2546,6 +2565,86 @@ async function updateTaskStatus(taskId, newStatus) {
   // Clear recovery caches — task status changed, so it needs re-evaluation
   if (ok) clearRecoveryCaches(taskId);
   return ok;
+}
+
+function parseTaskTimestamp(value) {
+  if (!value) return null;
+  const raw =
+    value.created_at ||
+    value.createdAt ||
+    value.created ||
+    value.updated_at ||
+    value.updatedAt ||
+    value.updated ||
+    value.started_at ||
+    value.startedAt ||
+    value;
+  if (!raw) return null;
+  const ts = Date.parse(raw);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function isPlannerTaskData(task) {
+  if (!task) return false;
+  const title = String(task.title || "").toLowerCase();
+  const desc = String(task.description || task.body || "").toLowerCase();
+  if (title.includes("plan next tasks") || title.includes("plan next phase")) {
+    return true;
+  }
+  if (title.includes("task planner")) {
+    return true;
+  }
+  return (
+    desc.includes("task planner — auto-created by codex-monitor") ||
+    desc.includes("task planner - auto-created by codex-monitor")
+  );
+}
+
+async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
+  const projectId =
+    taskData?.project_id ||
+    taskData?.projectId ||
+    attemptInfo?.project_id ||
+    attemptInfo?.projectId ||
+    (await findVkProjectId());
+  if (!projectId) {
+    return { completed: false, reason: "project_not_found" };
+  }
+  const tasksRes = await fetchVk(`/api/tasks?project_id=${projectId}`);
+  const tasks = Array.isArray(tasksRes?.data)
+    ? tasksRes.data
+    : Array.isArray(tasksRes?.tasks)
+      ? tasksRes.tasks
+      : Array.isArray(tasksRes)
+        ? tasksRes
+        : [];
+  const sinceMs =
+    parseTaskTimestamp(taskData) ||
+    parseTaskTimestamp(attemptInfo) ||
+    Date.now();
+  const candidates = tasks.filter((t) => {
+    if (!t || t.id === taskData?.id) return false;
+    if (isPlannerTaskData(t)) return false;
+    const createdMs = parseTaskTimestamp(t);
+    return createdMs && createdMs > sinceMs;
+  });
+  const backlogCandidates = candidates.filter((t) => {
+    if (!t?.status) return true;
+    const status = String(t.status).toLowerCase();
+    return status === "todo" || status === "inprogress" || status === "inreview";
+  });
+  const finalCandidates =
+    backlogCandidates.length > 0 ? backlogCandidates : candidates;
+  return {
+    completed: finalCandidates.length > 0,
+    createdCount: finalCandidates.length,
+    projectId,
+    sinceMs,
+    sampleTitles: finalCandidates
+      .slice(0, 3)
+      .map((t) => t.title || t.id)
+      .filter(Boolean),
+  };
 }
 
 /**
@@ -4653,6 +4752,7 @@ async function smartPRFlow(attemptId, shortId, status) {
     // ── Step 0: Check if task/branch is already merged ───────────
     // Prevents infinite retry loops for tasks that were completed in previous sessions
     const attemptInfo = await getAttemptInfo(attemptId);
+    let taskData = null;
     if (attemptInfo?.branch) {
       if (mergedBranchCache.has(attemptInfo.branch)) {
         console.log(
@@ -4681,10 +4781,9 @@ async function smartPRFlow(attemptId, shortId, status) {
     if (attemptInfo?.task_id) {
       try {
         const taskRes = await fetchVk(`/api/tasks/${attemptInfo.task_id}`);
-        const desc = (
-          taskRes?.data?.description ||
-          taskRes?.data?.body ||
-          ""
+        taskData = taskRes?.data || taskRes || null;
+        const desc = String(
+          taskData?.description || taskData?.body || "",
         ).toLowerCase();
         const completionSignals = [
           "superseded by",
@@ -4702,6 +4801,39 @@ async function smartPRFlow(attemptId, shortId, status) {
           );
           void updateTaskStatus(attemptInfo.task_id, "done");
           await archiveAttempt(attemptId);
+          return;
+        }
+        if (isPlannerTaskData(taskData)) {
+          const verify = await verifyPlannerTaskCompletion(
+            taskData,
+            attemptInfo,
+          );
+          if (verify.completed) {
+            console.log(
+              `[monitor] ${tag}: planner task verified (${verify.createdCount} new task(s)) — marking done`,
+            );
+            void updateTaskStatus(attemptInfo.task_id, "done");
+            await archiveAttempt(attemptId);
+            if (telegramToken && telegramChatId) {
+              const suffix = verify.sampleTitles?.length
+                ? ` Examples: ${verify.sampleTitles.join(", ")}`
+                : "";
+              void sendTelegramMessage(
+                `✅ Task planner verified: ${verify.createdCount} new task(s) detected.${suffix}`,
+              );
+            }
+            return;
+          }
+          console.warn(
+            `[monitor] ${tag}: planner task incomplete — no new backlog tasks detected`,
+          );
+          void updateTaskStatus(attemptInfo.task_id, "todo");
+          await archiveAttempt(attemptId);
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              "⚠️ Task planner incomplete: no new backlog tasks detected. Returned to todo.",
+            );
+          }
           return;
         }
       } catch {
@@ -4764,15 +4896,18 @@ async function smartPRFlow(attemptId, shortId, status) {
 
     // ── Resolve target branch (task-level upstream overrides) ───
     const attempt = await getAttemptInfo(attemptId);
-    let taskData = null;
-    if (attempt?.task_id) {
+    if (!taskData && attempt?.task_id) {
       try {
         const taskRes = await fetchVk(`/api/tasks/${attempt.task_id}`);
         if (taskRes?.success && taskRes.data) {
           taskData = taskRes.data;
-          attempt.task_title = attempt.task_title || taskRes.data.title;
+        } else if (taskRes?.data || taskRes) {
+          taskData = taskRes.data || taskRes;
+        }
+        if (taskData) {
+          attempt.task_title = attempt.task_title || taskData.title;
           attempt.task_description =
-            taskRes.data.description || taskRes.data.body || "";
+            taskData.description || taskData.body || "";
         }
       } catch {
         /* best effort */

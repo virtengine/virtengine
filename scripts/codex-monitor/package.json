@@ -112,6 +112,7 @@
     "task-archiver.mjs",
     "vk-log-stream.mjs",
     "workspace-monitor.mjs",
+    "pr-cleanup-daemon.mjs",
     "lib/logger.mjs",
     ".env.example",
     "codex-monitor.config.example.json",

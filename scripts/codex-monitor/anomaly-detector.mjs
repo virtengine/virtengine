@@ -105,6 +105,7 @@ const DEFAULT_THRESHOLDS = {
  * @property {number} firstLineAt
  * @property {number} lastLineAt
  * @property {string|null} lastToolTitle - Last ToolCall title seen
+ * @property {number} lastToolCallFingerprint - DJB2 hash of last tool call (minus toolCallId)
  * @property {number} consecutiveSameToolCount - How many times in a row
  * @property {number} rebaseCount - git rebase --continue count
  * @property {number} rebaseAbortCount
@@ -137,6 +138,7 @@ function createProcessState(processId) {
     firstLineAt: now,
     lastLineAt: now,
     lastToolTitle: null,
+    lastToolCallFingerprint: 0,
     consecutiveSameToolCount: 0,
     rebaseCount: 0,
     rebaseAbortCount: 0,
@@ -175,6 +177,43 @@ const RE_REBASE_ABORT = /git rebase --abort/;
 
 // P2: Tool call (Copilot format) — extract title
 const RE_TOOL_CALL_TITLE = /"ToolCall"\s*:\s*\{[^}]*"title"\s*:\s*"([^"]+)"/;
+
+// P2: Strip toolCallId from tool call lines for content fingerprinting
+// toolCallId changes every call, so we strip it to compare actual content
+const RE_TOOL_CALL_ID = /"toolCallId"\s*:\s*"[^"]*"\s*,?\s*/g;
+
+// Tools that are inherently iterative — agents legitimately call these many
+// times on the same file during normal development (edit→test→edit cycles).
+// These get multiplied thresholds to avoid false-positive kill signals.
+const ITERATIVE_TOOL_PREFIXES = [
+  "Editing ",       // replace_string_in_file, multi_replace_string_in_file
+  "Reading ",       // read_file
+  "Searching ",     // grep_search, file_search, semantic_search
+  "Listing ",       // list_dir, list_code_usages
+];
+
+/**
+ * Simple DJB2 string hash for fingerprinting tool call lines.
+ * Not cryptographic — just fast dedup.
+ * @param {string} str
+ * @returns {number}
+ */
+function djb2Hash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
+/**
+ * Check if a tool title represents an inherently iterative operation.
+ * @param {string} title
+ * @returns {boolean}
+ */
+function isIterativeTool(title) {
+  return ITERATIVE_TOOL_PREFIXES.some((p) => title.startsWith(p));
+}
 
 // P2: Tool failure (Copilot format)
 const STR_TOOL_FAILED = '"status":"failed"';
@@ -559,6 +598,15 @@ export class AnomalyDetector {
 
   /**
    * P2: Consecutive identical tool calls — agent stuck in a loop.
+   *
+   * KEY: We fingerprint the ENTIRE tool call content (minus the ever-changing
+   * toolCallId) so that different edits to the same file are NOT counted as
+   * a loop. Only truly identical calls (same title, same arguments, same
+   * content) increment the counter.
+   *
+   * Additionally, known-iterative tools (Editing, Reading, Searching) get
+   * multiplied thresholds since agents legitimately call them many times
+   * during normal edit→test→edit development cycles.
    */
   #detectToolCallLoop(line, state) {
     const match = RE_TOOL_CALL_TITLE.exec(line);
@@ -569,35 +617,51 @@ export class AnomalyDetector {
 
     const title = match[1];
 
-    if (title === state.lastToolTitle) {
+    // Fingerprint the full tool call content, stripping the toolCallId which
+    // changes every invocation. Two calls are "identical" only when both the
+    // tool name AND the arguments/content are the same.
+    const stripped = line.replace(RE_TOOL_CALL_ID, "");
+    const fingerprint = djb2Hash(stripped);
+
+    if (fingerprint === state.lastToolCallFingerprint && title === state.lastToolTitle) {
       state.consecutiveSameToolCount++;
     } else {
       state.lastToolTitle = title;
+      state.lastToolCallFingerprint = fingerprint;
       state.consecutiveSameToolCount = 1;
     }
 
     const count = state.consecutiveSameToolCount;
 
-    if (count >= this.#thresholds.toolCallLoopKill) {
+    // Use elevated thresholds for inherently iterative tools (editing, reading)
+    const iterative = isIterativeTool(title);
+    const warnThreshold = iterative
+      ? this.#thresholds.toolCallLoopWarn * 3
+      : this.#thresholds.toolCallLoopWarn;
+    const killThreshold = iterative
+      ? this.#thresholds.toolCallLoopKill * 3
+      : this.#thresholds.toolCallLoopKill;
+
+    if (count >= killThreshold) {
       this.#emit({
         type: AnomalyType.TOOL_CALL_LOOP,
         severity: Severity.HIGH,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Tool call loop detected: "${title}" called ${count}x consecutively`,
-        data: { tool: title, count },
+        message: `Tool call death loop: "${title}" called ${count}x consecutively (identical content)`,
+        data: { tool: title, count, iterative },
         action: "warn",
       });
-    } else if (count >= this.#thresholds.toolCallLoopWarn) {
+    } else if (count >= warnThreshold) {
       this.#emit({
         type: AnomalyType.TOOL_CALL_LOOP,
         severity: Severity.MEDIUM,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Tool call loop: "${title}" called ${count}x consecutively`,
-        data: { tool: title, count },
+        message: `Tool call loop: "${title}" called ${count}x consecutively (identical content)`,
+        data: { tool: title, count, iterative },
         action: "warn",
       });
     }

@@ -615,59 +615,34 @@ export async function resolveConflictsWithSDK({
 /**
  * Launch an SDK agent with FULL ACCESS to resolve conflicts.
  *
+ * CRITICAL: Always creates a FRESH, DEDICATED Codex SDK thread for each
+ * conflict resolution. NEVER reuses the primary agent's session or the
+ * Telegram bot's thread. This prevents:
+ *  - Context contamination from ongoing workspace conversations
+ *  - Collisions with active /background or Telegram agent turns
+ *  - Token overflow from accumulated unrelated context
+ *
  * Priority order:
- *  1. Codex SDK (via primary-agent / codex-shell) — same as /background command.
- *     Uses Thread API with danger-full-access sandbox and full tool access.
+ *  1. Fresh Codex SDK thread — same capabilities as /background but isolated.
  *  2. Codex CLI fallback — `codex exec` with danger-full-access sandbox.
  *  3. Copilot CLI fallback.
- *
- * The SDK path is preferred because it uses the same Thread-based execution
- * that powers the /background Telegram command, which has proven reliable for
- * conflict resolution tasks.
  */
 async function launchSDKAgent(prompt, cwd, timeoutMs) {
-  // ── Primary: Use Codex SDK (same path as /background command) ───────────
-  // This uses codex-shell.mjs → @openai/codex-sdk Thread with:
-  //   sandboxMode: "danger-full-access"
-  //   approvalPolicy: "never"
-  //   workingDirectory: cwd
-  // Which gives the agent full shell, file I/O, and git access.
+  // ── Primary: Fresh Codex SDK thread (NEVER reuse existing session) ──────
+  // Creates a brand new Thread with danger-full-access sandbox, same config
+  // as the /background command, but completely independent from the primary
+  // agent. This guarantees clean context for conflict resolution.
   try {
-    const { execPrimaryPrompt, initPrimaryAgent, getPrimaryAgentName, isPrimaryBusy } =
-      await import("./primary-agent.mjs");
-
-    // Don't compete with an active /background or Telegram agent turn
-    if (isPrimaryBusy()) {
-      console.log(
-        `[sdk-resolve] primary agent is busy — skipping to CLI fallback`,
-      );
-    } else {
-      await initPrimaryAgent();
-      const agentName = getPrimaryAgentName();
-      console.log(
-        `[sdk-resolve] using primary agent (${agentName}) — same as /background`,
-      );
-
-      const result = await execPrimaryPrompt(prompt, { timeoutMs });
-      const output = result?.finalResponse || "";
-      const hasContent = output.length > 0 && !output.includes("SDK disabled");
-
-      if (hasContent) {
-        return {
-          success: true,
-          output,
-          error: null,
-        };
-      }
-
-      // If the primary agent returned empty/disabled, fall through to CLI
-      console.warn(
-        `[sdk-resolve] primary agent returned no actionable output — trying CLI fallback`,
-      );
+    const sdkResult = await launchFreshCodexThread(prompt, cwd, timeoutMs);
+    if (sdkResult.success || sdkResult.output) {
+      return sdkResult;
     }
+    console.warn(
+      `[sdk-resolve] fresh SDK thread returned no actionable output — trying CLI fallback`,
+    );
   } catch (err) {
     console.warn(
-      `[sdk-resolve] primary agent failed: ${err.message} — trying CLI fallback`,
+      `[sdk-resolve] fresh SDK thread failed: ${err.message} — trying CLI fallback`,
     );
   }
 
@@ -686,8 +661,101 @@ async function launchSDKAgent(prompt, cwd, timeoutMs) {
   return {
     success: false,
     output: "",
-    error: "No SDK agent available (primary agent, codex CLI, and copilot CLI all failed)",
+    error: "No SDK agent available (fresh thread, codex CLI, and copilot CLI all failed)",
   };
+}
+
+/**
+ * Create a FRESH, EPHEMERAL Codex SDK thread for conflict resolution.
+ *
+ * This is the same SDK and same settings as codex-shell.mjs's THREAD_OPTIONS,
+ * but creates a brand new instance + thread that is completely independent
+ * from the primary agent. The thread is discarded after use.
+ */
+async function launchFreshCodexThread(prompt, cwd, timeoutMs) {
+  const tag = "[sdk-resolve:fresh-thread]";
+
+  // Load the Codex SDK class
+  let CodexClass;
+  try {
+    const mod = await import("@openai/codex-sdk");
+    CodexClass = mod.Codex;
+  } catch (err) {
+    return {
+      success: false,
+      output: "",
+      error: `Codex SDK not available: ${err.message}`,
+    };
+  }
+
+  // Create a fresh, isolated instance — never shares state with primary agent
+  const codex = new CodexClass();
+
+  // Same settings as codex-shell.mjs THREAD_OPTIONS — full access, no approval
+  const threadOptions = {
+    sandboxMode: "danger-full-access",
+    workingDirectory: cwd,
+    skipGitRepoCheck: true,
+    approvalPolicy: "never",
+  };
+
+  console.log(`${tag} creating fresh thread (cwd: ${cwd})`);
+  const thread = codex.startThread(threadOptions);
+
+  // Set up timeout
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+
+  try {
+    // Run the conflict resolution prompt as a single streamed turn
+    const turn = await thread.runStreamed(prompt, {
+      signal: controller.signal,
+    });
+
+    let finalResponse = "";
+    const allItems = [];
+
+    // Consume the event stream
+    for await (const event of turn.events) {
+      if (event.type === "item.completed") {
+        allItems.push(event.item);
+        if (event.item.type === "agent_message" && event.item.text) {
+          finalResponse += event.item.text + "\n";
+        }
+      }
+    }
+
+    clearTimeout(timer);
+
+    const output = finalResponse.trim() || "(Agent completed with no text output)";
+    const hasCommands = allItems.some(
+      (i) => i.type === "command_execution" || i.type === "file_change",
+    );
+
+    console.log(
+      `${tag} thread completed — ${allItems.length} items, ${hasCommands ? "made changes" : "no changes"}`,
+    );
+
+    return {
+      success: true,
+      output,
+      error: null,
+    };
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") {
+      return {
+        success: false,
+        output: "",
+        error: `timeout after ${timeoutMs}ms`,
+      };
+    }
+    return {
+      success: false,
+      output: "",
+      error: err.message,
+    };
+  }
 }
 
 function isCommandAvailable(cmd) {
