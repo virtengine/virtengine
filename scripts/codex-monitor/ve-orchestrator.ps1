@@ -3794,8 +3794,28 @@ Do NOT create another plan or summary. Write real code.
             continue
         }
 
-        # Do not archive idle attempts; they are already in review
-        Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — awaiting PR" -Level "WARN"
+        # ── Escalate long-idle review attempts ────────────────────────────
+        # After 3x IdleTimeoutMin (180m by default), archive and reset task
+        # so it can be re-attempted instead of sitting forever.
+        $totalIdleMinutes = $idleMinutes
+        $escalationThreshold = $IdleTimeoutMin * 3  # 180m default
+
+        if ($totalIdleMinutes -ge $escalationThreshold) {
+            Write-Log "Attempt $($a.id.Substring(0,8)) idle $([math]::Round($totalIdleMinutes))m (>= ${escalationThreshold}m threshold) — archiving stale review attempt" -Level "ERROR"
+            if (-not $DryRun) {
+                $archived = Try-ArchiveAttempt -AttemptId $a.id -AttemptObject $a
+                if ($archived) {
+                    $tracked.status = "archived"
+                    $tracked.archived_reason = "idle_review_escalation"
+                    Write-Log "Archived stale review attempt $($a.id.Substring(0,8)) — task will be re-attempted" -Level "OK"
+                }
+            }
+        }
+        else {
+            # Not yet at escalation threshold — log warning and let Process-CompletedAttempts handle it
+            $remaining = [math]::Ceiling($escalationThreshold - $totalIdleMinutes)
+            Write-Log "Attempt $($a.id.Substring(0,8)) idle $([math]::Round($totalIdleMinutes))m — awaiting PR (will escalate in ${remaining}m)" -Level "WARN"
+        }
     }
 
     # ── Stale running detection (stateless — crash-restart-safe) ───────────
@@ -4189,6 +4209,8 @@ function Process-CompletedAttempts {
         $attemptId = $entry.Key
         $info = $entry.Value
 
+      try {
+
         # Skip already-completed or manual review
         if ($info.status -in @("merged", "done", "manual_review")) { continue }
 
@@ -4330,7 +4352,8 @@ function Process-CompletedAttempts {
                                 continue
                             }
                             # Start fresh session with original task prompt (no "check git status" nonsense)
-                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message "" -Reason "fresh_task_restart" -IncludeTaskContext:$true
+                            $freshMsg = "This task has no commits yet. Please implement the task completely from scratch — read the task description carefully, implement all required changes, write tests, commit with a conventional commit message, and push to origin."
+                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $freshMsg -Reason "fresh_task_restart" -IncludeTaskContext:$true
                             $info.push_notified = $true
                             continue
                         }
@@ -4922,6 +4945,13 @@ $summary
                 Write-Log "CI status unknown for PR #$($pr.number)" -Level "WARN"
             }
         }
+
+      } catch {
+        # Per-attempt error isolation: one attempt failure must not crash the entire loop
+        $branchName = if ($info -and $info.branch) { $info.branch } else { "unknown" }
+        Write-Log "EXCEPTION processing attempt $($attemptId.Substring(0,8)) (branch: $branchName): $($_.Exception.Message)" -Level "ERROR"
+        Write-Log "Stack trace: $($_.ScriptStackTrace)" -Level "ERROR"
+      }
     }
 
     # Clean up completed attempts from tracking
