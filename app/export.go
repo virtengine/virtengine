@@ -299,7 +299,7 @@ func Setup(opts ...SetupAppOption) *VirtEngineApp {
 
 	appOpts.Set("home", cfg.home)
 
-	r := rand.New(rand.NewSource(0)) // nolint: gosec
+	r := rand.New(rand.NewSource(0)) // #nosec G404 -- deterministic simulation random for genesis export
 	genTime := simulation.RandTimestamp(r)
 
 	appOpts.Set("GenesisTime", genTime)
