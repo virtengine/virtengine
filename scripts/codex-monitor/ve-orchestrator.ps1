@@ -3294,7 +3294,9 @@ function Resolve-MergeConflicts {
     }
 
     # Commit the merge resolution
-    $env:GIT_EDITOR = "true"
+    # Set git editor to colon (POSIX no-op) and disable merge commit editor
+    $env:GIT_EDITOR = ":"
+    $env:GIT_MERGE_AUTOEDIT = "no"
     git commit --no-edit 2>&1 | Out-Null
     $env:GIT_EDITOR = $null
     if ($LASTEXITCODE -ne 0) {

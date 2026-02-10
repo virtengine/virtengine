@@ -153,9 +153,9 @@ class PRCleanupDaemon {
         await this.fixCI(pr);
       }
 
-      // After cleanup, check if ready to merge
+      // After cleanup, check if ready to enable auto-merge
       if (this.config.autoMerge) {
-        await this.attemptAutoMerge(pr);
+        await this.enableAutoMerge(pr);
       }
     } catch (err) {
       this.stats.errors++;
@@ -237,8 +237,49 @@ class PRCleanupDaemon {
   }
 
   /**
+   * Enable auto-merge on a PR if not already enabled
+   * @param {object} pr - PR metadata
+   */
+  async enableAutoMerge(pr) {
+    try {
+      // Check if auto-merge is already enabled
+      const { stdout } = await exec(`gh pr view ${pr.number} --json autoMergeRequest`);
+      const prData = JSON.parse(stdout);
+      
+      if (prData.autoMergeRequest) {
+        console.log(`[pr-cleanup-daemon] PR #${pr.number} already has auto-merge enabled`);
+        return true;
+      }
+
+      // Check if PR is eligible for auto-merge
+      const { stdout: statusOut } = await exec(`gh pr view ${pr.number} --json mergeable,mergeStateStatus`);
+      const status = JSON.parse(statusOut);
+
+      if (status.mergeable === 'CONFLICTING') {
+        console.log(`[pr-cleanup-daemon] PR #${pr.number} has conflicts, cannot enable auto-merge`);
+        return false;
+      }
+
+      if (this.config.dryRun) {
+        console.log(`[pr-cleanup-daemon] [DRY RUN] Would enable auto-merge on PR #${pr.number}`);
+        return true;
+      }
+
+      // Enable auto-merge with squash strategy
+      await exec(`gh pr merge ${pr.number} --auto --squash`);
+      console.log(`[pr-cleanup-daemon] ✓ Enabled auto-merge on PR #${pr.number}`);
+      return true;
+
+    } catch (err) {
+      console.error(`[pr-cleanup-daemon] Failed to enable auto-merge on PR #${pr.number}:`, err.message);
+      return false;
+    }
+  }
+
+  /**
    * Attempt to auto-merge PR if all checks pass
    * @param {object} pr - PR metadata
+   * @deprecated Use enableAutoMerge instead - GitHub will auto-merge when ready
    */
   async attemptAutoMerge(pr) {
     // Re-fetch PR status to check latest state

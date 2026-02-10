@@ -468,6 +468,12 @@ type PaymentIntentRequest struct {
 	// PaymentMethodID is the payment method to use (optional)
 	PaymentMethodID string `json:"payment_method_id,omitempty"`
 
+	// PaymentMethodType is the gateway-specific payment method type (optional)
+	PaymentMethodType string `json:"payment_method_type,omitempty"`
+
+	// PaymentMethodData is the gateway-specific payment method data (optional)
+	PaymentMethodData map[string]interface{} `json:"payment_method_data,omitempty"`
+
 	// Description is a description of the payment
 	Description string `json:"description,omitempty"`
 
