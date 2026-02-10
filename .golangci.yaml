@@ -1,0 +1,41 @@
+---
+version: "2"
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - errcheck
+    - errchkjson
+    - goconst
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - prealloc
+    - staticcheck
+    - unparam
+    - unused
+  # Note: gofmt is a formatter, not a linter. Auto-formatting is handled by
+  # pre-commit hook. golangci-lint only runs actual linters (not formatters).
+  settings:
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - singleCaseSwitch
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - path: (.+)\.go$
+        text: comment on exported (method|function|type|const|var)
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+# Formatting handled by pre-commit hook (.git/hooks/pre-commit)
+# golangci-lint only checks non-auto-fixable issues

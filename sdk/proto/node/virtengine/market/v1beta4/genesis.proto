@@ -1,0 +1,34 @@
+syntax = "proto3";
+package virtengine.market.v1beta4;
+
+import "gogoproto/gogo.proto";
+import "virtengine/market/v1beta4/order.proto";
+import "virtengine/market/v1beta4/lease.proto";
+import "virtengine/market/v1beta4/bid.proto";
+import "virtengine/market/v1beta4/params.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v1beta4";
+
+// GenesisState defines the basic genesis state used by market module
+message GenesisState {
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "params",
+    (gogoproto.moretags) = 'yaml:"params"'
+  ];
+  repeated Order orders = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "orders",
+    (gogoproto.moretags) = 'yaml:"orders"'
+  ];
+  repeated Lease leases = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "leases",
+    (gogoproto.moretags) = 'yaml:"leases"'
+  ];
+  repeated Bid bids = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "bids",
+    (gogoproto.moretags) = 'yaml:"bids"'
+  ];
+}

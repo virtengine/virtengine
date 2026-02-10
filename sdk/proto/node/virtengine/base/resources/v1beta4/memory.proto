@@ -1,0 +1,31 @@
+syntax = "proto3";
+package virtengine.base.resources.v1beta4;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/base/attributes/v1/attribute.proto";
+import "virtengine/base/resources/v1beta4/resourcevalue.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4";
+
+// Memory stores resource quantity and memory attributes.
+message Memory {
+  option (gogoproto.equal) = true;
+
+  // Quantity of memory available, which represents the amount of memory in bytes.
+  // This field is required and must be a non-negative integer.
+  ResourceValue quantity = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "size",
+    (gogoproto.moretags) = "yaml:\"size\""
+  ];
+
+  // Attributes that describe the memory, such as its type and speed.
+  // This field is required and must be a list of Attribute key-values.
+  repeated virtengine.base.attributes.v1.Attribute attributes = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1.Attributes",
+    (gogoproto.jsontag)      = "attributes,omitempty",
+    (gogoproto.moretags)     = "yaml:\"attributes,omitempty\""
+  ];
+}

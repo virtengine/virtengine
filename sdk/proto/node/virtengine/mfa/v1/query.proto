@@ -1,0 +1,408 @@
+syntax = "proto3";
+package virtengine.mfa.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "virtengine/mfa/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/mfa/v1";
+
+// Query defines the gRPC querier service for the mfa module
+service Query {
+  // MFAPolicy returns the MFA policy for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc MFAPolicy(QueryMFAPolicyRequest) returns (QueryMFAPolicyResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/policy/{address}";
+  }
+
+  // FactorEnrollments returns all factor enrollments for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc FactorEnrollments(QueryFactorEnrollmentsRequest) returns (QueryFactorEnrollmentsResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/enrollments/{address}";
+  }
+
+  // FactorEnrollment returns a specific factor enrollment
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc FactorEnrollment(QueryFactorEnrollmentRequest) returns (QueryFactorEnrollmentResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/enrollment/{address}/{factor_id}";
+  }
+
+  // Challenge returns a challenge by ID
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Challenge(QueryChallengeRequest) returns (QueryChallengeResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/challenge/{challenge_id}";
+  }
+
+  // PendingChallenges returns pending challenges for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc PendingChallenges(QueryPendingChallengesRequest) returns (QueryPendingChallengesResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/challenges/{address}";
+  }
+
+  // AuthorizationSession returns an authorization session by ID
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AuthorizationSession(QueryAuthorizationSessionRequest) returns (QueryAuthorizationSessionResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/session/{session_id}";
+  }
+
+  // TrustedDevices returns trusted devices for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc TrustedDevices(QueryTrustedDevicesRequest) returns (QueryTrustedDevicesResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/devices/{address}";
+  }
+
+  // SensitiveTxConfig returns the configuration for a sensitive tx type
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SensitiveTxConfig(QuerySensitiveTxConfigRequest) returns (QuerySensitiveTxConfigResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/sensitive_tx/{transaction_type}";
+  }
+
+  // AllSensitiveTxConfigs returns all sensitive tx configurations
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AllSensitiveTxConfigs(QueryAllSensitiveTxConfigsRequest) returns (QueryAllSensitiveTxConfigsResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/sensitive_tx";
+  }
+
+  // MFARequired checks if MFA is required for a transaction
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc MFARequired(QueryMFARequiredRequest) returns (QueryMFARequiredResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/required/{address}/{transaction_type}";
+  }
+
+  // Params returns the module parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/params";
+  }
+}
+
+// QueryMFAPolicyRequest is the request for QueryMFAPolicy
+message QueryMFAPolicyRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+}
+
+// QueryMFAPolicyResponse is the response for QueryMFAPolicy
+message QueryMFAPolicyResponse {
+  // Policy is the MFA policy for the account
+  MFAPolicy policy = 1 [
+    (gogoproto.jsontag) = "policy",
+    (gogoproto.moretags) = "yaml:\"policy\""
+  ];
+
+  // Found indicates if the policy was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryFactorEnrollmentsRequest is the request for QueryFactorEnrollments
+message QueryFactorEnrollmentsRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // FactorTypeFilter optionally filters by factor type
+  FactorType factor_type_filter = 2 [
+    (gogoproto.jsontag) = "factor_type_filter,omitempty",
+    (gogoproto.moretags) = "yaml:\"factor_type_filter\""
+  ];
+
+  // StatusFilter optionally filters by enrollment status
+  FactorEnrollmentStatus status_filter = 3 [
+    (gogoproto.jsontag) = "status_filter,omitempty",
+    (gogoproto.moretags) = "yaml:\"status_filter\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 4 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryFactorEnrollmentsResponse is the response for QueryFactorEnrollments
+message QueryFactorEnrollmentsResponse {
+  // Enrollments is the list of factor enrollments
+  repeated FactorEnrollment enrollments = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "enrollments",
+    (gogoproto.moretags) = "yaml:\"enrollments\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryFactorEnrollmentRequest is the request for QueryFactorEnrollment
+message QueryFactorEnrollmentRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // FactorID is the ID of the factor to query
+  string factor_id = 2 [
+    (gogoproto.jsontag) = "factor_id",
+    (gogoproto.moretags) = "yaml:\"factor_id\""
+  ];
+}
+
+// QueryFactorEnrollmentResponse is the response for QueryFactorEnrollment
+message QueryFactorEnrollmentResponse {
+  // Enrollment is the factor enrollment
+  FactorEnrollment enrollment = 1 [
+    (gogoproto.jsontag) = "enrollment",
+    (gogoproto.moretags) = "yaml:\"enrollment\""
+  ];
+
+  // Found indicates if the enrollment was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryChallengeRequest is the request for QueryChallenge
+message QueryChallengeRequest {
+  // ChallengeID is the ID of the challenge to query
+  string challenge_id = 1 [
+    (gogoproto.jsontag) = "challenge_id",
+    (gogoproto.moretags) = "yaml:\"challenge_id\""
+  ];
+}
+
+// QueryChallengeResponse is the response for QueryChallenge
+message QueryChallengeResponse {
+  // Challenge is the MFA challenge
+  Challenge challenge = 1 [
+    (gogoproto.jsontag) = "challenge",
+    (gogoproto.moretags) = "yaml:\"challenge\""
+  ];
+
+  // Found indicates if the challenge was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryPendingChallengesRequest is the request for QueryPendingChallenges
+message QueryPendingChallengesRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryPendingChallengesResponse is the response for QueryPendingChallenges
+message QueryPendingChallengesResponse {
+  // Challenges is the list of pending challenges
+  repeated Challenge challenges = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "challenges",
+    (gogoproto.moretags) = "yaml:\"challenges\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryAuthorizationSessionRequest is the request for QueryAuthorizationSession
+message QueryAuthorizationSessionRequest {
+  // SessionID is the ID of the session to query
+  string session_id = 1 [
+    (gogoproto.jsontag) = "session_id",
+    (gogoproto.moretags) = "yaml:\"session_id\""
+  ];
+}
+
+// QueryAuthorizationSessionResponse is the response for QueryAuthorizationSession
+message QueryAuthorizationSessionResponse {
+  // Session is the authorization session
+  AuthorizationSession session = 1 [
+    (gogoproto.jsontag) = "session",
+    (gogoproto.moretags) = "yaml:\"session\""
+  ];
+
+  // Found indicates if the session was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+
+  // IsValid indicates if the session is still valid
+  bool is_valid = 3 [
+    (gogoproto.jsontag) = "is_valid",
+    (gogoproto.moretags) = "yaml:\"is_valid\""
+  ];
+}
+
+// QueryTrustedDevicesRequest is the request for QueryTrustedDevices
+message QueryTrustedDevicesRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryTrustedDevicesResponse is the response for QueryTrustedDevices
+message QueryTrustedDevicesResponse {
+  // Devices is the list of trusted devices
+  repeated TrustedDevice devices = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "devices",
+    (gogoproto.moretags) = "yaml:\"devices\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QuerySensitiveTxConfigRequest is the request for QuerySensitiveTxConfig
+message QuerySensitiveTxConfigRequest {
+  // TransactionType is the transaction type to query
+  SensitiveTransactionType transaction_type = 1 [
+    (gogoproto.jsontag) = "transaction_type",
+    (gogoproto.moretags) = "yaml:\"transaction_type\""
+  ];
+}
+
+// QuerySensitiveTxConfigResponse is the response for QuerySensitiveTxConfig
+message QuerySensitiveTxConfigResponse {
+  // Config is the sensitive transaction configuration
+  SensitiveTxConfig config = 1 [
+    (gogoproto.jsontag) = "config",
+    (gogoproto.moretags) = "yaml:\"config\""
+  ];
+
+  // Found indicates if the config was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryAllSensitiveTxConfigsRequest is the request for QueryAllSensitiveTxConfigs
+message QueryAllSensitiveTxConfigsRequest {
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 1 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryAllSensitiveTxConfigsResponse is the response for QueryAllSensitiveTxConfigs
+message QueryAllSensitiveTxConfigsResponse {
+  // Configs is the list of sensitive transaction configurations
+  repeated SensitiveTxConfig configs = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "configs",
+    (gogoproto.moretags) = "yaml:\"configs\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryMFARequiredRequest is the request for QueryMFARequired
+message QueryMFARequiredRequest {
+  // Address is the account address to check
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // TransactionType is the transaction type to check
+  SensitiveTransactionType transaction_type = 2 [
+    (gogoproto.jsontag) = "transaction_type",
+    (gogoproto.moretags) = "yaml:\"transaction_type\""
+  ];
+}
+
+// QueryMFARequiredResponse is the response for QueryMFARequired
+message QueryMFARequiredResponse {
+  // Required indicates if MFA is required
+  bool required = 1 [
+    (gogoproto.jsontag) = "required",
+    (gogoproto.moretags) = "yaml:\"required\""
+  ];
+
+  // FactorCombinations lists the acceptable factor combinations
+  repeated FactorCombination factor_combinations = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "factor_combinations",
+    (gogoproto.moretags) = "yaml:\"factor_combinations\""
+  ];
+
+  // MinVEIDScore is the minimum VEID score required
+  uint32 min_veid_score = 3 [
+    (gogoproto.jsontag) = "min_veid_score",
+    (gogoproto.moretags) = "yaml:\"min_veid_score\""
+  ];
+}
+
+// QueryParamsRequest is the request for QueryParams
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response for QueryParams
+message QueryParamsResponse {
+  // Params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}

@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: virtengine-node
+  namespace: virtengine
+spec:
+  hosts:
+    - virtengine-node.virtengine.svc.cluster.local
+  http:
+    - timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: gateway-error,connect-failure,refused-stream,reset,5xx
+      route:
+        - destination:
+            host: virtengine-node.virtengine.svc.cluster.local

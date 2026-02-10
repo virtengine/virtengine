@@ -1,0 +1,25 @@
+# Production Pod Disruption Budgets
+# More restrictive than base for production stability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: virtengine-node-prod
+  namespace: virtengine
+spec:
+  minAvailable: 3  # Ensure quorum during disruptions
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virtengine-node
+      environment: prod
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: provider-daemon-prod
+  namespace: virtengine
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: provider-daemon
+      environment: prod

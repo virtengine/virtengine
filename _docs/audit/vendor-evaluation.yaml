@@ -1,0 +1,65 @@
+evaluation_criteria:
+  - name: Cosmos SDK Experience
+    weight: 25
+    description: Prior audits of Cosmos SDK chains
+
+  - name: Cryptography Expertise
+    weight: 20
+    description: Published research, CVE discoveries, formal reviews
+
+  - name: ML Security Capability
+    weight: 15
+    description: AI/ML security audit experience
+
+  - name: Timeline Fit
+    weight: 15
+    description: Availability within our audit window
+
+  - name: Cost
+    weight: 10
+    description: Competitive pricing and pricing transparency
+
+  - name: Reputation
+    weight: 15
+    description: Industry standing, references, prior L1 audits
+
+vendors:
+  - name: Trail of Bits
+    cosmos_experience: 9
+    crypto_expertise: 10
+    ml_capability: 7
+    timeline: Available Q2
+    estimated_cost: -300K
+    notes: Premier firm, audited multiple L1s
+
+  - name: OpenZeppelin
+    cosmos_experience: 7
+    crypto_expertise: 8
+    ml_capability: 5
+    timeline: Available Q1
+    estimated_cost: -250K
+    notes: Strong in EVM, growing Cosmos practice
+
+  - name: Consensys Diligence
+    cosmos_experience: 6
+    crypto_expertise: 8
+    ml_capability: 4
+    timeline: Available Q2
+    estimated_cost: -280K
+    notes: Ethereum focused but broad expertise
+
+  - name: NCC Group
+    cosmos_experience: 5
+    crypto_expertise: 9
+    ml_capability: 8
+    timeline: Available Q1
+    estimated_cost: -350K
+    notes: Strong crypto and ML practice
+
+  - name: Kudelski Security
+    cosmos_experience: 4
+    crypto_expertise: 10
+    ml_capability: 6
+    timeline: Available Q1
+    estimated_cost: -400K
+    notes: Top-tier cryptography, HSM expertise

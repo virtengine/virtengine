@@ -1,0 +1,121 @@
+{
+  "version": "1.0.0",
+  "description": "VirtEngine marketplace categories for Waldur integration",
+  "categories": [
+    {
+      "title": "Compute",
+      "description": "Virtual machines, containers, and general-purpose computing resources for running workloads.",
+      "icon": "server",
+      "offering_types": [
+        "VirtEngine.VM",
+        "VirtEngine.Container",
+        "VirtEngine.Instance"
+      ],
+      "metadata": {
+        "color": "#3498db",
+        "priority": 1,
+        "default_for_sync": true
+      }
+    },
+    {
+      "title": "HPC",
+      "description": "High-performance computing resources including MPI clusters, batch processing, and scientific computing environments.",
+      "icon": "cpu",
+      "offering_types": [
+        "VirtEngine.HPC",
+        "VirtEngine.HPCCluster",
+        "VirtEngine.BatchJob"
+      ],
+      "metadata": {
+        "color": "#9b59b6",
+        "priority": 2,
+        "default_for_sync": true
+      }
+    },
+    {
+      "title": "GPU",
+      "description": "GPU-accelerated computing instances for machine learning, deep learning, and graphics processing workloads.",
+      "icon": "gpu",
+      "offering_types": [
+        "VirtEngine.GPU",
+        "VirtEngine.GPUInstance",
+        "VirtEngine.GPUCluster"
+      ],
+      "metadata": {
+        "color": "#27ae60",
+        "priority": 3,
+        "default_for_sync": true
+      }
+    },
+    {
+      "title": "Storage",
+      "description": "Object storage, block storage, and file storage solutions for data persistence and sharing.",
+      "icon": "database",
+      "offering_types": [
+        "VirtEngine.ObjectStorage",
+        "VirtEngine.BlockStorage",
+        "VirtEngine.FileStorage",
+        "VirtEngine.S3"
+      ],
+      "metadata": {
+        "color": "#e67e22",
+        "priority": 4,
+        "default_for_sync": true
+      }
+    },
+    {
+      "title": "Network",
+      "description": "Networking services including VPNs, load balancers, firewalls, and private networks.",
+      "icon": "network",
+      "offering_types": [
+        "VirtEngine.VPN",
+        "VirtEngine.LoadBalancer",
+        "VirtEngine.Firewall",
+        "VirtEngine.PrivateNetwork"
+      ],
+      "metadata": {
+        "color": "#1abc9c",
+        "priority": 5,
+        "default_for_sync": true
+      }
+    },
+    {
+      "title": "TEE",
+      "description": "Trusted Execution Environment resources for confidential computing and secure enclaves.",
+      "icon": "shield",
+      "offering_types": [
+        "VirtEngine.TEE",
+        "VirtEngine.SecureEnclave",
+        "VirtEngine.ConfidentialVM"
+      ],
+      "metadata": {
+        "color": "#e74c3c",
+        "priority": 6,
+        "default_for_sync": true
+      }
+    },
+    {
+      "title": "AI/ML",
+      "description": "Machine learning platforms, model training infrastructure, and inference services.",
+      "icon": "brain",
+      "offering_types": [
+        "VirtEngine.AIML",
+        "VirtEngine.MLTraining",
+        "VirtEngine.Inference",
+        "VirtEngine.NotebookServer"
+      ],
+      "metadata": {
+        "color": "#f39c12",
+        "priority": 7,
+        "default_for_sync": true
+      }
+    }
+  ],
+  "default_category": "Compute",
+  "sync_settings": {
+    "auto_sync_enabled": true,
+    "sync_interval_seconds": 300,
+    "retry_on_failure": true,
+    "max_retries": 3
+  }
+}

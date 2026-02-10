@@ -1,0 +1,140 @@
+# SCALE-002: KEDA ScaledObject for event-driven autoscaling
+# Enables scaling based on Prometheus metrics and external triggers
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: provider-daemon-keda
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: autoscaling
+    app.kubernetes.io/part-of: virtengine-platform
+  annotations:
+    description: "KEDA-based event-driven scaling for provider daemon"
+spec:
+  scaleTargetRef:
+    name: provider-daemon
+    kind: Deployment
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 3
+  maxReplicaCount: 25
+  fallback:
+    failureThreshold: 3
+    replicas: 5
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      name: provider-daemon-keda-hpa
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 10
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+  triggers:
+    # Scale based on pending marketplace orders
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: virtengine_marketplace_open_orders
+        query: sum(virtengine_marketplace_order_count{status="pending"})
+        threshold: "100"
+        activationThreshold: "10"
+      authenticationRef:
+        name: prometheus-auth
+    
+    # Scale based on bid queue depth
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: provider_daemon_pending_orders
+        query: sum(provider_daemon_pending_orders_total)
+        threshold: "200"
+        activationThreshold: "20"
+    
+    # Scale based on active leases across all providers
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: virtengine_active_leases
+        query: sum(virtengine_active_leases_total)
+        threshold: "500"
+        activationThreshold: "50"
+    
+    # Scale based on bid processing latency
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: bid_processing_latency_high
+        query: histogram_quantile(0.99, sum(rate(provider_daemon_bid_duration_seconds_bucket[5m])) by (le)) > 0.5
+        threshold: "1"
+        activationThreshold: "0"
+---
+# KEDA ScaledObject for Full Nodes (RPC tier)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: fullnode-keda
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: autoscaling
+spec:
+  scaleTargetRef:
+    name: virtengine-fullnode
+    kind: StatefulSet
+  pollingInterval: 30
+  cooldownPeriod: 600
+  minReplicaCount: 3
+  maxReplicaCount: 15
+  fallback:
+    failureThreshold: 3
+    replicas: 4
+  triggers:
+    # Scale based on RPC request rate
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: rpc_requests_rate
+        query: sum(rate(virtengine_rpc_requests_total[5m]))
+        threshold: "500"
+        activationThreshold: "100"
+    
+    # Scale based on query latency
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: rpc_latency_high
+        query: histogram_quantile(0.99, sum(rate(virtengine_rpc_duration_seconds_bucket[5m])) by (le))
+        threshold: "0.2"  # 200ms
+        activationThreshold: "0.1"
+    
+    # Scale based on connection count
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: active_connections
+        query: sum(virtengine_active_websocket_connections)
+        threshold: "2000"
+        activationThreshold: "500"
+---
+# TriggerAuthentication for Prometheus
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: prometheus-auth
+  namespace: virtengine
+spec:
+  secretTargetRef: []
+  # Add authentication if Prometheus requires it
+  # - parameter: bearerToken
+  #   name: prometheus-token
+  #   key: token

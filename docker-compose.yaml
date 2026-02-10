@@ -1,0 +1,655 @@
+# VirtEngine Local Development Environment
+# One-command startup: docker compose up -d
+#
+# Services:
+#   VirtEngine Core:
+#     - virtengine-node: Cosmos SDK blockchain node (single validator)
+#     - provider-daemon: Provider marketplace daemon (built from source)
+#
+#   Waldur Stack (upstream images from opennode/waldur-mastermind):
+#     - waldur-db: PostgreSQL database for Waldur
+#     - waldur-queue: RabbitMQ message broker
+#     - waldur-mastermind-api: Waldur REST API
+#     - waldur-mastermind-worker: Celery async worker
+#     - waldur-mastermind-beat: Celery periodic tasks
+#     - waldur-homeport: Waldur web UI
+#     - waldur-caddy: Reverse proxy for Waldur services
+#     - keycloak: Identity and access management
+#     - keycloak-db: PostgreSQL for Keycloak
+#
+#   Infrastructure:
+#     - kong: API gateway
+#     - api-portal: Swagger UI
+#     - portal: Local Next.js portal UI
+#     - ve-portal: Local Vite React portal UI
+#     - prometheus: Metrics
+#     - grafana: Dashboards
+
+x-waldur-mastermind-env: &waldur-mastermind-env
+  GLOBAL_SECRET_KEY: ${WALDUR_SECRET_KEY:-changeme-localdev}
+  POSTGRESQL_HOST: waldur-db
+  POSTGRESQL_PASSWORD: ${WALDUR_POSTGRESQL_PASSWORD:-waldur}
+  RABBITMQ_HOST: waldur-queue
+  RABBITMQ_PASSWORD: ${WALDUR_RABBITMQ_PASSWORD:-waldur}
+  RABBITMQ_USERNAME: ${WALDUR_RABBITMQ_USERNAME:-waldur}
+  GLOBAL_DEFAULT_FROM_EMAIL: waldur@localhost
+  GLOBAL_DEBUG: "true"
+  KEYCLOAK_SECRET: ${WALDUR_KEYCLOAK_SECRET:-76bc7e31-3c1b-4406-bd82-5c7f1fefd00a}
+
+x-waldur-mastermind-volumes: &waldur-mastermind-volumes
+  - ./config/waldur/mastermind/override.conf.py:/etc/waldur/override.conf.py:ro
+  - ./config/waldur/mastermind/logging.conf.py:/etc/waldur/logging.conf.py:ro
+  - ./config/waldur/mastermind/saml2.conf.py:/etc/waldur/saml2.conf.py:ro
+  - ./config/waldur/mastermind/id_rsa:/etc/waldur/id_rsa:ro
+  - ./config/waldur/mastermind/id_rsa.pub:/etc/waldur/id_rsa.pub:ro
+  - ./config/waldur/mastermind/saml2/credentials:/etc/waldur/saml2/credentials:ro
+  - ./config/waldur/mastermind/saml2/metadata:/etc/waldur/saml2/metadata:ro
+  - ./config/waldur/mastermind/valimo:/etc/waldur/valimo:ro
+  - ./config/waldur/mastermind/notification-templates.yaml:/etc/waldur/notification-templates.yaml:ro
+  - ./config/waldur/mastermind/auth.yaml:/etc/waldur/auth.yaml:ro
+  - ./config/waldur/mastermind/support.yaml:/etc/waldur/support.yaml:ro
+  - ./config/waldur/mastermind/whitelabeling.yaml:/etc/waldur/whitelabeling.yaml:ro
+  - ./config/waldur/mastermind/marketplace.yaml:/etc/waldur/marketplace.yaml:ro
+  - ./config/waldur/mastermind/marketplace-script.yaml:/etc/waldur/marketplace-script.yaml:ro
+  - ./config/waldur/whitelabeling:/etc/waldur/icons:ro
+  - waldur-script-launchzone:/var/lib/waldur/waldur-script-launchzone
+
+networks:
+  virtengine-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  chain-data:
+  provider-data:
+  waldur-db-data:
+  keycloak-db-data:
+  waldur-script-launchzone:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  grafana-data:
+  explorer-data:
+
+services:
+  # =============================================================================
+  # VirtEngine Chain Node (Single Validator)
+  # =============================================================================
+  virtengine-node:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.virtengine
+    container_name: virtengine-node
+    hostname: virtengine-node
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "26656:26656" # P2P
+      - "26657:26657" # RPC
+      - "1317:1317" # REST API
+      - "9090:9090" # gRPC
+      - "9091:9091" # gRPC-Web
+    volumes:
+      - chain-data:/var/lib/virtengine
+      - ./scripts:/scripts:ro
+    environment:
+      - CHAIN_ID=${CHAIN_ID:-virtengine-localnet-1}
+      - MONIKER=localvalidator
+      - KEYRING_BACKEND=test
+    entrypoint: ["/scripts/init-chain.sh"]
+    command: ["virtengine-localnet-1"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # =============================================================================
+  # Provider Daemon (built from source)
+  # =============================================================================
+  provider-daemon:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.provider-daemon
+    container_name: provider-daemon
+    hostname: provider-daemon
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.40
+    ports:
+      - "8443:8443" # Provider API
+      - "8444:8444" # Provider gRPC
+    volumes:
+      - provider-data:/var/lib/provider-daemon
+    environment:
+      - VIRTENGINE_NODE=http://virtengine-node:26657
+      - VIRTENGINE_CHAIN_ID=${CHAIN_ID:-virtengine-localnet-1}
+      - VIRTENGINE_PROVIDER_LISTEN=0.0.0.0:8443
+      - VIRTENGINE_PROVIDER_METRICS=0.0.0.0:8444
+      - VIRTENGINE_LOG_LEVEL=${LOG_LEVEL:-info}
+      - VIRTENGINE_WALDUR_ENABLED=true
+      - VIRTENGINE_WALDUR_BASE_URL=http://waldur-caddy/api/
+      - VIRTENGINE_WALDUR_TOKEN=${WALDUR_API_TOKEN:-}
+      # Enable offering sync from chain to Waldur by default
+      - VIRTENGINE_WALDUR_OFFERING_SYNC_ENABLED=true
+      - VIRTENGINE_WALDUR_OFFERING_SYNC_INTERVAL=300
+      - VIRTENGINE_WALDUR_CUSTOMER_UUID=${WALDUR_CUSTOMER_UUID:-}
+    command:
+      [
+        "start",
+        "--node",
+        "http://virtengine-node:26657",
+        "--chain-id",
+        "virtengine-localnet-1",
+        "--waldur-offering-sync-enabled=true",
+      ]
+    depends_on:
+      virtengine-node:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur PostgreSQL Database
+  # =============================================================================
+  waldur-db:
+    image: postgres:16-alpine
+    container_name: waldur-db
+    hostname: waldur-db
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.20
+    environment:
+      POSTGRES_USER: waldur
+      POSTGRES_PASSWORD: ${WALDUR_POSTGRESQL_PASSWORD:-waldur}
+      POSTGRES_DB: waldur
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - waldur-db-data:/var/lib/postgresql/data
+      - ./config/waldur/createdb-celery_results.sql:/docker-entrypoint-initdb.d/createdb-celery_results.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waldur"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur RabbitMQ
+  # =============================================================================
+  waldur-queue:
+    image: rabbitmq:4.1.2
+    container_name: waldur-queue
+    hostname: waldur-queue
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.21
+    environment:
+      RABBITMQ_DEFAULT_USER: ${WALDUR_RABBITMQ_USERNAME:-waldur}
+      RABBITMQ_DEFAULT_PASS: ${WALDUR_RABBITMQ_PASSWORD:-waldur}
+    volumes:
+      - ./config/waldur/rabbitmq-enabled-plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./config/waldur/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur Script Launchzone Init
+  # =============================================================================
+  waldur-launchzone-init:
+    image: opennode/waldur-mastermind:${WALDUR_MASTERMIND_IMAGE_TAG:-7.9.8}
+    container_name: waldur-launchzone-init
+    user: root
+    networks:
+      - virtengine-net
+    volumes:
+      - waldur-script-launchzone:/var/lib/waldur/waldur-script-launchzone
+    command: chown -R 1001:0 /var/lib/waldur/waldur-script-launchzone
+    restart: "no"
+
+  # =============================================================================
+  # Waldur DB Migration
+  # =============================================================================
+  waldur-mastermind-db-migration:
+    image: opennode/waldur-mastermind:${WALDUR_MASTERMIND_IMAGE_TAG:-7.9.8}
+    container_name: waldur-mastermind-db-migration
+    hostname: waldur-mastermind-db-migration
+    user: "1001:0"
+    networks:
+      - virtengine-net
+    environment: *waldur-mastermind-env
+    volumes: *waldur-mastermind-volumes
+    depends_on:
+      waldur-db:
+        condition: service_healthy
+      waldur-queue:
+        condition: service_started
+      waldur-launchzone-init:
+        condition: service_completed_successfully
+    command: initdb
+    restart: "no"
+
+  # =============================================================================
+  # Waldur Mastermind API
+  # =============================================================================
+  waldur-mastermind-api:
+    image: opennode/waldur-mastermind:${WALDUR_MASTERMIND_IMAGE_TAG:-7.9.8}
+    container_name: waldur-mastermind-api
+    hostname: waldur-mastermind-api
+    user: "1001:0"
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.22
+    environment: *waldur-mastermind-env
+    volumes: *waldur-mastermind-volumes
+    depends_on:
+      waldur-mastermind-db-migration:
+        condition: service_completed_successfully
+      waldur-mastermind-worker:
+        condition: service_started
+      waldur-mastermind-beat:
+        condition: service_started
+      waldur-db:
+        condition: service_healthy
+      waldur-queue:
+        condition: service_started
+    command: mastermind
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur Celery Worker
+  # =============================================================================
+  waldur-mastermind-worker:
+    image: opennode/waldur-mastermind:${WALDUR_MASTERMIND_IMAGE_TAG:-7.9.8}
+    container_name: waldur-mastermind-worker
+    hostname: waldur-mastermind-worker
+    user: "1001:0"
+    networks:
+      - virtengine-net
+    environment: *waldur-mastermind-env
+    volumes: *waldur-mastermind-volumes
+    depends_on:
+      waldur-db:
+        condition: service_healthy
+      waldur-queue:
+        condition: service_started
+      waldur-launchzone-init:
+        condition: service_completed_successfully
+    command: worker
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A waldur_core.server inspect ping"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur Celery Beat
+  # =============================================================================
+  waldur-mastermind-beat:
+    image: opennode/waldur-mastermind:${WALDUR_MASTERMIND_IMAGE_TAG:-7.9.8}
+    container_name: waldur-mastermind-beat
+    hostname: waldur-mastermind-beat
+    user: "1001:0"
+    networks:
+      - virtengine-net
+    environment: *waldur-mastermind-env
+    volumes: *waldur-mastermind-volumes
+    depends_on:
+      waldur-db:
+        condition: service_healthy
+      waldur-mastermind-worker:
+        condition: service_started
+      waldur-launchzone-init:
+        condition: service_completed_successfully
+    command: beat
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur HomePort (Web UI)
+  # =============================================================================
+  waldur-homeport:
+    image: opennode/waldur-homeport:${WALDUR_HOMEPORT_IMAGE_TAG:-7.9.8}
+    container_name: waldur-homeport
+    hostname: waldur-homeport
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.23
+    environment:
+      API_URL: https://localhost/
+      TITLE: "VirtEngine Waldur | Cloud Service Management"
+    volumes:
+      - ./config/waldur/homeport/config.template.json:/usr/share/nginx/config.template.json:ro
+      - ./config/waldur/homeport/opt/waldur-homeport:/opt/waldur-homeport:ro
+    depends_on:
+      waldur-db:
+        condition: service_healthy
+      waldur-mastermind-api:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --silent --fail http://waldur-homeport:8080/ || exit 1",
+        ]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur Reverse Proxy (Caddy)
+  # =============================================================================
+  waldur-caddy:
+    image: caddy:2
+    container_name: waldur-caddy
+    hostname: waldur-caddy
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.24
+    ports:
+      - "80:80" # Waldur HTTP
+      - "443:443" # Waldur HTTPS (self-signed for local dev)
+    environment:
+      VIRTUAL_HOST: localhost
+      TLS: internal
+    volumes:
+      - ./config/waldur/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./config/waldur/caddy-includes:/etc/caddy-includes:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      waldur-homeport:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # Keycloak (Identity Provider)
+  # =============================================================================
+  keycloak:
+    image: keycloak/keycloak:25.0
+    container_name: keycloak
+    hostname: keycloak
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.25
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_POSTGRESQL_PASSWORD:-changeme}
+      KC_PROXY: edge
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./config/waldur/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    command: start --import-realm
+    restart: unless-stopped
+
+  # =============================================================================
+  # Keycloak PostgreSQL
+  # =============================================================================
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: keycloak-db
+    hostname: keycloak-db
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.26
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_POSTGRESQL_PASSWORD:-changeme}
+      POSTGRES_DB: keycloak
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # API Gateway - Kong (DB-less)
+  # =============================================================================
+  kong:
+    image: kong:3.6.1
+    container_name: kong
+    hostname: kong
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.50
+    ports:
+      - "8000:8000" # API Gateway proxy
+      - "8001:8001" # Admin API
+      - "8100:8100" # Metrics (Prometheus)
+    volumes:
+      - ./config/kong/kong.yaml:/kong/declarative/kong.yaml:ro
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yaml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_LOG_LEVEL: info
+    depends_on:
+      - virtengine-node
+      - waldur-mastermind-api
+      - provider-daemon
+      - api-portal
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Local Portal UI (Next.js)
+  # =============================================================================
+  portal:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.portal
+      target: dev
+    container_name: portal
+    hostname: portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.55
+    ports:
+      - "3000:3000" # Local Portal UI
+    volumes:
+      - ./portal/src:/workspace/portal/src
+      - ./portal/public:/workspace/portal/public
+      - ./lib:/workspace/lib
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_CHAIN_ID: ${CHAIN_ID:-virtengine-localnet-1}
+      NEXT_PUBLIC_CHAIN_RPC: http://localhost:26657
+      NEXT_PUBLIC_CHAIN_REST: http://localhost:1317
+      NEXT_PUBLIC_CHAIN_WS: ws://localhost:26657/websocket
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_INDEXER_URL: http://localhost:8000
+      NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID:-}
+      NEXT_PUBLIC_SUPPORTED_WALLETS: ${NEXT_PUBLIC_SUPPORTED_WALLETS:-keplr,leap,cosmostation}
+      NEXT_PUBLIC_ENABLE_TESTNET: ${NEXT_PUBLIC_ENABLE_TESTNET:-false}
+      NEXT_PUBLIC_ENABLE_MFA: ${NEXT_PUBLIC_ENABLE_MFA:-true}
+      NEXT_PUBLIC_ENABLE_HPC: ${NEXT_PUBLIC_ENABLE_HPC:-true}
+      NEXT_PUBLIC_ENABLE_IDENTITY: ${NEXT_PUBLIC_ENABLE_IDENTITY:-true}
+      NEXT_PUBLIC_DEV_MODE: ${NEXT_PUBLIC_DEV_MODE:-true}
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      - virtengine-node
+      - kong
+    restart: unless-stopped
+
+  # =============================================================================
+  # VE Portal UI (Vite React)
+  # =============================================================================
+  ve-portal:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.ve-portal
+    container_name: ve-portal
+    hostname: ve-portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.56
+    ports:
+      - "5173:5173" # Vite dev server
+    environment:
+      VITE_CHAIN_ID: ${CHAIN_ID:-virtengine-localnet-1}
+      VITE_CHAIN_RPC: http://localhost:26657
+      VITE_CHAIN_REST: http://localhost:1317
+    depends_on:
+      - virtengine-node
+    restart: unless-stopped
+
+  # =============================================================================
+  # API Developer Portal (Swagger UI)
+  # =============================================================================
+  api-portal:
+    image: swaggerapi/swagger-ui:v5.17.14
+    container_name: api-portal
+    hostname: api-portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.51
+    ports:
+      - "3001:8080" # Developer portal (Swagger UI)
+    volumes:
+      - ./sdk/docs/swagger-ui/swagger.yaml:/swagger/swagger.yaml:ro
+    environment:
+      SWAGGER_JSON: /swagger/swagger.yaml
+      BASE_URL: /portal
+    restart: unless-stopped
+
+  # =============================================================================
+  # Blockchain Explorer (Ping.pub / Explorer)
+  # Provides a web UI for browsing blocks, transactions, validators, and
+  # querying on-chain marketplace offerings, orders, and identity data.
+  # =============================================================================
+  # NOTE: Commented out - ping-pub/explorer doesn't publish Docker images.
+  # To use, either:
+  # 1. Build from source: https://github.com/ping-pub/explorer
+  # 2. Use an alternative like Big Dipper or Mintscan
+  # explorer:
+  #   image: ping-pub/explorer:latest
+  #   container_name: explorer
+  #   hostname: explorer
+  #   networks:
+  #     virtengine-net:
+  #       ipv4_address: 172.28.0.54
+  #   ports:
+  #     - "8088:8080" # Blockchain Explorer UI
+  #   volumes:
+  #     - ./config/explorer/chains.json:/app/chains.json:ro
+  #     - explorer-data:/app/data
+  #   environment:
+  #     # Configure chain endpoints
+  #     CHAIN_NAME: VirtEngine
+  #     CHAIN_RPC: http://virtengine-node:26657
+  #     CHAIN_REST: http://virtengine-node:1317
+  #     CHAIN_GRPC: virtengine-node:9090
+  #   depends_on:
+  #     virtengine-node:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+  # =============================================================================
+  # Prometheus
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: prometheus
+    hostname: prometheus
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.52
+    ports:
+      - "9095:9090" # Prometheus UI
+    volumes:
+      - ./config/kong/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - kong
+    restart: unless-stopped
+
+  # =============================================================================
+  # Grafana
+  # =============================================================================
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    container_name: grafana
+    hostname: grafana
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.53
+    ports:
+      - "3002:3000" # Grafana UI
+    volumes:
+      - ./config/kong/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # =============================================================================
+  # Test Runner (only starts with --profile test)
+  # =============================================================================
+  test-runner:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.test
+    container_name: test-runner
+    hostname: test-runner
+    networks:
+      - virtengine-net
+    volumes:
+      - .:/workspace:ro
+      - ./tests:/workspace/tests
+    environment:
+      VIRTENGINE_NODE_URL: http://virtengine-node:26657
+      VIRTENGINE_GRPC_URL: virtengine-node:9090
+      WALDUR_API_URL: https://waldur-caddy/api/
+      PROVIDER_API_URL: http://provider-daemon:8443
+      API_GATEWAY_URL: http://kong:8000
+    working_dir: /workspace
+    command:
+      [
+        "echo",
+        "Test runner ready. Use: docker compose run test-runner go test ./tests/integration/...",
+      ]
+    depends_on:
+      - virtengine-node
+      - waldur-mastermind-api
+      - provider-daemon
+    profiles:
+      - test

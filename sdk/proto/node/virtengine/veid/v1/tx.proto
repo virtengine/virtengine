@@ -1,0 +1,1300 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "virtengine/veid/v1/types.proto";
+import "virtengine/veid/v1/appeal.proto";
+import "virtengine/veid/v1/compliance.proto";
+import "virtengine/veid/v1/model.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// Msg defines the veid Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // UploadScope uploads an identity scope
+  rpc UploadScope(MsgUploadScope) returns (MsgUploadScopeResponse);
+  
+  // RevokeScope revokes an identity scope
+  rpc RevokeScope(MsgRevokeScope) returns (MsgRevokeScopeResponse);
+  
+  // RequestVerification requests verification of a scope
+  rpc RequestVerification(MsgRequestVerification) returns (MsgRequestVerificationResponse);
+  
+  // UpdateVerificationStatus updates the verification status (validator only)
+  rpc UpdateVerificationStatus(MsgUpdateVerificationStatus) returns (MsgUpdateVerificationStatusResponse);
+  
+  // UpdateScore updates the identity score (validator only)
+  rpc UpdateScore(MsgUpdateScore) returns (MsgUpdateScoreResponse);
+  
+  // CreateIdentityWallet creates an identity wallet
+  rpc CreateIdentityWallet(MsgCreateIdentityWallet) returns (MsgCreateIdentityWalletResponse);
+  
+  // AddScopeToWallet adds a scope reference to a wallet
+  rpc AddScopeToWallet(MsgAddScopeToWallet) returns (MsgAddScopeToWalletResponse);
+  
+  // RevokeScopeFromWallet revokes a scope from a wallet
+  rpc RevokeScopeFromWallet(MsgRevokeScopeFromWallet) returns (MsgRevokeScopeFromWalletResponse);
+  
+  // UpdateConsentSettings updates consent settings
+  rpc UpdateConsentSettings(MsgUpdateConsentSettings) returns (MsgUpdateConsentSettingsResponse);
+  
+  // RebindWallet rebinds a wallet during key rotation
+  rpc RebindWallet(MsgRebindWallet) returns (MsgRebindWalletResponse);
+  
+  // UpdateDerivedFeatures updates derived features (validator only)
+  rpc UpdateDerivedFeatures(MsgUpdateDerivedFeatures) returns (MsgUpdateDerivedFeaturesResponse);
+  
+  // CompleteBorderlineFallback completes a borderline fallback after MFA
+  rpc CompleteBorderlineFallback(MsgCompleteBorderlineFallback) returns (MsgCompleteBorderlineFallbackResponse);
+  
+  // UpdateBorderlineParams updates borderline parameters (governance only)
+  rpc UpdateBorderlineParams(MsgUpdateBorderlineParams) returns (MsgUpdateBorderlineParamsResponse);
+  
+  // UpdateParams updates module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // ==========================================================================
+  // Web-Scope Verification Proofs (SSO/Email/SMS)
+  // ==========================================================================
+
+  // SubmitSSOVerificationProof submits an SSO verification proof
+  rpc SubmitSSOVerificationProof(MsgSubmitSSOVerificationProof) returns (MsgSubmitSSOVerificationProofResponse);
+
+  // SubmitEmailVerificationProof submits an email OTP verification proof
+  rpc SubmitEmailVerificationProof(MsgSubmitEmailVerificationProof) returns (MsgSubmitEmailVerificationProofResponse);
+
+  // SubmitSMSVerificationProof submits an SMS OTP verification proof
+  rpc SubmitSMSVerificationProof(MsgSubmitSMSVerificationProof) returns (MsgSubmitSMSVerificationProofResponse);
+
+  // SubmitSocialMediaScope submits a social media profile scope
+  rpc SubmitSocialMediaScope(MsgSubmitSocialMediaScope) returns (MsgSubmitSocialMediaScopeResponse);
+
+  // ==========================================================================
+  // Appeal Messages (VE-3020)
+  // ==========================================================================
+  
+  // SubmitAppeal submits an appeal against a verification decision
+  rpc SubmitAppeal(MsgSubmitAppeal) returns (MsgSubmitAppealResponse);
+  
+  // ClaimAppeal allows an arbitrator to claim an appeal for review
+  rpc ClaimAppeal(MsgClaimAppeal) returns (MsgClaimAppealResponse);
+  
+  // ResolveAppeal resolves an appeal (arbitrator/governance only)
+  rpc ResolveAppeal(MsgResolveAppeal) returns (MsgResolveAppealResponse);
+  
+  // WithdrawAppeal allows the submitter to withdraw their appeal
+  rpc WithdrawAppeal(MsgWithdrawAppeal) returns (MsgWithdrawAppealResponse);
+
+  // ==========================================================================
+  // Compliance Messages (VE-3021)
+  // ==========================================================================
+  
+  // SubmitComplianceCheck submits external compliance check results
+  rpc SubmitComplianceCheck(MsgSubmitComplianceCheck) returns (MsgSubmitComplianceCheckResponse);
+  
+  // AttestCompliance allows validators to attest compliance status
+  rpc AttestCompliance(MsgAttestCompliance) returns (MsgAttestComplianceResponse);
+  
+  // UpdateComplianceParams updates compliance configuration (gov only)
+  rpc UpdateComplianceParams(MsgUpdateComplianceParams) returns (MsgUpdateComplianceParamsResponse);
+  
+  // RegisterComplianceProvider registers a new compliance provider (gov only)
+  rpc RegisterComplianceProvider(MsgRegisterComplianceProvider) returns (MsgRegisterComplianceProviderResponse);
+  
+  // DeactivateComplianceProvider deactivates a compliance provider (gov only)
+  rpc DeactivateComplianceProvider(MsgDeactivateComplianceProvider) returns (MsgDeactivateComplianceProviderResponse);
+
+  // ==========================================================================
+  // Model Versioning Messages (VE-3007)
+  // ==========================================================================
+  
+  // RegisterModel registers a new ML model (authorized only)
+  rpc RegisterModel(MsgRegisterModel) returns (MsgRegisterModelResponse);
+  
+  // ProposeModelUpdate proposes updating active model via governance
+  rpc ProposeModelUpdate(MsgProposeModelUpdate) returns (MsgProposeModelUpdateResponse);
+  
+  // ReportModelVersion reports validator's model versions
+  rpc ReportModelVersion(MsgReportModelVersion) returns (MsgReportModelVersionResponse);
+  
+  // ActivateModel activates a pending model after governance approval
+  rpc ActivateModel(MsgActivateModel) returns (MsgActivateModelResponse);
+  
+  // DeprecateModel deprecates a model
+  rpc DeprecateModel(MsgDeprecateModel) returns (MsgDeprecateModelResponse);
+  
+  // RevokeModel revokes a model
+  rpc RevokeModel(MsgRevokeModel) returns (MsgRevokeModelResponse);
+}
+
+// MsgUploadScope is the message for uploading an identity scope
+message MsgUploadScope {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgUploadScope";
+
+  // Sender is the account uploading the scope
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ScopeID is a unique identifier for this scope
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ScopeType indicates what kind of identity data this scope contains
+  ScopeType scope_type = 3 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // EncryptedPayload is the encrypted identity data
+  EncryptedPayloadEnvelope encrypted_payload = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "encrypted_payload",
+    (gogoproto.moretags) = "yaml:\"encrypted_payload\""
+  ];
+
+  // Salt is a per-upload unique salt for cryptographic binding
+  bytes salt = 5 [
+    (gogoproto.jsontag) = "salt",
+    (gogoproto.moretags) = "yaml:\"salt\""
+  ];
+
+  // DeviceFingerprint is the device that captured/uploaded this data
+  string device_fingerprint = 6 [
+    (gogoproto.jsontag) = "device_fingerprint",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+
+  // ClientID is the approved client that facilitated this upload
+  string client_id = 7 [
+    (gogoproto.jsontag) = "client_id",
+    (gogoproto.moretags) = "yaml:\"client_id\""
+  ];
+
+  // ClientSignature is the signature from the approved client
+  bytes client_signature = 8 [
+    (gogoproto.jsontag) = "client_signature",
+    (gogoproto.moretags) = "yaml:\"client_signature\""
+  ];
+
+  // UserSignature is the signature from the user authorizing this upload
+  bytes user_signature = 9 [
+    (gogoproto.jsontag) = "user_signature",
+    (gogoproto.moretags) = "yaml:\"user_signature\""
+  ];
+
+  // PayloadHash is the hash of the encrypted payload for integrity
+  bytes payload_hash = 10 [
+    (gogoproto.jsontag) = "payload_hash",
+    (gogoproto.moretags) = "yaml:\"payload_hash\""
+  ];
+
+  // CaptureTimestamp is when the data was captured (Unix timestamp)
+  int64 capture_timestamp = 11 [
+    (gogoproto.jsontag) = "capture_timestamp",
+    (gogoproto.moretags) = "yaml:\"capture_timestamp\""
+  ];
+
+  // GeoHint is an optional coarse geographic hint
+  string geo_hint = 12 [
+    (gogoproto.jsontag) = "geo_hint",
+    (gogoproto.moretags) = "yaml:\"geo_hint\""
+  ];
+}
+
+// MsgUploadScopeResponse is the response for MsgUploadScope
+message MsgUploadScopeResponse {
+  // ScopeID is the ID of the uploaded scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Status is the initial verification status
+  VerificationStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // UploadedAt is when the scope was uploaded (Unix timestamp)
+  int64 uploaded_at = 3 [
+    (gogoproto.jsontag) = "uploaded_at",
+    (gogoproto.moretags) = "yaml:\"uploaded_at\""
+  ];
+}
+
+// MsgSubmitSSOVerificationProof submits an SSO verification proof.
+message MsgSubmitSSOVerificationProof {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitSSOVerificationProof";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string linkage_id = 2 [
+    (gogoproto.jsontag) = "linkage_id",
+    (gogoproto.moretags) = "yaml:\"linkage_id\""
+  ];
+
+  bytes attestation_data = 3 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  string evidence_hash = 4 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 5 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 6 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 7 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitSSOVerificationProofResponse is the response for SSO proof submission.
+message MsgSubmitSSOVerificationProofResponse {
+  string linkage_id = 1 [
+    (gogoproto.jsontag) = "linkage_id",
+    (gogoproto.moretags) = "yaml:\"linkage_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgSubmitEmailVerificationProof submits an email OTP verification proof.
+message MsgSubmitEmailVerificationProof {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitEmailVerificationProof";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string verification_id = 2 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string email_hash = 3 [
+    (gogoproto.jsontag) = "email_hash",
+    (gogoproto.moretags) = "yaml:\"email_hash\""
+  ];
+
+  string domain_hash = 4 [
+    (gogoproto.jsontag) = "domain_hash",
+    (gogoproto.moretags) = "yaml:\"domain_hash\""
+  ];
+
+  string nonce = 5 [
+    (gogoproto.jsontag) = "nonce",
+    (gogoproto.moretags) = "yaml:\"nonce\""
+  ];
+
+  bool is_organizational = 6 [
+    (gogoproto.jsontag) = "is_organizational",
+    (gogoproto.moretags) = "yaml:\"is_organizational\""
+  ];
+
+  bytes attestation_data = 7 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  bytes account_signature = 8 [
+    (gogoproto.jsontag) = "account_signature",
+    (gogoproto.moretags) = "yaml:\"account_signature\""
+  ];
+
+  int64 verified_at = 9 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  int64 expires_at = 10 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  string evidence_hash = 11 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 12 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 13 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 14 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitEmailVerificationProofResponse is the response for email proof submission.
+message MsgSubmitEmailVerificationProofResponse {
+  string verification_id = 1 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgSubmitSMSVerificationProof submits an SMS OTP verification proof.
+message MsgSubmitSMSVerificationProof {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitSMSVerificationProof";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string verification_id = 2 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string phone_hash = 3 [
+    (gogoproto.jsontag) = "phone_hash",
+    (gogoproto.moretags) = "yaml:\"phone_hash\""
+  ];
+
+  string phone_hash_salt = 4 [
+    (gogoproto.jsontag) = "phone_hash_salt",
+    (gogoproto.moretags) = "yaml:\"phone_hash_salt\""
+  ];
+
+  string country_code_hash = 5 [
+    (gogoproto.jsontag) = "country_code_hash",
+    (gogoproto.moretags) = "yaml:\"country_code_hash\""
+  ];
+
+  string carrier_type = 6 [
+    (gogoproto.jsontag) = "carrier_type",
+    (gogoproto.moretags) = "yaml:\"carrier_type\""
+  ];
+
+  bool is_voip = 7 [
+    (gogoproto.jsontag) = "is_voip",
+    (gogoproto.moretags) = "yaml:\"is_voip\""
+  ];
+
+  string validator_address = 8 [
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  bytes attestation_data = 9 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  bytes account_signature = 10 [
+    (gogoproto.jsontag) = "account_signature",
+    (gogoproto.moretags) = "yaml:\"account_signature\""
+  ];
+
+  int64 verified_at = 11 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  int64 expires_at = 12 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  string evidence_hash = 13 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 14 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 15 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 16 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitSMSVerificationProofResponse is the response for SMS proof submission.
+message MsgSubmitSMSVerificationProofResponse {
+  string verification_id = 1 [
+    (gogoproto.jsontag) = "verification_id",
+    (gogoproto.moretags) = "yaml:\"verification_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgSubmitSocialMediaScope submits a social media profile scope.
+message MsgSubmitSocialMediaScope {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "account_address";
+  option (amino.name) = "veid/MsgSubmitSocialMediaScope";
+
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  SocialMediaProvider provider = 3 [
+    (gogoproto.jsontag) = "provider",
+    (gogoproto.moretags) = "yaml:\"provider\""
+  ];
+
+  string profile_name_hash = 4 [
+    (gogoproto.jsontag) = "profile_name_hash",
+    (gogoproto.moretags) = "yaml:\"profile_name_hash\""
+  ];
+
+  string email_hash = 5 [
+    (gogoproto.jsontag) = "email_hash",
+    (gogoproto.moretags) = "yaml:\"email_hash\""
+  ];
+
+  string username_hash = 6 [
+    (gogoproto.jsontag) = "username_hash",
+    (gogoproto.moretags) = "yaml:\"username_hash\""
+  ];
+
+  string org_hash = 7 [
+    (gogoproto.jsontag) = "org_hash",
+    (gogoproto.moretags) = "yaml:\"org_hash\""
+  ];
+
+  int64 account_created_at = 8 [
+    (gogoproto.jsontag) = "account_created_at",
+    (gogoproto.moretags) = "yaml:\"account_created_at\""
+  ];
+
+  uint32 account_age_days = 9 [
+    (gogoproto.jsontag) = "account_age_days",
+    (gogoproto.moretags) = "yaml:\"account_age_days\""
+  ];
+
+  bool is_verified = 10 [
+    (gogoproto.jsontag) = "is_verified",
+    (gogoproto.moretags) = "yaml:\"is_verified\""
+  ];
+
+  string friend_count_range = 11 [
+    (gogoproto.jsontag) = "friend_count_range",
+    (gogoproto.moretags) = "yaml:\"friend_count_range\""
+  ];
+
+  bytes attestation_data = 12 [
+    (gogoproto.jsontag) = "attestation_data",
+    (gogoproto.moretags) = "yaml:\"attestation_data\""
+  ];
+
+  bytes account_signature = 13 [
+    (gogoproto.jsontag) = "account_signature",
+    (gogoproto.moretags) = "yaml:\"account_signature\""
+  ];
+
+  EncryptedPayloadEnvelope encrypted_payload = 14 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "encrypted_payload",
+    (gogoproto.moretags) = "yaml:\"encrypted_payload\""
+  ];
+
+  string evidence_hash = 15 [
+    (gogoproto.jsontag) = "evidence_hash",
+    (gogoproto.moretags) = "yaml:\"evidence_hash\""
+  ];
+
+  string evidence_storage_backend = 16 [
+    (gogoproto.jsontag) = "evidence_storage_backend",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_backend\""
+  ];
+
+  string evidence_storage_ref = 17 [
+    (gogoproto.jsontag) = "evidence_storage_ref",
+    (gogoproto.moretags) = "yaml:\"evidence_storage_ref\""
+  ];
+
+  map<string, string> evidence_metadata = 18 [
+    (gogoproto.jsontag) = "evidence_metadata",
+    (gogoproto.moretags) = "yaml:\"evidence_metadata\""
+  ];
+}
+
+// MsgSubmitSocialMediaScopeResponse is the response for social media scope submission.
+message MsgSubmitSocialMediaScopeResponse {
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  uint32 score_contribution = 3 [
+    (gogoproto.jsontag) = "score_contribution",
+    (gogoproto.moretags) = "yaml:\"score_contribution\""
+  ];
+
+  int64 verified_at = 4 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgRevokeScope is the message for revoking an identity scope
+message MsgRevokeScope {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgRevokeScope";
+
+  // Sender is the account revoking the scope
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ScopeID is the unique identifier of the scope to revoke
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Reason is the reason for revocation
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// MsgRevokeScopeResponse is the response for MsgRevokeScope
+message MsgRevokeScopeResponse {
+  // ScopeID is the ID of the revoked scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // RevokedAt is when the scope was revoked (Unix timestamp)
+  int64 revoked_at = 2 [
+    (gogoproto.jsontag) = "revoked_at",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+}
+
+// MsgRequestVerification is the message for requesting verification of a scope
+message MsgRequestVerification {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgRequestVerification";
+
+  // Sender is the account requesting verification
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ScopeID is the unique identifier of the scope to verify
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+}
+
+// MsgRequestVerificationResponse is the response for MsgRequestVerification
+message MsgRequestVerificationResponse {
+  // ScopeID is the ID of the scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Status is the new verification status
+  VerificationStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // RequestedAt is when verification was requested (Unix timestamp)
+  int64 requested_at = 3 [
+    (gogoproto.jsontag) = "requested_at",
+    (gogoproto.moretags) = "yaml:\"requested_at\""
+  ];
+}
+
+// MsgUpdateVerificationStatus is the message for validators to update verification status
+message MsgUpdateVerificationStatus {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgUpdateVerificationStatus";
+
+  // Sender is the validator updating the status
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // AccountAddress is the account whose scope is being updated
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeID is the unique identifier of the scope
+  string scope_id = 3 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // NewStatus is the new verification status
+  VerificationStatus new_status = 4 [
+    (gogoproto.jsontag) = "new_status",
+    (gogoproto.moretags) = "yaml:\"new_status\""
+  ];
+
+  // Reason is the reason for the status update
+  string reason = 5 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// MsgUpdateVerificationStatusResponse is the response for MsgUpdateVerificationStatus
+message MsgUpdateVerificationStatusResponse {
+  // ScopeID is the ID of the scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // PreviousStatus is the previous verification status
+  VerificationStatus previous_status = 2 [
+    (gogoproto.jsontag) = "previous_status",
+    (gogoproto.moretags) = "yaml:\"previous_status\""
+  ];
+
+  // NewStatus is the new verification status
+  VerificationStatus new_status = 3 [
+    (gogoproto.jsontag) = "new_status",
+    (gogoproto.moretags) = "yaml:\"new_status\""
+  ];
+
+  // UpdatedAt is when the status was updated (Unix timestamp)
+  int64 updated_at = 4 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+}
+
+// MsgUpdateScore is the message for validators to update identity score
+message MsgUpdateScore {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgUpdateScore";
+
+  // Sender is the validator updating the score
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // AccountAddress is the account whose score is being updated
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // NewScore is the new identity score (0-100)
+  uint32 new_score = 3 [
+    (gogoproto.jsontag) = "new_score",
+    (gogoproto.moretags) = "yaml:\"new_score\""
+  ];
+
+  // ScoreVersion is the ML model version used
+  string score_version = 4 [
+    (gogoproto.jsontag) = "score_version",
+    (gogoproto.moretags) = "yaml:\"score_version\""
+  ];
+}
+
+// MsgUpdateScoreResponse is the response for MsgUpdateScore
+message MsgUpdateScoreResponse {
+  // AccountAddress is the account whose score was updated
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // PreviousScore is the previous identity score
+  uint32 previous_score = 2 [
+    (gogoproto.jsontag) = "previous_score",
+    (gogoproto.moretags) = "yaml:\"previous_score\""
+  ];
+
+  // NewScore is the new identity score
+  uint32 new_score = 3 [
+    (gogoproto.jsontag) = "new_score",
+    (gogoproto.moretags) = "yaml:\"new_score\""
+  ];
+
+  // PreviousTier is the previous identity tier
+  IdentityTier previous_tier = 4 [
+    (gogoproto.jsontag) = "previous_tier",
+    (gogoproto.moretags) = "yaml:\"previous_tier\""
+  ];
+
+  // NewTier is the new identity tier
+  IdentityTier new_tier = 5 [
+    (gogoproto.jsontag) = "new_tier",
+    (gogoproto.moretags) = "yaml:\"new_tier\""
+  ];
+
+  // UpdatedAt is when the score was updated (Unix timestamp)
+  int64 updated_at = 6 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+}
+
+// MsgCreateIdentityWallet is the message for creating an identity wallet
+message MsgCreateIdentityWallet {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgCreateIdentityWallet";
+
+  // Sender is the account creating the wallet
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // BindingSignature is the signature proving ownership of the account
+  bytes binding_signature = 2 [
+    (gogoproto.jsontag) = "binding_signature",
+    (gogoproto.moretags) = "yaml:\"binding_signature\""
+  ];
+
+  // BindingPubKey is the public key used for the binding signature
+  bytes binding_pub_key = 3 [
+    (gogoproto.jsontag) = "binding_pub_key",
+    (gogoproto.moretags) = "yaml:\"binding_pub_key\""
+  ];
+
+  // InitialConsent contains optional initial consent settings
+  ConsentSettings initial_consent = 4 [
+    (gogoproto.jsontag) = "initial_consent",
+    (gogoproto.moretags) = "yaml:\"initial_consent\""
+  ];
+
+  // Metadata contains optional wallet metadata
+  map<string, string> metadata = 5 [
+    (gogoproto.jsontag) = "metadata",
+    (gogoproto.moretags) = "yaml:\"metadata\""
+  ];
+}
+
+// MsgCreateIdentityWalletResponse is the response for MsgCreateIdentityWallet
+message MsgCreateIdentityWalletResponse {
+  // WalletID is the ID of the created wallet
+  string wallet_id = 1 [
+    (gogoproto.jsontag) = "wallet_id",
+    (gogoproto.moretags) = "yaml:\"wallet_id\""
+  ];
+
+  // CreatedAt is when the wallet was created (Unix timestamp)
+  int64 created_at = 2 [
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+}
+
+// MsgAddScopeToWallet is the message for adding a scope reference to a wallet
+message MsgAddScopeToWallet {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgAddScopeToWallet";
+
+  // Sender is the account that owns the wallet
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ScopeID is the unique identifier of the scope to add
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ScopeType is the type of scope being added
+  ScopeType scope_type = 3 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // EnvelopeHash is the hash of the encrypted scope envelope
+  bytes envelope_hash = 4 [
+    (gogoproto.jsontag) = "envelope_hash",
+    (gogoproto.moretags) = "yaml:\"envelope_hash\""
+  ];
+
+  // UserSignature authorizes adding this scope to the wallet
+  bytes user_signature = 5 [
+    (gogoproto.jsontag) = "user_signature",
+    (gogoproto.moretags) = "yaml:\"user_signature\""
+  ];
+
+  // GrantConsent indicates if consent should be granted for this scope
+  bool grant_consent = 6 [
+    (gogoproto.jsontag) = "grant_consent",
+    (gogoproto.moretags) = "yaml:\"grant_consent\""
+  ];
+
+  // ConsentPurpose describes the purpose for consent
+  string consent_purpose = 7 [
+    (gogoproto.jsontag) = "consent_purpose",
+    (gogoproto.moretags) = "yaml:\"consent_purpose\""
+  ];
+
+  // ConsentExpiresAt is when consent expires (Unix timestamp)
+  int64 consent_expires_at = 8 [
+    (gogoproto.jsontag) = "consent_expires_at",
+    (gogoproto.moretags) = "yaml:\"consent_expires_at\""
+  ];
+}
+
+// MsgAddScopeToWalletResponse is the response for MsgAddScopeToWallet
+message MsgAddScopeToWalletResponse {
+  // ScopeID is the ID of the added scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // AddedAt is when the scope was added (Unix timestamp)
+  int64 added_at = 2 [
+    (gogoproto.jsontag) = "added_at",
+    (gogoproto.moretags) = "yaml:\"added_at\""
+  ];
+}
+
+// MsgRevokeScopeFromWallet is the message for revoking a scope from a wallet
+message MsgRevokeScopeFromWallet {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgRevokeScopeFromWallet";
+
+  // Sender is the account that owns the wallet
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ScopeID is the unique identifier of the scope to revoke
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Reason is the reason for revocation
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+
+  // UserSignature authorizes revoking this scope
+  bytes user_signature = 4 [
+    (gogoproto.jsontag) = "user_signature",
+    (gogoproto.moretags) = "yaml:\"user_signature\""
+  ];
+}
+
+// MsgRevokeScopeFromWalletResponse is the response for MsgRevokeScopeFromWallet
+message MsgRevokeScopeFromWalletResponse {
+  // ScopeID is the ID of the revoked scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // RevokedAt is when the scope was revoked (Unix timestamp)
+  int64 revoked_at = 2 [
+    (gogoproto.jsontag) = "revoked_at",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+}
+
+// MsgUpdateConsentSettings is the message for updating consent settings
+message MsgUpdateConsentSettings {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgUpdateConsentSettings";
+
+  // Sender is the account that owns the wallet
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ScopeID is the scope to update consent for (empty for global settings)
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // GrantConsent indicates whether to grant or revoke consent
+  bool grant_consent = 3 [
+    (gogoproto.jsontag) = "grant_consent",
+    (gogoproto.moretags) = "yaml:\"grant_consent\""
+  ];
+
+  // Purpose is the purpose for granting consent
+  string purpose = 4 [
+    (gogoproto.jsontag) = "purpose",
+    (gogoproto.moretags) = "yaml:\"purpose\""
+  ];
+
+  // ExpiresAt is when the consent should expire (Unix timestamp)
+  int64 expires_at = 5 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // GlobalSettings contains global settings updates
+  GlobalConsentUpdate global_settings = 6 [
+    (gogoproto.jsontag) = "global_settings",
+    (gogoproto.moretags) = "yaml:\"global_settings\""
+  ];
+
+  // UserSignature authorizes this consent update
+  bytes user_signature = 7 [
+    (gogoproto.jsontag) = "user_signature",
+    (gogoproto.moretags) = "yaml:\"user_signature\""
+  ];
+}
+
+// MsgUpdateConsentSettingsResponse is the response for MsgUpdateConsentSettings
+message MsgUpdateConsentSettingsResponse {
+  // UpdatedAt is when consent was updated (Unix timestamp)
+  int64 updated_at = 1 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+
+  // ConsentVersion is the new consent version
+  uint32 consent_version = 2 [
+    (gogoproto.jsontag) = "consent_version",
+    (gogoproto.moretags) = "yaml:\"consent_version\""
+  ];
+}
+
+// MsgRebindWallet is the message for rebinding a wallet during key rotation
+message MsgRebindWallet {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgRebindWallet";
+
+  // Sender is the account that owns the wallet
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // NewBindingSignature is the new binding signature with the new key
+  bytes new_binding_signature = 2 [
+    (gogoproto.jsontag) = "new_binding_signature",
+    (gogoproto.moretags) = "yaml:\"new_binding_signature\""
+  ];
+
+  // NewBindingPubKey is the new public key
+  bytes new_binding_pub_key = 3 [
+    (gogoproto.jsontag) = "new_binding_pub_key",
+    (gogoproto.moretags) = "yaml:\"new_binding_pub_key\""
+  ];
+
+  // OldSignature proves ownership of the old key
+  bytes old_signature = 4 [
+    (gogoproto.jsontag) = "old_signature",
+    (gogoproto.moretags) = "yaml:\"old_signature\""
+  ];
+
+  // MFAProof is proof of MFA for key rotation (serialized)
+  bytes mfa_proof = 5 [
+    (gogoproto.jsontag) = "mfa_proof",
+    (gogoproto.moretags) = "yaml:\"mfa_proof\""
+  ];
+
+  // DeviceFingerprint is the client device fingerprint
+  string device_fingerprint = 6 [
+    (gogoproto.jsontag) = "device_fingerprint",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+}
+
+// MsgRebindWalletResponse is the response for MsgRebindWallet
+message MsgRebindWalletResponse {
+  // ReboundAt is when the wallet was rebound (Unix timestamp)
+  int64 rebound_at = 1 [
+    (gogoproto.jsontag) = "rebound_at",
+    (gogoproto.moretags) = "yaml:\"rebound_at\""
+  ];
+}
+
+// MsgUpdateDerivedFeatures is the message for updating derived features
+message MsgUpdateDerivedFeatures {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgUpdateDerivedFeatures";
+
+  // Sender is the validator submitting the update
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // AccountAddress is the account to update features for
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // FaceEmbeddingHash is the new face embedding hash
+  bytes face_embedding_hash = 3 [
+    (gogoproto.jsontag) = "face_embedding_hash",
+    (gogoproto.moretags) = "yaml:\"face_embedding_hash\""
+  ];
+
+  // DocFieldHashes are new document field hashes
+  map<string, bytes> doc_field_hashes = 4 [
+    (gogoproto.jsontag) = "doc_field_hashes",
+    (gogoproto.moretags) = "yaml:\"doc_field_hashes\""
+  ];
+
+  // BiometricHash is the new biometric hash
+  bytes biometric_hash = 5 [
+    (gogoproto.jsontag) = "biometric_hash",
+    (gogoproto.moretags) = "yaml:\"biometric_hash\""
+  ];
+
+  // LivenessProofHash is the new liveness proof hash
+  bytes liveness_proof_hash = 6 [
+    (gogoproto.jsontag) = "liveness_proof_hash",
+    (gogoproto.moretags) = "yaml:\"liveness_proof_hash\""
+  ];
+
+  // ModelVersion is the ML model version used
+  string model_version = 7 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+}
+
+// MsgUpdateDerivedFeaturesResponse is the response for MsgUpdateDerivedFeatures
+message MsgUpdateDerivedFeaturesResponse {
+  // UpdatedAt is when the features were updated (Unix timestamp)
+  int64 updated_at = 1 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+}
+
+// MsgCompleteBorderlineFallback is the message for completing a borderline fallback
+message MsgCompleteBorderlineFallback {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "veid/MsgCompleteBorderlineFallback";
+
+  // Sender is the account completing the fallback
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ChallengeID is the MFA challenge ID that was satisfied
+  string challenge_id = 2 [
+    (gogoproto.jsontag) = "challenge_id",
+    (gogoproto.moretags) = "yaml:\"challenge_id\""
+  ];
+
+  // FactorsSatisfied are the factor types that were successfully verified
+  repeated string factors_satisfied = 3 [
+    (gogoproto.jsontag) = "factors_satisfied",
+    (gogoproto.moretags) = "yaml:\"factors_satisfied\""
+  ];
+}
+
+// MsgCompleteBorderlineFallbackResponse is the response for MsgCompleteBorderlineFallback
+message MsgCompleteBorderlineFallbackResponse {
+  // FallbackID is the ID of the completed fallback
+  string fallback_id = 1 [
+    (gogoproto.jsontag) = "fallback_id",
+    (gogoproto.moretags) = "yaml:\"fallback_id\""
+  ];
+
+  // FinalStatus is the resulting verification status
+  VerificationStatus final_status = 2 [
+    (gogoproto.jsontag) = "final_status",
+    (gogoproto.moretags) = "yaml:\"final_status\""
+  ];
+
+  // FactorClass is the security class of the satisfied factors
+  string factor_class = 3 [
+    (gogoproto.jsontag) = "factor_class",
+    (gogoproto.moretags) = "yaml:\"factor_class\""
+  ];
+}
+
+// MsgUpdateBorderlineParams is the message for updating borderline parameters
+message MsgUpdateBorderlineParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgUpdateBorderlineParams";
+
+  // Authority is the governance module account address
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Params are the new borderline parameters
+  BorderlineParams params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// MsgUpdateBorderlineParamsResponse is the response for MsgUpdateBorderlineParams
+message MsgUpdateBorderlineParamsResponse {}
+
+// MsgUpdateParams is the message for updating module parameters
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgUpdateParams";
+
+  // Authority is the governance module account address
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Params are the new module parameters
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}

@@ -1,0 +1,914 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`SDL SDL GPU RAM should return correct version 1`] = `
+Uint8Array [
+  10,
+  191,
+  201,
+  161,
+  251,
+  144,
+  215,
+  236,
+  74,
+  174,
+  198,
+  52,
+  116,
+  40,
+  36,
+  9,
+  19,
+  100,
+  118,
+  216,
+  139,
+  192,
+  91,
+  239,
+  38,
+  33,
+  42,
+  131,
+  9,
+  37,
+  217,
+  36,
+]
+`;
+
+exports[`SDL SDL GPU Tests should generate correct manifest 1`] = `
+[
+  {
+    "name": "westcoast",
+    "services": [
+      {
+        "args": null,
+        "command": null,
+        "count": 2,
+        "credentials": null,
+        "env": null,
+        "expose": [
+          {
+            "endpointSequenceNumber": 0,
+            "externalPort": 0,
+            "global": true,
+            "hosts": [
+              "ahostname.com",
+            ],
+            "httpOptions": {
+              "maxBodySize": 1048576,
+              "nextCases": [
+                "error",
+                "timeout",
+              ],
+              "nextTimeout": 0,
+              "nextTries": 3,
+              "readTimeout": 60000,
+              "sendTimeout": 60000,
+            },
+            "ip": "",
+            "port": 80,
+            "proto": "TCP",
+            "service": "",
+          },
+          {
+            "endpointSequenceNumber": 0,
+            "externalPort": 0,
+            "global": true,
+            "hosts": null,
+            "httpOptions": {
+              "maxBodySize": 1048576,
+              "nextCases": [
+                "error",
+                "timeout",
+              ],
+              "nextTimeout": 0,
+              "nextTries": 3,
+              "readTimeout": 60000,
+              "sendTimeout": 60000,
+            },
+            "ip": "",
+            "port": 12345,
+            "proto": "UDP",
+            "service": "",
+          },
+        ],
+        "image": "nginx",
+        "name": "web",
+        "resources": {
+          "cpu": {
+            "units": {
+              "val": "100",
+            },
+          },
+          "endpoints": [
+            {
+              "sequence_number": 0,
+            },
+            {
+              "kind": 1,
+              "sequence_number": 0,
+            },
+          ],
+          "gpu": {
+            "attributes": [
+              {
+                "key": "vendor/nvidia/model/*",
+                "value": "true",
+              },
+            ],
+            "units": {
+              "val": 1,
+            },
+          },
+          "id": 1,
+          "memory": {
+            "size": {
+              "val": 134217728,
+            },
+          },
+          "storage": [
+            {
+              "name": "default",
+              "size": {
+                "val": 1073741824,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  },
+]
+`;
+
+exports[`SDL SDL GPU Tests should return correct version 1`] = `
+Uint8Array [
+  150,
+  188,
+  12,
+  67,
+  235,
+  14,
+  176,
+  26,
+  140,
+  222,
+  143,
+  22,
+  23,
+  130,
+  162,
+  19,
+  28,
+  179,
+  6,
+  118,
+  120,
+  213,
+  174,
+  53,
+  80,
+  184,
+  172,
+  71,
+  101,
+  40,
+  210,
+  40,
+]
+`;
+
+exports[`SDL SDL GPU should return the correct manifest version: Manifest version matches expected result 1`] = `
+Uint8Array [
+  232,
+  220,
+  31,
+  53,
+  91,
+  117,
+  187,
+  158,
+  23,
+  7,
+  98,
+  203,
+  249,
+  159,
+  218,
+  228,
+  124,
+  136,
+  63,
+  25,
+  249,
+  113,
+  117,
+  158,
+  160,
+  178,
+  171,
+  70,
+  118,
+  199,
+  207,
+  250,
+]
+`;
+
+exports[`SDL SDL WordPress Deployment Groups should generate the correct deployment groups 1`] = `
+[
+  {
+    "name": "akash",
+    "requirements": {
+      "attributes": [],
+      "signedBy": {
+        "allOf": [],
+        "anyOf": [
+          "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+          "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
+        ],
+      },
+    },
+    "resources": [
+      {
+        "count": 1,
+        "price": {
+          "amount": "10000",
+          "denom": "uve",
+        },
+        "resource": {
+          "cpu": {
+            "attributes": undefined,
+            "units": {
+              "val": Uint8Array [
+                49,
+                48,
+                48,
+                48,
+              ],
+            },
+          },
+          "endpoints": [],
+          "gpu": {
+            "attributes": undefined,
+            "units": {
+              "val": Uint8Array [
+                48,
+              ],
+            },
+          },
+          "id": 1,
+          "memory": {
+            "attributes": undefined,
+            "quantity": {
+              "val": Uint8Array [
+                49,
+                48,
+                55,
+                51,
+                55,
+                52,
+                49,
+                56,
+                50,
+                52,
+              ],
+            },
+          },
+          "storage": [
+            {
+              "attributes": undefined,
+              "name": "default",
+              "quantity": {
+                "val": Uint8Array [
+                  49,
+                  48,
+                  55,
+                  51,
+                  55,
+                  52,
+                  49,
+                  56,
+                  50,
+                  52,
+                ],
+              },
+            },
+            {
+              "attributes": [
+                {
+                  "key": "class",
+                  "value": "beta3",
+                },
+                {
+                  "key": "persistent",
+                  "value": "true",
+                },
+              ],
+              "name": "wordpress-db",
+              "quantity": {
+                "val": Uint8Array [
+                  56,
+                  53,
+                  56,
+                  57,
+                  57,
+                  51,
+                  52,
+                  53,
+                  57,
+                  50,
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        "count": 1,
+        "price": {
+          "amount": "10000",
+          "denom": "uve",
+        },
+        "resource": {
+          "cpu": {
+            "attributes": undefined,
+            "units": {
+              "val": Uint8Array [
+                52,
+                48,
+                48,
+                48,
+              ],
+            },
+          },
+          "endpoints": [
+            {
+              "sequence_number": 0,
+            },
+          ],
+          "gpu": {
+            "attributes": undefined,
+            "units": {
+              "val": Uint8Array [
+                48,
+              ],
+            },
+          },
+          "id": 2,
+          "memory": {
+            "attributes": undefined,
+            "quantity": {
+              "val": Uint8Array [
+                52,
+                50,
+                57,
+                52,
+                57,
+                54,
+                55,
+                50,
+                57,
+                54,
+              ],
+            },
+          },
+          "storage": [
+            {
+              "attributes": undefined,
+              "name": "default",
+              "quantity": {
+                "val": Uint8Array [
+                  52,
+                  50,
+                  57,
+                  52,
+                  57,
+                  54,
+                  55,
+                  50,
+                  57,
+                  54,
+                ],
+              },
+            },
+            {
+              "attributes": [
+                {
+                  "key": "class",
+                  "value": "beta3",
+                },
+                {
+                  "key": "persistent",
+                  "value": "true",
+                },
+              ],
+              "name": "wordpress-data",
+              "quantity": {
+                "val": Uint8Array [
+                  51,
+                  52,
+                  51,
+                  53,
+                  57,
+                  55,
+                  51,
+                  56,
+                  51,
+                  54,
+                  56,
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+  },
+]
+`;
+
+exports[`SDL SDL WordPress Version should return the correct manifest version 1`] = `
+Uint8Array [
+  41,
+  59,
+  109,
+  246,
+  224,
+  47,
+  134,
+  151,
+  175,
+  212,
+  39,
+  166,
+  185,
+  123,
+  9,
+  234,
+  39,
+  45,
+  57,
+  28,
+  107,
+  76,
+  26,
+  88,
+  129,
+  224,
+  141,
+  178,
+  188,
+  237,
+  211,
+  251,
+]
+`;
+
+exports[`SDL SDL v3 Resource Groups should create v3 resource groups: Groups matches expected result 1`] = `
+[
+  {
+    "name": "westcoast",
+    "requirements": {
+      "attributes": [
+        {
+          "key": "foo",
+          "value": "bar",
+        },
+        {
+          "key": "region",
+          "value": "us-west",
+        },
+      ],
+      "signedBy": {
+        "allOf": [
+          "ve1123123",
+          "ve1124123123",
+        ],
+        "anyOf": [
+          "ve1123123",
+          "ve1124123123",
+        ],
+      },
+    },
+    "resources": [
+      {
+        "count": 2,
+        "price": {
+          "amount": "50",
+          "denom": "uve",
+        },
+        "resource": {
+          "cpu": {
+            "attributes": undefined,
+            "units": {
+              "val": Uint8Array [
+                49,
+                48,
+                48,
+              ],
+            },
+          },
+          "endpoints": [
+            {
+              "sequence_number": 0,
+            },
+            {
+              "kind": 1,
+              "sequence_number": 0,
+            },
+          ],
+          "gpu": {
+            "attributes": [
+              {
+                "key": "vendor/nvidia/model/a100",
+                "value": "true",
+              },
+            ],
+            "units": {
+              "val": Uint8Array [
+                49,
+              ],
+            },
+          },
+          "id": 1,
+          "memory": {
+            "attributes": undefined,
+            "quantity": {
+              "val": Uint8Array [
+                49,
+                51,
+                52,
+                50,
+                49,
+                55,
+                55,
+                50,
+                56,
+              ],
+            },
+          },
+          "storage": [
+            {
+              "attributes": undefined,
+              "name": "default",
+              "quantity": {
+                "val": Uint8Array [
+                  49,
+                  48,
+                  55,
+                  51,
+                  55,
+                  52,
+                  49,
+                  56,
+                  50,
+                  52,
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+  },
+]
+`;
+
+exports[`SDL SDL: IP Lease Manifest should generate the correct manifest: Manifest matches expected result 1`] = `
+[
+  {
+    "Name": "dcloud",
+    "Services": [
+      {
+        "Args": null,
+        "Command": null,
+        "Count": 1,
+        "Env": null,
+        "Expose": [
+          {
+            "EndpointSequenceNumber": 1,
+            "ExternalPort": 80,
+            "Global": true,
+            "HTTPOptions": {
+              "MaxBodySize": 1048576,
+              "NextCases": [
+                "error",
+                "timeout",
+              ],
+              "NextTimeout": 0,
+              "NextTries": 3,
+              "ReadTimeout": 60000,
+              "SendTimeout": 60000,
+            },
+            "Hosts": null,
+            "IP": "myendpoint",
+            "Port": 3000,
+            "Proto": "TCP",
+            "Service": "",
+          },
+        ],
+        "Image": "akashlytics/hello-akash-world:0.2.0",
+        "Name": "web",
+        "Resources": {
+          "cpu": {
+            "units": {
+              "val": "500",
+            },
+          },
+          "endpoints": [
+            {
+              "kind": 2,
+              "sequence_number": 1,
+            },
+          ],
+          "memory": {
+            "size": {
+              "val": 536870912,
+            },
+          },
+          "storage": [
+            {
+              "name": "default",
+              "size": {
+                "val": 536870912,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  },
+]
+`;
+
+exports[`SDL test GPU with interface SDL: GPU Version with ram & interface (snapshot): Manifest version matches expected result 1`] = `
+Uint8Array [
+  2,
+  202,
+  192,
+  211,
+  110,
+  29,
+  213,
+  154,
+  140,
+  25,
+  139,
+  151,
+  166,
+  36,
+  136,
+  139,
+  68,
+  241,
+  136,
+  65,
+  173,
+  51,
+  153,
+  126,
+  166,
+  245,
+  156,
+  55,
+  83,
+  238,
+  54,
+  170,
+]
+`;
+
+exports[`SDL test sdl persistent storage SDL: Persistent Storage Manifest: SDL: Persistent Storage Manifest 1`] = `
+[
+  {
+    "Name": "akash",
+    "Services": [
+      {
+        "Args": null,
+        "Command": null,
+        "Count": 1,
+        "Env": [
+          "WORDPRESS_DB_HOST=db",
+          "WORDPRESS_DB_USER=wordpress",
+          "WORDPRESS_DB_PASSWORD=testpass4you",
+          "WORDPRESS_DB_NAME=wordpress",
+        ],
+        "Expose": [
+          {
+            "EndpointSequenceNumber": 0,
+            "ExternalPort": 0,
+            "Global": true,
+            "HTTPOptions": {
+              "MaxBodySize": 104857600,
+              "NextCases": [
+                "error",
+                "timeout",
+              ],
+              "NextTimeout": 0,
+              "NextTries": 3,
+              "ReadTimeout": 60000,
+              "SendTimeout": 60000,
+            },
+            "Hosts": null,
+            "IP": "",
+            "Port": 80,
+            "Proto": "TCP",
+            "Service": "",
+          },
+        ],
+        "Image": "wordpress",
+        "Name": "wordpress",
+        "Resources": {
+          "cpu": {
+            "units": {
+              "val": "4000",
+            },
+          },
+          "endpoints": null,
+          "memory": {
+            "size": {
+              "val": 4294967296,
+            },
+          },
+          "storage": [
+            {
+              "name": "default",
+              "size": {
+                "val": 4294967296,
+              },
+            },
+            {
+              "attributes": [
+                {
+                  "key": "class",
+                  "value": "beta3",
+                },
+                {
+                  "key": "persistent",
+                  "value": "true",
+                },
+              ],
+              "name": "wordpress-data",
+              "size": {
+                "val": 34359738368,
+              },
+            },
+          ],
+        },
+        "params": {
+          "Storage": [
+            {
+              "mount": "/var/www/html",
+              "name": "wordpress-data",
+              "readOnly": false,
+            },
+          ],
+        },
+      },
+      {
+        "Args": null,
+        "Command": null,
+        "Count": 1,
+        "Env": [
+          "MYSQL_RANDOM_ROOT_PASSWORD=1",
+          "MYSQL_DATABASE=wordpress",
+          "MYSQL_USER=wordpress",
+          "MYSQL_PASSWORD=testpass4you",
+        ],
+        "Expose": [
+          {
+            "EndpointSequenceNumber": 0,
+            "ExternalPort": 0,
+            "Global": false,
+            "HTTPOptions": {
+              "MaxBodySize": 1048576,
+              "NextCases": [
+                "error",
+                "timeout",
+              ],
+              "NextTimeout": 0,
+              "NextTries": 3,
+              "ReadTimeout": 60000,
+              "SendTimeout": 60000,
+            },
+            "Hosts": null,
+            "IP": "",
+            "Port": 3306,
+            "Proto": "TCP",
+            "Service": "wordpress",
+          },
+          {
+            "EndpointSequenceNumber": 0,
+            "ExternalPort": 0,
+            "Global": false,
+            "HTTPOptions": {
+              "MaxBodySize": 1048576,
+              "NextCases": [
+                "error",
+                "timeout",
+              ],
+              "NextTimeout": 0,
+              "NextTries": 3,
+              "ReadTimeout": 60000,
+              "SendTimeout": 60000,
+            },
+            "Hosts": null,
+            "IP": "",
+            "Port": 33060,
+            "Proto": "TCP",
+            "Service": "wordpress",
+          },
+        ],
+        "Image": "mariadb:10.6.4",
+        "Name": "db",
+        "Resources": {
+          "cpu": {
+            "units": {
+              "val": "1000",
+            },
+          },
+          "endpoints": null,
+          "memory": {
+            "size": {
+              "val": 1073741824,
+            },
+          },
+          "storage": [
+            {
+              "name": "default",
+              "size": {
+                "val": 1073741824,
+              },
+            },
+            {
+              "attributes": [
+                {
+                  "key": "class",
+                  "value": "beta3",
+                },
+                {
+                  "key": "persistent",
+                  "value": "true",
+                },
+              ],
+              "name": "wordpress-db",
+              "size": {
+                "val": 8589934592,
+              },
+            },
+            {
+              "attributes": [
+                {
+                  "key": "class",
+                  "value": "ram",
+                },
+                {
+                  "key": "persistent",
+                  "value": "false",
+                },
+              ],
+              "name": "shm",
+              "size": {
+                "val": 1073741824,
+              },
+            },
+            {
+              "attributes": [
+                {
+                  "key": "class",
+                  "value": "ram",
+                },
+                {
+                  "key": "persistent",
+                  "value": "false",
+                },
+              ],
+              "name": "shm2",
+              "size": {
+                "val": 1073741824,
+              },
+            },
+          ],
+        },
+        "params": {
+          "Storage": [
+            {
+              "mount": "/var/lib/mysql",
+              "name": "wordpress-db",
+              "readOnly": false,
+            },
+            {
+              "mount": "/dev/shm",
+              "name": "shm",
+              "readOnly": false,
+            },
+          ],
+        },
+      },
+    ],
+  },
+]
+`;

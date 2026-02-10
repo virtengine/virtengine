@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package virtengine.discovery.v1;
+
+import "virtengine/discovery/v1/client_info.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/client";
+
+// VirtEngine virtengine specific RPC parameters.
+message VirtEngine {
+  // ClientInfo holds information about the client.
+  ClientInfo client_info = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ClientInfo",
+    (gogoproto.jsontag)    = "client_info",
+    (gogoproto.moretags)   = "yaml:\"client_info\""
+  ];
+}

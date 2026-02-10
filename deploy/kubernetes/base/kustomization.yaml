@@ -1,0 +1,36 @@
+# VirtEngine Kubernetes Base Manifests
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: virtengine
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - virtengine-node-deployment.yaml
+  - virtengine-node-service.yaml
+  - provider-daemon-deployment.yaml
+  - provider-daemon-service.yaml
+  - pdb.yaml
+  - hpa.yaml
+  - networkpolicy.yaml
+  # TEE Enclave resources (TEE-HW-001)
+  - tee-enclave-configmap.yaml
+  - tee-enclave-deployment.yaml
+  - tee-enclave-service.yaml
+
+configMapGenerator:
+  - name: virtengine-config
+    behavior: merge
+    literals:
+      - CHAIN_ID=virtengine-1
+      - LOG_LEVEL=info
+
+images:
+  - name: virtengine/virtengine-node
+    newTag: latest
+  - name: virtengine/provider-daemon
+    newTag: latest
+  - name: virtengine/tee-enclave
+    newTag: 0.1.0

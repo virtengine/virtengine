@@ -1,0 +1,18 @@
+syntax = "proto3";
+package virtengine.take.v1;
+
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/take/v1/paramsmsg.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/take/v1";
+
+// Msg defines the take Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+  // UpdateParams defines a governance operation for updating the x/market module
+  // parameters. The authority is hard-coded to the x/gov module account.
+  //
+  // Since: akash v1.0.0
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}

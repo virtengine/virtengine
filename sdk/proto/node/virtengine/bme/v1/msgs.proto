@@ -1,0 +1,195 @@
+syntax = "proto3";
+package virtengine.bme.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos/base/v1beta1/coin.proto";
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "amino/amino.proto";
+
+import "virtengine/bme/v1/params.proto";
+import "virtengine/bme/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/bme/v1";
+
+// MsgUpdateParams defines the message for updating module parameters
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "virtengine/bme/v1/MsgUpdateParams";
+
+  // authority is the address that controls the module (governance)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString"
+  ];
+
+  // params defines the updated parameters
+  Params params = 2 [(gogoproto.nullable) = false];
+}
+
+// MsgUpdateParamsResponse is the response type for MsgUpdateParams
+message MsgUpdateParamsResponse {}
+
+// MsgSeedVault defines the message for seeding the BME vault with AKT
+// This is used to provide an initial volatility buffer
+message MsgSeedVault {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "virtengine/bme/v1/MsgSeedVault";
+
+  // authority is the address that controls the module (governance)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString"
+  ];
+
+  // amount is the AKT amount to seed the vault with
+  cosmos.base.v1beta1.Coin amount = 2 [
+    (gogoproto.nullable) = false
+  ];
+
+  // source is the source of funds (e.g., community pool)
+  string source = 3;
+}
+
+// MsgSeedVaultResponse is the response type for MsgSeedVault
+message MsgSeedVaultResponse {
+  // vault_akt is the new vault AKT balance
+  string vault_akt = 1 [
+    (cosmos_proto.scalar) = "cosmos.Int",
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// MsgBurnMint defines the message for burning one token to mint another
+// Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+message MsgBurnMint {
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "virtengine/bme/v1/MsgBurnMint";
+
+  // owner source of the coins to be burned
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // to destination of the minted coins.
+  // if minted coin is ACT, "to" must be same as signer
+  string to = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "to",
+    (gogoproto.moretags)  = "yaml:\"to\""
+  ];
+
+  // coins_to_burn
+  cosmos.base.v1beta1.Coin coins_to_burn = 3 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "CoinsToBurn",
+    (gogoproto.jsontag)    = "coins_to_burn",
+    (gogoproto.moretags)   = "yaml:\"coins_to_burn\""
+  ];
+
+  // denom_to_mint
+  string denom_to_mint = 4 [
+    (gogoproto.customname) = "DenomToMint",
+    (gogoproto.jsontag)    = "denom_to_mint",
+    (gogoproto.moretags)   = "yaml:\"denom_to_mint\""
+  ];
+}
+
+// MsgMintACT defines the message for burning one token to mint another
+// Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+message MsgMintACT {
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "virtengine/bme/v1/MsgMintACT";
+
+  // owner source of the coins to be burned
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // to destination of the minted coins.
+  // if minted coin is ACT, "to" must be same as signer
+  string to = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "to",
+    (gogoproto.moretags)  = "yaml:\"to\""
+  ];
+
+  // coins_to_burn
+  cosmos.base.v1beta1.Coin coins_to_burn = 3 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "CoinsToBurn",
+    (gogoproto.jsontag)    = "coins_to_burn",
+    (gogoproto.moretags)   = "yaml:\"coins_to_burn\""
+  ];
+}
+
+// MsgMintACT defines the message for burning one token to mint another
+// Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+message MsgBurnACT {
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "virtengine/bme/v1/MsgBurnACT";
+
+  // owner source of the coins to be burned
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // to destination of the minted coins.
+  // if minted coin is ACT, "to" must be same as signer
+  string to = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "to",
+    (gogoproto.moretags)  = "yaml:\"to\""
+  ];
+
+  // coins_to_burn
+  cosmos.base.v1beta1.Coin coins_to_burn = 3 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "CoinsToBurn",
+    (gogoproto.jsontag)    = "coins_to_burn",
+    (gogoproto.moretags)   = "yaml:\"coins_to_burn\""
+  ];
+}
+
+
+// MsgBurnMintResponse is the response type for MsgBurnMint
+message MsgBurnMintResponse {
+  LedgerRecordID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  LedgerRecordStatus status = 2;
+}
+
+// MsgBurnMintResponse is the response type for MsgBurnMint
+message MsgMintACTResponse {
+  LedgerRecordID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  LedgerRecordStatus status = 2;
+}
+
+// MsgBurnMintResponse is the response type for MsgBurnMint
+message MsgBurnACTResponse {
+  LedgerRecordID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  LedgerRecordStatus status = 2;
+}
+

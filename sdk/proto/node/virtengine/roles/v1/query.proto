@@ -1,0 +1,214 @@
+syntax = "proto3";
+package virtengine.roles.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "virtengine/roles/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/roles/v1";
+
+// Query defines the gRPC querier service for the roles module
+service Query {
+  // AccountRoles queries all roles for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AccountRoles(QueryAccountRolesRequest) returns (QueryAccountRolesResponse) {
+    option (google.api.http).get = "/virtengine/roles/v1/account/{address}/roles";
+  }
+
+  // RoleMembers queries all members of a specific role
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc RoleMembers(QueryRoleMembersRequest) returns (QueryRoleMembersResponse) {
+    option (google.api.http).get = "/virtengine/roles/v1/role/{role}/members";
+  }
+
+  // AccountState queries the state of an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AccountState(QueryAccountStateRequest) returns (QueryAccountStateResponse) {
+    option (google.api.http).get = "/virtengine/roles/v1/account/{address}/state";
+  }
+
+  // GenesisAccounts queries all genesis accounts
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc GenesisAccounts(QueryGenesisAccountsRequest) returns (QueryGenesisAccountsResponse) {
+    option (google.api.http).get = "/virtengine/roles/v1/genesis_accounts";
+  }
+
+  // Params queries the module parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/roles/v1/params";
+  }
+
+  // HasRole checks if an account has a specific role
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc HasRole(QueryHasRoleRequest) returns (QueryHasRoleResponse) {
+    option (google.api.http).get = "/virtengine/roles/v1/account/{address}/has_role/{role}";
+  }
+}
+
+// QueryAccountRolesRequest is the request for QueryAccountRoles
+message QueryAccountRolesRequest {
+  // Address is the account address to query roles for
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+}
+
+// QueryAccountRolesResponse is the response for QueryAccountRoles
+message QueryAccountRolesResponse {
+  // Address is the queried account address
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // Roles are the role assignments for this account
+  repeated RoleAssignment roles = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "roles",
+    (gogoproto.moretags) = "yaml:\"roles\""
+  ];
+}
+
+// QueryRoleMembersRequest is the request for QueryRoleMembers
+message QueryRoleMembersRequest {
+  // Role is the role to query members for
+  string role = 1 [
+    (gogoproto.jsontag) = "role",
+    (gogoproto.moretags) = "yaml:\"role\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryRoleMembersResponse is the response for QueryRoleMembers
+message QueryRoleMembersResponse {
+  // Role is the queried role
+  string role = 1 [
+    (gogoproto.jsontag) = "role",
+    (gogoproto.moretags) = "yaml:\"role\""
+  ];
+
+  // Members are the role assignments for this role
+  repeated RoleAssignment members = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "members",
+    (gogoproto.moretags) = "yaml:\"members\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 3 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryAccountStateRequest is the request for QueryAccountState
+message QueryAccountStateRequest {
+  // Address is the account address to query state for
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+}
+
+// QueryAccountStateResponse is the response for QueryAccountState
+message QueryAccountStateResponse {
+  // AccountState is the account state record
+  AccountStateRecord account_state = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account_state",
+    (gogoproto.moretags) = "yaml:\"account_state\""
+  ];
+
+  // Found indicates if the account state was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryGenesisAccountsRequest is the request for QueryGenesisAccounts
+message QueryGenesisAccountsRequest {
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 1 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryGenesisAccountsResponse is the response for QueryGenesisAccounts
+message QueryGenesisAccountsResponse {
+  // Addresses are the genesis account addresses
+  repeated string addresses = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "addresses",
+    (gogoproto.moretags) = "yaml:\"addresses\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [
+    (gogoproto.jsontag) = "pagination,omitempty",
+    (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryParamsRequest is the request for QueryParams
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response for QueryParams
+message QueryParamsResponse {
+  // Params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// QueryHasRoleRequest is the request for QueryHasRole
+message QueryHasRoleRequest {
+  // Address is the account address to check
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // Role is the role to check for
+  string role = 2 [
+    (gogoproto.jsontag) = "role",
+    (gogoproto.moretags) = "yaml:\"role\""
+  ];
+}
+
+// QueryHasRoleResponse is the response for QueryHasRole
+message QueryHasRoleResponse {
+  // HasRole indicates if the account has the specified role
+  bool has_role = 1 [
+    (gogoproto.jsontag) = "has_role",
+    (gogoproto.moretags) = "yaml:\"has_role\""
+  ];
+
+  // Assignment is the role assignment if found
+  RoleAssignment assignment = 2 [
+    (gogoproto.jsontag) = "assignment,omitempty",
+    (gogoproto.moretags) = "yaml:\"assignment\""
+  ];
+}

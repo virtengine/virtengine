@@ -1,0 +1,22 @@
+syntax = "proto3";
+package virtengine.base.offchain.sign.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/types/offchain/sign";
+
+// MsgSignData defines an arbitrary, general-purpose, off-chain message
+message MsgSignData {
+  // Signer is the sdk.AccAddress of the message signer
+  string signer = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "signer",
+    (gogoproto.moretags)  = "yaml:\"signer\""
+  ];
+
+  // Data represents the raw bytes of the content that is signed (text, json, etc)
+  bytes data = 2 [
+    (gogoproto.jsontag) = "data"
+  ];
+}

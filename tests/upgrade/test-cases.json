@@ -1,0 +1,226 @@
+{
+    "v1.2.0": {
+        "modules": {
+            "added": [
+                "veid",
+                "mfa",
+                "encryption",
+                "hpc",
+                "settlement",
+                "delegation",
+                "roles",
+                "support",
+                "enclave",
+                "fraud",
+                "benchmark",
+                "resources",
+                "config",
+                "oracle",
+                "review",
+                "bme",
+                "virt_staking"
+            ],
+            "removed": []
+        },
+        "migrations": {
+        }
+    },
+    "v1.1.0": {
+        "modules": {
+        },
+        "migrations": {
+        }
+    },
+    "v1.0.0": {
+        "modules": {
+            "added": [
+                "consensus"
+            ],
+            "removed": [
+                "agov",
+                "astaking",
+                "crisis"
+            ]
+        },
+        "migrations": {
+            "auth": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                },
+                {
+                    "from": "4",
+                    "to": "5"
+                }
+            ],
+            "authz": [
+                {
+                    "from": "2",
+                    "to": "3"
+                }
+            ],
+            "bank": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                }
+            ],
+            "cert": [
+                {
+                    "from": "3",
+                    "to": "4"
+                }
+            ],
+            "deployment": [
+                {
+                    "from": "4",
+                    "to": "5"
+                }
+            ],
+            "distribution": [
+                {
+                    "from": "2",
+                    "to": "3"
+                }
+            ],
+            "audit": [
+                {
+                    "from": "2",
+                    "to": "3"
+                }
+            ],
+            "escrow": [
+                {
+                    "from": "2",
+                    "to": "3"
+                }
+            ],
+            "feegrant": [
+                {
+                    "from": "1",
+                    "to": "2"
+                }
+            ],
+            "gov": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                },
+                {
+                    "from": "4",
+                    "to": "5"
+                }
+            ],
+            "ibc": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                },
+                {
+                    "from": "4",
+                    "to": "5"
+                },
+                {
+                    "from": "5",
+                    "to": "6"
+                },
+                {
+                    "from": "6",
+                    "to": "7"
+                },
+                {
+                    "from": "7",
+                    "to": "8"
+                }
+            ],
+            "market": [
+                {
+                    "from": "6",
+                    "to": "7"
+                }
+            ],
+            "mint": [
+                {
+                    "from": "1",
+                    "to": "2"
+                }
+            ],
+            "provider": [
+                {
+                    "from": "2",
+                    "to": "3"
+                }
+            ],
+            "slashing": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                }
+            ],
+            "staking": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                },
+                {
+                    "from": "4",
+                    "to": "5"
+                }
+            ],
+            "take": [
+                {
+                    "from": "2",
+                    "to": "3"
+                }
+            ],
+            "transfer": [
+                {
+                    "from": "2",
+                    "to": "3"
+                },
+                {
+                    "from": "3",
+                    "to": "4"
+                },
+                {
+                    "from": "4",
+                    "to": "5"
+                },
+                {
+                    "from": "5",
+                    "to": "6"
+                }
+            ],
+            "upgrade": [
+                {
+                    "from": "1",
+                    "to": "2"
+                }
+            ]
+        }
+    }
+}

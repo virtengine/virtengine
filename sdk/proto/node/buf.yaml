@@ -1,0 +1,22 @@
+version: v1
+name: buf.build/virtengine/virtengine
+deps:
+  - buf.build/cosmos/gogo-proto
+  - buf.build/cosmos/cosmos-sdk
+  - buf.build/cosmos/cosmos-proto  
+  - buf.build/cosmos/ibc
+  - buf.build/cosmos/ics23
+  - buf.build/googleapis/googleapis
+  - buf.build/protocolbuffers/wellknowntypes
+  - buf.build/cosmwasm/wasmd
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - STANDARD
+    - COMMENTS
+    - FILE_LOWER_SNAKE_CASE
+  except:
+    - UNARY_RPC
+    - COMMENT_FIELD

@@ -1,0 +1,31 @@
+# ArgoCD Command Parameters ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmd-params-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Application controller settings
+  controller.status.processors: "20"
+  controller.operation.processors: "10"
+  controller.self.heal.timeout.seconds: "5"
+  controller.repo.server.timeout.seconds: "60"
+  
+  # Repo server settings
+  reposerver.parallelism.limit: "0"
+  
+  # Server settings
+  server.insecure: "false"
+  server.staticassets: "/shared/app"
+  server.disable.auth: "false"
+  server.enable.gzip: "true"
+  
+  # Application set controller
+  applicationsetcontroller.policy: "sync"
+  applicationsetcontroller.enable.progressive.syncs: "false"
+  
+  # Notifications controller
+  notificationscontroller.selfservice.enabled: "false"

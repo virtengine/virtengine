@@ -1,0 +1,55 @@
+# Copyright 2024 VirtEngine Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Load Test
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Nightly at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration in minutes'
+        required: false
+        default: '30'
+      target_rps:
+        description: 'Target requests per second'
+        required: false
+        default: '1000'
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    environment: load-test
+    timeout-minutes: 60
+    env:
+      GO_VERSION: "1.25.5"
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Build load test binary
+        run: go build -o loadtest ./tests/load/cmd/loadtest
+      
+      - name: Run VEID load test
+        run: |
+          ./loadtest \
+            --scenario veid_submit \
+            --duration ${{ github.event.inputs.duration || '30' }}m \
+            --target-rps ${{ github.event.inputs.target_rps || '1000' }} \
+            --endpoint localhost:9090 \
+            --output results/veid-load.json
+        continue-on-error: true
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-test-results
+          path: results/

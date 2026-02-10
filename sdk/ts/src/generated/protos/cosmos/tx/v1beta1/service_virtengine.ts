@@ -1,0 +1,76 @@
+import { BroadcastTxRequest, BroadcastTxResponse, GetBlockWithTxsRequest, GetBlockWithTxsResponse, GetTxRequest, GetTxResponse, GetTxsEventRequest, GetTxsEventResponse, SimulateRequest, SimulateResponse, TxDecodeAminoRequest, TxDecodeAminoResponse, TxDecodeRequest, TxDecodeResponse, TxEncodeAminoRequest, TxEncodeAminoResponse, TxEncodeRequest, TxEncodeResponse } from "./service.ts";
+
+export const Service = {
+  typeName: "cosmos.tx.v1beta1.Service",
+  methods: {
+    simulate: {
+      name: "Simulate",
+      httpMethod: "post",
+      httpPath: "/cosmos/tx/v1beta1/simulate",
+      input: SimulateRequest,
+      output: SimulateResponse,
+      get parent() { return Service; },
+    },
+    getTx: {
+      name: "GetTx",
+      httpPath: "/cosmos/tx/v1beta1/txs/{hash}",
+      input: GetTxRequest,
+      output: GetTxResponse,
+      get parent() { return Service; },
+    },
+    broadcastTx: {
+      name: "BroadcastTx",
+      httpMethod: "post",
+      httpPath: "/cosmos/tx/v1beta1/txs",
+      input: BroadcastTxRequest,
+      output: BroadcastTxResponse,
+      get parent() { return Service; },
+    },
+    getTxsEvent: {
+      name: "GetTxsEvent",
+      httpPath: "/cosmos/tx/v1beta1/txs",
+      input: GetTxsEventRequest,
+      output: GetTxsEventResponse,
+      get parent() { return Service; },
+    },
+    getBlockWithTxs: {
+      name: "GetBlockWithTxs",
+      httpPath: "/cosmos/tx/v1beta1/txs/block/{height}",
+      input: GetBlockWithTxsRequest,
+      output: GetBlockWithTxsResponse,
+      get parent() { return Service; },
+    },
+    txDecode: {
+      name: "TxDecode",
+      httpMethod: "post",
+      httpPath: "/cosmos/tx/v1beta1/decode",
+      input: TxDecodeRequest,
+      output: TxDecodeResponse,
+      get parent() { return Service; },
+    },
+    txEncode: {
+      name: "TxEncode",
+      httpMethod: "post",
+      httpPath: "/cosmos/tx/v1beta1/encode",
+      input: TxEncodeRequest,
+      output: TxEncodeResponse,
+      get parent() { return Service; },
+    },
+    txEncodeAmino: {
+      name: "TxEncodeAmino",
+      httpMethod: "post",
+      httpPath: "/cosmos/tx/v1beta1/encode/amino",
+      input: TxEncodeAminoRequest,
+      output: TxEncodeAminoResponse,
+      get parent() { return Service; },
+    },
+    txDecodeAmino: {
+      name: "TxDecodeAmino",
+      httpMethod: "post",
+      httpPath: "/cosmos/tx/v1beta1/decode/amino",
+      input: TxDecodeAminoRequest,
+      output: TxDecodeAminoResponse,
+      get parent() { return Service; },
+    },
+  },
+} as const;

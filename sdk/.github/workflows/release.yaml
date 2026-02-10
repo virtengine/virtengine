@@ -1,0 +1,50 @@
+name: Release
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch git
+        run: git fetch --prune --unshallow
+
+      - name: Setup environment
+        uses: HatsuneMiku3939/direnv-action@v1
+
+      - name: Setup go toolchain
+        run: |
+          toolchain=$(./script/tools.sh gotoolchain | sed 's/go*//')
+          echo "GOVERSION=${toolchain}" >> $GITHUB_ENV
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GOVERSION }}"
+
+      - name: Get release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Install Changelog Generator
+        run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@${{ env.GIT_CHGLOG_VERSION }}
+
+      - name: Generate Changelog
+        run: make changelog
+
+      - name: Delete previous manual release
+        uses: cb80/delrel@latest
+        with:
+          tag: v${{ env.RELEASE_TAG }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete previously created release if exists
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: changelog.md

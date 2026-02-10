@@ -1,0 +1,19 @@
+---
+name: lint
+on:
+  push:
+    paths:
+      - "**.sh"
+      - ".github/workflows/lint-shell.yaml"
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git fetch --prune --unshallow
+      - name: Setup env
+        uses: HatsuneMiku3939/direnv-action@v1
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+      - run: make lint-shell

@@ -1,0 +1,96 @@
+syntax = "proto3";
+package virtengine.resources.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "virtengine/resources/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/resources/v1";
+
+// Msg defines the resources Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // ProviderHeartbeat updates resource inventory from a provider heartbeat.
+  rpc ProviderHeartbeat(MsgProviderHeartbeat) returns (MsgProviderHeartbeatResponse);
+
+  // AllocateResources selects a provider and creates a pending allocation.
+  rpc AllocateResources(MsgAllocateResources) returns (MsgAllocateResourcesResponse);
+
+  // ActivateAllocation acknowledges and activates an allocation.
+  rpc ActivateAllocation(MsgActivateAllocation) returns (MsgActivateAllocationResponse);
+
+  // ReleaseAllocation releases an allocation and returns capacity.
+  rpc ReleaseAllocation(MsgReleaseAllocation) returns (MsgReleaseAllocationResponse);
+
+  // UpdateParams updates module parameters (governance only).
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgProviderHeartbeat {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "resources/MsgProviderHeartbeat";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string inventory_id = 2 [(gogoproto.jsontag) = "inventory_id", (gogoproto.moretags) = "yaml:\"inventory_id\""];
+  ResourceClass resource_class = 3 [(gogoproto.jsontag) = "resource_class", (gogoproto.moretags) = "yaml:\"resource_class\""];
+  ResourceCapacity total = 4 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "total", (gogoproto.moretags) = "yaml:\"total\""];
+  ResourceCapacity available = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "available", (gogoproto.moretags) = "yaml:\"available\""];
+  Locality locality = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "locality", (gogoproto.moretags) = "yaml:\"locality\""];
+  uint64 sequence = 7 [(gogoproto.jsontag) = "sequence", (gogoproto.moretags) = "yaml:\"sequence\""];
+}
+
+message MsgProviderHeartbeatResponse {
+  bool accepted = 1 [(gogoproto.jsontag) = "accepted", (gogoproto.moretags) = "yaml:\"accepted\""];
+  uint64 sequence_ack = 2 [(gogoproto.jsontag) = "sequence_ack", (gogoproto.moretags) = "yaml:\"sequence_ack\""];
+}
+
+message MsgAllocateResources {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "requester_address";
+  option (amino.name) = "resources/MsgAllocateResources";
+
+  string requester_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  ResourceRequest request = 2 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "request", (gogoproto.moretags) = "yaml:\"request\""];
+}
+
+message MsgAllocateResourcesResponse {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+}
+
+message MsgActivateAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "resources/MsgActivateAllocation";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+}
+
+message MsgActivateAllocationResponse {}
+
+message MsgReleaseAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "requester_address";
+  option (amino.name) = "resources/MsgReleaseAllocation";
+
+  string requester_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string reason = 3 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+message MsgReleaseAllocationResponse {}
+
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "resources/MsgUpdateParams";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "authority", (gogoproto.moretags) = "yaml:\"authority\""];
+  Params params = 2 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "params", (gogoproto.moretags) = "yaml:\"params\""];
+}
+
+message MsgUpdateParamsResponse {}

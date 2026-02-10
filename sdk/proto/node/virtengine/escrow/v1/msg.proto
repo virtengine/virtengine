@@ -1,0 +1,50 @@
+syntax = "proto3";
+package virtengine.escrow.v1;
+
+import "gogoproto/gogo.proto";
+
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/escrow/id/v1/id.proto";
+import "virtengine/base/deposit/v1/deposit.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/v1";
+
+// MsgAccountDeposit represents a message to deposit funds into an existing escrow account
+// on the blockchain. This is part of the interaction mechanism for managing
+// deployment-related resources.
+message MsgAccountDeposit {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "signer";
+
+  // Signer is the account bech32 address of the user who wants to deposit into
+  // an escrow account. Does not necessarily needs to be an owner of the deployment.
+  // It is a string representing a valid bech32 account address.
+  //
+  // Example:
+  //   "ve1..."
+  string signer = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "signer",
+    (gogoproto.moretags)  = "yaml:\"signer\""
+  ];
+
+  // ID is the unique identifier of the account.
+  virtengine.escrow.id.v1.Account id = 2 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  // Deposit contains information about the deposit amount and the source of the deposit to the escrow account.
+  virtengine.base.deposit.v1.Deposit deposit = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "deposit",
+    (gogoproto.moretags) = "yaml:\"deposit\""
+  ];
+}
+
+// MsgAccountDepositResponse defines response type for the MsgDeposit.
+message MsgAccountDepositResponse {}

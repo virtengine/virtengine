@@ -1,0 +1,55 @@
+{
+  "deployment": {
+    "web": {
+      "dcloud": {
+        "count": 1,
+        "profile": "web"
+      }
+    }
+  },
+  "profiles": {
+    "compute": {
+      "web": {
+        "resources": {
+          "cpu": {
+            "units": 0.5
+          },
+          "memory": {
+            "size": "512Mi"
+          },
+          "storage": {
+            "size": "512Mi"
+          }
+        }
+      }
+    },
+    "placement": {
+      "dcloud": {
+        "pricing": {
+          "web": {
+            "amount": 1000,
+            "denom": "uve"
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "web": {
+      "expose": [
+        {
+          "as": 80,
+          "port": 3000,
+          "to": [
+            {
+              "global": true
+            }
+          ]
+        }
+      ],
+      "image": "virtenginelytics/hello-VirtEngine-world:0.2.0"
+    }
+  },
+  "version": "2.0"
+}
+

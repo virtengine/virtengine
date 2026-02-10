@@ -1,0 +1,25 @@
+syntax = "proto3";
+package virtengine.market.v1beta5;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/base/resources/v1beta4/resources.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5";
+
+// ResourceOffer describes resources that provider is offering
+// for deployment.
+message ResourceOffer {
+  option (gogoproto.equal) = true;
+  // Resources holds information about bid resources.
+  virtengine.base.resources.v1beta4.Resources resources = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.jsontag)    = "resources",
+    (gogoproto.moretags)   = "yaml:\"resources\""
+  ];
+  // Count is the number of resources.
+  uint32 count = 2 [
+    (gogoproto.jsontag)  = "count",
+    (gogoproto.moretags) = "yaml:\"count\""
+  ];
+}

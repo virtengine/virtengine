@@ -1,0 +1,339 @@
+# VirtEngine TEE Enclave Deployment
+# TEE-HW-001: Deploy TEE hardware & attestation in production
+#
+# This deployment runs the TEE enclave service with platform-specific
+# node selectors and tolerations. It supports SGX, SEV-SNP, and Nitro platforms.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tee-enclave
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    virtengine.io/task: "TEE-HW-001"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tee-enclave
+      app.kubernetes.io/component: enclave
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tee-enclave
+        app.kubernetes.io/component: enclave
+        app.kubernetes.io/part-of: virtengine
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: tee-enclave
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Prefer TEE-enabled nodes, schedule on any enclave-ready node
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: virtengine.io/enclave-ready
+                    operator: In
+                    values:
+                      - "true"
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: virtengine.io/tee-platform
+                    operator: In
+                    values:
+                      - nitro
+            - weight: 80
+              preference:
+                matchExpressions:
+                  - key: virtengine.io/tee-platform
+                    operator: In
+                    values:
+                      - sev-snp
+            - weight: 60
+              preference:
+                matchExpressions:
+                  - key: virtengine.io/tee-platform
+                    operator: In
+                    values:
+                      - sgx
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: tee-enclave
+                topologyKey: kubernetes.io/hostname
+
+      # Tolerate TEE-specific taints
+      tolerations:
+        - key: virtengine.io/tee
+          operator: Exists
+          effect: NoSchedule
+        - key: dedicated
+          operator: Equal
+          value: enclave
+          effect: NoSchedule
+
+      initContainers:
+        # Hardware detection init container
+        - name: tee-hardware-detect
+          image: virtengine/tee-enclave:0.1.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Detecting TEE hardware..."
+              
+              # Detect platform
+              PLATFORM="simulated"
+              
+              # Check for Nitro
+              if [ -e /dev/nsm ]; then
+                echo "Nitro NSM device detected"
+                PLATFORM="nitro"
+              fi
+              
+              # Check for SEV-SNP
+              if [ -e /dev/sev-guest ]; then
+                echo "SEV-SNP device detected"
+                PLATFORM="sev-snp"
+              fi
+              
+              # Check for SGX
+              if [ -e /dev/sgx/enclave ] || [ -e /dev/sgx_enclave ]; then
+                echo "SGX device detected"
+                PLATFORM="sgx"
+              fi
+              
+              echo "Detected platform: $PLATFORM"
+              echo "$PLATFORM" > /shared/platform
+              
+              # Verify hardware for production
+              if [ "$VIRTENGINE_TEE_REQUIRE_HARDWARE" = "true" ] && [ "$PLATFORM" = "simulated" ]; then
+                echo "ERROR: Production mode requires TEE hardware, but none detected"
+                exit 1
+              fi
+              
+              echo "Hardware detection complete"
+          env:
+            - name: VIRTENGINE_TEE_REQUIRE_HARDWARE
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_REQUIRE_HARDWARE
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: shared
+              mountPath: /shared
+            - name: dev-tee
+              mountPath: /dev
+              readOnly: true
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+
+      containers:
+        - name: enclave
+          image: virtengine/tee-enclave:0.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+            - --config=/config/enclave.yaml
+          ports:
+            - name: grpc
+              containerPort: 8443
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            - name: attestation
+              containerPort: 8444
+              protocol: TCP
+          env:
+            - name: VIRTENGINE_TEE_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_MODE
+            - name: VIRTENGINE_TEE_REQUIRE_HARDWARE
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_REQUIRE_HARDWARE
+            - name: VIRTENGINE_TEE_ALLOW_DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_ALLOW_DEBUG
+            - name: VIRTENGINE_TEE_ATTESTATION_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_ATTESTATION_ENDPOINT
+            - name: VIRTENGINE_TEE_CERT_CACHE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_CERT_CACHE_PATH
+            - name: VIRTENGINE_TEE_MEASUREMENT_ALLOWLIST
+              value: /config/measurements.json
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: measurements
+              mountPath: /config/measurements.json
+              subPath: measurements.json
+              readOnly: true
+            - name: cert-cache
+              mountPath: /var/cache/virtengine/tee-certs
+            - name: shared
+              mountPath: /shared
+              readOnly: true
+            - name: dev-tee
+              mountPath: /dev
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: config
+          configMap:
+            name: tee-enclave-config
+        - name: measurements
+          configMap:
+            name: tee-measurement-allowlist
+        - name: cert-cache
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: shared
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: dev-tee
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: tmp
+          emptyDir:
+            sizeLimit: 100Mi
+
+---
+# ServiceAccount for TEE Enclave
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tee-enclave
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+  annotations:
+    # For AWS: eks.amazonaws.com/role-arn annotation for IRSA
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/virtengine-tee-enclave
+
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tee-enclave-pdb
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tee-enclave
+      app.kubernetes.io/component: enclave

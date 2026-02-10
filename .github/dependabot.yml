@@ -1,0 +1,203 @@
+# INFRA-003: Dependency vulnerability scanning with Dependabot
+# Automatically creates PRs to update dependencies with security vulnerabilities
+# Also keeps dependencies up-to-date on a weekly schedule
+
+version: 2
+registries:
+  # GitHub Container Registry for Docker images
+  ghcr:
+    type: docker-registry
+    url: https://ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
+
+updates:
+  # Go modules (main codebase)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    groups:
+      # Group Cosmos SDK and related updates
+      cosmos-sdk:
+        patterns:
+          - "github.com/cosmos/*"
+          - "github.com/cometbft/*"
+          - "cosmossdk.io/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group crypto/security libraries
+      crypto:
+        patterns:
+          - "golang.org/x/crypto"
+          - "github.com/btcsuite/*"
+          - "github.com/tyler-smith/*"
+      # Group testing libraries
+      testing:
+        patterns:
+          - "github.com/stretchr/testify"
+          - "github.com/golang/mock"
+          - "go.uber.org/mock"
+          - "github.com/jarcoal/httpmock"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps)"
+    reviewers:
+      - "virtengine/core-maintainers"
+
+  # Go modules (SDK subdirectory)
+  - package-ecosystem: "gomod"
+    directory: "/sdk"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+      - "sdk"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Python dependencies (ML pipelines)
+  - package-ecosystem: "pip"
+    directory: "/ml"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      ml-frameworks:
+        patterns:
+          - "tensorflow*"
+          - "torch*"
+          - "numpy"
+          - "scipy"
+          - "scikit-learn"
+      security:
+        patterns:
+          - "cryptography"
+          - "pynacl"
+          - "certifi"
+    labels:
+      - "dependencies"
+      - "python"
+      - "ml"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Python test dependencies
+  - package-ecosystem: "pip"
+    directory: "/tests/python"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "python"
+      - "tests"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # npm dependencies (Codex Monitor)
+  - package-ecosystem: "npm"
+    directory: "/scripts/codex-monitor"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      linting:
+        patterns:
+          - "eslint*"
+          - "prettier*"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "build(deps-dev)"
+
+  # npm dependencies (Portal library)
+  - package-ecosystem: "npm"
+    directory: "/lib/portal"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      react:
+        patterns:
+          - "react*"
+          - "@react/*"
+      testing:
+        patterns:
+          - "jest"
+          - "@testing-library/*"
+          - "vitest"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "portal"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/_build"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      # Group all GitHub Actions updates
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"

@@ -1,0 +1,98 @@
+import { QueryAllBalancesRequest, QueryAllBalancesResponse, QueryBalanceRequest, QueryBalanceResponse, QueryDenomMetadataByQueryStringRequest, QueryDenomMetadataByQueryStringResponse, QueryDenomMetadataRequest, QueryDenomMetadataResponse, QueryDenomOwnersByQueryRequest, QueryDenomOwnersByQueryResponse, QueryDenomOwnersRequest, QueryDenomOwnersResponse, QueryDenomsMetadataRequest, QueryDenomsMetadataResponse, QueryParamsRequest, QueryParamsResponse, QuerySendEnabledRequest, QuerySendEnabledResponse, QuerySpendableBalanceByDenomRequest, QuerySpendableBalanceByDenomResponse, QuerySpendableBalancesRequest, QuerySpendableBalancesResponse, QuerySupplyOfRequest, QuerySupplyOfResponse, QueryTotalSupplyRequest, QueryTotalSupplyResponse } from "./query.ts";
+
+export const Query = {
+  typeName: "cosmos.bank.v1beta1.Query",
+  methods: {
+    balance: {
+      name: "Balance",
+      httpPath: "/cosmos/bank/v1beta1/balances/{address}/by_denom",
+      input: QueryBalanceRequest,
+      output: QueryBalanceResponse,
+      get parent() { return Query; },
+    },
+    allBalances: {
+      name: "AllBalances",
+      httpPath: "/cosmos/bank/v1beta1/balances/{address}",
+      input: QueryAllBalancesRequest,
+      output: QueryAllBalancesResponse,
+      get parent() { return Query; },
+    },
+    spendableBalances: {
+      name: "SpendableBalances",
+      httpPath: "/cosmos/bank/v1beta1/spendable_balances/{address}",
+      input: QuerySpendableBalancesRequest,
+      output: QuerySpendableBalancesResponse,
+      get parent() { return Query; },
+    },
+    spendableBalanceByDenom: {
+      name: "SpendableBalanceByDenom",
+      httpPath: "/cosmos/bank/v1beta1/spendable_balances/{address}/by_denom",
+      input: QuerySpendableBalanceByDenomRequest,
+      output: QuerySpendableBalanceByDenomResponse,
+      get parent() { return Query; },
+    },
+    totalSupply: {
+      name: "TotalSupply",
+      httpPath: "/cosmos/bank/v1beta1/supply",
+      input: QueryTotalSupplyRequest,
+      output: QueryTotalSupplyResponse,
+      get parent() { return Query; },
+    },
+    supplyOf: {
+      name: "SupplyOf",
+      httpPath: "/cosmos/bank/v1beta1/supply/by_denom",
+      input: QuerySupplyOfRequest,
+      output: QuerySupplyOfResponse,
+      get parent() { return Query; },
+    },
+    params: {
+      name: "Params",
+      httpPath: "/cosmos/bank/v1beta1/params",
+      input: QueryParamsRequest,
+      output: QueryParamsResponse,
+      get parent() { return Query; },
+    },
+    denomsMetadata: {
+      name: "DenomsMetadata",
+      httpPath: "/cosmos/bank/v1beta1/denoms_metadata",
+      input: QueryDenomsMetadataRequest,
+      output: QueryDenomsMetadataResponse,
+      get parent() { return Query; },
+    },
+    denomMetadata: {
+      name: "DenomMetadata",
+      httpPath: "/cosmos/bank/v1beta1/denoms_metadata/{denom=**}",
+      input: QueryDenomMetadataRequest,
+      output: QueryDenomMetadataResponse,
+      get parent() { return Query; },
+    },
+    denomMetadataByQueryString: {
+      name: "DenomMetadataByQueryString",
+      httpPath: "/cosmos/bank/v1beta1/denoms_metadata_by_query_string",
+      input: QueryDenomMetadataByQueryStringRequest,
+      output: QueryDenomMetadataByQueryStringResponse,
+      get parent() { return Query; },
+    },
+    denomOwners: {
+      name: "DenomOwners",
+      httpPath: "/cosmos/bank/v1beta1/denom_owners/{denom=**}",
+      input: QueryDenomOwnersRequest,
+      output: QueryDenomOwnersResponse,
+      get parent() { return Query; },
+    },
+    denomOwnersByQuery: {
+      name: "DenomOwnersByQuery",
+      httpPath: "/cosmos/bank/v1beta1/denom_owners_by_query",
+      input: QueryDenomOwnersByQueryRequest,
+      output: QueryDenomOwnersByQueryResponse,
+      get parent() { return Query; },
+    },
+    sendEnabled: {
+      name: "SendEnabled",
+      httpPath: "/cosmos/bank/v1beta1/send_enabled",
+      input: QuerySendEnabledRequest,
+      output: QuerySendEnabledResponse,
+      get parent() { return Query; },
+    },
+  },
+} as const;

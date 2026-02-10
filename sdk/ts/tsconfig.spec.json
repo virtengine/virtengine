@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.build.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.spec.ts",
+    "test/**/*",
+    "script/**/*",
+    "./node_modules/.tmp/virtengine/generated/**/*.ts"
+  ]
+}
+

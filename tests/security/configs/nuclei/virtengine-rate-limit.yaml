@@ -1,0 +1,52 @@
+id: virtengine-rate-limit
+
+info:
+  name: VirtEngine - Rate Limiting Check
+  author: VirtEngine Security Team
+  severity: medium
+  description: Verifies rate limiting is enforced on sensitive endpoints
+  reference:
+    - PENETRATION_TESTING_PROGRAM.md#API-RATE-001
+  tags: virtengine,ratelimit,dos
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/api/v1/auth/login"
+    
+    body: '{"email":"test@test.com","password":"test123"}'
+    
+    headers:
+      Content-Type: application/json
+    
+    attack: batteringram
+    payloads:
+      attempt:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - "10"
+    
+    stop-at-first-match: false
+    
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 429
+        negative: true
+        
+      - type: dsl
+        dsl:
+          - "len(body) > 0"
+
+    extractors:
+      - type: dsl
+        dsl:
+          - "status_code"

@@ -1,0 +1,153 @@
+syntax = "proto3";
+package virtengine.marketplace.v1;
+
+import "cosmos/base/v1beta1/coin.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+import "virtengine/encryption/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1";
+
+// OfferingState represents the lifecycle state of an offering
+enum OfferingState {
+  // OFFERING_STATE_UNSPECIFIED represents an unspecified offering state
+  OFFERING_STATE_UNSPECIFIED = 0;
+
+  // OFFERING_STATE_ACTIVE indicates the offering is active and available for orders
+  OFFERING_STATE_ACTIVE = 1;
+
+  // OFFERING_STATE_PAUSED indicates the offering is temporarily paused
+  OFFERING_STATE_PAUSED = 2;
+
+  // OFFERING_STATE_SUSPENDED indicates the offering is suspended by admin/moderator
+  OFFERING_STATE_SUSPENDED = 3;
+
+  // OFFERING_STATE_DEPRECATED indicates the offering is deprecated (no new orders)
+  OFFERING_STATE_DEPRECATED = 4;
+
+  // OFFERING_STATE_TERMINATED indicates the offering is permanently terminated
+  OFFERING_STATE_TERMINATED = 5;
+}
+
+// OfferingCategory represents the category of an offering
+enum OfferingCategory {
+  // OFFERING_CATEGORY_UNSPECIFIED represents an unspecified category
+  OFFERING_CATEGORY_UNSPECIFIED = 0;
+
+  // OFFERING_CATEGORY_COMPUTE represents compute/VM offerings
+  OFFERING_CATEGORY_COMPUTE = 1;
+
+  // OFFERING_CATEGORY_STORAGE represents storage offerings
+  OFFERING_CATEGORY_STORAGE = 2;
+
+  // OFFERING_CATEGORY_NETWORK represents network offerings
+  OFFERING_CATEGORY_NETWORK = 3;
+
+  // OFFERING_CATEGORY_HPC represents high-performance computing offerings
+  OFFERING_CATEGORY_HPC = 4;
+
+  // OFFERING_CATEGORY_GPU represents GPU compute offerings
+  OFFERING_CATEGORY_GPU = 5;
+
+  // OFFERING_CATEGORY_ML represents machine learning offerings
+  OFFERING_CATEGORY_ML = 6;
+
+  // OFFERING_CATEGORY_OTHER represents other/custom offerings
+  OFFERING_CATEGORY_OTHER = 7;
+}
+
+// PricingModel represents how an offering is priced
+enum PricingModel {
+  // PRICING_MODEL_UNSPECIFIED represents an unspecified pricing model
+  PRICING_MODEL_UNSPECIFIED = 0;
+
+  // PRICING_MODEL_HOURLY represents hourly pricing
+  PRICING_MODEL_HOURLY = 1;
+
+  // PRICING_MODEL_DAILY represents daily pricing
+  PRICING_MODEL_DAILY = 2;
+
+  // PRICING_MODEL_MONTHLY represents monthly pricing
+  PRICING_MODEL_MONTHLY = 3;
+
+  // PRICING_MODEL_USAGE_BASED represents usage-based pricing
+  PRICING_MODEL_USAGE_BASED = 4;
+
+  // PRICING_MODEL_FIXED represents fixed/one-time pricing
+  PRICING_MODEL_FIXED = 5;
+}
+
+// IdentityRequirement defines the identity verification requirements for an offering
+message IdentityRequirement {
+  uint32 min_score = 1 [(gogoproto.jsontag) = "min_score", (gogoproto.moretags) = "yaml:\"min_score\""];
+  string required_status = 2 [(gogoproto.jsontag) = "required_status", (gogoproto.moretags) = "yaml:\"required_status\""];
+  bool require_verified_email = 3 [(gogoproto.jsontag) = "require_verified_email", (gogoproto.moretags) = "yaml:\"require_verified_email\""];
+  bool require_verified_domain = 4 [(gogoproto.jsontag) = "require_verified_domain", (gogoproto.moretags) = "yaml:\"require_verified_domain\""];
+  bool require_mfa = 5 [(gogoproto.jsontag) = "require_mfa", (gogoproto.moretags) = "yaml:\"require_mfa\""];
+}
+
+// PricingInfo defines the pricing structure for an offering
+message PricingInfo {
+  PricingModel model = 1 [(gogoproto.jsontag) = "model", (gogoproto.moretags) = "yaml:\"model\""];
+  uint64 base_price = 2 [(gogoproto.jsontag) = "base_price", (gogoproto.moretags) = "yaml:\"base_price\""];
+  string currency = 3 [(gogoproto.jsontag) = "currency", (gogoproto.moretags) = "yaml:\"currency\""];
+  map<string, uint64> usage_rates = 4 [(gogoproto.jsontag) = "usage_rates,omitempty", (gogoproto.moretags) = "yaml:\"usage_rates\""];
+  int64 minimum_commitment = 5 [(gogoproto.jsontag) = "minimum_commitment,omitempty", (gogoproto.moretags) = "yaml:\"minimum_commitment\""];
+}
+
+// PriceComponent represents component-based pricing for an offering.
+message PriceComponent {
+  // Resource type (cpu, ram, storage, gpu, network).
+  string resource_type = 1 [(gogoproto.jsontag) = "resource_type,omitempty", (gogoproto.moretags) = "yaml:\"resource_type\""];
+
+  // Unit of the component (vcpu, gb, hour, month).
+  string unit = 2 [(gogoproto.jsontag) = "unit,omitempty", (gogoproto.moretags) = "yaml:\"unit\""];
+
+  // Price per unit.
+  cosmos.base.v1beta1.Coin price = 3 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "price", (gogoproto.moretags) = "yaml:\"price\""];
+
+  // USD reference price at time of creation (display only).
+  string usd_reference = 4 [(gogoproto.jsontag) = "usd_reference,omitempty", (gogoproto.moretags) = "yaml:\"usd_reference\""];
+}
+
+// OfferingID is the unique identifier for an offering
+message OfferingID {
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  uint64 sequence = 2 [(gogoproto.jsontag) = "sequence", (gogoproto.moretags) = "yaml:\"sequence\""];
+}
+
+// EncryptedProviderSecrets holds encrypted provider secrets
+message EncryptedProviderSecrets {
+  virtengine.encryption.v1.EncryptedPayloadEnvelope envelope = 1 [(gogoproto.jsontag) = "envelope", (gogoproto.moretags) = "yaml:\"envelope\""];
+  string envelope_ref = 2 [(gogoproto.jsontag) = "envelope_ref,omitempty", (gogoproto.moretags) = "yaml:\"envelope_ref\""];
+  repeated string recipient_key_ids = 3 [(gogoproto.jsontag) = "recipient_key_ids,omitempty", (gogoproto.moretags) = "yaml:\"recipient_key_ids\""];
+}
+
+// Offering represents a marketplace offering from a provider
+message Offering {
+  OfferingID id = 1 [(gogoproto.jsontag) = "id", (gogoproto.moretags) = "yaml:\"id\""];
+  OfferingState state = 2 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  OfferingCategory category = 3 [(gogoproto.jsontag) = "category", (gogoproto.moretags) = "yaml:\"category\""];
+  string name = 4 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 5 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  string version = 6 [(gogoproto.jsontag) = "version,omitempty", (gogoproto.moretags) = "yaml:\"version\""];
+  PricingInfo pricing = 7 [(gogoproto.jsontag) = "pricing", (gogoproto.moretags) = "yaml:\"pricing\""];
+  IdentityRequirement identity_requirement = 8 [(gogoproto.jsontag) = "identity_requirement", (gogoproto.moretags) = "yaml:\"identity_requirement\""];
+  bool require_mfa_for_orders = 9 [(gogoproto.jsontag) = "require_mfa_for_orders", (gogoproto.moretags) = "yaml:\"require_mfa_for_orders\""];
+  map<string, string> public_metadata = 10 [(gogoproto.jsontag) = "public_metadata,omitempty", (gogoproto.moretags) = "yaml:\"public_metadata\""];
+  EncryptedProviderSecrets encrypted_secrets = 11 [(gogoproto.jsontag) = "encrypted_secrets,omitempty", (gogoproto.moretags) = "yaml:\"encrypted_secrets\""];
+  map<string, string> specifications = 12 [(gogoproto.jsontag) = "specifications,omitempty", (gogoproto.moretags) = "yaml:\"specifications\""];
+  repeated string tags = 13 [(gogoproto.jsontag) = "tags,omitempty", (gogoproto.moretags) = "yaml:\"tags\""];
+  repeated string regions = 14 [(gogoproto.jsontag) = "regions,omitempty", (gogoproto.moretags) = "yaml:\"regions\""];
+  google.protobuf.Timestamp created_at = 15 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp updated_at = 16 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  google.protobuf.Timestamp activated_at = 17 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "activated_at,omitempty", (gogoproto.moretags) = "yaml:\"activated_at\""];
+  google.protobuf.Timestamp terminated_at = 18 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "terminated_at,omitempty", (gogoproto.moretags) = "yaml:\"terminated_at\""];
+  uint32 max_concurrent_orders = 19 [(gogoproto.jsontag) = "max_concurrent_orders,omitempty", (gogoproto.moretags) = "yaml:\"max_concurrent_orders\""];
+  uint64 total_order_count = 20 [(gogoproto.jsontag) = "total_order_count", (gogoproto.moretags) = "yaml:\"total_order_count\""];
+  uint64 active_order_count = 21 [(gogoproto.jsontag) = "active_order_count", (gogoproto.moretags) = "yaml:\"active_order_count\""];
+  repeated PriceComponent prices = 22 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "prices,omitempty", (gogoproto.moretags) = "yaml:\"prices\""];
+  bool allow_bidding = 23 [(gogoproto.jsontag) = "allow_bidding", (gogoproto.moretags) = "yaml:\"allow_bidding\""];
+  cosmos.base.v1beta1.Coin min_bid = 24 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "min_bid,omitempty", (gogoproto.moretags) = "yaml:\"min_bid\""];
+}

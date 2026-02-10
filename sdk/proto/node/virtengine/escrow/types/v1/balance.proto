@@ -1,0 +1,21 @@
+syntax = "proto3";
+package virtengine.escrow.types.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1";
+
+// Balance holds the unspent coin received from all deposits with same denom
+// DecCoin is not being used here as it does not support negative values,
+// and balance may go negative if account is overdrawn.
+message Balance {
+  option (gogoproto.equal) = true;
+
+  string denom  = 1;
+  string amount = 2 [
+    (cosmos_proto.scalar)  = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable)   = false
+  ];
+}

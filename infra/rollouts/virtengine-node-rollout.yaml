@@ -1,0 +1,216 @@
+# VirtEngine Node Blue/Green Rollout
+# Uses Argo Rollouts for zero-downtime deployments
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: virtengine-node
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: blockchain
+    app.kubernetes.io/part-of: virtengine
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virtengine-node
+  strategy:
+    blueGreen:
+      # Active service receives production traffic
+      activeService: virtengine-node-active
+      # Preview service for testing before promotion
+      previewService: virtengine-node-preview
+      # Automatic promotion after successful analysis
+      autoPromotionEnabled: false
+      # Preview replicas (can be less than active)
+      previewReplicaCount: 2
+      # Scale down delay after promotion
+      scaleDownDelaySeconds: 300
+      # Scale down delay on abort
+      abortScaleDownDelaySeconds: 60
+      # Anti-affinity configuration
+      antiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          weight: 100
+      # Pre-promotion analysis
+      prePromotionAnalysis:
+        templates:
+          - templateName: chain-sync-check
+          - templateName: health-check
+        args:
+          - name: service-name
+            value: virtengine-node-preview
+      # Post-promotion analysis
+      postPromotionAnalysis:
+        templates:
+          - templateName: health-check
+        args:
+          - name: service-name
+            value: virtengine-node-active
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: virtengine-node
+        app.kubernetes.io/component: blockchain
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "26660"
+    spec:
+      serviceAccountName: virtengine-node
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: virtengine-node
+          image: virtengine/virtengine:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: p2p
+              containerPort: 26656
+            - name: rpc
+              containerPort: 26657
+            - name: rest
+              containerPort: 1317
+            - name: grpc
+              containerPort: 9090
+            - name: prometheus
+              containerPort: 26660
+          env:
+            - name: CHAIN_ID
+              value: virtengine-1
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 8Gi
+            limits:
+              cpu: 4000m
+              memory: 16Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/virtengine
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: rpc
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: rpc
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: virtengine-node-data
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: virtengine-node
+---
+# Active Service (receives production traffic)
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node-active
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+spec:
+  type: ClusterIP
+  ports:
+    - name: rpc
+      port: 26657
+      targetPort: rpc
+    - name: rest
+      port: 1317
+      targetPort: rest
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+  selector:
+    app.kubernetes.io/name: virtengine-node
+---
+# Preview Service (for testing new versions)
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node-preview
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+spec:
+  type: ClusterIP
+  ports:
+    - name: rpc
+      port: 26657
+      targetPort: rpc
+    - name: rest
+      port: 1317
+      targetPort: rest
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+  selector:
+    app.kubernetes.io/name: virtengine-node
+---
+# Analysis Template: Chain Sync Check
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: chain-sync-check
+  namespace: virtengine
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: chain-sync-status
+      interval: 30s
+      count: 10
+      successCondition: result.syncing == false && result.catching_up == false
+      failureLimit: 3
+      provider:
+        web:
+          url: "http://{{args.service-name}}.virtengine.svc.cluster.local:26657/status"
+          jsonPath: "{.result.sync_info}"
+---
+# Analysis Template: Health Check
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: health-check
+  namespace: virtengine
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: http-health
+      interval: 10s
+      count: 30
+      successCondition: result == 200
+      failureLimit: 3
+      provider:
+        web:
+          url: "http://{{args.service-name}}.virtengine.svc.cluster.local:26657/health"
+          method: GET
+    - name: error-rate
+      interval: 30s
+      count: 10
+      successCondition: result[0] < 0.05
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(virtengine_request_errors_total{service="{{args.service-name}}"}[5m])) /
+            sum(rate(virtengine_requests_total{service="{{args.service-name}}"}[5m]))

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package virtengine.sdk.v1;
+
+import "cosmos/auth/v1beta1/auth.proto";
+import "cosmos/auth/v1beta1/query.proto";
+import "cosmos/crypto/secp256k1/keys.proto";
+import "cosmos/tx/signing/v1beta1/signing.proto";
+import "cosmos/tx/v1beta1/service.proto";
+import "cosmos/tx/v1beta1/tx.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/sdk/v1";
+
+// SDKDeps is a placeholder message used to pull in SDK dependencies for codegen.
+message SDKDeps {}

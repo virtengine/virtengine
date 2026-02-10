@@ -1,0 +1,43 @@
+package types
+
+import (
+	"github.com/cosmos/cosmos-sdk/codec"
+	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/msgservice"
+
+	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
+)
+
+// RegisterLegacyAminoCodec registers the necessary interfaces and types
+// for the enclave module on the provided LegacyAmino codec.
+func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	cdc.RegisterConcrete(&v1.MsgRegisterEnclaveIdentity{}, "enclave/MsgRegisterEnclaveIdentity", nil)
+	cdc.RegisterConcrete(&v1.MsgRotateEnclaveIdentity{}, "enclave/MsgRotateEnclaveIdentity", nil)
+	cdc.RegisterConcrete(&v1.MsgProposeMeasurement{}, "enclave/MsgProposeMeasurement", nil)
+	cdc.RegisterConcrete(&v1.MsgRevokeMeasurement{}, "enclave/MsgRevokeMeasurement", nil)
+	cdc.RegisterConcrete(&v1.MsgUpdateParams{}, "enclave/MsgUpdateParams", nil)
+	cdc.RegisterConcrete(&AddMeasurementProposal{}, "enclave/AddMeasurementProposal", nil)
+	cdc.RegisterConcrete(&RevokeMeasurementProposal{}, "enclave/RevokeMeasurementProposal", nil)
+	cdc.RegisterConcrete(&MsgEnclaveHeartbeat{}, "enclave/MsgEnclaveHeartbeat", nil)
+}
+
+// RegisterInterfaces registers the interfaces for the enclave module
+func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
+	registry.RegisterImplementations(
+		(*sdk.Msg)(nil),
+		&v1.MsgRegisterEnclaveIdentity{},
+		&v1.MsgRotateEnclaveIdentity{},
+		&v1.MsgProposeMeasurement{},
+		&v1.MsgRevokeMeasurement{},
+		&v1.MsgUpdateParams{},
+	)
+
+	// Note: AddMeasurementProposal and RevokeMeasurementProposal are not registered
+	// with RegisterImplementations because they are not proper protobuf types.
+	// They are registered with legacy amino codec which is sufficient for
+	// governance proposal handling. Registering them here would cause a
+	// duplicate typeURL error since they lack proper protobuf message names.
+
+	msgservice.RegisterMsgServiceDesc(registry, &v1.Msg_serviceDesc)
+}

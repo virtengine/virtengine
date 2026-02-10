@@ -1,0 +1,114 @@
+# VirtEngine Tempo Configuration
+# MONITOR-001: Distributed tracing backend
+
+# Server configuration
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+# Distributor configuration
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+    jaeger:
+      protocols:
+        thrift_http:
+          endpoint: "0.0.0.0:14268"
+        grpc:
+          endpoint: "0.0.0.0:14250"
+    zipkin:
+      endpoint: "0.0.0.0:9411"
+
+# Ingester configuration
+ingester:
+  trace_idle_period: 10s
+  max_block_bytes: 1048576  # 1MB
+  max_block_duration: 5m
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+
+# Compactor configuration
+compactor:
+  compaction:
+    block_retention: 720h  # Keep traces for 30 days
+
+# Storage configuration
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+    pool:
+      max_workers: 100
+      queue_depth: 10000
+
+# Query configuration
+querier:
+  max_concurrent_queries: 20
+  search:
+    external_hedge_requests_at: 8s
+    external_hedge_requests_up_to: 2
+
+# Query frontend configuration
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09  # 1GB
+  trace_by_id:
+    duration_slo: 5s
+
+# Metrics generator configuration
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: virtengine
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    service_graphs:
+      wait: 10s
+      max_items: 10000
+      workers: 10
+    span_metrics:
+      dimensions:
+        - service.name
+        - virtengine.module
+        - virtengine.operation
+      enable_target_info: true
+      intrinsic_dimensions:
+        status_code: true
+        status_message: true
+
+# Overrides configuration
+overrides:
+  defaults:
+    metrics_generator:
+      processors:
+        - service-graphs
+        - span-metrics
+      generate_native_histograms: both
+    ingestion:
+      rate_limit_bytes: 15000000  # 15MB/s
+      burst_size_bytes: 20000000  # 20MB
+    max_traces_per_user: 10000
+    max_search_bytes_per_trace: 50000
+
+# Usage report disabled
+usage_report:
+  reporting_enabled: false

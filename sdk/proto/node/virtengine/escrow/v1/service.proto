@@ -1,0 +1,16 @@
+syntax = "proto3";
+package virtengine.escrow.v1;
+
+import "virtengine/escrow/v1/msg.proto";
+
+import "cosmos/msg/v1/msg.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/v1";
+
+// Msg defines the x/deployment Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // AccountDeposit deposits more funds into the escrow account.
+  rpc AccountDeposit(MsgAccountDeposit) returns (MsgAccountDepositResponse);
+}

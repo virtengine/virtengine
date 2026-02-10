@@ -1,0 +1,6 @@
+host: https://virtengine.com
+attributes:
+  - key: region
+    value: sfo
+  - key: moniker
+    value: virtengine

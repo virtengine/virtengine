@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package virtengine.base.attributes.v1;
+
+import "gogoproto/gogo.proto";
+
+option (gogoproto.goproto_stringer_all) = false;
+option (gogoproto.stringer_all)         = false;
+option go_package                       = "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1";
+
+// Attribute represents an arbitrary attribute key-value pair.
+message Attribute {
+  option (gogoproto.goproto_getters) = false;
+  option (gogoproto.equal)           = false;
+
+  // Key of the attribute (e.g., "region", "cpu_architecture", etc.).
+  string key = 1 [(gogoproto.moretags) = "yaml:\"key\""];
+  // Value of the attribute (e.g., "us-west", "x86_64", etc.).
+  string value = 2 [(gogoproto.moretags) = "yaml:\"value\""];
+}
+
+// SignedBy represents validation accounts that tenant expects signatures for provider attributes.
+// AllOf has precedence i.e. if there is at least one entry AnyOf is ignored regardless to how many
+// entries there.
+message SignedBy { // TODO: this behaviour to be discussed
+  option (gogoproto.goproto_getters) = false;
+  option (gogoproto.stringer)        = false;
+  option (gogoproto.equal)           = true;
+
+  // AllOf indicates all keys in this list must have signed attributes.
+  repeated string all_of = 1 [
+    (gogoproto.jsontag)  = "all_of",
+    (gogoproto.moretags) = "yaml:\"allOf\""
+  ];
+  // AnyOf means that at least one of the keys from the list must have signed attributes.
+  repeated string any_of = 2 [
+    (gogoproto.jsontag)  = "any_of",
+    (gogoproto.moretags) = "yaml:\"anyOf\""
+  ];
+}
+
+// PlacementRequirements represents the requirements for a provider placement on the network.
+// It is used to specify the characteristics and constraints of a provider that can be used to satisfy a deployment request.
+message PlacementRequirements {
+  option (gogoproto.goproto_getters) = false;
+  option (gogoproto.stringer)        = false;
+  option (gogoproto.equal)           = true;
+
+  // SignedBy holds the list of keys that tenants expect to have signatures from.
+  SignedBy signed_by = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "signed_by",
+    (gogoproto.moretags) = "yaml:\"signed_by\""
+  ];
+
+  // Attribute holds the list of attributes tenant expects from the provider.
+  repeated Attribute attributes = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "Attributes",
+    (gogoproto.jsontag)      = "attributes",
+    (gogoproto.moretags)     = "yaml:\"attributes\""
+  ];
+}

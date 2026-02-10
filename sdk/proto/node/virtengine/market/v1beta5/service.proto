@@ -1,0 +1,34 @@
+syntax = "proto3";
+package virtengine.market.v1beta5;
+
+import "virtengine/market/v1beta5/bidmsg.proto";
+import "virtengine/market/v1beta5/leasemsg.proto";
+import "virtengine/market/v1beta5/paramsmsg.proto";
+import "cosmos/msg/v1/msg.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5";
+
+// Msg defines the market Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+  // CreateBid defines a method to create a bid given proper inputs.
+  rpc CreateBid(MsgCreateBid) returns (MsgCreateBidResponse);
+
+  // CloseBid defines a method to close a bid given proper inputs.
+  rpc CloseBid(MsgCloseBid) returns (MsgCloseBidResponse);
+
+  // WithdrawLease withdraws accrued funds from the lease payment
+  rpc WithdrawLease(MsgWithdrawLease) returns (MsgWithdrawLeaseResponse);
+
+  // CreateLease creates a new lease
+  rpc CreateLease(MsgCreateLease) returns (MsgCreateLeaseResponse);
+
+  // CloseLease defines a method to close an order given proper inputs.
+  rpc CloseLease(MsgCloseLease) returns (MsgCloseLeaseResponse);
+
+  // UpdateParams defines a governance operation for updating the x/market module
+  // parameters. The authority is hard-coded to the x/gov module account.
+  //
+  // Since: virtengine v1.0.0
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}

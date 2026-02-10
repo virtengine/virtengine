@@ -1,0 +1,151 @@
+# SCALE-002: Enhanced HPA with custom metrics for horizontal scaling
+# This extends the base HPA with business-specific metrics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: provider-daemon-hpa-enhanced
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: autoscaling
+    app.kubernetes.io/part-of: virtengine-platform
+  annotations:
+    description: "Enhanced HPA with custom metrics for provider daemon scaling"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: provider-daemon
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    # CPU-based scaling (primary)
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Memory-based scaling
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metric: pending orders per instance
+    - type: Pods
+      pods:
+        metric:
+          name: provider_daemon_pending_orders
+        target:
+          type: AverageValue
+          averageValue: "50"
+    # Custom metric: active leases per instance
+    - type: Pods
+      pods:
+        metric:
+          name: provider_daemon_active_leases
+        target:
+          type: AverageValue
+          averageValue: "100"
+    # Custom metric: bid processing latency (p99)
+    - type: Pods
+      pods:
+        metric:
+          name: provider_daemon_bid_latency_p99_ms
+        target:
+          type: AverageValue
+          averageValue: "500"
+  behavior:
+    scaleDown:
+      # Conservative scale-down to avoid thrashing
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      # Aggressive scale-up to handle load spikes
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+---
+# Full Node HPA for RPC scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fullnode-hpa
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: virtengine-fullnode
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+    # CPU-based scaling
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+    # Memory-based scaling
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+    # Custom metric: RPC requests per second
+    - type: Pods
+      pods:
+        metric:
+          name: virtengine_rpc_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "100"
+    # Custom metric: RPC latency p99
+    - type: Pods
+      pods:
+        metric:
+          name: virtengine_rpc_latency_p99_ms
+        target:
+          type: AverageValue
+          averageValue: "200"
+    # Custom metric: active connections
+    - type: Pods
+      pods:
+        metric:
+          name: virtengine_active_connections
+        target:
+          type: AverageValue
+          averageValue: "500"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes for stateful nodes
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60

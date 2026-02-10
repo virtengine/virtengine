@@ -1,0 +1,473 @@
+{
+  "description": "Sample capture payloads for integration testing",
+  "version": "1.0.0",
+  "generated": "2025-01-15T00:00:00Z",
+  "test_fixtures": {
+    "valid_document_capture": {
+      "description": "Valid ID document front capture",
+      "flow_id": "flow-test-doc-001",
+      "session_id": "session-test-doc-001",
+      "capture_type": "document_front",
+      "device_info": {
+        "platform": "android",
+        "os_version": "14.0",
+        "device_model": "Pixel 8 Pro",
+        "device_fingerprint": "fp-abc123def456"
+      },
+      "capture_metadata": {
+        "width": 4032,
+        "height": 3024,
+        "format": "jpeg",
+        "compression_quality": 85,
+        "file_size_bytes": 1245678,
+        "capture_timestamp": 1705276800000,
+        "quality_score": 92
+      },
+      "salt_binding": {
+        "salt_base64": "dGVzdC1zYWx0LWZvci1kb2N1bWVudC1jYXB0dXJl",
+        "salt_hash_base64": "4vMDdZu7x9A+K9JmYsJ3tQ==",
+        "binding_hash_base64": "RHVtbXktYmluZGluZy1oYXNoLWZvci10ZXN0aW5n"
+      },
+      "expected_validation": {
+        "valid": true,
+        "quality_pass": true,
+        "signature_valid": true,
+        "salt_binding_valid": true
+      }
+    },
+    "valid_selfie_capture": {
+      "description": "Valid selfie capture with liveness",
+      "flow_id": "flow-test-selfie-001",
+      "session_id": "session-test-selfie-001",
+      "capture_type": "selfie",
+      "device_info": {
+        "platform": "ios",
+        "os_version": "17.2",
+        "device_model": "iPhone 15 Pro",
+        "device_fingerprint": "fp-xyz789ghi012"
+      },
+      "capture_metadata": {
+        "width": 3024,
+        "height": 4032,
+        "format": "heic",
+        "compression_quality": 90,
+        "file_size_bytes": 892345,
+        "capture_timestamp": 1705276805000,
+        "quality_score": 95
+      },
+      "liveness_metadata": {
+        "challenges_completed": ["blink", "turn_left"],
+        "liveness_score": 0.98,
+        "liveness_passed": true,
+        "video_duration_ms": 3500
+      },
+      "salt_binding": {
+        "salt_base64": "dGVzdC1zYWx0LWZvci1zZWxmaWUtY2FwdHVyZQ==",
+        "salt_hash_base64": "K9xB2RpJmZs+DdZu7vMJ3tQ==",
+        "binding_hash_base64": "U2VsZmllLWJpbmRpbmctaGFzaC1mb3ItdGVzdGluZw=="
+      },
+      "expected_validation": {
+        "valid": true,
+        "quality_pass": true,
+        "liveness_pass": true,
+        "signature_valid": true,
+        "salt_binding_valid": true
+      }
+    },
+    "valid_liveness_video": {
+      "description": "Valid liveness video capture",
+      "flow_id": "flow-test-liveness-001",
+      "session_id": "session-test-liveness-001",
+      "capture_type": "liveness_video",
+      "device_info": {
+        "platform": "android",
+        "os_version": "13.0",
+        "device_model": "Samsung Galaxy S24",
+        "device_fingerprint": "fp-lmn456opq789"
+      },
+      "capture_metadata": {
+        "width": 1920,
+        "height": 1080,
+        "format": "mp4",
+        "codec": "h264",
+        "fps": 30,
+        "duration_ms": 5000,
+        "file_size_bytes": 2567890,
+        "capture_timestamp": 1705276810000
+      },
+      "liveness_metadata": {
+        "challenges_completed": ["blink", "smile", "turn_right"],
+        "liveness_score": 0.96,
+        "liveness_passed": true
+      },
+      "salt_binding": {
+        "salt_base64": "dGVzdC1zYWx0LWZvci1saXZlbmVzcy12aWRlbw==",
+        "salt_hash_base64": "pJmZs+K9xB2RDdZu7vMJ3tQ==",
+        "binding_hash_base64": "TGl2ZW5lc3MtYmluZGluZy1oYXNoLWZvci10ZXN0aW5n"
+      },
+      "expected_validation": {
+        "valid": true,
+        "liveness_pass": true,
+        "signature_valid": true,
+        "salt_binding_valid": true
+      }
+    },
+    "invalid_blurry_document": {
+      "description": "Invalid document capture - too blurry",
+      "flow_id": "flow-test-invalid-blur-001",
+      "session_id": "session-test-invalid-blur-001",
+      "capture_type": "document_front",
+      "device_info": {
+        "platform": "android",
+        "os_version": "12.0",
+        "device_model": "Budget Phone X",
+        "device_fingerprint": "fp-budget123"
+      },
+      "capture_metadata": {
+        "width": 1280,
+        "height": 960,
+        "format": "jpeg",
+        "compression_quality": 60,
+        "file_size_bytes": 156789,
+        "capture_timestamp": 1705276820000,
+        "quality_score": 35
+      },
+      "quality_issues": {
+        "blur_score": 28,
+        "blur_threshold": 50,
+        "is_blurry": true
+      },
+      "expected_validation": {
+        "valid": false,
+        "quality_pass": false,
+        "error_code": "IMAGE_TOO_BLURRY",
+        "error_message": "Image is too blurry"
+      }
+    },
+    "invalid_no_face": {
+      "description": "Invalid selfie capture - no face detected",
+      "flow_id": "flow-test-invalid-noface-001",
+      "session_id": "session-test-invalid-noface-001",
+      "capture_type": "selfie",
+      "device_info": {
+        "platform": "ios",
+        "os_version": "16.5",
+        "device_model": "iPhone 14",
+        "device_fingerprint": "fp-noface456"
+      },
+      "capture_metadata": {
+        "width": 3024,
+        "height": 4032,
+        "format": "jpeg",
+        "file_size_bytes": 789012,
+        "capture_timestamp": 1705276830000,
+        "quality_score": 0
+      },
+      "quality_issues": {
+        "face_detected": false,
+        "face_count": 0
+      },
+      "expected_validation": {
+        "valid": false,
+        "quality_pass": false,
+        "error_code": "FACE_NOT_DETECTED",
+        "error_message": "No face detected in image"
+      }
+    },
+    "invalid_liveness_failed": {
+      "description": "Invalid capture - liveness check failed (spoof detected)",
+      "flow_id": "flow-test-invalid-spoof-001",
+      "session_id": "session-test-invalid-spoof-001",
+      "capture_type": "selfie",
+      "device_info": {
+        "platform": "android",
+        "os_version": "14.0",
+        "device_model": "Generic Phone",
+        "device_fingerprint": "fp-spoof789"
+      },
+      "capture_metadata": {
+        "width": 1920,
+        "height": 1080,
+        "format": "jpeg",
+        "file_size_bytes": 456789,
+        "capture_timestamp": 1705276840000
+      },
+      "liveness_metadata": {
+        "challenges_completed": [],
+        "liveness_score": 0.15,
+        "liveness_passed": false,
+        "spoof_detected": true,
+        "spoof_type": "printed_photo"
+      },
+      "expected_validation": {
+        "valid": false,
+        "liveness_pass": false,
+        "security_violation": true,
+        "error_code": "SPOOF_DETECTED",
+        "error_message": "Spoofing attempt detected"
+      }
+    },
+    "invalid_salt_binding_mismatch": {
+      "description": "Invalid capture - salt binding mismatch (potential replay)",
+      "flow_id": "flow-test-invalid-replay-001",
+      "session_id": "session-test-invalid-replay-001",
+      "capture_type": "document_front",
+      "device_info": {
+        "platform": "android",
+        "os_version": "13.0",
+        "device_model": "Attacker Phone",
+        "device_fingerprint": "fp-replay123"
+      },
+      "capture_metadata": {
+        "capture_timestamp": 1705276850000
+      },
+      "salt_binding": {
+        "salt_base64": "cmVwbGF5LXNhbHQtYXR0ZW1wdA==",
+        "salt_hash_base64": "InvalidSaltHashForReplay==",
+        "binding_hash_base64": "SW52YWxpZC1iaW5kaW5nLWhhc2gtZm9yLXJlcGxheQ=="
+      },
+      "tampering_indicators": {
+        "salt_binding_mismatch": true,
+        "original_session_id": "session-original-001",
+        "replay_session_id": "session-test-invalid-replay-001"
+      },
+      "expected_validation": {
+        "valid": false,
+        "salt_binding_valid": false,
+        "security_violation": true,
+        "error_code": "SALT_BINDING_MISMATCH",
+        "error_message": "Salt binding verification failed - potential replay attack"
+      }
+    },
+    "invalid_device_integrity": {
+      "description": "Invalid capture - device integrity check failed (rooted device)",
+      "flow_id": "flow-test-invalid-rooted-001",
+      "session_id": "session-test-invalid-rooted-001",
+      "capture_type": "selfie",
+      "device_info": {
+        "platform": "android",
+        "os_version": "13.0",
+        "device_model": "Rooted Phone",
+        "device_fingerprint": "fp-rooted456"
+      },
+      "device_attestation": {
+        "attestation_type": "play_integrity",
+        "attestation_passed": false,
+        "verdict": {
+          "request_valid": true,
+          "app_recognized": true,
+          "basic_integrity": false,
+          "device_integrity": false,
+          "strong_integrity": false
+        },
+        "failure_reason": "Device appears to be rooted or modified"
+      },
+      "expected_validation": {
+        "valid": false,
+        "device_integrity_pass": false,
+        "security_violation": true,
+        "error_code": "DEVICE_ROOTED",
+        "error_message": "Device integrity check failed - device appears to be rooted"
+      }
+    },
+    "invalid_expired_session": {
+      "description": "Invalid capture - session expired",
+      "flow_id": "flow-test-invalid-expired-001",
+      "session_id": "session-test-invalid-expired-001",
+      "capture_type": "document_front",
+      "device_info": {
+        "platform": "ios",
+        "os_version": "17.0",
+        "device_model": "iPhone 15",
+        "device_fingerprint": "fp-expired789"
+      },
+      "capture_metadata": {
+        "capture_timestamp": 1705190400000,
+        "upload_timestamp": 1705363200000,
+        "time_difference_hours": 48
+      },
+      "session_metadata": {
+        "session_created": 1705190400000,
+        "session_ttl_hours": 24,
+        "session_expired_at": 1705276800000
+      },
+      "expected_validation": {
+        "valid": false,
+        "error_code": "SESSION_EXPIRED",
+        "error_message": "Capture session has expired"
+      }
+    },
+    "invalid_gallery_upload": {
+      "description": "Invalid capture - gallery upload detected",
+      "flow_id": "flow-test-invalid-gallery-001",
+      "session_id": "session-test-invalid-gallery-001",
+      "capture_type": "selfie",
+      "device_info": {
+        "platform": "ios",
+        "os_version": "17.1",
+        "device_model": "iPhone 14 Pro",
+        "device_fingerprint": "fp-gallery012"
+      },
+      "capture_metadata": {
+        "capture_timestamp": 1704672000000,
+        "upload_timestamp": 1705276860000,
+        "exif_date_time": "2024-01-08T00:00:00Z"
+      },
+      "gallery_detection": {
+        "is_from_gallery": true,
+        "detection_method": "exif_timestamp_mismatch",
+        "original_capture_date": "2024-01-08T00:00:00Z",
+        "time_difference_days": 7
+      },
+      "expected_validation": {
+        "valid": false,
+        "security_violation": true,
+        "error_code": "GALLERY_NOT_ALLOWED",
+        "error_message": "Gallery uploads are not permitted for identity verification"
+      }
+    }
+  },
+  "encryption_test_vectors": {
+    "description": "Test vectors for encryption/decryption verification",
+    "algorithm": "X25519-XSalsa20-Poly1305",
+    "test_cases": [
+      {
+        "name": "small_payload",
+        "plaintext_base64": "SGVsbG8sIFdvcmxkIQ==",
+        "plaintext_size_bytes": 13,
+        "nonce_base64": "dGVzdC1ub25jZS0yNC1ieXRlcw==",
+        "note": "Actual ciphertext varies by ephemeral key - verify decryption works"
+      },
+      {
+        "name": "typical_image_metadata",
+        "plaintext_size_bytes": 1024,
+        "note": "1KB payload representing image metadata"
+      },
+      {
+        "name": "full_image_payload",
+        "plaintext_size_bytes": 1048576,
+        "note": "1MB payload representing compressed image"
+      }
+    ]
+  },
+  "signature_test_vectors": {
+    "description": "Test vectors for signature verification",
+    "algorithm": "Ed25519",
+    "test_cases": [
+      {
+        "name": "client_signature",
+        "public_key_base64": "VGVzdC1wdWJsaWMta2V5LWZvci1jbGllbnQ=",
+        "message_base64": "VGVzdC1tZXNzYWdlLWZvci1zaWduaW5n",
+        "signature_base64": "VGVzdC1zaWduYXR1cmUtNjQtYnl0ZXM=",
+        "note": "Verify signature validation logic"
+      },
+      {
+        "name": "user_signature",
+        "public_key_base64": "VGVzdC11c2VyLXB1YmxpYy1rZXk=",
+        "message_base64": "VXNlci1tZXNzYWdlLXRvLXNpZ24=",
+        "signature_base64": "VXNlci1zaWduYXR1cmUtNjQtYnl0ZXM=",
+        "note": "Verify user signature validation"
+      }
+    ]
+  },
+  "device_attestation_samples": {
+    "android_play_integrity": {
+      "description": "Sample Play Integrity API response",
+      "token_format": "JWT",
+      "sample_decoded_payload": {
+        "requestDetails": {
+          "requestPackageName": "com.virtengine.veid.app",
+          "timestampMillis": "1705276800000",
+          "nonce": "dGVzdC1ub25jZS1mb3ItaW50ZWdyaXR5"
+        },
+        "appIntegrity": {
+          "appRecognitionVerdict": "PLAY_RECOGNIZED",
+          "packageName": "com.virtengine.veid.app",
+          "certificateSha256Digest": ["sample-cert-digest"],
+          "versionCode": "100"
+        },
+        "deviceIntegrity": {
+          "deviceRecognitionVerdict": ["MEETS_DEVICE_INTEGRITY", "MEETS_BASIC_INTEGRITY"]
+        },
+        "accountDetails": {
+          "appLicensingVerdict": "LICENSED"
+        }
+      }
+    },
+    "ios_app_attest": {
+      "description": "Sample App Attest assertion",
+      "attestation_format": "CBOR",
+      "sample_components": {
+        "authenticatorData": "base64-encoded-auth-data",
+        "rpIdHash": "hash-of-app-bundle-id",
+        "counter": 1,
+        "attestedCredentialData": {
+          "aaguid": "00000000-0000-0000-0000-000000000000",
+          "credentialId": "credential-id-bytes",
+          "publicKey": "cose-public-key"
+        }
+      }
+    }
+  },
+  "upload_scenarios": {
+    "successful_single_chunk": {
+      "description": "Successful upload in single chunk",
+      "payload_size_bytes": 512000,
+      "chunk_size_bytes": 1048576,
+      "total_chunks": 1,
+      "upload_duration_ms": 2500,
+      "result": "success"
+    },
+    "successful_multi_chunk": {
+      "description": "Successful upload in multiple chunks",
+      "payload_size_bytes": 5242880,
+      "chunk_size_bytes": 1048576,
+      "total_chunks": 5,
+      "upload_duration_ms": 8500,
+      "result": "success"
+    },
+    "retry_success": {
+      "description": "Upload succeeds after retry",
+      "payload_size_bytes": 2097152,
+      "chunk_size_bytes": 1048576,
+      "total_chunks": 2,
+      "failed_chunks": [2],
+      "retry_count": 1,
+      "upload_duration_ms": 6000,
+      "result": "success"
+    },
+    "retry_exhausted": {
+      "description": "Upload fails after max retries",
+      "payload_size_bytes": 1048576,
+      "chunk_size_bytes": 1048576,
+      "total_chunks": 1,
+      "retry_count": 5,
+      "max_retries": 5,
+      "result": "failure",
+      "error_code": "UPLOAD_RETRY_EXHAUSTED"
+    },
+    "resume_success": {
+      "description": "Upload resumes from previous session",
+      "payload_size_bytes": 10485760,
+      "chunk_size_bytes": 1048576,
+      "total_chunks": 10,
+      "previous_completed_chunks": 6,
+      "resumed_chunks": 4,
+      "upload_duration_ms": 5000,
+      "result": "success"
+    },
+    "tamper_detected": {
+      "description": "Tamper detected during upload",
+      "payload_size_bytes": 1048576,
+      "tampering": {
+        "type": "hash_mismatch",
+        "chunk_index": 1,
+        "expected_hash": "expected-sha256-hash",
+        "received_hash": "received-sha256-hash"
+      },
+      "result": "failure",
+      "error_code": "TAMPER_DETECTED"
+    }
+  }
+}
+

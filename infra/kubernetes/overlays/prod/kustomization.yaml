@@ -1,0 +1,130 @@
+# Production Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: virtengine
+
+resources:
+  - ../../base
+  - pdb-production.yaml
+
+namePrefix: prod-
+
+commonLabels:
+  environment: prod
+
+commonAnnotations:
+  prometheus.io/enabled: "true"
+  vault.hashicorp.com/agent-inject: "true"
+
+patches:
+  # Service account annotations for IRSA
+  - target:
+      kind: ServiceAccount
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/virtengine-virtengine-node-prod
+  - target:
+      kind: ServiceAccount
+      name: provider-daemon
+    patch: |-
+      - op: replace
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/virtengine-provider-daemon-prod
+  # Production resource sizing
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 2000m
+            memory: 8Gi
+          limits:
+            cpu: 4000m
+            memory: 16Gi
+  - target:
+      kind: Deployment
+      name: provider-daemon
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+  # Production replicas
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 4
+  # Production storage
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 200Gi
+  # Node affinity for validators
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          role: validator
+          virtengine.io/chain: "true"
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: dedicated
+            operator: Equal
+            value: validator
+            effect: NoSchedule
+  # Pod topology spread for HA
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: virtengine-node
+
+configMapGenerator:
+  - name: virtengine-node-config
+    behavior: merge
+    literals:
+      - chain-id=virtengine-1
+  - name: provider-daemon-config
+    behavior: merge
+    literals:
+      - log-level=warn
+
+images:
+  - name: virtengine/virtengine
+    newTag: v1.0.0
+  - name: virtengine/provider-daemon
+    newTag: v1.0.0
+
+replicas:
+  - name: provider-daemon
+    count: 3

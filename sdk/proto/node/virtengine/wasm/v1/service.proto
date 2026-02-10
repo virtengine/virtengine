@@ -1,0 +1,18 @@
+syntax = "proto3";
+package virtengine.wasm.v1;
+
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/wasm/v1/paramsmsg.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/wasm/v1";
+
+// Msg defines the wasm Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+  // UpdateParams defines a governance operation for updating the x/wasm module
+  // parameters. The authority is hard-coded to the x/gov module account.
+  //
+  // Since: akash v2.0.0
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}

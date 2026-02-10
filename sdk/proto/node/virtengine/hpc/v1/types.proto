@@ -1,0 +1,626 @@
+syntax = "proto3";
+package virtengine.hpc.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/base/v1beta1/coin.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/hpc/v1";
+
+// ClusterState represents the state of an HPC cluster
+enum ClusterState {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // CLUSTER_STATE_UNSPECIFIED represents an unspecified cluster state
+  CLUSTER_STATE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ClusterStateUnspecified"];
+
+  // CLUSTER_STATE_PENDING indicates the cluster is pending registration
+  CLUSTER_STATE_PENDING = 1 [(gogoproto.enumvalue_customname) = "ClusterStatePending"];
+
+  // CLUSTER_STATE_ACTIVE indicates the cluster is active and accepting jobs
+  CLUSTER_STATE_ACTIVE = 2 [(gogoproto.enumvalue_customname) = "ClusterStateActive"];
+
+  // CLUSTER_STATE_DRAINING indicates the cluster is draining (not accepting new jobs)
+  CLUSTER_STATE_DRAINING = 3 [(gogoproto.enumvalue_customname) = "ClusterStateDraining"];
+
+  // CLUSTER_STATE_OFFLINE indicates the cluster is offline
+  CLUSTER_STATE_OFFLINE = 4 [(gogoproto.enumvalue_customname) = "ClusterStateOffline"];
+
+  // CLUSTER_STATE_DEREGISTERED indicates the cluster has been deregistered
+  CLUSTER_STATE_DEREGISTERED = 5 [(gogoproto.enumvalue_customname) = "ClusterStateDeregistered"];
+}
+
+// JobState represents the state of an HPC job
+enum JobState {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // JOB_STATE_UNSPECIFIED represents an unspecified job state
+  JOB_STATE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "JobStateUnspecified"];
+
+  // JOB_STATE_PENDING indicates the job is pending
+  JOB_STATE_PENDING = 1 [(gogoproto.enumvalue_customname) = "JobStatePending"];
+
+  // JOB_STATE_QUEUED indicates the job is queued in SLURM
+  JOB_STATE_QUEUED = 2 [(gogoproto.enumvalue_customname) = "JobStateQueued"];
+
+  // JOB_STATE_RUNNING indicates the job is running
+  JOB_STATE_RUNNING = 3 [(gogoproto.enumvalue_customname) = "JobStateRunning"];
+
+  // JOB_STATE_COMPLETED indicates the job completed successfully
+  JOB_STATE_COMPLETED = 4 [(gogoproto.enumvalue_customname) = "JobStateCompleted"];
+
+  // JOB_STATE_FAILED indicates the job failed
+  JOB_STATE_FAILED = 5 [(gogoproto.enumvalue_customname) = "JobStateFailed"];
+
+  // JOB_STATE_CANCELLED indicates the job was cancelled
+  JOB_STATE_CANCELLED = 6 [(gogoproto.enumvalue_customname) = "JobStateCancelled"];
+
+  // JOB_STATE_TIMEOUT indicates the job timed out
+  JOB_STATE_TIMEOUT = 7 [(gogoproto.enumvalue_customname) = "JobStateTimeout"];
+}
+
+// NodeState represents the state of a compute node
+enum NodeState {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // NODE_STATE_UNSPECIFIED represents an unspecified node state
+  NODE_STATE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "NodeStateUnspecified"];
+
+  // NODE_STATE_UNKNOWN indicates unknown node state
+  NODE_STATE_UNKNOWN = 1 [(gogoproto.enumvalue_customname) = "NodeStateUnknown"];
+
+  // NODE_STATE_PENDING indicates the node is pending registration
+  NODE_STATE_PENDING = 2 [(gogoproto.enumvalue_customname) = "NodeStatePending"];
+
+  // NODE_STATE_ACTIVE indicates the node is active
+  NODE_STATE_ACTIVE = 3 [(gogoproto.enumvalue_customname) = "NodeStateActive"];
+
+  // NODE_STATE_STALE indicates the node has missed heartbeats
+  NODE_STATE_STALE = 4 [(gogoproto.enumvalue_customname) = "NodeStateStale"];
+
+  // NODE_STATE_DRAINING indicates the node is draining
+  NODE_STATE_DRAINING = 5 [(gogoproto.enumvalue_customname) = "NodeStateDraining"];
+
+  // NODE_STATE_DRAINED indicates the node is drained
+  NODE_STATE_DRAINED = 6 [(gogoproto.enumvalue_customname) = "NodeStateDrained"];
+
+  // NODE_STATE_OFFLINE indicates the node is offline
+  NODE_STATE_OFFLINE = 7 [(gogoproto.enumvalue_customname) = "NodeStateOffline"];
+
+  // NODE_STATE_DEREGISTERED indicates the node is deregistered
+  NODE_STATE_DEREGISTERED = 8 [(gogoproto.enumvalue_customname) = "NodeStateDeregistered"];
+}
+
+// HealthStatus represents the health status of a node
+enum HealthStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // HEALTH_STATUS_UNSPECIFIED represents an unspecified health status
+  HEALTH_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "HealthStatusUnspecified"];
+
+  // HEALTH_STATUS_HEALTHY indicates healthy
+  HEALTH_STATUS_HEALTHY = 1 [(gogoproto.enumvalue_customname) = "HealthStatusHealthy"];
+
+  // HEALTH_STATUS_DEGRADED indicates degraded
+  HEALTH_STATUS_DEGRADED = 2 [(gogoproto.enumvalue_customname) = "HealthStatusDegraded"];
+
+  // HEALTH_STATUS_UNHEALTHY indicates unhealthy
+  HEALTH_STATUS_UNHEALTHY = 3 [(gogoproto.enumvalue_customname) = "HealthStatusUnhealthy"];
+
+  // HEALTH_STATUS_DRAINING indicates draining
+  HEALTH_STATUS_DRAINING = 4 [(gogoproto.enumvalue_customname) = "HealthStatusDraining"];
+
+  // HEALTH_STATUS_OFFLINE indicates offline
+  HEALTH_STATUS_OFFLINE = 5 [(gogoproto.enumvalue_customname) = "HealthStatusOffline"];
+}
+
+// HPCRewardSource indicates the source of HPC rewards
+enum HPCRewardSource {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // HPC_REWARD_SOURCE_UNSPECIFIED represents an unspecified reward source
+  HPC_REWARD_SOURCE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "HPCRewardSourceUnspecified"];
+
+  // HPC_REWARD_SOURCE_JOB_COMPLETION is for completed job rewards
+  HPC_REWARD_SOURCE_JOB_COMPLETION = 1 [(gogoproto.enumvalue_customname) = "HPCRewardSourceJobCompletion"];
+
+  // HPC_REWARD_SOURCE_USAGE is for usage-based rewards
+  HPC_REWARD_SOURCE_USAGE = 2 [(gogoproto.enumvalue_customname) = "HPCRewardSourceUsage"];
+
+  // HPC_REWARD_SOURCE_BONUS is for bonus rewards
+  HPC_REWARD_SOURCE_BONUS = 3 [(gogoproto.enumvalue_customname) = "HPCRewardSourceBonus"];
+}
+
+// DisputeStatus indicates the status of a dispute
+enum DisputeStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // DISPUTE_STATUS_UNSPECIFIED represents an unspecified dispute status
+  DISPUTE_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "DisputeStatusUnspecified"];
+
+  // DISPUTE_STATUS_PENDING indicates the dispute is pending
+  DISPUTE_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "DisputeStatusPending"];
+
+  // DISPUTE_STATUS_UNDER_REVIEW indicates the dispute is under review
+  DISPUTE_STATUS_UNDER_REVIEW = 2 [(gogoproto.enumvalue_customname) = "DisputeStatusUnderReview"];
+
+  // DISPUTE_STATUS_RESOLVED indicates the dispute is resolved
+  DISPUTE_STATUS_RESOLVED = 3 [(gogoproto.enumvalue_customname) = "DisputeStatusResolved"];
+
+  // DISPUTE_STATUS_REJECTED indicates the dispute was rejected
+  DISPUTE_STATUS_REJECTED = 4 [(gogoproto.enumvalue_customname) = "DisputeStatusRejected"];
+}
+
+// Partition represents a SLURM partition/queue
+message Partition {
+  option (gogoproto.equal) = false;
+
+  string name = 1 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  int32 nodes = 2 [(gogoproto.jsontag) = "nodes", (gogoproto.moretags) = "yaml:\"nodes\""];
+  int64 max_runtime = 3 [(gogoproto.jsontag) = "max_runtime", (gogoproto.moretags) = "yaml:\"max_runtime\""];
+  int64 default_runtime = 4 [(gogoproto.jsontag) = "default_runtime", (gogoproto.moretags) = "yaml:\"default_runtime\""];
+  int32 max_nodes = 5 [(gogoproto.jsontag) = "max_nodes", (gogoproto.moretags) = "yaml:\"max_nodes\""];
+  repeated string features = 6 [(gogoproto.jsontag) = "features,omitempty", (gogoproto.moretags) = "yaml:\"features\""];
+  int32 priority = 7 [(gogoproto.jsontag) = "priority", (gogoproto.moretags) = "yaml:\"priority\""];
+  string state = 8 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+}
+
+// ClusterMetadata contains additional cluster metadata
+message ClusterMetadata {
+  option (gogoproto.equal) = false;
+
+  int64 total_cpu_cores = 1 [(gogoproto.jsontag) = "total_cpu_cores", (gogoproto.moretags) = "yaml:\"total_cpu_cores\""];
+  int64 total_memory_gb = 2 [(gogoproto.jsontag) = "total_memory_gb", (gogoproto.moretags) = "yaml:\"total_memory_gb\""];
+  int64 total_gpus = 3 [(gogoproto.jsontag) = "total_gpus,omitempty", (gogoproto.moretags) = "yaml:\"total_gpus\""];
+  repeated string gpu_types = 4 [(gogoproto.jsontag) = "gpu_types,omitempty", (gogoproto.moretags) = "yaml:\"gpu_types\""];
+  string interconnect_type = 5 [(gogoproto.jsontag) = "interconnect_type", (gogoproto.moretags) = "yaml:\"interconnect_type\""];
+  string storage_type = 6 [(gogoproto.jsontag) = "storage_type", (gogoproto.moretags) = "yaml:\"storage_type\""];
+  int64 total_storage_gb = 7 [(gogoproto.jsontag) = "total_storage_gb", (gogoproto.moretags) = "yaml:\"total_storage_gb\""];
+}
+
+// HPCCluster represents a SLURM cluster registered on-chain
+message HPCCluster {
+  option (gogoproto.equal) = false;
+
+  string cluster_id = 1 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string provider_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string name = 3 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 4 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  ClusterState state = 5 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  repeated Partition partitions = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "partitions", (gogoproto.moretags) = "yaml:\"partitions\""];
+  int32 total_nodes = 7 [(gogoproto.jsontag) = "total_nodes", (gogoproto.moretags) = "yaml:\"total_nodes\""];
+  int32 available_nodes = 8 [(gogoproto.jsontag) = "available_nodes", (gogoproto.moretags) = "yaml:\"available_nodes\""];
+  string region = 9 [(gogoproto.jsontag) = "region", (gogoproto.moretags) = "yaml:\"region\""];
+  ClusterMetadata cluster_metadata = 10 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "cluster_metadata", (gogoproto.moretags) = "yaml:\"cluster_metadata\""];
+  string slurm_version = 11 [(gogoproto.jsontag) = "slurm_version", (gogoproto.moretags) = "yaml:\"slurm_version\""];
+  string kubernetes_cluster_id = 12 [(gogoproto.jsontag) = "kubernetes_cluster_id,omitempty", (gogoproto.moretags) = "yaml:\"kubernetes_cluster_id\""];
+  google.protobuf.Timestamp created_at = 13 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp updated_at = 14 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  int64 block_height = 15 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// QueueOption represents a queue/partition option in an offering
+message QueueOption {
+  option (gogoproto.equal) = false;
+
+  string partition_name = 1 [(gogoproto.jsontag) = "partition_name", (gogoproto.moretags) = "yaml:\"partition_name\""];
+  string display_name = 2 [(gogoproto.jsontag) = "display_name", (gogoproto.moretags) = "yaml:\"display_name\""];
+  int32 max_nodes = 3 [(gogoproto.jsontag) = "max_nodes", (gogoproto.moretags) = "yaml:\"max_nodes\""];
+  int64 max_runtime = 4 [(gogoproto.jsontag) = "max_runtime", (gogoproto.moretags) = "yaml:\"max_runtime\""];
+  repeated string features = 5 [(gogoproto.jsontag) = "features,omitempty", (gogoproto.moretags) = "yaml:\"features\""];
+  string price_multiplier = 6 [(gogoproto.jsontag) = "price_multiplier", (gogoproto.moretags) = "yaml:\"price_multiplier\""];
+}
+
+// HPCPricing contains HPC pricing information
+message HPCPricing {
+  option (gogoproto.equal) = false;
+
+  string base_node_hour_price = 1 [(gogoproto.jsontag) = "base_node_hour_price", (gogoproto.moretags) = "yaml:\"base_node_hour_price\""];
+  string cpu_core_hour_price = 2 [(gogoproto.jsontag) = "cpu_core_hour_price", (gogoproto.moretags) = "yaml:\"cpu_core_hour_price\""];
+  string gpu_hour_price = 3 [(gogoproto.jsontag) = "gpu_hour_price,omitempty", (gogoproto.moretags) = "yaml:\"gpu_hour_price\""];
+  string memory_gb_hour_price = 4 [(gogoproto.jsontag) = "memory_gb_hour_price", (gogoproto.moretags) = "yaml:\"memory_gb_hour_price\""];
+  string storage_gb_price = 5 [(gogoproto.jsontag) = "storage_gb_price", (gogoproto.moretags) = "yaml:\"storage_gb_price\""];
+  string network_gb_price = 6 [(gogoproto.jsontag) = "network_gb_price", (gogoproto.moretags) = "yaml:\"network_gb_price\""];
+  string currency = 7 [(gogoproto.jsontag) = "currency", (gogoproto.moretags) = "yaml:\"currency\""];
+  string minimum_charge = 8 [(gogoproto.jsontag) = "minimum_charge", (gogoproto.moretags) = "yaml:\"minimum_charge\""];
+}
+
+// JobResources defines resource requirements for an HPC job
+message JobResources {
+  option (gogoproto.equal) = false;
+
+  int32 nodes = 1 [(gogoproto.jsontag) = "nodes", (gogoproto.moretags) = "yaml:\"nodes\""];
+  int32 cpu_cores_per_node = 2 [(gogoproto.jsontag) = "cpu_cores_per_node", (gogoproto.moretags) = "yaml:\"cpu_cores_per_node\""];
+  int32 memory_gb_per_node = 3 [(gogoproto.jsontag) = "memory_gb_per_node", (gogoproto.moretags) = "yaml:\"memory_gb_per_node\""];
+  int32 gpus_per_node = 4 [(gogoproto.jsontag) = "gpus_per_node,omitempty", (gogoproto.moretags) = "yaml:\"gpus_per_node\""];
+  int32 storage_gb = 5 [(gogoproto.jsontag) = "storage_gb", (gogoproto.moretags) = "yaml:\"storage_gb\""];
+  string gpu_type = 6 [(gogoproto.jsontag) = "gpu_type,omitempty", (gogoproto.moretags) = "yaml:\"gpu_type\""];
+}
+
+// PreconfiguredWorkload represents a pre-approved workload
+message PreconfiguredWorkload {
+  option (gogoproto.equal) = false;
+
+  string workload_id = 1 [(gogoproto.jsontag) = "workload_id", (gogoproto.moretags) = "yaml:\"workload_id\""];
+  string name = 2 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 3 [(gogoproto.jsontag) = "description", (gogoproto.moretags) = "yaml:\"description\""];
+  string container_image = 4 [(gogoproto.jsontag) = "container_image", (gogoproto.moretags) = "yaml:\"container_image\""];
+  string default_command = 5 [(gogoproto.jsontag) = "default_command,omitempty", (gogoproto.moretags) = "yaml:\"default_command\""];
+  JobResources required_resources = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "required_resources", (gogoproto.moretags) = "yaml:\"required_resources\""];
+  string category = 7 [(gogoproto.jsontag) = "category", (gogoproto.moretags) = "yaml:\"category\""];
+  string version = 8 [(gogoproto.jsontag) = "version", (gogoproto.moretags) = "yaml:\"version\""];
+}
+
+// HPCOffering represents an HPC service offering
+message HPCOffering {
+  option (gogoproto.equal) = false;
+
+  string offering_id = 1 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  string cluster_id = 2 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string provider_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string name = 4 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 5 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  repeated QueueOption queue_options = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "queue_options", (gogoproto.moretags) = "yaml:\"queue_options\""];
+  HPCPricing pricing = 7 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "pricing", (gogoproto.moretags) = "yaml:\"pricing\""];
+  int32 required_identity_threshold = 8 [(gogoproto.jsontag) = "required_identity_threshold", (gogoproto.moretags) = "yaml:\"required_identity_threshold\""];
+  int64 max_runtime_seconds = 9 [(gogoproto.jsontag) = "max_runtime_seconds", (gogoproto.moretags) = "yaml:\"max_runtime_seconds\""];
+  repeated PreconfiguredWorkload preconfigured_workloads = 10 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "preconfigured_workloads,omitempty", (gogoproto.moretags) = "yaml:\"preconfigured_workloads\""];
+  bool supports_custom_workloads = 11 [(gogoproto.jsontag) = "supports_custom_workloads", (gogoproto.moretags) = "yaml:\"supports_custom_workloads\""];
+  bool active = 12 [(gogoproto.jsontag) = "active", (gogoproto.moretags) = "yaml:\"active\""];
+  google.protobuf.Timestamp created_at = 13 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp updated_at = 14 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  int64 block_height = 15 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// JobWorkloadSpec defines the workload for an HPC job
+message JobWorkloadSpec {
+  option (gogoproto.equal) = false;
+
+  string container_image = 1 [(gogoproto.jsontag) = "container_image", (gogoproto.moretags) = "yaml:\"container_image\""];
+  string command = 2 [(gogoproto.jsontag) = "command", (gogoproto.moretags) = "yaml:\"command\""];
+  repeated string arguments = 3 [(gogoproto.jsontag) = "arguments,omitempty", (gogoproto.moretags) = "yaml:\"arguments\""];
+  map<string, string> environment = 4 [(gogoproto.jsontag) = "environment,omitempty", (gogoproto.moretags) = "yaml:\"environment\""];
+  string working_directory = 5 [(gogoproto.jsontag) = "working_directory,omitempty", (gogoproto.moretags) = "yaml:\"working_directory\""];
+  string preconfigured_workload_id = 6 [(gogoproto.jsontag) = "preconfigured_workload_id,omitempty", (gogoproto.moretags) = "yaml:\"preconfigured_workload_id\""];
+  bool is_preconfigured = 7 [(gogoproto.jsontag) = "is_preconfigured", (gogoproto.moretags) = "yaml:\"is_preconfigured\""];
+}
+
+// DataReference references external data
+message DataReference {
+  option (gogoproto.equal) = false;
+
+  string reference_id = 1 [(gogoproto.jsontag) = "reference_id", (gogoproto.moretags) = "yaml:\"reference_id\""];
+  string type = 2 [(gogoproto.jsontag) = "type", (gogoproto.moretags) = "yaml:\"type\""];
+  string uri = 3 [(gogoproto.jsontag) = "uri", (gogoproto.moretags) = "yaml:\"uri\""];
+  bool encrypted = 4 [(gogoproto.jsontag) = "encrypted", (gogoproto.moretags) = "yaml:\"encrypted\""];
+  string checksum = 5 [(gogoproto.jsontag) = "checksum,omitempty", (gogoproto.moretags) = "yaml:\"checksum\""];
+  int64 size_bytes = 6 [(gogoproto.jsontag) = "size_bytes,omitempty", (gogoproto.moretags) = "yaml:\"size_bytes\""];
+}
+
+// HPCUsageMetrics contains usage metrics for an HPC job
+message HPCUsageMetrics {
+  option (gogoproto.equal) = false;
+
+  int64 wall_clock_seconds = 1 [(gogoproto.jsontag) = "wall_clock_seconds", (gogoproto.moretags) = "yaml:\"wall_clock_seconds\""];
+  int64 cpu_core_seconds = 2 [(gogoproto.jsontag) = "cpu_core_seconds", (gogoproto.moretags) = "yaml:\"cpu_core_seconds\""];
+  int64 memory_gb_seconds = 3 [(gogoproto.jsontag) = "memory_gb_seconds", (gogoproto.moretags) = "yaml:\"memory_gb_seconds\""];
+  int64 gpu_seconds = 4 [(gogoproto.jsontag) = "gpu_seconds,omitempty", (gogoproto.moretags) = "yaml:\"gpu_seconds\""];
+  int64 storage_gb_hours = 5 [(gogoproto.jsontag) = "storage_gb_hours", (gogoproto.moretags) = "yaml:\"storage_gb_hours\""];
+  int64 network_bytes_in = 6 [(gogoproto.jsontag) = "network_bytes_in", (gogoproto.moretags) = "yaml:\"network_bytes_in\""];
+  int64 network_bytes_out = 7 [(gogoproto.jsontag) = "network_bytes_out", (gogoproto.moretags) = "yaml:\"network_bytes_out\""];
+  int64 node_hours = 8 [(gogoproto.jsontag) = "node_hours", (gogoproto.moretags) = "yaml:\"node_hours\""];
+  int32 nodes_used = 9 [(gogoproto.jsontag) = "nodes_used", (gogoproto.moretags) = "yaml:\"nodes_used\""];
+}
+
+// HPCJob represents an HPC job request
+message HPCJob {
+  option (gogoproto.equal) = false;
+
+  string job_id = 1 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  string cluster_id = 3 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string provider_address = 4 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string customer_address = 5 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer_address", (gogoproto.moretags) = "yaml:\"customer_address\""];
+  string slurm_job_id = 6 [(gogoproto.jsontag) = "slurm_job_id,omitempty", (gogoproto.moretags) = "yaml:\"slurm_job_id\""];
+  JobState state = 7 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  string queue_name = 8 [(gogoproto.jsontag) = "queue_name", (gogoproto.moretags) = "yaml:\"queue_name\""];
+  JobWorkloadSpec workload_spec = 9 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "workload_spec", (gogoproto.moretags) = "yaml:\"workload_spec\""];
+  JobResources resources = 10 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "resources", (gogoproto.moretags) = "yaml:\"resources\""];
+  repeated DataReference data_references = 11 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "data_references,omitempty", (gogoproto.moretags) = "yaml:\"data_references\""];
+  string encrypted_inputs_pointer = 12 [(gogoproto.jsontag) = "encrypted_inputs_pointer,omitempty", (gogoproto.moretags) = "yaml:\"encrypted_inputs_pointer\""];
+  string encrypted_outputs_pointer = 13 [(gogoproto.jsontag) = "encrypted_outputs_pointer,omitempty", (gogoproto.moretags) = "yaml:\"encrypted_outputs_pointer\""];
+  int64 max_runtime_seconds = 14 [(gogoproto.jsontag) = "max_runtime_seconds", (gogoproto.moretags) = "yaml:\"max_runtime_seconds\""];
+  repeated cosmos.base.v1beta1.Coin agreed_price = 15 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "agreed_price", (gogoproto.moretags) = "yaml:\"agreed_price\""];
+  string escrow_id = 16 [(gogoproto.jsontag) = "escrow_id,omitempty", (gogoproto.moretags) = "yaml:\"escrow_id\""];
+  string scheduling_decision_id = 17 [(gogoproto.jsontag) = "scheduling_decision_id,omitempty", (gogoproto.moretags) = "yaml:\"scheduling_decision_id\""];
+  string status_message = 18 [(gogoproto.jsontag) = "status_message,omitempty", (gogoproto.moretags) = "yaml:\"status_message\""];
+  int32 exit_code = 19 [(gogoproto.jsontag) = "exit_code,omitempty", (gogoproto.moretags) = "yaml:\"exit_code\""];
+  google.protobuf.Timestamp created_at = 20 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp queued_at = 21 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "queued_at,omitempty", (gogoproto.moretags) = "yaml:\"queued_at\""];
+  google.protobuf.Timestamp started_at = 22 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "started_at,omitempty", (gogoproto.moretags) = "yaml:\"started_at\""];
+  google.protobuf.Timestamp completed_at = 23 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "completed_at,omitempty", (gogoproto.moretags) = "yaml:\"completed_at\""];
+  int64 block_height = 24 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// NodeReward represents a reward for a specific node
+message NodeReward {
+  option (gogoproto.equal) = false;
+
+  string node_id = 1 [(gogoproto.jsontag) = "node_id", (gogoproto.moretags) = "yaml:\"node_id\""];
+  string provider_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  repeated cosmos.base.v1beta1.Coin amount = 3 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "amount", (gogoproto.moretags) = "yaml:\"amount\""];
+  string contribution_weight = 4 [(gogoproto.jsontag) = "contribution_weight", (gogoproto.moretags) = "yaml:\"contribution_weight\""];
+  int64 usage_seconds = 5 [(gogoproto.jsontag) = "usage_seconds", (gogoproto.moretags) = "yaml:\"usage_seconds\""];
+}
+
+// JobAccounting represents accounting data for an HPC job
+message JobAccounting {
+  option (gogoproto.equal) = false;
+
+  string job_id = 1 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string cluster_id = 2 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string provider_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string customer_address = 4 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer_address", (gogoproto.moretags) = "yaml:\"customer_address\""];
+  HPCUsageMetrics usage_metrics = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "usage_metrics", (gogoproto.moretags) = "yaml:\"usage_metrics\""];
+  repeated cosmos.base.v1beta1.Coin total_cost = 6 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "total_cost", (gogoproto.moretags) = "yaml:\"total_cost\""];
+  repeated cosmos.base.v1beta1.Coin provider_reward = 7 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "provider_reward", (gogoproto.moretags) = "yaml:\"provider_reward\""];
+  repeated NodeReward node_rewards = 8 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "node_rewards,omitempty", (gogoproto.moretags) = "yaml:\"node_rewards\""];
+  repeated cosmos.base.v1beta1.Coin platform_fee = 9 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "platform_fee", (gogoproto.moretags) = "yaml:\"platform_fee\""];
+  string settlement_status = 10 [(gogoproto.jsontag) = "settlement_status", (gogoproto.moretags) = "yaml:\"settlement_status\""];
+  string settlement_id = 11 [(gogoproto.jsontag) = "settlement_id,omitempty", (gogoproto.moretags) = "yaml:\"settlement_id\""];
+  repeated string signed_usage_record_ids = 12 [(gogoproto.jsontag) = "signed_usage_record_ids", (gogoproto.moretags) = "yaml:\"signed_usage_record_ids\""];
+  JobState job_completion_status = 13 [(gogoproto.jsontag) = "job_completion_status", (gogoproto.moretags) = "yaml:\"job_completion_status\""];
+  google.protobuf.Timestamp created_at = 14 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp finalized_at = 15 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "finalized_at,omitempty", (gogoproto.moretags) = "yaml:\"finalized_at\""];
+  int64 block_height = 16 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// LatencyMeasurement contains latency measurement to another node
+message LatencyMeasurement {
+  option (gogoproto.equal) = false;
+
+  string target_node_id = 1 [(gogoproto.jsontag) = "target_node_id", (gogoproto.moretags) = "yaml:\"target_node_id\""];
+  int64 latency_ms = 2 [(gogoproto.jsontag) = "latency_ms", (gogoproto.moretags) = "yaml:\"latency_ms\""];
+  google.protobuf.Timestamp measured_at = 3 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "measured_at", (gogoproto.moretags) = "yaml:\"measured_at\""];
+}
+
+// NodeResources contains node resource capacity
+message NodeResources {
+  option (gogoproto.equal) = false;
+
+  int32 cpu_cores = 1 [(gogoproto.jsontag) = "cpu_cores", (gogoproto.moretags) = "yaml:\"cpu_cores\""];
+  int32 memory_gb = 2 [(gogoproto.jsontag) = "memory_gb", (gogoproto.moretags) = "yaml:\"memory_gb\""];
+  int32 gpus = 3 [(gogoproto.jsontag) = "gpus,omitempty", (gogoproto.moretags) = "yaml:\"gpus\""];
+  string gpu_type = 4 [(gogoproto.jsontag) = "gpu_type,omitempty", (gogoproto.moretags) = "yaml:\"gpu_type\""];
+  int32 storage_gb = 5 [(gogoproto.jsontag) = "storage_gb", (gogoproto.moretags) = "yaml:\"storage_gb\""];
+}
+
+// NodeCapacity contains node capacity information
+message NodeCapacity {
+  option (gogoproto.equal) = false;
+
+  int32 cpu_cores_total = 1 [(gogoproto.jsontag) = "cpu_cores_total", (gogoproto.moretags) = "yaml:\"cpu_cores_total\""];
+  int32 cpu_cores_available = 2 [(gogoproto.jsontag) = "cpu_cores_available", (gogoproto.moretags) = "yaml:\"cpu_cores_available\""];
+  int32 cpu_cores_allocated = 3 [(gogoproto.jsontag) = "cpu_cores_allocated", (gogoproto.moretags) = "yaml:\"cpu_cores_allocated\""];
+  int32 memory_gb_total = 4 [(gogoproto.jsontag) = "memory_gb_total", (gogoproto.moretags) = "yaml:\"memory_gb_total\""];
+  int32 memory_gb_available = 5 [(gogoproto.jsontag) = "memory_gb_available", (gogoproto.moretags) = "yaml:\"memory_gb_available\""];
+  int32 memory_gb_allocated = 6 [(gogoproto.jsontag) = "memory_gb_allocated", (gogoproto.moretags) = "yaml:\"memory_gb_allocated\""];
+  int32 gpus_total = 7 [(gogoproto.jsontag) = "gpus_total", (gogoproto.moretags) = "yaml:\"gpus_total\""];
+  int32 gpus_available = 8 [(gogoproto.jsontag) = "gpus_available", (gogoproto.moretags) = "yaml:\"gpus_available\""];
+  int32 gpus_allocated = 9 [(gogoproto.jsontag) = "gpus_allocated", (gogoproto.moretags) = "yaml:\"gpus_allocated\""];
+  string gpu_type = 10 [(gogoproto.jsontag) = "gpu_type,omitempty", (gogoproto.moretags) = "yaml:\"gpu_type\""];
+  int32 storage_gb_total = 11 [(gogoproto.jsontag) = "storage_gb_total", (gogoproto.moretags) = "yaml:\"storage_gb_total\""];
+  int32 storage_gb_available = 12 [(gogoproto.jsontag) = "storage_gb_available", (gogoproto.moretags) = "yaml:\"storage_gb_available\""];
+  int32 storage_gb_allocated = 13 [(gogoproto.jsontag) = "storage_gb_allocated", (gogoproto.moretags) = "yaml:\"storage_gb_allocated\""];
+}
+
+// NodeHealth contains node health information
+message NodeHealth {
+  option (gogoproto.equal) = false;
+
+  HealthStatus status = 1 [(gogoproto.jsontag) = "status", (gogoproto.moretags) = "yaml:\"status\""];
+  int64 uptime_seconds = 2 [(gogoproto.jsontag) = "uptime_seconds", (gogoproto.moretags) = "yaml:\"uptime_seconds\""];
+  string load_average_1m = 3 [(gogoproto.jsontag) = "load_average_1m", (gogoproto.moretags) = "yaml:\"load_average_1m\""];
+  string load_average_5m = 4 [(gogoproto.jsontag) = "load_average_5m", (gogoproto.moretags) = "yaml:\"load_average_5m\""];
+  string load_average_15m = 5 [(gogoproto.jsontag) = "load_average_15m", (gogoproto.moretags) = "yaml:\"load_average_15m\""];
+  int32 cpu_utilization_percent = 6 [(gogoproto.jsontag) = "cpu_utilization_percent", (gogoproto.moretags) = "yaml:\"cpu_utilization_percent\""];
+  int32 memory_utilization_percent = 7 [(gogoproto.jsontag) = "memory_utilization_percent", (gogoproto.moretags) = "yaml:\"memory_utilization_percent\""];
+  int32 gpu_utilization_percent = 8 [(gogoproto.jsontag) = "gpu_utilization_percent,omitempty", (gogoproto.moretags) = "yaml:\"gpu_utilization_percent\""];
+  int32 gpu_memory_utilization_percent = 9 [(gogoproto.jsontag) = "gpu_memory_utilization_percent,omitempty", (gogoproto.moretags) = "yaml:\"gpu_memory_utilization_percent\""];
+  int32 disk_io_utilization_percent = 10 [(gogoproto.jsontag) = "disk_io_utilization_percent", (gogoproto.moretags) = "yaml:\"disk_io_utilization_percent\""];
+  int32 network_utilization_percent = 11 [(gogoproto.jsontag) = "network_utilization_percent", (gogoproto.moretags) = "yaml:\"network_utilization_percent\""];
+  int32 temperature_celsius = 12 [(gogoproto.jsontag) = "temperature_celsius,omitempty", (gogoproto.moretags) = "yaml:\"temperature_celsius\""];
+  int32 gpu_temperature_celsius = 13 [(gogoproto.jsontag) = "gpu_temperature_celsius,omitempty", (gogoproto.moretags) = "yaml:\"gpu_temperature_celsius\""];
+  int32 error_count_24h = 14 [(gogoproto.jsontag) = "error_count_24h", (gogoproto.moretags) = "yaml:\"error_count_24h\""];
+  int32 warning_count_24h = 15 [(gogoproto.jsontag) = "warning_count_24h", (gogoproto.moretags) = "yaml:\"warning_count_24h\""];
+  string last_error_message = 16 [(gogoproto.jsontag) = "last_error_message,omitempty", (gogoproto.moretags) = "yaml:\"last_error_message\""];
+  string slurm_state = 17 [(gogoproto.jsontag) = "slurm_state,omitempty", (gogoproto.moretags) = "yaml:\"slurm_state\""];
+}
+
+// NodeHardware contains node hardware details
+message NodeHardware {
+  option (gogoproto.equal) = false;
+
+  string cpu_model = 1 [(gogoproto.jsontag) = "cpu_model,omitempty", (gogoproto.moretags) = "yaml:\"cpu_model\""];
+  string cpu_vendor = 2 [(gogoproto.jsontag) = "cpu_vendor,omitempty", (gogoproto.moretags) = "yaml:\"cpu_vendor\""];
+  string cpu_arch = 3 [(gogoproto.jsontag) = "cpu_arch,omitempty", (gogoproto.moretags) = "yaml:\"cpu_arch\""];
+  int32 sockets = 4 [(gogoproto.jsontag) = "sockets,omitempty", (gogoproto.moretags) = "yaml:\"sockets\""];
+  int32 cores_per_socket = 5 [(gogoproto.jsontag) = "cores_per_socket,omitempty", (gogoproto.moretags) = "yaml:\"cores_per_socket\""];
+  int32 threads_per_core = 6 [(gogoproto.jsontag) = "threads_per_core,omitempty", (gogoproto.moretags) = "yaml:\"threads_per_core\""];
+  string memory_type = 7 [(gogoproto.jsontag) = "memory_type,omitempty", (gogoproto.moretags) = "yaml:\"memory_type\""];
+  int32 memory_speed_mhz = 8 [(gogoproto.jsontag) = "memory_speed_mhz,omitempty", (gogoproto.moretags) = "yaml:\"memory_speed_mhz\""];
+  string gpu_model = 9 [(gogoproto.jsontag) = "gpu_model,omitempty", (gogoproto.moretags) = "yaml:\"gpu_model\""];
+  int32 gpu_memory_gb = 10 [(gogoproto.jsontag) = "gpu_memory_gb,omitempty", (gogoproto.moretags) = "yaml:\"gpu_memory_gb\""];
+  string storage_type = 11 [(gogoproto.jsontag) = "storage_type,omitempty", (gogoproto.moretags) = "yaml:\"storage_type\""];
+  repeated string features = 12 [(gogoproto.jsontag) = "features,omitempty", (gogoproto.moretags) = "yaml:\"features\""];
+}
+
+// NodeTopology describes node topology
+message NodeTopology {
+  option (gogoproto.equal) = false;
+
+  int32 numa_nodes = 1 [(gogoproto.jsontag) = "numa_nodes,omitempty", (gogoproto.moretags) = "yaml:\"numa_nodes\""];
+  int32 numa_memory_gb = 2 [(gogoproto.jsontag) = "numa_memory_gb,omitempty", (gogoproto.moretags) = "yaml:\"numa_memory_gb\""];
+  string interconnect = 3 [(gogoproto.jsontag) = "interconnect,omitempty", (gogoproto.moretags) = "yaml:\"interconnect\""];
+  string network_fabric = 4 [(gogoproto.jsontag) = "network_fabric,omitempty", (gogoproto.moretags) = "yaml:\"network_fabric\""];
+  string topology_hint = 5 [(gogoproto.jsontag) = "topology_hint,omitempty", (gogoproto.moretags) = "yaml:\"topology_hint\""];
+}
+
+// NodeLocality describes node locality
+message NodeLocality {
+  option (gogoproto.equal) = false;
+
+  string region = 1 [(gogoproto.jsontag) = "region,omitempty", (gogoproto.moretags) = "yaml:\"region\""];
+  string datacenter = 2 [(gogoproto.jsontag) = "datacenter,omitempty", (gogoproto.moretags) = "yaml:\"datacenter\""];
+  string zone = 3 [(gogoproto.jsontag) = "zone,omitempty", (gogoproto.moretags) = "yaml:\"zone\""];
+  string rack = 4 [(gogoproto.jsontag) = "rack,omitempty", (gogoproto.moretags) = "yaml:\"rack\""];
+  string row = 5 [(gogoproto.jsontag) = "row,omitempty", (gogoproto.moretags) = "yaml:\"row\""];
+  string position = 6 [(gogoproto.jsontag) = "position,omitempty", (gogoproto.moretags) = "yaml:\"position\""];
+}
+
+// NodeMetadata contains metadata about a compute node
+message NodeMetadata {
+  option (gogoproto.equal) = false;
+
+  string node_id = 1 [(gogoproto.jsontag) = "node_id", (gogoproto.moretags) = "yaml:\"node_id\""];
+  string cluster_id = 2 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string provider_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string region = 4 [(gogoproto.jsontag) = "region", (gogoproto.moretags) = "yaml:\"region\""];
+  string datacenter = 5 [(gogoproto.jsontag) = "datacenter,omitempty", (gogoproto.moretags) = "yaml:\"datacenter\""];
+  repeated LatencyMeasurement latency_measurements = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "latency_measurements,omitempty", (gogoproto.moretags) = "yaml:\"latency_measurements\""];
+  int64 avg_latency_ms = 7 [(gogoproto.jsontag) = "avg_latency_ms", (gogoproto.moretags) = "yaml:\"avg_latency_ms\""];
+  int64 network_bandwidth_mbps = 8 [(gogoproto.jsontag) = "network_bandwidth_mbps", (gogoproto.moretags) = "yaml:\"network_bandwidth_mbps\""];
+  NodeResources resources = 9 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "resources", (gogoproto.moretags) = "yaml:\"resources\""];
+  bool active = 10 [(gogoproto.jsontag) = "active", (gogoproto.moretags) = "yaml:\"active\""];
+  google.protobuf.Timestamp last_heartbeat = 11 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "last_heartbeat", (gogoproto.moretags) = "yaml:\"last_heartbeat\""];
+  google.protobuf.Timestamp joined_at = 12 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "joined_at", (gogoproto.moretags) = "yaml:\"joined_at\""];
+  google.protobuf.Timestamp updated_at = 13 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  int64 block_height = 14 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+  NodeState state = 15 [(gogoproto.jsontag) = "state,omitempty", (gogoproto.moretags) = "yaml:\"state\""];
+  HealthStatus health_status = 16 [(gogoproto.jsontag) = "health_status,omitempty", (gogoproto.moretags) = "yaml:\"health_status\""];
+  string agent_pubkey = 17 [(gogoproto.jsontag) = "agent_pubkey,omitempty", (gogoproto.moretags) = "yaml:\"agent_pubkey\""];
+  string hardware_fingerprint = 18 [(gogoproto.jsontag) = "hardware_fingerprint,omitempty", (gogoproto.moretags) = "yaml:\"hardware_fingerprint\""];
+  string agent_version = 19 [(gogoproto.jsontag) = "agent_version,omitempty", (gogoproto.moretags) = "yaml:\"agent_version\""];
+  uint64 last_sequence_number = 20 [(gogoproto.jsontag) = "last_sequence_number,omitempty", (gogoproto.moretags) = "yaml:\"last_sequence_number\""];
+  NodeCapacity capacity = 21 [(gogoproto.jsontag) = "capacity,omitempty", (gogoproto.moretags) = "yaml:\"capacity\""];
+  NodeHealth health = 22 [(gogoproto.jsontag) = "health,omitempty", (gogoproto.moretags) = "yaml:\"health\""];
+  NodeHardware hardware = 23 [(gogoproto.jsontag) = "hardware,omitempty", (gogoproto.moretags) = "yaml:\"hardware\""];
+  NodeTopology topology = 24 [(gogoproto.jsontag) = "topology,omitempty", (gogoproto.moretags) = "yaml:\"topology\""];
+  NodeLocality locality = 25 [(gogoproto.jsontag) = "locality,omitempty", (gogoproto.moretags) = "yaml:\"locality\""];
+}
+
+// ClusterCandidate represents a candidate cluster for scheduling
+message ClusterCandidate {
+  option (gogoproto.equal) = false;
+
+  string cluster_id = 1 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string region = 2 [(gogoproto.jsontag) = "region", (gogoproto.moretags) = "yaml:\"region\""];
+  int64 avg_latency_ms = 3 [(gogoproto.jsontag) = "avg_latency_ms", (gogoproto.moretags) = "yaml:\"avg_latency_ms\""];
+  int32 available_nodes = 4 [(gogoproto.jsontag) = "available_nodes", (gogoproto.moretags) = "yaml:\"available_nodes\""];
+  string latency_score = 5 [(gogoproto.jsontag) = "latency_score", (gogoproto.moretags) = "yaml:\"latency_score\""];
+  string capacity_score = 6 [(gogoproto.jsontag) = "capacity_score", (gogoproto.moretags) = "yaml:\"capacity_score\""];
+  string combined_score = 7 [(gogoproto.jsontag) = "combined_score", (gogoproto.moretags) = "yaml:\"combined_score\""];
+  bool eligible = 8 [(gogoproto.jsontag) = "eligible", (gogoproto.moretags) = "yaml:\"eligible\""];
+  string ineligibility_reason = 9 [(gogoproto.jsontag) = "ineligibility_reason,omitempty", (gogoproto.moretags) = "yaml:\"ineligibility_reason\""];
+}
+
+// SchedulingDecision records the decision trail for job scheduling
+message SchedulingDecision {
+  option (gogoproto.equal) = false;
+
+  string decision_id = 1 [(gogoproto.jsontag) = "decision_id", (gogoproto.moretags) = "yaml:\"decision_id\""];
+  string job_id = 2 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string selected_cluster_id = 3 [(gogoproto.jsontag) = "selected_cluster_id", (gogoproto.moretags) = "yaml:\"selected_cluster_id\""];
+  repeated ClusterCandidate candidate_clusters = 4 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "candidate_clusters", (gogoproto.moretags) = "yaml:\"candidate_clusters\""];
+  string decision_reason = 5 [(gogoproto.jsontag) = "decision_reason", (gogoproto.moretags) = "yaml:\"decision_reason\""];
+  bool is_fallback = 6 [(gogoproto.jsontag) = "is_fallback", (gogoproto.moretags) = "yaml:\"is_fallback\""];
+  string fallback_reason = 7 [(gogoproto.jsontag) = "fallback_reason,omitempty", (gogoproto.moretags) = "yaml:\"fallback_reason\""];
+  string latency_score = 8 [(gogoproto.jsontag) = "latency_score", (gogoproto.moretags) = "yaml:\"latency_score\""];
+  string capacity_score = 9 [(gogoproto.jsontag) = "capacity_score", (gogoproto.moretags) = "yaml:\"capacity_score\""];
+  string combined_score = 10 [(gogoproto.jsontag) = "combined_score", (gogoproto.moretags) = "yaml:\"combined_score\""];
+  google.protobuf.Timestamp created_at = 11 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  int64 block_height = 12 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// HPCRewardRecipient represents a recipient of HPC rewards
+message HPCRewardRecipient {
+  option (gogoproto.equal) = false;
+
+  string address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "address", (gogoproto.moretags) = "yaml:\"address\""];
+  repeated cosmos.base.v1beta1.Coin amount = 2 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "amount", (gogoproto.moretags) = "yaml:\"amount\""];
+  string recipient_type = 3 [(gogoproto.jsontag) = "recipient_type", (gogoproto.moretags) = "yaml:\"recipient_type\""];
+  string node_id = 4 [(gogoproto.jsontag) = "node_id,omitempty", (gogoproto.moretags) = "yaml:\"node_id\""];
+  string contribution_weight = 5 [(gogoproto.jsontag) = "contribution_weight", (gogoproto.moretags) = "yaml:\"contribution_weight\""];
+  string reason = 6 [(gogoproto.jsontag) = "reason", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// RewardCalculationDetails contains transparency data for reward calculation
+message RewardCalculationDetails {
+  option (gogoproto.equal) = false;
+
+  string total_usage_value = 1 [(gogoproto.jsontag) = "total_usage_value", (gogoproto.moretags) = "yaml:\"total_usage_value\""];
+  string reward_pool_contribution = 2 [(gogoproto.jsontag) = "reward_pool_contribution", (gogoproto.moretags) = "yaml:\"reward_pool_contribution\""];
+  string platform_fee_rate = 3 [(gogoproto.jsontag) = "platform_fee_rate", (gogoproto.moretags) = "yaml:\"platform_fee_rate\""];
+  string node_contribution_formula = 4 [(gogoproto.jsontag) = "node_contribution_formula", (gogoproto.moretags) = "yaml:\"node_contribution_formula\""];
+  map<string, string> input_metrics = 5 [(gogoproto.jsontag) = "input_metrics", (gogoproto.moretags) = "yaml:\"input_metrics\""];
+}
+
+// HPCRewardRecord represents a reward distribution for HPC contribution
+message HPCRewardRecord {
+  option (gogoproto.equal) = false;
+
+  string reward_id = 1 [(gogoproto.jsontag) = "reward_id", (gogoproto.moretags) = "yaml:\"reward_id\""];
+  string job_id = 2 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string cluster_id = 3 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  HPCRewardSource source = 4 [(gogoproto.jsontag) = "source", (gogoproto.moretags) = "yaml:\"source\""];
+  repeated cosmos.base.v1beta1.Coin total_reward = 5 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "total_reward", (gogoproto.moretags) = "yaml:\"total_reward\""];
+  repeated HPCRewardRecipient recipients = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "recipients", (gogoproto.moretags) = "yaml:\"recipients\""];
+  repeated string referenced_usage_records = 7 [(gogoproto.jsontag) = "referenced_usage_records", (gogoproto.moretags) = "yaml:\"referenced_usage_records\""];
+  JobState job_completion_status = 8 [(gogoproto.jsontag) = "job_completion_status", (gogoproto.moretags) = "yaml:\"job_completion_status\""];
+  string formula_version = 9 [(gogoproto.jsontag) = "formula_version", (gogoproto.moretags) = "yaml:\"formula_version\""];
+  RewardCalculationDetails calculation_details = 10 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "calculation_details", (gogoproto.moretags) = "yaml:\"calculation_details\""];
+  bool disputed = 11 [(gogoproto.jsontag) = "disputed", (gogoproto.moretags) = "yaml:\"disputed\""];
+  string dispute_id = 12 [(gogoproto.jsontag) = "dispute_id,omitempty", (gogoproto.moretags) = "yaml:\"dispute_id\""];
+  google.protobuf.Timestamp issued_at = 13 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "issued_at", (gogoproto.moretags) = "yaml:\"issued_at\""];
+  int64 block_height = 14 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// HPCDispute represents a dispute for HPC rewards/usage
+message HPCDispute {
+  option (gogoproto.equal) = false;
+
+  string dispute_id = 1 [(gogoproto.jsontag) = "dispute_id", (gogoproto.moretags) = "yaml:\"dispute_id\""];
+  string job_id = 2 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string reward_id = 3 [(gogoproto.jsontag) = "reward_id,omitempty", (gogoproto.moretags) = "yaml:\"reward_id\""];
+  string disputer_address = 4 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "disputer_address", (gogoproto.moretags) = "yaml:\"disputer_address\""];
+  string dispute_type = 5 [(gogoproto.jsontag) = "dispute_type", (gogoproto.moretags) = "yaml:\"dispute_type\""];
+  string reason = 6 [(gogoproto.jsontag) = "reason", (gogoproto.moretags) = "yaml:\"reason\""];
+  string evidence = 7 [(gogoproto.jsontag) = "evidence,omitempty", (gogoproto.moretags) = "yaml:\"evidence\""];
+  DisputeStatus status = 8 [(gogoproto.jsontag) = "status", (gogoproto.moretags) = "yaml:\"status\""];
+  string resolution = 9 [(gogoproto.jsontag) = "resolution,omitempty", (gogoproto.moretags) = "yaml:\"resolution\""];
+  string resolver_address = 10 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "resolver_address,omitempty", (gogoproto.moretags) = "yaml:\"resolver_address\""];
+  google.protobuf.Timestamp created_at = 11 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp resolved_at = 12 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "resolved_at,omitempty", (gogoproto.moretags) = "yaml:\"resolved_at\""];
+  int64 block_height = 13 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+}
+
+// Params defines the parameters for the HPC module
+message Params {
+  option (gogoproto.equal) = false;
+
+  string platform_fee_rate = 1 [(gogoproto.jsontag) = "platform_fee_rate", (gogoproto.moretags) = "yaml:\"platform_fee_rate\""];
+  string provider_reward_rate = 2 [(gogoproto.jsontag) = "provider_reward_rate", (gogoproto.moretags) = "yaml:\"provider_reward_rate\""];
+  string node_reward_rate = 3 [(gogoproto.jsontag) = "node_reward_rate", (gogoproto.moretags) = "yaml:\"node_reward_rate\""];
+  int64 min_job_duration_seconds = 4 [(gogoproto.jsontag) = "min_job_duration_seconds", (gogoproto.moretags) = "yaml:\"min_job_duration_seconds\""];
+  int64 max_job_duration_seconds = 5 [(gogoproto.jsontag) = "max_job_duration_seconds", (gogoproto.moretags) = "yaml:\"max_job_duration_seconds\""];
+  int32 default_identity_threshold = 6 [(gogoproto.jsontag) = "default_identity_threshold", (gogoproto.moretags) = "yaml:\"default_identity_threshold\""];
+  int64 cluster_heartbeat_timeout = 7 [(gogoproto.jsontag) = "cluster_heartbeat_timeout", (gogoproto.moretags) = "yaml:\"cluster_heartbeat_timeout\""];
+  int64 node_heartbeat_timeout = 8 [(gogoproto.jsontag) = "node_heartbeat_timeout", (gogoproto.moretags) = "yaml:\"node_heartbeat_timeout\""];
+  string latency_weight_factor = 9 [(gogoproto.jsontag) = "latency_weight_factor", (gogoproto.moretags) = "yaml:\"latency_weight_factor\""];
+  string capacity_weight_factor = 10 [(gogoproto.jsontag) = "capacity_weight_factor", (gogoproto.moretags) = "yaml:\"capacity_weight_factor\""];
+  int64 max_latency_ms = 11 [(gogoproto.jsontag) = "max_latency_ms", (gogoproto.moretags) = "yaml:\"max_latency_ms\""];
+  int64 dispute_resolution_period = 12 [(gogoproto.jsontag) = "dispute_resolution_period", (gogoproto.moretags) = "yaml:\"dispute_resolution_period\""];
+  string reward_formula_version = 13 [(gogoproto.jsontag) = "reward_formula_version", (gogoproto.moretags) = "yaml:\"reward_formula_version\""];
+  bool enable_proximity_clustering = 14 [(gogoproto.jsontag) = "enable_proximity_clustering", (gogoproto.moretags) = "yaml:\"enable_proximity_clustering\""];
+}

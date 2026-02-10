@@ -1,0 +1,6 @@
+version: v2
+directories:
+  - proto/node
+  - proto/provider
+  - .cache/include
+  - go/vendor/github.com/cosmos/cosmos-sdk/proto

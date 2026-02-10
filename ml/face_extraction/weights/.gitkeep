@@ -1,0 +1,17 @@
+# Face Extraction Model Weights
+
+#
+
+# This directory contains trained model weights for face extraction.
+
+# Weights are not committed to git due to size - download via scripts/extract_rmit_weights.py
+
+#
+
+# Models:
+
+# - unet_resnet34.pt: ResNet34-backbone U-Net for document face extraction
+
+# Source: RMIT OCR_Document_Scan intern project (2023)
+
+# SHA256: 0ea89b9d7b249d04ebe767cc38e78d04545067eabdda0f9fc22a1ae2c19bca57

@@ -1,0 +1,287 @@
+syntax = "proto3";
+package virtengine.hpc.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "cosmos/base/v1beta1/coin.proto";
+import "virtengine/hpc/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/hpc/v1";
+
+// Msg defines the hpc Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // RegisterCluster registers a new HPC cluster
+  rpc RegisterCluster(MsgRegisterCluster) returns (MsgRegisterClusterResponse);
+
+  // UpdateCluster updates an existing HPC cluster
+  rpc UpdateCluster(MsgUpdateCluster) returns (MsgUpdateClusterResponse);
+
+  // DeregisterCluster deregisters an HPC cluster
+  rpc DeregisterCluster(MsgDeregisterCluster) returns (MsgDeregisterClusterResponse);
+
+  // CreateOffering creates a new HPC offering
+  rpc CreateOffering(MsgCreateOffering) returns (MsgCreateOfferingResponse);
+
+  // UpdateOffering updates an existing HPC offering
+  rpc UpdateOffering(MsgUpdateOffering) returns (MsgUpdateOfferingResponse);
+
+  // SubmitJob submits a new HPC job
+  rpc SubmitJob(MsgSubmitJob) returns (MsgSubmitJobResponse);
+
+  // CancelJob cancels an HPC job
+  rpc CancelJob(MsgCancelJob) returns (MsgCancelJobResponse);
+
+  // ReportJobStatus reports job status from the provider daemon
+  rpc ReportJobStatus(MsgReportJobStatus) returns (MsgReportJobStatusResponse);
+
+  // UpdateNodeMetadata updates node metadata
+  rpc UpdateNodeMetadata(MsgUpdateNodeMetadata) returns (MsgUpdateNodeMetadataResponse);
+
+  // FlagDispute flags a dispute for moderation
+  rpc FlagDispute(MsgFlagDispute) returns (MsgFlagDisputeResponse);
+
+  // ResolveDispute resolves a dispute (moderator only)
+  rpc ResolveDispute(MsgResolveDispute) returns (MsgResolveDisputeResponse);
+
+  // UpdateParams updates module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// MsgRegisterCluster registers a new HPC cluster
+message MsgRegisterCluster {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgRegisterCluster";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string name = 2 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 3 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  string region = 4 [(gogoproto.jsontag) = "region", (gogoproto.moretags) = "yaml:\"region\""];
+  repeated Partition partitions = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "partitions", (gogoproto.moretags) = "yaml:\"partitions\""];
+  int32 total_nodes = 6 [(gogoproto.jsontag) = "total_nodes", (gogoproto.moretags) = "yaml:\"total_nodes\""];
+  ClusterMetadata cluster_metadata = 7 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "cluster_metadata", (gogoproto.moretags) = "yaml:\"cluster_metadata\""];
+  string slurm_version = 8 [(gogoproto.jsontag) = "slurm_version", (gogoproto.moretags) = "yaml:\"slurm_version\""];
+}
+
+// MsgRegisterClusterResponse is the response for MsgRegisterCluster
+message MsgRegisterClusterResponse {
+  string cluster_id = 1 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+}
+
+// MsgUpdateCluster updates an existing HPC cluster
+message MsgUpdateCluster {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgUpdateCluster";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string cluster_id = 2 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string name = 3 [(gogoproto.jsontag) = "name,omitempty", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 4 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  ClusterState state = 5 [(gogoproto.jsontag) = "state,omitempty", (gogoproto.moretags) = "yaml:\"state\""];
+  repeated Partition partitions = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "partitions,omitempty", (gogoproto.moretags) = "yaml:\"partitions\""];
+  int32 total_nodes = 7 [(gogoproto.jsontag) = "total_nodes,omitempty", (gogoproto.moretags) = "yaml:\"total_nodes\""];
+  int32 available_nodes = 8 [(gogoproto.jsontag) = "available_nodes,omitempty", (gogoproto.moretags) = "yaml:\"available_nodes\""];
+  ClusterMetadata cluster_metadata = 9 [(gogoproto.jsontag) = "cluster_metadata,omitempty", (gogoproto.moretags) = "yaml:\"cluster_metadata\""];
+}
+
+// MsgUpdateClusterResponse is the response for MsgUpdateCluster
+message MsgUpdateClusterResponse {}
+
+// MsgDeregisterCluster deregisters an HPC cluster
+message MsgDeregisterCluster {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgDeregisterCluster";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string cluster_id = 2 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+}
+
+// MsgDeregisterClusterResponse is the response for MsgDeregisterCluster
+message MsgDeregisterClusterResponse {}
+
+// MsgCreateOffering creates a new HPC offering
+message MsgCreateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgCreateOffering";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string cluster_id = 2 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string name = 3 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 4 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  repeated QueueOption queue_options = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "queue_options", (gogoproto.moretags) = "yaml:\"queue_options\""];
+  HPCPricing pricing = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "pricing", (gogoproto.moretags) = "yaml:\"pricing\""];
+  int32 required_identity_threshold = 7 [(gogoproto.jsontag) = "required_identity_threshold", (gogoproto.moretags) = "yaml:\"required_identity_threshold\""];
+  int64 max_runtime_seconds = 8 [(gogoproto.jsontag) = "max_runtime_seconds", (gogoproto.moretags) = "yaml:\"max_runtime_seconds\""];
+  repeated PreconfiguredWorkload preconfigured_workloads = 9 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "preconfigured_workloads,omitempty", (gogoproto.moretags) = "yaml:\"preconfigured_workloads\""];
+  bool supports_custom_workloads = 10 [(gogoproto.jsontag) = "supports_custom_workloads", (gogoproto.moretags) = "yaml:\"supports_custom_workloads\""];
+}
+
+// MsgCreateOfferingResponse is the response for MsgCreateOffering
+message MsgCreateOfferingResponse {
+  string offering_id = 1 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+}
+
+// MsgUpdateOffering updates an existing HPC offering
+message MsgUpdateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgUpdateOffering";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  string name = 3 [(gogoproto.jsontag) = "name,omitempty", (gogoproto.moretags) = "yaml:\"name\""];
+  string description = 4 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  repeated QueueOption queue_options = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "queue_options,omitempty", (gogoproto.moretags) = "yaml:\"queue_options\""];
+  HPCPricing pricing = 6 [(gogoproto.jsontag) = "pricing,omitempty", (gogoproto.moretags) = "yaml:\"pricing\""];
+  int32 required_identity_threshold = 7 [(gogoproto.jsontag) = "required_identity_threshold,omitempty", (gogoproto.moretags) = "yaml:\"required_identity_threshold\""];
+  int64 max_runtime_seconds = 8 [(gogoproto.jsontag) = "max_runtime_seconds,omitempty", (gogoproto.moretags) = "yaml:\"max_runtime_seconds\""];
+  repeated PreconfiguredWorkload preconfigured_workloads = 9 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "preconfigured_workloads,omitempty", (gogoproto.moretags) = "yaml:\"preconfigured_workloads\""];
+  bool supports_custom_workloads = 10 [(gogoproto.jsontag) = "supports_custom_workloads,omitempty", (gogoproto.moretags) = "yaml:\"supports_custom_workloads\""];
+  bool active = 11 [(gogoproto.jsontag) = "active,omitempty", (gogoproto.moretags) = "yaml:\"active\""];
+}
+
+// MsgUpdateOfferingResponse is the response for MsgUpdateOffering
+message MsgUpdateOfferingResponse {}
+
+// MsgSubmitJob submits a new HPC job
+message MsgSubmitJob {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer_address";
+  option (amino.name) = "hpc/MsgSubmitJob";
+
+  string customer_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer_address", (gogoproto.moretags) = "yaml:\"customer_address\""];
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  string queue_name = 3 [(gogoproto.jsontag) = "queue_name", (gogoproto.moretags) = "yaml:\"queue_name\""];
+  JobWorkloadSpec workload_spec = 4 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "workload_spec", (gogoproto.moretags) = "yaml:\"workload_spec\""];
+  JobResources resources = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "resources", (gogoproto.moretags) = "yaml:\"resources\""];
+  repeated DataReference data_references = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "data_references,omitempty", (gogoproto.moretags) = "yaml:\"data_references\""];
+  string encrypted_inputs_pointer = 7 [(gogoproto.jsontag) = "encrypted_inputs_pointer,omitempty", (gogoproto.moretags) = "yaml:\"encrypted_inputs_pointer\""];
+  string encrypted_outputs_pointer = 8 [(gogoproto.jsontag) = "encrypted_outputs_pointer,omitempty", (gogoproto.moretags) = "yaml:\"encrypted_outputs_pointer\""];
+  int64 max_runtime_seconds = 9 [(gogoproto.jsontag) = "max_runtime_seconds", (gogoproto.moretags) = "yaml:\"max_runtime_seconds\""];
+  repeated cosmos.base.v1beta1.Coin max_price = 10 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "max_price", (gogoproto.moretags) = "yaml:\"max_price\""];
+}
+
+// MsgSubmitJobResponse is the response for MsgSubmitJob
+message MsgSubmitJobResponse {
+  string job_id = 1 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string escrow_id = 2 [(gogoproto.jsontag) = "escrow_id", (gogoproto.moretags) = "yaml:\"escrow_id\""];
+}
+
+// MsgCancelJob cancels an HPC job
+message MsgCancelJob {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "requester_address";
+  option (amino.name) = "hpc/MsgCancelJob";
+
+  string requester_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  string job_id = 2 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string reason = 3 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// MsgCancelJobResponse is the response for MsgCancelJob
+message MsgCancelJobResponse {}
+
+// MsgReportJobStatus reports job status from the provider daemon
+message MsgReportJobStatus {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgReportJobStatus";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string job_id = 2 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string slurm_job_id = 3 [(gogoproto.jsontag) = "slurm_job_id,omitempty", (gogoproto.moretags) = "yaml:\"slurm_job_id\""];
+  JobState state = 4 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  string status_message = 5 [(gogoproto.jsontag) = "status_message,omitempty", (gogoproto.moretags) = "yaml:\"status_message\""];
+  int32 exit_code = 6 [(gogoproto.jsontag) = "exit_code,omitempty", (gogoproto.moretags) = "yaml:\"exit_code\""];
+  HPCUsageMetrics usage_metrics = 7 [(gogoproto.jsontag) = "usage_metrics,omitempty", (gogoproto.moretags) = "yaml:\"usage_metrics\""];
+  string signature = 8 [(gogoproto.jsontag) = "signature", (gogoproto.moretags) = "yaml:\"signature\""];
+  int64 signed_timestamp = 9 [(gogoproto.jsontag) = "signed_timestamp", (gogoproto.moretags) = "yaml:\"signed_timestamp\""];
+}
+
+// MsgReportJobStatusResponse is the response for MsgReportJobStatus
+message MsgReportJobStatusResponse {}
+
+// MsgUpdateNodeMetadata updates node metadata
+message MsgUpdateNodeMetadata {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "hpc/MsgUpdateNodeMetadata";
+
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string node_id = 2 [(gogoproto.jsontag) = "node_id", (gogoproto.moretags) = "yaml:\"node_id\""];
+  string cluster_id = 3 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string region = 4 [(gogoproto.jsontag) = "region,omitempty", (gogoproto.moretags) = "yaml:\"region\""];
+  string datacenter = 5 [(gogoproto.jsontag) = "datacenter,omitempty", (gogoproto.moretags) = "yaml:\"datacenter\""];
+  repeated LatencyMeasurement latency_measurements = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "latency_measurements,omitempty", (gogoproto.moretags) = "yaml:\"latency_measurements\""];
+  int64 network_bandwidth_mbps = 7 [(gogoproto.jsontag) = "network_bandwidth_mbps,omitempty", (gogoproto.moretags) = "yaml:\"network_bandwidth_mbps\""];
+  NodeResources resources = 8 [(gogoproto.jsontag) = "resources,omitempty", (gogoproto.moretags) = "yaml:\"resources\""];
+  bool active = 9 [(gogoproto.jsontag) = "active,omitempty", (gogoproto.moretags) = "yaml:\"active\""];
+  NodeState state = 10 [(gogoproto.jsontag) = "state,omitempty", (gogoproto.moretags) = "yaml:\"state\""];
+  HealthStatus health_status = 11 [(gogoproto.jsontag) = "health_status,omitempty", (gogoproto.moretags) = "yaml:\"health_status\""];
+  string agent_pubkey = 12 [(gogoproto.jsontag) = "agent_pubkey,omitempty", (gogoproto.moretags) = "yaml:\"agent_pubkey\""];
+  string hardware_fingerprint = 13 [(gogoproto.jsontag) = "hardware_fingerprint,omitempty", (gogoproto.moretags) = "yaml:\"hardware_fingerprint\""];
+  string agent_version = 14 [(gogoproto.jsontag) = "agent_version,omitempty", (gogoproto.moretags) = "yaml:\"agent_version\""];
+  uint64 last_sequence_number = 15 [(gogoproto.jsontag) = "last_sequence_number,omitempty", (gogoproto.moretags) = "yaml:\"last_sequence_number\""];
+  NodeCapacity capacity = 16 [(gogoproto.jsontag) = "capacity,omitempty", (gogoproto.moretags) = "yaml:\"capacity\""];
+  NodeHealth health = 17 [(gogoproto.jsontag) = "health,omitempty", (gogoproto.moretags) = "yaml:\"health\""];
+  NodeHardware hardware = 18 [(gogoproto.jsontag) = "hardware,omitempty", (gogoproto.moretags) = "yaml:\"hardware\""];
+  NodeTopology topology = 19 [(gogoproto.jsontag) = "topology,omitempty", (gogoproto.moretags) = "yaml:\"topology\""];
+  NodeLocality locality = 20 [(gogoproto.jsontag) = "locality,omitempty", (gogoproto.moretags) = "yaml:\"locality\""];
+}
+
+// MsgUpdateNodeMetadataResponse is the response for MsgUpdateNodeMetadata
+message MsgUpdateNodeMetadataResponse {}
+
+// MsgFlagDispute flags a dispute for moderation
+message MsgFlagDispute {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "disputer_address";
+  option (amino.name) = "hpc/MsgFlagDispute";
+
+  string disputer_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "disputer_address", (gogoproto.moretags) = "yaml:\"disputer_address\""];
+  string job_id = 2 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
+  string reward_id = 3 [(gogoproto.jsontag) = "reward_id,omitempty", (gogoproto.moretags) = "yaml:\"reward_id\""];
+  string dispute_type = 4 [(gogoproto.jsontag) = "dispute_type", (gogoproto.moretags) = "yaml:\"dispute_type\""];
+  string reason = 5 [(gogoproto.jsontag) = "reason", (gogoproto.moretags) = "yaml:\"reason\""];
+  string evidence = 6 [(gogoproto.jsontag) = "evidence,omitempty", (gogoproto.moretags) = "yaml:\"evidence\""];
+}
+
+// MsgFlagDisputeResponse is the response for MsgFlagDispute
+message MsgFlagDisputeResponse {
+  string dispute_id = 1 [(gogoproto.jsontag) = "dispute_id", (gogoproto.moretags) = "yaml:\"dispute_id\""];
+}
+
+// MsgResolveDispute resolves a dispute (moderator only)
+message MsgResolveDispute {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "resolver_address";
+  option (amino.name) = "hpc/MsgResolveDispute";
+
+  string resolver_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "resolver_address", (gogoproto.moretags) = "yaml:\"resolver_address\""];
+  string dispute_id = 2 [(gogoproto.jsontag) = "dispute_id", (gogoproto.moretags) = "yaml:\"dispute_id\""];
+  DisputeStatus status = 3 [(gogoproto.jsontag) = "status", (gogoproto.moretags) = "yaml:\"status\""];
+  string resolution = 4 [(gogoproto.jsontag) = "resolution", (gogoproto.moretags) = "yaml:\"resolution\""];
+}
+
+// MsgResolveDisputeResponse is the response for MsgResolveDispute
+message MsgResolveDisputeResponse {}
+
+// MsgUpdateParams updates module parameters (governance only)
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "hpc/MsgUpdateParams";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "authority", (gogoproto.moretags) = "yaml:\"authority\""];
+  Params params = 2 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "params", (gogoproto.moretags) = "yaml:\"params\""];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}

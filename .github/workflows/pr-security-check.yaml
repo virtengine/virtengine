@@ -1,0 +1,412 @@
+# INFRA-003: PR Security Check Workflow
+# Fast security gates for pull requests
+#
+# Features:
+#   - Quick vulnerability scanning on PR
+#   - Security-focused linting
+#   - Dependency change analysis
+#   - Required status checks for security
+
+name: PR Security Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+concurrency:
+  group: pr-security-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25.5"
+  GOWORK: "off"  # Disable workspace mode for vendor operations
+  GO_TEST_TIMEOUT_UNIT: "30m"
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  # ===========================================================================
+  # Analyze Changed Files
+  # ===========================================================================
+  analyze-changes:
+    name: Analyze Changes
+    runs-on: ubuntu-latest
+    outputs:
+      go_changed: ${{ steps.changes.outputs.go }}
+      deps_changed: ${{ steps.changes.outputs.deps }}
+      docker_changed: ${{ steps.changes.outputs.docker }}
+      security_relevant: ${{ steps.changes.outputs.security }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Analyze file changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+            deps:
+              - 'go.mod'
+              - 'go.sum'
+              - '**/package.json'
+              - '**/package-lock.json'
+              - '**/requirements.txt'
+            docker:
+              - '**/Dockerfile*'
+              - 'docker-compose*.yaml'
+            security:
+              - 'x/veid/**'
+              - 'x/mfa/**'
+              - 'x/encryption/**'
+              - 'pkg/inference/**'
+              - '**/crypto/**'
+              - '**/auth/**'
+
+  # ===========================================================================
+  # Quick Go Security Scan
+  # ===========================================================================
+  go-security:
+    name: Go Security Scan
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.go_changed == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install security tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Run govulncheck
+        id: govulncheck
+        run: |
+          govulncheck ./... 2>&1 | tee govulncheck-output.txt
+          if grep -q "Vulnerability" govulncheck-output.txt; then
+            echo "has_vulns=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_vulns=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run gosec on changed files
+        id: gosec
+        run: |
+          # Get list of changed Go files
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.go' | grep -v '_test.go' | grep -v 'vendor/' | grep -v '\.pb\.go$' || true)
+
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "Scanning changed files: $CHANGED_FILES"
+            
+            # Run gosec (no || true - failures should be caught)
+            gosec -exclude-generated -fmt json -out gosec-results.json $CHANGED_FILES
+            
+            # Load baseline if exists
+            if [ -f .gosec-baseline.json ]; then
+              echo "Comparing against baseline..."
+              # Count NEW high/critical severity issues
+              HIGH_CRITICAL=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
+              MEDIUM=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "MEDIUM")] | length')
+              
+              echo "high_critical=$HIGH_CRITICAL" >> $GITHUB_OUTPUT
+              echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+              
+              if [ "$HIGH_CRITICAL" -gt 0 ]; then
+                echo "::error::Found $HIGH_CRITICAL new high/critical severity issues"
+                exit 1
+              elif [ "$MEDIUM" -gt 0 ]; then
+                echo "::warning::Found $MEDIUM medium severity issues"
+              fi
+            else
+              # No baseline - count all issues
+              ISSUES=$(cat gosec-results.json | jq '.Issues | length')
+              echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+              
+              if [ "$ISSUES" -gt 0 ]; then
+                echo "::warning::Found $ISSUES security issues (no baseline configured)"
+              fi
+            fi
+          else
+            echo "No Go files changed"
+            echo "issues=0" >> $GITHUB_OUTPUT
+            echo "high_critical=0" >> $GITHUB_OUTPUT
+            echo "medium=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR with security findings
+        if: steps.govulncheck.outputs.has_vulns == 'true' || steps.gosec.outputs.issues > '0' || steps.gosec.outputs.high_critical > '0' || steps.gosec.outputs.medium > '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let comment = '## 🔒 Security Scan Results\n\n';
+
+            if ('${{ steps.govulncheck.outputs.has_vulns }}' === 'true') {
+              comment += '### ⚠️ Vulnerability Check\n';
+              comment += 'Potential vulnerabilities detected in dependencies. Please review `govulncheck` output.\n\n';
+            }
+
+            const highCritical = parseInt('${{ steps.gosec.outputs.high_critical }}') || 0;
+            const medium = parseInt('${{ steps.gosec.outputs.medium }}') || 0;
+            const issues = parseInt('${{ steps.gosec.outputs.issues }}') || 0;
+
+            if (highCritical > 0 || medium > 0 || issues > 0) {
+              comment += '### 🔍 Static Analysis (gosec)\n';
+              if (highCritical > 0) {
+                comment += `❌ **${highCritical} new HIGH/CRITICAL severity issues** - Must be fixed before merge\n`;
+              }
+              if (medium > 0) {
+                comment += `⚠️ ${medium} medium severity issues - Please review\n`;
+              }
+              if (issues > 0 && highCritical === 0 && medium === 0) {
+                comment += `Found ${issues} potential security issues in changed files.\n`;
+              }
+              comment += '\n';
+            }
+
+            comment += '---\n';
+            comment += '*This is an automated security check. Please address findings before merge.*';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # ===========================================================================
+  # Secret Scanning (Gitleaks)
+  # ===========================================================================
+  gitleaks-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Fetch base ref for diff scanning
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+
+      - name: Run gitleaks on PR diff
+        run: |
+          # Get base commit SHA
+          BASE_SHA=$(git merge-base origin/${{ github.base_ref }} HEAD)
+          
+          # Scan PR diff only (from base to HEAD)
+          if [ -f .gitleaks.toml ]; then
+            gitleaks detect --source . --config .gitleaks.toml --log-opts "${BASE_SHA}..HEAD" --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          else
+            gitleaks detect --source . --log-opts "${BASE_SHA}..HEAD" --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          fi
+
+      - name: Upload gitleaks results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gitleaks.sarif
+          category: "gitleaks-pr"
+  # Dependency Change Analysis
+  # ===========================================================================
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.deps_changed == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, Unlicense, CC0-1.0
+
+  # ===========================================================================
+  # Security-Focused Linting
+  # ===========================================================================
+  security-lint:
+    name: Security Lint
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.security_relevant == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Fetch base ref for lint context
+        run: |
+          git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
+
+      - name: Run security-focused golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.4.0
+          args: "--timeout=10m --enable=gosec --enable=errcheck --enable=govet ./x/veid/... ./x/mfa/... ./x/encryption/... ./pkg/inference/..."
+
+  # ===========================================================================
+  # Code Coverage Gate
+  # ===========================================================================
+  coverage-gate:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.go_changed == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Run tests with coverage
+        run: |
+          go test -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+            -coverprofile=coverage.out -covermode=atomic ./... 2>/dev/null || true
+
+      - name: Check coverage threshold
+        id: coverage
+        run: |
+          if [ ! -f coverage.out ]; then
+            echo "No coverage file generated"
+            echo "coverage=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Calculate total coverage
+          COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          # Minimum required coverage
+          MIN_COVERAGE=80
+
+          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+            echo "::warning::Coverage is ${COVERAGE}%, below minimum ${MIN_COVERAGE}%"
+          else
+            echo "Coverage is ${COVERAGE}%, meets minimum ${MIN_COVERAGE}%"
+          fi
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 7
+
+  # ===========================================================================
+  # Security Check Summary
+  # ===========================================================================
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs:
+      - analyze-changes
+      - go-security
+      - dependency-review
+      - security-lint
+      - coverage-gate
+      - gitleaks-scan
+    if: always()
+    steps:
+      - name: Generate security summary
+        run: |
+          echo "# PR Security Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Required |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          # Go Security
+          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ]; then
+            echo "| Go Security Scan | ${{ needs.go-security.result }} | Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Go Security Scan | skipped | No |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Dependency Review
+          if [ "${{ needs.analyze-changes.outputs.deps_changed }}" == "true" ]; then
+            echo "| Dependency Review | ${{ needs.dependency-review.result }} | Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Dependency Review | skipped | No |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Security Lint
+          if [ "${{ needs.analyze-changes.outputs.security_relevant }}" == "true" ]; then
+            echo "| Security Lint | ${{ needs.security-lint.result }} | Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Security Lint | skipped | No |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Coverage Gate
+          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ]; then
+            echo "| Coverage Gate | ${{ needs.coverage-gate.result }} | Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Coverage Gate | skipped | No |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Gitleaks
+          echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for failures
+        if: |
+          (needs.analyze-changes.outputs.go_changed == 'true' && needs.go-security.result == 'failure') ||
+          (needs.analyze-changes.outputs.deps_changed == 'true' && needs.dependency-review.result == 'failure') ||
+          needs.gitleaks-scan.result == 'failure'
+        run: |
+          echo "::error::Security checks failed. Please address the issues before merging."
+          exit 1

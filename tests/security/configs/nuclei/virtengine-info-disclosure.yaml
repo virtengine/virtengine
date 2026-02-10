@@ -1,0 +1,49 @@
+id: virtengine-information-disclosure
+
+info:
+  name: VirtEngine - Information Disclosure
+  author: VirtEngine Security Team
+  severity: medium
+  description: Detects information disclosure through error messages and debug endpoints
+  reference:
+    - PENETRATION_TESTING_PROGRAM.md#WMC-005
+  tags: virtengine,disclosure,info
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/debug/pprof/"
+      - "{{BaseURL}}/debug/vars"
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/config.yaml"
+      - "{{BaseURL}}/api/v1/debug"
+      - "{{BaseURL}}/metrics"
+      - "{{BaseURL}}/health/full"
+
+    stop-at-first-match: true
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - "goroutine"
+          - "runtime/pprof"
+        condition: or
+
+      - type: word
+        words:
+          - "password"
+          - "secret"
+          - "api_key"
+          - "private_key"
+        condition: or
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - 'go[0-9]+\.[0-9]+\.[0-9]+'
+          - 'version.*[0-9]+\.[0-9]+\.[0-9]+'

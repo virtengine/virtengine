@@ -1,0 +1,1762 @@
+openapi: 3.0.3
+info:
+  title: VirtEngine Provider Portal API
+  version: 1.0.0
+  description: |
+    REST API for interacting with VirtEngine provider portals.
+
+    ## Authentication
+
+    Most endpoints require wallet-signed authentication. Include the following headers:
+
+    - `X-VE-Address`: VirtEngine wallet address
+    - `X-VE-Timestamp`: Unix milliseconds timestamp
+    - `X-VE-Nonce`: Random 32-character hex string
+    - `X-VE-Signature`: Base64-encoded ADR-036 signature
+    - `X-VE-PubKey`: Base64-encoded public key
+
+    The signature is created by signing the canonical request data using ADR-036.
+
+    Legacy HMAC authentication is also supported by some deployments. For HMAC, send:
+
+    - `X-VE-Principal`: Logical principal identifier
+    - `X-VE-Timestamp`: Unix seconds timestamp
+    - `X-VE-Signature`: Hex-encoded HMAC-SHA256
+
+    Canonical HMAC payload:
+
+    `METHOD\nPATH\nQUERY\nPRINCIPAL\nTIMESTAMP`
+
+  contact:
+    name: VirtEngine
+    url: https://virtengine.io
+    email: api@virtengine.io
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+  - url: https://{provider-endpoint}/api/v1
+    description: Provider API endpoint
+    variables:
+      provider-endpoint:
+        default: provider.example.com:8443
+        description: Provider public API host
+
+security:
+  - walletAuth: []
+  - hmacAuth: []
+
+tags:
+  - name: Health
+    description: Provider health and status
+  - name: Deployments
+    description: Deployment management
+  - name: Metrics
+    description: Metrics and usage data
+  - name: Organizations
+    description: Organization management
+  - name: Tickets
+    description: Support ticket management
+  - name: Billing
+    description: Invoices and usage
+  - name: Provider
+    description: Provider information
+  - name: Vault
+    description: Encrypted data vault operations
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check provider health
+      description: Returns health status for the provider portal API.
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Provider is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Provider is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deployments:
+    get:
+      tags:
+        - Deployments
+      summary: List deployments
+      description: Returns deployments for the authenticated user.
+      operationId: listDeployments
+      parameters:
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/cursorParam"
+        - name: status
+          in: query
+          description: Filter by deployment status
+          schema:
+            type: string
+            enum: [pending, active, closed]
+      responses:
+        "200":
+          description: Deployments list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /deployments/{deploymentId}:
+    get:
+      tags:
+        - Deployments
+      summary: Get deployment details
+      operationId: getDeployment
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+      responses:
+        "200":
+          description: Deployment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /deployments/{deploymentId}/status:
+    get:
+      tags:
+        - Deployments
+      summary: Get deployment status
+      operationId: getDeploymentStatus
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+      responses:
+        "200":
+          description: Deployment status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /deployments/{deploymentId}/logs:
+    get:
+      tags:
+        - Deployments
+      summary: Get deployment logs
+      description: |
+        Returns log lines for a deployment. If a WebSocket upgrade is requested, the
+        server streams log lines over a WebSocket connection.
+
+        WebSocket messages are text frames containing formatted log lines.
+      operationId: getDeploymentLogs
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+        - name: tail
+          in: query
+          description: Number of log lines to return
+          schema:
+            type: integer
+            default: 200
+        - name: level
+          in: query
+          description: Filter by log level
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+        - name: search
+          in: query
+          description: Filter by case-insensitive substring
+          schema:
+            type: string
+        - name: download
+          in: query
+          description: Set to 1 to request downloadable output
+          schema:
+            type: string
+            enum: ["1"]
+        - name: follow
+          in: query
+          description: When using WebSockets, set to 0 to disable follow mode
+          schema:
+            type: string
+            enum: ["0", "1"]
+      responses:
+        "200":
+          description: Log lines
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      x-websocket: true
+
+  /deployments/{deploymentId}/shell/session:
+    post:
+      tags:
+        - Deployments
+      summary: Create shell session token
+      description: Issues a short-lived token for establishing a WebSocket shell session.
+      operationId: createShellSession
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShellSessionRequest"
+      responses:
+        "200":
+          description: Session token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShellSessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /deployments/{deploymentId}/shell:
+    get:
+      tags:
+        - Deployments
+      summary: Connect to deployment shell
+      description: |
+        WebSocket endpoint for interactive shell access. A session token can be
+        provided using the `token` query parameter.
+
+        Binary message frames use the first byte as a control code:
+
+        - 100: stdout
+        - 101: stderr
+        - 102: result
+        - 103: failure
+        - 104: stdin
+        - 105: resize
+      operationId: connectShell
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+        - name: token
+          in: query
+          description: Session token issued by `/shell/session`
+          schema:
+            type: string
+        - name: container
+          in: query
+          description: Target container name
+          schema:
+            type: string
+      responses:
+        "200":
+          description: WebSocket upgrade accepted
+        "101":
+          description: WebSocket connection established
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+      x-websocket: true
+  /deployments/{deploymentId}/metrics:
+    get:
+      tags:
+        - Metrics
+      summary: Get deployment metrics
+      operationId: getDeploymentMetrics
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+      responses:
+        "200":
+          description: Current metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceMetrics"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /deployments/{deploymentId}/metrics/history:
+    get:
+      tags:
+        - Metrics
+      summary: Get deployment metrics history
+      operationId: getDeploymentMetricsHistory
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+        - $ref: "#/components/parameters/startTimeParam"
+        - $ref: "#/components/parameters/endTimeParam"
+        - $ref: "#/components/parameters/intervalParam"
+      responses:
+        "200":
+          description: Metrics time series
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsSeriesResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /deployments/{deploymentId}/events:
+    get:
+      tags:
+        - Deployments
+      summary: Get deployment events
+      operationId: getDeploymentEvents
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/cursorParam"
+      responses:
+        "200":
+          description: Deployment events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentEventListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /deployments/{deploymentId}/actions:
+    post:
+      tags:
+        - Deployments
+      summary: Perform deployment action
+      operationId: performDeploymentAction
+      parameters:
+        - $ref: "#/components/parameters/deploymentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeploymentActionRequest"
+      responses:
+        "200":
+          description: Action response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentActionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /metrics/aggregate:
+    get:
+      tags:
+        - Metrics
+      summary: Get aggregated metrics
+      operationId: getAggregatedMetrics
+      parameters:
+        - $ref: "#/components/parameters/startTimeParam"
+        - $ref: "#/components/parameters/endTimeParam"
+        - $ref: "#/components/parameters/intervalParam"
+      responses:
+        "200":
+          description: Aggregated metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsSeriesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /organizations:
+    get:
+      tags:
+        - Organizations
+      summary: List organizations
+      operationId: listOrganizations
+      responses:
+        "200":
+          description: Organization list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /organizations/{orgId}:
+    get:
+      tags:
+        - Organizations
+      summary: Get organization details
+      operationId: getOrganization
+      parameters:
+        - $ref: "#/components/parameters/orgId"
+      responses:
+        "200":
+          description: Organization detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /organizations/{orgId}/members:
+    get:
+      tags:
+        - Organizations
+      summary: List organization members
+      operationId: listOrganizationMembers
+      parameters:
+        - $ref: "#/components/parameters/orgId"
+      responses:
+        "200":
+          description: Organization members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrganizationMember"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /organizations/{orgId}/invite:
+    post:
+      tags:
+        - Organizations
+      summary: Invite organization member
+      operationId: inviteOrganizationMember
+      parameters:
+        - $ref: "#/components/parameters/orgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationInviteRequest"
+      responses:
+        "200":
+          description: Member invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMember"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /organizations/{orgId}/members/{address}:
+    delete:
+      tags:
+        - Organizations
+      summary: Remove organization member
+      operationId: removeOrganizationMember
+      parameters:
+        - $ref: "#/components/parameters/orgId"
+        - $ref: "#/components/parameters/addressParam"
+      responses:
+        "204":
+          description: Member removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tickets:
+    get:
+      tags:
+        - Tickets
+      summary: List support tickets
+      operationId: listTickets
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, waiting_customer, resolved, closed]
+        - name: deployment_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tickets list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ticket"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - Tickets
+      summary: Create support ticket
+      operationId: createTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /tickets/{ticketId}:
+    get:
+      tags:
+        - Tickets
+      summary: Get ticket details
+      operationId: getTicket
+      parameters:
+        - $ref: "#/components/parameters/ticketId"
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags:
+        - Tickets
+      summary: Update ticket
+      operationId: updateTicket
+      parameters:
+        - $ref: "#/components/parameters/ticketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTicketRequest"
+      responses:
+        "200":
+          description: Ticket updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tickets/{ticketId}/comments:
+    post:
+      tags:
+        - Tickets
+      summary: Add ticket comment
+      operationId: addTicketComment
+      parameters:
+        - $ref: "#/components/parameters/ticketId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketCommentRequest"
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketComment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /invoices:
+    get:
+      tags:
+        - Billing
+      summary: List invoices
+      operationId: listInvoices
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, overdue]
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/cursorParam"
+      responses:
+        "200":
+          description: Invoices list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /invoices/{invoiceId}:
+    get:
+      tags:
+        - Billing
+      summary: Get invoice
+      operationId: getInvoice
+      parameters:
+        - $ref: "#/components/parameters/invoiceId"
+      responses:
+        "200":
+          description: Invoice detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /usage:
+    get:
+      tags:
+        - Billing
+      summary: Get current usage
+      operationId: getUsage
+      responses:
+        "200":
+          description: Current usage summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /usage/history:
+    get:
+      tags:
+        - Billing
+      summary: Get usage history
+      operationId: getUsageHistory
+      parameters:
+        - $ref: "#/components/parameters/startTimeParam"
+        - $ref: "#/components/parameters/endTimeParam"
+        - $ref: "#/components/parameters/intervalParam"
+      responses:
+        "200":
+          description: Usage history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageHistoryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /provider/info:
+    get:
+      tags:
+        - Provider
+      summary: Get provider info
+      operationId: getProviderInfo
+      security: []
+      responses:
+        "200":
+          description: Provider information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /provider/pricing:
+    get:
+      tags:
+        - Provider
+      summary: Get provider pricing
+      operationId: getProviderPricing
+      security: []
+      responses:
+        "200":
+          description: Pricing information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderPricing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /provider/capacity:
+    get:
+      tags:
+        - Provider
+      summary: Get provider capacity
+      operationId: getProviderCapacity
+      security: []
+      responses:
+        "200":
+          description: Capacity information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderCapacity"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /provider/attributes:
+    get:
+      tags:
+        - Provider
+      summary: Get provider attributes
+      operationId: getProviderAttributes
+      security: []
+      responses:
+        "200":
+          description: Provider attributes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderAttributes"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /vault/blobs:
+    post:
+      tags:
+        - Vault
+      summary: Upload a vault blob
+      operationId: uploadVaultBlob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultUploadRequest"
+      responses:
+        "201":
+          description: Vault blob created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /vault/blobs/{blobId}:
+    get:
+      tags:
+        - Vault
+      summary: Retrieve and decrypt a vault blob
+      operationId: getVaultBlob
+      parameters:
+        - $ref: "#/components/parameters/VaultBlobId"
+        - name: org_id
+          in: query
+          schema:
+            type: string
+        - name: purpose
+          in: query
+          schema:
+            type: string
+        - name: reason
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vault blob data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultRetrieveResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - Vault
+      summary: Delete a vault blob
+      operationId: deleteVaultBlob
+      parameters:
+        - $ref: "#/components/parameters/VaultBlobId"
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vault/blobs/{blobId}/metadata:
+    get:
+      tags:
+        - Vault
+      summary: Get vault blob metadata
+      operationId: getVaultBlobMetadata
+      parameters:
+        - $ref: "#/components/parameters/VaultBlobId"
+        - name: org_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vault blob metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultBlobMetadata"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vault/audit:
+    get:
+      tags:
+        - Vault
+      summary: Search vault audit events
+      operationId: listVaultAuditEvents
+      parameters:
+        - name: blob_id
+          in: query
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: requester
+          in: query
+          schema:
+            type: string
+        - name: org_id
+          in: query
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: end
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vault audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultAuditResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    walletAuth:
+      type: apiKey
+      in: header
+      name: X-VE-Signature
+      description: |
+        Wallet-signed authentication. Required headers:
+        - X-VE-Address: Wallet address
+        - X-VE-Timestamp: Unix milliseconds
+        - X-VE-Nonce: Random hex string
+        - X-VE-Signature: Base64 signature
+        - X-VE-PubKey: Base64 public key
+    hmacAuth:
+      type: apiKey
+      in: header
+      name: X-VE-Signature
+      description: |
+        Legacy HMAC authentication. Required headers:
+        - X-VE-Principal: Principal identifier
+        - X-VE-Timestamp: Unix seconds
+        - X-VE-Signature: Hex HMAC-SHA256
+
+  parameters:
+    deploymentId:
+      name: deploymentId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Deployment (lease) identifier
+    orgId:
+      name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+    ticketId:
+      name: ticketId
+      in: path
+      required: true
+      schema:
+        type: string
+    invoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema:
+        type: string
+    VaultBlobId:
+      name: blobId
+      in: path
+      required: true
+      schema:
+        type: string
+    addressParam:
+      name: address
+      in: path
+      required: true
+      schema:
+        type: string
+    limitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    cursorParam:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    startTimeParam:
+      name: start
+      in: query
+      description: Start timestamp (RFC3339)
+      schema:
+        type: string
+        format: date-time
+    endTimeParam:
+      name: end
+      in: query
+      description: End timestamp (RFC3339)
+      schema:
+        type: string
+        format: date-time
+    intervalParam:
+      name: interval
+      in: query
+      description: Aggregation interval (e.g. 1m, 5m, 1h)
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Not authorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    VaultUploadRequest:
+      type: object
+      required:
+        - scope
+        - payload_base64
+      properties:
+        scope:
+          type: string
+        org_id:
+          type: string
+        retention_policy:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        payload_base64:
+          type: string
+          format: byte
+        content_base64:
+          type: string
+          format: byte
+    VaultUploadResponse:
+      type: object
+      properties:
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+    VaultRetrieveResponse:
+      type: object
+      properties:
+        data_base64:
+          type: string
+          format: byte
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+    VaultAuditResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaultAuditEvent"
+    VaultBlobMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+        key_id:
+          type: string
+        key_version:
+          type: integer
+        content_hash:
+          type: string
+        size:
+          type: integer
+        encrypted_size:
+          type: integer
+        owner:
+          type: string
+        org_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        retention_policy:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        backend:
+          type: string
+        backend_ref:
+          type: string
+    VaultAuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        event_type:
+          type: string
+        blob_id:
+          type: string
+        scope:
+          type: string
+        requester:
+          type: string
+        org_id:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        previous_hash:
+          type: string
+        hash:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+        version:
+          type: string
+        uptime_seconds:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    DeploymentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        owner:
+          type: string
+        provider:
+          type: string
+        state:
+          type: string
+          enum: [pending, active, closed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DeploymentDetail:
+      allOf:
+        - $ref: "#/components/schemas/DeploymentSummary"
+        - type: object
+          properties:
+            resources:
+              $ref: "#/components/schemas/ResourceMetrics"
+            services:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServiceStatus"
+            metadata:
+              type: object
+              additionalProperties: true
+
+    DeploymentListResponse:
+      type: object
+      properties:
+        deployments:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeploymentSummary"
+        next_cursor:
+          type: string
+
+    DeploymentStatus:
+      type: object
+      properties:
+        lease_id:
+          type: string
+        state:
+          type: string
+        replicas:
+          type: object
+          properties:
+            ready:
+              type: integer
+            total:
+              type: integer
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceStatus"
+        last_updated:
+          type: string
+          format: date-time
+
+    ServiceStatus:
+      type: object
+      properties:
+        name:
+          type: string
+        state:
+          type: string
+        replicas:
+          type: integer
+        ports:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortMapping"
+
+    PortMapping:
+      type: object
+      properties:
+        port:
+          type: integer
+        protocol:
+          type: string
+
+    DeploymentActionRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [start, stop, restart, resize]
+        parameters:
+          type: object
+          additionalProperties: true
+
+    DeploymentActionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        operation_id:
+          type: string
+        state:
+          type: string
+    DeploymentEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    DeploymentEventListResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeploymentEvent"
+        next_cursor:
+          type: string
+
+    ShellSessionRequest:
+      type: object
+      properties:
+        container:
+          type: string
+
+    ShellSessionResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        deployment:
+          type: string
+        container:
+          type: string
+        session_ttl:
+          type: integer
+
+    ResourceMetrics:
+      type: object
+      properties:
+        cpu:
+          $ref: "#/components/schemas/UsageMetric"
+        memory:
+          $ref: "#/components/schemas/UsageMetric"
+        storage:
+          $ref: "#/components/schemas/UsageMetric"
+        network:
+          $ref: "#/components/schemas/NetworkMetric"
+        timestamp:
+          type: string
+          format: date-time
+
+    UsageMetric:
+      type: object
+      properties:
+        usage:
+          type: number
+        limit:
+          type: number
+        unit:
+          type: string
+
+    NetworkMetric:
+      type: object
+      properties:
+        rx_bytes:
+          type: number
+        tx_bytes:
+          type: number
+
+    MetricsPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        metrics:
+          $ref: "#/components/schemas/ResourceMetrics"
+
+    MetricsSeriesResponse:
+      type: object
+      properties:
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricsPoint"
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    OrganizationDetail:
+      allOf:
+        - $ref: "#/components/schemas/Organization"
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: "#/components/schemas/OrganizationMember"
+
+    OrganizationMember:
+      type: object
+      properties:
+        address:
+          type: string
+        role:
+          type: string
+          enum: [admin, member, viewer]
+        joined_at:
+          type: string
+          format: date-time
+
+    OrganizationInviteRequest:
+      type: object
+      required:
+        - address
+        - role
+      properties:
+        address:
+          type: string
+        role:
+          type: string
+          enum: [admin, member, viewer]
+
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: string
+        deployment_id:
+          type: string
+        subject:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, waiting_customer, resolved, closed]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TicketDetail:
+      allOf:
+        - $ref: "#/components/schemas/Ticket"
+        - type: object
+          properties:
+            comments:
+              type: array
+              items:
+                $ref: "#/components/schemas/TicketComment"
+
+    CreateTicketRequest:
+      type: object
+      required:
+        - deployment_id
+        - subject
+        - description
+      properties:
+        deployment_id:
+          type: string
+        subject:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [technical, billing, general, security]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+
+    UpdateTicketRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [open, in_progress, waiting_customer, resolved, closed]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+
+    TicketCommentRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+
+    TicketComment:
+      type: object
+      properties:
+        id:
+          type: string
+        author:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        status:
+          type: string
+          enum: [pending, paid, overdue]
+        total:
+          type: string
+        currency:
+          type: string
+        due_date:
+          type: string
+          format: date-time
+        issued_at:
+          type: string
+          format: date-time
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+
+    InvoiceLineItem:
+      type: object
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+        unit_price:
+          type: string
+        total:
+          type: string
+
+    InvoiceListResponse:
+      type: object
+      properties:
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+        next_cursor:
+          type: string
+
+    UsageSummary:
+      type: object
+      properties:
+        period:
+          $ref: "#/components/schemas/UsagePeriod"
+        total_cost:
+          type: string
+        currency:
+          type: string
+        resources:
+          $ref: "#/components/schemas/ResourceMetrics"
+
+    UsageHistoryResponse:
+      type: object
+      properties:
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageHistoryPoint"
+
+    UsageHistoryPoint:
+      type: object
+      properties:
+        period:
+          $ref: "#/components/schemas/UsagePeriod"
+        total_cost:
+          type: string
+        currency:
+          type: string
+        resources:
+          $ref: "#/components/schemas/ResourceMetrics"
+
+    UsagePeriod:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+
+    ProviderInfo:
+      type: object
+      properties:
+        address:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        chain_id:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        region:
+          type: string
+        endpoints:
+          $ref: "#/components/schemas/ProviderEndpoints"
+
+    ProviderEndpoints:
+      type: object
+      properties:
+        rest:
+          type: string
+        websocket:
+          type: string
+        grpc:
+          type: string
+
+    ProviderPricing:
+      type: object
+      properties:
+        currency:
+          type: string
+        cpu:
+          $ref: "#/components/schemas/ResourcePrice"
+        memory:
+          $ref: "#/components/schemas/ResourcePrice"
+        storage:
+          $ref: "#/components/schemas/ResourcePrice"
+        gpu:
+          $ref: "#/components/schemas/ResourcePrice"
+
+    ResourcePrice:
+      type: object
+      properties:
+        unit:
+          type: string
+        price:
+          type: string
+        interval:
+          type: string
+          enum: [hourly, daily, monthly]
+
+    ProviderCapacity:
+      type: object
+      properties:
+        cpu_cores:
+          type: number
+        memory_gb:
+          type: number
+        storage_gb:
+          type: number
+        gpu_units:
+          type: number
+
+    ProviderAttributes:
+      type: object
+      properties:
+        attributes:
+          type: object
+          additionalProperties: true
+
+    VaultUploadRequest:
+      type: object
+      required:
+        - scope
+        - content_base64
+      properties:
+        scope:
+          type: string
+          enum: [veid, support, market, audit]
+        content_base64:
+          type: string
+          description: Base64-encoded plaintext payload
+        org_id:
+          type: string
+        retention_policy:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    VaultUploadResponse:
+      type: object
+      properties:
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+
+    VaultRetrieveResponse:
+      type: object
+      properties:
+        data_base64:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+
+    VaultBlobMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+        key_id:
+          type: string
+        key_version:
+          type: integer
+          format: int64
+        content_hash:
+          type: string
+        size:
+          type: integer
+          format: int64
+        encrypted_size:
+          type: integer
+          format: int64
+        owner:
+          type: string
+        org_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        retention_policy:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        backend:
+          type: string
+        backend_ref:
+          type: string
+
+    VaultAuditResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaultAuditEvent"
+
+    VaultAuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        event_type:
+          type: string
+        blob_id:
+          type: string
+        scope:
+          type: string
+        requester:
+          type: string
+        org_id:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        previous_hash:
+          type: string
+        hash:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string

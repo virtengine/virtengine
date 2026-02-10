@@ -1,0 +1,80 @@
+syntax = "proto3";
+package virtengine.escrow.types.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+import "cosmos/base/v1beta1/coin.proto";
+
+import "virtengine/escrow/id/v1/id.proto";
+import "virtengine/escrow/types/v1/balance.proto";
+import "virtengine/escrow/types/v1/deposit.proto";
+import "virtengine/escrow/types/v1/state.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1";
+
+
+// Account stores state for an escrow account.
+message AccountState {
+  // Owner is the account bech32 address of the user who owns the deployment.
+  // It is a string representing a valid bech32 account address.
+  //
+  // Example:
+  //   "ve1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+
+  // State represents the current state of an Account.
+  State state = 2 [
+    (gogoproto.jsontag)  = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  // Transferred total coins spent by this account.
+  repeated cosmos.base.v1beta1.DecCoin transferred = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.DecCoins",
+    (gogoproto.jsontag)      = "transferred",
+    (gogoproto.moretags)     = "yaml:\"transferred\""
+  ];
+
+  // SettledAt represents the block height at which this account was last settled.
+  int64 settled_at = 4 [
+    (gogoproto.jsontag)    = "settledAt",
+    (gogoproto.moretags)   = "yaml:\"settledAt\"",
+    (gogoproto.customname) = "SettledAt"
+  ];
+
+  // Funds holds the unspent coins received from all deposits
+  repeated Balance funds = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "funds",
+    (gogoproto.moretags) = "yaml:\"funds\""
+  ];
+
+  repeated Depositor deposits = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "deposits",
+    (gogoproto.moretags) = "yaml:\"deposits\""
+  ];
+}
+
+// Account
+message Account {
+  virtengine.escrow.id.v1.Account id = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)  = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+
+  AccountState state = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+}

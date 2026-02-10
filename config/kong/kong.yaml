@@ -1,0 +1,216 @@
+_format_version: "3.0"
+_transform: true
+
+plugins:
+  - name: prometheus
+  - name: correlation-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+      echo_downstream: true
+
+services:
+  - name: waldur
+    url: http://waldur-mastermind-api:8080
+    tags:
+      - system:waldur
+    routes:
+      - name: waldur-v1
+        paths:
+          - /v1/waldur
+        strip_path: true
+        tags:
+          - lifecycle:deprecated
+        plugins:
+          - name: key-auth
+            config:
+              hide_credentials: true
+              key_names:
+                - x-api-key
+                - apikey
+          - name: acl
+            config:
+              allow:
+                - public
+          - name: rate-limiting
+            config:
+              minute: 120
+              policy: local
+          - name: request-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v1
+                  - x-gateway:virtengine
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v1
+                  - x-gateway:virtengine
+                  - deprecation:true
+                  - sunset:2026-12-31
+      - name: waldur-v2
+        paths:
+          - /v2/waldur
+        strip_path: true
+        tags:
+          - lifecycle:stable
+        plugins:
+          - name: key-auth
+            config:
+              hide_credentials: true
+              key_names:
+                - x-api-key
+                - apikey
+          - name: acl
+            config:
+              allow:
+                - public
+          - name: rate-limiting
+            config:
+              minute: 240
+              policy: local
+          - name: request-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v2
+                  - x-gateway:virtengine
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v2
+                  - x-gateway:virtengine
+
+  - name: chain-rest
+    url: http://virtengine-node:1317
+    tags:
+      - system:chain
+    routes:
+      - name: chain-v1
+        paths:
+          - /v1/chain
+        strip_path: true
+        tags:
+          - lifecycle:stable
+        plugins:
+          - name: key-auth
+            config:
+              hide_credentials: true
+              key_names:
+                - x-api-key
+                - apikey
+          - name: acl
+            config:
+              allow:
+                - public
+          - name: rate-limiting
+            config:
+              minute: 300
+              policy: local
+          - name: request-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v1
+                  - x-gateway:virtengine
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v1
+                  - x-gateway:virtengine
+
+  - name: provider-api
+    url: http://provider-daemon:8443
+    tags:
+      - system:provider
+    routes:
+      - name: provider-v1
+        paths:
+          - /v1/provider
+        strip_path: true
+        tags:
+          - lifecycle:beta
+        plugins:
+          - name: key-auth
+            config:
+              hide_credentials: true
+              key_names:
+                - x-api-key
+                - apikey
+          - name: acl
+            config:
+              allow:
+                - public
+          - name: rate-limiting
+            config:
+              minute: 60
+              policy: local
+          - name: request-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v1
+                  - x-gateway:virtengine
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-api-version:v1
+                  - x-gateway:virtengine
+                  - x-lifecycle-stage:beta
+
+  - name: api-portal
+    url: http://api-portal:8080
+    tags:
+      - system:portal
+    routes:
+      - name: api-portal
+        paths:
+          - /portal
+        strip_path: false
+        tags:
+          - lifecycle:stable
+        plugins:
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-gateway:virtengine
+
+  - name: ve-portal
+    url: http://portal:3000
+    tags:
+      - system:portal
+    routes:
+      - name: ve-portal
+        paths:
+          - /app
+        strip_path: true
+        tags:
+          - lifecycle:stable
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 600
+              policy: local
+          - name: response-transformer
+            config:
+              add:
+                headers:
+                  - x-gateway:virtengine
+
+consumers:
+  - username: dev-portal
+    keyauth_credentials:
+      - key: dev-portal-key
+    acls:
+      - group: public
+  - username: admin-ops
+    keyauth_credentials:
+      - key: admin-ops-key
+    acls:
+      - group: admin

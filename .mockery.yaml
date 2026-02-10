@@ -1,0 +1,14 @@
+dir: mocks
+structname: '{{.InterfaceName}}'
+filename: "{{.StructName}}_mock.go"
+template: testify
+template-data:
+  unroll-variadic: true
+packages:
+  github.com/virtengine/virtengine/testutil/cosmos:
+    config:
+      dir: testutil/cosmos/mocks
+    interfaces:
+      AuthzKeeper: {}
+      BankKeeper: {}
+      TakeKeeper: {}

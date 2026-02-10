@@ -1,0 +1,70 @@
+syntax = "proto3";
+package virtengine.delegation.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/delegation/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/delegation/v1";
+
+// GenesisState defines the delegation module's genesis state
+message GenesisState {
+  // params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+
+  // delegations are the initial delegations
+  repeated Delegation delegations = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "delegations",
+    (gogoproto.moretags) = "yaml:\"delegations\""
+  ];
+
+  // unbonding_delegations are the initial unbonding delegations
+  repeated UnbondingDelegation unbonding_delegations = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "unbonding_delegations",
+    (gogoproto.moretags) = "yaml:\"unbonding_delegations\""
+  ];
+
+  // redelegations are the initial redelegations
+  repeated Redelegation redelegations = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "redelegations",
+    (gogoproto.moretags) = "yaml:\"redelegations\""
+  ];
+
+  // validator_shares are the initial validator shares
+  repeated ValidatorShares validator_shares = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "validator_shares",
+    (gogoproto.moretags) = "yaml:\"validator_shares\""
+  ];
+
+  // delegator_rewards are the initial delegator rewards
+  repeated DelegatorReward delegator_rewards = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "delegator_rewards",
+    (gogoproto.moretags) = "yaml:\"delegator_rewards\""
+  ];
+
+  // delegation_sequence is the next delegation sequence number
+  uint64 delegation_sequence = 7 [
+    (gogoproto.jsontag) = "delegation_sequence",
+    (gogoproto.moretags) = "yaml:\"delegation_sequence\""
+  ];
+
+  // unbonding_sequence is the next unbonding sequence number
+  uint64 unbonding_sequence = 8 [
+    (gogoproto.jsontag) = "unbonding_sequence",
+    (gogoproto.moretags) = "yaml:\"unbonding_sequence\""
+  ];
+
+  // redelegation_sequence is the next redelegation sequence number
+  uint64 redelegation_sequence = 9 [
+    (gogoproto.jsontag) = "redelegation_sequence",
+    (gogoproto.moretags) = "yaml:\"redelegation_sequence\""
+  ];
+}

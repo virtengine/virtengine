@@ -1,0 +1,242 @@
+---
+version: 2
+project_name: node
+dist: ./.cache/goreleaser/main
+env:
+  - GO111MODULE=on
+  - CGO_ENABLED=1
+before:
+  hooks:
+    - apt update
+    - apt install -y pkg-config libudev-dev:amd64 libudev-dev:arm64
+builds:
+  - id: virtengine-darwin-amd64
+    binary: virtengine
+    main: ./cmd/virtengine
+    goarch:
+      - amd64
+    goos:
+      - darwin
+    env:
+      - CC=o64-clang
+      - CXX=o64-clang++
+    flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
+      - -trimpath
+    ldflags:
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+  - id: virtengine-darwin-arm64
+    binary: virtengine
+    main: ./cmd/virtengine
+    goarch:
+      - arm64
+    goos:
+      - darwin
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
+      - -trimpath
+    ldflags:
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+  - id: virtengine-linux-amd64
+    binary: virtengine
+    main: ./cmd/virtengine
+    env:
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
+    goarch:
+      - amd64
+    goos:
+      - linux
+    flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
+      - -trimpath
+    ldflags:
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+      - -extldflags "-lc -lrt -lpthread"
+  - id: virtengine-linux-arm64
+    binary: virtengine
+    main: ./cmd/virtengine
+    goarch:
+      - arm64
+    goos:
+      - linux
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
+      - -trimpath
+    ldflags:
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+      - -extldflags "-lc -lrt -lpthread"
+universal_binaries:
+  - id: virtengine-darwin-universal
+    ids:
+      - virtengine-darwin-amd64
+      - virtengine-darwin-arm64
+    replace: true
+    name_template: "virtengine"
+archives:
+  - id: w/version
+    ids:
+      - virtengine-darwin-universal
+      - virtengine-linux-amd64
+      - virtengine-linux-arm64
+    name_template: "virtengine_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    formats:
+      - zip
+    files:
+      - none*
+  - id: wo/version
+    ids:
+      - virtengine-darwin-universal
+      - virtengine-linux-amd64
+      - virtengine-linux-arm64
+    name_template: "virtengine_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    formats:
+      - zip
+    files:
+      - none*
+
+checksum:
+  # You can change the name of the checksums file.
+  # Default is `{{ .ProjectName }}_{{ .Version }}_checksums.txt`.
+  name_template: "virtengine_{{ .Version }}_checksums.txt"
+
+dockers:
+  - dockerfile: _build/Dockerfile.virtengine
+    use: buildx
+    goarch: amd64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url={{ .GitURL }}
+      - --label=org.opencontainers.image.source={{ .GitURL }}
+      - --label=org.opencontainers.image.version={{ replace .Version "+" "-" }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{if eq .Env.STABLE "true"}}stable{{else}}latest{{end}}-amd64'
+  - dockerfile: _build/Dockerfile.virtengine
+    use: buildx
+    goarch: arm64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url={{ .GitURL }}
+      - --label=org.opencontainers.image.source={{ .GitURL }}
+      - --label=org.opencontainers.image.version={{ replace .Version "+" "-" }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-arm64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-arm64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{if eq .Env.STABLE "true"}}stable{{else}}latest{{end}}-arm64'
+docker_manifests:
+  - name_template: "{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}"
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-arm64'
+  - name_template: '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}'
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-arm64'
+  - name_template: "{{ .Env.DOCKER_IMAGE }}:latest"
+    image_templates:
+      - "{{ .Env.DOCKER_IMAGE }}:latest-amd64"
+      - "{{ .Env.DOCKER_IMAGE }}:latest-arm64"
+
+nfpms:
+  - id: w/version
+    vendor: "VirtEngine"
+    homepage: "https://virtengine.com"
+    maintainer: "VirtEngine <hello@virtengine.com>"
+    file_name_template: "virtengine_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - deb
+      - rpm
+    license: Apache 2.0
+  - id: wo/version
+    vendor: "VirtEngine"
+    homepage: "https://virtengine.com"
+    maintainer: "VirtEngine <hello@virtengine.com>"
+    file_name_template: "virtengine_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - deb
+      - rpm
+    license: Apache 2.0
+
+release:
+  github:
+    owner: virtengine
+    name: node
+  prerelease: auto
+  mode: replace
+  draft: false
+  extra_files:
+    - glob: .cache/sbom/*.json
+    - glob: .cache/sbom/*.sig
+    - glob: .cache/sbom/*.cert
+
+# SECURITY-9C: Artifact signing with Sigstore cosign
+# Enables keyless signing using GitHub Actions OIDC tokens
+signs:
+  - cmd: cosign
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+    certificate: "${artifact}.pem"
+
+# Docker image signing with cosign
+docker_signs:
+  - cmd: cosign
+    args:
+      - "sign"
+      - "--yes"
+      - "${artifact}"
+    artifacts: all
+    output: true
+
+# SBOM generation for releases
+sboms:
+  - id: sbom-cyclonedx
+    artifacts: archive
+    documents:
+      - "sbom_{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.cdx.json"
+    cmd: syft
+    args:
+      - "$artifact"
+      - "--output"
+      - "cyclonedx-json=$document"
+
+# Metadata for release artifacts
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"

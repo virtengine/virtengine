@@ -1,0 +1,6 @@
+version: v1
+plugins:
+  - name: doc
+    strategy: all
+    out: ./docs/proto
+    opt: ./docs/protodoc-markdown.tmpl,provider.md

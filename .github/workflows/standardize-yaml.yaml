@@ -1,0 +1,30 @@
+---
+name: standardize-yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.yml"
+
+jobs:
+  check-yml-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check-yml-count
+        run: |
+          # Skip certain legacy yml files that are required by external tools
+          # Note: All workflow files should use .yaml extension
+          # Skip dependabot.yml as GitHub requires this exact filename
+          # Skip _config.yml as Jekyll requires this exact filename for GitHub Pages
+          yml_files=$(git ls-files '*.yml' ':!:codecov.yml' ':!:sdk/codecov.yml' ':!:config/kong/prometheus.yml' ':!:.github/dependabot.yml' ':!:_config.yml')
+          if [[ -n "$yml_files" ]]; then 
+            echo "Found .yml files that should be .yaml:"
+            echo "$yml_files"
+            echo ""
+            echo "Please rename these files to use .yaml extension"
+            exit 1
+          fi
+          echo "✅ All YAML files use correct .yaml extension"

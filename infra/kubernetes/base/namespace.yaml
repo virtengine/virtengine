@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine
+    istio-injection: enabled

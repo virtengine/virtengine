@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package virtengine.manifest.v2beta3;
+
+import "gogoproto/gogo.proto";
+import "virtengine/manifest/v2beta3/service.proto";
+
+option (gogoproto.goproto_stringer_all) = false;
+option (gogoproto.stringer_all)         = true;
+option go_package                       = "github.com/virtengine/virtengine/sdk/go/manifest/v2beta3";
+
+// Group store name and list of services
+message Group {
+  // getters must be implemented as value receiver
+  // due to GetName collision
+  option (gogoproto.goproto_getters) = false;
+  string name = 1 [
+    (gogoproto.jsontag)  = "name",
+    (gogoproto.moretags) = "yaml:\"name\""
+  ];
+  repeated Service services = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "Services",
+    (gogoproto.jsontag)      = "services",
+    (gogoproto.moretags)     = "yaml:\"services\""
+  ];
+}

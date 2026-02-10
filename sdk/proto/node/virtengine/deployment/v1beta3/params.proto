@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package virtengine.deployment.v1beta3;
+
+import "gogoproto/gogo.proto";
+import "cosmos/base/v1beta1/coin.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta3";
+
+// Params defines the parameters for the x/deployment package
+message Params {
+  repeated cosmos.base.v1beta1.Coin min_deposits = 1[
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins",
+    (gogoproto.customname)   = "MinDeposits",
+    (gogoproto.nullable)     = false,
+    (gogoproto.jsontag)      = "min_deposits",
+    (gogoproto.moretags)     = "yaml:\"min_deposits\""
+  ];
+}

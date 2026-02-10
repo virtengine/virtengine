@@ -1,0 +1,423 @@
+syntax = "proto3";
+package virtengine.mfa.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "virtengine/mfa/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/mfa/v1";
+
+// Msg defines the mfa Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // EnrollFactor enrolls a new MFA factor
+  rpc EnrollFactor(MsgEnrollFactor) returns (MsgEnrollFactorResponse);
+
+  // RevokeFactor revokes an enrolled factor
+  rpc RevokeFactor(MsgRevokeFactor) returns (MsgRevokeFactorResponse);
+
+  // SetMFAPolicy sets the MFA policy for an account
+  rpc SetMFAPolicy(MsgSetMFAPolicy) returns (MsgSetMFAPolicyResponse);
+
+  // CreateChallenge creates an MFA challenge
+  rpc CreateChallenge(MsgCreateChallenge) returns (MsgCreateChallengeResponse);
+
+  // VerifyChallenge verifies an MFA challenge response
+  rpc VerifyChallenge(MsgVerifyChallenge) returns (MsgVerifyChallengeResponse);
+
+  // AddTrustedDevice adds a trusted device
+  rpc AddTrustedDevice(MsgAddTrustedDevice) returns (MsgAddTrustedDeviceResponse);
+
+  // RemoveTrustedDevice removes a trusted device
+  rpc RemoveTrustedDevice(MsgRemoveTrustedDevice) returns (MsgRemoveTrustedDeviceResponse);
+
+  // UpdateSensitiveTxConfig updates sensitive transaction configuration (governance only)
+  rpc UpdateSensitiveTxConfig(MsgUpdateSensitiveTxConfig) returns (MsgUpdateSensitiveTxConfigResponse);
+
+  // UpdateParams updates module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// MsgEnrollFactor is the message for enrolling a new MFA factor
+message MsgEnrollFactor {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgEnrollFactor";
+
+  // Sender is the account enrolling the factor
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // FactorType is the type of factor to enroll
+  FactorType factor_type = 2 [
+    (gogoproto.jsontag) = "factor_type",
+    (gogoproto.moretags) = "yaml:\"factor_type\""
+  ];
+
+  // Label is a user-friendly label for the factor
+  string label = 3 [
+    (gogoproto.jsontag) = "label",
+    (gogoproto.moretags) = "yaml:\"label\""
+  ];
+
+  // PublicIdentifier is the public component (for FIDO2, hardware keys)
+  bytes public_identifier = 4 [
+    (gogoproto.jsontag) = "public_identifier,omitempty",
+    (gogoproto.moretags) = "yaml:\"public_identifier\""
+  ];
+
+  // Metadata contains factor-specific metadata
+  FactorMetadata metadata = 5 [
+    (gogoproto.jsontag) = "metadata,omitempty",
+    (gogoproto.moretags) = "yaml:\"metadata\""
+  ];
+
+  // InitialVerificationProof is proof of factor possession during enrollment
+  bytes initial_verification_proof = 6 [
+    (gogoproto.jsontag) = "initial_verification_proof,omitempty",
+    (gogoproto.moretags) = "yaml:\"initial_verification_proof\""
+  ];
+}
+
+// MsgEnrollFactorResponse is the response for MsgEnrollFactor
+message MsgEnrollFactorResponse {
+  // FactorID is the unique identifier for the enrolled factor
+  string factor_id = 1 [
+    (gogoproto.jsontag) = "factor_id",
+    (gogoproto.moretags) = "yaml:\"factor_id\""
+  ];
+
+  // Status is the enrollment status
+  FactorEnrollmentStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+}
+
+// MsgRevokeFactor is the message for revoking an enrolled factor
+message MsgRevokeFactor {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgRevokeFactor";
+
+  // Sender is the account revoking the factor
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // FactorType is the type of factor to revoke
+  FactorType factor_type = 2 [
+    (gogoproto.jsontag) = "factor_type",
+    (gogoproto.moretags) = "yaml:\"factor_type\""
+  ];
+
+  // FactorID is the ID of the factor to revoke
+  string factor_id = 3 [
+    (gogoproto.jsontag) = "factor_id",
+    (gogoproto.moretags) = "yaml:\"factor_id\""
+  ];
+
+  // MFAProof is proof of MFA for this operation (required if MFA is enabled)
+  MFAProof mfa_proof = 4 [
+    (gogoproto.jsontag) = "mfa_proof,omitempty",
+    (gogoproto.moretags) = "yaml:\"mfa_proof\""
+  ];
+}
+
+// MsgRevokeFactorResponse is the response for MsgRevokeFactor
+message MsgRevokeFactorResponse {
+  // Success indicates if the revocation was successful
+  bool success = 1 [
+    (gogoproto.jsontag) = "success",
+    (gogoproto.moretags) = "yaml:\"success\""
+  ];
+}
+
+// MsgSetMFAPolicy is the message for setting MFA policy
+message MsgSetMFAPolicy {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgSetMFAPolicy";
+
+  // Sender is the account setting the policy
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // Policy is the new MFA policy
+  MFAPolicy policy = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "policy",
+    (gogoproto.moretags) = "yaml:\"policy\""
+  ];
+
+  // MFAProof is proof of MFA for this operation (required if MFA is already enabled)
+  MFAProof mfa_proof = 3 [
+    (gogoproto.jsontag) = "mfa_proof,omitempty",
+    (gogoproto.moretags) = "yaml:\"mfa_proof\""
+  ];
+}
+
+// MsgSetMFAPolicyResponse is the response for MsgSetMFAPolicy
+message MsgSetMFAPolicyResponse {
+  // Success indicates if the policy update was successful
+  bool success = 1 [
+    (gogoproto.jsontag) = "success",
+    (gogoproto.moretags) = "yaml:\"success\""
+  ];
+}
+
+// MsgCreateChallenge is the message for creating an MFA challenge
+message MsgCreateChallenge {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgCreateChallenge";
+
+  // Sender is the account requesting the challenge
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // FactorType is the type of factor to challenge
+  FactorType factor_type = 2 [
+    (gogoproto.jsontag) = "factor_type",
+    (gogoproto.moretags) = "yaml:\"factor_type\""
+  ];
+
+  // FactorID is the specific factor to challenge (optional)
+  string factor_id = 3 [
+    (gogoproto.jsontag) = "factor_id,omitempty",
+    (gogoproto.moretags) = "yaml:\"factor_id\""
+  ];
+
+  // TransactionType is the sensitive transaction this challenge is for
+  SensitiveTransactionType transaction_type = 4 [
+    (gogoproto.jsontag) = "transaction_type",
+    (gogoproto.moretags) = "yaml:\"transaction_type\""
+  ];
+
+  // ClientInfo contains client information
+  ClientInfo client_info = 5 [
+    (gogoproto.jsontag) = "client_info,omitempty",
+    (gogoproto.moretags) = "yaml:\"client_info\""
+  ];
+}
+
+// MsgCreateChallengeResponse is the response for MsgCreateChallenge
+message MsgCreateChallengeResponse {
+  // ChallengeID is the unique identifier for the challenge
+  string challenge_id = 1 [
+    (gogoproto.jsontag) = "challenge_id",
+    (gogoproto.moretags) = "yaml:\"challenge_id\""
+  ];
+
+  // ChallengeData contains factor-specific challenge data
+  bytes challenge_data = 2 [
+    (gogoproto.jsontag) = "challenge_data,omitempty",
+    (gogoproto.moretags) = "yaml:\"challenge_data\""
+  ];
+
+  // ExpiresAt is when the challenge expires
+  int64 expires_at = 3 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+}
+
+// MsgVerifyChallenge is the message for verifying a challenge response
+message MsgVerifyChallenge {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgVerifyChallenge";
+
+  // Sender is the account verifying the challenge
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // ChallengeID is the challenge being verified
+  string challenge_id = 2 [
+    (gogoproto.jsontag) = "challenge_id",
+    (gogoproto.moretags) = "yaml:\"challenge_id\""
+  ];
+
+  // Response is the challenge response
+  ChallengeResponse response = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "response",
+    (gogoproto.moretags) = "yaml:\"response\""
+  ];
+}
+
+// MsgVerifyChallengeResponse is the response for MsgVerifyChallenge
+message MsgVerifyChallengeResponse {
+  // Verified indicates if verification was successful
+  bool verified = 1 [
+    (gogoproto.jsontag) = "verified",
+    (gogoproto.moretags) = "yaml:\"verified\""
+  ];
+
+  // SessionID is the authorization session ID if verified
+  string session_id = 2 [
+    (gogoproto.jsontag) = "session_id,omitempty",
+    (gogoproto.moretags) = "yaml:\"session_id\""
+  ];
+
+  // SessionExpiresAt is when the session expires
+  int64 session_expires_at = 3 [
+    (gogoproto.jsontag) = "session_expires_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"session_expires_at\""
+  ];
+
+  // RemainingFactors lists factors still needed to satisfy policy
+  repeated FactorType remaining_factors = 4 [
+    (gogoproto.jsontag) = "remaining_factors,omitempty",
+    (gogoproto.moretags) = "yaml:\"remaining_factors\""
+  ];
+}
+
+// MsgAddTrustedDevice is the message for adding a trusted device
+message MsgAddTrustedDevice {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgAddTrustedDevice";
+
+  // Sender is the account adding the device
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // DeviceInfo contains the device information
+  DeviceInfo device_info = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "device_info",
+    (gogoproto.moretags) = "yaml:\"device_info\""
+  ];
+
+  // MFAProof is proof of MFA for this operation
+  MFAProof mfa_proof = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "mfa_proof",
+    (gogoproto.moretags) = "yaml:\"mfa_proof\""
+  ];
+}
+
+// MsgAddTrustedDeviceResponse is the response for MsgAddTrustedDevice
+message MsgAddTrustedDeviceResponse {
+  // Success indicates if the device was added
+  bool success = 1 [
+    (gogoproto.jsontag) = "success",
+    (gogoproto.moretags) = "yaml:\"success\""
+  ];
+
+  // TrustExpiresAt is when the device trust expires
+  int64 trust_expires_at = 2 [
+    (gogoproto.jsontag) = "trust_expires_at",
+    (gogoproto.moretags) = "yaml:\"trust_expires_at\""
+  ];
+}
+
+// MsgRemoveTrustedDevice is the message for removing a trusted device
+message MsgRemoveTrustedDevice {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "mfa/MsgRemoveTrustedDevice";
+
+  // Sender is the account removing the device
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // DeviceFingerprint is the fingerprint of the device to remove
+  string device_fingerprint = 2 [
+    (gogoproto.jsontag) = "device_fingerprint",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+
+  // MFAProof is proof of MFA for this operation (optional if removing from trusted device)
+  MFAProof mfa_proof = 3 [
+    (gogoproto.jsontag) = "mfa_proof,omitempty",
+    (gogoproto.moretags) = "yaml:\"mfa_proof\""
+  ];
+}
+
+// MsgRemoveTrustedDeviceResponse is the response for MsgRemoveTrustedDevice
+message MsgRemoveTrustedDeviceResponse {
+  // Success indicates if the device was removed
+  bool success = 1 [
+    (gogoproto.jsontag) = "success",
+    (gogoproto.moretags) = "yaml:\"success\""
+  ];
+}
+
+// MsgUpdateSensitiveTxConfig is the message for updating sensitive tx config (governance)
+message MsgUpdateSensitiveTxConfig {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "mfa/MsgUpdateSensitiveTxConfig";
+
+  // Authority is the governance authority
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Config is the new configuration
+  SensitiveTxConfig config = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "config",
+    (gogoproto.moretags) = "yaml:\"config\""
+  ];
+}
+
+// MsgUpdateSensitiveTxConfigResponse is the response for MsgUpdateSensitiveTxConfig
+message MsgUpdateSensitiveTxConfigResponse {
+  // Success indicates if the update was successful
+  bool success = 1 [
+    (gogoproto.jsontag) = "success",
+    (gogoproto.moretags) = "yaml:\"success\""
+  ];
+}
+
+// MsgUpdateParams is the message for updating module parameters
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "mfa/MsgUpdateParams";
+
+  // Authority is the address that controls the module (x/gov module account)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Params are the new module parameters
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}

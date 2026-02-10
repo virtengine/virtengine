@@ -1,0 +1,31 @@
+FROM golang:1.25.5-alpine AS build
+
+RUN apk add --no-cache ca-certificates git make bash gcc musl-dev linux-headers
+
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY sdk/go/go.mod sdk/go/go.sum sdk/go/
+COPY sdk/specs/go.mod sdk/specs/
+RUN go mod download
+
+COPY . .
+
+ENV CGO_ENABLED=0
+RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/virtengine ./cmd/virtengine
+
+FROM golang:1.25.5-alpine
+
+RUN apk add --no-cache ca-certificates bash curl jq && \
+    addgroup -S virtengine && \
+    adduser -S -G virtengine -u 10001 virtengine && \
+    mkdir -p /var/lib/virtengine && \
+    chown -R virtengine:virtengine /var/lib/virtengine
+
+ENV HOME=/var/lib/virtengine
+WORKDIR /var/lib/virtengine
+
+COPY --from=build /out/virtengine /usr/local/bin/virtengine
+
+EXPOSE 26657
+
+ENTRYPOINT ["/bin/sh"]

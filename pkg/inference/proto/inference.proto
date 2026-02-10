@@ -1,0 +1,249 @@
+// Copyright 2024-2026 VirtEngine Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Package proto defines the gRPC protocol for the VEID inference sidecar.
+// This service provides deterministic ML inference for identity scoring.
+//
+// VE-219: Deterministic identity verification runtime
+
+syntax = "proto3";
+
+package inference.v1;
+
+option go_package = "github.com/virtengine/virtengine/pkg/inference/proto;inferencepb";
+
+// InferenceService provides deterministic ML inference for VEID identity scoring.
+// All inference must be deterministic across validators for blockchain consensus.
+service InferenceService {
+  // GetModelInfo returns information about the loaded model.
+  rpc GetModelInfo(GetModelInfoRequest) returns (GetModelInfoResponse);
+
+  // ComputeScore runs ML inference to compute an identity score.
+  rpc ComputeScore(ComputeScoreRequest) returns (ComputeScoreResponse);
+
+  // HealthCheck checks if the service is healthy and ready.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // GetMetrics returns service metrics for observability.
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+
+  // VerifyDeterminism runs a determinism check with known test vectors.
+  rpc VerifyDeterminism(VerifyDeterminismRequest) returns (VerifyDeterminismResponse);
+}
+
+// ============================================================================
+// Model Info
+// ============================================================================
+
+message GetModelInfoRequest {}
+
+message GetModelInfoResponse {
+  // version is the semantic version of the model (e.g., "v1.0.0")
+  string version = 1;
+
+  // hash is the SHA256 hash of the model weights for integrity verification
+  string hash = 2;
+
+  // input_dim is the expected input feature vector dimension
+  int32 input_dim = 3;
+
+  // output_dim is the output dimension (typically 1 for single score)
+  int32 output_dim = 4;
+
+  // tensorflow_version is the TensorFlow version used for export
+  string tensorflow_version = 5;
+
+  // export_timestamp is when the model was exported (RFC3339)
+  string export_timestamp = 6;
+
+  // pipeline_version is the overall ML pipeline version
+  string pipeline_version = 7;
+
+  // determinism_config contains determinism configuration details
+  DeterminismConfig determinism_config = 8;
+}
+
+// DeterminismConfig describes how determinism is enforced
+message DeterminismConfig {
+  // force_cpu forces CPU-only execution (no GPU)
+  bool force_cpu = 1;
+
+  // random_seed is the fixed random seed for all operations
+  int64 random_seed = 2;
+
+  // inter_op_parallelism is the number of inter-op threads (1 for determinism)
+  int32 inter_op_parallelism = 3;
+
+  // intra_op_parallelism is the number of intra-op threads (1 for determinism)
+  int32 intra_op_parallelism = 4;
+
+  // deterministic_ops forces use of deterministic operation implementations
+  bool deterministic_ops = 5;
+}
+
+// ============================================================================
+// Compute Score
+// ============================================================================
+
+message ComputeScoreRequest {
+  // features is the input feature vector (must match model's input_dim)
+  repeated float features = 1;
+
+  // metadata contains contextual information about the inference request
+  InferenceMetadata metadata = 2;
+
+  // return_contributions requests feature contribution breakdown
+  bool return_contributions = 3;
+}
+
+message InferenceMetadata {
+  // account_address is the blockchain address being verified
+  string account_address = 1;
+
+  // block_height is the current block height
+  int64 block_height = 2;
+
+  // request_id is a unique identifier for this request (for tracing)
+  string request_id = 3;
+
+  // validator_address is the address of the validator performing inference
+  string validator_address = 4;
+}
+
+message ComputeScoreResponse {
+  // score is the quantized identity score (0-100)
+  uint32 score = 1;
+
+  // raw_score is the raw model output before quantization
+  float raw_score = 2;
+
+  // confidence is the model's confidence in the prediction (0.0-1.0)
+  float confidence = 3;
+
+  // input_hash is the SHA256 hash of the input features for verification
+  string input_hash = 4;
+
+  // output_hash is the SHA256 hash of the raw output for determinism verification
+  string output_hash = 5;
+
+  // model_version is the version of the model that produced this result
+  string model_version = 6;
+
+  // model_hash is the SHA256 hash of the model weights
+  string model_hash = 7;
+
+  // reason_codes explain factors contributing to the score
+  repeated string reason_codes = 8;
+
+  // compute_time_ms is the inference computation time in milliseconds
+  int64 compute_time_ms = 9;
+
+  // feature_contributions maps feature names to their contribution scores
+  map<string, float> feature_contributions = 10;
+}
+
+// ============================================================================
+// Health Check
+// ============================================================================
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  // status indicates the service health status
+  HealthStatus status = 1;
+
+  // model_loaded indicates if the model is successfully loaded
+  bool model_loaded = 2;
+
+  // model_version is the loaded model version
+  string model_version = 3;
+
+  // model_hash is the loaded model hash
+  string model_hash = 4;
+
+  // uptime_seconds is how long the service has been running
+  int64 uptime_seconds = 5;
+
+  // last_inference_timestamp is when the last inference was performed (RFC3339)
+  string last_inference_timestamp = 6;
+
+  // error_message contains details if status is not HEALTHY
+  string error_message = 7;
+}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_HEALTHY = 1;
+  HEALTH_STATUS_DEGRADED = 2;
+  HEALTH_STATUS_UNHEALTHY = 3;
+}
+
+// ============================================================================
+// Metrics
+// ============================================================================
+
+message GetMetricsRequest {}
+
+message GetMetricsResponse {
+  // total_inferences is the total number of inference requests
+  uint64 total_inferences = 1;
+
+  // successful_inferences is the number of successful inferences
+  uint64 successful_inferences = 2;
+
+  // failed_inferences is the number of failed inferences
+  uint64 failed_inferences = 3;
+
+  // average_latency_ms is the average inference latency in milliseconds
+  float average_latency_ms = 4;
+
+  // p99_latency_ms is the 99th percentile latency in milliseconds
+  float p99_latency_ms = 5;
+
+  // model_version is the current model version
+  string model_version = 6;
+
+  // model_hash is the current model hash
+  string model_hash = 7;
+
+  // uptime_seconds is how long the service has been running
+  int64 uptime_seconds = 8;
+
+  // memory_usage_mb is the current memory usage in megabytes
+  float memory_usage_mb = 9;
+
+  // latency_histogram contains latency distribution buckets
+  map<string, uint64> latency_histogram = 10;
+}
+
+// ============================================================================
+// Determinism Verification
+// ============================================================================
+
+message VerifyDeterminismRequest {
+  // test_vector_id is the ID of the test vector to use (optional)
+  string test_vector_id = 1;
+
+  // custom_input is a custom input for verification (if test_vector_id is empty)
+  repeated float custom_input = 2;
+
+  // expected_output_hash is the expected output hash (for custom input)
+  string expected_output_hash = 3;
+}
+
+message VerifyDeterminismResponse {
+  // passed indicates if the determinism check passed
+  bool passed = 1;
+
+  // actual_output_hash is the hash of the output produced
+  string actual_output_hash = 2;
+
+  // expected_output_hash is the expected hash
+  string expected_output_hash = 3;
+
+  // differences contains descriptions of any differences found
+  repeated string differences = 4;
+
+  // test_vector_id is the ID of the test vector used
+  string test_vector_id = 5;
+}

@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "name": "azure-e2e",
+  "services": [
+    {
+      "name": "vm",
+      "type": "vm",
+      "image": "Canonical:UbuntuServer:18.04-LTS:latest",
+      "resources": {"cpu": 2000, "memory": 2147483648},
+      "ports": [{"name": "ssh", "container_port": 22, "expose": true}]
+    }
+  ]
+}

@@ -1,0 +1,540 @@
+syntax = "proto3";
+package virtengine.enclave.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "amino/amino.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/enclave/v1";
+
+// TEEType represents the type of Trusted Execution Environment
+enum TEEType {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // TEE_TYPE_UNSPECIFIED is the default/invalid TEE type
+  TEE_TYPE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "TEETypeUnspecified"];
+
+  // TEE_TYPE_SGX is Intel SGX
+  TEE_TYPE_SGX = 1 [(gogoproto.enumvalue_customname) = "TEETypeSGX"];
+
+  // TEE_TYPE_SEV_SNP is AMD SEV-SNP
+  TEE_TYPE_SEV_SNP = 2 [(gogoproto.enumvalue_customname) = "TEETypeSEVSNP"];
+
+  // TEE_TYPE_NITRO is AWS Nitro Enclaves
+  TEE_TYPE_NITRO = 3 [(gogoproto.enumvalue_customname) = "TEETypeNitro"];
+
+  // TEE_TYPE_TRUSTZONE is ARM TrustZone (future)
+  TEE_TYPE_TRUSTZONE = 4 [(gogoproto.enumvalue_customname) = "TEETypeTrustZone"];
+}
+
+// EnclaveIdentityStatus represents the status of an enclave identity
+enum EnclaveIdentityStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // ENCLAVE_IDENTITY_STATUS_UNSPECIFIED is the default/invalid status
+  ENCLAVE_IDENTITY_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "EnclaveIdentityStatusUnspecified"];
+
+  // ENCLAVE_IDENTITY_STATUS_ACTIVE indicates the enclave identity is active
+  ENCLAVE_IDENTITY_STATUS_ACTIVE = 1 [(gogoproto.enumvalue_customname) = "EnclaveIdentityStatusActive"];
+
+  // ENCLAVE_IDENTITY_STATUS_PENDING indicates the enclave identity is pending verification
+  ENCLAVE_IDENTITY_STATUS_PENDING = 2 [(gogoproto.enumvalue_customname) = "EnclaveIdentityStatusPending"];
+
+  // ENCLAVE_IDENTITY_STATUS_EXPIRED indicates the enclave identity has expired
+  ENCLAVE_IDENTITY_STATUS_EXPIRED = 3 [(gogoproto.enumvalue_customname) = "EnclaveIdentityStatusExpired"];
+
+  // ENCLAVE_IDENTITY_STATUS_REVOKED indicates the enclave identity has been revoked
+  ENCLAVE_IDENTITY_STATUS_REVOKED = 4 [(gogoproto.enumvalue_customname) = "EnclaveIdentityStatusRevoked"];
+
+  // ENCLAVE_IDENTITY_STATUS_ROTATING indicates key rotation is in progress
+  ENCLAVE_IDENTITY_STATUS_ROTATING = 5 [(gogoproto.enumvalue_customname) = "EnclaveIdentityStatusRotating"];
+}
+
+// KeyRotationStatus represents the status of a key rotation
+enum KeyRotationStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // KEY_ROTATION_STATUS_UNSPECIFIED is the default/invalid status
+  KEY_ROTATION_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "KeyRotationStatusUnspecified"];
+
+  // KEY_ROTATION_STATUS_PENDING indicates rotation is pending
+  KEY_ROTATION_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "KeyRotationStatusPending"];
+
+  // KEY_ROTATION_STATUS_ACTIVE indicates rotation is active (overlap period)
+  KEY_ROTATION_STATUS_ACTIVE = 2 [(gogoproto.enumvalue_customname) = "KeyRotationStatusActive"];
+
+  // KEY_ROTATION_STATUS_COMPLETED indicates rotation is completed
+  KEY_ROTATION_STATUS_COMPLETED = 3 [(gogoproto.enumvalue_customname) = "KeyRotationStatusCompleted"];
+
+  // KEY_ROTATION_STATUS_CANCELLED indicates rotation was cancelled
+  KEY_ROTATION_STATUS_CANCELLED = 4 [(gogoproto.enumvalue_customname) = "KeyRotationStatusCancelled"];
+}
+
+// EnclaveIdentity represents a validator's enclave identity record
+message EnclaveIdentity {
+  option (gogoproto.equal) = true;
+
+  // ValidatorAddress is the validator operator address
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // TEEType is the type of TEE (SGX, SEV-SNP, NITRO)
+  TEEType tee_type = 2 [
+    (gogoproto.jsontag) = "tee_type",
+    (gogoproto.moretags) = "yaml:\"tee_type\""
+  ];
+
+  // MeasurementHash is the enclave measurement (MRENCLAVE for SGX)
+  bytes measurement_hash = 3 [
+    (gogoproto.jsontag) = "measurement_hash",
+    (gogoproto.moretags) = "yaml:\"measurement_hash\""
+  ];
+
+  // SignerHash is the signer measurement (MRSIGNER for SGX)
+  bytes signer_hash = 4 [
+    (gogoproto.jsontag) = "signer_hash,omitempty",
+    (gogoproto.moretags) = "yaml:\"signer_hash\""
+  ];
+
+  // EncryptionPubKey is the enclave's public key for encryption
+  bytes encryption_pub_key = 5 [
+    (gogoproto.jsontag) = "encryption_pub_key",
+    (gogoproto.moretags) = "yaml:\"encryption_pub_key\""
+  ];
+
+  // SigningPubKey is the enclave's public key for signing attestations
+  bytes signing_pub_key = 6 [
+    (gogoproto.jsontag) = "signing_pub_key",
+    (gogoproto.moretags) = "yaml:\"signing_pub_key\""
+  ];
+
+  // AttestationQuote is the raw attestation quote from the TEE
+  bytes attestation_quote = 7 [
+    (gogoproto.jsontag) = "attestation_quote",
+    (gogoproto.moretags) = "yaml:\"attestation_quote\""
+  ];
+
+  // AttestationChain is the certificate chain for attestation verification
+  repeated bytes attestation_chain = 8 [
+    (gogoproto.jsontag) = "attestation_chain",
+    (gogoproto.moretags) = "yaml:\"attestation_chain\""
+  ];
+
+  // ISVProdID is the Independent Software Vendor Product ID
+  uint32 isv_prod_id = 9 [
+    (gogoproto.jsontag) = "isv_prod_id",
+    (gogoproto.moretags) = "yaml:\"isv_prod_id\""
+  ];
+
+  // ISVSVN is the Independent Software Vendor Security Version Number
+  uint32 isv_svn = 10 [
+    (gogoproto.jsontag) = "isv_svn",
+    (gogoproto.moretags) = "yaml:\"isv_svn\""
+  ];
+
+  // QuoteVersion is the attestation quote format version
+  uint32 quote_version = 11 [
+    (gogoproto.jsontag) = "quote_version",
+    (gogoproto.moretags) = "yaml:\"quote_version\""
+  ];
+
+  // DebugMode indicates if the enclave is in debug mode (must be false for production)
+  bool debug_mode = 12 [
+    (gogoproto.jsontag) = "debug_mode",
+    (gogoproto.moretags) = "yaml:\"debug_mode\""
+  ];
+
+  // Epoch is the registration epoch
+  uint64 epoch = 13 [
+    (gogoproto.jsontag) = "epoch",
+    (gogoproto.moretags) = "yaml:\"epoch\""
+  ];
+
+  // ExpiryHeight is the block height when this identity expires
+  int64 expiry_height = 14 [
+    (gogoproto.jsontag) = "expiry_height",
+    (gogoproto.moretags) = "yaml:\"expiry_height\""
+  ];
+
+  // RegisteredAt is the timestamp when this identity was registered
+  google.protobuf.Timestamp registered_at = 15 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "registered_at",
+    (gogoproto.moretags) = "yaml:\"registered_at\""
+  ];
+
+  // UpdatedAt is the timestamp when this identity was last updated
+  google.protobuf.Timestamp updated_at = 16 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+
+  // Status is the current status of the enclave identity
+  EnclaveIdentityStatus status = 17 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+}
+
+// MeasurementRecord represents an approved enclave measurement in the allowlist
+message MeasurementRecord {
+  option (gogoproto.equal) = true;
+
+  // MeasurementHash is the enclave measurement hash
+  bytes measurement_hash = 1 [
+    (gogoproto.jsontag) = "measurement_hash",
+    (gogoproto.moretags) = "yaml:\"measurement_hash\""
+  ];
+
+  // TEEType is the TEE type this measurement is for
+  TEEType tee_type = 2 [
+    (gogoproto.jsontag) = "tee_type",
+    (gogoproto.moretags) = "yaml:\"tee_type\""
+  ];
+
+  // Description is a human-readable description
+  string description = 3 [
+    (gogoproto.jsontag) = "description",
+    (gogoproto.moretags) = "yaml:\"description\""
+  ];
+
+  // MinISVSVN is the minimum required security version
+  uint32 min_isv_svn = 4 [
+    (gogoproto.jsontag) = "min_isv_svn",
+    (gogoproto.moretags) = "yaml:\"min_isv_svn\""
+  ];
+
+  // AddedAt is when this measurement was added
+  google.protobuf.Timestamp added_at = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "added_at",
+    (gogoproto.moretags) = "yaml:\"added_at\""
+  ];
+
+  // AddedByProposal is the governance proposal ID that added this measurement
+  uint64 added_by_proposal = 6 [
+    (gogoproto.jsontag) = "added_by_proposal",
+    (gogoproto.moretags) = "yaml:\"added_by_proposal\""
+  ];
+
+  // ExpiryHeight is when this measurement expires (0 for no expiry)
+  int64 expiry_height = 7 [
+    (gogoproto.jsontag) = "expiry_height,omitempty",
+    (gogoproto.moretags) = "yaml:\"expiry_height\""
+  ];
+
+  // Revoked indicates if this measurement has been revoked
+  bool revoked = 8 [
+    (gogoproto.jsontag) = "revoked",
+    (gogoproto.moretags) = "yaml:\"revoked\""
+  ];
+
+  // RevokedAt is when this measurement was revoked (if applicable)
+  google.protobuf.Timestamp revoked_at = 9 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "revoked_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+
+  // RevokedByProposal is the governance proposal that revoked this (if applicable)
+  uint64 revoked_by_proposal = 10 [
+    (gogoproto.jsontag) = "revoked_by_proposal,omitempty",
+    (gogoproto.moretags) = "yaml:\"revoked_by_proposal\""
+  ];
+}
+
+// KeyRotationRecord represents a key rotation event
+message KeyRotationRecord {
+  option (gogoproto.equal) = true;
+
+  // ValidatorAddress is the validator operator address
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // Epoch is the epoch when rotation was initiated
+  uint64 epoch = 2 [
+    (gogoproto.jsontag) = "epoch",
+    (gogoproto.moretags) = "yaml:\"epoch\""
+  ];
+
+  // OldKeyFingerprint is the fingerprint of the old key
+  string old_key_fingerprint = 3 [
+    (gogoproto.jsontag) = "old_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"old_key_fingerprint\""
+  ];
+
+  // NewKeyFingerprint is the fingerprint of the new key
+  string new_key_fingerprint = 4 [
+    (gogoproto.jsontag) = "new_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"new_key_fingerprint\""
+  ];
+
+  // OverlapStartHeight is when both keys become valid
+  int64 overlap_start_height = 5 [
+    (gogoproto.jsontag) = "overlap_start_height",
+    (gogoproto.moretags) = "yaml:\"overlap_start_height\""
+  ];
+
+  // OverlapEndHeight is when the old key becomes invalid
+  int64 overlap_end_height = 6 [
+    (gogoproto.jsontag) = "overlap_end_height",
+    (gogoproto.moretags) = "yaml:\"overlap_end_height\""
+  ];
+
+  // InitiatedAt is when the rotation was initiated
+  google.protobuf.Timestamp initiated_at = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "initiated_at",
+    (gogoproto.moretags) = "yaml:\"initiated_at\""
+  ];
+
+  // CompletedAt is when the rotation was completed (old key invalidated)
+  google.protobuf.Timestamp completed_at = 8 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "completed_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"completed_at\""
+  ];
+
+  // Status is the current status of the rotation
+  KeyRotationStatus status = 9 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+}
+
+// AttestedScoringResult represents an enclave-attested scoring output
+message AttestedScoringResult {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the identity scope that was scored
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // AccountAddress is the account that owns the identity
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Score is the computed identity score (0-100)
+  uint32 score = 3 [
+    (gogoproto.jsontag) = "score",
+    (gogoproto.moretags) = "yaml:\"score\""
+  ];
+
+  // Status is the verification status
+  string status = 4 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // ReasonCodes are structured reason codes for the score
+  repeated string reason_codes = 5 [
+    (gogoproto.jsontag) = "reason_codes,omitempty",
+    (gogoproto.moretags) = "yaml:\"reason_codes\""
+  ];
+
+  // ModelVersionHash is the hash of the ML model used
+  bytes model_version_hash = 6 [
+    (gogoproto.jsontag) = "model_version_hash",
+    (gogoproto.moretags) = "yaml:\"model_version_hash\""
+  ];
+
+  // InputHash is the hash of the input data (for determinism verification)
+  bytes input_hash = 7 [
+    (gogoproto.jsontag) = "input_hash",
+    (gogoproto.moretags) = "yaml:\"input_hash\""
+  ];
+
+  // EvidenceHashes are hashes of evidence artifacts (face embeddings, OCR, etc.)
+  repeated bytes evidence_hashes = 8 [
+    (gogoproto.jsontag) = "evidence_hashes,omitempty",
+    (gogoproto.moretags) = "yaml:\"evidence_hashes\""
+  ];
+
+  // EnclaveMeasurementHash is the measurement of the enclave that computed this
+  bytes enclave_measurement_hash = 9 [
+    (gogoproto.jsontag) = "enclave_measurement_hash",
+    (gogoproto.moretags) = "yaml:\"enclave_measurement_hash\""
+  ];
+
+  // EnclaveSignature is the signature from the enclave signing key
+  bytes enclave_signature = 10 [
+    (gogoproto.jsontag) = "enclave_signature",
+    (gogoproto.moretags) = "yaml:\"enclave_signature\""
+  ];
+
+  // AttestationReference is a reference to the attestation quote (hash or ID)
+  bytes attestation_reference = 11 [
+    (gogoproto.jsontag) = "attestation_reference",
+    (gogoproto.moretags) = "yaml:\"attestation_reference\""
+  ];
+
+  // ValidatorAddress is the validator that produced this result
+  string validator_address = 12 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // BlockHeight is the block height where this result was produced
+  int64 block_height = 13 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+
+  // Timestamp is when this result was computed
+  google.protobuf.Timestamp timestamp = 14 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "timestamp",
+    (gogoproto.moretags) = "yaml:\"timestamp\""
+  ];
+}
+
+// ValidatorKeyInfo contains key information for a validator
+message ValidatorKeyInfo {
+  option (gogoproto.equal) = true;
+
+  // ValidatorAddress is the validator operator address
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // EncryptionKeyID is the key identifier
+  string encryption_key_id = 2 [
+    (gogoproto.jsontag) = "encryption_key_id",
+    (gogoproto.moretags) = "yaml:\"encryption_key_id\""
+  ];
+
+  // EncryptionPubKey is the public key for encryption
+  bytes encryption_pub_key = 3 [
+    (gogoproto.jsontag) = "encryption_pub_key",
+    (gogoproto.moretags) = "yaml:\"encryption_pub_key\""
+  ];
+
+  // MeasurementHash is the enclave measurement hash
+  bytes measurement_hash = 4 [
+    (gogoproto.jsontag) = "measurement_hash",
+    (gogoproto.moretags) = "yaml:\"measurement_hash\""
+  ];
+
+  // ExpiryHeight is when the identity expires
+  int64 expiry_height = 5 [
+    (gogoproto.jsontag) = "expiry_height",
+    (gogoproto.moretags) = "yaml:\"expiry_height\""
+  ];
+
+  // IsInRotation indicates if key rotation is in progress
+  bool is_in_rotation = 6 [
+    (gogoproto.jsontag) = "is_in_rotation",
+    (gogoproto.moretags) = "yaml:\"is_in_rotation\""
+  ];
+}
+
+// Params defines the parameters for the enclave module
+message Params {
+  option (gogoproto.equal) = true;
+  option (amino.name) = "virtengine/enclave/Params";
+
+  // MaxEnclaveKeysPerValidator is the maximum number of enclave keys a validator can have
+  uint32 max_enclave_keys_per_validator = 1 [
+    (gogoproto.jsontag) = "max_enclave_keys_per_validator",
+    (gogoproto.moretags) = "yaml:\"max_enclave_keys_per_validator\""
+  ];
+
+  // DefaultExpiryBlocks is the default number of blocks until enclave identity expires
+  int64 default_expiry_blocks = 2 [
+    (gogoproto.jsontag) = "default_expiry_blocks",
+    (gogoproto.moretags) = "yaml:\"default_expiry_blocks\""
+  ];
+
+  // KeyRotationOverlapBlocks is the default overlap period for key rotations
+  int64 key_rotation_overlap_blocks = 3 [
+    (gogoproto.jsontag) = "key_rotation_overlap_blocks",
+    (gogoproto.moretags) = "yaml:\"key_rotation_overlap_blocks\""
+  ];
+
+  // MinQuoteVersion is the minimum attestation quote version required
+  uint32 min_quote_version = 4 [
+    (gogoproto.jsontag) = "min_quote_version",
+    (gogoproto.moretags) = "yaml:\"min_quote_version\""
+  ];
+
+  // AllowedTEETypes is the list of allowed TEE types
+  repeated TEEType allowed_tee_types = 5 [
+    (gogoproto.jsontag) = "allowed_tee_types",
+    (gogoproto.moretags) = "yaml:\"allowed_tee_types\""
+  ];
+
+  // ScoreTolerance is the maximum allowed score difference for consensus
+  uint32 score_tolerance = 6 [
+    (gogoproto.jsontag) = "score_tolerance",
+    (gogoproto.moretags) = "yaml:\"score_tolerance\""
+  ];
+
+  // RequireAttestationChain indicates if attestation chain verification is required
+  bool require_attestation_chain = 7 [
+    (gogoproto.jsontag) = "require_attestation_chain",
+    (gogoproto.moretags) = "yaml:\"require_attestation_chain\""
+  ];
+
+  // MaxAttestationAge is the maximum age of attestation in blocks
+  int64 max_attestation_age = 8 [
+    (gogoproto.jsontag) = "max_attestation_age",
+    (gogoproto.moretags) = "yaml:\"max_attestation_age\""
+  ];
+
+  // EnableCommitteeMode enables committee-based identity processing
+  bool enable_committee_mode = 9 [
+    (gogoproto.jsontag) = "enable_committee_mode",
+    (gogoproto.moretags) = "yaml:\"enable_committee_mode\""
+  ];
+
+  // CommitteeSize is the size of the identity committee (if committee mode enabled)
+  uint32 committee_size = 10 [
+    (gogoproto.jsontag) = "committee_size,omitempty",
+    (gogoproto.moretags) = "yaml:\"committee_size\""
+  ];
+
+  // CommitteeEpochBlocks is the number of blocks per committee epoch
+  int64 committee_epoch_blocks = 11 [
+    (gogoproto.jsontag) = "committee_epoch_blocks,omitempty",
+    (gogoproto.moretags) = "yaml:\"committee_epoch_blocks\""
+  ];
+
+  // EnableMeasurementCleanup enables automatic cleanup of expired measurements
+  bool enable_measurement_cleanup = 12 [
+    (gogoproto.jsontag) = "enable_measurement_cleanup",
+    (gogoproto.moretags) = "yaml:\"enable_measurement_cleanup\""
+  ];
+
+  // MaxRegistrationsPerBlock limits registrations per block (0 = unlimited)
+  uint32 max_registrations_per_block = 13 [
+    (gogoproto.jsontag) = "max_registrations_per_block",
+    (gogoproto.moretags) = "yaml:\"max_registrations_per_block\""
+  ];
+
+  // RegistrationCooldownBlocks enforces cooldown between re-registrations
+  int64 registration_cooldown_blocks = 14 [
+    (gogoproto.jsontag) = "registration_cooldown_blocks",
+    (gogoproto.moretags) = "yaml:\"registration_cooldown_blocks\""
+  ];
+}

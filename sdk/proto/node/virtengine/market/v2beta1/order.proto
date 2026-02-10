@@ -1,0 +1,100 @@
+syntax = "proto3";
+package virtengine.market.v2beta1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+import "virtengine/deployment/v1beta5/groupspec.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v2beta1";
+
+// OrderId stores owner and all other seq numbers.
+message OrderID {
+  option (gogoproto.equal)            = true;
+  option (gogoproto.goproto_stringer) = false;
+
+  // Owner is the account bech32 address of the user who owns the deployment.
+  // It is a string representing a valid bech32 account address.
+  //
+  // Example:
+  //   "ve1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
+  // It is used to differentiate deployments created by the same owner.
+  uint64 dseq  = 2 [
+    (gogoproto.customname) = "DSeq",
+    (gogoproto.jsontag)    = "dseq",
+    (gogoproto.moretags)   = "yaml:\"dseq\""
+  ];
+
+  // Gseq (group sequence number) is a unique numeric identifier for the group.
+  // It is used to differentiate groups created by the same owner in a deployment.
+  uint32 gseq = 3 [
+    (gogoproto.customname) = "GSeq",
+    (gogoproto.jsontag)    = "gseq",
+    (gogoproto.moretags)   = "yaml:\"gseq\""
+  ];
+
+  // Oseq (order sequence) distinguishes multiple orders associated with a single deployment.
+  // Oseq is incremented when a lease associated with an existing deployment is closed, and a new order is generated.
+  uint32 oseq = 4 [
+    (gogoproto.customname) = "OSeq",
+    (gogoproto.jsontag)    = "oseq",
+    (gogoproto.moretags)   = "yaml:\"oseq\""
+  ];
+}
+
+
+// Order stores orderID, state of order and other details.
+message Order {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+
+  // State is an enum which refers to state of order.
+  enum State {
+    option (gogoproto.goproto_enum_prefix) = false;
+
+    // Prefix should start with 0 in enum. So declaring dummy state.
+    invalid = 0 [
+        (gogoproto.enumvalue_customname) = "OrderStateInvalid"
+    ];
+    // OrderOpen denotes state for order open.
+    open = 1 [
+        (gogoproto.enumvalue_customname) = "OrderOpen"
+    ];
+    // OrderMatched denotes state for order matched.
+    active = 2 [
+        (gogoproto.enumvalue_customname) = "OrderActive"
+    ];
+    // OrderClosed denotes state for order lost.
+    closed = 3 [
+        (gogoproto.enumvalue_customname) = "OrderClosed"
+    ];
+  }
+
+  // Id is the unique identifier of the order.
+  OrderID id = 1 [
+    (gogoproto.customname) = "ID",
+    (gogoproto.nullable)   = false,
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  State state    = 2 [
+    (gogoproto.jsontag)  = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  virtengine.deployment.v1beta5.GroupSpec spec = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "spec",
+    (gogoproto.moretags) = "yaml:\"spec\""
+  ];
+
+  int64 created_at = 4;
+}

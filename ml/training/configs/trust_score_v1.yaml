@@ -1,0 +1,272 @@
+# =============================================================================
+# Trust Score Model Training Configuration v1.0
+# =============================================================================
+# VE-3A: Frozen training configuration for deterministic model training
+#
+# This configuration is immutable once committed. To update training parameters,
+# create a new versioned config (e.g., trust_score_v2.yaml).
+#
+# IMPORTANT: Any changes to this file require governance approval before
+# the resulting model can be deployed to mainnet.
+# =============================================================================
+
+# Configuration version metadata
+config_version: "1.0.0"
+feature_schema_version: "1.0.0"
+dataset_version: "2024-01-v1"
+
+# Experiment identification
+experiment_name: "trust_score_v1"
+random_seed: 42
+deterministic: true
+log_level: "INFO"
+
+# =============================================================================
+# Dataset Configuration
+# =============================================================================
+dataset:
+  # Data paths (relative to training root or absolute)
+  data_paths:
+    - "${VEID_DATASET_PATH:-data/veid_production}"
+  
+  # Document types to include
+  doc_types:
+    - "id_card"
+    - "passport"
+    - "drivers_license"
+    - "residence_permit"
+    - "national_id"
+  
+  # Dataset splits (must sum to 1.0)
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  
+  # Anonymization settings
+  anonymize: true
+  anonymization_method: "hash_sha256"
+  # Salt is generated per training run and stored in manifest
+  
+  # Sampling settings
+  max_samples: null  # Use all available samples
+  balance_classes: true
+  min_samples_per_class: 100
+  
+  # Quality filters
+  min_face_confidence: 0.8
+  min_doc_quality: 0.6
+  min_ocr_confidence: 0.5
+  
+  # Reproducibility
+  random_seed: 42
+  
+  # Cache settings
+  cache_dir: ".cache/dataset"
+  use_cache: true
+
+# =============================================================================
+# Preprocessing Configuration
+# =============================================================================
+preprocessing:
+  # Image preprocessing
+  image_size: [224, 224]
+  normalize_images: true
+  normalize_mean: [0.485, 0.456, 0.406]  # ImageNet mean
+  normalize_std: [0.229, 0.224, 0.225]   # ImageNet std
+  
+  # Document preprocessing
+  apply_orientation_correction: true
+  apply_perspective_correction: true
+  apply_enhancement: true
+  
+  # OCR preprocessing
+  ocr_language: "eng"
+  ocr_timeout_seconds: 10.0
+
+# =============================================================================
+# Data Augmentation Configuration
+# =============================================================================
+augmentation:
+  enabled: true
+  
+  # Augmentation types to apply
+  augmentation_types:
+    - "brightness"
+    - "contrast"
+    - "rotation"
+    - "blur"
+    - "noise"
+  
+  # Augmentation parameters
+  brightness_range: [0.8, 1.2]
+  contrast_range: [0.8, 1.2]
+  rotation_range: [-5.0, 5.0]  # Degrees
+  blur_kernel_range: [3, 7]
+  noise_std_range: [0.01, 0.05]
+  perspective_strength: 0.1
+  jpeg_quality_range: [70, 95]
+  
+  # Probability of applying augmentation
+  augmentation_probability: 0.5
+  
+  # Number of augmented copies per sample
+  num_augmented_copies: 2
+
+# =============================================================================
+# Feature Extraction Configuration
+# =============================================================================
+features:
+  # Face embedding settings
+  face_embedding_dim: 512
+  face_embedding_model: "facenet"
+  use_face_confidence: true
+  
+  # Document quality features
+  doc_quality_features:
+    - "sharpness"
+    - "brightness"
+    - "contrast"
+    - "noise_level"
+    - "blur_score"
+  
+  # OCR field settings
+  ocr_fields:
+    - "name"
+    - "date_of_birth"
+    - "document_number"
+    - "expiry_date"
+    - "nationality"
+  use_ocr_confidence: true
+  use_field_validation: true
+  
+  # Metadata features
+  use_device_metadata: true
+  use_session_metadata: true
+  use_capture_metadata: true
+  
+  # Combined feature vector dimension
+  # Must match pkg/inference/types.go:TotalFeatureDim
+  combined_feature_dim: 768
+  
+  # Feature normalization
+  normalize_features: true
+  feature_scaling: "standard"  # Options: "standard", "minmax", "robust"
+
+# =============================================================================
+# Model Architecture Configuration
+# =============================================================================
+model:
+  # Architecture settings
+  input_dim: 768  # Must match features.combined_feature_dim
+  hidden_layers: [512, 256, 128, 64]
+  dropout_rate: 0.3
+  activation: "relu"
+  output_activation: "sigmoid"
+  
+  # L2 regularization
+  l2_regularization: 0.01
+  
+  # Batch normalization
+  use_batch_norm: true
+  
+  # Output scaling (0-100 trust score)
+  output_scale: 100.0
+  
+  # Training hyperparameters
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 100
+  
+  # Optimizer settings (Adam)
+  optimizer: "adam"
+  adam_beta_1: 0.9
+  adam_beta_2: 0.999
+  adam_epsilon: 1.0e-7
+  
+  # Learning rate schedule
+  use_lr_schedule: true
+  lr_decay_factor: 0.1
+  lr_decay_patience: 10
+  min_lr: 1.0e-6
+  
+  # Early stopping
+  early_stopping: true
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.001
+  
+  # Checkpointing
+  checkpoint_dir: "output/checkpoints"
+  save_best_only: true
+  
+  # Logging
+  tensorboard_log_dir: "output/logs/tensorboard"
+  log_every_n_steps: 100
+
+# =============================================================================
+# Model Export Configuration
+# =============================================================================
+export:
+  # Export path
+  export_dir: "output/exported_models"
+  
+  # Model versioning
+  version_prefix: "v"
+  include_timestamp: true
+  
+  # SavedModel settings
+  include_optimizer: false
+  signature_name: "serving_default"
+  
+  # Input/output specifications for Go inference
+  input_name: "features"
+  output_name: "trust_score"
+  
+  # Quantization (disabled for determinism)
+  quantize: false
+  quantization_type: "float16"
+  
+  # Hash computation for versioning
+  compute_hash: true
+  hash_algorithm: "sha256"
+
+# =============================================================================
+# Evaluation Thresholds
+# =============================================================================
+# These thresholds must be met for a model to be approved for production
+evaluation:
+  # Minimum acceptable metrics
+  min_r2: 0.85
+  max_mae: 8.0
+  max_rmse: 10.0
+  
+  # Accuracy thresholds (percentage within N points)
+  min_accuracy_5: 0.60   # 60% within ±5 points
+  min_accuracy_10: 0.80  # 80% within ±10 points
+  min_accuracy_20: 0.95  # 95% within ±20 points
+  
+  # Error distribution thresholds
+  max_p95_error: 15.0    # 95th percentile error ≤ 15 points
+  max_mean_bias: 2.0     # Mean bias ≤ ±2 points
+  
+  # Minimum sample counts
+  min_test_samples: 1000
+
+# =============================================================================
+# Determinism Configuration
+# =============================================================================
+determinism:
+  # Force CPU-only execution (no GPU variance)
+  force_cpu: true
+  
+  # Fixed random seed
+  random_seed: 42
+  
+  # Enable TensorFlow deterministic operations
+  tf_deterministic_ops: true
+  
+  # Disable parallel execution in TensorFlow
+  inter_op_parallelism: 1
+  intra_op_parallelism: 1
+  
+  # Python environment
+  pythonhashseed: 42

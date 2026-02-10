@@ -1,0 +1,658 @@
+# Document Type Configuration for VirtEngine OCR
+# 
+# This file defines field layouts, validation patterns, and extraction rules
+# for different identity document types.
+#
+# Task Reference: VE-3047 - Generalize Document Type Configuration
+#
+# Supported Standards:
+# - ICAO 9303 (Passports, TD1/TD2/TD3 formats)
+# - AAMVA (US Driver's Licenses)
+# - Country-specific national IDs
+#
+# Usage:
+#   from ml.ocr_extraction.document_config import DocumentConfigLoader
+#   loader = DocumentConfigLoader.get_instance()
+#   passport_def = loader.get_document_type("passport")
+
+version: "1.0"
+schema_version: 1
+
+document_types:
+  # ============================================================================
+  # ICAO 9303 Standard Documents
+  # ============================================================================
+  
+  # International Passport (TD3 Format)
+  passport:
+    name: "International Passport"
+    standard: "ICAO 9303"
+    has_mrz: true
+    mrz_format: "TD3"  # 2 lines, 44 chars each
+    description: "Machine-readable travel document following ICAO Doc 9303 TD3 specification"
+    fields:
+      surname:
+        required: true
+        pattern: "^[A-Z][A-Z '\\-]+$"
+        max_length: 39
+        position_hint: "top_third"
+        description: "Family name / Last name"
+      given_names:
+        required: true
+        pattern: "^[A-Z][A-Z '\\-]+$"
+        max_length: 39
+        position_hint: "top_third"
+        description: "First name and middle names"
+      nationality:
+        required: true
+        pattern: "^[A-Z]{3}$"
+        position_hint: "middle"
+        description: "3-letter nationality code (ISO 3166-1 alpha-3)"
+      date_of_birth:
+        required: true
+        format: "YYMMDD"
+        pattern: "^[0-9]{6}$"
+        description: "Date of birth in YYMMDD format"
+      sex:
+        required: true
+        pattern: "^[MF<]$"
+        description: "Sex (M=Male, F=Female, <=Unspecified)"
+      date_of_expiry:
+        required: true
+        format: "YYMMDD"
+        pattern: "^[0-9]{6}$"
+        description: "Document expiry date in YYMMDD format"
+      document_number:
+        required: true
+        pattern: "^[A-Z0-9]{9}$"
+        has_check_digit: true
+        description: "Passport number"
+      issuing_country:
+        required: true
+        pattern: "^[A-Z]{3}$"
+        description: "3-letter issuing country code"
+      personal_number:
+        required: false
+        pattern: "^[A-Z0-9<]{1,14}$"
+        has_check_digit: true
+        description: "Optional personal identification number"
+
+  # National ID Card (TD1 Format)
+  national_id_td1:
+    name: "National ID Card (TD1)"
+    standard: "ICAO 9303"
+    has_mrz: true
+    mrz_format: "TD1"  # 3 lines, 30 chars each
+    description: "ID card following ICAO Doc 9303 TD1 specification (credit card size)"
+    fields:
+      document_code:
+        required: true
+        pattern: "^I[A-Z<]$"
+        description: "Document type code (I=ID card)"
+      issuing_state:
+        required: true
+        pattern: "^[A-Z]{3}$"
+        description: "3-letter issuing state code"
+      document_number:
+        required: true
+        pattern: "^[A-Z0-9]{9}$"
+        has_check_digit: true
+        description: "Document number"
+      date_of_birth:
+        required: true
+        format: "YYMMDD"
+        pattern: "^[0-9]{6}$"
+        has_check_digit: true
+      sex:
+        required: true
+        pattern: "^[MF<]$"
+      date_of_expiry:
+        required: true
+        format: "YYMMDD"
+        pattern: "^[0-9]{6}$"
+        has_check_digit: true
+      nationality:
+        required: true
+        pattern: "^[A-Z]{3}$"
+      surname:
+        required: true
+        pattern: "^[A-Z][A-Z '\\-]+$"
+        max_length: 30
+      given_names:
+        required: true
+        pattern: "^[A-Z][A-Z '\\-]+$"
+        max_length: 30
+      optional_data_1:
+        required: false
+        max_length: 15
+        description: "Optional data field (line 1)"
+      optional_data_2:
+        required: false
+        max_length: 11
+        description: "Optional data field (line 2)"
+
+  # National ID Card (TD2 Format)
+  national_id_td2:
+    name: "National ID Card (TD2)"
+    standard: "ICAO 9303"
+    has_mrz: true
+    mrz_format: "TD2"  # 2 lines, 36 chars each
+    description: "ID card following ICAO Doc 9303 TD2 specification (larger format)"
+    fields:
+      document_code:
+        required: true
+        pattern: "^[IAC][A-Z<]$"
+      issuing_state:
+        required: true
+        pattern: "^[A-Z]{3}$"
+      surname:
+        required: true
+        pattern: "^[A-Z][A-Z '\\-]+$"
+      given_names:
+        required: true
+        pattern: "^[A-Z][A-Z '\\-]+$"
+      document_number:
+        required: true
+        pattern: "^[A-Z0-9]{9}$"
+        has_check_digit: true
+      nationality:
+        required: true
+        pattern: "^[A-Z]{3}$"
+      date_of_birth:
+        required: true
+        format: "YYMMDD"
+        has_check_digit: true
+      sex:
+        required: true
+        pattern: "^[MF<]$"
+      date_of_expiry:
+        required: true
+        format: "YYMMDD"
+        has_check_digit: true
+
+  # ============================================================================
+  # Country-Specific National IDs (Non-MRZ)
+  # ============================================================================
+
+  # Turkish National ID (Nüfus Cüzdanı / Kimlik Kartı)
+  turkish_id:
+    name: "Turkish National ID"
+    standard: "Turkey"
+    has_mrz: false
+    language: "tr"
+    description: "Turkish Republic Identity Card (T.C. Kimlik Kartı)"
+    fields:
+      tc_kimlik_no:
+        required: true
+        pattern: "^[0-9]{11}$"
+        label_text: ["T.C. Kimlik No", "TC Kimlik", "T.C. KİMLİK NO", "KİMLİK NO"]
+        position_hint: "top"
+        description: "Turkish Citizen ID Number (11 digits)"
+        has_check_digit: true
+        check_digit_algorithm: "tr_tckn"
+      soyadi:
+        required: true
+        label_text: ["Soyadı", "SOYADI", "SOYAD"]
+        position_hint: "upper_third"
+        description: "Surname"
+      adi:
+        required: true
+        label_text: ["Adı", "ADI", "AD"]
+        position_hint: "upper_third"
+        description: "Given name(s)"
+      dogum_tarihi:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["Doğum Tarihi", "DOĞUM TARİHİ"]
+        position_hint: "middle"
+        description: "Date of birth"
+      dogum_yeri:
+        required: false
+        label_text: ["Doğum Yeri", "DOĞUM YERİ"]
+        description: "Place of birth"
+      anne_adi:
+        required: false
+        label_text: ["Anne Adı", "ANNE ADI"]
+        description: "Mother's name"
+      baba_adi:
+        required: false
+        label_text: ["Baba Adı", "BABA ADI"]
+        description: "Father's name"
+      seri_no:
+        required: false
+        pattern: "^[A-Z][0-9]{2}[A-Z][0-9]{5}$"
+        label_text: ["Seri No", "SERİ NO"]
+        description: "Serial number"
+      gecerlilik_tarihi:
+        required: false
+        format: "DD.MM.YYYY"
+        label_text: ["Geçerlilik Tarihi", "SON GEÇERLİLİK"]
+        description: "Expiry date"
+
+  # German ID Card (Personalausweis)
+  german_id:
+    name: "German Identity Card"
+    standard: "Germany"
+    has_mrz: true
+    mrz_format: "TD1"
+    language: "de"
+    description: "German Personalausweis"
+    fields:
+      surname:
+        required: true
+        label_text: ["Familienname", "Name"]
+      given_names:
+        required: true
+        label_text: ["Vornamen", "Vorname"]
+      date_of_birth:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["Geburtsdatum"]
+      place_of_birth:
+        required: false
+        label_text: ["Geburtsort"]
+      nationality:
+        required: true
+        label_text: ["Staatsangehörigkeit"]
+      date_of_expiry:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["Gültig bis"]
+      document_number:
+        required: true
+        pattern: "^[A-Z0-9]{9}$"
+        label_text: ["Ausweisnummer"]
+        has_check_digit: true
+
+  # French ID Card (Carte Nationale d'Identité)
+  french_id:
+    name: "French National ID Card"
+    standard: "France"
+    has_mrz: true
+    mrz_format: "TD1"
+    language: "fr"
+    description: "Carte Nationale d'Identité Française"
+    fields:
+      surname:
+        required: true
+        label_text: ["Nom", "NOM"]
+      given_names:
+        required: true
+        label_text: ["Prénoms", "PRENOMS"]
+      date_of_birth:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["Né(e) le", "Date de naissance"]
+      place_of_birth:
+        required: false
+        label_text: ["à", "Lieu de naissance"]
+      sex:
+        required: true
+        pattern: "^[MF]$"
+        label_text: ["Sexe"]
+      date_of_expiry:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["Expire le", "Date d'expiration"]
+      document_number:
+        required: true
+        pattern: "^[A-Z0-9]{12}$"
+        has_check_digit: true
+
+  # Indian Aadhaar Card
+  indian_aadhaar:
+    name: "Indian Aadhaar Card"
+    standard: "India"
+    has_mrz: false
+    has_qr_code: true
+    language: "en"
+    description: "Unique Identification Authority of India (UIDAI) Aadhaar"
+    fields:
+      aadhaar_number:
+        required: true
+        pattern: "^[0-9]{12}$"
+        label_text: ["Aadhaar No", "आधार संख्या"]
+        has_check_digit: true
+        check_digit_algorithm: "verhoeff"
+        description: "12-digit Aadhaar number"
+      name:
+        required: true
+        label_text: ["Name", "नाम"]
+      date_of_birth:
+        required: true
+        format: "DD/MM/YYYY"
+        label_text: ["DOB", "Date of Birth", "जन्म तिथि"]
+      gender:
+        required: true
+        pattern: "^(Male|Female|Transgender|M|F|T)$"
+        label_text: ["Gender", "लिंग"]
+      address:
+        required: false
+        label_text: ["Address", "पता"]
+      vid:
+        required: false
+        pattern: "^[0-9]{16}$"
+        description: "Virtual ID"
+
+  # ============================================================================
+  # Driver's Licenses
+  # ============================================================================
+
+  # US Driver's License (AAMVA Standard)
+  us_drivers_license:
+    name: "US Driver's License"
+    standard: "AAMVA"
+    has_mrz: false
+    has_pdf417: true
+    barcode_format: "PDF417"
+    description: "American Association of Motor Vehicle Administrators standard"
+    fields:
+      dcs:
+        required: true
+        description: "Family Name (Last Name)"
+        barcode_element: "DCS"
+      dac:
+        required: true
+        description: "First Name"
+        barcode_element: "DAC"
+      dad:
+        required: false
+        description: "Middle Name"
+        barcode_element: "DAD"
+      dbb:
+        required: true
+        format: "MMDDYYYY"
+        description: "Date of Birth"
+        barcode_element: "DBB"
+      dbc:
+        required: true
+        pattern: "^[12]$"
+        description: "Sex (1=Male, 2=Female)"
+        barcode_element: "DBC"
+      dag:
+        required: true
+        description: "Street Address"
+        barcode_element: "DAG"
+      dai:
+        required: true
+        description: "City"
+        barcode_element: "DAI"
+      daj:
+        required: true
+        pattern: "^[A-Z]{2}$"
+        description: "State (2-letter code)"
+        barcode_element: "DAJ"
+      dak:
+        required: true
+        pattern: "^[0-9]{5}(-[0-9]{4})?$"
+        description: "ZIP Code"
+        barcode_element: "DAK"
+      daq:
+        required: true
+        description: "License Number"
+        barcode_element: "DAQ"
+      dbd:
+        required: true
+        format: "MMDDYYYY"
+        description: "Document Issue Date"
+        barcode_element: "DBD"
+      dba:
+        required: true
+        format: "MMDDYYYY"
+        description: "Document Expiration Date"
+        barcode_element: "DBA"
+      dcg:
+        required: true
+        pattern: "^USA$"
+        description: "Country"
+        barcode_element: "DCG"
+
+  # Australian Driver's License
+  australian_drivers_license:
+    name: "Australian Driver's License"
+    standard: "Australia"
+    has_mrz: false
+    description: "Australian state/territory driver's license"
+    fields:
+      licence_number:
+        required: true
+        pattern: "^[0-9]{8,10}$"
+        label_text: ["Licence No", "License Number"]
+      surname:
+        required: true
+        label_text: ["Surname", "Family Name"]
+      given_names:
+        required: true
+        label_text: ["Given Names", "First Name"]
+      date_of_birth:
+        required: true
+        format: "DD/MM/YYYY"
+        label_text: ["Date of Birth", "DOB"]
+      address:
+        required: true
+        label_text: ["Address"]
+      expiry_date:
+        required: true
+        format: "DD/MM/YYYY"
+        label_text: ["Expiry", "Expires"]
+      state:
+        required: true
+        pattern: "^(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)$"
+        label_text: ["State"]
+        description: "Australian state/territory code"
+      card_number:
+        required: false
+        label_text: ["Card Number"]
+
+  # UK Driver's License
+  uk_drivers_license:
+    name: "UK Driver's License"
+    standard: "UK"
+    has_mrz: false
+    description: "UK (DVLA) photocard driving licence"
+    fields:
+      surname:
+        required: true
+        label_text: ["1.", "Surname"]
+      given_names:
+        required: true
+        label_text: ["2.", "First names"]
+      date_of_birth:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["3.", "Date of birth"]
+      date_of_issue:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["4a.", "Date of issue"]
+      date_of_expiry:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["4b.", "Date of expiry"]
+      licence_number:
+        required: true
+        pattern: "^[A-Z0-9]{16}$"
+        label_text: ["5.", "Licence number"]
+        description: "16-character driver number"
+      address:
+        required: true
+        label_text: ["8.", "Address"]
+      categories:
+        required: true
+        label_text: ["9.", "Categories"]
+        description: "Vehicle categories (e.g., B, BE, AM)"
+
+  # European Union Driver's License (Generic)
+  eu_drivers_license:
+    name: "EU Driver's License"
+    standard: "EU"
+    has_mrz: false
+    description: "European Union standard driving licence format"
+    fields:
+      surname:
+        required: true
+        label_text: ["1."]
+      given_names:
+        required: true
+        label_text: ["2."]
+      date_of_birth:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["3."]
+      place_of_birth:
+        required: false
+        label_text: ["3."]
+      date_of_issue:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["4a."]
+      date_of_expiry:
+        required: true
+        format: "DD.MM.YYYY"
+        label_text: ["4b."]
+      issuing_authority:
+        required: false
+        label_text: ["4c."]
+      licence_number:
+        required: true
+        label_text: ["5."]
+      photo:
+        required: false
+        label_text: ["6."]
+        description: "Photo position hint"
+      signature:
+        required: false
+        label_text: ["7."]
+      address:
+        required: false
+        label_text: ["8."]
+      categories:
+        required: true
+        label_text: ["9."]
+
+  # ============================================================================
+  # Residence Permits
+  # ============================================================================
+
+  # EU Residence Permit (Title of Residence)
+  eu_residence_permit:
+    name: "EU Residence Permit"
+    standard: "EU"
+    has_mrz: true
+    mrz_format: "TD1"
+    description: "European Union residence permit card"
+    fields:
+      permit_type:
+        required: true
+        label_text: ["Type of permit", "Permit"]
+      surname:
+        required: true
+        label_text: ["Surname", "Name"]
+      given_names:
+        required: true
+        label_text: ["Given names", "First names"]
+      date_of_birth:
+        required: true
+        format: "DD.MM.YYYY"
+      nationality:
+        required: true
+        pattern: "^[A-Z]{3}$"
+      date_of_issue:
+        required: true
+        format: "DD.MM.YYYY"
+      date_of_expiry:
+        required: true
+        format: "DD.MM.YYYY"
+      document_number:
+        required: true
+        has_check_digit: true
+      remarks:
+        required: false
+        description: "Additional remarks or conditions"
+
+# ============================================================================
+# Validation Rules and Algorithms
+# ============================================================================
+
+validation:
+  check_digit_algorithms:
+    mod10:
+      description: "Standard Luhn algorithm (mod 10)"
+      used_by: ["credit_cards"]
+    mod7_3_1:
+      description: "ICAO check digit (7-3-1 weighting pattern)"
+      used_by: ["passport", "national_id_td1", "national_id_td2"]
+    verhoeff:
+      description: "Verhoeff algorithm for Aadhaar"
+      used_by: ["indian_aadhaar"]
+    tr_tckn:
+      description: "Turkish TCKN validation algorithm"
+      used_by: ["turkish_id"]
+  
+  date_formats:
+    YYMMDD:
+      description: "ICAO MRZ date format"
+      strptime: "%y%m%d"
+    DDMMYYYY:
+      description: "Common European format"
+      strptime: "%d%m%Y"
+    MMDDYYYY:
+      description: "US format (AAMVA)"
+      strptime: "%m%d%Y"
+    "DD/MM/YYYY":
+      description: "Slash-separated format"
+      strptime: "%d/%m/%Y"
+    "DD.MM.YYYY":
+      description: "Dot-separated European format"
+      strptime: "%d.%m.%Y"
+    "MM/DD/YYYY":
+      description: "US slash format"
+      strptime: "%m/%d/%Y"
+    "YYYY-MM-DD":
+      description: "ISO 8601 format"
+      strptime: "%Y-%m-%d"
+
+  country_codes:
+    # ISO 3166-1 alpha-3 codes used in MRZ
+    pattern: "^[A-Z]{3}$"
+    examples: ["USA", "GBR", "DEU", "FRA", "TUR", "IND", "AUS"]
+
+  sex_codes:
+    M: "Male"
+    F: "Female"
+    "<": "Unspecified (MRZ)"
+    "1": "Male (AAMVA)"
+    "2": "Female (AAMVA)"
+
+# ============================================================================
+# Field Position Hints (for visual zone extraction)
+# ============================================================================
+
+position_hints:
+  top:
+    y_range: [0.0, 0.15]
+    description: "Top 15% of document"
+  top_third:
+    y_range: [0.0, 0.33]
+    description: "Top third of document"
+  upper_third:
+    y_range: [0.15, 0.45]
+    description: "Upper-middle region"
+  middle:
+    y_range: [0.33, 0.67]
+    description: "Middle third of document"
+  lower_third:
+    y_range: [0.55, 0.85]
+    description: "Lower-middle region"
+  bottom_third:
+    y_range: [0.67, 1.0]
+    description: "Bottom third of document"
+  bottom:
+    y_range: [0.85, 1.0]
+    description: "Bottom 15% of document (MRZ zone)"
+  left_half:
+    x_range: [0.0, 0.5]
+    description: "Left half of document"
+  right_half:
+    x_range: [0.5, 1.0]
+    description: "Right half of document"

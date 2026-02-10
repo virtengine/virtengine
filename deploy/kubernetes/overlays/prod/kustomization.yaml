@@ -1,0 +1,144 @@
+# Production Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: virtengine-prod
+
+resources:
+  - ../../base
+  - blue-green-service.yaml
+  - hpa-enhanced.yaml
+  - keda-scaledobject.yaml
+
+namePrefix: prod-
+
+commonLabels:
+  environment: prod
+
+commonAnnotations:
+  # Production-specific annotations
+  sidecar.istio.io/inject: "true"
+
+patches:
+  # Production replicas
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 4
+  - target:
+      kind: Deployment
+      name: provider-daemon
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  # Production resources
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "2000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "8Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "16Gi"
+  - target:
+      kind: Deployment
+      name: provider-daemon
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "1000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "3000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
+  # Storage for production
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 1Ti
+  # PDB for production
+  - target:
+      kind: PodDisruptionBudget
+      name: virtengine-node-pdb
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 3
+  - target:
+      kind: PodDisruptionBudget
+      name: provider-daemon-pdb
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+  # HPA for production
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: provider-daemon-hpa
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+configMapGenerator:
+  - name: virtengine-config
+    behavior: merge
+    literals:
+      - CHAIN_ID=virtengine-1
+      - LOG_LEVEL=info
+      - API_SWAGGER=false
+      - PRUNING=custom
+      - PRUNING_KEEP_RECENT=1000
+      - PRUNING_INTERVAL=100
+
+images:
+  - name: virtengine/virtengine-node
+    newTag: v1.0.0  # Pin to specific version in prod
+  - name: virtengine/provider-daemon
+    newTag: v1.0.0
+  - name: virtengine/tee-enclave
+    newTag: v1.0.0  # TEE-HW-001: Production TEE enclave
+
+# TEE Enclave production patches (TEE-HW-001)
+patchesStrategicMerge:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: tee-enclave
+    spec:
+      replicas: 3
+      template:
+        spec:
+          containers:
+            - name: enclave
+              resources:
+                requests:
+                  cpu: "1000m"
+                  memory: "2Gi"
+                limits:
+                  cpu: "4000m"
+                  memory: "8Gi"

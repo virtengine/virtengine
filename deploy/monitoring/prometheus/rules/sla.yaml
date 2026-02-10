@@ -1,0 +1,43 @@
+groups:
+  - name: sla.alerts
+    rules:
+      - alert: SLAUptimeBreach
+        expr: |
+          (1 - (
+            sum(rate(virtengine_provider_workload_uptime_seconds[30d])) by (provider_id, lease_id)
+            / sum(rate(virtengine_provider_workload_expected_uptime_seconds[30d])) by (provider_id, lease_id)
+          )) * 100 > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          sla_metric: uptime
+        annotations:
+          summary: "SLA Uptime breach for {{ $labels.lease_id }}"
+          description: "Uptime is {{ $value | printf \"%.2f\" }}% below SLA target"
+
+      - alert: SLALatencyBreach
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(virtengine_provider_request_latency_bucket[1h])) by (le, lease_id)
+          ) > 500
+        for: 5m
+        labels:
+          severity: critical
+          sla_metric: latency_p99
+        annotations:
+          summary: "SLA P99 Latency breach for {{ $labels.lease_id }}"
+          description: "P99 latency is {{ $value | printf \"%.0f\" }}ms, exceeds 500ms SLA"
+
+      - alert: SLAUptimeWarning
+        expr: |
+          (1 - (
+            sum(rate(virtengine_provider_workload_uptime_seconds[30d])) by (provider_id, lease_id)
+            / sum(rate(virtengine_provider_workload_expected_uptime_seconds[30d])) by (provider_id, lease_id)
+          )) * 100 > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          sla_metric: uptime
+        annotations:
+          summary: "SLA Uptime approaching threshold for {{ $labels.lease_id }}"
+          description: "Uptime buffer is {{ $value | printf \"%.2f\" }}%"

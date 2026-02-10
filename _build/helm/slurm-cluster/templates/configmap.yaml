@@ -1,0 +1,103 @@
+{{/*
+VE-502: SLURM ConfigMap
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "slurm-cluster.fullname" . }}-config
+  labels:
+    {{- include "slurm-cluster.labels" . | nindent 4 }}
+data:
+  slurm.conf: |
+    # SLURM Configuration for VirtEngine HPC Cluster
+    # VE-502: Decentralized SLURM cluster deployment
+    
+    ClusterName={{ .Values.cluster.name }}
+    SlurmctldHost={{ include "slurm-cluster.fullname" . }}-controller
+    
+    # Authentication
+    AuthType=auth/munge
+    CryptoType=crypto/munge
+    
+    # Slurmctld settings
+    SlurmctldPort=6817
+    SlurmctldPidFile=/var/run/slurmctld.pid
+    SlurmctldLogFile=/var/log/slurm/slurmctld.log
+    StateSaveLocation=/var/spool/slurmctld
+    
+    # Slurmd settings  
+    SlurmdPort=6818
+    SlurmdPidFile=/var/run/slurmd.pid
+    SlurmdSpoolDir=/var/spool/slurmd
+    SlurmdLogFile=/var/log/slurm/slurmd.log
+    
+    # Scheduler
+    SchedulerType=sched/backfill
+    SelectType=select/cons_tres
+    SelectTypeParameters=CR_Core_Memory
+    
+    # Accounting
+    {{- if .Values.database.enabled }}
+    AccountingStorageType=accounting_storage/slurmdbd
+    AccountingStorageHost={{ include "slurm-cluster.fullname" . }}-database
+    AccountingStoragePort=6819
+    {{- else }}
+    AccountingStorageType=accounting_storage/none
+    {{- end }}
+    JobAcctGatherType=jobacct_gather/linux
+    JobAcctGatherFrequency=30
+    
+    # Process tracking
+    ProctrackType=proctrack/cgroup
+    TaskPlugin=task/cgroup,task/affinity
+    
+    # Job scheduling
+    DefMemPerCPU=1000
+    MaxMemPerCPU=0
+    
+    # Timeouts
+    SlurmctldTimeout=120
+    SlurmdTimeout=300
+    InactiveLimit=0
+    MinJobAge=300
+    KillWait=30
+    Waittime=0
+    
+    # Logging
+    SlurmctldDebug=info
+    SlurmdDebug=info
+    
+    # VirtEngine integration
+    # Jobs will be tracked and reported on-chain
+    MailProg=/usr/bin/true
+    
+    # Node definitions (dynamically configured)
+    {{- range $i := until (int .Values.compute.replicas) }}
+    NodeName={{ include "slurm-cluster.fullname" $ }}-compute-{{ $i }} CPUs={{ $.Values.compute.resources.limits.cpu | default 16 }} RealMemory={{ $.Values.compute.resources.limits.memory | default "64Gi" | trimSuffix "Gi" | mul 1024 }} State=UNKNOWN
+    {{- end }}
+    
+    # Partition definitions
+    {{- range .Values.partitions }}
+    PartitionName={{ .name }} Nodes={{ .nodes }} Default={{ .default }} MaxTime={{ .maxTime }} State={{ .state }}{{ if .features }} Feature={{ .features }}{{ end }}
+    {{- end }}
+    
+  cgroup.conf: |
+    CgroupAutomount=yes
+    CgroupMountpoint=/sys/fs/cgroup
+    ConstrainCores=yes
+    ConstrainRAMSpace=yes
+    ConstrainSwapSpace=yes
+    ConstrainDevices=yes
+    AllowedDevicesFile=/etc/slurm/cgroup_allowed_devices_file.conf
+    
+  cgroup_allowed_devices_file.conf: |
+    /dev/null
+    /dev/urandom
+    /dev/zero
+    /dev/sda*
+    /dev/cpu/*/*
+    /dev/pts/*
+    {{- if .Values.compute.gpu.enabled }}
+    /dev/nvidia*
+    /dev/dri/*
+    {{- end }}

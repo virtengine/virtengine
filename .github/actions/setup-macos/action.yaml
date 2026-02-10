@@ -1,0 +1,83 @@
+---
+name: setup-macos
+description: 'Setup macOS environment for VirtEngine CI builds'
+runs:
+  using: 'composite'
+  steps:
+    - name: Fetch all tags
+      shell: bash
+      run: |
+        if git rev-parse --is-shallow-repository | grep -qxF true; then
+          git fetch --prune --unshallow
+        else
+          git fetch --prune --tags
+        fi
+    - name: Install dependencies
+      shell: bash
+      run: |
+        brew install bash direnv pv lz4 jq wget coreutils
+    - name: Detect required Go version
+      shell: bash
+      run: |
+        toolchain=$(bash ./script/tools.sh gotoolchain | sed 's/^go//')
+        if [ -z "$toolchain" ]; then
+            echo "Error: Failed to detect Go version from script/tools.sh" >&2
+            exit 1
+        fi
+        echo "GOVERSION=${toolchain}" >> $GITHUB_ENV
+    - uses: actions/setup-go@v5
+      with:
+        go-version: "${{ env.GOVERSION }}"
+        check-latest: true
+    - name: Set environment variables
+      shell: bash
+      run: |
+        ROOT_DIR=$(pwd)
+        
+        # Core environment variables
+        echo "VE_ROOT=${ROOT_DIR}" >> $GITHUB_ENV
+        echo "VE_DIRENV_SET=1" >> $GITHUB_ENV
+        echo "VIRTENGINE_ROOT=${ROOT_DIR}" >> $GITHUB_ENV
+        echo "VIRTENGINE_DIRENV_SET=1" >> $GITHUB_ENV
+        
+        # Dev cache paths
+        echo "VE_DEVCACHE=${ROOT_DIR}/.cache" >> $GITHUB_ENV
+        echo "VE_DEVCACHE_BIN=${ROOT_DIR}/.cache/bin" >> $GITHUB_ENV
+        echo "VE_DEVCACHE_VERSIONS=${ROOT_DIR}/.cache/versions" >> $GITHUB_ENV
+        echo "VE_DEVCACHE_INCLUDE=${ROOT_DIR}/.cache/include" >> $GITHUB_ENV
+        echo "VE_DEVCACHE_NODE_MODULES=${ROOT_DIR}/.cache" >> $GITHUB_ENV
+        echo "VE_RUN=${ROOT_DIR}/.cache/run" >> $GITHUB_ENV
+        echo "VE_RUN_BIN=${ROOT_DIR}/.cache/run/bin" >> $GITHUB_ENV
+        
+        # Binary paths
+        echo "VIRTENGINE=${ROOT_DIR}/.cache/bin/virtengine" >> $GITHUB_ENV
+        
+        # Go toolchain settings
+        toolchain=$(bash ./script/tools.sh gotoolchain)
+        echo "GOTOOLCHAIN=${toolchain}" >> $GITHUB_ENV
+        toolchain_semver=$(echo "${toolchain}" | sed 's/go*/v/' | tr -d '\n')
+        echo "GOTOOLCHAIN_SEMVER=${toolchain_semver}" >> $GITHUB_ENV
+        
+        # macOS-specific CGO settings to suppress deprecation warnings
+        echo "CGO_CFLAGS=-Wno-deprecated-declarations" >> $GITHUB_ENV
+        
+        # Use internal linkmode on macOS to avoid external linker issues
+        echo "GO_LINKMODE=internal" >> $GITHUB_ENV
+        
+        # Disable code signing for CI builds
+        echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+        
+        # Create cache directories
+        mkdir -p "${ROOT_DIR}/.cache/bin" "${ROOT_DIR}/.cache/versions" "${ROOT_DIR}/.cache/include" "${ROOT_DIR}/.cache/run/bin"
+    - name: Verify build environment
+      shell: bash
+      run: |
+        echo "=== macOS Build environment verification ==="
+        echo "VE_ROOT: ${VE_ROOT:-NOT SET}"
+        echo "VE_DIRENV_SET: ${VE_DIRENV_SET:-NOT SET}"
+        echo "GOTOOLCHAIN: ${GOTOOLCHAIN:-NOT SET}"
+        echo "VIRTENGINE: ${VIRTENGINE:-NOT SET}"
+        echo "CGO_CFLAGS: ${CGO_CFLAGS:-NOT SET}"
+        echo "GO_LINKMODE: ${GO_LINKMODE:-NOT SET}"
+        echo "Go version: $(go version)"
+        echo "Clang version: $(clang --version | head -1)"

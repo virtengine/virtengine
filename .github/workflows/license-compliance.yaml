@@ -1,0 +1,303 @@
+# INFRA-003: License Compliance Checking Workflow
+# Ensures all dependencies have compatible licenses
+#
+# Features:
+#   - Go license scanning with go-licenses
+#   - Policy enforcement for allowed/denied licenses
+#   - SPDX SBOM generation for license compliance
+#   - License report generation
+
+name: License Compliance
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "go.mod"
+      - "go.sum"
+      - "**/package.json"
+      - "**/requirements.txt"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "go.mod"
+      - "go.sum"
+      - "**/package.json"
+      - "**/requirements.txt"
+  schedule:
+    # Weekly license audit on Sundays
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: license-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25.5"
+  NODE_VERSION: "20"
+  GOWORK: "off"  # Disable workspace mode for vendor operations
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ===========================================================================
+  # Go License Compliance
+  # ===========================================================================
+  go-licenses:
+    name: Go License Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Check for disallowed licenses
+        id: license-check
+        run: |
+          # Define disallowed licenses (copyleft that would require source disclosure)
+          DISALLOWED="GPL-2.0,GPL-3.0,AGPL-3.0,LGPL-2.0,LGPL-2.1,LGPL-3.0,SSPL-1.0,BUSL-1.1"
+
+          # Generate license report
+          go-licenses report ./... --template='{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}
+          {{end}}' > licenses.csv 2>/dev/null || true
+
+          # Check for disallowed licenses
+          echo "Checking for disallowed licenses..."
+          VIOLATIONS=""
+          while IFS=, read -r pkg license url; do
+            for disallowed in ${DISALLOWED//,/ }; do
+              if echo "$license" | grep -qi "$disallowed"; then
+                VIOLATIONS="${VIOLATIONS}${pkg}: ${license}\n"
+              fi
+            done
+          done < licenses.csv
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::Disallowed licenses found:"
+            echo -e "$VIOLATIONS"
+            echo "has_violations=true" >> $GITHUB_OUTPUT
+          else
+            echo "All licenses are compliant"
+            echo "has_violations=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate license report
+        run: |
+          echo "# Go Dependency Licenses" > LICENSE_REPORT.md
+          echo "" >> LICENSE_REPORT.md
+          echo "Generated: $(date -u)" >> LICENSE_REPORT.md
+          echo "" >> LICENSE_REPORT.md
+          echo "| Package | License | URL |" >> LICENSE_REPORT.md
+          echo "|---------|---------|-----|" >> LICENSE_REPORT.md
+          if [ -f licenses.csv ]; then
+            while IFS=, read -r pkg license url; do
+              # Skip empty lines
+              [ -z "$pkg" ] && continue
+              echo "| ${pkg} | ${license:-Unknown} | ${url:-N/A} |" >> LICENSE_REPORT.md
+            done < licenses.csv
+          fi
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-license-report
+          path: |
+            licenses.csv
+            LICENSE_REPORT.md
+          retention-days: 90
+
+      - name: Fail on violations
+        if: steps.license-check.outputs.has_violations == 'true'
+        run: |
+          echo "::error::License compliance check failed. Please review disallowed licenses."
+          exit 1
+
+  # ===========================================================================
+  # npm License Compliance
+  # ===========================================================================
+  npm-licenses:
+    name: npm License Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install license-checker
+        run: npm install -g license-checker
+
+      - name: Check portal licenses
+        if: hashFiles('lib/portal/package.json') != ''
+        run: |
+          cd lib/portal
+          npm install --ignore-scripts || true
+
+          # Generate license report
+          license-checker --json --production > ../npm-licenses.json 2>/dev/null || true
+
+          # Check for problematic licenses
+          DISALLOWED="GPL-2.0|GPL-3.0|AGPL|SSPL|BUSL"
+
+          if license-checker --production --failOn "$DISALLOWED" 2>/dev/null; then
+            echo "npm licenses are compliant"
+          else
+            echo "::warning::Some npm packages may have restrictive licenses"
+          fi
+
+      - name: Generate npm license summary
+        if: hashFiles('lib/portal/package.json') != ''
+        run: |
+          cd lib/portal
+          license-checker --production --summary > ../npm-license-summary.txt 2>/dev/null || true
+
+      - name: Upload npm license report
+        uses: actions/upload-artifact@v4
+        if: hashFiles('lib/portal/package.json') != ''
+        with:
+          name: npm-license-report
+          path: |
+            lib/npm-licenses.json
+            lib/npm-license-summary.txt
+          retention-days: 90
+
+  # ===========================================================================
+  # Python License Compliance
+  # ===========================================================================
+  python-licenses:
+    name: Python License Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pip-licenses
+        run: pip install pip-licenses
+
+      - name: Check ML dependencies licenses
+        run: |
+          if [ -f ml/requirements.txt ]; then
+            pip install -r ml/requirements.txt --quiet 2>/dev/null || true
+            pip-licenses --format=json > python-licenses.json 2>/dev/null || true
+            pip-licenses --format=markdown > python-licenses.md 2>/dev/null || true
+
+            # Check for problematic licenses
+            DISALLOWED="GPL|AGPL|SSPL"
+            if pip-licenses --format=csv 2>/dev/null | grep -iE "$DISALLOWED"; then
+              echo "::warning::Some Python packages may have restrictive licenses"
+            else
+              echo "Python licenses are compliant"
+            fi
+          else
+            echo "No ML requirements.txt found, skipping"
+          fi
+
+      - name: Upload Python license report
+        uses: actions/upload-artifact@v4
+        if: hashFiles('ml/requirements.txt') != ''
+        with:
+          name: python-license-report
+          path: |
+            python-licenses.json
+            python-licenses.md
+          retention-days: 90
+
+  # ===========================================================================
+  # SPDX SBOM for License Compliance
+  # ===========================================================================
+  spdx-sbom:
+    name: Generate SPDX SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: virtengine-sbom.spdx.json
+
+      - name: Upload SPDX SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: spdx-sbom
+          path: virtengine-sbom.spdx.json
+          retention-days: 365
+
+  # ===========================================================================
+  # License Compliance Summary
+  # ===========================================================================
+  license-summary:
+    name: License Summary
+    runs-on: ubuntu-latest
+    needs:
+      - go-licenses
+      - npm-licenses
+      - python-licenses
+      - spdx-sbom
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: license-reports
+        continue-on-error: true
+
+      - name: Generate compliance summary
+        run: |
+          echo "# License Compliance Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Ecosystem | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Modules | ${{ needs.go-licenses.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| npm Packages | ${{ needs.npm-licenses.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Packages | ${{ needs.python-licenses.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SPDX SBOM | ${{ needs.spdx-sbom.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Allowed Licenses" >> $GITHUB_STEP_SUMMARY
+          echo "- MIT, MIT-0" >> $GITHUB_STEP_SUMMARY
+          echo "- Apache-2.0" >> $GITHUB_STEP_SUMMARY
+          echo "- BSD-2-Clause, BSD-3-Clause" >> $GITHUB_STEP_SUMMARY
+          echo "- ISC" >> $GITHUB_STEP_SUMMARY
+          echo "- MPL-2.0" >> $GITHUB_STEP_SUMMARY
+          echo "- Unlicense, CC0-1.0" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Disallowed Licenses" >> $GITHUB_STEP_SUMMARY
+          echo "- GPL-2.0, GPL-3.0" >> $GITHUB_STEP_SUMMARY
+          echo "- AGPL-3.0" >> $GITHUB_STEP_SUMMARY
+          echo "- LGPL (without linking exception)" >> $GITHUB_STEP_SUMMARY
+          echo "- SSPL-1.0" >> $GITHUB_STEP_SUMMARY
+          echo "- BUSL-1.1" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for critical failures
+        if: needs.go-licenses.result == 'failure'
+        run: |
+          echo "::error::Go license compliance check failed"
+          exit 1

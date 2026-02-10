@@ -1,0 +1,63 @@
+syntax = "proto3";
+package virtengine.market.v1beta5;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/market/v1/bid.proto";
+import "virtengine/market/v1/lease.proto";
+import "virtengine/market/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5";
+
+// MsgCreateLease is sent to create a lease.
+message MsgCreateLease {
+  option (gogoproto.equal)      = false;
+
+  // BidId is the unique identifier of the Bid.
+  virtengine.market.v1.BidID bid_id = 1 [
+    (gogoproto.customname) = "BidID",
+    (gogoproto.nullable)   = false,
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+}
+
+// MsgCreateLeaseResponse is the response from creating a lease.
+message MsgCreateLeaseResponse {}
+
+// MsgWithdrawLease defines an SDK message for withdrawing lease funds.
+message MsgWithdrawLease {
+  option (gogoproto.equal) = false;
+
+  // BidId is the unique identifier of the Bid.
+  virtengine.market.v1.LeaseID id = 1 [
+    (gogoproto.customname) = "ID",
+    (gogoproto.nullable)   = false,
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+}
+
+// MsgWithdrawLeaseResponse defines the Msg/WithdrawLease response type.
+message MsgWithdrawLeaseResponse {}
+
+// MsgCloseLease defines an SDK message for closing order.
+message MsgCloseLease {
+  option (gogoproto.equal) = false;
+
+  // LeaseID is the unique identifier of the Lease.
+  virtengine.market.v1.LeaseID id = 1 [
+    (gogoproto.customname) = "ID",
+    (gogoproto.nullable)   = false,
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  virtengine.market.v1.LeaseClosedReason reason = 2 [
+    (gogoproto.jsontag)  = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// MsgCloseLeaseResponse defines the Msg/CloseLease response type.
+message MsgCloseLeaseResponse {}

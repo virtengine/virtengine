@@ -1,0 +1,316 @@
+syntax = "proto3";
+package virtengine.enclave.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/enclave/v1";
+
+// EventEnclaveIdentityRegistered is emitted when an enclave identity is registered
+message EventEnclaveIdentityRegistered {
+  option (gogoproto.equal) = true;
+
+  // Validator is the validator address
+  string validator = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator",
+    (gogoproto.moretags) = "yaml:\"validator\""
+  ];
+
+  // TEEType is the type of TEE
+  string tee_type = 2 [
+    (gogoproto.jsontag) = "tee_type",
+    (gogoproto.moretags) = "yaml:\"tee_type\""
+  ];
+
+  // MeasurementHash is the enclave measurement hash (hex-encoded)
+  string measurement_hash = 3 [
+    (gogoproto.jsontag) = "measurement_hash",
+    (gogoproto.moretags) = "yaml:\"measurement_hash\""
+  ];
+
+  // EncryptionKeyID is the encryption key identifier
+  string encryption_key_id = 4 [
+    (gogoproto.jsontag) = "encryption_key_id",
+    (gogoproto.moretags) = "yaml:\"encryption_key_id\""
+  ];
+
+  // SigningKeyID is the signing key identifier
+  string signing_key_id = 5 [
+    (gogoproto.jsontag) = "signing_key_id",
+    (gogoproto.moretags) = "yaml:\"signing_key_id\""
+  ];
+
+  // Epoch is the registration epoch
+  uint64 epoch = 6 [
+    (gogoproto.jsontag) = "epoch",
+    (gogoproto.moretags) = "yaml:\"epoch\""
+  ];
+
+  // ExpiryHeight is the block height when this identity expires
+  int64 expiry_height = 7 [
+    (gogoproto.jsontag) = "expiry_height",
+    (gogoproto.moretags) = "yaml:\"expiry_height\""
+  ];
+}
+
+// EventEnclaveIdentityUpdated is emitted when an enclave identity is updated
+message EventEnclaveIdentityUpdated {
+  option (gogoproto.equal) = true;
+
+  // Validator is the validator address
+  string validator = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator",
+    (gogoproto.moretags) = "yaml:\"validator\""
+  ];
+
+  // Status is the new status
+  string status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+}
+
+// EventEnclaveIdentityRevoked is emitted when an enclave identity is revoked
+message EventEnclaveIdentityRevoked {
+  option (gogoproto.equal) = true;
+
+  // Validator is the validator address
+  string validator = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator",
+    (gogoproto.moretags) = "yaml:\"validator\""
+  ];
+
+  // Reason is the reason for revocation
+  string reason = 2 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// EventEnclaveIdentityExpired is emitted when an enclave identity expires
+message EventEnclaveIdentityExpired {
+  option (gogoproto.equal) = true;
+
+  // Validator is the validator address
+  string validator = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator",
+    (gogoproto.moretags) = "yaml:\"validator\""
+  ];
+
+  // ExpiryHeight is the height at which the identity expired
+  int64 expiry_height = 2 [
+    (gogoproto.jsontag) = "expiry_height",
+    (gogoproto.moretags) = "yaml:\"expiry_height\""
+  ];
+}
+
+// EventEnclaveKeyRotated is emitted when a key rotation is initiated
+message EventEnclaveKeyRotated {
+  option (gogoproto.equal) = true;
+
+  // Validator is the validator address
+  string validator = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator",
+    (gogoproto.moretags) = "yaml:\"validator\""
+  ];
+
+  // OldKeyFingerprint is the fingerprint of the old key
+  string old_key_fingerprint = 2 [
+    (gogoproto.jsontag) = "old_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"old_key_fingerprint\""
+  ];
+
+  // NewKeyFingerprint is the fingerprint of the new key
+  string new_key_fingerprint = 3 [
+    (gogoproto.jsontag) = "new_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"new_key_fingerprint\""
+  ];
+
+  // OverlapStartHeight is when both keys become valid
+  int64 overlap_start_height = 4 [
+    (gogoproto.jsontag) = "overlap_start_height",
+    (gogoproto.moretags) = "yaml:\"overlap_start_height\""
+  ];
+
+  // OverlapEndHeight is when the old key becomes invalid
+  int64 overlap_end_height = 5 [
+    (gogoproto.jsontag) = "overlap_end_height",
+    (gogoproto.moretags) = "yaml:\"overlap_end_height\""
+  ];
+}
+
+// EventKeyRotationCompleted is emitted when a key rotation completes
+message EventKeyRotationCompleted {
+  option (gogoproto.equal) = true;
+
+  // Validator is the validator address
+  string validator = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator",
+    (gogoproto.moretags) = "yaml:\"validator\""
+  ];
+
+  // NewKeyFingerprint is the fingerprint of the new active key
+  string new_key_fingerprint = 2 [
+    (gogoproto.jsontag) = "new_key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"new_key_fingerprint\""
+  ];
+}
+
+// EventMeasurementAdded is emitted when a measurement is added to the allowlist
+message EventMeasurementAdded {
+  option (gogoproto.equal) = true;
+
+  // MeasurementHash is the measurement hash (hex-encoded)
+  string measurement_hash = 1 [
+    (gogoproto.jsontag) = "measurement_hash",
+    (gogoproto.moretags) = "yaml:\"measurement_hash\""
+  ];
+
+  // TEEType is the TEE type
+  string tee_type = 2 [
+    (gogoproto.jsontag) = "tee_type",
+    (gogoproto.moretags) = "yaml:\"tee_type\""
+  ];
+
+  // Description is the measurement description
+  string description = 3 [
+    (gogoproto.jsontag) = "description",
+    (gogoproto.moretags) = "yaml:\"description\""
+  ];
+
+  // MinISVSVN is the minimum security version
+  uint32 min_isv_svn = 4 [
+    (gogoproto.jsontag) = "min_isv_svn",
+    (gogoproto.moretags) = "yaml:\"min_isv_svn\""
+  ];
+}
+
+// EventMeasurementRevoked is emitted when a measurement is revoked
+message EventMeasurementRevoked {
+  option (gogoproto.equal) = true;
+
+  // MeasurementHash is the measurement hash (hex-encoded)
+  string measurement_hash = 1 [
+    (gogoproto.jsontag) = "measurement_hash",
+    (gogoproto.moretags) = "yaml:\"measurement_hash\""
+  ];
+
+  // Reason is the reason for revocation
+  string reason = 2 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// EventVEIDScoreComputedAttested is emitted when a VEID score is computed with attestation
+message EventVEIDScoreComputedAttested {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the identity scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // AccountAddress is the account that owns the identity
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Score is the computed score
+  uint32 score = 3 [
+    (gogoproto.jsontag) = "score",
+    (gogoproto.moretags) = "yaml:\"score\""
+  ];
+
+  // Status is the verification status
+  string status = 4 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // BlockHeight is the block height
+  int64 block_height = 5 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+}
+
+// EventVEIDScoreRejectedAttestation is emitted when a VEID score fails attestation verification
+message EventVEIDScoreRejectedAttestation {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the identity scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // AccountAddress is the account that owns the identity
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ProposedScore is the score proposed by the proposer
+  uint32 proposed_score = 3 [
+    (gogoproto.jsontag) = "proposed_score",
+    (gogoproto.moretags) = "yaml:\"proposed_score\""
+  ];
+
+  // ComputedScore is the locally computed score
+  uint32 computed_score = 4 [
+    (gogoproto.jsontag) = "computed_score",
+    (gogoproto.moretags) = "yaml:\"computed_score\""
+  ];
+
+  // Reason is the reason for rejection
+  string reason = 5 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// EventConsensusVerificationFailed is emitted when consensus verification fails
+message EventConsensusVerificationFailed {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the identity scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ProposedScore is the score proposed
+  uint32 proposed_score = 2 [
+    (gogoproto.jsontag) = "proposed_score",
+    (gogoproto.moretags) = "yaml:\"proposed_score\""
+  ];
+
+  // ComputedScore is the locally recomputed score
+  uint32 computed_score = 3 [
+    (gogoproto.jsontag) = "computed_score",
+    (gogoproto.moretags) = "yaml:\"computed_score\""
+  ];
+
+  // ScoreDifference is the absolute difference between scores
+  int32 score_difference = 4 [
+    (gogoproto.jsontag) = "score_difference",
+    (gogoproto.moretags) = "yaml:\"score_difference\""
+  ];
+
+  // Reason is the failure reason
+  string reason = 5 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}

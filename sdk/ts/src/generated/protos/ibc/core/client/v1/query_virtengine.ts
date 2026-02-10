@@ -1,0 +1,85 @@
+import { QueryClientCreatorRequest, QueryClientCreatorResponse, QueryClientParamsRequest, QueryClientParamsResponse, QueryClientStateRequest, QueryClientStateResponse, QueryClientStatesRequest, QueryClientStatesResponse, QueryClientStatusRequest, QueryClientStatusResponse, QueryConsensusStateHeightsRequest, QueryConsensusStateHeightsResponse, QueryConsensusStateRequest, QueryConsensusStateResponse, QueryConsensusStatesRequest, QueryConsensusStatesResponse, QueryUpgradedClientStateRequest, QueryUpgradedClientStateResponse, QueryUpgradedConsensusStateRequest, QueryUpgradedConsensusStateResponse, QueryVerifyMembershipRequest, QueryVerifyMembershipResponse } from "./query.ts";
+
+export const Query = {
+  typeName: "ibc.core.client.v1.Query",
+  methods: {
+    clientState: {
+      name: "ClientState",
+      httpPath: "/ibc/core/client/v1/client_states/{client_id}",
+      input: QueryClientStateRequest,
+      output: QueryClientStateResponse,
+      get parent() { return Query; },
+    },
+    clientStates: {
+      name: "ClientStates",
+      httpPath: "/ibc/core/client/v1/client_states",
+      input: QueryClientStatesRequest,
+      output: QueryClientStatesResponse,
+      get parent() { return Query; },
+    },
+    consensusState: {
+      name: "ConsensusState",
+      httpPath: "/ibc/core/client/v1/consensus_states/{client_id}/revision/{revision_number}/height/{revision_height}",
+      input: QueryConsensusStateRequest,
+      output: QueryConsensusStateResponse,
+      get parent() { return Query; },
+    },
+    consensusStates: {
+      name: "ConsensusStates",
+      httpPath: "/ibc/core/client/v1/consensus_states/{client_id}",
+      input: QueryConsensusStatesRequest,
+      output: QueryConsensusStatesResponse,
+      get parent() { return Query; },
+    },
+    consensusStateHeights: {
+      name: "ConsensusStateHeights",
+      httpPath: "/ibc/core/client/v1/consensus_states/{client_id}/heights",
+      input: QueryConsensusStateHeightsRequest,
+      output: QueryConsensusStateHeightsResponse,
+      get parent() { return Query; },
+    },
+    clientStatus: {
+      name: "ClientStatus",
+      httpPath: "/ibc/core/client/v1/client_status/{client_id}",
+      input: QueryClientStatusRequest,
+      output: QueryClientStatusResponse,
+      get parent() { return Query; },
+    },
+    clientParams: {
+      name: "ClientParams",
+      httpPath: "/ibc/core/client/v1/params",
+      input: QueryClientParamsRequest,
+      output: QueryClientParamsResponse,
+      get parent() { return Query; },
+    },
+    clientCreator: {
+      name: "ClientCreator",
+      httpPath: "/ibc/core/client/v1/client_creator/{client_id}",
+      input: QueryClientCreatorRequest,
+      output: QueryClientCreatorResponse,
+      get parent() { return Query; },
+    },
+    upgradedClientState: {
+      name: "UpgradedClientState",
+      httpPath: "/ibc/core/client/v1/upgraded_client_states",
+      input: QueryUpgradedClientStateRequest,
+      output: QueryUpgradedClientStateResponse,
+      get parent() { return Query; },
+    },
+    upgradedConsensusState: {
+      name: "UpgradedConsensusState",
+      httpPath: "/ibc/core/client/v1/upgraded_consensus_states",
+      input: QueryUpgradedConsensusStateRequest,
+      output: QueryUpgradedConsensusStateResponse,
+      get parent() { return Query; },
+    },
+    verifyMembership: {
+      name: "VerifyMembership",
+      httpMethod: "post",
+      httpPath: "/ibc/core/client/v1/verify_membership",
+      input: QueryVerifyMembershipRequest,
+      output: QueryVerifyMembershipResponse,
+      get parent() { return Query; },
+    },
+  },
+} as const;

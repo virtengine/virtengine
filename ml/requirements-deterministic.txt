@@ -1,0 +1,61 @@
+# VirtEngine VEID Pipeline - Deterministic Python Dependencies
+# VE-219: Pinned versions for reproducible builds
+#
+# CRITICAL: All versions are pinned with exact versions to ensure
+# identical execution across all validator nodes.
+#
+# To update: pin exact versions here or generate hashes with:
+# pip-compile --generate-hashes requirements-deterministic.in
+
+# TensorFlow (CPU-only for determinism)
+tensorflow-cpu==2.15.0
+
+# DeepFace for facial verification
+deepface==0.0.79
+
+# OpenCV for image processing (headless, no GUI)
+opencv-python-headless==4.8.1.78
+
+# NumPy with pinned version for numerical consistency
+numpy==1.26.3
+
+# Pillow for image handling
+Pillow==10.3.0
+
+# ONNX Runtime for CRAFT model (CPU-only)
+onnxruntime==1.16.3
+
+# PyTorch (CPU-only) for CRAFT text detection
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+
+# Tesseract OCR Python bindings
+pytesseract==0.3.10
+
+# gRPC for sidecar communication
+grpcio==1.60.0
+
+grpcio-tools==1.60.0
+
+# Protobuf
+protobuf==4.25.2
+
+# Scipy for numerical operations
+scipy==1.12.0
+
+# scikit-image for image processing
+scikit-image==0.22.0
+
+# mtcnn for face detection (used by DeepFace)
+mtcnn==0.1.1
+
+# Additional dependencies for reproducibility
+h5py==3.10.0
+
+tqdm==4.66.3
+
+# Logging and monitoring
+structlog==24.1.0
+
+# YAML parsing for config files
+PyYAML==6.0.1

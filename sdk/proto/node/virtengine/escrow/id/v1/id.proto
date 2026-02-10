@@ -1,0 +1,52 @@
+syntax = "proto3";
+package virtengine.escrow.id.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1";
+
+// Scope is an enum which refers to the account scope
+enum Scope {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // Prefix should start with 0 in enum. So declaring dummy state.
+  invalid = 0 [(gogoproto.enumvalue_customname) = "ScopeInvalid"];
+  // DeploymentActive denotes state for deployment active.
+  deployment = 1 [(gogoproto.enumvalue_customname) = "ScopeDeployment"];
+  // DeploymentClosed denotes state for deployment closed.
+  bid = 2 [(gogoproto.enumvalue_customname) = "ScopeBid"];
+}
+
+// Account is the account identifier.
+message Account {
+  option (gogoproto.goproto_stringer) = true;
+
+  Scope scope = 1 [
+    (gogoproto.jsontag) = "scope",
+    (gogoproto.moretags) = "yaml:\"scope\""
+  ];
+
+  string xid = 2 [
+    (gogoproto.jsontag) = "xid",
+    (gogoproto.moretags) = "yaml:\"xid\"",
+    (gogoproto.customname) = "XID"
+  ];
+}
+
+// Payment is the payment identifier.
+message Payment {
+  option (gogoproto.goproto_stringer) = true;
+
+  Account aid = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "aid",
+    (gogoproto.moretags) = "yaml:\"aid\"",
+    (gogoproto.customname) = "AID"
+  ];
+
+  string xid = 2 [
+    (gogoproto.jsontag) = "xid",
+    (gogoproto.moretags) = "yaml:\"xid\"",
+    (gogoproto.customname) = "XID"
+  ];
+}

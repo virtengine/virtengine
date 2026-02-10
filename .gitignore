@@ -1,0 +1,88 @@
+# etc
+*.DS_Store
+
+#vendor
+/vendor
+
+# dev artifacts
+/devdata
+pkg/provider_daemon/data/
+
+# chain data
+*.tsd
+
+# test artifacts
+debug.test
+
+dist
+
+#IDE
+.idea/
+*.iml
+coverage.txt
+.vscode
+
+/.cache
+/.release-env
+/.docker-creds
+
+/tmp-swagger-gen
+
+# go workspaces
+/go.work.sum
+
+/.editorconfig
+
+dev.env
+.env
+.env.*
+!.env.example
+
+*.exe
+/.testchain
+/temp
+
+# ML model weights (large binary files)
+ml/*/weights/*.pt
+ml/*/weights/*.pth
+!ml/*/weights/.gitkeep
+
+# Python caches/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+venv/
+.venv/
+.localnet-last-update.virtengine-node
+.localnet-last-update.provider-daemon
+
+# Node.js / Frontend
+node_modules/
+.next/
+*.tsbuildinfo
+
+
+nul
+.playwright-mcp/*
+*/nul
+
+# Task planning files (agent-generated)
+_docs/ralph/tasks/
+.localnet*
+scripts/codex-monitor/logs/*
+scripts/codex-monitor/codex-monitor.config.json
+scripts/codex-monitor/.codex-monitor.json
+scripts/codex-monitor/codex-monitor.json
+scripts/codex-monitor/.cache/
+pkg/provider_daemon/audit.log
+scripts/.cache/ve-orchestrator-copilot.json
+scripts/.cache/*
+tmpclaude*

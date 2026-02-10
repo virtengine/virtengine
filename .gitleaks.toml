@@ -1,0 +1,70 @@
+# Gitleaks configuration for VirtEngine
+# Documentation: https://github.com/gitleaks/gitleaks
+
+title = "VirtEngine Gitleaks Configuration"
+
+[extend]
+# useDefault = true will include default gitleaks rules
+useDefault = true
+
+# Allowlist for known false positives
+[[rules]]
+id = "generic-api-key"
+description = "Generic API key detection"
+regex = '''(?i)(api[_-]?key|apikey|api[_-]?token)['\"]?\s*[:=]\s*['\"]([\w\-\.]+)['\"]'''
+# Exclude test fixtures and mock data
+[rules.allowlist]
+paths = [
+  '''tests?/.*fixtures?/.*''',
+  '''testutil/.*''',
+  '''.*_test\.go''',
+  '''.*\.golden''',
+  '''testdata/.*''',
+]
+description = "Test fixtures and mock data"
+
+[[rules]]
+id = "test-private-key"
+description = "Test private keys in fixtures"
+regex = '''-----BEGIN.*PRIVATE KEY-----'''
+[rules.allowlist]
+paths = [
+  '''tests?/.*fixtures?/.*''',
+  '''testutil/.*''',
+  '''.*_test\.go''',
+  '''testdata/.*''',
+]
+description = "Test fixtures containing private keys for testing"
+
+# Global allowlist for specific patterns
+[allowlist]
+# Exclude generated files and documentation
+paths = [
+  '''.*\.pb\.go''',
+  '''.*\.pb\.gw\.go''',
+  '''vendor/.*''',
+  '''node_modules/.*''',
+  '''\.git/.*''',
+  '''\.cache/.*''',
+  '''_build/.*''',
+  '''_docs/.*''',
+]
+
+# Exclude specific commits (if needed)
+# commits = ["commit-hash-here"]
+
+# Exclude specific regexes that match content
+regexes = [
+  '''dev-portal-key''',  # Example API key in documentation
+  '''cafebabe:deadbeef''',  # Example credentials in docs/README
+]
+
+# Stop words that indicate false positives
+stopwords = [
+  "example",
+  "sample",
+  "placeholder",
+  "your-key-here",
+  "sk_test_",
+  "pk_test_",
+]

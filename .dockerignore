@@ -1,0 +1,13 @@
+# etc
+/.github
+/_docs
+*.DS_Store
+
+# vendor
+/vendor
+
+# binaries
+/virtengine
+
+# dev artifacts
+/devdata

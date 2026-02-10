@@ -1,0 +1,38 @@
+syntax = "proto3";
+package virtengine.enclave.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/enclave/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/enclave/v1";
+
+// GenesisState defines the enclave module's genesis state
+message GenesisState {
+  // EnclaveIdentities are the registered enclave identities
+  repeated EnclaveIdentity enclave_identities = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "enclave_identities",
+    (gogoproto.moretags) = "yaml:\"enclave_identities\""
+  ];
+
+  // MeasurementAllowlist is the list of approved enclave measurements
+  repeated MeasurementRecord measurement_allowlist = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "measurement_allowlist",
+    (gogoproto.moretags) = "yaml:\"measurement_allowlist\""
+  ];
+
+  // KeyRotations is the list of active key rotations
+  repeated KeyRotationRecord key_rotations = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "key_rotations,omitempty",
+    (gogoproto.moretags) = "yaml:\"key_rotations\""
+  ];
+
+  // Params are the module parameters
+  Params params = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}

@@ -1,0 +1,35 @@
+syntax = "proto3";
+package virtengine.deployment.v1beta5;
+
+import "gogoproto/gogo.proto";
+
+import "cosmos/base/v1beta1/coin.proto";
+
+import "virtengine/base/resources/v1beta4/resources.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta5";
+
+// ResourceUnit extends Resources and adds Count along with the Price.
+message ResourceUnit {
+  option (gogoproto.equal) = true;
+
+  // Resource holds the amount of resources.
+  virtengine.base.resources.v1beta4.Resources resource = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.embed)    = true,
+    (gogoproto.jsontag)  = "resource",
+    (gogoproto.moretags) = "yaml:\"resource\""
+  ];
+  // Count corresponds to the amount of replicas to run of the resources.
+  uint32 count = 2 [
+    (gogoproto.jsontag)  = "count",
+    (gogoproto.moretags) = "yaml:\"count\""
+  ];
+  // Price holds the pricing for the resource units.
+  repeated cosmos.base.v1beta1.DecCoin prices = 3 [
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.DecCoins",
+    (gogoproto.nullable)     = false,
+    (gogoproto.jsontag)      = "prices",
+    (gogoproto.moretags)     = "yaml:\"prices\""
+  ];
+}

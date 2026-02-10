@@ -1,0 +1,39 @@
+syntax = "proto3";
+package virtengine.inventory.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/inventory/v1/resources.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/inventory/v1";
+
+// NodeCapabilities extended list of node capabilities
+message NodeCapabilities {
+  repeated string storage_classes = 1 [
+    (gogoproto.customname)   = "StorageClasses",
+    (gogoproto.jsontag)      = "storage_classes",
+    (gogoproto.moretags)     = "yaml:\"storage_classes\""
+  ];
+}
+
+// Node reports node inventory details
+message Node {
+  string name = 1 [
+    (gogoproto.customname)   = "Name",
+    (gogoproto.jsontag)      = "name",
+    (gogoproto.moretags)     = "yaml:\"name\""
+  ];
+
+  NodeResources resources = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "Resources",
+    (gogoproto.jsontag)      = "resources",
+    (gogoproto.moretags)     = "yaml:\"resources\""
+  ];
+
+  NodeCapabilities capabilities = 3 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "Capabilities",
+    (gogoproto.jsontag)      = "capabilities",
+    (gogoproto.moretags)     = "yaml:\"capabilities\""
+  ];
+}

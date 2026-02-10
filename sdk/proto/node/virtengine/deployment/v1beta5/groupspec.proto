@@ -1,0 +1,39 @@
+syntax = "proto3";
+package virtengine.deployment.v1beta5;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/base/attributes/v1/attribute.proto";
+import "virtengine/deployment/v1beta5/resourceunit.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta5";
+
+// GroupSpec defines a specification for a group in a deployment on the network.
+// This includes attributes like the group name, placement requirements, and resource units.
+message GroupSpec {
+  option (gogoproto.equal)           = true;
+  option (gogoproto.goproto_getters) = false;
+
+  // Name is the name of the group.
+  string name = 1 [
+    (gogoproto.jsontag)  = "name",
+    (gogoproto.moretags) = "yaml:\"name\""
+  ];
+
+  // Requirements specifies the placement requirements for the group.
+  // This determines where the resources in the group can be deployed.
+  virtengine.base.attributes.v1.PlacementRequirements requirements = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "requirements",
+    (gogoproto.moretags) = "yaml:\"requirements\""
+  ];
+
+  // Resources is a list containing the resource units allocated to the group.
+  // Each ResourceUnit defines the specific resources (e.g., CPU, memory) assigned.
+  repeated ResourceUnit resources = 3 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "ResourceUnits",
+    (gogoproto.jsontag)      = "resources",
+    (gogoproto.moretags)     = "yaml:\"resources\""
+  ];
+}

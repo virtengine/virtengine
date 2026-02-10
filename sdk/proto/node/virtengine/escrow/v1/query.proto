@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package virtengine.escrow.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+
+import "virtengine/escrow/types/v1/account.proto";
+import "virtengine/escrow/types/v1/payment.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/v1";
+
+// Query defines the gRPC querier service for the escrow package.
+service Query {
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // Accounts queries all accounts.
+  rpc Accounts(QueryAccountsRequest) returns (QueryAccountsResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/types/accounts";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // Payments queries all payments.
+  rpc Payments(QueryPaymentsRequest) returns (QueryPaymentsResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/types/payments";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // Invoice queries an invoice ledger record by ID.
+  rpc Invoice(QueryInvoiceRequest) returns (QueryInvoiceResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/invoices/{invoice_id}";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // InvoicesByProvider queries invoices by provider.
+  rpc InvoicesByProvider(QueryInvoicesByProviderRequest) returns (QueryInvoicesByProviderResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/providers/{provider}/invoices";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // InvoicesByCustomer queries invoices by customer.
+  rpc InvoicesByCustomer(QueryInvoicesByCustomerRequest) returns (QueryInvoicesByCustomerResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/customers/{customer}/invoices";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // InvoiceLedger queries invoice ledger entries by invoice ID.
+  rpc InvoiceLedger(QueryInvoiceLedgerRequest) returns (QueryInvoiceLedgerResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/invoices/{invoice_id}/ledger";
+  }
+}
+
+// QueryAccountRequest is request type for the Query/Account RPC method.
+message QueryAccountsRequest {
+  // State represents the current state of an Account.
+  string state = 1;
+  // Scope holds the scope of the account.
+  string xid   = 2 [
+    (gogoproto.jsontag) = "xid",
+    (gogoproto.moretags) = "yaml:\"xid\"",
+    (gogoproto.customname) = "XID"
+  ];
+
+  // Pagination is used to paginate the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 5;
+}
+
+// QueryProvidersResponse is response type for the Query/Providers RPC method
+message QueryAccountsResponse {
+  // Accounts is a list of Account.
+  repeated virtengine.escrow.types.v1.Account accounts = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1.Accounts"
+  ];
+  // Pagination contains the information about response pagination.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryPaymentRequest is request type for the Query/Payment RPC method
+message QueryPaymentsRequest {
+  // State represents the current state of a Payment.
+  string state = 1;
+  string xid   = 2 [
+    (gogoproto.jsontag) = "xid",
+    (gogoproto.moretags) = "yaml:\"xid\"",
+    (gogoproto.customname) = "XID"
+  ];
+
+  // Pagination is used to paginate the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 6;
+}
+
+// QueryProvidersResponse is response type for the Query/Providers RPC method
+message QueryPaymentsResponse {
+  // Payments is a list of payments.
+  repeated virtengine.escrow.types.v1.Payment payments = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1.Payments"
+  ];
+
+  // Pagination contains the information about response pagination.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryInvoiceRequest is request type for the Query/Invoice RPC method.
+message QueryInvoiceRequest {
+  string invoice_id = 1;
+}
+
+// QueryInvoiceResponse is response type for the Query/Invoice RPC method.
+message QueryInvoiceResponse {
+  string invoice_json = 1;
+}
+
+// QueryInvoicesByProviderRequest is request type for the Query/InvoicesByProvider RPC method.
+message QueryInvoicesByProviderRequest {
+  string provider = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryInvoicesByProviderResponse is response type for the Query/InvoicesByProvider RPC method.
+message QueryInvoicesByProviderResponse {
+  repeated string invoices_json = 1;
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryInvoicesByCustomerRequest is request type for the Query/InvoicesByCustomer RPC method.
+message QueryInvoicesByCustomerRequest {
+  string customer = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryInvoicesByCustomerResponse is response type for the Query/InvoicesByCustomer RPC method.
+message QueryInvoicesByCustomerResponse {
+  repeated string invoices_json = 1;
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryInvoiceLedgerRequest is request type for the Query/InvoiceLedger RPC method.
+message QueryInvoiceLedgerRequest {
+  string invoice_id = 1;
+}
+
+// QueryInvoiceLedgerResponse is response type for the Query/InvoiceLedger RPC method.
+message QueryInvoiceLedgerResponse {
+  repeated string entries_json = 1;
+}

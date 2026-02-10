@@ -1,0 +1,117 @@
+{{/*
+VE-502: SLURM Compute Nodes StatefulSet
+*/}}
+{{- if .Values.compute.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "slurm-cluster.fullname" . }}-compute
+  labels:
+    {{- include "slurm-cluster.labels" . | nindent 4 }}
+    app.kubernetes.io/component: compute
+spec:
+  serviceName: {{ include "slurm-cluster.fullname" . }}-compute
+  replicas: {{ .Values.compute.replicas }}
+  selector:
+    matchLabels:
+      {{- include "slurm-cluster.compute.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "slurm-cluster.compute.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "slurm-cluster.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      {{- with .Values.compute.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.compute.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.compute.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: slurmd
+          image: "{{ .Values.compute.image.repository }}:{{ .Values.compute.image.tag }}"
+          imagePullPolicy: {{ .Values.compute.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.security.securityContext | nindent 12 }}
+          ports:
+            - name: slurmd
+              containerPort: 6818
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.compute.resources | nindent 12 }}
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm
+            - name: slurmd-spool
+              mountPath: /var/spool/slurmd
+            - name: munge-key
+              mountPath: /etc/munge
+              readOnly: true
+          env:
+            - name: SLURM_CLUSTER_NAME
+              value: {{ .Values.cluster.name | quote }}
+            - name: SLURMD_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: VIRTENGINE_REGION
+              value: {{ .Values.cluster.region | quote }}
+            - name: VIRTENGINE_DATACENTER
+              value: {{ .Values.cluster.datacenter | quote }}
+            {{- if .Values.compute.features }}
+            - name: SLURMD_FEATURES
+              value: {{ .Values.compute.features | join "," | quote }}
+            {{- end }}
+          livenessProbe:
+            exec:
+              command:
+                - scontrol
+                - show
+                - node
+                - $(SLURMD_NODE_NAME)
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - pgrep
+                - slurmd
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: {{ include "slurm-cluster.fullname" . }}-config
+        - name: slurmd-spool
+          emptyDir: {}
+        - name: munge-key
+          secret:
+            secretName: {{ .Values.munge.secretName | default (printf "%s-munge-key" (include "slurm-cluster.fullname" .)) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slurm-cluster.fullname" . }}-compute
+  labels:
+    {{- include "slurm-cluster.labels" . | nindent 4 }}
+    app.kubernetes.io/component: compute
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: slurmd
+      port: 6818
+      targetPort: slurmd
+  selector:
+    {{- include "slurm-cluster.compute.selectorLabels" . | nindent 4 }}
+{{- end }}

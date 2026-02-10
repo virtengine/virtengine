@@ -1,0 +1,94 @@
+{{/*
+VE-502: SLURM Controller Deployment
+*/}}
+{{- if .Values.controller.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "slurm-cluster.fullname" . }}-controller
+  labels:
+    {{- include "slurm-cluster.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "slurm-cluster.controller.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "slurm-cluster.controller.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "slurm-cluster.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      containers:
+        - name: slurmctld
+          image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.security.securityContext | nindent 12 }}
+          ports:
+            - name: slurmctld
+              containerPort: 6817
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm
+            - name: slurm-state
+              mountPath: /var/spool/slurmctld
+            - name: munge-key
+              mountPath: /etc/munge
+              readOnly: true
+          env:
+            - name: SLURM_CLUSTER_NAME
+              value: {{ .Values.cluster.name | quote }}
+            - name: VIRTENGINE_REGION
+              value: {{ .Values.cluster.region | quote }}
+          livenessProbe:
+            exec:
+              command:
+                - scontrol
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - scontrol
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 5
+        {{- if .Values.virtengine.providerDaemon.enabled }}
+        - name: provider-daemon
+          image: "{{ .Values.virtengine.providerDaemon.image.repository }}:{{ .Values.virtengine.providerDaemon.image.tag }}"
+          imagePullPolicy: {{ .Values.virtengine.providerDaemon.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.virtengine.providerDaemon.resources | nindent 12 }}
+          env:
+            - name: VIRTENGINE_CHAIN_RPC
+              value: {{ .Values.virtengine.registration.chainRPC | quote }}
+            - name: SLURM_CLUSTER_NAME
+              value: {{ .Values.cluster.name | quote }}
+            - name: PROVIDER_ADDRESS
+              value: {{ .Values.cluster.providerAddress | quote }}
+        {{- end }}
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: {{ include "slurm-cluster.fullname" . }}-config
+        - name: slurm-state
+          {{- if .Values.controller.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "slurm-cluster.fullname" . }}-controller-state
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: munge-key
+          secret:
+            secretName: {{ .Values.munge.secretName | default (printf "%s-munge-key" (include "slurm-cluster.fullname" .)) }}
+{{- end }}

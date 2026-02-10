@@ -1,0 +1,45 @@
+syntax = "proto3";
+package virtengine.mfa.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/mfa/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/mfa/v1";
+
+// GenesisState defines the mfa module's genesis state
+message GenesisState {
+  // Params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+
+  // MFAPolicies are the initial MFA policies
+  repeated MFAPolicy mfa_policies = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "mfa_policies",
+    (gogoproto.moretags) = "yaml:\"mfa_policies\""
+  ];
+
+  // FactorEnrollments are the initial factor enrollments
+  repeated FactorEnrollment factor_enrollments = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "factor_enrollments",
+    (gogoproto.moretags) = "yaml:\"factor_enrollments\""
+  ];
+
+  // SensitiveTxConfigs are the sensitive transaction configurations
+  repeated SensitiveTxConfig sensitive_tx_configs = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "sensitive_tx_configs",
+    (gogoproto.moretags) = "yaml:\"sensitive_tx_configs\""
+  ];
+
+  // TrustedDevices are the initial trusted devices
+  repeated TrustedDevice trusted_devices = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "trusted_devices",
+    (gogoproto.moretags) = "yaml:\"trusted_devices\""
+  ];
+}

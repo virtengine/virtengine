@@ -1,0 +1,141 @@
+# QUALITY-001 + INFRA-003: Code Coverage Configuration
+# Target: 80% minimum (enforced), 90%+ aspirational for unit tests
+# Updated with stricter enforcement for CI/CD hardening
+ignore:
+  - "**/*.pb.go"
+  - "**/*.pb.gw.go"
+  - "**/mocks/**"
+  - "**/kubernetes_mock/**"
+  - "**/testutil/**"
+  - "**/cmd/**"
+  - "vendor/**"
+  - "**/simulation/**"
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+  require_base: true
+  require_head: true
+codecov:
+  require_ci_to_pass: true
+  notify:
+    after_n_builds: 1
+  # INFRA-003: Strict CI integration
+  ci:
+    - "github-actions"
+
+# INFRA-003: GitHub Checks integration for required status checks
+github_checks:
+  annotations: true
+
+coverage:
+  range: 70..100
+  round: down
+  precision: 2
+  status:
+    project:
+      default:
+        # INFRA-003: Minimum 80% coverage enforced (fail CI if below)
+        target: 80%
+        threshold: 2%
+        if_not_found: error  # Changed from success to enforce coverage
+        if_ci_failed: error
+        # Prevent coverage regression
+        only_pulls: false
+        # INFRA-003: Require informational comment even if passing
+        informational: false
+      # Aspirational target for overall project
+      aspirational:
+        target: 90%
+        threshold: 2%
+        if_not_found: success
+        if_ci_failed: error
+        informational: true  # Don't fail, just report
+      # Separate target for x/ modules (critical path)
+      x-modules:
+        paths:
+          - "x/**"
+        target: 85%  # Stricter for blockchain modules
+        threshold: 1%
+        if_not_found: error
+      # Separate target for pkg/ (off-chain services)
+      pkg:
+        paths:
+          - "pkg/**"
+        target: 80%
+        threshold: 2%
+        if_not_found: success
+    patch:
+      default:
+        # INFRA-003: All new code must have 80% minimum coverage
+        target: 80%
+        if_not_found: success
+        only_pulls: true
+        # New code should not reduce coverage
+        threshold: 0%
+      # Aspirational patch coverage
+      aspirational:
+        target: 90%
+        if_not_found: success
+        only_pulls: true
+        informational: true
+      # Critical modules require 90% patch coverage (enforced)
+      critical:
+        paths:
+          - "x/veid/**"
+          - "x/mfa/**"
+          - "x/encryption/**"
+          - "x/escrow/**"
+        target: 90%
+        if_not_found: success
+        # INFRA-003: Critical security code must meet coverage
+        informational: false
+    changes:
+      default:
+        # Track changes to ensure coverage trends
+        target: auto
+        threshold: 5%
+# Component-level coverage tracking
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 2%
+  individual_components:
+    - component_id: x-veid
+      name: "x/veid - Identity Verification"
+      paths:
+        - "x/veid/**"
+    - component_id: x-mfa
+      name: "x/mfa - Multi-Factor Auth"
+      paths:
+        - "x/mfa/**"
+    - component_id: x-encryption
+      name: "x/encryption - Cryptography"
+      paths:
+        - "x/encryption/**"
+    - component_id: x-market
+      name: "x/market - Marketplace"
+      paths:
+        - "x/market/**"
+    - component_id: x-escrow
+      name: "x/escrow - Escrow"
+      paths:
+        - "x/escrow/**"
+    - component_id: x-fraud
+      name: "x/fraud - Fraud Detection"
+      paths:
+        - "x/fraud/**"
+    - component_id: x-hpc
+      name: "x/hpc - HPC Scheduling"
+      paths:
+        - "x/hpc/**"
+    - component_id: pkg-provider
+      name: "pkg/provider_daemon - Provider Services"
+      paths:
+        - "pkg/provider_daemon/**"
+    - component_id: pkg-inference
+      name: "pkg/inference - ML Inference"
+      paths:
+        - "pkg/inference/**"

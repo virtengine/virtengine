@@ -1,0 +1,163 @@
+syntax = "proto3";
+package virtengine.marketplace.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "virtengine/marketplace/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1";
+
+// Msg defines the marketplace Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // CreateOffering creates a new marketplace offering
+  rpc CreateOffering(MsgCreateOffering) returns (MsgCreateOfferingResponse);
+
+  // UpdateOffering updates an existing marketplace offering
+  rpc UpdateOffering(MsgUpdateOffering) returns (MsgUpdateOfferingResponse);
+
+  // DeactivateOffering deactivates an existing marketplace offering
+  rpc DeactivateOffering(MsgDeactivateOffering) returns (MsgDeactivateOfferingResponse);
+
+  // AcceptBid accepts a provider bid on an order
+  rpc AcceptBid(MsgAcceptBid) returns (MsgAcceptBidResponse);
+
+  // TerminateAllocation terminates an allocation
+  rpc TerminateAllocation(MsgTerminateAllocation) returns (MsgTerminateAllocationResponse);
+
+  // ResizeAllocation resizes an existing allocation
+  rpc ResizeAllocation(MsgResizeAllocation) returns (MsgResizeAllocationResponse);
+
+  // PauseAllocation pauses an active allocation
+  rpc PauseAllocation(MsgPauseAllocation) returns (MsgPauseAllocationResponse);
+
+  // WaldurCallback handles callbacks from Waldur integration
+  rpc WaldurCallback(MsgWaldurCallback) returns (MsgWaldurCallbackResponse);
+}
+
+// MsgCreateOffering creates a new marketplace offering
+message MsgCreateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "marketplace/MsgCreateOffering";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider", (gogoproto.moretags) = "yaml:\"provider\""];
+  Offering offering = 2 [(gogoproto.jsontag) = "offering", (gogoproto.moretags) = "yaml:\"offering\""];
+}
+
+// MsgCreateOfferingResponse is the response for MsgCreateOffering
+message MsgCreateOfferingResponse {
+  string offering_id = 1 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+}
+
+// MsgUpdateOffering updates an existing marketplace offering
+message MsgUpdateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "marketplace/MsgUpdateOffering";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider", (gogoproto.moretags) = "yaml:\"provider\""];
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  Offering updates = 3 [(gogoproto.jsontag) = "updates", (gogoproto.moretags) = "yaml:\"updates\""];
+}
+
+// MsgUpdateOfferingResponse is the response for MsgUpdateOffering
+message MsgUpdateOfferingResponse {}
+
+// MsgDeactivateOffering deactivates an existing marketplace offering
+message MsgDeactivateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "marketplace/MsgDeactivateOffering";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider", (gogoproto.moretags) = "yaml:\"provider\""];
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+}
+
+// MsgDeactivateOfferingResponse is the response for MsgDeactivateOffering
+message MsgDeactivateOfferingResponse {}
+
+// MsgAcceptBid accepts a bid for an order
+message MsgAcceptBid {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgAcceptBid";
+
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  string order_id = 2 [(gogoproto.jsontag) = "order_id", (gogoproto.moretags) = "yaml:\"order_id\""];
+  string bid_id = 3 [(gogoproto.jsontag) = "bid_id", (gogoproto.moretags) = "yaml:\"bid_id\""];
+}
+
+// MsgAcceptBidResponse is the response for MsgAcceptBid
+message MsgAcceptBidResponse {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+}
+
+// MsgTerminateAllocation terminates an allocation
+message MsgTerminateAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgTerminateAllocation";
+
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string reason = 3 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// MsgTerminateAllocationResponse is the response for MsgTerminateAllocation
+message MsgTerminateAllocationResponse {}
+
+// MsgResizeAllocation resizes an allocation
+message MsgResizeAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgResizeAllocation";
+
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  repeated ResourceUnit resource_units = 3 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "resource_units,omitempty", (gogoproto.moretags) = "yaml:\"resource_units\""];
+  string reason = 4 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// MsgResizeAllocationResponse is the response for MsgResizeAllocation
+message MsgResizeAllocationResponse {}
+
+// MsgPauseAllocation pauses an allocation
+message MsgPauseAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgPauseAllocation";
+
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string reason = 3 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// MsgPauseAllocationResponse is the response for MsgPauseAllocation
+message MsgPauseAllocationResponse {}
+
+// ResourceUnit represents a resource type and its unit quantity for resizing
+message ResourceUnit {
+  string resource_type = 1 [(gogoproto.jsontag) = "resource_type", (gogoproto.moretags) = "yaml:\"resource_type\""];
+  uint64 units = 2 [(gogoproto.jsontag) = "units", (gogoproto.moretags) = "yaml:\"units\""];
+}
+
+// MsgWaldurCallback handles callbacks from Waldur integration
+message MsgWaldurCallback {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "marketplace/MsgWaldurCallback";
+
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string callback_type = 2;
+  string resource_id = 3;
+  string status = 4;
+  string payload = 5;
+  bytes signature = 6;
+}
+
+// MsgWaldurCallbackResponse is the response for MsgWaldurCallback
+message MsgWaldurCallbackResponse {}

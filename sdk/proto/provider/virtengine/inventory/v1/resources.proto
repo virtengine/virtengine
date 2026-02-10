@@ -1,0 +1,56 @@
+syntax = "proto3";
+package virtengine.inventory.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/inventory/v1/cpu.proto";
+import "virtengine/inventory/v1/gpu.proto";
+import "virtengine/inventory/v1/memory.proto";
+import "virtengine/inventory/v1/resourcepair.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/inventory/v1";
+
+// NodeResources reports node inventory details
+message NodeResources {
+  CPU cpu = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "CPU",
+    (gogoproto.jsontag)      = "cpu",
+    (gogoproto.moretags)     = "yaml:\"cpu\""
+  ];
+
+  Memory memory = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "Memory",
+    (gogoproto.jsontag)      = "memory",
+    (gogoproto.moretags)     = "yaml:\"memory\""
+  ];
+
+  GPU gpu = 3 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "GPUs",
+    (gogoproto.customname)   = "GPU",
+    (gogoproto.jsontag)      = "gpu",
+    (gogoproto.moretags)     = "yaml:\"gpu\""
+  ];
+
+  ResourcePair ephemeral_storage = 4 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "EphemeralStorage",
+    (gogoproto.jsontag)      = "ephemeral_storage",
+    (gogoproto.moretags)     = "yaml:\"ephemeral_storage\""
+  ];
+
+  ResourcePair volumes_attached = 5 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "VolumesAttached",
+    (gogoproto.jsontag)      = "volumes_attached",
+    (gogoproto.moretags)     = "yaml:\"volumes_attached\""
+  ];
+
+  ResourcePair volumes_mounted = 6 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "VolumesMounted",
+    (gogoproto.jsontag)      = "volumes_mounted",
+    (gogoproto.moretags)     = "yaml:\"volumes_mounted\""
+  ];
+}

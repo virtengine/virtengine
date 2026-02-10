@@ -1,0 +1,20 @@
+# ArgoCD Installation
+# Reference: https://github.com/argoproj/argo-cd/releases
+# This file should be downloaded from the ArgoCD release
+# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/install.yaml
+
+# For production, use the HA manifests:
+# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/ha/install.yaml
+
+# Note: This is a placeholder. In CI/CD, download the actual manifest:
+# curl -sSL https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/install.yaml -o install.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-version
+  namespace: argocd
+data:
+  version: "v2.10.0"
+  install_url: "https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/install.yaml"
+  ha_install_url: "https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/ha/install.yaml"

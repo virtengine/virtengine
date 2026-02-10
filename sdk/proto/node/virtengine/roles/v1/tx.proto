@@ -1,0 +1,187 @@
+syntax = "proto3";
+package virtengine.roles.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "virtengine/roles/v1/types.proto";
+import "virtengine/mfa/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/roles/v1";
+
+// Msg defines the roles Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // AssignRole assigns a role to an account
+  rpc AssignRole(MsgAssignRole) returns (MsgAssignRoleResponse);
+
+  // RevokeRole revokes a role from an account
+  rpc RevokeRole(MsgRevokeRole) returns (MsgRevokeRoleResponse);
+
+  // SetAccountState sets the state of an account
+  rpc SetAccountState(MsgSetAccountState) returns (MsgSetAccountStateResponse);
+
+  // NominateAdmin nominates an administrator (GenesisAccount only)
+  rpc NominateAdmin(MsgNominateAdmin) returns (MsgNominateAdminResponse);
+
+  // UpdateParams updates the module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// MsgAssignRole is the message for assigning a role to an account
+message MsgAssignRole {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "roles/MsgAssignRole";
+
+  // Sender is the account assigning the role
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // Address is the target account to receive the role
+  string address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // Role is the role to assign
+  string role = 3 [
+    (gogoproto.jsontag) = "role",
+    (gogoproto.moretags) = "yaml:\"role\""
+  ];
+}
+
+// MsgAssignRoleResponse is the response for MsgAssignRole
+message MsgAssignRoleResponse {}
+
+// MsgRevokeRole is the message for revoking a role from an account
+message MsgRevokeRole {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "roles/MsgRevokeRole";
+
+  // Sender is the account revoking the role
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // Address is the target account to lose the role
+  string address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // Role is the role to revoke
+  string role = 3 [
+    (gogoproto.jsontag) = "role",
+    (gogoproto.moretags) = "yaml:\"role\""
+  ];
+}
+
+// MsgRevokeRoleResponse is the response for MsgRevokeRole
+message MsgRevokeRoleResponse {}
+
+// MsgSetAccountState is the message for setting an account's state
+message MsgSetAccountState {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "roles/MsgSetAccountState";
+
+  // Sender is the account setting the state
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // Address is the target account whose state is being set
+  string address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // State is the new state for the account
+  string state = 3 [
+    (gogoproto.jsontag) = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  // Reason is the reason for the state change
+  string reason = 4 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+
+  // MFAProof is optional proof of MFA for sensitive account recovery operations
+  virtengine.mfa.v1.MFAProof mfa_proof = 5 [
+    (gogoproto.jsontag) = "mfa_proof,omitempty",
+    (gogoproto.moretags) = "yaml:\"mfa_proof\""
+  ];
+
+  // DeviceFingerprint is the optional client device fingerprint
+  string device_fingerprint = 6 [
+    (gogoproto.jsontag) = "device_fingerprint,omitempty",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+}
+
+// MsgSetAccountStateResponse is the response for MsgSetAccountState
+message MsgSetAccountStateResponse {}
+
+// MsgNominateAdmin is the message for nominating an administrator (GenesisAccount only)
+message MsgNominateAdmin {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "roles/MsgNominateAdmin";
+
+  // Sender is the genesis account making the nomination
+  string sender = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+
+  // Address is the account to be nominated as administrator
+  string address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+}
+
+// MsgNominateAdminResponse is the response for MsgNominateAdmin
+message MsgNominateAdminResponse {}
+
+// MsgUpdateParams is the message for updating module parameters
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "roles/MsgUpdateParams";
+
+  // Authority is the address that controls the module (x/gov module account)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Params are the new module parameters
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}

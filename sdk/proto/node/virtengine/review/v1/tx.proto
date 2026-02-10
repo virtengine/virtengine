@@ -1,0 +1,104 @@
+syntax = "proto3";
+package virtengine.review.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/review/v1";
+
+// Msg defines the review Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // SubmitReview submits a new review
+  rpc SubmitReview(MsgSubmitReview) returns (MsgSubmitReviewResponse);
+
+  // DeleteReview deletes a review
+  rpc DeleteReview(MsgDeleteReview) returns (MsgDeleteReviewResponse);
+
+  // UpdateParams updates module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// MsgSubmitReview submits a new review
+message MsgSubmitReview {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "reviewer";
+  option (amino.name) = "review/MsgSubmitReview";
+
+  string reviewer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string subject_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string subject_type = 3;
+  string order_id = 4;
+  uint32 rating = 5;
+  string comment = 6;
+  string lease_id = 7;
+}
+
+// MsgSubmitReviewResponse is the response for MsgSubmitReview
+message MsgSubmitReviewResponse {
+  string review_id = 1;
+  int64 submitted_at = 2;
+}
+
+// MsgDeleteReview deletes a review
+message MsgDeleteReview {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "review/MsgDeleteReview";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string review_id = 2;
+  string reason = 3;
+}
+
+// MsgDeleteReviewResponse is the response for MsgDeleteReview
+message MsgDeleteReviewResponse {}
+
+// MsgUpdateParams updates module parameters
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "review/MsgUpdateParams";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  Params params = 2 [(gogoproto.nullable) = false];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}
+
+// Params defines the parameters for the review module
+message Params {
+  uint64 min_review_interval = 1;
+  uint64 max_comment_length = 2;
+  bool require_completed_order = 3;
+  uint64 review_window = 4;
+  uint32 min_rating = 5;
+  uint32 max_rating = 6;
+}
+
+// GenesisState is the genesis state for the review module
+message GenesisState {
+  option (gogoproto.equal) = false;
+  
+  Params params = 1 [(gogoproto.nullable) = false];
+  repeated Review reviews = 2 [(gogoproto.nullable) = false];
+  uint64 review_sequence = 3;
+}
+
+// Review represents a review
+message Review {
+  string review_id = 1;
+  string reviewer = 2;
+  string subject_address = 3;
+  string subject_type = 4;
+  string order_id = 5;
+  string lease_id = 6;
+  uint32 rating = 7;
+  string comment = 8;
+  int64 submitted_at = 9;
+  int64 block_height = 10;
+}
