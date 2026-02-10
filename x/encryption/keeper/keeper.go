@@ -27,6 +27,13 @@ type IKeeper interface {
 	ValidateEnvelope(ctx sdk.Context, envelope *types.EncryptedPayloadEnvelope) error
 	ValidateEnvelopeRecipients(ctx sdk.Context, envelope *types.EncryptedPayloadEnvelope) ([]string, error)
 
+	// Access control
+	CheckEnvelopeAccess(ctx sdk.Context, envelope *types.EncryptedPayloadEnvelope, requester sdk.AccAddress) error
+	CheckEnvelopeAccessByFingerprint(ctx sdk.Context, envelope *types.EncryptedPayloadEnvelope, keyFingerprint string) error
+	ValidateAndCheckAccess(ctx sdk.Context, envelope *types.EncryptedPayloadEnvelope, requester sdk.AccAddress) error
+	GetEnvelopeRecipients(ctx sdk.Context, envelope *types.EncryptedPayloadEnvelope) ([]sdk.AccAddress, error)
+	EnforceEncryptedPayloadRequired(envelope *types.EncryptedPayloadEnvelope, fieldName string) error
+
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
 	SetParams(ctx sdk.Context, params types.Params) error

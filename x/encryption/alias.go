@@ -17,6 +17,9 @@ type (
 	MsgRevokeRecipientKey    = types.MsgRevokeRecipientKey
 	MsgUpdateKeyLabel        = types.MsgUpdateKeyLabel
 	MsgRotateKey             = types.MsgRotateKey
+	EnvelopeMetadata         = types.EnvelopeMetadata
+	EnvelopeValidationResult = types.EnvelopeValidationResult
+	RecipientStatus          = types.RecipientStatus
 )
 
 // Alias constants
@@ -43,6 +46,8 @@ var (
 	GetAlgorithmInfo            = types.GetAlgorithmInfo
 	RegisterInterfaces          = types.RegisterInterfaces
 	RegisterLegacyAminoCodec    = types.RegisterLegacyAminoCodec
+	ExtractEnvelopeMetadata     = types.ExtractEnvelopeMetadata
+	ValidateParams              = types.ValidateParams
 )
 
 // Alias error variables
@@ -64,4 +69,5 @@ var (
 	ErrUnauthorized          = types.ErrUnauthorized
 	ErrNotRecipient          = types.ErrNotRecipient
 	ErrReencryptionJobFailed = types.ErrReencryptionJobFailed
+	ErrUnauthorizedAccess    = types.ErrUnauthorizedAccess
 )
