@@ -31,6 +31,7 @@ func TestIsValidScopeType(t *testing.T) {
 		{types.ScopeTypeSMSProof, true},
 		{types.ScopeTypeDomainVerify, true},
 		{types.ScopeTypeADSSO, true},
+		{types.ScopeTypeSocialMedia, true},
 		{types.ScopeType("invalid"), false},
 		{types.ScopeType(""), false},
 	}
@@ -44,7 +45,7 @@ func TestIsValidScopeType(t *testing.T) {
 
 func TestAllScopeTypes(t *testing.T) {
 	scopeTypes := types.AllScopeTypes()
-	assert.Len(t, scopeTypes, 11) // All 11 scope types
+	assert.Len(t, scopeTypes, 12) // All 12 scope types
 
 	// Verify all types are present
 	assert.Contains(t, scopeTypes, types.ScopeTypeIDDocument)
@@ -58,6 +59,7 @@ func TestAllScopeTypes(t *testing.T) {
 	assert.Contains(t, scopeTypes, types.ScopeTypeSMSProof)
 	assert.Contains(t, scopeTypes, types.ScopeTypeDomainVerify)
 	assert.Contains(t, scopeTypes, types.ScopeTypeADSSO)
+	assert.Contains(t, scopeTypes, types.ScopeTypeSocialMedia)
 }
 
 func TestScopeTypeWeight(t *testing.T) {
@@ -73,6 +75,7 @@ func TestScopeTypeWeight(t *testing.T) {
 		{types.ScopeTypeDeviceAttestation, 12},
 		{types.ScopeTypeDomainVerify, 15},
 		{types.ScopeTypeADSSO, 12},
+		{types.ScopeTypeSocialMedia, 12},
 		{types.ScopeTypeEmailProof, 10},
 		{types.ScopeTypeSMSProof, 10},
 		{types.ScopeTypeSSOMetadata, 5}, // Lowest weight

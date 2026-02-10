@@ -63,6 +63,9 @@ const (
 	// AttestationTypeSSOVerification for SSO provider verification
 	AttestationTypeSSOVerification AttestationType = "sso_verification"
 
+	// AttestationTypeSocialMediaVerification for social media profile verification
+	AttestationTypeSocialMediaVerification AttestationType = "social_media_verification"
+
 	// AttestationTypeBiometricVerification for biometric verification
 	AttestationTypeBiometricVerification AttestationType = "biometric_verification"
 
@@ -86,6 +89,7 @@ func AllAttestationTypes() []AttestationType {
 		AttestationTypeSMSVerification,
 		AttestationTypeDomainVerification,
 		AttestationTypeSSOVerification,
+		AttestationTypeSocialMediaVerification,
 		AttestationTypeBiometricVerification,
 		AttestationTypeBiometricHardware,
 		AttestationTypeDeviceIntegrity,
@@ -120,6 +124,8 @@ func ScopeTypeFromAttestationType(t AttestationType) ScopeType {
 		return ScopeTypeDomainVerify
 	case AttestationTypeSSOVerification:
 		return ScopeTypeSSOMetadata
+	case AttestationTypeSocialMediaVerification:
+		return ScopeTypeSocialMedia
 	case AttestationTypeBiometricVerification:
 		return ScopeTypeBiometric
 	case AttestationTypeBiometricHardware:

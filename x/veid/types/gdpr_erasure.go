@@ -79,6 +79,9 @@ const (
 	// ErasureCategoryDerivedFeatures erases derived feature hashes
 	ErasureCategoryDerivedFeatures ErasureCategory = "derived_features"
 
+	// ErasureCategorySocialMedia erases social media scope metadata
+	ErasureCategorySocialMedia ErasureCategory = "social_media"
+
 	// ErasureCategoryAll erases all erasable personal data
 	ErasureCategoryAll ErasureCategory = "all"
 )
@@ -91,6 +94,7 @@ func AllErasureCategories() []ErasureCategory {
 		ErasureCategoryVerificationHistory,
 		ErasureCategoryConsent,
 		ErasureCategoryDerivedFeatures,
+		ErasureCategorySocialMedia,
 		ErasureCategoryAll,
 	}
 }
@@ -195,6 +199,9 @@ type ErasureReport struct {
 
 	// ConsentRecordsErased indicates if consent records were erased
 	ConsentRecordsErased bool `json:"consent_records_erased"`
+
+	// SocialMediaDataErased indicates if social media data was erased
+	SocialMediaDataErased bool `json:"social_media_data_erased"`
 
 	// OffChainDataDeleted indicates if off-chain data was deleted
 	OffChainDataDeleted bool `json:"off_chain_data_deleted"`

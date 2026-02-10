@@ -11,6 +11,7 @@ type WebScopeChainClient interface {
 	SubmitSSOVerificationProof(ctx context.Context, msg *veidtypes.MsgSubmitSSOVerificationProof) error
 	SubmitEmailVerificationProof(ctx context.Context, msg *veidtypes.MsgSubmitEmailVerificationProof) error
 	SubmitSMSVerificationProof(ctx context.Context, msg *veidtypes.MsgSubmitSMSVerificationProof) error
+	SubmitSocialMediaScope(ctx context.Context, msg *veidtypes.MsgSubmitSocialMediaScope) error
 }
 
 // ProofResult is a generic submission result for web-scope proofs.

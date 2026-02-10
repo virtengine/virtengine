@@ -21,7 +21,7 @@ export function BiometricCaptureScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Biometric Hardware"
-        stepIndex={4}
+        stepIndex={5}
         subtitle="Capture fingerprint or iris using the secure sensor."
       />
       <View style={styles.selectorRow}>

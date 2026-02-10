@@ -354,6 +354,18 @@ var (
 	PrefixSMSDeliveryResult = []byte{0x4C}
 
 	// ============================================================================
+	// Social Media Scope Keys (VE-47D)
+	// ============================================================================
+
+	// PrefixSocialMediaScope is the prefix for social media scope storage
+	// Key: PrefixSocialMediaScope | scope_id -> SocialMediaScope
+	PrefixSocialMediaScope = []byte{0x9A}
+
+	// PrefixSocialMediaScopeByAccount is the prefix for social media scope lookup by account
+	// Key: PrefixSocialMediaScopeByAccount | address | provider | scope_id -> bool
+	PrefixSocialMediaScopeByAccount = []byte{0x9B}
+
+	// ============================================================================
 	// Appeal System Keys (VE-3020)
 	// ============================================================================
 
