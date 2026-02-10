@@ -17,9 +17,10 @@ import { existsSync, readdirSync } from "fs";
 import { resolve, basename } from "path";
 import { tmpdir } from "os";
 import { fileURLToPath } from "url";
+import { resolveRepoRoot } from "./repo-root.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
-const REPO_ROOT = resolve(__dirname, "..", "..");
+const REPO_ROOT = resolveRepoRoot();
 
 /**
  * Configure git to never open interactive editors

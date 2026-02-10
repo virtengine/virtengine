@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRoot } from "./repo-root.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -17,7 +18,7 @@ const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000; // 60 min for agentic tasks
 const STATE_FILE = resolve(__dirname, "logs", "claude-shell-state.json");
-const REPO_ROOT = resolve(__dirname, "..", "..");
+const REPO_ROOT = resolveRepoRoot();
 
 // ── State ───────────────────────────────────────────────────────────────────
 

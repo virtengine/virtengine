@@ -684,6 +684,8 @@ async function main() {
     agentPrompts: {},
   };
 
+  env.REPO_ROOT = process.env.REPO_ROOT || repoRoot;
+
   if (isNonInteractive) {
     return runNonInteractive({
       env,
@@ -1363,6 +1365,7 @@ async function runNonInteractive({
   configDir,
 }) {
   env.PROJECT_NAME = process.env.PROJECT_NAME || projectName;
+  env.REPO_ROOT = process.env.REPO_ROOT || repoRoot;
   env.GITHUB_REPO = process.env.GITHUB_REPO || slug || "";
   env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
   env.TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
