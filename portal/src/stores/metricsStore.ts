@@ -2,8 +2,7 @@
  * Copyright (c) VirtEngine, Inc.
  * SPDX-License-Identifier: BSL-1.1
  *
- * Metrics Zustand store with mock data.
- * Provides aggregated metrics, deployment metrics, and time-series history.
+ * Metrics store backed by provider daemon aggregation.
  */
 
 import { create } from 'zustand';
@@ -20,314 +19,8 @@ import type {
   ResourceMetric,
   TimeRange,
 } from '@virtengine/portal/types/metrics';
-
-// =============================================================================
-// Mock Data Generators
-// =============================================================================
-
-function mockResourceMetric(used: number, limit: number, unit: string): ResourceMetric {
-  return { used, limit, percent: limit > 0 ? (used / limit) * 100 : 0, unit };
-}
-
-function generateTimeSeries(
-  name: string,
-  unit: string,
-  points: number,
-  baseValue: number,
-  variance: number,
-  intervalMs: number
-): MetricSeries {
-  const now = Date.now();
-  const data: MetricPoint[] = [];
-  for (let i = points - 1; i >= 0; i--) {
-    data.push({
-      timestamp: now - i * intervalMs,
-      value: Math.max(0, baseValue + (Math.random() - 0.5) * variance * 2),
-    });
-  }
-  return { name, unit, data };
-}
-
-const MOCK_PROVIDERS: ProviderMetrics[] = [
-  {
-    providerName: 'CloudCore',
-    providerAddress: 'virtengine1prov1abc...7h3k',
-    deploymentCount: 3,
-    cpu: mockResourceMetric(48, 64, 'cores'),
-    memory: mockResourceMetric(192, 256, 'GB'),
-    storage: mockResourceMetric(3.2, 5, 'TB'),
-  },
-  {
-    providerName: 'DataNexus',
-    providerAddress: 'virtengine1prov2def...9j4m',
-    deploymentCount: 2,
-    cpu: mockResourceMetric(24, 32, 'cores'),
-    memory: mockResourceMetric(96, 128, 'GB'),
-    storage: mockResourceMetric(1.8, 3, 'TB'),
-  },
-  {
-    providerName: 'HPCGrid',
-    providerAddress: 'virtengine1prov3ghi...2k7n',
-    deploymentCount: 1,
-    cpu: mockResourceMetric(14, 16, 'cores'),
-    memory: mockResourceMetric(52, 64, 'GB'),
-    storage: mockResourceMetric(0.8, 1, 'TB'),
-  },
-];
-
-function buildMockDeploymentMetrics(): DeploymentMetrics[] {
-  return [
-    {
-      deploymentId: 'dep-001',
-      provider: 'CloudCore',
-      current: {
-        timestamp: Date.now(),
-        cpu: mockResourceMetric(14, 32, 'cores'),
-        memory: mockResourceMetric(58, 128, 'GB'),
-        storage: mockResourceMetric(680, 1000, 'GB'),
-        network: {
-          rxBytesPerSec: 45000,
-          txBytesPerSec: 32000,
-          rxPacketsPerSec: 1200,
-          txPacketsPerSec: 980,
-        },
-        gpu: {
-          utilizationPercent: 72,
-          memoryUsedMB: 28000,
-          memoryTotalMB: 40960,
-          temperatureC: 68,
-        },
-      },
-      history: {
-        cpu: generateTimeSeries('CPU', 'cores', 24, 14, 4, 3600000),
-        memory: generateTimeSeries('Memory', 'GB', 24, 58, 10, 3600000),
-        storage: generateTimeSeries('Storage', 'GB', 24, 680, 20, 3600000),
-        network: generateTimeSeries('Network', 'KB/s', 24, 45, 15, 3600000),
-      },
-      services: [
-        {
-          name: 'api-gateway',
-          replicas: 2,
-          current: {
-            timestamp: Date.now(),
-            cpu: mockResourceMetric(4, 8, 'cores'),
-            memory: mockResourceMetric(12, 32, 'GB'),
-            storage: mockResourceMetric(20, 50, 'GB'),
-            network: {
-              rxBytesPerSec: 20000,
-              txBytesPerSec: 15000,
-              rxPacketsPerSec: 600,
-              txPacketsPerSec: 500,
-            },
-          },
-        },
-        {
-          name: 'inference-worker',
-          replicas: 6,
-          current: {
-            timestamp: Date.now(),
-            cpu: mockResourceMetric(10, 24, 'cores'),
-            memory: mockResourceMetric(46, 96, 'GB'),
-            storage: mockResourceMetric(660, 950, 'GB'),
-            network: {
-              rxBytesPerSec: 25000,
-              txBytesPerSec: 17000,
-              rxPacketsPerSec: 600,
-              txPacketsPerSec: 480,
-            },
-            gpu: {
-              utilizationPercent: 72,
-              memoryUsedMB: 28000,
-              memoryTotalMB: 40960,
-              temperatureC: 68,
-            },
-          },
-        },
-      ],
-    },
-    {
-      deploymentId: 'dep-002',
-      provider: 'DataNexus',
-      current: {
-        timestamp: Date.now(),
-        cpu: mockResourceMetric(38, 64, 'cores'),
-        memory: mockResourceMetric(148, 256, 'GB'),
-        storage: mockResourceMetric(1200, 2000, 'GB'),
-        network: {
-          rxBytesPerSec: 85000,
-          txBytesPerSec: 62000,
-          rxPacketsPerSec: 2400,
-          txPacketsPerSec: 1800,
-        },
-      },
-      history: {
-        cpu: generateTimeSeries('CPU', 'cores', 24, 38, 8, 3600000),
-        memory: generateTimeSeries('Memory', 'GB', 24, 148, 20, 3600000),
-        storage: generateTimeSeries('Storage', 'GB', 24, 1200, 50, 3600000),
-        network: generateTimeSeries('Network', 'KB/s', 24, 85, 25, 3600000),
-      },
-      services: [
-        {
-          name: 'data-pipeline',
-          replicas: 4,
-          current: {
-            timestamp: Date.now(),
-            cpu: mockResourceMetric(38, 64, 'cores'),
-            memory: mockResourceMetric(148, 256, 'GB'),
-            storage: mockResourceMetric(1200, 2000, 'GB'),
-            network: {
-              rxBytesPerSec: 85000,
-              txBytesPerSec: 62000,
-              rxPacketsPerSec: 2400,
-              txPacketsPerSec: 1800,
-            },
-          },
-        },
-      ],
-    },
-    {
-      deploymentId: 'dep-003',
-      provider: 'HPCGrid',
-      current: {
-        timestamp: Date.now(),
-        cpu: mockResourceMetric(14, 16, 'cores'),
-        memory: mockResourceMetric(52, 64, 'GB'),
-        storage: mockResourceMetric(380, 500, 'GB'),
-        network: {
-          rxBytesPerSec: 12000,
-          txBytesPerSec: 8000,
-          rxPacketsPerSec: 400,
-          txPacketsPerSec: 300,
-        },
-      },
-      history: {
-        cpu: generateTimeSeries('CPU', 'cores', 24, 14, 3, 3600000),
-        memory: generateTimeSeries('Memory', 'GB', 24, 52, 8, 3600000),
-        storage: generateTimeSeries('Storage', 'GB', 24, 380, 15, 3600000),
-        network: generateTimeSeries('Network', 'KB/s', 24, 12, 5, 3600000),
-      },
-      services: [
-        {
-          name: 'batch-node',
-          replicas: 1,
-          current: {
-            timestamp: Date.now(),
-            cpu: mockResourceMetric(14, 16, 'cores'),
-            memory: mockResourceMetric(52, 64, 'GB'),
-            storage: mockResourceMetric(380, 500, 'GB'),
-            network: {
-              rxBytesPerSec: 12000,
-              txBytesPerSec: 8000,
-              rxPacketsPerSec: 400,
-              txPacketsPerSec: 300,
-            },
-          },
-        },
-      ],
-    },
-  ];
-}
-
-function buildMockSummary(deployments: DeploymentMetrics[]): MetricsSummary {
-  const totalCPU = deployments.reduce((acc, d) => acc + d.current.cpu.used, 0);
-  const totalCPULimit = deployments.reduce((acc, d) => acc + d.current.cpu.limit, 0);
-  const totalMem = deployments.reduce((acc, d) => acc + d.current.memory.used, 0);
-  const totalMemLimit = deployments.reduce((acc, d) => acc + d.current.memory.limit, 0);
-  const totalStor = deployments.reduce((acc, d) => acc + d.current.storage.used, 0);
-  const totalStorLimit = deployments.reduce((acc, d) => acc + d.current.storage.limit, 0);
-
-  return {
-    totalCPU: mockResourceMetric(totalCPU, totalCPULimit, 'cores'),
-    totalMemory: mockResourceMetric(totalMem, totalMemLimit, 'GB'),
-    totalStorage: mockResourceMetric(totalStor, totalStorLimit, 'GB'),
-    totalNetwork: {
-      rxBytesPerSec: deployments.reduce((s, d) => s + d.current.network.rxBytesPerSec, 0),
-      txBytesPerSec: deployments.reduce((s, d) => s + d.current.network.txBytesPerSec, 0),
-      rxPacketsPerSec: deployments.reduce((s, d) => s + d.current.network.rxPacketsPerSec, 0),
-      txPacketsPerSec: deployments.reduce((s, d) => s + d.current.network.txPacketsPerSec, 0),
-    },
-    activeDeployments: deployments.length,
-    totalProviders: MOCK_PROVIDERS.length,
-    byProvider: MOCK_PROVIDERS,
-    byDeployment: deployments,
-    healthOverview: { healthy: 2, degraded: 1, warning: 0, critical: 0 },
-  };
-}
-
-const MOCK_ALERTS: Alert[] = [
-  {
-    id: 'alert-001',
-    name: 'High CPU Usage',
-    deploymentId: 'dep-002',
-    metric: 'cpu',
-    condition: 'gt',
-    threshold: 80,
-    duration: 300,
-    status: 'firing',
-    lastFired: Date.now() - 120000,
-    notificationChannels: ['email', 'webhook'],
-  },
-  {
-    id: 'alert-002',
-    name: 'Storage Nearly Full',
-    deploymentId: 'dep-001',
-    metric: 'storage',
-    condition: 'gt',
-    threshold: 90,
-    duration: 600,
-    status: 'active',
-    notificationChannels: ['email'],
-  },
-  {
-    id: 'alert-003',
-    name: 'Memory Pressure',
-    metric: 'memory',
-    condition: 'gt',
-    threshold: 85,
-    duration: 300,
-    status: 'resolved',
-    lastFired: Date.now() - 3600000,
-    notificationChannels: ['email', 'webhook'],
-  },
-];
-
-const MOCK_ALERT_EVENTS: AlertEvent[] = [
-  {
-    id: 'evt-001',
-    alertId: 'alert-001',
-    alertName: 'High CPU Usage',
-    status: 'firing',
-    value: 82.5,
-    timestamp: Date.now() - 120000,
-    acknowledged: false,
-  },
-  {
-    id: 'evt-002',
-    alertId: 'alert-003',
-    alertName: 'Memory Pressure',
-    status: 'resolved',
-    value: 72.1,
-    timestamp: Date.now() - 3600000,
-    acknowledged: true,
-    acknowledgedBy: 'admin',
-    acknowledgedAt: Date.now() - 3500000,
-  },
-  {
-    id: 'evt-003',
-    alertId: 'alert-003',
-    alertName: 'Memory Pressure',
-    status: 'firing',
-    value: 88.3,
-    timestamp: Date.now() - 7200000,
-    acknowledged: true,
-    acknowledgedBy: 'admin',
-    acknowledgedAt: Date.now() - 7100000,
-  },
-];
-
-// =============================================================================
-// Store Interface
-// =============================================================================
+import { MultiProviderClient } from '@/lib/portal-adapter';
+import { getPortalEndpoints } from '@/lib/config';
 
 export interface MetricsState {
   summary: MetricsSummary | null;
@@ -354,10 +47,6 @@ export interface MetricsActions {
 
 export type MetricsStore = MetricsState & MetricsActions;
 
-// =============================================================================
-// Store Implementation
-// =============================================================================
-
 const initialState: MetricsState = {
   summary: null,
   deploymentMetrics: [],
@@ -370,26 +59,194 @@ const initialState: MetricsState = {
   error: null,
 };
 
-export const useMetricsStore = create<MetricsStore>()((set, _get) => ({
+let providerClient: MultiProviderClient | null = null;
+let providerClientInit: Promise<void> | null = null;
+
+const getProviderClient = async () => {
+  if (!providerClient) {
+    providerClient = new MultiProviderClient({
+      chainEndpoint: getPortalEndpoints().chainRest,
+    });
+  }
+  if (!providerClientInit) {
+    providerClientInit = providerClient.initialize().catch(() => undefined);
+  }
+  await providerClientInit;
+  return providerClient;
+};
+
+const buildResourceMetric = (used: number, limit: number, unit: string): ResourceMetric => ({
+  used,
+  limit,
+  percent: limit > 0 ? (used / limit) * 100 : 0,
+  unit,
+});
+
+const seriesFromPoint = (name: string, unit: string, point: MetricPoint): MetricSeries => ({
+  name,
+  unit,
+  data: [point],
+});
+
+const buildDeploymentMetrics = (
+  deploymentId: string,
+  providerName: string,
+  metrics: {
+    cpu: { usage: number; limit: number };
+    memory: { usage: number; limit: number };
+    storage: { usage: number; limit: number };
+    network?: { rxBytes?: number; txBytes?: number };
+    gpu?: { usage?: number; limit?: number };
+  }
+): DeploymentMetrics => {
+  const timestamp = Date.now();
+  return {
+    deploymentId,
+    provider: providerName,
+    current: {
+      timestamp,
+      cpu: buildResourceMetric(metrics.cpu.usage, metrics.cpu.limit, 'cores'),
+      memory: buildResourceMetric(metrics.memory.usage, metrics.memory.limit, 'GB'),
+      storage: buildResourceMetric(metrics.storage.usage, metrics.storage.limit, 'GB'),
+      network: {
+        rxBytesPerSec: metrics.network?.rxBytes ?? 0,
+        txBytesPerSec: metrics.network?.txBytes ?? 0,
+        rxPacketsPerSec: 0,
+        txPacketsPerSec: 0,
+      },
+      gpu: metrics.gpu
+        ? {
+            utilizationPercent: metrics.gpu.limit
+              ? (metrics.gpu.usage / metrics.gpu.limit) * 100
+              : 0,
+            memoryUsedMB: metrics.gpu.usage ?? 0,
+            memoryTotalMB: metrics.gpu.limit ?? 0,
+            temperatureC: 0,
+          }
+        : undefined,
+    },
+    history: {
+      cpu: seriesFromPoint('CPU', 'cores', { timestamp, value: metrics.cpu.usage }),
+      memory: seriesFromPoint('Memory', 'GB', { timestamp, value: metrics.memory.usage }),
+      storage: seriesFromPoint('Storage', 'GB', { timestamp, value: metrics.storage.usage }),
+      network: seriesFromPoint('Network', 'bytes/s', {
+        timestamp,
+        value: (metrics.network?.rxBytes ?? 0) + (metrics.network?.txBytes ?? 0),
+      }),
+    },
+    services: [],
+  };
+};
+
+export const useMetricsStore = create<MetricsStore>()((set) => ({
   ...initialState,
 
   fetchMetrics: async () => {
     set({ isLoading: true, error: null });
 
     try {
-      // In production, fetches from provider APIs and aggregates:
-      // const metrics = await multiProviderClient.getAggregatedMetrics();
+      const client = await getProviderClient();
+      const providers = client.getProviders();
+      const deployments = await client.listAllDeployments({ refresh: true });
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const metricsResults = await Promise.allSettled(
+        deployments.map(async (deployment) => {
+          const provider = providers.find((p) => p.address === deployment.providerId);
+          const daemonClient = client.getClient(deployment.providerId);
+          if (!daemonClient) return null;
+          const metrics = await daemonClient.getDeploymentMetrics(deployment.id);
+          return {
+            deploymentId: deployment.id,
+            providerName: provider?.name ?? deployment.providerId,
+            providerId: deployment.providerId,
+            metrics,
+          };
+        })
+      );
 
-      const deployments = buildMockDeploymentMetrics();
-      const summary = buildMockSummary(deployments);
+      const deploymentMetrics: DeploymentMetrics[] = [];
+      const providerMetricsMap = new Map<string, ProviderMetrics>();
+      let totalCpuUsed = 0;
+      let totalCpuLimit = 0;
+      let totalMemUsed = 0;
+      let totalMemLimit = 0;
+      let totalStorageUsed = 0;
+      let totalStorageLimit = 0;
+      let totalNetRx = 0;
+      let totalNetTx = 0;
+
+      metricsResults.forEach((result) => {
+        if (result.status !== 'fulfilled' || !result.value) return;
+        const { deploymentId, providerName, providerId, metrics } = result.value;
+        deploymentMetrics.push(
+          buildDeploymentMetrics(deploymentId, providerName, {
+            cpu: metrics.cpu,
+            memory: metrics.memory,
+            storage: metrics.storage,
+            network: metrics.network,
+            gpu: metrics.gpu,
+          })
+        );
+
+        totalCpuUsed += metrics.cpu.usage ?? 0;
+        totalCpuLimit += metrics.cpu.limit ?? 0;
+        totalMemUsed += metrics.memory.usage ?? 0;
+        totalMemLimit += metrics.memory.limit ?? 0;
+        totalStorageUsed += metrics.storage.usage ?? 0;
+        totalStorageLimit += metrics.storage.limit ?? 0;
+        totalNetRx += metrics.network?.rxBytes ?? 0;
+        totalNetTx += metrics.network?.txBytes ?? 0;
+
+        const existing = providerMetricsMap.get(providerId);
+        if (existing) {
+          existing.cpu.used += metrics.cpu.usage ?? 0;
+          existing.cpu.limit += metrics.cpu.limit ?? 0;
+          existing.memory.used += metrics.memory.usage ?? 0;
+          existing.memory.limit += metrics.memory.limit ?? 0;
+          existing.storage.used += metrics.storage.usage ?? 0;
+          existing.storage.limit += metrics.storage.limit ?? 0;
+          existing.deploymentCount += 1;
+        } else {
+          providerMetricsMap.set(providerId, {
+            providerName,
+            providerAddress: providerId,
+            deploymentCount: 1,
+            cpu: buildResourceMetric(metrics.cpu.usage ?? 0, metrics.cpu.limit ?? 0, 'cores'),
+            memory: buildResourceMetric(metrics.memory.usage ?? 0, metrics.memory.limit ?? 0, 'GB'),
+            storage: buildResourceMetric(
+              metrics.storage.usage ?? 0,
+              metrics.storage.limit ?? 0,
+              'GB'
+            ),
+          });
+        }
+      });
+
+      const summary: MetricsSummary = {
+        totalCPU: buildResourceMetric(totalCpuUsed, totalCpuLimit, 'cores'),
+        totalMemory: buildResourceMetric(totalMemUsed, totalMemLimit, 'GB'),
+        totalStorage: buildResourceMetric(totalStorageUsed, totalStorageLimit, 'GB'),
+        totalNetwork: {
+          rxBytesPerSec: totalNetRx,
+          txBytesPerSec: totalNetTx,
+          rxPacketsPerSec: 0,
+          txPacketsPerSec: 0,
+        },
+        activeDeployments: deploymentMetrics.length,
+        totalProviders: providerMetricsMap.size,
+        byProvider: Array.from(providerMetricsMap.values()),
+        byDeployment: deploymentMetrics,
+        healthOverview: {
+          healthy: deploymentMetrics.length,
+          degraded: 0,
+          warning: 0,
+          critical: 0,
+        },
+      };
 
       set({
         summary,
-        deploymentMetrics: deployments,
-        alerts: MOCK_ALERTS,
-        alertEvents: MOCK_ALERT_EVENTS,
+        deploymentMetrics,
         isLoading: false,
       });
     } catch (error) {
@@ -444,10 +301,6 @@ export const useMetricsStore = create<MetricsStore>()((set, _get) => ({
     set({ error: null });
   },
 }));
-
-// =============================================================================
-// Selectors
-// =============================================================================
 
 export const selectFiringAlerts = (state: MetricsStore): Alert[] =>
   state.alerts.filter((a) => a.status === 'firing');

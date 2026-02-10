@@ -5,11 +5,10 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useWallet, useIdentity } from '@/lib/portal-adapter';
 import { IdentityRequirements } from '@/components/identity';
-import { formatCurrency, formatTokenAmount, generateId, truncateAddress } from '@/lib/utils';
+import { formatCurrency, formatTokenAmount, truncateAddress } from '@/lib/utils';
 import { txLink } from '@/lib/explorer';
 import { formatPriceUSD, useOfferingStore } from '@/stores/offeringStore';
-
-const SIGNING_DELAY_MS = 1200;
+import { useOrderStore } from '@/stores/orderStore';
 
 type OrderStep = 'configure' | 'review' | 'signing' | 'confirmed';
 
@@ -23,11 +22,6 @@ type ResourceLineItem = {
 
 function formatUve(amount: number): string {
   return `${formatTokenAmount(amount, 6, 2)} UVE`;
-}
-
-function buildTxHash(): string {
-  const random = Math.random().toString(16).slice(2).padEnd(16, '0');
-  return `0x${random.slice(0, 16)}`;
 }
 
 export default function OrderCreateClient() {
@@ -49,6 +43,8 @@ export default function OrderCreateClient() {
     fetchProvider,
     clearError,
   } = useOfferingStore();
+  const createOrder = useOrderStore((s) => s.createOrder);
+  const fetchOrders = useOrderStore((s) => s.fetchOrders);
 
   const [step, setStep] = useState<OrderStep>('configure');
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -57,6 +53,7 @@ export default function OrderCreateClient() {
   const [notes, setNotes] = useState('');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [signError, setSignError] = useState<string | null>(null);
 
   useEffect(() => {
     if (provider && Number.isFinite(sequence)) {
@@ -152,11 +149,28 @@ export default function OrderCreateClient() {
   const canProceed = totals.totalUve > 0 && resourceSelections.length > 0;
 
   const handleSign = async () => {
+    if (!msgPreview || !account) {
+      return;
+    }
+    if (status !== 'connected') {
+      setSignError('Connect your wallet to sign this transaction.');
+      return;
+    }
     setStep('signing');
-    await new Promise((resolve) => setTimeout(resolve, SIGNING_DELAY_MS));
-    setTxHash(buildTxHash());
-    setOrderId(generateId('order'));
-    setStep('confirmed');
+    setSignError(null);
+    try {
+      const tx = await createOrder(msgPreview, wallet);
+      setTxHash(tx);
+      await fetchOrders(account.address);
+      const latest = [...useOrderStore.getState().orders].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      )[0];
+      setOrderId(latest?.id ?? null);
+      setStep('confirmed');
+    } catch (error) {
+      setSignError(error instanceof Error ? error.message : 'Failed to submit order');
+      setStep('review');
+    }
   };
 
   if (isLoadingDetail) {
@@ -454,6 +468,11 @@ export default function OrderCreateClient() {
                 {orderName && <p>Order name: {orderName}</p>}
                 {notes && <p>Notes: {notes}</p>}
               </div>
+              {signError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                  {signError}
+                </div>
+              )}
             </>
           )}
 
@@ -476,7 +495,7 @@ export default function OrderCreateClient() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Order ID</p>
-                  <p className="mt-1 font-mono text-sm">{orderId}</p>
+                  <p className="mt-1 font-mono text-sm">{orderId ?? 'Pending'}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Transaction hash</p>
@@ -507,12 +526,21 @@ export default function OrderCreateClient() {
               </div>
 
               <div className="mt-6 flex flex-wrap gap-4">
-                <Link
-                  href={`/orders/${orderId}`}
-                  className="flex-1 rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  View Order
-                </Link>
+                {orderId ? (
+                  <Link
+                    href={`/orders/${orderId}`}
+                    className="flex-1 rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    View Order
+                  </Link>
+                ) : (
+                  <Link
+                    href="/orders"
+                    className="flex-1 rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    View Orders
+                  </Link>
+                )}
                 <Link
                   href="/orders"
                   className="flex-1 rounded-lg border border-border px-4 py-3 text-center text-sm hover:bg-accent"

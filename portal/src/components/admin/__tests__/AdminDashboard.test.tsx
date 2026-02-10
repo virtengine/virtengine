@@ -7,6 +7,7 @@ import { AdminLayout } from '@/layouts/AdminLayout';
 import i18n from '@/i18n';
 
 const replaceMock = vi.fn();
+const fetchAdminMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -19,6 +20,14 @@ vi.mock('next/navigation', () => ({
   }),
   usePathname: () => '/',
   useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('@/lib/portal-adapter', () => ({
+  useWallet: () => ({
+    status: 'connected',
+    accounts: [{ address: 've1admin' }],
+    activeAccountIndex: 0,
+  }),
 }));
 
 const initialState = useAdminStore.getState();
@@ -53,8 +62,9 @@ describe.each(TEST_LOCALES)('AdminDashboardPage (%s)', (locale) => {
 
 describe('AdminLayout access control', () => {
   beforeEach(() => {
-    useAdminStore.setState(initialState, true);
+    useAdminStore.setState({ ...initialState, fetchAdminData: fetchAdminMock }, true);
     replaceMock.mockClear();
+    fetchAdminMock.mockReset();
   });
 
   it('redirects non-admin users', () => {
