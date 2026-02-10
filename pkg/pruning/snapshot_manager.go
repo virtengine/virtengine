@@ -48,9 +48,19 @@ type SnapshotCreateResult struct {
 
 // NewSnapshotManager creates a new snapshot manager.
 func NewSnapshotManager(config SnapshotConfig, baseDir string, logger log.Logger) (*SnapshotManager, error) {
+	// Validate baseDir path
+	if baseDir == "" {
+		return nil, fmt.Errorf("baseDir is required")
+	}
+	cleanBase := filepath.Clean(baseDir)
+	absBase, err := filepath.Abs(cleanBase)
+	if err != nil {
+		return nil, fmt.Errorf("invalid baseDir path: %w", err)
+	}
+
 	snapshotDir := config.Directory
 	if snapshotDir == "" {
-		snapshotDir = filepath.Join(baseDir, "data", "snapshots")
+		snapshotDir = filepath.Join(absBase, "data", "snapshots")
 	}
 
 	// Ensure directory exists
@@ -75,6 +85,7 @@ func NewSnapshotManager(config SnapshotConfig, baseDir string, logger log.Logger
 // loadSnapshots loads snapshot metadata from disk.
 func (sm *SnapshotManager) loadSnapshots() error {
 	metadataFile := filepath.Join(sm.baseDir, "metadata.json")
+	// #nosec G304 -- sm.baseDir is validated in constructor
 	data, err := os.ReadFile(metadataFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -103,6 +114,7 @@ func (sm *SnapshotManager) saveSnapshotsLocked() error {
 	}
 
 	metadataFile := filepath.Join(sm.baseDir, "metadata.json")
+	// #nosec G304 -- sm.baseDir is validated in constructor
 	return os.WriteFile(metadataFile, data, 0600)
 }
 

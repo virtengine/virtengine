@@ -271,3 +271,151 @@ func TestValidateAndClean(t *testing.T) {
 		t.Error("ValidateAndClean should reject traversal")
 	}
 }
+
+func TestSymlinkEscapeAttempt(t *testing.T) {
+	// Create temp directory structure
+	tmpDir := t.TempDir()
+	allowedDir := filepath.Join(tmpDir, "allowed")
+	restrictedDir := filepath.Join(tmpDir, "restricted")
+
+	if err := os.MkdirAll(allowedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(restrictedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	restrictedFile := filepath.Join(restrictedDir, "secret.txt")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
+	if err := os.WriteFile(restrictedFile, []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create symlink pointing outside allowed directory
+	symlinkPath := filepath.Join(allowedDir, "escape")
+	if err := os.Symlink(restrictedFile, symlinkPath); err != nil {
+		t.Skip("symlink creation failed, skipping test")
+	}
+
+	// PathValidator should detect symlink escape
+	v := NewPathValidator(allowedDir)
+	err := v.ValidatePath(symlinkPath)
+	if err == nil {
+		t.Error("ValidatePath should reject symlink escape attempt")
+	}
+}
+
+func TestDoubleEncodedTraversal(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"double URL encoded", "%252e%252e%252f"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCLIPath(tt.path)
+			if err == nil {
+				t.Errorf("ValidateCLIPath should reject %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestWindowsPathTraversal(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{"UNC path", `\\server\share\file`, false},
+		{"windows traversal", `..\\..\\windows\\system32`, true},
+		{"mixed separators", `foo/..\\bar`, true},
+		{"windows drive traversal", `C:\..\boot.ini`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCLIPath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateCLIPath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestTOCTOURaceCondition(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
+	if err := os.WriteFile(testFile, []byte("original"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	v := NewPathValidator(tmpDir)
+
+	// Validate path
+	if err := v.ValidatePath(testFile); err != nil {
+		t.Fatalf("ValidatePath failed: %v", err)
+	}
+
+	// Simulate TOCTOU: replace file with symlink after validation
+	if err := os.Remove(testFile); err != nil {
+		t.Fatal(err)
+	}
+	evilTarget := filepath.Join(tmpDir, "..", "evil.txt")
+	if err := os.Symlink(evilTarget, testFile); err != nil {
+		t.Skip("symlink creation failed, skipping test")
+	}
+
+	// Re-validation should catch the symlink
+	err := v.ValidatePath(testFile)
+	if err == nil {
+		t.Error("ValidatePath should detect symlink replacement")
+	}
+}
+
+func TestPathValidatorRequireAbsolute(t *testing.T) {
+	tmpDir := t.TempDir()
+	v := NewPathValidator(tmpDir, WithRequireAbsolute(true))
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{"absolute path", filepath.Join(tmpDir, "file.txt"), false},
+		{"relative path", "file.txt", true},
+		{"relative with dots", "./file.txt", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.ValidatePath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidatePath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPathValidatorEmptyAllowedDirs(t *testing.T) {
+	// Create validator with no directory restrictions
+	v := &PathValidator{
+		allowedDirs: []string{},
+	}
+
+	// Should validate against traversal but not directory containment
+	err := v.ValidatePath("/tmp/test.txt")
+	if err != nil {
+		t.Errorf("ValidatePath should allow any path when allowedDirs is empty: %v", err)
+	}
+
+	// Still reject traversal sequences
+	err = v.ValidatePath("../../../etc/passwd")
+	if err == nil {
+		t.Error("ValidatePath should still reject traversal sequences")
+	}
+}
