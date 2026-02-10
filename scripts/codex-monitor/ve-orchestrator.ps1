@@ -3517,6 +3517,7 @@ function Sync-TrackedAttempts {
                 no_commits_retries            = 0
                 conflict_rebase_attempted     = $false
                 stale_running_detected_at     = $null
+                plan_continue_sent            = $false
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
 
@@ -3579,6 +3580,42 @@ function Sync-TrackedAttempts {
                         Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
                     }
                     $tracked.review_marked = $true
+
+                    # ── Plan-only completion detection ────────────────────────
+                    # If the agent completed "successfully" but made zero commits
+                    # (e.g. it created a plan and asked "should I implement?"),
+                    # send a same-session follow-up telling it to continue.
+                    if ($summary.latest_process_status -eq "completed" -and -not $tracked.plan_continue_sent) {
+                        $branchForCheck = $tracked.branch
+                        if ($branchForCheck) {
+                            # Fetch remote refs first so Get-CommitsAhead sees remote branch
+                            git fetch origin $branchForCheck --quiet 2>$null
+                            $ahead = Get-CommitsAhead -Branch "origin/$branchForCheck"
+                            if ($ahead -eq 0) {
+                                Write-Log "Attempt $($a.id.Substring(0,8)) completed with 0 commits — plan-only detected, sending continue follow-up (same session)" -Level "ACTION"
+                                $tracked.plan_continue_sent = $true
+                                $planMsg = @"
+You created a plan but did NOT implement it. The session completed with 0 code changes.
+
+DO NOT ask for confirmation — start implementing NOW. Work through each task in the plan systematically:
+1. Write the actual code changes
+2. Write or update tests
+3. Commit each completed task
+4. Push when done
+
+Do NOT create another plan or summary. Write real code.
+"@
+                                $tracked.pending_followup = @{
+                                    message     = $planMsg.Trim()
+                                    reason      = "plan_only_completion"
+                                    new_session = $false
+                                }
+                            }
+                            elseif ($ahead -gt 0) {
+                                Write-Log "Attempt $($a.id.Substring(0,8)) completed with $ahead commit(s) — real work done" -Level "INFO"
+                            }
+                        }
+                    }
 
                     # ── Agent Work Logger: stop session ──
                     if ($script:AgentWorkLoggerEnabled) {
