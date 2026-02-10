@@ -30,7 +30,8 @@ export default function OrderCreateClient() {
   const provider = params.provider as string;
   const sequence = Number(params.sequence);
 
-  const { status, accounts, activeAccountIndex } = useWallet();
+  const wallet = useWallet();
+  const { status, accounts, activeAccountIndex } = wallet;
   const account = accounts[activeAccountIndex];
   const { actions: identityActions } = useIdentity();
   const gatingError = identityActions.checkRequirements('place_order');
@@ -159,7 +160,10 @@ export default function OrderCreateClient() {
     setStep('signing');
     setSignError(null);
     try {
-      const tx = await createOrder(msgPreview, wallet);
+      const tx = await createOrder(
+        msgPreview,
+        wallet as unknown as Parameters<typeof createOrder>[1]
+      );
       setTxHash(tx);
       await fetchOrders(account.address);
       const latest = [...useOrderStore.getState().orders].sort(
