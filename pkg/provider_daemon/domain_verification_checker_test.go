@@ -16,6 +16,12 @@ import (
 	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
+const (
+	testProviderAddr = "virtengine1abcd1234"
+	testDomain       = "example.com"
+	testToken        = "abc123def456"
+)
+
 // mockDNSResolver implements DNSResolver for testing.
 type mockDNSResolver struct {
 	txtRecords   map[string][]string
@@ -144,12 +150,6 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 	}
 }
 
-const (
-	testProviderAddr = "virtengine1abcd1234"
-	testDomain       = "example.com"
-	testToken        = "abc123def456"
-)
-
 func TestVerifyDNSTXT(t *testing.T) {
 	providerAddr := testProviderAddr
 	domain := testDomain
@@ -270,7 +270,7 @@ func TestVerifyCNAME(t *testing.T) {
 		{
 			name: "wrong cname target",
 			cnameRecords: map[string]string{
-				verificationName: "wrong-target.example.com",
+				verificationName: fmt.Sprintf("wrong-target.%s", testDomain),
 			},
 			expectError: true,
 			errorMsg:    "does not match expected",
@@ -381,7 +381,8 @@ func TestVerifyHTTPWellKnown(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, keeper.HTTPWellKnownPath, r.URL.Path)
 				w.WriteHeader(tt.statusCode)
-				_, _ = w.Write([]byte(tt.responseBody))
+				_, writeErr := w.Write([]byte(tt.responseBody))
+				require.NoError(t, writeErr)
 			}))
 			defer server.Close()
 
@@ -544,7 +545,7 @@ func TestVerificationTimeout(t *testing.T) {
 	// Create slow DNS resolver that will exceed timeout
 	cfg.DNSResolver = &mockDNSResolver{
 		txtRecords: map[string][]string{
-			"_virtengine-verification.example.com": {"test-token"},
+			fmt.Sprintf("%s.%s", keeper.DNSVerificationPrefix, testDomain): {"test-token"},
 		},
 		err: context.DeadlineExceeded,
 	}
@@ -606,7 +607,8 @@ func TestHTTPWellKnownJSONFormats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(tt.responseBody))
+				_, writeErr := w.Write([]byte(tt.responseBody))
+				require.NoError(t, writeErr)
 			}))
 			defer server.Close()
 
