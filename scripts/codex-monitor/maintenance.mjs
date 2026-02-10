@@ -253,6 +253,204 @@ export function cleanupWorktrees(repoRoot) {
   return pruned;
 }
 
+// ── Stale Branch Cleanup ────────────────────────────────────────────────
+
+/**
+ * Clean up old local branches created by codex/vibe-kanban automation.
+ *
+ * Targets branches matching `ve/*` and `copilot-worktree-*` patterns.
+ *
+ * Safety checks before deleting a branch:
+ *  1. Not the currently checked-out branch
+ *  2. Not checked out in any active worktree
+ *  3. Has a corresponding remote branch (was pushed) OR has been merged
+ *  4. Local and remote refs match (no unpushed local commits)
+ *  5. Last commit is older than `minAgeMs` (default 24 hours)
+ *
+ * @param {string} repoRoot - repository root path
+ * @param {object} [opts]
+ * @param {number}  [opts.minAgeMs=86400000] - minimum age in ms (default 24h)
+ * @param {boolean} [opts.dryRun=false] - if true, log but don't delete
+ * @param {string[]} [opts.protectedBranches] - branches to never delete (default: ["main","mainnet/main"])
+ * @param {string[]} [opts.patterns] - branch glob prefixes to target (default: ["ve/","copilot-worktree-"])
+ * @returns {{ deleted: string[], skipped: { branch: string, reason: string }[], errors: string[] }}
+ */
+export function cleanupStaleBranches(repoRoot, opts = {}) {
+  const {
+    minAgeMs = 24 * 60 * 60 * 1000,
+    dryRun = false,
+    protectedBranches = ["main", "mainnet/main"],
+    patterns = ["ve/", "copilot-worktree-"],
+  } = opts;
+
+  const result = { deleted: [], skipped: [], errors: [] };
+  if (!repoRoot) return result;
+
+  // 1. Get currently checked-out branch
+  let currentBranch = null;
+  try {
+    const r = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true,
+    });
+    if (r.status === 0) currentBranch = r.stdout.trim();
+  } catch {
+    /* best effort */
+  }
+
+  // 2. Get branches checked out in worktrees (cannot delete these)
+  const worktreeBranches = new Set();
+  try {
+    const r = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 10000,
+      windowsHide: true,
+    });
+    if (r.status === 0 && r.stdout) {
+      for (const entry of r.stdout.split(/\n\n/).filter(Boolean)) {
+        const branchMatch = entry.match(/^branch\s+refs\/heads\/(.+)/m);
+        if (branchMatch) worktreeBranches.add(branchMatch[1]);
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+
+  // 3. List all local branches
+  let localBranches;
+  try {
+    const r = spawnSync(
+      "git",
+      ["for-each-ref", "--format=%(refname:short)", "refs/heads/"],
+      { cwd: repoRoot, encoding: "utf8", timeout: 10000, windowsHide: true },
+    );
+    if (r.status !== 0 || !r.stdout) return result;
+    localBranches = r.stdout.trim().split("\n").filter(Boolean);
+  } catch (e) {
+    result.errors.push(`Failed to list branches: ${e.message}`);
+    return result;
+  }
+
+  // 4. Filter to target patterns only
+  const targetBranches = localBranches.filter((b) =>
+    patterns.some((p) => b.startsWith(p)),
+  );
+
+  if (targetBranches.length === 0) return result;
+
+  const cutoff = Date.now() - minAgeMs;
+
+  for (const branch of targetBranches) {
+    // Skip protected branches
+    if (protectedBranches.includes(branch)) {
+      result.skipped.push({ branch, reason: "protected" });
+      continue;
+    }
+
+    // Skip currently checked-out branch
+    if (branch === currentBranch) {
+      result.skipped.push({ branch, reason: "checked-out" });
+      continue;
+    }
+
+    // Skip branches checked out in worktrees
+    if (worktreeBranches.has(branch)) {
+      result.skipped.push({ branch, reason: "active-worktree" });
+      continue;
+    }
+
+    // Check last commit date
+    try {
+      const dateResult = spawnSync(
+        "git",
+        ["log", "-1", "--format=%ct", branch],
+        { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+      );
+      if (dateResult.status !== 0 || !dateResult.stdout.trim()) {
+        result.skipped.push({ branch, reason: "no-commit-date" });
+        continue;
+      }
+      const commitEpoch = parseInt(dateResult.stdout.trim(), 10) * 1000;
+      if (commitEpoch > cutoff) {
+        result.skipped.push({ branch, reason: "too-recent" });
+        continue;
+      }
+    } catch {
+      result.skipped.push({ branch, reason: "date-check-failed" });
+      continue;
+    }
+
+    // Check if remote tracking branch exists and is in sync
+    const remoteRef = `origin/${branch}`;
+    const remoteExists = spawnSync(
+      "git",
+      ["rev-parse", "--verify", `refs/remotes/${remoteRef}`],
+      { cwd: repoRoot, timeout: 5000, windowsHide: true },
+    );
+
+    if (remoteExists.status === 0) {
+      // Remote exists — check if local is ahead (unpushed commits)
+      const aheadCheck = spawnSync(
+        "git",
+        ["rev-list", "--count", `${remoteRef}..${branch}`],
+        { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+      );
+      const ahead = parseInt(aheadCheck.stdout?.trim(), 10) || 0;
+      if (ahead > 0) {
+        result.skipped.push({ branch, reason: "unpushed-commits" });
+        continue;
+      }
+    } else {
+      // No remote — check if merged into main (safe to delete if merged)
+      const mergedCheck = spawnSync(
+        "git",
+        ["branch", "--merged", "main", "--list", branch],
+        { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
+      );
+      const isMerged = mergedCheck.stdout?.trim() === branch;
+      if (!isMerged) {
+        result.skipped.push({ branch, reason: "not-pushed-not-merged" });
+        continue;
+      }
+    }
+
+    // All checks passed — delete the branch
+    if (dryRun) {
+      console.log(`[maintenance] would delete stale branch: ${branch}`);
+      result.deleted.push(branch);
+    } else {
+      try {
+        const del = spawnSync("git", ["branch", "-D", branch], {
+          cwd: repoRoot,
+          encoding: "utf8",
+          timeout: 10000,
+          windowsHide: true,
+        });
+        if (del.status === 0) {
+          console.log(`[maintenance] deleted stale branch: ${branch}`);
+          result.deleted.push(branch);
+        } else {
+          const err = (del.stderr || del.stdout || "").trim();
+          result.errors.push(`${branch}: ${err}`);
+        }
+      } catch (e) {
+        result.errors.push(`${branch}: ${e.message}`);
+      }
+    }
+  }
+
+  if (result.deleted.length > 0) {
+    console.log(
+      `[maintenance] branch cleanup: ${result.deleted.length} deleted, ${result.skipped.length} skipped, ${result.errors.length} errors`,
+    );
+  }
+
+  return result;
+}
+
 // ── Monitor Singleton via PID file ──────────────────────────────────────
 
 const PID_FILE_NAME = "codex-monitor.pid";
@@ -365,13 +563,16 @@ export function syncLocalTrackingBranches(repoRoot, branches) {
   // 2. Determine which branch is currently checked out (so we can handle it)
   let currentBranch = null;
   try {
-    const result = spawnSync(
-      "git",
-      ["rev-parse", "--abbrev-ref", "HEAD"],
-      { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
-    );
+    const result = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true,
+    });
     if (result.status === 0) currentBranch = result.stdout.trim();
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 
   for (const branch of toSync) {
     try {
@@ -421,11 +622,12 @@ export function syncLocalTrackingBranches(repoRoot, branches) {
       // If this is the currently checked-out branch, use git pull --ff-only
       if (branch === currentBranch) {
         // Check for uncommitted changes — skip if dirty
-        const statusCheck = spawnSync(
-          "git",
-          ["status", "--porcelain"],
-          { cwd: repoRoot, encoding: "utf8", timeout: 5000, windowsHide: true },
-        );
+        const statusCheck = spawnSync("git", ["status", "--porcelain"], {
+          cwd: repoRoot,
+          encoding: "utf8",
+          timeout: 5000,
+          windowsHide: true,
+        });
         if (statusCheck.stdout?.trim()) {
           console.warn(
             `[maintenance] '${branch}' is checked out with uncommitted changes — skipping pull`,
@@ -433,11 +635,12 @@ export function syncLocalTrackingBranches(repoRoot, branches) {
           continue;
         }
 
-        const pull = spawnSync(
-          "git",
-          ["pull", "--ff-only", "--quiet"],
-          { cwd: repoRoot, encoding: "utf8", timeout: 30_000, windowsHide: true },
-        );
+        const pull = spawnSync("git", ["pull", "--ff-only", "--quiet"], {
+          cwd: repoRoot,
+          encoding: "utf8",
+          timeout: 30_000,
+          windowsHide: true,
+        });
         if (pull.status === 0) {
           console.log(
             `[maintenance] fast-forwarded checked-out '${branch}' (was ${behind} behind)`,
@@ -487,9 +690,20 @@ export function syncLocalTrackingBranches(repoRoot, branches) {
  * @param {number} [opts.gitPushMaxAgeMs] - max age for git push before kill (default 5min)
  * @param {string[]} [opts.syncBranches] - local branches to fast-forward (default: ["main"])
  * @param {function} [opts.archiveCompletedTasks] - optional async function to archive VK tasks
+ * @param {object} [opts.branchCleanup] - branch cleanup options (passed to cleanupStaleBranches)
+ * @param {boolean} [opts.branchCleanup.enabled=true] - enable/disable branch cleanup
+ * @param {number} [opts.branchCleanup.minAgeMs] - minimum branch age before cleanup (default 24h)
+ * @param {boolean} [opts.branchCleanup.dryRun] - if true, log only without deleting
  */
 export async function runMaintenanceSweep(opts = {}) {
-  const { repoRoot, childPid, gitPushMaxAgeMs, syncBranches, archiveCompletedTasks } = opts;
+  const {
+    repoRoot,
+    childPid,
+    gitPushMaxAgeMs,
+    syncBranches,
+    archiveCompletedTasks,
+    branchCleanup,
+  } = opts;
   console.log("[maintenance] starting sweep...");
 
   const staleKilled = killStaleOrchestrators(childPid);
@@ -499,6 +713,21 @@ export async function runMaintenanceSweep(opts = {}) {
     ? syncLocalTrackingBranches(repoRoot, syncBranches)
     : 0;
 
+  // Branch cleanup: delete old ve/* and copilot-worktree-* branches
+  let branchesDeleted = 0;
+  const branchCleanupEnabled = branchCleanup?.enabled !== false;
+  if (repoRoot && branchCleanupEnabled) {
+    try {
+      const branchResult = cleanupStaleBranches(repoRoot, {
+        minAgeMs: branchCleanup?.minAgeMs,
+        dryRun: branchCleanup?.dryRun,
+      });
+      branchesDeleted = branchResult.deleted.length;
+    } catch (err) {
+      console.warn(`[maintenance] branch cleanup failed: ${err.message}`);
+    }
+  }
+
   // Optional: Archive old completed VK tasks (if provided)
   let tasksArchived = 0;
   if (archiveCompletedTasks && typeof archiveCompletedTasks === "function") {
@@ -506,7 +735,9 @@ export async function runMaintenanceSweep(opts = {}) {
       const result = await archiveCompletedTasks();
       tasksArchived = result?.archived || 0;
       if (tasksArchived > 0) {
-        console.log(`[maintenance] archived ${tasksArchived} old completed tasks`);
+        console.log(
+          `[maintenance] archived ${tasksArchived} old completed tasks`,
+        );
       }
     } catch (err) {
       console.warn(`[maintenance] task archiving failed: ${err.message}`);
@@ -514,8 +745,15 @@ export async function runMaintenanceSweep(opts = {}) {
   }
 
   console.log(
-    `[maintenance] sweep complete: ${staleKilled} stale orchestrators, ${pushesReaped} stuck pushes, ${worktreesPruned} worktrees pruned, ${branchesSynced} branches synced`,
+    `[maintenance] sweep complete: ${staleKilled} stale orchestrators, ${pushesReaped} stuck pushes, ${worktreesPruned} worktrees pruned, ${branchesSynced} branches synced, ${branchesDeleted} stale branches deleted`,
   );
 
-  return { staleKilled, pushesReaped, worktreesPruned, branchesSynced, tasksArchived };
+  return {
+    staleKilled,
+    pushesReaped,
+    worktreesPruned,
+    branchesSynced,
+    tasksArchived,
+    branchesDeleted,
+  };
 }
