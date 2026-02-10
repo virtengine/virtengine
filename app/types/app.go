@@ -606,6 +606,7 @@ func (app *App) InitNormalKeepers(
 		cdc,
 		app.keys[settlementtypes.StoreKey],
 		app.Keepers.Cosmos.Bank,
+		app.Keepers.VirtEngine.Escrow,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		app.Keepers.VirtEngine.Encryption,
 	)

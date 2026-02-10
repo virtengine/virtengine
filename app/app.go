@@ -371,6 +371,7 @@ func OrderEndBlockers(_ []string) []string {
 		supporttypes.ModuleName,
 		configtypes.ModuleName,
 		hpctypes.ModuleName,
+		resourcestypes.ModuleName,
 		benchmarktypes.ModuleName,
 		enclavetypes.ModuleName,
 		settlementtypes.ModuleName,

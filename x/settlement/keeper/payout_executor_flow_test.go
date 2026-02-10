@@ -286,7 +286,7 @@ func (s *KeeperTestSuite) TestReconcilePayoutAfterRestart() {
 	require.Equal(t, types.FiatConversionStateOffRampPending, conversion.State)
 	require.Equal(t, types.PayoutStateProcessing, payout.State)
 
-	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, "authority", mockEncryptionKeeper{})
+	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
 	restarted.SetDexSwapExecutor(swapExec)
 	restarted.SetOffRampBridge(bridge)
 
