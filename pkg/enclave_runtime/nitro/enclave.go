@@ -37,6 +37,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // =============================================================================
@@ -244,8 +246,8 @@ func (ne *NitroEnclave) detectHardware() error {
 		return fmt.Errorf("%w: %v", ErrNitroDeviceNotAvailable, err)
 	}
 
-	// Check for nitro-cli
-	cliPath, err := exec.LookPath(NitroCLIBinary)
+	// Resolve and validate nitro-cli path
+	cliPath, err := security.ResolveAndValidateExecutable("nitro", NitroCLIBinary)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNitroCLINotFound, err)
 	}
@@ -325,7 +327,13 @@ func (ne *NitroEnclave) hardwareBuildEnclave(ctx context.Context, dockerImage st
 		"--output-file", cleanPath,
 	}
 
-	//nolint:gosec // G204: inputs validated above
+	// Validate all arguments
+	if err := security.NitroCliArgs(args...); err != nil {
+		return fmt.Errorf("invalid nitro-cli arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
 	cmd := exec.CommandContext(ctx, ne.cliPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -418,7 +426,13 @@ func (ne *NitroEnclave) hardwareRunEnclave(ctx context.Context, eifPath string, 
 		"--memory", fmt.Sprintf("%d", memoryMB),
 	}
 
-	//nolint:gosec // G204: cliPath validated, cleanPath sanitized
+	// Validate all arguments
+	if err := security.NitroCliArgs(args...); err != nil {
+		return nil, fmt.Errorf("invalid nitro-cli arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
 	cmd := exec.CommandContext(ctx, ne.cliPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -504,8 +518,16 @@ func (ne *NitroEnclave) hardwareDescribeEnclave(ctx context.Context, enclaveID s
 	ctx, cancel := context.WithTimeout(ctx, DefaultDescribeTimeout)
 	defer cancel()
 
-	//nolint:gosec // G204: cliPath validated during init
-	cmd := exec.CommandContext(ctx, ne.cliPath, "describe-enclaves")
+	args := []string{"describe-enclaves"}
+
+	// Validate arguments
+	if err := security.NitroCliArgs(args...); err != nil {
+		return nil, fmt.Errorf("invalid nitro-cli arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	cmd := exec.CommandContext(ctx, ne.cliPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -566,7 +588,13 @@ func (ne *NitroEnclave) hardwareTerminateEnclave(ctx context.Context, enclaveID 
 		"--enclave-id", enclaveID,
 	}
 
-	//nolint:gosec // G204: cliPath validated, enclaveID validated
+	// Validate all arguments
+	if err := security.NitroCliArgs(args...); err != nil {
+		return fmt.Errorf("invalid nitro-cli arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
 	cmd := exec.CommandContext(ctx, ne.cliPath, args...)
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -608,8 +636,16 @@ func (ne *NitroEnclave) hardwareListEnclaves(ctx context.Context) ([]*EnclaveInf
 	ctx, cancel := context.WithTimeout(ctx, DefaultDescribeTimeout)
 	defer cancel()
 
-	//nolint:gosec // G204: cliPath validated during init
-	cmd := exec.CommandContext(ctx, ne.cliPath, "describe-enclaves")
+	args := []string{"describe-enclaves"}
+
+	// Validate arguments
+	if err := security.NitroCliArgs(args...); err != nil {
+		return nil, fmt.Errorf("invalid nitro-cli arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	cmd := exec.CommandContext(ctx, ne.cliPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

@@ -33,6 +33,12 @@ func NewHelmCLIClient(config HelmCLIConfig) *HelmCLIClient {
 	if config.Binary == "" {
 		config.Binary = "helm"
 	}
+
+	// Validate helm executable path
+	if validatedPath, err := security.ResolveAndValidateExecutable("kubernetes", config.Binary); err == nil {
+		config.Binary = validatedPath
+	}
+
 	return &HelmCLIClient{config: config}
 }
 
@@ -190,6 +196,12 @@ func NewKubeCLIStatusChecker(config KubeCLIConfig) *KubeCLIStatusChecker {
 	if config.Binary == "" {
 		config.Binary = "kubectl"
 	}
+
+	// Validate kubectl executable path
+	if validatedPath, err := security.ResolveAndValidateExecutable("kubernetes", config.Binary); err == nil {
+		config.Binary = validatedPath
+	}
+
 	return &KubeCLIStatusChecker{config: config}
 }
 
