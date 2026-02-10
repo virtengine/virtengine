@@ -74,6 +74,47 @@ func TestParamsValidate(t *testing.T) {
 			expectErr: true,
 			errMsg:    "duplicate Denom Take Rate",
 		},
+		{
+			name: "zero default rate valid",
+			params: taketype.Params{
+				DefaultTakeRate: 0,
+				DenomTakeRates: taketype.DenomTakeRates{
+					{Denom: "uve", Rate: 0},
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "max valid default rate",
+			params: taketype.Params{
+				DefaultTakeRate: 100,
+				DenomTakeRates: taketype.DenomTakeRates{
+					{Denom: "uve", Rate: 100},
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "empty denom rates",
+			params: taketype.Params{
+				DefaultTakeRate: 20,
+				DenomTakeRates:  taketype.DenomTakeRates{},
+			},
+			expectErr: true,
+			errMsg:    "uve must be present",
+		},
+		{
+			name: "multiple valid denoms",
+			params: taketype.Params{
+				DefaultTakeRate: 20,
+				DenomTakeRates: taketype.DenomTakeRates{
+					{Denom: "uve", Rate: 2},
+					{Denom: "ufoo", Rate: 5},
+					{Denom: "ubar", Rate: 10},
+				},
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, tc := range tests {
