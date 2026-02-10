@@ -14,8 +14,8 @@
  *   - Per-process tracking via ProcessState objects
  *   - Sliding window counters for rate-based detection
  *   - Fingerprinted dedup to avoid alert spam
- *   - Severity levels: CRITICAL (kill), HIGH (warn), MEDIUM (warn), LOW (info)
- *   - KILL action reserved for TOKEN_OVERFLOW only (true unrecoverable state)
+ *   - Severity levels: CRITICAL (kill), HIGH (kill at threshold/warn), MEDIUM (warn), LOW (info)
+ *   - KILL action triggers at kill thresholds for all anomaly types (not just TOKEN_OVERFLOW)
  *   - Active process monitoring only (completed processes archived for analysis)
  *
  * Pattern catalog: See VK_FAILURE_PATTERN_CATALOG.md
@@ -95,6 +95,32 @@ const DEFAULT_THRESHOLDS = {
   processCleanupMs: 30 * 60 * 1000,
 };
 
+// Thought patterns that are legitimate during long-running operations.
+// Agents running test suites, builds, or installations will naturally repeat
+// these status thoughts many times — they're progress indicators, not loops.
+const THOUGHT_SPINNING_EXCLUSIONS = [
+  /^running\s+\w*\s*tests?$/i,           // "Running integration tests", "Running portal tests", "Running unit tests"
+  /^running\s+\w+$/i,                     // "Running prettier", "Running eslint"
+  /^waiting\s+for\s+/i,                   // "Waiting for tests to complete"
+  /^installing\s+/i,                      // "Installing dependencies"
+  /^building\s+/i,                        // "Building the project"
+  /^compiling\s+/i,                       // "Compiling TypeScript"
+  /^testing\s+/i,                         // "Testing the implementation"
+  /^executing\s+/i,                       // "Executing the command"
+  /^checking\s+/i,                        // "Checking test results"
+  /^analyzing\s+/i,                       // "Analyzing test output"
+];
+
+/**
+ * Check if a thought is a legitimate operational status message
+ * that should not count toward thought spinning detection.
+ * @param {string} normalized - Lowercase, trimmed thought text
+ * @returns {boolean}
+ */
+function isOperationalThought(normalized) {
+  return THOUGHT_SPINNING_EXCLUSIONS.some((re) => re.test(normalized));
+}
+
 // ── Per-process state ───────────────────────────────────────────────────────
 
 /**
@@ -105,6 +131,7 @@ const DEFAULT_THRESHOLDS = {
  * @property {number} firstLineAt
  * @property {number} lastLineAt
  * @property {string|null} lastToolTitle - Last ToolCall title seen
+ * @property {number} lastToolCallFingerprint - DJB2 hash of last tool call (minus toolCallId)
  * @property {number} consecutiveSameToolCount - How many times in a row
  * @property {number} rebaseCount - git rebase --continue count
  * @property {number} rebaseAbortCount
@@ -121,6 +148,7 @@ const DEFAULT_THRESHOLDS = {
  * @property {string|null} branch
  * @property {Set<string>} alertsSent - Dedup keys for alerts already sent
  * @property {Map<string, number>} alertTimestamps - Dedup key → last alert time
+ * @property {Map<string, number>} alertEmitCounts - type → total emit count (for escalation)
  */
 
 /**
@@ -137,6 +165,7 @@ function createProcessState(processId) {
     firstLineAt: now,
     lastLineAt: now,
     lastToolTitle: null,
+    lastToolCallFingerprint: 0,
     consecutiveSameToolCount: 0,
     rebaseCount: 0,
     rebaseAbortCount: 0,
@@ -153,6 +182,7 @@ function createProcessState(processId) {
     branch: null,
     alertsSent: new Set(),
     alertTimestamps: new Map(),
+    alertEmitCounts: new Map(),
   };
 }
 
@@ -175,6 +205,43 @@ const RE_REBASE_ABORT = /git rebase --abort/;
 
 // P2: Tool call (Copilot format) — extract title
 const RE_TOOL_CALL_TITLE = /"ToolCall"\s*:\s*\{[^}]*"title"\s*:\s*"([^"]+)"/;
+
+// P2: Strip toolCallId from tool call lines for content fingerprinting
+// toolCallId changes every call, so we strip it to compare actual content
+const RE_TOOL_CALL_ID = /"toolCallId"\s*:\s*"[^"]*"\s*,?\s*/g;
+
+// Tools that are inherently iterative — agents legitimately call these many
+// times on the same file during normal development (edit→test→edit cycles).
+// These get multiplied thresholds to avoid false-positive kill signals.
+const ITERATIVE_TOOL_PREFIXES = [
+  "Editing ",       // replace_string_in_file, multi_replace_string_in_file
+  "Reading ",       // read_file
+  "Searching ",     // grep_search, file_search, semantic_search
+  "Listing ",       // list_dir, list_code_usages
+];
+
+/**
+ * Simple DJB2 string hash for fingerprinting tool call lines.
+ * Not cryptographic — just fast dedup.
+ * @param {string} str
+ * @returns {number}
+ */
+function djb2Hash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
+/**
+ * Check if a tool title represents an inherently iterative operation.
+ * @param {string} title
+ * @returns {boolean}
+ */
+function isIterativeTool(title) {
+  return ITERATIVE_TOOL_PREFIXES.some((p) => title.startsWith(p));
+}
 
 // P2: Tool failure (Copilot format)
 const STR_TOOL_FAILED = '"status":"failed"';
@@ -411,6 +478,8 @@ export class AnomalyDetector {
         consecutiveSameToolCount: state.consecutiveSameToolCount,
         lastToolTitle: state.lastToolTitle,
         idleSec: Math.round((Date.now() - state.lastLineAt) / 1000),
+        alertEmitCounts: Object.fromEntries(state.alertEmitCounts),
+        runtimeMin: Math.round((Date.now() - state.firstLineAt) / 60_000),
       });
     }
 
@@ -458,6 +527,18 @@ export class AnomalyDetector {
       if (proc.idleSec >= this.#thresholds.idleStallWarnSec) {
         concerns.push(`idle ${proc.idleSec}s`);
       }
+      // Show circuit-breaker escalation status
+      const escalated = Object.entries(proc.alertEmitCounts || {}).filter(
+        ([, c]) => c >= 3,
+      );
+      if (escalated.length > 0) {
+        concerns.push(
+          `escalated: ${escalated.map(([t, c]) => `${t}(${c}x)`).join(", ")}`,
+        );
+      }
+      if (proc.runtimeMin >= 60) {
+        concerns.push(`runtime ${proc.runtimeMin}min`);
+      }
       if (concerns.length > 0) {
         lines.push(
           `\n⚠️ <b>${escapeHtml(proc.shortId)}</b> (${escapeHtml(proc.taskTitle || "?")}):`,
@@ -504,8 +585,9 @@ export class AnomalyDetector {
 
   /**
    * P0: Model not supported — subagent dies, parent wastes ~90s retrying.
-   * This is an external issue (Azure/model config), so we warn aggressively
-   * but don't kill — killing won't fix an external config problem.
+   * While this is an external issue (Azure/model config), after enough failures
+   * the agent is wasting compute spinning in retry loops. Kill it so the slot
+   * is freed for a fresh attempt that might succeed after config fixes.
    */
   #detectModelNotSupported(line, state) {
     if (!line.includes(STR_MODEL_NOT_SUPPORTED)) return;
@@ -521,7 +603,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Model not supported — ${state.modelFailureCount} failures, each wasting ~90s in retries`,
         data: { failureCount: state.modelFailureCount },
-        action: "warn",
+        action: "kill",
       });
     } else {
       this.#emit({
@@ -559,6 +641,15 @@ export class AnomalyDetector {
 
   /**
    * P2: Consecutive identical tool calls — agent stuck in a loop.
+   *
+   * KEY: We fingerprint the ENTIRE tool call content (minus the ever-changing
+   * toolCallId) so that different edits to the same file are NOT counted as
+   * a loop. Only truly identical calls (same title, same arguments, same
+   * content) increment the counter.
+   *
+   * Additionally, known-iterative tools (Editing, Reading, Searching) get
+   * multiplied thresholds since agents legitimately call them many times
+   * during normal edit→test→edit development cycles.
    */
   #detectToolCallLoop(line, state) {
     const match = RE_TOOL_CALL_TITLE.exec(line);
@@ -569,35 +660,51 @@ export class AnomalyDetector {
 
     const title = match[1];
 
-    if (title === state.lastToolTitle) {
+    // Fingerprint the full tool call content, stripping the toolCallId which
+    // changes every invocation. Two calls are "identical" only when both the
+    // tool name AND the arguments/content are the same.
+    const stripped = line.replace(RE_TOOL_CALL_ID, "");
+    const fingerprint = djb2Hash(stripped);
+
+    if (fingerprint === state.lastToolCallFingerprint && title === state.lastToolTitle) {
       state.consecutiveSameToolCount++;
     } else {
       state.lastToolTitle = title;
+      state.lastToolCallFingerprint = fingerprint;
       state.consecutiveSameToolCount = 1;
     }
 
     const count = state.consecutiveSameToolCount;
 
-    if (count >= this.#thresholds.toolCallLoopKill) {
+    // Use elevated thresholds for inherently iterative tools (editing, reading)
+    const iterative = isIterativeTool(title);
+    const warnThreshold = iterative
+      ? this.#thresholds.toolCallLoopWarn * 3
+      : this.#thresholds.toolCallLoopWarn;
+    const killThreshold = iterative
+      ? this.#thresholds.toolCallLoopKill * 3
+      : this.#thresholds.toolCallLoopKill;
+
+    if (count >= killThreshold) {
       this.#emit({
         type: AnomalyType.TOOL_CALL_LOOP,
         severity: Severity.HIGH,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Tool call loop detected: "${title}" called ${count}x consecutively`,
-        data: { tool: title, count },
-        action: "warn",
+        message: `Tool call death loop: "${title}" called ${count}x consecutively (identical content)`,
+        data: { tool: title, count, iterative },
+        action: "kill",
       });
-    } else if (count >= this.#thresholds.toolCallLoopWarn) {
+    } else if (count >= warnThreshold) {
       this.#emit({
         type: AnomalyType.TOOL_CALL_LOOP,
         severity: Severity.MEDIUM,
         processId: state.processId,
         shortId: state.shortId,
         taskTitle: state.taskTitle,
-        message: `Tool call loop: "${title}" called ${count}x consecutively`,
-        data: { tool: title, count },
+        message: `Tool call loop: "${title}" called ${count}x consecutively (identical content)`,
+        data: { tool: title, count, iterative },
         action: "warn",
       });
     }
@@ -620,7 +727,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Tool failure cascade: ${state.toolFailureCount} failures in session`,
         data: { count: state.toolFailureCount },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.toolFailureCount >= this.#thresholds.toolFailureWarn) {
       this.#emit({
@@ -661,7 +768,7 @@ export class AnomalyDetector {
           rebaseCount: state.rebaseCount,
           abortCount: state.rebaseAbortCount,
         },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.rebaseCount >= this.#thresholds.rebaseWarn) {
       this.#emit({
@@ -697,7 +804,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Git push loop detected: ${state.gitPushCount} push attempts`,
         data: { count: state.gitPushCount },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.gitPushCount >= this.#thresholds.gitPushWarn) {
       this.#emit({
@@ -730,7 +837,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Excessive subagent spawning: ${state.subagentCount} subagents`,
         data: { count: state.subagentCount },
-        action: "warn",
+        action: "kill",
       });
     } else if (state.subagentCount >= this.#thresholds.subagentWarn) {
       this.#emit({
@@ -797,8 +904,16 @@ export class AnomalyDetector {
 
     // Normalize: lowercase, trim, collapse whitespace
     const normalized = thoughtText.toLowerCase().trim().replace(/\s+/g, " ");
-    // Only track thoughts > 3 chars (skip single tokens like "I" or "the")
-    if (normalized.length <= 3) return;
+    // Skip short fragments — streaming often emits single tokens ("portal",
+    // " trust", "the") that accumulate massive counts but aren't real repeated
+    // thoughts. Require at least 12 chars (~2-3 words) to count as a trackable
+    // thought pattern.
+    if (normalized.length < 12) return;
+
+    // Skip operational status messages — agents running tests, builds, or
+    // installations legitimately repeat status thoughts like "Running integration
+    // tests" many times. These are progress indicators, not loops.
+    if (isOperationalThought(normalized)) return;
 
     const count = (state.thoughtCounts.get(normalized) || 0) + 1;
     state.thoughtCounts.set(normalized, count);
@@ -812,7 +927,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Thought spinning: "${thoughtText}" repeated ${count}x — model may be looping`,
         data: { thought: thoughtText, count },
-        action: "warn",
+        action: "kill",
       });
     } else if (count >= this.#thresholds.thoughtSpinWarn) {
       this.#emit({
@@ -872,7 +987,7 @@ export class AnomalyDetector {
         taskTitle: state.taskTitle,
         message: `Repeated error (${count}x): ${line.slice(0, 150)}`,
         data: { fingerprint, count },
-        action: "warn",
+        action: "kill",
       });
     } else if (count >= this.#thresholds.repeatedErrorWarn) {
       this.#emit({
@@ -920,7 +1035,7 @@ export class AnomalyDetector {
           taskTitle: state.taskTitle,
           message: `Agent may be stalled: no output for ${Math.round(idleMs / 1000)}s`,
           data: { idleSec: Math.round(idleMs / 1000) },
-          action: "warn",
+          action: "kill",
         });
       } else if (idleMs >= this.#thresholds.idleStallWarnSec * 1000) {
         this.#emit({
@@ -962,7 +1077,14 @@ export class AnomalyDetector {
   // ── Emission ──────────────────────────────────────────────────────────────
 
   /**
-   * Emit an anomaly event with dedup protection.
+   * Emit an anomaly event with dedup protection and auto-escalation.
+   *
+   * Circuit breaker: When a warn-level anomaly fires 3+ times for the same
+   * process (each separated by the dedup window), auto-escalate to
+   * action="kill". This prevents agents from wasting hours in loops that
+   * individually don't cross kill thresholds but collectively indicate a
+   * stuck process.
+   *
    * @param {Anomaly} anomaly
    */
   #emit(anomaly) {
@@ -977,6 +1099,25 @@ export class AnomalyDetector {
         return; // Already alerted recently
       }
       state.alertTimestamps.set(dedupKey, now);
+
+      // ── Circuit breaker escalation ─────────────────────────────────
+      // Track how many times this anomaly type has been emitted for this
+      // process. If a warn/info action fires 3+ times, auto-escalate
+      // to kill — the process is stuck and won't recover on its own.
+      const emitKey = anomaly.type;
+      const emitCount = (state.alertEmitCounts.get(emitKey) || 0) + 1;
+      state.alertEmitCounts.set(emitKey, emitCount);
+
+      if (anomaly.action === "warn" || anomaly.action === "info") {
+        if (emitCount >= 3) {
+          console.warn(
+            `[anomaly-detector] circuit breaker: ${anomaly.type} fired ${emitCount}x for ${anomaly.shortId} — escalating to KILL`,
+          );
+          anomaly.action = "kill";
+          anomaly.severity = Severity.HIGH;
+          anomaly.message = `[ESCALATED] ${anomaly.message} (${emitCount} alerts over ${Math.round((now - state.firstLineAt) / 60_000)}min)`;
+        }
+      }
     }
 
     // Increment global counter

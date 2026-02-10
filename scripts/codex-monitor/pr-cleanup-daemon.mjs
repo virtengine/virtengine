@@ -78,7 +78,7 @@ class PRCleanupDaemon {
       console.log(`[pr-cleanup-daemon] Active cleanups: ${this.activeCleanups.size}, Queued: ${this.cleanupQueue.length}`);
     } catch (err) {
       this.stats.errors++;
-      console.error(`[pr-cleanup-daemon] Run failed:`, err.message);
+      console.error(`[pr-cleanup-daemon] Run failed:`, err?.message ?? String(err));
     }
   }
 
@@ -96,8 +96,9 @@ class PRCleanupDaemon {
       const problematicPRs = [];
 
       for (const pr of allPRs) {
-        // Skip excluded labels
-        if (pr.labels.some(l => this.config.excludeLabels.includes(l.name))) {
+        // Skip excluded labels (guard against missing labels or config)
+        const excludeLabels = this.config.excludeLabels || [];
+        if (Array.isArray(pr.labels) && pr.labels.some(l => l?.name && excludeLabels.includes(l.name))) {
           continue;
         }
 
@@ -112,7 +113,7 @@ class PRCleanupDaemon {
         }
 
         // Check for failing CI
-        if (pr.statusCheckRollup?.some(check => check.conclusion === 'FAILURE')) {
+        if (Array.isArray(pr.statusCheckRollup) && pr.statusCheckRollup.some(check => check?.conclusion === 'FAILURE')) {
           problematicPRs.push({
             ...pr,
             issue: 'ci_failure',
@@ -126,12 +127,13 @@ class PRCleanupDaemon {
       return problematicPRs.sort((a, b) => a.priority - b.priority);
     } catch (err) {
       // Handle rate limiting gracefully
-      if (err.message.includes('HTTP 429') || err.message.includes('rate limit')) {
+      const errMsg = typeof err?.message === 'string' ? err.message : String(err);
+      if (errMsg.includes('HTTP 429') || errMsg.includes('rate limit')) {
         console.warn(`[pr-cleanup-daemon] GitHub API rate limited - will retry next cycle`);
         return [];
       }
       
-      console.error(`[pr-cleanup-daemon] Failed to fetch PRs:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to fetch PRs:`, errMsg);
       return [];
     }
   }
@@ -159,7 +161,7 @@ class PRCleanupDaemon {
       }
     } catch (err) {
       this.stats.errors++;
-      console.error(`[pr-cleanup-daemon] Failed to process PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to process PR #${pr.number}:`, err?.message ?? String(err));
     } finally {
       this.activeCleanups.delete(pr.number);
     }
@@ -199,8 +201,8 @@ class PRCleanupDaemon {
       this.stats.conflictsResolved++;
       console.log(`[pr-cleanup-daemon] ✓ Resolved conflicts on PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, err.message);
-      await this.escalate(pr, 'conflict_resolution_failed', { error: err.message });
+      console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, err?.message ?? String(err));
+      await this.escalate(pr, 'conflict_resolution_failed', { error: err?.message ?? String(err) });
       this.stats.escalations++;
     }
   }
@@ -213,9 +215,10 @@ class PRCleanupDaemon {
     console.log(`[pr-cleanup-daemon] Fixing CI on PR #${pr.number}`);
 
     // Get failing checks
-    const failedChecks = pr.statusCheckRollup.filter(c => c.conclusion === 'FAILURE');
+    const checks = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup : [];
+    const failedChecks = checks.filter(c => c?.conclusion === 'FAILURE');
     console.log(`[pr-cleanup-daemon] PR #${pr.number} has ${failedChecks.length} failed checks:`, 
-      failedChecks.map(c => c.name).join(', '));
+      failedChecks.map(c => c?.name).join(', '));
 
     // For now, just re-trigger CI (future: spawn agent to fix specific failures)
     if (this.config.dryRun) {
@@ -232,7 +235,7 @@ class PRCleanupDaemon {
       this.stats.ciRetriggers++;
       console.log(`[pr-cleanup-daemon] ✓ Re-triggered CI on PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err?.message ?? String(err));
     }
   }
 
@@ -241,16 +244,22 @@ class PRCleanupDaemon {
    * @param {object} pr - PR metadata
    */
   async attemptAutoMerge(pr) {
-    // Re-fetch PR status to check latest state
-    const { stdout } = await exec(`gh pr view ${pr.number} --json mergeable,statusCheckRollup`);
-    const latest = JSON.parse(stdout);
+    let latest;
+    try {
+      const { stdout } = await exec(`gh pr view ${pr.number} --json mergeable,statusCheckRollup`);
+      latest = JSON.parse(stdout);
+    } catch (err) {
+      console.error(`[pr-cleanup-daemon] Failed to fetch PR #${pr.number} status for auto-merge:`, err?.message ?? String(err));
+      return;
+    }
 
     if (latest.mergeable !== 'MERGEABLE') {
       console.log(`[pr-cleanup-daemon] PR #${pr.number} not mergeable: ${latest.mergeable}`);
       return;
     }
 
-    const allGreen = latest.statusCheckRollup.every(c => c.conclusion === 'SUCCESS');
+    const latestChecks = Array.isArray(latest.statusCheckRollup) ? latest.statusCheckRollup : [];
+    const allGreen = latestChecks.length > 0 && latestChecks.every(c => c?.conclusion === 'SUCCESS');
     if (!allGreen) {
       console.log(`[pr-cleanup-daemon] PR #${pr.number} has non-green checks, skipping auto-merge`);
       return;
@@ -266,7 +275,7 @@ class PRCleanupDaemon {
       this.stats.autoMerges++;
       console.log(`[pr-cleanup-daemon] ✓ Auto-merged PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to auto-merge PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to auto-merge PR #${pr.number}:`, err?.message ?? String(err));
     }
   }
 
@@ -281,7 +290,7 @@ class PRCleanupDaemon {
       const { stdout } = await exec(`git diff --check || git diff --name-only --diff-filter=U | wc -l`);
       return parseInt(stdout.trim(), 10);
     } catch (err) {
-      console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, err.message);
+      console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, err?.message ?? String(err));
       return 0; // Assume small if can't determine
     }
   }
@@ -292,8 +301,9 @@ class PRCleanupDaemon {
    */
   async spawnCodexAgent(opts) {
     return new Promise((resolve, reject) => {
+      const scriptPath = new URL('./codex-shell.mjs', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
       const args = [
-        'scripts/codex-monitor/codex-shell.mjs',
+        scriptPath,
         'spawn-agent',
         JSON.stringify(opts),
       ];
@@ -334,7 +344,7 @@ class PRCleanupDaemon {
       try {
         await exec(`curl -s -X POST "https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage" -d chat_id="${process.env.TELEGRAM_CHAT_ID}" -d text="${encodeURIComponent(message)}"`);
       } catch (err) {
-        console.error(`[pr-cleanup-daemon] Failed to send Telegram alert:`, err.message);
+        console.error(`[pr-cleanup-daemon] Failed to send Telegram alert:`, err?.message ?? String(err));
       }
     }
   }
