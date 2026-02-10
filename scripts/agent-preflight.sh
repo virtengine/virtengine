@@ -5,6 +5,12 @@ set -euo pipefail
 
 echo "=== Agent Pre-flight Check ==="
 
+# ── Non-interactive git config (prevent editor popups) ──
+git config --local core.editor ":" 2>/dev/null || true
+git config --local merge.autoEdit false 2>/dev/null || true
+export GIT_EDITOR=":"
+export GIT_MERGE_AUTOEDIT="no"
+
 # Detect what changed
 CHANGED_FILES=$(git diff --cached --name-only 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
 

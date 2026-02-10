@@ -57,7 +57,7 @@ param(
     [int]$SetupTimeoutMin = 30,
     [int]$CiWaitMin = 15,
     [int]$MaxRetries = 5,
-    [switch]$UseAutoMerge,
+    [bool]$UseAutoMerge = $true,
     [switch]$UseAdminMerge,
     [switch]$WaitForMutex,
     [switch]$DryRun,

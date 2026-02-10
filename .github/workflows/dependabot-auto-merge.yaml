@@ -52,7 +52,7 @@ jobs:
               if: >
                   steps.toggle.outputs.skip != 'true' &&
                   contains(fromJSON('["version-update:semver-patch", "version-update:semver-minor"]'), steps.metadata.outputs.update-type)
-              run: gh pr merge --auto --squash "$PR_URL"
+              run: gh pr merge --auto --squash --delete-branch "$PR_URL"
               env:
                   PR_URL: ${{ github.event.pull_request.html_url }}
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

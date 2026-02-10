@@ -1021,7 +1021,7 @@ function Merge-PR {
     )
     $args = @(
         "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--merge", "--delete-branch"
+        "--squash", "--delete-branch"
     )
     if ($AutoMerge) { $args += "--auto" }
     if ($Admin) { $args += "--admin" }
@@ -1046,7 +1046,7 @@ function Enable-AutoMerge {
     param([Parameter(Mandatory)][int]$PRNumber)
     $result = Invoke-VKGithub -Args @(
         "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--auto", "--merge", "--delete-branch"
+        "--auto", "--squash", "--delete-branch"
     )
     return ($null -ne $result)
 }

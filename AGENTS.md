@@ -30,7 +30,7 @@ EXECUTE THE TASK IMMEDIATELY.
 
 ### Completing a TASK <IMPORTANT GIT INFO>
 
-Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit, such as gofmt, prettier, golangci-lint) & git merge origin <<upstream branch>> & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks! <<upstream branch>> is the default branch that your branch was created from - MAKE sure that you have MERGED any upstream changes before pushing as otherwise there could be an unaddressed CONFLICT. <<URGENT>>
+Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit, such as gofmt, prettier, golangci-lint) & git merge origin <<upstream branch>> --no-edit & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks! <<upstream branch>> is the default branch that your branch was created from - MAKE sure that you have MERGED any upstream changes before pushing as otherwise there could be an unaddressed CONFLICT. <<URGENT>>
 
 If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you do not need to push changes.
 

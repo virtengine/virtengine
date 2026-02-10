@@ -22,6 +22,7 @@
 
 ## All Changes
 
+- [ ] Git configured for non-interactive mode (`git config --local core.editor :`)
 - [ ] Conventional commit format: `type(scope): description`
 - [ ] No sensitive data in commits (API keys, passwords, tokens)
 - [ ] Copyright headers on new files

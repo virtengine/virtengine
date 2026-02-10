@@ -5,6 +5,12 @@ $ErrorActionPreference = "Continue"
 
 Write-Host "=== Agent Pre-flight Check ===" -ForegroundColor Cyan
 
+# ── Non-interactive git config (prevent editor popups) ──────────────────────
+git config --local core.editor ":" 2>$null
+git config --local merge.autoEdit false 2>$null
+$env:GIT_EDITOR = ":"
+$env:GIT_MERGE_AUTOEDIT = "no"
+
 $changedFiles = git diff --cached --name-only 2>$null
 if (-not $changedFiles) {
     $changedFiles = git diff --name-only HEAD~1 2>$null

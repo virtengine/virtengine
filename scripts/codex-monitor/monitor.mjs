@@ -38,12 +38,12 @@ import {
 import { PRCleanupDaemon } from "./pr-cleanup-daemon.mjs";
 import {
   execPrimaryPrompt,
-  isPrimaryBusy,
   initPrimaryAgent,
   setPrimaryAgent,
   getPrimaryAgentName,
   switchPrimaryAgent,
 } from "./primary-agent.mjs";
+import { execPooledPrompt } from "./agent-pool.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
@@ -122,7 +122,12 @@ import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
-const ANOMALY_SIGNAL_PATH = resolve(__dirname, "..", ".cache", "anomaly-signals.json");
+const ANOMALY_SIGNAL_PATH = resolve(
+  __dirname,
+  "..",
+  ".cache",
+  "anomaly-signals.json",
+);
 
 /**
  * Write an anomaly signal to the shared signal file for the orchestrator to pick up.
@@ -137,7 +142,9 @@ function writeAnomalySignal(anomaly) {
       const raw = readFileSync(ANOMALY_SIGNAL_PATH, "utf8");
       signals = JSON.parse(raw);
       if (!Array.isArray(signals)) signals = [];
-    } catch { /* file doesn't exist yet */ }
+    } catch {
+      /* file doesn't exist yet */
+    }
     signals.push({
       type: anomaly.type,
       severity: anomaly.severity,
@@ -151,7 +158,9 @@ function writeAnomalySignal(anomaly) {
     if (signals.length > 50) signals = signals.slice(-50);
     writeFileSync(ANOMALY_SIGNAL_PATH, JSON.stringify(signals, null, 2));
   } catch (err) {
-    console.warn(`[anomaly-detector] writeAnomalySignal failed: ${err.message}`);
+    console.warn(
+      `[anomaly-detector] writeAnomalySignal failed: ${err.message}`,
+    );
   }
 }
 
@@ -1667,7 +1676,7 @@ function ensureVkLogStream() {
           /* detector error — non-fatal */
         }
       }
-      
+
       // Feed log lines to VK error resolver for auto-resolution
       if (vkErrorResolver) {
         try {
@@ -1722,12 +1731,15 @@ function ensureVkLogStream() {
     vkErrorResolver = new VKErrorResolver(repoRoot, vkEndpointUrl, {
       enabled: true,
       onResolve: (resolution) => {
-        console.log(`[monitor] VK auto-resolution: ${resolution.errorType} - ${resolution.result.success ? '✓ success' : '✗ failed'}`);
-        
+        console.log(
+          `[monitor] VK auto-resolution: ${resolution.errorType} - ${resolution.result.success ? "✓ success" : "✗ failed"}`,
+        );
+
         // Notify via Telegram
-        const emoji = resolution.result.success ? '🤖' : '⚠️';
-        const status = resolution.result.success ? 'resolved' : 'failed';
-        const branch = resolution.context.branch || `PR #${resolution.context.prNumber}`;
+        const emoji = resolution.result.success ? "🤖" : "⚠️";
+        const status = resolution.result.success ? "resolved" : "failed";
+        const branch =
+          resolution.context.branch || `PR #${resolution.context.prNumber}`;
         notify(`${emoji} Auto-${status} ${resolution.errorType} on ${branch}`);
       },
     });
@@ -2683,7 +2695,9 @@ async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
   const backlogCandidates = candidates.filter((t) => {
     if (!t?.status) return true;
     const status = String(t.status).toLowerCase();
-    return status === "todo" || status === "inprogress" || status === "inreview";
+    return (
+      status === "todo" || status === "inprogress" || status === "inreview"
+    );
   });
   const finalCandidates =
     backlogCandidates.length > 0 ? backlogCandidates : candidates;
@@ -3683,20 +3697,37 @@ async function checkMergedPRsAndUpdateTasks() {
                 // Create temporary worktree if none found
                 if (!worktreePath && cc.branch) {
                   try {
-                    const tmpDir = resolve(repoRoot, ".cache", "worktrees", cc.branch.replace(/\//g, "-"));
-                    const mkResult = spawnSync("git", ["worktree", "add", tmpDir, cc.branch], {
-                      cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"],
-                      timeout: 60000, encoding: "utf8",
-                      shell: process.platform === "win32",
-                    });
+                    const tmpDir = resolve(
+                      repoRoot,
+                      ".cache",
+                      "worktrees",
+                      cc.branch.replace(/\//g, "-"),
+                    );
+                    const mkResult = spawnSync(
+                      "git",
+                      ["worktree", "add", tmpDir, cc.branch],
+                      {
+                        cwd: repoRoot,
+                        stdio: ["ignore", "pipe", "pipe"],
+                        timeout: 60000,
+                        encoding: "utf8",
+                        shell: process.platform === "win32",
+                      },
+                    );
                     if (mkResult.status === 0) {
                       worktreePath = tmpDir;
-                      console.log(`[monitor] Created temporary worktree for ${cc.branch} at ${tmpDir}`);
+                      console.log(
+                        `[monitor] Created temporary worktree for ${cc.branch} at ${tmpDir}`,
+                      );
                     } else {
-                      console.warn(`[monitor] Failed to create worktree for ${cc.branch}: ${mkResult.stderr}`);
+                      console.warn(
+                        `[monitor] Failed to create worktree for ${cc.branch}: ${mkResult.stderr}`,
+                      );
                     }
                   } catch (wErr) {
-                    console.warn(`[monitor] Worktree creation error: ${wErr.message}`);
+                    console.warn(
+                      `[monitor] Worktree creation error: ${wErr.message}`,
+                    );
                   }
                 }
 
@@ -3706,7 +3737,10 @@ async function checkMergedPRsAndUpdateTasks() {
                       const result = await resolveConflictsWithSDK({
                         worktreePath,
                         branch: cc.branch,
-                        baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
+                        baseBranch: resolveAttemptTargetBranch(
+                          attemptInfo,
+                          task,
+                        ),
                         prNumber: cc.prNumber,
                         taskTitle: task.title,
                         taskDescription: task.description || "",
@@ -4129,22 +4163,13 @@ async function checkAndMergeDependabotPRs() {
 async function runMergeStrategyAnalysis(ctx) {
   const tag = `merge-strategy(${ctx.shortId})`;
   try {
-    if (isPrimaryBusy()) {
-      console.log(`[${tag}] Codex busy — deferring analysis`);
-      // Retry after 60 seconds if Codex frees up
-      setTimeout(() => {
-        if (!isPrimaryBusy()) void runMergeStrategyAnalysis(ctx);
-      }, 60_000);
-      return;
-    }
-
     const telegramFn =
       telegramToken && telegramChatId
         ? (msg) => void sendTelegramMessage(msg)
         : null;
 
     const decision = await analyzeMergeStrategy(ctx, {
-      execCodex: execPrimaryPrompt,
+      execCodex: execPooledPrompt,
       timeoutMs:
         parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
       logDir,
@@ -4167,8 +4192,8 @@ async function runMergeStrategyAnalysis(ctx) {
         console.log(
           `[${tag}] → prompt agent: ${(decision.message || "").slice(0, 100)}`,
         );
-        if (codexEnabled && !isPrimaryBusy() && decision.message) {
-          void execPrimaryPrompt(
+        if (codexEnabled && decision.message) {
+          void execPooledPrompt(
             `The merge strategy reviewer has feedback on your work for task "${ctx.taskTitle || ctx.shortId}":\n\n` +
               decision.message +
               `\n\nPlease address this feedback, commit, and push.`,
@@ -4355,11 +4380,7 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
           );
 
           // ── Run task assessment on rebase failure ──────────────
-          if (
-            branchRouting?.assessWithSdk &&
-            codexEnabled &&
-            !isPrimaryBusy()
-          ) {
+          if (branchRouting?.assessWithSdk && codexEnabled) {
             void runTaskAssessment({
               taskId: task.id,
               taskTitle: task.title,
@@ -4432,10 +4453,8 @@ async function runTaskAssessment(ctx) {
     }
 
     // ── Full SDK assessment ───────────────────────────────
-    if (!codexEnabled || isPrimaryBusy()) {
-      console.log(
-        `[${tag}] skipping SDK assessment — agent ${isPrimaryBusy() ? "busy" : "disabled"}`,
-      );
+    if (!codexEnabled) {
+      console.log(`[${tag}] skipping SDK assessment — agent disabled`);
       return;
     }
 
@@ -4445,7 +4464,7 @@ async function runTaskAssessment(ctx) {
         : null;
 
     const decision = await assessTask(ctx, {
-      execCodex: execPrimaryPrompt,
+      execCodex: execPooledPrompt,
       timeoutMs: 5 * 60 * 1000,
       logDir,
       onTelegram: telegramFn,
@@ -4479,8 +4498,8 @@ async function actOnAssessment(ctx, decision) {
 
     case "reprompt_same":
       console.log(`[${tag}] → reprompt same session`);
-      if (decision.prompt && codexEnabled && !isPrimaryBusy()) {
-        void execPrimaryPrompt(decision.prompt, { timeoutMs: 15 * 60 * 1000 });
+      if (decision.prompt && codexEnabled) {
+        void execPooledPrompt(decision.prompt, { timeoutMs: 15 * 60 * 1000 });
       }
       break;
 
@@ -4946,7 +4965,11 @@ async function smartPRFlow(attemptId, shortId, status) {
     }
 
     // No commits and no changes → archive stale attempt (unless called for conflict resolution)
-    if (commits_ahead === 0 && !has_uncommitted_changes && status !== "conflict") {
+    if (
+      commits_ahead === 0 &&
+      !has_uncommitted_changes &&
+      status !== "conflict"
+    ) {
       console.warn(
         `[monitor] ${tag}: no commits ahead, no changes — archiving stale attempt`,
       );
@@ -4965,8 +4988,8 @@ async function smartPRFlow(attemptId, shortId, status) {
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
       // Ask the agent to commit via primary agent
-      if (primaryAgentReady && !isPrimaryBusy()) {
-        void execPrimaryPrompt(
+      if (primaryAgentReady) {
+        void execPooledPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
             `1. Stage all changes: git add -A\n` +
@@ -5139,8 +5162,8 @@ Return a short summary of what you did and any files that needed manual resoluti
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (primaryAgentReady && !isPrimaryBusy()) {
-            void execPrimaryPrompt(
+          if (primaryAgentReady) {
+            void execPooledPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
               { timeoutMs: 15 * 60 * 1000 },
@@ -5222,7 +5245,7 @@ Return a short summary of what you did and any files that needed manual resoluti
       }
 
       // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
-      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
+      if (codexAnalyzeMergeStrategy) {
         void runMergeStrategyAnalysis({
           attemptId,
           shortId,
@@ -5269,8 +5292,8 @@ Return a short summary of what you did and any files that needed manual resoluti
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (primaryAgentReady && !isPrimaryBusy()) {
-        void execPrimaryPrompt(
+      if (primaryAgentReady) {
+        void execPooledPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -5292,8 +5315,8 @@ Return a short summary of what you did and any files that needed manual resoluti
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (primaryAgentReady && !isPrimaryBusy()) {
-        void execPrimaryPrompt(
+      if (primaryAgentReady) {
+        void execPooledPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -7760,16 +7783,8 @@ function attemptSelfRestartAfterQuiet() {
     return;
   }
   const filename = selfRestartLastFile || "unknown";
-  if (isPrimaryBusy()) {
-    if (!pendingSelfRestart) {
-      console.log(
-        `\n[monitor] source files stable but primary agent busy — deferring restart (${filename})`,
-      );
-    }
-    pendingSelfRestart = filename;
-    setTimeout(retryDeferredSelfRestart, 5000);
-    return;
-  }
+  // Self-restart no longer blocked by primary agent — ephemeral pool
+  // threads run independently and don't need to be drained.
   selfRestartForSourceChange(filename);
 }
 
