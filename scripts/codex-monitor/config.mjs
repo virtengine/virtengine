@@ -1010,6 +1010,13 @@ export function loadConfig(argv = process.argv, options = {}) {
           ? process.env.COPILOT_SDK_DISABLED !== "1"
           : process.env.CLAUDE_SDK_DISABLED !== "1";
 
+  // agentPoolEnabled: true when ANY agent SDK is available for pooled operations
+  // This decouples pooled prompt execution from specific SDK selection
+  const agentPoolEnabled =
+    process.env.CODEX_SDK_DISABLED !== "1" ||
+    process.env.COPILOT_SDK_DISABLED !== "1" ||
+    process.env.CLAUDE_SDK_DISABLED !== "1";
+
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
   const vkRecoveryHost =
@@ -1279,6 +1286,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     preflightEnabled,
     preflightRetryMs,
     codexEnabled,
+    agentPoolEnabled,
     primaryAgent,
     primaryAgentEnabled,
 

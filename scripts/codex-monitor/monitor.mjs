@@ -244,6 +244,7 @@ let {
   preflightRetryMs: configPreflightRetryMs,
   primaryAgent,
   primaryAgentEnabled,
+  agentPoolEnabled,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -418,13 +419,13 @@ if (primaryAgentReady) {
 // Merge strategy: Codex-powered merge decision analysis
 // Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
 const codexAnalyzeMergeStrategy =
-  codexEnabled &&
+  agentPoolEnabled &&
   (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false";
 const mergeStrategyMode = String(
   process.env.MERGE_STRATEGY_MODE || "smart",
 ).toLowerCase();
 const codexResolveConflictsEnabled =
-  codexEnabled &&
+  agentPoolEnabled &&
   (process.env.CODEX_RESOLVE_CONFLICTS || "true").toLowerCase() !== "false";
 const conflictResolutionTimeoutMs = Number(
   process.env.MERGE_CONFLICT_RESOLUTION_TIMEOUT_MS || "600000",
@@ -4192,7 +4193,7 @@ async function runMergeStrategyAnalysis(ctx) {
         console.log(
           `[${tag}] → prompt agent: ${(decision.message || "").slice(0, 100)}`,
         );
-        if (codexEnabled && decision.message) {
+        if (agentPoolEnabled && decision.message) {
           void execPooledPrompt(
             `The merge strategy reviewer has feedback on your work for task "${ctx.taskTitle || ctx.shortId}":\n\n` +
               decision.message +
@@ -4380,7 +4381,7 @@ async function rebaseDownstreamTasks(mergedUpstreamBranch, excludeAttemptId) {
           );
 
           // ── Run task assessment on rebase failure ──────────────
-          if (branchRouting?.assessWithSdk && codexEnabled) {
+          if (branchRouting?.assessWithSdk && agentPoolEnabled) {
             void runTaskAssessment({
               taskId: task.id,
               taskTitle: task.title,
@@ -4453,7 +4454,7 @@ async function runTaskAssessment(ctx) {
     }
 
     // ── Full SDK assessment ───────────────────────────────
-    if (!codexEnabled) {
+    if (!agentPoolEnabled) {
       console.log(`[${tag}] skipping SDK assessment — agent disabled`);
       return;
     }
@@ -4498,7 +4499,7 @@ async function actOnAssessment(ctx, decision) {
 
     case "reprompt_same":
       console.log(`[${tag}] → reprompt same session`);
-      if (decision.prompt && codexEnabled) {
+      if (decision.prompt && agentPoolEnabled) {
         void execPooledPrompt(decision.prompt, { timeoutMs: 15 * 60 * 1000 });
       }
       break;

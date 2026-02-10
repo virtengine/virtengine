@@ -25,7 +25,14 @@ import {
   initPrimaryAgent,
   steerPrimaryPrompt,
   getPrimaryAgentName,
+  switchPrimaryAgent,
 } from "./primary-agent.mjs";
+import {
+  getPoolSdkName,
+  setPoolSdk,
+  resetPoolSdkCache,
+  getAvailableSdks,
+} from "./agent-pool.mjs";
 import { loadExecutorConfig } from "./config.mjs";
 import {
   loadWorkspaceRegistry,
@@ -1094,6 +1101,10 @@ const COMMANDS = {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
   },
+  "/sdk": {
+    handler: cmdSdk,
+    desc: "View/switch agent pool SDK: /sdk [codex|copilot|claude]",
+  },
   "/shared_workspaces": {
     handler: cmdSharedWorkspaces,
     desc: "List shared cloud workspace availability",
@@ -1215,7 +1226,7 @@ async function registerBotCommands() {
   }
 }
 
-const FAST_COMMANDS = new Set(["/status", "/tasks"]);
+const FAST_COMMANDS = new Set(["/status", "/tasks", "/sdk"]);
 
 async function handleCommand(text, chatId) {
   const parts = text.split(/\s+/);
@@ -2369,6 +2380,69 @@ async function cmdModel(chatId, modelArg) {
     );
   } catch (err) {
     await sendReply(chatId, `❌ Error: ${err.message}`);
+  }
+}
+
+async function cmdSdk(chatId, sdkArg) {
+  if (!sdkArg || sdkArg.trim() === "") {
+    // Show current SDK info
+    const poolSdk = getPoolSdkName();
+    const primaryAgent = getPrimaryAgentName();
+    const available = getAvailableSdks();
+    const lines = [
+      "🔌 Agent SDK Status",
+      "",
+      `Pool SDK: ${poolSdk}`,
+      `Primary Agent: ${primaryAgent}`,
+      `Available: ${available.join(", ") || "(none)"}`,
+      "",
+      "Switch SDK:",
+      "  /sdk copilot    Use Copilot SDK",
+      "  /sdk codex      Use Codex SDK",
+      "  /sdk claude     Use Claude SDK",
+      "  /sdk auto       Reset to config default",
+    ];
+    await sendReply(chatId, lines.join("\n"));
+    return;
+  }
+
+  const target = sdkArg.trim().toLowerCase().replace(/-sdk$/, "");
+
+  if (target === "auto" || target === "reset") {
+    resetPoolSdkCache();
+    await sendReply(
+      chatId,
+      "✅ Agent pool SDK reset to config default.\nCurrent: " +
+        getPoolSdkName(),
+    );
+    return;
+  }
+
+  const validSdks = ["codex", "copilot", "claude"];
+  if (!validSdks.includes(target)) {
+    await sendReply(
+      chatId,
+      `Unknown SDK: ${target}\nValid: ${validSdks.join(", ")}, auto`,
+    );
+    return;
+  }
+
+  try {
+    // Switch pool SDK
+    setPoolSdk(target);
+
+    // Also switch primary agent to match
+    const switchResult = await switchPrimaryAgent(`${target}-sdk`);
+    const primaryStatus = switchResult.ok
+      ? `Primary agent: ${switchResult.name}`
+      : `Primary agent switch failed: ${switchResult.reason}`;
+
+    await sendReply(
+      chatId,
+      `✅ SDK switched to: ${target}\nPool SDK: ${getPoolSdkName()}\n${primaryStatus}`,
+    );
+  } catch (err) {
+    await sendReply(chatId, `❌ Error switching SDK: ${err.message}`);
   }
 }
 
