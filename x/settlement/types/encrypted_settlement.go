@@ -136,6 +136,54 @@ type SettlementPayload struct {
 	AMLCheckID        string `json:"aml_check_id,omitempty"`
 }
 
+// FiatConversionPayload is the decrypted fiat conversion payload structure.
+// This data must be encrypted before being stored on-chain.
+type FiatConversionPayload struct {
+	PaymentMethod     string `json:"payment_method,omitempty"`
+	Destination       string `json:"destination,omitempty"`
+	DestinationRegion string `json:"destination_region,omitempty"`
+	PreferredDEX      string `json:"preferred_dex,omitempty"`
+	PreferredOffRamp  string `json:"preferred_off_ramp,omitempty"`
+}
+
+// Validate validates the fiat conversion payload.
+func (p *FiatConversionPayload) Validate() error {
+	if p == nil {
+		return fmt.Errorf("payload is required")
+	}
+	if p.PaymentMethod == "" {
+		return fmt.Errorf("payment method is required")
+	}
+	if p.Destination == "" {
+		return fmt.Errorf("destination is required")
+	}
+	return nil
+}
+
+// FiatPayoutPreferencePayload is the decrypted payout preference payload.
+// This data must be encrypted before being stored on-chain.
+type FiatPayoutPreferencePayload struct {
+	PaymentMethod     string `json:"payment_method,omitempty"`
+	Destination       string `json:"destination,omitempty"`
+	DestinationRegion string `json:"destination_region,omitempty"`
+	PreferredDEX      string `json:"preferred_dex,omitempty"`
+	PreferredOffRamp  string `json:"preferred_off_ramp,omitempty"`
+}
+
+// Validate validates the payout preference payload.
+func (p *FiatPayoutPreferencePayload) Validate() error {
+	if p == nil {
+		return fmt.Errorf("payload is required")
+	}
+	if p.PaymentMethod == "" {
+		return fmt.Errorf("payment method is required")
+	}
+	if p.Destination == "" {
+		return fmt.Errorf("destination is required")
+	}
+	return nil
+}
+
 // BankAccountInfo holds sensitive bank account details
 type BankAccountInfo struct {
 	AccountNumber string `json:"account_number"`

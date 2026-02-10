@@ -363,7 +363,10 @@ export async function execCodexPrompt(userMessage, options = {}) {
       // Build the user prompt with optional status context
       let prompt = userMessage;
       if (statusData) {
-        const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
+        const statusSnippet = JSON.stringify(statusData, null, 2).slice(
+          0,
+          2000,
+        );
         prompt = `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
       } else {
         prompt = `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
@@ -449,7 +452,11 @@ export async function execCodexPrompt(userMessage, options = {}) {
         throw err;
       }
     }
-    return { finalResponse: "❌ Agent failed after retry.", items: [], usage: null };
+    return {
+      finalResponse: "❌ Agent failed after retry.",
+      items: [],
+      usage: null,
+    };
   } finally {
     activeTurn = false;
   }
@@ -470,20 +477,14 @@ export async function steerCodexPrompt(message) {
     }
     const thread = await getThread();
     const steerFn =
-      thread?.steer ||
-      thread?.sendSteer ||
-      thread?.steering ||
-      null;
+      thread?.steer || thread?.sendSteer || thread?.steering || null;
     if (typeof steerFn === "function") {
       await steerFn.call(thread, message);
       return { ok: true, mode: "steer" };
     }
 
     const enqueueFn =
-      thread?.send ||
-      thread?.addMessage ||
-      thread?.enqueue ||
-      null;
+      thread?.send || thread?.addMessage || thread?.enqueue || null;
     if (typeof enqueueFn === "function") {
       await enqueueFn.call(thread, {
         role: "user",

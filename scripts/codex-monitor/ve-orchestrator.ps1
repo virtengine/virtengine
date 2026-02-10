@@ -178,6 +178,9 @@ $script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")
 $script:StopFilePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-stop"
 $script:RebaseCooldownPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-rebase-cooldown.json"
 $script:AgentLogDir = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\agent-logs"
+$script:AnomalySignalPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\anomaly-signals.json"
+$script:CODEX_TAKEOVER_THRESHOLD = 3  # After N failed attempts, switch to Codex SDK CLI
+$script:CodexTakeoverJobs = @{}  # Track Codex CLI takeover jobs
 $script:CompletedTasks = @()
 $script:SubmittedTasks = @()
 $script:FollowUpEvents = @()
@@ -3032,6 +3035,37 @@ function Test-GitRebaseInProgress {
     return ((Test-Path (Join-Path $gitDirStr "rebase-merge")) -or (Test-Path (Join-Path $gitDirStr "rebase-apply")))
 }
 
+function Test-GitWorktreeClean {
+    <#
+    .SYNOPSIS Run git status and verify the working tree is clean.
+    .DESCRIPTION Logs a short git status output and returns $true when clean.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$RepoPath,
+        [string]$Label = $RepoPath
+    )
+
+    $statusShort = git -C $RepoPath status --short --branch 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "git status failed for ${Label}: $statusShort" -Level "WARN"
+        return $false
+    }
+    if ($statusShort) {
+        Write-Log "git status [$Label]: $statusShort" -Level "DEBUG"
+    }
+    else {
+        Write-Log "git status [$Label]: (no output)" -Level "DEBUG"
+    }
+
+    $porcelain = git -C $RepoPath status --porcelain 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "git status --porcelain failed for ${Label}: $porcelain" -Level "WARN"
+        return $false
+    }
+    if ($porcelain) { return $false }
+    return $true
+}
+
 function Invoke-DirectRebase {
     <#
     .SYNOPSIS Smart rebase of a PR branch onto its base branch.
@@ -3066,11 +3100,12 @@ function Invoke-DirectRebase {
             git -C $worktreePath rebase --abort 2>&1 | Out-Null
         }
         # ── Guard 4: Check for dirty working tree ───────────────────────
-        $status = git -C $worktreePath status --porcelain 2>&1
-        if ($status) {
-            Write-Log "Worktree $worktreePath has uncommitted changes — cannot rebase" -Level "WARN"
-            Set-RebaseCooldown -Branch $Branch -CooldownMinutes 15
+        if (-not (Test-GitWorktreeClean -RepoPath $worktreePath -Label $worktreePath)) {
+            Write-Log "Worktree $worktreePath has uncommitted changes — falling back to VK API rebase" -Level "INFO"
+            # Don't block background agents — fall back to VK API rebase instead
+            # This allows background agents to continue working even when user has local changes
             if ($AttemptId) { return Rebase-VKAttempt -AttemptId $AttemptId }
+            # No AttemptId means this was called manually — skip for now
             return $false
         }
         $useWorktree = $true
@@ -3519,6 +3554,7 @@ function Sync-TrackedAttempts {
                 no_commits_retries            = 0
                 conflict_rebase_attempted     = $false
                 stale_running_detected_at     = $null
+                plan_continue_sent            = $false
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
 
@@ -3581,6 +3617,42 @@ function Sync-TrackedAttempts {
                         Update-VKTaskStatus -TaskId $tracked.task_id -Status "inreview" | Out-Null
                     }
                     $tracked.review_marked = $true
+
+                    # ── Plan-only completion detection ────────────────────────
+                    # If the agent completed "successfully" but made zero commits
+                    # (e.g. it created a plan and asked "should I implement?"),
+                    # send a same-session follow-up telling it to continue.
+                    if ($summary.latest_process_status -eq "completed" -and -not $tracked.plan_continue_sent) {
+                        $branchForCheck = $tracked.branch
+                        if ($branchForCheck) {
+                            # Fetch remote refs first so Get-CommitsAhead sees remote branch
+                            git fetch origin $branchForCheck --quiet 2>$null
+                            $ahead = Get-CommitsAhead -Branch "origin/$branchForCheck"
+                            if ($ahead -eq 0) {
+                                Write-Log "Attempt $($a.id.Substring(0,8)) completed with 0 commits — plan-only detected, sending continue follow-up (same session)" -Level "ACTION"
+                                $tracked.plan_continue_sent = $true
+                                $planMsg = @"
+You created a plan but did NOT implement it. The session completed with 0 code changes.
+
+DO NOT ask for confirmation — start implementing NOW. Work through each task in the plan systematically:
+1. Write the actual code changes
+2. Write or update tests
+3. Commit each completed task
+4. Push when done
+
+Do NOT create another plan or summary. Write real code.
+"@
+                                $tracked.pending_followup = @{
+                                    message     = $planMsg.Trim()
+                                    reason      = "plan_only_completion"
+                                    new_session = $false
+                                }
+                            }
+                            elseif ($ahead -gt 0) {
+                                Write-Log "Attempt $($a.id.Substring(0,8)) completed with $ahead commit(s) — real work done" -Level "INFO"
+                            }
+                        }
+                    }
 
                     # ── Agent Work Logger: stop session ──
                     if ($script:AgentWorkLoggerEnabled) {
@@ -3724,8 +3796,28 @@ function Sync-TrackedAttempts {
             continue
         }
 
-        # Do not archive idle attempts; they are already in review
-        Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — awaiting PR" -Level "WARN"
+        # ── Escalate long-idle review attempts ────────────────────────────
+        # After 3x IdleTimeoutMin (180m by default), archive and reset task
+        # so it can be re-attempted instead of sitting forever.
+        $totalIdleMinutes = $idleMinutes
+        $escalationThreshold = $IdleTimeoutMin * 3  # 180m default
+
+        if ($totalIdleMinutes -ge $escalationThreshold) {
+            Write-Log "Attempt $($a.id.Substring(0,8)) idle $([math]::Round($totalIdleMinutes))m (>= ${escalationThreshold}m threshold) — archiving stale review attempt" -Level "ERROR"
+            if (-not $DryRun) {
+                $archived = Try-ArchiveAttempt -AttemptId $a.id -AttemptObject $a
+                if ($archived) {
+                    $tracked.status = "archived"
+                    $tracked.archived_reason = "idle_review_escalation"
+                    Write-Log "Archived stale review attempt $($a.id.Substring(0,8)) — task will be re-attempted" -Level "OK"
+                }
+            }
+        }
+        else {
+            # Not yet at escalation threshold — log warning and let Process-CompletedAttempts handle it
+            $remaining = [math]::Ceiling($escalationThreshold - $totalIdleMinutes)
+            Write-Log "Attempt $($a.id.Substring(0,8)) idle $([math]::Round($totalIdleMinutes))m — awaiting PR (will escalate in ${remaining}m)" -Level "WARN"
+        }
     }
 
     # ── Stale running detection (stateless — crash-restart-safe) ───────────
@@ -3944,6 +4036,170 @@ function Prune-CompletedTaskWorkspaces {
     }
 }
 
+# ── Anomaly Signal Processing (v0.14.7) ──────────────────────────────────────
+function Process-AnomalySignals {
+    <#
+    .SYNOPSIS Read anomaly signals written by the monitor's anomaly detector
+    and translate kill-worthy events into recovery actions for tracked attempts.
+    #>
+    if (-not (Test-Path $script:AnomalySignalPath)) { return }
+
+    try {
+        $raw = Get-Content $script:AnomalySignalPath -Raw -ErrorAction SilentlyContinue
+        if (-not $raw) { return }
+        $signals = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if (-not $signals -or @($signals).Count -eq 0) { return }
+
+        # Clear the file immediately to avoid re-processing
+        Set-Content $script:AnomalySignalPath -Value "[]" -Force
+
+        foreach ($signal in $signals) {
+            $shortId = $signal.shortId
+            if (-not $shortId) { continue }
+
+            # Find matching tracked attempt
+            $matched = $null
+            foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+                if ($entry.Key.StartsWith($shortId) -or ($entry.Value.branch -and $entry.Value.branch -match $shortId)) {
+                    $matched = $entry
+                    break
+                }
+            }
+
+            if (-not $matched) {
+                Write-Log "Anomaly signal for $shortId — no matching tracked attempt" -Level "WARN"
+                continue
+            }
+
+            $attemptId = $matched.Key
+            $info = $matched.Value
+
+            Write-Log "Anomaly signal: $($signal.type) ($($signal.severity)) for $($info.branch) — action=$($signal.action)" -Level "WARN"
+
+            # For kill/restart actions, handle recovery based on attempt status
+            if ($signal.action -in @("kill", "restart")) {
+                if ($info.status -in @("review", "error")) {
+                    $info.status = "error"
+                    $info.error_notified = $true
+                    $msg = "The anomaly detector flagged this task ($($signal.type): $($signal.message)). Starting a fresh session to retry."
+                    $info.force_new_session = $true
+                    $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_recovery"
+                }
+                elseif ($info.status -eq "running") {
+                    # Kill signal on a running process — the anomaly detector
+                    # already decided this process should die (threshold
+                    # exceeded). Act immediately regardless of severity level.
+                    # A HIGH-severity kill is just as actionable as CRITICAL —
+                    # the detector differentiates severity for notification
+                    # purposes, but action="kill" means KILL.
+                    $sevLabel = if ($signal.severity -eq "CRITICAL") { "CRITICAL" } else { "SEVERE" }
+                    Write-Log "$sevLabel anomaly ($($signal.type)) for running attempt $($attemptId.Substring(0,8)) — archiving + retrying (action=$($signal.action))" -Level "WARN"
+                    $info.status = "error"
+                    $info.error_notified = $true
+                    $info.force_new_session = $true
+                    $info.anomaly_killed = $true
+                    $msg = "$sevLabel anomaly: $($signal.type) — $($signal.message). Archiving and retrying with a fresh session."
+                    $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "anomaly_kill"
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "Process-AnomalySignals error: $($_.Exception.Message)" -Level "WARN"
+    }
+}
+
+# ── Codex SDK Takeover (v0.14.6) ─────────────────────────────────────────────
+function Process-CodexTakeoverJobs {
+    <#
+    .SYNOPSIS After N failed follow-up attempts, take over with Codex SDK CLI directly.
+    Runs `codex exec --sandbox danger-full-access` against the worktree.
+    #>
+    foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+        $attemptId = $entry.Key
+        $info = $entry.Value
+
+        # Only consider failed tasks that have exceeded the takeover threshold
+        if ($info.status -notin @("error", "review", "manual_review")) { continue }
+
+        $taskKey = if ($info.task_id) { $info.task_id } else { $attemptId }
+        $followUpCount = if ($script:TaskFollowUpCounts.ContainsKey($taskKey)) {
+            $script:TaskFollowUpCounts[$taskKey]
+        }
+        else { 0 }
+
+        if ($followUpCount -lt $script:CODEX_TAKEOVER_THRESHOLD) { continue }
+
+        # Check if we already have an active takeover job
+        if ($script:CodexTakeoverJobs.ContainsKey($attemptId)) {
+            $job = $script:CodexTakeoverJobs[$attemptId]
+            if ($job.State -eq "Running") { continue }
+
+            # Job finished — check result
+            $output = Receive-Job $job -ErrorAction SilentlyContinue
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            $script:CodexTakeoverJobs.Remove($attemptId)
+
+            Write-Log "Codex takeover finished for $($info.branch)" -Level "OK"
+            $info.status = "review"
+            $info.codex_takeover_completed = $true
+            continue
+        }
+
+        # Check if Codex CLI is available
+        $codexPath = Get-Command "codex" -ErrorAction SilentlyContinue
+        if (-not $codexPath) {
+            Write-Log "Codex CLI not available — cannot takeover $($info.branch)" -Level "WARN"
+            continue
+        }
+
+        # Get worktree path for this branch
+        $worktreePath = Get-WorktreePathForBranch -Branch $info.branch
+        if (-not $worktreePath -or -not (Test-Path $worktreePath)) {
+            Write-Log "No worktree for $($info.branch) — cannot takeover" -Level "WARN"
+            continue
+        }
+
+        # Get task description for the prompt
+        $taskDesc = ""
+        if ($info.task_description_cached) {
+            $taskDesc = $info.task_description_cached
+        }
+        elseif ($info.name) {
+            $taskDesc = $info.name
+        }
+
+        $takeoverPrompt = @"
+You are taking over a task that failed after $followUpCount attempts.
+Task: $taskDesc
+Branch: $($info.branch)
+
+COMPLETE THIS TASK END-TO-END:
+1. Check what has been done so far (git log, git status, existing code)
+2. Implement all remaining changes
+3. Write or fix tests
+4. Run formatting (gofmt, prettier as needed)
+5. Commit with conventional commit message
+6. Push to origin
+
+Do NOT ask for confirmation. Just do it.
+"@
+
+        Write-Log "Starting Codex CLI takeover for $($info.branch) (attempt $followUpCount/$($script:CODEX_TAKEOVER_THRESHOLD) threshold reached)" -Level "ACTION"
+
+        if (-not $DryRun) {
+            $job = Start-Job -ScriptBlock {
+                param($codexExe, $prompt, $workDir)
+                & $codexExe exec --sandbox "danger-full-access" -C $workDir --skip-git-repo-check $prompt 2>&1
+            } -ArgumentList @($codexPath.Source, $takeoverPrompt, $worktreePath)
+
+            $script:CodexTakeoverJobs[$attemptId] = $job
+            $info.codex_takeover_started = $true
+            $info.codex_takeover_at = Get-Date
+        }
+    }
+}
+
 function Process-CompletedAttempts {
     <#
     .SYNOPSIS Check tracked attempts for PR status and handle merging.
@@ -3954,6 +4210,8 @@ function Process-CompletedAttempts {
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
         $attemptId = $entry.Key
         $info = $entry.Value
+
+      try {
 
         # Skip already-completed or manual review
         if ($info.status -in @("merged", "done", "manual_review")) { continue }
@@ -4096,7 +4354,8 @@ function Process-CompletedAttempts {
                                 continue
                             }
                             # Start fresh session with original task prompt (no "check git status" nonsense)
-                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message "" -Reason "fresh_task_restart" -IncludeTaskContext:$true
+                            $freshMsg = "This task has no commits yet. Please implement the task completely from scratch — read the task description carefully, implement all required changes, write tests, commit with a conventional commit message, and push to origin."
+                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $freshMsg -Reason "fresh_task_restart" -IncludeTaskContext:$true
                             $info.push_notified = $true
                             continue
                         }
@@ -4688,6 +4947,13 @@ $summary
                 Write-Log "CI status unknown for PR #$($pr.number)" -Level "WARN"
             }
         }
+
+      } catch {
+        # Per-attempt error isolation: one attempt failure must not crash the entire loop
+        $branchName = if ($info -and $info.branch) { $info.branch } else { "unknown" }
+        Write-Log "EXCEPTION processing attempt $($attemptId.Substring(0,8)) (branch: $branchName): $($_.Exception.Message)" -Level "ERROR"
+        Write-Log "Stack trace: $($_.ScriptStackTrace)" -Level "ERROR"
+      }
     }
 
     # Clean up completed attempts from tracking
@@ -5012,10 +5278,21 @@ function Invoke-DownstreamRebase {
             if ($worktreePath -and (Test-Path $worktreePath)) {
                 # Rebase within the worktree to avoid "already used by worktree" errors
                 Write-Log "Rebasing within worktree: $worktreePath" -Level "DEBUG"
+                if (-not (Test-GitWorktreeClean -RepoPath $worktreePath -Label $worktreePath)) {
+                    $failed++
+                    Write-Log "Rebase skipped for $shortId — worktree has uncommitted changes" -Level "WARN"
+                    continue
+                }
                 $result = git -C $worktreePath rebase $UpstreamBranch 2>&1
             }
             else {
                 # No worktree exists, use standard rebase
+                $repoPath = (Get-Location).Path
+                if (-not (Test-GitWorktreeClean -RepoPath $repoPath -Label $repoPath)) {
+                    $failed++
+                    Write-Log "Rebase skipped for $shortId — repo has uncommitted changes" -Level "WARN"
+                    continue
+                }
                 $result = & git rebase $UpstreamBranch $branch 2>&1
             }
 
@@ -6062,6 +6339,14 @@ function Start-Orchestrator {
 
             # Step 3b: Send queued follow-ups before starting new tasks
             Process-PendingFollowUps
+            if (Test-OrchestratorStop) { break }
+
+            # Step 3c: Codex SDK takeover for tasks exceeding follow-up threshold
+            Process-CodexTakeoverJobs
+            if (Test-OrchestratorStop) { break }
+
+            # Step 3d: Process anomaly signals from the monitor's anomaly detector
+            Process-AnomalySignals
             if (Test-OrchestratorStop) { break }
 
             # Step 4: Fill empty parallel slots with new task submissions

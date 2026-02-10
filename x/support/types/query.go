@@ -34,7 +34,9 @@ type QueryParamsResponse struct {
 
 // QuerySupportRequestRequest is the request for querying a support request
 type QuerySupportRequestRequest struct {
-	TicketID string `json:"ticket_id"`
+	TicketID      string `json:"ticket_id"`
+	ViewerAddress string `json:"viewer_address,omitempty"`
+	ViewerKeyID   string `json:"viewer_key_id,omitempty"`
 }
 
 // QuerySupportRequestResponse is the response for querying a support request
@@ -46,6 +48,8 @@ type QuerySupportRequestResponse struct {
 type QuerySupportRequestsBySubmitterRequest struct {
 	SubmitterAddress string `json:"submitter_address"`
 	Status           string `json:"status,omitempty"`
+	ViewerAddress    string `json:"viewer_address,omitempty"`
+	ViewerKeyID      string `json:"viewer_key_id,omitempty"`
 }
 
 // QuerySupportRequestsBySubmitterResponse is the response for submitter queries
@@ -55,7 +59,9 @@ type QuerySupportRequestsBySubmitterResponse struct {
 
 // QuerySupportResponsesByRequestRequest is the request for responses by ticket
 type QuerySupportResponsesByRequestRequest struct {
-	TicketID string `json:"ticket_id"`
+	TicketID      string `json:"ticket_id"`
+	ViewerAddress string `json:"viewer_address,omitempty"`
+	ViewerKeyID   string `json:"viewer_key_id,omitempty"`
 }
 
 // QuerySupportResponsesByRequestResponse is the response for responses by ticket

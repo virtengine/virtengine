@@ -142,10 +142,11 @@ func (s *KeeperTestSuite) TestFiatConversionPayoutSuccess() {
 		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
 		FiatCurrency:      "USD",
 		PaymentMethod:     "bank_transfer",
-		Destination:       "acct-token",
+		DestinationHash:   types.HashDestination("acct-token"),
 		SlippageTolerance: 0.01,
 		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
 		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
 	}
 
 	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
@@ -195,10 +196,11 @@ func (s *KeeperTestSuite) TestFiatConversionPayoutSwapFailure() {
 		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
 		FiatCurrency:      "USD",
 		PaymentMethod:     "bank_transfer",
-		Destination:       "acct-token",
+		DestinationHash:   types.HashDestination("acct-token"),
 		SlippageTolerance: 0.01,
 		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
 		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
 	}
 
 	_, err := s.keeper.RequestFiatConversion(s.ctx, request)

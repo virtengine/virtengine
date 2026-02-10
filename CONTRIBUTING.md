@@ -55,6 +55,76 @@ defer goleak.VerifyNoLeaks(t)
 
 at the very beginning of the test, and it will fail the test if it detects goroutines that were opened but never cleaned up at the end of the test.
 
+#### Secret Scanning
+
+VirtEngine uses [gitleaks](https://github.com/gitleaks/gitleaks) to prevent hardcoded secrets from being committed. The pre-commit hook automatically scans staged changes.
+
+**Setup:**
+
+The pre-commit hook is automatically created when you clone the repository. If you need to set it up manually:
+
+```bash
+# Gitleaks is installed to .cache/bin during make setup-cache
+make setup-cache
+
+# The pre-commit hook is at .git/hooks/pre-commit
+# It runs automatically on git commit
+```
+
+**How it works:**
+
+- **Automatic**: Runs on every `git commit` and scans only staged changes
+- **Fast**: Only checks files you're committing, not the entire history
+- **Configurable**: Rules and allowlists defined in `.gitleaks.toml`
+
+**If gitleaks detects a secret:**
+
+```
+❌ COMMIT BLOCKED: Potential secrets detected
+```
+
+1. **Remove the secret** from the staged file
+2. **Use environment variables** instead: `os.Getenv("API_KEY")`
+3. **For test fixtures**: Add to `.gitleaks.toml` allowlist or use mock values
+
+**False positives:**
+
+If gitleaks flags something that isn't a secret:
+
+- Add `# gitleaks:allow` comment on the line
+- Or update `.gitleaks.toml` allowlist rules
+
+**Bypass (NOT RECOMMENDED):**
+
+```bash
+git commit --no-verify  # Skips pre-commit hook
+```
+
+Only use `--no-verify` if you're absolutely certain there are no secrets and the alert is a false positive.
+
+**Running manually:**
+
+```bash
+# Scan staged changes (same as pre-commit hook)
+.cache/bin/gitleaks protect --staged --verbose
+
+# Scan entire repository history
+.cache/bin/gitleaks detect --verbose
+
+# Scan specific files
+.cache/bin/gitleaks detect --source=path/to/file.go
+```
+
+**Common patterns gitleaks detects:**
+
+- AWS keys, GCP keys, Azure keys
+- API keys and tokens
+- Private keys and certificates
+- Database passwords and connection strings
+- JWT secrets
+- Stripe keys
+- Generic API keys matching pattern: `api_key = "abc123"`
+
 #### Required Checks and Branch Protection
 
 All pull requests must pass the following required checks before merge:

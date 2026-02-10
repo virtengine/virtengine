@@ -88,6 +88,7 @@ type KeeperTestSuite struct {
 	keeper     keeper.Keeper
 	bankKeeper *MockBankKeeper
 	cdc        codec.Codec
+	storeKey   storetypes.StoreKey
 
 	// Test addresses
 	depositor sdk.AccAddress
@@ -102,6 +103,7 @@ func TestKeeperTestSuite(t *testing.T) {
 func (s *KeeperTestSuite) SetupTest() {
 	// Create store key
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	s.storeKey = storeKey
 
 	// Create codec
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -123,7 +125,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	s.bankKeeper = NewMockBankKeeper()
 
 	// Create keeper
-	s.keeper = keeper.NewKeeper(s.cdc, storeKey, s.bankKeeper, "authority")
+	s.keeper = keeper.NewKeeper(s.cdc, storeKey, s.bankKeeper, "authority", mockEncryptionKeeper{})
 
 	// Create test addresses
 	s.depositor = sdk.AccAddress([]byte("depositor___________"))

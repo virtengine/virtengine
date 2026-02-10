@@ -1,6 +1,7 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   readFileSync,
   watch,
   writeFileSync,
@@ -42,7 +43,6 @@ import {
   setPrimaryAgent,
   getPrimaryAgentName,
   switchPrimaryAgent,
-  resetPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -120,6 +120,40 @@ import { VKErrorResolver } from "./vk-error-resolver.mjs";
 import { createAnomalyDetector } from "./anomaly-detector.mjs";
 import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
+const ANOMALY_SIGNAL_PATH = resolve(__dirname, "..", ".cache", "anomaly-signals.json");
+
+/**
+ * Write an anomaly signal to the shared signal file for the orchestrator to pick up.
+ * The orchestrator reads this file in Process-AnomalySignals and acts accordingly.
+ */
+function writeAnomalySignal(anomaly) {
+  try {
+    const dir = resolve(__dirname, "..", ".cache");
+    mkdirSync(dir, { recursive: true });
+    let signals = [];
+    try {
+      const raw = readFileSync(ANOMALY_SIGNAL_PATH, "utf8");
+      signals = JSON.parse(raw);
+      if (!Array.isArray(signals)) signals = [];
+    } catch { /* file doesn't exist yet */ }
+    signals.push({
+      type: anomaly.type,
+      severity: anomaly.severity,
+      action: anomaly.action,
+      shortId: anomaly.shortId,
+      processId: anomaly.processId,
+      message: anomaly.message,
+      timestamp: new Date().toISOString(),
+    });
+    // Cap at 50 signals to prevent unbounded growth
+    if (signals.length > 50) signals = signals.slice(-50);
+    writeFileSync(ANOMALY_SIGNAL_PATH, JSON.stringify(signals, null, 2));
+  } catch (err) {
+    console.warn(`[anomaly-detector] writeAnomalySignal failed: ${err.message}`);
+  }
+}
 
 // ── Configure logging before anything else ──────────────────────────────────
 configureFromArgs(process.argv.slice(2));
@@ -381,7 +415,8 @@ const mergeStrategyMode = String(
   process.env.MERGE_STRATEGY_MODE || "smart",
 ).toLowerCase();
 const codexResolveConflictsEnabled =
-  codexEnabled && mergeStrategyMode.includes("codexsdk");
+  codexEnabled &&
+  (process.env.CODEX_RESOLVE_CONFLICTS || "true").toLowerCase() !== "false";
 const conflictResolutionTimeoutMs = Number(
   process.env.MERGE_CONFLICT_RESOLUTION_TIMEOUT_MS || "600000",
 );
@@ -1377,11 +1412,14 @@ async function startVibeKanbanProcess() {
     `[monitor] starting vibe-kanban via ${useLocal ? "local bin" : "npx"} (HOST=${vkRecoveryHost} PORT=${vkRecoveryPort}, endpoint=${vkEndpointUrl})`,
   );
 
+  // Use shell: true only when running through npx (string command).
+  // When using the local binary directly, avoid shell to prevent DEP0190
+  // deprecation warning ("Passing args to child process with shell true").
   vibeKanbanProcess = spawn(spawnCmd, spawnArgs, {
     env,
     cwd: repoRoot,
     stdio: "ignore",
-    shell: true,
+    shell: !useLocal,
     detached: true,
   });
   vibeKanbanProcess.unref();
@@ -1548,28 +1586,29 @@ function ensureVkLogStream() {
           `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
         );
 
-        // Act on kill/restart actions — kill the specific process, NOT the whole monitor.
-        // Circuit breaker is reserved for actual repeated monitor crashes, not per-process anomalies.
+        // Act on kill/restart actions — write signal file for the orchestrator
+        // AND directly kill the VK process WebSocket to stop further resource
+        // wastage immediately. The signal file ensures the orchestrator also
+        // archives and retries the attempt on its next loop.
         if (anomaly.action === "kill" || anomaly.action === "restart") {
           console.warn(
-            `[anomaly-detector] executing action="${anomaly.action}" for ${anomaly.type} on process ${anomaly.shortId}`,
+            `[anomaly-detector] writing signal for action="${anomaly.action}" ${anomaly.type} on process ${anomaly.shortId}`,
           );
+          writeAnomalySignal(anomaly);
 
-          // 1. Kill the specific VK execution process log stream
+          // Directly kill the VK log stream for this process so the agent
+          // stops consuming compute immediately. Don't wait for the
+          // orchestrator's next poll cycle.
           if (vkLogStream && anomaly.processId) {
-            vkLogStream.killProcess(anomaly.processId, `anomaly-detector: ${anomaly.type}`);
-          }
-
-          // 2. Reset the primary agent session only for truly fatal anomalies
-          //    (token overflow, stream death) — NOT for model-not-supported or push loops
-          //    since those are external/transient issues.
-          if (
-            anomaly.type === "TOKEN_OVERFLOW" ||
-            anomaly.type === "STREAM_DEATH"
-          ) {
-            void resetPrimaryAgent().catch((err) => {
-              console.warn(`[anomaly-detector] resetPrimaryAgent failed: ${err.message}`);
-            });
+            const killed = vkLogStream.killProcess(
+              anomaly.processId,
+              `anomaly: ${anomaly.type} (${anomaly.action})`,
+            );
+            if (killed) {
+              console.warn(
+                `[anomaly-detector] killed VK process stream ${anomaly.shortId} directly`,
+              );
+            }
           }
         }
       },
@@ -2580,6 +2619,86 @@ async function updateTaskStatus(taskId, newStatus) {
   return ok;
 }
 
+function parseTaskTimestamp(value) {
+  if (!value) return null;
+  const raw =
+    value.created_at ||
+    value.createdAt ||
+    value.created ||
+    value.updated_at ||
+    value.updatedAt ||
+    value.updated ||
+    value.started_at ||
+    value.startedAt ||
+    value;
+  if (!raw) return null;
+  const ts = Date.parse(raw);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function isPlannerTaskData(task) {
+  if (!task) return false;
+  const title = String(task.title || "").toLowerCase();
+  const desc = String(task.description || task.body || "").toLowerCase();
+  if (title.includes("plan next tasks") || title.includes("plan next phase")) {
+    return true;
+  }
+  if (title.includes("task planner")) {
+    return true;
+  }
+  return (
+    desc.includes("task planner — auto-created by codex-monitor") ||
+    desc.includes("task planner - auto-created by codex-monitor")
+  );
+}
+
+async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
+  const projectId =
+    taskData?.project_id ||
+    taskData?.projectId ||
+    attemptInfo?.project_id ||
+    attemptInfo?.projectId ||
+    (await findVkProjectId());
+  if (!projectId) {
+    return { completed: false, reason: "project_not_found" };
+  }
+  const tasksRes = await fetchVk(`/api/tasks?project_id=${projectId}`);
+  const tasks = Array.isArray(tasksRes?.data)
+    ? tasksRes.data
+    : Array.isArray(tasksRes?.tasks)
+      ? tasksRes.tasks
+      : Array.isArray(tasksRes)
+        ? tasksRes
+        : [];
+  const sinceMs =
+    parseTaskTimestamp(taskData) ||
+    parseTaskTimestamp(attemptInfo) ||
+    Date.now();
+  const candidates = tasks.filter((t) => {
+    if (!t || t.id === taskData?.id) return false;
+    if (isPlannerTaskData(t)) return false;
+    const createdMs = parseTaskTimestamp(t);
+    return createdMs && createdMs > sinceMs;
+  });
+  const backlogCandidates = candidates.filter((t) => {
+    if (!t?.status) return true;
+    const status = String(t.status).toLowerCase();
+    return status === "todo" || status === "inprogress" || status === "inreview";
+  });
+  const finalCandidates =
+    backlogCandidates.length > 0 ? backlogCandidates : candidates;
+  return {
+    completed: finalCandidates.length > 0,
+    createdCount: finalCandidates.length,
+    projectId,
+    sinceMs,
+    sampleTitles: finalCandidates
+      .slice(0, 3)
+      .map((t) => t.title || t.id)
+      .filter(Boolean),
+  };
+}
+
 /**
  * Safe recovery: re-fetches a task's live status from VK before moving it
  * to "todo".  If the user has since cancelled/done the task, the recovery
@@ -3029,6 +3148,8 @@ const STALE_TASK_AGE_MS = STALE_TASK_AGE_HOURS * 60 * 60 * 1000;
  */
 const conflictResolutionCooldown = new Map();
 const CONFLICT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+const CONFLICT_MAX_ATTEMPTS = 3; // Max resolution attempts per task before giving up
+const conflictResolutionAttempts = new Map(); // task ID → attempt count
 
 const RECOVERY_SKIP_CACHE_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -3517,112 +3638,142 @@ async function checkMergedPRsAndUpdateTasks() {
           Date.now() - lastConflictCheck < CONFLICT_COOLDOWN_MS;
         const onDirtyCooldown = isOnResolutionCooldown(task.id);
         if (!onCooldown && !onDirtyCooldown) {
-          const cc = conflictCandidates[0];
-          let resolveAttemptId = cc.attemptId;
-          if (!resolveAttemptId) {
-            const matchAttempt = allVkAttempts.find(
-              (a) => a.branch === cc.branch || a.pr_number === cc.prNumber,
+          // Check if we've exhausted max resolution attempts for this task
+          const attempts = conflictResolutionAttempts.get(task.id) || 0;
+          if (attempts >= CONFLICT_MAX_ATTEMPTS) {
+            console.warn(
+              `[monitor] ⚠️ Task "${task.title}" PR #${conflictCandidates[0].prNumber} conflict resolution exhausted (${attempts}/${CONFLICT_MAX_ATTEMPTS} attempts) — skipping`,
             );
-            resolveAttemptId = matchAttempt?.id || localAttempt?.id;
-          }
-          if (resolveAttemptId) {
-            const shortId = resolveAttemptId.substring(0, 8);
-            conflictResolutionCooldown.set(task.id, Date.now());
-            recordResolutionAttempt(task.id);
-
-            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
-            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
-
-            if (!sdkOnCooldown && !sdkExhausted) {
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+          } else {
+            conflictResolutionAttempts.set(task.id, attempts + 1);
+            const cc = conflictCandidates[0];
+            let resolveAttemptId = cc.attemptId;
+            if (!resolveAttemptId) {
+              const matchAttempt = allVkAttempts.find(
+                (a) => a.branch === cc.branch || a.pr_number === cc.prNumber,
               );
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — launching SDK resolver (attempt ${shortId})`,
-                );
-              }
+              resolveAttemptId = matchAttempt?.id || localAttempt?.id;
+            }
+            if (resolveAttemptId) {
+              const shortId = resolveAttemptId.substring(0, 8);
+              conflictResolutionCooldown.set(task.id, Date.now());
+              recordResolutionAttempt(task.id);
 
-              let worktreePath = null;
-              const attemptInfo = await getAttemptInfo(resolveAttemptId);
-              worktreePath =
-                attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
-              if (!worktreePath) {
-                worktreePath = findWorktreeForBranch(cc.branch);
-              }
+              const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
+              const sdkExhausted = isSDKResolutionExhausted(cc.branch);
 
-              if (worktreePath) {
-                void (async () => {
-                  try {
-                    const result = await resolveConflictsWithSDK({
-                      worktreePath,
-                      branch: cc.branch,
-                      baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
-                      prNumber: cc.prNumber,
-                      taskTitle: task.title,
-                      taskDescription: task.description || "",
-                      logDir: logDir,
-                    });
-                    if (result.success) {
-                      console.log(
-                        `[monitor] ✅ SDK resolved conflicts for PR #${cc.prNumber} (${result.resolvedFiles.length} files)`,
-                      );
-                      clearDirtyTask(task.id);
-                      clearSDKResolutionState(cc.branch);
-                      if (telegramToken && telegramChatId) {
-                        void sendTelegramMessage(
-                          `✅ SDK resolved merge conflicts for PR #${cc.prNumber} "${task.title}" (${result.resolvedFiles.length} files)`,
-                        );
-                      }
-                    } else {
-                      console.warn(
-                        `[monitor] ❌ SDK conflict resolution failed for PR #${cc.prNumber}: ${result.error}`,
-                      );
-                      if (telegramToken && telegramChatId) {
-                        void sendTelegramMessage(
-                          `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
-                        );
-                      }
-                      conflictsTriggered++;
-                      void smartPRFlow(resolveAttemptId, shortId, "conflict");
-                    }
-                  } catch (err) {
-                    console.warn(
-                      `[monitor] SDK conflict resolution threw: ${err.message}`,
-                    );
-                  }
-                })();
-              } else {
-                console.warn(
-                  `[monitor] No worktree found for ${cc.branch} — deferring to orchestrator`,
+              if (!sdkOnCooldown && !sdkExhausted) {
+                console.log(
+                  `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
                 );
                 if (telegramToken && telegramChatId) {
                   void sendTelegramMessage(
-                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
+                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+                  );
+                }
+
+                let worktreePath = null;
+                const attemptInfo = await getAttemptInfo(resolveAttemptId);
+                worktreePath =
+                  attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+                if (!worktreePath) {
+                  worktreePath = findWorktreeForBranch(cc.branch);
+                }
+
+                // Create temporary worktree if none found
+                if (!worktreePath && cc.branch) {
+                  try {
+                    const tmpDir = resolve(repoRoot, ".cache", "worktrees", cc.branch.replace(/\//g, "-"));
+                    const mkResult = spawnSync("git", ["worktree", "add", tmpDir, cc.branch], {
+                      cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"],
+                      timeout: 60000, encoding: "utf8",
+                      shell: process.platform === "win32",
+                    });
+                    if (mkResult.status === 0) {
+                      worktreePath = tmpDir;
+                      console.log(`[monitor] Created temporary worktree for ${cc.branch} at ${tmpDir}`);
+                    } else {
+                      console.warn(`[monitor] Failed to create worktree for ${cc.branch}: ${mkResult.stderr}`);
+                    }
+                  } catch (wErr) {
+                    console.warn(`[monitor] Worktree creation error: ${wErr.message}`);
+                  }
+                }
+
+                if (worktreePath) {
+                  void (async () => {
+                    try {
+                      const result = await resolveConflictsWithSDK({
+                        worktreePath,
+                        branch: cc.branch,
+                        baseBranch: resolveAttemptTargetBranch(attemptInfo, task),
+                        prNumber: cc.prNumber,
+                        taskTitle: task.title,
+                        taskDescription: task.description || "",
+                        logDir: logDir,
+                      });
+                      if (result.success) {
+                        console.log(
+                          `[monitor] ✅ SDK resolved conflicts for PR #${cc.prNumber} (${result.resolvedFiles.length} files)`,
+                        );
+                        clearDirtyTask(task.id);
+                        clearSDKResolutionState(cc.branch);
+                        conflictResolutionAttempts.delete(task.id); // Reset on success
+                        if (telegramToken && telegramChatId) {
+                          void sendTelegramMessage(
+                            `✅ SDK resolved merge conflicts for PR #${cc.prNumber} "${task.title}" (${result.resolvedFiles.length} files)`,
+                          );
+                        }
+                      } else {
+                        console.warn(
+                          `[monitor] ❌ SDK conflict resolution failed for PR #${cc.prNumber}: ${result.error}`,
+                        );
+                        if (telegramToken && telegramChatId) {
+                          void sendTelegramMessage(
+                            `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
+                          );
+                        }
+                        conflictsTriggered++;
+                        void smartPRFlow(resolveAttemptId, shortId, "conflict");
+                      }
+                    } catch (err) {
+                      console.warn(
+                        `[monitor] SDK conflict resolution threw: ${err.message}`,
+                      );
+                    }
+                  })();
+                } else {
+                  console.warn(
+                    `[monitor] No worktree found for ${cc.branch} — deferring to orchestrator`,
+                  );
+                  if (telegramToken && telegramChatId) {
+                    void sendTelegramMessage(
+                      `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
+                    );
+                  }
+                  conflictsTriggered++;
+                  void smartPRFlow(resolveAttemptId, shortId, "conflict");
+                }
+              } else {
+                const reason = sdkExhausted
+                  ? "SDK attempts exhausted"
+                  : "SDK on cooldown";
+                console.log(
+                  `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — ${reason}, deferring to orchestrator (attempt ${shortId})`,
+                );
+                if (telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
                   );
                 }
                 conflictsTriggered++;
                 void smartPRFlow(resolveAttemptId, shortId, "conflict");
               }
             } else {
-              const reason = sdkExhausted
-                ? "SDK attempts exhausted"
-                : "SDK on cooldown";
-              console.log(
-                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — ${reason}, deferring to orchestrator (attempt ${shortId})`,
+              console.warn(
+                `[monitor] Task "${task.title}" PR #${cc.prNumber} has conflicts but no attempt ID — cannot trigger resolution`,
               );
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
-                );
-              }
-              conflictsTriggered++;
-              void smartPRFlow(resolveAttemptId, shortId, "conflict");
             }
-          } else {
-            console.warn(
-              `[monitor] Task "${task.title}" PR #${cc.prNumber} has conflicts but no attempt ID — cannot trigger resolution`,
-            );
           }
         }
       }
@@ -4685,6 +4836,7 @@ async function smartPRFlow(attemptId, shortId, status) {
     // ── Step 0: Check if task/branch is already merged ───────────
     // Prevents infinite retry loops for tasks that were completed in previous sessions
     const attemptInfo = await getAttemptInfo(attemptId);
+    let taskData = null;
     if (attemptInfo?.branch) {
       if (mergedBranchCache.has(attemptInfo.branch)) {
         console.log(
@@ -4713,10 +4865,9 @@ async function smartPRFlow(attemptId, shortId, status) {
     if (attemptInfo?.task_id) {
       try {
         const taskRes = await fetchVk(`/api/tasks/${attemptInfo.task_id}`);
-        const desc = (
-          taskRes?.data?.description ||
-          taskRes?.data?.body ||
-          ""
+        taskData = taskRes?.data || taskRes || null;
+        const desc = String(
+          taskData?.description || taskData?.body || "",
         ).toLowerCase();
         const completionSignals = [
           "superseded by",
@@ -4734,6 +4885,39 @@ async function smartPRFlow(attemptId, shortId, status) {
           );
           void updateTaskStatus(attemptInfo.task_id, "done");
           await archiveAttempt(attemptId);
+          return;
+        }
+        if (isPlannerTaskData(taskData)) {
+          const verify = await verifyPlannerTaskCompletion(
+            taskData,
+            attemptInfo,
+          );
+          if (verify.completed) {
+            console.log(
+              `[monitor] ${tag}: planner task verified (${verify.createdCount} new task(s)) — marking done`,
+            );
+            void updateTaskStatus(attemptInfo.task_id, "done");
+            await archiveAttempt(attemptId);
+            if (telegramToken && telegramChatId) {
+              const suffix = verify.sampleTitles?.length
+                ? ` Examples: ${verify.sampleTitles.join(", ")}`
+                : "";
+              void sendTelegramMessage(
+                `✅ Task planner verified: ${verify.createdCount} new task(s) detected.${suffix}`,
+              );
+            }
+            return;
+          }
+          console.warn(
+            `[monitor] ${tag}: planner task incomplete — no new backlog tasks detected`,
+          );
+          void updateTaskStatus(attemptInfo.task_id, "todo");
+          await archiveAttempt(attemptId);
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              "⚠️ Task planner incomplete: no new backlog tasks detected. Returned to todo.",
+            );
+          }
           return;
         }
       } catch {
@@ -4761,8 +4945,8 @@ async function smartPRFlow(attemptId, shortId, status) {
       );
     }
 
-    // No commits and no changes → archive stale attempt instead of silently skipping
-    if (commits_ahead === 0 && !has_uncommitted_changes) {
+    // No commits and no changes → archive stale attempt (unless called for conflict resolution)
+    if (commits_ahead === 0 && !has_uncommitted_changes && status !== "conflict") {
       console.warn(
         `[monitor] ${tag}: no commits ahead, no changes — archiving stale attempt`,
       );
@@ -4796,15 +4980,18 @@ async function smartPRFlow(attemptId, shortId, status) {
 
     // ── Resolve target branch (task-level upstream overrides) ───
     const attempt = await getAttemptInfo(attemptId);
-    let taskData = null;
-    if (attempt?.task_id) {
+    if (!taskData && attempt?.task_id) {
       try {
         const taskRes = await fetchVk(`/api/tasks/${attempt.task_id}`);
         if (taskRes?.success && taskRes.data) {
           taskData = taskRes.data;
-          attempt.task_title = attempt.task_title || taskRes.data.title;
+        } else if (taskRes?.data || taskRes) {
+          taskData = taskRes.data || taskRes;
+        }
+        if (taskData) {
+          attempt.task_title = attempt.task_title || taskData.title;
           attempt.task_description =
-            taskRes.data.description || taskRes.data.body || "";
+            taskData.description || taskData.body || "";
         }
       } catch {
         /* best effort */
