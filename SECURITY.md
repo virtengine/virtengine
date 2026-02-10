@@ -145,10 +145,19 @@ All contributors must follow these security guidelines:
 
 ### Cryptographic Guidelines
 
+For detailed cryptographic standards and approved algorithms, see [Cryptography Policy](_docs/security/crypto-policy.md).
+
+**Quick reference:**
 - **Use approved algorithms:** X25519-XSalsa20-Poly1305 for encryption envelopes
+- **Hashing:** SHA-256 or stronger (SHA-384, SHA-512, BLAKE2b)
 - **Never roll your own crypto:** Use established libraries
 - **Proper key management:** Clear sensitive data from memory after use
 - **Signature validation:** Verify all required signatures (client, user, salt binding)
+- **Random generation:** Use `crypto/rand` for security-sensitive operations
+
+**Legacy algorithm handling:**
+- SHA-1: Only for SAML 2.0 protocol compliance (eduGAIN federation) - see crypto policy for details
+- MD5: Prohibited for all security purposes
 
 ### Dependency Management
 

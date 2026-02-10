@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -107,11 +108,9 @@ func NewTwilioGateway(config ProviderConfig, logger zerolog.Logger) (*TwilioGate
 	}
 
 	gateway := &TwilioGateway{
-		config: config,
-		logger: logger.With().Str("provider", "twilio").Logger(),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		config:           config,
+		logger:           logger.With().Str("provider", "twilio").Logger(),
+		httpClient:       security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 		lastRequestReset: time.Now(),
 		rateLimit:        100, // Default 100 req/sec
 		rateLimitBurst:   150,
@@ -495,6 +494,7 @@ func (g *TwilioGateway) ParseWebhook(ctx context.Context, payload []byte, signat
 	// Validate signature if webhook secret is configured
 	if g.config.WebhookSecret != "" {
 		// Twilio uses HMAC-SHA1 for webhook validation
+		//nolint:gosec // G401: HMAC-SHA1 required by Twilio webhook API - third-party service requirement
 		// In production, validate X-Twilio-Signature header
 		if signature == "" {
 			return nil, errors.Wrap(ErrWebhookInvalid, "missing signature")
@@ -608,11 +608,9 @@ func NewVonageGateway(config ProviderConfig, logger zerolog.Logger) (*VonageGate
 	}
 
 	return &VonageGateway{
-		config: config,
-		logger: logger.With().Str("provider", "vonage").Logger(),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		config:           config,
+		logger:           logger.With().Str("provider", "vonage").Logger(),
+		httpClient:       security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 		lastRequestReset: time.Now(),
 		rateLimit:        30, // Default 30 req/sec
 		rateLimitBurst:   50,

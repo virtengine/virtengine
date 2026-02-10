@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/sdk/go/node/client/types"
 	clientv1beta3 "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
@@ -106,7 +107,11 @@ func NewChainCallbackSink(ctx context.Context, cfg ChainCallbackSinkConfig) (*Ch
 	defer cancel()
 
 	//nolint:staticcheck // grpc.DialContext kept for compatibility with existing connection flow.
-	grpcConn, err := grpc.DialContext(dialCtx, cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	grpcConn, err := grpc.DialContext(
+		dialCtx,
+		cfg.GRPCEndpoint,
+		grpc.WithTransportCredentials(credentials.NewTLS(security.SecureTLSConfig())),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("dial grpc: %w", err)
 	}

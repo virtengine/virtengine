@@ -12,9 +12,10 @@ import (
 )
 
 type mockChainClient struct {
-	lastSSO   *veidtypes.MsgSubmitSSOVerificationProof
-	lastEmail *veidtypes.MsgSubmitEmailVerificationProof
-	lastSMS   *veidtypes.MsgSubmitSMSVerificationProof
+	lastSSO    *veidtypes.MsgSubmitSSOVerificationProof
+	lastEmail  *veidtypes.MsgSubmitEmailVerificationProof
+	lastSMS    *veidtypes.MsgSubmitSMSVerificationProof
+	lastSocial *veidtypes.MsgSubmitSocialMediaScope
 }
 
 func (m *mockChainClient) SubmitSSOVerificationProof(_ context.Context, msg *veidtypes.MsgSubmitSSOVerificationProof) error {
@@ -29,6 +30,11 @@ func (m *mockChainClient) SubmitEmailVerificationProof(_ context.Context, msg *v
 
 func (m *mockChainClient) SubmitSMSVerificationProof(_ context.Context, msg *veidtypes.MsgSubmitSMSVerificationProof) error {
 	m.lastSMS = msg
+	return nil
+}
+
+func (m *mockChainClient) SubmitSocialMediaScope(_ context.Context, msg *veidtypes.MsgSubmitSocialMediaScope) error {
+	m.lastSocial = msg
 	return nil
 }
 
@@ -136,4 +142,64 @@ func TestSMSAdapter_SubmitProof(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, chain.lastSMS)
 	require.Equal(t, "sms-1", chain.lastSMS.VerificationId)
+}
+
+func TestSocialMediaAdapter_SubmitScope(t *testing.T) {
+	chain := &mockChainClient{}
+	adapter := NewGoogleSocialMediaAdapter(chain)
+
+	issuer := veidtypes.AttestationIssuer{
+		ID:             "did:virtengine:signer:social",
+		KeyFingerprint: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+	}
+	subject := veidtypes.AttestationSubject{
+		ID:             "did:virtengine:cosmos1abc",
+		AccountAddress: "cosmos1abc",
+	}
+	att := veidtypes.NewVerificationAttestation(
+		issuer,
+		subject,
+		veidtypes.AttestationTypeSocialMediaVerification,
+		[]byte("nonce-social-32------------"),
+		time.Now(),
+		time.Hour,
+		95,
+		90,
+	)
+	att.SetProof(veidtypes.AttestationProof{
+		Type:               veidtypes.ProofTypeEd25519,
+		Created:            time.Now(),
+		VerificationMethod: "did:virtengine:signer:social#keys-1",
+		ProofPurpose:       "assertionMethod",
+		ProofValue:         base64.StdEncoding.EncodeToString([]byte("sig")),
+		Nonce:              "nonce",
+	})
+
+	payload := veidtypes.EncryptedPayloadEnvelope{
+		Version:          1,
+		AlgorithmId:      "x25519-xsalsa20-poly1305",
+		AlgorithmVersion: 1,
+		Nonce:            []byte("nonce-nonce-nonce-000000"),
+		Ciphertext:       []byte("cipher"),
+		SenderPubKey:     []byte("sender-pub-key"),
+		SenderSignature:  []byte("sender-sig"),
+	}
+
+	_, err := adapter.SubmitScope(context.Background(), SocialMediaScopeRequest{
+		AccountAddress:     "cosmos1abc",
+		ScopeID:            "social-1",
+		Provider:           veidtypes.SocialMediaProviderGoogle,
+		ProfileName:        "Jane Doe",
+		Email:              "jane@example.com",
+		AccountAgeDays:     365,
+		IsVerified:         true,
+		Attestation:        att,
+		AccountSignature:   []byte("account-sig"),
+		EncryptedPayload:   payload,
+		EvidenceStorageRef: "vault://social/1",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, chain.lastSocial)
+	require.Equal(t, "social-1", chain.lastSocial.ScopeId)
+	require.Equal(t, "cosmos1abc", chain.lastSocial.AccountAddress)
 }

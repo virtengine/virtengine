@@ -24,6 +24,7 @@ const (
 	TypeMsgSubmitSSOVerificationProof   = "submit_sso_verification_proof"
 	TypeMsgSubmitEmailVerificationProof = "submit_email_verification_proof"
 	TypeMsgSubmitSMSVerificationProof   = "submit_sms_verification_proof"
+	TypeMsgSubmitSocialMediaScope       = "submit_social_media_scope"
 )
 
 // ============================================================================
@@ -79,6 +80,12 @@ type MsgSubmitSMSVerificationProof = veidv1.MsgSubmitSMSVerificationProof
 
 // MsgSubmitSMSVerificationProofResponse is the response for SMS proof submission
 type MsgSubmitSMSVerificationProofResponse = veidv1.MsgSubmitSMSVerificationProofResponse
+
+// MsgSubmitSocialMediaScope is the message for social media scope submission
+type MsgSubmitSocialMediaScope = veidv1.MsgSubmitSocialMediaScope
+
+// MsgSubmitSocialMediaScopeResponse is the response for social media scope submission
+type MsgSubmitSocialMediaScopeResponse = veidv1.MsgSubmitSocialMediaScopeResponse
 
 // EncryptedPayloadEnvelope is the encrypted payload type from proto
 type EncryptedPayloadEnvelope = veidv1.EncryptedPayloadEnvelope

@@ -26,6 +26,9 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgCreateProvider{}, ModuleName+"/"+msgTypeCreateProvider, nil)
 	cdc.RegisterConcrete(&MsgUpdateProvider{}, ModuleName+"/"+msgTypeUpdateProvider, nil)
 	cdc.RegisterConcrete(&MsgDeleteProvider{}, ModuleName+"/"+msgTypeDeleteProvider, nil)
+	cdc.RegisterConcrete(&MsgRequestDomainVerification{}, ModuleName+"/"+msgTypeRequestDomainVerification, nil)
+	cdc.RegisterConcrete(&MsgConfirmDomainVerification{}, ModuleName+"/"+msgTypeConfirmDomainVerification, nil)
+	cdc.RegisterConcrete(&MsgRevokeDomainVerification{}, ModuleName+"/"+msgTypeRevokeDomainVerification, nil)
 }
 
 // RegisterInterfaces registers the x/provider interfaces types with the interface registry

@@ -22,8 +22,8 @@ func TestTOTPConfig(t *testing.T) {
 	if config.Skew != 1 {
 		t.Errorf("expected Skew=1, got %d", config.Skew)
 	}
-	if config.Algorithm != "SHA1" {
-		t.Errorf("expected Algorithm=SHA1, got %s", config.Algorithm)
+	if config.Algorithm != "SHA256" {
+		t.Errorf("expected Algorithm=SHA256, got %s", config.Algorithm)
 	}
 }
 

@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // Error messages
@@ -44,9 +46,7 @@ func NewVEIDAuthClient(issuer, clientID, clientSecret string) *VEIDAuthClient {
 		issuer:       issuer,
 		clientID:     clientID,
 		clientSecret: clientSecret,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		httpClient:   security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}
 }
 

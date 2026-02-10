@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // OAuth2Config contains OAuth2/OIDC configuration.
@@ -85,10 +87,8 @@ type ManagedToken struct {
 // NewOAuth2TokenManager creates a new OAuth2 token manager.
 func NewOAuth2TokenManager(config *OAuth2Config) *OAuth2TokenManager {
 	return &OAuth2TokenManager{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		tokens:     make(map[string]*ManagedToken),
 		refreshing: make(map[string]bool),
 		stopCh:     make(chan struct{}),
