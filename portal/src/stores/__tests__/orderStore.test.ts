@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { useOrderStore } from '@/stores/orderStore';
 import type { WalletSigner } from '@/lib/api/chain';
 import { fetchPaginated, fetchChainJsonWithFallback, signAndBroadcastAmino } from '@/lib/api/chain';
@@ -13,11 +14,11 @@ vi.mock('@/lib/api/chain', async () => {
   };
 });
 
-const fetchPaginatedMock = fetchPaginated as unknown as vi.MockedFunction<typeof fetchPaginated>;
-const fetchChainMock = fetchChainJsonWithFallback as unknown as vi.MockedFunction<
+const fetchPaginatedMock = fetchPaginated as unknown as MockedFunction<typeof fetchPaginated>;
+const fetchChainMock = fetchChainJsonWithFallback as unknown as MockedFunction<
   typeof fetchChainJsonWithFallback
 >;
-const signAndBroadcastMock = signAndBroadcastAmino as unknown as vi.MockedFunction<
+const signAndBroadcastMock = signAndBroadcastAmino as unknown as MockedFunction<
   typeof signAndBroadcastAmino
 >;
 
@@ -63,7 +64,7 @@ describe('orderStore', () => {
     const wallet: WalletSigner = {
       status: 'connected',
       chainId: 'virtengine-1',
-      accounts: [{ address: 've1owner' }],
+      accounts: [{ address: 've1owner', pubKey: new Uint8Array(), algo: 'secp256k1' }],
       activeAccountIndex: 0,
       signAmino: vi.fn(),
       estimateFee: vi

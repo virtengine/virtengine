@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { useCustomerDashboardStore } from '@/stores/customerDashboardStore';
 import { fetchPaginated, fetchChainJsonWithFallback } from '@/lib/api/chain';
 
@@ -23,8 +24,8 @@ vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,
 }));
 
-const fetchPaginatedMock = fetchPaginated as unknown as vi.MockedFunction<typeof fetchPaginated>;
-const fetchChainMock = fetchChainJsonWithFallback as unknown as vi.MockedFunction<
+const fetchPaginatedMock = fetchPaginated as unknown as MockedFunction<typeof fetchPaginated>;
+const fetchChainMock = fetchChainJsonWithFallback as unknown as MockedFunction<
   typeof fetchChainJsonWithFallback
 >;
 

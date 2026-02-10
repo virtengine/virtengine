@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { useAdminStore } from '@/stores/adminStore';
 import { fetchPaginated, fetchChainJsonWithFallback } from '@/lib/api/chain';
 import { apiClient } from '@/lib/api-client';
@@ -35,13 +36,13 @@ vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,
 }));
 
-const fetchPaginatedMock = fetchPaginated as unknown as vi.MockedFunction<typeof fetchPaginated>;
-const fetchChainJsonMock = fetchChainJsonWithFallback as unknown as vi.MockedFunction<
+const fetchPaginatedMock = fetchPaginated as unknown as MockedFunction<typeof fetchPaginated>;
+const fetchChainJsonMock = fetchChainJsonWithFallback as unknown as MockedFunction<
   typeof fetchChainJsonWithFallback
 >;
 const apiClientMock = apiClient as unknown as {
-  get: vi.MockedFunction<typeof apiClient.get>;
-  post: vi.MockedFunction<typeof apiClient.post>;
+  get: MockedFunction<typeof apiClient.get>;
+  post: MockedFunction<typeof apiClient.post>;
 };
 const initialState = useAdminStore.getState();
 
