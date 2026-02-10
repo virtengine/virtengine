@@ -33,6 +33,9 @@ if ($hasGo -or $hasGoMod) {
     }
 
     $goPkgs = $hasGo | ForEach-Object { "./" + (Split-Path -Parent $_) } | Sort-Object -Unique | Where-Object { $_ -ne "./" }
+    $goPkgs = $goPkgs | Where-Object { Test-Path $_ } | Where-Object {
+        (Get-ChildItem -Path $_ -Filter *.go -File -ErrorAction SilentlyContinue).Count -gt 0
+    }
 
     if ($goPkgs) {
         Write-Host "  gofmt..."
