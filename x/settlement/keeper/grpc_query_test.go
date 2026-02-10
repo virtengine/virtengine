@@ -60,7 +60,7 @@ func setupGRPCTest(t *testing.T) *grpcTestSuite {
 	ctx := sdk.NewContext(stateStore, tmproto.Header{Height: 1, Time: now}, false, testutil.Logger(t))
 
 	bankKeeper := NewMockBankKeeper()
-	settlementKeeper := keeper.NewKeeper(cfg.Codec, storeKey, bankKeeper, "authority")
+	settlementKeeper := keeper.NewKeeper(cfg.Codec, storeKey, bankKeeper, "authority", mockEncryptionKeeper{})
 
 	queryHelper := baseapp.NewQueryServerTestHelper(ctx, cfg.InterfaceRegistry)
 	settlementv1.RegisterQueryServer(queryHelper, keeper.GRPCQuerier{IKeeper: settlementKeeper})
@@ -223,10 +223,10 @@ func seedSettlementData(t *testing.T, suite *grpcTestSuite) seededData {
 		FiatCurrency:      "USD",
 		FiatAmount:        "100.00",
 		PaymentMethod:     "bank",
-		DestinationRef:    "acct-123",
 		DestinationHash:   types.HashDestination("acct-123"),
 		DestinationRegion: "US",
 		SlippageTolerance: 0.01,
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
 		AuditTrail: []types.FiatConversionAuditEntry{{
 			Action:    "requested",
 			Actor:     provider.String(),
@@ -241,7 +241,6 @@ func seedSettlementData(t *testing.T, suite *grpcTestSuite) seededData {
 		Enabled:           true,
 		FiatCurrency:      "USD",
 		PaymentMethod:     "bank",
-		DestinationRef:    "acct-123",
 		DestinationHash:   types.HashDestination("acct-123"),
 		DestinationRegion: "US",
 		PreferredDEX:      "dex",
@@ -249,6 +248,7 @@ func seedSettlementData(t *testing.T, suite *grpcTestSuite) seededData {
 		SlippageTolerance: 0.02,
 		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
 		StableToken:       types.TokenSpec{Symbol: "USD", Denom: "uusd", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key"}),
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}

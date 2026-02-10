@@ -74,6 +74,7 @@ func QueryCmd() *cobra.Command {
 		GetQueryOracleCmd(),
 		GetQueryBMECmd(),
 		GetQueryEnclaveCmd(),
+		GetQueryEncryptionCmd(),
 		GetQueryModuleNameToAddressCmd(),
 		cflags.LineBreak,
 		GetQueryVEIDCmd(),
