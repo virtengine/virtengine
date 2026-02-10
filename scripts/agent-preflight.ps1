@@ -19,6 +19,18 @@ $hasPortal = $changedFiles | Where-Object { $_ -match '^portal/' }
 $hasGoMod = $changedFiles | Where-Object { $_ -match '^go\.(mod|sum)$' }
 $errors = 0
 
+# ── Windows Firewall check (non-blocking) ──────────────────────────────────
+if (($IsWindows -or ($env:OS -eq "Windows_NT")) -and ($hasGo -or $hasGoMod)) {
+    $fwScript = Join-Path $PSScriptRoot "setup-firewall.ps1"
+    if (Test-Path $fwScript) {
+        $fwResult = & pwsh -NoProfile -ExecutionPolicy Bypass -File $fwScript -Check 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [WARN] Windows Firewall not configured — Go tests may trigger popups" -ForegroundColor Yellow
+            Write-Host "  Run: make setup-firewall" -ForegroundColor DarkGray
+        }
+    }
+}
+
 if ($hasGo -or $hasGoMod) {
     Write-Host "--- Go checks ---" -ForegroundColor Yellow
 
