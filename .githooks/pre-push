@@ -162,6 +162,20 @@ if $HAS_ONLY_DOCS; then
     exit 0
 fi
 
+# ── Windows Firewall check (non-blocking warning) ──────────────────────────
+if [ "$(uname -o 2>/dev/null)" = "Msys" ] || [ -n "$MSYSTEM" ] || [ -n "$OS" ] && echo "$OS" | grep -qi windows; then
+    if ($HAS_GO || $HAS_DEPS_GO) && command -v pwsh >/dev/null 2>&1; then
+        if [ -f "scripts/setup-firewall.ps1" ]; then
+            if ! pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-firewall.ps1 -Check >/dev/null 2>&1; then
+                echo ""
+                hook_warn "Windows Firewall not configured — Go tests may trigger popups"
+                hook_step "Run: make setup-firewall"
+                echo ""
+            fi
+        fi
+    fi
+fi
+
 # =========================================================================
 # DETERMINE WHICH CHECKS TO RUN
 # =========================================================================

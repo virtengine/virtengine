@@ -276,6 +276,10 @@ func toProtoParams(params types.Params) settlementv1.Params {
 }
 
 func toProtoFiatConversionRecord(record types.FiatConversionRecord) settlementv1.FiatConversionRecord {
+	encryptedRef := ""
+	if record.EncryptedPayload != nil {
+		encryptedRef = record.EncryptedPayload.EnvelopeRef
+	}
 	return settlementv1.FiatConversionRecord{
 		ConversionId:        record.ConversionID,
 		InvoiceId:           record.InvoiceID,
@@ -297,7 +301,7 @@ func toProtoFiatConversionRecord(record types.FiatConversionRecord) settlementv1
 		FiatCurrency:        record.FiatCurrency,
 		FiatAmount:          record.FiatAmount,
 		PaymentMethod:       record.PaymentMethod,
-		DestinationRef:      record.DestinationRef,
+		DestinationRef:      encryptedRef,
 		DestinationHash:     record.DestinationHash,
 		DestinationRegion:   record.DestinationRegion,
 		SlippageTolerance:   record.SlippageTolerance,
@@ -337,12 +341,16 @@ func toProtoFiatConversionAuditEntries(entries []types.FiatConversionAuditEntry)
 }
 
 func toProtoFiatPayoutPreference(pref types.FiatPayoutPreference) settlementv1.FiatPayoutPreference {
+	encryptedRef := ""
+	if pref.EncryptedPayload != nil {
+		encryptedRef = pref.EncryptedPayload.EnvelopeRef
+	}
 	return settlementv1.FiatPayoutPreference{
 		Provider:          pref.Provider,
 		Enabled:           pref.Enabled,
 		FiatCurrency:      pref.FiatCurrency,
 		PaymentMethod:     pref.PaymentMethod,
-		DestinationRef:    pref.DestinationRef,
+		DestinationRef:    encryptedRef,
 		DestinationHash:   pref.DestinationHash,
 		DestinationRegion: pref.DestinationRegion,
 		PreferredDex:      pref.PreferredDEX,

@@ -300,6 +300,8 @@ export class VkLogStream {
     if (!ws) return false;
     const shortId = processId.slice(0, 8);
     console.warn(`[vk-log-stream:${shortId}] killing process: ${reason}`);
+    // Mark as finished BEFORE closing so the close handler won't reconnect
+    this.#finished.add(processId);
     try {
       ws.close(1000, reason);
     } catch {
@@ -421,7 +423,7 @@ export class VkLogStream {
     }
 
     // ── LogMsg::Finished — session is done ──
-    if ("Finished" in msg) {
+    if ("Finished" in msg || "finished" in msg) {
       const shortSid = sessionId.slice(0, 8);
       console.log(
         `[vk-log-stream] session stream ${shortSid} received Finished`,
@@ -676,6 +678,28 @@ export class VkLogStream {
     // ── LogMsg::SessionId, LogMsg::MessageId, LogMsg::Ready — informational ──
     if (msg.SessionId || msg.MessageId || msg.Ready !== undefined) {
       return; // Ignore informational messages
+    }
+
+    // ── LogMsg::finished (lowercase variant) — some VK versions send this ──
+    if (msg.finished === true || "finished" in msg) {
+      this.#finished.add(processId);
+      const shortId = processId.slice(0, 8);
+      console.log(`[vk-log-stream:${shortId}] execution process finished (lowercase variant)`);
+      const ws = this.#connections.get(processId);
+      if (ws) {
+        try {
+          ws.close(1000, "finished");
+        } catch {
+          /* best effort */
+        }
+        this.#connections.delete(processId);
+      }
+      this.#writeToFile(
+        processId,
+        `\n--- [vk-log-stream] Process ${shortId} finished at ${new Date().toISOString()} ---\n`,
+      );
+      this.#writeSessionLogFooter(processId);
+      return;
     }
 
     // Unknown format — log raw for debugging

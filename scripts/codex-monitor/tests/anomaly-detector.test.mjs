@@ -87,28 +87,22 @@ describe("AnomalyDetector", () => {
   });
 
   describe("Model Not Supported (P0)", () => {
-    it("warns on first failure at medium severity, escalates on threshold", () => {
+    it("warns on first failure at medium severity, kills at threshold", () => {
       const line = "CAPIError: 400 The requested model is not supported";
       detector.processLine(line, META);
       expect(anomalies).toHaveLength(1);
-      // First failure is MEDIUM — model issues are external, not actionable by kill
+      // First failure is MEDIUM — model issues are external, not immediately actionable
       expect(anomalies[0].severity).toBe(Severity.MEDIUM);
       expect(anomalies[0].action).toBe("warn");
 
-      // Wait for dedup window
-      anomalies[0] = null;
-      anomalies.length = 0;
-
-      // Escalation happens at threshold (default 5), not after just 2
-      setTimeout(() => {
-        detector.processLine(line, META);
-        // Still under threshold — should remain warn-level
-        const highOrAbove = anomalies.filter(
-          (a) => a?.severity === Severity.HIGH || a?.severity === Severity.CRITICAL,
-        );
-        // May or may not have emitted depending on dedup, but no CRITICAL kill
-        expect(highOrAbove.every((a) => a.action === "warn")).toBe(true);
-      }, 150);
+      // Second failure hits kill threshold (modelFailureKill=2 in test config)
+      detector.processLine(line, META);
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.MODEL_NOT_SUPPORTED && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+      expect(kills[0].severity).toBe(Severity.HIGH);
     });
   });
 
@@ -167,7 +161,80 @@ describe("AnomalyDetector", () => {
       // Should have at least a HIGH severity anomaly at kill threshold
       const highs = anomalies.filter((a) => a.severity === Severity.HIGH);
       expect(highs.length).toBeGreaterThanOrEqual(1);
-      expect(highs[0].action).toBe("warn");
+      expect(highs[0].action).toBe("kill");
+    });
+
+    it("does NOT false-positive on different edits to the same file", () => {
+      // Simulates an agent making 15 DIFFERENT edits to the same test file
+      // (each edit has different rawInput content — this is normal development)
+      for (let i = 0; i < 15; i++) {
+        const line = `{"ToolCall":{"toolCallId":"tc${i}","title":"Editing x/take/keeper/keeper_test.go","kind":"execute","rawInput":{"oldString":"line ${i} old","newString":"line ${i} new"}}}`;
+        detector.processLine(line, META);
+      }
+
+      // No anomaly should fire — each edit is different content
+      const loopAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.TOOL_CALL_LOOP,
+      );
+      expect(loopAnomalies).toHaveLength(0);
+    });
+
+    it("DOES detect truly identical edits to the same file (real death loop)", () => {
+      // Same file, same content every time — this IS a death loop
+      const line =
+        '{"ToolCall":{"toolCallId":"tc1","title":"Editing x/take/keeper/keeper_test.go","kind":"execute","rawInput":{"oldString":"same old","newString":"same new"}}}';
+
+      // Iterative tools get 3x thresholds: warn = 9, kill = 18
+      for (let i = 0; i < 9; i++) {
+        detector.processLine(line, META);
+      }
+
+      const warns = anomalies.filter(
+        (a) => a.type === AnomalyType.TOOL_CALL_LOOP && a.severity === Severity.MEDIUM,
+      );
+      expect(warns.length).toBeGreaterThanOrEqual(1);
+      expect(warns[0].message).toContain("identical content");
+    });
+
+    it("applies elevated thresholds for iterative tools (Editing, Reading)", () => {
+      // Non-iterative tool hits warn at 3
+      const nonIterative =
+        '{"ToolCall":{"toolCallId":"tc1","title":"apply_patch","kind":"execute","rawInput":{}}}';
+      for (let i = 0; i < 3; i++) {
+        detector.processLine(nonIterative, META);
+      }
+      expect(anomalies.filter((a) => a.type === AnomalyType.TOOL_CALL_LOOP)).toHaveLength(1);
+
+      // Reset for a fresh process
+      const d2 = makeDetector();
+      const editLine =
+        '{"ToolCall":{"toolCallId":"tc1","title":"Editing src/foo.go","kind":"execute","rawInput":{"old":"x","new":"y"}}}';
+
+      // Iterative tool should NOT warn at 3 (3x multiplier means warn at 9)
+      for (let i = 0; i < 3; i++) {
+        d2.detector.processLine(editLine, META);
+      }
+      const editLoops = d2.anomalies.filter((a) => a.type === AnomalyType.TOOL_CALL_LOOP);
+      expect(editLoops).toHaveLength(0);
+      d2.detector.stop();
+    });
+
+    it("ignores toolCallId differences when fingerprinting", () => {
+      // Same content, different toolCallId — should still count as consecutive
+      const line1 =
+        '{"ToolCall":{"toolCallId":"aaaa","title":"apply_patch","kind":"execute","rawInput":{"content":"x"}}}';
+      const line2 =
+        '{"ToolCall":{"toolCallId":"bbbb","title":"apply_patch","kind":"execute","rawInput":{"content":"x"}}}';
+      const line3 =
+        '{"ToolCall":{"toolCallId":"cccc","title":"apply_patch","kind":"execute","rawInput":{"content":"x"}}}';
+
+      detector.processLine(line1, META);
+      detector.processLine(line2, META);
+      detector.processLine(line3, META);
+
+      // Should detect loop at 3 (same content despite different toolCallIds)
+      const loops = anomalies.filter((a) => a.type === AnomalyType.TOOL_CALL_LOOP);
+      expect(loops.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -258,6 +325,23 @@ describe("AnomalyDetector", () => {
 
       for (let i = 0; i < 20; i++) {
         detector.processLine(line, META);
+      }
+
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
+
+    it("ignores short streaming token fragments (portal, trust)", () => {
+      // These are single-word streaming tokens that accumulate massive counts
+      // in agent logs but are NOT real repeated thoughts
+      const portalLine = '{"Thought":{"type":"text","text":"portal"}}';
+      const trustLine = '{"Thought":{"type":"text","text":" trust"}}';
+
+      for (let i = 0; i < 60; i++) {
+        detector.processLine(portalLine, META);
+        detector.processLine(trustLine, META);
       }
 
       const spinAnomalies = anomalies.filter(
@@ -420,6 +504,83 @@ describe("AnomalyDetector", () => {
       expect(rateAnomalies.length).toBeGreaterThanOrEqual(1);
     });
   });
+  describe("Kill action escalation", () => {
+    it("emits kill action for subagent waste at kill threshold", () => {
+      // Matches RE_SUBAGENT_SPAWN: "ToolCall" with "rawInput":{"prompt":...}
+      const spawnLine = '{"ToolCall":{"toolCallId":"tc1","title":"runSubagent","kind":"invoke","rawInput":{"prompt":"do something"}}}';
+      for (let i = 0; i < 6; i++) {
+        detector.processLine(spawnLine, META);
+      }
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.SUBAGENT_WASTE && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+      expect(kills[0].severity).toBe(Severity.HIGH);
+    });
+
+    it("emits kill action for tool failure cascade at kill threshold", () => {
+      // Matches RE_TOOL_UPDATE_FAILED: "ToolUpdate" with "status":"failed"
+      const failLine = '{"ToolUpdate":{"toolCallId":"tc1","status":"failed","error":"something broke"}}';
+      for (let i = 0; i < 8; i++) {
+        detector.processLine(failLine, META);
+      }
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.TOOL_FAILURE_CASCADE && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("emits kill action for git push loop at kill threshold", () => {
+      const pushLine = "git push --set-upstream origin feature-branch";
+      for (let i = 0; i < 4; i++) {
+        detector.processLine(pushLine, META);
+      }
+      const kills = anomalies.filter(
+        (a) =>
+          a.type === AnomalyType.GIT_PUSH_LOOP && a.action === "kill",
+      );
+      expect(kills.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Thought spinning exclusions", () => {
+    it("excludes operational test-running thoughts from spinning detection", () => {
+      // Uses the actual Copilot thought format: "Thought":{"type":"text","text":"..."}
+      const thoughtLine = '{"Thought":{"type":"text","text":"Running integration tests"}}';
+      for (let i = 0; i < 15; i++) {
+        detector.processLine(thoughtLine, META);
+      }
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
+
+    it("excludes 'waiting for' thoughts from spinning detection", () => {
+      const thoughtLine = '{"Thought":{"type":"text","text":"Waiting for tests to complete"}}';
+      for (let i = 0; i < 15; i++) {
+        detector.processLine(thoughtLine, META);
+      }
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies).toHaveLength(0);
+    });
+
+    it("still detects genuine thought spinning (non-operational)", () => {
+      const thoughtLine = '{"Thought":{"type":"text","text":"I need to fix this bug somehow"}}';
+      for (let i = 0; i < 15; i++) {
+        detector.processLine(thoughtLine, META);
+      }
+      const spinAnomalies = anomalies.filter(
+        (a) => a.type === AnomalyType.THOUGHT_SPINNING,
+      );
+      expect(spinAnomalies.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
 });
 
 describe("createAnomalyDetector factory", () => {
@@ -427,5 +588,103 @@ describe("createAnomalyDetector factory", () => {
     const detector = createAnomalyDetector();
     expect(detector).toBeInstanceOf(AnomalyDetector);
     detector.stop();
+  });
+});
+
+describe("Circuit breaker escalation", () => {
+  it("escalates warn-only anomalies to kill after 3 dedup cycles", async () => {
+    // Use very short dedup (50ms) so we can cycle quickly
+    const { detector, anomalies } = makeDetector({ alertDedupWindowMs: 50 });
+
+    // MODEL_NOT_SUPPORTED below kill threshold emits action: "warn"
+    // with modelFailureKill=2, the 1st failure is below threshold
+    const msLine = "CAPIError: 400 The requested model is not supported for this operation.";
+    const pid = "circuit-breaker-test-1234-5678-abcdef012345";
+    const meta = { processId: pid, stream: "stdout" };
+
+    // Cycle 1: first failure (warn)
+    detector.processLine(msLine, meta);
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Cycle 2: second failure (but still same dedup key, need to wait)
+    detector.processLine(msLine, meta);
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Cycle 3: third failure
+    detector.processLine(msLine, meta);
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Cycle 4: fourth failure should trigger escalation
+    detector.processLine(msLine, meta);
+
+    const killAnoms = anomalies.filter(
+      (a) =>
+        a.type === AnomalyType.MODEL_NOT_SUPPORTED &&
+        a.action === "kill",
+    );
+    // Should have at least 1 kill: either from threshold escalation (at 2)
+    // or from circuit breaker (after 3 warn cycles)
+    expect(killAnoms.length).toBeGreaterThanOrEqual(1);
+
+    detector.stop();
+  });
+
+  it("escalates git push warn to kill after repeated warnings", async () => {
+    const { detector, anomalies } = makeDetector({
+      alertDedupWindowMs: 50,
+      gitPushWarn: 2,
+      gitPushKill: 100, // High kill threshold so we rely on circuit breaker
+    });
+
+    const pushLine = "git push --set-upstream origin feature-branch";
+    const pid = "gitpush-breaker-1234-5678-abcdef012345";
+    const meta = { processId: pid, stream: "stdout" };
+
+    // Push enough to trigger warn (threshold=2)
+    detector.processLine(pushLine, meta);
+    detector.processLine(pushLine, meta);
+    // First warn emitted
+
+    // Wait for dedup, push again to get 2nd warn
+    await new Promise((r) => setTimeout(r, 60));
+    detector.processLine(pushLine, meta);
+
+    await new Promise((r) => setTimeout(r, 60));
+    detector.processLine(pushLine, meta);
+
+    await new Promise((r) => setTimeout(r, 60));
+    detector.processLine(pushLine, meta);
+
+    // After 3+ warn cycles, circuit breaker should escalate to kill
+    const killAnoms = anomalies.filter(
+      (a) =>
+        a.type === AnomalyType.GIT_PUSH_LOOP &&
+        a.action === "kill",
+    );
+    expect(killAnoms.length).toBeGreaterThanOrEqual(1);
+    // Verify escalation message
+    const escalated = killAnoms.find((a) => a.message.includes("[ESCALATED]"));
+    expect(escalated).toBeDefined();
+
+    detector.stop();
+  });
+});
+
+describe("MODEL_NOT_SUPPORTED kill at threshold", () => {
+  it("emits kill action when model failures hit kill threshold", () => {
+    const { detector, anomalies } = makeDetector({ modelFailureKill: 2 });
+
+    const msLine = "CAPIError: 400 The requested model is not supported for this operation.";
+    detector.processLine(msLine, META);
+    detector.processLine(msLine, META);
+
+    const kills = anomalies.filter(
+      (a) =>
+        a.type === AnomalyType.MODEL_NOT_SUPPORTED &&
+        a.action === "kill",
+    );
+    expect(kills.length).toBeGreaterThanOrEqual(1);
+    expect(kills[0].severity).toBe(Severity.HIGH);
+    expect(kills[0].message).toContain("failures");
   });
 });

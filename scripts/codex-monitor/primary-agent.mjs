@@ -78,7 +78,9 @@ let primaryFallbackReason = null;
 let initialized = false;
 
 function normalizePrimaryAgent(value) {
-  const raw = String(value || "").trim().toLowerCase();
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!raw) return "codex-sdk";
   if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
   if (["copilot", "copilot-sdk", "github-copilot"].includes(raw))
@@ -157,7 +159,10 @@ export async function initPrimaryAgent(nameOrConfig = null) {
   const desired = resolvePrimaryAgent(nameOrConfig);
   setPrimaryAgent(desired);
 
-  if (activeAdapter.name === "codex-sdk" && process.env.CODEX_SDK_DISABLED === "1") {
+  if (
+    activeAdapter.name === "codex-sdk" &&
+    process.env.CODEX_SDK_DISABLED === "1"
+  ) {
     primaryFallbackReason = "Codex SDK disabled — attempting fallback";
     if (process.env.COPILOT_SDK_DISABLED !== "1") {
       setPrimaryAgent("copilot-sdk");
@@ -166,7 +171,10 @@ export async function initPrimaryAgent(nameOrConfig = null) {
     }
   }
 
-  if (activeAdapter.name === "claude-sdk" && process.env.CLAUDE_SDK_DISABLED === "1") {
+  if (
+    activeAdapter.name === "claude-sdk" &&
+    process.env.CLAUDE_SDK_DISABLED === "1"
+  ) {
     primaryFallbackReason = "Claude SDK disabled — falling back to Codex";
     setPrimaryAgent("codex-sdk");
   }

@@ -294,7 +294,7 @@ func New(t *testing.T, cfg Config) *Network {
 		tmCfg.P2P.AllowDuplicateIP = true
 
 		if i == 0 {
-			apiListenAddr := fmt.Sprintf("tcp://0.0.0.0:%d", ports.mustGetPort())
+			apiListenAddr := fmt.Sprintf("tcp://127.0.0.1:%d", ports.mustGetPort())
 			appCfg.API.Address = apiListenAddr
 
 			apiURL, err := url.Parse(apiListenAddr)
