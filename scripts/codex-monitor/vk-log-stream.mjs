@@ -311,6 +311,50 @@ export class VkLogStream {
     return true;
   }
 
+
+  /**
+   * Close a session stream WebSocket and stop tracking it.
+   * @param {string} sessionId
+   * @param {string} [reason="session no longer tracked"]
+   * @returns {boolean} True if the session was tracked.
+   */
+  closeSession(sessionId, reason = "session no longer tracked") {
+    if (!sessionId) return false;
+    const ws = this.#sessionStreams.get(sessionId);
+    if (ws) {
+      try {
+        ws.close(1000, reason);
+      } catch {
+        /* best effort */
+      }
+    }
+    const wasTracked =
+      this.#sessionStreams.delete(sessionId) ||
+      this.#trackedSessions.delete(sessionId);
+    this.#trackedSessions.delete(sessionId);
+    this.#sessionReconnectCounts.delete(sessionId);
+    return wasTracked;
+  }
+
+  /**
+   * Close any session streams not in the allowed set.
+   * @param {Iterable<string>} allowedSessionIds
+   * @param {string} [reason="session no longer active"]
+   * @returns {number} Number of sessions pruned.
+   */
+  pruneSessions(allowedSessionIds, reason = "session no longer active") {
+    const allowed = new Set(allowedSessionIds || []);
+    let pruned = 0;
+    for (const sessionId of Array.from(this.#trackedSessions)) {
+      if (!allowed.has(sessionId)) {
+        if (this.closeSession(sessionId, reason)) {
+          pruned += 1;
+        }
+      }
+    }
+    return pruned;
+  }
+
   // ── Private methods ────────────────────────────────────────────────────────
 
   /**

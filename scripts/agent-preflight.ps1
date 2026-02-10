@@ -23,6 +23,7 @@ if (-not $changedFiles) {
 $hasGo = $changedFiles | Where-Object { $_ -match '\.go$' }
 $hasPortal = $changedFiles | Where-Object { $_ -match '^portal/' }
 $hasGoMod = $changedFiles | Where-Object { $_ -match '^go\.(mod|sum)$' }
+$hasCodexMonitor = $changedFiles | Where-Object { $_ -match '^scripts/codex-monitor/' }
 $errors = 0
 
 # ── Windows Firewall check (non-blocking) ──────────────────────────────────
@@ -93,6 +94,24 @@ if ($hasPortal) {
     Write-Host "  Tests..."
     pnpm -C portal test 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: portal tests" -ForegroundColor Red; $errors++ }
+}
+
+if ($hasCodexMonitor) {
+    Write-Host "--- Codex Monitor checks ---" -ForegroundColor Yellow
+
+    if (-not (Test-Path "scripts/codex-monitor/node_modules")) {
+        Write-Host "  npm install..."
+        Push-Location scripts/codex-monitor
+        npm install 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: npm install" -ForegroundColor Red; $errors++ }
+        Pop-Location
+    }
+
+    Write-Host "  Prepublish check..."
+    Push-Location scripts/codex-monitor
+    node prepublish-check.mjs 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: prepublish check" -ForegroundColor Red; $errors++ }
+    Pop-Location
 }
 
 Write-Host ""

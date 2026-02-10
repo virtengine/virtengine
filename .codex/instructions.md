@@ -85,11 +85,21 @@ For complex tasks with multiple independent parts, you can spawn Codex sub-agent
 
 ```bash
 # Example: delegate two independent subtasks
-codex --prompt "Implement the keeper method for X in x/veid/keeper/keeper.go" --auto-edit
-codex --prompt "Add unit tests for X in x/veid/keeper/keeper_test.go" --auto-edit
+codex exec -s workspace-write -C . "Implement the keeper method for X in x/veid/keeper/keeper.go"
+codex exec -s workspace-write -C . "Add unit tests for X in x/veid/keeper/keeper_test.go"
 ```
 
 Use this when a task has clearly separable, independent pieces. Do NOT use for sequential work where one part depends on another.
+
+## Codex Subagents (Parallel)
+
+Codex does not have a native subagent tool like Copilot, so use:
+
+**CLI exec**: `codex exec` (best for file writes)
+- Put options **before** the prompt: `codex exec -s workspace-write -C <repo> "<prompt>"`
+- If writes are blocked by policy, use:
+  `codex exec --dangerously-bypass-approvals-and-sandbox -C <repo> "<prompt>"`
+- Run multiple `codex exec` commands in parallel using the shell tool.
 
 ## Environment Notes
 

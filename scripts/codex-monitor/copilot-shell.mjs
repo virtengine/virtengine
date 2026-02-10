@@ -7,7 +7,7 @@
  * as the primary executor.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,7 @@ const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000; // 60 min for agentic tasks
 const STATE_FILE = resolve(__dirname, "logs", "copilot-shell-state.json");
+const SESSION_LOG_DIR = resolve(__dirname, "logs", "copilot-sessions");
 const REPO_ROOT = resolveRepoRoot();
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -44,6 +45,54 @@ function safeJsonParse(raw) {
     return JSON.parse(raw);
   } catch {
     return null;
+  }
+}
+
+function safeStringify(value, maxLen = 8000) {
+  let text = "";
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = String(value);
+  }
+  if (text.length > maxLen) {
+    text = text.slice(0, maxLen) + "...";
+  }
+  return text;
+}
+
+function initSessionLog(sessionId, prompt, timeoutMs) {
+  if (!sessionId) return null;
+  try {
+    mkdirSync(SESSION_LOG_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const shortId = sessionId.slice(0, 8);
+    const logPath = resolve(
+      SESSION_LOG_DIR,
+      `copilot-session-${stamp}-${shortId}.log`,
+    );
+    const header = [
+      "# Copilot Session Log",
+      `# Timestamp: ${timestamp()}`,
+      `# Session ID: ${sessionId}`,
+      `# Timeout: ${timeoutMs}ms`,
+      `# Prompt: ${(prompt || "").slice(0, 500)}`,
+      "",
+    ].join("\n");
+    appendFileSync(logPath, header + "\n");
+    return logPath;
+  } catch {
+    return null;
+  }
+}
+
+function logSessionEvent(logPath, event) {
+  if (!logPath || !event) return;
+  try {
+    const payload = safeStringify(event);
+    appendFileSync(logPath, `${timestamp()} ${event.type || "event"} ${payload}\n`);
+  } catch {
+    /* best effort */
   }
 }
 
@@ -320,12 +369,14 @@ export async function execCopilotPrompt(userMessage, options = {}) {
 
   let unsubscribe = null;
   const session = await getSession();
+  const logPath = initSessionLog(activeSessionId, userMessage, timeoutMs);
   const items = [];
   let finalResponse = "";
   let responseFromMessage = false;
 
   const handleEvent = async (event) => {
     if (!event) return;
+    logSessionEvent(logPath, event);
     items.push(event);
     if (event.type === "assistant.message" && event.data?.content) {
       finalResponse = event.data.content;

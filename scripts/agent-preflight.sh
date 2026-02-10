@@ -22,11 +22,13 @@ fi
 HAS_GO=false
 HAS_PORTAL=false
 HAS_GOMOD=false
+HAS_CODEX_MONITOR=false
 ERRORS=0
 
 echo "$CHANGED_FILES" | grep -q '\.go$' && HAS_GO=true || true
 echo "$CHANGED_FILES" | grep -q '^portal/' && HAS_PORTAL=true || true
 echo "$CHANGED_FILES" | grep -qE '^go\.(mod|sum)$' && HAS_GOMOD=true || true
+echo "$CHANGED_FILES" | grep -q '^scripts/codex-monitor/' && HAS_CODEX_MONITOR=true || true
 
 if $HAS_GO || $HAS_GOMOD; then
     echo "--- Go checks ---"
@@ -72,6 +74,22 @@ if $HAS_PORTAL; then
 
     echo "  Tests..."
     pnpm -C portal test 2>&1 || { echo "FAIL: portal tests"; ERRORS=$((ERRORS+1)); }
+fi
+
+if $HAS_CODEX_MONITOR; then
+    echo "--- Codex Monitor checks ---"
+
+    if [ ! -d "scripts/codex-monitor/node_modules" ]; then
+        echo "  npm install..."
+        cd scripts/codex-monitor
+        npm install 2>&1 || { echo "FAIL: npm install"; ERRORS=$((ERRORS+1)); }
+        cd - >/dev/null
+    fi
+
+    echo "  Prepublish check..."
+    cd scripts/codex-monitor
+    node prepublish-check.mjs 2>&1 || { echo "FAIL: prepublish check"; ERRORS=$((ERRORS+1)); }
+    cd - >/dev/null
 fi
 
 echo ""

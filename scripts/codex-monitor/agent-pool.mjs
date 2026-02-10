@@ -267,6 +267,7 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: `Codex SDK not available: ${err.message}`,
       sdk: "codex",
+      threadId: null,
     };
   }
 
@@ -317,6 +318,7 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
       items: allItems,
       error: null,
       sdk: "codex",
+      threadId: thread.id || null,
     };
   } catch (err) {
     clearTimeout(timer);
@@ -327,6 +329,7 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
         items: [],
         error: `${TAG} codex timeout after ${timeoutMs}ms`,
         sdk: "codex",
+        threadId: null,
       };
     }
     return {
@@ -335,6 +338,7 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: err.message,
       sdk: "codex",
+      threadId: null,
     };
   }
 }
@@ -367,6 +371,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: `Copilot SDK not available: ${err.message}`,
       sdk: "copilot",
+      threadId: null,
     };
   }
 
@@ -395,6 +400,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: `Copilot client start failed: ${err.message}`,
       sdk: "copilot",
+      threadId: null,
     };
   }
 
@@ -484,6 +490,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       items: allItems,
       error: null,
       sdk: "copilot",
+      threadId: null,
     };
   } catch (err) {
     clearTimeout(timer);
@@ -494,6 +501,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         items: [],
         error: `${TAG} copilot timeout after ${timeoutMs}ms`,
         sdk: "copilot",
+        threadId: null,
       };
     }
     return {
@@ -502,6 +510,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: err.message,
       sdk: "copilot",
+      threadId: null,
     };
   } finally {
     // Best-effort teardown — don't let cleanup errors propagate
@@ -542,6 +551,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: `Claude SDK not available: ${err.message}`,
       sdk: "claude",
+      threadId: null,
     };
   }
 
@@ -687,6 +697,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       items: allItems,
       error: null,
       sdk: "claude",
+      threadId: null,
     };
   } catch (err) {
     clearTimeout(timer);
@@ -697,6 +708,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
         items: [],
         error: `${TAG} claude timeout after ${timeoutMs}ms`,
         sdk: "claude",
+        threadId: null,
       };
     }
     return {
@@ -705,6 +717,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: err.message,
       sdk: "claude",
+      threadId: null,
     };
   }
 }
@@ -816,6 +829,7 @@ export async function launchEphemeralThread(
     items: [],
     error: `${TAG} no SDK available. Tried: ${triedSdks.join(", ") || "(all disabled)"}`,
     sdk: primaryName,
+    threadId: null,
   };
 }
 
@@ -874,4 +888,480 @@ export async function execPooledPrompt(userMessage, options = {}) {
     items: result.items,
     usage: null, // ephemeral threads don't aggregate usage today
   };
+}
+
+// ---------------------------------------------------------------------------
+// Thread Persistence & Resume Registry
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} ThreadRecord
+ * @property {string}      threadId   SDK-specific thread/session ID.
+ * @property {string}      sdk        Which SDK owns this thread.
+ * @property {string}      taskKey    Caller-defined key (task ID, PR#, etc.).
+ * @property {string}      cwd        Working directory used.
+ * @property {number}      turnCount  How many turns have been run.
+ * @property {number}      createdAt  Unix ms when first created.
+ * @property {number}      lastUsedAt Unix ms of most recent run.
+ * @property {string|null} lastError  Last error message if any.
+ * @property {boolean}     alive      Whether this thread is still usable.
+ */
+
+/** @type {Map<string, ThreadRecord>} In-memory registry keyed by taskKey */
+const threadRegistry = new Map();
+
+const THREAD_REGISTRY_FILE = resolve(__dirname, "logs", "thread-registry.json");
+const THREAD_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+/**
+ * Load thread registry from disk (best-effort).
+ */
+async function loadThreadRegistry() {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const raw = await readFile(THREAD_REGISTRY_FILE, "utf8");
+    const entries = JSON.parse(raw);
+    for (const [key, record] of Object.entries(entries)) {
+      // Expire old threads
+      if (Date.now() - record.lastUsedAt > THREAD_MAX_AGE_MS) continue;
+      if (!record.alive) continue;
+      threadRegistry.set(key, record);
+    }
+  } catch {
+    // No registry file yet — that's fine
+  }
+}
+
+/**
+ * Persist thread registry to disk (best-effort).
+ */
+async function saveThreadRegistry() {
+  try {
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    await mkdir(resolve(__dirname, "logs"), { recursive: true });
+    const obj = Object.fromEntries(threadRegistry);
+    await writeFile(THREAD_REGISTRY_FILE, JSON.stringify(obj, null, 2), "utf8");
+  } catch {
+    // Non-critical — registry is an optimisation, not a requirement
+  }
+}
+
+// Load registry at module init
+loadThreadRegistry().catch(() => {});
+
+// ---------------------------------------------------------------------------
+// Per-SDK Resume Launchers
+// ---------------------------------------------------------------------------
+
+/**
+ * Resume an existing Codex thread and run a follow-up prompt.
+ * Uses `codex.resumeThread(threadId)` from @openai/codex-sdk.
+ *
+ * @param {string} threadId  Thread ID from a previous launchCodexThread.
+ * @param {string} prompt    Follow-up prompt.
+ * @param {string} cwd       Working directory.
+ * @param {number} timeoutMs Abort timeout in ms.
+ * @param {object} extra     Optional { onEvent, abortController }.
+ * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, threadId: string|null }>}
+ */
+async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
+  const { onEvent, abortController: externalAC } = extra;
+
+  let CodexClass;
+  try {
+    const mod = await import("@openai/codex-sdk");
+    CodexClass = mod.Codex;
+    if (!CodexClass) throw new Error("Codex export not found");
+  } catch (err) {
+    return {
+      success: false,
+      output: "",
+      items: [],
+      error: `Codex SDK not available: ${err.message}`,
+      sdk: "codex",
+      threadId: null,
+    };
+  }
+
+  const codex = new CodexClass();
+
+  let thread;
+  try {
+    thread = codex.resumeThread(threadId, {
+      sandboxMode: "danger-full-access",
+      workingDirectory: cwd,
+      skipGitRepoCheck: true,
+      approvalPolicy: "never",
+    });
+  } catch (err) {
+    // Resume failed (thread expired, not found, etc.) — signal caller to start fresh
+    return {
+      success: false,
+      output: "",
+      items: [],
+      error: `Thread resume failed: ${err.message}`,
+      sdk: "codex",
+      threadId: null,
+    };
+  }
+
+  const controller = externalAC || new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+
+  try {
+    const turn = await thread.runStreamed(prompt, {
+      signal: controller.signal,
+    });
+    let finalResponse = "";
+    const allItems = [];
+
+    for await (const event of turn.events) {
+      if (typeof onEvent === "function")
+        try {
+          onEvent(event);
+        } catch {
+          /* */
+        }
+      if (event.type === "item.completed") {
+        allItems.push(event.item);
+        if (event.item.type === "agent_message" && event.item.text) {
+          finalResponse += event.item.text + "\n";
+        }
+      }
+    }
+
+    clearTimeout(timer);
+    const newThreadId = thread.id || threadId;
+    return {
+      success: true,
+      output: finalResponse.trim() || "(resumed — no text output)",
+      items: allItems,
+      error: null,
+      sdk: "codex",
+      threadId: newThreadId,
+    };
+  } catch (err) {
+    clearTimeout(timer);
+    const isTimeout = err.name === "AbortError" || String(err) === "timeout";
+    return {
+      success: false,
+      output: "",
+      items: [],
+      error: isTimeout
+        ? `${TAG} codex resume timeout after ${timeoutMs}ms`
+        : `Thread resume error: ${err.message}`,
+      sdk: "codex",
+      threadId: null,
+    };
+  }
+}
+
+/**
+ * "Resume" for SDKs without native thread persistence.
+ * Falls back to starting a fresh thread with a context-carrying preamble.
+ *
+ * @param {string} _threadId  Ignored — no native resume available.
+ * @param {string} prompt     Follow-up prompt.
+ * @param {string} cwd        Working directory.
+ * @param {number} timeoutMs  Abort timeout.
+ * @param {object} extra      Optional extras.
+ * @param {string} sdkName    "copilot" or "claude".
+ * @returns {Promise<Object>}
+ */
+async function resumeGenericThread(
+  _threadId,
+  prompt,
+  cwd,
+  timeoutMs,
+  extra = {},
+  sdkName = "copilot",
+) {
+  // No native resume — launch fresh with context preamble
+  const contextPrompt = `# CONTINUATION — Resuming Prior Context\n\nYou are continuing work from a previous session. Pick up where you left off.\n\n---\n\n${prompt}`;
+  const launcher =
+    sdkName === "claude" ? launchClaudeThread : launchCopilotThread;
+  const result = await launcher(contextPrompt, cwd, timeoutMs, extra);
+  return { ...result, threadId: null }; // No persistent ID available
+}
+
+// ---------------------------------------------------------------------------
+// Thread-Persistent Launcher
+// ---------------------------------------------------------------------------
+
+/**
+ * Launch a new thread OR resume an existing one for the given task key.
+ *
+ * When a `taskKey` is provided:
+ *   1. Check the thread registry for an existing, alive thread.
+ *   2. If found and the same SDK — attempt resume (Codex) or context-carry (others).
+ *   3. If resume fails or no prior thread — start fresh.
+ *   4. Register the new thread for future resume.
+ *
+ * Without `taskKey`, behaves identically to `launchEphemeralThread`.
+ *
+ * @param {string}  prompt      Prompt to run.
+ * @param {string}  [cwd]       Working directory.
+ * @param {number}  [timeoutMs] Timeout in ms.
+ * @param {object}  [extra]     Options:
+ * @param {string}  [extra.taskKey]    Key for thread registry (task ID, PR number, etc.)
+ * @param {string}  [extra.sdk]        Force a specific SDK.
+ * @param {Function} [extra.onEvent]   Event callback.
+ * @param {AbortController} [extra.abortController]
+ * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, threadId: string|null, resumed: boolean }>}
+ */
+export async function launchOrResumeThread(
+  prompt,
+  cwd = REPO_ROOT,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  extra = {},
+) {
+  const { taskKey, ...restExtra } = extra;
+
+  // No taskKey — pure ephemeral (backward compatible)
+  if (!taskKey) {
+    const result = await launchEphemeralThread(
+      prompt,
+      cwd,
+      timeoutMs,
+      restExtra,
+    );
+    return { ...result, threadId: result.threadId || null, resumed: false };
+  }
+
+  // Check registry for existing thread
+  const existing = threadRegistry.get(taskKey);
+  if (existing && existing.alive && existing.threadId) {
+    const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
+
+    // Only attempt native resume for Codex (it has resumeThread API)
+    if (sdkName === "codex" && existing.sdk === "codex") {
+      console.log(
+        `${TAG} resuming Codex thread ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
+      );
+      const result = await resumeCodexThread(
+        existing.threadId,
+        prompt,
+        cwd,
+        timeoutMs,
+        restExtra,
+      );
+
+      if (result.success) {
+        // Update registry
+        existing.turnCount += 1;
+        existing.lastUsedAt = Date.now();
+        existing.lastError = null;
+        if (result.threadId) existing.threadId = result.threadId;
+        threadRegistry.set(taskKey, existing);
+        saveThreadRegistry().catch(() => {});
+        return { ...result, resumed: true };
+      }
+
+      // Resume failed — fall through to fresh launch
+      console.warn(
+        `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
+      );
+      existing.alive = false;
+      threadRegistry.set(taskKey, existing);
+    } else if (existing.sdk !== sdkName) {
+      // SDK changed — invalidate old thread
+      console.log(
+        `${TAG} SDK changed from ${existing.sdk} to ${sdkName} for task "${taskKey}", starting fresh`,
+      );
+      existing.alive = false;
+    } else {
+      // Non-Codex SDK: use context-carry resume
+      console.log(
+        `${TAG} context-carry resume for ${sdkName} thread, task "${taskKey}"`,
+      );
+      const result = await resumeGenericThread(
+        existing.threadId,
+        prompt,
+        cwd,
+        timeoutMs,
+        restExtra,
+        sdkName,
+      );
+
+      if (result.success) {
+        existing.turnCount += 1;
+        existing.lastUsedAt = Date.now();
+        existing.lastError = null;
+        threadRegistry.set(taskKey, existing);
+        saveThreadRegistry().catch(() => {});
+        return { ...result, resumed: true };
+      }
+
+      console.warn(
+        `${TAG} context-carry resume failed for task "${taskKey}": ${result.error}`,
+      );
+      existing.alive = false;
+    }
+  }
+
+  // Fresh launch — register the new thread
+  const result = await launchEphemeralThread(prompt, cwd, timeoutMs, restExtra);
+
+  // Register thread for future resume
+  const record = {
+    threadId: result.threadId || null,
+    sdk: result.sdk,
+    taskKey,
+    cwd,
+    turnCount: 1,
+    createdAt: Date.now(),
+    lastUsedAt: Date.now(),
+    lastError: result.success ? null : result.error,
+    alive: result.success && !!result.threadId,
+  };
+  threadRegistry.set(taskKey, record);
+  saveThreadRegistry().catch(() => {});
+
+  return { ...result, threadId: result.threadId || null, resumed: false };
+}
+
+// ---------------------------------------------------------------------------
+// Error Recovery Wrapper
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute a prompt with automatic error recovery via thread resume.
+ *
+ * If the initial run fails, this will:
+ *   1. Resume the same thread with the error context
+ *   2. Ask the agent to diagnose and fix the issue
+ *   3. Retry up to `maxRetries` times
+ *
+ * @param {string}  prompt      Initial prompt.
+ * @param {object}  options     Options:
+ * @param {string}  options.taskKey       Required — identifies the thread.
+ * @param {string}  [options.cwd]         Working directory.
+ * @param {number}  [options.timeoutMs]   Per-attempt timeout.
+ * @param {number}  [options.maxRetries]  Max follow-up attempts (default: 2).
+ * @param {Function} [options.shouldRetry] Custom predicate: (result) => boolean.
+ * @param {Function} [options.buildRetryPrompt] Custom retry prompt builder: (result, attempt) => string.
+ * @param {string}  [options.sdk]         Force SDK.
+ * @param {Function} [options.onEvent]    Event callback.
+ * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, attempts: number, resumed: boolean }>}
+ */
+export async function execWithRetry(prompt, options = {}) {
+  const {
+    taskKey,
+    cwd = REPO_ROOT,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    maxRetries = 2,
+    shouldRetry,
+    buildRetryPrompt,
+    sdk,
+    onEvent,
+  } = options;
+
+  if (!taskKey) {
+    throw new Error(
+      `${TAG} execWithRetry requires a taskKey for thread persistence`,
+    );
+  }
+
+  let lastResult = null;
+  const totalAttempts = 1 + maxRetries;
+
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    const currentPrompt =
+      attempt === 1
+        ? prompt
+        : typeof buildRetryPrompt === "function"
+          ? buildRetryPrompt(lastResult, attempt)
+          : `# ERROR RECOVERY — Attempt ${attempt}/${totalAttempts}\n\nYour previous attempt failed with:\n\`\`\`\n${lastResult?.error || lastResult?.output || "(unknown error)"}\n\`\`\`\n\nPlease diagnose the issue, fix it, and try again. Here was the original task:\n\n${prompt}`;
+
+    console.log(
+      `${TAG} execWithRetry: attempt ${attempt}/${totalAttempts} for task "${taskKey}"${attempt > 1 ? " (resume)" : ""}`,
+    );
+
+    lastResult = await launchOrResumeThread(currentPrompt, cwd, timeoutMs, {
+      taskKey,
+      sdk,
+      onEvent,
+    });
+
+    // Check if we should retry
+    if (lastResult.success) {
+      // If caller has custom shouldRetry (e.g. "output must contain 'PASS'"), check it
+      if (typeof shouldRetry === "function" && shouldRetry(lastResult)) {
+        console.log(
+          `${TAG} attempt ${attempt} succeeded but shouldRetry returned true`,
+        );
+        continue;
+      }
+      return { ...lastResult, attempts: attempt };
+    }
+
+    // Failed — should we retry?
+    if (attempt < totalAttempts) {
+      if (typeof shouldRetry === "function" && !shouldRetry(lastResult)) {
+        // Custom predicate says don't retry
+        console.log(`${TAG} shouldRetry returned false — not retrying`);
+        return { ...lastResult, attempts: attempt };
+      }
+      console.warn(
+        `${TAG} attempt ${attempt} failed, will retry: ${lastResult.error}`,
+      );
+    }
+  }
+
+  return { ...lastResult, attempts: totalAttempts };
+}
+
+// ---------------------------------------------------------------------------
+// Thread Management Exports
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the thread record for a task key.
+ * @param {string} taskKey
+ * @returns {ThreadRecord|null}
+ */
+export function getThreadRecord(taskKey) {
+  return threadRegistry.get(taskKey) || null;
+}
+
+/**
+ * Invalidate (kill) a thread record so it won't be resumed.
+ * @param {string} taskKey
+ */
+export function invalidateThread(taskKey) {
+  const record = threadRegistry.get(taskKey);
+  if (record) {
+    record.alive = false;
+    threadRegistry.set(taskKey, record);
+    saveThreadRegistry().catch(() => {});
+  }
+}
+
+/**
+ * Clear all thread records (e.g. on monitor restart).
+ */
+export function clearThreadRegistry() {
+  threadRegistry.clear();
+  saveThreadRegistry().catch(() => {});
+}
+
+/**
+ * Get summary of all active threads.
+ * @returns {Array<{ taskKey: string, sdk: string, threadId: string|null, turnCount: number, age: number }>}
+ */
+export function getActiveThreads() {
+  const now = Date.now();
+  const result = [];
+  for (const [key, record] of threadRegistry) {
+    if (!record.alive) continue;
+    if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) continue;
+    result.push({
+      taskKey: key,
+      sdk: record.sdk,
+      threadId: record.threadId,
+      turnCount: record.turnCount,
+      age: now - record.createdAt,
+    });
+  }
+  return result;
 }

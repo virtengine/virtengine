@@ -51,6 +51,7 @@ import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
 import { RestartController } from "./restart-controller.mjs";
 import {
   analyzeMergeStrategy,
+  executeDecision,
   resetMergeStrategyDedup,
 } from "./merge-strategy.mjs";
 import { assessTask, quickAssess } from "./task-assessment.mjs";
@@ -118,6 +119,21 @@ import { WorkspaceMonitor } from "./workspace-monitor.mjs";
 import { VkLogStream } from "./vk-log-stream.mjs";
 import { VKErrorResolver } from "./vk-error-resolver.mjs";
 import { createAnomalyDetector } from "./anomaly-detector.mjs";
+import {
+  getWorktreeManager,
+  acquireWorktree,
+  releaseWorktree,
+  releaseWorktreeByBranch,
+  findWorktreeForBranch as findManagedWorktree,
+  pruneStaleWorktrees,
+  getWorktreeStats,
+} from "./worktree-manager.mjs";
+import {
+  getTaskExecutor,
+  isInternalExecutorEnabled,
+  getExecutorMode,
+  loadExecutorOptionsFromConfig,
+} from "./task-executor.mjs";
 import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -281,6 +297,8 @@ let {
   branchRouting,
   telegramVerbosity,
   fleet: fleetConfig,
+  internalExecutor: internalExecutorConfig,
+  executorMode: configExecutorMode,
 } = config;
 
 let watchPath = resolve(configWatchPath);
@@ -514,6 +532,19 @@ let vkErrorResolver = null;
 let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
+
+const VK_SESSION_KEEP_STATUSES = new Set(["running", "review", "manual_review", "in_review", "inreview"]);
+
+function normalizeAttemptStatus(status) {
+  return String(status || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, "_");
+}
+
+function shouldKeepSessionForStatus(status) {
+  return VK_SESSION_KEEP_STATUSES.has(normalizeAttemptStatus(status));
+}
 
 // ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
 let anomalyDetector = null;
@@ -1772,15 +1803,18 @@ async function refreshVkSessionStreams(reason = "manual") {
     // ── 1. Collect attempts from orchestrator status file ──────────────
     const statusData = await readStatusData();
     const statusAttempts = statusData?.attempts || {};
+    const statusDataAvailable = !!statusData;
 
     // ── 2. Also query VK directly for all non-archived attempts ────────
     //    The status file can be stale/incomplete (e.g. after restarts or
     //    when attempts were submitted in previous orchestrator cycles).
     let vkAttempts = [];
+    let vkAttemptsAvailable = false;
     try {
       const vkRes = await fetchVk("/api/task-attempts?archived=false");
       if (vkRes?.success && Array.isArray(vkRes.data)) {
         vkAttempts = vkRes.data;
+        vkAttemptsAvailable = true;
       }
     } catch (err) {
       console.warn(
@@ -1788,13 +1822,21 @@ async function refreshVkSessionStreams(reason = "manual") {
       );
     }
 
+    const allowedAttemptIds = new Set();
+    const allowedSessions = new Set();
+
     // ── 3. Merge: build unified map of attemptId → metadata ───────────
     /** @type {Map<string, {task_id?:string, task_title?:string, branch?:string, session_id?:string, executor?:string, executor_variant?:string}>} */
     const mergedAttempts = new Map();
 
-    // Status file attempts (mark only running ones)
+    // Status file attempts (mark running + review states)
     for (const [attemptId, info] of Object.entries(statusAttempts)) {
-      if (!attemptId || !info || info.status !== "running") continue;
+      if (!attemptId || !info) continue;
+      if (!shouldKeepSessionForStatus(info.status)) continue;
+      allowedAttemptIds.add(attemptId);
+      if (info.session_id) {
+        allowedSessions.add(info.session_id);
+      }
       mergedAttempts.set(attemptId, {
         task_id: info.task_id,
         task_title: info.task_title || info.name,
@@ -1810,6 +1852,11 @@ async function refreshVkSessionStreams(reason = "manual") {
     for (const vkAttempt of vkAttempts) {
       if (!vkAttempt?.id) continue;
       if (mergedAttempts.has(vkAttempt.id)) continue; // status file takes precedence
+      const vkStatus = vkAttempt.status ?? vkAttempt.state ?? "";
+      if (vkStatus && !shouldKeepSessionForStatus(vkStatus)) {
+        continue;
+      }
+      allowedAttemptIds.add(vkAttempt.id);
       mergedAttempts.set(vkAttempt.id, {
         task_id: vkAttempt.task_id,
         task_title: vkAttempt.name,
@@ -1827,6 +1874,14 @@ async function refreshVkSessionStreams(reason = "manual") {
         `${vkAttempts.length} vk-api, merged)`,
     );
 
+    // Keep cached sessions for allowed attempts
+    for (const attemptId of allowedAttemptIds) {
+      const cachedSession = vkSessionCache.get(attemptId);
+      if (cachedSession) {
+        allowedSessions.add(cachedSession);
+      }
+    }
+
     // ── 4. Discover sessions and connect ──────────────────────────────
     for (const [attemptId, info] of mergedAttempts) {
       let sessionId = info.session_id || vkSessionCache.get(attemptId) || null;
@@ -1843,6 +1898,7 @@ async function refreshVkSessionStreams(reason = "manual") {
 
       if (!sessionId) continue; // no session yet — will retry next cycle
 
+      allowedSessions.add(sessionId);
       vkLogStream.setProcessMeta(attemptId, {
         attemptId,
         taskId: info.task_id,
@@ -1853,6 +1909,25 @@ async function refreshVkSessionStreams(reason = "manual") {
         executorVariant: info.executor_variant,
       });
       vkLogStream.connectToSession(sessionId);
+    }
+
+    if (statusDataAvailable || vkAttemptsAvailable) {
+      for (const attemptId of Array.from(vkSessionCache.keys())) {
+        if (!allowedAttemptIds.has(attemptId)) {
+          vkSessionCache.delete(attemptId);
+        }
+      }
+      if (vkLogStream?.pruneSessions) {
+        const pruned = vkLogStream.pruneSessions(
+          allowedSessions,
+          "session no longer active",
+        );
+        if (pruned > 0) {
+          console.log(
+            `[monitor] refreshVkSessionStreams(${reason}): pruned ${pruned} stale session streams`,
+          );
+        }
+      }
     }
   } catch (err) {
     console.warn(
@@ -1994,11 +2069,20 @@ function ghAvailable() {
 }
 
 /**
- * Find the worktree path for a given branch by parsing `git worktree list`.
- * Returns null if no worktree is found.
+ * Find the worktree path for a given branch.
+ * Delegates to the centralized WorktreeManager; falls back to direct git parsing
+ * for branches not tracked in the registry.
  */
 function findWorktreeForBranch(branch) {
   if (!branch) return null;
+  // Try centralized manager first (has registry + git porcelain search)
+  try {
+    const managed = findManagedWorktree(branch);
+    if (managed) return managed;
+  } catch {
+    // Manager may not be initialized — fall through
+  }
+  // Fallback: direct git worktree list parsing
   try {
     const result = spawnSync("git", ["worktree", "list", "--porcelain"], {
       cwd: repoRoot,
@@ -2016,7 +2100,6 @@ function findWorktreeForBranch(branch) {
         currentPath = line.slice(9).trim();
       } else if (line.startsWith("branch ") && currentPath) {
         const branchRef = line.slice(7).trim();
-        // branchRef is like "refs/heads/ve/40fa-m-interactive-co"
         const branchName = branchRef.replace(/^refs\/heads\//, "");
         if (branchName === branch) {
           return currentPath;
@@ -3695,39 +3778,22 @@ async function checkMergedPRsAndUpdateTasks() {
                   worktreePath = findWorktreeForBranch(cc.branch);
                 }
 
-                // Create temporary worktree if none found
+                // Create worktree via centralized manager if none found
                 if (!worktreePath && cc.branch) {
                   try {
-                    const tmpDir = resolve(
-                      repoRoot,
-                      ".cache",
-                      "worktrees",
-                      cc.branch.replace(/\//g, "-"),
-                    );
-                    const mkResult = spawnSync(
-                      "git",
-                      ["worktree", "add", tmpDir, cc.branch],
-                      {
-                        cwd: repoRoot,
-                        stdio: ["ignore", "pipe", "pipe"],
-                        timeout: 60000,
-                        encoding: "utf8",
-                        shell: process.platform === "win32",
-                      },
-                    );
-                    if (mkResult.status === 0) {
-                      worktreePath = tmpDir;
+                    const taskKey = task.id || cc.branch;
+                    const wt = await acquireWorktree(cc.branch, taskKey, {
+                      owner: "monitor-conflict",
+                    });
+                    if (wt?.path) {
+                      worktreePath = wt.path;
                       console.log(
-                        `[monitor] Created temporary worktree for ${cc.branch} at ${tmpDir}`,
-                      );
-                    } else {
-                      console.warn(
-                        `[monitor] Failed to create worktree for ${cc.branch}: ${mkResult.stderr}`,
+                        `[monitor] Acquired worktree for ${cc.branch} at ${wt.path} (${wt.created ? "created" : "existing"})`,
                       );
                     }
                   } catch (wErr) {
                     console.warn(
-                      `[monitor] Worktree creation error: ${wErr.message}`,
+                      `[monitor] Worktree acquisition error: ${wErr.message}`,
                     );
                   }
                 }
@@ -4182,79 +4248,34 @@ async function runMergeStrategyAnalysis(ctx) {
       return;
     }
 
-    // ── Act on the decision ──────────────────────────────────────
-    switch (decision.action) {
-      case "merge_after_ci_pass":
-        console.log(`[${tag}] → merge_after_ci_pass`);
-        // Nothing extra — the VK cleanup script handles auto-merge after CI
-        break;
+    // ── Execute the decision via centralized executor ────────────
+    console.log(
+      `[${tag}] → ${decision.action}${decision.reason ? ": " + decision.reason.slice(0, 100) : ""}`,
+    );
 
-      case "prompt":
-        console.log(
-          `[${tag}] → prompt agent: ${(decision.message || "").slice(0, 100)}`,
-        );
-        if (agentPoolEnabled && decision.message) {
-          void execPooledPrompt(
-            `The merge strategy reviewer has feedback on your work for task "${ctx.taskTitle || ctx.shortId}":\n\n` +
-              decision.message +
-              `\n\nPlease address this feedback, commit, and push.`,
-            { timeoutMs: 15 * 60 * 1000 },
-          );
-        }
-        break;
+    const execResult = await executeDecision(decision, ctx, {
+      logDir,
+      onTelegram: telegramFn,
+      timeoutMs:
+        parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 15 * 60 * 1000,
+    });
 
-      case "close_pr":
-        console.log(`[${tag}] → close_pr: ${decision.reason || "no reason"}`);
-        if (telegramFn) {
-          telegramFn(
-            `🚫 Merge strategy recommends closing PR for ${ctx.shortId}: ${decision.reason || "no reason given"}`,
-          );
-        }
-        // Don't auto-close — just flag for human. Closing could lose work.
-        break;
-
-      case "re_attempt":
-        console.log(`[${tag}] → re_attempt: ${decision.reason || "no reason"}`);
-        // Trigger a fresh session retry
-        if (typeof attemptFreshSessionRetry === "function") {
-          const freshStarted = await attemptFreshSessionRetry(
-            "merge_strategy_re_attempt",
-            decision.reason || "Merge strategy recommended re-attempt",
-          );
-          if (freshStarted && telegramFn) {
-            telegramFn(
-              `🔄 Merge strategy recommended re-attempt for ${ctx.shortId}. Fresh session started.`,
-            );
-          }
-        }
-        break;
-
-      case "manual_review":
-        console.log(
-          `[${tag}] → manual_review: ${decision.reason || "no reason"}`,
-        );
-        // Already notified via Telegram by analyzeMergeStrategy
-        break;
-
-      case "wait": {
-        const waitSec = decision.seconds || 300;
-        console.log(`[${tag}] → wait ${waitSec}s: ${decision.reason || ""}`);
-        // Re-run analysis after the wait period
-        setTimeout(() => {
+    // ── Post-execution handling ──────────────────────────────────
+    if (execResult.action === "wait" && execResult.waitSeconds) {
+      // Re-run analysis after the wait period
+      setTimeout(
+        () => {
           void runMergeStrategyAnalysis({
             ...ctx,
             ciStatus: "re-check",
           });
-        }, waitSec * 1000);
-        break;
-      }
+        },
+        (execResult.waitSeconds || 300) * 1000,
+      );
+    }
 
-      case "noop":
-        console.log(`[${tag}] → noop`);
-        break;
-
-      default:
-        console.warn(`[${tag}] unknown action: ${decision.action}`);
+    if (!execResult.success && execResult.error) {
+      console.warn(`[${tag}] execution issue: ${execResult.error}`);
     }
   } catch (err) {
     console.warn(
@@ -7974,6 +7995,12 @@ function applyConfig(nextConfig, options = {}) {
   executorScheduler = nextConfig.scheduler;
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
+
+  // ── Internal executor hot-reload ──────────────────────────────────────
+  if (nextConfig.internalExecutor) {
+    internalExecutorConfig = nextConfig.internalExecutor;
+  }
+
   codexEnabled = nextConfig.codexEnabled;
   primaryAgentName = nextConfig.primaryAgent;
   primaryAgentReady = nextConfig.primaryAgentEnabled;
@@ -8067,6 +8094,9 @@ process.on("SIGINT", () => {
     vkLogStream.stop();
     vkLogStream = null;
   }
+  if (internalTaskExecutor) {
+    void internalTaskExecutor.stop();
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopEnvWatchers();
@@ -8097,6 +8127,9 @@ process.on("SIGTERM", () => {
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
+  }
+  if (internalTaskExecutor) {
+    void internalTaskExecutor.stop();
   }
   stopAutoUpdateLoop();
   stopSelfWatcher();
@@ -8377,7 +8410,56 @@ try {
 } catch (err) {
   console.warn(`[monitor] complexity matrix log failed: ${err.message}`);
 }
-startProcess();
+
+// ── Internal Executor / VK Orchestrator startup ──────────────────────────────
+/** @type {import("./task-executor.mjs").TaskExecutor|null} */
+let internalTaskExecutor = null;
+
+const executorMode = configExecutorMode || getExecutorMode();
+console.log(`[monitor] executor mode: ${executorMode}`);
+
+if (executorMode === "internal" || executorMode === "hybrid") {
+  // Start internal executor
+  try {
+    const execOpts = {
+      ...internalExecutorConfig,
+      repoRoot,
+      repoSlug,
+      sendTelegram: telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null,
+      onTaskStarted: (task, slot) => {
+        console.log(
+          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) in ${slot.worktreePath}`
+        );
+      },
+      onTaskCompleted: (task, result) => {
+        console.log(
+          `[task-executor] ✅ completed: "${task.title}" (${result.attempts} attempt(s))`
+        );
+      },
+      onTaskFailed: (task, err) => {
+        console.warn(
+          `[task-executor] ❌ failed: "${task.title}" — ${err?.message || err}`
+        );
+      },
+    };
+    internalTaskExecutor = getTaskExecutor(execOpts);
+    internalTaskExecutor.start();
+    console.log(
+      `[monitor] internal executor started (maxParallel=${execOpts.maxParallel || 3}, sdk=${execOpts.sdk || "auto"})`
+    );
+  } catch (err) {
+    console.error(`[monitor] internal executor failed to start: ${err.message}`);
+  }
+}
+
+if (executorMode === "vk" || executorMode === "hybrid") {
+  // Start VK orchestrator (ve-orchestrator.ps1)
+  startProcess();
+} else {
+  console.log("[monitor] VK orchestrator skipped (executor mode = internal)");
+}
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
 }
@@ -8409,6 +8491,8 @@ injectMonitorFunctions({
     anomalyDetector
       ? anomalyDetector.getStatusReport()
       : "Anomaly detector not running.",
+  getInternalExecutor: () => internalTaskExecutor,
+  getExecutorMode: () => executorMode,
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
@@ -8443,6 +8527,8 @@ export {
   resolveUpstreamFromConfig,
   rebaseDownstreamTasks,
   runTaskAssessment,
+  // Internal executor
+  internalTaskExecutor,
   // Fleet coordination re-exports for external consumers
   getFleetState,
   isFleetCoordinator,

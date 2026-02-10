@@ -12,6 +12,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pruneStaleWorktrees, getWorktreeStats } from "./worktree-manager.mjs";
 
 const isWindows = process.platform === "win32";
 
@@ -709,6 +710,21 @@ export async function runMaintenanceSweep(opts = {}) {
   const staleKilled = killStaleOrchestrators(childPid);
   const pushesReaped = reapStuckGitPushes(gitPushMaxAgeMs);
   const worktreesPruned = repoRoot ? cleanupWorktrees(repoRoot) : 0;
+
+  // Also prune via centralized WorktreeManager
+  try {
+    const pruneResult = await pruneStaleWorktrees();
+    if (pruneResult.pruned > 0) {
+      console.log(
+        `[maintenance] WorktreeManager pruned ${pruneResult.pruned} stale worktrees`,
+      );
+    }
+  } catch (wtErr) {
+    console.warn(
+      `[maintenance] WorktreeManager prune failed: ${wtErr.message}`,
+    );
+  }
+
   const branchesSynced = repoRoot
     ? syncLocalTrackingBranches(repoRoot, syncBranches)
     : 0;

@@ -32,7 +32,22 @@ import {
   setPoolSdk,
   resetPoolSdkCache,
   getAvailableSdks,
+  getActiveThreads,
+  clearThreadRegistry,
+  invalidateThread,
 } from "./agent-pool.mjs";
+import {
+  getKanbanAdapter,
+  setKanbanBackend,
+  getAvailableBackends,
+  getKanbanBackendName,
+} from "./kanban-adapter.mjs";
+import {
+  getWorktreeManager,
+  listActiveWorktrees as listManagedWorktrees,
+  pruneStaleWorktrees,
+  getWorktreeStats,
+} from "./worktree-manager.mjs";
 import { loadExecutorConfig } from "./config.mjs";
 import {
   loadWorkspaceRegistry,
@@ -77,7 +92,18 @@ const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const POLL_TIMEOUT_S = 30; // long-poll timeout
 const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
-const AGENT_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
+const AGENT_TIMEOUT_MS = (() => {
+  const minRaw = Number(process.env.TELEGRAM_AGENT_TIMEOUT_MIN || "");
+  if (Number.isFinite(minRaw) && minRaw > 0) return minRaw * 60 * 1000;
+  const raw = Number(
+    process.env.TELEGRAM_AGENT_TIMEOUT_MS ||
+      process.env.PRIMARY_AGENT_TIMEOUT_MS ||
+      process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
+      "",
+  );
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return 90 * 60 * 1000; // 90 min default
+})();
 let telegramPollLockHeld = false;
 const presenceIntervalSec = Number(
   process.env.TELEGRAM_PRESENCE_INTERVAL_SEC || "60",
@@ -98,6 +124,8 @@ const presenceChatId = process.env.TELEGRAM_PRESENCE_CHAT_ID;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
+
+console.log(`[telegram-bot] agent timeout set to ${Math.round(AGENT_TIMEOUT_MS / 60000)} min`);
 
 // ── Message Batching Configuration ──────────────────────────────────────────
 const batchingEnabled = !["0", "false", "no"].includes(
@@ -260,6 +288,8 @@ let _triggerTaskPlanner = null;
 let _reconcileTaskStatuses = null;
 let _onDigestSealed = null;
 let _getAnomalyReport = null;
+let _getInternalExecutor = null;
+let _getExecutorMode = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -282,6 +312,8 @@ export function injectMonitorFunctions({
   reconcileTaskStatuses,
   onDigestSealed,
   getAnomalyReport,
+  getInternalExecutor,
+  getExecutorMode,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -299,6 +331,8 @@ export function injectMonitorFunctions({
   _reconcileTaskStatuses = reconcileTaskStatuses;
   _onDigestSealed = onDigestSealed || null;
   _getAnomalyReport = getAnomalyReport || null;
+  _getInternalExecutor = getInternalExecutor || null;
+  _getExecutorMode = getExecutorMode || null;
 }
 
 /**
@@ -1105,6 +1139,22 @@ const COMMANDS = {
     handler: cmdSdk,
     desc: "View/switch agent pool SDK: /sdk [codex|copilot|claude]",
   },
+  "/kanban": {
+    handler: cmdKanban,
+    desc: "View/switch kanban backend: /kanban [vk|github|jira]",
+  },
+  "/threads": {
+    handler: cmdThreads,
+    desc: "View active agent threads: /threads [clear]",
+  },
+  "/worktrees": {
+    handler: cmdWorktrees,
+    desc: "View/manage worktrees: /worktrees [prune|release <taskKey>]",
+  },
+  "/executor": {
+    handler: cmdExecutor,
+    desc: "View/manage executor mode: /executor [status|mode <vk|internal|hybrid>|slots]",
+  },
   "/shared_workspaces": {
     handler: cmdSharedWorkspaces,
     desc: "List shared cloud workspace availability",
@@ -1226,7 +1276,15 @@ async function registerBotCommands() {
   }
 }
 
-const FAST_COMMANDS = new Set(["/status", "/tasks", "/sdk"]);
+const FAST_COMMANDS = new Set([
+  "/status",
+  "/tasks",
+  "/sdk",
+  "/kanban",
+  "/threads",
+  "/worktrees",
+  "/executor",
+]);
 
 async function handleCommand(text, chatId) {
   const parts = text.split(/\s+/);
@@ -2381,6 +2439,299 @@ async function cmdModel(chatId, modelArg) {
   } catch (err) {
     await sendReply(chatId, `❌ Error: ${err.message}`);
   }
+}
+
+async function cmdKanban(chatId, backendArg) {
+  if (!backendArg || backendArg.trim() === "") {
+    const current = getKanbanBackendName();
+    const available = getAvailableBackends();
+    const lines = [
+      "📋 Kanban Backend Status",
+      "",
+      `Active: ${current}`,
+      `Available: ${available.join(", ")}`,
+      "",
+      "Switch backend:",
+      "  /kanban vk        Vibe-Kanban (default)",
+      "  /kanban github     GitHub Issues",
+      "  /kanban jira       Jira (stub)",
+    ];
+    await sendReply(chatId, lines.join("\n"));
+    return;
+  }
+
+  const target = backendArg.trim().toLowerCase();
+  const validBackends = getAvailableBackends();
+
+  if (!validBackends.includes(target)) {
+    await sendReply(
+      chatId,
+      `Unknown backend: ${target}\nValid: ${validBackends.join(", ")}`,
+    );
+    return;
+  }
+
+  try {
+    setKanbanBackend(target);
+    await sendReply(
+      chatId,
+      `✅ Kanban backend switched to: ${target}\nActive: ${getKanbanBackendName()}`,
+    );
+  } catch (err) {
+    await sendReply(chatId, `❌ Error switching backend: ${err.message}`);
+  }
+}
+
+async function cmdThreads(chatId, subArg) {
+  if (subArg && subArg.trim().toLowerCase() === "clear") {
+    clearThreadRegistry();
+    await sendReply(chatId, "✅ Thread registry cleared.");
+    return;
+  }
+
+  if (subArg && subArg.trim().toLowerCase().startsWith("kill ")) {
+    const taskKey = subArg.trim().substring(5).trim();
+    if (!taskKey) {
+      await sendReply(chatId, "Usage: /threads kill <taskKey>");
+      return;
+    }
+    invalidateThread(taskKey);
+    await sendReply(chatId, `✅ Thread for "${taskKey}" invalidated.`);
+    return;
+  }
+
+  const threads = getActiveThreads();
+  if (threads.length === 0) {
+    await sendReply(
+      chatId,
+      "🧵 No active agent threads.\n\nThreads are created when tasks run via the agent pool with thread persistence.",
+    );
+    return;
+  }
+
+  const lines = [`🧵 Active Agent Threads (${threads.length})`, ""];
+
+  for (const t of threads) {
+    const ageMin = Math.round(t.age / 60_000);
+    lines.push(
+      `• ${t.taskKey}`,
+      `  SDK: ${t.sdk} | Turns: ${t.turnCount} | Age: ${ageMin}m`,
+      `  Thread: ${t.threadId ? t.threadId.slice(0, 12) + "…" : "(none)"}`,
+      "",
+    );
+  }
+
+  lines.push(
+    "Commands:",
+    "  /threads clear          Clear all thread records",
+    "  /threads kill <taskKey>  Invalidate a specific thread",
+  );
+
+  await sendReply(chatId, lines.join("\n"));
+}
+
+/**
+ * /worktrees — View and manage git worktrees.
+ *
+ * Subcommands:
+ *   /worktrees           — Show all active worktrees with branch, task, age
+ *   /worktrees stats     — Show aggregate statistics
+ *   /worktrees prune     — Prune stale/orphaned worktrees
+ *   /worktrees release <taskKey> — Release a specific worktree by task key
+ */
+async function cmdWorktrees(chatId, args) {
+  const parts = args ? args.trim().split(/\s+/) : [];
+  const sub = parts[0]?.toLowerCase();
+
+  if (sub === "prune") {
+    // Prune stale worktrees
+    try {
+      const result = await pruneStaleWorktrees();
+      const lines = [`🧹 Worktree prune complete:`];
+      lines.push(`  Pruned: ${result.pruned}`);
+      lines.push(`  Registry evicted: ${result.evicted}`);
+      await sendReply(chatId, lines.join("\n"));
+    } catch (err) {
+      await sendReply(chatId, `❌ Prune failed: ${err.message}`);
+    }
+    return;
+  }
+
+  if (sub === "release") {
+    const taskKey = parts[1];
+    if (!taskKey) {
+      await sendReply(chatId, "Usage: /worktrees release <taskKey>");
+      return;
+    }
+    try {
+      const wm = getWorktreeManager();
+      const result = wm.releaseWorktree(taskKey);
+      if (result.success) {
+        await sendReply(
+          chatId,
+          `✅ Released worktree for "${taskKey}": ${result.path}`,
+        );
+      } else {
+        await sendReply(
+          chatId,
+          `⚠️ No worktree found for task key "${taskKey}"`,
+        );
+      }
+    } catch (err) {
+      await sendReply(chatId, `❌ Release failed: ${err.message}`);
+    }
+    return;
+  }
+
+  if (sub === "stats") {
+    try {
+      const stats = getWorktreeStats();
+      const lines = [`📊 Worktree Stats:`];
+      lines.push(`  Total tracked: ${stats.total}`);
+      lines.push(`  Active: ${stats.active}`);
+      lines.push(`  Stale: ${stats.stale}`);
+      if (Object.keys(stats.byOwner).length > 0) {
+        lines.push(`  By owner:`);
+        for (const [owner, count] of Object.entries(stats.byOwner)) {
+          lines.push(`    ${owner}: ${count}`);
+        }
+      }
+      await sendReply(chatId, lines.join("\n"));
+    } catch (err) {
+      await sendReply(chatId, `❌ Stats failed: ${err.message}`);
+    }
+    return;
+  }
+
+  // Default: list all active worktrees
+  try {
+    const worktrees = listManagedWorktrees();
+    if (!worktrees || worktrees.length === 0) {
+      await sendReply(chatId, "🌳 No active worktrees tracked.");
+      return;
+    }
+
+    const lines = [`🌳 Active Worktrees (${worktrees.length}):\n`];
+    for (const wt of worktrees) {
+      const ageMin = Math.round((wt.age || 0) / 60000);
+      const ageStr =
+        ageMin >= 60 ? `${Math.round(ageMin / 60)}h` : `${ageMin}m`;
+      const branch = wt.branch || "(detached)";
+      const taskKey = wt.taskKey ? ` [${wt.taskKey}]` : "";
+      const owner = wt.owner ? ` (${wt.owner})` : "";
+      const status = wt.status || "active";
+      lines.push(`• ${branch}${taskKey}${owner}`);
+      lines.push(`  Status: ${status} | Age: ${ageStr}`);
+      lines.push(`  Path: ${wt.path}`);
+    }
+
+    lines.push(
+      `\nCommands: /worktrees prune | /worktrees release <key> | /worktrees stats`,
+    );
+    await sendReply(chatId, lines.join("\n"));
+  } catch (err) {
+    await sendReply(chatId, `❌ Worktree list failed: ${err.message}`);
+  }
+}
+
+/**
+ * /executor — View and manage the internal task executor.
+ *
+ * Subcommands:
+ *   /executor           — Show status (mode, active slots, SDK, etc.)
+ *   /executor status    — Same as above
+ *   /executor slots     — Show active task slots with details
+ *   /executor mode <vk|internal|hybrid> — Show current mode (runtime switch not supported)
+ */
+async function cmdExecutor(chatId, args) {
+  const parts = args ? args.trim().split(/\s+/) : [];
+  const sub = parts[0]?.toLowerCase();
+
+  // Get monitor functions for executor access
+  const executor = _getInternalExecutor?.();
+  const mode = _getExecutorMode?.() || "vk";
+
+  if (sub === "slots") {
+    if (!executor) {
+      await sendReply(
+        chatId,
+        `⚙️ Internal executor not active (mode: ${mode})`,
+      );
+      return;
+    }
+    const status = executor.getStatus();
+    if (status.slots.length === 0) {
+      await sendReply(
+        chatId,
+        `⚙️ No active task slots (${status.activeSlots}/${status.maxParallel} used)`,
+      );
+      return;
+    }
+    const lines = [
+      `⚙️ Active Task Slots (${status.activeSlots}/${status.maxParallel}):\n`,
+    ];
+    for (const slot of status.slots) {
+      const runMin = Math.round(slot.runningFor / 60);
+      const runStr =
+        runMin >= 60
+          ? `${Math.round(runMin / 60)}h${runMin % 60}m`
+          : `${runMin}m`;
+      lines.push(`• ${slot.taskTitle}`);
+      lines.push(`  ID: ${slot.taskId.substring(0, 8)} | SDK: ${slot.sdk}`);
+      lines.push(`  Branch: ${slot.branch}`);
+      lines.push(
+        `  Running: ${runStr} | Attempt: ${slot.attempt} | Status: ${slot.status}`,
+      );
+    }
+    await sendReply(chatId, lines.join("\n"));
+    return;
+  }
+
+  if (sub === "mode") {
+    const target = parts[1]?.toLowerCase();
+    if (target && ["vk", "internal", "hybrid"].includes(target)) {
+      await sendReply(
+        chatId,
+        `⚙️ Current mode: ${mode}\n` +
+          `ℹ️ Mode can be changed via EXECUTOR_MODE env var or config.\n` +
+          `Restart the monitor after changing to apply.`,
+      );
+    } else {
+      await sendReply(
+        chatId,
+        `⚙️ Current executor mode: ${mode}\n\nValid modes: vk, internal, hybrid`,
+      );
+    }
+    return;
+  }
+
+  // Default: show status
+  const lines = [`⚙️ Executor Status\n`];
+  lines.push(`Mode: ${mode}`);
+
+  if (executor) {
+    const status = executor.getStatus();
+    lines.push(`Running: ${status.running ? "✅ Yes" : "❌ No"}`);
+    lines.push(`SDK: ${status.sdk}`);
+    lines.push(`Active Slots: ${status.activeSlots}/${status.maxParallel}`);
+    lines.push(`Poll Interval: ${status.pollIntervalMs / 1000}s`);
+    lines.push(`Task Timeout: ${Math.round(status.taskTimeoutMs / 60000)}min`);
+    lines.push(`Max Retries: ${status.maxRetries}`);
+    lines.push(`Cooldowns: ${status.cooldowns}`);
+    if (status.projectId) {
+      lines.push(`Project ID: ${status.projectId.substring(0, 8)}...`);
+    }
+  } else {
+    lines.push(`Internal executor: not active`);
+    if (mode === "vk") {
+      lines.push(
+        `\nℹ️ Using VK executor only. Set EXECUTOR_MODE=internal or hybrid to enable.`,
+      );
+    }
+  }
+
+  lines.push(`\nCommands: /executor slots | /executor mode`);
+  await sendReply(chatId, lines.join("\n"));
 }
 
 async function cmdSdk(chatId, sdkArg) {

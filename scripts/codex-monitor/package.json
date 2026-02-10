@@ -114,6 +114,9 @@
     "workspace-monitor.mjs",
     "pr-cleanup-daemon.mjs",
     "lib/logger.mjs",
+    "agent-pool.mjs",
+    "repo-root.mjs",
+    "vk-error-resolver.mjs",
     ".env.example",
     "codex-monitor.config.example.json",
     "codex-monitor.schema.json",
@@ -121,9 +124,9 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.37",
-    "@github/copilot-sdk": "0.1.19",
-    "@openai/codex-sdk": "0.99.0-alpha.6",
+    "@anthropic-ai/claude-agent-sdk": "0.2.38",
+    "@github/copilot-sdk": "0.1.23",
+    "@openai/codex-sdk": "0.99.0-alpha.14",
     "vibe-kanban": "0.1.7"
   },
   "devDependencies": {

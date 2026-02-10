@@ -1017,6 +1017,50 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.COPILOT_SDK_DISABLED !== "1" ||
     process.env.CLAUDE_SDK_DISABLED !== "1";
 
+  // ── Internal Executor ────────────────────────────────────
+  // Allows the monitor to run tasks via agent-pool directly instead of
+  // (or alongside) the VK executor. Modes: "vk" (default), "internal", "hybrid".
+  const internalExecutorConfig = configData.internalExecutor || {};
+  const executorMode = (
+    process.env.EXECUTOR_MODE ||
+    internalExecutorConfig.mode ||
+    "vk"
+  ).toLowerCase();
+  const internalExecutor = {
+    mode: ["vk", "internal", "hybrid"].includes(executorMode)
+      ? executorMode
+      : "vk",
+    maxParallel: Number(
+      process.env.INTERNAL_EXECUTOR_PARALLEL ||
+        internalExecutorConfig.maxParallel ||
+        3,
+    ),
+    pollIntervalMs: Number(
+      process.env.INTERNAL_EXECUTOR_POLL_MS ||
+        internalExecutorConfig.pollIntervalMs ||
+        30000,
+    ),
+    sdk:
+      process.env.INTERNAL_EXECUTOR_SDK ||
+      internalExecutorConfig.sdk ||
+      "auto",
+    taskTimeoutMs: Number(
+      process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
+        internalExecutorConfig.taskTimeoutMs ||
+        90 * 60 * 1000,
+    ),
+    maxRetries: Number(
+      process.env.INTERNAL_EXECUTOR_MAX_RETRIES ||
+        internalExecutorConfig.maxRetries ||
+        2,
+    ),
+    autoCreatePr: internalExecutorConfig.autoCreatePr !== false,
+    projectId:
+      process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
+      internalExecutorConfig.projectId ||
+      null,
+  };
+
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
   const vkRecoveryHost =
@@ -1289,6 +1333,10 @@ export function loadConfig(argv = process.argv, options = {}) {
     agentPoolEnabled,
     primaryAgent,
     primaryAgentEnabled,
+
+    // Internal Executor
+    internalExecutor,
+    executorMode: internalExecutor.mode,
 
     // Merge Strategy
     codexAnalyzeMergeStrategy:
