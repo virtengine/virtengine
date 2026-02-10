@@ -13,6 +13,9 @@ import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec as execCallback } from 'child_process';
 import { fileURLToPath } from 'url';
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const exec = promisify(execCallback);
 
@@ -168,7 +171,7 @@ class PRCleanupDaemon {
   }
 
   /**
-   * Resolve conflicts on a PR using codex-sdk agent
+   * Resolve conflicts on a PR — tries codex agent first, falls back to local merge
    * @param {object} pr - PR metadata
    */
   async resolveConflicts(pr) {
@@ -183,9 +186,9 @@ class PRCleanupDaemon {
       return;
     }
 
-    // 2. Spawn codex-sdk agent to resolve
+    // 2. Try codex-sdk agent first, fall back to local merge
     if (this.config.dryRun) {
-      console.log(`[pr-cleanup-daemon] [DRY RUN] Would spawn codex agent for PR #${pr.number}`);
+      console.log(`[pr-cleanup-daemon] [DRY RUN] Would resolve conflicts for PR #${pr.number}`);
       return;
     }
 
@@ -200,10 +203,88 @@ class PRCleanupDaemon {
 
       this.stats.conflictsResolved++;
       console.log(`[pr-cleanup-daemon] ✓ Resolved conflicts on PR #${pr.number}`);
-    } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, err?.message ?? String(err));
-      await this.escalate(pr, 'conflict_resolution_failed', { error: err?.message ?? String(err) });
-      this.stats.escalations++;
+    } catch (agentErr) {
+      console.warn(`[pr-cleanup-daemon] Codex agent failed for PR #${pr.number}, trying local merge: ${agentErr.message}`);
+      
+      // Fallback: resolve locally using temporary worktree
+      try {
+        await this.resolveConflictsLocally(pr);
+        this.stats.conflictsResolved++;
+        console.log(`[pr-cleanup-daemon] ✓ Resolved conflicts locally on PR #${pr.number}`);
+      } catch (localErr) {
+        console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, localErr.message);
+        await this.escalate(pr, 'conflict_resolution_failed', { error: localErr.message });
+        this.stats.escalations++;
+      }
+    }
+  }
+
+  /**
+   * Resolve conflicts locally using a temporary worktree and merge
+   * Only handles auto-resolvable conflicts (lockfiles, generated files)
+   * @param {object} pr - PR metadata
+   */
+  async resolveConflictsLocally(pr) {
+    let tmpDir;
+    try {
+      tmpDir = await mkdtemp(join(tmpdir(), 'pr-merge-'));
+      
+      // Fetch all relevant refs
+      await exec(`git fetch origin ${pr.headRefName} main`);
+      
+      // Create worktree on the PR branch
+      await exec(`git worktree add "${tmpDir}" "origin/${pr.headRefName}" --detach`);
+      await exec(`git checkout -B "${pr.headRefName}" "origin/${pr.headRefName}"`, { cwd: tmpDir });
+      
+      // Attempt merge with main
+      try {
+        await exec(`git merge origin/main --no-edit`, { cwd: tmpDir });
+      } catch {
+        // Merge has conflicts — try auto-resolving known file types
+        const { stdout: conflictFiles } = await exec(
+          `git diff --name-only --diff-filter=U`, { cwd: tmpDir }
+        ).catch(() => ({ stdout: '' }));
+        
+        const files = conflictFiles.trim().split('\n').filter(Boolean);
+        const autoResolvable = [
+          'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'go.sum',
+          'coverage.txt', 'results.txt', 'package.json',
+        ];
+        
+        let allResolved = true;
+        for (const file of files) {
+          const basename = file.split('/').pop();
+          if (autoResolvable.includes(basename) || basename.endsWith('.lock')) {
+            // Accept theirs (main) for lockfiles, ours for coverage/results
+            const strategy = ['coverage.txt', 'results.txt', 'CHANGELOG.md'].includes(basename)
+              ? '--ours' : '--theirs';
+            await exec(`git checkout ${strategy} -- "${file}"`, { cwd: tmpDir });
+            await exec(`git add "${file}"`, { cwd: tmpDir });
+          } else {
+            allResolved = false;
+          }
+        }
+        
+        if (!allResolved) {
+          await exec(`git merge --abort`, { cwd: tmpDir }).catch(() => {});
+          throw new Error(`Cannot auto-resolve all conflicts: ${files.join(', ')}`);
+        }
+        
+        // Commit the resolved merge
+        await exec(`git commit --no-edit`, { cwd: tmpDir });
+      }
+      
+      // Push the merged branch
+      await exec(`git push origin "${pr.headRefName}"`, { cwd: tmpDir });
+    } finally {
+      if (tmpDir) {
+        try {
+          await exec(`git worktree remove "${tmpDir}" --force`);
+        } catch {
+          try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
+          try { await exec(`git worktree prune`); } catch {}
+        }
+      }
     }
   }
 
@@ -226,16 +307,39 @@ class PRCleanupDaemon {
       return;
     }
 
+    let tmpDir;
     try {
-      // Re-trigger by pushing empty commit
-      await exec(`gh pr checkout ${pr.number}`);
-      await exec(`git commit --allow-empty -m "chore: re-trigger CI"`);
-      await exec(`git push`);
+      // Use a temporary worktree to avoid conflicts with existing checkouts
+      tmpDir = await mkdtemp(join(tmpdir(), 'pr-cleanup-'));
+      
+      // Fetch latest refs first
+      await exec(`git fetch origin ${pr.headRefName}`);
+      
+      // Create a temporary worktree for the PR branch
+      await exec(`git worktree add "${tmpDir}" "origin/${pr.headRefName}" --detach`);
+      
+      // Checkout the branch properly inside the worktree
+      await exec(`git checkout -B "${pr.headRefName}" "origin/${pr.headRefName}"`, { cwd: tmpDir });
+      
+      // Push empty commit to re-trigger CI
+      await exec(`git commit --allow-empty -m "chore: re-trigger CI"`, { cwd: tmpDir });
+      await exec(`git push origin "${pr.headRefName}"`, { cwd: tmpDir });
 
       this.stats.ciRetriggers++;
       console.log(`[pr-cleanup-daemon] ✓ Re-triggered CI on PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err?.message ?? String(err));
+      console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err.message);
+    } finally {
+      // Clean up the temporary worktree
+      if (tmpDir) {
+        try {
+          await exec(`git worktree remove "${tmpDir}" --force`);
+        } catch {
+          // If worktree remove fails, try manual cleanup
+          try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
+          try { await exec(`git worktree prune`); } catch {}
+        }
+      }
     }
   }
 
@@ -280,18 +384,61 @@ class PRCleanupDaemon {
   }
 
   /**
-   * Get conflict size (number of conflict marker lines)
+   * Get conflict size (number of conflicting files) using GitHub API
+   * Avoids local checkout entirely to prevent worktree/divergence issues
    * @param {object} pr - PR metadata
-   * @returns {Promise<number>} Number of conflict lines
+   * @returns {Promise<number>} Number of conflict lines (estimated)
    */
   async getConflictSize(pr) {
     try {
-      await exec(`gh pr checkout ${pr.number}`);
-      const { stdout } = await exec(`git diff --check || git diff --name-only --diff-filter=U | wc -l`);
-      return parseInt(stdout.trim(), 10);
-    } catch (err) {
-      console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, err?.message ?? String(err));
-      return 0; // Assume small if can't determine
+      // Use GitHub API to get the list of changed files and estimate conflict scope
+      // This avoids the need for local checkout entirely
+      const { stdout } = await exec(
+        `gh pr diff ${pr.number} --name-only`
+      );
+      const changedFiles = stdout.trim().split('\n').filter(Boolean);
+      
+      // Estimate: each changed file could have ~10 lines of conflicts on average
+      // This is a rough heuristic — the real conflict size can only be known after merge attempt
+      const estimatedConflictLines = changedFiles.length * 10;
+      console.log(`[pr-cleanup-daemon] PR #${pr.number}: ${changedFiles.length} files changed (est. ~${estimatedConflictLines} conflict lines)`);
+      return estimatedConflictLines;
+    } catch {
+      // If we can't even get the diff (e.g., too diverged), try merge in temp worktree
+      let tmpDir;
+      try {
+        tmpDir = await mkdtemp(join(tmpdir(), 'pr-conflict-'));
+        await exec(`git fetch origin ${pr.headRefName} main`);
+        await exec(`git worktree add "${tmpDir}" "origin/main" --detach`);
+        
+        // Attempt merge to count conflicts
+        try {
+          await exec(`git merge --no-commit --no-ff "origin/${pr.headRefName}"`, { cwd: tmpDir });
+          // If merge succeeds, no conflicts
+          await exec(`git merge --abort`, { cwd: tmpDir }).catch(() => {});
+          return 0;
+        } catch {
+          // Count conflicting files
+          const { stdout: conflictOutput } = await exec(
+            `git diff --name-only --diff-filter=U`, { cwd: tmpDir }
+          ).catch(() => ({ stdout: '' }));
+          const conflictFiles = conflictOutput.trim().split('\n').filter(Boolean);
+          await exec(`git merge --abort`, { cwd: tmpDir }).catch(() => {});
+          return conflictFiles.length * 15; // ~15 lines per conflicting file
+        }
+      } catch (innerErr) {
+        console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, innerErr.message);
+        return 0; // Assume small if can't determine
+      } finally {
+        if (tmpDir) {
+          try {
+            await exec(`git worktree remove "${tmpDir}" --force`);
+          } catch {
+            try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
+            try { await exec(`git worktree prune`); } catch {}
+          }
+        }
+      }
     }
   }
 

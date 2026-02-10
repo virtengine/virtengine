@@ -32,7 +32,14 @@ function configureNonInteractiveGit(workspacePath) {
 
   try {
     // Set local git config for this workspace
-    execSync('git config --local core.editor true', { 
+    // Use ':' (colon) as no-op editor - POSIX standard that always succeeds
+    execSync('git config --local core.editor :', { 
+      cwd: workspacePath, 
+      stdio: 'pipe' 
+    });
+    
+    // Also disable merge commit editor prompts
+    execSync('git config --local merge.commit.autoEdit no', { 
       cwd: workspacePath, 
       stdio: 'pipe' 
     });
