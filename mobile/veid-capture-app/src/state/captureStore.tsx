@@ -5,12 +5,14 @@ import type {
   DocumentCapture,
   LivenessResult,
   OcrResult,
-  SelfieCapture
+  SelfieCapture,
+  SocialMediaProfile
 } from "../core/captureModels";
 import { initializeCaptureSession } from "../core/captureSession";
 
 export type CaptureStep =
   | "consent"
+  | "social_media"
   | "document_front"
   | "document_back"
   | "selfie"
@@ -33,11 +35,13 @@ type CaptureAction =
   | { type: "set_liveness"; payload: LivenessResult }
   | { type: "set_biometric"; payload: BiometricCapture }
   | { type: "set_ocr"; payload: OcrResult }
+  | { type: "add_social"; payload: SocialMediaProfile }
   | { type: "next" }
   | { type: "prev" };
 
 const steps: CaptureStep[] = [
   "consent",
+  "social_media",
   "document_front",
   "document_back",
   "selfie",
@@ -58,7 +62,7 @@ function reducer(state: CaptureState, action: CaptureAction): CaptureState {
       return {
         ...state,
         consentAccepted: true,
-        currentStep: "document_front"
+        currentStep: "social_media"
       };
     case "set_document":
       return {
@@ -88,6 +92,14 @@ function reducer(state: CaptureState, action: CaptureAction): CaptureState {
         ...state,
         session: { ...state.session, ocr: action.payload }
       };
+    case "add_social": {
+      const existing = state.session.socialMedia ?? [];
+      const filtered = existing.filter((profile) => profile.provider !== action.payload.provider);
+      return {
+        ...state,
+        session: { ...state.session, socialMedia: [...filtered, action.payload] }
+      };
+    }
     case "next": {
       const index = steps.indexOf(state.currentStep);
       const requiresBack = state.session.documentType !== "passport";

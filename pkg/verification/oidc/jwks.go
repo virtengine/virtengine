@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -102,12 +103,10 @@ func NewJWKSManager(config *JWKSManagerConfig, logger zerolog.Logger) *JWKSManag
 	}
 
 	return &JWKSManager{
-		httpClient: &http.Client{
-			Timeout: config.HTTPTimeout,
-		},
-		logger: logger.With().Str("component", "jwks_manager").Logger(),
-		caches: make(map[string]*jwksCache),
-		config: config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(config.HTTPTimeout)),
+		logger:     logger.With().Str("component", "jwks_manager").Logger(),
+		caches:     make(map[string]*jwksCache),
+		config:     config,
 	}
 }
 

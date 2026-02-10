@@ -31,6 +31,7 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgSubmitSSOVerificationProof{}, "veid/MsgSubmitSSOVerificationProof")
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgSubmitEmailVerificationProof{}, "veid/MsgSubmitEmailVerificationProof")
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgSubmitSMSVerificationProof{}, "veid/MsgSubmitSMSVerificationProof")
+	legacy.RegisterAminoMsg(cdc, &veidv1.MsgSubmitSocialMediaScope{}, "veid/MsgSubmitSocialMediaScope")
 	// Wallet messages
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgCreateIdentityWallet{}, "veid/MsgCreateIdentityWallet")
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgAddScopeToWallet{}, "veid/MsgAddScopeToWallet")
@@ -60,6 +61,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&veidv1.MsgSubmitSSOVerificationProof{},
 		&veidv1.MsgSubmitEmailVerificationProof{},
 		&veidv1.MsgSubmitSMSVerificationProof{},
+		&veidv1.MsgSubmitSocialMediaScope{},
 		// Wallet messages (in tx.proto Msg service)
 		&veidv1.MsgCreateIdentityWallet{},
 		&veidv1.MsgAddScopeToWallet{},

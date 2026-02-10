@@ -3,7 +3,7 @@ package analysis
 import (
 	"context"
 	"math"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: Monte Carlo simulation uses weak random for reproducibility, not security
 	"sort"
 	"sync"
 

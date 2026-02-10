@@ -1,6 +1,10 @@
 package types
 
-import "time"
+import (
+	"time"
+
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
+)
 
 // SSOLinkageToProto converts linkage metadata to its protobuf representation.
 func SSOLinkageToProto(linkage *SSOLinkageMetadata) *SSOLinkageMetadataPB {
@@ -106,6 +110,38 @@ func SMSVerificationRecordToProto(record *SMSVerificationRecord) *SMSVerificatio
 	return resp
 }
 
+// SocialMediaScopeToProto converts a social media scope to protobuf.
+func SocialMediaScopeToProto(scope *SocialMediaScope) *SocialMediaScopePB {
+	if scope == nil {
+		return nil
+	}
+
+	resp := &SocialMediaScopePB{
+		Version:                scope.Version,
+		ScopeId:                scope.ScopeID,
+		AccountAddress:         scope.AccountAddress,
+		Provider:               SocialMediaProviderToProto(scope.Provider),
+		ProfileNameHash:        scope.ProfileNameHash,
+		EmailHash:              scope.EmailHash,
+		UsernameHash:           scope.UsernameHash,
+		OrgHash:                scope.OrgHash,
+		AccountCreatedAt:       toUnixPointer(scope.AccountCreatedAt),
+		AccountAgeDays:         scope.AccountAgeDays,
+		IsVerified:             scope.IsVerified,
+		FriendCountRange:       scope.FriendCountRange,
+		Status:                 string(scope.Status),
+		CreatedAt:              scope.CreatedAt.Unix(),
+		UpdatedAt:              scope.UpdatedAt.Unix(),
+		EncryptedPayload:       encryptedPayloadToProto(scope.EncryptedPayload),
+		EvidenceHash:           scope.EvidenceHash,
+		EvidenceStorageBackend: scope.EvidenceStorageBackend,
+		EvidenceStorageRef:     scope.EvidenceStorageRef,
+		EvidenceMetadata:       scope.EvidenceMetadata,
+	}
+
+	return resp
+}
+
 // PhoneNumberHashToProto converts a phone hash to protobuf.
 func PhoneNumberHashToProto(hash PhoneNumberHash) *PhoneNumberHashPB {
 	return &PhoneNumberHashPB{
@@ -121,4 +157,27 @@ func toUnix(t time.Time) int64 {
 		return 0
 	}
 	return t.Unix()
+}
+
+func toUnixPointer(t *time.Time) int64 {
+	if t == nil || t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
+func encryptedPayloadToProto(payload encryptiontypes.EncryptedPayloadEnvelope) EncryptedPayloadEnvelope {
+	return EncryptedPayloadEnvelope{
+		Version:             payload.Version,
+		AlgorithmId:         payload.AlgorithmID,
+		AlgorithmVersion:    payload.AlgorithmVersion,
+		RecipientKeyIds:     payload.RecipientKeyIDs,
+		RecipientPublicKeys: payload.RecipientPublicKeys,
+		EncryptedKeys:       payload.EncryptedKeys,
+		Nonce:               payload.Nonce,
+		Ciphertext:          payload.Ciphertext,
+		SenderSignature:     payload.SenderSignature,
+		SenderPubKey:        payload.SenderPubKey,
+		Metadata:            payload.Metadata,
+	}
 }

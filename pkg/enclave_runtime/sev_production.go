@@ -26,6 +26,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // =============================================================================
@@ -108,9 +110,7 @@ func NewProductionSEVBackend(config SEVProductionConfig) *ProductionSEVBackend {
 		config:     config,
 		kdsBaseURL: config.KDSBaseURL,
 		kdsTimeout: config.KDSTimeout,
-		httpClient: &http.Client{
-			Timeout: config.KDSTimeout,
-		},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(config.KDSTimeout)),
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	"github.com/virtengine/virtengine/pkg/security"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
 
 // ============================================================================
@@ -243,9 +243,8 @@ func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
 	endpoint := a.config.GetGRPCEndpoint()
 
 	// Create gRPC connection
-	// Note: In production, use proper TLS credentials
 	conn, err := grpc.NewClient(endpoint,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(credentials.NewTLS(security.SecureTLSConfig())),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Osmosis gRPC: %w", err)

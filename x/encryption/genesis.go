@@ -16,25 +16,35 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 	}
 
 	// Initialize recipient keys
+	addresses := make(map[string]sdk.AccAddress)
 	for _, keyRecord := range data.RecipientKeys {
 		addr, err := sdk.AccAddressFromBech32(keyRecord.Address)
 		if err != nil {
 			panic(err)
 		}
 
-		_, err = k.RegisterRecipientKey(
-			ctx,
-			addr,
-			keyRecord.PublicKey,
-			keyRecord.AlgorithmId,
-			keyRecord.Label,
-		)
-		if err != nil {
-			// Skip if key already exists
-			if err != types.ErrKeyAlreadyExists {
-				panic(err)
-			}
+		record := types.RecipientKeyRecord{
+			Address:        keyRecord.Address,
+			PublicKey:      keyRecord.PublicKey,
+			KeyFingerprint: keyRecord.KeyFingerprint,
+			KeyVersion:     keyRecord.KeyVersion,
+			AlgorithmID:    keyRecord.AlgorithmId,
+			RegisteredAt:   keyRecord.RegisteredAt,
+			RevokedAt:      keyRecord.RevokedAt,
+			DeprecatedAt:   keyRecord.DeprecatedAt,
+			ExpiresAt:      keyRecord.ExpiresAt,
+			PurgeAt:        keyRecord.PurgeAt,
+			Label:          keyRecord.Label,
 		}
+
+		if err := k.ImportRecipientKeyRecord(ctx, record); err != nil {
+			panic(err)
+		}
+		addresses[addr.String()] = addr
+	}
+
+	for _, addr := range addresses {
+		k.RefreshActiveRecipientKey(ctx, addr)
 	}
 }
 
@@ -50,9 +60,13 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 			Address:        record.Address,
 			PublicKey:      record.PublicKey,
 			KeyFingerprint: record.KeyFingerprint,
+			KeyVersion:     record.KeyVersion,
 			AlgorithmId:    record.AlgorithmID,
 			RegisteredAt:   record.RegisteredAt,
 			RevokedAt:      record.RevokedAt,
+			DeprecatedAt:   record.DeprecatedAt,
+			ExpiresAt:      record.ExpiresAt,
+			PurgeAt:        record.PurgeAt,
 			Label:          record.Label,
 		})
 		return false

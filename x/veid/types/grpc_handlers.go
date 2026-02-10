@@ -43,6 +43,7 @@ var _Msg_serviceDesc = struct {
 		{MethodName: "SubmitSSOVerificationProof", Handler: nil},
 		{MethodName: "SubmitEmailVerificationProof", Handler: nil},
 		{MethodName: "SubmitSMSVerificationProof", Handler: nil},
+		{MethodName: "SubmitSocialMediaScope", Handler: nil},
 	},
 	Streams:  []struct{}{},
 	Metadata: "virtengine/veid/v1/msg.proto",
@@ -72,6 +73,7 @@ type MsgServer interface {
 	SubmitSSOVerificationProof(ctx context.Context, msg *MsgSubmitSSOVerificationProof) (*MsgSubmitSSOVerificationProofResponse, error)
 	SubmitEmailVerificationProof(ctx context.Context, msg *MsgSubmitEmailVerificationProof) (*MsgSubmitEmailVerificationProofResponse, error)
 	SubmitSMSVerificationProof(ctx context.Context, msg *MsgSubmitSMSVerificationProof) (*MsgSubmitSMSVerificationProofResponse, error)
+	SubmitSocialMediaScope(ctx context.Context, msg *MsgSubmitSocialMediaScope) (*MsgSubmitSocialMediaScopeResponse, error)
 }
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
@@ -102,6 +104,7 @@ var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "SubmitSSOVerificationProof", Handler: _Msg_SubmitSSOVerificationProof_Handler},
 		{MethodName: "SubmitEmailVerificationProof", Handler: _Msg_SubmitEmailVerificationProof_Handler},
 		{MethodName: "SubmitSMSVerificationProof", Handler: _Msg_SubmitSMSVerificationProof_Handler},
+		{MethodName: "SubmitSocialMediaScope", Handler: _Msg_SubmitSocialMediaScope_Handler},
 	},
 	Streams:  []ggrpc.StreamDesc{},
 	Metadata: "virtengine/veid/v1/msg.proto",
@@ -345,6 +348,20 @@ func _Msg_SubmitSMSVerificationProof_Handler(srv interface{}, ctx context.Contex
 	})
 }
 
+func _Msg_SubmitSocialMediaScope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitSocialMediaScope)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitSocialMediaScope(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitSocialMediaScope"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitSocialMediaScope(ctx, req.(*MsgSubmitSocialMediaScope))
+	})
+}
+
 // QueryServer is the interface for the query server
 type QueryServer interface {
 	IdentityRecord(ctx context.Context, req *QueryIdentityRecordRequest) (*QueryIdentityRecordResponse, error)
@@ -356,6 +373,8 @@ type QueryServer interface {
 	SSOLinkage(ctx context.Context, req *QuerySSOLinkageRequest) (*QuerySSOLinkageResponse, error)
 	EmailVerification(ctx context.Context, req *QueryEmailVerificationRequest) (*QueryEmailVerificationResponse, error)
 	SMSVerification(ctx context.Context, req *QuerySMSVerificationRequest) (*QuerySMSVerificationResponse, error)
+	SocialMediaScope(ctx context.Context, req *QuerySocialMediaScopeRequest) (*QuerySocialMediaScopeResponse, error)
+	SocialMediaScopes(ctx context.Context, req *QuerySocialMediaScopesRequest) (*QuerySocialMediaScopesResponse, error)
 	// Wallet queries
 	IdentityWallet(ctx context.Context, req *QueryIdentityWalletRequest) (*QueryIdentityWalletResponse, error)
 	WalletScopes(ctx context.Context, req *QueryWalletScopesRequest) (*QueryWalletScopesResponse, error)
@@ -397,6 +416,8 @@ var _Query_serviceDesc = struct {
 		{MethodName: "SSOLinkage", Handler: nil},
 		{MethodName: "EmailVerification", Handler: nil},
 		{MethodName: "SMSVerification", Handler: nil},
+		{MethodName: "SocialMediaScope", Handler: nil},
+		{MethodName: "SocialMediaScopes", Handler: nil},
 		{MethodName: "IdentityWallet", Handler: nil},
 		{MethodName: "WalletScopes", Handler: nil},
 		{MethodName: "ConsentSettings", Handler: nil},
@@ -430,6 +451,8 @@ var _Query_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "SSOLinkage", Handler: _Query_SSOLinkage_Handler},
 		{MethodName: "EmailVerification", Handler: _Query_EmailVerification_Handler},
 		{MethodName: "SMSVerification", Handler: _Query_SMSVerification_Handler},
+		{MethodName: "SocialMediaScope", Handler: _Query_SocialMediaScope_Handler},
+		{MethodName: "SocialMediaScopes", Handler: _Query_SocialMediaScopes_Handler},
 		{MethodName: "IdentityWallet", Handler: _Query_IdentityWallet_Handler},
 		{MethodName: "WalletScopes", Handler: _Query_WalletScopes_Handler},
 		{MethodName: "ConsentSettings", Handler: _Query_ConsentSettings_Handler},
@@ -567,6 +590,34 @@ func _Query_SMSVerification_Handler(srv interface{}, ctx context.Context, dec fu
 	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/SMSVerification"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(QueryServer).SMSVerification(ctx, req.(*QuerySMSVerificationRequest))
+	})
+}
+
+func _Query_SocialMediaScope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuerySocialMediaScopeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).SocialMediaScope(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/SocialMediaScope"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).SocialMediaScope(ctx, req.(*QuerySocialMediaScopeRequest))
+	})
+}
+
+func _Query_SocialMediaScopes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuerySocialMediaScopesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).SocialMediaScopes(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/SocialMediaScopes"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).SocialMediaScopes(ctx, req.(*QuerySocialMediaScopesRequest))
 	})
 }
 
@@ -769,6 +820,24 @@ type QuerySMSVerificationRequest struct {
 
 type QuerySMSVerificationResponse struct {
 	Record *SMSVerificationRecordPB `json:"record,omitempty"`
+}
+
+type QuerySocialMediaScopeRequest struct {
+	ScopeID        string `json:"scope_id"`
+	AccountAddress string `json:"account_address"`
+}
+
+type QuerySocialMediaScopeResponse struct {
+	Scope *SocialMediaScopePB `json:"scope,omitempty"`
+}
+
+type QuerySocialMediaScopesRequest struct {
+	AccountAddress string `json:"account_address"`
+	Provider       string `json:"provider,omitempty"`
+}
+
+type QuerySocialMediaScopesResponse struct {
+	Scopes []SocialMediaScopePB `json:"scopes"`
 }
 
 // ============================================================================

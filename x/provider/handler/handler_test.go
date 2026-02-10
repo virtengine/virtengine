@@ -537,7 +537,7 @@ func TestConfirmDomainVerification_NoRequest(t *testing.T) {
 
 	res, err := suite.handler(suite.ctx, confirmMsg)
 	require.Error(t, err)
-	require.NotNil(t, res)
+	require.Nil(t, res)
 	require.Contains(t, err.Error(), "not found")
 }
 

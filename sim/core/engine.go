@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: deterministic simulation uses weak random for reproducibility, not security
 	"strconv"
 	"time"
 
@@ -431,6 +431,5 @@ func utilization(state markets.MarketState) float64 {
 }
 
 func newDeterministicRNG(seed int64) *rand.Rand {
-	// #nosec G404 -- deterministic simulation rng
-	return rand.New(rand.NewSource(seed))
+	return rand.New(rand.NewSource(seed)) // #nosec G404 -- deterministic simulation RNG for reproducibility
 }
