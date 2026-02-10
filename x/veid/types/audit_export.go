@@ -101,6 +101,12 @@ const (
 	// AuditEventTypeBiometricMatch represents biometric matching events
 	AuditEventTypeBiometricMatch AuditEventType = "BIOMETRIC_MATCH"
 
+	// AuditEventTypeEvidenceDecision represents evidence decision events
+	AuditEventTypeEvidenceDecision AuditEventType = "EVIDENCE_DECISION"
+
+	// AuditEventTypeEvidenceOverride represents reviewer override events
+	AuditEventTypeEvidenceOverride AuditEventType = "EVIDENCE_OVERRIDE"
+
 	// AuditEventTypeParamsUpdate represents module parameter update events
 	AuditEventTypeParamsUpdate AuditEventType = "PARAMS_UPDATE"
 )
@@ -121,6 +127,8 @@ var ValidAuditEventTypes = []AuditEventType{
 	AuditEventTypeCredentialRevoke,
 	AuditEventTypeGeoCheck,
 	AuditEventTypeBiometricMatch,
+	AuditEventTypeEvidenceDecision,
+	AuditEventTypeEvidenceOverride,
 	AuditEventTypeParamsUpdate,
 }
 
