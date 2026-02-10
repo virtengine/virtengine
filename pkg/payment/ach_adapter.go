@@ -510,7 +510,7 @@ func BuildNACHAFile(companyName, companyID, immediateOrigin, immediateDestinatio
 		strings.ToUpper(companyName)[:minLen(len(companyName), 23)],
 	)
 
-	var lines []string
+	lines := make([]string, 0, len(entries)+1)
 	lines = append(lines, header)
 
 	for _, entry := range entries {

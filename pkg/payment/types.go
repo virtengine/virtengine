@@ -468,6 +468,12 @@ type PaymentIntentRequest struct {
 	// PaymentMethodID is the payment method to use (optional)
 	PaymentMethodID string `json:"payment_method_id,omitempty"`
 
+	// PaymentMethodType is the gateway-specific payment method type (optional)
+	PaymentMethodType string `json:"payment_method_type,omitempty"`
+
+	// PaymentMethodData is the gateway-specific payment method data (optional)
+	PaymentMethodData map[string]interface{} `json:"payment_method_data,omitempty"`
+
 	// Description is a description of the payment
 	Description string `json:"description,omitempty"`
 
@@ -489,6 +495,10 @@ type PaymentIntentRequest struct {
 	// IdempotencyKey to prevent duplicate charges
 	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
+
+const (
+	captureMethodManual = "manual"
+)
 
 // ============================================================================
 // 3D Secure / SCA Types

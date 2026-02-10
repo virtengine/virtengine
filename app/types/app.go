@@ -607,6 +607,7 @@ func (app *App) InitNormalKeepers(
 		app.keys[settlementtypes.StoreKey],
 		app.Keepers.Cosmos.Bank,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		app.Keepers.VirtEngine.Encryption,
 	)
 
 	app.Keepers.VirtEngine.Fraud = fraudkeeper.NewKeeper(

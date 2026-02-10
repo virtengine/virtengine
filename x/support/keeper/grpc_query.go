@@ -25,6 +25,9 @@ func (q GRPCQuerier) SupportRequest(c context.Context, req *types.QuerySupportRe
 	if req.TicketID == "" {
 		return nil, status.Error(codes.InvalidArgument, "ticket_id is required")
 	}
+	if req.ViewerAddress == "" {
+		return nil, status.Error(codes.PermissionDenied, "viewer_address is required")
+	}
 
 	ctx := sdk.UnwrapSDKContext(c)
 	id, err := types.ParseSupportRequestID(req.TicketID)
@@ -35,6 +38,14 @@ func (q GRPCQuerier) SupportRequest(c context.Context, req *types.QuerySupportRe
 	request, found := q.GetSupportRequest(ctx, id)
 	if !found {
 		return nil, types.ErrSupportRequestNotFound
+	}
+
+	viewerAddr, err := sdk.AccAddressFromBech32(req.ViewerAddress)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+	if err := q.requireSupportPayloadAccess(ctx, &request.Payload, viewerAddr, req.ViewerKeyID); err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	return &types.QuerySupportRequestResponse{Request: request}, nil
@@ -55,6 +66,15 @@ func (q GRPCQuerier) SupportRequestsBySubmitter(c context.Context, req *types.Qu
 		return nil, types.ErrInvalidAddress.Wrap(err.Error())
 	}
 
+	viewer := req.ViewerAddress
+	if viewer == "" {
+		viewer = req.SubmitterAddress
+	}
+	viewerAddr, err := sdk.AccAddressFromBech32(viewer)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+
 	requests := q.GetSupportRequestsBySubmitter(ctx, addr)
 	if req.Status != "" {
 		statusFilter := types.SupportStatusFromString(req.Status)
@@ -70,6 +90,12 @@ func (q GRPCQuerier) SupportRequestsBySubmitter(c context.Context, req *types.Qu
 		requests = filtered
 	}
 
+	for _, request := range requests {
+		if err := q.requireSupportPayloadAccess(ctx, &request.Payload, viewerAddr, req.ViewerKeyID); err != nil {
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		}
+	}
+
 	return &types.QuerySupportRequestsBySubmitterResponse{Requests: requests}, nil
 }
 
@@ -81,6 +107,9 @@ func (q GRPCQuerier) SupportResponsesByRequest(c context.Context, req *types.Que
 	if req.TicketID == "" {
 		return nil, status.Error(codes.InvalidArgument, "ticket_id is required")
 	}
+	if req.ViewerAddress == "" {
+		return nil, status.Error(codes.PermissionDenied, "viewer_address is required")
+	}
 
 	ctx := sdk.UnwrapSDKContext(c)
 	id, err := types.ParseSupportRequestID(req.TicketID)
@@ -89,6 +118,15 @@ func (q GRPCQuerier) SupportResponsesByRequest(c context.Context, req *types.Que
 	}
 
 	responses := q.GetSupportResponses(ctx, id)
+	viewerAddr, err := sdk.AccAddressFromBech32(req.ViewerAddress)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+	for _, response := range responses {
+		if err := q.requireSupportPayloadAccess(ctx, &response.Payload, viewerAddr, req.ViewerKeyID); err != nil {
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		}
+	}
 	return &types.QuerySupportResponsesByRequestResponse{Responses: responses}, nil
 }
 

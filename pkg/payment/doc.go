@@ -1,10 +1,10 @@
 // Package payment provides payment gateway integration for fiat-to-crypto onramp
-// in the VirtEngine marketplace, supporting Visa/Mastercard card payments.
+// in the VirtEngine marketplace, supporting card, PayPal, and ACH payments.
 //
 // VE-906: Payment gateway integration for Visa/Mastercard
 //
 // This package implements:
-//   - Payment gateway client interface (Stripe, Adyen backends)
+//   - Payment gateway client interface (Stripe, Adyen, PayPal, ACH backends)
 //   - Card tokenization (PCI-DSS compliant - never stores actual card numbers)
 //   - Payment intent creation and processing
 //   - 3D Secure / Strong Customer Authentication (SCA) handling
@@ -27,7 +27,7 @@
 //	├─────────────────────────────────────────────────────────────────────┤
 //	│                       Gateway Adapters                              │
 //	├─────────────────────┬─────────────────────┬─────────────────────────┤
-//	│       Stripe        │       Adyen         │       Custom            │
+//	│       Stripe        │       Adyen         │       PayPal/ACH         │
 //	└─────────────────────┴─────────────────────┴─────────────────────────┘
 //
 // PCI-DSS Compliance:

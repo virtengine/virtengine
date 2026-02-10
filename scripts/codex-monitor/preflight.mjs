@@ -8,11 +8,24 @@ const MIN_FREE_BYTES = MIN_FREE_GB * 1024 * 1024 * 1024;
 
 function runCommand(command, args, options = {}) {
   try {
+    const useShell = options.shell ?? isWindows;
+    // DEP0190 fix: Node.js 24+ warns when passing args array with shell: true.
+    // Join command + args into a single string when using shell mode.
+    if (useShell && args && args.length > 0) {
+      const fullCommand = [command, ...args].join(" ");
+      return spawnSync(fullCommand, [], {
+        encoding: "utf8",
+        windowsHide: true,
+        shell: true,
+        ...options,
+        // Ensure shell stays true (override any options.shell)
+      });
+    }
     return spawnSync(command, args, {
       encoding: "utf8",
       windowsHide: true,
       // On Windows, use shell to resolve .cmd/.ps1 shims (pnpm, gh, etc.)
-      shell: isWindows,
+      shell: useShell,
       ...options,
     });
   } catch (error) {
@@ -190,7 +203,9 @@ function checkToolchain() {
 }
 
 function checkGhAuth() {
-  const tokenPresent = Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN);
+  const tokenPresent = Boolean(
+    process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
+  );
   const auth = runCommand("gh", ["auth", "status", "-h", "github.com"]);
   if (auth.status === 0) {
     return { ok: true, method: "gh" };
@@ -223,7 +238,7 @@ export function runPreflightChecks(options = {}) {
     errors.push({
       title: "Git identity not configured",
       message:
-        "Set git user.name and user.email (git config --global user.name \"Your Name\"; git config --global user.email \"you@example.com\").",
+        'Set git user.name and user.email (git config --global user.name "Your Name"; git config --global user.email "you@example.com").',
     });
   }
 

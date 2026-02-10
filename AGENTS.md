@@ -15,6 +15,8 @@
 {READ THE FOLLOWING}
 Always work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
 
+NEVER START A PLAN AND THEN ASK FOR USER INPUT, OR ASK FOR USER INPUT DURING A COMPLETION OF A TASK - ONCE YOU ARE ASSIGNED A PROPER TASK - YOU MUST COMPLETE IT END TO END.
+
 ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task is fully completed and ready for merge. This is non negotiable.
 
 When working on a task, do not stop until it is COMPLETELY done. Continue working on this task until it is 100% DONE END-TO-END with no questions asked.

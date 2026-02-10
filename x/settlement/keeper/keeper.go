@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
@@ -141,6 +142,7 @@ type Keeper struct {
 	complianceKeeper ComplianceKeeper
 	oracleKeeper     OracleKeeper
 	priceFeeds       map[types.OracleSourceType]PriceFeed
+	encryptionKeeper EncryptionKeeper
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
@@ -156,8 +158,14 @@ type BankKeeper interface {
 	GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin
 }
 
+// EncryptionKeeper defines the expected encryption keeper interface.
+type EncryptionKeeper interface {
+	ValidateEnvelope(ctx sdk.Context, envelope *encryptiontypes.EncryptedPayloadEnvelope) error
+	ValidateEnvelopeRecipients(ctx sdk.Context, envelope *encryptiontypes.EncryptedPayloadEnvelope) ([]string, error)
+}
+
 // NewKeeper creates and returns an instance for settlement keeper
-func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string) Keeper {
+func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string, encryptionKeeper EncryptionKeeper) Keeper {
 	keeper := Keeper{
 		cdc:              cdc,
 		skey:             skey,
@@ -168,6 +176,7 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankK
 		complianceKeeper: nil,
 		oracleKeeper:     nil,
 		priceFeeds:       make(map[types.OracleSourceType]PriceFeed),
+		encryptionKeeper: encryptionKeeper,
 		authority:        authority,
 	}
 	return keeper

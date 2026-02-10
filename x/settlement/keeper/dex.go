@@ -63,11 +63,27 @@ func (k Keeper) SetNextFiatConversionSequence(ctx sdk.Context, seq uint64) {
 
 // SetFiatPayoutPreference stores provider fiat payout preferences.
 func (k Keeper) SetFiatPayoutPreference(ctx sdk.Context, pref types.FiatPayoutPreference) error {
+	if pref.EncryptedPayload != nil {
+		pref.EncryptedPayload.EnsureEnvelopeHash()
+		if k.encryptionKeeper != nil && pref.EncryptedPayload.Envelope != nil {
+			missing, err := k.encryptionKeeper.ValidateEnvelopeRecipients(ctx, pref.EncryptedPayload.Envelope)
+			if err != nil {
+				return types.ErrInvalidParams.Wrapf("recipient validation failed: %v", err)
+			}
+			if len(missing) > 0 {
+				return types.ErrInvalidParams.Wrapf("unregistered recipients: %v", missing)
+			}
+		}
+	}
 	if err := pref.Validate(); err != nil {
 		return err
 	}
 
-	if pref.DestinationHash == "" && pref.DestinationRef != "" {
+	if pref.EncryptedPayload != nil && pref.EncryptedPayload.EnvelopeRef != "" {
+		pref.DestinationRef = pref.EncryptedPayload.EnvelopeRef
+	}
+
+	if pref.DestinationHash == "" && pref.DestinationRef != "" && pref.EncryptedPayload == nil {
 		pref.DestinationHash = types.HashDestination(pref.DestinationRef)
 	}
 
@@ -125,6 +141,21 @@ func (k Keeper) WithFiatPayoutPreferences(ctx sdk.Context, fn func(types.FiatPay
 
 // SetFiatConversion saves a fiat conversion record.
 func (k Keeper) SetFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error {
+	if conversion.EncryptedPayload != nil {
+		conversion.EncryptedPayload.EnsureEnvelopeHash()
+		if k.encryptionKeeper != nil && conversion.EncryptedPayload.Envelope != nil {
+			missing, err := k.encryptionKeeper.ValidateEnvelopeRecipients(ctx, conversion.EncryptedPayload.Envelope)
+			if err != nil {
+				return types.ErrInvalidParams.Wrapf("recipient validation failed: %v", err)
+			}
+			if len(missing) > 0 {
+				return types.ErrInvalidParams.Wrapf("unregistered recipients: %v", missing)
+			}
+		}
+	}
+	if conversion.EncryptedPayload != nil && conversion.EncryptedPayload.EnvelopeRef != "" {
+		conversion.DestinationRef = conversion.EncryptedPayload.EnvelopeRef
+	}
 	if err := conversion.Validate(); err != nil {
 		return err
 	}
@@ -254,6 +285,18 @@ func (k Keeper) updateFiatConversionState(ctx sdk.Context, conversion types.Fiat
 func (k Keeper) RequestFiatConversion(ctx sdk.Context, request types.FiatConversionRequest) (*types.FiatConversionRecord, error) {
 	if err := request.Validate(); err != nil {
 		return nil, err
+	}
+	if request.EncryptedPayload != nil {
+		request.EncryptedPayload.EnsureEnvelopeHash()
+		if k.encryptionKeeper != nil && request.EncryptedPayload.Envelope != nil {
+			missing, err := k.encryptionKeeper.ValidateEnvelopeRecipients(ctx, request.EncryptedPayload.Envelope)
+			if err != nil {
+				return nil, types.ErrInvalidParams.Wrapf("recipient validation failed: %v", err)
+			}
+			if len(missing) > 0 {
+				return nil, types.ErrInvalidParams.Wrapf("unregistered recipients: %v", missing)
+			}
+		}
 	}
 
 	params := k.GetParams(ctx)
@@ -397,13 +440,14 @@ func (k Keeper) createConversionFromPreference(ctx sdk.Context, settlement types
 		CryptoAmount:      netAmount,
 		FiatCurrency:      pref.FiatCurrency,
 		PaymentMethod:     pref.PaymentMethod,
-		Destination:       pref.DestinationRef,
+		DestinationHash:   pref.DestinationHash,
 		DestinationRegion: pref.DestinationRegion,
 		PreferredDEX:      pref.PreferredDEX,
 		PreferredOffRamp:  pref.PreferredOffRamp,
 		SlippageTolerance: pref.SlippageTolerance,
 		CryptoToken:       pref.CryptoToken,
 		StableToken:       pref.StableToken,
+		EncryptedPayload:  pref.EncryptedPayload,
 	}
 
 	conversion, err := k.RequestFiatConversion(ctx, request)

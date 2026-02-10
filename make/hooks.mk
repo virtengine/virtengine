@@ -39,3 +39,38 @@ check-hooks:
 	else \
 		echo "Git hooks are NOT installed. Run: make setup-hooks"; \
 	fi
+
+# ── Windows Firewall Setup ──────────────────────────────────────────────────
+#
+# Go test binaries are compiled to unique paths under the build cache.
+# On Windows, each new binary may trigger a Firewall popup. These targets
+# configure Windows Firewall to suppress those popups.
+#
+# Usage:
+#   make setup-firewall       Install firewall rules (prompts for admin)
+#   make check-firewall       Check if rules are installed
+#   make remove-firewall      Remove firewall rules
+
+.PHONY: setup-firewall
+setup-firewall:
+	@if command -v pwsh >/dev/null 2>&1; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-firewall.ps1; \
+	else \
+		echo "setup-firewall is only needed on Windows (pwsh not found)"; \
+	fi
+
+.PHONY: check-firewall
+check-firewall:
+	@if command -v pwsh >/dev/null 2>&1; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-firewall.ps1 -Check; \
+	else \
+		echo "Firewall check is only needed on Windows"; \
+	fi
+
+.PHONY: remove-firewall
+remove-firewall:
+	@if command -v pwsh >/dev/null 2>&1; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-firewall.ps1 -Remove; \
+	else \
+		echo "Firewall removal is only needed on Windows"; \
+	fi

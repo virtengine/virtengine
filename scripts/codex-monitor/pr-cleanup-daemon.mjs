@@ -13,6 +13,9 @@ import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec as execCallback } from 'child_process';
 import { fileURLToPath } from 'url';
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const exec = promisify(execCallback);
 
@@ -78,7 +81,7 @@ class PRCleanupDaemon {
       console.log(`[pr-cleanup-daemon] Active cleanups: ${this.activeCleanups.size}, Queued: ${this.cleanupQueue.length}`);
     } catch (err) {
       this.stats.errors++;
-      console.error(`[pr-cleanup-daemon] Run failed:`, err.message);
+      console.error(`[pr-cleanup-daemon] Run failed:`, err?.message ?? String(err));
     }
   }
 
@@ -96,8 +99,9 @@ class PRCleanupDaemon {
       const problematicPRs = [];
 
       for (const pr of allPRs) {
-        // Skip excluded labels
-        if (pr.labels.some(l => this.config.excludeLabels.includes(l.name))) {
+        // Skip excluded labels (guard against missing labels or config)
+        const excludeLabels = this.config.excludeLabels || [];
+        if (Array.isArray(pr.labels) && pr.labels.some(l => l?.name && excludeLabels.includes(l.name))) {
           continue;
         }
 
@@ -112,7 +116,7 @@ class PRCleanupDaemon {
         }
 
         // Check for failing CI
-        if (pr.statusCheckRollup?.some(check => check.conclusion === 'FAILURE')) {
+        if (Array.isArray(pr.statusCheckRollup) && pr.statusCheckRollup.some(check => check?.conclusion === 'FAILURE')) {
           problematicPRs.push({
             ...pr,
             issue: 'ci_failure',
@@ -126,12 +130,13 @@ class PRCleanupDaemon {
       return problematicPRs.sort((a, b) => a.priority - b.priority);
     } catch (err) {
       // Handle rate limiting gracefully
-      if (err.message.includes('HTTP 429') || err.message.includes('rate limit')) {
+      const errMsg = typeof err?.message === 'string' ? err.message : String(err);
+      if (errMsg.includes('HTTP 429') || errMsg.includes('rate limit')) {
         console.warn(`[pr-cleanup-daemon] GitHub API rate limited - will retry next cycle`);
         return [];
       }
       
-      console.error(`[pr-cleanup-daemon] Failed to fetch PRs:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to fetch PRs:`, errMsg);
       return [];
     }
   }
@@ -159,14 +164,14 @@ class PRCleanupDaemon {
       }
     } catch (err) {
       this.stats.errors++;
-      console.error(`[pr-cleanup-daemon] Failed to process PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to process PR #${pr.number}:`, err?.message ?? String(err));
     } finally {
       this.activeCleanups.delete(pr.number);
     }
   }
 
   /**
-   * Resolve conflicts on a PR using codex-sdk agent
+   * Resolve conflicts on a PR — tries codex agent first, falls back to local merge
    * @param {object} pr - PR metadata
    */
   async resolveConflicts(pr) {
@@ -181,9 +186,9 @@ class PRCleanupDaemon {
       return;
     }
 
-    // 2. Spawn codex-sdk agent to resolve
+    // 2. Try codex-sdk agent first, fall back to local merge
     if (this.config.dryRun) {
-      console.log(`[pr-cleanup-daemon] [DRY RUN] Would spawn codex agent for PR #${pr.number}`);
+      console.log(`[pr-cleanup-daemon] [DRY RUN] Would resolve conflicts for PR #${pr.number}`);
       return;
     }
 
@@ -198,10 +203,88 @@ class PRCleanupDaemon {
 
       this.stats.conflictsResolved++;
       console.log(`[pr-cleanup-daemon] ✓ Resolved conflicts on PR #${pr.number}`);
-    } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, err.message);
-      await this.escalate(pr, 'conflict_resolution_failed', { error: err.message });
-      this.stats.escalations++;
+    } catch (agentErr) {
+      console.warn(`[pr-cleanup-daemon] Codex agent failed for PR #${pr.number}, trying local merge: ${agentErr.message}`);
+      
+      // Fallback: resolve locally using temporary worktree
+      try {
+        await this.resolveConflictsLocally(pr);
+        this.stats.conflictsResolved++;
+        console.log(`[pr-cleanup-daemon] ✓ Resolved conflicts locally on PR #${pr.number}`);
+      } catch (localErr) {
+        console.error(`[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`, localErr.message);
+        await this.escalate(pr, 'conflict_resolution_failed', { error: localErr.message });
+        this.stats.escalations++;
+      }
+    }
+  }
+
+  /**
+   * Resolve conflicts locally using a temporary worktree and merge
+   * Only handles auto-resolvable conflicts (lockfiles, generated files)
+   * @param {object} pr - PR metadata
+   */
+  async resolveConflictsLocally(pr) {
+    let tmpDir;
+    try {
+      tmpDir = await mkdtemp(join(tmpdir(), 'pr-merge-'));
+      
+      // Fetch all relevant refs
+      await exec(`git fetch origin ${pr.headRefName} main`);
+      
+      // Create worktree on the PR branch
+      await exec(`git worktree add "${tmpDir}" "origin/${pr.headRefName}" --detach`);
+      await exec(`git checkout -B "${pr.headRefName}" "origin/${pr.headRefName}"`, { cwd: tmpDir });
+      
+      // Attempt merge with main
+      try {
+        await exec(`git merge origin/main --no-edit`, { cwd: tmpDir });
+      } catch {
+        // Merge has conflicts — try auto-resolving known file types
+        const { stdout: conflictFiles } = await exec(
+          `git diff --name-only --diff-filter=U`, { cwd: tmpDir }
+        ).catch(() => ({ stdout: '' }));
+        
+        const files = conflictFiles.trim().split('\n').filter(Boolean);
+        const autoResolvable = [
+          'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'go.sum',
+          'coverage.txt', 'results.txt', 'package.json',
+        ];
+        
+        let allResolved = true;
+        for (const file of files) {
+          const basename = file.split('/').pop();
+          if (autoResolvable.includes(basename) || basename.endsWith('.lock')) {
+            // Accept theirs (main) for lockfiles, ours for coverage/results
+            const strategy = ['coverage.txt', 'results.txt', 'CHANGELOG.md'].includes(basename)
+              ? '--ours' : '--theirs';
+            await exec(`git checkout ${strategy} -- "${file}"`, { cwd: tmpDir });
+            await exec(`git add "${file}"`, { cwd: tmpDir });
+          } else {
+            allResolved = false;
+          }
+        }
+        
+        if (!allResolved) {
+          await exec(`git merge --abort`, { cwd: tmpDir }).catch(() => {});
+          throw new Error(`Cannot auto-resolve all conflicts: ${files.join(', ')}`);
+        }
+        
+        // Commit the resolved merge
+        await exec(`git commit --no-edit`, { cwd: tmpDir });
+      }
+      
+      // Push the merged branch
+      await exec(`git push origin "${pr.headRefName}"`, { cwd: tmpDir });
+    } finally {
+      if (tmpDir) {
+        try {
+          await exec(`git worktree remove "${tmpDir}" --force`);
+        } catch {
+          try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
+          try { await exec(`git worktree prune`); } catch {}
+        }
+      }
     }
   }
 
@@ -213,9 +296,10 @@ class PRCleanupDaemon {
     console.log(`[pr-cleanup-daemon] Fixing CI on PR #${pr.number}`);
 
     // Get failing checks
-    const failedChecks = pr.statusCheckRollup.filter(c => c.conclusion === 'FAILURE');
+    const checks = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup : [];
+    const failedChecks = checks.filter(c => c?.conclusion === 'FAILURE');
     console.log(`[pr-cleanup-daemon] PR #${pr.number} has ${failedChecks.length} failed checks:`, 
-      failedChecks.map(c => c.name).join(', '));
+      failedChecks.map(c => c?.name).join(', '));
 
     // For now, just re-trigger CI (future: spawn agent to fix specific failures)
     if (this.config.dryRun) {
@@ -223,16 +307,39 @@ class PRCleanupDaemon {
       return;
     }
 
+    let tmpDir;
     try {
-      // Re-trigger by pushing empty commit
-      await exec(`gh pr checkout ${pr.number}`);
-      await exec(`git commit --allow-empty -m "chore: re-trigger CI"`);
-      await exec(`git push`);
+      // Use a temporary worktree to avoid conflicts with existing checkouts
+      tmpDir = await mkdtemp(join(tmpdir(), 'pr-cleanup-'));
+      
+      // Fetch latest refs first
+      await exec(`git fetch origin ${pr.headRefName}`);
+      
+      // Create a temporary worktree for the PR branch
+      await exec(`git worktree add "${tmpDir}" "origin/${pr.headRefName}" --detach`);
+      
+      // Checkout the branch properly inside the worktree
+      await exec(`git checkout -B "${pr.headRefName}" "origin/${pr.headRefName}"`, { cwd: tmpDir });
+      
+      // Push empty commit to re-trigger CI
+      await exec(`git commit --allow-empty -m "chore: re-trigger CI"`, { cwd: tmpDir });
+      await exec(`git push origin "${pr.headRefName}"`, { cwd: tmpDir });
 
       this.stats.ciRetriggers++;
       console.log(`[pr-cleanup-daemon] ✓ Re-triggered CI on PR #${pr.number}`);
     } catch (err) {
       console.error(`[pr-cleanup-daemon] Failed to re-trigger CI on PR #${pr.number}:`, err.message);
+    } finally {
+      // Clean up the temporary worktree
+      if (tmpDir) {
+        try {
+          await exec(`git worktree remove "${tmpDir}" --force`);
+        } catch {
+          // If worktree remove fails, try manual cleanup
+          try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
+          try { await exec(`git worktree prune`); } catch {}
+        }
+      }
     }
   }
 
@@ -241,16 +348,22 @@ class PRCleanupDaemon {
    * @param {object} pr - PR metadata
    */
   async attemptAutoMerge(pr) {
-    // Re-fetch PR status to check latest state
-    const { stdout } = await exec(`gh pr view ${pr.number} --json mergeable,statusCheckRollup`);
-    const latest = JSON.parse(stdout);
+    let latest;
+    try {
+      const { stdout } = await exec(`gh pr view ${pr.number} --json mergeable,statusCheckRollup`);
+      latest = JSON.parse(stdout);
+    } catch (err) {
+      console.error(`[pr-cleanup-daemon] Failed to fetch PR #${pr.number} status for auto-merge:`, err?.message ?? String(err));
+      return;
+    }
 
     if (latest.mergeable !== 'MERGEABLE') {
       console.log(`[pr-cleanup-daemon] PR #${pr.number} not mergeable: ${latest.mergeable}`);
       return;
     }
 
-    const allGreen = latest.statusCheckRollup.every(c => c.conclusion === 'SUCCESS');
+    const latestChecks = Array.isArray(latest.statusCheckRollup) ? latest.statusCheckRollup : [];
+    const allGreen = latestChecks.length > 0 && latestChecks.every(c => c?.conclusion === 'SUCCESS');
     if (!allGreen) {
       console.log(`[pr-cleanup-daemon] PR #${pr.number} has non-green checks, skipping auto-merge`);
       return;
@@ -266,23 +379,66 @@ class PRCleanupDaemon {
       this.stats.autoMerges++;
       console.log(`[pr-cleanup-daemon] ✓ Auto-merged PR #${pr.number}`);
     } catch (err) {
-      console.error(`[pr-cleanup-daemon] Failed to auto-merge PR #${pr.number}:`, err.message);
+      console.error(`[pr-cleanup-daemon] Failed to auto-merge PR #${pr.number}:`, err?.message ?? String(err));
     }
   }
 
   /**
-   * Get conflict size (number of conflict marker lines)
+   * Get conflict size (number of conflicting files) using GitHub API
+   * Avoids local checkout entirely to prevent worktree/divergence issues
    * @param {object} pr - PR metadata
-   * @returns {Promise<number>} Number of conflict lines
+   * @returns {Promise<number>} Number of conflict lines (estimated)
    */
   async getConflictSize(pr) {
     try {
-      await exec(`gh pr checkout ${pr.number}`);
-      const { stdout } = await exec(`git diff --check || git diff --name-only --diff-filter=U | wc -l`);
-      return parseInt(stdout.trim(), 10);
-    } catch (err) {
-      console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, err.message);
-      return 0; // Assume small if can't determine
+      // Use GitHub API to get the list of changed files and estimate conflict scope
+      // This avoids the need for local checkout entirely
+      const { stdout } = await exec(
+        `gh pr diff ${pr.number} --name-only`
+      );
+      const changedFiles = stdout.trim().split('\n').filter(Boolean);
+      
+      // Estimate: each changed file could have ~10 lines of conflicts on average
+      // This is a rough heuristic — the real conflict size can only be known after merge attempt
+      const estimatedConflictLines = changedFiles.length * 10;
+      console.log(`[pr-cleanup-daemon] PR #${pr.number}: ${changedFiles.length} files changed (est. ~${estimatedConflictLines} conflict lines)`);
+      return estimatedConflictLines;
+    } catch {
+      // If we can't even get the diff (e.g., too diverged), try merge in temp worktree
+      let tmpDir;
+      try {
+        tmpDir = await mkdtemp(join(tmpdir(), 'pr-conflict-'));
+        await exec(`git fetch origin ${pr.headRefName} main`);
+        await exec(`git worktree add "${tmpDir}" "origin/main" --detach`);
+        
+        // Attempt merge to count conflicts
+        try {
+          await exec(`git merge --no-commit --no-ff "origin/${pr.headRefName}"`, { cwd: tmpDir });
+          // If merge succeeds, no conflicts
+          await exec(`git merge --abort`, { cwd: tmpDir }).catch(() => {});
+          return 0;
+        } catch {
+          // Count conflicting files
+          const { stdout: conflictOutput } = await exec(
+            `git diff --name-only --diff-filter=U`, { cwd: tmpDir }
+          ).catch(() => ({ stdout: '' }));
+          const conflictFiles = conflictOutput.trim().split('\n').filter(Boolean);
+          await exec(`git merge --abort`, { cwd: tmpDir }).catch(() => {});
+          return conflictFiles.length * 15; // ~15 lines per conflicting file
+        }
+      } catch (innerErr) {
+        console.warn(`[pr-cleanup-daemon] Could not determine conflict size for PR #${pr.number}:`, innerErr.message);
+        return 0; // Assume small if can't determine
+      } finally {
+        if (tmpDir) {
+          try {
+            await exec(`git worktree remove "${tmpDir}" --force`);
+          } catch {
+            try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
+            try { await exec(`git worktree prune`); } catch {}
+          }
+        }
+      }
     }
   }
 
@@ -292,8 +448,9 @@ class PRCleanupDaemon {
    */
   async spawnCodexAgent(opts) {
     return new Promise((resolve, reject) => {
+      const scriptPath = new URL('./codex-shell.mjs', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
       const args = [
-        'scripts/codex-monitor/codex-shell.mjs',
+        scriptPath,
         'spawn-agent',
         JSON.stringify(opts),
       ];
@@ -334,7 +491,7 @@ class PRCleanupDaemon {
       try {
         await exec(`curl -s -X POST "https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage" -d chat_id="${process.env.TELEGRAM_CHAT_ID}" -d text="${encodeURIComponent(message)}"`);
       } catch (err) {
-        console.error(`[pr-cleanup-daemon] Failed to send Telegram alert:`, err.message);
+        console.error(`[pr-cleanup-daemon] Failed to send Telegram alert:`, err?.message ?? String(err));
       }
     }
   }
