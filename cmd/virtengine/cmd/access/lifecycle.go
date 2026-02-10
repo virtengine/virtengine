@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 type lifecycleRequest struct {
@@ -178,7 +179,7 @@ func doHMACRequest(reqURL, principal, secret string, body []byte) (*http.Respons
 	req.Header.Set("X-VE-Timestamp", timestamp)
 	req.Header.Set("X-VE-Signature", signature)
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second))
 	return client.Do(req)
 }
 

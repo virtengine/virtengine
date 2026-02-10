@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 func makeHTTPDialer(remoteAddr string) (func(context.Context, string, string) (net.Conn, error), error) {
@@ -58,6 +60,7 @@ func NewHTTPClient(ctx context.Context, remoteAddr string) (*http.Client, error)
 			// Set to true to prevent GZIP-bomb DoS attacks
 			DisableCompression: true,
 			DialContext:        dialFn,
+			TLSClientConfig:    security.SecureTLSConfig(),
 
 			// Force HTTP/1.1 to ensure better connection pooling behavior
 			// Some RPC nodes may not handle HTTP/2 connection pooling optimally

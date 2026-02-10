@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // environmentLive is the Adyen live environment identifier
@@ -67,7 +69,7 @@ func NewStripeStubAdapter(config StripeConfig) (Gateway, error) {
 
 	return &stripeStubAdapter{
 		config:     config,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		baseURL:    baseURL,
 	}, nil
 }
@@ -409,7 +411,7 @@ func NewAdyenStubAdapter(config AdyenConfig) (Gateway, error) {
 
 	return &adyenStubAdapter{
 		config:     config,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		baseURL:    baseURL,
 	}, nil
 }

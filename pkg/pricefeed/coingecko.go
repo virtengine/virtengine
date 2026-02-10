@@ -13,6 +13,8 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -83,11 +85,9 @@ func NewCoinGeckoProvider(name string, cfg CoinGeckoConfig, retryCfg RetryConfig
 	}
 
 	provider := &CoinGeckoProvider{
-		name:   name,
-		config: cfg,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		name:        name,
+		config:      cfg,
+		client:      security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		rateLimiter: newRateLimiter(cfg.RateLimitPerMinute),
 		health: SourceHealth{
 			Source:    name,

@@ -16,6 +16,8 @@ import (
 
 	client "github.com/waldur/go-client"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // Waldur-specific errors
@@ -195,10 +197,8 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 
 	// Create HTTP client with timeout
-	httpClient := &http.Client{
-		Timeout:   cfg.Timeout,
-		Transport: otelhttp.NewTransport(http.DefaultTransport),
-	}
+	httpClient := security.NewSecureHTTPClient(security.WithTimeout(cfg.Timeout))
+	httpClient.Transport = otelhttp.NewTransport(httpClient.Transport)
 
 	// Create Waldur API client
 	api, err := client.NewClientWithResponses(
