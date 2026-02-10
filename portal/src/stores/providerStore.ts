@@ -201,7 +201,7 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
           name: coerceString(record.name, 'Offering'),
           category: parseOfferingCategory(record.category),
           status: parseOfferingStatus(record.state ?? record.status),
-          syncStatus: 'synced',
+          syncStatus: 'synced' as ProviderOfferingSummary['syncStatus'],
           activeOrders: coerceNumber(record.active_order_count ?? record.activeOrderCount, 0),
           totalOrders: coerceNumber(record.total_order_count ?? record.totalOrderCount, 0),
           basePrice: coerceNumber(pricing.base_price ?? pricing.basePrice, 0),
@@ -216,6 +216,10 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
           record.id ?? record.lease_id ?? record.leaseId,
           coerceString(record.order_id ?? record.orderId, '')
         );
+        const resources =
+          record.resources && typeof record.resources === 'object'
+            ? (record.resources as Record<string, unknown>)
+            : {};
         return {
           id: leaseId,
           offeringName: coerceString(record.offering_name ?? record.offeringName, 'Offering'),
@@ -227,10 +231,10 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
           customerName: coerceString(record.customer_name ?? record.customerName, 'Customer'),
           status: parseAllocationStatus(record.state ?? record.status),
           resources: {
-            cpu: coerceNumber(record.cpu ?? record.resources?.cpu, 0),
-            memory: coerceNumber(record.memory ?? record.resources?.memory, 0),
-            storage: coerceNumber(record.storage ?? record.resources?.storage, 0),
-            gpu: coerceNumber(record.gpu ?? record.resources?.gpu, 0) || undefined,
+            cpu: coerceNumber(record.cpu ?? resources.cpu, 0),
+            memory: coerceNumber(record.memory ?? resources.memory, 0),
+            storage: coerceNumber(record.storage ?? resources.storage, 0),
+            gpu: coerceNumber(record.gpu ?? resources.gpu, 0) || undefined,
           },
           monthlyRevenue: coerceNumber(record.monthly_revenue ?? record.revenue, 0),
           createdAt: toDate(record.created_at ?? record.createdAt).toISOString(),
@@ -243,6 +247,10 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
           record.price && typeof record.price === 'object'
             ? (record.price as Record<string, unknown>)
             : undefined;
+        const resources =
+          record.resources && typeof record.resources === 'object'
+            ? (record.resources as Record<string, unknown>)
+            : {};
         return {
           id: coerceString(record.id ?? record.bid_id ?? record.bidId, ''),
           offeringName: coerceString(record.offering_name ?? record.offeringName, 'Offering'),
@@ -251,17 +259,17 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
             record.owner ?? record.customer ?? record.customer_address,
             ''
           ),
-          status: 'awaiting_customer',
+          status: 'awaiting_customer' as PendingBid['status'],
           bidAmount: coerceNumber(price?.amount ?? record.amount, 0),
           currency: coerceString(price?.denom ?? record.currency, 'uve'),
           duration: coerceString(record.duration ?? record.duration_str, ''),
           createdAt: toDate(record.created_at ?? record.createdAt).toISOString(),
           expiresAt: toDate(record.expires_at ?? record.expiresAt ?? record.expiry).toISOString(),
           resources: {
-            cpu: coerceNumber(record.cpu ?? record.resources?.cpu, 0),
-            memory: coerceNumber(record.memory ?? record.resources?.memory, 0),
-            storage: coerceNumber(record.storage ?? record.resources?.storage, 0),
-            gpu: coerceNumber(record.gpu ?? record.resources?.gpu, 0) || undefined,
+            cpu: coerceNumber(record.cpu ?? resources.cpu, 0),
+            memory: coerceNumber(record.memory ?? resources.memory, 0),
+            storage: coerceNumber(record.storage ?? resources.storage, 0),
+            gpu: coerceNumber(record.gpu ?? resources.gpu, 0) || undefined,
           },
         };
       });

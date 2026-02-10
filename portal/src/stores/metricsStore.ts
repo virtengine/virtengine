@@ -117,7 +117,7 @@ const buildDeploymentMetrics = (
       gpu: metrics.gpu
         ? {
             utilizationPercent: metrics.gpu.limit
-              ? (metrics.gpu.usage / metrics.gpu.limit) * 100
+              ? ((metrics.gpu.usage ?? 0) / metrics.gpu.limit) * 100
               : 0,
             memoryUsedMB: metrics.gpu.usage ?? 0,
             memoryTotalMB: metrics.gpu.limit ?? 0,

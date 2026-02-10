@@ -35,16 +35,14 @@ vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,
 }));
 
-type Mocked<T> = T & {
-  mockReset: () => void;
-  mockImplementation: (fn: (...args: unknown[]) => unknown) => void;
-};
-
-const fetchPaginatedMock = fetchPaginated as unknown as Mocked<typeof fetchPaginated>;
-const fetchChainJsonMock = fetchChainJsonWithFallback as unknown as Mocked<
+const fetchPaginatedMock = fetchPaginated as unknown as vi.MockedFunction<typeof fetchPaginated>;
+const fetchChainJsonMock = fetchChainJsonWithFallback as unknown as vi.MockedFunction<
   typeof fetchChainJsonWithFallback
 >;
-const apiClientMock = apiClient as unknown as { get: Mocked<typeof apiClient.get> };
+const apiClientMock = apiClient as unknown as {
+  get: vi.MockedFunction<typeof apiClient.get>;
+  post: vi.MockedFunction<typeof apiClient.post>;
+};
 const initialState = useAdminStore.getState();
 
 describe('adminStore', () => {
@@ -130,7 +128,8 @@ describe('adminStore', () => {
       return Promise.resolve({ items: [], nextKey: null, total: 0 });
     });
 
-    fetchChainJsonMock.mockImplementation((paths) => {
+    fetchChainJsonMock.mockImplementation((...args: unknown[]) => {
+      const paths = (args[0] as string[]) ?? [];
       const path = paths[0] ?? '';
       if (path.includes('/blocks/latest')) {
         return Promise.resolve({

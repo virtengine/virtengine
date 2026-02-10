@@ -17,7 +17,7 @@ import type { WalletContextValue } from '../../../lib/portal';
 // ============================================================================
 
 export { PortalProvider, usePortal } from '../../../lib/portal';
-export type { PortalProviderProps, PortalConfig } from '../../../lib/portal';
+export type { PortalProviderProps, PortalConfig, WalletContextValue } from '../../../lib/portal';
 
 // ============================================================================
 // Authentication (VE-700)

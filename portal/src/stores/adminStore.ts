@@ -237,12 +237,9 @@ async function fetchRecentBlocks(): Promise<RecentBlock[]> {
   const latest = await fetchChainJsonWithFallback<Record<string, unknown>>([
     '/cosmos/base/tendermint/v1beta1/blocks/latest',
   ]);
-  const latestHeight = coerceNumber(
-    (latest.block as Record<string, unknown> | undefined)?.header?.height ??
-      (latest.block as Record<string, unknown> | undefined)?.header?.height ??
-      0,
-    0
-  );
+  const latestBlock = latest.block as Record<string, unknown> | undefined;
+  const latestHeader = (latestBlock?.header as Record<string, unknown> | undefined) ?? undefined;
+  const latestHeight = coerceNumber(latestHeader?.height, 0);
   const blocks: RecentBlock[] = [];
   for (let i = 0; i < 5; i += 1) {
     const height = latestHeight - i;
@@ -251,14 +248,9 @@ async function fetchRecentBlocks(): Promise<RecentBlock[]> {
       const block = await fetchChainJsonWithFallback<Record<string, unknown>>([
         `/cosmos/base/tendermint/v1beta1/blocks/${height}`,
       ]);
-      const header = (block.block as Record<string, unknown> | undefined)?.header as Record<
-        string,
-        unknown
-      >;
-      const txs = (block.block as Record<string, unknown> | undefined)?.data as Record<
-        string,
-        unknown
-      >;
+      const blockRecord = block.block as Record<string, unknown> | undefined;
+      const header = blockRecord?.header as Record<string, unknown> | undefined;
+      const txs = blockRecord?.data as Record<string, unknown> | undefined;
       blocks.push({
         height,
         proposer: coerceString(header?.proposer_address, 'unknown'),
@@ -292,7 +284,11 @@ export const useAdminStore = create<AdminStore>()((set, get) => ({
         ]);
 
       const proposals: GovernanceProposal[] = govResult.items.map((record) => {
-        const metadata = coerceString(record.metadata ?? record.content?.metadata, '');
+        const content =
+          record.content && typeof record.content === 'object'
+            ? (record.content as Record<string, unknown>)
+            : undefined;
+        const metadata = coerceString(record.metadata ?? content?.metadata, '');
         const parsedMeta = parseProposalMetadata(metadata);
         const finalTally =
           record.final_tally_result && typeof record.final_tally_result === 'object'

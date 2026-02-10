@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIdentityStore } from '@/stores/identityStore';
+import type { WalletSigner } from '@/lib/api/chain';
 import { fetchChainJsonWithFallback, signAndBroadcastAmino } from '@/lib/api/chain';
 
 vi.mock('@/lib/api/chain', async () => {
@@ -11,12 +12,12 @@ vi.mock('@/lib/api/chain', async () => {
   };
 });
 
-type Mocked<T> = T & { mockReset: () => void; mockResolvedValue: (value: unknown) => void };
-
-const fetchChainMock = fetchChainJsonWithFallback as unknown as Mocked<
+const fetchChainMock = fetchChainJsonWithFallback as unknown as vi.MockedFunction<
   typeof fetchChainJsonWithFallback
 >;
-const signMock = signAndBroadcastAmino as unknown as Mocked<typeof signAndBroadcastAmino>;
+const signMock = signAndBroadcastAmino as unknown as vi.MockedFunction<
+  typeof signAndBroadcastAmino
+>;
 
 const initialState = useIdentityStore.getState();
 
@@ -46,7 +47,7 @@ describe('identityStore', () => {
   });
 
   it('requests verification via signing', async () => {
-    const wallet = {
+    const wallet: WalletSigner = {
       status: 'connected',
       chainId: 'virtengine-1',
       accounts: [{ address: 've1owner' }],

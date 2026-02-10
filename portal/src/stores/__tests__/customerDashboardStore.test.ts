@@ -23,13 +23,8 @@ vi.mock('@/lib/portal-adapter', () => ({
   MultiProviderClient: MockMultiProviderClient,
 }));
 
-type Mocked<T> = T & {
-  mockReset: () => void;
-  mockImplementation: (fn: (...args: unknown[]) => unknown) => void;
-};
-
-const fetchPaginatedMock = fetchPaginated as unknown as Mocked<typeof fetchPaginated>;
-const fetchChainMock = fetchChainJsonWithFallback as unknown as Mocked<
+const fetchPaginatedMock = fetchPaginated as unknown as vi.MockedFunction<typeof fetchPaginated>;
+const fetchChainMock = fetchChainJsonWithFallback as unknown as vi.MockedFunction<
   typeof fetchChainJsonWithFallback
 >;
 
@@ -87,7 +82,9 @@ describe('customerDashboardStore', () => {
       });
     });
 
-    fetchChainMock.mockResolvedValue({ provider: { info: { name: 'Provider One' } } });
+    fetchChainMock.mockResolvedValue({
+      provider: { info: { name: 'Provider One' } },
+    });
 
     await useCustomerDashboardStore.getState().fetchDashboard('ve1owner');
 

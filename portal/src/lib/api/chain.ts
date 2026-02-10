@@ -7,6 +7,7 @@
 
 import { env } from '@/config/env';
 import { getChainInfo } from '@/config/chains';
+import type { WalletContextValue } from '@/lib/portal-adapter';
 
 export class ChainRequestError extends Error {
   status: number;
@@ -205,26 +206,10 @@ export async function fetchPaginated<T>(
   return { items, nextKey, total };
 }
 
-export interface WalletSigner {
-  status: 'idle' | 'connecting' | 'connected' | 'error';
-  chainId: string | null;
-  accounts: Array<{ address: string; pubKey?: Uint8Array }>;
-  activeAccountIndex: number;
-  signAmino: (
-    signDoc: Record<string, unknown>,
-    options?: { preferNoSetFee?: boolean; preferNoSetMemo?: boolean }
-  ) => Promise<{
-    signed: Record<string, unknown>;
-    signature: {
-      pub_key?: Record<string, unknown>;
-      signature: string;
-    };
-  }>;
-  estimateFee: (gasLimit: number) => {
-    amount: Array<{ denom: string; amount: string }>;
-    gas: string;
-  };
-}
+export type WalletSigner = Pick<
+  WalletContextValue,
+  'status' | 'chainId' | 'accounts' | 'activeAccountIndex' | 'signAmino' | 'estimateFee'
+>;
 
 export interface SignedTxResult {
   txHash: string;
@@ -236,7 +221,7 @@ export interface SignedTxResult {
 
 export async function signAndBroadcastAmino(
   wallet: WalletSigner,
-  msgs: Array<{ typeUrl: string; value: Record<string, unknown> }>,
+  msgs: Array<{ typeUrl: string; value: unknown }>,
   memo = '',
   gasLimit = 200000
 ): Promise<SignedTxResult> {
