@@ -508,6 +508,36 @@ export type {
 // export { WebSocketClient } from './utils/websocket-client';
 
 // ============================================================================
+// LLM Chat Agent (VE-70D)
+// ============================================================================
+
+export {
+  createChatAgent,
+  buildChatContext,
+  formatChatContext,
+  CHAT_TOOL_DEFINITIONS,
+  CHAT_TOOL_HANDLERS,
+  OpenAIProvider,
+  LocalLLMProvider,
+} from "./src/chat";
+
+export type {
+  ChatMessage,
+  ChatRole,
+  ChatAction,
+  ChatActionPreview,
+  ChatActionStatus,
+  ChatContextSnapshot,
+  ChatContextOptions,
+  ChatRuntimeContext,
+  ChatToolCall,
+  ChatToolDefinition,
+  ChatToolResult,
+  ChatAgentResult,
+  LLMProvider,
+} from "./src/chat";
+
+// ============================================================================
 // Utilities
 // ============================================================================
 

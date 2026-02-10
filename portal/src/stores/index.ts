@@ -95,3 +95,4 @@ export {
   type ChainEventState,
   type ChainEventActions,
 } from './chainEventStore';
+export { useChatStore, setChatRuntime, initializeChatSession, type ChatStore } from './chatStore';
