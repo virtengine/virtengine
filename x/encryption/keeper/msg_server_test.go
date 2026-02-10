@@ -187,3 +187,78 @@ func TestMsgUpdateKeyLabel_ValidateBasic(t *testing.T) {
 		})
 	}
 }
+
+func TestMsgRotateKey_ValidateBasic(t *testing.T) {
+	validKey := make([]byte, 32)
+
+	tests := []struct {
+		name      string
+		msg       types.MsgRotateKey
+		expectErr bool
+	}{
+		{
+			name: "valid message",
+			msg: types.MsgRotateKey{
+				Sender:            "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+				OldKeyFingerprint: "abc123def456",
+				NewPublicKey:      validKey,
+				NewAlgorithmId:    types.AlgorithmX25519XSalsa20Poly1305,
+				NewLabel:          "rotated",
+				Reason:            "scheduled",
+				NewKeyTtlSeconds:  3600,
+			},
+			expectErr: false,
+		},
+		{
+			name: "invalid sender address",
+			msg: types.MsgRotateKey{
+				Sender:            "invalid",
+				OldKeyFingerprint: "abc123def456",
+				NewPublicKey:      validKey,
+				NewAlgorithmId:    types.AlgorithmX25519XSalsa20Poly1305,
+			},
+			expectErr: true,
+		},
+		{
+			name: "missing old fingerprint",
+			msg: types.MsgRotateKey{
+				Sender:         "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+				NewPublicKey:   validKey,
+				NewAlgorithmId: types.AlgorithmX25519XSalsa20Poly1305,
+			},
+			expectErr: true,
+		},
+		{
+			name: "invalid public key size",
+			msg: types.MsgRotateKey{
+				Sender:            "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+				OldKeyFingerprint: "abc123def456",
+				NewPublicKey:      make([]byte, 16),
+				NewAlgorithmId:    types.AlgorithmX25519XSalsa20Poly1305,
+			},
+			expectErr: true,
+		},
+		{
+			name: "unsupported algorithm",
+			msg: types.MsgRotateKey{
+				Sender:            "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+				OldKeyFingerprint: "abc123def456",
+				NewPublicKey:      validKey,
+				NewAlgorithmId:    "UNKNOWN",
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := types.ValidateMsgRotateKey(&tc.msg)
+
+			if tc.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

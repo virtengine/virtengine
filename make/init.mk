@@ -101,6 +101,7 @@ STATIK_VERSION               ?= v0.1.7
 GIT_CHGLOG_VERSION           ?= v0.15.1
 MOCKERY_VERSION              ?= 3.5.0
 COSMOVISOR_VERSION           ?= v1.7.1
+GITLEAKS_VERSION             ?= 8.22.1
 
 # ==== Build tools version tracking ====
 # <TOOL>_VERSION_FILE points to the marker file for the installed version.
@@ -111,6 +112,7 @@ GOLANGCI_LINT_VERSION_FILE       := $(VE_DEVCACHE_VERSIONS)/golangci-lint/$(GOLA
 STATIK_VERSION_FILE              := $(VE_DEVCACHE_VERSIONS)/statik/$(STATIK_VERSION)
 COSMOVISOR_VERSION_FILE          := $(VE_DEVCACHE_VERSIONS)/cosmovisor/$(COSMOVISOR_VERSION)
 COSMOVISOR_DEBUG_VERSION_FILE    := $(VE_DEVCACHE_VERSIONS)/cosmovisor/debug/$(COSMOVISOR_VERSION)
+GITLEAKS_VERSION_FILE            := $(VE_DEVCACHE_VERSIONS)/gitleaks/$(GITLEAKS_VERSION)
 
 # ==== Build tools executables ====
 GIT_CHGLOG                       := $(VE_DEVCACHE_BIN)/git-chglog
@@ -120,6 +122,7 @@ GOLANGCI_LINT                    := $(VE_DEVCACHE_BIN)/golangci-lint
 STATIK                           := $(VE_DEVCACHE_BIN)/statik
 COSMOVISOR                       := $(VE_DEVCACHE_BIN)/cosmovisor
 COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
+GITLEAKS                         := $(VE_DEVCACHE_BIN)/gitleaks
 
 
 ifeq ($(OS),Windows_NT)

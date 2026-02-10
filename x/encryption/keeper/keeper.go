@@ -3,6 +3,7 @@ package keeper
 import (
 	"encoding/json"
 	"math"
+	"time"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -17,6 +18,7 @@ type IKeeper interface {
 	RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, publicKey []byte, algorithmID, label string) (string, error)
 	RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyFingerprint string) error
 	UpdateKeyLabel(ctx sdk.Context, address sdk.AccAddress, keyFingerprint, label string) error
+	RotateRecipientKey(ctx sdk.Context, address sdk.AccAddress, oldFingerprint string, newPublicKey []byte, newAlgorithmID, newLabel, reason string, newKeyTTLSeconds uint64) (string, error)
 	GetRecipientKeys(ctx sdk.Context, address sdk.AccAddress) []types.RecipientKeyRecord
 	GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string) (types.RecipientKeyRecord, bool)
 	GetActiveRecipientKey(ctx sdk.Context, address sdk.AccAddress) (types.RecipientKeyRecord, bool)
@@ -42,6 +44,8 @@ type Keeper struct {
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
 	authority string
+
+	hooks types.EncryptionHooks
 }
 
 // NewKeeper creates and returns an instance for encryption keeper
@@ -51,6 +55,12 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string
 		skey:      skey,
 		authority: authority,
 	}
+}
+
+// SetHooks sets the encryption hooks.
+func (k *Keeper) SetHooks(hooks types.EncryptionHooks) *Keeper {
+	k.hooks = hooks
+	return k
 }
 
 // Codec returns keeper codec
@@ -74,6 +84,10 @@ type paramsStore struct {
 	MaxKeysPerAccount        uint32   `json:"max_keys_per_account"`
 	AllowedAlgorithms        []string `json:"allowed_algorithms"`
 	RequireSignature         bool     `json:"require_signature"`
+	RevocationGracePeriod    uint64   `json:"revocation_grace_period_seconds"`
+	KeyExpiryWarningSeconds  []uint64 `json:"key_expiry_warning_seconds"`
+	RotationBatchSize        uint32   `json:"rotation_batch_size"`
+	DefaultKeyTTLSeconds     uint64   `json:"default_key_ttl_seconds"`
 }
 
 // SetParams sets the module parameters
@@ -88,6 +102,10 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 		MaxKeysPerAccount:        params.MaxKeysPerAccount,
 		AllowedAlgorithms:        params.AllowedAlgorithms,
 		RequireSignature:         params.RequireSignature,
+		RevocationGracePeriod:    params.RevocationGracePeriodSeconds,
+		KeyExpiryWarningSeconds:  params.KeyExpiryWarningSeconds,
+		RotationBatchSize:        params.RotationBatchSize,
+		DefaultKeyTTLSeconds:     params.DefaultKeyTtlSeconds,
 	})
 	if err != nil {
 		return err
@@ -109,10 +127,14 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 	return types.Params{
-		MaxRecipientsPerEnvelope: ps.MaxRecipientsPerEnvelope,
-		MaxKeysPerAccount:        ps.MaxKeysPerAccount,
-		AllowedAlgorithms:        ps.AllowedAlgorithms,
-		RequireSignature:         ps.RequireSignature,
+		MaxRecipientsPerEnvelope:     ps.MaxRecipientsPerEnvelope,
+		MaxKeysPerAccount:            ps.MaxKeysPerAccount,
+		AllowedAlgorithms:            ps.AllowedAlgorithms,
+		RequireSignature:             ps.RequireSignature,
+		RevocationGracePeriodSeconds: ps.RevocationGracePeriod,
+		KeyExpiryWarningSeconds:      ps.KeyExpiryWarningSeconds,
+		RotationBatchSize:            ps.RotationBatchSize,
+		DefaultKeyTtlSeconds:         ps.DefaultKeyTTLSeconds,
 	}
 }
 
@@ -125,6 +147,9 @@ type recipientKeyStore struct {
 	AlgorithmID    string `json:"algorithm_id"`
 	RegisteredAt   int64  `json:"registered_at"`
 	RevokedAt      int64  `json:"revoked_at"`
+	DeprecatedAt   int64  `json:"deprecated_at"`
+	ExpiresAt      int64  `json:"expires_at"`
+	PurgeAt        int64  `json:"purge_at"`
 	Label          string `json:"label"`
 }
 
@@ -180,7 +205,15 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 		AlgorithmID:    algorithmID,
 		RegisteredAt:   ctx.BlockTime().Unix(),
 		RevokedAt:      0,
+		DeprecatedAt:   0,
+		ExpiresAt:      0,
+		PurgeAt:        0,
 		Label:          label,
+	}
+
+	if params.DefaultKeyTtlSeconds > 0 {
+		ttl := safeInt64FromUint64(params.DefaultKeyTtlSeconds)
+		record.ExpiresAt = ctx.BlockTime().Add(time.Duration(ttl) * time.Second).Unix()
 	}
 
 	bz, err := json.Marshal(&record)
@@ -194,70 +227,13 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 	// Store fingerprint -> address mapping
 	store.Set(types.KeyByFingerprintKey([]byte(fingerprint)), address.Bytes())
 
+	// Store version -> fingerprint mapping
+	store.Set(types.RecipientKeyVersionKey(address.Bytes(), nextVersion), []byte(fingerprint))
+
 	// Update active key pointer
 	store.Set(types.ActiveKeyKey(address.Bytes()), []byte(fingerprint))
 
 	return fingerprint, nil
-}
-
-// RevokeRecipientKey revokes a recipient's public key
-func (k Keeper) RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyFingerprint string) error {
-	store := ctx.KVStore(k.skey)
-
-	if address.String() != k.authority {
-		addrBytes := store.Get(types.KeyByFingerprintKey([]byte(keyFingerprint)))
-		if addrBytes != nil && string(addrBytes) != address.String() {
-			return types.ErrUnauthorized.Wrap("sender is not key owner or authority")
-		}
-	}
-
-	targetAddr := address
-	if address.String() == k.authority {
-		addrBytes := store.Get(types.KeyByFingerprintKey([]byte(keyFingerprint)))
-		if addrBytes == nil {
-			return types.ErrKeyNotFound.Wrapf("key fingerprint %s not found", keyFingerprint)
-		}
-		targetAddr = sdk.AccAddress(addrBytes)
-	}
-
-	// Get existing key record
-	key := types.RecipientKeyKey(targetAddr.Bytes(), []byte(keyFingerprint))
-	bz := store.Get(key)
-	if bz == nil {
-		return types.ErrKeyNotFound.Wrapf("no key found for address %s", targetAddr.String())
-	}
-
-	var record recipientKeyStore
-	if err := json.Unmarshal(bz, &record); err != nil {
-		return types.ErrKeyNotFound.Wrapf("failed to unmarshal key record: %v", err)
-	}
-
-	// Verify fingerprint matches
-	if record.KeyFingerprint != keyFingerprint {
-		return types.ErrKeyNotFound.Wrapf("key fingerprint %s not found for address %s", keyFingerprint, targetAddr.String())
-	}
-
-	// Check if already revoked
-	if record.RevokedAt != 0 {
-		return types.ErrKeyRevoked.Wrapf("key %s is already revoked", keyFingerprint)
-	}
-
-	// Mark as revoked
-	record.RevokedAt = ctx.BlockTime().Unix()
-
-	bz, err := json.Marshal(&record)
-	if err != nil {
-		return err
-	}
-
-	store.Set(key, bz)
-
-	activeKey := store.Get(types.ActiveKeyKey(targetAddr.Bytes()))
-	if string(activeKey) == keyFingerprint {
-		k.setLatestActiveKey(ctx, targetAddr)
-	}
-
-	return nil
 }
 
 // UpdateKeyLabel updates a recipient key's label
@@ -316,6 +292,9 @@ func (k Keeper) GetRecipientKeys(ctx sdk.Context, address sdk.AccAddress) []type
 			AlgorithmID:    record.AlgorithmID,
 			RegisteredAt:   record.RegisteredAt,
 			RevokedAt:      record.RevokedAt,
+			DeprecatedAt:   record.DeprecatedAt,
+			ExpiresAt:      record.ExpiresAt,
+			PurgeAt:        record.PurgeAt,
 			Label:          record.Label,
 			KeyVersion:     record.KeyVersion,
 		})
@@ -357,9 +336,31 @@ func (k Keeper) GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string
 		AlgorithmID:    record.AlgorithmID,
 		RegisteredAt:   record.RegisteredAt,
 		RevokedAt:      record.RevokedAt,
+		DeprecatedAt:   record.DeprecatedAt,
+		ExpiresAt:      record.ExpiresAt,
+		PurgeAt:        record.PurgeAt,
 		Label:          record.Label,
 		KeyVersion:     record.KeyVersion,
 	}, true
+}
+
+// GetRecipientKeyByVersion returns a key record by address and version.
+func (k Keeper) GetRecipientKeyByVersion(ctx sdk.Context, address sdk.AccAddress, version uint32) (types.RecipientKeyRecord, bool) {
+	store := ctx.KVStore(k.skey)
+	fp := store.Get(types.RecipientKeyVersionKey(address.Bytes(), version))
+	if len(fp) == 0 {
+		return types.RecipientKeyRecord{}, false
+	}
+	return k.GetRecipientKeyByFingerprint(ctx, string(fp))
+}
+
+// ResolveRecipientKeyID resolves a recipient key ID (fingerprint or versioned) to a key record.
+func (k Keeper) ResolveRecipientKeyID(ctx sdk.Context, address sdk.AccAddress, keyID string) (types.RecipientKeyRecord, bool) {
+	fingerprint, version, ok := types.ParseRecipientKeyID(keyID)
+	if ok {
+		return k.GetRecipientKeyByVersion(ctx, address, version)
+	}
+	return k.GetRecipientKeyByFingerprint(ctx, fingerprint)
 }
 
 // GetActiveRecipientKey returns the active (non-revoked) key for an address
@@ -368,7 +369,7 @@ func (k Keeper) GetActiveRecipientKey(ctx sdk.Context, address sdk.AccAddress) (
 	activeFingerprint := store.Get(types.ActiveKeyKey(address.Bytes()))
 	if len(activeFingerprint) > 0 {
 		record, found := k.GetRecipientKeyByFingerprint(ctx, string(activeFingerprint))
-		if found && record.IsActive() {
+		if found && k.isKeyUsableAt(ctx.BlockTime().Unix(), record) {
 			return record, true
 		}
 	}
@@ -377,7 +378,7 @@ func (k Keeper) GetActiveRecipientKey(ctx sdk.Context, address sdk.AccAddress) (
 	activeFingerprint = store.Get(types.ActiveKeyKey(address.Bytes()))
 	if len(activeFingerprint) > 0 {
 		record, found := k.GetRecipientKeyByFingerprint(ctx, string(activeFingerprint))
-		if found && record.IsActive() {
+		if found && k.isKeyUsableAt(ctx.BlockTime().Unix(), record) {
 			return record, true
 		}
 	}
@@ -433,8 +434,16 @@ func (k Keeper) ValidateEnvelopeRecipients(ctx sdk.Context, envelope *types.Encr
 			continue
 		}
 
-		if !record.IsActive() {
-			return nil, types.ErrKeyRevoked.Wrapf("recipient key %s has been revoked", keyID)
+		if !k.isKeyUsableAt(ctx.BlockTime().Unix(), record) {
+			if record.RevokedAt != 0 {
+				return nil, types.ErrKeyRevoked.Wrapf("recipient key %s has been revoked", keyID)
+			}
+			if record.DeprecatedAt != 0 {
+				return nil, types.ErrKeyDeprecated.Wrapf("recipient key %s is deprecated", keyID)
+			}
+			if record.ExpiresAt != 0 {
+				return nil, types.ErrKeyExpired.Wrapf("recipient key %s has expired", keyID)
+			}
 		}
 	}
 
@@ -449,6 +458,19 @@ func safeUint32FromInt(value int) uint32 {
 		return math.MaxUint32
 	}
 	return uint32(value)
+}
+
+func (k Keeper) isKeyUsableAt(blockTime int64, record types.RecipientKeyRecord) bool {
+	if record.RevokedAt != 0 {
+		return false
+	}
+	if record.DeprecatedAt != 0 {
+		return false
+	}
+	if record.ExpiresAt != 0 && blockTime >= record.ExpiresAt {
+		return false
+	}
+	return true
 }
 
 // WithRecipientKeys iterates all recipient keys
@@ -473,6 +495,9 @@ func (k Keeper) WithRecipientKeys(ctx sdk.Context, fn func(record types.Recipien
 			AlgorithmID:    record.AlgorithmID,
 			RegisteredAt:   record.RegisteredAt,
 			RevokedAt:      record.RevokedAt,
+			DeprecatedAt:   record.DeprecatedAt,
+			ExpiresAt:      record.ExpiresAt,
+			PurgeAt:        record.PurgeAt,
 			Label:          record.Label,
 			KeyVersion:     record.KeyVersion,
 		}
@@ -488,7 +513,7 @@ func (k Keeper) setLatestActiveKey(ctx sdk.Context, address sdk.AccAddress) {
 	var latest types.RecipientKeyRecord
 	found := false
 	for _, key := range keys {
-		if !key.IsActive() {
+		if !k.isKeyUsableAt(ctx.BlockTime().Unix(), key) {
 			continue
 		}
 		if !found || key.KeyVersion > latest.KeyVersion {
@@ -502,4 +527,9 @@ func (k Keeper) setLatestActiveKey(ctx sdk.Context, address sdk.AccAddress) {
 
 	store := ctx.KVStore(k.skey)
 	store.Set(types.ActiveKeyKey(address.Bytes()), []byte(latest.KeyFingerprint))
+}
+
+// RefreshActiveRecipientKey recalculates and stores the latest active key for an address.
+func (k Keeper) RefreshActiveRecipientKey(ctx sdk.Context, address sdk.AccAddress) {
+	k.setLatestActiveKey(ctx, address)
 }

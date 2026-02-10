@@ -55,5 +55,23 @@ $(COSMOVISOR_VERSION_FILE): $(VE_DEVCACHE)
 	touch $@
 $(COSMOVISOR): $(COSMOVISOR_VERSION_FILE)
 
+$(GITLEAKS_VERSION_FILE): $(VE_DEVCACHE)
+	@echo "installing gitleaks $(GITLEAKS_VERSION) ..."
+	rm -f $(GITLEAKS)
+ifeq ($(OS),Windows_NT)
+	powershell -Command "$$url = 'https://github.com/gitleaks/gitleaks/releases/download/v$(GITLEAKS_VERSION)/gitleaks_$(GITLEAKS_VERSION)_windows_x64.zip'; \
+		Invoke-WebRequest -Uri $$url -OutFile $(VE_DEVCACHE)/gitleaks.zip; \
+		Expand-Archive -Path $(VE_DEVCACHE)/gitleaks.zip -DestinationPath $(VE_DEVCACHE_BIN) -Force; \
+		Remove-Item $(VE_DEVCACHE)/gitleaks.zip"
+else ifeq ($(UNAME_OS),Darwin)
+	curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v$(GITLEAKS_VERSION)/gitleaks_$(GITLEAKS_VERSION)_darwin_$(UNAME_ARCH).tar.gz" | tar -xz -C $(VE_DEVCACHE_BIN) gitleaks
+else
+	curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v$(GITLEAKS_VERSION)/gitleaks_$(GITLEAKS_VERSION)_linux_$(UNAME_ARCH).tar.gz" | tar -xz -C $(VE_DEVCACHE_BIN) gitleaks
+endif
+	rm -rf "$(dir $@)"
+	mkdir -p "$(dir $@)"
+	touch $@
+$(GITLEAKS): $(GITLEAKS_VERSION_FILE)
+
 cache-clean:
 	rm -rf $(VE_DEVCACHE)
