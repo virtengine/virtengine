@@ -28,10 +28,11 @@ import (
 	rolesv1 "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/virtengine/virtengine/pkg/observability"
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/pkg/servicedesk"
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
@@ -955,7 +956,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if grpcEndpoint := viper.GetString(FlagWaldurChainGRPC); grpcEndpoint != "" {
 		conn, err := grpc.NewClient(
 			grpcEndpoint,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithTransportCredentials(credentials.NewTLS(security.SecureTLSConfig())),
 			grpc.WithStatsHandler(observability.GRPCClientStatsHandler()),
 		)
 		if err != nil {

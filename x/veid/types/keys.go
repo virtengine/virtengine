@@ -354,6 +354,18 @@ var (
 	PrefixSMSDeliveryResult = []byte{0x4C}
 
 	// ============================================================================
+	// Social Media Scope Keys (VE-47D)
+	// ============================================================================
+
+	// PrefixSocialMediaScope is the prefix for social media scope storage
+	// Key: PrefixSocialMediaScope | scope_id -> SocialMediaScope
+	PrefixSocialMediaScope = []byte{0x9A}
+
+	// PrefixSocialMediaScopeByAccount is the prefix for social media scope lookup by account
+	// Key: PrefixSocialMediaScopeByAccount | address | provider | scope_id -> bool
+	PrefixSocialMediaScopeByAccount = []byte{0x9B}
+
+	// ============================================================================
 	// Appeal System Keys (VE-3020)
 	// ============================================================================
 
@@ -745,6 +757,18 @@ var (
 	// PrefixConsentEventBySubject stores consent event IDs by subject
 	// Key: PrefixConsentEventBySubject | account_address -> []event_id
 	PrefixConsentEventBySubject = []byte{0x99}
+
+	// PrefixEvidenceRecord stores evidence records
+	// Key: PrefixEvidenceRecord | evidence_id -> EvidenceRecord
+	PrefixEvidenceRecord = []byte{0x9A}
+
+	// PrefixEvidenceRecordByAccount stores evidence IDs by account
+	// Key: PrefixEvidenceRecordByAccount | account_address -> []evidence_id
+	PrefixEvidenceRecordByAccount = []byte{0x9B}
+
+	// PrefixEvidenceRecordByAccountType stores evidence IDs by account and type
+	// Key: PrefixEvidenceRecordByAccountType | account_address | evidence_type -> []evidence_id
+	PrefixEvidenceRecordByAccountType = []byte{0x9C}
 )
 
 // IdentityRecordKey returns the store key for an identity record
@@ -919,6 +943,33 @@ func ConsentEventBySubjectKey(address []byte) []byte {
 	key := make([]byte, 0, len(PrefixConsentEventBySubject)+len(address))
 	key = append(key, PrefixConsentEventBySubject...)
 	key = append(key, address...)
+	return key
+}
+
+// EvidenceRecordKey returns the store key for an evidence record.
+func EvidenceRecordKey(evidenceID string) []byte {
+	idBytes := []byte(evidenceID)
+	key := make([]byte, 0, len(PrefixEvidenceRecord)+len(idBytes))
+	key = append(key, PrefixEvidenceRecord...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// EvidenceRecordByAccountKey returns the store key for evidence records by account.
+func EvidenceRecordByAccountKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixEvidenceRecordByAccount)+len(address))
+	key = append(key, PrefixEvidenceRecordByAccount...)
+	key = append(key, address...)
+	return key
+}
+
+// EvidenceRecordByAccountTypeKey returns the store key for evidence records by account and type.
+func EvidenceRecordByAccountTypeKey(address []byte, evidenceType EvidenceType) []byte {
+	key := make([]byte, 0, len(PrefixEvidenceRecordByAccountType)+len(address)+1+len(evidenceType))
+	key = append(key, PrefixEvidenceRecordByAccountType...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(evidenceType)...)
 	return key
 }
 

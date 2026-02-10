@@ -61,12 +61,14 @@ type TOTPConfig struct {
 }
 
 // DefaultTOTPConfig returns the default TOTP configuration
+// Changed to SHA-256 in v0.9.x for improved security
+// Legacy SHA-1 enrollments continue to work (algorithm stored per enrollment)
 func DefaultTOTPConfig() TOTPConfig {
 	return TOTPConfig{
 		Period:    30,
 		Digits:    6,
 		Skew:      1,
-		Algorithm: "SHA1",
+		Algorithm: "SHA256",
 	}
 }
 

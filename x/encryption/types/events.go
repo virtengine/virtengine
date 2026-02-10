@@ -5,6 +5,9 @@ const (
 	EventTypeKeyRegistered = "key_registered"
 	EventTypeKeyRevoked    = "key_revoked"
 	EventTypeKeyUpdated    = "key_updated"
+	EventTypeKeyRotated    = "key_rotated"
+	EventTypeKeyExpired    = "key_expired"
+	EventTypeKeyExpiryWarn = "key_expiry_warning"
 )
 
 // Event attribute keys
@@ -16,6 +19,11 @@ const (
 	AttributeKeyRegisteredAt = "registered_at"
 	AttributeKeyRevokedAt    = "revoked_at"
 	AttributeKeyRevokedBy    = "revoked_by"
+	AttributeKeyDeprecatedAt = "deprecated_at"
+	AttributeKeyExpiresAt    = "expires_at"
+	AttributeKeyOldKey       = "old_fingerprint"
+	AttributeKeyNewKey       = "new_fingerprint"
+	AttributeKeyWarningSecs  = "warning_window_seconds"
 )
 
 // EventKeyRegistered is emitted when a recipient key is registered
@@ -42,4 +50,27 @@ type EventKeyUpdated struct {
 	Field       string `json:"field"`
 	OldValue    string `json:"old_value,omitempty"`
 	NewValue    string `json:"new_value,omitempty"`
+}
+
+// EventKeyRotated is emitted when a recipient key is rotated
+type EventKeyRotated struct {
+	Address        string `json:"address"`
+	OldFingerprint string `json:"old_fingerprint"`
+	NewFingerprint string `json:"new_fingerprint"`
+	RotatedAt      int64  `json:"rotated_at"`
+}
+
+// EventKeyExpiryWarning is emitted when a key is nearing expiry
+type EventKeyExpiryWarning struct {
+	Address              string `json:"address"`
+	Fingerprint          string `json:"fingerprint"`
+	ExpiresAt            int64  `json:"expires_at"`
+	WarningWindowSeconds uint64 `json:"warning_window_seconds"`
+}
+
+// EventKeyExpired is emitted when a key expires
+type EventKeyExpired struct {
+	Address     string `json:"address"`
+	Fingerprint string `json:"fingerprint"`
+	ExpiredAt   int64  `json:"expired_at"`
 }

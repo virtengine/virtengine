@@ -8,7 +8,8 @@ export function initializeCaptureSession(documentType: DocumentType): CaptureSes
   return {
     sessionId: createId("session"),
     createdAt: Date.now(),
-    documentType
+    documentType,
+    socialMedia: []
   };
 }
 

@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -42,11 +44,9 @@ func NewACHAdapter(config ACHConfig) (*ACHAdapter, error) {
 	}
 
 	return &ACHAdapter{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		baseURL: baseURL,
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
+		baseURL:    baseURL,
 	}, nil
 }
 
@@ -503,7 +503,7 @@ type DirectACHAdapter struct {
 func NewDirectACHAdapter(config ACHConfig) (*DirectACHAdapter, error) {
 	return &DirectACHAdapter{
 		config:     config,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}, nil
 }
 

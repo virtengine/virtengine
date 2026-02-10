@@ -46,6 +46,7 @@ type erasureReportStore struct {
 	VerificationHistoryErased bool              `json:"verification_history_erased"`
 	DerivedFeaturesErased     bool              `json:"derived_features_erased"`
 	ConsentRecordsErased      bool              `json:"consent_records_erased"`
+	SocialMediaDataErased     bool              `json:"social_media_data_erased"`
 	OffChainDataDeleted       bool              `json:"off_chain_data_deleted"`
 	OnChainDataMadeUnreadable bool              `json:"on_chain_data_made_unreadable"`
 	TotalRecordsAffected      uint64            `json:"total_records_affected"`
@@ -314,6 +315,17 @@ func (k Keeper) eraseCategory(
 		affected += k.DeleteConsentRecordsBySubject(ctx, address)
 		affected += k.DeleteConsentEventsBySubject(ctx, address)
 		report.ConsentRecordsErased = true
+
+	case types.ErasureCategorySocialMedia:
+		// Erase social media scope metadata
+		account := address.String()
+		scopes := k.GetSocialMediaScopesByAccount(ctx, account, nil)
+		for _, scope := range scopes {
+			if k.DeleteSocialMediaScope(ctx, scope.ScopeID) {
+				affected++
+			}
+		}
+		report.SocialMediaDataErased = true
 
 	case types.ErasureCategoryAll:
 		// This is handled by iterating all categories in executeErasure
@@ -886,6 +898,7 @@ func erasureReportToStore(r *types.ErasureReport) *erasureReportStore {
 		VerificationHistoryErased: r.VerificationHistoryErased,
 		DerivedFeaturesErased:     r.DerivedFeaturesErased,
 		ConsentRecordsErased:      r.ConsentRecordsErased,
+		SocialMediaDataErased:     r.SocialMediaDataErased,
 		OffChainDataDeleted:       r.OffChainDataDeleted,
 		OnChainDataMadeUnreadable: r.OnChainDataMadeUnreadable,
 		TotalRecordsAffected:      r.TotalRecordsAffected,
@@ -916,6 +929,7 @@ func erasureReportFromStore(rs *erasureReportStore) *types.ErasureReport {
 		VerificationHistoryErased: rs.VerificationHistoryErased,
 		DerivedFeaturesErased:     rs.DerivedFeaturesErased,
 		ConsentRecordsErased:      rs.ConsentRecordsErased,
+		SocialMediaDataErased:     rs.SocialMediaDataErased,
 		OffChainDataDeleted:       rs.OffChainDataDeleted,
 		OnChainDataMadeUnreadable: rs.OnChainDataMadeUnreadable,
 		TotalRecordsAffected:      rs.TotalRecordsAffected,

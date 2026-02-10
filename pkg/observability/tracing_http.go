@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // HTTPTracingHandler wraps an HTTP handler with OpenTelemetry instrumentation.
@@ -19,7 +21,7 @@ func HTTPTracingHandler(handler http.Handler, name string) http.Handler {
 
 // TracedHTTPClient returns an HTTP client instrumented with OpenTelemetry.
 func TracedHTTPClient() *http.Client {
-	return &http.Client{
-		Transport: otelhttp.NewTransport(http.DefaultTransport),
-	}
+	client := security.NewSecureHTTPClient()
+	client.Transport = otelhttp.NewTransport(client.Transport)
+	return client
 }

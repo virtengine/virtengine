@@ -12,6 +12,8 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -39,9 +41,7 @@ func NewPythProvider(name string, cfg PythConfig, retryCfg RetryConfig) (*PythPr
 	provider := &PythProvider{
 		name:   name,
 		config: cfg,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		health: SourceHealth{
 			Source:    name,
 			Type:      SourceTypePyth,

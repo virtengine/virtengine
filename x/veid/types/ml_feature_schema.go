@@ -199,6 +199,8 @@ func ScopeTypeToConsentCategory(scopeType ScopeType) ConsentCategory {
 		return ConsentCategoryDomainOwnership
 	case ScopeTypeADSSO:
 		return ConsentCategoryEnterpriseIdentity
+	case ScopeTypeSocialMedia:
+		return ConsentCategoryIdentityAttestation
 	default:
 		return ConsentCategoryBiometricPII // Default to most restrictive
 	}

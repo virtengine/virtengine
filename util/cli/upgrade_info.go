@@ -12,6 +12,8 @@ import (
 	"github.com/google/go-github/v62/github"
 	"github.com/gregjones/httpcache"
 	"golang.org/x/oauth2"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // UpgradeInfo is expected format for the info field to allow auto-download
@@ -24,14 +26,18 @@ type UpgradeInfo struct {
 // tag - release tag
 // pretty - either prettify (true) json output or not (false)
 func UpgradeInfoFromTag(ctx context.Context, tag string, pretty bool) (string, error) {
-	tc := &http.Client{
-		Transport: &oauth2.Transport{
-			Base: httpcache.NewMemoryCacheTransport(),
-			Source: oauth2.StaticTokenSource(
-				&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
-			),
-		},
+	cacheTransport := httpcache.NewMemoryCacheTransport()
+	cacheTransport.Transport = security.NewSecureHTTPClient().Transport
+
+	transport := &oauth2.Transport{
+		Base: cacheTransport,
+		Source: oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
+		),
 	}
+
+	tc := security.NewSecureHTTPClient()
+	tc.Transport = transport
 
 	gh := github.NewClient(tc)
 

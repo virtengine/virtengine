@@ -35,7 +35,8 @@ const (
 	// DNSVerificationPrefix is the subdomain prefix for verification TXT records
 	DNSVerificationPrefix = "_virtengine-verification"
 
-	// HTTPWellKnownPath is the path for HTTP well-known verification
+	// HTTPWellKnownPath is the path for HTTP well-known verification.
+	//nolint:gosec // G101: public well-known path, not a credential
 	HTTPWellKnownPath = "/.well-known/virtengine-verification"
 )
 
@@ -63,9 +64,8 @@ type DomainVerificationRecord struct {
 	RenewalAt       int64                    `json:"renewal_at,omitempty"`
 }
 
-// RequestDomainVerification requests domain verification with specified method (replaces GenerateDomainVerificationToken)
-// TODO: Replace int32 with types.VerificationMethod after proto generation
-func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, domain string, method int32) (*DomainVerificationRecord, string, error) {
+// RequestDomainVerification requests domain verification with specified method (replaces GenerateDomainVerificationToken).
+func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccAddress, domain string, method types.VerificationMethod) (*DomainVerificationRecord, string, error) {
 	if err := validateDomain(domain); err != nil {
 		return nil, "", types.ErrInvalidDomain.Wrapf("invalid domain: %v", err)
 	}
@@ -73,21 +73,14 @@ func (k Keeper) RequestDomainVerification(ctx sdk.Context, providerAddr sdk.AccA
 	var methodType VerificationMethodType
 	var verificationTarget string
 
-	// Temporary enum values until proto generation
-	const (
-		VERIFICATION_METHOD_DNS_TXT         = 1
-		VERIFICATION_METHOD_DNS_CNAME       = 2
-		VERIFICATION_METHOD_HTTP_WELL_KNOWN = 3
-	)
-
 	switch method {
-	case VERIFICATION_METHOD_DNS_TXT:
+	case types.VERIFICATION_METHOD_DNS_TXT:
 		methodType = VerificationMethodDNSTXT
 		verificationTarget = fmt.Sprintf("%s.%s", DNSVerificationPrefix, domain)
-	case VERIFICATION_METHOD_DNS_CNAME:
+	case types.VERIFICATION_METHOD_DNS_CNAME:
 		methodType = VerificationMethodDNSCNAME
 		verificationTarget = fmt.Sprintf("%s.%s", DNSVerificationPrefix, domain)
-	case VERIFICATION_METHOD_HTTP_WELL_KNOWN:
+	case types.VERIFICATION_METHOD_HTTP_WELL_KNOWN:
 		methodType = VerificationMethodHTTPWellKnown
 		verificationTarget = fmt.Sprintf("https://%s%s", domain, HTTPWellKnownPath)
 	default:
@@ -171,7 +164,7 @@ func (k Keeper) RevokeDomainVerification(ctx sdk.Context, providerAddr sdk.AccAd
 // GenerateDomainVerificationToken generates a new verification token for a provider's domain (legacy - kept for compatibility)
 func (k Keeper) GenerateDomainVerificationToken(ctx sdk.Context, providerAddr sdk.AccAddress, domain string) (*DomainVerificationRecord, error) {
 	// Use DNS_TXT as default method (value 1)
-	record, _, err := k.RequestDomainVerification(ctx, providerAddr, domain, 1)
+	record, _, err := k.RequestDomainVerification(ctx, providerAddr, domain, types.VERIFICATION_METHOD_DNS_TXT)
 	return record, err
 }
 

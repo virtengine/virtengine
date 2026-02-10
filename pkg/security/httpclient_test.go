@@ -64,6 +64,21 @@ func TestNewSecureHTTPClientWithOptions(t *testing.T) {
 	}
 }
 
+func TestHTTPClientMinTLSVersionClamp(t *testing.T) {
+	config := DefaultHTTPClientConfig()
+	config.MinTLSVersion = tls.VersionTLS10
+
+	client := NewHTTPClientFromConfig(config)
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected *http.Transport")
+	}
+
+	if transport.TLSClientConfig.MinVersion != tls.VersionTLS12 {
+		t.Errorf("expected MinTLSVersion TLS 1.2, got %v", transport.TLSClientConfig.MinVersion)
+	}
+}
+
 func TestNewSecureHTTPClientTLS13(t *testing.T) {
 	client := NewSecureHTTPClientTLS13()
 

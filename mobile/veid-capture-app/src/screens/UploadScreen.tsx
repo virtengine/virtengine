@@ -29,7 +29,7 @@ export function UploadScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Secure Upload"
-        stepIndex={6}
+        stepIndex={7}
         subtitle="Encrypt and transmit your capture package with attestation."
       />
       <View style={styles.content}>

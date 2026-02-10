@@ -13,6 +13,7 @@ var (
 	_ sdk.Msg = &MsgSubmitSSOVerificationProof{}
 	_ sdk.Msg = &MsgSubmitEmailVerificationProof{}
 	_ sdk.Msg = &MsgSubmitSMSVerificationProof{}
+	_ sdk.Msg = &MsgSubmitSocialMediaScope{}
 )
 
 // Route returns the route for the message
@@ -294,6 +295,67 @@ func (msg *MsgSubmitSMSVerificationProof) ValidateBasic() error {
 
 // GetSigners returns the signers for the message
 func (msg *MsgSubmitSMSVerificationProof) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.AccountAddress)
+	return []sdk.AccAddress{signer}
+}
+
+// Route returns the route for the message
+func (msg *MsgSubmitSocialMediaScope) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg *MsgSubmitSocialMediaScope) Type() string { return "submit_social_media_scope" }
+
+// ValidateBasic validates the message
+func (msg *MsgSubmitSocialMediaScope) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.AccountAddress); err != nil {
+		return ErrInvalidAddress.Wrap("invalid account address")
+	}
+
+	if msg.ScopeId == "" {
+		return ErrInvalidScope.Wrap("scope_id cannot be empty")
+	}
+
+	if msg.Provider == SocialMediaProviderUnspecified {
+		return ErrInvalidScopeType.Wrap("provider cannot be unspecified")
+	}
+
+	if msg.ProfileNameHash == "" || len(msg.ProfileNameHash) != 64 {
+		return ErrInvalidScope.Wrap("profile_name_hash must be a valid SHA256 hex string")
+	}
+
+	if msg.EmailHash != "" && len(msg.EmailHash) != 64 {
+		return ErrInvalidScope.Wrap("email_hash must be a valid SHA256 hex string")
+	}
+
+	if msg.UsernameHash != "" && len(msg.UsernameHash) != 64 {
+		return ErrInvalidScope.Wrap("username_hash must be a valid SHA256 hex string")
+	}
+
+	if msg.OrgHash != "" && len(msg.OrgHash) != 64 {
+		return ErrInvalidScope.Wrap("org_hash must be a valid SHA256 hex string")
+	}
+
+	if msg.AccountCreatedAt == 0 && msg.AccountAgeDays == 0 {
+		return ErrInvalidScope.Wrap("account age or creation time must be provided")
+	}
+
+	if len(msg.AttestationData) == 0 {
+		return ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
+	}
+
+	if len(msg.AccountSignature) == 0 {
+		return ErrInvalidBindingSignature.Wrap("account_signature cannot be empty")
+	}
+
+	if err := msg.EncryptedPayload.Validate(); err != nil {
+		return ErrInvalidPayload.Wrap(err.Error())
+	}
+
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg *MsgSubmitSocialMediaScope) GetSigners() []sdk.AccAddress {
 	signer, _ := sdk.AccAddressFromBech32(msg.AccountAddress)
 	return []sdk.AccAddress{signer}
 }

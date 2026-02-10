@@ -358,6 +358,22 @@ func (k Keeper) ProcessVerificationRequest(
 		return result
 	}
 
+	// Step 4b: Process evidence pipeline (document + biometric)
+	assessment, evidenceErr := k.ProcessEvidencePipeline(ctx, addr, request.RequestID, validDecrypted, keyProvider)
+	if evidenceErr != nil {
+		k.Logger(ctx).Error("evidence pipeline failed", "error", evidenceErr)
+		result.Metadata["evidence_error"] = evidenceErr.Error()
+	} else if assessment != nil {
+		result.Metadata["evidence_confidence"] = fmt.Sprintf("%d", assessment.OverallConfidence)
+		result.Metadata["evidence_provenance_hash"] = hex.EncodeToString(assessment.ProvenanceHash)
+		if adjusted, applied := applyEvidenceConfidence(score, assessment.OverallConfidence); applied {
+			score = adjusted
+		}
+		if shouldFlagLowEvidenceConfidence(assessment.OverallConfidence) {
+			reasonCodes = append(reasonCodes, types.ReasonCodeLowConfidence)
+		}
+	}
+
 	// Step 5: Build final result
 	result.Score = score
 	result.ModelVersion = modelVersion

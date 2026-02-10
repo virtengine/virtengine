@@ -27,8 +27,12 @@ type (
 	MsgRevokeRecipientKeyResponsePB = encryptionv1.MsgRevokeRecipientKeyResponse
 	// MsgUpdateKeyLabelPB is the generated proto type
 	MsgUpdateKeyLabelPB = encryptionv1.MsgUpdateKeyLabel
+	// MsgRotateKeyPB is the generated proto type
+	MsgRotateKeyPB = encryptionv1.MsgRotateKey
 	// MsgUpdateKeyLabelResponsePB is the generated proto type
 	MsgUpdateKeyLabelResponsePB = encryptionv1.MsgUpdateKeyLabelResponse
+	// MsgRotateKeyResponsePB is the generated proto type
+	MsgRotateKeyResponsePB = encryptionv1.MsgRotateKeyResponse
 )
 
 // Proto message type aliases for core types
@@ -57,6 +61,12 @@ type (
 	EventKeyRevokedPB = encryptionv1.EventKeyRevoked
 	// EventKeyUpdatedPB is the generated proto type for EventKeyUpdated
 	EventKeyUpdatedPB = encryptionv1.EventKeyUpdated
+	// EventKeyRotatedPB is the generated proto type for EventKeyRotated
+	EventKeyRotatedPB = encryptionv1.EventKeyRotated
+	// EventKeyExpiryWarningPB is the generated proto type for EventKeyExpiryWarning
+	EventKeyExpiryWarningPB = encryptionv1.EventKeyExpiryWarning
+	// EventKeyExpiredPB is the generated proto type for EventKeyExpired
+	EventKeyExpiredPB = encryptionv1.EventKeyExpired
 )
 
 // Proto message type aliases for query types
@@ -111,6 +121,7 @@ type MsgServerLocal interface {
 	RegisterRecipientKey(ctx context.Context, msg *MsgRegisterRecipientKeyPB) (*MsgRegisterRecipientKeyResponsePB, error)
 	RevokeRecipientKey(ctx context.Context, msg *MsgRevokeRecipientKeyPB) (*MsgRevokeRecipientKeyResponsePB, error)
 	UpdateKeyLabel(ctx context.Context, msg *MsgUpdateKeyLabelPB) (*MsgUpdateKeyLabelResponsePB, error)
+	RotateKey(ctx context.Context, msg *MsgRotateKeyPB) (*MsgRotateKeyResponsePB, error)
 }
 
 // NewMsgServerAdapter creates a new adapter that wraps a local MsgServer
@@ -128,6 +139,10 @@ func (a *msgServerAdapter) RevokeRecipientKey(ctx context.Context, req *encrypti
 
 func (a *msgServerAdapter) UpdateKeyLabel(ctx context.Context, req *encryptionv1.MsgUpdateKeyLabel) (*encryptionv1.MsgUpdateKeyLabelResponse, error) {
 	return a.local.UpdateKeyLabel(ctx, req)
+}
+
+func (a *msgServerAdapter) RotateKey(ctx context.Context, req *encryptionv1.MsgRotateKey) (*encryptionv1.MsgRotateKeyResponse, error) {
+	return a.local.RotateKey(ctx, req)
 }
 
 // =============================================================================
