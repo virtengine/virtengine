@@ -18,6 +18,9 @@ export function ReviewScreen() {
       ? "Verified"
       : "Unsupported"
     : "Pending";
+  const socialStatus = state.session.socialMedia?.length
+    ? `${state.session.socialMedia.length} connected`
+    : "None";
 
   useEffect(() => {
     const runOcr = async () => {
@@ -37,7 +40,7 @@ export function ReviewScreen() {
     <View style={styles.container}>
       <CaptureHeader
         title="Review Capture"
-        stepIndex={5}
+        stepIndex={6}
         subtitle="Confirm your document, biometric, and liveness status."
       />
       <ScrollView style={styles.content}>
@@ -48,6 +51,7 @@ export function ReviewScreen() {
         <Text style={styles.line}>Liveness: {state.session.liveness?.passed ? "Passed" : "Pending"}</Text>
         <Text style={styles.line}>Biometric hardware: {biometricStatus}</Text>
         <Text style={styles.line}>Device attestation: {attestationStatus}</Text>
+        <Text style={styles.line}>Social accounts: {socialStatus}</Text>
 
         <Text style={styles.sectionTitle}>OCR Fields</Text>
         {loading ? <ActivityIndicator /> : null}

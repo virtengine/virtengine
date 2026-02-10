@@ -32,7 +32,9 @@ import {
   injectMonitorFunctions,
   notify,
   restoreLiveDigest,
+  getDigestSnapshot,
 } from "./telegram-bot.mjs";
+import { PRCleanupDaemon } from "./pr-cleanup-daemon.mjs";
 import {
   execPrimaryPrompt,
   isPrimaryBusy,
@@ -40,6 +42,7 @@ import {
   setPrimaryAgent,
   getPrimaryAgentName,
   switchPrimaryAgent,
+  resetPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -111,10 +114,24 @@ import {
   appendKnowledgeEntry,
   formatKnowledgeSummary,
 } from "./shared-knowledge.mjs";
+import { WorkspaceMonitor } from "./workspace-monitor.mjs";
+import { VkLogStream } from "./vk-log-stream.mjs";
+import { createAnomalyDetector } from "./anomaly-detector.mjs";
+import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Configure logging before anything else ──────────────────────────────────
+configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
+
+// Install console interceptor with log file (after config provides logDir)
+{
+  const _logDir = config.logDir || resolve(__dirname, "logs");
+  const _logFile = resolve(_logDir, "monitor.log");
+  installConsoleInterceptor({ logFile: _logFile });
+}
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -228,6 +245,39 @@ console.log(`[monitor] task planner mode: ${plannerMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
 
+// ── Workspace monitor: track agent workspaces with git state + stuck detection ──
+const workspaceMonitor = new WorkspaceMonitor({
+  cacheDir: resolve(repoRoot, ".cache", "workspace-logs"),
+  repoRoot,
+  onStuckDetected: ({ attemptId, reason, recommendation }) => {
+    const msg = `⚠️ Agent ${attemptId.substring(0, 8)} stuck: ${reason}\nRecommendation: ${recommendation}`;
+    console.warn(`[workspace-monitor] ${msg}`);
+    void notify?.(msg, { dedupKey: `stuck-${attemptId.substring(0, 8)}` });
+  },
+});
+
+// ── Devmode Auto Code Fix: background agent that fixes issues from digest ──
+const devmodeAutoCodeFix = {
+  enabled: ["1", "true", "yes"].includes(
+    String(process.env.DEVMODE_AUTO_CODE_FIX || "").toLowerCase(),
+  ),
+  cycleCount: 0,
+  cycleInterval: Math.max(
+    1,
+    Number(process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL || "2"),
+  ),
+  timeoutMs: Number(process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS || "300000"), // 5 min
+  running: false,
+  lastRunAt: 0,
+  lastDigestText: "",
+  branch: process.env.DEVMODE_AUTO_CODE_FIX_BRANCH || "",
+};
+if (devmodeAutoCodeFix.enabled) {
+  console.log(
+    `[monitor] devmode auto code fix ENABLED (every ${devmodeAutoCodeFix.cycleInterval} digest cycle(s), timeout ${devmodeAutoCodeFix.timeoutMs}ms)`,
+  );
+}
+
 // ── Interactive shell state ────────────────────────────────────────────────
 const shellState = {
   enabled: !!interactiveShellEnabled,
@@ -251,6 +301,62 @@ const shellAnsi = {
 const shellPromptText = shellAnsi.cyan("[agent]") + " > ";
 const shellInfoPrefix = shellAnsi.dim("[shell]") + " ";
 console.log(`[monitor] task planner mode: ${plannerMode}`);
+
+function shellWriteRaw(chunk) {
+  try {
+    process.stdout.write(chunk);
+  } catch {
+    /* ignore write failures */
+  }
+}
+
+function shellWriteLine(text) {
+  shellWriteRaw(`${shellInfoPrefix}${text}\n`);
+}
+
+function startInteractiveShell() {
+  if (!shellIsTTY || shellState.active) {
+    return;
+  }
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: shellPromptText,
+    terminal: true,
+  });
+  shellState.rl = rl;
+  shellState.active = true;
+  rl.on("line", (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      rl.prompt();
+      return;
+    }
+    if (["exit", "quit"].includes(trimmed.toLowerCase())) {
+      rl.close();
+      return;
+    }
+    shellState.queue = shellState.queue
+      .then(async () => {
+        if (!primaryAgentReady) {
+          shellWriteLine("Primary agent not ready.");
+          return;
+        }
+        await execPrimaryPrompt(trimmed, { timeoutMs: 15 * 60 * 1000 });
+      })
+      .catch((err) => {
+        shellWriteLine(`Error: ${err.message || err}`);
+      })
+      .finally(() => {
+        rl.prompt();
+      });
+  });
+  rl.on("close", () => {
+    shellState.active = false;
+    shellState.rl = null;
+  });
+  rl.prompt();
+}
 let codexDisabledReason = codexEnabled
   ? ""
   : process.env.CODEX_SDK_DISABLED === "1"
@@ -258,29 +364,6 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
-
-function startInteractiveShell() {
-  if (shellState.active || !shellState.enabled || !shellIsTTY) {
-    return;
-  }
-
-  if (!shellState.rl) {
-    shellState.rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      terminal: true,
-    });
-    shellState.rl.on("close", () => {
-      shellState.active = false;
-      shellState.rl = null;
-    });
-  }
-
-  shellState.active = true;
-  shellState.prompt = shellPromptText;
-  shellState.rl.setPrompt(shellPromptText);
-  shellState.rl.prompt();
-}
 setPrimaryAgent(primaryAgentName);
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
@@ -376,6 +459,15 @@ let vkRecoveryLastAt = 0;
 let vkNonJsonNotifiedAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
+
+// ── VK WebSocket log stream — captures real-time agent logs from execution processes ──
+let vkLogStream = null;
+let vkSessionDiscoveryTimer = null;
+let vkSessionDiscoveryInFlight = false;
+const vkSessionCache = new Map();
+
+// ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
+let anomalyDetector = null;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -899,7 +991,7 @@ Constraints:
 4) Prefer small guardrails over big rewrites.`;
 
   const filesBefore = detectChangedFiles(repoRoot);
-  const result = await runCodexExec(prompt, repoRoot, 180_000);
+  const result = await runCodexExec(prompt, repoRoot, 1_800_000);
   const filesAfter = detectChangedFiles(repoRoot);
   const newChanges = filesAfter.filter((f) => !filesBefore.includes(f));
   const changeSummary = getChangeSummary(repoRoot, newChanges);
@@ -1001,7 +1093,7 @@ function trackErrorFrequency(line) {
   }
 }
 
-async function triggerLoopFix(errorLine, repeatCount) {
+function triggerLoopFix(errorLine, repeatCount) {
   if (!autoFixEnabled) return;
   loopFixInProgress = true;
 
@@ -1010,29 +1102,36 @@ async function triggerLoopFix(errorLine, repeatCount) {
       ? (msg) => void sendTelegramMessage(msg)
       : null;
 
-  try {
-    const result = await fixLoopingError({
-      errorLine,
-      repeatCount,
-      repoRoot,
-      logDir,
-      onTelegram: telegramFn,
-      recentMessages: getTelegramHistory(),
-    });
+  // Fire-and-forget: never block the stdout pipeline
+  void (async () => {
+    try {
+      const result = await fixLoopingError({
+        errorLine,
+        repeatCount,
+        repoRoot,
+        logDir,
+        onTelegram: telegramFn,
+        recentMessages: getTelegramHistory(),
+      });
 
-    if (result.fixed) {
-      console.log(
-        "[monitor] loop fix applied — file watcher will restart orchestrator",
-      );
+      if (result.fixed) {
+        console.log(
+          "[monitor] loop fix applied — file watcher will restart orchestrator",
+        );
+      } else {
+        console.log(
+          `[monitor] loop fix returned no changes: ${result.outcome || "no-fix"}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] loop fix error: ${err.message || err}`);
+      if (telegramFn) {
+        telegramFn(`🔁 Loop fix crashed: ${err.message || err}`);
+      }
+    } finally {
+      loopFixInProgress = false;
     }
-  } catch (err) {
-    console.warn(`[monitor] loop fix error: ${err.message || err}`);
-    if (telegramFn) {
-      telegramFn(`🔁 Loop fix crashed: ${err.message || err}`);
-    }
-  } finally {
-    loopFixInProgress = false;
-  }
+  })();
 }
 
 const contextPatterns = [
@@ -1058,7 +1157,9 @@ const errorPatterns = [
   /SetValueInvocationException/i,
   /Cannot bind argument/i,
   /Unhandled/i,
-  /\bFailed\b/i,
+  /\bFailed to compile\b/i,
+  /\bFailed to start\b/i,
+  /\bFATAL\b/i,
   /Copilot assignment failed/i,
 ];
 
@@ -1076,6 +1177,15 @@ const errorNoisePatterns = [
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
   // Stats summary line (contains "Failed" as a counter, not an error)
   /First-shot:.*Failed:/i,
+  // Attempt lifecycle lines that include "failed" but are expected status updates
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} finished \(failed\)\s+—\s+marking review/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} failed in workspace — requires agent attention/i,
+  // Agent work logger noise (handled separately, not a monitor crash)
+  /^\s*\[agent-logger\]\s+Session ended:/i,
+  /^\s*\[agent-logger\]\s+Error logged:/i,
+  // Attempt lifecycle lines that include "failed" but are normal status updates
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} finished \(failed\)\s+—\s+marking review/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Attempt [0-9a-f]{8} failed in workspace — requires agent attention/i,
   // Box-drawing cycle summary lines
   /^\s*[│┃|]\s*(Elapsed|Submitted|Tracked|First-shot):/i,
   /^\s*[─┄╌═]+/,
@@ -1355,6 +1465,8 @@ async function ensureVibeKanbanRunning() {
   if (await isVibeKanbanOnline()) {
     // Reset restart counter on successful health check
     vkRestartCount = 0;
+    // Start VK log stream if not already running
+    ensureVkLogStream();
     return;
   }
   // If process is alive, give it 15s grace to start up
@@ -1382,6 +1494,11 @@ function restartVibeKanbanProcess() {
   if (!vkSpawnEnabled) {
     return;
   }
+  // Stop log stream — will restart when VK comes back online
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   // Just kill the process — the exit handler will auto-restart it
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
     try {
@@ -1392,6 +1509,289 @@ function restartVibeKanbanProcess() {
   } else {
     void startVibeKanbanProcess();
   }
+}
+
+/**
+ * Ensure the VK log stream is running. Creates a new VkLogStream instance
+ * if one doesn't exist, connecting to VK's execution-process WebSocket
+ * endpoints to capture real-time agent stdout/stderr.
+ *
+ * Two log outputs:
+ *   1. Raw per-process logs → .cache/agent-logs/vk-exec-{shortId}.log
+ *   2. Structured session logs → logs/vk-sessions/vk-session-{stamp}-{shortId}.log
+ *      (mirrors codex-exec format with task metadata headers for autofix analysis)
+ *
+ * Discovery model: No REST list endpoint exists for execution processes.
+ * Instead, connectToSession(sessionId) is called when sessions are created
+ * (see startFreshSession). On startup, we also scan active_attempts for any
+ * existing session IDs to connect to.
+ */
+function ensureVkLogStream() {
+  if (vkLogStream) return;
+  console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
+
+  // Initialize anomaly detector if not already running
+  if (!anomalyDetector) {
+    anomalyDetector = createAnomalyDetector({
+      onAnomaly: (anomaly) => {
+        const icon =
+          anomaly.severity === "CRITICAL"
+            ? "🔴"
+            : anomaly.severity === "HIGH"
+              ? "🟠"
+              : "🟡";
+        console.warn(
+          `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
+        );
+
+        // Act on kill/restart actions — kill the specific process, NOT the whole monitor.
+        // Circuit breaker is reserved for actual repeated monitor crashes, not per-process anomalies.
+        if (anomaly.action === "kill" || anomaly.action === "restart") {
+          console.warn(
+            `[anomaly-detector] executing action="${anomaly.action}" for ${anomaly.type} on process ${anomaly.shortId}`,
+          );
+
+          // 1. Kill the specific VK execution process log stream
+          if (vkLogStream && anomaly.processId) {
+            vkLogStream.killProcess(anomaly.processId, `anomaly-detector: ${anomaly.type}`);
+          }
+
+          // 2. Reset the primary agent session only for truly fatal anomalies
+          //    (token overflow, stream death) — NOT for model-not-supported or push loops
+          //    since those are external/transient issues.
+          if (
+            anomaly.type === "TOKEN_OVERFLOW" ||
+            anomaly.type === "STREAM_DEATH"
+          ) {
+            void resetPrimaryAgent().catch((err) => {
+              console.warn(`[anomaly-detector] resetPrimaryAgent failed: ${err.message}`);
+            });
+          }
+        }
+      },
+      notify: (text, options) => {
+        sendTelegramMessage(text, options).catch(() => {});
+      },
+    });
+    console.log("[monitor] anomaly detector started");
+  }
+
+  const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
+  const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
+  vkLogStream = new VkLogStream(vkEndpointUrl, {
+    logDir: agentLogDir,
+    sessionLogDir,
+    // Always keep VK log streaming silent in the CLI.
+    echo: false,
+    filterLine: (line) => {
+      // Drop verbose VK/Codex event chatter and token streams.
+      if (!line) return false;
+      if (line.length > 6000) return false;
+      if (line.startsWith('{"method":"codex/event/')) return false;
+      if (line.startsWith('{"method":"item/')) return false;
+      if (line.startsWith('{"method":"thread/')) return false;
+      if (line.startsWith('{"method":"account/')) return false;
+      if (line.includes('"type":"reasoning_content_delta"')) return false;
+      if (line.includes('"type":"agent_reasoning_delta"')) return false;
+      if (line.includes('"type":"token_count"')) return false;
+      if (line.includes('"type":"item_started"')) return false;
+      if (line.includes('"type":"item_completed"')) return false;
+      if (line.includes('"type":"exec_command_begin"')) return false;
+      if (line.includes('"type":"exec_command_output_delta"')) return false;
+      if (line.includes('"type":"exec_command_end"')) return false;
+      if (line.includes('"method":"codex/event/reasoning_content_delta"'))
+        return false;
+      if (line.includes('"method":"codex/event/agent_reasoning_delta"'))
+        return false;
+      if (line.includes('"method":"codex/event/token_count"')) return false;
+      if (line.includes('"method":"codex/event/item_started"')) return false;
+      if (line.includes('"method":"codex/event/item_completed"')) return false;
+      if (line.includes('"method":"codex/event/exec_command_')) return false;
+      if (line.includes('"method":"item/reasoning/summaryTextDelta"'))
+        return false;
+      if (line.includes('"method":"item/commandExecution/outputDelta"'))
+        return false;
+      if (line.includes('"method":"codex/event/agent_reasoning"')) return false;
+      return true;
+    },
+    onLine: (line, meta) => {
+      // Feed every agent log line to the anomaly detector for real-time
+      // pattern matching (death loops, token overflow, stalls, etc.).
+      if (anomalyDetector) {
+        try {
+          anomalyDetector.processLine(line, meta);
+        } catch {
+          /* detector error — non-fatal */
+        }
+      }
+    },
+    onProcessConnected: (processId, meta) => {
+      // When a new execution process is discovered via the session stream,
+      // look up task metadata from status data and enrich the process
+      void (async () => {
+        try {
+          const statusData = await readStatusData();
+          const attempts = statusData?.attempts || {};
+          // Find the attempt that matches this session
+          // VK processes belong to sessions which belong to workspaces (= attempts)
+          for (const [attemptId, info] of Object.entries(attempts)) {
+            if (!info) continue;
+            // Match by session_id if available, or if the process was connected
+            // for a session belonging to this attempt
+            if (
+              meta.sessionId &&
+              (info.session_id === meta.sessionId ||
+                attemptId === meta.sessionId)
+            ) {
+              vkLogStream.setProcessMeta(processId, {
+                attemptId,
+                taskId: info.task_id,
+                taskTitle: info.task_title || info.name,
+                branch: info.branch,
+                sessionId: meta.sessionId,
+                executor: info.executor,
+                executorVariant: info.executor_variant,
+              });
+              break;
+            }
+          }
+        } catch {
+          /* best effort */
+        }
+      })();
+    },
+  });
+  vkLogStream.start();
+
+  // Discover any active sessions immediately and keep polling for new sessions
+  void refreshVkSessionStreams("startup");
+  ensureVkSessionDiscoveryLoop();
+}
+
+function ensureVkSessionDiscoveryLoop() {
+  if (vkSessionDiscoveryTimer) return;
+  if (!Number.isFinite(vkEnsureIntervalMs) || vkEnsureIntervalMs <= 0) return;
+  vkSessionDiscoveryTimer = setInterval(() => {
+    void refreshVkSessionStreams("periodic");
+  }, vkEnsureIntervalMs);
+}
+
+async function refreshVkSessionStreams(reason = "manual") {
+  if (!vkLogStream) {
+    console.log(`[monitor] refreshVkSessionStreams(${reason}): no vkLogStream`);
+    return;
+  }
+  if (vkSessionDiscoveryInFlight) return;
+  vkSessionDiscoveryInFlight = true;
+
+  try {
+    // ── 1. Collect attempts from orchestrator status file ──────────────
+    const statusData = await readStatusData();
+    const statusAttempts = statusData?.attempts || {};
+
+    // ── 2. Also query VK directly for all non-archived attempts ────────
+    //    The status file can be stale/incomplete (e.g. after restarts or
+    //    when attempts were submitted in previous orchestrator cycles).
+    let vkAttempts = [];
+    try {
+      const vkRes = await fetchVk("/api/task-attempts?archived=false");
+      if (vkRes?.success && Array.isArray(vkRes.data)) {
+        vkAttempts = vkRes.data;
+      }
+    } catch (err) {
+      console.warn(
+        `[monitor] refreshVkSessionStreams: VK attempt fetch failed: ${err.message}`,
+      );
+    }
+
+    // ── 3. Merge: build unified map of attemptId → metadata ───────────
+    /** @type {Map<string, {task_id?:string, task_title?:string, branch?:string, session_id?:string, executor?:string, executor_variant?:string}>} */
+    const mergedAttempts = new Map();
+
+    // Status file attempts (mark only running ones)
+    for (const [attemptId, info] of Object.entries(statusAttempts)) {
+      if (!attemptId || !info || info.status !== "running") continue;
+      mergedAttempts.set(attemptId, {
+        task_id: info.task_id,
+        task_title: info.task_title || info.name,
+        branch: info.branch,
+        session_id: info.session_id,
+        executor: info.executor,
+        executor_variant: info.executor_variant,
+        source: "status",
+      });
+    }
+
+    // VK API attempts (add any not already present from status file)
+    for (const vkAttempt of vkAttempts) {
+      if (!vkAttempt?.id) continue;
+      if (mergedAttempts.has(vkAttempt.id)) continue; // status file takes precedence
+      mergedAttempts.set(vkAttempt.id, {
+        task_id: vkAttempt.task_id,
+        task_title: vkAttempt.name,
+        branch: vkAttempt.branch,
+        session_id: null,
+        executor: null,
+        executor_variant: null,
+        source: "vk-api",
+      });
+    }
+
+    console.log(
+      `[monitor] refreshVkSessionStreams(${reason}): ${mergedAttempts.size} attempts ` +
+        `(${Object.values(statusAttempts).filter((i) => i?.status === "running").length} status + ` +
+        `${vkAttempts.length} vk-api, merged)`,
+    );
+
+    // ── 4. Discover sessions and connect ──────────────────────────────
+    for (const [attemptId, info] of mergedAttempts) {
+      let sessionId = info.session_id || vkSessionCache.get(attemptId) || null;
+
+      if (!sessionId) {
+        sessionId = await fetchLatestVkSessionId(attemptId);
+        if (sessionId) {
+          vkSessionCache.set(attemptId, sessionId);
+          console.log(
+            `[monitor] refreshVkSessionStreams: discovered session ${sessionId.slice(0, 8)} for attempt ${attemptId.slice(0, 8)} (${info.source})`,
+          );
+        }
+      }
+
+      if (!sessionId) continue; // no session yet — will retry next cycle
+
+      vkLogStream.setProcessMeta(attemptId, {
+        attemptId,
+        taskId: info.task_id,
+        taskTitle: info.task_title,
+        branch: info.branch,
+        sessionId,
+        executor: info.executor,
+        executorVariant: info.executor_variant,
+      });
+      vkLogStream.connectToSession(sessionId);
+    }
+  } catch (err) {
+    console.warn(
+      `[monitor] VK session discovery (${reason}) failed: ${err.message || err}`,
+    );
+  } finally {
+    vkSessionDiscoveryInFlight = false;
+  }
+}
+
+async function fetchLatestVkSessionId(workspaceId) {
+  const res = await fetchVk(
+    `/api/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+  if (!res?.success || !Array.isArray(res.data)) return null;
+  const sessions = res.data;
+  if (!sessions.length) return null;
+  const ordered = sessions.slice().sort((a, b) => {
+    const aTs = Date.parse(a?.updated_at || a?.created_at || 0) || 0;
+    const bTs = Date.parse(b?.updated_at || b?.created_at || 0) || 0;
+    return bTs - aTs;
+  });
+  return ordered[0]?.id || null;
 }
 
 async function triggerVibeKanbanRecovery(reason) {
@@ -1999,6 +2399,24 @@ async function startFreshSession(workspaceId, prompt, taskId) {
     console.log(
       `[monitor] ✅ Fresh session started: ${session.id} (retry #${freshSessionCount})`,
     );
+
+    // Connect the VK log stream to this session for real-time log capture
+    if (vkLogStream) {
+      // Set metadata so structured session logs get proper headers
+      const attemptInfo = await getAttemptInfo(workspaceId);
+      if (attemptInfo) {
+        vkLogStream.setProcessMeta(workspaceId, {
+          attemptId: workspaceId,
+          taskId: attemptInfo.task_id,
+          taskTitle: attemptInfo.task_title || attemptInfo.name,
+          branch: attemptInfo.branch,
+          sessionId: session.id,
+          executor: attemptInfo.executor,
+          executorVariant: attemptInfo.executor_variant,
+        });
+      }
+      vkLogStream.connectToSession(session.id);
+    }
 
     return { success: true, sessionId: session.id };
   } catch (err) {
@@ -3077,31 +3495,31 @@ async function checkMergedPRsAndUpdateTasks() {
           }
           if (resolveAttemptId) {
             const shortId = resolveAttemptId.substring(0, 8);
-            console.log(
-              `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — triggering rebase/resolution`,
-            );
             conflictResolutionCooldown.set(task.id, Date.now());
-            conflictsTriggered++;
-            // Fire-and-forget: let smartPRFlow handle rebase + conflict resolution
-            void smartPRFlow(resolveAttemptId, shortId, "conflict");
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — triggering auto-resolution`,
-              );
+            recordResolutionAttempt(task.id);
 
-              // Discover worktree path from attempt data
+            const sdkOnCooldown = isSDKResolutionOnCooldown(cc.branch);
+            const sdkExhausted = isSDKResolutionExhausted(cc.branch);
+
+            if (!sdkOnCooldown && !sdkExhausted) {
+              console.log(
+                `[monitor] ⚠️ Task "${task.title}" PR #${cc.prNumber} has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+              );
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — launching SDK resolver (attempt ${shortId})`,
+                );
+              }
+
               let worktreePath = null;
               const attemptInfo = await getAttemptInfo(resolveAttemptId);
               worktreePath =
                 attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
-
-              // Fallback: try git worktree list to find the branch's worktree
               if (!worktreePath) {
                 worktreePath = findWorktreeForBranch(cc.branch);
               }
 
               if (worktreePath) {
-                // Fire-and-forget: launch SDK resolver in background
                 void (async () => {
                   try {
                     const result = await resolveConflictsWithSDK({
@@ -3133,6 +3551,8 @@ async function checkMergedPRsAndUpdateTasks() {
                           `❌ SDK conflict resolution failed for PR #${cc.prNumber} "${task.title}": ${result.error}\nFalling back to orchestrator.`,
                         );
                       }
+                      conflictsTriggered++;
+                      void smartPRFlow(resolveAttemptId, shortId, "conflict");
                     }
                   } catch (err) {
                     console.warn(
@@ -3149,9 +3569,10 @@ async function checkMergedPRsAndUpdateTasks() {
                     `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — no worktree, orchestrator will handle (attempt ${shortId})`,
                   );
                 }
+                conflictsTriggered++;
+                void smartPRFlow(resolveAttemptId, shortId, "conflict");
               }
             } else {
-              // SDK exhausted or on cooldown — fall back to orchestrator
               const reason = sdkExhausted
                 ? "SDK attempts exhausted"
                 : "SDK on cooldown";
@@ -3163,6 +3584,8 @@ async function checkMergedPRsAndUpdateTasks() {
                   `🔀 PR #${cc.prNumber} for "${task.title}" has merge conflicts — ${reason}, orchestrator will handle (attempt ${shortId})`,
                 );
               }
+              conflictsTriggered++;
+              void smartPRFlow(resolveAttemptId, shortId, "conflict");
             }
           } else {
             console.warn(
@@ -4227,6 +4650,65 @@ function resolveAttemptTargetBranch(attempt, task) {
 async function smartPRFlow(attemptId, shortId, status) {
   const tag = `smartPR(${shortId})`;
   try {
+    // ── Step 0: Check if task/branch is already merged ───────────
+    // Prevents infinite retry loops for tasks that were completed in previous sessions
+    const attemptInfo = await getAttemptInfo(attemptId);
+    if (attemptInfo?.branch) {
+      if (mergedBranchCache.has(attemptInfo.branch)) {
+        console.log(
+          `[monitor] ${tag}: branch already in merged cache — archiving`,
+        );
+        await archiveAttempt(attemptId);
+        return;
+      }
+      const merged = await isBranchMerged(attemptInfo.branch);
+      if (merged) {
+        console.log(
+          `[monitor] ${tag}: branch ${attemptInfo.branch} confirmed merged — completing task`,
+        );
+        mergedBranchCache.add(attemptInfo.branch);
+        if (attemptInfo.task_id) {
+          mergedTaskCache.add(attemptInfo.task_id);
+          void updateTaskStatus(attemptInfo.task_id, "done");
+        }
+        await archiveAttempt(attemptId);
+        saveMergedTaskCache();
+        return;
+      }
+    }
+
+    // ── Step 0b: Check task description for "already completed" signals ──
+    if (attemptInfo?.task_id) {
+      try {
+        const taskRes = await fetchVk(`/api/tasks/${attemptInfo.task_id}`);
+        const desc = (
+          taskRes?.data?.description ||
+          taskRes?.data?.body ||
+          ""
+        ).toLowerCase();
+        const completionSignals = [
+          "superseded by",
+          "already completed",
+          "this task has been completed",
+          "merged in",
+          "completed via",
+          "no longer needed",
+          "already merged",
+        ];
+        const isDescComplete = completionSignals.some((s) => desc.includes(s));
+        if (isDescComplete) {
+          console.log(
+            `[monitor] ${tag}: task description indicates already completed — archiving`,
+          );
+          void updateTaskStatus(attemptInfo.task_id, "done");
+          await archiveAttempt(attemptId);
+          return;
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+
     // ── Step 1: Check branch status ─────────────────────────────
     const branchStatus = await fetchBranchStatus(attemptId);
     if (!branchStatus) {
@@ -4348,11 +4830,17 @@ async function smartPRFlow(attemptId, shortId, status) {
           console.log(`[monitor] ${tag}: conflicts resolved via VK API`);
         } else {
           const attemptInfo = await getAttemptInfo(attemptId);
-          const worktreeDir =
+          let worktreeDir =
             attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+          // Fallback: look up worktree by branch name from git
+          if (!worktreeDir && (attemptInfo?.branch || attempt?.branch)) {
+            worktreeDir = findWorktreeForBranch(
+              attemptInfo?.branch || attempt?.branch,
+            );
+          }
           if (codexResolveConflictsEnabled) {
             console.warn(
-              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
+              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution (worktree: ${worktreeDir || "UNKNOWN"})`,
             );
             const classification = classifyConflictedFiles(files);
             const fileGuidance = files
@@ -4637,6 +5125,33 @@ async function resolveAndTriggerSmartPR(shortId, status) {
     const statusData = await readStatusData();
     const attempts = statusData?.active_attempts || [];
     const match = attempts.find((a) => a.id?.startsWith(shortId));
+
+    // ── Early merged-branch check: skip if branch is already merged ──
+    const resolvedAttempt = match;
+    if (resolvedAttempt?.branch) {
+      if (mergedBranchCache.has(resolvedAttempt.branch)) {
+        console.log(
+          `[monitor] smartPR(${shortId}): branch ${resolvedAttempt.branch} already in mergedBranchCache — skipping`,
+        );
+        return;
+      }
+      // Check GitHub for a merged PR with this head branch
+      const merged = await isBranchMerged(resolvedAttempt.branch);
+      if (merged) {
+        console.log(
+          `[monitor] smartPR(${shortId}): branch ${resolvedAttempt.branch} confirmed merged — completing task and skipping PR flow`,
+        );
+        mergedBranchCache.add(resolvedAttempt.branch);
+        if (resolvedAttempt.task_id) {
+          mergedTaskCache.add(resolvedAttempt.task_id);
+          void updateTaskStatus(resolvedAttempt.task_id, "done");
+        }
+        await archiveAttempt(resolvedAttempt.id || shortId);
+        saveMergedTaskCache();
+        return;
+      }
+    }
+
     if (!match) {
       // Try the full list via VK API
       const allAttempts = await fetchVk(
@@ -6136,7 +6651,7 @@ ${logTail}
 
   try {
     // Use runCodexExec from autofix.mjs — gives Codex workspace access
-    const result = await runCodexExec(prompt, repoRoot, 90_000);
+    const result = await runCodexExec(prompt, repoRoot, 1_800_000);
 
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
     const analysisText = result.output || result.error || "(no output)";
@@ -6255,6 +6770,9 @@ async function handleExit(code, signal, logPath) {
 
   const logText = await readFile(logPath, "utf8").catch(() => "");
   const reason = signal ? `signal ${signal}` : `exit ${code}`;
+  const isSigKill = signal === "SIGKILL";
+
+  // ── Check if this is an intentional restart BEFORE clearing flags ──
   const isFileChangeRestart = pendingRestart && skipNextAnalyze;
   const isAbnormalExit = Boolean(signal) || code !== 0;
   const isCleanExit = !isAbnormalExit; // exit code 0, no signal
@@ -6269,6 +6787,9 @@ async function handleExit(code, signal, logPath) {
 
     // File-change restarts don't need analysis or auto-fix
     if (isFileChangeRestart) {
+      console.log(
+        `[monitor] intentional restart (${reason}) — skipping autofix`,
+      );
       startProcess();
       return;
     }
@@ -6302,6 +6823,16 @@ async function handleExit(code, signal, logPath) {
     }
     restartCount += 1;
     setTimeout(startProcess, exitState.backoffMs);
+    return;
+  }
+
+  // ── External kill (SIGKILL): treat as non-actionable, restart quietly ──
+  if (isSigKill) {
+    console.warn(
+      `[monitor] orchestrator killed by ${reason} — skipping autofix/analysis`,
+    );
+    restartCount += 1;
+    setTimeout(startProcess, restartDelayMs);
     return;
   }
 
@@ -6358,82 +6889,99 @@ async function handleExit(code, signal, logPath) {
     return;
   }
 
-  // ── Auto-fix: try to fix the crash automatically ──────────────────────
-  if (autoFixEnabled && logText.length > 0) {
+  // ── Auto-fix: runs in BACKGROUND only for genuine monitor/orchestrator crashes ──
+  // STRICT trigger: only fire when the orchestrator ITSELF crashed (unhandled
+  // exception, stack trace from our code, import error, etc.) — NOT when the
+  // log merely contains "ERROR" from normal task lifecycle messages.
+  //
+  // If autofix writes changes, the devmode file watcher triggers a clean restart.
+  // If no changes are needed, autofix just logs the outcome — no restart.
+  const hasMonitorCrash =
+    logText.includes("Unhandled exception") ||
+    logText.includes("Unhandled rejection") ||
+    logText.includes("SyntaxError:") ||
+    logText.includes("ReferenceError:") ||
+    logText.includes("TypeError:") ||
+    logText.includes("Cannot find module") ||
+    logText.includes("FATAL ERROR") ||
+    logText.includes("Traceback (most recent call last)") ||
+    // PowerShell internal crash
+    logText.includes("TerminatingError") ||
+    logText.includes("script block termination") ||
+    // Very short runtime with high exit code = likely startup crash
+    (code > 1 && runDurationMs < 30_000);
+
+  if (autoFixEnabled && logText.length > 0 && hasMonitorCrash) {
     const telegramFn =
       telegramToken && telegramChatId
         ? (msg) => void sendTelegramMessage(msg)
         : null;
 
-    try {
-      const result = await attemptAutoFix({
-        logText: logText.slice(-15000),
-        reason,
-        repoRoot,
-        logDir,
-        onTelegram: telegramFn,
-        recentMessages: getTelegramHistory(),
-      });
+    // Fire-and-forget: autofix runs in background, orchestrator restarts now
+    void (async () => {
+      try {
+        const result = await attemptAutoFix({
+          logText: logText.slice(-15000),
+          reason,
+          repoRoot,
+          logDir,
+          onTelegram: telegramFn,
+          recentMessages: getTelegramHistory(),
+        });
 
-      if (result.fixed) {
-        // Fix was written to disk — the file watcher will restart us.
-        // Don't call startProcess() manually — let the watcher handle it.
+        if (result.fixed) {
+          console.log(
+            "[monitor] background auto-fix applied — file watcher will restart orchestrator if needed",
+          );
+          return;
+        }
+
+        if (result.outcome && result.outcome !== "clean-exit-skip") {
+          console.log(
+            `[monitor] background auto-fix outcome: ${result.outcome.slice(0, 100)}`,
+          );
+        }
+
+        // Auto-fix couldn't help — run diagnostic analysis in background too
         console.log(
-          "[monitor] auto-fix applied, waiting for file watcher to restart",
+          "[monitor] auto-fix unsuccessful — running background Codex analysis",
         );
-        return;
-      }
-
-      // Not fixed — notify that autofix tried but couldn't help
-      if (
-        result.outcome &&
-        result.outcome !== "clean-exit-skip" &&
-        telegramFn
-      ) {
-        // Only notify if we haven't already (attemptAutoFix sends its own notifications)
-        // but ensure the user knows the fallback path is happening
-        console.log(
-          `[monitor] auto-fix outcome: ${result.outcome.slice(0, 100)}`,
+        await analyzeWithCodex(logPath, logText.slice(-15000), reason);
+      } catch (err) {
+        console.warn(
+          `[monitor] background auto-fix error: ${err.message || err}`,
         );
       }
-    } catch (err) {
-      console.warn(`[monitor] auto-fix error: ${err.message || err}`);
-      if (telegramToken && telegramChatId) {
-        void sendTelegramMessage(
-          `🔧 Auto-fix crashed: ${err.message || err}\nFalling back to Codex analysis.`,
-        );
-      }
-    }
-  }
-
-  // ── Fallback: Codex SDK analysis (diagnosis only) ─────────────────────
-  if (telegramToken && telegramChatId) {
-    void sendTelegramMessage(
-      `🔍 Codex analysis triggered (${reason}):\nAuto-fix was unable to resolve the crash — running diagnostic analysis.`,
+    })();
+  } else if (autoFixEnabled && logText.length > 0 && !hasMonitorCrash) {
+    // Not a monitor crash — normal exit with task errors. Skip autofix entirely.
+    console.log(
+      `[monitor] exit ${reason} — no monitor crash detected — skipping autofix`,
     );
   }
-  await analyzeWithCodex(logPath, logText.slice(-15000), reason);
 
+  // ── Context window exhaustion: attempt fresh session (non-blocking) ───
   if (hasContextWindowError(logText)) {
     console.log(
-      "[monitor] context window exhaustion detected — attempting fresh session",
+      "[monitor] context window exhaustion detected — attempting fresh session in background",
     );
-    const freshStarted = await attemptFreshSessionRetry(
-      "context_window_exhausted",
-      logText.slice(-3000),
-    );
-    if (freshStarted) {
-      // Fresh session created — do NOT restart the current process.
-      // The new session will handle the task in the same workspace.
-      console.log("[monitor] fresh session handles task — skipping restart");
-      return;
-    }
-    // Fallback: leave the hint file for manual recovery
-    await writeFile(
-      logPath.replace(/\.log$/, "-context.txt"),
-      "Detected context window error. Fresh session retry failed — consider manual recovery.\n",
-      "utf8",
-    );
+    void (async () => {
+      const freshStarted = await attemptFreshSessionRetry(
+        "context_window_exhausted",
+        logText.slice(-3000),
+      );
+      if (freshStarted) {
+        console.log(
+          "[monitor] fresh session started for context-exhausted task",
+        );
+      } else {
+        await writeFile(
+          logPath.replace(/\.log$/, "-context.txt"),
+          "Detected context window error. Fresh session retry failed — consider manual recovery.\n",
+          "utf8",
+        );
+      }
+    })();
   }
 
   if (isAbnormalExit) {
@@ -6453,46 +7001,56 @@ async function handleExit(code, signal, logPath) {
         }
         if (telegramToken && telegramChatId) {
           void sendTelegramMessage(
-            `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes and requesting a fix.`,
+            `🛑 Crash loop detected (${restartCountNow} exits in 5m). Pausing orchestrator restarts for ${pauseMin} minutes. Background fix running.`,
           );
         }
+        // ── Background crash-loop fix: runs while orchestrator is paused ──
+        // Does NOT block handleExit. If it writes changes, file watcher restarts.
+        // If it fails, the pause timer will restart the orchestrator anyway.
         if (!orchestratorLoopFixInProgress) {
           orchestratorLoopFixInProgress = true;
-          const fixResult = await attemptCrashLoopFix({
-            reason,
-            logText,
-          }).catch((err) => ({
-            fixed: false,
-            outcome: err?.message || "crash-loop-fix-error",
-          }));
-          orchestratorLoopFixInProgress = false;
-          if (fixResult.fixed) {
-            if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `🛠️ Crash-loop fix applied. Orchestrator will retry after cooldown.\n${fixResult.outcome}`,
-              );
-            }
-          } else {
-            // Crash loop fix failed — try a fresh session as last resort
-            console.log(
-              "[monitor] crash loop fix failed — attempting fresh session",
-            );
-            const freshStarted = await attemptFreshSessionRetry(
-              "crash_loop_unresolvable",
-              logText.slice(-3000),
-            );
-            if (freshStarted) {
-              if (telegramToken && telegramChatId) {
-                void sendTelegramMessage(
-                  `🔄 Crash-loop fix failed but fresh session started. New agent will retry.`,
+          void (async () => {
+            try {
+              const fixResult = await attemptCrashLoopFix({
+                reason,
+                logText,
+              });
+              if (fixResult.fixed) {
+                console.log(
+                  "[monitor] background crash-loop fix applied — file watcher will handle restart",
                 );
+                if (telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🛠️ Crash-loop fix applied. File watcher will restart orchestrator.\n${fixResult.outcome}`,
+                  );
+                }
+              } else {
+                console.log(
+                  `[monitor] background crash-loop fix unsuccessful: ${fixResult.outcome}`,
+                );
+                // Try fresh session as background last resort
+                const freshStarted = await attemptFreshSessionRetry(
+                  "crash_loop_unresolvable",
+                  logText.slice(-3000),
+                );
+                if (freshStarted && telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `🔄 Crash-loop fix failed but fresh session started. New agent will retry.`,
+                  );
+                } else if (!freshStarted && telegramToken && telegramChatId) {
+                  void sendTelegramMessage(
+                    `⚠️ Crash-loop fix failed: ${fixResult.outcome}. Orchestrator will resume after ${pauseMin}m pause.`,
+                  );
+                }
               }
-            } else if (telegramToken && telegramChatId) {
-              void sendTelegramMessage(
-                `⚠️ Crash-loop fix attempt failed: ${fixResult.outcome}. Fresh session also failed. Orchestrator remains paused.`,
+            } catch (err) {
+              console.warn(
+                `[monitor] background crash-loop fix error: ${err.message || err}`,
               );
+            } finally {
+              orchestratorLoopFixInProgress = false;
             }
-          }
+          })();
         }
       }
       return;
@@ -6517,6 +7075,155 @@ async function handleExit(code, signal, logPath) {
 
   restartCount += 1;
   setTimeout(startProcess, restartDelayMs);
+}
+
+// ── Devmode Auto Code Fix: background agent triggered after digest seal ──────
+
+/**
+ * Called when a Live Digest window is sealed. Collects errors/warnings from the
+ * digest, then dispatches a background Codex/Copilot agent to fix the issues.
+ *
+ * Only active when DEVMODE_AUTO_CODE_FIX=true env var is set.
+ * Runs every N digest cycles (default 2) to allow the agent time to fix before
+ * the next cycle's changes are picked up by the self-watcher.
+ */
+async function handleDigestSealed({ entries, text }) {
+  if (!devmodeAutoCodeFix.enabled) return;
+
+  devmodeAutoCodeFix.cycleCount++;
+  const cycle = devmodeAutoCodeFix.cycleCount;
+  const interval = devmodeAutoCodeFix.cycleInterval;
+
+  // Only run every N cycles
+  if (cycle % interval !== 0) {
+    console.log(
+      `[devmode-fix] digest cycle ${cycle} — skipping (runs every ${interval} cycles)`,
+    );
+    return;
+  }
+
+  // Don't run if already running
+  if (devmodeAutoCodeFix.running) {
+    console.log(`[devmode-fix] skipping — previous run still in progress`);
+    return;
+  }
+
+  // Filter to error and warning entries only
+  const actionableEntries = entries.filter((e) => e.priority <= 3);
+  if (actionableEntries.length === 0) {
+    console.log(
+      `[devmode-fix] digest cycle ${cycle} — no errors/warnings, skipping`,
+    );
+    return;
+  }
+
+  // Build the digest summary for the agent
+  const errorLines = actionableEntries
+    .map((e) => `${e.time} ${e.emoji} ${e.text}`)
+    .join("\n");
+
+  // Read recent orchestrator log tail for additional context
+  let recentLogTail = "";
+  try {
+    const activeLogPath = resolve(logDir, "orchestrator-active.log");
+    if (existsSync(activeLogPath)) {
+      const logContent = readFileSync(activeLogPath, "utf8");
+      const logLines = logContent.split("\n");
+      recentLogTail = logLines.slice(-100).join("\n");
+    }
+  } catch {
+    /* best effort */
+  }
+
+  // Determine target branch
+  const targetBranch = devmodeAutoCodeFix.branch || "";
+  const branchInstruction = targetBranch
+    ? `Work on the existing branch: ${targetBranch}. Do NOT create a new branch.`
+    : "Work on the current branch.";
+
+  const prompt = [
+    "You are a background debugging agent for the VirtEngine codex-monitor orchestration system.",
+    "The following errors and warnings were collected from the most recent Live Digest cycle.",
+    "Your job is to identify the root causes and fix them by modifying the source code.",
+    "",
+    "## IMPORTANT RULES",
+    "- Do NOT commit your changes. Only modify files.",
+    "- Do NOT run git push or create PRs.",
+    `- ${branchInstruction}`,
+    "- Focus on fixing the ROOT CAUSE, not symptoms.",
+    "- The codex-monitor source code is in: scripts/codex-monitor/",
+    "- The orchestrator is: scripts/codex-monitor/ve-orchestrator.ps1",
+    "- The monitor is: scripts/codex-monitor/monitor.mjs",
+    "- After you make changes, the monitor will auto-restart (file watcher).",
+    "",
+    "## Live Digest Errors/Warnings",
+    "",
+    errorLines,
+    "",
+    "## Recent Orchestrator Log (last 100 lines)",
+    "",
+    recentLogTail,
+    "",
+    "## Instructions",
+    "",
+    "1. Analyze the errors above to identify root causes",
+    "2. Search the codebase for relevant code",
+    "3. Make targeted fixes to resolve the issues",
+    "4. Do NOT commit — the file watcher will auto-restart the monitor",
+  ].join("\n");
+
+  console.log(
+    `[devmode-fix] digest cycle ${cycle} — dispatching background agent (${actionableEntries.length} actionable entries)`,
+  );
+  devmodeAutoCodeFix.running = true;
+  devmodeAutoCodeFix.lastRunAt = Date.now();
+  devmodeAutoCodeFix.lastDigestText = text;
+
+  // Log the dispatch
+  try {
+    const fixLogDir = resolve(repoRoot, ".cache", "devmode-fix-logs");
+    await mkdir(fixLogDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    await writeFile(
+      resolve(fixLogDir, `devmode-fix-${stamp}.prompt.md`),
+      prompt,
+      "utf8",
+    );
+  } catch {
+    /* best effort */
+  }
+
+  // Dispatch to Codex SDK in background
+  try {
+    const result = await runCodexExec(
+      prompt,
+      repoRoot,
+      devmodeAutoCodeFix.timeoutMs,
+      resolve(repoRoot, ".cache", "devmode-fix-logs"),
+    );
+
+    if (result.success) {
+      console.log(`[devmode-fix] background agent completed successfully`);
+      void notify?.(
+        `🔧 Devmode auto-fix completed (cycle ${cycle}). ${actionableEntries.length} issues addressed. Monitor will auto-restart.`,
+        4,
+        { dedupKey: "devmode-fix-complete" },
+      );
+    } else {
+      console.warn(
+        `[devmode-fix] background agent failed: ${result.error || "unknown"}`,
+      );
+      void notify?.(
+        `⚠️ Devmode auto-fix failed (cycle ${cycle}): ${result.error || "no output"}`,
+        3,
+        { dedupKey: "devmode-fix-failed" },
+      );
+    }
+  } catch (err) {
+    console.error(`[devmode-fix] dispatch error: ${err.message}`);
+  } finally {
+    devmodeAutoCodeFix.running = false;
+  }
 }
 
 async function startProcess() {
@@ -6554,6 +7261,13 @@ async function startProcess() {
   const activeLogPath = resolve(logDir, "orchestrator-active.log");
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
   const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
+
+  // ── Workspace monitor: initialize for this process session ──
+  try {
+    await workspaceMonitor.init();
+  } catch (err) {
+    console.warn(`[monitor] workspace monitor init failed: ${err.message}`);
+  }
 
   // ── Agent log streaming: fan out per-attempt log lines to .cache/agent-logs/ ──
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
@@ -6632,6 +7346,30 @@ async function startProcess() {
     for (const line of lines) {
       // ── Agent log streaming: fan out to per-attempt log files ──
       streamToAgentLog(line);
+
+      // ── Workspace monitoring: detect attempt lifecycle from orchestrator logs ──
+      const trackMatch = line.match(
+        /Tracking new attempt:\s+([0-9a-f]{8})\s*→\s*(\S+)/i,
+      );
+      if (trackMatch) {
+        const shortId = trackMatch[1];
+        const branch = trackMatch[2];
+        const worktreePath = findWorktreeForBranch(branch);
+        if (worktreePath) {
+          void workspaceMonitor
+            .startMonitoring(shortId, worktreePath, {
+              taskId: shortId,
+              executor: "unknown",
+              branch,
+            })
+            .catch((err) =>
+              console.warn(
+                `[workspace-monitor] failed to start for ${shortId}: ${err.message}`,
+              ),
+            );
+        }
+      }
+
       if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
         lastErrorLine = line;
         lastErrorAt = Date.now();
@@ -6653,6 +7391,10 @@ async function startProcess() {
         const shortId = prFlowMatch[1];
         const finishStatus = prFlowMatch[2];
         void resolveAndTriggerSmartPR(shortId, finishStatus);
+        // Stop workspace monitoring for this attempt
+        void workspaceMonitor
+          .stopMonitoring(shortId, finishStatus)
+          .catch(() => {});
       }
       // ── "No remote branch" → trigger VK-based PR flow ──────────
       const noBranchMatch = line.match(
@@ -6754,6 +7496,10 @@ function selfRestartForSourceChange(filename) {
   );
   console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -7082,6 +7828,10 @@ async function reloadConfig(reason) {
 
 process.on("SIGINT", () => {
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopEnvWatchers();
@@ -7091,6 +7841,7 @@ process.on("SIGINT", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   process.exit(0);
 });
@@ -7098,11 +7849,20 @@ process.on("SIGINT", () => {
 // Windows: closing the terminal window doesn't send SIGINT/SIGTERM reliably.
 process.on("exit", () => {
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
+  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
 });
 
 process.on("SIGTERM", () => {
   shuttingDown = true;
+  if (vkLogStream) {
+    vkLogStream.stop();
+    vkLogStream = null;
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopEnvWatchers();
@@ -7112,6 +7872,7 @@ process.on("SIGTERM", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   stopTelegramBot();
   process.exit(0);
@@ -7176,8 +7937,6 @@ try {
   const vkBaseUrl = config.vkEndpointUrl || `http://127.0.0.1:${vkPort}`;
   const tomlResult = ensureCodexConfig({
     vkBaseUrl,
-    vkPort,
-    vkHost: "127.0.0.1",
   });
   if (!tomlResult.noChanges) {
     console.log("[monitor] updated ~/.codex/config.toml:");
@@ -7325,6 +8084,13 @@ startInteractiveShell();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }
+// When VK is externally managed (not spawned by monitor), still connect the
+// log stream so agent logs are captured to .cache/agent-logs/.
+if (!vkSpawnEnabled && vkEndpointUrl) {
+  void isVibeKanbanOnline().then((online) => {
+    if (online) ensureVkLogStream();
+  });
+}
 if (
   vkSpawnEnabled &&
   Number.isFinite(vkEnsureIntervalMs) &&
@@ -7332,6 +8098,22 @@ if (
 ) {
   setInterval(() => {
     void ensureVibeKanbanRunning();
+  }, vkEnsureIntervalMs);
+}
+// Periodically reconnect log stream for externally-managed VK (e.g. after VK restart).
+// Session discovery is handled by ensureVkSessionDiscoveryLoop() inside ensureVkLogStream().
+if (
+  !vkSpawnEnabled &&
+  vkEndpointUrl &&
+  Number.isFinite(vkEnsureIntervalMs) &&
+  vkEnsureIntervalMs > 0
+) {
+  setInterval(() => {
+    if (!vkLogStream) {
+      void isVibeKanbanOnline().then((online) => {
+        if (online) ensureVkLogStream();
+      });
+    }
   }, vkEnsureIntervalMs);
 }
 void ensureCodexSdkReady().then(() => {
@@ -7387,9 +8169,28 @@ injectMonitorFunctions({
   getActiveAttemptInfo,
   triggerTaskPlanner,
   reconcileTaskStatuses,
+  onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
+  getAnomalyReport: () =>
+    anomalyDetector
+      ? anomalyDetector.getStatusReport()
+      : "Anomaly detector not running.",
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
+}
+
+// ── Start PR Cleanup Daemon ──────────────────────────────────────────────────
+// Automatically resolves PR conflicts and CI failures every 30 minutes
+let prCleanupDaemon = null;
+if (config.prCleanupEnabled !== false) {
+  console.log("[monitor] Starting PR cleanup daemon...");
+  prCleanupDaemon = new PRCleanupDaemon({
+    intervalMs: 30 * 60 * 1000, // 30 minutes
+    maxConcurrentCleanups: 3,
+    dryRun: false,
+    autoMerge: true,
+  });
+  prCleanupDaemon.start();
 }
 
 // ── Named exports for testing ───────────────────────────────────────────────

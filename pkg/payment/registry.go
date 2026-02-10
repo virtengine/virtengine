@@ -1,163 +1,206 @@
 // Package payment provides payment gateway integration for Visa/Mastercard.
 //
-// VE-49C: Payment processor registry and routing.
+// VE-3064: Payment processor registry for routing and fallback.
 package payment
 
 import (
 	"context"
-	"sort"
+	"errors"
+	"strings"
 	"sync"
 )
 
-// FeeSchedule represents gateway fee configuration.
+// FeeSchedule represents fee structure for a gateway.
 type FeeSchedule struct {
-	FixedFee int64   // minor units
-	Percent  float64 // percent of amount (e.g. 2.9 for 2.9%)
+	// FixedFee is a fixed fee in minor units.
+	FixedFee int64
+
+	// VariableBps is the variable fee in basis points.
+	VariableBps int64
 }
 
-// ProcessorPreference defines fallback ordering.
-type ProcessorPreference struct {
+// ProcessorRoute configures gateway routing rules.
+type ProcessorRoute struct {
+	Gateway    GatewayType
+	Regions    []string
+	Currencies []Currency
+	Fee        FeeSchedule
+	Enabled    bool
+}
+
+// ProviderPreferences defines the ordered fallback chain.
+type ProviderPreferences struct {
 	Primary   GatewayType
 	Secondary GatewayType
 	Tertiary  GatewayType
 }
 
-// ProcessorSelectionRequest defines adapter selection parameters.
-type ProcessorSelectionRequest struct {
-	ProviderID     string
-	Region         string
-	Amount         Amount
-	RequireHealthy bool
-}
-
-// PaymentProcessorRegistry provides adapter selection and routing.
+// PaymentProcessorRegistry selects adapters by region, currency, and preferences.
 type PaymentProcessorRegistry struct {
-	mu            sync.RWMutex
-	adapters      map[GatewayType]Gateway
-	fees          map[GatewayType]FeeSchedule
-	regionPrefs   map[string]ProcessorPreference
-	providerPrefs map[string]ProcessorPreference
+	mu                  sync.RWMutex
+	adapters            map[GatewayType]Gateway
+	routes              map[GatewayType]ProcessorRoute
+	providerPreferences map[string]ProviderPreferences
+	defaultPreferences  ProviderPreferences
 }
 
-// NewPaymentProcessorRegistry creates a new registry.
+// NewPaymentProcessorRegistry creates a registry.
 func NewPaymentProcessorRegistry() *PaymentProcessorRegistry {
 	return &PaymentProcessorRegistry{
-		adapters:      make(map[GatewayType]Gateway),
-		fees:          make(map[GatewayType]FeeSchedule),
-		regionPrefs:   make(map[string]ProcessorPreference),
-		providerPrefs: make(map[string]ProcessorPreference),
+		adapters:            make(map[GatewayType]Gateway),
+		routes:              make(map[GatewayType]ProcessorRoute),
+		providerPreferences: make(map[string]ProviderPreferences),
 	}
 }
 
-// RegisterAdapter registers a gateway adapter.
-func (r *PaymentProcessorRegistry) RegisterAdapter(gateway GatewayType, adapter Gateway) {
+// RegisterAdapter registers an adapter and its routing config.
+func (r *PaymentProcessorRegistry) RegisterAdapter(adapter Gateway, route ProcessorRoute) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.adapters[gateway] = adapter
+
+	route.Gateway = adapter.Type()
+	if !route.Enabled {
+		route.Enabled = true
+	}
+
+	r.adapters[adapter.Type()] = adapter
+	r.routes[adapter.Type()] = route
 }
 
-// RegisterFees registers a fee schedule for a gateway.
-func (r *PaymentProcessorRegistry) RegisterFees(gateway GatewayType, fee FeeSchedule) {
+// SetProviderPreferences sets the fallback order for a provider ID.
+func (r *PaymentProcessorRegistry) SetProviderPreferences(providerID string, prefs ProviderPreferences) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.fees[gateway] = fee
+	r.providerPreferences[strings.ToLower(providerID)] = prefs
 }
 
-// SetRegionPreference sets regional routing preference.
-func (r *PaymentProcessorRegistry) SetRegionPreference(region string, pref ProcessorPreference) {
+// SetDefaultPreferences sets default fallback order when provider-specific preferences are absent.
+func (r *PaymentProcessorRegistry) SetDefaultPreferences(prefs ProviderPreferences) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.regionPrefs[region] = pref
+	r.defaultPreferences = prefs
 }
 
-// SetProviderPreference sets provider-specific routing preference.
-func (r *PaymentProcessorRegistry) SetProviderPreference(providerID string, pref ProcessorPreference) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.providerPrefs[providerID] = pref
+// SelectAdapter selects an adapter based on provider preferences and fallback.
+func (r *PaymentProcessorRegistry) SelectAdapter(ctx context.Context, providerID, region string, amount Amount) (Gateway, error) {
+	r.mu.RLock()
+	prefs, ok := r.providerPreferences[strings.ToLower(providerID)]
+	if !ok {
+		prefs = r.defaultPreferences
+	}
+	r.mu.RUnlock()
+
+	candidates := []GatewayType{prefs.Primary, prefs.Secondary, prefs.Tertiary}
+	for _, gatewayType := range candidates {
+		if gatewayType == "" {
+			continue
+		}
+		adapter, ok := r.getAdapter(ctx, gatewayType, region, amount)
+		if ok {
+			return adapter, nil
+		}
+	}
+
+	return r.SelectOptimalAdapter(ctx, region, amount)
 }
 
-// SelectAdapter selects the best available adapter with fallback.
-func (r *PaymentProcessorRegistry) SelectAdapter(ctx context.Context, req ProcessorSelectionRequest) (Gateway, error) {
+// SelectOptimalAdapter selects the adapter with the lowest fee for a region/currency.
+func (r *PaymentProcessorRegistry) SelectOptimalAdapter(ctx context.Context, region string, amount Amount) (Gateway, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	preference := ProcessorPreference{}
-	if req.ProviderID != "" {
-		if pref, ok := r.providerPrefs[req.ProviderID]; ok {
-			preference = pref
-		}
-	}
-	if preference.Primary == "" && req.Region != "" {
-		if pref, ok := r.regionPrefs[req.Region]; ok {
-			preference = pref
-		}
-	}
+	var (
+		bestAdapter Gateway
+		bestFee     int64
+		found       bool
+	)
 
-	candidates := r.preferenceChain(preference)
-	if len(candidates) == 0 {
-		candidates = r.bestGatewaysByFeeLocked(req.Amount)
-	}
-
-	for _, gateway := range candidates {
-		adapter, ok := r.adapters[gateway]
-		if !ok {
+	for gatewayType, adapter := range r.adapters {
+		route, ok := r.routes[gatewayType]
+		if !ok || !route.Enabled {
 			continue
 		}
-		if req.RequireHealthy && !adapter.IsHealthy(ctx) {
+		if !routeSupports(route, region, amount.Currency) {
 			continue
 		}
-		return adapter, nil
+		if !adapter.IsHealthy(ctx) {
+			continue
+		}
+
+		fee := calculateFee(amount, route.Fee)
+		if !found || fee < bestFee {
+			bestAdapter = adapter
+			bestFee = fee
+			found = true
+		}
 	}
 
-	return nil, ErrNoAvailableGateway
+	if !found {
+		return nil, ErrGatewayUnavailable
+	}
+
+	return bestAdapter, nil
 }
 
-// EstimateFee returns the fee amount for a gateway.
-func (r *PaymentProcessorRegistry) EstimateFee(amount Amount, gateway GatewayType) Amount {
+func (r *PaymentProcessorRegistry) getAdapter(ctx context.Context, gatewayType GatewayType, region string, amount Amount) (Gateway, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	schedule := r.fees[gateway]
-	feeValue := schedule.FixedFee + int64(float64(amount.Value)*schedule.Percent/100.0)
-	return Amount{Value: feeValue, Currency: amount.Currency}
+
+	adapter, ok := r.adapters[gatewayType]
+	if !ok {
+		return nil, false
+	}
+
+	route, ok := r.routes[gatewayType]
+	if !ok || !route.Enabled {
+		return nil, false
+	}
+
+	if !routeSupports(route, region, amount.Currency) {
+		return nil, false
+	}
+
+	if !adapter.IsHealthy(ctx) {
+		return nil, false
+	}
+
+	return adapter, true
 }
 
-func (r *PaymentProcessorRegistry) preferenceChain(pref ProcessorPreference) []GatewayType {
-	seen := make(map[GatewayType]struct{})
-	var chain []GatewayType
-	for _, gateway := range []GatewayType{pref.Primary, pref.Secondary, pref.Tertiary} {
-		if gateway == "" {
-			continue
+func routeSupports(route ProcessorRoute, region string, currency Currency) bool {
+	if len(route.Regions) > 0 {
+		match := false
+		for _, r := range route.Regions {
+			if strings.EqualFold(strings.TrimSpace(r), strings.TrimSpace(region)) {
+				match = true
+				break
+			}
 		}
-		if _, ok := seen[gateway]; ok {
-			continue
+		if !match {
+			return false
 		}
-		seen[gateway] = struct{}{}
-		chain = append(chain, gateway)
 	}
-	return chain
+
+	if len(route.Currencies) > 0 {
+		match := false
+		for _, c := range route.Currencies {
+			if c == currency {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+
+	return true
 }
 
-func (r *PaymentProcessorRegistry) bestGatewaysByFeeLocked(amount Amount) []GatewayType {
-	type feeCandidate struct {
-		gateway GatewayType
-		fee     int64
-	}
-
-	candidates := make([]feeCandidate, 0, len(r.adapters))
-	for gateway := range r.adapters {
-		fee := r.fees[gateway]
-		feeValue := fee.FixedFee + int64(float64(amount.Value)*fee.Percent/100.0)
-		candidates = append(candidates, feeCandidate{gateway: gateway, fee: feeValue})
-	}
-
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].fee < candidates[j].fee
-	})
-
-	result := make([]GatewayType, 0, len(candidates))
-	for _, cand := range candidates {
-		result = append(result, cand.gateway)
-	}
-	return result
+func calculateFee(amount Amount, fee FeeSchedule) int64 {
+	variable := (amount.Value * fee.VariableBps) / 10000
+	return fee.FixedFee + variable
 }
+
+// ErrRegistryNotConfigured indicates registry is missing configuration.
+var ErrRegistryNotConfigured = errors.New("payment registry not configured")

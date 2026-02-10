@@ -628,14 +628,19 @@ func VerifyXMLSignatureWithCertBytes(xmlData, certBytes []byte) (bool, error) {
 // ============================================================================
 
 // SHA-1 algorithm URIs that are considered weak and MUST be rejected
+// These constants are defined for SAML 2.0 XML signature validation only
+// and are explicitly rejected in validateSignatureAlgorithm()
 const (
 	// SignatureAlgorithmRSASHA1 is RSA-SHA1 signature algorithm (WEAK - DO NOT USE)
+	//nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec (eduGAIN federation) - rejected during validation
 	SignatureAlgorithmRSASHA1 = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
 
 	// SignatureAlgorithmDSASHA1 is DSA-SHA1 signature algorithm (WEAK - DO NOT USE)
+	//nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec (eduGAIN federation) - rejected during validation
 	SignatureAlgorithmDSASHA1 = "http://www.w3.org/2000/09/xmldsig#dsa-sha1"
 
 	// DigestAlgorithmSHA1 is SHA-1 digest algorithm (WEAK - DO NOT USE)
+	//nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec (eduGAIN federation) - rejected during validation
 	DigestAlgorithmSHA1 = "http://www.w3.org/2000/09/xmldsig#sha1"
 )
 

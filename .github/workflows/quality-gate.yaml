@@ -28,11 +28,44 @@ env:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
+  # ===========================================================================
+  # Analyze Changed Files
+  # ===========================================================================
+  analyze-changes:
+    name: Analyze Changes
+    runs-on: ubuntu-latest
+    outputs:
+      go_changed: ${{ steps.changes.outputs.go }}
+      ml_changed: ${{ steps.changes.outputs.ml }}
+      portal_changed: ${{ steps.changes.outputs.portal }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Analyze file changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+            ml:
+              - 'pkg/inference/**'
+              - 'ml/**'
+            portal:
+              - 'portal/**'
+              - 'lib/portal/**'
+              - 'lib/capture/**'
+
   lint:
     name: lint
     runs-on: ubuntu-latest
+    needs: analyze-changes
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -147,3 +180,464 @@ jobs:
 
       - name: Validate AGENTS documentation
         run: node scripts/validate-agents-docs.mjs
+
+  # ===========================================================================
+  # Security Checks (from pr-security-check.yaml)
+  # ===========================================================================
+  gosec-scan:
+    name: gosec-scan
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.go_changed == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Run gosec
+        id: gosec
+        run: |
+          # Get changed Go files
+          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref || 'main' }}...HEAD -- '*.go' | grep -v '_test.go' | grep -v 'vendor/' | grep -v '\.pb\.go$' || true)
+          
+          if [ -n "$CHANGED_FILES" ]; then
+            gosec -fmt json -out gosec-results.json -exclude-generated $CHANGED_FILES || true
+            
+            if [ -f .gosec-baseline.json ]; then
+              HIGH_CRITICAL=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
+              MEDIUM=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "MEDIUM")] | length')
+              
+              echo "high_critical=$HIGH_CRITICAL" >> $GITHUB_OUTPUT
+              echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+              
+              if [ "$HIGH_CRITICAL" -gt 0 ]; then
+                echo "::error::Found $HIGH_CRITICAL new high/critical severity issues"
+                exit 1
+              elif [ "$MEDIUM" -gt 0 ]; then
+                echo "::warning::Found $MEDIUM medium severity issues"
+              fi
+            fi
+          fi
+
+  gitleaks-scan:
+    name: gitleaks-scan
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Fetch base ref for diff scanning
+        run: |
+          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
+
+      - name: Run gitleaks on PR diff
+        run: |
+          BASE_SHA=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
+          
+          if [ -f .gitleaks.toml ]; then
+            gitleaks detect --source . --config .gitleaks.toml --log-opts "${BASE_SHA}..HEAD" --verbose --redact
+          else
+            gitleaks detect --source . --log-opts "${BASE_SHA}..HEAD" --verbose --redact
+          fi
+
+  # ===========================================================================
+  # ML Determinism Check (when ML code changed)
+  # ===========================================================================
+  ml-determinism-check:
+    name: ml-determinism-check
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.ml_changed == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          if [ -f ml/requirements.txt ]; then
+            pip install -r ml/requirements.txt
+          fi
+
+      - name: Verify Go inference determinism
+        run: |
+          go test -v -timeout 10m ./pkg/inference/... -run TestDeterminism
+
+      - name: Verify config has determinism enabled
+        run: |
+          # Check that inference config has deterministic settings
+          if grep -r "ForceCPU.*true" pkg/inference/ && grep -r "DeterministicOps.*true" pkg/inference/; then
+            echo "✓ Determinism config verified"
+          else
+            echo "::error::Missing determinism configuration in pkg/inference"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # Portal CI Check (when portal code changed)
+  # ===========================================================================
+  portal-lint:
+    name: portal-lint
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.portal_changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: "10.28.2"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint & Type Check
+        run: |
+          pnpm --filter @virtengine/portal lint
+          pnpm --filter @virtengine/portal type-check
+
+  portal-test:
+    name: portal-test
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.portal_changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: "10.28.2"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm --filter @virtengine/portal test
+
+  portal-build:
+    name: portal-build
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.portal_changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: "10.28.2"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build portal
+        run: pnpm --filter @virtengine/portal build
+
+  # ===========================================================================
+  # Aggregate Quality Gate Summary
+  # ===========================================================================
+  quality-summary:
+    name: Quality Gate Summary
+    runs-on: ubuntu-latest
+    needs:
+      - analyze-changes
+      - lint
+      - vet
+      - build
+      - test-go
+      - agents-docs
+      - gosec-scan
+      - gitleaks-scan
+      - ml-determinism-check
+      - portal-lint
+      - portal-test
+      - portal-build
+    if: always()
+    steps:
+      - name: Check required jobs passed
+        id: check
+        run: |
+          echo "=== Quality Gate Summary ==="
+          echo ""
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Vet: ${{ needs.vet.result }}"
+          echo "Build: ${{ needs.build.result }}"
+          echo "Test: ${{ needs.test-go.result }}"
+          echo "AGENTS Docs: ${{ needs.agents-docs.result }}"
+          echo "gosec: ${{ needs.gosec-scan.result }}"
+          echo "gitleaks: ${{ needs.gitleaks-scan.result }}"
+          echo "ML Determinism: ${{ needs.ml-determinism-check.result }}"
+          echo "Portal Lint: ${{ needs.portal-lint.result }}"
+          echo "Portal Test: ${{ needs.portal-test.result }}"
+          echo "Portal Build: ${{ needs.portal-build.result }}"
+          echo ""
+          
+          FAILED=0
+          
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "::error::Lint check failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.vet.result }}" != "success" ]; then
+            echo "::error::Vet check failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "::error::Build failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.test-go.result }}" != "success" ]; then
+            echo "::error::Tests failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.agents-docs.result }}" != "success" ]; then
+            echo "::warning::AGENTS docs validation had issues"
+          fi
+          
+          # Security checks - only fail if Go changed and check ran
+          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ] && [ "${{ needs.gosec-scan.result }}" == "failure" ]; then
+            echo "::error::gosec security scan failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.gitleaks-scan.result }}" == "failure" ]; then
+            echo "::error::gitleaks secret scan failed"
+            FAILED=1
+          fi
+          
+          # ML determinism - only fail if ML changed and check ran
+          if [ "${{ needs.analyze-changes.outputs.ml_changed }}" == "true" ] && [ "${{ needs.ml-determinism-check.result }}" == "failure" ]; then
+            echo "::error::ML determinism check failed"
+            FAILED=1
+          fi
+          
+          # Portal checks - only fail if portal changed and checks ran
+          if [ "${{ needs.analyze-changes.outputs.portal_changed }}" == "true" ]; then
+            if [ "${{ needs.portal-lint.result }}" == "failure" ]; then
+              echo "::error::Portal lint failed"
+              FAILED=1
+            fi
+            if [ "${{ needs.portal-test.result }}" == "failure" ]; then
+              echo "::error::Portal tests failed"
+              FAILED=1
+            fi
+            if [ "${{ needs.portal-build.result }}" == "failure" ]; then
+              echo "::error::Portal build failed"
+              FAILED=1
+            fi
+          fi
+          
+          if [ "$FAILED" -eq 1 ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post summary
+        if: always()
+        run: |
+          echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Required |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Vet | ${{ needs.vet.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test-go.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| AGENTS Docs | ${{ needs.agents-docs.result }} | ⚠️ Warning |" >> $GITHUB_STEP_SUMMARY
+          
+          # Add conditional checks
+          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ]; then
+            echo "| gosec Scan | ${{ needs.gosec-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| gosec Scan | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "| gitleaks Scan | ${{ needs.gitleaks-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.analyze-changes.outputs.ml_changed }}" == "true" ]; then
+            echo "| ML Determinism | ${{ needs.ml-determinism-check.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| ML Determinism | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.analyze-changes.outputs.portal_changed }}" == "true" ]; then
+            echo "| Portal Lint | ${{ needs.portal-lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+            echo "| Portal Test | ${{ needs.portal-test.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+            echo "| Portal Build | ${{ needs.portal-build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Portal Checks | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment PR report card
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const statusEmoji = {
+              success: '✅',
+              failure: '❌',
+              cancelled: '🚫',
+              skipped: '⏭️'
+            };
+            
+            const lint = '${{ needs.lint.result }}';
+            const vet = '${{ needs.vet.result }}';
+            const build = '${{ needs.build.result }}';
+            const test = '${{ needs.test-go.result }}';
+            const docs = '${{ needs.agents-docs.result }}';
+            const gosec = '${{ needs.gosec-scan.result }}';
+            const gitleaks = '${{ needs.gitleaks-scan.result }}';
+            const mlDet = '${{ needs.ml-determinism-check.result }}';
+            const portalLint = '${{ needs.portal-lint.result }}';
+            const portalTest = '${{ needs.portal-test.result }}';
+            const portalBuild = '${{ needs.portal-build.result }}';
+            
+            const goChanged = '${{ needs.analyze-changes.outputs.go_changed }}' === 'true';
+            const mlChanged = '${{ needs.analyze-changes.outputs.ml_changed }}' === 'true';
+            const portalChanged = '${{ needs.analyze-changes.outputs.portal_changed }}' === 'true';
+            
+            let overallStatus = '✅ Passed';
+            if (lint !== 'success' || vet !== 'success' || build !== 'success' || test !== 'success' || 
+                gitleaks === 'failure' ||
+                (goChanged && gosec === 'failure') ||
+                (mlChanged && mlDet === 'failure') ||
+                (portalChanged && (portalLint === 'failure' || portalTest === 'failure' || portalBuild === 'failure'))) {
+              overallStatus = '❌ Failed';
+            }
+            
+            let comment = `## 📊 Quality Gate Report Card
+            
+**Overall Status:** ${overallStatus}
+
+| Check | Status | Required |
+|-------|--------|----------|
+| Lint | ${statusEmoji[lint] || '❓'} ${lint} | Yes |
+| Vet | ${statusEmoji[vet] || '❓'} ${vet} | Yes |
+| Build | ${statusEmoji[build] || '❓'} ${build} | Yes |
+| Tests | ${statusEmoji[test] || '❓'} ${test} | Yes |
+| AGENTS Docs | ${statusEmoji[docs] || '❓'} ${docs} | Warning Only |`;
+            
+            if (goChanged) {
+              comment += `\n| gosec Scan | ${statusEmoji[gosec] || '❓'} ${gosec} | Yes |`;
+            }
+            comment += `\n| gitleaks Scan | ${statusEmoji[gitleaks] || '❓'} ${gitleaks} | Yes |`;
+            
+            if (mlChanged) {
+              comment += `\n| ML Determinism | ${statusEmoji[mlDet] || '❓'} ${mlDet} | Yes |`;
+            }
+            
+            if (portalChanged) {
+              comment += `\n| Portal Lint | ${statusEmoji[portalLint] || '❓'} ${portalLint} | Yes |`;
+              comment += `\n| Portal Test | ${statusEmoji[portalTest] || '❓'} ${portalTest} | Yes |`;
+              comment += `\n| Portal Build | ${statusEmoji[portalBuild] || '❓'} ${portalBuild} | Yes |`;
+            }
+            
+            comment += `
+
+---
+
+**Required Checks for Merge:**
+- ✅ All linting must pass
+- ✅ Go vet must pass
+- ✅ Build must succeed
+- ✅ Core tests must pass
+- ✅ gitleaks secret scanning must pass
+- ${goChanged ? '✅ gosec security scan must pass (Go files changed)' : '⏭️ gosec scan skipped (no Go changes)'}
+- ${mlChanged ? '✅ ML determinism must pass (ML code changed)' : '⏭️ ML determinism skipped (no ML changes)'}
+- ${portalChanged ? '✅ Portal CI must pass (portal code changed)' : '⏭️ Portal CI skipped (no portal changes)'}
+- ⚠️ AGENTS docs should be valid (warning only)
+
+_This report card is automatically updated on each push._
+`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Quality Gate Report Card')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                comment_id: botComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }

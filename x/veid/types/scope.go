@@ -44,6 +44,9 @@ const (
 
 	// ScopeTypeADSSO represents Active Directory SSO verification (VE-907)
 	ScopeTypeADSSO ScopeType = "ad_sso"
+
+	// ScopeTypeSocialMedia represents social media profile verification
+	ScopeTypeSocialMedia ScopeType = "social_media"
 )
 
 // ScopeSchemaVersion is the current schema version for identity scopes
@@ -69,6 +72,7 @@ func AllScopeTypes() []ScopeType {
 		ScopeTypeSMSProof,
 		ScopeTypeDomainVerify,
 		ScopeTypeADSSO,
+		ScopeTypeSocialMedia,
 	}
 }
 
@@ -108,6 +112,8 @@ func ScopeTypeWeight(scopeType ScopeType) uint32 {
 		return 5 // Lowest weight - SSO metadata
 	case ScopeTypeADSSO:
 		return 12 // Medium weight - enterprise AD SSO
+	case ScopeTypeSocialMedia:
+		return 12 // Medium weight - social media profile signals
 	default:
 		return 0
 	}
@@ -143,6 +149,8 @@ func ScopeTypeDescription(scopeType ScopeType) string {
 		return "Domain ownership verification"
 	case ScopeTypeADSSO:
 		return "Active Directory SSO verification (Azure AD, SAML, LDAP)"
+	case ScopeTypeSocialMedia:
+		return "Social media profile verification (public profile metadata)"
 	default:
 		return errMsgUnknownScopeType
 	}

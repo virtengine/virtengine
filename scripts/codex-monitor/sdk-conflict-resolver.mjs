@@ -18,7 +18,7 @@
 import { spawn } from "node:child_process";
 import { resolve, basename } from "node:path";
 import { writeFile, readFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -219,6 +219,19 @@ export function getSDKResolutionSummary() {
     total: entries.length,
     entries,
   };
+}
+
+function resolveGitDir(worktreePath) {
+  const dotGit = resolve(worktreePath, ".git");
+  if (!existsSync(dotGit)) return null;
+  try {
+    const content = readFileSync(dotGit, "utf8");
+    const match = content.match(/gitdir:\\s*(.+)/);
+    if (!match) return null;
+    return resolve(worktreePath, match[1].trim());
+  } catch {
+    return null;
+  }
 }
 
 // ── Prompt builder ───────────────────────────────────────────────────────────
@@ -600,43 +613,81 @@ export async function resolveConflictsWithSDK({
 // ── SDK Agent Launcher ───────────────────────────────────────────────────────
 
 /**
- * Launch a Codex exec process with FULL ACCESS to the worktree.
- * Falls back to copilot-cli if Codex is unavailable.
+ * Launch an SDK agent with FULL ACCESS to resolve conflicts.
+ *
+ * Priority order:
+ *  1. Codex SDK (via primary-agent / codex-shell) — same as /background command.
+ *     Uses Thread API with danger-full-access sandbox and full tool access.
+ *  2. Codex CLI fallback — `codex exec` with danger-full-access sandbox.
+ *  3. Copilot CLI fallback.
+ *
+ * The SDK path is preferred because it uses the same Thread-based execution
+ * that powers the /background Telegram command, which has proven reliable for
+ * conflict resolution tasks.
  */
 async function launchSDKAgent(prompt, cwd, timeoutMs) {
-  // Try Codex SDK first (native full-auto mode with file access)
+  // ── Primary: Use Codex SDK (same path as /background command) ───────────
+  // This uses codex-shell.mjs → @openai/codex-sdk Thread with:
+  //   sandboxMode: "danger-full-access"
+  //   approvalPolicy: "never"
+  //   workingDirectory: cwd
+  // Which gives the agent full shell, file I/O, and git access.
+  try {
+    const { execPrimaryPrompt, initPrimaryAgent, getPrimaryAgentName, isPrimaryBusy } =
+      await import("./primary-agent.mjs");
+
+    // Don't compete with an active /background or Telegram agent turn
+    if (isPrimaryBusy()) {
+      console.log(
+        `[sdk-resolve] primary agent is busy — skipping to CLI fallback`,
+      );
+    } else {
+      await initPrimaryAgent();
+      const agentName = getPrimaryAgentName();
+      console.log(
+        `[sdk-resolve] using primary agent (${agentName}) — same as /background`,
+      );
+
+      const result = await execPrimaryPrompt(prompt, { timeoutMs });
+      const output = result?.finalResponse || "";
+      const hasContent = output.length > 0 && !output.includes("SDK disabled");
+
+      if (hasContent) {
+        return {
+          success: true,
+          output,
+          error: null,
+        };
+      }
+
+      // If the primary agent returned empty/disabled, fall through to CLI
+      console.warn(
+        `[sdk-resolve] primary agent returned no actionable output — trying CLI fallback`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[sdk-resolve] primary agent failed: ${err.message} — trying CLI fallback`,
+    );
+  }
+
+  // ── Fallback: Codex CLI with danger-full-access ─────────────────────────
   const codexAvailable = await isCommandAvailable("codex");
   if (codexAvailable) {
     return launchCodexExec(prompt, cwd, timeoutMs);
   }
 
-  // Try Copilot CLI
+  // ── Fallback: Copilot CLI ───────────────────────────────────────────────
   const copilotAvailable = await isCommandAvailable("github-copilot-cli");
   if (copilotAvailable) {
     return launchCopilotExec(prompt, cwd, timeoutMs);
   }
 
-  // No SDK available — fall back to the primary agent module
-  console.warn(
-    "[sdk-resolve] no CLI SDK available — trying primary agent module",
-  );
-  try {
-    const { execPrimaryPrompt } = await import("./primary-agent.mjs");
-    const result = await execPrimaryPrompt(prompt, { timeoutMs });
-    return {
-      success: !!result?.finalResponse,
-      output: result?.finalResponse || "",
-      error: result?.finalResponse
-        ? null
-        : "Primary agent returned no response",
-    };
-  } catch (err) {
-    return {
-      success: false,
-      output: "",
-      error: `No SDK available and primary agent failed: ${err.message}`,
-    };
-  }
+  return {
+    success: false,
+    output: "",
+    error: "No SDK agent available (primary agent, codex CLI, and copilot CLI all failed)",
+  };
 }
 
 function isCommandAvailable(cmd) {
@@ -656,7 +707,22 @@ function launchCodexExec(prompt, cwd, timeoutMs) {
   return new Promise((resolvePromise) => {
     let child;
     try {
-      child = spawn("codex", ["exec", "--full-auto", "-C", cwd], {
+      const args = [
+        "exec",
+        "--ask-for-approval",
+        "never",
+        "--sandbox",
+        "danger-full-access",
+        "-C",
+        cwd,
+      ];
+
+      const gitDir = resolveGitDir(cwd);
+      if (gitDir) {
+        args.push("--add-dir", gitDir);
+      }
+
+      child = spawn("codex", args, {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
         shell: process.platform === "win32",

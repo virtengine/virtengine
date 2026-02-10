@@ -157,9 +157,14 @@ func NewSecureHTTPClient(opts ...HTTPClientOption) *http.Client {
 
 // NewHTTPClientFromConfig creates an HTTP client from a configuration struct.
 func NewHTTPClientFromConfig(config HTTPClientConfig) *http.Client {
+	minTLSVersion := config.MinTLSVersion
+	if minTLSVersion < tls.VersionTLS12 {
+		minTLSVersion = tls.VersionTLS12
+	}
+
 	// Create TLS config with secure defaults
 	tlsConfig := &tls.Config{
-		MinVersion:         config.MinTLSVersion,
+		MinVersion:         minTLSVersion,
 		InsecureSkipVerify: config.InsecureSkipVerify, //nolint:gosec // G402: Configurable for dev/test
 	}
 

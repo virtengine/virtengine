@@ -16,6 +16,8 @@ linters:
     - staticcheck
     - unparam
     - unused
+  # Note: gofmt is a formatter, not a linter. Auto-formatting is handled by
+  # pre-commit hook. golangci-lint only runs actual linters (not formatters).
   settings:
     gocritic:
       disabled-checks:
@@ -35,12 +37,5 @@ linters:
       - third_party$
       - builtin$
       - examples$
-formatters:
-  enable:
-    - gofmt
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+# Formatting handled by pre-commit hook (.git/hooks/pre-commit)
+# golangci-lint only checks non-auto-fixable issues

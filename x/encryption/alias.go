@@ -16,6 +16,7 @@ type (
 	MsgRegisterRecipientKey  = types.MsgRegisterRecipientKey
 	MsgRevokeRecipientKey    = types.MsgRevokeRecipientKey
 	MsgUpdateKeyLabel        = types.MsgUpdateKeyLabel
+	MsgRotateKey             = types.MsgRotateKey
 )
 
 // Alias constants
@@ -46,18 +47,21 @@ var (
 
 // Alias error variables
 var (
-	ErrInvalidAddress       = types.ErrInvalidAddress
-	ErrInvalidPublicKey     = types.ErrInvalidPublicKey
-	ErrKeyNotFound          = types.ErrKeyNotFound
-	ErrKeyAlreadyExists     = types.ErrKeyAlreadyExists
-	ErrKeyRevoked           = types.ErrKeyRevoked
-	ErrInvalidEnvelope      = types.ErrInvalidEnvelope
-	ErrUnsupportedAlgorithm = types.ErrUnsupportedAlgorithm
-	ErrUnsupportedVersion   = types.ErrUnsupportedVersion
-	ErrInvalidSignature     = types.ErrInvalidSignature
-	ErrEncryptionFailed     = types.ErrEncryptionFailed
-	ErrDecryptionFailed     = types.ErrDecryptionFailed
-	ErrInvalidNonce         = types.ErrInvalidNonce
-	ErrUnauthorized         = types.ErrUnauthorized
-	ErrNotRecipient         = types.ErrNotRecipient
+	ErrInvalidAddress        = types.ErrInvalidAddress
+	ErrInvalidPublicKey      = types.ErrInvalidPublicKey
+	ErrKeyNotFound           = types.ErrKeyNotFound
+	ErrKeyAlreadyExists      = types.ErrKeyAlreadyExists
+	ErrKeyRevoked            = types.ErrKeyRevoked
+	ErrKeyDeprecated         = types.ErrKeyDeprecated
+	ErrKeyExpired            = types.ErrKeyExpired
+	ErrInvalidEnvelope       = types.ErrInvalidEnvelope
+	ErrUnsupportedAlgorithm  = types.ErrUnsupportedAlgorithm
+	ErrUnsupportedVersion    = types.ErrUnsupportedVersion
+	ErrInvalidSignature      = types.ErrInvalidSignature
+	ErrEncryptionFailed      = types.ErrEncryptionFailed
+	ErrDecryptionFailed      = types.ErrDecryptionFailed
+	ErrInvalidNonce          = types.ErrInvalidNonce
+	ErrUnauthorized          = types.ErrUnauthorized
+	ErrNotRecipient          = types.ErrNotRecipient
+	ErrReencryptionJobFailed = types.ErrReencryptionJobFailed
 )

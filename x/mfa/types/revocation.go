@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ocsp"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -106,11 +108,9 @@ type OCSPCacheEntry struct {
 // NewRevocationChecker creates a new revocation checker
 func NewRevocationChecker(timeout time.Duration) *RevocationChecker {
 	return &RevocationChecker{
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
-		crlCache:  make(map[string]*CRLCacheEntry),
-		ocspCache: make(map[string]*OCSPCacheEntry),
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(timeout)),
+		crlCache:   make(map[string]*CRLCacheEntry),
+		ocspCache:  make(map[string]*OCSPCacheEntry),
 	}
 }
 

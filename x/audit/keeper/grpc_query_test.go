@@ -8,18 +8,17 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 
 	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"github.com/virtengine/virtengine/app"
 	"github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 type grpcTestSuite struct {
 	t      *testing.T
-	app    *app.VirtEngineApp
 	ctx    sdk.Context
 	keeper keeper.Keeper
 
@@ -31,12 +30,11 @@ func setupTest(t *testing.T) *grpcTestSuite {
 		t: t,
 	}
 
-	suite.app = app.Setup(app.WithGenesis(app.GenesisStateWithValSet))
-
 	suite.ctx, suite.keeper = setupKeeper(t)
 	querier := keeper.Querier{Keeper: suite.keeper}
 
-	queryHelper := baseapp.NewQueryServerTestHelper(suite.ctx, suite.app.InterfaceRegistry())
+	cfg := testutilmod.MakeTestEncodingConfig()
+	queryHelper := baseapp.NewQueryServerTestHelper(suite.ctx, cfg.InterfaceRegistry)
 	types.RegisterQueryServer(queryHelper, querier)
 	suite.queryClient = types.NewQueryClient(queryHelper)
 

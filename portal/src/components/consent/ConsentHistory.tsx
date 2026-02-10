@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import type { ConsentEvent, ConsentSettingsResponse } from '@/types/consent';
+import { useTranslation } from 'react-i18next';
 
 const EVENT_LABELS: Record<string, string> = {
   granted: 'Granted',
@@ -22,6 +23,7 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 export function ConsentHistory() {
+  const { t } = useTranslation();
   const wallet = useWallet();
   const account = wallet.accounts[wallet.activeAccountIndex];
   const address = account?.address ?? 'virtengine1demo';
@@ -40,14 +42,16 @@ export function ConsentHistory() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Consent history</CardTitle>
-        <CardDescription>Audit trail of every consent change on your VEID profile.</CardDescription>
+        <CardTitle>{t('Consent history')}</CardTitle>
+        <CardDescription>
+          {t('Audit trail of every consent change on your VEID profile.')}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading consent history…</p>
+          <p className="text-sm text-muted-foreground">{t('Loading consent history…')}</p>
         ) : events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No consent events yet.</p>
+          <p className="text-sm text-muted-foreground">{t('No consent events yet.')}</p>
         ) : (
           <Table>
             <TableHeader>

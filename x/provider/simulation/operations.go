@@ -2,7 +2,7 @@ package simulation
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
 
 	cerrors "cosmossdk.io/errors"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"

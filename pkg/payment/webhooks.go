@@ -129,7 +129,7 @@ func (ws *WebhookServer) handlePayPalWebhook(w http.ResponseWriter, r *http.Requ
 	ws.processWebhook(w, r, body, GatewayPayPal)
 }
 
-// handleACHWebhook handles ACH-specific webhooks
+// handleACHWebhook handles ACH-specific webhooks (Stripe-compatible signature)
 func (ws *WebhookServer) handleACHWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -157,12 +157,9 @@ func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, 
 	case GatewayAdyen:
 		signature = r.Header.Get("X-Adyen-Hmac-Signature")
 	case GatewayPayPal:
-		signature = ws.buildPayPalSignatureEnvelope(r)
+		signature = buildPayPalSignatureHeader(r)
 	case GatewayACH:
 		signature = r.Header.Get("Stripe-Signature")
-		if signature == "" {
-			signature = r.Header.Get("ACH-Signature")
-		}
 	}
 
 	// Validate signature
@@ -210,34 +207,42 @@ func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (ws *WebhookServer) buildPayPalSignatureEnvelope(r *http.Request) string {
-	envelope := map[string]string{
+// buildPayPalSignatureHeader encodes the PayPal signature headers into a JSON string.
+func buildPayPalSignatureHeader(r *http.Request) string {
+	payload := map[string]string{
 		"transmission_id":   r.Header.Get("PayPal-Transmission-Id"),
-		"transmission_sig":  r.Header.Get("PayPal-Transmission-Sig"),
 		"transmission_time": r.Header.Get("PayPal-Transmission-Time"),
 		"cert_url":          r.Header.Get("PayPal-Cert-Url"),
 		"auth_algo":         r.Header.Get("PayPal-Auth-Algo"),
+		"transmission_sig":  r.Header.Get("PayPal-Transmission-Sig"),
+		"webhook_id":        r.Header.Get("PayPal-Webhook-Id"),
 	}
-	if envelope["transmission_id"] == "" {
-		envelope["transmission_id"] = r.Header.Get("Paypal-Transmission-Id")
+
+	// Fallback for lowercase variant some gateways use
+	if payload["transmission_id"] == "" {
+		payload["transmission_id"] = r.Header.Get("Paypal-Transmission-Id")
 	}
-	if envelope["transmission_sig"] == "" {
-		envelope["transmission_sig"] = r.Header.Get("Paypal-Transmission-Sig")
+	if payload["transmission_time"] == "" {
+		payload["transmission_time"] = r.Header.Get("Paypal-Transmission-Time")
 	}
-	if envelope["transmission_time"] == "" {
-		envelope["transmission_time"] = r.Header.Get("Paypal-Transmission-Time")
+	if payload["cert_url"] == "" {
+		payload["cert_url"] = r.Header.Get("Paypal-Cert-Url")
 	}
-	if envelope["cert_url"] == "" {
-		envelope["cert_url"] = r.Header.Get("Paypal-Cert-Url")
+	if payload["auth_algo"] == "" {
+		payload["auth_algo"] = r.Header.Get("Paypal-Auth-Algo")
 	}
-	if envelope["auth_algo"] == "" {
-		envelope["auth_algo"] = r.Header.Get("Paypal-Auth-Algo")
+	if payload["transmission_sig"] == "" {
+		payload["transmission_sig"] = r.Header.Get("Paypal-Transmission-Sig")
 	}
-	payload, err := json.Marshal(envelope)
+	if payload["webhook_id"] == "" {
+		payload["webhook_id"] = r.Header.Get("Paypal-Webhook-Id")
+	}
+
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		return ""
 	}
-	return string(payload)
+	return string(raw)
 }
 
 // isProcessed checks if an event was already processed

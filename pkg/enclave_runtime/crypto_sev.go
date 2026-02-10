@@ -44,6 +44,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // =============================================================================
@@ -437,10 +439,8 @@ type VCEKCertificateFetcher struct {
 // NewVCEKCertificateFetcher creates a new VCEK certificate fetcher.
 func NewVCEKCertificateFetcher() *VCEKCertificateFetcher {
 	return &VCEKCertificateFetcher{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		cache: NewCertificateCache(1000, 7*24*time.Hour), // Cache for 7 days
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
+		cache:      NewCertificateCache(1000, 7*24*time.Hour), // Cache for 7 days
 	}
 }
 

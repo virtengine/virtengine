@@ -5,7 +5,7 @@ import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { useCaptureStore } from "../state/captureStore";
 
-export function SelfieCaptureScreen({ stepIndex = 2 }: { stepIndex?: number }) {
+export function SelfieCaptureScreen({ stepIndex = 3 }: { stepIndex?: number }) {
   const { dispatch } = useCaptureStore();
   const [hasCapture, setHasCapture] = useState(false);
 

@@ -129,7 +129,7 @@ func (s *DelegationGRPCQueryTestSuite) TestDelegationQueriesPopulated() {
 	s.Require().NoError(err)
 	s.Require().Len(valResp.Delegations, 1)
 
-	reward := types.NewDelegatorReward(queryDelegatorAddr, queryValidator1, 1, "500000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward := types.NewDelegatorReward(queryDelegatorAddr, queryValidator1, 1, "500000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	require.NoError(s.T(), s.keeper.SetDelegatorReward(s.ctx, *reward))
 
 	rewardResp, err := s.querier.DelegatorRewards(s.ctx, &delegationv1.QueryDelegatorRewardsRequest{

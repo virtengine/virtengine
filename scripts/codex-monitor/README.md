@@ -7,6 +7,10 @@
   &nbsp;&nbsp;&nbsp;
   <img src="docs/kanban-board.png" alt="Kanban Board" width="520" />
 </p>
+<p align="center">
+  <img src="docs/workspace-view.png" alt="Live Telegram Digest" width="1080" />
+  &nbsp;&nbsp;&nbsp;
+  </p>
 
 ## Why codex-monitor?
 
@@ -136,7 +140,7 @@ Configuration loads from (highest priority first):
 
 1. **CLI flags** (`--script ./myorch.ps1`)
 2. **Environment variables** (`ORCHESTRATOR_SCRIPT=...`)
-3. **`.env` file** (in codex-monitor directory)
+3. **`.env` file** (config directory: codex-monitor folder for repo installs, user config dir for global installs)
 4. **`codex-monitor.config.json`** (project config)
 5. **Built-in defaults**
 
@@ -306,36 +310,36 @@ Select a profile via `--profile` or `CODEX_MONITOR_PROFILE`.
 
 See [.env.example](.env.example) for the full reference. Key variables:
 
-| Variable                              | Default                        | Description                                                                                                            |
-| ------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `PROJECT_NAME`                        | auto-detected                  | Project name for display                                                                                               |
-| `GITHUB_REPO`                         | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
-| `ORCHESTRATOR_SCRIPT`                 | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
-| `ORCHESTRATOR_ARGS`                   | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
-| `OPENAI_API_KEY`                      | —                              | API key for Codex analysis                                                                                             |
-| `PRIMARY_AGENT`                       | `codex-sdk`                    | Primary agent adapter (`codex-sdk`, `copilot-sdk`, `claude-sdk`)                                                       |
-| `COPILOT_MODEL`                       | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
-| `COPILOT_SDK_DISABLED`                | `0`                            | Disable Copilot SDK primary agent                                                                                      |
-| `COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT` | `true`                         | Disable Copilot cloud triggers when a rate-limit comment is detected                                                   |
-| `COPILOT_CLOUD_COOLDOWN_MIN`          | `60`                           | Default Copilot cloud cooldown duration (minutes)                                                                      |
-| `COPILOT_RATE_LIMIT_COOLDOWN_MIN`     | `120`                          | Cooldown duration (minutes) applied specifically after a Copilot rate-limit notice                                     |
-| `TELEGRAM_BOT_TOKEN`                  | —                              | Telegram bot token from @BotFather                                                                                     |
-| `TELEGRAM_CHAT_ID`                    | —                              | Telegram chat ID                                                                                                       |
-| `VK_BASE_URL`                         | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
-| `VK_TARGET_BRANCH`                    | `origin/main`                  | Default upstream branch for task attempts/PRs                                                                          |
-| `CODEX_MONITOR_TASK_UPSTREAM`         | `origin/ve/codex-monitor-generic` | Default upstream branch for codex-monitor tasks (overrides `VK_TARGET_BRANCH`)                                        |
-| `EXECUTORS`                           | Codex only                     | Executor shorthand (see above)                                                                                         |
-| `EXECUTOR_DISTRIBUTION`               | `weighted`                     | Distribution mode                                                                                                      |
-| `FAILOVER_STRATEGY`                   | `next-in-line`                 | Failover behavior                                                                                                      |
-| `MAX_PARALLEL`                        | `6`                            | Max concurrent agent slots                                                                                             |
-| `CODEX_MONITOR_REPO`                  | —                              | Selected repo name (multi-repo)                                                                                        |
-| `CODEX_MONITOR_PROFILE`               | —                              | Environment profile name                                                                                               |
-| `CODEX_MONITOR_MODE`                  | `virtengine`/`generic`         | Mode override                                                                                                          |
-| `CODEX_MONITOR_PREFLIGHT_DISABLED`    | `0`                            | Disable preflight checks                                                                                               |
-| `CODEX_MONITOR_PREFLIGHT_RETRY_MS`    | `300000`                       | Preflight retry interval (ms)                                                                                          |
-| `LOG_MAX_SIZE_MB`                     | `500`                          | Max total log folder size in MB (0 = unlimited)                                                                        |
-| `LOG_CLEANUP_INTERVAL_MIN`            | `30`                           | How often to check log folder size (0 = startup only)                                                                  |
-| `TELEGRAM_VERBOSITY`                  | `summary`                      | Notification verbosity: `minimal`, `summary`, or `detailed`                                                            |
+| Variable                              | Default                           | Description                                                                                                            |
+| ------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `PROJECT_NAME`                        | auto-detected                     | Project name for display                                                                                               |
+| `GITHUB_REPO`                         | auto-detected                     | GitHub repo slug (`org/repo`)                                                                                          |
+| `ORCHESTRATOR_SCRIPT`                 | auto-detected                     | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
+| `ORCHESTRATOR_ARGS`                   | `-MaxParallel 6 -WaitForMutex`    | Arguments passed to orchestrator                                                                                       |
+| `OPENAI_API_KEY`                      | —                                 | API key for Codex analysis                                                                                             |
+| `PRIMARY_AGENT`                       | `codex-sdk`                       | Primary agent adapter (`codex-sdk`, `copilot-sdk`, `claude-sdk`)                                                       |
+| `COPILOT_MODEL`                       | Copilot CLI default               | Model override for Copilot SDK                                                                                         |
+| `COPILOT_SDK_DISABLED`                | `0`                               | Disable Copilot SDK primary agent                                                                                      |
+| `COPILOT_CLOUD_DISABLE_ON_RATE_LIMIT` | `true`                            | Disable Copilot cloud triggers when a rate-limit comment is detected                                                   |
+| `COPILOT_CLOUD_COOLDOWN_MIN`          | `60`                              | Default Copilot cloud cooldown duration (minutes)                                                                      |
+| `COPILOT_RATE_LIMIT_COOLDOWN_MIN`     | `120`                             | Cooldown duration (minutes) applied specifically after a Copilot rate-limit notice                                     |
+| `TELEGRAM_BOT_TOKEN`                  | —                                 | Telegram bot token from @BotFather                                                                                     |
+| `TELEGRAM_CHAT_ID`                    | —                                 | Telegram chat ID                                                                                                       |
+| `VK_BASE_URL`                         | `http://127.0.0.1:54089`          | Vibe-Kanban API endpoint                                                                                               |
+| `VK_TARGET_BRANCH`                    | `origin/main`                     | Default upstream branch for task attempts/PRs                                                                          |
+| `CODEX_MONITOR_TASK_UPSTREAM`         | `origin/ve/codex-monitor-generic` | Default upstream branch for codex-monitor tasks (overrides `VK_TARGET_BRANCH`)                                         |
+| `EXECUTORS`                           | Codex only                        | Executor shorthand (see above)                                                                                         |
+| `EXECUTOR_DISTRIBUTION`               | `weighted`                        | Distribution mode                                                                                                      |
+| `FAILOVER_STRATEGY`                   | `next-in-line`                    | Failover behavior                                                                                                      |
+| `MAX_PARALLEL`                        | `6`                               | Max concurrent agent slots                                                                                             |
+| `CODEX_MONITOR_REPO`                  | —                                 | Selected repo name (multi-repo)                                                                                        |
+| `CODEX_MONITOR_PROFILE`               | —                                 | Environment profile name                                                                                               |
+| `CODEX_MONITOR_MODE`                  | `virtengine`/`generic`            | Mode override                                                                                                          |
+| `CODEX_MONITOR_PREFLIGHT_DISABLED`    | `0`                               | Disable preflight checks                                                                                               |
+| `CODEX_MONITOR_PREFLIGHT_RETRY_MS`    | `300000`                          | Preflight retry interval (ms)                                                                                          |
+| `LOG_MAX_SIZE_MB`                     | `500`                             | Max total log folder size in MB (0 = unlimited)                                                                        |
+| `LOG_CLEANUP_INTERVAL_MIN`            | `30`                              | How often to check log folder size (0 = startup only)                                                                  |
+| `TELEGRAM_VERBOSITY`                  | `summary`                         | Notification verbosity: `minimal`, `summary`, or `detailed`                                                            |
 
 ### Task Upstream Routing
 
@@ -363,24 +367,24 @@ complexity tier (LOW / MEDIUM / HIGH), then picks the appropriate model.
 
 Prefix every task title with a size label in brackets:
 
-| Label  | Complexity | Scope                                      |
-|--------|------------|--------------------------------------------|
-| `[xs]` | LOW        | < 30 min — config change, typo fix         |
-| `[s]`  | LOW        | 30-60 min — small feature, docs update     |
-| `[m]`  | MEDIUM     | 1-2 hours — standard feature, bug fix      |
-| `[l]`  | HIGH       | 2-4 hours — multi-file change, test suite  |
-| `[xl]` | HIGH       | 4-8 hours — cross-module, architecture     |
-| `[xxl]`| HIGH       | 8+ hours — infrastructure, major refactor  |
+| Label   | Complexity | Scope                                     |
+| ------- | ---------- | ----------------------------------------- |
+| `[xs]`  | LOW        | < 30 min — config change, typo fix        |
+| `[s]`   | LOW        | 30-60 min — small feature, docs update    |
+| `[m]`   | MEDIUM     | 1-2 hours — standard feature, bug fix     |
+| `[l]`   | HIGH       | 2-4 hours — multi-file change, test suite |
+| `[xl]`  | HIGH       | 4-8 hours — cross-module, architecture    |
+| `[xxl]` | HIGH       | 8+ hours — infrastructure, major refactor |
 
 Tasks without a size label default to `[m]` (MEDIUM).
 
 #### Default Models
 
-| Tier   | Codex (OpenAI)       | Copilot (Claude)     |
-|--------|----------------------|----------------------|
-| LOW    | gpt-5.1-codex-mini   | haiku-4.5            |
-| MEDIUM | gpt-5.2-codex        | sonnet-4.5           |
-| HIGH   | gpt-5.1-codex-max    | opus-4.6             |
+| Tier   | Codex (OpenAI)     | Copilot (Claude) |
+| ------ | ------------------ | ---------------- |
+| LOW    | gpt-5.1-codex-mini | haiku-4.5        |
+| MEDIUM | gpt-5.2-codex      | sonnet-4.5       |
+| HIGH   | gpt-5.1-codex-max  | opus-4.6         |
 
 #### Keyword Escalation / Simplification
 
@@ -414,7 +418,11 @@ Or in `codex-monitor.config.json`:
     "enabled": true,
     "models": {
       "CODEX": {
-        "high": { "model": "gpt-5.1-codex-max", "variant": "GPT51_CODEX_MAX", "reasoningEffort": "high" }
+        "high": {
+          "model": "gpt-5.1-codex-max",
+          "variant": "GPT51_CODEX_MAX",
+          "reasoningEffort": "high"
+        }
       }
     }
   }
@@ -461,10 +469,10 @@ immediately conflict with ongoing resolution:
 All dirty/conflict resolution tasks are automatically assigned the **highest
 available model** regardless of their original complexity classification:
 
-| Executor | Model              |
-|----------|--------------------|
-| CODEX    | gpt-5.1-codex-max  |
-| COPILOT  | opus-4.6           |
+| Executor | Model             |
+| -------- | ----------------- |
+| CODEX    | gpt-5.1-codex-max |
+| COPILOT  | opus-4.6          |
 
 This ensures conflicts get the most capable model for complex merge resolution.
 
@@ -522,6 +530,7 @@ When multiple codex-monitor instances run across workstations (coordinated via T
 **Idempotent Claims** — Multiple claim attempts with the same token return the same result, preventing race conditions.
 
 **Deterministic Conflict Resolution** — When two instances claim the same task, conflicts are resolved by:
+
 1. Coordinator priority (coordinator always wins)
 2. Coordinator priority number (lower wins)
 3. Timestamp (earlier claim wins)
@@ -530,40 +539,47 @@ When multiple codex-monitor instances run across workstations (coordinated via T
 **Persistent Claim Tokens** — Each claim has a unique UUID token for idempotency and verification.
 
 **Claim Lifecycle:**
+
 - **Claim** — Instance reserves a task for a TTL period (default: 60 minutes)
 - **Renew** — Extend the claim TTL before it expires
 - **Release** — Release the claim when work is complete or abandoned
 - **Auto-sweep** — Expired claims are automatically cleaned up
 
 **Storage:**
+
 - Registry: `.cache/codex-monitor/task-claims.json`
 - Audit log: `.cache/codex-monitor/task-claims-audit.jsonl`
 
 **Programmatic API:**
 
 ```javascript
-import { claimTask, releaseTask, renewClaim, listClaims } from './task-claims.mjs';
+import {
+  claimTask,
+  releaseTask,
+  renewClaim,
+  listClaims,
+} from "./task-claims.mjs";
 
 // Claim a task
 const result = await claimTask({
-  taskId: 'abc123',
-  instanceId: 'workstation-1',
+  taskId: "abc123",
+  instanceId: "workstation-1",
   ttlMinutes: 60,
-  metadata: { branch: 've/task', agent: 'codex' }
+  metadata: { branch: "ve/task", agent: "codex" },
 });
 
 if (result.success) {
   // Work on task...
-  
+
   // Renew if needed
-  await renewClaim({ taskId: 'abc123', claimToken: result.token });
-  
+  await renewClaim({ taskId: "abc123", claimToken: result.token });
+
   // Release when done
-  await releaseTask({ taskId: 'abc123', claimToken: result.token });
+  await releaseTask({ taskId: "abc123", claimToken: result.token });
 }
 
 // List all claims
-const claims = await listClaims({ instanceId: 'workstation-1' });
+const claims = await listClaims({ instanceId: "workstation-1" });
 ```
 
 **Integration:** The orchestrator automatically claims tasks before starting work and releases them upon completion. Claims are announced in the configured Telegram or VK channel for fleet visibility.
@@ -1030,7 +1046,7 @@ pwsh ve-orchestrator.ps1 -MaxParallel 6 -PollIntervalSec 90
 
 ### First-run setup doesn't launch
 
-The auto-detection checks for `.env` or `codex-monitor.config.json`. If either exists, setup won't auto-launch. Run `codex-monitor --setup` manually.
+The auto-detection checks for `.env` or `codex-monitor.config.json` in the config directory (repo install: codex-monitor folder; global install: user config dir). If either exists, setup won't auto-launch. Run `codex-monitor --setup` manually.
 
 ### Telegram 409 errors
 

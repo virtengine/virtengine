@@ -21,10 +21,14 @@ func DefaultGenesisState() *GenesisState {
 // DefaultParams returns the default parameters
 func DefaultParams() Params {
 	return Params{
-		MaxRecipientsPerEnvelope: 10,
-		MaxKeysPerAccount:        5,
-		AllowedAlgorithms:        SupportedAlgorithms(),
-		RequireSignature:         true,
+		MaxRecipientsPerEnvelope:     10,
+		MaxKeysPerAccount:            5,
+		AllowedAlgorithms:            SupportedAlgorithms(),
+		RequireSignature:             true,
+		RevocationGracePeriodSeconds: 604800, // 7 days
+		KeyExpiryWarningSeconds:      []uint64{604800, 86400},
+		RotationBatchSize:            100,
+		DefaultKeyTtlSeconds:         0,
 	}
 }
 
@@ -61,6 +65,10 @@ func ValidateParams(p *Params) error {
 		if !IsAlgorithmSupported(alg) {
 			return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", alg)
 		}
+	}
+
+	if p.RotationBatchSize == 0 {
+		return ErrInvalidEnvelope.Wrap("rotation_batch_size must be greater than 0")
 	}
 
 	return nil

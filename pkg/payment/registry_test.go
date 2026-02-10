@@ -4,107 +4,109 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-type stubGateway struct {
+type mockGateway struct {
 	name    string
-	gateway GatewayType
+	gwType  GatewayType
 	healthy bool
 }
 
-func (s *stubGateway) Name() string                       { return s.name }
-func (s *stubGateway) Type() GatewayType                  { return s.gateway }
-func (s *stubGateway) IsHealthy(ctx context.Context) bool { return s.healthy }
-func (s *stubGateway) Close() error                       { return nil }
-func (s *stubGateway) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
-	return Customer{ID: "cust"}, nil
+func (m mockGateway) Name() string                       { return m.name }
+func (m mockGateway) Type() GatewayType                  { return m.gwType }
+func (m mockGateway) IsHealthy(ctx context.Context) bool { return m.healthy }
+func (m mockGateway) Close() error                       { return nil }
+func (m mockGateway) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
+	return Customer{}, nil
 }
-func (s *stubGateway) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
-	return Customer{ID: customerID}, nil
+func (m mockGateway) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
+	return Customer{}, nil
 }
-func (s *stubGateway) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
-	return Customer{ID: customerID}, nil
+func (m mockGateway) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
+	return Customer{}, nil
 }
-func (s *stubGateway) DeleteCustomer(ctx context.Context, customerID string) error {
+func (m mockGateway) DeleteCustomer(ctx context.Context, customerID string) error { return nil }
+func (m mockGateway) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
+	return "", nil
+}
+func (m mockGateway) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
 	return nil
 }
-func (s *stubGateway) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
-	return token.Token, nil
+func (m mockGateway) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
+	return nil, nil
 }
-func (s *stubGateway) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
-	return nil
+func (m mockGateway) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
+	return PaymentIntent{}, nil
 }
-func (s *stubGateway) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
-	return []CardToken{}, nil
+func (m mockGateway) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
+	return PaymentIntent{}, nil
 }
-func (s *stubGateway) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
-	return PaymentIntent{ID: "pi_1", Status: PaymentIntentStatusSucceeded}, nil
+func (m mockGateway) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
+	return PaymentIntent{}, nil
 }
-func (s *stubGateway) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
-	return PaymentIntent{ID: paymentIntentID, Status: PaymentIntentStatusSucceeded}, nil
+func (m mockGateway) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
+	return PaymentIntent{}, nil
 }
-func (s *stubGateway) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
-	return PaymentIntent{ID: paymentIntentID, Status: PaymentIntentStatusSucceeded}, nil
+func (m mockGateway) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
+	return PaymentIntent{}, nil
 }
-func (s *stubGateway) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
-	return PaymentIntent{ID: paymentIntentID, Status: PaymentIntentStatusCanceled}, nil
+func (m mockGateway) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
+	return Refund{}, nil
 }
-func (s *stubGateway) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
-	return PaymentIntent{ID: paymentIntentID, Status: PaymentIntentStatusSucceeded}, nil
+func (m mockGateway) GetRefund(ctx context.Context, refundID string) (Refund, error) {
+	return Refund{}, nil
 }
-func (s *stubGateway) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
-	return Refund{ID: "re_1", Status: RefundStatusSucceeded}, nil
-}
-func (s *stubGateway) GetRefund(ctx context.Context, refundID string) (Refund, error) {
-	return Refund{ID: refundID, Status: RefundStatusSucceeded}, nil
-}
-func (s *stubGateway) ValidateWebhook(payload []byte, signature string) error { return nil }
-func (s *stubGateway) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
-	return WebhookEvent{ID: "evt_1", Gateway: s.gateway}, nil
+func (m mockGateway) ValidateWebhook(payload []byte, signature string) error { return nil }
+func (m mockGateway) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
+	return WebhookEvent{}, nil
 }
 
-func TestRegistry_SelectAdapterFallback(t *testing.T) {
+func TestPaymentProcessorRegistry_Fallback(t *testing.T) {
 	registry := NewPaymentProcessorRegistry()
-	registry.RegisterAdapter(GatewayStripe, &stubGateway{name: "stripe", gateway: GatewayStripe, healthy: false})
-	registry.RegisterAdapter(GatewayPayPal, &stubGateway{name: "paypal", gateway: GatewayPayPal, healthy: true})
-	registry.SetProviderPreference("provider-1", ProcessorPreference{
+
+	registry.RegisterAdapter(mockGateway{name: "Stripe", gwType: GatewayStripe, healthy: false}, ProcessorRoute{
+		Regions:    []string{"US"},
+		Currencies: []Currency{CurrencyUSD},
+		Fee:        FeeSchedule{FixedFee: 30, VariableBps: 290},
+	})
+	registry.RegisterAdapter(mockGateway{name: "Adyen", gwType: GatewayAdyen, healthy: true}, ProcessorRoute{
+		Regions:    []string{"US"},
+		Currencies: []Currency{CurrencyUSD},
+		Fee:        FeeSchedule{FixedFee: 25, VariableBps: 300},
+	})
+	registry.RegisterAdapter(mockGateway{name: "PayPal", gwType: GatewayPayPal, healthy: true}, ProcessorRoute{
+		Regions:    []string{"US"},
+		Currencies: []Currency{CurrencyUSD},
+		Fee:        FeeSchedule{FixedFee: 40, VariableBps: 350},
+	})
+
+	registry.SetProviderPreferences("provider-1", ProviderPreferences{
 		Primary:   GatewayStripe,
-		Secondary: GatewayPayPal,
+		Secondary: GatewayAdyen,
+		Tertiary:  GatewayPayPal,
 	})
 
-	adapter, err := registry.SelectAdapter(context.Background(), ProcessorSelectionRequest{
-		ProviderID:     "provider-1",
-		RequireHealthy: true,
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, GatewayPayPal, adapter.Type())
+	adapter, err := registry.SelectAdapter(context.Background(), "provider-1", "US", NewAmount(1000, CurrencyUSD))
+	require.NoError(t, err)
+	require.Equal(t, GatewayAdyen, adapter.Type())
 }
 
-func TestRegistry_SelectAdapterRegion(t *testing.T) {
+func TestPaymentProcessorRegistry_Optimal(t *testing.T) {
 	registry := NewPaymentProcessorRegistry()
-	registry.RegisterAdapter(GatewayStripe, &stubGateway{name: "stripe", gateway: GatewayStripe, healthy: true})
-	registry.SetRegionPreference("EU", ProcessorPreference{Primary: GatewayStripe})
 
-	adapter, err := registry.SelectAdapter(context.Background(), ProcessorSelectionRequest{
-		Region:         "EU",
-		RequireHealthy: true,
+	registry.RegisterAdapter(mockGateway{name: "Stripe", gwType: GatewayStripe, healthy: true}, ProcessorRoute{
+		Regions:    []string{"EU"},
+		Currencies: []Currency{CurrencyEUR},
+		Fee:        FeeSchedule{FixedFee: 30, VariableBps: 290},
 	})
-	assert.NoError(t, err)
-	assert.Equal(t, GatewayStripe, adapter.Type())
-}
-
-func TestRegistry_FeeRouting(t *testing.T) {
-	registry := NewPaymentProcessorRegistry()
-	registry.RegisterAdapter(GatewayStripe, &stubGateway{name: "stripe", gateway: GatewayStripe, healthy: true})
-	registry.RegisterAdapter(GatewayAdyen, &stubGateway{name: "adyen", gateway: GatewayAdyen, healthy: true})
-	registry.RegisterFees(GatewayStripe, FeeSchedule{FixedFee: 30, Percent: 2.9})
-	registry.RegisterFees(GatewayAdyen, FeeSchedule{FixedFee: 10, Percent: 1.5})
-
-	adapter, err := registry.SelectAdapter(context.Background(), ProcessorSelectionRequest{
-		Amount:         NewAmount(10000, CurrencyUSD),
-		RequireHealthy: true,
+	registry.RegisterAdapter(mockGateway{name: "Adyen", gwType: GatewayAdyen, healthy: true}, ProcessorRoute{
+		Regions:    []string{"EU"},
+		Currencies: []Currency{CurrencyEUR},
+		Fee:        FeeSchedule{FixedFee: 20, VariableBps: 250},
 	})
-	assert.NoError(t, err)
-	assert.Equal(t, GatewayAdyen, adapter.Type())
+
+	adapter, err := registry.SelectOptimalAdapter(context.Background(), "EU", NewAmount(1000, CurrencyEUR))
+	require.NoError(t, err)
+	require.Equal(t, GatewayAdyen, adapter.Type())
 }

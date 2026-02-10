@@ -19,14 +19,14 @@ import (
 
 // CreateRoutingAuditRecord creates a new routing audit record
 func (k Keeper) CreateRoutingAuditRecord(ctx sdk.Context, record *types.RoutingAuditRecord) error {
-	if err := record.Validate(); err != nil {
-		return err
-	}
-
 	// Generate record ID if not set
 	if record.RecordID == "" {
 		seq := k.incrementSequence(ctx, types.SequenceKeyRoutingAudit)
 		record.RecordID = fmt.Sprintf("routing-audit-%d", seq)
+	}
+
+	if err := record.Validate(); err != nil {
+		return err
 	}
 
 	record.CreatedAt = ctx.BlockTime()
@@ -96,14 +96,14 @@ func (k Keeper) WithRoutingAuditRecords(ctx sdk.Context, fn func(types.RoutingAu
 
 // CreateRoutingViolation creates a new routing violation record
 func (k Keeper) CreateRoutingViolation(ctx sdk.Context, violation *types.RoutingViolation) error {
-	if err := violation.Validate(); err != nil {
-		return err
-	}
-
 	// Generate violation ID if not set
 	if violation.ViolationID == "" {
 		seq := k.incrementSequence(ctx, types.SequenceKeyRoutingViolation)
 		violation.ViolationID = fmt.Sprintf("routing-violation-%d", seq)
+	}
+
+	if err := violation.Validate(); err != nil {
+		return err
 	}
 
 	violation.CreatedAt = ctx.BlockTime()

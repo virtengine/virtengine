@@ -1,6 +1,6 @@
 // Package payment provides payment gateway integration for Visa/Mastercard.
 //
-// VE-49C: PayPal Commerce adapter implementation.
+// VE-3062: PayPal Commerce adapter for payment intents and refunds.
 package payment
 
 import (
@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,20 +19,23 @@ import (
 )
 
 // ============================================================================
-// PayPal Commerce Adapter
+// PayPal Adapter
 // ============================================================================
 
-// PayPalAdapter implements the Gateway interface using PayPal REST APIs.
+// PayPalAdapter implements the Gateway interface for PayPal Commerce Platform.
 type PayPalAdapter struct {
 	config     PayPalConfig
 	httpClient *http.Client
 
+	// OAuth token management
 	tokenMu     sync.RWMutex
 	accessToken string
 	tokenExpiry time.Time
 }
 
-// NewPayPalAdapter creates a new PayPal Commerce adapter.
+const paypalCaptureMethodManual = "manual"
+
+// NewPayPalAdapter creates a new PayPal adapter.
 func NewPayPalAdapter(config PayPalConfig) (Gateway, error) {
 	if config.ClientID == "" || config.ClientSecret == "" {
 		return nil, ErrGatewayNotConfigured
@@ -59,62 +62,6 @@ func (a *PayPalAdapter) IsHealthy(ctx context.Context) bool {
 
 func (a *PayPalAdapter) Close() error {
 	return nil
-}
-
-// ============================================================================
-// OAuth Token Management
-// ============================================================================
-
-func (a *PayPalAdapter) getAccessToken(ctx context.Context) (string, error) {
-	a.tokenMu.RLock()
-	if a.accessToken != "" && time.Now().Before(a.tokenExpiry) {
-		token := a.accessToken
-		a.tokenMu.RUnlock()
-		return token, nil
-	}
-	a.tokenMu.RUnlock()
-
-	a.tokenMu.Lock()
-	defer a.tokenMu.Unlock()
-
-	if a.accessToken != "" && time.Now().Before(a.tokenExpiry) {
-		return a.accessToken, nil
-	}
-
-	tokenURL := fmt.Sprintf("%s/v1/oauth2/token", a.config.GetBaseURL())
-	data := url.Values{}
-	data.Set("grant_type", "client_credentials")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.SetBasicAuth(a.config.ClientID, a.config.ClientSecret)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("paypal token request failed: %s", string(body))
-	}
-
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return "", err
-	}
-
-	a.accessToken = tokenResp.AccessToken
-	a.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn-300) * time.Second)
-
-	return a.accessToken, nil
 }
 
 // ============================================================================
@@ -153,9 +100,6 @@ func (a *PayPalAdapter) UpdateCustomer(ctx context.Context, customerID string, r
 	if req.Phone != nil {
 		customer.Phone = *req.Phone
 	}
-	if req.DefaultPaymentMethodID != nil {
-		customer.DefaultPaymentMethodID = *req.DefaultPaymentMethodID
-	}
 	return customer, nil
 }
 
@@ -179,90 +123,91 @@ func (a *PayPalAdapter) DetachPaymentMethod(ctx context.Context, paymentMethodID
 }
 
 func (a *PayPalAdapter) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
-	return []CardToken{}, nil
+	return nil, nil
 }
 
 // ============================================================================
-// Payment Intents (PayPal Orders API)
+// Payment Intents (PayPal Orders)
 // ============================================================================
 
 func (a *PayPalAdapter) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
-	purchaseUnits := []paypalPurchaseUnit{
-		{
-			ReferenceID: req.IdempotencyKey,
-			Description: req.Description,
-			Amount: paypalAmount{
-				CurrencyCode: string(req.Amount.Currency),
-				Value:        formatPayPalAmount(req.Amount),
+	intent := "CAPTURE"
+	if req.CaptureMethod == paypalCaptureMethodManual {
+		intent = "AUTHORIZE"
+	}
+
+	amountValue := formatPayPalAmount(req.Amount)
+	orderReq := paypalOrderRequest{
+		Intent: intent,
+		PurchaseUnits: []paypalPurchaseUnit{
+			{
+				CustomID:    req.CustomerID,
+				Description: req.Description,
+				Amount: paypalAmount{
+					CurrencyCode: string(req.Amount.Currency),
+					Value:        amountValue,
+				},
 			},
+		},
+		ApplicationContext: paypalApplicationContext{
+			ReturnURL: req.ReturnURL,
+			CancelURL: req.ReturnURL,
+			BrandName: req.StatementDescriptor,
 		},
 	}
 
-	orderReq := paypalOrderRequest{
-		Intent:        "CAPTURE",
-		PurchaseUnits: purchaseUnits,
+	if req.ReceiptEmail != "" {
+		orderReq.Payer = &paypalPayer{EmailAddress: req.ReceiptEmail}
 	}
 
-	if req.ReturnURL != "" {
-		orderReq.ApplicationContext = &paypalApplicationContext{
-			ReturnURL: req.ReturnURL,
-			CancelURL: req.ReturnURL + "?cancel=true",
-		}
-	}
-
-	if req.PaymentMethodType != "" {
-		orderReq.PaymentSource = map[string]map[string]string{
-			strings.ToLower(req.PaymentMethodType): {},
-		}
-	}
-
-	body, err := a.doPayPalRequest(ctx, http.MethodPost, "/v2/checkout/orders", orderReq, req.IdempotencyKey)
+	respBody, err := a.doRequest(ctx, http.MethodPost, "/v2/checkout/orders", orderReq, req.IdempotencyKey)
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
 	var order paypalOrderResponse
-	if err := json.Unmarshal(body, &order); err != nil {
-		return PaymentIntent{}, err
+	if err := json.Unmarshal(respBody, &order); err != nil {
+		return PaymentIntent{}, fmt.Errorf("failed to parse PayPal order response: %w", err)
 	}
 
-	intent := mapPayPalOrder(order, req.Amount, req.CustomerID)
-	return intent, nil
+	return a.mapPayPalOrder(order, req.Amount), nil
 }
 
 func (a *PayPalAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
-	body, err := a.doPayPalRequest(ctx, http.MethodGet, "/v2/checkout/orders/"+paymentIntentID, nil, "")
+	respBody, err := a.doRequest(ctx, http.MethodGet, "/v2/checkout/orders/"+paymentIntentID, nil, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
 	var order paypalOrderResponse
-	if err := json.Unmarshal(body, &order); err != nil {
+	if err := json.Unmarshal(respBody, &order); err != nil {
+		return PaymentIntent{}, fmt.Errorf("failed to parse PayPal order response: %w", err)
+	}
+
+	amount, err := parsePayPalAmount(order.PurchaseUnits)
+	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	intent := mapPayPalOrder(order, Amount{}, "")
-	return intent, nil
+	return a.mapPayPalOrder(order, amount), nil
 }
 
 func (a *PayPalAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
-	body, err := a.doPayPalRequest(ctx, http.MethodPost, "/v2/checkout/orders/"+paymentIntentID+"/capture", nil, "")
+	respBody, err := a.doRequest(ctx, http.MethodPost, "/v2/checkout/orders/"+paymentIntentID+"/capture", nil, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var order paypalOrderResponse
-	if err := json.Unmarshal(body, &order); err != nil {
-		return PaymentIntent{}, err
+	var capture paypalOrderCaptureResponse
+	if err := json.Unmarshal(respBody, &capture); err != nil {
+		return PaymentIntent{}, fmt.Errorf("failed to parse PayPal capture response: %w", err)
 	}
 
-	intent := mapPayPalOrder(order, Amount{}, "")
-	intent.PaymentMethodID = paymentMethodID
-	return intent, nil
+	return a.mapPayPalCapture(capture), nil
 }
 
 func (a *PayPalAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
-	_, err := a.doPayPalRequest(ctx, http.MethodPost, "/v2/checkout/orders/"+paymentIntentID+"/cancel", nil, "")
+	_, err := a.doRequest(ctx, http.MethodPost, "/v2/checkout/orders/"+paymentIntentID+"/cancel", nil, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
@@ -276,21 +221,25 @@ func (a *PayPalAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID
 }
 
 func (a *PayPalAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
-	body, err := a.doPayPalRequest(ctx, http.MethodPost, "/v2/checkout/orders/"+paymentIntentID+"/capture", nil, "")
+	payload := map[string]interface{}{}
+	if amount != nil {
+		payload["amount"] = paypalAmount{
+			CurrencyCode: string(amount.Currency),
+			Value:        formatPayPalAmount(*amount),
+		}
+	}
+
+	respBody, err := a.doRequest(ctx, http.MethodPost, "/v2/checkout/orders/"+paymentIntentID+"/capture", payload, "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var order paypalOrderResponse
-	if err := json.Unmarshal(body, &order); err != nil {
-		return PaymentIntent{}, err
+	var capture paypalOrderCaptureResponse
+	if err := json.Unmarshal(respBody, &capture); err != nil {
+		return PaymentIntent{}, fmt.Errorf("failed to parse PayPal capture response: %w", err)
 	}
 
-	intent := mapPayPalOrder(order, Amount{}, "")
-	if amount != nil {
-		intent.CapturedAmount = *amount
-	}
-	return intent, nil
+	return a.mapPayPalCapture(capture), nil
 }
 
 // ============================================================================
@@ -298,71 +247,44 @@ func (a *PayPalAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentI
 // ============================================================================
 
 func (a *PayPalAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
-	refundReq := paypalRefundRequest{}
+	captureID := req.PaymentIntentID
+	if captureID == "" {
+		return Refund{}, ErrPaymentIntentNotFound
+	}
+
+	payload := paypalRefundRequest{}
 	if req.Amount != nil {
-		refundReq.Amount = &paypalAmount{
+		payload.Amount = &paypalAmount{
 			CurrencyCode: string(req.Amount.Currency),
 			Value:        formatPayPalAmount(*req.Amount),
 		}
 	}
 
-	body, err := a.doPayPalRequest(ctx, http.MethodPost, "/v2/payments/captures/"+req.PaymentIntentID+"/refund", refundReq, req.IdempotencyKey)
+	respBody, err := a.doRequest(ctx, http.MethodPost, "/v2/payments/captures/"+captureID+"/refund", payload, req.IdempotencyKey)
 	if err != nil {
 		return Refund{}, err
 	}
 
 	var refundResp paypalRefundResponse
-	if err := json.Unmarshal(body, &refundResp); err != nil {
-		return Refund{}, err
+	if err := json.Unmarshal(respBody, &refundResp); err != nil {
+		return Refund{}, fmt.Errorf("failed to parse PayPal refund response: %w", err)
 	}
 
-	refundAmount := Amount{}
-	if refundResp.Amount != nil {
-		parsed, err := parsePayPalAmount(refundResp.Amount.Value, refundResp.Amount.CurrencyCode)
-		if err == nil {
-			refundAmount = parsed
-		}
-	}
-	if req.Amount != nil {
-		refundAmount = *req.Amount
-	}
-
-	return Refund{
-		ID:              refundResp.ID,
-		PaymentIntentID: req.PaymentIntentID,
-		Amount:          refundAmount,
-		Status:          mapPayPalRefundStatus(refundResp.Status),
-		Reason:          req.Reason,
-		Metadata:        req.Metadata,
-		CreatedAt:       time.Now(),
-	}, nil
+	return mapPayPalRefund(refundResp), nil
 }
 
 func (a *PayPalAdapter) GetRefund(ctx context.Context, refundID string) (Refund, error) {
-	body, err := a.doPayPalRequest(ctx, http.MethodGet, "/v2/payments/refunds/"+refundID, nil, "")
+	respBody, err := a.doRequest(ctx, http.MethodGet, "/v2/payments/refunds/"+refundID, nil, "")
 	if err != nil {
 		return Refund{}, err
 	}
 
 	var refundResp paypalRefundResponse
-	if err := json.Unmarshal(body, &refundResp); err != nil {
-		return Refund{}, err
+	if err := json.Unmarshal(respBody, &refundResp); err != nil {
+		return Refund{}, fmt.Errorf("failed to parse PayPal refund response: %w", err)
 	}
 
-	refundAmount := Amount{}
-	if refundResp.Amount != nil {
-		parsed, err := parsePayPalAmount(refundResp.Amount.Value, refundResp.Amount.CurrencyCode)
-		if err == nil {
-			refundAmount = parsed
-		}
-	}
-
-	return Refund{
-		ID:        refundResp.ID,
-		Status:    mapPayPalRefundStatus(refundResp.Status),
-		Amount:    refundAmount,
-		CreatedAt: time.Now(),
-	}, nil
+	return mapPayPalRefund(refundResp), nil
 }
 
 // ============================================================================
@@ -374,38 +296,62 @@ func (a *PayPalAdapter) ValidateWebhook(payload []byte, signature string) error 
 		return nil
 	}
 
-	var headers paypalWebhookHeaders
-	if err := json.Unmarshal([]byte(signature), &headers); err != nil {
-		return ErrWebhookSignatureInvalid
-	}
-	if headers.TransmissionID == "" || headers.TransmissionSig == "" {
+	var sig paypalWebhookSignature
+	if err := json.Unmarshal([]byte(signature), &sig); err != nil {
 		return ErrWebhookSignatureInvalid
 	}
 
-	verifyReq := paypalWebhookVerificationRequest{
-		TransmissionID:   headers.TransmissionID,
-		TransmissionTime: headers.TransmissionTime,
-		TransmissionSig:  headers.TransmissionSig,
-		CertURL:          headers.CertURL,
-		AuthAlgo:         headers.AuthAlgo,
+	if sig.TransmissionID == "" || sig.TransmissionSig == "" || sig.TransmissionTime == "" {
+		return ErrWebhookSignatureInvalid
+	}
+
+	accessToken, err := a.getAccessToken(context.Background())
+	if err != nil {
+		return err
+	}
+
+	verifyReq := paypalWebhookVerifyRequest{
+		AuthAlgo:         sig.AuthAlgo,
+		CertURL:          sig.CertURL,
+		TransmissionID:   sig.TransmissionID,
+		TransmissionSig:  sig.TransmissionSig,
+		TransmissionTime: sig.TransmissionTime,
 		WebhookID:        a.config.WebhookID,
 		WebhookEvent:     json.RawMessage(payload),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	body, err := a.doPayPalRequest(ctx, http.MethodPost, "/v1/notifications/verify-webhook-signature", verifyReq, "")
+	body, err := json.Marshal(verifyReq)
 	if err != nil {
+		return fmt.Errorf("failed to encode PayPal webhook verification: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, a.config.GetBaseURL()+"/v1/notifications/verify-webhook-signature", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create PayPal webhook verification request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("webhook verification failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
 		return ErrWebhookSignatureInvalid
 	}
 
 	var verifyResp struct {
 		VerificationStatus string `json:"verification_status"`
 	}
-	if err := json.Unmarshal(body, &verifyResp); err != nil {
+
+	if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err != nil {
 		return ErrWebhookSignatureInvalid
 	}
-	if verifyResp.VerificationStatus != "SUCCESS" {
+
+	if strings.ToUpper(verifyResp.VerificationStatus) != "SUCCESS" {
 		return ErrWebhookSignatureInvalid
 	}
 
@@ -415,56 +361,120 @@ func (a *PayPalAdapter) ValidateWebhook(payload []byte, signature string) error 
 func (a *PayPalAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
 	var event paypalWebhookEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
-		return WebhookEvent{}, err
+		return WebhookEvent{}, fmt.Errorf("failed to parse PayPal webhook event: %w", err)
 	}
 
 	webhookEvent := WebhookEvent{
-		ID:      event.ID,
-		Type:    mapPayPalEventType(event.EventType),
-		Gateway: GatewayPayPal,
-		Payload: payload,
+		ID:        event.ID,
+		Gateway:   GatewayPayPal,
+		Payload:   payload,
+		Timestamp: time.Now(),
 	}
 
 	if t, err := time.Parse(time.RFC3339, event.CreateTime); err == nil {
 		webhookEvent.Timestamp = t
-	} else {
-		webhookEvent.Timestamp = time.Now()
 	}
 
-	if resource, ok := event.Resource.(map[string]interface{}); ok {
-		webhookEvent.Data = map[string]interface{}{
-			"object": resource,
-		}
+	switch event.EventType {
+	case "CHECKOUT.ORDER.APPROVED", "CHECKOUT.ORDER.COMPLETED", "PAYMENT.CAPTURE.COMPLETED":
+		webhookEvent.Type = WebhookEventPaymentIntentSucceeded
+	case "CHECKOUT.ORDER.CANCELLED", "PAYMENT.CAPTURE.DENIED":
+		webhookEvent.Type = WebhookEventPaymentIntentFailed
+	case "PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED":
+		webhookEvent.Type = WebhookEventChargeRefunded
+	case "CUSTOMER.DISPUTE.CREATED":
+		webhookEvent.Type = WebhookEventChargeDisputeCreated
+	case "CUSTOMER.DISPUTE.UPDATED":
+		webhookEvent.Type = WebhookEventChargeDisputeUpdated
+	case "CUSTOMER.DISPUTE.RESOLVED":
+		webhookEvent.Type = WebhookEventChargeDisputeClosed
+	default:
+		return WebhookEvent{}, ErrWebhookEventUnknown
 	}
 
 	return webhookEvent, nil
 }
 
 // ============================================================================
-// Helper Functions
+// PayPal OAuth and HTTP helpers
 // ============================================================================
 
-func (a *PayPalAdapter) doPayPalRequest(ctx context.Context, method, path string, body interface{}, idempotencyKey string) ([]byte, error) {
-	token, err := a.getAccessToken(ctx)
+func (a *PayPalAdapter) getAccessToken(ctx context.Context) (string, error) {
+	a.tokenMu.RLock()
+	if a.accessToken != "" && time.Now().Before(a.tokenExpiry) {
+		token := a.accessToken
+		a.tokenMu.RUnlock()
+		return token, nil
+	}
+	a.tokenMu.RUnlock()
+
+	a.tokenMu.Lock()
+	defer a.tokenMu.Unlock()
+
+	if a.accessToken != "" && time.Now().Before(a.tokenExpiry) {
+		return a.accessToken, nil
+	}
+
+	data := "grant_type=client_credentials"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.config.GetBaseURL()+"/v1/oauth2/token", strings.NewReader(data))
 	if err != nil {
-		return nil, ErrGatewayUnavailable
+		return "", fmt.Errorf("failed to create PayPal token request: %w", err)
 	}
 
-	var reader io.Reader
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		reader = bytes.NewReader(encoded)
+	req.SetBasicAuth(a.config.ClientID, a.config.ClientSecret)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("PayPal token request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("PayPal token request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, a.config.GetBaseURL()+path, reader)
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int64  `json:"expires_in"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("failed to parse PayPal token response: %w", err)
+	}
+
+	if tokenResp.AccessToken == "" {
+		return "", ErrGatewayUnavailable
+	}
+
+	a.accessToken = tokenResp.AccessToken
+	a.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn-60) * time.Second)
+
+	return a.accessToken, nil
+}
+
+func (a *PayPalAdapter) doRequest(ctx context.Context, method, path string, body interface{}, idempotencyKey string) ([]byte, error) {
+	accessToken, err := a.getAccessToken(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	var payload io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode PayPal request: %w", err)
+		}
+		payload = bytes.NewReader(raw)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, a.config.GetBaseURL()+path, payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PayPal request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
 	if idempotencyKey != "" {
 		req.Header.Set("PayPal-Request-Id", idempotencyKey)
@@ -472,164 +482,47 @@ func (a *PayPalAdapter) doPayPalRequest(ctx context.Context, method, path string
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return nil, ErrGatewayUnavailable
+		return nil, fmt.Errorf("PayPal request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read PayPal response: %w", err)
 	}
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, ErrGatewayUnavailable
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("PayPal request failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return respBody, nil
 }
 
-func mapPayPalOrder(order paypalOrderResponse, amount Amount, customerID string) PaymentIntent {
-	intent := PaymentIntent{
-		ID:         order.ID,
-		Gateway:    GatewayPayPal,
-		Amount:     amount,
-		Status:     mapPayPalOrderStatus(order.Status),
-		CustomerID: customerID,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
-	}
-
-	if len(order.PurchaseUnits) > 0 {
-		unit := order.PurchaseUnits[0]
-		if unit.Amount != nil {
-			if parsed, err := parsePayPalAmount(unit.Amount.Value, unit.Amount.CurrencyCode); err == nil {
-				intent.Amount = parsed
-			}
-		}
-	}
-
-	if order.Status == "CREATED" || order.Status == "PAYER_ACTION_REQUIRED" {
-		intent.RequiresSCA = true
-		if link := findPayPalLink(order.Links, "approve"); link != "" {
-			intent.SCARedirectURL = link
-		}
-	}
-
-	if capture := findPayPalCapture(order.PurchaseUnits); capture != nil {
-		if parsed, err := parsePayPalAmount(capture.Amount.Value, capture.Amount.CurrencyCode); err == nil {
-			intent.CapturedAmount = parsed
-		}
-	}
-
-	return intent
-}
-
-func mapPayPalOrderStatus(status string) PaymentIntentStatus {
-	switch status {
-	case "CREATED", "PAYER_ACTION_REQUIRED":
-		return PaymentIntentStatusRequiresAction
-	case "APPROVED":
-		return PaymentIntentStatusRequiresConfirmation
-	case "COMPLETED":
-		return PaymentIntentStatusSucceeded
-	case "CANCELLED", "VOIDED":
-		return PaymentIntentStatusCanceled
-	case "FAILED", "DECLINED":
-		return PaymentIntentStatusFailed
-	default:
-		return PaymentIntentStatusProcessing
-	}
-}
-
-func mapPayPalRefundStatus(status string) RefundStatus {
-	switch status {
-	case "COMPLETED":
-		return RefundStatusSucceeded
-	case "PENDING":
-		return RefundStatusPending
-	case "FAILED", "CANCELLED":
-		return RefundStatusFailed
-	default:
-		return RefundStatusPending
-	}
-}
-
-func formatPayPalAmount(amount Amount) string {
-	major := amount.Major()
-	if amount.Currency.MinorUnitFactor() == 1 {
-		return fmt.Sprintf("%.0f", major)
-	}
-	return fmt.Sprintf("%.2f", major)
-}
-
-func parsePayPalAmount(value string, currency string) (Amount, error) {
-	var major float64
-	if _, err := fmt.Sscanf(value, "%f", &major); err != nil {
-		return Amount{}, err
-	}
-	cur := Currency(strings.ToUpper(currency))
-	factor := cur.MinorUnitFactor()
-	minor := int64(major * float64(factor))
-	return NewAmount(minor, cur), nil
-}
-
-func mapPayPalEventType(eventType string) WebhookEventType {
-	switch eventType {
-	case "PAYMENT.CAPTURE.COMPLETED":
-		return WebhookEventPaymentIntentSucceeded
-	case "PAYMENT.CAPTURE.DENIED", "PAYMENT.CAPTURE.FAILED":
-		return WebhookEventPaymentIntentFailed
-	case "PAYMENT.CAPTURE.REFUNDED":
-		return WebhookEventChargeRefunded
-	case "CHECKOUT.ORDER.CANCELLED":
-		return WebhookEventPaymentIntentCanceled
-	case "CHECKOUT.ORDER.APPROVED":
-		return WebhookEventPaymentIntentProcessing
-	default:
-		return WebhookEventType(eventType)
-	}
-}
-
-func findPayPalLink(links []paypalLink, rel string) string {
-	for _, link := range links {
-		if strings.EqualFold(link.Rel, rel) {
-			return link.Href
-		}
-	}
-	return ""
-}
-
-func findPayPalCapture(units []paypalPurchaseUnitResponse) *paypalCapture {
-	if len(units) == 0 {
-		return nil
-	}
-	unit := units[0]
-	if unit.Payments == nil || len(unit.Payments.Captures) == 0 {
-		return nil
-	}
-	return &unit.Payments.Captures[0]
-}
-
 // ============================================================================
-// PayPal API Types
+// PayPal mapping helpers
 // ============================================================================
 
 type paypalOrderRequest struct {
-	Intent             string                       `json:"intent"`
-	PurchaseUnits      []paypalPurchaseUnit         `json:"purchase_units"`
-	ApplicationContext *paypalApplicationContext    `json:"application_context,omitempty"`
-	PaymentSource      map[string]map[string]string `json:"payment_source,omitempty"`
-}
-
-type paypalPurchaseUnit struct {
-	ReferenceID string       `json:"reference_id,omitempty"`
-	Description string       `json:"description,omitempty"`
-	Amount      paypalAmount `json:"amount"`
+	Intent             string                   `json:"intent"`
+	PurchaseUnits      []paypalPurchaseUnit     `json:"purchase_units"`
+	ApplicationContext paypalApplicationContext `json:"application_context,omitempty"`
+	Payer              *paypalPayer             `json:"payer,omitempty"`
 }
 
 type paypalApplicationContext struct {
-	ReturnURL string `json:"return_url"`
-	CancelURL string `json:"cancel_url"`
+	ReturnURL string `json:"return_url,omitempty"`
+	CancelURL string `json:"cancel_url,omitempty"`
+	BrandName string `json:"brand_name,omitempty"`
+}
+
+type paypalPayer struct {
+	EmailAddress string `json:"email_address,omitempty"`
+}
+
+type paypalPurchaseUnit struct {
+	Amount      paypalAmount `json:"amount"`
+	CustomID    string       `json:"custom_id,omitempty"`
+	Description string       `json:"description,omitempty"`
 }
 
 type paypalAmount struct {
@@ -637,24 +530,24 @@ type paypalAmount struct {
 	Value        string `json:"value"`
 }
 
-type paypalLink struct {
-	Href string `json:"href"`
-	Rel  string `json:"rel"`
-}
-
 type paypalOrderResponse struct {
-	ID            string                       `json:"id"`
-	Status        string                       `json:"status"`
-	Links         []paypalLink                 `json:"links,omitempty"`
-	PurchaseUnits []paypalPurchaseUnitResponse `json:"purchase_units,omitempty"`
+	ID            string               `json:"id"`
+	Status        string               `json:"status"`
+	Links         []paypalLink         `json:"links,omitempty"`
+	PurchaseUnits []paypalPurchaseUnit `json:"purchase_units,omitempty"`
 }
 
-type paypalPurchaseUnitResponse struct {
-	Amount   *paypalAmount               `json:"amount,omitempty"`
-	Payments *paypalPurchaseUnitPayments `json:"payments,omitempty"`
+type paypalOrderCaptureResponse struct {
+	ID            string                   `json:"id"`
+	Status        string                   `json:"status"`
+	PurchaseUnits []paypalPurchaseUnitItem `json:"purchase_units,omitempty"`
 }
 
-type paypalPurchaseUnitPayments struct {
+type paypalPurchaseUnitItem struct {
+	Payments paypalPayments `json:"payments"`
+}
+
+type paypalPayments struct {
 	Captures []paypalCapture `json:"captures,omitempty"`
 }
 
@@ -664,37 +557,230 @@ type paypalCapture struct {
 	Amount paypalAmount `json:"amount"`
 }
 
+type paypalLink struct {
+	Rel  string `json:"rel"`
+	Href string `json:"href"`
+}
+
 type paypalRefundRequest struct {
 	Amount *paypalAmount `json:"amount,omitempty"`
 }
 
 type paypalRefundResponse struct {
-	ID     string        `json:"id"`
-	Status string        `json:"status"`
-	Amount *paypalAmount `json:"amount,omitempty"`
+	ID            string       `json:"id"`
+	Status        string       `json:"status"`
+	Amount        paypalAmount `json:"amount"`
+	CreateTime    string       `json:"create_time"`
+	UpdateTime    string       `json:"update_time"`
+	FailureReason string       `json:"reason_code"`
 }
 
 type paypalWebhookEvent struct {
-	ID         string      `json:"id"`
-	EventType  string      `json:"event_type"`
-	CreateTime string      `json:"create_time"`
-	Resource   interface{} `json:"resource"`
+	ID         string `json:"id"`
+	EventType  string `json:"event_type"`
+	CreateTime string `json:"create_time"`
 }
 
-type paypalWebhookHeaders struct {
+type paypalWebhookSignature struct {
 	TransmissionID   string `json:"transmission_id"`
-	TransmissionSig  string `json:"transmission_sig"`
 	TransmissionTime string `json:"transmission_time"`
 	CertURL          string `json:"cert_url"`
 	AuthAlgo         string `json:"auth_algo"`
+	TransmissionSig  string `json:"transmission_sig"`
+	WebhookID        string `json:"webhook_id"`
 }
 
-type paypalWebhookVerificationRequest struct {
-	TransmissionID   string          `json:"transmission_id"`
-	TransmissionTime string          `json:"transmission_time"`
-	TransmissionSig  string          `json:"transmission_sig"`
-	CertURL          string          `json:"cert_url"`
+type paypalWebhookVerifyRequest struct {
 	AuthAlgo         string          `json:"auth_algo"`
+	CertURL          string          `json:"cert_url"`
+	TransmissionID   string          `json:"transmission_id"`
+	TransmissionSig  string          `json:"transmission_sig"`
+	TransmissionTime string          `json:"transmission_time"`
 	WebhookID        string          `json:"webhook_id"`
 	WebhookEvent     json.RawMessage `json:"webhook_event"`
+}
+
+func (a *PayPalAdapter) mapPayPalOrder(order paypalOrderResponse, amount Amount) PaymentIntent {
+	status := mapPayPalOrderStatus(order.Status)
+	redirectURL := ""
+	for _, link := range order.Links {
+		if link.Rel == "approve" {
+			redirectURL = link.Href
+			break
+		}
+	}
+
+	intent := PaymentIntent{
+		ID:             order.ID,
+		Gateway:        GatewayPayPal,
+		Amount:         amount,
+		Status:         status,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		RequiresSCA:    redirectURL != "",
+		SCARedirectURL: redirectURL,
+	}
+
+	if status == PaymentIntentStatusSucceeded {
+		intent.CapturedAmount = amount
+	}
+
+	return intent
+}
+
+func (a *PayPalAdapter) mapPayPalCapture(capture paypalOrderCaptureResponse) PaymentIntent {
+	amount := Amount{}
+	captureID := ""
+	if len(capture.PurchaseUnits) > 0 && len(capture.PurchaseUnits[0].Payments.Captures) > 0 {
+		cap := capture.PurchaseUnits[0].Payments.Captures[0]
+		captureID = cap.ID
+		parsed, err := parsePayPalAmount([]paypalPurchaseUnit{{Amount: cap.Amount}})
+		if err == nil {
+			amount = parsed
+		}
+	}
+
+	status := mapPayPalOrderStatus(capture.Status)
+	intent := PaymentIntent{
+		ID:              capture.ID,
+		Gateway:         GatewayPayPal,
+		Amount:          amount,
+		Status:          status,
+		CapturedAmount:  amount,
+		PaymentMethodID: captureID,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	return intent
+}
+
+func mapPayPalRefund(refund paypalRefundResponse) Refund {
+	amount := Amount{}
+	if refund.Amount.CurrencyCode != "" {
+		parsed, err := parsePayPalAmount([]paypalPurchaseUnit{{Amount: refund.Amount}})
+		if err == nil {
+			amount = parsed
+		}
+	}
+
+	status := RefundStatusPending
+	switch strings.ToUpper(refund.Status) {
+	case "COMPLETED":
+		status = RefundStatusSucceeded
+	case "FAILED", "CANCELLED":
+		status = RefundStatusFailed
+	}
+
+	createdAt := time.Now()
+	if refund.CreateTime != "" {
+		if t, err := time.Parse(time.RFC3339, refund.CreateTime); err == nil {
+			createdAt = t
+		}
+	}
+
+	return Refund{
+		ID:            refund.ID,
+		Amount:        amount,
+		Status:        status,
+		FailureReason: refund.FailureReason,
+		CreatedAt:     createdAt,
+	}
+}
+
+func mapPayPalOrderStatus(status string) PaymentIntentStatus {
+	switch strings.ToUpper(status) {
+	case "CREATED", "SAVED", "APPROVED", "PAYER_ACTION_REQUIRED":
+		return PaymentIntentStatusRequiresAction
+	case "COMPLETED":
+		return PaymentIntentStatusSucceeded
+	case "VOIDED", "CANCELLED":
+		return PaymentIntentStatusCanceled
+	case "FAILED", "DENIED":
+		return PaymentIntentStatusFailed
+	default:
+		return PaymentIntentStatusProcessing
+	}
+}
+
+func formatPayPalAmount(amount Amount) string {
+	factor := amount.Currency.MinorUnitFactor()
+	if factor <= 1 {
+		return strconv.FormatInt(amount.Value, 10)
+	}
+	decimals := 0
+	for factor > 1 {
+		decimals++
+		factor /= 10
+	}
+	value := float64(amount.Value) / float64(amount.Currency.MinorUnitFactor())
+	return strconv.FormatFloat(value, 'f', decimals, 64)
+}
+
+func parsePayPalAmount(units []paypalPurchaseUnit) (Amount, error) {
+	if len(units) == 0 {
+		return Amount{}, ErrInvalidCurrency
+	}
+
+	currency := Currency(strings.ToUpper(units[0].Amount.CurrencyCode))
+	if !currency.IsValid() {
+		return Amount{}, ErrInvalidCurrency
+	}
+
+	minor, err := parsePayPalValueToMinor(units[0].Amount.Value, currency)
+	if err != nil {
+		return Amount{}, err
+	}
+
+	return Amount{Value: minor, Currency: currency}, nil
+}
+
+func parsePayPalValueToMinor(value string, currency Currency) (int64, error) {
+	if value == "" {
+		return 0, ErrInvalidCurrency
+	}
+
+	factor := currency.MinorUnitFactor()
+	if factor == 1 {
+		return strconv.ParseInt(value, 10, 64)
+	}
+
+	parts := strings.SplitN(value, ".", 2)
+	whole, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	fractional := int64(0)
+	decimals := int64(1)
+	if len(parts) == 2 {
+		fractionalStr := parts[1]
+		for len(fractionalStr) < int64Digits(factor) {
+			fractionalStr += "0"
+		}
+		if len(fractionalStr) > int64Digits(factor) {
+			fractionalStr = fractionalStr[:int64Digits(factor)]
+		}
+		fractional, err = strconv.ParseInt(fractionalStr, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		for i := 0; i < int64Digits(factor); i++ {
+			decimals *= 10
+		}
+	}
+
+	return whole*factor + fractional*(factor/decimals), nil
+}
+
+func int64Digits(value int64) int {
+	digits := 0
+	for value > 1 {
+		digits++
+		value /= 10
+	}
+	if digits == 0 {
+		return 1
+	}
+	return digits
 }

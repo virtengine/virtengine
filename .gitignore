@@ -83,5 +83,6 @@ scripts/codex-monitor/.codex-monitor.json
 scripts/codex-monitor/codex-monitor.json
 scripts/codex-monitor/.cache/
 pkg/provider_daemon/audit.log
-
+scripts/.cache/ve-orchestrator-copilot.json
 scripts/.cache/*
+tmpclaude*

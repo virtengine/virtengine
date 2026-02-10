@@ -25,6 +25,9 @@ const (
 
 	// EventTypeDistributeReward is emitted when rewards are distributed
 	EventTypeDistributeReward = "distribute_reward"
+
+	// EventTypeDelegatorSlashed is emitted when a delegator is slashed
+	EventTypeDelegatorSlashed = "delegator_slashed"
 )
 
 // Delegation module event attribute keys
@@ -61,4 +64,16 @@ const (
 
 	// AttributeKeyRedelegationID is the attribute key for redelegation ID
 	AttributeKeyRedelegationID = "redelegation_id"
+
+	// AttributeKeySlashAmount is the attribute key for slashed amount
+	AttributeKeySlashAmount = "slash_amount"
+
+	// AttributeKeySlashFraction is the attribute key for slashing fraction
+	AttributeKeySlashFraction = "slash_fraction"
+
+	// AttributeKeySlashShares is the attribute key for slashed shares
+	AttributeKeySlashShares = "slash_shares"
+
+	// AttributeKeyInfractionHeight is the attribute key for infraction height
+	AttributeKeyInfractionHeight = "infraction_height"
 )

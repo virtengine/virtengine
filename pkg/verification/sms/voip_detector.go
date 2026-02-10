@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -629,12 +630,10 @@ func NewNumVerifyDetector(apiKey string, logger zerolog.Logger) (*NumVerifyDetec
 	}
 
 	return &NumVerifyDetector{
-		apiKey: apiKey,
-		httpClient: &http.Client{
-			Timeout: 15 * time.Second,
-		},
-		logger: logger.With().Str("component", "numverify_detector").Logger(),
-		cache:  newVoIPCache(24 * time.Hour),
+		apiKey:     apiKey,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(15 * time.Second)),
+		logger:     logger.With().Str("component", "numverify_detector").Logger(),
+		cache:      newVoIPCache(24 * time.Hour),
 	}, nil
 }
 

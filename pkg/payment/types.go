@@ -63,23 +63,17 @@ var (
 	// ErrAmountAboveMaximum is returned when amount exceeds limits
 	ErrAmountAboveMaximum = errors.New("amount above maximum threshold")
 
+	// ErrInvalidAmount is returned when amount formatting is invalid
+	ErrInvalidAmount = errors.New("invalid amount")
+
 	// ErrRateLimitExceeded is returned when rate limit is hit
 	ErrRateLimitExceeded = errors.New("rate limit exceeded")
 
 	// ErrGatewayUnavailable is returned when gateway is unreachable
 	ErrGatewayUnavailable = errors.New("payment gateway unavailable")
 
-	// ErrNoAvailableGateway is returned when no gateway is available for routing
-	ErrNoAvailableGateway = errors.New("no available payment gateway")
-
 	// ErrDisputeInProgress is returned when payment is under dispute
 	ErrDisputeInProgress = errors.New("payment has active dispute")
-
-	// ErrBankAccountRequired is returned when ACH bank account details are missing
-	ErrBankAccountRequired = errors.New("bank account details required")
-
-	// ErrBankAccountVerificationFailed is returned when bank verification fails
-	ErrBankAccountVerificationFailed = errors.New("bank account verification failed")
 
 	// ErrQuoteExpired is returned when a conversion quote has expired
 	ErrQuoteExpired = errors.New("conversion quote expired")
@@ -99,10 +93,10 @@ const (
 	// GatewayAdyen represents Adyen payment gateway
 	GatewayAdyen GatewayType = "adyen"
 
-	// GatewayPayPal represents PayPal Commerce platform
+	// GatewayPayPal represents PayPal payment gateway
 	GatewayPayPal GatewayType = "paypal"
 
-	// GatewayACH represents ACH direct debit processing
+	// GatewayACH represents ACH direct debit gateway
 	GatewayACH GatewayType = "ach"
 )
 
@@ -217,7 +211,7 @@ func (a Amount) Sub(other Amount) (Amount, error) {
 }
 
 // ============================================================================
-// Card & Bank Types (Tokens Only - No Raw PAN Data)
+// Card Types (Tokens Only - No Raw PAN Data)
 // ============================================================================
 
 // CardBrand represents card network brands
@@ -273,21 +267,6 @@ type CardToken struct {
 
 	// ExpiresAt is when the token expires (optional)
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-}
-
-// BankAccountDetails contains bank account information for ACH debits.
-// NOTE: This should never store plaintext account numbers at rest; use tokenization in production.
-type BankAccountDetails struct {
-	AccountNumber     string `json:"account_number"`
-	RoutingNumber     string `json:"routing_number"`
-	AccountType       string `json:"account_type,omitempty"`        // checking, savings
-	AccountHolderType string `json:"account_holder_type,omitempty"` // individual, company
-	AccountHolderName string `json:"account_holder_name,omitempty"`
-	BankName          string `json:"bank_name,omitempty"`
-	Country           string `json:"country,omitempty"`
-	Last4             string `json:"last4,omitempty"`
-	Fingerprint       string `json:"fingerprint,omitempty"`
-	Verified          bool   `json:"verified"`
 }
 
 // IsExpired checks if the card (not token) is expired
@@ -488,18 +467,6 @@ type PaymentIntentRequest struct {
 
 	// PaymentMethodID is the payment method to use (optional)
 	PaymentMethodID string `json:"payment_method_id,omitempty"`
-
-	// PaymentMethodType is the payment method type (card, paypal, ideal, sepa, ach, etc.)
-	PaymentMethodType string `json:"payment_method_type,omitempty"`
-
-	// PaymentMethodData contains gateway-specific payment method details
-	PaymentMethodData map[string]string `json:"payment_method_data,omitempty"`
-
-	// BankAccount is the bank account details for ACH debit
-	BankAccount *BankAccountDetails `json:"bank_account,omitempty"`
-
-	// BankVerificationMethod is "micro_deposit" or "instant"
-	BankVerificationMethod string `json:"bank_verification_method,omitempty"`
 
 	// Description is a description of the payment
 	Description string `json:"description,omitempty"`

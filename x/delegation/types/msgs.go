@@ -83,8 +83,20 @@ func NewMsgRedelegate(delegatorAddr, srcValidatorAddr, dstValidatorAddr string, 
 // NewMsgClaimRewards creates a new MsgClaimRewards
 func NewMsgClaimRewards(delegatorAddr, validatorAddr string) *MsgClaimRewards {
 	return &MsgClaimRewards{
-		Delegator: delegatorAddr,
-		Validator: validatorAddr,
+		Delegator:   delegatorAddr,
+		Validator:   validatorAddr,
+		StartHeight: 0,
+		EndHeight:   0,
+	}
+}
+
+// NewMsgClaimRewardsRange creates a new MsgClaimRewards with a height range
+func NewMsgClaimRewardsRange(delegatorAddr, validatorAddr string, startHeight, endHeight int64) *MsgClaimRewards {
+	return &MsgClaimRewards{
+		Delegator:   delegatorAddr,
+		Validator:   validatorAddr,
+		StartHeight: startHeight,
+		EndHeight:   endHeight,
 	}
 }
 

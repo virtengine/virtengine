@@ -122,3 +122,31 @@ func (ms *msgServer) UpdateKeyLabel(goCtx context.Context, msg *types.MsgUpdateK
 
 	return &types.MsgUpdateKeyLabelResponse{}, nil
 }
+
+// RotateKey rotates a recipient key to a new public key
+func (ms *msgServer) RotateKey(goCtx context.Context, msg *types.MsgRotateKey) (*types.MsgRotateKeyResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	newFingerprint, err := ms.keeper.RotateRecipientKey(
+		ctx,
+		sender,
+		msg.OldKeyFingerprint,
+		msg.NewPublicKey,
+		msg.NewAlgorithmId,
+		msg.NewLabel,
+		msg.Reason,
+		msg.NewKeyTtlSeconds,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgRotateKeyResponse{
+		NewKeyFingerprint: newFingerprint,
+	}, nil
+}

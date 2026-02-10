@@ -5,91 +5,141 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPayPalAdapter_CreateCaptureRefund(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
-		_ = r.ParseForm()
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"access_token":"token","expires_in":3600}`))
+func TestPayPalAdapter_CreateConfirmRefund(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/v1/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "token",
+			"expires_in":   3600,
+		})
 	})
-	mux.HandleFunc("/v2/checkout/orders", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"id":"ORDER123",
-			"status":"CREATED",
-			"links":[{"href":"https://paypal.test/approve","rel":"approve"}],
-			"purchase_units":[{"amount":{"currency_code":"USD","value":"10.00"}}]
-		}`))
+	handler.HandleFunc("/v2/checkout/orders", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		var req paypalOrderRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, "CAPTURE", req.Intent)
+
+		_ = json.NewEncoder(w).Encode(paypalOrderResponse{
+			ID:     "ORDER123",
+			Status: "CREATED",
+			Links: []paypalLink{
+				{Rel: "approve", Href: "https://example.test/approve"},
+			},
+			PurchaseUnits: req.PurchaseUnits,
+		})
 	})
-	mux.HandleFunc("/v2/checkout/orders/ORDER123/capture", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"id":"ORDER123",
-			"status":"COMPLETED",
-			"purchase_units":[{"payments":{"captures":[{"id":"CAPTURE123","status":"COMPLETED","amount":{"currency_code":"USD","value":"10.00"}}]}}]
-		}`))
+	handler.HandleFunc("/v2/checkout/orders/ORDER123/capture", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		_ = json.NewEncoder(w).Encode(paypalOrderCaptureResponse{
+			ID:     "ORDER123",
+			Status: "COMPLETED",
+			PurchaseUnits: []paypalPurchaseUnitItem{
+				{
+					Payments: paypalPayments{
+						Captures: []paypalCapture{
+							{
+								ID:     "CAPTURE123",
+								Status: "COMPLETED",
+								Amount: paypalAmount{CurrencyCode: "USD", Value: "10.00"},
+							},
+						},
+					},
+				},
+			},
+		})
 	})
-	mux.HandleFunc("/v2/payments/captures/CAPTURE123/refund", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"REFUND123","status":"COMPLETED","amount":{"currency_code":"USD","value":"10.00"}}`))
-	})
-	mux.HandleFunc("/v1/notifications/verify-webhook-signature", func(w http.ResponseWriter, r *http.Request) {
-		var payload map[string]interface{}
-		_ = json.NewDecoder(r.Body).Decode(&payload)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"verification_status":"SUCCESS"}`))
+	handler.HandleFunc("/v2/payments/captures/CAPTURE123/refund", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		_ = json.NewEncoder(w).Encode(paypalRefundResponse{
+			ID:         "REFUND123",
+			Status:     "COMPLETED",
+			Amount:     paypalAmount{CurrencyCode: "USD", Value: "5.00"},
+			CreateTime: time.Now().UTC().Format(time.RFC3339),
+		})
 	})
 
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	cfg := PayPalConfig{
+	gw, err := NewPayPalAdapter(PayPalConfig{
 		ClientID:     "client",
 		ClientSecret: "secret",
-		Environment:  "sandbox",
 		BaseURL:      server.URL,
-		WebhookID:    "wh_123",
-	}
-
-	adapter, err := NewPayPalAdapter(cfg)
-	require.NoError(t, err)
-
-	intent, err := adapter.CreatePaymentIntent(context.Background(), PaymentIntentRequest{
-		Amount:    NewAmount(1000, CurrencyUSD),
-		ReturnURL: "https://return",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, PaymentIntentStatusRequiresAction, intent.Status)
-	assert.Equal(t, "https://paypal.test/approve", intent.SCARedirectURL)
 
-	captured, err := adapter.ConfirmPaymentIntent(context.Background(), "ORDER123", "")
+	adapter := gw.(*PayPalAdapter)
+	adapter.httpClient = server.Client()
+
+	ctx := context.Background()
+	intent, err := adapter.CreatePaymentIntent(ctx, PaymentIntentRequest{
+		Amount:        NewAmount(1000, CurrencyUSD),
+		CustomerID:    "cust",
+		Description:   "test",
+		ReceiptEmail:  "test@example.com",
+		CaptureMethod: "automatic",
+	})
 	require.NoError(t, err)
-	assert.Equal(t, PaymentIntentStatusSucceeded, captured.Status)
-	assert.Equal(t, int64(1000), captured.CapturedAmount.Value)
+	require.Equal(t, PaymentIntentStatusRequiresAction, intent.Status)
+	require.True(t, strings.HasPrefix(intent.SCARedirectURL, "https://"))
 
-	refund, err := adapter.CreateRefund(context.Background(), RefundRequest{
+	intent, err = adapter.ConfirmPaymentIntent(ctx, "ORDER123", "")
+	require.NoError(t, err)
+	require.Equal(t, PaymentIntentStatusSucceeded, intent.Status)
+	require.Equal(t, "CAPTURE123", intent.PaymentMethodID)
+
+	refund, err := adapter.CreateRefund(ctx, RefundRequest{
 		PaymentIntentID: "CAPTURE123",
-		Amount:          ptrAmount(NewAmount(1000, CurrencyUSD)),
+		Amount:          ptrAmount(NewAmount(500, CurrencyUSD)),
 	})
 	require.NoError(t, err)
-	assert.Equal(t, RefundStatusSucceeded, refund.Status)
+	require.Equal(t, RefundStatusSucceeded, refund.Status)
+}
 
-	signature, err := json.Marshal(paypalWebhookHeaders{
-		TransmissionID:   "tid",
-		TransmissionSig:  "sig",
-		TransmissionTime: "2024-01-01T00:00:00Z",
-		CertURL:          "https://cert",
-		AuthAlgo:         "SHA256",
+func TestPayPalAdapter_WebhookVerification(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/v1/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "token",
+			"expires_in":   3600,
+		})
+	})
+	handler.HandleFunc("/v1/notifications/verify-webhook-signature", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"verification_status": "SUCCESS",
+		})
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	gw, err := NewPayPalAdapter(PayPalConfig{
+		ClientID:     "client",
+		ClientSecret: "secret",
+		WebhookID:    "wh_123",
+		BaseURL:      server.URL,
 	})
 	require.NoError(t, err)
-	err = adapter.ValidateWebhook([]byte(`{"id":"evt_1"}`), string(signature))
+
+	adapter := gw.(*PayPalAdapter)
+	adapter.httpClient = server.Client()
+
+	payload := []byte(`{"id":"evt_1","event_type":"CHECKOUT.ORDER.COMPLETED","create_time":"2024-01-01T00:00:00Z"}`)
+	signature := `{"transmission_id":"tx","transmission_time":"2024-01-01T00:00:00Z","cert_url":"https://example.test","auth_algo":"SHA256withRSA","transmission_sig":"sig","webhook_id":"wh_123"}`
+
+	require.NoError(t, adapter.ValidateWebhook(payload, signature))
+
+	event, err := adapter.ParseWebhookEvent(payload)
 	require.NoError(t, err)
+	require.Equal(t, WebhookEventPaymentIntentSucceeded, event.Type)
 }
 
 func ptrAmount(amount Amount) *Amount {

@@ -218,6 +218,37 @@ func (s *DelegationOperationsTestSuite) TestUndelegateAll() {
 	s.Require().False(found)
 }
 
+// TestUndelegateAutoClaimsRewards tests that undelegation auto-claims rewards
+func (s *DelegationOperationsTestSuite) TestUndelegateAutoClaimsRewards() {
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(2000000))
+
+	// Delegate
+	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, amount)
+	s.Require().NoError(err)
+
+	// Create an unclaimed reward
+	reward := types.NewDelegatorReward(
+		delegatorAddr,
+		validatorAddr,
+		1,
+		"150000",
+		"1000000000000000000",
+		"10000000000000000000",
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)
+	s.Require().NoError(s.keeper.SetDelegatorReward(s.ctx, *reward))
+
+	// Undelegate triggers auto-claim
+	_, err = s.keeper.Undelegate(s.ctx, delegatorAddr, validatorAddr, amount)
+	s.Require().NoError(err)
+
+	claimed, _ := s.keeper.GetDelegatorReward(s.ctx, delegatorAddr, validatorAddr, 1)
+	s.Require().True(claimed.Claimed)
+}
+
 // TestUndelegateNotFound tests undelegating non-existent delegation
 func (s *DelegationOperationsTestSuite) TestUndelegateNotFound() {
 	delegatorAddr := delTestDelegatorAddr
@@ -310,6 +341,29 @@ func (s *DelegationOperationsTestSuite) TestRedelegateTransitive() {
 	s.Require().Contains(err.Error(), "transitive")
 }
 
+// TestRedelegateFromDestinationBlocked tests that redelegation from a destination validator is blocked during the redelegation period
+func (s *DelegationOperationsTestSuite) TestRedelegateFromDestinationBlocked() {
+	delegatorAddr := delTestDelegatorAddr
+	validator1 := delTestValidatorAddr
+	validator2 := delTestValidator2Addr
+	validator3 := delTestValidator3Addr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(2000000))
+	redAmount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
+
+	// Delegate to validator1
+	err := s.keeper.Delegate(s.ctx, delegatorAddr, validator1, amount)
+	s.Require().NoError(err)
+
+	// Redelegate from validator1 to validator2
+	_, err = s.keeper.Redelegate(s.ctx, delegatorAddr, validator1, validator2, redAmount)
+	s.Require().NoError(err)
+
+	// Attempt redelegation from destination validator2 to validator3 should fail
+	_, err = s.keeper.Redelegate(s.ctx, delegatorAddr, validator2, validator3, redAmount)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "destination")
+}
+
 // TestRedelegateMaxRedelegations tests max redelegations enforcement
 func (s *DelegationOperationsTestSuite) TestRedelegateMaxRedelegations() {
 	delegatorAddr := delTestDelegatorAddr
@@ -371,6 +425,38 @@ func (s *DelegationOperationsTestSuite) TestCompleteUnbonding() {
 	// Unbonding should be deleted
 	_, found := s.keeper.GetUnbondingDelegation(s.ctx, "ubd-complete-test")
 	s.Require().False(found)
+}
+
+// TestRedelegationCompletesInEndBlocker tests that mature redelegations complete in EndBlocker
+func (s *DelegationOperationsTestSuite) TestRedelegationCompletesInEndBlocker() {
+	delegatorAddr := delTestDelegatorAddr
+	srcValidator := delTestValidatorAddr
+	dstValidator := delTestValidator2Addr
+	delegateAmount := sdk.NewCoin("uve", sdkmath.NewInt(3000000))
+	redelegateAmount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
+
+	params := s.keeper.GetParams(s.ctx)
+	params.UnbondingPeriod = 1
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	err := s.keeper.Delegate(s.ctx, delegatorAddr, srcValidator, delegateAmount)
+	s.Require().NoError(err)
+
+	completionTime, err := s.keeper.Redelegate(s.ctx, delegatorAddr, srcValidator, dstValidator, redelegateAmount)
+	s.Require().NoError(err)
+
+	// Move time beyond completion
+	s.ctx = s.ctx.WithBlockTime(completionTime.Add(2 * time.Second))
+
+	// BeginBlocker should not complete redelegations anymore
+	s.Require().NoError(s.keeper.BeginBlocker(s.ctx))
+	redelegations := s.keeper.GetDelegatorRedelegations(s.ctx, delegatorAddr)
+	s.Require().Len(redelegations, 1)
+
+	// EndBlocker completes redelegation
+	s.Require().NoError(s.keeper.EndBlocker(s.ctx))
+	redelegations = s.keeper.GetDelegatorRedelegations(s.ctx, delegatorAddr)
+	s.Require().Len(redelegations, 0)
 }
 
 // TestCompleteRedelegation tests completing a redelegation

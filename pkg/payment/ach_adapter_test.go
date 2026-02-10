@@ -5,133 +5,121 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
-	"sync/atomic"
+	"net/url"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stripe/stripe-go/v80"
 )
 
-func TestACHAdapter_CreatePaymentIntentWithRetry(t *testing.T) {
-	var debitCalls int32
+func TestACHAdapter_PaymentIntentAndRefund(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/v1/payment_intents", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		body, _ := ioReadAll(r)
+		values, _ := url.ParseQuery(string(body))
+		require.Equal(t, "1000", values.Get("amount"))
+		require.Equal(t, "usd", values.Get("currency"))
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ach/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":              "pi_123",
+			"amount":          1000,
+			"currency":        "usd",
+			"status":          "processing",
+			"customer":        "cust_1",
+			"payment_method":  "pm_1",
+			"amount_received": 0,
+			"amount_refunded": 0,
+			"created":         time.Now().Unix(),
+		})
 	})
-	mux.HandleFunc("/ach/verifications/micro_deposits", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"verified"}`))
+	handler.HandleFunc("/v1/payment_intents/pi_123/confirm", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":              "pi_123",
+			"amount":          1000,
+			"currency":        "usd",
+			"status":          "succeeded",
+			"customer":        "cust_1",
+			"payment_method":  "pm_1",
+			"amount_received": 1000,
+			"amount_refunded": 0,
+			"created":         time.Now().Unix(),
+		})
 	})
-	mux.HandleFunc("/ach/debits", func(w http.ResponseWriter, r *http.Request) {
-		if atomic.AddInt32(&debitCalls, 1) == 1 {
-			http.Error(w, "temporary error", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"debit_123","status":"succeeded","amount":1000,"currency":"USD","payment_method_id":"pm_123"}`))
-	})
-	mux.HandleFunc("/ach/refunds", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"refund_123","payment_intent_id":"debit_123","status":"succeeded","amount":1000,"currency":"USD"}`))
+	handler.HandleFunc("/v1/refunds", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":       "re_123",
+			"amount":   500,
+			"currency": "usd",
+			"status":   "succeeded",
+			"created":  time.Now().Unix(),
+		})
 	})
 
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	cfg := ACHConfig{
-		SecretKey:          "ach_secret",
-		BaseURL:            server.URL,
-		RetryMaxAttempts:   2,
-		RetryInitialDelay:  10 * time.Millisecond,
-		RetryMaxDelay:      20 * time.Millisecond,
-		RetryBackoffFactor: 2.0,
-	}
-
-	adapter, err := NewACHAdapter(cfg)
-	require.NoError(t, err)
-
-	intent, err := adapter.CreatePaymentIntent(context.Background(), PaymentIntentRequest{
-		Amount:                 NewAmount(1000, CurrencyUSD),
-		CustomerID:             "cust_1",
-		BankVerificationMethod: "micro_deposit",
-		BankAccount: &BankAccountDetails{
-			AccountNumber: "000111222333",
-			RoutingNumber: "110000000",
-			AccountType:   "checking",
-		},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, PaymentIntentStatusSucceeded, intent.Status)
-	assert.Equal(t, int64(2), int64(atomic.LoadInt32(&debitCalls)))
-
-	refund, err := adapter.CreateRefund(context.Background(), RefundRequest{
-		PaymentIntentID: intent.ID,
-		Amount:          ptrAmount(NewAmount(1000, CurrencyUSD)),
+	gw, err := NewACHAdapter(ACHConfig{
+		SecretKey: "sk_test",
+		BaseURL:   server.URL + "/v1",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, RefundStatusSucceeded, refund.Status)
+
+	adapter := gw.(*ACHAdapter)
+	adapter.httpClient = server.Client()
+
+	ctx := context.Background()
+	intent, err := adapter.CreatePaymentIntent(ctx, PaymentIntentRequest{
+		Amount:          NewAmount(1000, CurrencyUSD),
+		CustomerID:      "cust_1",
+		PaymentMethodID: "pm_1",
+	})
+	require.NoError(t, err)
+	require.Equal(t, PaymentIntentStatusProcessing, intent.Status)
+
+	intent, err = adapter.ConfirmPaymentIntent(ctx, "pi_123", "")
+	require.NoError(t, err)
+	require.Equal(t, PaymentIntentStatusSucceeded, intent.Status)
+
+	refund, err := adapter.CreateRefund(ctx, RefundRequest{
+		PaymentIntentID: "pi_123",
+		Amount:          ptrAmount(NewAmount(500, CurrencyUSD)),
+	})
+	require.NoError(t, err)
+	require.Equal(t, RefundStatusSucceeded, refund.Status)
 }
 
-func TestACHAdapter_WebhookValidationAndParsing(t *testing.T) {
-	cfg := ACHConfig{
-		SecretKey:     "ach_secret",
-		WebhookSecret: "wh_secret",
-		BaseURL:       "https://ach.test",
-	}
-	adapter, err := NewACHAdapter(cfg)
+func TestACHAdapter_ValidateWebhook(t *testing.T) {
+	gw, err := NewACHAdapter(ACHConfig{
+		SecretKey:     "sk_test",
+		WebhookSecret: "whsec_test",
+		BaseURL:       "https://example.test",
+	})
 	require.NoError(t, err)
 
-	payload := []byte(`{"id":"evt_1","type":"ach.debit.succeeded","created":1700000000,"data":{"object":{"id":"debit_123"}}}`)
-	timestamp := "1700000000"
-	mac := hmac.New(sha256.New, []byte(cfg.WebhookSecret))
-	mac.Write([]byte(timestamp + "." + string(payload)))
-	signature := "t=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
+	adapter := gw.(*ACHAdapter)
+	payload := []byte(fmt.Sprintf(`{"id":"evt_1","type":"payment_intent.succeeded","created":1700000000,"api_version":"%s"}`, stripe.APIVersion))
+	timestamp := time.Now().Unix()
+	sig := buildStripeSignature(adapter.config.WebhookSecret, payload, timestamp)
+	header := fmt.Sprintf("t=%d,v1=%s", timestamp, sig)
 
-	require.NoError(t, adapter.ValidateWebhook(payload, signature))
-
-	event, err := adapter.ParseWebhookEvent(payload)
-	require.NoError(t, err)
-	assert.Equal(t, WebhookEventPaymentIntentSucceeded, event.Type)
-	assert.Equal(t, GatewayACH, event.Gateway)
+	require.NoError(t, adapter.ValidateWebhook(payload, header))
 }
 
-func TestACHAdapter_BuildNACHAFile(t *testing.T) {
-	cfg := ACHConfig{
-		SecretKey:        "ach_secret",
-		NACHAOriginID:    "123456789",
-		NACHACompanyName: "VirtEngine",
-	}
-	gateway, err := NewACHAdapter(cfg)
-	require.NoError(t, err)
-	adapter := gateway.(*ACHAdapter)
+func buildStripeSignature(secret string, payload []byte, timestamp int64) string {
+	signed := fmt.Sprintf("%d.%s", timestamp, payload)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(signed))
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
-	file, err := adapter.BuildNACHAFile([]ACHEntry{
-		{
-			TransactionCode:   "27",
-			RoutingNumber:     "110000000",
-			AccountNumber:     "000111222333",
-			Amount:            1000,
-			AccountHolderName: "Alice",
-			IndividualID:      "INV001",
-		},
-		{
-			TransactionCode:   "27",
-			RoutingNumber:     "110000000",
-			AccountNumber:     "000111222444",
-			Amount:            2000,
-			AccountHolderName: "Bob",
-			IndividualID:      "INV002",
-		},
-	}, time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC))
-	require.NoError(t, err)
-
-	lines := strings.Split(file, "\n")
-	assert.GreaterOrEqual(t, len(lines), 4)
-	assert.Equal(t, byte('1'), lines[0][0])
-	assert.Equal(t, byte('5'), lines[1][0])
+func ioReadAll(r *http.Request) ([]byte, error) {
+	defer r.Body.Close()
+	return io.ReadAll(r.Body)
 }

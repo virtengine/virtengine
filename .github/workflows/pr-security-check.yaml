@@ -122,18 +122,44 @@ jobs:
 
           if [ -n "$CHANGED_FILES" ]; then
             echo "Scanning changed files: $CHANGED_FILES"
-            gosec -exclude-generated -fmt json -out gosec-results.json $CHANGED_FILES 2>/dev/null || true
-
-            # Count issues
-            ISSUES=$(cat gosec-results.json 2>/dev/null | jq '.Issues | length' 2>/dev/null || echo "0")
-            echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+            
+            # Run gosec (no || true - failures should be caught)
+            gosec -exclude-generated -fmt json -out gosec-results.json $CHANGED_FILES
+            
+            # Load baseline if exists
+            if [ -f .gosec-baseline.json ]; then
+              echo "Comparing against baseline..."
+              # Count NEW high/critical severity issues
+              HIGH_CRITICAL=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
+              MEDIUM=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "MEDIUM")] | length')
+              
+              echo "high_critical=$HIGH_CRITICAL" >> $GITHUB_OUTPUT
+              echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+              
+              if [ "$HIGH_CRITICAL" -gt 0 ]; then
+                echo "::error::Found $HIGH_CRITICAL new high/critical severity issues"
+                exit 1
+              elif [ "$MEDIUM" -gt 0 ]; then
+                echo "::warning::Found $MEDIUM medium severity issues"
+              fi
+            else
+              # No baseline - count all issues
+              ISSUES=$(cat gosec-results.json | jq '.Issues | length')
+              echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+              
+              if [ "$ISSUES" -gt 0 ]; then
+                echo "::warning::Found $ISSUES security issues (no baseline configured)"
+              fi
+            fi
           else
             echo "No Go files changed"
             echo "issues=0" >> $GITHUB_OUTPUT
+            echo "high_critical=0" >> $GITHUB_OUTPUT
+            echo "medium=0" >> $GITHUB_OUTPUT
           fi
 
       - name: Comment on PR with security findings
-        if: steps.govulncheck.outputs.has_vulns == 'true' || steps.gosec.outputs.issues > '0'
+        if: steps.govulncheck.outputs.has_vulns == 'true' || steps.gosec.outputs.issues > '0' || steps.gosec.outputs.high_critical > '0' || steps.gosec.outputs.medium > '0'
         uses: actions/github-script@v7
         with:
           script: |
@@ -146,10 +172,22 @@ jobs:
               comment += 'Potential vulnerabilities detected in dependencies. Please review `govulncheck` output.\n\n';
             }
 
-            if (parseInt('${{ steps.gosec.outputs.issues }}') > 0) {
-              comment += '### 🔍 Static Analysis\n';
-              comment += `Found ${{ steps.gosec.outputs.issues }} potential security issues in changed files.\n`;
-              comment += 'Please review the gosec results before merging.\n\n';
+            const highCritical = parseInt('${{ steps.gosec.outputs.high_critical }}') || 0;
+            const medium = parseInt('${{ steps.gosec.outputs.medium }}') || 0;
+            const issues = parseInt('${{ steps.gosec.outputs.issues }}') || 0;
+
+            if (highCritical > 0 || medium > 0 || issues > 0) {
+              comment += '### 🔍 Static Analysis (gosec)\n';
+              if (highCritical > 0) {
+                comment += `❌ **${highCritical} new HIGH/CRITICAL severity issues** - Must be fixed before merge\n`;
+              }
+              if (medium > 0) {
+                comment += `⚠️ ${medium} medium severity issues - Please review\n`;
+              }
+              if (issues > 0 && highCritical === 0 && medium === 0) {
+                comment += `Found ${issues} potential security issues in changed files.\n`;
+              }
+              comment += '\n';
             }
 
             comment += '---\n';
@@ -163,6 +201,45 @@ jobs:
             });
 
   # ===========================================================================
+  # Secret Scanning (Gitleaks)
+  # ===========================================================================
+  gitleaks-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Fetch base ref for diff scanning
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+
+      - name: Run gitleaks on PR diff
+        run: |
+          # Get base commit SHA
+          BASE_SHA=$(git merge-base origin/${{ github.base_ref }} HEAD)
+          
+          # Scan PR diff only (from base to HEAD)
+          if [ -f .gitleaks.toml ]; then
+            gitleaks detect --source . --config .gitleaks.toml --log-opts "${BASE_SHA}..HEAD" --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          else
+            gitleaks detect --source . --log-opts "${BASE_SHA}..HEAD" --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          fi
+
+      - name: Upload gitleaks results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gitleaks.sarif
+          category: "gitleaks-pr"
   # Dependency Change Analysis
   # ===========================================================================
   dependency-review:
@@ -284,6 +361,7 @@ jobs:
       - dependency-review
       - security-lint
       - coverage-gate
+      - gitleaks-scan
     if: always()
     steps:
       - name: Generate security summary
@@ -321,10 +399,14 @@ jobs:
             echo "| Coverage Gate | skipped | No |" >> $GITHUB_STEP_SUMMARY
           fi
 
+          # Gitleaks
+          echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |" >> $GITHUB_STEP_SUMMARY
+
       - name: Check for failures
         if: |
           (needs.analyze-changes.outputs.go_changed == 'true' && needs.go-security.result == 'failure') ||
-          (needs.analyze-changes.outputs.deps_changed == 'true' && needs.dependency-review.result == 'failure')
+          (needs.analyze-changes.outputs.deps_changed == 'true' && needs.dependency-review.result == 'failure') ||
+          needs.gitleaks-scan.result == 'failure'
         run: |
           echo "::error::Security checks failed. Please address the issues before merging."
           exit 1

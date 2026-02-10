@@ -64,26 +64,50 @@ message RecipientKeyRecord {
     (gogoproto.moretags) = "yaml:\"key_fingerprint\""
   ];
 
+  // KeyVersion is the rotation version for this key
+  uint32 key_version = 4 [
+    (gogoproto.jsontag) = "key_version,omitempty",
+    (gogoproto.moretags) = "yaml:\"key_version\""
+  ];
+
   // AlgorithmID specifies which algorithm this key is for
-  string algorithm_id = 4 [
+  string algorithm_id = 5 [
     (gogoproto.jsontag) = "algorithm_id",
     (gogoproto.moretags) = "yaml:\"algorithm_id\""
   ];
 
   // RegisteredAt is the block time when the key was registered
-  int64 registered_at = 5 [
+  int64 registered_at = 6 [
     (gogoproto.jsontag) = "registered_at",
     (gogoproto.moretags) = "yaml:\"registered_at\""
   ];
 
   // RevokedAt is the block time when the key was revoked (0 if active)
-  int64 revoked_at = 6 [
+  int64 revoked_at = 7 [
     (gogoproto.jsontag) = "revoked_at,omitempty",
     (gogoproto.moretags) = "yaml:\"revoked_at\""
   ];
 
+  // DeprecatedAt is the block time when the key was deprecated (0 if not deprecated)
+  int64 deprecated_at = 8 [
+    (gogoproto.jsontag) = "deprecated_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"deprecated_at\""
+  ];
+
+  // ExpiresAt is the block time when the key expires (0 if no expiry)
+  int64 expires_at = 9 [
+    (gogoproto.jsontag) = "expires_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // PurgeAt is the block time when the key material should be purged (0 if not scheduled)
+  int64 purge_at = 10 [
+    (gogoproto.jsontag) = "purge_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"purge_at\""
+  ];
+
   // Label is an optional human-readable label for the key
-  string label = 7 [
+  string label = 11 [
     (gogoproto.jsontag) = "label,omitempty",
     (gogoproto.moretags) = "yaml:\"label\""
   ];
@@ -319,6 +343,30 @@ message Params {
     (gogoproto.jsontag) = "require_signature",
     (gogoproto.moretags) = "yaml:\"require_signature\""
   ];
+
+  // RevocationGracePeriodSeconds is the grace period before purging revoked keys
+  uint64 revocation_grace_period_seconds = 5 [
+    (gogoproto.jsontag) = "revocation_grace_period_seconds",
+    (gogoproto.moretags) = "yaml:\"revocation_grace_period_seconds\""
+  ];
+
+  // KeyExpiryWarningSeconds are warning windows before expiry for warning events
+  repeated uint64 key_expiry_warning_seconds = 6 [
+    (gogoproto.jsontag) = "key_expiry_warning_seconds",
+    (gogoproto.moretags) = "yaml:\"key_expiry_warning_seconds\""
+  ];
+
+  // RotationBatchSize is the max number of envelopes to queue per rotation batch
+  uint32 rotation_batch_size = 7 [
+    (gogoproto.jsontag) = "rotation_batch_size",
+    (gogoproto.moretags) = "yaml:\"rotation_batch_size\""
+  ];
+
+  // DefaultKeyTtlSeconds is the default TTL applied to newly registered keys (0 disables)
+  uint64 default_key_ttl_seconds = 8 [
+    (gogoproto.jsontag) = "default_key_ttl_seconds",
+    (gogoproto.moretags) = "yaml:\"default_key_ttl_seconds\""
+  ];
 }
 
 // EventKeyRegistered is emitted when a recipient key is registered
@@ -397,5 +445,69 @@ message EventKeyUpdated {
   string new_value = 5 [
     (gogoproto.jsontag) = "new_value,omitempty",
     (gogoproto.moretags) = "yaml:\"new_value\""
+  ];
+}
+
+// EventKeyRotated is emitted when a recipient key is rotated
+message EventKeyRotated {
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  string old_fingerprint = 2 [
+    (gogoproto.jsontag) = "old_fingerprint",
+    (gogoproto.moretags) = "yaml:\"old_fingerprint\""
+  ];
+
+  string new_fingerprint = 3 [
+    (gogoproto.jsontag) = "new_fingerprint",
+    (gogoproto.moretags) = "yaml:\"new_fingerprint\""
+  ];
+
+  int64 rotated_at = 4 [
+    (gogoproto.jsontag) = "rotated_at",
+    (gogoproto.moretags) = "yaml:\"rotated_at\""
+  ];
+}
+
+// EventKeyExpiryWarning is emitted when a key is nearing expiry
+message EventKeyExpiryWarning {
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  string fingerprint = 2 [
+    (gogoproto.jsontag) = "fingerprint",
+    (gogoproto.moretags) = "yaml:\"fingerprint\""
+  ];
+
+  int64 expires_at = 3 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  uint64 warning_window_seconds = 4 [
+    (gogoproto.jsontag) = "warning_window_seconds",
+    (gogoproto.moretags) = "yaml:\"warning_window_seconds\""
+  ];
+}
+
+// EventKeyExpired is emitted when a key expires
+message EventKeyExpired {
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  string fingerprint = 2 [
+    (gogoproto.jsontag) = "fingerprint",
+    (gogoproto.moretags) = "yaml:\"fingerprint\""
+  ];
+
+  int64 expired_at = 3 [
+    (gogoproto.jsontag) = "expired_at",
+    (gogoproto.moretags) = "yaml:\"expired_at\""
   ];
 }

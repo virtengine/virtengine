@@ -2,7 +2,7 @@ package agents
 
 import (
 	"context"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation agents use weak random for reproducibility, not security
 
 	"github.com/virtengine/virtengine/sim/model"
 )

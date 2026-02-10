@@ -116,6 +116,26 @@ var (
 	// PrefixFiatDailyTotals stores daily fiat conversion totals
 	// Key: PrefixFiatDailyTotals | provider | yyyymmdd -> sdkmath.Int (bytes)
 	PrefixFiatDailyTotals = []byte{0x1A}
+
+	// PrefixOraclePriceHistory stores historical oracle prices
+	// Key: PrefixOraclePriceHistory | base | quote | timestamp -> Price
+	PrefixOraclePriceHistory = []byte{0x1B}
+
+	// PrefixOracleLatestPrice stores latest aggregated oracle price per pair
+	// Key: PrefixOracleLatestPrice | base | quote -> Price
+	PrefixOracleLatestPrice = []byte{0x1C}
+
+	// PrefixOraclePriceAlert stores price deviation alerts
+	// Key: PrefixOraclePriceAlert | base | quote | timestamp -> PriceAlert
+	PrefixOraclePriceAlert = []byte{0x1D}
+
+	// PrefixSettlementRateLock stores locked settlement rates
+	// Key: PrefixSettlementRateLock | settlement_id -> SettlementRateLock
+	PrefixSettlementRateLock = []byte{0x1E}
+
+	// PrefixSettlementRateQueue stores queued settlement rate locks
+	// Key: PrefixSettlementRateQueue | settlement_id -> SettlementRateLock
+	PrefixSettlementRateQueue = []byte{0x1F}
 )
 
 // ParamsKey returns the store key for module parameters
@@ -324,6 +344,67 @@ func FiatDailyTotalKey(provider string, day string) []byte {
 	key = append(key, []byte(provider)...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(day)...)
+	return key
+}
+
+// OraclePriceHistoryKey returns the store key for a historical price entry.
+func OraclePriceHistoryKey(base, quote string, timestamp uint64) []byte {
+	key := make([]byte, 0, len(PrefixOraclePriceHistory)+len(base)+1+len(quote)+1+8)
+	key = append(key, PrefixOraclePriceHistory...)
+	key = append(key, []byte(base)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(quote)...)
+	key = append(key, byte('/'))
+	key = appendUint64(key, timestamp)
+	return key
+}
+
+// OraclePriceHistoryPrefix returns the prefix for a pair's price history.
+func OraclePriceHistoryPrefix(base, quote string) []byte {
+	key := make([]byte, 0, len(PrefixOraclePriceHistory)+len(base)+1+len(quote)+1)
+	key = append(key, PrefixOraclePriceHistory...)
+	key = append(key, []byte(base)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(quote)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// OracleLatestPriceKey returns the store key for the latest price of a pair.
+func OracleLatestPriceKey(base, quote string) []byte {
+	key := make([]byte, 0, len(PrefixOracleLatestPrice)+len(base)+1+len(quote))
+	key = append(key, PrefixOracleLatestPrice...)
+	key = append(key, []byte(base)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(quote)...)
+	return key
+}
+
+// OraclePriceAlertKey returns the store key for a price alert entry.
+func OraclePriceAlertKey(base, quote string, timestamp uint64) []byte {
+	key := make([]byte, 0, len(PrefixOraclePriceAlert)+len(base)+1+len(quote)+1+8)
+	key = append(key, PrefixOraclePriceAlert...)
+	key = append(key, []byte(base)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(quote)...)
+	key = append(key, byte('/'))
+	key = appendUint64(key, timestamp)
+	return key
+}
+
+// SettlementRateLockKey returns the store key for a settlement rate lock.
+func SettlementRateLockKey(settlementID string) []byte {
+	key := make([]byte, 0, len(PrefixSettlementRateLock)+len(settlementID))
+	key = append(key, PrefixSettlementRateLock...)
+	key = append(key, []byte(settlementID)...)
+	return key
+}
+
+// SettlementRateQueueKey returns the store key for a queued settlement rate lock.
+func SettlementRateQueueKey(settlementID string) []byte {
+	key := make([]byte, 0, len(PrefixSettlementRateQueue)+len(settlementID))
+	key = append(key, PrefixSettlementRateQueue...)
+	key = append(key, []byte(settlementID)...)
 	return key
 }
 

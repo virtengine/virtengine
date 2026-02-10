@@ -33,6 +33,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -236,9 +238,7 @@ func (r *TensorFlowRuntime) Initialize() error {
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
-	r.httpClient = &http.Client{
-		Timeout: timeout,
-	}
+	r.httpClient = security.NewSecureHTTPClient(security.WithTimeout(timeout))
 
 	// Verify sidecar is healthy
 	if err := r.checkSidecarHealth(); err != nil {

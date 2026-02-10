@@ -1,21 +1,20 @@
 // Package payment provides payment gateway integration for Visa/Mastercard.
 //
-// VE-49C: ACH direct debit adapter implementation.
+// VE-3063: ACH direct debit adapter for settlement.
 package payment
 
 import (
-	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/stripe/stripe-go/v80/webhook"
 	"github.com/virtengine/virtengine/pkg/security"
 )
 
@@ -23,67 +22,41 @@ import (
 // ACH Adapter
 // ============================================================================
 
-// OFACScreener provides an integration point for OFAC screening.
-type OFACScreener interface {
-	Screen(ctx context.Context, account BankAccountDetails) error
-}
+// OFACScreeningHook is an integration point for OFAC checks.
+// Return an error to block a payment.
+type OFACScreeningHook func(ctx context.Context, customerID, paymentMethodID string) error
 
-// ACHAdapterOption configures the ACH adapter.
-type ACHAdapterOption func(*ACHAdapter)
-
-// WithOFACScreener sets the OFAC screener.
-func WithOFACScreener(screener OFACScreener) ACHAdapterOption {
-	return func(a *ACHAdapter) {
-		a.ofacScreener = screener
-	}
-}
-
-// ACHAdapter implements the Gateway interface for ACH debits.
+// ACHAdapter implements the Gateway interface for ACH direct debit.
+// This uses Stripe's ACH APIs for verification and collection by default.
 type ACHAdapter struct {
-	config        ACHConfig
-	httpClient    *http.Client
-	baseURL       string
-	ofacScreener  OFACScreener
-	retryMax      int
-	retryDelay    time.Duration
-	retryMaxDelay time.Duration
-	retryFactor   float64
+	config     ACHConfig
+	httpClient *http.Client
+	baseURL    string
+
+	ofacHook OFACScreeningHook
 }
 
 // NewACHAdapter creates a new ACH adapter.
-func NewACHAdapter(config ACHConfig, opts ...ACHAdapterOption) (Gateway, error) {
+func NewACHAdapter(config ACHConfig) (Gateway, error) {
 	if config.SecretKey == "" {
 		return nil, ErrGatewayNotConfigured
 	}
 
-	adapter := &ACHAdapter{
-		config:        config,
-		httpClient:    security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
-		baseURL:       config.GetBaseURL(),
-		retryMax:      config.RetryMaxAttempts,
-		retryDelay:    config.RetryInitialDelay,
-		retryMaxDelay: config.RetryMaxDelay,
-		retryFactor:   config.RetryBackoffFactor,
+	baseURL := strings.TrimRight(config.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.stripe.com/v1"
 	}
 
-	if adapter.retryMax == 0 {
-		adapter.retryMax = 3
-	}
-	if adapter.retryDelay == 0 {
-		adapter.retryDelay = 200 * time.Millisecond
-	}
-	if adapter.retryMaxDelay == 0 {
-		adapter.retryMaxDelay = 2 * time.Second
-	}
-	if adapter.retryFactor == 0 {
-		adapter.retryFactor = 2.0
-	}
+	return &ACHAdapter{
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
+		baseURL:    baseURL,
+	}, nil
+}
 
-	for _, opt := range opts {
-		opt(adapter)
-	}
-
-	return adapter, nil
+// SetOFACScreeningHook sets the OFAC screening hook.
+func (a *ACHAdapter) SetOFACScreeningHook(hook OFACScreeningHook) {
+	a.ofacHook = hook
 }
 
 func (a *ACHAdapter) Name() string {
@@ -95,8 +68,8 @@ func (a *ACHAdapter) Type() GatewayType {
 }
 
 func (a *ACHAdapter) IsHealthy(ctx context.Context) bool {
-	_, err := a.doRequest(ctx, http.MethodGet, "/ach/health", nil, "")
-	return err == nil
+	resp, err := a.doRequest(ctx, http.MethodGet, "/account", "", "")
+	return err == nil && len(resp) > 0
 }
 
 func (a *ACHAdapter) Close() error {
@@ -108,57 +81,113 @@ func (a *ACHAdapter) Close() error {
 // ============================================================================
 
 func (a *ACHAdapter) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
-	resp, err := a.doRequest(ctx, http.MethodPost, "/ach/customers", req, "")
+	values := url.Values{}
+	if req.Email != "" {
+		values.Set("email", req.Email)
+	}
+	if req.Name != "" {
+		values.Set("name", req.Name)
+	}
+	if req.Phone != "" {
+		values.Set("phone", req.Phone)
+	}
+	if req.VEIDAddress != "" {
+		values.Set("metadata[veid_address]", req.VEIDAddress)
+	}
+	for k, v := range req.Metadata {
+		values.Set(fmt.Sprintf("metadata[%s]", k), v)
+	}
+
+	body, err := a.doRequest(ctx, http.MethodPost, "/customers", values.Encode(), "")
 	if err != nil {
 		return Customer{}, err
 	}
 
-	var result struct {
-		ID string `json:"id"`
+	var resp struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Phone string `json:"phone"`
 	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return Customer{}, err
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return Customer{}, fmt.Errorf("failed to parse customer response: %w", err)
 	}
 
 	return Customer{
-		ID:          result.ID,
-		Email:       req.Email,
-		Name:        req.Name,
-		Phone:       req.Phone,
-		VEIDAddress: req.VEIDAddress,
-		Metadata:    req.Metadata,
-		CreatedAt:   time.Now(),
+		ID:        resp.ID,
+		Email:     resp.Email,
+		Name:      resp.Name,
+		Phone:     resp.Phone,
+		CreatedAt: time.Now(),
 	}, nil
 }
 
 func (a *ACHAdapter) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
-	resp, err := a.doRequest(ctx, http.MethodGet, "/ach/customers/"+customerID, nil, "")
+	body, err := a.doRequest(ctx, http.MethodGet, "/customers/"+customerID, "", "")
 	if err != nil {
 		return Customer{}, err
 	}
 
-	var result Customer
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return Customer{}, err
+	var resp struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Phone string `json:"phone"`
 	}
-	return result, nil
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return Customer{}, fmt.Errorf("failed to parse customer response: %w", err)
+	}
+
+	return Customer{
+		ID:        resp.ID,
+		Email:     resp.Email,
+		Name:      resp.Name,
+		Phone:     resp.Phone,
+		CreatedAt: time.Now(),
+	}, nil
 }
 
 func (a *ACHAdapter) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
-	resp, err := a.doRequest(ctx, http.MethodPatch, "/ach/customers/"+customerID, req, "")
+	values := url.Values{}
+	if req.Email != nil {
+		values.Set("email", *req.Email)
+	}
+	if req.Name != nil {
+		values.Set("name", *req.Name)
+	}
+	if req.Phone != nil {
+		values.Set("phone", *req.Phone)
+	}
+	for k, v := range req.Metadata {
+		values.Set(fmt.Sprintf("metadata[%s]", k), v)
+	}
+
+	body, err := a.doRequest(ctx, http.MethodPost, "/customers/"+customerID, values.Encode(), "")
 	if err != nil {
 		return Customer{}, err
 	}
 
-	var result Customer
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return Customer{}, err
+	var resp struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Phone string `json:"phone"`
 	}
-	return result, nil
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return Customer{}, fmt.Errorf("failed to parse customer response: %w", err)
+	}
+
+	return Customer{
+		ID:        resp.ID,
+		Email:     resp.Email,
+		Name:      resp.Name,
+		Phone:     resp.Phone,
+		CreatedAt: time.Now(),
+	}, nil
 }
 
 func (a *ACHAdapter) DeleteCustomer(ctx context.Context, customerID string) error {
-	_, err := a.doRequest(ctx, http.MethodDelete, "/ach/customers/"+customerID, nil, "")
+	_, err := a.doRequest(ctx, http.MethodDelete, "/customers/"+customerID, "", "")
 	return err
 }
 
@@ -170,137 +199,150 @@ func (a *ACHAdapter) AttachPaymentMethod(ctx context.Context, customerID string,
 	if token.Token == "" {
 		return "", ErrInvalidCardToken
 	}
+
+	values := url.Values{}
+	values.Set("customer", customerID)
+
+	_, err := a.doRequest(ctx, http.MethodPost, "/payment_methods/"+token.Token+"/attach", values.Encode(), "")
+	if err != nil {
+		return "", err
+	}
 	return token.Token, nil
 }
 
 func (a *ACHAdapter) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
-	_, err := a.doRequest(ctx, http.MethodDelete, "/ach/payment_methods/"+paymentMethodID, nil, "")
+	_, err := a.doRequest(ctx, http.MethodPost, "/payment_methods/"+paymentMethodID+"/detach", "", "")
 	return err
 }
 
 func (a *ACHAdapter) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
-	resp, err := a.doRequest(ctx, http.MethodGet, "/ach/customers/"+customerID+"/payment_methods", nil, "")
+	query := "/payment_methods?customer=" + url.QueryEscape(customerID) + "&type=us_bank_account"
+	body, err := a.doRequest(ctx, http.MethodGet, query, "", "")
 	if err != nil {
 		return nil, err
 	}
 
-	var result []CardToken
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, err
+	var resp struct {
+		Data []struct {
+			ID            string `json:"id"`
+			USBankAccount struct {
+				BankName string `json:"bank_name"`
+				Last4    string `json:"last4"`
+			} `json:"us_bank_account"`
+			Created int64 `json:"created"`
+		} `json:"data"`
 	}
-	return result, nil
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse payment methods: %w", err)
+	}
+
+	methods := make([]CardToken, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		methods = append(methods, CardToken{
+			Token:     item.ID,
+			Gateway:   GatewayACH,
+			Last4:     item.USBankAccount.Last4,
+			CreatedAt: time.Unix(item.Created, 0),
+		})
+	}
+
+	return methods, nil
 }
 
 // ============================================================================
-// Payment Intents
+// Payment Intents (Stripe ACH)
 // ============================================================================
 
 func (a *ACHAdapter) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
-	if req.PaymentMethodID == "" && req.BankAccount == nil {
-		return PaymentIntent{}, ErrBankAccountRequired
-	}
-
-	if req.BankAccount != nil {
-		if a.ofacScreener != nil {
-			if err := a.ofacScreener.Screen(ctx, *req.BankAccount); err != nil {
-				return PaymentIntent{}, err
-			}
-		}
-		if err := a.verifyBankAccount(ctx, *req.BankAccount, req.BankVerificationMethod); err != nil {
+	if a.ofacHook != nil && req.PaymentMethodID != "" {
+		if err := a.ofacHook(ctx, req.CustomerID, req.PaymentMethodID); err != nil {
 			return PaymentIntent{}, err
 		}
 	}
 
-	debitReq := achDebitRequest{
-		Amount:          req.Amount.Value,
-		Currency:        string(req.Amount.Currency),
-		CustomerID:      req.CustomerID,
-		PaymentMethodID: req.PaymentMethodID,
-		Metadata:        req.Metadata,
+	values := url.Values{}
+	values.Set("amount", strconv.FormatInt(req.Amount.Value, 10))
+	values.Set("currency", strings.ToLower(string(req.Amount.Currency)))
+	values.Add("payment_method_types[]", "us_bank_account")
+
+	if req.CustomerID != "" {
+		values.Set("customer", req.CustomerID)
 	}
-	if req.BankAccount != nil {
-		debitReq.BankAccount = req.BankAccount
+	if req.PaymentMethodID != "" {
+		values.Set("payment_method", req.PaymentMethodID)
+	}
+	if req.Description != "" {
+		values.Set("description", req.Description)
+	}
+	if req.ReceiptEmail != "" {
+		values.Set("receipt_email", req.ReceiptEmail)
+	}
+	if req.CaptureMethod == "manual" {
+		values.Set("capture_method", "manual")
+	} else {
+		values.Set("capture_method", "automatic")
+	}
+	for k, v := range req.Metadata {
+		values.Set(fmt.Sprintf("metadata[%s]", k), v)
 	}
 
-	resp, err := a.doRequestWithRetry(ctx, http.MethodPost, "/ach/debits", debitReq, req.IdempotencyKey)
+	body, err := a.doRequest(ctx, http.MethodPost, "/payment_intents", values.Encode(), req.IdempotencyKey)
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var result achDebitResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return PaymentIntent{}, err
-	}
-
-	intent := mapAchDebitToIntent(result, req.Amount, req.CustomerID)
-	return intent, nil
+	return mapStripeLikePaymentIntent(body), nil
 }
 
 func (a *ACHAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
-	resp, err := a.doRequest(ctx, http.MethodGet, "/ach/debits/"+paymentIntentID, nil, "")
+	body, err := a.doRequest(ctx, http.MethodGet, "/payment_intents/"+paymentIntentID, "", "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var result achDebitResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return PaymentIntent{}, err
-	}
-
-	return mapAchDebitToIntent(result, Amount{}, ""), nil
+	return mapStripeLikePaymentIntent(body), nil
 }
 
 func (a *ACHAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
-	resp, err := a.doRequest(ctx, http.MethodPost, "/ach/debits/"+paymentIntentID+"/confirm", nil, "")
+	values := url.Values{}
+	if paymentMethodID != "" {
+		values.Set("payment_method", paymentMethodID)
+	}
+
+	body, err := a.doRequest(ctx, http.MethodPost, "/payment_intents/"+paymentIntentID+"/confirm", values.Encode(), "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var result achDebitResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return PaymentIntent{}, err
-	}
-
-	intent := mapAchDebitToIntent(result, Amount{}, "")
-	intent.PaymentMethodID = paymentMethodID
-	return intent, nil
+	return mapStripeLikePaymentIntent(body), nil
 }
 
 func (a *ACHAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
-	resp, err := a.doRequest(ctx, http.MethodPost, "/ach/debits/"+paymentIntentID+"/cancel", nil, "")
+	values := url.Values{}
+	if reason != "" {
+		values.Set("cancellation_reason", reason)
+	}
+
+	body, err := a.doRequest(ctx, http.MethodPost, "/payment_intents/"+paymentIntentID+"/cancel", values.Encode(), "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var result achDebitResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return PaymentIntent{}, err
-	}
-
-	return mapAchDebitToIntent(result, Amount{}, ""), nil
+	return mapStripeLikePaymentIntent(body), nil
 }
 
 func (a *ACHAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
-	req := achCaptureRequest{}
+	values := url.Values{}
 	if amount != nil {
-		req.Amount = amount.Value
+		values.Set("amount_to_capture", strconv.FormatInt(amount.Value, 10))
 	}
 
-	resp, err := a.doRequest(ctx, http.MethodPost, "/ach/debits/"+paymentIntentID+"/capture", req, "")
+	body, err := a.doRequest(ctx, http.MethodPost, "/payment_intents/"+paymentIntentID+"/capture", values.Encode(), "")
 	if err != nil {
 		return PaymentIntent{}, err
 	}
 
-	var result achDebitResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return PaymentIntent{}, err
-	}
-
-	intent := mapAchDebitToIntent(result, Amount{}, "")
-	if amount != nil {
-		intent.CapturedAmount = *amount
-	}
-	return intent, nil
+	return mapStripeLikePaymentIntent(body), nil
 }
 
 // ============================================================================
@@ -308,63 +350,30 @@ func (a *ACHAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID s
 // ============================================================================
 
 func (a *ACHAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
-	refundReq := achRefundRequest{
-		PaymentIntentID: req.PaymentIntentID,
-		Reason:          string(req.Reason),
-		Metadata:        req.Metadata,
-	}
+	values := url.Values{}
+	values.Set("payment_intent", req.PaymentIntentID)
 	if req.Amount != nil {
-		refundReq.Amount = req.Amount.Value
-		refundReq.Currency = string(req.Amount.Currency)
+		values.Set("amount", strconv.FormatInt(req.Amount.Value, 10))
+	}
+	for k, v := range req.Metadata {
+		values.Set(fmt.Sprintf("metadata[%s]", k), v)
 	}
 
-	resp, err := a.doRequestWithRetry(ctx, http.MethodPost, "/ach/refunds", refundReq, req.IdempotencyKey)
+	body, err := a.doRequest(ctx, http.MethodPost, "/refunds", values.Encode(), req.IdempotencyKey)
 	if err != nil {
 		return Refund{}, err
 	}
 
-	var result achRefundResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return Refund{}, err
-	}
-
-	refundAmount := Amount{}
-	if req.Amount != nil {
-		refundAmount = *req.Amount
-	} else if result.Amount > 0 {
-		refundAmount = NewAmount(result.Amount, Currency(result.Currency))
-	}
-
-	return Refund{
-		ID:              result.ID,
-		PaymentIntentID: result.PaymentIntentID,
-		Amount:          refundAmount,
-		Status:          mapAchRefundStatus(result.Status),
-		Reason:          req.Reason,
-		Metadata:        req.Metadata,
-		CreatedAt:       time.Now(),
-	}, nil
+	return mapStripeLikeRefund(body), nil
 }
 
 func (a *ACHAdapter) GetRefund(ctx context.Context, refundID string) (Refund, error) {
-	resp, err := a.doRequest(ctx, http.MethodGet, "/ach/refunds/"+refundID, nil, "")
+	body, err := a.doRequest(ctx, http.MethodGet, "/refunds/"+refundID, "", "")
 	if err != nil {
 		return Refund{}, err
 	}
 
-	var result achRefundResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return Refund{}, err
-	}
-
-	refundAmount := NewAmount(result.Amount, Currency(result.Currency))
-	return Refund{
-		ID:              result.ID,
-		PaymentIntentID: result.PaymentIntentID,
-		Amount:          refundAmount,
-		Status:          mapAchRefundStatus(result.Status),
-		CreatedAt:       time.Now(),
-	}, nil
+	return mapStripeLikeRefund(body), nil
 }
 
 // ============================================================================
@@ -376,350 +385,287 @@ func (a *ACHAdapter) ValidateWebhook(payload []byte, signature string) error {
 		return nil
 	}
 
-	parts := strings.Split(signature, ",")
-	var timestamp, sig string
-	for _, part := range parts {
-		if strings.HasPrefix(part, "t=") {
-			timestamp = strings.TrimPrefix(part, "t=")
-		} else if strings.HasPrefix(part, "v1=") {
-			sig = strings.TrimPrefix(part, "v1=")
-		}
-	}
-
-	if timestamp == "" || sig == "" {
+	_, err := webhook.ConstructEvent(payload, signature, a.config.WebhookSecret)
+	if err != nil {
 		return ErrWebhookSignatureInvalid
 	}
-
-	signedPayload := timestamp + "." + string(payload)
-	mac := hmac.New(sha256.New, []byte(a.config.WebhookSecret))
-	mac.Write([]byte(signedPayload))
-	expectedSig := hex.EncodeToString(mac.Sum(nil))
-
-	if !hmac.Equal([]byte(sig), []byte(expectedSig)) {
-		return ErrWebhookSignatureInvalid
-	}
-
 	return nil
 }
 
 func (a *ACHAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
-	var event achWebhookEvent
+	var event struct {
+		ID         string `json:"id"`
+		Type       string `json:"type"`
+		Created    int64  `json:"created"`
+		APIVersion string `json:"api_version"`
+	}
 	if err := json.Unmarshal(payload, &event); err != nil {
-		return WebhookEvent{}, err
+		return WebhookEvent{}, fmt.Errorf("failed to parse ACH webhook: %w", err)
 	}
 
 	webhookEvent := WebhookEvent{
-		ID:        event.ID,
-		Type:      mapAchWebhookType(event.Type),
-		Gateway:   GatewayACH,
-		Payload:   payload,
-		Timestamp: time.Unix(event.Created, 0),
-		Data:      event.Data,
+		ID:         event.ID,
+		Gateway:    GatewayACH,
+		Payload:    payload,
+		Timestamp:  time.Unix(event.Created, 0),
+		APIVersion: event.APIVersion,
 	}
+
+	switch event.Type {
+	case "payment_intent.succeeded":
+		webhookEvent.Type = WebhookEventPaymentIntentSucceeded
+	case "payment_intent.payment_failed":
+		webhookEvent.Type = WebhookEventPaymentIntentFailed
+	case "payment_intent.processing":
+		webhookEvent.Type = WebhookEventPaymentIntentProcessing
+	case "payment_intent.canceled":
+		webhookEvent.Type = WebhookEventPaymentIntentCanceled
+	case "charge.refunded":
+		webhookEvent.Type = WebhookEventChargeRefunded
+	case "charge.dispute.created":
+		webhookEvent.Type = WebhookEventChargeDisputeCreated
+	case "charge.dispute.updated":
+		webhookEvent.Type = WebhookEventChargeDisputeUpdated
+	case "charge.dispute.closed":
+		webhookEvent.Type = WebhookEventChargeDisputeClosed
+	default:
+		return WebhookEvent{}, ErrWebhookEventUnknown
+	}
+
 	return webhookEvent, nil
 }
 
 // ============================================================================
-// NACHA File Generation
+// ACH Verification & Compliance Helpers
 // ============================================================================
 
-// ACHEntry represents an entry in a NACHA file.
-type ACHEntry struct {
-	TraceNumber       string
-	TransactionCode   string
-	RoutingNumber     string
-	AccountNumber     string
-	Amount            int64
-	AccountHolderName string
-	IndividualID      string
+// VerifyBankAccountMicroDeposits verifies a bank account using micro-deposit amounts.
+func (a *ACHAdapter) VerifyBankAccountMicroDeposits(ctx context.Context, paymentMethodID string, amounts []int64) error {
+	if len(amounts) == 0 {
+		return ErrInvalidAmount
+	}
+
+	values := url.Values{}
+	for _, amount := range amounts {
+		values.Add("amounts[]", strconv.FormatInt(amount, 10))
+	}
+
+	_, err := a.doRequest(ctx, http.MethodPost, "/payment_methods/"+paymentMethodID+"/verify", values.Encode(), "")
+	return err
 }
 
-// BuildNACHAFile generates a NACHA formatted file.
-func (a *ACHAdapter) BuildNACHAFile(entries []ACHEntry, effectiveDate time.Time) (string, error) {
-	if a.config.NACHAOriginID == "" || a.config.NACHACompanyName == "" {
-		return "", ErrGatewayNotConfigured
-	}
-	return generateNACHAFile(entries, a.config.NACHAOriginID, a.config.NACHACompanyName, effectiveDate), nil
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-func (a *ACHAdapter) verifyBankAccount(ctx context.Context, account BankAccountDetails, method string) error {
-	verifyMethod := strings.ToLower(method)
-	if verifyMethod == "" {
-		verifyMethod = "micro_deposit"
+// RetryPaymentIntent retries confirmation with exponential backoff.
+func (a *ACHAdapter) RetryPaymentIntent(ctx context.Context, paymentIntentID string, maxAttempts int, initialDelay time.Duration) (PaymentIntent, error) {
+	delay := initialDelay
+	if delay <= 0 {
+		delay = 2 * time.Second
 	}
 
-	path := "/ach/verifications/micro_deposits"
-	if verifyMethod == "instant" {
-		path = "/ach/verifications/instant"
-	}
-
-	resp, err := a.doRequest(ctx, http.MethodPost, path, account, "")
-	if err != nil {
-		return err
-	}
-
-	var result struct {
-		Status string `json:"status"`
-	}
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return err
-	}
-	if !strings.EqualFold(result.Status, "verified") {
-		return ErrBankAccountVerificationFailed
-	}
-	return nil
-}
-
-func (a *ACHAdapter) doRequestWithRetry(ctx context.Context, method, path string, body interface{}, idempotencyKey string) ([]byte, error) {
-	attempt := 0
-	delay := a.retryDelay
-	for {
-		attempt++
-		resp, err := a.doRequest(ctx, method, path, body, idempotencyKey)
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		intent, err := a.ConfirmPaymentIntent(ctx, paymentIntentID, "")
 		if err == nil {
-			return resp, nil
+			return intent, nil
 		}
-		if attempt >= a.retryMax {
-			return nil, err
-		}
+		lastErr = err
 		time.Sleep(delay)
-		delay = time.Duration(float64(delay) * a.retryFactor)
-		if delay > a.retryMaxDelay {
-			delay = a.retryMaxDelay
-		}
+		delay *= 2
 	}
+
+	if lastErr == nil {
+		lastErr = ErrGatewayUnavailable
+	}
+	return PaymentIntent{}, lastErr
 }
 
-func (a *ACHAdapter) doRequest(ctx context.Context, method, path string, body interface{}, idempotencyKey string) ([]byte, error) {
-	var reader io.Reader
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		reader = bytes.NewReader(encoded)
+// ============================================================================
+// NACHA File Generation (bulk settlement)
+// ============================================================================
+
+// ACHEntry represents a single NACHA entry detail.
+type ACHEntry struct {
+	TraceNumber     string
+	RoutingNumber   string
+	AccountNumber   string
+	AccountName     string
+	Amount          Amount
+	TransactionCode string
+}
+
+// BuildNACHAFile creates a basic NACHA file for bulk settlements.
+func BuildNACHAFile(companyName, companyID, immediateOrigin, immediateDestination string, entries []ACHEntry, createdAt time.Time) (string, error) {
+	if companyName == "" || companyID == "" || immediateOrigin == "" || immediateDestination == "" {
+		return "", ErrInvalidAmount
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, a.baseURL+path, reader)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	header := fmt.Sprintf("101 %-10s%-10s%s%s094101%s\n",
+		immediateDestination,
+		immediateOrigin,
+		createdAt.Format("060102"),
+		createdAt.Format("1504"),
+		strings.ToUpper(companyName)[:minLen(len(companyName), 23)],
+	)
+
+	var lines []string
+	lines = append(lines, header)
+
+	for _, entry := range entries {
+		amount := fmt.Sprintf("%010d", entry.Amount.Value)
+		line := fmt.Sprintf("622%-9s%-17s%s%-22s%s\n",
+			entry.RoutingNumber,
+			entry.AccountNumber,
+			amount,
+			padRight(entry.AccountName, 22),
+			entry.TraceNumber,
+		)
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, ""), nil
+}
+
+func padRight(value string, width int) string {
+	if len(value) >= width {
+		return value[:width]
+	}
+	return value + strings.Repeat(" ", width-len(value))
+}
+
+func minLen(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+func (a *ACHAdapter) doRequest(ctx context.Context, method, path, body, idempotencyKey string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, method, a.baseURL+path, strings.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ACH request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+a.config.SecretKey)
-	req.Header.Set("Content-Type", "application/json")
+	if method != http.MethodGet {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return nil, ErrGatewayUnavailable
+		return nil, fmt.Errorf("ACH request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	payload, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read ACH response: %w", err)
 	}
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, ErrGatewayUnavailable
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ACH request failed with status %d: %s", resp.StatusCode, string(payload))
 	}
 
-	return respBody, nil
+	return payload, nil
 }
 
-func mapAchDebitToIntent(result achDebitResponse, amount Amount, customerID string) PaymentIntent {
-	intent := PaymentIntent{
-		ID:              result.ID,
+func mapStripeLikePaymentIntent(payload []byte) PaymentIntent {
+	var resp struct {
+		ID             string            `json:"id"`
+		Amount         int64             `json:"amount"`
+		Currency       string            `json:"currency"`
+		Status         string            `json:"status"`
+		Customer       string            `json:"customer"`
+		PaymentMethod  string            `json:"payment_method"`
+		Description    string            `json:"description"`
+		ClientSecret   string            `json:"client_secret"`
+		AmountReceived int64             `json:"amount_received"`
+		AmountRefunded int64             `json:"amount_refunded"`
+		Metadata       map[string]string `json:"metadata"`
+		Created        int64             `json:"created"`
+	}
+
+	_ = json.Unmarshal(payload, &resp)
+
+	currency := Currency(strings.ToUpper(resp.Currency))
+	amount := Amount{Value: resp.Amount, Currency: currency}
+	captured := Amount{Value: resp.AmountReceived, Currency: currency}
+	refunded := Amount{Value: resp.AmountRefunded, Currency: currency}
+
+	if resp.AmountReceived == 0 && mapStripeStatus(resp.Status) == PaymentIntentStatusSucceeded {
+		captured = amount
+	}
+
+	return PaymentIntent{
+		ID:              resp.ID,
 		Gateway:         GatewayACH,
 		Amount:          amount,
-		Status:          mapAchStatus(result.Status),
-		CustomerID:      customerID,
-		PaymentMethodID: result.PaymentMethodID,
-		CreatedAt:       time.Now(),
+		Status:          mapStripeStatus(resp.Status),
+		CustomerID:      resp.Customer,
+		PaymentMethodID: resp.PaymentMethod,
+		Description:     resp.Description,
+		ClientSecret:    resp.ClientSecret,
+		CapturedAmount:  captured,
+		RefundedAmount:  refunded,
+		Metadata:        resp.Metadata,
+		CreatedAt:       time.Unix(resp.Created, 0),
 		UpdatedAt:       time.Now(),
 	}
-
-	if result.Amount > 0 {
-		intent.Amount = NewAmount(result.Amount, Currency(result.Currency))
-	}
-	if intent.Status == PaymentIntentStatusSucceeded {
-		intent.CapturedAmount = intent.Amount
-	}
-	if result.FailureCode != "" {
-		intent.FailureCode = result.FailureCode
-		intent.FailureMessage = result.FailureMessage
-	}
-
-	return intent
 }
 
-func mapAchStatus(status string) PaymentIntentStatus {
-	switch strings.ToLower(status) {
-	case "succeeded", "settled":
-		return PaymentIntentStatusSucceeded
-	case "failed":
-		return PaymentIntentStatusFailed
-	case "canceled":
-		return PaymentIntentStatusCanceled
+func mapStripeStatus(status string) PaymentIntentStatus {
+	switch status {
+	case "requires_payment_method":
+		return PaymentIntentStatusRequiresPaymentMethod
 	case "requires_confirmation":
 		return PaymentIntentStatusRequiresConfirmation
-	default:
+	case "requires_action":
+		return PaymentIntentStatusRequiresAction
+	case "processing":
 		return PaymentIntentStatusProcessing
-	}
-}
-
-func mapAchRefundStatus(status string) RefundStatus {
-	switch strings.ToLower(status) {
 	case "succeeded":
-		return RefundStatusSucceeded
-	case "failed":
-		return RefundStatusFailed
+		return PaymentIntentStatusSucceeded
 	case "canceled":
-		return RefundStatusCanceled
+		return PaymentIntentStatusCanceled
 	default:
-		return RefundStatusPending
+		return PaymentIntentStatusFailed
 	}
 }
 
-func generateNACHAFile(entries []ACHEntry, originID, companyName string, effectiveDate time.Time) string {
-	batchDate := effectiveDate.Format("060102")
-	fileDate := time.Now().Format("060102")
-
-	lines := make([]string, 0, len(entries)+4)
-	lines = append(lines, fmt.Sprintf("1%09s%s%-23s%-6s", "094101", fileDate, padRight("VIRTENGINE", 23), "094101"))
-
-	batchHeader := fmt.Sprintf("5%1s%-16s%-10s%-6s%-6s%-3s%-10s%-8s%-6s",
-		"1", padRight(companyName, 16), padRight(originID, 10), "PPD", "SETTLE", batchDate, padRight(originID, 10), "1", "000000")
-	lines = append(lines, batchHeader)
-
-	entryHash := int64(0)
-	totalDebit := int64(0)
-	traceSeq := 1
-
-	for _, entry := range entries {
-		routing := padLeft(entry.RoutingNumber, 9, '0')
-		account := padRight(entry.AccountNumber, 17)
-		amount := padLeft(fmt.Sprintf("%d", entry.Amount), 10, '0')
-		name := padRight(entry.AccountHolderName, 22)
-		individual := padRight(entry.IndividualID, 15)
-		trace := padLeft(fmt.Sprintf("%s%07d", originID, traceSeq), 15, '0')
-
-		lines = append(lines, fmt.Sprintf("6%-2s%s%s%s%s%s%s",
-			entry.TransactionCode, routing, account, amount, individual, name, trace))
-		traceSeq++
-		entryHash += parseRoutingForHash(entry.RoutingNumber)
-		totalDebit += entry.Amount
+func mapStripeLikeRefund(payload []byte) Refund {
+	var resp struct {
+		ID            string `json:"id"`
+		Amount        int64  `json:"amount"`
+		Currency      string `json:"currency"`
+		Status        string `json:"status"`
+		FailureReason string `json:"failure_reason"`
+		Created       int64  `json:"created"`
 	}
 
-	control := fmt.Sprintf("8%06d%010d%012d%012d%-10s%25s",
-		len(entries), entryHash%10000000000, totalDebit, 0, originID, "")
-	lines = append(lines, control)
+	_ = json.Unmarshal(payload, &resp)
 
-	fileControl := fmt.Sprintf("9%06d%06d%08d%012d%012d%39s",
-		1, len(entries), entryHash%100000000, totalDebit, 0, "")
-	lines = append(lines, fileControl)
-
-	return strings.Join(lines, "\n")
-}
-
-func padRight(value string, length int) string {
-	if len(value) >= length {
-		return value[:length]
+	status := RefundStatusPending
+	switch resp.Status {
+	case "succeeded":
+		status = RefundStatusSucceeded
+	case "failed", "canceled":
+		status = RefundStatusFailed
 	}
-	return value + strings.Repeat(" ", length-len(value))
-}
 
-func padLeft(value string, length int, pad rune) string {
-	if len(value) >= length {
-		return value[len(value)-length:]
-	}
-	return strings.Repeat(string(pad), length-len(value)) + value
-}
-
-func parseRoutingForHash(routing string) int64 {
-	if len(routing) > 8 {
-		routing = routing[:8]
-	}
-	var hash int64
-	for _, r := range routing {
-		if r >= '0' && r <= '9' {
-			hash = hash*10 + int64(r-'0')
-		}
-	}
-	return hash
-}
-
-// ============================================================================
-// ACH API Types
-// ============================================================================
-
-type achDebitRequest struct {
-	Amount          int64               `json:"amount"`
-	Currency        string              `json:"currency"`
-	CustomerID      string              `json:"customer_id,omitempty"`
-	PaymentMethodID string              `json:"payment_method_id,omitempty"`
-	BankAccount     *BankAccountDetails `json:"bank_account,omitempty"`
-	Metadata        map[string]string   `json:"metadata,omitempty"`
-}
-
-type achDebitResponse struct {
-	ID              string `json:"id"`
-	Status          string `json:"status"`
-	Amount          int64  `json:"amount"`
-	Currency        string `json:"currency"`
-	PaymentMethodID string `json:"payment_method_id"`
-	FailureCode     string `json:"failure_code,omitempty"`
-	FailureMessage  string `json:"failure_message,omitempty"`
-}
-
-type achCaptureRequest struct {
-	Amount int64 `json:"amount,omitempty"`
-}
-
-type achRefundRequest struct {
-	PaymentIntentID string            `json:"payment_intent_id"`
-	Amount          int64             `json:"amount,omitempty"`
-	Currency        string            `json:"currency,omitempty"`
-	Reason          string            `json:"reason,omitempty"`
-	Metadata        map[string]string `json:"metadata,omitempty"`
-}
-
-type achRefundResponse struct {
-	ID              string `json:"id"`
-	PaymentIntentID string `json:"payment_intent_id"`
-	Status          string `json:"status"`
-	Amount          int64  `json:"amount"`
-	Currency        string `json:"currency"`
-}
-
-type achWebhookEvent struct {
-	ID      string      `json:"id"`
-	Type    string      `json:"type"`
-	Created int64       `json:"created"`
-	Data    interface{} `json:"data"`
-}
-
-func mapAchWebhookType(eventType string) WebhookEventType {
-	switch eventType {
-	case "ach.debit.succeeded":
-		return WebhookEventPaymentIntentSucceeded
-	case "ach.debit.failed":
-		return WebhookEventPaymentIntentFailed
-	case "ach.debit.canceled":
-		return WebhookEventPaymentIntentCanceled
-	case "ach.debit.processing":
-		return WebhookEventPaymentIntentProcessing
-	case "ach.refund.succeeded":
-		return WebhookEventChargeRefunded
-	default:
-		return WebhookEventType(eventType)
+	return Refund{
+		ID:            resp.ID,
+		Amount:        Amount{Value: resp.Amount, Currency: Currency(strings.ToUpper(resp.Currency))},
+		Status:        status,
+		FailureReason: resp.FailureReason,
+		CreatedAt:     time.Unix(resp.Created, 0),
 	}
 }
-
-var _ = bytes.Buffer{}

@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"bytes"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -368,4 +369,373 @@ func TestEligibleClusterFiltering(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestScheduleJobPriorityOrdering validates that higher score clusters are selected first.
+func TestScheduleJobPriorityOrdering(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{1}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{2}, 20)).String()
+
+	clusterA := types.HPCCluster{
+		ClusterID:       "cluster-a",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-a",
+		State:           types.ClusterStateActive,
+		TotalNodes:      10,
+		AvailableNodes:  8,
+		Region:          "us-east-1",
+	}
+	clusterB := types.HPCCluster{
+		ClusterID:       "cluster-b",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-b",
+		State:           types.ClusterStateActive,
+		TotalNodes:      6,
+		AvailableNodes:  4,
+		Region:          "us-east-1",
+	}
+
+	mustSetCluster(t, ctx, k, clusterA)
+	mustSetCluster(t, ctx, k, clusterB)
+
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-a-1",
+		ClusterID:       "cluster-a",
+		ProviderAddress: providerAddr,
+		Region:          "us-east-1",
+		AvgLatencyMs:    10,
+		Active:          true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-b-1",
+		ClusterID:       "cluster-b",
+		ProviderAddress: providerAddr,
+		Region:          "us-east-1",
+		AvgLatencyMs:    40,
+		Active:          true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-1",
+		ClusterID:         "cluster-a",
+		ProviderAddress:   providerAddr,
+		Name:              "standard",
+		MaxRuntimeSeconds: 3600,
+		Active:            true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	job := types.HPCJob{
+		JobID:           "job-1",
+		OfferingID:      "offering-1",
+		CustomerAddress: customerAddr,
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	}
+
+	decision, err := k.ScheduleJob(ctx, &job)
+	require.NoError(t, err)
+	require.Equal(t, "cluster-a", decision.SelectedClusterID)
+	require.GreaterOrEqual(t, len(decision.CandidateClusters), 2)
+	require.Equal(t, "cluster-a", decision.CandidateClusters[0].ClusterID)
+}
+
+// TestScheduleJobResourceAllocation ensures resource requests route to eligible clusters.
+func TestScheduleJobResourceAllocation(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{3}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{4}, 20)).String()
+
+	clusterSmall := types.HPCCluster{
+		ClusterID:       "cluster-small",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-small",
+		State:           types.ClusterStateActive,
+		TotalNodes:      3,
+		AvailableNodes:  2,
+		Region:          "us-west-2",
+	}
+	clusterLarge := types.HPCCluster{
+		ClusterID:       "cluster-large",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-large",
+		State:           types.ClusterStateActive,
+		TotalNodes:      12,
+		AvailableNodes:  10,
+		Region:          "us-west-2",
+	}
+
+	mustSetCluster(t, ctx, k, clusterSmall)
+	mustSetCluster(t, ctx, k, clusterLarge)
+
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-large-1",
+		ClusterID:       "cluster-large",
+		ProviderAddress: providerAddr,
+		Region:          "us-west-2",
+		AvgLatencyMs:    15,
+		Active:          true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-2",
+		ClusterID:         "cluster-large",
+		ProviderAddress:   providerAddr,
+		Name:              "gpu-standard",
+		MaxRuntimeSeconds: 7200,
+		Active:            true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	job := types.HPCJob{
+		JobID:           "job-2",
+		OfferingID:      "offering-2",
+		CustomerAddress: customerAddr,
+		Resources: types.JobResources{
+			Nodes: 4,
+		},
+	}
+
+	decision, err := k.ScheduleJob(ctx, &job)
+	require.NoError(t, err)
+	require.Equal(t, "cluster-large", decision.SelectedClusterID)
+}
+
+// TestScheduleJobPreemptionLogic simulates a higher-priority job arriving when capacity is exhausted.
+func TestScheduleJobPreemptionLogic(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{5}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{6}, 20)).String()
+
+	clusterPrimary := types.HPCCluster{
+		ClusterID:       "cluster-primary",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-primary",
+		State:           types.ClusterStateActive,
+		TotalNodes:      8,
+		AvailableNodes:  4,
+		Region:          "eu-central-1",
+	}
+	clusterFallback := types.HPCCluster{
+		ClusterID:       "cluster-fallback",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-fallback",
+		State:           types.ClusterStateActive,
+		TotalNodes:      12,
+		AvailableNodes:  12,
+		Region:          "eu-central-1",
+	}
+
+	mustSetCluster(t, ctx, k, clusterPrimary)
+	mustSetCluster(t, ctx, k, clusterFallback)
+
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-primary-1",
+		ClusterID:       "cluster-primary",
+		ProviderAddress: providerAddr,
+		Region:          "eu-central-1",
+		AvgLatencyMs:    10,
+		Active:          true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-fallback-1",
+		ClusterID:       "cluster-fallback",
+		ProviderAddress: providerAddr,
+		Region:          "eu-central-1",
+		AvgLatencyMs:    80,
+		Active:          true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-3",
+		ClusterID:         "cluster-primary",
+		ProviderAddress:   providerAddr,
+		Name:              "priority-queue",
+		MaxRuntimeSeconds: 3600,
+		Active:            true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	initialJob := types.HPCJob{
+		JobID:           "job-initial",
+		OfferingID:      "offering-3",
+		CustomerAddress: customerAddr,
+		Resources: types.JobResources{
+			Nodes: 4,
+		},
+	}
+
+	initialDecision, err := k.ScheduleJob(ctx, &initialJob)
+	require.NoError(t, err)
+	require.Equal(t, "cluster-primary", initialDecision.SelectedClusterID)
+
+	clusterPrimary.AvailableNodes = 0
+	mustSetCluster(t, ctx, k, clusterPrimary)
+
+	urgentJob := types.HPCJob{
+		JobID:           "job-urgent",
+		OfferingID:      "offering-3",
+		CustomerAddress: customerAddr,
+		Resources: types.JobResources{
+			Nodes: 4,
+		},
+	}
+
+	decision, err := k.ScheduleJob(ctx, &urgentJob)
+	require.NoError(t, err)
+	require.Equal(t, "cluster-fallback", decision.SelectedClusterID)
+	require.True(t, decision.IsFallback)
+}
+
+// TestSchedulingFairnessAcrossUsers ensures identical jobs from different users are treated consistently.
+func TestSchedulingFairnessAcrossUsers(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String()
+	customerA := sdk.AccAddress(bytes.Repeat([]byte{8}, 20)).String()
+	customerB := sdk.AccAddress(bytes.Repeat([]byte{9}, 20)).String()
+
+	cluster := types.HPCCluster{
+		ClusterID:       "cluster-fair",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-fair",
+		State:           types.ClusterStateActive,
+		TotalNodes:      8,
+		AvailableNodes:  8,
+		Region:          "ap-south-1",
+	}
+	mustSetCluster(t, ctx, k, cluster)
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-fair-1",
+		ClusterID:       "cluster-fair",
+		ProviderAddress: providerAddr,
+		Region:          "ap-south-1",
+		AvgLatencyMs:    20,
+		Active:          true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-4",
+		ClusterID:         "cluster-fair",
+		ProviderAddress:   providerAddr,
+		Name:              "fair-share",
+		MaxRuntimeSeconds: 3600,
+		Active:            true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	jobA := types.HPCJob{
+		JobID:           "job-fair-a",
+		OfferingID:      "offering-4",
+		CustomerAddress: customerA,
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	}
+	jobB := types.HPCJob{
+		JobID:           "job-fair-b",
+		OfferingID:      "offering-4",
+		CustomerAddress: customerB,
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	}
+
+	decisionA, err := k.ScheduleJob(ctx, &jobA)
+	require.NoError(t, err)
+	decisionB, err := k.ScheduleJob(ctx, &jobB)
+	require.NoError(t, err)
+
+	require.Equal(t, decisionA.SelectedClusterID, decisionB.SelectedClusterID)
+}
+
+// TestClusterCapacityChecksBeforeScheduling verifies no scheduling happens when capacity is insufficient.
+func TestClusterCapacityChecksBeforeScheduling(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{10}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{11}, 20)).String()
+
+	cluster := types.HPCCluster{
+		ClusterID:       "cluster-capacity",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-capacity",
+		State:           types.ClusterStateActive,
+		TotalNodes:      4,
+		AvailableNodes:  1,
+		Region:          "us-central-1",
+	}
+	mustSetCluster(t, ctx, k, cluster)
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-5",
+		ClusterID:         "cluster-capacity",
+		ProviderAddress:   providerAddr,
+		Name:              "capacity-check",
+		MaxRuntimeSeconds: 3600,
+		Active:            true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	job := types.HPCJob{
+		JobID:           "job-capacity",
+		OfferingID:      "offering-5",
+		CustomerAddress: customerAddr,
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	}
+
+	_, err := k.ScheduleJob(ctx, &job)
+	require.ErrorIs(t, err, types.ErrNoAvailableCluster)
+}
+
+// TestSchedulingWithHeterogeneousResources verifies resource-aware filtering with GPU-heavy jobs.
+func TestSchedulingWithHeterogeneousResources(t *testing.T) {
+	clusters := []types.HPCCluster{
+		{
+			ClusterID:      "cluster-cpu",
+			State:          types.ClusterStateActive,
+			TotalNodes:     8,
+			AvailableNodes: 8,
+			ClusterMetadata: types.ClusterMetadata{
+				TotalCPUCores: 256,
+				TotalMemoryGB: 512,
+				TotalGPUs:     0,
+			},
+		},
+		{
+			ClusterID:      "cluster-gpu",
+			State:          types.ClusterStateActive,
+			TotalNodes:     4,
+			AvailableNodes: 4,
+			ClusterMetadata: types.ClusterMetadata{
+				TotalCPUCores: 128,
+				TotalMemoryGB: 256,
+				TotalGPUs:     16,
+			},
+		},
+		{
+			ClusterID:      "cluster-mixed",
+			State:          types.ClusterStateActive,
+			TotalNodes:     2,
+			AvailableNodes: 2,
+			ClusterMetadata: types.ClusterMetadata{
+				TotalCPUCores: 64,
+				TotalMemoryGB: 128,
+				TotalGPUs:     4,
+			},
+		},
+	}
+
+	resources := types.JobResources{
+		Nodes:           2,
+		CPUCoresPerNode: 16,
+		MemoryGBPerNode: 64,
+		GPUsPerNode:     4,
+	}
+
+	eligible := keeper.FilterEligibleClusters(clusters, resources)
+	require.Len(t, eligible, 1)
+	require.Equal(t, "cluster-gpu", eligible[0].ClusterID)
 }

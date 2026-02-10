@@ -411,3 +411,187 @@ func TestProviderDeleteWithActiveLeases(t *testing.T) {
 	_, found := suite.keeper.Get(suite.ctx, providerAddr)
 	require.True(t, found, "provider should still exist after failed deletion")
 }
+
+func TestRequestDomainVerification(t *testing.T) {
+	suite := setupTestSuite(t)
+
+	providerAddr := testutil.AccAddress(t)
+	createMsg := &types.MsgCreateProvider{
+		Owner:   providerAddr.String(),
+		HostURI: testutil.ProviderHostname(t),
+	}
+
+	err := suite.keeper.Create(suite.ctx, types.Provider(*createMsg))
+	require.NoError(t, err)
+
+	msg := &types.MsgRequestDomainVerification{
+		Owner:  providerAddr.String(),
+		Domain: "provider.example.com",
+		Method: types.VERIFICATION_METHOD_DNS_TXT,
+	}
+
+	res, err := suite.handler(suite.ctx, msg)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	t.Run("ensure event created", func(t *testing.T) {
+		var found bool
+		for _, event := range res.Events {
+			ev, parseErr := sdk.ParseTypedEvent(event)
+			if parseErr != nil {
+				continue
+			}
+			if dev, ok := ev.(*types.EventProviderDomainVerificationRequested); ok {
+				require.Equal(t, msg.Owner, dev.Owner)
+				require.Equal(t, msg.Domain, dev.Domain)
+				require.Equal(t, "dns_txt", dev.Method)
+				require.NotEmpty(t, dev.Token)
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "EventProviderDomainVerificationRequested should be emitted")
+	})
+}
+
+func TestRequestDomainVerification_ProviderNotFound(t *testing.T) {
+	suite := setupTestSuite(t)
+
+	msg := &types.MsgRequestDomainVerification{
+		Owner:  testutil.AccAddress(t).String(),
+		Domain: "provider.example.com",
+		Method: types.VERIFICATION_METHOD_DNS_TXT,
+	}
+
+	res, err := suite.handler(suite.ctx, msg)
+	require.Error(t, err)
+	require.Nil(t, res)
+	require.True(t, errors.Is(err, types.ErrProviderNotFound))
+}
+
+func TestConfirmDomainVerification(t *testing.T) {
+	suite := setupTestSuite(t)
+
+	providerAddr := testutil.AccAddress(t)
+	createMsg := &types.MsgCreateProvider{
+		Owner:   providerAddr.String(),
+		HostURI: testutil.ProviderHostname(t),
+	}
+
+	err := suite.keeper.Create(suite.ctx, types.Provider(*createMsg))
+	require.NoError(t, err)
+
+	requestMsg := &types.MsgRequestDomainVerification{
+		Owner:  providerAddr.String(),
+		Domain: "provider.example.com",
+		Method: types.VERIFICATION_METHOD_DNS_TXT,
+	}
+
+	_, err = suite.handler(suite.ctx, requestMsg)
+	require.NoError(t, err)
+
+	confirmMsg := &types.MsgConfirmDomainVerification{
+		Owner: providerAddr.String(),
+		Proof: "dns-txt-verified-proof",
+	}
+
+	res, err := suite.handler(suite.ctx, confirmMsg)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	t.Run("ensure event created", func(t *testing.T) {
+		var found bool
+		for _, event := range res.Events {
+			ev, parseErr := sdk.ParseTypedEvent(event)
+			if parseErr != nil {
+				continue
+			}
+			if dev, ok := ev.(*types.EventProviderDomainVerificationConfirmed); ok {
+				require.Equal(t, confirmMsg.Owner, dev.Owner)
+				require.Equal(t, "provider.example.com", dev.Domain)
+				require.NotEmpty(t, dev.Method)
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "EventProviderDomainVerificationConfirmed should be emitted")
+	})
+}
+
+func TestConfirmDomainVerification_NoRequest(t *testing.T) {
+	suite := setupTestSuite(t)
+
+	providerAddr := testutil.AccAddress(t)
+	createMsg := &types.MsgCreateProvider{
+		Owner:   providerAddr.String(),
+		HostURI: testutil.ProviderHostname(t),
+	}
+
+	err := suite.keeper.Create(suite.ctx, types.Provider(*createMsg))
+	require.NoError(t, err)
+
+	confirmMsg := &types.MsgConfirmDomainVerification{
+		Owner: providerAddr.String(),
+		Proof: "dns-txt-verified-proof",
+	}
+
+	res, err := suite.handler(suite.ctx, confirmMsg)
+	require.Error(t, err)
+	require.Nil(t, res)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestRevokeDomainVerification(t *testing.T) {
+	suite := setupTestSuite(t)
+
+	providerAddr := testutil.AccAddress(t)
+	createMsg := &types.MsgCreateProvider{
+		Owner:   providerAddr.String(),
+		HostURI: testutil.ProviderHostname(t),
+	}
+
+	err := suite.keeper.Create(suite.ctx, types.Provider(*createMsg))
+	require.NoError(t, err)
+
+	requestMsg := &types.MsgRequestDomainVerification{
+		Owner:  providerAddr.String(),
+		Domain: "provider.example.com",
+		Method: types.VERIFICATION_METHOD_DNS_TXT,
+	}
+
+	_, err = suite.handler(suite.ctx, requestMsg)
+	require.NoError(t, err)
+
+	confirmMsg := &types.MsgConfirmDomainVerification{
+		Owner: providerAddr.String(),
+		Proof: "dns-txt-verified-proof",
+	}
+
+	_, err = suite.handler(suite.ctx, confirmMsg)
+	require.NoError(t, err)
+
+	revokeMsg := &types.MsgRevokeDomainVerification{
+		Owner: providerAddr.String(),
+	}
+
+	res, err := suite.handler(suite.ctx, revokeMsg)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	t.Run("ensure event created", func(t *testing.T) {
+		var found bool
+		for _, event := range res.Events {
+			ev, parseErr := sdk.ParseTypedEvent(event)
+			if parseErr != nil {
+				continue
+			}
+			if dev, ok := ev.(*types.EventProviderDomainVerificationRevoked); ok {
+				require.Equal(t, revokeMsg.Owner, dev.Owner)
+				require.Equal(t, "provider.example.com", dev.Domain)
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "EventProviderDomainVerificationRevoked should be emitted")
+	})
+}

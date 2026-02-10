@@ -14,7 +14,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { resolve, dirname, basename } from "node:path";
+import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
@@ -26,6 +26,31 @@ const CONFIG_FILES = [
   ".codex-monitor.json",
   "codex-monitor.json",
 ];
+
+function hasSetupMarkers(dir) {
+  const markers = [".env", ...CONFIG_FILES];
+  return markers.some((name) => existsSync(resolve(dir, name)));
+}
+
+function isPathInside(parent, child) {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function resolveConfigDir(repoRoot) {
+  const repoPath = resolve(repoRoot || process.cwd());
+  const packageDir = resolve(__dirname);
+  if (isPathInside(repoPath, packageDir) || hasSetupMarkers(packageDir)) {
+    return packageDir;
+  }
+  const baseDir =
+    process.env.APPDATA ||
+    process.env.LOCALAPPDATA ||
+    process.env.HOME ||
+    process.env.USERPROFILE ||
+    process.cwd();
+  return resolve(baseDir, "codex-monitor");
+}
 
 // ── .env loader ──────────────────────────────────────────────────────────────
 
@@ -633,6 +658,14 @@ You are an autonomous task planner. When the task backlog is low, you analyze th
 - Prioritize bug fixes and test coverage over new features
 - Consider technical debt and code quality improvements
 - Check for existing similar tasks to avoid duplicates
+
+## CRITICAL: Task Creation Order
+
+**Create tasks in REVERSE sequence order** (highest number first, e.g., 45B → 45A → 44D → ... → 37A).
+Vibe-kanban displays newest tasks at the top of the backlog. By creating the highest-priority
+tasks LAST, they appear at the TOP of the backlog for both the orchestrator and human review.
+The orchestrator uses sequence numbers (like 37A, 38B) to determine execution order regardless
+of creation order, but the visual backlog order matters for human-in-the-loop understanding.
 `;
 
 function loadAgentPrompts(configDir, repoRoot, configData) {
@@ -717,9 +750,12 @@ export function loadConfig(argv = process.argv, options = {}) {
   const { reloadEnv = false } = options;
   const cli = parseArgs(argv);
 
-  // Determine config directory (where codex-monitor lives)
+  const repoRootForConfig = detectRepoRoot();
+  // Determine config directory (where codex-monitor stores its config)
   const configDir =
-    cli["config-dir"] || process.env.CODEX_MONITOR_DIR || __dirname;
+    cli["config-dir"] ||
+    process.env.CODEX_MONITOR_DIR ||
+    resolveConfigDir(repoRootForConfig);
 
   const configFile = loadConfigFile(configDir);
   let configData = configFile.data || {};
@@ -920,11 +956,13 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.watchPath ||
       scriptPath,
   );
-  const echoLogs = flags.has("no-echo-logs")
-    ? false
-    : configData.echoLogs !== undefined
-      ? configData.echoLogs
-      : true;
+  const echoLogs = flags.has("echo-logs")
+    ? true
+    : flags.has("no-echo-logs")
+      ? false
+      : configData.echoLogs !== undefined
+        ? configData.echoLogs
+        : false;
   const autoFixEnabled = flags.has("no-autofix")
     ? false
     : configData.autoFixEnabled !== undefined
@@ -1113,9 +1151,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   // and conflict-aware ordering.
   const fleetEnabled = !["0", "false", "no"].includes(
     String(
-      process.env.FLEET_ENABLED ??
-        configData.fleetEnabled ??
-        "true",
+      process.env.FLEET_ENABLED ?? configData.fleetEnabled ?? "true",
     ).toLowerCase(),
   );
   const fleetBufferMultiplier = Number(
@@ -1208,8 +1244,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const agentPrompts = loadAgentPrompts(configDir, repoRoot, configData);
 
   // ── First-run detection ──────────────────────────────────
-  const isFirstRun =
-    !existsSync(resolve(configDir, ".env")) && !configFile.path;
+  const isFirstRun = !hasSetupMarkers(configDir);
 
   const config = {
     // Identity

@@ -22,7 +22,7 @@
 
 import { createInterface } from "node:readline";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { resolve, dirname, basename, relative } from "node:path";
+import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
@@ -59,6 +59,38 @@ function getVersion() {
   } catch {
     return "0.0.0";
   }
+}
+
+function hasSetupMarkers(dir) {
+  const markers = [
+    ".env",
+    "codex-monitor.config.json",
+    ".codex-monitor.json",
+    "codex-monitor.json",
+  ];
+  return markers.some((name) => existsSync(resolve(dir, name)));
+}
+
+function isPathInside(parent, child) {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function resolveConfigDir(repoRoot) {
+  const explicit = process.env.CODEX_MONITOR_DIR;
+  if (explicit) return resolve(explicit);
+  const repoPath = resolve(repoRoot || process.cwd());
+  const packageDir = resolve(__dirname);
+  if (isPathInside(repoPath, packageDir) || hasSetupMarkers(packageDir)) {
+    return packageDir;
+  }
+  const baseDir =
+    process.env.APPDATA ||
+    process.env.LOCALAPPDATA ||
+    process.env.HOME ||
+    process.env.USERPROFILE ||
+    process.cwd();
+  return resolve(baseDir, "codex-monitor");
 }
 
 function printBanner() {
@@ -638,6 +670,7 @@ async function main() {
   }
 
   const repoRoot = detectRepoRoot();
+  const configDir = resolveConfigDir(repoRoot);
   const slug = detectRepoSlug();
   const projectName = detectProjectName(repoRoot);
 
@@ -652,7 +685,14 @@ async function main() {
   };
 
   if (isNonInteractive) {
-    return runNonInteractive({ env, configJson, repoRoot, slug, projectName });
+    return runNonInteractive({
+      env,
+      configJson,
+      repoRoot,
+      slug,
+      projectName,
+      configDir,
+    });
   }
 
   const prompt = createPrompt();
@@ -1309,7 +1349,7 @@ async function main() {
   }
 
   // ── Write Files ─────────────────────────────────────────
-  await writeConfigFiles({ env, configJson, repoRoot });
+  await writeConfigFiles({ env, configJson, repoRoot, configDir });
 }
 
 // ── Non-Interactive Mode ─────────────────────────────────────────────────────
@@ -1320,6 +1360,7 @@ async function runNonInteractive({
   repoRoot,
   slug,
   projectName,
+  configDir,
 }) {
   env.PROJECT_NAME = process.env.PROJECT_NAME || projectName;
   env.GITHUB_REPO = process.env.GITHUB_REPO || slug || "";
@@ -1375,18 +1416,20 @@ async function runNonInteractive({
     },
   ];
 
-  await writeConfigFiles({ env, configJson, repoRoot });
+  await writeConfigFiles({ env, configJson, repoRoot, configDir });
 }
 
 // ── File Writing ─────────────────────────────────────────────────────────────
 
-async function writeConfigFiles({ env, configJson, repoRoot }) {
+async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   heading("Writing Configuration");
+  const targetDir = resolve(configDir || __dirname);
+  mkdirSync(targetDir, { recursive: true });
 
   // ── .env file ──────────────────────────────────────────
-  const envPath = resolve(__dirname, ".env");
+  const envPath = resolve(targetDir, ".env");
   const targetEnvPath = existsSync(envPath)
-    ? resolve(__dirname, ".env.generated")
+    ? resolve(targetDir, ".env.generated")
     : envPath;
 
   if (existsSync(envPath)) {
@@ -1419,7 +1462,7 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
   const configOut = { $schema: "./codex-monitor.schema.json", ...configJson };
   // Keep vkAutoConfig in config file for monitor to apply on first launch
   // (includes executorProfiles with environment variables like PATH)
-  const configPath = resolve(__dirname, "codex-monitor.config.json");
+  const configPath = resolve(targetDir, "codex-monitor.config.json");
   writeFileSync(configPath, JSON.stringify(configOut, null, 2) + "\n", "utf8");
   success(`Config written to ${relative(repoRoot, configPath)}`);
 
@@ -1428,12 +1471,9 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
 
   const vkPort = env.VK_RECOVERY_PORT || "54089";
   const vkBaseUrl = env.VK_BASE_URL || `http://127.0.0.1:${vkPort}`;
-  const vkHost = "127.0.0.1";
 
   const tomlResult = ensureCodexConfig({
     vkBaseUrl,
-    vkPort,
-    vkHost,
     dryRun: false,
   });
   printConfigSummary(tomlResult, (msg) => console.log(msg));
@@ -1509,11 +1549,9 @@ async function writeConfigFiles({ env, configJson, repoRoot }) {
  * Called from monitor.mjs before starting the main loop.
  */
 export function shouldRunSetup() {
-  const hasEnv = existsSync(resolve(__dirname, ".env"));
-  const hasConfig =
-    existsSync(resolve(__dirname, "codex-monitor.config.json")) ||
-    existsSync(resolve(__dirname, ".codex-monitor.json"));
-  return !hasEnv && !hasConfig;
+  const repoRoot = detectRepoRoot();
+  const configDir = resolveConfigDir(repoRoot);
+  return !hasSetupMarkers(configDir);
 }
 
 /**
