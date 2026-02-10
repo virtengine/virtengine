@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/chaos"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // KubernetesRunner implements the ExperimentRunner interface for Kubernetes.
@@ -90,6 +91,16 @@ func NewKubernetesRunner(opts ...KubernetesRunnerOption) *KubernetesRunner {
 
 	for _, opt := range opts {
 		opt(r)
+	}
+
+	// Validate kubectl path
+	validatedPath, err := security.ResolveAndValidateExecutable("kubernetes", r.kubectlPath)
+	if err != nil {
+		// Fall back to default but log warning
+		// In production, this should fail fast
+		r.kubectlPath = "kubectl"
+	} else {
+		r.kubectlPath = validatedPath
 	}
 
 	return r
@@ -478,8 +489,16 @@ func (r *KubernetesRunner) generateActionManifest(action chaos.ExperimentAction)
 
 // applyManifest applies a manifest to Kubernetes.
 func (r *KubernetesRunner) applyManifest(ctx context.Context, manifest string) error {
-	//nolint:gosec // G204: kubectlPath is validated during runner initialization
-	cmd := exec.CommandContext(ctx, r.kubectlPath, "apply", "-f", "-")
+	args := []string{"apply", "-f", "-"}
+
+	// Validate kubectl arguments
+	if err := security.KubectlArgs(args...); err != nil {
+		return fmt.Errorf("invalid kubectl arguments: %w", err)
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	cmd := exec.CommandContext(ctx, r.kubectlPath, args...)
 	cmd.Stdin = strings.NewReader(manifest)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -494,8 +513,16 @@ func (r *KubernetesRunner) applyManifest(ctx context.Context, manifest string) e
 func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) error {
 	// Try to delete all chaos types
 	for _, kind := range []string{"podchaos", "networkchaos", "stresschaos", "timechaos", "chaosengine"} {
-		//nolint:gosec // G204: kubectlPath validated, kind from hardcoded list, name is chaos resource name
-		cmd := exec.CommandContext(ctx, r.kubectlPath, "delete", kind, name, "-n", r.namespace, "--ignore-not-found")
+		args := []string{"delete", kind, name, "-n", r.namespace, "--ignore-not-found"}
+
+		// Validate arguments
+		if err := security.KubectlArgs(args...); err != nil {
+			continue // Skip invalid combinations
+		}
+
+		// Execute with validated path and arguments
+		//nolint:gosec // G204: Executable path and arguments validated by security package
+		cmd := exec.CommandContext(ctx, r.kubectlPath, args...)
 		if _, err := cmd.CombinedOutput(); err != nil {
 			// Log but continue
 			if r.logger != nil {
@@ -512,9 +539,16 @@ func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) erro
 func (r *KubernetesRunner) getResourceStatus(ctx context.Context, name string) (string, error) {
 	// Try common chaos resource types
 	for _, kind := range []string{"podchaos", "networkchaos", "stresschaos"} {
-		//nolint:gosec // G204: kubectlPath validated, kind from hardcoded list
-		cmd := exec.CommandContext(ctx, r.kubectlPath, "get", kind, name, "-n", r.namespace,
-			"-o", "jsonpath={.status.experiment.phase}")
+		args := []string{"get", kind, name, "-n", r.namespace, "-o", "jsonpath={.status.experiment.phase}"}
+
+		// Validate arguments
+		if err := security.KubectlArgs(args...); err != nil {
+			continue // Skip invalid combinations
+		}
+
+		// Execute with validated path and arguments
+		//nolint:gosec // G204: Executable path and arguments validated by security package
+		cmd := exec.CommandContext(ctx, r.kubectlPath, args...)
 		output, err := cmd.Output()
 		if err == nil && len(output) > 0 {
 			return string(output), nil

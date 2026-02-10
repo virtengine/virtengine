@@ -167,9 +167,16 @@ func (m *MetricsCollector) CollectJobs() *NodeJobs {
 		return jobs
 	}
 
-	// Try to get SLURM job counts using validated arguments
-	//nolint:gosec // G204: Command "squeue" and arguments validated by security.SLURMSqueueArgs
-	if output, err := exec.Command("squeue", args...).Output(); err == nil {
+	// Resolve and validate squeue executable
+	squeuePath, err := security.ResolveAndValidateExecutable("slurm", "squeue")
+	if err != nil {
+		// SLURM not available, return empty jobs
+		return jobs
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	if output, err := exec.Command(squeuePath, args...).Output(); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 		for _, line := range lines {
 			switch strings.TrimSpace(line) {
@@ -188,35 +195,41 @@ func (m *MetricsCollector) CollectJobs() *NodeJobs {
 func (m *MetricsCollector) CollectServices() *NodeServices {
 	services := &NodeServices{}
 
-	// Check slurmd
-	//nolint:gosec // G204: pgrep with fixed argument "-x" and literal "slurmd"
-	if _, err := exec.Command("pgrep", "-x", "slurmd").Output(); err == nil {
-		services.SLURMDRunning = true
+	// Check slurmd using pgrep
+	if pgrepPath, err := security.ResolveAndValidateExecutable("system", "pgrep"); err == nil {
+		//nolint:gosec // G204: Executable path validated, args are fixed literals
+		if _, err := exec.Command(pgrepPath, "-x", "slurmd").Output(); err == nil {
+			services.SLURMDRunning = true
+		}
 	}
 
 	// Get slurmd version
-	//nolint:gosec // G204: slurmd with fixed argument "--version"
-	if output, err := exec.Command("slurmd", "--version").Output(); err == nil {
-		services.SLURMDVersion = strings.TrimSpace(string(output))
+	if slurmdPath, err := security.ResolveAndValidateExecutable("slurm", "slurmd"); err == nil {
+		//nolint:gosec // G204: Executable path validated, args are fixed literals
+		if output, err := exec.Command(slurmdPath, "--version").Output(); err == nil {
+			services.SLURMDVersion = strings.TrimSpace(string(output))
+		}
 	}
 
 	// Check munge
-	//nolint:gosec // G204: pgrep with fixed argument "-x" and literal "munged"
-	if _, err := exec.Command("pgrep", "-x", "munged").Output(); err == nil {
-		services.MungeRunning = true
+	if pgrepPath, err := security.ResolveAndValidateExecutable("system", "pgrep"); err == nil {
+		//nolint:gosec // G204: Executable path validated, args are fixed literals
+		if _, err := exec.Command(pgrepPath, "-x", "munged").Output(); err == nil {
+			services.MungeRunning = true
+		}
 	}
 
 	// Check container runtime
-	if _, err := exec.LookPath("singularity"); err == nil {
+	if singularityPath, err := security.ResolveAndValidateExecutable("system", "singularity"); err == nil {
 		services.ContainerRuntime = "singularity"
-		//nolint:gosec // G204: singularity with fixed argument "--version"
-		if output, err := exec.Command("singularity", "--version").Output(); err == nil {
+		//nolint:gosec // G204: Executable path validated, args are fixed literals
+		if output, err := exec.Command(singularityPath, "--version").Output(); err == nil {
 			services.ContainerRuntimeVersion = strings.TrimSpace(string(output))
 		}
-	} else if _, err := exec.LookPath("docker"); err == nil {
+	} else if dockerPath, err := security.ResolveAndValidateExecutable("system", "docker"); err == nil {
 		services.ContainerRuntime = "docker"
-		//nolint:gosec // G204: docker with fixed argument "--version"
-		if output, err := exec.Command("docker", "--version").Output(); err == nil {
+		//nolint:gosec // G204: Executable path validated, args are fixed literals
+		if output, err := exec.Command(dockerPath, "--version").Output(); err == nil {
 			services.ContainerRuntimeVersion = strings.TrimSpace(string(output))
 		}
 	}
@@ -353,9 +366,15 @@ func (m *MetricsCollector) getCPUUtilization() int32 {
 }
 
 func (m *MetricsCollector) getGPUInfo() (int32, int32, string) {
-	// Try nvidia-smi
-	//nolint:gosec // G204: nvidia-smi with fixed arguments
-	output, err := exec.Command("nvidia-smi", "--query-gpu=count,name", "--format=csv,noheader").Output()
+	// Resolve and validate nvidia-smi
+	nvidiaSmiPath, err := security.ResolveAndValidateExecutable("system", "nvidia-smi")
+	if err != nil {
+		return 0, 0, ""
+	}
+
+	// Execute with fixed arguments
+	//nolint:gosec // G204: Executable path validated, args are fixed literals
+	output, err := exec.Command(nvidiaSmiPath, "--query-gpu=count,name", "--format=csv,noheader").Output()
 	if err != nil {
 		return 0, 0, ""
 	}
@@ -383,8 +402,15 @@ func (m *MetricsCollector) getStorageInfo(path string) (uint64, uint64) {
 			return 0, 0
 		}
 
-		//nolint:gosec // G204: Command "df" and arguments validated by security.DfArgs
-		output, err := exec.Command("df", args...).Output()
+		// Resolve and validate df executable
+		dfPath, err := security.ResolveAndValidateExecutable("system", "df")
+		if err != nil {
+			return 0, 0
+		}
+
+		// Execute with validated path and arguments
+		//nolint:gosec // G204: Executable path and arguments validated by security package
+		output, err := exec.Command(dfPath, args...).Output()
 		if err != nil {
 			return 0, 0
 		}
@@ -424,8 +450,15 @@ func (m *MetricsCollector) getSLURMNodeState() string {
 		return osUnknown
 	}
 
-	//nolint:gosec // G204: Command "sinfo" and arguments validated by security.SLURMSinfoArgs
-	output, err := exec.Command("sinfo", args...).Output()
+	// Resolve and validate sinfo executable
+	sinfoPath, err := security.ResolveAndValidateExecutable("slurm", "sinfo")
+	if err != nil {
+		return osUnknown
+	}
+
+	// Execute with validated path and arguments
+	//nolint:gosec // G204: Executable path and arguments validated by security package
+	output, err := exec.Command(sinfoPath, args...).Output()
 	if err != nil {
 		return osUnknown
 	}
@@ -450,9 +483,15 @@ func (m *MetricsCollector) measureLatency(target string) *LatencyProbe {
 			return nil
 		}
 
+		// Resolve and validate ping executable
+		pingPath, pingErr := security.ResolveAndValidateExecutable("system", "ping")
+		if pingErr != nil {
+			return nil
+		}
+
 		// Try ICMP ping if available
-		//nolint:gosec // G204: Command "ping" and arguments validated by security.PingArgs
-		_, execErr := exec.Command("ping", args...).Output()
+		//nolint:gosec // G204: Executable path and arguments validated by security package
+		_, execErr := exec.Command(pingPath, args...).Output()
 		if execErr != nil {
 			return nil
 		}

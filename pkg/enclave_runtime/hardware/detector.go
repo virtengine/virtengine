@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // Version string constants
@@ -437,9 +439,9 @@ func (d *NitroDetector) Detect() (NitroCapabilities, error) {
 		caps.NSMAvailable = true
 	}
 
-	// Check for nitro-cli
-	cliPath, found := checkExecutableExists("nitro-cli")
-	if found {
+	// Check for nitro-cli using security validator
+	cliPath, err := security.ResolveAndValidateExecutable("nitro", "nitro-cli")
+	if err == nil {
 		caps.CLIPath = cliPath
 		// Get version (simplified)
 		caps.Version = d.getNitroCLIVersion(cliPath)
@@ -480,30 +482,6 @@ func checkDeviceExists(path string) (bool, error) {
 		return true, nil
 	}
 	return false, fmt.Errorf("path exists but is not a device: %s", path)
-}
-
-// checkExecutableExists checks if an executable exists in PATH or at an absolute path.
-func checkExecutableExists(name string) (string, bool) {
-	// Check absolute path first
-	if info, err := os.Stat(name); err == nil && !info.IsDir() {
-		return name, true
-	}
-
-	// Check common paths
-	paths := []string{
-		"/usr/bin/" + name,
-		"/usr/local/bin/" + name,
-		"/opt/bin/" + name,
-		"/sbin/" + name,
-	}
-
-	for _, path := range paths {
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path, true
-		}
-	}
-
-	return "", false
 }
 
 // readSysFile reads a value from a sysfs file.

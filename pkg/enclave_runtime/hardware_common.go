@@ -466,29 +466,6 @@ func checkDeviceExists(path string) (bool, error) {
 	return false, fmt.Errorf("path exists but is not a device: %s", path)
 }
 
-// checkExecutableExists checks if an executable exists in PATH or at an absolute path
-func checkExecutableExists(name string) (string, bool) {
-	// Check absolute path first
-	if info, err := os.Stat(name); err == nil && !info.IsDir() {
-		return name, true
-	}
-
-	// Check common paths
-	paths := []string{
-		"/usr/bin/" + name,
-		"/usr/local/bin/" + name,
-		"/opt/bin/" + name,
-	}
-
-	for _, path := range paths {
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path, true
-		}
-	}
-
-	return "", false
-}
-
 // readSysFile reads a value from a sysfs file
 func readSysFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
