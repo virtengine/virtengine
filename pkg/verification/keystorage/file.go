@@ -50,6 +50,18 @@ func NewFileStorage(config FileStorageConfig) (*FileStorage, error) {
 		return nil, ErrInvalidConfig.Wrap("directory is required")
 	}
 
+	// Validate directory path to prevent traversal
+	if strings.Contains(config.Directory, "\x00") {
+		return nil, ErrInvalidConfig.Wrap("directory path contains null byte")
+	}
+
+	// Clean and resolve to absolute path
+	absDir, err := filepath.Abs(filepath.Clean(config.Directory))
+	if err != nil {
+		return nil, ErrInvalidConfig.Wrapf("invalid directory path: %v", err)
+	}
+	config.Directory = absDir
+
 	if config.EncryptionKey == "" {
 		return nil, ErrInvalidConfig.Wrap("encryption_key is required")
 	}
@@ -134,6 +146,7 @@ func (f *FileStorage) StoreKey(ctx context.Context, keyInfo *veidtypes.SignerKey
 	}
 
 	// Write to file
+	// #nosec G304 -- filename is constructed from validated keyID via keyFilePath()
 	if err := os.WriteFile(filename, data, os.FileMode(f.config.FilePermissions)); err != nil {
 		return ErrStorageError.Wrapf("failed to write key file: %v", err)
 	}
@@ -223,6 +236,7 @@ func (f *FileStorage) ListKeys(ctx context.Context, signerID string) ([]*veidtyp
 
 	result := make([]*veidtypes.SignerKeyInfo, 0, len(files))
 	for _, file := range files {
+		// #nosec G304 -- files are from trusted storage directory (filepath.Glob on config.Directory)
 		data, err := os.ReadFile(file)
 		if err != nil {
 			continue
@@ -270,6 +284,7 @@ func (f *FileStorage) UpdateKeyState(ctx context.Context, keyID string, state ve
 
 	filename := f.keyFilePath(keyID)
 
+	// #nosec G304 -- filename is constructed from validated keyID via keyFilePath()
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {

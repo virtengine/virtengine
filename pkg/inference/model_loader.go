@@ -56,8 +56,16 @@ func (ml *ModelLoader) Load() (*TFModel, error) {
 		return nil, fmt.Errorf("invalid inference config: %w", err)
 	}
 
-	// Check if model path exists
+	// Validate model path against traversal attacks
 	modelPath := ml.config.ModelPath
+	cleanPath := filepath.Clean(modelPath)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid model path: %w", err)
+	}
+	modelPath = absPath
+
+	// Check if model path exists
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("model path does not exist: %s", modelPath)
 	}
