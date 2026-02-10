@@ -32,6 +32,7 @@ import { existsSync, mkdirSync, createWriteStream } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getConsoleLevel, LogLevel } from "./lib/logger.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -421,7 +422,16 @@ export function runCodexExec(
     let args;
     try {
       // Pass prompt via stdin (no positional arg) to avoid shell word-splitting
-      args = ["exec", "--full-auto", "-C", cwd];
+      args = [
+        "exec",
+        "--full-auto",
+        "-a",
+        "auto-edit",
+        "--sandbox",
+        "workspace-write",
+        "-C",
+        cwd,
+      ];
     } catch (err) {
       return promiseResolve({
         success: false,
@@ -481,15 +491,15 @@ export function runCodexExec(
       const text = chunk.toString();
       stdout += text;
       stream.write(text);
-      // Stream live to console so the operator can see agent progress
-      process.stdout.write(text);
+      // Only echo live agent output when --verbose or --trace is used
+      if (getConsoleLevel() <= LogLevel.DEBUG) process.stdout.write(text);
     });
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
       stderr += text;
       stream.write(`[stderr] ${text}`);
-      // Stream stderr live so MCP startup, model info, and exec logs are visible
-      process.stderr.write(text);
+      // Only echo live stderr when --verbose or --trace is used
+      if (getConsoleLevel() <= LogLevel.DEBUG) process.stderr.write(text);
     });
 
     const timer = setTimeout(() => {

@@ -306,6 +306,80 @@ func (r *Redelegation) Validate() error {
 	return nil
 }
 
+// DelegatorSlashingEvent represents a slashing event applied to a delegator.
+type DelegatorSlashingEvent struct {
+	// ID is the unique slashing event ID
+	ID string `json:"id"`
+
+	// DelegatorAddress is the delegator's address
+	DelegatorAddress string `json:"delegator_address"`
+
+	// ValidatorAddress is the validator's address
+	ValidatorAddress string `json:"validator_address"`
+
+	// SlashFraction is the applied slash fraction (legacy dec string)
+	SlashFraction string `json:"slash_fraction"`
+
+	// SlashAmount is the total amount slashed (base units)
+	SlashAmount string `json:"slash_amount"`
+
+	// SharesSlashed is the total shares slashed
+	SharesSlashed string `json:"shares_slashed"`
+
+	// InfractionHeight is the height at which the infraction occurred
+	InfractionHeight int64 `json:"infraction_height"`
+
+	// BlockHeight is the block height at which the slash was applied
+	BlockHeight int64 `json:"block_height"`
+
+	// BlockTime is the time at which the slash was applied
+	BlockTime time.Time `json:"block_time"`
+}
+
+// NewDelegatorSlashingEvent creates a new slashing event record.
+func NewDelegatorSlashingEvent(
+	id, delegatorAddr, validatorAddr, slashFraction, slashAmount, sharesSlashed string,
+	infractionHeight, blockHeight int64,
+	blockTime time.Time,
+) *DelegatorSlashingEvent {
+	return &DelegatorSlashingEvent{
+		ID:               id,
+		DelegatorAddress: delegatorAddr,
+		ValidatorAddress: validatorAddr,
+		SlashFraction:    slashFraction,
+		SlashAmount:      slashAmount,
+		SharesSlashed:    sharesSlashed,
+		InfractionHeight: infractionHeight,
+		BlockHeight:      blockHeight,
+		BlockTime:        blockTime,
+	}
+}
+
+// Validate validates the slashing event.
+func (e *DelegatorSlashingEvent) Validate() error {
+	if e.ID == "" {
+		return fmt.Errorf("id cannot be empty")
+	}
+	if e.DelegatorAddress == "" {
+		return fmt.Errorf("delegator_address cannot be empty")
+	}
+	if e.ValidatorAddress == "" {
+		return fmt.Errorf("validator_address cannot be empty")
+	}
+
+	amount, ok := new(big.Int).SetString(e.SlashAmount, 10)
+	if !ok || amount.Sign() < 0 {
+		return fmt.Errorf("invalid slash_amount: %s", e.SlashAmount)
+	}
+
+	shares, ok := new(big.Int).SetString(e.SharesSlashed, 10)
+	if !ok || shares.Sign() < 0 {
+		return fmt.Errorf("invalid shares_slashed: %s", e.SharesSlashed)
+	}
+
+	return nil
+}
+
 // ValidatorShares represents the total shares for a validator
 type ValidatorShares struct {
 	// ValidatorAddress is the validator's address
@@ -492,6 +566,9 @@ type DelegatorReward struct {
 	// CalculatedAt is when the reward was calculated
 	CalculatedAt time.Time `json:"calculated_at"`
 
+	// Height is the block height when reward was calculated
+	Height int64 `json:"height"`
+
 	// Claimed indicates if the reward has been claimed
 	Claimed bool `json:"claimed"`
 
@@ -500,7 +577,7 @@ type DelegatorReward struct {
 }
 
 // NewDelegatorReward creates a new delegator reward
-func NewDelegatorReward(delegatorAddr, validatorAddr string, epoch uint64, reward, shares, totalShares string, calcTime time.Time) *DelegatorReward {
+func NewDelegatorReward(delegatorAddr, validatorAddr string, epoch uint64, reward, shares, totalShares string, calcTime time.Time, height int64) *DelegatorReward {
 	return &DelegatorReward{
 		DelegatorAddress:            delegatorAddr,
 		ValidatorAddress:            validatorAddr,
@@ -509,6 +586,7 @@ func NewDelegatorReward(delegatorAddr, validatorAddr string, epoch uint64, rewar
 		SharesAtEpoch:               shares,
 		ValidatorTotalSharesAtEpoch: totalShares,
 		CalculatedAt:                calcTime,
+		Height:                      height,
 		Claimed:                     false,
 	}
 }
@@ -520,6 +598,9 @@ func (r *DelegatorReward) Validate() error {
 	}
 	if r.ValidatorAddress == "" {
 		return fmt.Errorf("validator_address cannot be empty")
+	}
+	if r.Height < 0 {
+		return fmt.Errorf("height cannot be negative")
 	}
 
 	reward, ok := new(big.Int).SetString(r.Reward, 10)

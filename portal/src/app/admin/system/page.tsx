@@ -18,8 +18,10 @@ import {
 } from '@/components/ui/Table';
 import { useAdminStore } from '@/stores/adminStore';
 import { formatDateTime } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 export default function AdminSystemPage() {
+  const { t } = useTranslation();
   const moduleParams = useAdminStore((s) => s.moduleParams);
   const featureFlags = useAdminStore((s) => s.featureFlags);
   const maintenance = useAdminStore((s) => s.maintenance);
@@ -29,15 +31,15 @@ export default function AdminSystemPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">System Configuration</h1>
+        <h1 className="text-3xl font-bold">{t('System Configuration')}</h1>
         <p className="mt-1 text-muted-foreground">
-          Module parameters, feature flags, and maintenance controls
+          {t('Module parameters, feature flags, and maintenance controls')}
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Maintenance Mode</CardTitle>
+          <CardTitle>{t('Maintenance Mode')}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -63,7 +65,7 @@ export default function AdminSystemPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Module Parameters</CardTitle>
+          <CardTitle>{t('Module Parameters')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -99,7 +101,7 @@ export default function AdminSystemPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Feature Flags</CardTitle>
+          <CardTitle>{t('Feature Flags')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {featureFlags.map((flag) => (

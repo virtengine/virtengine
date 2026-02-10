@@ -273,6 +273,7 @@ func (s *DelegationKeeperTestSuite) TestDelegatorReward() {
 		"1000000000000000000",
 		"10000000000000000000",
 		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
 	)
 
 	err := s.keeper.SetDelegatorReward(s.ctx, *reward)
@@ -439,12 +440,12 @@ func (s *DelegationKeeperTestSuite) TestGetDelegatorUnclaimedRewards() {
 	validatorAddr := testValidatorAddr
 
 	// Create unclaimed reward
-	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err := s.keeper.SetDelegatorReward(s.ctx, *reward1)
 	s.Require().NoError(err)
 
 	// Create claimed reward
-	reward2 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 2, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward2 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 2, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	reward2.Claimed = true
 	now := s.ctx.BlockTime()
 	reward2.ClaimedAt = &now

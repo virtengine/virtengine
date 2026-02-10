@@ -34,6 +34,7 @@ import {
   restoreLiveDigest,
   getDigestSnapshot,
 } from "./telegram-bot.mjs";
+import { PRCleanupDaemon } from "./pr-cleanup-daemon.mjs";
 import {
   execPrimaryPrompt,
   isPrimaryBusy,
@@ -41,6 +42,7 @@ import {
   setPrimaryAgent,
   getPrimaryAgentName,
   switchPrimaryAgent,
+  resetPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
@@ -114,10 +116,22 @@ import {
 } from "./shared-knowledge.mjs";
 import { WorkspaceMonitor } from "./workspace-monitor.mjs";
 import { VkLogStream } from "./vk-log-stream.mjs";
+import { createAnomalyDetector } from "./anomaly-detector.mjs";
+import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Configure logging before anything else ──────────────────────────────────
+configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
+
+// Install console interceptor with log file (after config provides logDir)
+{
+  const _logDir = config.logDir || resolve(__dirname, "logs");
+  const _logFile = resolve(_logDir, "monitor.log");
+  installConsoleInterceptor({ logFile: _logFile });
+}
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -451,6 +465,9 @@ let vkLogStream = null;
 let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
+
+// ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
+let anomalyDetector = null;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
@@ -1140,7 +1157,9 @@ const errorPatterns = [
   /SetValueInvocationException/i,
   /Cannot bind argument/i,
   /Unhandled/i,
-  /\bFailed\b/i,
+  /\bFailed to compile\b/i,
+  /\bFailed to start\b/i,
+  /\bFATAL\b/i,
   /Copilot assignment failed/i,
 ];
 
@@ -1510,16 +1529,101 @@ function restartVibeKanbanProcess() {
 function ensureVkLogStream() {
   if (vkLogStream) return;
   console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
+
+  // Initialize anomaly detector if not already running
+  if (!anomalyDetector) {
+    anomalyDetector = createAnomalyDetector({
+      onAnomaly: (anomaly) => {
+        const icon =
+          anomaly.severity === "CRITICAL"
+            ? "🔴"
+            : anomaly.severity === "HIGH"
+              ? "🟠"
+              : "🟡";
+        console.warn(
+          `[anomaly-detector] ${icon} ${anomaly.severity} ${anomaly.type} [${anomaly.shortId}]: ${anomaly.message}`,
+        );
+
+        // Act on kill/restart actions — kill the specific process, NOT the whole monitor.
+        // Circuit breaker is reserved for actual repeated monitor crashes, not per-process anomalies.
+        if (anomaly.action === "kill" || anomaly.action === "restart") {
+          console.warn(
+            `[anomaly-detector] executing action="${anomaly.action}" for ${anomaly.type} on process ${anomaly.shortId}`,
+          );
+
+          // 1. Kill the specific VK execution process log stream
+          if (vkLogStream && anomaly.processId) {
+            vkLogStream.killProcess(anomaly.processId, `anomaly-detector: ${anomaly.type}`);
+          }
+
+          // 2. Reset the primary agent session only for truly fatal anomalies
+          //    (token overflow, stream death) — NOT for model-not-supported or push loops
+          //    since those are external/transient issues.
+          if (
+            anomaly.type === "TOKEN_OVERFLOW" ||
+            anomaly.type === "STREAM_DEATH"
+          ) {
+            void resetPrimaryAgent().catch((err) => {
+              console.warn(`[anomaly-detector] resetPrimaryAgent failed: ${err.message}`);
+            });
+          }
+        }
+      },
+      notify: (text, options) => {
+        sendTelegramMessage(text, options).catch(() => {});
+      },
+    });
+    console.log("[monitor] anomaly detector started");
+  }
+
   const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
   const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
   vkLogStream = new VkLogStream(vkEndpointUrl, {
     logDir: agentLogDir,
     sessionLogDir,
-    echo: echoLogs,
-    onLine: (_line, _meta) => {
-      // Log lines are now written by VkLogStream internally to both raw and
-      // structured session log files. The onLine callback is kept for future
-      // extensions (e.g. error pattern detection, autofix triggers).
+    // Always keep VK log streaming silent in the CLI.
+    echo: false,
+    filterLine: (line) => {
+      // Drop verbose VK/Codex event chatter and token streams.
+      if (!line) return false;
+      if (line.length > 6000) return false;
+      if (line.startsWith('{"method":"codex/event/')) return false;
+      if (line.startsWith('{"method":"item/')) return false;
+      if (line.startsWith('{"method":"thread/')) return false;
+      if (line.startsWith('{"method":"account/')) return false;
+      if (line.includes('"type":"reasoning_content_delta"')) return false;
+      if (line.includes('"type":"agent_reasoning_delta"')) return false;
+      if (line.includes('"type":"token_count"')) return false;
+      if (line.includes('"type":"item_started"')) return false;
+      if (line.includes('"type":"item_completed"')) return false;
+      if (line.includes('"type":"exec_command_begin"')) return false;
+      if (line.includes('"type":"exec_command_output_delta"')) return false;
+      if (line.includes('"type":"exec_command_end"')) return false;
+      if (line.includes('"method":"codex/event/reasoning_content_delta"'))
+        return false;
+      if (line.includes('"method":"codex/event/agent_reasoning_delta"'))
+        return false;
+      if (line.includes('"method":"codex/event/token_count"')) return false;
+      if (line.includes('"method":"codex/event/item_started"')) return false;
+      if (line.includes('"method":"codex/event/item_completed"')) return false;
+      if (line.includes('"method":"codex/event/exec_command_')) return false;
+      if (line.includes('"method":"item/reasoning/summaryTextDelta"'))
+        return false;
+      if (line.includes('"method":"item/commandExecution/outputDelta"'))
+        return false;
+      if (line.includes('"method":"codex/event/agent_reasoning"')) return false;
+      return true;
+    },
+    onLine: (line, meta) => {
+      // Feed every agent log line to the anomaly detector for real-time
+      // pattern matching (death loops, token overflow, stalls, etc.).
+      if (anomalyDetector) {
+        try {
+          anomalyDetector.processLine(line, meta);
+        } catch {
+          /* detector error — non-fatal */
+        }
+      }
     },
     onProcessConnected: (processId, meta) => {
       // When a new execution process is discovered via the session stream,
@@ -4726,11 +4830,17 @@ async function smartPRFlow(attemptId, shortId, status) {
           console.log(`[monitor] ${tag}: conflicts resolved via VK API`);
         } else {
           const attemptInfo = await getAttemptInfo(attemptId);
-          const worktreeDir =
+          let worktreeDir =
             attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+          // Fallback: look up worktree by branch name from git
+          if (!worktreeDir && (attemptInfo?.branch || attempt?.branch)) {
+            worktreeDir = findWorktreeForBranch(
+              attemptInfo?.branch || attempt?.branch,
+            );
+          }
           if (codexResolveConflictsEnabled) {
             console.warn(
-              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
+              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution (worktree: ${worktreeDir || "UNKNOWN"})`,
             );
             const classification = classifyConflictedFiles(files);
             const fileGuidance = files
@@ -6779,18 +6889,29 @@ async function handleExit(code, signal, logPath) {
     return;
   }
 
-  // ── Auto-fix: run in BACKGROUND — do NOT block orchestrator restart ──
-  // The orchestrator restarts immediately below. If autofix writes changes,
-  // the devmode file watcher will trigger a clean restart automatically.
+  // ── Auto-fix: runs in BACKGROUND only for genuine monitor/orchestrator crashes ──
+  // STRICT trigger: only fire when the orchestrator ITSELF crashed (unhandled
+  // exception, stack trace from our code, import error, etc.) — NOT when the
+  // log merely contains "ERROR" from normal task lifecycle messages.
+  //
+  // If autofix writes changes, the devmode file watcher triggers a clean restart.
   // If no changes are needed, autofix just logs the outcome — no restart.
-  const hasRealErrors =
-    logText.includes("ERROR") ||
-    logText.includes("FATAL") ||
+  const hasMonitorCrash =
     logText.includes("Unhandled exception") ||
-    logText.includes("Exception") ||
-    logText.includes("Traceback");
+    logText.includes("Unhandled rejection") ||
+    logText.includes("SyntaxError:") ||
+    logText.includes("ReferenceError:") ||
+    logText.includes("TypeError:") ||
+    logText.includes("Cannot find module") ||
+    logText.includes("FATAL ERROR") ||
+    logText.includes("Traceback (most recent call last)") ||
+    // PowerShell internal crash
+    logText.includes("TerminatingError") ||
+    logText.includes("script block termination") ||
+    // Very short runtime with high exit code = likely startup crash
+    (code > 1 && runDurationMs < 30_000);
 
-  if (autoFixEnabled && logText.length > 0 && hasRealErrors) {
+  if (autoFixEnabled && logText.length > 0 && hasMonitorCrash) {
     const telegramFn =
       telegramToken && telegramChatId
         ? (msg) => void sendTelegramMessage(msg)
@@ -6832,10 +6953,10 @@ async function handleExit(code, signal, logPath) {
         );
       }
     })();
-  } else if (autoFixEnabled && logText.length > 0 && !hasRealErrors) {
-    // No real errors in log — skip autofix entirely, just log
+  } else if (autoFixEnabled && logText.length > 0 && !hasMonitorCrash) {
+    // Not a monitor crash — normal exit with task errors. Skip autofix entirely.
     console.log(
-      `[monitor] exit ${reason} has no real errors in log — skipping autofix`,
+      `[monitor] exit ${reason} — no monitor crash detected — skipping autofix`,
     );
   }
 
@@ -8049,9 +8170,27 @@ injectMonitorFunctions({
   triggerTaskPlanner,
   reconcileTaskStatuses,
   onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
+  getAnomalyReport: () =>
+    anomalyDetector
+      ? anomalyDetector.getStatusReport()
+      : "Anomaly detector not running.",
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
+}
+
+// ── Start PR Cleanup Daemon ──────────────────────────────────────────────────
+// Automatically resolves PR conflicts and CI failures every 30 minutes
+let prCleanupDaemon = null;
+if (config.prCleanupEnabled !== false) {
+  console.log("[monitor] Starting PR cleanup daemon...");
+  prCleanupDaemon = new PRCleanupDaemon({
+    intervalMs: 30 * 60 * 1000, // 30 minutes
+    maxConcurrentCleanups: 3,
+    dryRun: false,
+    autoMerge: true,
+  });
+  prCleanupDaemon.start();
 }
 
 // ── Named exports for testing ───────────────────────────────────────────────

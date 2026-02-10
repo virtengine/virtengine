@@ -71,6 +71,7 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 			del.Shares,
 			valShares.TotalShares,
 			ctx.BlockTime(),
+			ctx.BlockHeight(),
 		)
 
 		if err := k.SetDelegatorReward(ctx, *reward); err != nil {

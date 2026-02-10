@@ -6,6 +6,7 @@ package keeper
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -307,6 +308,54 @@ func (q *Querier) DelegatorRedelegations(ctx context.Context, req *delegationv1.
 	}, nil
 }
 
+// Redelegations queries all active redelegations.
+func (q *Querier) Redelegations(ctx context.Context, req *delegationv1.QueryRedelegationsRequest) (*delegationv1.QueryRedelegationsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	if req.Pagination == nil {
+		req.Pagination = &sdkquery.PageRequest{}
+	}
+	if req.Pagination.Limit == 0 {
+		req.Pagination.Limit = sdkquery.DefaultLimit
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	store := prefix.NewStore(sdkCtx.KVStore(q.skey), delegationtypes.RedelegationPrefix)
+	now := sdkCtx.BlockTime()
+
+	redelegations := make([]delegationv1.Redelegation, 0)
+	pageRes, err := sdkquery.FilteredPaginate(store, req.Pagination, func(_ []byte, value []byte, accumulate bool) (bool, error) {
+		var red delegationtypes.Redelegation
+		if err := json.Unmarshal(value, &red); err != nil {
+			return false, err
+		}
+
+		active := false
+		for _, entry := range red.Entries {
+			if entry.CompletionTime.After(now) {
+				active = true
+				break
+			}
+		}
+
+		if accumulate && active {
+			redelegations = append(redelegations, redelegationToProto(red))
+		}
+
+		return active, nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &delegationv1.QueryRedelegationsResponse{
+		Redelegations: redelegations,
+		Pagination:    pageRes,
+	}, nil
+}
+
 // DelegatorRewards queries unclaimed rewards for a delegator from a specific validator.
 func (q *Querier) DelegatorRewards(ctx context.Context, req *delegationv1.QueryDelegatorRewardsRequest) (*delegationv1.QueryDelegatorRewardsResponse, error) {
 	if req == nil {
@@ -334,6 +383,120 @@ func (q *Querier) DelegatorRewards(ctx context.Context, req *delegationv1.QueryD
 	return &delegationv1.QueryDelegatorRewardsResponse{
 		Rewards:     responseRewards,
 		TotalReward: totalReward,
+	}, nil
+}
+
+// HistoricalRewards queries historical rewards for a delegator from a validator.
+func (q *Querier) HistoricalRewards(ctx context.Context, req *delegationv1.QueryHistoricalRewardsRequest) (*delegationv1.QueryHistoricalRewardsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.DelegatorAddress == "" || req.ValidatorAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, "delegator_address and validator_address cannot be empty")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(req.DelegatorAddress); err != nil {
+		return nil, delegationtypes.ErrInvalidDelegator.Wrap(err.Error())
+	}
+	if _, err := sdk.AccAddressFromBech32(req.ValidatorAddress); err != nil {
+		return nil, delegationtypes.ErrInvalidValidator.Wrap(err.Error())
+	}
+
+	if req.Pagination == nil {
+		req.Pagination = &sdkquery.PageRequest{}
+	}
+	if req.Pagination.Limit == 0 {
+		req.Pagination.Limit = sdkquery.DefaultLimit
+	}
+
+	startHeight := req.StartHeight
+	endHeight := req.EndHeight
+	if endHeight != 0 && startHeight > endHeight {
+		return nil, status.Error(codes.InvalidArgument, "start_height cannot be greater than end_height")
+	}
+	if endHeight == 0 {
+		endHeight = int64(^uint64(0) >> 1)
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	store := prefix.NewStore(sdkCtx.KVStore(q.skey), delegationtypes.DelegatorRewardsPrefix)
+
+	rewards := make([]delegationv1.DelegatorReward, 0)
+	totalReward := big.NewInt(0)
+	pageRes, err := sdkquery.FilteredPaginate(store, req.Pagination, func(_ []byte, value []byte, accumulate bool) (bool, error) {
+		var reward delegationtypes.DelegatorReward
+		if err := json.Unmarshal(value, &reward); err != nil {
+			return false, err
+		}
+
+		match := reward.DelegatorAddress == req.DelegatorAddress &&
+			reward.ValidatorAddress == req.ValidatorAddress &&
+			!reward.Claimed &&
+			reward.Height >= startHeight &&
+			reward.Height <= endHeight
+
+		if accumulate && match {
+			rewards = append(rewards, delegatorRewardToProto(reward))
+			totalReward.Add(totalReward, reward.GetRewardBigInt())
+		}
+
+		return match, nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &delegationv1.QueryHistoricalRewardsResponse{
+		Rewards:     rewards,
+		TotalReward: totalReward.String(),
+		Pagination:  pageRes,
+	}, nil
+}
+
+// SlashingEvents queries slashing events for a delegator.
+func (q *Querier) SlashingEvents(ctx context.Context, req *delegationv1.QuerySlashingEventsRequest) (*delegationv1.QuerySlashingEventsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.DelegatorAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, "delegator_address cannot be empty")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(req.DelegatorAddress); err != nil {
+		return nil, delegationtypes.ErrInvalidDelegator.Wrap(err.Error())
+	}
+
+	if req.Pagination == nil {
+		req.Pagination = &sdkquery.PageRequest{}
+	}
+	if req.Pagination.Limit == 0 {
+		req.Pagination.Limit = sdkquery.DefaultLimit
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	prefixKey := append([]byte{}, delegationtypes.DelegatorSlashingEventPrefix...)
+	prefixKey = append(prefixKey, []byte(req.DelegatorAddress+":")...)
+	store := prefix.NewStore(sdkCtx.KVStore(q.skey), prefixKey)
+
+	events := make([]delegationv1.DelegatorSlashingEvent, 0)
+	pageRes, err := sdkquery.FilteredPaginate(store, req.Pagination, func(_ []byte, value []byte, accumulate bool) (bool, error) {
+		var event delegationtypes.DelegatorSlashingEvent
+		if err := json.Unmarshal(value, &event); err != nil {
+			return false, err
+		}
+
+		if accumulate {
+			events = append(events, delegatorSlashingEventToProto(event))
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &delegationv1.QuerySlashingEventsResponse{
+		Events:     events,
+		Pagination: pageRes,
 	}, nil
 }
 
@@ -495,7 +658,22 @@ func delegatorRewardToProto(reward delegationtypes.DelegatorReward) delegationv1
 		SharesAtEpoch:               reward.SharesAtEpoch,
 		ValidatorTotalSharesAtEpoch: reward.ValidatorTotalSharesAtEpoch,
 		CalculatedAt:                reward.CalculatedAt,
+		Height:                      reward.Height,
 		Claimed:                     reward.Claimed,
 		ClaimedAt:                   reward.ClaimedAt,
+	}
+}
+
+func delegatorSlashingEventToProto(event delegationtypes.DelegatorSlashingEvent) delegationv1.DelegatorSlashingEvent {
+	return delegationv1.DelegatorSlashingEvent{
+		Id:               event.ID,
+		DelegatorAddress: event.DelegatorAddress,
+		ValidatorAddress: event.ValidatorAddress,
+		SlashFraction:    event.SlashFraction,
+		SlashAmount:      event.SlashAmount,
+		SharesSlashed:    event.SharesSlashed,
+		InfractionHeight: event.InfractionHeight,
+		BlockHeight:      event.BlockHeight,
+		BlockTime:        event.BlockTime,
 	}
 }

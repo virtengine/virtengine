@@ -152,8 +152,9 @@ const THREAD_OPTIONS = {
 };
 
 /**
- * Get or create the persistent thread.
- * Resumes an existing thread if we have a saved threadId.
+ * Get or create a thread.
+ * ALWAYS starts a fresh thread per task — never resumes a previous session.
+ * This prevents token overflow from accumulated context across tasks.
  */
 async function getThread() {
   if (activeThread) return activeThread;
@@ -164,18 +165,14 @@ async function getThread() {
     codexInstance = new Cls();
   }
 
-  // Try to resume existing thread
+  // Always start a new thread — never resume the old one.
+  // Token overflow (395k > 272k limit) is caused by accumulated context
+  // from reusing the same thread across multiple tasks.
   if (activeThreadId) {
-    try {
-      activeThread = codexInstance.resumeThread(activeThreadId, THREAD_OPTIONS);
-      console.log(`[codex-shell] resumed thread ${activeThreadId}`);
-      return activeThread;
-    } catch (err) {
-      console.warn(
-        `[codex-shell] failed to resume thread ${activeThreadId}: ${err.message} — starting fresh`,
-      );
-      activeThreadId = null;
-    }
+    console.log(
+      `[codex-shell] discarding previous thread ${activeThreadId} — creating fresh thread per task`,
+    );
+    activeThreadId = null;
   }
 
   // Start a new thread with the system prompt as the first turn
@@ -356,6 +353,10 @@ export async function execCodexPrompt(userMessage, options = {}) {
   activeTurn = true;
 
   try {
+    // Always start a fresh thread for each task to prevent token overflow
+    // from accumulated context across multiple tasks.
+    activeThread = null;
+
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const thread = await getThread();
 

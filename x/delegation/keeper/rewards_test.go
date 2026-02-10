@@ -181,11 +181,11 @@ func (s *RewardsTestSuite) TestClaimRewards() {
 	validatorAddr := testValidatorAddr
 
 	// Create unclaimed rewards for multiple epochs
-	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err := s.keeper.SetDelegatorReward(s.ctx, *reward1)
 	s.Require().NoError(err)
 
-	reward2 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 2, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward2 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 2, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err = s.keeper.SetDelegatorReward(s.ctx, *reward2)
 	s.Require().NoError(err)
 
@@ -214,11 +214,11 @@ func (s *RewardsTestSuite) TestClaimAllRewards() {
 	validator2 := testValidator2Addr
 
 	// Create rewards from multiple validators
-	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err := s.keeper.SetDelegatorReward(s.ctx, *reward1)
 	s.Require().NoError(err)
 
-	reward2 := types.NewDelegatorReward(delegatorAddr, validator2, 1, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward2 := types.NewDelegatorReward(delegatorAddr, validator2, 1, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err = s.keeper.SetDelegatorReward(s.ctx, *reward2)
 	s.Require().NoError(err)
 
@@ -233,8 +233,8 @@ func (s *RewardsTestSuite) TestClaimAllRewards() {
 
 // TestClaimRewardsNoRewards tests claiming when no rewards exist
 func (s *RewardsTestSuite) TestClaimRewardsNoRewards() {
-	delegatorAddr := testRewardDelegatorAddr
-	validatorAddr := testRewardValidatorAddr
+	delegatorAddr := testDelegator1Addr
+	validatorAddr := testValidator1Addr
 
 	// No rewards exist
 	claimedCoins, err := s.keeper.ClaimRewards(s.ctx, delegatorAddr, validatorAddr)
@@ -249,16 +249,16 @@ func (s *RewardsTestSuite) TestGetDelegatorTotalRewards() {
 	validator2 := "cosmos1validator2222222222222222"
 
 	// Create unclaimed rewards
-	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err := s.keeper.SetDelegatorReward(s.ctx, *reward1)
 	s.Require().NoError(err)
 
-	reward2 := types.NewDelegatorReward(delegatorAddr, validator2, 1, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward2 := types.NewDelegatorReward(delegatorAddr, validator2, 1, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err = s.keeper.SetDelegatorReward(s.ctx, *reward2)
 	s.Require().NoError(err)
 
 	// Create claimed reward (should not be counted)
-	reward3 := types.NewDelegatorReward(delegatorAddr, validator1, 2, "500000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward3 := types.NewDelegatorReward(delegatorAddr, validator1, 2, "500000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	reward3.Claimed = true
 	now := s.ctx.BlockTime()
 	reward3.ClaimedAt = &now
@@ -277,22 +277,48 @@ func (s *RewardsTestSuite) TestGetDelegatorValidatorTotalRewards() {
 	validator2 := "cosmos1validator2222222222222222"
 
 	// Create rewards from validator1
-	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err := s.keeper.SetDelegatorReward(s.ctx, *reward1)
 	s.Require().NoError(err)
 
-	reward2 := types.NewDelegatorReward(delegatorAddr, validator1, 2, "150000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward2 := types.NewDelegatorReward(delegatorAddr, validator1, 2, "150000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err = s.keeper.SetDelegatorReward(s.ctx, *reward2)
 	s.Require().NoError(err)
 
 	// Create reward from validator2 (should not be counted)
-	reward3 := types.NewDelegatorReward(delegatorAddr, validator2, 1, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
+	reward3 := types.NewDelegatorReward(delegatorAddr, validator2, 1, "200000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
 	err = s.keeper.SetDelegatorReward(s.ctx, *reward3)
 	s.Require().NoError(err)
 
 	// Get total from validator1
 	total := s.keeper.GetDelegatorValidatorTotalRewards(s.ctx, delegatorAddr, validator1)
 	s.Require().Equal("250000", total) // 100000 + 150000
+}
+
+// TestClaimRewardsInRange tests claiming rewards within a height range
+func (s *RewardsTestSuite) TestClaimRewardsInRange() {
+	delegatorAddr := testDelegator1Addr
+	validatorAddr := testValidator1Addr
+
+	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000", "10000", s.ctx.BlockTime(), 90)
+	reward2 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 2, "200000", "1000", "10000", s.ctx.BlockTime(), 100)
+	reward3 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 3, "300000", "1000", "10000", s.ctx.BlockTime(), 110)
+
+	s.Require().NoError(s.keeper.SetDelegatorReward(s.ctx, *reward1))
+	s.Require().NoError(s.keeper.SetDelegatorReward(s.ctx, *reward2))
+	s.Require().NoError(s.keeper.SetDelegatorReward(s.ctx, *reward3))
+
+	claimed, err := s.keeper.ClaimRewardsInRange(s.ctx, delegatorAddr, validatorAddr, 95, 105)
+	s.Require().NoError(err)
+	s.Require().Equal("200000uve", claimed.String())
+
+	r1, _ := s.keeper.GetDelegatorReward(s.ctx, delegatorAddr, validatorAddr, 1)
+	r2, _ := s.keeper.GetDelegatorReward(s.ctx, delegatorAddr, validatorAddr, 2)
+	r3, _ := s.keeper.GetDelegatorReward(s.ctx, delegatorAddr, validatorAddr, 3)
+
+	s.Require().False(r1.Claimed)
+	s.Require().True(r2.Claimed)
+	s.Require().False(r3.Claimed)
 }
 
 // TestCalculateDelegatorRewardAmount tests reward amount calculation

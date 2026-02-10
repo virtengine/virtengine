@@ -1,7 +1,7 @@
 # VirtEngine Progress
 
 Last updated: 2026-02-10
-Status: Baseline refresh (no prior _docs/ralph/progress.md found in repo)
+Status: Baseline refresh (prior snapshot merged into this update)
 
 ## Inputs reviewed
 - _docs/ralph/ralph_patent_text.txt (extracted from _docs/AU2024203136A1-LIVE.pdf)
@@ -24,6 +24,11 @@ Status: Baseline refresh (no prior _docs/ralph/progress.md found in repo)
 
 Notes:
 - PR titles and summaries indicate acceptance criteria likely met for those scopes, but no full re-validation was performed as part of this planning task.
+
+## Prior snapshot (2026-02-09) notes
+- Previous progress file reported missing `_docs/ralph_patent_text.txt`. This update includes the extracted patent text and uses it for gap analysis.
+- Security remediation backlog (issues #151-#161) remains relevant and is already captured by existing kanban tasks 52B-53D.
+- Module TODOs noted previously (MFA validation, HPC penalties, market query TODOs, staking type tests) remain tracked in existing tasks and were not duplicated here.
 
 ## Gaps vs patent specification (high-level)
 - Encrypted data flows are implemented in the encryption module but are not consistently enforced across marketplace, support, provider, and order metadata.

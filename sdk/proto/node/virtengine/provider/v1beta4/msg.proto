@@ -146,3 +146,90 @@ message MsgVerifyProviderDomainResponse {
     (gogoproto.moretags) = "yaml:\"verified\""
   ];
 }
+
+// VerificationMethod defines the method used for domain verification
+enum VerificationMethod {
+  VERIFICATION_METHOD_UNKNOWN = 0;
+  VERIFICATION_METHOD_DNS_TXT = 1;
+  VERIFICATION_METHOD_DNS_CNAME = 2;
+  VERIFICATION_METHOD_HTTP_WELL_KNOWN = 3;
+}
+
+// MsgRequestDomainVerification defines an SDK message for requesting domain verification
+message MsgRequestDomainVerification {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+  VerificationMethod method = 3 [
+    (gogoproto.jsontag)  = "method",
+    (gogoproto.moretags) = "yaml:\"method\""
+  ];
+}
+
+// MsgRequestDomainVerificationResponse defines the Msg/RequestDomainVerification response type.
+message MsgRequestDomainVerificationResponse {
+  string token = 1 [
+    (gogoproto.jsontag)  = "token",
+    (gogoproto.moretags) = "yaml:\"token\""
+  ];
+  int64 expires_at = 2 [
+    (gogoproto.jsontag)  = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+  string verification_target = 3 [
+    (gogoproto.jsontag)  = "verification_target",
+    (gogoproto.moretags) = "yaml:\"verification_target\""
+  ];
+}
+
+// MsgConfirmDomainVerification defines an SDK message for confirming domain verification with off-chain proof
+message MsgConfirmDomainVerification {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string proof = 2 [
+    (gogoproto.jsontag)  = "proof",
+    (gogoproto.moretags) = "yaml:\"proof\""
+  ];
+}
+
+// MsgConfirmDomainVerificationResponse defines the Msg/ConfirmDomainVerification response type.
+message MsgConfirmDomainVerificationResponse {
+  bool verified = 1 [
+    (gogoproto.jsontag)  = "verified",
+    (gogoproto.moretags) = "yaml:\"verified\""
+  ];
+  int64 verified_at = 2 [
+    (gogoproto.jsontag)  = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+}
+
+// MsgRevokeDomainVerification defines an SDK message for revoking domain verification
+message MsgRevokeDomainVerification {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+}
+
+// MsgRevokeDomainVerificationResponse defines the Msg/RevokeDomainVerification response type.
+message MsgRevokeDomainVerificationResponse {}

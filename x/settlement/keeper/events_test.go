@@ -130,48 +130,54 @@ func TestParamsValidation(t *testing.T) {
 		},
 		{
 			name: "valid custom params",
-			params: types.Params{
-				PlatformFeeRate:                        "0.03",
-				ValidatorFeeRate:                       "0.02",
-				MinEscrowDuration:                      3600,
-				MaxEscrowDuration:                      86400 * 365,
-				SettlementPeriod:                       86400,
-				RewardClaimExpiry:                      86400 * 30,
-				StakingRewardEpochLength:               100,
-				DisputeWindowDuration:                  86400 * 7,
-				UsageRewardRateBps:                     500,
-				UsageRewardCPUMultiplierBps:            10000,
-				UsageRewardMemoryMultiplierBps:         10000,
-				UsageRewardStorageMultiplierBps:        10000,
-				UsageRewardGPUMultiplierBps:            10000,
-				UsageRewardNetworkMultiplierBps:        10000,
-				UsageRewardSLAOnTimeMultiplierBps:      10000,
-				UsageRewardSLALateMultiplierBps:        9000,
-				UsageRewardAcknowledgedMultiplierBps:   10000,
-				UsageRewardUnacknowledgedMultiplierBps: 9000,
-			},
+			params: func() types.Params {
+				params := types.DefaultParams()
+				params.PlatformFeeRate = "0.03"
+				params.ValidatorFeeRate = "0.02"
+				params.MinEscrowDuration = 3600
+				params.MaxEscrowDuration = 86400 * 365
+				params.SettlementPeriod = 86400
+				params.RewardClaimExpiry = 86400 * 30
+				params.StakingRewardEpochLength = 100
+				params.DisputeWindowDuration = 86400 * 7
+				params.UsageRewardRateBps = 500
+				params.UsageRewardCPUMultiplierBps = 10000
+				params.UsageRewardMemoryMultiplierBps = 10000
+				params.UsageRewardStorageMultiplierBps = 10000
+				params.UsageRewardGPUMultiplierBps = 10000
+				params.UsageRewardNetworkMultiplierBps = 10000
+				params.UsageRewardSLAOnTimeMultiplierBps = 10000
+				params.UsageRewardSLALateMultiplierBps = 9000
+				params.UsageRewardAcknowledgedMultiplierBps = 10000
+				params.UsageRewardUnacknowledgedMultiplierBps = 9000
+				return params
+			}(),
 			expectError: false,
 		},
 		{
 			name: "invalid platform fee rate",
-			params: types.Params{
-				PlatformFeeRate:       "1.5", // > 100%
-				ValidatorFeeRate:      "0.01",
-				MinEscrowDuration:     3600,
-				MaxEscrowDuration:     86400 * 365,
-				SettlementPeriod:      86400,
-				DisputeWindowDuration: 86400 * 7,
-			},
+			params: func() types.Params {
+				params := types.DefaultParams()
+				params.PlatformFeeRate = "1.5"
+				params.ValidatorFeeRate = "0.01"
+				params.MinEscrowDuration = 3600
+				params.MaxEscrowDuration = 86400 * 365
+				params.SettlementPeriod = 86400
+				params.DisputeWindowDuration = 86400 * 7
+				return params
+			}(),
 			expectError: true,
 		},
 		{
 			name: "min duration greater than max",
-			params: types.Params{
-				PlatformFeeRate:   "0.05",
-				ValidatorFeeRate:  "0.01",
-				MinEscrowDuration: 86400 * 400,
-				MaxEscrowDuration: 86400,
-			},
+			params: func() types.Params {
+				params := types.DefaultParams()
+				params.PlatformFeeRate = rate005
+				params.ValidatorFeeRate = "0.01"
+				params.MinEscrowDuration = 86400 * 400
+				params.MaxEscrowDuration = 86400
+				return params
+			}(),
 			expectError: true,
 		},
 	}

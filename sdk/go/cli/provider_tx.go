@@ -66,7 +66,200 @@ func GetTxProviderCmd() *cobra.Command {
 	cmd.AddCommand(
 		GetTxProviderCreateCmd(),
 		GetTxProviderUpdateCmd(),
+		GetTxDomainVerificationCmd(),
 	)
+	return cmd
+}
+
+func GetTxDomainVerificationCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "domain",
+		Short: "Domain verification subcommands",
+		RunE:  sdkclient.ValidateCmd,
+	}
+	cmd.AddCommand(
+		GetTxGenerateDomainVerificationTokenCmd(),
+		GetTxVerifyProviderDomainCmd(),
+		GetTxRequestDomainVerificationCmd(),
+		GetTxConfirmDomainVerificationCmd(),
+		GetTxRevokeDomainVerificationCmd(),
+	)
+	return cmd
+}
+
+func GetTxGenerateDomainVerificationTokenCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "generate [domain]",
+		Short:             "Generate domain verification token (legacy)",
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			msg := &types.MsgGenerateDomainVerificationToken{
+				Owner:  cctx.GetFromAddress().String(),
+				Domain: args[0],
+			}
+
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+func GetTxVerifyProviderDomainCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "verify",
+		Short:             "Verify provider domain (legacy)",
+		Args:              cobra.NoArgs,
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			msg := &types.MsgVerifyProviderDomain{
+				Owner: cctx.GetFromAddress().String(),
+			}
+
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+func GetTxRequestDomainVerificationCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "request [domain] [method]",
+		Short:             "Request domain verification with specified method (dns-txt, dns-cname, http-well-known)",
+		Args:              cobra.ExactArgs(2),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			var method types.VerificationMethod
+			switch args[1] {
+			case "dns-txt":
+				method = types.VERIFICATION_METHOD_DNS_TXT
+			case "dns-cname":
+				method = types.VERIFICATION_METHOD_DNS_CNAME
+			case "http-well-known":
+				method = types.VERIFICATION_METHOD_HTTP_WELL_KNOWN
+			default:
+				return fmt.Errorf("invalid method: %s (must be dns-txt, dns-cname, or http-well-known)", args[1])
+			}
+
+			msg := &types.MsgRequestDomainVerification{
+				Owner:  cctx.GetFromAddress().String(),
+				Domain: args[0],
+				Method: method,
+			}
+
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+func GetTxConfirmDomainVerificationCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "confirm [proof]",
+		Short:             "Confirm domain verification with off-chain proof",
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			msg := &types.MsgConfirmDomainVerification{
+				Owner: cctx.GetFromAddress().String(),
+				Proof: args[0],
+			}
+
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+func GetTxRevokeDomainVerificationCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "revoke",
+		Short:             "Revoke domain verification",
+		Args:              cobra.NoArgs,
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			msg := &types.MsgRevokeDomainVerification{
+				Owner: cctx.GetFromAddress().String(),
+			}
+
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
 

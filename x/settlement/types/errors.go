@@ -141,4 +141,16 @@ var (
 
 	// ErrFiatLimitExceeded is returned when conversion limits are exceeded
 	ErrFiatLimitExceeded = errorsmod.Register(ModuleName, 1544, "fiat conversion limit exceeded")
+
+	// ErrOracleUnavailable is returned when oracle sources are unavailable
+	ErrOracleUnavailable = errorsmod.Register(ModuleName, 1545, "oracle sources unavailable")
+
+	// ErrOracleStalePrice is returned when oracle prices are stale
+	ErrOracleStalePrice = errorsmod.Register(ModuleName, 1546, "oracle price stale")
+
+	// ErrOracleInsufficientSources is returned when not enough oracle sources are available
+	ErrOracleInsufficientSources = errorsmod.Register(ModuleName, 1547, "insufficient oracle sources")
+
+	// ErrRateUnavailable is returned when settlement rates cannot be locked
+	ErrRateUnavailable = errorsmod.Register(ModuleName, 1548, "settlement rate unavailable")
 )

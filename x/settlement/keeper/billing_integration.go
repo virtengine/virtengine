@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -203,6 +204,14 @@ func (k Keeper) generateInvoiceForSettlement(
 
 	if _, err := k.billingKeeper.RecordPayment(ctx, record.InvoiceID, record.Total, "settlement"); err != nil {
 		return "", err
+	}
+
+	if _, err := k.LockSettlementRates(ctx, settlement.SettlementID, record.InvoiceID); err != nil {
+		if errors.Is(err, types.ErrRateUnavailable) {
+			k.Logger(ctx).Error("settlement rates unavailable, queued", "settlement_id", settlement.SettlementID, "invoice_id", record.InvoiceID, "error", err)
+		} else {
+			return "", err
+		}
 	}
 
 	return record.InvoiceID, nil
