@@ -273,8 +273,9 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
 
   // ── 2. Create an ephemeral thread ────────────────────────────────────────
   // Sandbox policy: configurable via CODEX_SANDBOX env var or config
-  // Options: "workspace-write" (safe default), "danger-full-access" (legacy), "read-only"
-  const sandboxPolicy = process.env.CODEX_SANDBOX || "workspace-write";
+  // Options: "danger-full-access" (default — full write access for worktree workflows),
+  //          "workspace-write" (restricted — breaks with worktrees), "read-only"
+  const sandboxPolicy = process.env.CODEX_SANDBOX || "danger-full-access";
 
   const codex = new CodexClass();
   const thread = codex.startThread({
@@ -1022,7 +1023,7 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
 
   let thread;
   try {
-    const sandboxPolicy = process.env.CODEX_SANDBOX || "workspace-write";
+    const sandboxPolicy = process.env.CODEX_SANDBOX || "danger-full-access";
     thread = codex.resumeThread(threadId, {
       sandboxMode: sandboxPolicy,
       workingDirectory: cwd,
