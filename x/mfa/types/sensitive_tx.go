@@ -48,6 +48,31 @@ const (
 	SensitiveTxWebhookConfiguration SensitiveTransactionType = 18
 )
 
+// TransactionCategory represents the category of a sensitive transaction.
+// Categories are used for step-up authorization decisions.
+type TransactionCategory uint8
+
+const (
+	// CategoryUnspecified represents an unspecified category.
+	CategoryUnspecified TransactionCategory = 0
+	// CategoryAccountSecurity groups account security operations.
+	CategoryAccountSecurity TransactionCategory = 1
+	// CategoryAccessControl groups role and access control operations.
+	CategoryAccessControl TransactionCategory = 2
+	// CategoryProviderOperations groups provider onboarding and offerings.
+	CategoryProviderOperations TransactionCategory = 3
+	// CategoryValidatorOperations groups validator/staking operations.
+	CategoryValidatorOperations TransactionCategory = 4
+	// CategoryMarketplace groups marketplace and order activity.
+	CategoryMarketplace TransactionCategory = 5
+	// CategoryGovernance groups governance operations.
+	CategoryGovernance TransactionCategory = 6
+	// CategoryFundsTransfer groups withdrawals and transfers.
+	CategoryFundsTransfer TransactionCategory = 7
+	// CategoryAPIManagement groups API and webhook configuration.
+	CategoryAPIManagement TransactionCategory = 8
+)
+
 // SensitiveTransactionTypeNames maps transaction types to human-readable names
 var SensitiveTransactionTypeNames = map[SensitiveTransactionType]string{
 	SensitiveTxUnspecified:           "unspecified",
@@ -77,6 +102,59 @@ func (t SensitiveTransactionType) String() string {
 		return name
 	}
 	return fmt.Sprintf("unknown(%d)", t)
+}
+
+// Category returns the transaction category for the sensitive transaction type.
+func (t SensitiveTransactionType) Category() TransactionCategory {
+	switch t {
+	case SensitiveTxAccountRecovery, SensitiveTxKeyRotation, SensitiveTxAccountDeletion,
+		SensitiveTxTwoFactorDisable, SensitiveTxPrimaryEmailChange, SensitiveTxPhoneNumberChange:
+		return CategoryAccountSecurity
+
+	case SensitiveTxRoleAssignment:
+		return CategoryAccessControl
+
+	case SensitiveTxProviderRegistration, SensitiveTxFirstOfferingCreate:
+		return CategoryProviderOperations
+
+	case SensitiveTxValidatorRegistration:
+		return CategoryValidatorOperations
+
+	case SensitiveTxHighValueOrder:
+		return CategoryMarketplace
+
+	case SensitiveTxGovernanceProposal, SensitiveTxGovernanceVote:
+		return CategoryGovernance
+
+	case SensitiveTxLargeWithdrawal, SensitiveTxMediumWithdrawal, SensitiveTxTransferToNewAddress:
+		return CategoryFundsTransfer
+
+	case SensitiveTxAPIKeyGeneration, SensitiveTxWebhookConfiguration:
+		return CategoryAPIManagement
+
+	default:
+		return CategoryUnspecified
+	}
+}
+
+// CanAuthorize returns true if a session authorized for this transaction type
+// can also authorize the target transaction type.
+// This enables risk-based step-up: sessions can cover lower-risk actions within
+// the same category, but never cross-category or higher-risk actions.
+func (t SensitiveTransactionType) CanAuthorize(target SensitiveTransactionType) bool {
+	if t == target {
+		return true
+	}
+
+	if t.Category() == CategoryUnspecified || target.Category() == CategoryUnspecified {
+		return false
+	}
+
+	if t.Category() != target.Category() {
+		return false
+	}
+
+	return t.GetRiskLevel() >= target.GetRiskLevel()
 }
 
 // IsValid returns true if the transaction type is valid
@@ -421,6 +499,7 @@ var KnownSensitiveMsgTypes = map[string]SensitiveTransactionType{
 	"/virtengine.roles.v1.MsgNominateAdmin": SensitiveTxRoleAssignment,
 
 	// Provider/Validator operations
+	"/virtengine.provider.v1beta3.MsgCreateProvider": SensitiveTxProviderRegistration,
 	"/virtengine.provider.v1.MsgCreateProvider":      SensitiveTxProviderRegistration,
 	"/virtengine.provider.v1beta4.MsgCreateProvider": SensitiveTxProviderRegistration,
 	"/cosmos.staking.v1beta1.MsgCreateValidator":     SensitiveTxValidatorRegistration,
@@ -428,6 +507,19 @@ var KnownSensitiveMsgTypes = map[string]SensitiveTransactionType{
 	// Governance
 	"/cosmos.gov.v1.MsgSubmitProposal":      SensitiveTxGovernanceProposal,
 	"/cosmos.gov.v1beta1.MsgSubmitProposal": SensitiveTxGovernanceProposal,
+	"/cosmos.gov.v1.MsgVote":                SensitiveTxGovernanceVote,
+	"/cosmos.gov.v1beta1.MsgVote":           SensitiveTxGovernanceVote,
+	"/cosmos.gov.v1.MsgVoteWeighted":        SensitiveTxGovernanceVote,
+	"/cosmos.gov.v1beta1.MsgVoteWeighted":   SensitiveTxGovernanceVote,
+
+	// Marketplace withdrawals
+	"/virtengine.market.v1.MsgWithdrawLease":      SensitiveTxMediumWithdrawal,
+	"/virtengine.market.v1beta4.MsgWithdrawLease": SensitiveTxMediumWithdrawal,
+	"/virtengine.market.v1beta5.MsgWithdrawLease": SensitiveTxMediumWithdrawal,
+
+	// Marketplace orders
+	"/virtengine.market.v1beta4.MsgCreateOrder": SensitiveTxHighValueOrder,
+	"/virtengine.market.v1beta5.MsgCreateOrder": SensitiveTxHighValueOrder,
 }
 
 // GetSensitiveTransactionType returns the sensitive transaction type for a message type URL

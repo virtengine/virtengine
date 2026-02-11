@@ -453,6 +453,120 @@ func (m *msgServer) UpdateSensitiveTxConfig(goCtx context.Context, msg *types.Ms
 	}, nil
 }
 
+// IssueSession issues a new authorization session for a transaction type.
+func (m *msgServer) IssueSession(goCtx context.Context, msg *types.MsgIssueSession) (*types.MsgIssueSessionResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	address, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+
+	if msg.MFAProof == nil {
+		return nil, types.ErrMFARequired.Wrap("MFA proof required to issue session")
+	}
+
+	deviceFingerprint := msg.DeviceFingerprint
+	if deviceFingerprint == "" {
+		deviceFingerprint = msg.MFAProof.DeviceFingerprint
+	}
+
+	hooks := NewMFAGatingHooks(m.Keeper)
+	if err := hooks.ValidateMFAProof(ctx, address, msg.TransactionType, msg.MFAProof, deviceFingerprint); err != nil {
+		return nil, err
+	}
+
+	// Use verified factors from the proof session
+	proofSession, found := m.GetAuthorizationSession(ctx, msg.MFAProof.SessionID)
+	if !found {
+		return nil, types.ErrSessionNotFound.Wrapf("session %s not found", msg.MFAProof.SessionID)
+	}
+
+	newSession, err := m.CreateAuthSessionForAction(ctx, address, msg.TransactionType, proofSession.VerifiedFactors, deviceFingerprint)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgIssueSessionResponse{
+		SessionID:        newSession.SessionID,
+		SessionExpiresAt: newSession.ExpiresAt,
+		IsSingleUse:      newSession.IsSingleUse,
+	}, nil
+}
+
+// RefreshSession refreshes an authorization session.
+func (m *msgServer) RefreshSession(goCtx context.Context, msg *types.MsgRefreshSession) (*types.MsgRefreshSessionResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	address, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+
+	if msg.MFAProof == nil {
+		return nil, types.ErrMFARequired.Wrap("MFA proof required to refresh session")
+	}
+
+	if msg.MFAProof.SessionID != msg.SessionID {
+		return nil, types.ErrInvalidProof.Wrap("MFA proof session does not match refresh target")
+	}
+
+	session, found := m.GetAuthorizationSession(ctx, msg.SessionID)
+	if !found {
+		return nil, types.ErrSessionNotFound.Wrapf("session %s not found", msg.SessionID)
+	}
+
+	if session.AccountAddress != msg.Sender {
+		return nil, types.ErrUnauthorized.Wrap("session does not belong to this account")
+	}
+
+	if session.IsSingleUse {
+		return nil, types.ErrUnauthorized.Wrap("single-use sessions cannot be refreshed")
+	}
+
+	hooks := NewMFAGatingHooks(m.Keeper)
+	if err := hooks.ValidateMFAProof(ctx, address, session.TransactionType, msg.MFAProof, msg.MFAProof.DeviceFingerprint); err != nil {
+		return nil, err
+	}
+
+	updated, err := m.RefreshAuthorizationSession(ctx, msg.SessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgRefreshSessionResponse{
+		SessionID:        updated.SessionID,
+		SessionExpiresAt: updated.ExpiresAt,
+	}, nil
+}
+
+// RevokeSession revokes an authorization session.
+func (m *msgServer) RevokeSession(goCtx context.Context, msg *types.MsgRevokeSession) (*types.MsgRevokeSessionResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	address, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+
+	session, found := m.GetAuthorizationSession(ctx, msg.SessionID)
+	if !found {
+		return nil, types.ErrSessionNotFound.Wrapf("session %s not found", msg.SessionID)
+	}
+
+	if session.AccountAddress != address.String() {
+		return nil, types.ErrUnauthorized.Wrap("session does not belong to this account")
+	}
+
+	if err := m.RevokeAuthorizationSession(ctx, msg.SessionID); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgRevokeSessionResponse{
+		Success: true,
+	}, nil
+}
+
 // Helper functions
 
 // validateMFAProof validates an MFA proof
