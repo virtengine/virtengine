@@ -9,11 +9,23 @@
 #   --restore HEIGHT   Restore to specific height
 #
 # Environment variables:
-#   NODE_HOME          Path to node home directory (default: /opt/virtengine)
-#   SNAPSHOT_DIR       Local snapshot directory (default: /data/snapshots)
-#   DR_BUCKET          S3 bucket for backups (required for upload)
-#   RETENTION_COUNT    Number of local snapshots to keep (default: 10)
-#   SNAPSHOT_INTERVAL  Blocks between snapshots (default: 1000)
+#   NODE_HOME                Path to node home directory (default: /opt/virtengine)
+#   SNAPSHOT_DIR             Local snapshot directory (default: /data/snapshots)
+#   DR_BUCKET                S3 bucket for backups (required for upload)
+#   RETENTION_COUNT          Number of local snapshots to keep (default: 10)
+#   SNAPSHOT_INTERVAL        Blocks between snapshots (default: 1000)
+#   SNAPSHOT_SIGNING_KEY     Path to PEM private key for snapshot signing
+#   SNAPSHOT_VERIFY_PUBKEY   Path to PEM public key for snapshot verification
+#   SNAPSHOT_SIGNING_REQUIRED Whether signing is required (default: 1)
+#   SNAPSHOT_SIGNATURE_ALG   Digest alg for openssl (default: sha256)
+#   VIRTENGINE_CMD           Override virtengine binary (default: virtengine)
+#   SYSTEMCTL_CMD            Override systemctl command (default: systemctl)
+#   ALERT_WEBHOOK            Optional webhook for backup/restore notifications
+#   ALERT_WEBHOOK_TIMEOUT    Webhook timeout seconds (default: 5)
+#   RESTORE_AUTO_APPROVE     Skip restore delay (default: 0)
+#   RESTORE_SKIP_SERVICE     Skip systemctl stop/start (default: 0)
+#   RESTORE_MAX_WAIT         Seconds to wait for sync check (default: 300)
+#   RESTORE_FALLBACK_ENABLED Allow fallback to older snapshots (default: 1)
 
 set -euo pipefail
 
@@ -23,6 +35,18 @@ SNAPSHOT_DIR="${SNAPSHOT_DIR:-/data/snapshots}"
 DR_BUCKET="${DR_BUCKET:-}"
 RETENTION_COUNT="${RETENTION_COUNT:-10}"
 SNAPSHOT_INTERVAL="${SNAPSHOT_INTERVAL:-1000}"
+SNAPSHOT_SIGNING_KEY="${SNAPSHOT_SIGNING_KEY:-}"
+SNAPSHOT_VERIFY_PUBKEY="${SNAPSHOT_VERIFY_PUBKEY:-}"
+SNAPSHOT_SIGNING_REQUIRED="${SNAPSHOT_SIGNING_REQUIRED:-1}"
+SNAPSHOT_SIGNATURE_ALG="${SNAPSHOT_SIGNATURE_ALG:-sha256}"
+VIRTENGINE_CMD="${VIRTENGINE_CMD:-virtengine}"
+SYSTEMCTL_CMD="${SYSTEMCTL_CMD:-systemctl}"
+ALERT_WEBHOOK="${ALERT_WEBHOOK:-}"
+ALERT_WEBHOOK_TIMEOUT="${ALERT_WEBHOOK_TIMEOUT:-5}"
+RESTORE_AUTO_APPROVE="${RESTORE_AUTO_APPROVE:-0}"
+RESTORE_SKIP_SERVICE="${RESTORE_SKIP_SERVICE:-0}"
+RESTORE_MAX_WAIT="${RESTORE_MAX_WAIT:-300}"
+RESTORE_FALLBACK_ENABLED="${RESTORE_FALLBACK_ENABLED:-1}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -42,14 +66,49 @@ log_error() {
     echo -e "${RED}[$(date -u +%FT%TZ)] ERROR:${NC} $*" >&2
 }
 
+notify_webhook() {
+    local event="$1"
+    local status="$2"
+    local message="$3"
+    local snapshot_name="${4:-}"
+
+    if [ -z "$ALERT_WEBHOOK" ]; then
+        return 0
+    fi
+
+    if ! command -v curl > /dev/null 2>&1; then
+        log_warn "curl not available, skipping webhook notification"
+        return 0
+    fi
+
+    local payload
+    payload=$(cat << EOF
+{
+  "event": "${event}",
+  "status": "${status}",
+  "message": "${message}",
+  "snapshot": "${snapshot_name}",
+  "timestamp": "$(date -u +%FT%TZ)",
+  "host": "$(hostname)",
+  "region": "$(get_region)"
+}
+EOF
+)
+
+    curl -s -X POST "$ALERT_WEBHOOK" \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        --max-time "$ALERT_WEBHOOK_TIMEOUT" > /dev/null 2>&1 || true
+}
+
 # Get current block height
 get_current_height() {
-    virtengine status 2>&1 | jq -r '.sync_info.latest_block_height' || echo "0"
+    "$VIRTENGINE_CMD" status 2>&1 | jq -r '.sync_info.latest_block_height' || echo "0"
 }
 
 # Get current app hash
 get_current_app_hash() {
-    virtengine status 2>&1 | jq -r '.sync_info.latest_app_hash' || echo ""
+    "$VIRTENGINE_CMD" status 2>&1 | jq -r '.sync_info.latest_app_hash' || echo ""
 }
 
 # Determine region from hostname or metadata
@@ -71,6 +130,120 @@ ensure_directories() {
     mkdir -p "${NODE_HOME}/data/snapshots"
 }
 
+ensure_signing_tools() {
+    if ! command -v openssl > /dev/null 2>&1; then
+        log_error "openssl not found; snapshot signing/verification requires openssl"
+        return 1
+    fi
+    return 0
+}
+
+resolve_verify_key() {
+    if [ -n "$SNAPSHOT_VERIFY_PUBKEY" ]; then
+        echo "$SNAPSHOT_VERIFY_PUBKEY"
+        return 0
+    fi
+    if [ -n "$SNAPSHOT_SIGNING_KEY" ]; then
+        echo "$SNAPSHOT_SIGNING_KEY"
+        return 0
+    fi
+    return 1
+}
+
+get_signing_fingerprint() {
+    local key_path="$1"
+    if [ -z "$key_path" ] || [ ! -f "$key_path" ]; then
+        echo "unknown"
+        return 0
+    fi
+    openssl pkey -in "$key_path" -pubout 2>/dev/null | openssl dgst -sha256 | awk '{print $2}'
+}
+
+add_signature_metadata() {
+    local snapshot_name="$1"
+    if [ -z "$SNAPSHOT_SIGNING_KEY" ] || [ ! -f "$SNAPSHOT_SIGNING_KEY" ]; then
+        return 0
+    fi
+
+    local key_fingerprint
+    key_fingerprint=$(get_signing_fingerprint "$SNAPSHOT_SIGNING_KEY")
+
+    if [ -f "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json" ]; then
+        jq ".signature = {\"file\": \"${snapshot_name}.sig\", \"algorithm\": \"${SNAPSHOT_SIGNATURE_ALG}\", \"key_fingerprint\": \"${key_fingerprint}\"}" \
+            "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json" > "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json.tmp"
+        mv "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json.tmp" "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json"
+    fi
+}
+
+sign_snapshot() {
+    local snapshot_name="$1"
+    local checksum_file="${SNAPSHOT_DIR}/${snapshot_name}.sha256"
+    local signature_file="${SNAPSHOT_DIR}/${snapshot_name}.sig"
+
+    if [ "$SNAPSHOT_SIGNING_REQUIRED" != "0" ] && [ -z "$SNAPSHOT_SIGNING_KEY" ]; then
+        log_error "SNAPSHOT_SIGNING_KEY is required but not set"
+        return 1
+    fi
+
+    if [ -z "$SNAPSHOT_SIGNING_KEY" ]; then
+        log_warn "SNAPSHOT_SIGNING_KEY not set; skipping signing"
+        return 0
+    fi
+
+    if [ ! -f "$SNAPSHOT_SIGNING_KEY" ]; then
+        log_error "Signing key not found: ${SNAPSHOT_SIGNING_KEY}"
+        return 1
+    fi
+
+    ensure_signing_tools
+
+    log_info "Signing snapshot checksum..."
+    openssl dgst -"${SNAPSHOT_SIGNATURE_ALG}" -sign "$SNAPSHOT_SIGNING_KEY" \
+        -out "$signature_file" "$checksum_file"
+
+    log_info "Snapshot signature created: $(basename "$signature_file")"
+    return 0
+}
+
+verify_snapshot_signature() {
+    local snapshot_name="$1"
+    local checksum_file="${SNAPSHOT_DIR}/${snapshot_name}.sha256"
+    local signature_file="${SNAPSHOT_DIR}/${snapshot_name}.sig"
+    local verify_key
+
+    if [ "$SNAPSHOT_SIGNING_REQUIRED" = "0" ] && [ ! -f "$signature_file" ]; then
+        log_warn "Signature verification skipped (signing not required)"
+        return 0
+    fi
+
+    if [ ! -f "$signature_file" ]; then
+        log_error "Signature file missing: ${signature_file}"
+        return 1
+    fi
+
+    verify_key=$(resolve_verify_key || true)
+    if [ -z "$verify_key" ]; then
+        log_error "No verification key available (SNAPSHOT_VERIFY_PUBKEY or SNAPSHOT_SIGNING_KEY required)"
+        return 1
+    fi
+
+    if [ ! -f "$verify_key" ]; then
+        log_error "Verification key not found: ${verify_key}"
+        return 1
+    fi
+
+    ensure_signing_tools
+
+    if openssl dgst -"${SNAPSHOT_SIGNATURE_ALG}" -verify "$verify_key" \
+        -signature "$signature_file" "$checksum_file" > /dev/null 2>&1; then
+        log_info "Signature verification: PASSED"
+        return 0
+    fi
+
+    log_error "Signature verification: FAILED"
+    return 1
+}
+
 # Create a chain state snapshot
 create_snapshot() {
     local height=$(get_current_height)
@@ -81,14 +254,14 @@ create_snapshot() {
     log_info "Creating snapshot at height ${height}..."
     
     # Check if node is syncing
-    local catching_up=$(virtengine status 2>&1 | jq -r '.sync_info.catching_up')
+    local catching_up=$("$VIRTENGINE_CMD" status 2>&1 | jq -r '.sync_info.catching_up')
     if [ "$catching_up" == "true" ]; then
         log_warn "Node is still syncing, snapshot may be incomplete"
     fi
     
     # Export state JSON (lightweight, for genesis recreation if needed)
     log_info "Exporting state JSON..."
-    if ! virtengine export --height "$height" > "${SNAPSHOT_DIR}/${snapshot_name}.json" 2>/dev/null; then
+    if ! "$VIRTENGINE_CMD" export --height "$height" > "${SNAPSHOT_DIR}/${snapshot_name}.json" 2>/dev/null; then
         log_warn "State export failed or not supported, skipping JSON export"
         touch "${SNAPSHOT_DIR}/${snapshot_name}.json.skipped"
     fi
@@ -114,21 +287,26 @@ create_snapshot() {
     "node_home": "${NODE_HOME}",
     "region": "$(get_region)",
     "hostname": "$(hostname)",
-    "chain_id": "$(virtengine status 2>&1 | jq -r '.node_info.network' || echo 'unknown')"
+    "chain_id": "$("$VIRTENGINE_CMD" status 2>&1 | jq -r '.node_info.network' || echo 'unknown')"
 }
 EOF
     
+    add_signature_metadata "$snapshot_name"
+
     # Generate checksums
     cd "${SNAPSHOT_DIR}"
     sha256sum "${snapshot_name}.json" "${snapshot_name}_data.tar.gz" "${snapshot_name}_metadata.json" 2>/dev/null \
         > "${snapshot_name}.sha256" || \
         sha256sum "${snapshot_name}_data.tar.gz" "${snapshot_name}_metadata.json" > "${snapshot_name}.sha256"
     
+    sign_snapshot "$snapshot_name"
+
     log_info "Snapshot created: ${snapshot_name}"
     log_info "  Height: ${height}"
     log_info "  App Hash: ${app_hash}"
     log_info "  Size: $(du -h "${SNAPSHOT_DIR}/${snapshot_name}_data.tar.gz" | cut -f1)"
-    
+
+    notify_webhook "snapshot.create" "success" "Snapshot created successfully" "$snapshot_name"
     echo "${snapshot_name}"
 }
 
@@ -169,13 +347,22 @@ upload_to_remote() {
     aws s3 cp "${SNAPSHOT_DIR}/${snapshot_name}.sha256" \
         "${remote_path}/${snapshot_name}.sha256" \
         --only-show-errors
+
+    # Upload signature if present
+    if [ -f "${SNAPSHOT_DIR}/${snapshot_name}.sig" ]; then
+        aws s3 cp "${SNAPSHOT_DIR}/${snapshot_name}.sig" \
+            "${remote_path}/${snapshot_name}.sig" \
+            --only-show-errors
+    fi
     
     # Verify upload
-    if aws s3api head-object --bucket "$(echo $DR_BUCKET | sed 's|s3://||' | cut -d'/' -f1)" \
+    if aws s3api head-object --bucket "$(echo "$DR_BUCKET" | sed 's|s3://||' | cut -d'/' -f1)" \
         --key "${region}/state/${snapshot_name}_data.tar.gz" > /dev/null 2>&1; then
         log_info "Upload verified successfully"
+        notify_webhook "snapshot.upload" "success" "Snapshot uploaded successfully" "$snapshot_name"
     else
         log_error "Upload verification failed!"
+        notify_webhook "snapshot.upload" "failure" "Snapshot upload verification failed" "$snapshot_name"
         return 1
     fi
 }
@@ -192,6 +379,7 @@ cleanup_old_snapshots() {
     # Remove corresponding metadata and checksums
     ls -t state_*_metadata.json 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
     ls -t state_*.sha256 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
+    ls -t state_*.sig 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
     ls -t state_*.json 2>/dev/null | grep -v metadata | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
     
     log_info "Cleanup complete"
@@ -222,6 +410,12 @@ verify_backup() {
         log_error "Local checksum verification: FAILED"
         return 1
     fi
+
+    # Verify signature
+    if ! verify_snapshot_signature "$snapshot_name"; then
+        log_error "Signature verification failed"
+        return 1
+    fi
     
     # Test archive integrity
     if tar -tzf "${snapshot_name}_data.tar.gz" > /dev/null 2>&1; then
@@ -238,15 +432,29 @@ verify_backup() {
         
         # Download remote checksum
         aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sha256" /tmp/remote.sha256 --only-show-errors
+        if aws s3 ls "${DR_BUCKET}/${region}/state/${snapshot_name}.sig" > /dev/null 2>&1; then
+            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sig" /tmp/remote.sig --only-show-errors
+        fi
         
         if diff -q "${snapshot_name}.sha256" /tmp/remote.sha256 > /dev/null 2>&1; then
             log_info "Remote checksum match: PASSED"
         else
             log_error "Remote checksum match: FAILED"
             rm -f /tmp/remote.sha256
+            rm -f /tmp/remote.sig
             return 1
         fi
-        
+
+        if [ -f /tmp/remote.sig ]; then
+            cp /tmp/remote.sig "${snapshot_name}.sig"
+            if ! verify_snapshot_signature "$snapshot_name"; then
+                log_error "Remote signature verification failed"
+                rm -f /tmp/remote.sha256 /tmp/remote.sig
+                return 1
+            fi
+            rm -f /tmp/remote.sig
+        fi
+
         rm -f /tmp/remote.sha256
     fi
     
@@ -258,94 +466,152 @@ verify_backup() {
 restore_snapshot() {
     local target_height="$1"
     local region=$(get_region)
-    
+
     if [ -z "$target_height" ]; then
         log_error "Target height required for restore"
         return 1
     fi
-    
+
     log_info "Restoring to height: ${target_height}"
-    
-    # Find matching snapshot
+
     local snapshot_name=""
-    
-    # Check local first
-    snapshot_name=$(ls -t "${SNAPSHOT_DIR}"/state_${target_height}_*_data.tar.gz 2>/dev/null | head -1 | xargs -r basename | sed 's/_data.tar.gz//')
-    
-    # If not local, try remote
-    if [ -z "$snapshot_name" ] && [ -n "$DR_BUCKET" ]; then
+    local candidates=()
+
+    while IFS= read -r line; do
+        [ -n "$line" ] && candidates+=("$line")
+    done < <(ls -t "${SNAPSHOT_DIR}"/state_${target_height}_*_data.tar.gz 2>/dev/null | sed 's/_data.tar.gz//' | xargs -r -n1 basename)
+
+    if [ ${#candidates[@]} -eq 0 ] && [ -n "$DR_BUCKET" ]; then
         log_info "Snapshot not found locally, checking remote..."
-        snapshot_name=$(aws s3 ls "${DR_BUCKET}/${region}/state/" | grep "state_${target_height}_" | grep "_data.tar.gz" | head -1 | awk '{print $4}' | sed 's/_data.tar.gz//')
-        
-        if [ -n "$snapshot_name" ]; then
-            log_info "Downloading snapshot from remote..."
-            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}_data.tar.gz" "${SNAPSHOT_DIR}/" --only-show-errors
-            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sha256" "${SNAPSHOT_DIR}/" --only-show-errors
-            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}_metadata.json" "${SNAPSHOT_DIR}/" --only-show-errors
-        fi
+        while IFS= read -r line; do
+            [ -n "$line" ] && candidates+=("$line")
+        done < <(aws s3 ls "${DR_BUCKET}/${region}/state/" | awk '{print $4}' | grep "state_${target_height}_" | grep "_data.tar.gz" | sed 's/_data.tar.gz//' || true)
     fi
-    
-    if [ -z "$snapshot_name" ]; then
+
+    if [ ${#candidates[@]} -eq 0 ]; then
         log_error "No snapshot found for height ${target_height}"
         return 1
     fi
-    
-    log_info "Using snapshot: ${snapshot_name}"
-    
-    # Verify snapshot
-    if ! verify_backup "$snapshot_name"; then
-        log_error "Snapshot verification failed, aborting restore"
+
+    for candidate in "${candidates[@]}"; do
+        snapshot_name="$candidate"
+        if [ ! -f "${SNAPSHOT_DIR}/${snapshot_name}_data.tar.gz" ] && [ -n "$DR_BUCKET" ]; then
+            log_info "Downloading snapshot ${snapshot_name} from remote..."
+            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}_data.tar.gz" "${SNAPSHOT_DIR}/" --only-show-errors
+            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sha256" "${SNAPSHOT_DIR}/" --only-show-errors
+            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}_metadata.json" "${SNAPSHOT_DIR}/" --only-show-errors
+            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sig" "${SNAPSHOT_DIR}/" --only-show-errors 2>/dev/null || true
+        fi
+
+        log_info "Validating snapshot candidate: ${snapshot_name}"
+        if verify_backup "$snapshot_name"; then
+            log_info "Snapshot validation passed: ${snapshot_name}"
+            break
+        fi
+
+        log_warn "Snapshot validation failed: ${snapshot_name}"
+        snapshot_name=""
+    done
+
+    if [ -z "$snapshot_name" ] && [ "$RESTORE_FALLBACK_ENABLED" != "0" ]; then
+        log_warn "No valid snapshot found at requested height; attempting fallback to latest valid snapshot"
+        for candidate in $(ls -t "${SNAPSHOT_DIR}"/state_*_data.tar.gz 2>/dev/null | sed 's/_data.tar.gz//' | xargs -r -n1 basename); do
+            if verify_backup "$candidate"; then
+                snapshot_name="$candidate"
+                log_warn "Falling back to snapshot: ${snapshot_name}"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$snapshot_name" ]; then
+        log_error "No valid snapshot found for restore"
+        notify_webhook "snapshot.restore" "failure" "No valid snapshot available for restore" ""
         return 1
     fi
-    
-    # Confirm restore
+
+    log_info "Using snapshot: ${snapshot_name}"
+
     log_warn "This will REPLACE the current chain data!"
-    log_warn "Press Ctrl+C within 10 seconds to abort..."
-    sleep 10
-    
-    # Stop the node
-    log_info "Stopping virtengine service..."
-    systemctl stop virtengine || true
-    
-    # Backup current data (just in case)
-    log_info "Backing up current data..."
-    if [ -d "${NODE_HOME}/data" ]; then
-        mv "${NODE_HOME}/data" "${NODE_HOME}/data.backup.$(date +%s)"
+    if [ "$RESTORE_AUTO_APPROVE" = "0" ]; then
+        log_warn "Press Ctrl+C within 10 seconds to abort..."
+        sleep 10
     fi
-    
-    # Extract snapshot
+
+    if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
+        log_info "Stopping virtengine service..."
+        "$SYSTEMCTL_CMD" stop virtengine || true
+    else
+        log_warn "RESTORE_SKIP_SERVICE=1 set; skipping service stop"
+    fi
+
+    log_info "Backing up current data..."
+    local backup_dir=""
+    if [ -d "${NODE_HOME}/data" ]; then
+        backup_dir="${NODE_HOME}/data.backup.$(date +%s)"
+        mv "${NODE_HOME}/data" "$backup_dir"
+    fi
+
+    local restore_dir="${NODE_HOME}/data.restore.$(date +%s)"
+    mkdir -p "$restore_dir"
+
     log_info "Extracting snapshot..."
-    tar -xzf "${SNAPSHOT_DIR}/${snapshot_name}_data.tar.gz" -C "${NODE_HOME}/"
-    
-    # Start the node
-    log_info "Starting virtengine service..."
-    systemctl start virtengine
-    
-    # Monitor sync
+    if ! tar -xzf "${SNAPSHOT_DIR}/${snapshot_name}_data.tar.gz" -C "$restore_dir"; then
+        log_error "Snapshot extraction failed"
+        if [ -n "$backup_dir" ] && [ -d "$backup_dir" ]; then
+            rm -rf "${NODE_HOME}/data"
+            mv "$backup_dir" "${NODE_HOME}/data"
+        fi
+        notify_webhook "snapshot.restore" "failure" "Snapshot extraction failed" "$snapshot_name"
+        return 1
+    fi
+
+    if [ ! -d "${restore_dir}/data" ]; then
+        log_error "Snapshot data directory missing after extraction"
+        if [ -n "$backup_dir" ] && [ -d "$backup_dir" ]; then
+            rm -rf "${NODE_HOME}/data"
+            mv "$backup_dir" "${NODE_HOME}/data"
+        fi
+        notify_webhook "snapshot.restore" "failure" "Snapshot data directory missing after extraction" "$snapshot_name"
+        return 1
+    fi
+
+    mv "${restore_dir}/data" "${NODE_HOME}/data"
+    rm -rf "$restore_dir"
+
+    if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
+        log_info "Starting virtengine service..."
+        "$SYSTEMCTL_CMD" start virtengine
+    else
+        log_warn "RESTORE_SKIP_SERVICE=1 set; skipping service start"
+    fi
+
     log_info "Monitoring sync progress..."
-    local max_wait=300
+    local max_wait="${RESTORE_MAX_WAIT}"
     local waited=0
-    
+
     while [ $waited -lt $max_wait ]; do
-        if virtengine status 2>&1 | jq -e '.sync_info' > /dev/null 2>&1; then
+        if "$VIRTENGINE_CMD" status 2>&1 | jq -e '.sync_info' > /dev/null 2>&1; then
             local current_height=$(get_current_height)
-            local catching_up=$(virtengine status 2>&1 | jq -r '.sync_info.catching_up')
-            
+            local catching_up=$("$VIRTENGINE_CMD" status 2>&1 | jq -r '.sync_info.catching_up')
+
             log_info "Current height: ${current_height}, Catching up: ${catching_up}"
-            
+
             if [ "$catching_up" == "false" ]; then
                 log_info "Restore complete! Node is synced."
+                notify_webhook "snapshot.restore" "success" "Restore completed and node is synced" "$snapshot_name"
                 return 0
             fi
         fi
-        
+
         sleep 5
         waited=$((waited + 5))
     done
-    
+
     log_warn "Node is still syncing after ${max_wait} seconds"
     log_info "Continue monitoring with: virtengine status"
-    
+
+    notify_webhook "snapshot.restore" "warning" "Restore completed but node still syncing" "$snapshot_name"
     return 0
 }
 
