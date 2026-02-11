@@ -25,6 +25,7 @@ type settlementCLITestSuite struct {
 func TestSettlementCLITestSuite(t *testing.T) {
 	cfg := network.DefaultConfig(testutil.NewTestNetworkFixture)
 	cfg.NumValidators = 1
+	cfg.CleanupDir = false
 
 	suiteInstance := &settlementCLITestSuite{}
 	suiteInstance.NetworkTestSuite = testutil.NewNetworkTestSuite(&cfg, suiteInstance)

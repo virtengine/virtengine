@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store"
 	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
@@ -19,7 +20,10 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 	"github.com/virtengine/virtengine/sdk/go/testutil"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	billing "github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/hpc/keeper"
 	"github.com/virtengine/virtengine/x/hpc/types"
@@ -92,6 +96,10 @@ func (m *MockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, senderM
 	return m.recordTransfer("module_to_account", senderModule, recipientAddr.String(), amt)
 }
 
+func (m *MockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderModule, recipientModule string, amt sdk.Coins) error {
+	return m.recordTransfer("module_to_module", senderModule, recipientModule, amt)
+}
+
 func (m *MockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error {
 	return m.recordTransfer("account_to_module", senderAddr.String(), recipientModule, amt)
 }
@@ -119,6 +127,120 @@ type MockBillingKeeper struct {
 	statusUpdates   []*billing.InvoiceLedgerEntry
 	paymentEntries  []*billing.InvoiceLedgerEntry
 	sequence        uint64
+}
+
+type MockEscrowKeeper struct {
+	accounts map[string]etypes.Account
+}
+
+func NewMockEscrowKeeper() *MockEscrowKeeper {
+	return &MockEscrowKeeper{
+		accounts: make(map[string]etypes.Account),
+	}
+}
+
+func (m *MockEscrowKeeper) AccountCreate(_ sdk.Context, id escrowid.Account, owner sdk.AccAddress, deposits []etypes.Depositor) error {
+	key := id.String()
+	if _, exists := m.accounts[key]; exists {
+		return fmt.Errorf("escrow account %s already exists", key)
+	}
+
+	account := etypes.Account{
+		ID: id,
+		State: etypes.AccountState{
+			Owner:       owner.String(),
+			State:       etypes.StateOpen,
+			Funds:       mergeDeposits(nil, deposits),
+			Deposits:    deposits,
+			Transferred: ensureTransferred(nil, deposits),
+		},
+	}
+	m.accounts[key] = account
+	return nil
+}
+
+func (m *MockEscrowKeeper) AccountDeposit(_ sdk.Context, id escrowid.Account, deposits []etypes.Depositor) error {
+	key := id.String()
+	account, exists := m.accounts[key]
+	if !exists {
+		return fmt.Errorf("escrow account %s not found", key)
+	}
+
+	account.State.Deposits = append(account.State.Deposits, deposits...)
+	account.State.Funds = mergeDeposits(account.State.Funds, deposits)
+	account.State.Transferred = ensureTransferred(account.State.Transferred, deposits)
+	m.accounts[key] = account
+	return nil
+}
+
+func (m *MockEscrowKeeper) GetAccount(_ sdk.Context, id escrowid.Account) (etypes.Account, error) {
+	key := id.String()
+	account, exists := m.accounts[key]
+	if !exists {
+		return etypes.Account{}, fmt.Errorf("escrow account %s not found", key)
+	}
+	return account, nil
+}
+
+func (m *MockEscrowKeeper) SaveAccount(_ sdk.Context, account etypes.Account) error {
+	key := account.ID.String()
+	m.accounts[key] = account
+	return nil
+}
+
+type mockEncryptionKeeper struct{}
+
+func (mockEncryptionKeeper) ValidateEnvelope(_ sdk.Context, _ *encryptiontypes.EncryptedPayloadEnvelope) error {
+	return nil
+}
+
+func (mockEncryptionKeeper) ValidateEnvelopeRecipients(_ sdk.Context, _ *encryptiontypes.EncryptedPayloadEnvelope) ([]string, error) {
+	return []string{}, nil
+}
+
+func mergeDeposits(existing []etypes.Balance, deposits []etypes.Depositor) []etypes.Balance {
+	totals := make(map[string]sdkmath.LegacyDec, len(existing))
+	for _, balance := range existing {
+		totals[balance.Denom] = balance.Amount
+	}
+
+	for _, dep := range deposits {
+		amount := dep.Balance.Amount
+		denom := dep.Balance.Denom
+		if current, ok := totals[denom]; ok {
+			totals[denom] = current.Add(amount)
+		} else {
+			totals[denom] = amount
+		}
+	}
+
+	out := make([]etypes.Balance, 0, len(totals))
+	for denom, amount := range totals {
+		out = append(out, etypes.Balance{
+			Denom:  denom,
+			Amount: amount,
+		})
+	}
+	return out
+}
+
+func ensureTransferred(existing sdk.DecCoins, deposits []etypes.Depositor) sdk.DecCoins {
+	totals := make(map[string]sdkmath.LegacyDec, len(existing))
+	for _, coin := range existing {
+		totals[coin.Denom] = coin.Amount
+	}
+
+	for _, dep := range deposits {
+		if _, ok := totals[dep.Balance.Denom]; !ok {
+			totals[dep.Balance.Denom] = sdkmath.LegacyZeroDec()
+		}
+	}
+
+	out := make(sdk.DecCoins, 0, len(totals))
+	for denom, amount := range totals {
+		out = append(out, sdk.NewDecCoinFromDec(denom, amount))
+	}
+	return out
 }
 
 func NewMockBillingKeeper() *MockBillingKeeper {
@@ -287,7 +409,8 @@ func setupHPCKeeperWithSettlement(t testing.TB) (sdk.Context, keeper.Keeper, set
 	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 
 	hpcKeeper := keeper.NewKeeper(cdc, hpcKey, bank, authority)
-	settlementKeeper := settlementkeeper.NewKeeper(cdc, settlementKey, bank, authority, nil)
+	escrowKeeper := NewMockEscrowKeeper()
+	settlementKeeper := settlementkeeper.NewKeeper(cdc, settlementKey, bank, escrowKeeper, authority, mockEncryptionKeeper{})
 	hpcKeeper.SetSettlementKeeper(settlementKeeper)
 
 	return ctx, hpcKeeper, settlementKeeper, bank

@@ -5,6 +5,7 @@ package keeper
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -327,9 +328,10 @@ func (k Keeper) buildSettlementUsageRecords(
 			usageUnits = 1
 		}
 
+		unitDivisor := clampInt64FromUint64(usageUnits)
 		unitPrice := sdk.NewDecCoinFromDec(
 			component.cost.Denom,
-			sdkmath.LegacyNewDecFromInt(component.cost.Amount).QuoInt64(int64(usageUnits)),
+			sdkmath.LegacyNewDecFromInt(component.cost.Amount).QuoInt64(unitDivisor),
 		)
 
 		metadata := copyStringMap(baseMetadata)
@@ -504,14 +506,14 @@ func usageUnitsFromSeconds(seconds int64) uint64 {
 	if hours <= 0 {
 		hours = 1
 	}
-	return uint64(hours)
+	return clampUint64FromInt64(hours)
 }
 
 func usageUnitsFromInt64(value int64) uint64 {
 	if value <= 0 {
 		return 0
 	}
-	return uint64(value)
+	return clampUint64FromInt64(value)
 }
 
 func usageUnitsFromBytes(bytes int64) uint64 {
@@ -526,7 +528,7 @@ func usageUnitsFromBytes(bytes int64) uint64 {
 	if gbUnits <= 0 {
 		gbUnits = 1
 	}
-	return uint64(gbUnits)
+	return clampUint64FromInt64(gbUnits)
 }
 
 func usageUnitsFromDec(value sdkmath.LegacyDec) uint64 {
@@ -535,9 +537,32 @@ func usageUnitsFromDec(value sdkmath.LegacyDec) uint64 {
 	}
 	truncated := value.TruncateInt64()
 	if value.Equal(sdkmath.LegacyNewDec(truncated)) {
-		return uint64(truncated)
+		return clampUint64FromInt64(truncated)
 	}
-	return uint64(truncated + 1)
+	if truncated == math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return clampUint64FromInt64(truncated + 1)
+}
+
+func clampUint64FromInt64(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	if value == math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return uint64(value)
+}
+
+func clampInt64FromUint64(value uint64) int64 {
+	if value == 0 {
+		return 1
+	}
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 func copyStringMap(in map[string]string) map[string]string {

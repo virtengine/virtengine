@@ -64,6 +64,16 @@ func (m *integrationBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, 
 	return nil
 }
 
+func (m *integrationBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderModule, recipientModule string, amt sdk.Coins) error {
+	m.transfers = append(m.transfers, BankTransfer{
+		Method: "module_to_module",
+		From:   senderModule,
+		To:     recipientModule,
+		Amount: amt,
+	})
+	return nil
+}
+
 func (m *integrationBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error {
 	m.transfers = append(m.transfers, BankTransfer{
 		Method: "account_to_module",
@@ -106,7 +116,8 @@ func TestHPCSettlementFlowsThroughSettlementModule(t *testing.T) {
 
 	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 	hpcKeeper := keeper.NewKeeper(cdc, hpcKey, bank, authority)
-	settlementKeeper := settlementkeeper.NewKeeper(cdc, settlementKey, bank, authority, nil)
+	escrowKeeper := NewMockEscrowKeeper()
+	settlementKeeper := settlementkeeper.NewKeeper(cdc, settlementKey, bank, escrowKeeper, authority, mockEncryptionKeeper{})
 	hpcKeeper.SetSettlementKeeper(settlementKeeper)
 
 	depositor := sdk.AccAddress([]byte("hpc-depositor-addr"))

@@ -218,7 +218,7 @@ func (k Keeper) ReleaseEscrow(ctx sdk.Context, escrowID string, reason string) e
 	}
 
 	if !releaseAmount.IsZero() {
-		if _, err := k.recordEscrowDisbursement(ctx, escrow, releaseAmount, recipient.String(), types.SettlementTypeFinal, true); err != nil {
+		if err := k.recordEscrowDisbursement(ctx, escrow, releaseAmount, recipient.String(), types.SettlementTypeFinal, true); err != nil {
 			return err
 		}
 	}
@@ -295,7 +295,7 @@ func (k Keeper) RefundEscrow(ctx sdk.Context, escrowID string, reason string) er
 	}
 
 	if !refundAmount.IsZero() {
-		if _, err := k.recordEscrowDisbursement(ctx, escrow, refundAmount, depositor.String(), types.SettlementTypeRefund, true); err != nil {
+		if err := k.recordEscrowDisbursement(ctx, escrow, refundAmount, depositor.String(), types.SettlementTypeRefund, true); err != nil {
 			return err
 		}
 	}
@@ -333,9 +333,9 @@ func (k Keeper) recordEscrowDisbursement(
 	recipient string,
 	settlementType types.SettlementType,
 	isFinal bool,
-) (*types.SettlementRecord, error) {
+) error {
 	if amount.IsZero() {
-		return nil, nil
+		return nil
 	}
 
 	seq := k.incrementSettlementSequence(ctx)
@@ -368,10 +368,10 @@ func (k Keeper) recordEscrowDisbursement(
 	)
 
 	if err := k.SetSettlement(ctx, *settlement); err != nil {
-		return nil, err
+		return err
 	}
 
-	return settlement, nil
+	return nil
 }
 
 // DisputeEscrow marks an escrow as disputed
