@@ -80,6 +80,30 @@ func convertMsgUpdateSensitiveTxConfigFromProto(req *mfav1.MsgUpdateSensitiveTxC
 	}
 }
 
+func convertMsgIssueSessionFromProto(req *mfav1.MsgIssueSession) *MsgIssueSession {
+	return &MsgIssueSession{
+		Sender:            req.Sender,
+		TransactionType:   transactionTypeFromProto(req.TransactionType),
+		MFAProof:          convertMFAProofFromProto(req.MfaProof),
+		DeviceFingerprint: req.DeviceFingerprint,
+	}
+}
+
+func convertMsgRefreshSessionFromProto(req *mfav1.MsgRefreshSession) *MsgRefreshSession {
+	return &MsgRefreshSession{
+		Sender:    req.Sender,
+		SessionID: req.SessionId,
+		MFAProof:  convertMFAProofFromProto(req.MfaProof),
+	}
+}
+
+func convertMsgRevokeSessionFromProto(req *mfav1.MsgRevokeSession) *MsgRevokeSession {
+	return &MsgRevokeSession{
+		Sender:    req.Sender,
+		SessionID: req.SessionId,
+	}
+}
+
 func factorTypeFromProto(value mfav1.FactorType) FactorType {
 	intValue := int32(value)
 	if intValue < 0 {
@@ -224,6 +248,39 @@ func convertMsgUpdateSensitiveTxConfigToProto(msg *MsgUpdateSensitiveTxConfig) *
 	}
 }
 
+func convertMsgIssueSessionToProto(msg *MsgIssueSession) *mfav1.MsgIssueSession {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgIssueSession{
+		Sender:            msg.Sender,
+		TransactionType:   mfav1.SensitiveTransactionType(msg.TransactionType),
+		MfaProof:          convertMFAProofToProto(msg.MFAProof),
+		DeviceFingerprint: msg.DeviceFingerprint,
+	}
+}
+
+func convertMsgRefreshSessionToProto(msg *MsgRefreshSession) *mfav1.MsgRefreshSession {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgRefreshSession{
+		Sender:    msg.Sender,
+		SessionId: msg.SessionID,
+		MfaProof:  convertMFAProofToProto(msg.MFAProof),
+	}
+}
+
+func convertMsgRevokeSessionToProto(msg *MsgRevokeSession) *mfav1.MsgRevokeSession {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgRevokeSession{
+		Sender:    msg.Sender,
+		SessionId: msg.SessionID,
+	}
+}
+
 func convertMsgEnrollFactorResponseToProto(resp *MsgEnrollFactorResponse) *mfav1.MsgEnrollFactorResponse {
 	return &mfav1.MsgEnrollFactorResponse{
 		FactorId: resp.FactorID,
@@ -284,6 +341,27 @@ func convertMsgUpdateSensitiveTxConfigResponseToProto(resp *MsgUpdateSensitiveTx
 	}
 }
 
+func convertMsgIssueSessionResponseToProto(resp *MsgIssueSessionResponse) *mfav1.MsgIssueSessionResponse {
+	return &mfav1.MsgIssueSessionResponse{
+		SessionId:        resp.SessionID,
+		SessionExpiresAt: resp.SessionExpiresAt,
+		IsSingleUse:      resp.IsSingleUse,
+	}
+}
+
+func convertMsgRefreshSessionResponseToProto(resp *MsgRefreshSessionResponse) *mfav1.MsgRefreshSessionResponse {
+	return &mfav1.MsgRefreshSessionResponse{
+		SessionId:        resp.SessionID,
+		SessionExpiresAt: resp.SessionExpiresAt,
+	}
+}
+
+func convertMsgRevokeSessionResponseToProto(resp *MsgRevokeSessionResponse) *mfav1.MsgRevokeSessionResponse {
+	return &mfav1.MsgRevokeSessionResponse{
+		Success: resp.Success,
+	}
+}
+
 // =============================================================================
 // Query Response Conversion Functions (Local -> Proto)
 // =============================================================================
@@ -333,12 +411,27 @@ func convertQueryAuthorizationSessionResponseToProto(resp *QueryAuthorizationSes
 	return &mfav1.QueryAuthorizationSessionResponse{Session: convertAuthorizationSessionToProto(resp.Session)}
 }
 
+func convertQueryAuthorizationSessionsResponseToProto(resp *QueryAuthorizationSessionsResponse) *mfav1.QueryAuthorizationSessionsResponse {
+	sessions := make([]mfav1.AuthorizationSession, len(resp.Sessions))
+	for i, s := range resp.Sessions {
+		sessions[i] = *convertAuthorizationSessionToProto(&s)
+	}
+	return &mfav1.QueryAuthorizationSessionsResponse{Sessions: sessions}
+}
+
 func convertQueryTrustedDevicesResponseToProto(resp *QueryTrustedDevicesResponse) *mfav1.QueryTrustedDevicesResponse {
 	devices := make([]mfav1.TrustedDevice, len(resp.Devices))
 	for i, d := range resp.Devices {
 		devices[i] = *convertTrustedDeviceToProto(&d)
 	}
 	return &mfav1.QueryTrustedDevicesResponse{Devices: devices}
+}
+
+func convertQueryTrustedDeviceResponseToProto(resp *QueryTrustedDeviceResponse) *mfav1.QueryTrustedDeviceResponse {
+	if resp.Device == nil {
+		return &mfav1.QueryTrustedDeviceResponse{Device: nil}
+	}
+	return &mfav1.QueryTrustedDeviceResponse{Device: convertTrustedDeviceToProto(resp.Device)}
 }
 
 func convertQuerySensitiveTxConfigResponseToProto(resp *QuerySensitiveTxConfigResponse) *mfav1.QuerySensitiveTxConfigResponse {

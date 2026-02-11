@@ -52,6 +52,18 @@ type (
 	MsgUpdateSensitiveTxConfigPB = mfav1.MsgUpdateSensitiveTxConfig
 	// MsgUpdateSensitiveTxConfigResponsePB is the generated proto type for MsgUpdateSensitiveTxConfigResponse
 	MsgUpdateSensitiveTxConfigResponsePB = mfav1.MsgUpdateSensitiveTxConfigResponse
+	// MsgIssueSessionPB is the generated proto type for MsgIssueSession
+	MsgIssueSessionPB = mfav1.MsgIssueSession
+	// MsgIssueSessionResponsePB is the generated proto type for MsgIssueSessionResponse
+	MsgIssueSessionResponsePB = mfav1.MsgIssueSessionResponse
+	// MsgRefreshSessionPB is the generated proto type for MsgRefreshSession
+	MsgRefreshSessionPB = mfav1.MsgRefreshSession
+	// MsgRefreshSessionResponsePB is the generated proto type for MsgRefreshSessionResponse
+	MsgRefreshSessionResponsePB = mfav1.MsgRefreshSessionResponse
+	// MsgRevokeSessionPB is the generated proto type for MsgRevokeSession
+	MsgRevokeSessionPB = mfav1.MsgRevokeSession
+	// MsgRevokeSessionResponsePB is the generated proto type for MsgRevokeSessionResponse
+	MsgRevokeSessionResponsePB = mfav1.MsgRevokeSessionResponse
 	// MsgUpdateParamsPB is the generated proto type for MsgUpdateParams
 	MsgUpdateParamsPB = mfav1.MsgUpdateParams
 	// MsgUpdateParamsResponsePB is the generated proto type for MsgUpdateParamsResponse
@@ -223,6 +235,33 @@ func (a *msgServerAdapter) UpdateSensitiveTxConfig(ctx context.Context, req *mfa
 	return convertMsgUpdateSensitiveTxConfigResponseToProto(resp), nil
 }
 
+func (a *msgServerAdapter) IssueSession(ctx context.Context, req *mfav1.MsgIssueSession) (*mfav1.MsgIssueSessionResponse, error) {
+	localReq := convertMsgIssueSessionFromProto(req)
+	resp, err := a.local.IssueSession(ctx, localReq)
+	if err != nil {
+		return nil, err
+	}
+	return convertMsgIssueSessionResponseToProto(resp), nil
+}
+
+func (a *msgServerAdapter) RefreshSession(ctx context.Context, req *mfav1.MsgRefreshSession) (*mfav1.MsgRefreshSessionResponse, error) {
+	localReq := convertMsgRefreshSessionFromProto(req)
+	resp, err := a.local.RefreshSession(ctx, localReq)
+	if err != nil {
+		return nil, err
+	}
+	return convertMsgRefreshSessionResponseToProto(resp), nil
+}
+
+func (a *msgServerAdapter) RevokeSession(ctx context.Context, req *mfav1.MsgRevokeSession) (*mfav1.MsgRevokeSessionResponse, error) {
+	localReq := convertMsgRevokeSessionFromProto(req)
+	resp, err := a.local.RevokeSession(ctx, localReq)
+	if err != nil {
+		return nil, err
+	}
+	return convertMsgRevokeSessionResponseToProto(resp), nil
+}
+
 func (a *msgServerAdapter) UpdateParams(ctx context.Context, req *mfav1.MsgUpdateParams) (*mfav1.MsgUpdateParamsResponse, error) {
 	// UpdateParams is not in the local MsgServer interface, return unimplemented
 	// This would need to be added to the local interface if needed
@@ -301,6 +340,18 @@ func (a *queryServerAdapter) AuthorizationSession(ctx context.Context, req *mfav
 	return convertQueryAuthorizationSessionResponseToProto(resp), nil
 }
 
+func (a *queryServerAdapter) AuthorizationSessions(ctx context.Context, req *mfav1.QueryAuthorizationSessionsRequest) (*mfav1.QueryAuthorizationSessionsResponse, error) {
+	localReq := &QueryAuthorizationSessionsRequest{
+		Address:        req.Address,
+		IncludeExpired: req.IncludeExpired,
+	}
+	resp, err := a.local.GetAuthorizationSessions(ctx, localReq)
+	if err != nil {
+		return nil, err
+	}
+	return convertQueryAuthorizationSessionsResponseToProto(resp), nil
+}
+
 func (a *queryServerAdapter) TrustedDevices(ctx context.Context, req *mfav1.QueryTrustedDevicesRequest) (*mfav1.QueryTrustedDevicesResponse, error) {
 	localReq := &QueryTrustedDevicesRequest{Address: req.Address}
 	resp, err := a.local.GetTrustedDevices(ctx, localReq)
@@ -308,6 +359,18 @@ func (a *queryServerAdapter) TrustedDevices(ctx context.Context, req *mfav1.Quer
 		return nil, err
 	}
 	return convertQueryTrustedDevicesResponseToProto(resp), nil
+}
+
+func (a *queryServerAdapter) TrustedDevice(ctx context.Context, req *mfav1.QueryTrustedDeviceRequest) (*mfav1.QueryTrustedDeviceResponse, error) {
+	localReq := &QueryTrustedDeviceRequest{
+		Address:           req.Address,
+		DeviceFingerprint: req.DeviceFingerprint,
+	}
+	resp, err := a.local.GetTrustedDevice(ctx, localReq)
+	if err != nil {
+		return nil, err
+	}
+	return convertQueryTrustedDeviceResponseToProto(resp), nil
 }
 
 func (a *queryServerAdapter) SensitiveTxConfig(ctx context.Context, req *mfav1.QuerySensitiveTxConfigRequest) (*mfav1.QuerySensitiveTxConfigResponse, error) {
