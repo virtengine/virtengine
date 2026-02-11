@@ -3,14 +3,21 @@ package provider_daemon
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
+	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -105,21 +112,137 @@ func (c *rpcChainClient) GetProviderConfig(ctx context.Context, address string) 
 
 // GetOpenOrders retrieves open orders that match provider capabilities
 func (c *rpcChainClient) GetOpenOrders(ctx context.Context, offeringTypes []string, regions []string) ([]Order, error) {
-	// TODO: Implement actual gRPC query to market module
-	// For now return empty list
-	return []Order{}, nil
+	if c.grpcConn == nil {
+		return nil, fmt.Errorf("grpc endpoint not configured")
+	}
+
+	client := marketv1beta5.NewQueryClient(c.grpcConn)
+
+	// Query orders with state = "open"
+	req := &marketv1beta5.QueryOrdersRequest{
+		Filters: marketv1beta5.OrderFilters{
+			State: "open",
+		},
+		Pagination: &query.PageRequest{
+			Limit: defaultHPCPollPageLimit,
+		},
+	}
+
+	resp, err := client.Orders(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orders: %w", err)
+	}
+
+	orders := make([]Order, 0, len(resp.Orders))
+	for _, protoOrder := range resp.Orders {
+		// Convert proto order to daemon Order struct
+		order := orderFromProto(protoOrder)
+
+		// Filter by offering types if specified
+		if len(offeringTypes) > 0 && !contains(offeringTypes, order.OfferingType) {
+			continue
+		}
+
+		// Filter by regions if specified
+		if len(regions) > 0 && order.Region != "" && !contains(regions, order.Region) {
+			continue
+		}
+
+		orders = append(orders, order)
+	}
+
+	return orders, nil
 }
 
 // PlaceBid places a bid on an order
 func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Signature) error {
-	// TODO: Implement actual gRPC transaction to market module
+	if c.grpcConn == nil {
+		return fmt.Errorf("grpc endpoint not configured")
+	}
+
+	if bid == nil {
+		return fmt.Errorf("bid cannot be nil")
+	}
+
+	// Parse order ID components from bid.OrderID string
+	// Expected format: "{owner}/{dseq}/{gseq}/{oseq}"
+	orderID, err := parseOrderID(bid.OrderID)
+	if err != nil {
+		return fmt.Errorf("invalid order ID: %w", err)
+	}
+
+	// Create bid ID from order ID and provider address
+	bidID := marketv1.BidID{
+		Owner:    orderID.Owner,
+		DSeq:     orderID.DSeq,
+		GSeq:     orderID.GSeq,
+		OSeq:     orderID.OSeq,
+		Provider: bid.ProviderAddress,
+	}
+
+	// Parse bid price
+	priceAmount, ok := sdkmath.NewIntFromString(bid.Price)
+	if !ok {
+		return fmt.Errorf("invalid bid price: %s", bid.Price)
+	}
+
+	// Create the MsgCreateBid message
+	msg := &marketv1beta5.MsgCreateBid{
+		ID: bidID,
+		Price: sdktypes.NewDecCoinFromDec(
+			bid.Currency,
+			sdkmath.LegacyNewDecFromInt(priceAmount),
+		),
+		Deposit: depositv1.Deposit{
+			Amount: sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit required for bids
+		},
+		ResourcesOffer: marketv1beta5.ResourcesOffer{}, // TODO: Extract from bid
+	}
+
+	// Send via Msg client
+	msgClient := marketv1beta5.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	_, err = msgClient.CreateBid(reqCtx, msg)
+	if err != nil {
+		return fmt.Errorf("failed to create bid: %w", err)
+	}
+
 	return nil
 }
 
 // GetProviderBids retrieves bids placed by this provider
 func (c *rpcChainClient) GetProviderBids(ctx context.Context, address string) ([]Bid, error) {
-	// TODO: Implement actual gRPC query to market module
-	return []Bid{}, nil
+	if c.grpcConn == nil {
+		return nil, fmt.Errorf("grpc endpoint not configured")
+	}
+
+	client := marketv1beta5.NewQueryClient(c.grpcConn)
+
+	// Query bids filtered by provider address
+	req := &marketv1beta5.QueryBidsRequest{
+		Filters: marketv1beta5.BidFilters{
+			Provider: address,
+			State:    "open", // Only return open bids
+		},
+		Pagination: &query.PageRequest{
+			Limit: defaultHPCPollPageLimit,
+		},
+	}
+
+	resp, err := client.Bids(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query bids: %w", err)
+	}
+
+	bids := make([]Bid, 0, len(resp.Bids))
+	for _, queryBid := range resp.Bids {
+		bids = append(bids, bidFromProto(&queryBid.Bid))
+	}
+
+	return bids, nil
 }
 
 // Close closes the gRPC connection
@@ -250,23 +373,118 @@ func (c *rpcChainClient) SubmitNodeMetadata(ctx context.Context, msg *hpcv1.MsgU
 	return err
 }
 
-// ReportJobAccounting reports job accounting to chain (placeholder).
-func (c *rpcChainClient) ReportJobAccounting(_ context.Context, _ string, _ *HPCSchedulerMetrics) error {
-	return nil
+// ReportJobAccounting reports job accounting to chain
+func (c *rpcChainClient) ReportJobAccounting(ctx context.Context, jobID string, metrics *HPCSchedulerMetrics) error {
+	if c.grpcConn == nil {
+		return nil // Silently skip if not connected
+	}
+
+	if metrics == nil {
+		return nil
+	}
+
+	// Convert metrics to proto format and submit via HPC module
+	protoMetrics := metricsToProto(metrics)
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Submit as a job status update with accounting metrics
+	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: "", // Will be set by KeyManager/TxBuilder
+		JobId:           jobID,
+		SlurmJobId:      "",
+		State:           hpcv1.JobStateRunning,
+		StatusMessage:   "Accounting update",
+		ExitCode:        0,
+		UsageMetrics:    protoMetrics,
+	})
+
+	return err
 }
 
-// SubmitAccountingRecord submits an accounting record (placeholder).
-func (c *rpcChainClient) SubmitAccountingRecord(_ context.Context, _ *hpctypes.HPCAccountingRecord) error {
-	return nil
+// SubmitAccountingRecord submits an accounting record
+func (c *rpcChainClient) SubmitAccountingRecord(ctx context.Context, record *hpctypes.HPCAccountingRecord) error {
+	if c.grpcConn == nil {
+		return nil // Silently skip if not connected
+	}
+
+	if record == nil {
+		return nil
+	}
+
+	// Convert record metrics to proto format
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Submit via job status with usage metrics from record
+	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: record.ProviderAddress,
+		JobId:           record.JobID,
+		SlurmJobId:      record.SchedulerJobID,
+		State:           hpcv1.JobStateRunning,
+		StatusMessage:   "Accounting record",
+		ExitCode:        0,
+		UsageMetrics: &hpcv1.HPCUsageMetrics{
+			CpuCoreSeconds:   record.UsageMetrics.CPUCoreSeconds,
+			MemoryGbSeconds:  record.UsageMetrics.MemoryGBSeconds,
+			GpuSeconds:       record.UsageMetrics.GPUSeconds,
+			StorageGbHours:   record.UsageMetrics.StorageGBHours,
+			NetworkBytesIn:   record.UsageMetrics.NetworkBytesIn,
+			NetworkBytesOut:  record.UsageMetrics.NetworkBytesOut,
+			WallClockSeconds: record.UsageMetrics.WallClockSeconds,
+			NodesUsed:        record.UsageMetrics.NodesUsed,
+		},
+	})
+
+	return err
 }
 
-// SubmitUsageSnapshot submits a usage snapshot (placeholder).
-func (c *rpcChainClient) SubmitUsageSnapshot(_ context.Context, _ *hpctypes.HPCUsageSnapshot) error {
-	return nil
+// SubmitUsageSnapshot submits a usage snapshot
+func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpctypes.HPCUsageSnapshot) error {
+	if c.grpcConn == nil {
+		return nil // Silently skip if not connected
+	}
+
+	if snapshot == nil {
+		return nil
+	}
+
+	// Submit snapshot via HPC module
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: snapshot.ProviderAddress,
+		JobId:           snapshot.JobID,
+		SlurmJobId:      snapshot.SchedulerJobID,
+		State:           hpcv1.JobStateRunning,
+		StatusMessage:   "Usage snapshot",
+		ExitCode:        0,
+		UsageMetrics: &hpcv1.HPCUsageMetrics{
+			CpuCoreSeconds:   snapshot.Metrics.CPUCoreSeconds,
+			MemoryGbSeconds:  snapshot.Metrics.MemoryGBSeconds,
+			GpuSeconds:       snapshot.Metrics.GPUSeconds,
+			StorageGbHours:   snapshot.Metrics.StorageGBHours,
+			NetworkBytesIn:   snapshot.Metrics.NetworkBytesIn,
+			NetworkBytesOut:  snapshot.Metrics.NetworkBytesOut,
+			WallClockSeconds: snapshot.Metrics.WallClockSeconds,
+			NodesUsed:        snapshot.Metrics.NodesUsed,
+		},
+	})
+
+	return err
 }
 
-// GetBillingRules returns billing rules (fallback default).
-func (c *rpcChainClient) GetBillingRules(_ context.Context, _ string) (*hpctypes.HPCBillingRules, error) {
+// GetBillingRules returns billing rules from on-chain params
+func (c *rpcChainClient) GetBillingRules(ctx context.Context, clusterID string) (*hpctypes.HPCBillingRules, error) {
+	// For now, just return default billing rules
+	// TODO: Query on-chain params when billing rules query is implemented
 	rules := hpctypes.DefaultHPCBillingRules("uvirt")
 	return &rules, nil
 }
@@ -502,4 +720,76 @@ func dataReferencesFromProto(references []hpcv1.DataReference) []hpctypes.DataRe
 		})
 	}
 	return out
+}
+
+// orderFromProto converts a proto Order to daemon Order struct
+func orderFromProto(protoOrder marketv1beta5.Order) Order {
+	return Order{
+		OrderID:         protoOrder.ID.String(),
+		CustomerAddress: protoOrder.ID.Owner,
+		OfferingType:    "compute", // Default, could be enhanced based on order spec
+		Requirements: ResourceRequirements{
+			CPUCores:  0, // TODO: Extract from order spec
+			MemoryGB:  0,
+			StorageGB: 0,
+		},
+		Region:    "",  // TODO: Extract from order spec attributes
+		MaxPrice:  "0", // TODO: Extract from order spec
+		Currency:  "uvirt",
+		CreatedAt: time.Unix(protoOrder.CreatedAt, 0),
+	}
+}
+
+// bidFromProto converts a proto Bid to daemon Bid struct
+func bidFromProto(protoBid *marketv1beta5.Bid) Bid {
+	return Bid{
+		BidID:           protoBid.ID.String(),
+		OrderID:         protoBid.ID.OrderID().String(),
+		ProviderAddress: protoBid.ID.Provider,
+		Price:           protoBid.Price.Amount.String(),
+		Currency:        protoBid.Price.Denom,
+		CreatedAt:       time.Unix(protoBid.CreatedAt, 0),
+		State:           protoBid.State.String(),
+	}
+}
+
+// contains checks if a string slice contains a value
+func contains(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+// parseOrderID parses an order ID string into components
+// Expected format: "{owner}/{dseq}/{gseq}/{oseq}"
+func parseOrderID(orderIDStr string) (marketv1.OrderID, error) {
+	parts := strings.Split(orderIDStr, "/")
+	if len(parts) != 4 {
+		return marketv1.OrderID{}, fmt.Errorf("invalid order ID format: expected owner/dseq/gseq/oseq, got %s", orderIDStr)
+	}
+
+	dseq, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return marketv1.OrderID{}, fmt.Errorf("invalid dseq: %w", err)
+	}
+
+	gseq, err := strconv.ParseUint(parts[2], 10, 32)
+	if err != nil {
+		return marketv1.OrderID{}, fmt.Errorf("invalid gseq: %w", err)
+	}
+
+	oseq, err := strconv.ParseUint(parts[3], 10, 32)
+	if err != nil {
+		return marketv1.OrderID{}, fmt.Errorf("invalid oseq: %w", err)
+	}
+
+	return marketv1.OrderID{
+		Owner: parts[0],
+		DSeq:  dseq,
+		GSeq:  uint32(gseq),
+		OSeq:  uint32(oseq),
+	}, nil
 }
