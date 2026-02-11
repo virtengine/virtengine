@@ -188,7 +188,7 @@ func NewApp(
 		minGasPrices = sdk.DecCoins{}
 	}
 	gasParams := gaspricing.DefaultParams(minGasPrices)
-	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.keys[apptypes.GasPricingStoreKey], logger, gasParams)
+	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.GetKey(apptypes.GasPricingStoreKey), logger, gasParams)
 
 	// TODO: There is a bug here, where we register the govRouter routes in InitNormalKeepers and then
 	// call setupHooks afterwards. Therefore, if a gov proposal needs to call a method and that method calls a
@@ -228,7 +228,7 @@ func NewApp(
 	app.MM.SetOrderInitGenesis(OrderInitGenesis(app.MM.ModuleNames())...)
 
 	app.Configurator = module.NewConfigurator(app.AppCodec(), app.MsgServiceRouter(), app.GRPCQueryRouter())
-	err := app.MM.RegisterServices(app.Configurator)
+	err = app.MM.RegisterServices(app.Configurator)
 	if err != nil {
 		panic(err)
 	}
@@ -480,7 +480,7 @@ func (app *VirtEngineApp) PrepareCheckStater(ctx sdk.Context) {
 }
 
 func (app *VirtEngineApp) applyAdaptiveMinGasPrices(ctx sdk.Context) {
-	if app.Keepers.VirtEngine.GasPricing == (gaspricing.Keeper{}) {
+	if app.Keepers.VirtEngine.GasPricing.IsZero() {
 		return
 	}
 	params := app.Keepers.VirtEngine.GasPricing.GetParams(ctx)
@@ -491,11 +491,11 @@ func (app *VirtEngineApp) applyAdaptiveMinGasPrices(ctx sdk.Context) {
 	if len(state.CurrentMinGasPrices) == 0 {
 		state = gaspricing.DefaultState(params)
 	}
-	app.SetMinGasPrices(state.CurrentMinGasPrices.String())
+	app.setAdaptiveMinGasPrices(state.CurrentMinGasPrices)
 }
 
 func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
-	if app.Keepers.VirtEngine.GasPricing == (gaspricing.Keeper{}) {
+	if app.Keepers.VirtEngine.GasPricing.IsZero() {
 		return
 	}
 	params := app.Keepers.VirtEngine.GasPricing.GetParams(ctx)
@@ -509,7 +509,14 @@ func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
 		app.Logger().Error("failed to update adaptive min gas prices", "err", err)
 		return
 	}
-	app.SetMinGasPrices(minGasPrices.String())
+	app.setAdaptiveMinGasPrices(minGasPrices)
+}
+
+func (app *VirtEngineApp) setAdaptiveMinGasPrices(minGasPrices sdk.DecCoins) {
+	if app.BaseApp == nil {
+		return
+	}
+	baseapp.SetMinGasPrices(minGasPrices.String())(app.BaseApp)
 }
 
 // LegacyAmino returns VirtEngineApp's amino codec.

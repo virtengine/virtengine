@@ -46,8 +46,8 @@ func (m IBCModule) OnChanOpenInit(
 		return "", ErrInvalidVersion.Wrapf("expected %s, got %s", Version, version)
 	}
 
-	if len(connectionHops) == 0 {
-		return "", channeltypes.ErrInvalidConnectionHops
+	if len(connectionHops) != 1 {
+		return "", channeltypes.ErrTooManyConnectionHops.Wrapf("expected 1, got %d", len(connectionHops))
 	}
 
 	m.keeper.StoreHandshakeRecord(ctx, channelID)
@@ -77,8 +77,8 @@ func (m IBCModule) OnChanOpenTry(
 		return "", ErrInvalidVersion.Wrapf("expected %s, got %s", Version, counterpartyVersion)
 	}
 
-	if len(connectionHops) == 0 {
-		return "", channeltypes.ErrInvalidConnectionHops
+	if len(connectionHops) != 1 {
+		return "", channeltypes.ErrTooManyConnectionHops.Wrapf("expected 1, got %d", len(connectionHops))
 	}
 
 	m.keeper.StoreHandshakeRecord(ctx, channelID)

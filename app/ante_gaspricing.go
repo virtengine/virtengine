@@ -53,7 +53,7 @@ func (d AdaptiveGasPriceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 	gasDec := sdkmath.LegacyNewDec(int64(gas))
 	gasPrices := feeDec.QuoDec(gasDec)
 
-	if !gasPrices.IsAllGTE(minGasPrices) {
+	if !gaspricing.DecCoinsAllGTE(gasPrices, minGasPrices) {
 		return ctx, fmt.Errorf("insufficient fee: min gas prices %s, got %s", minGasPrices, gasPrices)
 	}
 

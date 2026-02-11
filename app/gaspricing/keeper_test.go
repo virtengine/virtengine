@@ -21,7 +21,8 @@ func TestUpdateMinGasPrices(t *testing.T) {
 
 	ctx := sdk.NewContext(cms, tmproto.Header{Height: 10}, false, log.NewNopLogger())
 
-	baseMinGas := sdk.MustParseDecCoins("0.001uvirt")
+	baseMinGas, err := sdk.ParseDecCoins("0.001uvirt")
+	require.NoError(t, err)
 	params := DefaultParams(baseMinGas)
 	params.TargetBlockUtilizationBPS = 5000
 	params.AdjustmentRateBPS = 4000
@@ -34,10 +35,9 @@ func TestUpdateMinGasPrices(t *testing.T) {
 
 	highMinGas, _, err := keeper.UpdateMinGasPrices(ctx, 9000, 10000)
 	require.NoError(t, err)
-	require.True(t, highMinGas.IsAllGTE(baseMinGas))
+	require.True(t, DecCoinsAllGTE(highMinGas, baseMinGas))
 
 	lowMinGas, _, err := keeper.UpdateMinGasPrices(ctx, 1000, 10000)
 	require.NoError(t, err)
-	require.True(t, lowMinGas.IsAllGTE(baseMinGas))
+	require.True(t, DecCoinsAllGTE(lowMinGas, baseMinGas))
 }
-
