@@ -84,6 +84,28 @@ func TestHasValidAuthSession(t *testing.T) {
 	require.False(t, hasSession, "should return false for different action type")
 }
 
+func TestHasValidAuthSession_StepUpCategory(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	addr := sdk.AccAddress([]byte("test_address_1234567"))
+
+	now := ctx.BlockTime().Unix()
+	session := &types.AuthorizationSession{
+		SessionID:       "step-up-session",
+		AccountAddress:  addr.String(),
+		TransactionType: types.SensitiveTxLargeWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeFIDO2},
+		CreatedAt:       now,
+		ExpiresAt:       now + 15*60,
+		IsSingleUse:     false,
+	}
+	err := keeper.CreateAuthorizationSession(ctx, session)
+	require.NoError(t, err)
+
+	// High-risk funds transfer session should authorize lower-risk funds transfer
+	hasSession := keeper.HasValidAuthSession(ctx, addr, types.SensitiveTxMediumWithdrawal)
+	require.True(t, hasSession, "should allow step-up within same category for lower risk")
+}
+
 func TestHasValidAuthSessionWithDevice(t *testing.T) {
 	ctx, keeper := setupTestKeeper(t)
 	addr := sdk.AccAddress([]byte("test_address_1234567"))
@@ -419,6 +441,27 @@ func TestValidateSessionForTransaction(t *testing.T) {
 	err = keeper.ValidateSessionForTransaction(ctx, "validate-test-session", addr, types.SensitiveTxProviderRegistration, "wrong-device")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "device")
+}
+
+func TestValidateSessionForTransaction_StepUp(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	addr := sdk.AccAddress([]byte("test_address_1234567"))
+
+	now := ctx.BlockTime().Unix()
+	session := &types.AuthorizationSession{
+		SessionID:       "step-up-validate",
+		AccountAddress:  addr.String(),
+		TransactionType: types.SensitiveTxLargeWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeFIDO2},
+		CreatedAt:       now,
+		ExpiresAt:       now + 15*60,
+		IsSingleUse:     false,
+	}
+	_ = keeper.CreateAuthorizationSession(ctx, session)
+
+	// High-risk withdrawal session should validate lower-risk withdrawal
+	err := keeper.ValidateSessionForTransaction(ctx, "step-up-validate", addr, types.SensitiveTxMediumWithdrawal, "")
+	require.NoError(t, err)
 }
 
 func TestGetSessionDurationForAction(t *testing.T) {

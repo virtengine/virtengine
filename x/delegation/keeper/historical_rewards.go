@@ -55,12 +55,18 @@ func (k Keeper) ClaimRewardsInRange(ctx sdk.Context, delegatorAddr, validatorAdd
 		return sdk.NewCoins(), nil
 	}
 
+	params := k.GetParams(ctx)
+
 	delegatorAccAddr, err := sdk.AccAddressFromBech32(delegatorAddr)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(DefaultRewardDenom, math.NewIntFromBigInt(totalReward)))
+	rewardDenom := params.RewardDenom
+	if rewardDenom == "" {
+		rewardDenom = DefaultRewardDenom
+	}
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(totalReward)))
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {
 			return nil, fmt.Errorf("failed to transfer rewards: %w", err)

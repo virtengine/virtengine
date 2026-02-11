@@ -1,6 +1,9 @@
 package keeper
 
 import (
+	"encoding/json"
+	"fmt"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/mfa/types"
@@ -37,8 +40,8 @@ func (k Keeper) hasValidAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAd
 	now := ctx.BlockTime()
 
 	for _, session := range sessions {
-		// Check if session is for the correct action type
-		if session.TransactionType != action {
+		// Check if session can authorize the requested action (risk-based step-up)
+		if !session.TransactionType.CanAuthorize(action) {
 			continue
 		}
 
@@ -79,8 +82,8 @@ func (k Keeper) consumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAdd
 	now := ctx.BlockTime()
 
 	for _, session := range sessions {
-		// Check if session is for the correct action type
-		if session.TransactionType != action {
+		// Check if session can authorize the requested action (risk-based step-up)
+		if !session.TransactionType.CanAuthorize(action) {
 			continue
 		}
 
@@ -233,8 +236,8 @@ func (k Keeper) ValidateSessionForTransaction(
 		return types.ErrUnauthorized.Wrap("session does not belong to this account")
 	}
 
-	// Verify the session is for this action type
-	if session.TransactionType != action {
+	// Verify the session can authorize this action (risk-based step-up)
+	if !session.TransactionType.CanAuthorize(action) {
 		return types.ErrUnauthorized.Wrapf("session is for action %s, not %s",
 			session.TransactionType.String(), action.String())
 	}
@@ -278,4 +281,84 @@ func (k Keeper) IsActionSingleUse(ctx sdk.Context, action types.SensitiveTransac
 
 	// Fall back to type defaults
 	return action.IsSingleUse()
+}
+
+// RefreshAuthorizationSession extends the expiry of a valid, multi-use session.
+// Returns the updated session.
+func (k Keeper) RefreshAuthorizationSession(ctx sdk.Context, sessionID string) (*types.AuthorizationSession, error) {
+	session, found := k.GetAuthorizationSession(ctx, sessionID)
+	if !found {
+		return nil, types.ErrSessionNotFound.Wrapf("session %s not found", sessionID)
+	}
+
+	if session.IsSingleUse {
+		return nil, types.ErrUnauthorized.Wrap("single-use sessions cannot be refreshed")
+	}
+
+	now := ctx.BlockTime()
+	if !session.IsValid(now) {
+		return nil, types.ErrSessionExpired.Wrap("session has expired or already used")
+	}
+
+	duration := k.GetSessionDurationForAction(ctx, session.TransactionType)
+	if duration <= 0 {
+		duration = session.ExpiresAt - session.CreatedAt
+	}
+	if duration <= 0 {
+		return nil, types.ErrInvalidSensitiveTxConfig.Wrap("session duration must be positive to refresh")
+	}
+
+	session.ExpiresAt = now.Unix() + duration
+
+	store := ctx.KVStore(k.skey)
+	key := types.AuthorizationSessionKey(sessionID)
+
+	bz, err := json.Marshal(&sessionStore{
+		SessionID:         session.SessionID,
+		AccountAddress:    session.AccountAddress,
+		TransactionType:   session.TransactionType,
+		VerifiedFactors:   session.VerifiedFactors,
+		CreatedAt:         session.CreatedAt,
+		ExpiresAt:         session.ExpiresAt,
+		UsedAt:            session.UsedAt,
+		IsSingleUse:       session.IsSingleUse,
+		DeviceFingerprint: session.DeviceFingerprint,
+	})
+	if err != nil {
+		return nil, err
+	}
+	store.Set(key, bz)
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			types.EventTypeSessionRefreshed,
+			sdk.NewAttribute(types.AttributeKeySessionID, session.SessionID),
+			sdk.NewAttribute(types.AttributeKeyAccountAddress, session.AccountAddress),
+			sdk.NewAttribute(types.AttributeKeyExpiresAt, fmt.Sprintf("%d", session.ExpiresAt)),
+		),
+	)
+
+	return session, nil
+}
+
+// RevokeAuthorizationSession revokes a session by deleting it.
+func (k Keeper) RevokeAuthorizationSession(ctx sdk.Context, sessionID string) error {
+	session, found := k.GetAuthorizationSession(ctx, sessionID)
+	if !found {
+		return types.ErrSessionNotFound.Wrapf("session %s not found", sessionID)
+	}
+
+	if err := k.DeleteAuthorizationSession(ctx, sessionID); err != nil {
+		return err
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			types.EventTypeSessionRevoked,
+			sdk.NewAttribute(types.AttributeKeySessionID, sessionID),
+			sdk.NewAttribute(types.AttributeKeyAccountAddress, session.AccountAddress),
+		),
+	)
+
+	return nil
 }

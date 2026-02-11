@@ -9,10 +9,11 @@ import (
 )
 
 func baseConfig() core.Config {
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	return core.Config{
 		ScenarioName:       "baseline",
-		StartTime:          time.Now().UTC(),
-		EndTime:            time.Now().UTC().Add(365 * 24 * time.Hour),
+		StartTime:          start,
+		EndTime:            start.Add(365 * 24 * time.Hour),
 		TimeStep:           24 * time.Hour,
 		Seed:               42,
 		NumUsers:           200,

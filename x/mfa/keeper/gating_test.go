@@ -154,6 +154,45 @@ func (s *GatingTestSuite) TestValidateMFAProof_Valid() {
 	s.Require().NoError(err)
 }
 
+// Test: ValidateMFAProof - step-up within category
+func (s *GatingTestSuite) TestValidateMFAProof_StepUpWithinCategory() {
+	address := sdk.AccAddress([]byte("test-proof-step-up"))
+
+	// Configure sensitive tx configs for withdrawals
+	err := s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxLargeWithdrawal,
+		Enabled:         true,
+	})
+	s.Require().NoError(err)
+	err = s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxMediumWithdrawal,
+		Enabled:         true,
+	})
+	s.Require().NoError(err)
+
+	// Create a valid authorization session for a higher-risk withdrawal
+	session := &types.AuthorizationSession{
+		SessionID:       "step-up-session-id",
+		AccountAddress:  address.String(),
+		TransactionType: types.SensitiveTxLargeWithdrawal,
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 3600,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+	}
+	err = s.keeper.CreateAuthorizationSession(s.ctx, session)
+	s.Require().NoError(err)
+
+	proof := &types.MFAProof{
+		SessionID:       "step-up-session-id",
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+		Timestamp:       s.ctx.BlockTime().Unix(),
+	}
+
+	// Should authorize lower-risk withdrawal within same category
+	err = s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, "")
+	s.Require().NoError(err)
+}
+
 // Test: ValidateMFAProof - expired session
 func (s *GatingTestSuite) TestValidateMFAProof_ExpiredSession() {
 	address := sdk.AccAddress([]byte("test-proof-expired"))

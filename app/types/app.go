@@ -113,6 +113,8 @@ import (
 	tkeeper "github.com/virtengine/virtengine/x/take/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+
+	gaspricing "github.com/virtengine/virtengine/app/gaspricing"
 )
 
 const (
@@ -166,6 +168,7 @@ type AppKeepers struct {
 		Support     supportkeeper.Keeper
 		Delegation  delegationkeeper.Keeper
 		VirtStaking virtstakingkeeper.Keeper
+		GasPricing  gaspricing.Keeper
 		BME         bmekeeper.IKeeper
 		Oracle      oraclekeeper.IKeeper
 	}
@@ -784,6 +787,7 @@ func virtengineKVStoreKeys() []string {
 		reviewtypes.StoreKey,
 		delegationtypes.StoreKey,
 		virtstakingtypes.StoreKey,
+		GasPricingStoreKey,
 		bmetypes.StoreKey,
 		oracletypes.StoreKey,
 	}
