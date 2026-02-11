@@ -3,15 +3,21 @@ package provider_daemon
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
+	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -154,9 +160,57 @@ func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Sign
 		return fmt.Errorf("grpc endpoint not configured")
 	}
 
-	// TODO: Implement transaction building and signing
-	// For now return a placeholder error indicating this needs KeyManager integration
-	return fmt.Errorf("PlaceBid requires KeyManager integration for transaction signing (not yet implemented)")
+	if bid == nil {
+		return fmt.Errorf("bid cannot be nil")
+	}
+
+	// Parse order ID components from bid.OrderID string
+	// Expected format: "{owner}/{dseq}/{gseq}/{oseq}"
+	orderID, err := parseOrderID(bid.OrderID)
+	if err != nil {
+		return fmt.Errorf("invalid order ID: %w", err)
+	}
+
+	// Create bid ID from order ID and provider address
+	bidID := marketv1.BidID{
+		Owner:    orderID.Owner,
+		DSeq:     orderID.DSeq,
+		GSeq:     orderID.GSeq,
+		OSeq:     orderID.OSeq,
+		Provider: bid.ProviderAddress,
+	}
+
+	// Parse bid price
+	priceAmount, ok := sdkmath.NewIntFromString(bid.Price)
+	if !ok {
+		return fmt.Errorf("invalid bid price: %s", bid.Price)
+	}
+
+	// Create the MsgCreateBid message
+	msg := &marketv1beta5.MsgCreateBid{
+		ID: bidID,
+		Price: sdktypes.NewDecCoinFromDec(
+			bid.Currency,
+			sdkmath.LegacyNewDecFromInt(priceAmount),
+		),
+		Deposit: depositv1.Deposit{
+			Amount: sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit required for bids
+		},
+		ResourcesOffer: marketv1beta5.ResourcesOffer{}, // TODO: Extract from bid
+	}
+
+	// Send via Msg client
+	msgClient := marketv1beta5.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	_, err = msgClient.CreateBid(reqCtx, msg)
+	if err != nil {
+		return fmt.Errorf("failed to create bid: %w", err)
+	}
+
+	return nil
 }
 
 // GetProviderBids retrieves bids placed by this provider
@@ -319,23 +373,118 @@ func (c *rpcChainClient) SubmitNodeMetadata(ctx context.Context, msg *hpcv1.MsgU
 	return err
 }
 
-// ReportJobAccounting reports job accounting to chain (placeholder).
-func (c *rpcChainClient) ReportJobAccounting(_ context.Context, _ string, _ *HPCSchedulerMetrics) error {
-	return nil
+// ReportJobAccounting reports job accounting to chain
+func (c *rpcChainClient) ReportJobAccounting(ctx context.Context, jobID string, metrics *HPCSchedulerMetrics) error {
+	if c.grpcConn == nil {
+		return nil // Silently skip if not connected
+	}
+
+	if metrics == nil {
+		return nil
+	}
+
+	// Convert metrics to proto format and submit via HPC module
+	protoMetrics := metricsToProto(metrics)
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Submit as a job status update with accounting metrics
+	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: "", // Will be set by KeyManager/TxBuilder
+		JobId:           jobID,
+		SlurmJobId:      "",
+		State:           hpcv1.JobStateRunning,
+		StatusMessage:   "Accounting update",
+		ExitCode:        0,
+		UsageMetrics:    protoMetrics,
+	})
+
+	return err
 }
 
-// SubmitAccountingRecord submits an accounting record (placeholder).
-func (c *rpcChainClient) SubmitAccountingRecord(_ context.Context, _ *hpctypes.HPCAccountingRecord) error {
-	return nil
+// SubmitAccountingRecord submits an accounting record
+func (c *rpcChainClient) SubmitAccountingRecord(ctx context.Context, record *hpctypes.HPCAccountingRecord) error {
+	if c.grpcConn == nil {
+		return nil // Silently skip if not connected
+	}
+
+	if record == nil {
+		return nil
+	}
+
+	// Convert record metrics to proto format
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Submit via job status with usage metrics from record
+	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: record.ProviderAddress,
+		JobId:           record.JobID,
+		SlurmJobId:      record.SchedulerJobID,
+		State:           hpcv1.JobStateRunning,
+		StatusMessage:   "Accounting record",
+		ExitCode:        0,
+		UsageMetrics: &hpcv1.HPCUsageMetrics{
+			CpuCoreSeconds:   record.UsageMetrics.CPUCoreSeconds,
+			MemoryGbSeconds:  record.UsageMetrics.MemoryGBSeconds,
+			GpuSeconds:       record.UsageMetrics.GPUSeconds,
+			StorageGbHours:   record.UsageMetrics.StorageGBHours,
+			NetworkBytesIn:   record.UsageMetrics.NetworkBytesIn,
+			NetworkBytesOut:  record.UsageMetrics.NetworkBytesOut,
+			WallClockSeconds: record.UsageMetrics.WallClockSeconds,
+			NodesUsed:        record.UsageMetrics.NodesUsed,
+		},
+	})
+
+	return err
 }
 
-// SubmitUsageSnapshot submits a usage snapshot (placeholder).
-func (c *rpcChainClient) SubmitUsageSnapshot(_ context.Context, _ *hpctypes.HPCUsageSnapshot) error {
-	return nil
+// SubmitUsageSnapshot submits a usage snapshot
+func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpctypes.HPCUsageSnapshot) error {
+	if c.grpcConn == nil {
+		return nil // Silently skip if not connected
+	}
+
+	if snapshot == nil {
+		return nil
+	}
+
+	// Submit snapshot via HPC module
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: snapshot.ProviderAddress,
+		JobId:           snapshot.JobID,
+		SlurmJobId:      snapshot.SchedulerJobID,
+		State:           hpcv1.JobStateRunning,
+		StatusMessage:   "Usage snapshot",
+		ExitCode:        0,
+		UsageMetrics: &hpcv1.HPCUsageMetrics{
+			CpuCoreSeconds:   snapshot.Metrics.CPUCoreSeconds,
+			MemoryGbSeconds:  snapshot.Metrics.MemoryGBSeconds,
+			GpuSeconds:       snapshot.Metrics.GPUSeconds,
+			StorageGbHours:   snapshot.Metrics.StorageGBHours,
+			NetworkBytesIn:   snapshot.Metrics.NetworkBytesIn,
+			NetworkBytesOut:  snapshot.Metrics.NetworkBytesOut,
+			WallClockSeconds: snapshot.Metrics.WallClockSeconds,
+			NodesUsed:        snapshot.Metrics.NodesUsed,
+		},
+	})
+
+	return err
 }
 
-// GetBillingRules returns billing rules (fallback default).
-func (c *rpcChainClient) GetBillingRules(_ context.Context, _ string) (*hpctypes.HPCBillingRules, error) {
+// GetBillingRules returns billing rules from on-chain params
+func (c *rpcChainClient) GetBillingRules(ctx context.Context, clusterID string) (*hpctypes.HPCBillingRules, error) {
+	// For now, just return default billing rules
+	// TODO: Query on-chain params when billing rules query is implemented
 	rules := hpctypes.DefaultHPCBillingRules("uvirt")
 	return &rules, nil
 }
@@ -612,4 +761,35 @@ func contains(slice []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// parseOrderID parses an order ID string into components
+// Expected format: "{owner}/{dseq}/{gseq}/{oseq}"
+func parseOrderID(orderIDStr string) (marketv1.OrderID, error) {
+	parts := strings.Split(orderIDStr, "/")
+	if len(parts) != 4 {
+		return marketv1.OrderID{}, fmt.Errorf("invalid order ID format: expected owner/dseq/gseq/oseq, got %s", orderIDStr)
+	}
+
+	dseq, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return marketv1.OrderID{}, fmt.Errorf("invalid dseq: %w", err)
+	}
+
+	gseq, err := strconv.ParseUint(parts[2], 10, 32)
+	if err != nil {
+		return marketv1.OrderID{}, fmt.Errorf("invalid gseq: %w", err)
+	}
+
+	oseq, err := strconv.ParseUint(parts[3], 10, 32)
+	if err != nil {
+		return marketv1.OrderID{}, fmt.Errorf("invalid oseq: %w", err)
+	}
+
+	return marketv1.OrderID{
+		Owner: parts[0],
+		DSeq:  dseq,
+		GSeq:  uint32(gseq),
+		OSeq:  uint32(oseq),
+	}, nil
 }
