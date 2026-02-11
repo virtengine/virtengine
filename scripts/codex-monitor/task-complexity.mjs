@@ -569,3 +569,13 @@ function pointsToSize(points) {
   if (points <= 13) return "xl";
   return "xxl";
 }
+
+/**
+ * Map executor type string to SDK-compatible identifier.
+ */
+export function executorToSdk(executorType) {
+  const normalized = (executorType || "").toUpperCase();
+  if (normalized === "CLAUDE") return "claude";
+  if (normalized === "COPILOT") return "copilot";
+  return "codex";
+}
