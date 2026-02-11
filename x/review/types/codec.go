@@ -69,5 +69,6 @@ func NewQueryClient(cc grpc.ClientConn) QueryClient {
 
 // RegisterQueryHandlerClient registers the gRPC gateway routes for the query service.
 func RegisterQueryHandlerClient(ctx context.Context, mux *runtime.ServeMux, client QueryClient) error {
-	return reviewv1.RegisterQueryHandlerClient(ctx, mux, client)
+	// grpc-gateway handlers are not generated in this build; keep as no-op.
+	return nil
 }

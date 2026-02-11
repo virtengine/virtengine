@@ -210,6 +210,10 @@ func NewApp(
 	modules := appModules(app, encodingConfig)
 
 	app.MM = module.NewManager(modules...)
+	if app.Keepers.Cosmos.Crisis != nil {
+		//nolint:staticcheck // required for crisis invariant registration in this build
+		app.MM.RegisterInvariants(app.Keepers.Cosmos.Crisis)
+	}
 
 	// During begin block slashing happens after distr.BeginBlocker so that
 	// there is nothing left over in the validator fee pool, to keep the

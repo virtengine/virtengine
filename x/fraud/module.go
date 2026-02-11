@@ -21,6 +21,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"github.com/virtengine/virtengine/x/fraud/client/cli"
 	"github.com/virtengine/virtengine/x/fraud/keeper"
 	"github.com/virtengine/virtengine/x/fraud/types"
 )
@@ -83,12 +84,12 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the root tx command for the Fraud module.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetTxCmd()
 }
 
 // GetQueryCmd returns the root query command for the Fraud module.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetQueryCmd()
 }
 
 // AppModule implements an application module for the Fraud module.
@@ -123,7 +124,7 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 //
 //nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
 func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
-	// Invariants to be implemented
+	keeper.RegisterInvariants(ir, am.keeper)
 }
 
 // InitGenesis performs genesis initialization

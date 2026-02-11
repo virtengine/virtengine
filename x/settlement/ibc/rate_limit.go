@@ -18,16 +18,16 @@ const (
 
 // RateLimitConfig defines per-block packet limits.
 type RateLimitConfig struct {
-	Enabled                     bool   `json:"enabled"`
-	MaxPacketsPerBlock          uint64 `json:"max_packets_per_block"`
+	Enabled                      bool   `json:"enabled"`
+	MaxPacketsPerBlock           uint64 `json:"max_packets_per_block"`
 	MaxPacketsPerRelayerPerBlock uint64 `json:"max_packets_per_relayer_per_block"`
 }
 
 // DefaultRateLimitConfig returns the default IBC rate limit config.
 func DefaultRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
-		Enabled:                     true,
-		MaxPacketsPerBlock:          200,
+		Enabled:                      true,
+		MaxPacketsPerBlock:           200,
 		MaxPacketsPerRelayerPerBlock: 50,
 	}
 }
@@ -81,7 +81,7 @@ func (k IBCKeeper) CheckRateLimit(ctx sdk.Context, relayer sdk.AccAddress, packe
 		return nil
 	}
 
-	height := uint64(ctx.BlockHeight())
+	height := uint64(ctx.BlockHeight()) //nolint:gosec // block height is non-negative
 	store := ctx.KVStore(k.storeKey)
 
 	totalKey := RateLimitKey(height, packetType)
@@ -122,7 +122,7 @@ func (k IBCKeeper) CleanupRateLimitData(ctx sdk.Context) {
 				continue
 			}
 
-			height := int64(readUint64(key[len(prefix) : len(prefix)+8]))
+			height := int64(readUint64(key[len(prefix) : len(prefix)+8])) //nolint:gosec // stored heights fit in int64
 			if height <= cutoff {
 				store.Delete(key)
 			}

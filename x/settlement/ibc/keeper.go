@@ -14,6 +14,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
 	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
 
 	"github.com/virtengine/virtengine/x/settlement/types"
@@ -51,8 +52,7 @@ type ChannelKeeper interface {
 
 // PortKeeper defines the expected IBC port keeper.
 type PortKeeper interface {
-	BindPort(ctx sdk.Context, portID string)
-	IsBound(ctx sdk.Context, portID string) bool
+	Route(module string) (porttypes.IBCModule, bool)
 }
 
 // IBCKeeper implements settlement IBC logic.
@@ -99,16 +99,21 @@ func (k IBCKeeper) Logger(ctx sdk.Context) log.Logger {
 
 // BindPort binds to the settlement IBC port.
 func (k IBCKeeper) BindPort(ctx sdk.Context) error {
-	if k.portKeeper.IsBound(ctx, PortID) {
+	if _, ok := k.portKeeper.Route(PortID); ok {
 		return nil
 	}
-	k.portKeeper.BindPort(ctx, PortID)
+	if binder, ok := k.portKeeper.(interface {
+		BindPort(sdk.Context, string) error
+	}); ok {
+		return binder.BindPort(ctx, PortID)
+	}
 	return nil
 }
 
 // IsBound checks if the IBC port is bound.
 func (k IBCKeeper) IsBound(ctx sdk.Context) bool {
-	return k.portKeeper.IsBound(ctx, PortID)
+	_, ok := k.portKeeper.Route(PortID)
+	return ok
 }
 
 // StoreHandshakeRecord stores the handshake start info for timeout checks.
@@ -223,11 +228,19 @@ func (k IBCKeeper) sendPacket(
 
 	height, ok := timeoutHeight.(clienttypes.Height)
 	if !ok || height.IsZero() {
-		height = clienttypes.NewHeight(0, uint64(ctx.BlockHeight())+DefaultTimeoutHeightDelta)
+		blockHeight := ctx.BlockHeight()
+		if blockHeight < 0 {
+			blockHeight = 0
+		}
+		height = clienttypes.NewHeight(0, uint64(blockHeight)+DefaultTimeoutHeightDelta) //nolint:gosec // block height is non-negative
 	}
 
 	if timeoutTimestamp == 0 {
-		timeoutTimestamp = uint64(ctx.BlockTime().UnixNano()) + DefaultTimeoutTimestampDelta
+		blockTime := ctx.BlockTime().UnixNano()
+		if blockTime < 0 {
+			blockTime = 0
+		}
+		timeoutTimestamp = uint64(blockTime) + DefaultTimeoutTimestampDelta //nolint:gosec // block time is non-negative
 	}
 
 	sequence, err := k.channelKeeper.SendPacket(
@@ -400,7 +413,7 @@ func (k IBCKeeper) OnTimeoutPacket(
 	return nil
 }
 
-func (k IBCKeeper) handleEscrowDeposit(ctx sdk.Context, packet channeltypes.Packet, deposit EscrowDepositPacket) (EscrowDepositAck, error) {
+func (k IBCKeeper) handleEscrowDeposit(ctx sdk.Context, _ channeltypes.Packet, deposit EscrowDepositPacket) (EscrowDepositAck, error) {
 	if err := deposit.Validate(); err != nil {
 		return EscrowDepositAck{}, err
 	}
@@ -414,7 +427,7 @@ func (k IBCKeeper) handleEscrowDeposit(ctx sdk.Context, packet channeltypes.Pack
 		return EscrowDepositAck{}, err
 	}
 
-	expiresIn := time.Duration(deposit.ExpiresInSeconds) * time.Second
+	expiresIn := time.Duration(deposit.ExpiresInSeconds) * time.Second //nolint:gosec // bounded by params
 	escrowID, err := k.settlementKeeper.CreateEscrow(ctx, deposit.OrderID, depositor, deposit.Amount, expiresIn, deposit.Conditions)
 	if err != nil {
 		return EscrowDepositAck{}, err
@@ -431,7 +444,7 @@ func (k IBCKeeper) handleEscrowDeposit(ctx sdk.Context, packet channeltypes.Pack
 	return EscrowDepositAck{EscrowID: escrowID, OrderID: deposit.OrderID, Status: "created"}, nil
 }
 
-func (k IBCKeeper) handleEscrowRelease(ctx sdk.Context, packet channeltypes.Packet, release EscrowReleasePacket) (EscrowReleaseAck, error) {
+func (k IBCKeeper) handleEscrowRelease(ctx sdk.Context, _ channeltypes.Packet, release EscrowReleasePacket) (EscrowReleaseAck, error) {
 	if err := release.Validate(); err != nil {
 		return EscrowReleaseAck{}, err
 	}
@@ -461,7 +474,7 @@ func (k IBCKeeper) handleEscrowRelease(ctx sdk.Context, packet channeltypes.Pack
 	return EscrowReleaseAck{EscrowID: release.EscrowID, Status: "released"}, nil
 }
 
-func (k IBCKeeper) handleSettlementRecord(ctx sdk.Context, packet channeltypes.Packet, record SettlementRecordPacket) (SettlementRecordAck, error) {
+func (k IBCKeeper) handleSettlementRecord(ctx sdk.Context, _ channeltypes.Packet, record SettlementRecordPacket) (SettlementRecordAck, error) {
 	if err := record.Validate(); err != nil {
 		return SettlementRecordAck{}, err
 	}

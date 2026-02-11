@@ -20,6 +20,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
 	"github.com/stretchr/testify/require"
 
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
@@ -115,11 +116,11 @@ type mockChannelKeeper struct {
 }
 
 type sentPacket struct {
-	sourcePort      string
-	sourceChannel   string
-	timeoutHeight   clienttypes.Height
+	sourcePort       string
+	sourceChannel    string
+	timeoutHeight    clienttypes.Height
 	timeoutTimestamp uint64
-	data            []byte
+	data             []byte
 }
 
 func (m *mockChannelKeeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
@@ -127,13 +128,13 @@ func (m *mockChannelKeeper) GetChannel(ctx sdk.Context, portID, channelID string
 }
 
 func (m *mockChannelKeeper) SendPacket(ctx sdk.Context, sourcePort, sourceChannel string, timeoutHeight clienttypes.Height, timeoutTimestamp uint64, data []byte) (uint64, error) {
-	sequence := uint64(len(m.sent) + 1)
+	sequence := uint64(len(m.sent) + 1) //nolint:gosec // test helper sequence
 	m.sent = append(m.sent, sentPacket{
-		sourcePort:      sourcePort,
-		sourceChannel:   sourceChannel,
-		timeoutHeight:   timeoutHeight,
+		sourcePort:       sourcePort,
+		sourceChannel:    sourceChannel,
+		timeoutHeight:    timeoutHeight,
 		timeoutTimestamp: timeoutTimestamp,
-		data:            data,
+		data:             data,
 	})
 	return sequence, nil
 }
@@ -146,22 +147,26 @@ func newMockPortKeeper() *mockPortKeeper {
 	return &mockPortKeeper{bound: make(map[string]bool)}
 }
 
-func (m *mockPortKeeper) BindPort(ctx sdk.Context, portID string) {
+func (m *mockPortKeeper) BindPort(ctx sdk.Context, portID string) error {
 	m.bound[portID] = true
+	return nil
 }
 
-func (m *mockPortKeeper) IsBound(ctx sdk.Context, portID string) bool {
-	return m.bound[portID]
+func (m *mockPortKeeper) Route(module string) (porttypes.IBCModule, bool) {
+	if m.bound[module] {
+		return nil, true
+	}
+	return nil, false
 }
 
 type ibcTestEnv struct {
-	ctx       sdk.Context
-	keeper    IBCKeeper
-	settle    *mockSettlementKeeper
-	channel   *mockChannelKeeper
-	port      *mockPortKeeper
-	storeKey  storetypes.StoreKey
-	codec     codec.BinaryCodec
+	ctx      sdk.Context
+	keeper   IBCKeeper
+	settle   *mockSettlementKeeper
+	channel  *mockChannelKeeper
+	port     *mockPortKeeper
+	storeKey storetypes.StoreKey
+	codec    codec.BinaryCodec
 }
 
 func setupIBCTestEnv(t *testing.T) ibcTestEnv {
@@ -205,14 +210,14 @@ func TestIBCKeeperSendEscrowDepositDefaults(t *testing.T) {
 
 	depositor := sdk.AccAddress([]byte("depositor_addr______"))
 	deposit := EscrowDepositPacket{
-		DepositID:       "deposit-1",
-		OrderID:         "order-1",
-		Depositor:       depositor.String(),
-		Amount:          sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		DepositID:        "deposit-1",
+		OrderID:          "order-1",
+		Depositor:        depositor.String(),
+		Amount:           sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
 		ExpiresInSeconds: 3600,
-		SourceChainID:   "chain-a",
-		SourceChannel:   "channel-0",
-		RequestedAt:     env.ctx.BlockTime(),
+		SourceChainID:    "chain-a",
+		SourceChannel:    "channel-0",
+		RequestedAt:      env.ctx.BlockTime(),
 	}
 
 	sequence, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, deposit)
@@ -221,8 +226,10 @@ func TestIBCKeeperSendEscrowDepositDefaults(t *testing.T) {
 	require.Len(t, env.channel.sent, 1)
 
 	sent := env.channel.sent[0]
-	require.Equal(t, uint64(env.ctx.BlockHeight())+DefaultTimeoutHeightDelta, sent.timeoutHeight.RevisionHeight)
-	require.Equal(t, uint64(env.ctx.BlockTime().UnixNano())+DefaultTimeoutTimestampDelta, sent.timeoutTimestamp)
+	expectedHeight := uint64(env.ctx.BlockHeight()) + DefaultTimeoutHeightDelta                //nolint:gosec // test helper
+	expectedTimestamp := uint64(env.ctx.BlockTime().UnixNano()) + DefaultTimeoutTimestampDelta //nolint:gosec // test helper
+	require.Equal(t, expectedHeight, sent.timeoutHeight.RevisionHeight)
+	require.Equal(t, expectedTimestamp, sent.timeoutTimestamp)
 }
 
 func TestIBCKeeperOnRecvEscrowDeposit(t *testing.T) {
@@ -230,14 +237,14 @@ func TestIBCKeeperOnRecvEscrowDeposit(t *testing.T) {
 
 	depositor := sdk.AccAddress([]byte("depositor_addr______"))
 	deposit := EscrowDepositPacket{
-		DepositID:       "deposit-1",
-		OrderID:         "order-1",
-		Depositor:       depositor.String(),
-		Amount:          sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		DepositID:        "deposit-1",
+		OrderID:          "order-1",
+		Depositor:        depositor.String(),
+		Amount:           sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
 		ExpiresInSeconds: 3600,
-		SourceChainID:   "chain-a",
-		SourceChannel:   "channel-0",
-		RequestedAt:     env.ctx.BlockTime(),
+		SourceChainID:    "chain-a",
+		SourceChannel:    "channel-0",
+		RequestedAt:      env.ctx.BlockTime(),
 	}
 
 	packetData, err := NewPacketData(PacketTypeEscrowDeposit, deposit)
@@ -363,8 +370,8 @@ func TestIBCKeeperRateLimit(t *testing.T) {
 	env := setupIBCTestEnv(t)
 
 	cfg := RateLimitConfig{
-		Enabled:                     true,
-		MaxPacketsPerBlock:          1,
+		Enabled:                      true,
+		MaxPacketsPerBlock:           1,
 		MaxPacketsPerRelayerPerBlock: 1,
 	}
 	require.NoError(t, env.keeper.SetRateLimitConfig(env.ctx, cfg))
