@@ -58,6 +58,15 @@ export const env = {
 
   // Fiat Off-ramp
   fiatOffRampUrl: getEnvVar('NEXT_PUBLIC_FIAT_OFFRAMP_URL', ''),
+
+  // LLM Chat (VE-70D)
+  llmProvider: getEnvVar('NEXT_PUBLIC_LLM_PROVIDER', 'openai'),
+  llmEndpoint: getEnvVar('NEXT_PUBLIC_LLM_ENDPOINT', 'https://api.openai.com'),
+  llmModel: getEnvVar('NEXT_PUBLIC_LLM_MODEL', 'gpt-4o-mini'),
+  llmApiKey: getEnvVar('NEXT_PUBLIC_LLM_API_KEY', ''),
+  llmOrganizationId: getEnvVar('NEXT_PUBLIC_LLM_ORG_ID', ''),
+  llmLocalMode: getEnvVar('NEXT_PUBLIC_LLM_LOCAL_MODE', 'openai'),
+  enableChat: getBoolEnvVar('NEXT_PUBLIC_ENABLE_CHAT', true),
 } as const;
 
 export type Env = typeof env;

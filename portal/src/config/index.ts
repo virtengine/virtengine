@@ -16,7 +16,9 @@ export {
   createPortalConfig,
   createChainConfig,
   createWalletConfig,
+  createChatConfig,
   portalConfig,
   chainConfig,
   walletConfig,
+  chatConfig,
 } from './portal';
