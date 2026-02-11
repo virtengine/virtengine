@@ -158,6 +158,7 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 
 	if selectedCluster == nil {
 		if schedulingBlockedByQuota(candidates) {
+			k.recordQuotaDenied(ctx, queueName)
 			return nil, types.ErrTenantQuotaExceeded
 		}
 		return nil, types.ErrNoAvailableCluster
@@ -240,6 +241,8 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 			),
 		)
 	}
+
+	k.updateSchedulingMetrics(ctx, job, decision)
 
 	return decision, nil
 }

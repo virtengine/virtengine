@@ -116,6 +116,13 @@ service Query {
     option (google.api.http).get = "/virtengine/hpc/v1/job/{job_id}/scheduling";
   }
 
+  // SchedulingMetrics returns scheduling metrics for a cluster and queue
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc SchedulingMetrics(QuerySchedulingMetricsRequest) returns (QuerySchedulingMetricsResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/scheduling/metrics/{cluster_id}/{queue_name}";
+  }
+
   // Reward returns a reward record by ID
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
@@ -318,6 +325,17 @@ message QuerySchedulingDecisionByJobRequest {
 // QuerySchedulingDecisionByJobResponse is the response for Query/SchedulingDecisionByJob
 message QuerySchedulingDecisionByJobResponse {
   SchedulingDecision decision = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "decision", (gogoproto.moretags) = "yaml:\"decision\""];
+}
+
+// QuerySchedulingMetricsRequest is the request for Query/SchedulingMetrics
+message QuerySchedulingMetricsRequest {
+  string cluster_id = 1 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string queue_name = 2 [(gogoproto.jsontag) = "queue_name", (gogoproto.moretags) = "yaml:\"queue_name\""];
+}
+
+// QuerySchedulingMetricsResponse is the response for Query/SchedulingMetrics
+message QuerySchedulingMetricsResponse {
+  SchedulingMetrics metrics = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "metrics", (gogoproto.moretags) = "yaml:\"metrics\""];
 }
 
 // QueryRewardRequest is the request for Query/Reward

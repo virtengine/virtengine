@@ -523,6 +523,13 @@ message ClusterCandidate {
   string combined_score = 7 [(gogoproto.jsontag) = "combined_score", (gogoproto.moretags) = "yaml:\"combined_score\""];
   bool eligible = 8 [(gogoproto.jsontag) = "eligible", (gogoproto.moretags) = "yaml:\"eligible\""];
   string ineligibility_reason = 9 [(gogoproto.jsontag) = "ineligibility_reason,omitempty", (gogoproto.moretags) = "yaml:\"ineligibility_reason\""];
+  string priority_score = 10 [(gogoproto.jsontag) = "priority_score,omitempty", (gogoproto.moretags) = "yaml:\"priority_score\""];
+  string fair_share_score = 11 [(gogoproto.jsontag) = "fair_share_score,omitempty", (gogoproto.moretags) = "yaml:\"fair_share_score\""];
+  string age_score = 12 [(gogoproto.jsontag) = "age_score,omitempty", (gogoproto.moretags) = "yaml:\"age_score\""];
+  string job_size_score = 13 [(gogoproto.jsontag) = "job_size_score,omitempty", (gogoproto.moretags) = "yaml:\"job_size_score\""];
+  string partition_score = 14 [(gogoproto.jsontag) = "partition_score,omitempty", (gogoproto.moretags) = "yaml:\"partition_score\""];
+  bool preemption_possible = 15 [(gogoproto.jsontag) = "preemption_possible,omitempty", (gogoproto.moretags) = "yaml:\"preemption_possible\""];
+  bool quota_burst_used = 16 [(gogoproto.jsontag) = "quota_burst_used,omitempty", (gogoproto.moretags) = "yaml:\"quota_burst_used\""];
 }
 
 // SchedulingDecision records the decision trail for job scheduling
@@ -541,6 +548,40 @@ message SchedulingDecision {
   string combined_score = 10 [(gogoproto.jsontag) = "combined_score", (gogoproto.moretags) = "yaml:\"combined_score\""];
   google.protobuf.Timestamp created_at = 11 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
   int64 block_height = 12 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+  string priority_score = 13 [(gogoproto.jsontag) = "priority_score,omitempty", (gogoproto.moretags) = "yaml:\"priority_score\""];
+  string fair_share_score = 14 [(gogoproto.jsontag) = "fair_share_score,omitempty", (gogoproto.moretags) = "yaml:\"fair_share_score\""];
+  string age_score = 15 [(gogoproto.jsontag) = "age_score,omitempty", (gogoproto.moretags) = "yaml:\"age_score\""];
+  string job_size_score = 16 [(gogoproto.jsontag) = "job_size_score,omitempty", (gogoproto.moretags) = "yaml:\"job_size_score\""];
+  string partition_score = 17 [(gogoproto.jsontag) = "partition_score,omitempty", (gogoproto.moretags) = "yaml:\"partition_score\""];
+  bool preemption_planned = 18 [(gogoproto.jsontag) = "preemption_planned,omitempty", (gogoproto.moretags) = "yaml:\"preemption_planned\""];
+  repeated string preempted_job_ids = 19 [(gogoproto.jsontag) = "preempted_job_ids,omitempty", (gogoproto.moretags) = "yaml:\"preempted_job_ids\""];
+  bool backfill_used = 20 [(gogoproto.jsontag) = "backfill_used,omitempty", (gogoproto.moretags) = "yaml:\"backfill_used\""];
+  int64 backfill_window_seconds = 21 [(gogoproto.jsontag) = "backfill_window_seconds,omitempty", (gogoproto.moretags) = "yaml:\"backfill_window_seconds\""];
+  bool quota_burst_used = 22 [(gogoproto.jsontag) = "quota_burst_used,omitempty", (gogoproto.moretags) = "yaml:\"quota_burst_used\""];
+  string quota_reason = 23 [(gogoproto.jsontag) = "quota_reason,omitempty", (gogoproto.moretags) = "yaml:\"quota_reason\""];
+}
+
+// SchedulingMetrics captures aggregated scheduling metrics.
+message SchedulingMetrics {
+  option (gogoproto.equal) = false;
+
+  string cluster_id = 1 [(gogoproto.jsontag) = "cluster_id", (gogoproto.moretags) = "yaml:\"cluster_id\""];
+  string queue_name = 2 [(gogoproto.jsontag) = "queue_name", (gogoproto.moretags) = "yaml:\"queue_name\""];
+  uint64 total_decisions = 3 [(gogoproto.jsontag) = "total_decisions", (gogoproto.moretags) = "yaml:\"total_decisions\""];
+  uint64 preemption_planned = 4 [(gogoproto.jsontag) = "preemption_planned", (gogoproto.moretags) = "yaml:\"preemption_planned\""];
+  uint64 backfill_used = 5 [(gogoproto.jsontag) = "backfill_used", (gogoproto.moretags) = "yaml:\"backfill_used\""];
+  uint64 quota_burst_used = 6 [(gogoproto.jsontag) = "quota_burst_used", (gogoproto.moretags) = "yaml:\"quota_burst_used\""];
+  uint64 quota_denied = 7 [(gogoproto.jsontag) = "quota_denied", (gogoproto.moretags) = "yaml:\"quota_denied\""];
+  string avg_latency_score = 8 [(gogoproto.jsontag) = "avg_latency_score", (gogoproto.moretags) = "yaml:\"avg_latency_score\""];
+  string avg_capacity_score = 9 [(gogoproto.jsontag) = "avg_capacity_score", (gogoproto.moretags) = "yaml:\"avg_capacity_score\""];
+  string avg_combined_score = 10 [(gogoproto.jsontag) = "avg_combined_score", (gogoproto.moretags) = "yaml:\"avg_combined_score\""];
+  string avg_priority_score = 11 [(gogoproto.jsontag) = "avg_priority_score", (gogoproto.moretags) = "yaml:\"avg_priority_score\""];
+  string avg_fair_share_score = 12 [(gogoproto.jsontag) = "avg_fair_share_score", (gogoproto.moretags) = "yaml:\"avg_fair_share_score\""];
+  string avg_age_score = 13 [(gogoproto.jsontag) = "avg_age_score", (gogoproto.moretags) = "yaml:\"avg_age_score\""];
+  string avg_job_size_score = 14 [(gogoproto.jsontag) = "avg_job_size_score", (gogoproto.moretags) = "yaml:\"avg_job_size_score\""];
+  string avg_partition_score = 15 [(gogoproto.jsontag) = "avg_partition_score", (gogoproto.moretags) = "yaml:\"avg_partition_score\""];
+  google.protobuf.Timestamp last_decision_at = 16 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "last_decision_at", (gogoproto.moretags) = "yaml:\"last_decision_at\""];
+  int64 block_height = 17 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
 }
 
 // HPCRewardRecipient represents a recipient of HPC rewards

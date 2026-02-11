@@ -166,3 +166,32 @@ func (s *HPCSchedulingE2ETestSuite) TestAllowedRegionsFallback() {
 	s.Require().NoError(err)
 	s.Contains([]string{"cluster-eu-west", "cluster-apac"}, decision.SelectedClusterID)
 }
+
+func (s *HPCSchedulingE2ETestSuite) TestFairnessScheduling() {
+	ctx := context.Background()
+	s.Require().NoError(s.slurmMock.Start(ctx))
+	defer func() { _ = s.slurmMock.Stop() }()
+
+	customerA := "customer-fair-a"
+	customerB := "customer-fair-b"
+
+	runningJob := fixtures.StandardComputeJob(s.providerAddr, customerA)
+	runningJob.JobID = "sched-fairness-running"
+	s.Require().NoError(s.providerMock.EnqueueJob(runningJob, mocks.JobQueueOptions{Priority: 70, CustomerTier: 85}))
+	_, err := s.providerMock.ScheduleNext(ctx)
+	s.Require().NoError(err)
+	_, err = s.providerMock.StartJob(ctx, runningJob.JobID)
+	s.Require().NoError(err)
+
+	jobA := fixtures.StandardComputeJob(s.providerAddr, customerA)
+	jobA.JobID = "sched-fairness-a"
+	jobB := fixtures.StandardComputeJob(s.providerAddr, customerB)
+	jobB.JobID = "sched-fairness-b"
+
+	s.Require().NoError(s.providerMock.EnqueueJob(jobA, mocks.JobQueueOptions{Priority: 70, CustomerTier: 85}))
+	s.Require().NoError(s.providerMock.EnqueueJob(jobB, mocks.JobQueueOptions{Priority: 70, CustomerTier: 85}))
+
+	decision, err := s.providerMock.ScheduleNext(ctx)
+	s.Require().NoError(err)
+	s.Equal(jobB.JobID, decision.JobID)
+}

@@ -60,6 +60,13 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 		}
 	}
 
+	// Import scheduling metrics
+	for _, metrics := range data.SchedulingMetrics {
+		if err := k.SetSchedulingMetrics(ctx, metrics); err != nil {
+			panic(err)
+		}
+	}
+
 	// Import HPC rewards
 	for _, reward := range data.HPCRewards {
 		if err := k.SetHPCReward(ctx, reward); err != nil {
@@ -156,6 +163,13 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		return false
 	})
 
+	// Export scheduling metrics
+	var schedulingMetrics []types.SchedulingMetrics
+	k.WithSchedulingMetrics(ctx, func(metrics types.SchedulingMetrics) bool {
+		schedulingMetrics = append(schedulingMetrics, metrics)
+		return false
+	})
+
 	// Export HPC rewards
 	var hpcRewards []types.HPCRewardRecord
 	k.WithHPCRewards(ctx, func(reward types.HPCRewardRecord) bool {
@@ -182,6 +196,7 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		JobAccountings:      jobAccountings,
 		NodeMetadatas:       nodeMetadatas,
 		SchedulingDecisions: schedulingDecisions,
+		SchedulingMetrics:   schedulingMetrics,
 		HPCRewards:          hpcRewards,
 		Disputes:            disputes,
 		ClusterSequence:     maxClusterSeq + 1,

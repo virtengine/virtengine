@@ -126,6 +126,29 @@ func (q *Querier) SchedulingDecisionByJob(ctx context.Context, req *hpcv1.QueryS
 	}, nil
 }
 
+// SchedulingMetrics returns scheduling metrics for a cluster and queue.
+func (q *Querier) SchedulingMetrics(ctx context.Context, req *hpcv1.QuerySchedulingMetricsRequest) (*hpcv1.QuerySchedulingMetricsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ClusterId == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster_id required")
+	}
+	if req.QueueName == "" {
+		return nil, status.Error(codes.InvalidArgument, "queue_name required")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	metrics, found := q.GetSchedulingMetrics(sdkCtx, req.ClusterId, req.QueueName)
+	if !found {
+		return nil, status.Error(codes.NotFound, "scheduling metrics not found")
+	}
+
+	return &hpcv1.QuerySchedulingMetricsResponse{
+		Metrics: schedulingMetricsToProto(metrics),
+	}, nil
+}
+
 // Params returns module parameters.
 func (q *Querier) Params(ctx context.Context, _ *hpcv1.QueryParamsRequest) (*hpcv1.QueryParamsResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
@@ -218,6 +241,17 @@ func schedulingDecisionToProto(decision types.SchedulingDecision) hpcv1.Scheduli
 		LatencyScore:      decision.LatencyScore,
 		CapacityScore:     decision.CapacityScore,
 		CombinedScore:     decision.CombinedScore,
+		PriorityScore:     decision.PriorityScore,
+		FairShareScore:    decision.FairShareScore,
+		AgeScore:          decision.AgeScore,
+		JobSizeScore:      decision.JobSizeScore,
+		PartitionScore:    decision.PartitionScore,
+		PreemptionPlanned: decision.PreemptionPlanned,
+		PreemptedJobIds:   decision.PreemptedJobIDs,
+		BackfillUsed:      decision.BackfillUsed,
+		BackfillWindowSeconds: decision.BackfillWindowSeconds,
+		QuotaBurstUsed:    decision.QuotaBurstUsed,
+		QuotaReason:       decision.QuotaReason,
 		CreatedAt:         decision.CreatedAt,
 		BlockHeight:       decision.BlockHeight,
 	}
@@ -232,8 +266,37 @@ func clusterCandidateToProto(candidate types.ClusterCandidate) hpcv1.ClusterCand
 		LatencyScore:        candidate.LatencyScore,
 		CapacityScore:       candidate.CapacityScore,
 		CombinedScore:       candidate.CombinedScore,
+		PriorityScore:       candidate.PriorityScore,
+		FairShareScore:      candidate.FairShareScore,
+		AgeScore:            candidate.AgeScore,
+		JobSizeScore:        candidate.JobSizeScore,
+		PartitionScore:      candidate.PartitionScore,
+		PreemptionPossible:  candidate.PreemptionPossible,
+		QuotaBurstUsed:      candidate.QuotaBurstUsed,
 		Eligible:            candidate.Eligible,
 		IneligibilityReason: candidate.IneligibilityReason,
+	}
+}
+
+func schedulingMetricsToProto(metrics types.SchedulingMetrics) hpcv1.SchedulingMetrics {
+	return hpcv1.SchedulingMetrics{
+		ClusterId:        metrics.ClusterID,
+		QueueName:        metrics.QueueName,
+		TotalDecisions:   metrics.TotalDecisions,
+		PreemptionPlanned: metrics.PreemptionPlanned,
+		BackfillUsed:     metrics.BackfillUsed,
+		QuotaBurstUsed:   metrics.QuotaBurstUsed,
+		QuotaDenied:      metrics.QuotaDenied,
+		AvgLatencyScore:  metrics.AvgLatencyScore,
+		AvgCapacityScore: metrics.AvgCapacityScore,
+		AvgCombinedScore: metrics.AvgCombinedScore,
+		AvgPriorityScore: metrics.AvgPriorityScore,
+		AvgFairShareScore: metrics.AvgFairShareScore,
+		AvgAgeScore:       metrics.AvgAgeScore,
+		AvgJobSizeScore:   metrics.AvgJobSizeScore,
+		AvgPartitionScore: metrics.AvgPartitionScore,
+		LastDecisionAt:   metrics.LastDecisionAt,
+		BlockHeight:      metrics.BlockHeight,
 	}
 }
 

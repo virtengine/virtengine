@@ -94,6 +94,9 @@ var (
 	// WorkloadVotePrefix is the prefix for workload votes (VE-5F)
 	WorkloadVotePrefix = []byte{0x1F}
 
+	// SchedulingMetricsPrefix is the prefix for scheduling metrics (VE-78C)
+	SchedulingMetricsPrefix = []byte{0x2E}
+
 	// WorkloadGovernanceParamsKey is the key for governance params (VE-5F)
 	WorkloadGovernanceParamsKey = []byte{0x20}
 
@@ -263,4 +266,9 @@ func GetWorkloadProposalKey(proposalID string) []byte {
 // GetWorkloadVoteKey returns the key for a vote (VE-5F)
 func GetWorkloadVoteKey(proposalID, voter string) []byte {
 	return append(WorkloadVotePrefix, []byte(proposalID+"/"+voter)...)
+}
+
+// GetSchedulingMetricsKey returns the key for scheduling metrics.
+func GetSchedulingMetricsKey(clusterID, queueName string) []byte {
+	return append(SchedulingMetricsPrefix, []byte(clusterID+"/"+queueName)...)
 }
