@@ -95,3 +95,4 @@ export {
   type ChainEventState,
   type ChainEventActions,
 } from './chainEventStore';
+export { useChatStore, selectPendingAction, type ChatStore, type ChatState } from './chatStore';

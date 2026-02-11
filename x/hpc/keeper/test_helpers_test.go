@@ -23,6 +23,8 @@ import (
 	billing "github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/hpc/keeper"
 	"github.com/virtengine/virtengine/x/hpc/types"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 type BankTransfer struct {
@@ -75,6 +77,11 @@ func (m *MockBankKeeper) SpendableCoins(_ context.Context, addr sdk.AccAddress) 
 		return coins
 	}
 	return sdk.NewCoins()
+}
+
+func (m *MockBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddress, denom string) sdk.Coin {
+	coins := m.SpendableCoins(context.Background(), addr)
+	return sdk.NewCoin(denom, coins.AmountOf(denom))
 }
 
 func (m *MockBankKeeper) SendCoins(_ context.Context, fromAddr, toAddr sdk.AccAddress, amt sdk.Coins) error {
@@ -254,6 +261,36 @@ func setupHPCKeeper(t testing.TB) (sdk.Context, keeper.Keeper, *MockBankKeeper) 
 
 	k := keeper.NewKeeper(cdc, key, bank, authority)
 	return ctx, k, bank
+}
+
+func setupHPCKeeperWithSettlement(t testing.TB) (sdk.Context, keeper.Keeper, settlementkeeper.Keeper, *MockBankKeeper) {
+	t.Helper()
+
+	cfg := testutilmod.MakeTestEncodingConfig()
+	cdc := cfg.Codec
+
+	hpcKey := storetypes.NewKVStoreKey(types.StoreKey)
+	settlementKey := storetypes.NewKVStoreKey(settlementtypes.StoreKey)
+	db := dbm.NewMemDB()
+
+	ms := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	ms.MountStoreWithDB(hpcKey, storetypes.StoreTypeIAVL, db)
+	ms.MountStoreWithDB(settlementKey, storetypes.StoreTypeIAVL, db)
+
+	err := ms.LoadLatestVersion()
+	if err != nil {
+		t.Fatalf("failed to load store: %v", err)
+	}
+
+	ctx := sdk.NewContext(ms, tmproto.Header{Time: time.Unix(0, 0)}, false, testutil.Logger(t))
+	bank := NewMockBankKeeper()
+	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
+
+	hpcKeeper := keeper.NewKeeper(cdc, hpcKey, bank, authority)
+	settlementKeeper := settlementkeeper.NewKeeper(cdc, settlementKey, bank, authority, nil)
+	hpcKeeper.SetSettlementKeeper(settlementKeeper)
+
+	return ctx, hpcKeeper, settlementKeeper, bank
 }
 
 func mustSetCluster(t testing.TB, ctx sdk.Context, k keeper.Keeper, cluster types.HPCCluster) {

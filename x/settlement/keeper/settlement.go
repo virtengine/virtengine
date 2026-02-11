@@ -128,9 +128,8 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		return nil, types.ErrInvalidAddress.Wrap("invalid provider address")
 	}
 
-	customer, err := sdk.AccAddressFromBech32(escrow.Depositor)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap("invalid customer address")
+	if err := k.transferEscrowFundsToModule(ctx, escrow, types.ModuleAccountName, settlementAmount, false); err != nil {
+		return nil, err
 	}
 
 	// Transfer provider share when billing pipeline is disabled (legacy path).
@@ -208,6 +207,9 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 			return nil, err
 		}
 		k.updateEscrowState(ctx, escrow, oldState)
+		if err := k.closeEscrowAccount(ctx, escrow); err != nil {
+			return nil, err
+		}
 	}
 
 	// Save updated escrow
@@ -248,7 +250,7 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		OrderID:        orderID,
 		EscrowID:       escrow.EscrowID,
 		Provider:       escrow.Recipient,
-		Customer:       customer.String(),
+		Customer:       escrow.Depositor,
 		TotalAmount:    settlementAmount.String(),
 		ProviderShare:  providerShare.String(),
 		PlatformFee:    platformFee.String(),

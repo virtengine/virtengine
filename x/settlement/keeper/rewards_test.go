@@ -6,6 +6,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/x/settlement/keeper"
@@ -26,6 +27,22 @@ func (s *KeeperTestSuite) TestDistributeStakingRewards() {
 	s.Require().NotNil(dist)
 	s.Require().Equal(types.RewardSourceStaking, dist.Source)
 	s.Require().Equal(epoch, dist.EpochNumber)
+	s.Require().Len(dist.Recipients, 1)
+	s.Require().Equal(authtypes.NewModuleAddress(authtypes.FeeCollectorName).String(), dist.Recipients[0].Address)
+}
+
+func (s *KeeperTestSuite) TestDistributeStakingRewardsUsesRewardPoolAddress() {
+	params := types.DefaultParams()
+	params.StakingRewardEpochLength = 100
+	params.RewardPoolAddress = s.depositor.String()
+	err := s.keeper.SetParams(s.ctx, params)
+	s.Require().NoError(err)
+
+	dist, err := s.keeper.DistributeStakingRewards(s.ctx, 1)
+	s.Require().NoError(err)
+	s.Require().NotNil(dist)
+	s.Require().Len(dist.Recipients, 1)
+	s.Require().Equal(s.depositor.String(), dist.Recipients[0].Address)
 }
 
 func (s *KeeperTestSuite) TestDistributeProviderRewards() {

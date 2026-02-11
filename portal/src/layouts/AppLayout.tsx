@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react';
 import { Header, Footer, Navigation, Sidebar, MobileBottomNav } from '@/components/layout';
+import { ChatPanel } from '@/components/chat/ChatPanel';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -37,6 +38,7 @@ export function AppLayout({ children, sidebarVariant }: AppLayoutProps) {
         <Footer />
       </div>
       <MobileBottomNav />
+      <ChatPanel />
     </div>
   );
 }

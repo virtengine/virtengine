@@ -4,6 +4,7 @@
  */
 
 import type { PortalConfig, ChainConfig, WalletProviderConfig } from '@/lib/portal-adapter';
+import type { ChatProviderConfig } from '@/lib/portal-adapter';
 import { env } from './env';
 import { getChainInfo } from './chains';
 
@@ -81,6 +82,20 @@ export function createWalletConfig(): WalletProviderConfig {
 }
 
 /**
+ * Create chat configuration from environment
+ */
+export function createChatConfig(): ChatProviderConfig {
+  return {
+    provider: env.llmProvider === 'local' ? 'local' : 'openai',
+    endpoint: env.llmEndpoint,
+    model: env.llmModel,
+    apiKey: env.llmApiKey || undefined,
+    organizationId: env.llmOrganizationId || undefined,
+    localMode: env.llmLocalMode === 'ollama' ? 'ollama' : 'openai',
+  };
+}
+
+/**
  * Default portal config for use in providers
  */
 export const portalConfig = createPortalConfig();
@@ -94,3 +109,8 @@ export const chainConfig = createChainConfig();
  * Default wallet config for use in providers
  */
 export const walletConfig = createWalletConfig();
+
+/**
+ * Default chat config for use in providers
+ */
+export const chatConfig = createChatConfig();

@@ -20,6 +20,31 @@ export { PortalProvider, usePortal } from '../../../lib/portal';
 export type { PortalProviderProps, PortalConfig, WalletContextValue } from '../../../lib/portal';
 
 // ============================================================================
+// Chat Agent (VE-70D)
+// ============================================================================
+
+export {
+  ChatAgent,
+  createChatAgent,
+  createChatProvider,
+  createDefaultChatTools,
+  createChatSystemMessage,
+  buildChatContext,
+  createChatSnapshot,
+} from '../../../lib/portal';
+export type {
+  ChatMessage,
+  ChatAction,
+  ChatActionExecution,
+  ChatToolHandler,
+  ChatToolDefinition,
+  ChatToolContext,
+  ChatContextSnapshot,
+  ChatProviderConfig,
+  ChatProviderType,
+} from '../../../lib/portal';
+
+// ============================================================================
 // Authentication (VE-700)
 // ============================================================================
 
