@@ -7,6 +7,7 @@ import { AdminLayout } from '@/layouts/AdminLayout';
 import i18n from '@/i18n';
 
 const replaceMock = vi.fn();
+const fetchAdminMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -21,7 +22,28 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock('@/lib/portal-adapter', () => ({
+  useWallet: () => ({
+    status: 'connected',
+    accounts: [{ address: 've1admin' }],
+    activeAccountIndex: 0,
+  }),
+}));
+
 const initialState = useAdminStore.getState();
+
+const mockSystemHealth = {
+  blockHeight: 12345678,
+  blockTime: 6.5,
+  activeValidators: 42,
+  totalValidators: 50,
+  bondedTokens: '1000000',
+  inflationRate: 0.07,
+  communityPool: '500000',
+  txThroughput: 100,
+  avgGasPrice: 0.025,
+  networkUptime: 99.9,
+};
 
 expectTranslations([
   'Admin Dashboard',
@@ -32,7 +54,7 @@ expectTranslations([
 
 describe.each(TEST_LOCALES)('AdminDashboardPage (%s)', (locale) => {
   beforeEach(async () => {
-    useAdminStore.setState(initialState, true);
+    useAdminStore.setState({ ...initialState, systemHealth: mockSystemHealth }, true);
     replaceMock.mockClear();
     await setLocale(locale);
   });
@@ -53,8 +75,9 @@ describe.each(TEST_LOCALES)('AdminDashboardPage (%s)', (locale) => {
 
 describe('AdminLayout access control', () => {
   beforeEach(() => {
-    useAdminStore.setState(initialState, true);
+    useAdminStore.setState({ ...initialState, fetchAdminData: fetchAdminMock }, true);
     replaceMock.mockClear();
+    fetchAdminMock.mockReset();
   });
 
   it('redirects non-admin users', () => {

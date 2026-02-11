@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/Progress';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TerminateAllocationDialog } from '@/components/dashboard/TerminateAllocationDialog';
 import { useCustomerDashboardStore, selectAllocationById } from '@/stores/customerDashboardStore';
+import { useWallet } from '@/lib/portal-adapter';
 import { formatCurrency, formatDate, truncateAddress } from '@/lib/utils';
 import { CUSTOMER_ALLOCATION_STATUS_VARIANT } from '@/types/customer';
 import type { CustomerAllocationStatus } from '@/types/customer';
@@ -43,14 +44,16 @@ export default function AllocationDetailClient() {
   const { fetchDashboard, terminateAllocation, isLoading, allocations } =
     useCustomerDashboardStore();
   const allocation = useCustomerDashboardStore((state) => selectAllocationById(state, id));
+  const wallet = useWallet();
+  const account = wallet.accounts[wallet.activeAccountIndex];
 
   const [showTerminate, setShowTerminate] = useState(false);
 
   useEffect(() => {
-    if (allocations.length === 0) {
-      void fetchDashboard();
+    if (allocations.length === 0 && account?.address) {
+      void fetchDashboard(account.address);
     }
-  }, [allocations.length, fetchDashboard]);
+  }, [account?.address, allocations.length, fetchDashboard]);
 
   const handleTerminate = useCallback(
     async (allocationId: string) => {

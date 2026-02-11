@@ -7,6 +7,16 @@ import i18n from '@/i18n';
 
 const initialState = useAdminStore.getState();
 
+const mockModuleParams = [
+  {
+    module: 'market',
+    key: 'bid_duration',
+    value: '20s',
+    description: 'Duration for bid placement',
+  },
+  { module: 'escrow', key: 'payment_period', value: '30s', description: 'Escrow payment period' },
+];
+
 expectTranslations([
   'System Configuration',
   'Module parameters, feature flags, and maintenance controls',
@@ -15,7 +25,7 @@ expectTranslations([
 
 describe.each(TEST_LOCALES)('AdminSystemPage (%s)', (locale) => {
   beforeEach(async () => {
-    useAdminStore.setState(initialState, true);
+    useAdminStore.setState({ ...initialState, moduleParams: mockModuleParams }, true);
     await setLocale(locale);
   });
 
