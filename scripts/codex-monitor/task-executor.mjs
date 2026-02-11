@@ -212,6 +212,12 @@ class TaskExecutor {
     /** @type {Map<string, number>} taskId → skip-until timestamp */
     this._skipUntil = new Map();
 
+    // Track tasks that have already been completed with a PR (prevents re-dispatch loop)
+    /** @type {Set<string>} taskId set */
+    this._completedWithPR = new Set();
+    /** @type {Set<string>} taskId set — tracks tasks where a PR has been created for their branch */
+    this._prCreatedForBranch = new Set();
+
     // Repo context cache (AGENTS.md, copilot-instructions.md)
     this._contextCache = null;
     this._contextCacheTime = 0;
@@ -244,7 +250,18 @@ class TaskExecutor {
               this._skipUntil.set(id, until);
             }
           }
-          console.log(`${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked`);
+          // Restore completed-with-PR tracking
+          if (Array.isArray(data.completedWithPR)) {
+            for (const id of data.completedWithPR) {
+              this._completedWithPR.add(id);
+            }
+          }
+          if (Array.isArray(data.prCreatedForBranch)) {
+            for (const id of data.prCreatedForBranch) {
+              this._prCreatedForBranch.add(id);
+            }
+          }
+          console.log(`${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`);
         }
       }
     } catch (err) {
@@ -260,6 +277,8 @@ class TaskExecutor {
       const data = {
         noCommitCounts: Object.fromEntries(this._noCommitCounts),
         skipUntil: Object.fromEntries(this._skipUntil),
+        completedWithPR: Array.from(this._completedWithPR),
+        prCreatedForBranch: Array.from(this._prCreatedForBranch),
         savedAt: new Date().toISOString(),
       };
       writeFileSync(NO_COMMIT_STATE_FILE, JSON.stringify(data, null, 2), "utf8");
@@ -449,6 +468,8 @@ class TaskExecutor {
         if (!id) return false;
         // Already running
         if (this._activeSlots.has(id)) return false;
+        // Already completed with a PR
+        if (this._completedWithPR.has(id)) return false;
         // In cooldown (failure cooldown)
         const cooldownUntil = this._taskCooldowns.get(id);
         if (cooldownUntil && now - cooldownUntil < COOLDOWN_MS) return false;
@@ -565,10 +586,15 @@ class TaskExecutor {
 
       slot.worktreePath = wt.path;
 
-      // 4. Build prompt
+      // 4. Record pre-execution HEAD hash (to detect if agent made NEW commits)
+      const preExecHead = spawnSync("git", ["rev-parse", "HEAD"], {
+        cwd: wt.path, encoding: "utf8", timeout: 5000,
+      }).stdout?.trim() || "";
+
+      // 5. Build prompt
       const prompt = this._buildTaskPrompt(task, wt.path);
 
-      // 5. Execute agent
+      // 6. Execute agent
       console.log(`${TAG} executing task "${taskTitle}" in ${wt.path} on branch ${branch}`);
       const result = await execWithRetry(prompt, {
         taskKey: taskId,
@@ -584,9 +610,15 @@ class TaskExecutor {
       // Track attempts on task for PR body
       task._executionResult = result;
 
-      // 6. Handle result
+      // Record post-execution HEAD hash
+      const postExecHead = spawnSync("git", ["rev-parse", "HEAD"], {
+        cwd: wt.path, encoding: "utf8", timeout: 5000,
+      }).stdout?.trim() || "";
+      const agentMadeNewCommits = preExecHead && postExecHead && preExecHead !== postExecHead;
+
+      // 7. Handle result
       slot.status = result.success ? "completing" : "failed";
-      await this._handleTaskResult(task, result, wt.path);
+      await this._handleTaskResult(task, result, wt.path, { agentMadeNewCommits, preExecHead, postExecHead });
 
       // 7. Cleanup
       try {
@@ -790,15 +822,27 @@ class TaskExecutor {
    * @returns {Promise<void>}
    * @private
    */
-  async _handleTaskResult(task, result, worktreePath) {
+  async _handleTaskResult(task, result, worktreePath, execInfo = {}) {
     const taskTitle = (task.title || "").slice(0, 50);
     const tag = `${TAG} task "${taskTitle}"`;
 
     if (result.success) {
       console.log(`${tag} completed successfully (${result.attempts} attempt(s))`);
 
-      // Check if there are commits to push
-      const hasCommits = this._hasUnpushedCommits(worktreePath);
+      // Use HEAD tracking to determine if agent made NEW commits (not old leftovers)
+      const agentMadeNewCommits = execInfo.agentMadeNewCommits === true;
+      const hasAnyCommits = this._hasUnpushedCommits(worktreePath);
+
+      // If already completed+PR'd, skip re-processing
+      if (this._completedWithPR.has(task.id)) {
+        console.log(`${tag} already completed with PR — skipping re-processing`);
+        try { await updateTaskStatus(task.id, "inreview"); } catch { /* best-effort */ }
+        return;
+      }
+
+      // Determine effective "has commits" — only TRUE if agent actually made new commits THIS run
+      // OR if it's the first time we're seeing any commits on this branch (never PR'd before)
+      const hasCommits = agentMadeNewCommits || (hasAnyCommits && !this._completedWithPR.has(task.id) && !this._prCreatedForBranch.has(task.id));
 
       if (hasCommits && this.autoCreatePr) {
         // Real work done — reset the no-commit counter
@@ -815,6 +859,9 @@ class TaskExecutor {
 
         const pr = await this._createPR(task, worktreePath);
         if (pr) {
+          // Mark as completed with PR — prevents re-dispatch
+          this._completedWithPR.add(task.id);
+          this._prCreatedForBranch.add(task.id);
           try {
             await updateTaskStatus(task.id, "inreview");
           } catch { /* best-effort */ }
@@ -822,6 +869,8 @@ class TaskExecutor {
             `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`
           );
         } else {
+          // PR creation failed but task has commits — mark as completed anyway to prevent loop
+          this._completedWithPR.add(task.id);
           try {
             await updateTaskStatus(task.id, "inreview");
           } catch { /* best-effort */ }
@@ -1075,8 +1124,31 @@ class TaskExecutor {
       );
       if (result.status === 0) {
         console.log(`${TAG} auto-merge enabled for PR #${prNumber}`);
+        return;
+      }
+      const stderr = (result.stderr || "").trim();
+      // "clean status" means no required status checks — auto-merge not applicable.
+      // Fall back to direct merge (squash) so the PR gets merged immediately.
+      if (stderr.includes("clean status") || stderr.includes("not in the correct state")) {
+        console.log(`${TAG} auto-merge not available for PR #${prNumber}, attempting direct merge`);
+        const directResult = spawnSync(
+          "gh",
+          ["pr", "merge", String(prNumber), "--squash"],
+          {
+            cwd: worktreePath,
+            encoding: "utf8",
+            timeout: 30_000,
+            env: { ...process.env },
+          }
+        );
+        if (directResult.status === 0) {
+          console.log(`${TAG} ✅ directly merged PR #${prNumber}`);
+        } else {
+          const errMsg = (directResult.stderr || "").trim();
+          console.warn(`${TAG} direct merge also failed for PR #${prNumber}: ${errMsg}`);
+          console.log(`${TAG} PR #${prNumber} will be picked up by pr-cleanup-daemon`);
+        }
       } else {
-        const stderr = (result.stderr || "").trim();
         console.warn(`${TAG} auto-merge failed for PR #${prNumber}: ${stderr}`);
       }
     } catch (err) {
@@ -1105,6 +1177,40 @@ class TaskExecutor {
         console.warn(`${TAG} cannot create PR — no branch name detected`);
         return null;
       }
+
+      // ── Step 0: Check if PR already exists for this branch ─────────────
+      // This prevents duplicate PRs when the same task is re-dispatched
+      let existingPrUrl = null;
+      let existingPrNumber = null;
+      try {
+        const prList = spawnSync(
+          "gh", ["pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state", "--limit", "5"],
+          { cwd: worktreePath, encoding: "utf8", timeout: 10_000, env: { ...process.env } }
+        );
+        if (prList.status === 0) {
+          const prs = JSON.parse(prList.stdout || "[]");
+          // Prefer open PR, fall back to most recent merged
+          const openPr = prs.find(p => p.state === "OPEN");
+          const mergedPr = prs.find(p => p.state === "MERGED");
+          const existing = openPr || mergedPr;
+          if (existing) {
+            existingPrUrl = existing.url;
+            existingPrNumber = String(existing.number);
+            if (mergedPr && !openPr) {
+              // PR already merged — no need to create or push
+              console.log(`${TAG} PR already merged for branch ${branch}: #${existingPrNumber}`);
+              return { url: existingPrUrl, branch, prNumber: existingPrNumber };
+            }
+            if (openPr) {
+              // Open PR exists — just push latest commits and enable auto-merge
+              console.log(`${TAG} Open PR #${existingPrNumber} already exists for branch ${branch}`);
+              this._pushBranch(worktreePath, branch);
+              this._enableAutoMerge(existingPrNumber, worktreePath);
+              return { url: existingPrUrl, branch, prNumber: existingPrNumber };
+            }
+          }
+        }
+      } catch { /* best-effort — continue to create PR */ }
 
       // ── Step 1: Push branch to origin ──────────────────────────────────
       const pushResult = this._pushBranch(worktreePath, branch);
