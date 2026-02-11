@@ -142,10 +142,6 @@ us-east-1b:
 
 ### 1. Chain State Backup
 
-Primary automation lives in `scripts/dr/backup-chain-state.sh`, which creates snapshots, signs them, uploads to remote storage, and verifies signatures before restore. Set `SNAPSHOT_SIGNING_KEY` and `SNAPSHOT_VERIFY_PUBKEY` on all backup and restore hosts. The script includes rollback logic and fallback to older snapshots if corruption is detected.
-
-Provider daemon state is backed up separately with `scripts/dr/backup-provider-state.sh` to capture off-chain checkpoints and queue state. Schedule it alongside chain state snapshots.
-
 #### Continuous State Sync Replication
 
 All full nodes maintain state sync snapshots that can be used for rapid recovery.

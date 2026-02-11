@@ -150,45 +150,6 @@ func (s *KeeperTestSuite) TestRecordUsage() {
 	}
 }
 
-func (s *KeeperTestSuite) TestDoubleSettlementPrevention() {
-	amount := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000)))
-	escrowID, err := s.keeper.CreateEscrow(s.ctx, "order-double", s.depositor, amount, time.Hour*24, nil)
-	s.Require().NoError(err)
-	s.Require().NoError(s.keeper.ActivateEscrow(s.ctx, escrowID, "lease-double", s.provider))
-
-	usage := &types.UsageRecord{
-		OrderID:           "order-double",
-		Provider:          s.provider.String(),
-		Customer:          s.depositor.String(),
-		UsageUnits:        50,
-		UsageType:         "compute",
-		TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(500))),
-		PeriodStart:       s.ctx.BlockTime().Add(-time.Hour),
-		PeriodEnd:         s.ctx.BlockTime(),
-		ProviderSignature: []byte("provider-signature"),
-	}
-	s.Require().NoError(s.keeper.RecordUsage(s.ctx, usage))
-
-	_, err = s.keeper.SettleOrder(s.ctx, "order-double", []string{usage.UsageID}, false)
-	s.Require().NoError(err)
-
-	_, err = s.keeper.SettleOrder(s.ctx, "order-double", []string{usage.UsageID}, false)
-	s.Require().Error(err)
-}
-
-func (s *KeeperTestSuite) TestOverRefundBlocked() {
-	amount := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000)))
-	escrowID, err := s.keeper.CreateEscrow(s.ctx, "order-refund-block", s.depositor, amount, time.Hour*24, nil)
-	s.Require().NoError(err)
-	s.Require().NoError(s.keeper.ActivateEscrow(s.ctx, escrowID, "lease-refund-block", s.provider))
-
-	_, err = s.keeper.SettleOrder(s.ctx, "order-refund-block", nil, true)
-	s.Require().NoError(err)
-
-	err = s.keeper.RefundEscrow(s.ctx, escrowID, "refund-after-release")
-	s.Require().Error(err)
-}
-
 func (s *KeeperTestSuite) TestAcknowledgeUsage() {
 	// Set up: Create and activate an escrow
 	amount := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000)))

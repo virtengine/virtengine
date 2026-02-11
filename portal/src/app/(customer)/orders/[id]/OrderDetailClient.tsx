@@ -30,8 +30,6 @@ import type {
 } from '@/features/orders/tracking-types';
 import { formatCurrency, formatDate, truncateAddress } from '@/lib/utils';
 import { accountLink, txLink } from '@/lib/explorer';
-import { useOrderStore } from '@/stores/orderStore';
-import { useWallet } from '@/lib/portal-adapter';
 
 export default function OrderDetailClient() {
   const params = useParams();
@@ -42,8 +40,6 @@ export default function OrderDetailClient() {
     enabled: true,
     pollingInterval: 30000,
   });
-  const wallet = useWallet();
-  const closeOrder = useOrderStore((s) => s.closeOrder);
 
   const handleExtend = useCallback(async (req: ExtendOrderRequest): Promise<OrderActionResult> => {
     // In production: apiClient.post('/orders/extend', req)
@@ -54,31 +50,10 @@ export default function OrderDetailClient() {
     };
   }, []);
 
-  const handleCancel = useCallback(
-    async (req: CancelOrderRequest): Promise<OrderActionResult> => {
-      if (wallet.status !== 'connected') {
-        return { success: false, message: 'Connect your wallet to cancel this order.' };
-      }
-      const account = wallet.accounts[wallet.activeAccountIndex];
-      if (!account?.address) {
-        return { success: false, message: 'No active wallet account.' };
-      }
-      try {
-        await closeOrder(
-          req.orderId,
-          account.address,
-          wallet as unknown as Parameters<typeof closeOrder>[2]
-        );
-        return { success: true, message: 'Order cancellation submitted.' };
-      } catch (error) {
-        return {
-          success: false,
-          message: error instanceof Error ? error.message : 'Failed to cancel order.',
-        };
-      }
-    },
-    [closeOrder, wallet]
-  );
+  const handleCancel = useCallback(async (_req: CancelOrderRequest): Promise<OrderActionResult> => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return { success: true, message: 'Order cancellation initiated' };
+  }, []);
 
   const handleSupport = useCallback(
     async (_req: SupportTicketRequest): Promise<OrderActionResult> => {

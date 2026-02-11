@@ -5,14 +5,10 @@ package keeper
 
 import (
 	"fmt"
-	"math"
-	"strconv"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
@@ -171,406 +167,62 @@ func (k Keeper) executeSettlement(ctx sdk.Context, job *types.HPCJob, record *ty
 	result := &SettlementResult{
 		JobID:              job.JobID,
 		AccountingRecordID: record.RecordID,
+		CustomerPaid:       record.BillableAmount,
+		ProviderReceived:   record.ProviderReward,
+		PlatformFee:        record.PlatformFee,
 		RefundAmount:       sdk.NewCoins(),
 		SettledAt:          ctx.BlockTime(),
 	}
 
-	if k.settlementKeeper == nil {
-		result.Success = false
-		result.Error = "settlement keeper not configured"
-		return result, types.ErrInvalidJobAccounting.Wrap(result.Error)
+	// Generate settlement ID
+	result.SettlementID = fmt.Sprintf("hpc-settle-%s", record.RecordID)
+
+	// If job has an escrow ID, process escrow settlement
+	if job.EscrowID != "" {
+		// Calculate refund if agreed price exceeds billable
+		if job.AgreedPrice.IsAllGTE(record.BillableAmount) {
+			refund := job.AgreedPrice.Sub(record.BillableAmount...)
+			if !refund.IsZero() {
+				result.RefundAmount = refund
+			}
+		}
 	}
 
-	orderID, escrow, found := k.resolveSettlementEscrow(ctx, job)
-	if !found {
-		result.Success = false
-		result.Error = "settlement escrow not found"
-		return result, types.ErrInvalidJobAccounting.Wrap(result.Error)
-	}
-
-	usageRecords, err := k.buildSettlementUsageRecords(ctx, job, record, orderID, escrow)
+	// Transfer provider reward
+	providerAddr, err := sdk.AccAddressFromBech32(job.ProviderAddress)
 	if err != nil {
 		result.Success = false
-		result.Error = fmt.Sprintf("failed to build settlement usage records: %v", err)
+		result.Error = fmt.Sprintf("invalid provider address: %v", err)
 		return result, err
 	}
 
-	usageIDs := make([]string, 0, len(usageRecords))
-	for i := range usageRecords {
-		if err := k.settlementKeeper.RecordUsage(ctx, &usageRecords[i]); err != nil {
+	// Transfer from module to provider
+	if !record.ProviderReward.IsZero() {
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, providerAddr, record.ProviderReward); err != nil {
 			result.Success = false
-			result.Error = fmt.Sprintf("failed to record usage: %v", err)
+			result.Error = fmt.Sprintf("failed to transfer provider reward: %v", err)
 			return result, err
 		}
-		usageIDs = append(usageIDs, usageRecords[i].UsageID)
 	}
-
-	settlementRecord, err := k.settlementKeeper.SettleOrder(ctx, orderID, usageIDs, true)
-	if err != nil {
-		result.Success = false
-		result.Error = fmt.Sprintf("failed to settle order: %v", err)
-		return result, err
-	}
-
-	// Calculate refund if agreed price exceeds billable
-	if job.AgreedPrice.IsAllGTE(record.BillableAmount) {
-		refund := job.AgreedPrice.Sub(record.BillableAmount...)
-		if !refund.IsZero() {
-			result.RefundAmount = refund
-		}
-	}
-
-	result.SettlementID = settlementRecord.SettlementID
-	result.CustomerPaid = settlementRecord.TotalAmount
-	result.ProviderReceived = settlementRecord.ProviderShare
-	result.PlatformFee = settlementRecord.PlatformFee
 
 	// Emit settlement event
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"hpc_settlement",
-			sdk.NewAttribute("settlement_id", settlementRecord.SettlementID),
+			sdk.NewAttribute("settlement_id", result.SettlementID),
 			sdk.NewAttribute("job_id", job.JobID),
 			sdk.NewAttribute("accounting_record_id", record.RecordID),
 			sdk.NewAttribute("customer", job.CustomerAddress),
 			sdk.NewAttribute("provider", job.ProviderAddress),
-			sdk.NewAttribute("customer_paid", settlementRecord.TotalAmount.String()),
-			sdk.NewAttribute("provider_received", settlementRecord.ProviderShare.String()),
-			sdk.NewAttribute("platform_fee", settlementRecord.PlatformFee.String()),
+			sdk.NewAttribute("customer_paid", result.CustomerPaid.String()),
+			sdk.NewAttribute("provider_received", result.ProviderReceived.String()),
+			sdk.NewAttribute("platform_fee", result.PlatformFee.String()),
 			sdk.NewAttribute("refund", result.RefundAmount.String()),
 		),
 	)
 
 	result.Success = true
 	return result, nil
-}
-
-func (k Keeper) resolveSettlementEscrow(ctx sdk.Context, job *types.HPCJob) (string, settlementtypes.EscrowAccount, bool) {
-	orderID := job.JobID
-	if k.settlementKeeper == nil {
-		return orderID, settlementtypes.EscrowAccount{}, false
-	}
-
-	if escrow, found := k.settlementKeeper.GetEscrowByOrder(ctx, orderID); found {
-		return orderID, escrow, true
-	}
-
-	if job.EscrowID != "" {
-		if escrow, found := k.settlementKeeper.GetEscrow(ctx, job.EscrowID); found {
-			return escrow.OrderID, escrow, true
-		}
-	}
-
-	return orderID, settlementtypes.EscrowAccount{}, false
-}
-
-func (k Keeper) buildSettlementUsageRecords(
-	ctx sdk.Context,
-	job *types.HPCJob,
-	record *types.HPCAccountingRecord,
-	orderID string,
-	escrow settlementtypes.EscrowAccount,
-) ([]settlementtypes.UsageRecord, error) {
-	metrics := record.UsageMetrics
-	usageComponents := buildUsageComponents(metrics, record.BillableBreakdown)
-
-	targetCoin := selectBillableCoin(record.BillableAmount, usageComponents)
-	usageComponents = scaleComponentsToTarget(targetCoin, usageComponents)
-
-	baseMetadata := map[string]string{
-		"hpc_job_id":            job.JobID,
-		"hpc_cluster_id":        record.ClusterID,
-		"hpc_offering_id":       record.OfferingID,
-		"hpc_accounting_id":     record.RecordID,
-		"hpc_scheduler_type":    record.SchedulerType,
-		"hpc_formula_version":   record.FormulaVersion,
-		"hpc_job_state":         string(job.State),
-		"hpc_job_escrow_id":     job.EscrowID,
-		"hpc_cpu_core_seconds":  strconv.FormatInt(metrics.CPUCoreSeconds, 10),
-		"hpc_memory_gb_seconds": strconv.FormatInt(metrics.MemoryGBSeconds, 10),
-		"hpc_storage_gb_hours":  strconv.FormatInt(metrics.StorageGBHours, 10),
-		"hpc_network_bytes_in":  strconv.FormatInt(metrics.NetworkBytesIn, 10),
-		"hpc_network_bytes_out": strconv.FormatInt(metrics.NetworkBytesOut, 10),
-		"hpc_node_hours":        metrics.NodeHours.String(),
-		"hpc_gpu_seconds":       strconv.FormatInt(metrics.GPUSeconds, 10),
-		"hpc_gpu_type":          metrics.GPUType,
-	}
-
-	if escrow.EscrowID != "" {
-		baseMetadata["settlement_escrow_id"] = escrow.EscrowID
-	}
-	if escrow.LeaseID != "" {
-		baseMetadata["settlement_lease_id"] = escrow.LeaseID
-	}
-
-	if record.CalculationHash != "" {
-		baseMetadata["hpc_calculation_hash"] = record.CalculationHash
-	}
-
-	periodStart := record.PeriodStart
-	periodEnd := record.PeriodEnd
-	if periodEnd.Before(periodStart) {
-		periodEnd = periodStart
-	}
-
-	signature := []byte(record.CalculationHash)
-	if len(signature) == 0 {
-		signature = []byte(record.RecordID)
-	}
-
-	usageRecords := make([]settlementtypes.UsageRecord, 0, len(usageComponents))
-	for _, component := range usageComponents {
-		if component.cost.IsNil() || !component.cost.IsPositive() {
-			continue
-		}
-		usageUnits := component.units
-		if usageUnits == 0 {
-			usageUnits = 1
-		}
-
-		unitDivisor := clampInt64FromUint64(usageUnits)
-		unitPrice := sdk.NewDecCoinFromDec(
-			component.cost.Denom,
-			sdkmath.LegacyNewDecFromInt(component.cost.Amount).QuoInt64(unitDivisor),
-		)
-
-		metadata := copyStringMap(baseMetadata)
-		metadata["hpc_usage_type"] = component.usageType
-		metadata["hpc_usage_units"] = strconv.FormatUint(usageUnits, 10)
-
-		usageRecords = append(usageRecords, settlementtypes.UsageRecord{
-			UsageID:           "",
-			OrderID:           orderID,
-			LeaseID:           job.JobID,
-			Provider:          record.ProviderAddress,
-			Customer:          record.CustomerAddress,
-			UsageUnits:        usageUnits,
-			UsageType:         component.usageType,
-			PeriodStart:       periodStart,
-			PeriodEnd:         periodEnd,
-			UnitPrice:         unitPrice,
-			TotalCost:         sdk.NewCoins(component.cost),
-			ProviderSignature: signature,
-			SubmittedAt:       ctx.BlockTime(),
-			BlockHeight:       ctx.BlockHeight(),
-			Metadata:          metadata,
-		})
-	}
-
-	if len(usageRecords) == 0 && targetCoin.IsPositive() {
-		usageRecords = append(usageRecords, settlementtypes.UsageRecord{
-			UsageID:           "",
-			OrderID:           orderID,
-			LeaseID:           job.JobID,
-			Provider:          record.ProviderAddress,
-			Customer:          record.CustomerAddress,
-			UsageUnits:        1,
-			UsageType:         "fixed",
-			PeriodStart:       periodStart,
-			PeriodEnd:         periodEnd,
-			UnitPrice:         sdk.NewDecCoinFromCoin(targetCoin),
-			TotalCost:         sdk.NewCoins(targetCoin),
-			ProviderSignature: signature,
-			SubmittedAt:       ctx.BlockTime(),
-			BlockHeight:       ctx.BlockHeight(),
-			Metadata:          baseMetadata,
-		})
-	}
-
-	if len(usageRecords) == 0 {
-		return nil, types.ErrInvalidJobAccounting.Wrap("no billable usage to settle")
-	}
-
-	return usageRecords, nil
-}
-
-type usageComponent struct {
-	usageType string
-	units     uint64
-	cost      sdk.Coin
-}
-
-func buildUsageComponents(metrics types.HPCDetailedMetrics, breakdown types.BillableBreakdown) []usageComponent {
-	var components []usageComponent
-
-	components = appendUsageComponent(components, "cpu_core_hours", usageUnitsFromSeconds(metrics.CPUCoreSeconds), breakdown.CPUCost)
-	components = appendUsageComponent(components, "memory_gb_hours", usageUnitsFromSeconds(metrics.MemoryGBSeconds), breakdown.MemoryCost)
-	components = appendUsageComponent(components, "gpu_hours", usageUnitsFromSeconds(metrics.GPUSeconds), breakdown.GPUCost)
-	components = appendUsageComponent(components, "node_hours", usageUnitsFromDec(metrics.NodeHours), breakdown.NodeCost)
-	components = appendUsageComponent(components, "storage_gb_hours", usageUnitsFromInt64(metrics.StorageGBHours), breakdown.StorageCost)
-
-	networkBytes := metrics.NetworkBytesIn + metrics.NetworkBytesOut
-	components = appendUsageComponent(components, "network_gb", usageUnitsFromBytes(networkBytes), breakdown.NetworkCost)
-
-	if breakdown.QueuePenalty.IsPositive() {
-		components = appendUsageComponent(components, "queue_penalty", 1, breakdown.QueuePenalty)
-	}
-
-	return components
-}
-
-func appendUsageComponent(components []usageComponent, usageType string, units uint64, cost sdk.Coin) []usageComponent {
-	if !cost.IsPositive() {
-		return components
-	}
-	if units == 0 {
-		units = 1
-	}
-	return append(components, usageComponent{
-		usageType: usageType,
-		units:     units,
-		cost:      cost,
-	})
-}
-
-func selectBillableCoin(amount sdk.Coins, components []usageComponent) sdk.Coin {
-	if len(amount) > 0 {
-		return amount[0]
-	}
-	for _, component := range components {
-		if component.cost.IsPositive() {
-			return component.cost
-		}
-	}
-	return sdk.Coin{}
-}
-
-func scaleComponentsToTarget(target sdk.Coin, components []usageComponent) []usageComponent {
-	if !target.IsPositive() {
-		return components
-	}
-
-	total := sdkmath.NewInt(0)
-	for _, component := range components {
-		if component.cost.Denom == target.Denom {
-			total = total.Add(component.cost.Amount)
-		}
-	}
-
-	if total.IsZero() {
-		return []usageComponent{
-			{
-				usageType: "fixed",
-				units:     1,
-				cost:      target,
-			},
-		}
-	}
-
-	if total.Equal(target.Amount) {
-		return components
-	}
-
-	ratio := sdkmath.LegacyNewDecFromInt(target.Amount).Quo(sdkmath.LegacyNewDecFromInt(total))
-	adjusted := make([]usageComponent, 0, len(components))
-	sumAdjusted := sdkmath.NewInt(0)
-	lastIdx := -1
-
-	for idx, component := range components {
-		if component.cost.Denom != target.Denom {
-			adjusted = append(adjusted, component)
-			continue
-		}
-		amount := sdkmath.LegacyNewDecFromInt(component.cost.Amount).Mul(ratio).TruncateInt()
-		adjustedCost := sdk.NewCoin(component.cost.Denom, amount)
-		adjusted = append(adjusted, usageComponent{
-			usageType: component.usageType,
-			units:     component.units,
-			cost:      adjustedCost,
-		})
-		sumAdjusted = sumAdjusted.Add(amount)
-		lastIdx = idx
-	}
-
-	if lastIdx >= 0 && !sumAdjusted.Equal(target.Amount) {
-		remainder := target.Amount.Sub(sumAdjusted)
-		for idx := range adjusted {
-			if adjusted[idx].usageType == components[lastIdx].usageType && adjusted[idx].cost.Denom == target.Denom {
-				adjusted[idx].cost = adjusted[idx].cost.Add(sdk.NewCoin(target.Denom, remainder))
-				break
-			}
-		}
-	}
-
-	return adjusted
-}
-
-func usageUnitsFromSeconds(seconds int64) uint64 {
-	if seconds <= 0 {
-		return 0
-	}
-	hours := seconds / 3600
-	if seconds%3600 != 0 {
-		hours++
-	}
-	if hours <= 0 {
-		hours = 1
-	}
-	return clampUint64FromInt64(hours)
-}
-
-func usageUnitsFromInt64(value int64) uint64 {
-	if value <= 0 {
-		return 0
-	}
-	return clampUint64FromInt64(value)
-}
-
-func usageUnitsFromBytes(bytes int64) uint64 {
-	if bytes <= 0 {
-		return 0
-	}
-	const gb = int64(1024 * 1024 * 1024)
-	gbUnits := bytes / gb
-	if bytes%gb != 0 {
-		gbUnits++
-	}
-	if gbUnits <= 0 {
-		gbUnits = 1
-	}
-	return clampUint64FromInt64(gbUnits)
-}
-
-func usageUnitsFromDec(value sdkmath.LegacyDec) uint64 {
-	if value.IsNil() || value.IsNegative() || value.IsZero() {
-		return 0
-	}
-	truncated := value.TruncateInt64()
-	if value.Equal(sdkmath.LegacyNewDec(truncated)) {
-		return clampUint64FromInt64(truncated)
-	}
-	if truncated == math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return clampUint64FromInt64(truncated + 1)
-}
-
-func clampUint64FromInt64(value int64) uint64 {
-	if value <= 0 {
-		return 0
-	}
-	if value == math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return uint64(value)
-}
-
-func clampInt64FromUint64(value uint64) int64 {
-	if value == 0 {
-		return 1
-	}
-	if value > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(value)
-}
-
-func copyStringMap(in map[string]string) map[string]string {
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 // DistributeJobRewardsFromSettlement distributes rewards after settlement

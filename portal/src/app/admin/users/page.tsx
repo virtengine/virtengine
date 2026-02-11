@@ -76,7 +76,7 @@ export default function AdminUsersPage() {
 
   const handleAssign = (address: string) => {
     if (selectedRole) {
-      void assignRole(address, selectedRole);
+      assignRole(address, selectedRole);
       setSelectedRole('');
       setTargetAddress(null);
     }
@@ -186,14 +186,14 @@ export default function AdminUsersPage() {
                           <Button
                             variant={account.flagged ? 'secondary' : 'destructive'}
                             size="sm"
-                            onClick={() => void toggleAccountFlag(account.address)}
+                            onClick={() => toggleAccountFlag(account.address)}
                           >
                             {account.flagged ? 'Unflag' : 'Flag'}
                           </Button>
                           <Button
                             variant={account.suspended ? 'secondary' : 'outline'}
                             size="sm"
-                            onClick={() => void toggleAccountSuspension(account.address)}
+                            onClick={() => toggleAccountSuspension(account.address)}
                           >
                             {account.suspended ? 'Unsuspend' : 'Suspend'}
                           </Button>
@@ -322,7 +322,7 @@ export default function AdminUsersPage() {
                               <button
                                 type="button"
                                 className="ml-1 text-xs opacity-60 hover:opacity-100"
-                                onClick={() => void revokeRole(user.address, role)}
+                                onClick={() => revokeRole(user.address, role)}
                                 aria-label={`Remove ${role} role`}
                               >
                                 ×
@@ -449,14 +449,14 @@ export default function AdminUsersPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => void updateKycStatus(account.address, 'approved')}
+                            onClick={() => updateKycStatus(account.address, 'approved')}
                           >
                             Approve
                           </Button>
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => void updateKycStatus(account.address, 'rejected')}
+                            onClick={() => updateKycStatus(account.address, 'rejected')}
                           >
                             Reject
                           </Button>

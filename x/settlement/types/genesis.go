@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	sdkmath "cosmossdk.io/math"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // GenesisState is the genesis state for the settlement module
@@ -83,9 +82,6 @@ type Params struct {
 
 	// StakingRewardEpochLength is the length of staking reward epochs in blocks
 	StakingRewardEpochLength uint64 `json:"staking_reward_epoch_length"`
-
-	// RewardPoolAddress is the address where staking rewards are aggregated
-	RewardPoolAddress string `json:"reward_pool_address"`
 
 	// VerificationRewardAmount is the base reward for identity verifications
 	VerificationRewardAmount string `json:"verification_reward_amount"`
@@ -386,12 +382,6 @@ func (p Params) Validate() error {
 
 	if p.StakingRewardEpochLength == 0 {
 		return ErrInvalidParams.Wrap("staking_reward_epoch_length must be greater than zero")
-	}
-
-	if p.RewardPoolAddress != "" {
-		if _, err := sdk.AccAddressFromBech32(p.RewardPoolAddress); err != nil {
-			return ErrInvalidParams.Wrap("reward_pool_address must be a valid bech32 address")
-		}
 	}
 
 	if p.UsageRewardRateBps > 10000 {

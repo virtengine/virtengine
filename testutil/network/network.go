@@ -235,11 +235,7 @@ func New(t *testing.T, cfg Config) *Network {
 	t.Log("acquiring test network lock")
 	lock.Lock()
 
-	tempRoot := os.TempDir()
-	if cfg.CleanupDir {
-		tempRoot = t.TempDir()
-	}
-	baseDir, err := os.MkdirTemp(tempRoot, cfg.ChainID)
+	baseDir, err := os.MkdirTemp(t.TempDir(), cfg.ChainID)
 	require.NoError(t, err)
 	t.Logf("created temporary directory: %s", baseDir)
 

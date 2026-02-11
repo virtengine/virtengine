@@ -280,17 +280,6 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
     approvalPolicy: "never",
   });
 
-  if (!thread) {
-    return {
-      success: false,
-      output: "",
-      items: [],
-      error: "Codex SDK startThread() returned null — SDK may be misconfigured or API unreachable",
-      sdk: "codex",
-      threadId: null,
-    };
-  }
-
   // ── 3. Timeout / abort wiring ────────────────────────────────────────────
   const controller = externalAC || new AbortController();
   const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
@@ -924,12 +913,6 @@ const threadRegistry = new Map();
 const THREAD_REGISTRY_FILE = resolve(__dirname, "logs", "thread-registry.json");
 const THREAD_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-/** Maximum turns before a thread is considered exhausted and must be replaced */
-const MAX_THREAD_TURNS = 30;
-
-/** Maximum absolute age for a thread (regardless of lastUsedAt) */
-const THREAD_MAX_ABSOLUTE_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
-
 /**
  * Load thread registry from disk (best-effort).
  */
@@ -938,25 +921,11 @@ async function loadThreadRegistry() {
     const { readFile } = await import("node:fs/promises");
     const raw = await readFile(THREAD_REGISTRY_FILE, "utf8");
     const entries = JSON.parse(raw);
-    const now = Date.now();
-    let pruned = 0;
     for (const [key, record] of Object.entries(entries)) {
-      // Expire old threads (by lastUsedAt)
-      if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) { pruned++; continue; }
-      // Expire threads that have been alive too long (absolute age)
-      if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) { pruned++; continue; }
-      // Expire high-turn threads (context exhaustion)
-      if (record.turnCount >= MAX_THREAD_TURNS) {
-        console.log(`${TAG} expiring exhausted thread for task "${key}" (${record.turnCount} turns)`);
-        pruned++;
-        continue;
-      }
-      if (!record.alive) { pruned++; continue; }
+      // Expire old threads
+      if (Date.now() - record.lastUsedAt > THREAD_MAX_AGE_MS) continue;
+      if (!record.alive) continue;
       threadRegistry.set(key, record);
-    }
-    // Persist the cleaned registry back to disk so stale entries don't linger
-    if (pruned > 0) {
-      saveThreadRegistry().catch(() => {});
     }
   } catch {
     // No registry file yet — that's fine
@@ -1031,17 +1000,6 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
       output: "",
       items: [],
       error: `Thread resume failed: ${err.message}`,
-      sdk: "codex",
-      threadId: null,
-    };
-  }
-
-  if (!thread) {
-    return {
-      success: false,
-      output: "",
-      items: [],
-      error: "Codex SDK resumeThread() returned null — thread may have expired",
       sdk: "codex",
       threadId: null,
     };
@@ -1173,24 +1131,6 @@ export async function launchOrResumeThread(
   // Check registry for existing thread
   const existing = threadRegistry.get(taskKey);
   if (existing && existing.alive && existing.threadId) {
-    // Check if thread has exceeded max turns — force fresh start
-    if (existing.turnCount >= MAX_THREAD_TURNS) {
-      console.warn(
-        `${TAG} thread for task "${taskKey}" exceeded ${MAX_THREAD_TURNS} turns (has ${existing.turnCount}) — invalidating and starting fresh`,
-      );
-      existing.alive = false;
-      threadRegistry.set(taskKey, existing);
-      saveThreadRegistry().catch(() => {});
-      // Fall through to fresh launch below
-    } else if (Date.now() - existing.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) {
-      console.warn(
-        `${TAG} thread for task "${taskKey}" exceeded absolute age limit — invalidating and starting fresh`,
-      );
-      existing.alive = false;
-      threadRegistry.set(taskKey, existing);
-      saveThreadRegistry().catch(() => {});
-      // Fall through to fresh launch below
-    } else {
     const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
 
     // Only attempt native resume for Codex (it has resumeThread API)
@@ -1257,7 +1197,6 @@ export async function launchOrResumeThread(
       );
       existing.alive = false;
     }
-    } // close else for turn-count / absolute-age guard
   }
 
   // Fresh launch — register the new thread
@@ -1399,58 +1338,11 @@ export function invalidateThread(taskKey) {
 }
 
 /**
- * Invalidate a thread and force a fresh start on next attempt.
- * Unlike invalidateThread which just sets alive=false, this also logs the reason.
- * @param {string} taskKey
- * @param {string} reason
- */
-export function forceNewThread(taskKey, reason = "manual") {
-  const record = threadRegistry.get(taskKey);
-  if (record) {
-    console.log(`${TAG} force-invalidating thread for task "${taskKey}": ${reason} (was turn ${record.turnCount})`);
-    record.alive = false;
-    threadRegistry.set(taskKey, record);
-    saveThreadRegistry().catch(() => {});
-  }
-}
-
-/**
  * Clear all thread records (e.g. on monitor restart).
  */
 export function clearThreadRegistry() {
   threadRegistry.clear();
   saveThreadRegistry().catch(() => {});
-}
-
-/**
- * Prune all threads that have exceeded MAX_THREAD_TURNS or are older than THREAD_MAX_ABSOLUTE_AGE_MS.
- * Call on startup to clean up zombie threads from prior runs.
- * @returns {number} Number of threads pruned
- */
-export function pruneAllExhaustedThreads() {
-  let pruned = 0;
-  const now = Date.now();
-  for (const [key, record] of threadRegistry) {
-    let reason = null;
-    if (record.turnCount >= MAX_THREAD_TURNS) {
-      reason = `${record.turnCount} turns (max ${MAX_THREAD_TURNS})`;
-    } else if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) {
-      reason = `absolute age ${Math.round((now - record.createdAt) / 3600000)}h`;
-    } else if (!record.alive) {
-      reason = "already dead";
-    }
-    if (reason) {
-      console.log(`${TAG} pruning thread for task "${key}": ${reason}`);
-      record.alive = false;
-      threadRegistry.set(key, record);
-      pruned++;
-    }
-  }
-  if (pruned > 0) {
-    saveThreadRegistry().catch(() => {});
-    console.log(`${TAG} pruned ${pruned} exhausted/stale threads`);
-  }
-  return pruned;
 }
 
 /**
@@ -1463,8 +1355,6 @@ export function getActiveThreads() {
   for (const [key, record] of threadRegistry) {
     if (!record.alive) continue;
     if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) continue;
-    if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) continue;
-    if (record.turnCount >= MAX_THREAD_TURNS) continue;
     result.push({
       taskKey: key,
       sdk: record.sdk,

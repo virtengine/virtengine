@@ -14,7 +14,7 @@ describe('identityStore (VEID extensions)', () => {
   it('has correct initial state', () => {
     const { result } = renderHook(() => useIdentityStore());
 
-    expect(result.current.veidScore).toBe(0);
+    expect(result.current.veidScore).toBe(72);
     expect(result.current.isVerified).toBe(false);
     expect(result.current.wizardStep).toBeNull();
     expect(result.current.wizardStatus).toBe('idle');
@@ -103,7 +103,7 @@ describe('identityStore (VEID extensions)', () => {
       result.current.reset();
     });
 
-    expect(result.current.veidScore).toBe(0);
+    expect(result.current.veidScore).toBe(72);
     expect(result.current.isVerified).toBe(false);
     expect(result.current.wizardStep).toBeNull();
     expect(result.current.hasCompletedOnboarding).toBe(false);

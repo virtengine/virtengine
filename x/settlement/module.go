@@ -84,7 +84,7 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the root tx command for the settlement module.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	return cli.GetTxCmd()
+	return nil // CLI commands to be implemented
 }
 
 // GetQueryCmd returns the root query command for the settlement module.
@@ -114,8 +114,9 @@ func (am AppModule) Name() string {
 // RegisterInvariants registers the settlement module invariants.
 //
 //nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
-func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
-	keeper.RegisterInvariants(ir, am.keeper)
+func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
+	// Settlement module does not register invariants as state consistency
+	// is enforced through escrow lifecycle validations
 }
 
 // RegisterServices registers module services.

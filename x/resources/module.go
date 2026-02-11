@@ -148,13 +148,13 @@ func (AppModule) IsOnePerModuleType() {}
 
 // BeginBlock runs on begin block.
 func (am AppModule) BeginBlock(ctx context.Context) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	am.keeper.PruneStaleInventories(sdkCtx)
+	am.keeper.ExpirePendingAllocations(sdkCtx)
 	return nil
 }
 
 // EndBlock runs on end block.
 func (am AppModule) EndBlock(ctx context.Context) error {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	am.keeper.PruneStaleInventories(sdkCtx)
-	am.keeper.ExpirePendingAllocations(sdkCtx)
 	return nil
 }

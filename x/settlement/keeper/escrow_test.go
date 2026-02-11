@@ -2,7 +2,6 @@ package keeper_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -19,9 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
-	escrowmodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
-	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -56,24 +52,7 @@ func (m *MockBankKeeper) SendCoins(_ context.Context, fromAddr sdk.AccAddress, t
 	return nil
 }
 
-func (m *MockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderModule string, recipientModule string, amt sdk.Coins) error {
-	if senderBalance, ok := m.balances[senderModule]; ok {
-		if !senderBalance.IsAllGTE(amt) {
-			return types.ErrInsufficientFunds
-		}
-		m.balances[senderModule] = senderBalance.Sub(amt...)
-	}
-	m.balances[recipientModule] = m.balances[recipientModule].Add(amt...)
-	return nil
-}
-
 func (m *MockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
-	if senderBalance, ok := m.balances[senderModule]; ok {
-		if !senderBalance.IsAllGTE(amt) {
-			return types.ErrInsufficientFunds
-		}
-		m.balances[senderModule] = senderBalance.Sub(amt...)
-	}
 	m.balances[recipientAddr.String()] = m.balances[recipientAddr.String()].Add(amt...)
 	return nil
 }
@@ -85,7 +64,6 @@ func (m *MockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderA
 		return types.ErrInsufficientFunds
 	}
 	m.balances[sender] = senderBalance.Sub(amt...)
-	m.balances[recipientModule] = m.balances[recipientModule].Add(amt...)
 	return nil
 }
 
@@ -102,115 +80,6 @@ func (m *MockBankKeeper) SetBalance(addr sdk.AccAddress, coins sdk.Coins) {
 	m.balances[addr.String()] = coins
 }
 
-// MockEscrowKeeper is a minimal escrow keeper implementation for tests.
-type MockEscrowKeeper struct {
-	accounts map[string]etypes.Account
-	bank     *MockBankKeeper
-}
-
-func NewMockEscrowKeeper(bank *MockBankKeeper) *MockEscrowKeeper {
-	return &MockEscrowKeeper{
-		accounts: make(map[string]etypes.Account),
-		bank:     bank,
-	}
-}
-
-func (m *MockEscrowKeeper) AccountCreate(ctx sdk.Context, id escrowid.Account, owner sdk.AccAddress, deposits []etypes.Depositor) error {
-	key := id.Key()
-	if _, exists := m.accounts[key]; exists {
-		return types.ErrEscrowExists
-	}
-
-	denoms := make(map[string]struct{})
-	for _, dep := range deposits {
-		denoms[dep.Balance.Denom] = struct{}{}
-	}
-
-	funds := make([]etypes.Balance, 0, len(denoms))
-	transferred := make([]sdk.DecCoin, 0, len(denoms))
-	for denom := range denoms {
-		funds = append(funds, etypes.Balance{Denom: denom, Amount: sdkmath.LegacyZeroDec()})
-		transferred = append(transferred, sdk.NewDecCoin(denom, sdkmath.ZeroInt()))
-	}
-
-	account := etypes.Account{
-		ID: id,
-		State: etypes.AccountState{
-			Owner:       owner.String(),
-			State:       etypes.StateOpen,
-			Transferred: transferred,
-			SettledAt:   ctx.BlockHeight(),
-			Funds:       funds,
-			Deposits:    make([]etypes.Depositor, 0),
-		},
-	}
-
-	coins := sdk.NewCoins()
-	for _, dep := range deposits {
-		account.State.Deposits = append(account.State.Deposits, dep)
-		for i := range account.State.Funds {
-			if account.State.Funds[i].Denom == dep.Balance.Denom {
-				account.State.Funds[i].Amount.AddMut(dep.Balance.Amount)
-			}
-		}
-		coins = coins.Add(sdk.NewCoin(dep.Balance.Denom, dep.Balance.Amount.TruncateInt()))
-	}
-
-	if m.bank != nil && !coins.IsZero() {
-		if err := m.bank.SendCoinsFromAccountToModule(ctx, owner, escrowmodule.ModuleName, coins); err != nil {
-			return err
-		}
-	}
-
-	m.accounts[key] = account
-	return nil
-}
-
-func (m *MockEscrowKeeper) AccountDeposit(ctx sdk.Context, id escrowid.Account, deposits []etypes.Depositor) error {
-	key := id.Key()
-	account, exists := m.accounts[key]
-	if !exists {
-		return types.ErrEscrowNotFound
-	}
-
-	coins := sdk.NewCoins()
-	for _, dep := range deposits {
-		account.State.Deposits = append(account.State.Deposits, dep)
-		for i := range account.State.Funds {
-			if account.State.Funds[i].Denom == dep.Balance.Denom {
-				account.State.Funds[i].Amount.AddMut(dep.Balance.Amount)
-			}
-		}
-		coins = coins.Add(sdk.NewCoin(dep.Balance.Denom, dep.Balance.Amount.TruncateInt()))
-	}
-
-	if m.bank != nil && !coins.IsZero() {
-		owner, err := sdk.AccAddressFromBech32(account.State.Owner)
-		if err != nil {
-			return err
-		}
-		if err := m.bank.SendCoinsFromAccountToModule(ctx, owner, escrowmodule.ModuleName, coins); err != nil {
-			return err
-		}
-	}
-
-	m.accounts[key] = account
-	return nil
-}
-
-func (m *MockEscrowKeeper) GetAccount(_ sdk.Context, id escrowid.Account) (etypes.Account, error) {
-	account, exists := m.accounts[id.Key()]
-	if !exists {
-		return etypes.Account{}, errors.New("account not found")
-	}
-	return account, nil
-}
-
-func (m *MockEscrowKeeper) SaveAccount(_ sdk.Context, account etypes.Account) error {
-	m.accounts[account.ID.Key()] = account
-	return nil
-}
-
 // KeeperTestSuite is the test suite for the settlement keeper
 type KeeperTestSuite struct {
 	suite.Suite
@@ -218,7 +87,6 @@ type KeeperTestSuite struct {
 	ctx        sdk.Context
 	keeper     keeper.Keeper
 	bankKeeper *MockBankKeeper
-	escrow     *MockEscrowKeeper
 	cdc        codec.Codec
 	storeKey   storetypes.StoreKey
 
@@ -255,10 +123,9 @@ func (s *KeeperTestSuite) SetupTest() {
 
 	// Create mock bank keeper
 	s.bankKeeper = NewMockBankKeeper()
-	s.escrow = NewMockEscrowKeeper(s.bankKeeper)
 
 	// Create keeper
-	s.keeper = keeper.NewKeeper(s.cdc, storeKey, s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	s.keeper = keeper.NewKeeper(s.cdc, storeKey, s.bankKeeper, "authority", mockEncryptionKeeper{})
 
 	// Create test addresses
 	s.depositor = sdk.AccAddress([]byte("depositor___________"))

@@ -18,7 +18,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -132,7 +131,9 @@ func (s *VEIDE2ETestSuite) TestCompleteOnboardingFlow() {
 	require.Equal(s.T(), scopeFixture.ScopeID, resp.ScopeId)
 
 	// Verify identity record was created
-	ctx = ctx.WithBlockHeight(2).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(2).
 		WithBlockTime(FixedTimestampPlus(1))
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -143,7 +144,9 @@ func (s *VEIDE2ETestSuite) TestCompleteOnboardingFlow() {
 	// Step 2: Simulate validator score update (low tier)
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 25, TestModelVersion))
 
-	ctx = ctx.WithBlockHeight(3).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(3).
 		WithBlockTime(FixedTimestampPlus(2))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -189,7 +192,9 @@ func (s *VEIDE2ETestSuite) TestCompleteOnboardingFlow() {
 	// Step 4: Higher score update -> tier transition
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 82, TestModelVersion))
 
-	ctx = ctx.WithBlockHeight(4).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(4).
 		WithBlockTime(FixedTimestampPlus(3))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -255,7 +260,7 @@ func (s *VEIDE2ETestSuite) TestEmailVerificationFlow() {
 	expiresAt := FixedTimestampPlus(60 * 24 * 365) // 1 year
 	emailRecord.MarkVerified(FixedTimestampPlus(1), &expiresAt)
 	require.Equal(s.T(), veidtypes.EmailStatusVerified, emailRecord.Status)
-	require.True(s.T(), emailRecord.IsActiveAt(FixedTimestampPlus(2)))
+	require.True(s.T(), emailRecord.IsActive())
 
 	// Calculate email score contribution
 	weight := veidtypes.DefaultEmailScoringWeight()
@@ -437,10 +442,6 @@ func (s *VEIDE2ETestSuite) verifySSOProvider(customer sdk.AccAddress, fixture SS
 		fixture.Nonce,
 		FixedTimestampPlus(1),
 	)
-	// Evidence fields required for verified records
-	linkage.EvidenceHash = strings.Repeat("a", 64)
-	linkage.EvidenceStorageBackend = string(veidtypes.StorageBackendWaldur)
-	linkage.EvidenceStorageRef = "vault://evidence/sso-e2e"
 	require.NoError(s.T(), linkage.Validate())
 	require.True(s.T(), linkage.IsActive())
 
@@ -470,7 +471,9 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(
 		ctx, customer, transition1.ExpectedScore, transition1.ScoringModel))
 
-	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(1))
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -483,7 +486,9 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(
 		ctx, customer, transition2.ExpectedScore, transition2.ScoringModel))
 
-	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(2))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -496,7 +501,9 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(
 		ctx, customer, transition3.ExpectedScore, transition3.ScoringModel))
 
-	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(3))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -610,7 +617,9 @@ func (s *VEIDE2ETestSuite) TestMarketplaceVEIDGating() {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 25, TestModelVersion))
 
-	ctx = ctx.WithBlockHeight(2).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(2).
 		WithBlockTime(FixedTimestampPlus(1))
 
 	// Create offering that requires verified identity
@@ -660,7 +669,9 @@ func (s *VEIDE2ETestSuite) TestMarketplaceVEIDGating() {
 	// Update score to meet requirement
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 85, TestModelVersion))
 
-	ctx = ctx.WithBlockHeight(3).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(3).
 		WithBlockTime(FixedTimestampPlus(2))
 
 	// Order should now succeed
@@ -696,7 +707,9 @@ func (s *VEIDE2ETestSuite) TestLowScoreRejection() {
 	// Update with very low score
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 10, TestModelVersion))
 
-	ctx = ctx.WithBlockHeight(2).
+	s.app.Commit()
+	ctx = s.app.NewContext(false).
+		WithBlockHeight(2).
 		WithBlockTime(FixedTimestampPlus(1))
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)

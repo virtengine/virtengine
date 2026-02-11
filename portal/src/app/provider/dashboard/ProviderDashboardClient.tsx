@@ -18,7 +18,6 @@ import PayoutHistory from '@/components/provider/PayoutHistory';
 import ProviderTickets from '@/components/provider/ProviderTickets';
 import ProviderSyncStatus from '@/components/provider/ProviderSyncStatus';
 import { formatCurrency } from '@/lib/utils';
-import { useWallet } from '@/lib/portal-adapter';
 
 function DashboardSkeleton() {
   return (
@@ -49,17 +48,10 @@ export default function ProviderDashboardClient() {
   const stats = useProviderStore((s) => s.stats);
   const fetchDashboard = useProviderStore((s) => s.fetchDashboard);
   const clearError = useProviderStore((s) => s.clearError);
-  const wallet = useWallet();
-  const account = wallet.accounts[wallet.activeAccountIndex];
 
   useEffect(() => {
-    if (!account?.address) return;
-    void fetchDashboard(account.address);
-    const interval = setInterval(() => {
-      void fetchDashboard(account.address);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [account?.address, fetchDashboard]);
+    void fetchDashboard();
+  }, [fetchDashboard]);
 
   if (error) {
     return (
@@ -70,9 +62,7 @@ export default function ProviderDashboardClient() {
           type="button"
           onClick={() => {
             clearError();
-            if (account?.address) {
-              void fetchDashboard(account.address);
-            }
+            void fetchDashboard();
           }}
           className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
         >

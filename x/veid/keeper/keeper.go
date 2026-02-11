@@ -115,15 +115,6 @@ type Keeper struct {
 	// This is set via SetStakingKeeper after module initialization
 	stakingKeeper StakingKeeper
 
-	// marketKeeper is the market keeper reference for GDPR portability exports
-	marketKeeper MarketKeeper
-
-	// escrowKeeper is the escrow keeper reference for GDPR portability exports
-	escrowKeeper EscrowKeeper
-
-	// delegationKeeper is the delegation keeper reference for GDPR portability exports
-	delegationKeeper DelegationQueryKeeper
-
 	// zkSystem is the ZK proof system for privacy-preserving proofs
 	// Initialized during keeper setup with compiled circuits
 	zkSystem *ZKProofSystem
@@ -177,21 +168,6 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // SetStakingKeeper sets the staking keeper reference for validator authorization
 func (k *Keeper) SetStakingKeeper(stakingKeeper StakingKeeper) {
 	k.stakingKeeper = stakingKeeper
-}
-
-// SetMarketKeeper sets the market keeper reference for GDPR portability exports.
-func (k *Keeper) SetMarketKeeper(marketKeeper MarketKeeper) {
-	k.marketKeeper = marketKeeper
-}
-
-// SetEscrowKeeper sets the escrow keeper reference for GDPR portability exports.
-func (k *Keeper) SetEscrowKeeper(escrowKeeper EscrowKeeper) {
-	k.escrowKeeper = escrowKeeper
-}
-
-// SetDelegationKeeper sets the delegation keeper reference for GDPR portability exports.
-func (k *Keeper) SetDelegationKeeper(delegationKeeper DelegationQueryKeeper) {
-	k.delegationKeeper = delegationKeeper
 }
 
 // SetRandomSource overrides the default deterministic random source.

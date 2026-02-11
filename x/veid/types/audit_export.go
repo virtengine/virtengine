@@ -109,9 +109,6 @@ const (
 
 	// AuditEventTypeParamsUpdate represents module parameter update events
 	AuditEventTypeParamsUpdate AuditEventType = "PARAMS_UPDATE"
-
-	// AuditEventTypeGDPRPortability represents GDPR data portability requests
-	AuditEventTypeGDPRPortability AuditEventType = "GDPR_PORTABILITY"
 )
 
 // ValidAuditEventTypes contains all valid audit event types
@@ -133,7 +130,6 @@ var ValidAuditEventTypes = []AuditEventType{
 	AuditEventTypeEvidenceDecision,
 	AuditEventTypeEvidenceOverride,
 	AuditEventTypeParamsUpdate,
-	AuditEventTypeGDPRPortability,
 }
 
 // IsValidAuditEventType checks if an event type is valid

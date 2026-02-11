@@ -22,7 +22,7 @@ const exec = promisify(execCallback);
 // ── Configuration ────────────────────────────────────────────────────────────
 
 const CONFIG = {
-  intervalMs: 10 * 60 * 1000, // 10 minutes — fast turnaround for agent PRs
+  intervalMs: 30 * 60 * 1000, // 30 minutes
   maxConcurrentCleanups: 3, // Don't overwhelm system
   conflictStrategy: "ours-with-review", // Prefer incoming changes, flag risky merges
   autoMerge: true, // Auto-merge if CI green after cleanup
@@ -82,14 +82,7 @@ class PRCleanupDaemon {
         void this.processPR(pr); // Don't await — run in parallel
       }
 
-      // 4. Also scan for green PRs ready to merge (not just problematic ones)
-      try {
-        await this.mergeGreenPRs();
-      } catch (e) {
-        console.warn(`[pr-cleanup-daemon] Green PR scan failed: ${e?.message ?? String(e)}`);
-      }
-
-      // 5. Log stats
+      // 4. Log stats
       console.log(`[pr-cleanup-daemon] Stats:`, this.stats);
       console.log(
         `[pr-cleanup-daemon] Active cleanups: ${this.activeCleanups.size}, Queued: ${this.cleanupQueue.length}`,
@@ -592,75 +585,6 @@ class PRCleanupDaemon {
 
       child.on("error", reject);
     });
-  }
-
-  /**
-   * Scan all open PRs and auto-merge any that are green + mergeable.
-   * This catches PRs that were created by agents but never had auto-merge enabled.
-   */
-  async mergeGreenPRs() {
-    try {
-      const { stdout } = await exec(
-        `gh pr list --json number,title,mergeable,statusCheckRollup,headRefName,autoMergeRequest --limit 30`,
-      );
-      const allPRs = JSON.parse(stdout);
-
-      for (const pr of allPRs) {
-        // Skip if already has auto-merge enabled
-        if (pr.autoMergeRequest) continue;
-
-        // Skip excluded labels
-        const excludeLabels = this.config.excludeLabels || [];
-        if (
-          Array.isArray(pr.labels) &&
-          pr.labels.some((l) => l?.name && excludeLabels.includes(l.name))
-        ) continue;
-
-        // Only process MERGEABLE PRs
-        if (pr.mergeable !== "MERGEABLE") continue;
-
-        // Check if all CI checks are green
-        const checks = Array.isArray(pr.statusCheckRollup) ? pr.statusCheckRollup : [];
-        const hasChecks = checks.length > 0;
-        const allGreen = hasChecks && checks.every(
-          (c) => c?.conclusion === "SUCCESS" || c?.conclusion === "SKIPPED" || c?.conclusion === "NEUTRAL"
-        );
-
-        if (!allGreen) {
-          // Still pending? Enable auto-merge so it merges when CI passes
-          const hasPending = checks.some((c) => !c?.conclusion || c?.conclusion === "PENDING");
-          if (hasPending && pr.mergeable === "MERGEABLE") {
-            try {
-              await exec(`gh pr merge ${pr.number} --auto --squash --delete-branch`);
-              console.log(`[pr-cleanup-daemon] ⏳ Auto-merge queued for PR #${pr.number} (CI pending)`);
-            } catch { /* auto-merge may not be available */ }
-          }
-          continue;
-        }
-
-        if (this.config.dryRun) {
-          console.log(`[pr-cleanup-daemon] [DRY RUN] Would merge green PR #${pr.number}`);
-          continue;
-        }
-
-        // All green + mergeable → merge now
-        try {
-          await exec(`gh pr merge ${pr.number} --squash --delete-branch`);
-          this.stats.autoMerges++;
-          console.log(`[pr-cleanup-daemon] ✅ Auto-merged green PR #${pr.number}: ${pr.title}`);
-        } catch (err) {
-          // Fallback: enable auto-merge
-          try {
-            await exec(`gh pr merge ${pr.number} --auto --squash --delete-branch`);
-            console.log(`[pr-cleanup-daemon] ⏳ Auto-merge enabled for PR #${pr.number}`);
-          } catch {
-            console.warn(`[pr-cleanup-daemon] Failed to merge/auto-merge PR #${pr.number}: ${err?.message}`);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(`[pr-cleanup-daemon] Green PR scan error: ${err?.message ?? String(err)}`);
-    }
   }
 
   /**
