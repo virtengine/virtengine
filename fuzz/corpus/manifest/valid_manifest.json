@@ -1,1 +1,0 @@
-{"version":"v1","name":"test-deployment","services":[{"name":"web","type":"container","image":"nginx:latest","resources":{"cpu":1000,"memory":536870912}}]}

@@ -1,5 +1,0 @@
-packages:
-  - 'lib/portal'
-  - 'lib/capture'
-  - 'lib/admin'
-  - 'portal'

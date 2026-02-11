@@ -1,1 +1,0 @@
-{"version":"v2beta1","name":"gpu-training","services":[{"name":"trainer","type":"container","image":"tensorflow/tensorflow:latest-gpu","tag":"latest-gpu","resources":{"cpu":8000,"memory":17179869184,"storage":107374182400,"gpu":4},"replicas":1,"restart_policy":"on-failure"}]}
