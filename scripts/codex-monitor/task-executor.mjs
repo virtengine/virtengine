@@ -376,6 +376,11 @@ class TaskExecutor {
       console.log(`${TAG} cleaned up ${pruned} stale agent threads on startup`);
     }
 
+    // Recover orphaned worktrees from prior runs (async, non-blocking)
+    this._recoverOrphanedWorktrees().catch((err) => {
+      console.warn(`${TAG} orphan recovery failed: ${err.message}`);
+    });
+
     this._running = true;
     // Fire first poll immediately
     this._pollLoop();
@@ -408,6 +413,150 @@ class TaskExecutor {
     }
 
     console.log(`${TAG} stopped (${this._activeSlots.size} tasks were active)`);
+  }
+
+  /**
+   * Scan worktrees from prior runs for uncommitted/unpushed work.
+   * Attempts to commit, push, and create PRs for any orphaned work.
+   * @returns {Promise<void>}
+   */
+  async _recoverOrphanedWorktrees() {
+    const worktreeDir = resolve(this.repoRoot, ".cache", "worktrees");
+    if (!existsSync(worktreeDir)) return;
+
+    const { readdirSync, statSync } = await import("node:fs");
+    let dirs;
+    try {
+      dirs = readdirSync(worktreeDir);
+    } catch {
+      return;
+    }
+
+    let recovered = 0;
+    let skipped = 0;
+
+    for (const dirName of dirs) {
+      // Only process ve-<taskid>-* directories
+      const match = dirName.match(/^ve-([a-f0-9]{8})-/);
+      if (!match) continue;
+
+      const taskIdPrefix = match[1];
+      const wtPath = resolve(worktreeDir, dirName);
+
+      try {
+        const stat = statSync(wtPath);
+        if (!stat.isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      // Skip worktrees that are actively being used
+      const isActive = [...this._activeSlots.values()].some(
+        (s) => s.worktreePath && s.worktreePath.includes(dirName),
+      );
+      if (isActive) continue;
+
+      // Check for uncommitted changes
+      let hasChanges = false;
+      let branch = "";
+      try {
+        const status = execSync("git status --porcelain", {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 10000,
+        }).trim();
+        hasChanges = status.length > 0;
+
+        branch = execSync("git branch --show-current", {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 5000,
+        }).trim();
+      } catch {
+        continue; // Broken worktree, skip
+      }
+
+      if (!branch || !branch.startsWith("ve/")) continue;
+
+      // Check if we already created a PR for this branch
+      if (this._prCreatedForBranch.has(taskIdPrefix)) {
+        skipped++;
+        continue;
+      }
+
+      // Check for uncommitted changes OR unpushed commits
+      let hasUnpushed = false;
+      try {
+        const unpushed = execSync(`git log origin/main..HEAD --oneline`, {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 10000,
+        }).trim();
+        hasUnpushed = unpushed.length > 0;
+      } catch {
+        // No upstream tracking, that's ok
+      }
+
+      if (!hasChanges && !hasUnpushed) {
+        skipped++;
+        continue;
+      }
+
+      console.log(
+        `${TAG} [orphan-recovery] Found orphaned work in ${dirName}: ` +
+        `${hasChanges ? "uncommitted changes" : ""}${hasChanges && hasUnpushed ? " + " : ""}` +
+        `${hasUnpushed ? "unpushed commits" : ""} on branch ${branch}`,
+      );
+
+      // Commit uncommitted changes
+      if (hasChanges) {
+        try {
+          execSync("git add -A", { cwd: wtPath, timeout: 15000 });
+          execSync(
+            `git commit -m "feat: auto-commit orphaned agent work" --no-verify`,
+            { cwd: wtPath, timeout: 15000 },
+          );
+          console.log(`${TAG} [orphan-recovery] Committed changes in ${dirName}`);
+        } catch (err) {
+          console.warn(
+            `${TAG} [orphan-recovery] Failed to commit in ${dirName}: ${err.message}`,
+          );
+          continue;
+        }
+      }
+
+      // Build a minimal task object for _createPR
+      const taskObj = {
+        id: taskIdPrefix,
+        title: branch.replace("ve/", "").replace(/-/g, " ").substring(9), // Remove UUID prefix
+        description: "Auto-recovered from orphaned worktree",
+        branchName: branch,
+      };
+
+      // Try to create PR
+      try {
+        const prResult = await this._createPR(taskObj, wtPath, {
+          agentMadeNewCommits: true,
+        });
+        if (prResult) {
+          console.log(
+            `${TAG} [orphan-recovery] PR created for ${dirName}: ${prResult}`,
+          );
+          this._prCreatedForBranch.add(taskIdPrefix);
+          recovered++;
+        }
+      } catch (err) {
+        console.warn(
+          `${TAG} [orphan-recovery] PR creation failed for ${dirName}: ${err.message}`,
+        );
+      }
+    }
+
+    if (recovered > 0 || skipped > 0) {
+      console.log(
+        `${TAG} [orphan-recovery] complete: ${recovered} recovered, ${skipped} skipped`,
+      );
+    }
   }
 
   /**

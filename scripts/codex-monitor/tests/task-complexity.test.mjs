@@ -6,7 +6,6 @@ import {
   formatComplexityDecision,
   getComplexityMatrix,
   assessCompletionConfidence,
-  executorToSdk,
   COMPLEXITY_TIERS,
   SIZE_TO_COMPLEXITY,
   DEFAULT_MODEL_PROFILES,
@@ -249,12 +248,6 @@ describe("getModelForComplexity", () => {
     const result = getModelForComplexity("ultra", "CODEX");
     expect(result.model).toBe("gpt-5.2-codex");
   });
-
-  it("returns correct models for CLAUDE executor", () => {
-    expect(getModelForComplexity("low", "CLAUDE").model).toBe("claude-haiku-4-5");
-    expect(getModelForComplexity("medium", "CLAUDE").model).toBe("claude-sonnet-4-5");
-    expect(getModelForComplexity("high", "CLAUDE").model).toBe("claude-opus-4-6");
-  });
 });
 
 // ── resolveExecutorForTask ───────────────────────────────────────────────────
@@ -388,14 +381,6 @@ describe("resolveExecutorForTask", () => {
     expect(result.complexity.sizeLabel).toBe("xl");
     expect(result.complexity.tier).toBe("high");
   });
-
-  it("resolves CLAUDE executor profiles correctly", () => {
-    const base = { name: "claude-native", executor: "CLAUDE", variant: "OPUS_4_6" };
-    const task = { title: "small fix", description: "fix typo" };
-    const result = resolveExecutorForTask(task, base);
-    expect(result.model).toBeDefined();
-    expect(result.executor).toBe("CLAUDE");
-  });
 });
 
 // ── formatComplexityDecision ─────────────────────────────────────────────────
@@ -443,15 +428,10 @@ describe("getComplexityMatrix", () => {
     const matrix = getComplexityMatrix();
     expect(matrix.CODEX).toBeDefined();
     expect(matrix.COPILOT).toBeDefined();
-    expect(matrix.CLAUDE).toBeDefined();
     expect(Object.keys(matrix.CODEX)).toEqual(["low", "medium", "high"]);
     expect(Object.keys(matrix.COPILOT)).toEqual(["low", "medium", "high"]);
-    expect(Object.keys(matrix.CLAUDE)).toEqual(["low", "medium", "high"]);
     expect(matrix.CODEX.low.model).toBe("gpt-5.1-codex-mini");
     expect(matrix.COPILOT.high.model).toBe("opus-4.6");
-    expect(matrix.CLAUDE.low.model).toBe("claude-haiku-4-5");
-    expect(matrix.CLAUDE.medium.model).toBe("claude-sonnet-4-5");
-    expect(matrix.CLAUDE.high.model).toBe("claude-opus-4-6");
   });
 
   it("applies config overrides to the matrix", () => {
@@ -577,10 +557,9 @@ describe("constants", () => {
     expect(Object.values(COMPLEXITY_TIERS)).toEqual(["low", "medium", "high"]);
   });
 
-  it("DEFAULT_MODEL_PROFILES covers CODEX, COPILOT, and CLAUDE", () => {
+  it("DEFAULT_MODEL_PROFILES covers CODEX and COPILOT", () => {
     expect(DEFAULT_MODEL_PROFILES.CODEX).toBeDefined();
     expect(DEFAULT_MODEL_PROFILES.COPILOT).toBeDefined();
-    expect(DEFAULT_MODEL_PROFILES.CLAUDE).toBeDefined();
   });
 
   it("COMPLETION_CONFIDENCE has expected values", () => {
@@ -624,7 +603,7 @@ describe("constants", () => {
       executor: "COPILOT",
       variant: "CLAUDE_CODE",
     });
-    expect(Object.keys(MODEL_ALIASES)).toHaveLength(12);
+    expect(Object.keys(MODEL_ALIASES)).toHaveLength(8);
   });
 });
 
@@ -723,22 +702,5 @@ describe("new simplifier signal patterns", () => {
     });
     expect(result.tier).toBe("low");
     expect(result.adjusted).toBe(true);
-  });
-});
-
-// ── executorToSdk ────────────────────────────────────────────────────────────
-
-describe("executorToSdk", () => {
-  it("maps CLAUDE to claude", () => {
-    expect(executorToSdk("CLAUDE")).toBe("claude");
-  });
-  it("maps COPILOT to copilot", () => {
-    expect(executorToSdk("COPILOT")).toBe("copilot");
-  });
-  it("maps CODEX to codex", () => {
-    expect(executorToSdk("CODEX")).toBe("codex");
-  });
-  it("maps unknown to codex", () => {
-    expect(executorToSdk("UNKNOWN")).toBe("codex");
   });
 });

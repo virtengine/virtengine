@@ -10,6 +10,11 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	markettypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
+
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
@@ -89,6 +94,14 @@ func (k Keeper) SubmitExportRequest(
 		"requester", requesterAddress.String(),
 		"categories", categories,
 		"format", format)
+
+	if err := k.RecordAuditEvent(ctx, types.AuditEventTypeGDPRPortability, requesterAddress.String(), map[string]interface{}{
+		"request_id": request.RequestID,
+		"categories": categories,
+		"format":     format,
+	}); err != nil {
+		return nil, err
+	}
 
 	return request, nil
 }
@@ -227,6 +240,8 @@ func (k Keeper) exportCategory(
 		return k.exportTransactionData(ctx, address, pkg)
 	case types.ExportCategoryMarketplace:
 		return k.exportMarketplaceData(ctx, address, pkg)
+	case types.ExportCategoryEscrow:
+		return k.exportEscrowData(ctx, address, pkg)
 	case types.ExportCategoryDelegations:
 		return k.exportDelegationData(ctx, address, pkg)
 	}
@@ -357,12 +372,31 @@ func (k Keeper) exportVerificationHistory(ctx sdk.Context, address sdk.AccAddres
 
 // exportTransactionData exports transaction history
 // Note: This requires access to the bank/auth modules which may not be available here
-func (k Keeper) exportTransactionData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
-	// Transaction data would be exported from chain history
-	// This is a placeholder - actual implementation would query the chain
+func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+	// Use activity records as a deterministic on-chain transaction ledger surrogate.
+	records, err := k.GetRecentActivity(ctx, address.String(), 1000)
+	if err != nil {
+		return err
+	}
+
+	transactions := make([]types.PortableTransaction, 0)
+	for _, record := range records {
+		if record.ActivityType != types.ActivityTypeTransaction {
+			continue
+		}
+		txHash := sha256.Sum256([]byte(fmt.Sprintf("%s:%d:%d", record.Address, record.Timestamp.UnixNano(), record.BlockHeight)))
+		transactions = append(transactions, types.PortableTransaction{
+			TxHash:      hex.EncodeToString(txHash[:]),
+			TxType:      string(record.ActivityType),
+			Timestamp:   record.Timestamp,
+			BlockHeight: record.BlockHeight,
+			Status:      "recorded",
+		})
+	}
+
 	pkg.Transactions = &types.PortableTransactionData{
-		TotalTransactions: 0,
-		Transactions:      make([]types.PortableTransaction, 0),
+		TotalTransactions: len(transactions),
+		Transactions:      transactions,
 	}
 
 	pkg.Metadata.SchemaVersions[types.ExportCategoryTransactions] = schemaVersion10
@@ -371,17 +405,138 @@ func (k Keeper) exportTransactionData(_ sdk.Context, _ sdk.AccAddress, pkg *type
 
 // exportMarketplaceData exports marketplace activity
 // Note: This requires access to the market module
-func (k Keeper) exportMarketplaceData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
-	// Marketplace data would be exported from the market module
-	// This is a placeholder - actual implementation would query the market keeper
-	pkg.Marketplace = &types.PortableMarketplaceData{
-		TotalOrders: 0,
-		TotalLeases: 0,
-		Orders:      make([]types.PortableOrder, 0),
-		Leases:      make([]types.PortableLease, 0),
+func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+	data := &types.PortableMarketplaceData{
+		Orders: make([]types.PortableOrder, 0),
+		Bids:   make([]types.PortableBid, 0),
+		Leases: make([]types.PortableLease, 0),
 	}
 
+	if k.marketKeeper != nil {
+		k.marketKeeper.WithOrders(ctx, func(order markettypes.Order) bool {
+			if order.ID.Owner != address.String() {
+				return false
+			}
+			specs := make(map[string]interface{})
+			if bz, err := json.Marshal(order.Spec); err == nil {
+				_ = json.Unmarshal(bz, &specs)
+			}
+			data.Orders = append(data.Orders, types.PortableOrder{
+				OrderID:        order.ID.String(),
+				OrderType:      "order",
+				Status:         order.State.String(),
+				CreatedAt:      time.Unix(order.CreatedAt, 0),
+				BlockHeight:    order.CreatedAt,
+				Specifications: specs,
+			})
+			return false
+		})
+
+		k.marketKeeper.WithBids(ctx, func(bid markettypes.Bid) bool {
+			if bid.ID.Provider != address.String() {
+				return false
+			}
+			data.Bids = append(data.Bids, types.PortableBid{
+				BidID:       bid.ID.String(),
+				OrderID:     bid.ID.OrderID().String(),
+				Provider:    bid.ID.Provider,
+				Status:      bid.State.String(),
+				CreatedAt:   time.Unix(bid.CreatedAt, 0),
+				BlockHeight: bid.CreatedAt,
+				Price:       bid.Price.String(),
+			})
+			return false
+		})
+
+		k.marketKeeper.WithLeases(ctx, func(lease mv1.Lease) bool {
+			if lease.ID.Owner != address.String() && lease.ID.Provider != address.String() {
+				return false
+			}
+			var closedAt *time.Time
+			if lease.ClosedOn > 0 {
+				t := time.Unix(lease.ClosedOn, 0)
+				closedAt = &t
+			}
+			data.Leases = append(data.Leases, types.PortableLease{
+				LeaseID:   lease.ID.String(),
+				Provider:  lease.ID.Provider,
+				Status:    lease.State.String(),
+				CreatedAt: time.Unix(lease.CreatedAt, 0),
+				ClosedAt:  closedAt,
+				Price:     lease.Price.String(),
+			})
+			return false
+		})
+	}
+
+	data.TotalOrders = len(data.Orders)
+	data.TotalBids = len(data.Bids)
+	data.TotalLeases = len(data.Leases)
+
+	pkg.Marketplace = data
 	pkg.Metadata.SchemaVersions[types.ExportCategoryMarketplace] = schemaVersion10
+	return nil
+}
+
+// exportEscrowData exports escrow accounts and payments.
+func (k Keeper) exportEscrowData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+	data := &types.PortableEscrowData{
+		Accounts: make([]types.PortableEscrowAccount, 0),
+		Payments: make([]types.PortableEscrowPayment, 0),
+	}
+
+	if k.escrowKeeper != nil {
+		k.escrowKeeper.WithAccounts(ctx, func(account etypes.Account) bool {
+			if account.State.Owner != address.String() {
+				return false
+			}
+			transferred := make([]string, 0)
+			if len(account.State.Transferred) > 0 {
+				transferred = append(transferred, account.State.Transferred.String())
+			}
+			funds := make([]string, 0, len(account.State.Funds))
+			for _, fund := range account.State.Funds {
+				funds = append(funds, fmt.Sprintf("%v", fund))
+			}
+			deposits := make([]string, 0, len(account.State.Deposits))
+			for _, dep := range account.State.Deposits {
+				deposits = append(deposits, fmt.Sprintf("%v", dep))
+			}
+
+			data.Accounts = append(data.Accounts, types.PortableEscrowAccount{
+				AccountID:   fmt.Sprintf("%v", account.ID),
+				Owner:       account.State.Owner,
+				State:       account.State.State.String(),
+				Deposits:    deposits,
+				Funds:       funds,
+				SettledAt:   account.State.SettledAt,
+				Transferred: transferred,
+			})
+			return false
+		})
+
+		k.escrowKeeper.WithPayments(ctx, func(payment etypes.Payment) bool {
+			if payment.State.Owner != address.String() {
+				return false
+			}
+			data.Payments = append(data.Payments, types.PortableEscrowPayment{
+				PaymentID: fmt.Sprintf("%v", payment.ID),
+				Owner:     payment.State.Owner,
+				State:     payment.State.State.String(),
+				Rate:      payment.State.Rate.String(),
+				Balance:   payment.State.Balance.String(),
+				Unsettled: payment.State.Unsettled.String(),
+				Withdrawn: payment.State.Withdrawn.String(),
+			})
+			return false
+		})
+	}
+
+	data.TotalAccounts = len(data.Accounts)
+	data.TotalPayments = len(data.Payments)
+
+	pkg.Escrow = data
+	pkg.Metadata.SchemaVersions[types.ExportCategoryEscrow] = schemaVersion10
 	return nil
 }
 
@@ -394,8 +549,13 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 	}
 
 	pkg.Delegations = &types.PortableDelegationData{
-		TotalDelegations: len(delegations),
-		Delegations:      make([]types.PortableDelegation, 0),
+		TotalDelegations:     len(delegations),
+		Delegations:          make([]types.PortableDelegation, 0),
+		StakingDelegations:   make([]types.PortableStakingDelegation, 0),
+		UnbondingDelegations: make([]types.PortableUnbondingDelegation, 0),
+		Redelegations:        make([]types.PortableRedelegation, 0),
+		Rewards:              make([]types.PortableDelegationReward, 0),
+		SlashingEvents:       make([]types.PortableDelegationSlashingEvent, 0),
 	}
 
 	for _, del := range delegations {
@@ -419,6 +579,69 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 			RevokedAt:        del.RevokedAt,
 		}
 		pkg.Delegations.Delegations = append(pkg.Delegations.Delegations, portableDel)
+	}
+
+	if k.delegationKeeper != nil {
+		stakingDelegations := k.delegationKeeper.GetDelegatorDelegations(ctx, address.String())
+		for _, del := range stakingDelegations {
+			pkg.Delegations.StakingDelegations = append(pkg.Delegations.StakingDelegations, types.PortableStakingDelegation{
+				DelegatorAddress: del.DelegatorAddress,
+				ValidatorAddress: del.ValidatorAddress,
+				Shares:           del.Shares,
+				CreatedAt:        del.CreatedAt,
+				Status:           string(delegationtypes.DelegationStatusActive),
+			})
+		}
+
+		unbondings := k.delegationKeeper.GetDelegatorUnbondingDelegations(ctx, address.String())
+		for _, ub := range unbondings {
+			for _, entry := range ub.Entries {
+				pkg.Delegations.UnbondingDelegations = append(pkg.Delegations.UnbondingDelegations, types.PortableUnbondingDelegation{
+					ID:               ub.ID,
+					DelegatorAddress: ub.DelegatorAddress,
+					ValidatorAddress: ub.ValidatorAddress,
+					CompletionTime:   entry.CompletionTime,
+					Balance:          entry.Balance,
+				})
+			}
+		}
+
+		redelegations := k.delegationKeeper.GetDelegatorRedelegations(ctx, address.String())
+		for _, redel := range redelegations {
+			for _, entry := range redel.Entries {
+				pkg.Delegations.Redelegations = append(pkg.Delegations.Redelegations, types.PortableRedelegation{
+					ID:               redel.ID,
+					DelegatorAddress: redel.DelegatorAddress,
+					ValidatorSrc:     redel.ValidatorSrcAddress,
+					ValidatorDst:     redel.ValidatorDstAddress,
+					CompletionTime:   entry.CompletionTime,
+					Balance:          entry.InitialBalance,
+				})
+			}
+		}
+
+		rewards := k.delegationKeeper.GetDelegatorUnclaimedRewards(ctx, address.String())
+		for _, reward := range rewards {
+			pkg.Delegations.Rewards = append(pkg.Delegations.Rewards, types.PortableDelegationReward{
+				DelegatorAddress: reward.DelegatorAddress,
+				ValidatorAddress: reward.ValidatorAddress,
+				Epoch:            reward.EpochNumber,
+				Amount:           reward.Reward,
+				Claimed:          reward.Claimed,
+			})
+		}
+
+		slashingEvents := k.delegationKeeper.GetDelegatorSlashingEvents(ctx, address.String())
+		for _, event := range slashingEvents {
+			pkg.Delegations.SlashingEvents = append(pkg.Delegations.SlashingEvents, types.PortableDelegationSlashingEvent{
+				ID:               event.ID,
+				DelegatorAddress: event.DelegatorAddress,
+				ValidatorAddress: event.ValidatorAddress,
+				BlockHeight:      event.BlockHeight,
+				Reason:           event.SlashFraction,
+				Penalty:          event.SlashAmount,
+			})
+		}
 	}
 
 	pkg.Metadata.SchemaVersions[types.ExportCategoryDelegations] = schemaVersion10

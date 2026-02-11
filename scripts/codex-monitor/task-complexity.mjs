@@ -2,7 +2,7 @@
  * task-complexity.mjs — Task complexity routing for codex-monitor.
  *
  * Maps task size/complexity to appropriate AI models and reasoning effort
- * levels. Each executor type (CODEX, COPILOT, CLAUDE) has its own model tier
+ * levels. Each executor type (CODEX, COPILOT/Claude) has its own model tier
  * ladder, so small tasks use cheaper/faster models while complex tasks get
  * the most capable models.
  *
@@ -12,13 +12,13 @@
  *   HIGH   — l/xl/xxl tasks: complex architecture, multi-file changes
  *
  * Default Model Mapping:
- *   ┌──────────┬──────────────────────┬─────────────────────┬─────────────────────┐
- *   │ Tier     │ CODEX                │ COPILOT (Claude)    │ CLAUDE (native SDK) │
- *   ├──────────┼──────────────────────┼─────────────────────┼─────────────────────┤
- *   │ LOW      │ gpt-5.1-codex-mini   │ haiku-4.5           │ claude-haiku-4-5    │
- *   │ MEDIUM   │ gpt-5.2-codex        │ sonnet-4.5          │ claude-sonnet-4-5   │
- *   │ HIGH     │ gpt-5.1-codex-max    │ opus-4.6            │ claude-opus-4-6     │
- *   └──────────┴──────────────────────┴─────────────────────┴─────────────────────┘
+ *   ┌──────────┬──────────────────────┬─────────────────────┐
+ *   │ Tier     │ CODEX                │ COPILOT (Claude)    │
+ *   ├──────────┼──────────────────────┼─────────────────────┤
+ *   │ LOW      │ gpt-5.1-codex-mini   │ haiku-4.5           │
+ *   │ MEDIUM   │ gpt-5.2-codex        │ sonnet-4.5          │
+ *   │ HIGH     │ gpt-5.1-codex-max    │ opus-4.6            │
+ *   └──────────┴──────────────────────┴─────────────────────┘
  *
  * Reasoning Effort per tier:
  *   LOW    → "low"
@@ -89,23 +89,6 @@ export const DEFAULT_MODEL_PROFILES = Object.freeze({
       reasoningEffort: "high",
     },
   },
-  CLAUDE: {
-    [COMPLEXITY_TIERS.LOW]: {
-      model: "claude-haiku-4-5",
-      variant: "HAIKU_4_5",
-      reasoningEffort: "low",
-    },
-    [COMPLEXITY_TIERS.MEDIUM]: {
-      model: "claude-sonnet-4-5",
-      variant: "SONNET_4_5",
-      reasoningEffort: "medium",
-    },
-    [COMPLEXITY_TIERS.HIGH]: {
-      model: "claude-opus-4-6",
-      variant: "OPUS_4_6",
-      reasoningEffort: "high",
-    },
-  },
 });
 
 /**
@@ -121,11 +104,6 @@ export const MODEL_ALIASES = Object.freeze({
   "sonnet-4.5": { executor: "COPILOT", variant: "CLAUDE_SONNET_4_5" },
   "haiku-4.5": { executor: "COPILOT", variant: "CLAUDE_HAIKU_4_5" },
   "claude-code": { executor: "COPILOT", variant: "CLAUDE_CODE" },
-  // Claude SDK native executor aliases
-  "claude-sdk-opus": { executor: "CLAUDE", variant: "OPUS_4_6" },
-  "claude-sdk-sonnet": { executor: "CLAUDE", variant: "SONNET_4_5" },
-  "claude-sdk-haiku": { executor: "CLAUDE", variant: "HAIKU_4_5" },
-  "claude-sdk": { executor: "CLAUDE", variant: "OPUS_4_6" },
 });
 
 /**
@@ -378,7 +356,7 @@ export function formatComplexityDecision(resolved) {
  */
 export function getComplexityMatrix(configOverrides) {
   const matrix = {};
-  for (const executorType of ["CODEX", "COPILOT", "CLAUDE"]) {
+  for (const executorType of ["CODEX", "COPILOT"]) {
     matrix[executorType] = {};
     for (const tier of Object.values(COMPLEXITY_TIERS)) {
       matrix[executorType][tier] = getModelForComplexity(
@@ -590,21 +568,4 @@ function pointsToSize(points) {
   if (points <= 8) return "l";
   if (points <= 13) return "xl";
   return "xxl";
-}
-
-// ── Executor → SDK Mapping ──────────────────────────────────────────────────
-
-/**
- * Map an executor type (from executor profiles) to the corresponding
- * agent-pool SDK name. Used by task-executor to resolve which SDK
- * to use when dispatching a task with a specific executor profile.
- *
- * @param {string} executorType - "CODEX" | "COPILOT" | "CLAUDE"
- * @returns {string} SDK name for agent-pool: "codex" | "copilot" | "claude"
- */
-export function executorToSdk(executorType) {
-  const normalized = (executorType || "").toUpperCase();
-  if (normalized === "CLAUDE") return "claude";
-  if (normalized === "COPILOT") return "copilot";
-  return "codex";
 }

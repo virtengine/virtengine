@@ -25,8 +25,8 @@ const DEFAULT_CAPABILITIES_BY_PRIMARY = {
     vscodeTools: true,
   },
   claude: {
-    steering: true,
-    subagents: true,
+    steering: false,
+    subagents: false,
     vscodeTools: false,
   },
 };
@@ -40,9 +40,7 @@ const DEFAULT_CAPABILITIES = {
 let cachedConfig = null;
 
 function normalizePrimary(value) {
-  const primary = String(value || "")
-    .trim()
-    .toLowerCase();
+  const primary = String(value || "").trim().toLowerCase();
   if (SUPPORTED_PRIMARY.has(primary)) return primary;
   return DEFAULT_PRIMARY;
 }

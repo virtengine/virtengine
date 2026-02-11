@@ -1,9 +1,15 @@
 package keeper
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -201,18 +207,20 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 	}
 	commitmentHash := k.generateCommitmentHash(disclosedClaims, commitmentSalt)
 
-	// Generate the ZK proof bytes
-	// NOTE: For MVP, this is a placeholder that generates a simulated proof
-	// In production, this would call actual ZK circuit implementation
-	proofValue := k.generateZKProof(
+	proofValue, err := k.generateZKProof(
 		ctx,
+		record,
 		subjectAddress,
 		request.RequestedClaims,
 		disclosedClaims,
 		request.ClaimParameters,
 		scheme,
 		proofNonce,
+		commitmentSalt,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create the proof
 	proof := types.NewSelectiveDisclosureProof(
@@ -227,8 +235,14 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 	proof.ProofValue = proofValue
 	proof.Nonce = proofNonce
 	proof.Metadata = map[string]string{
-		"request_id": request.RequestID,
-		"purpose":    request.Purpose,
+		"request_id":      request.RequestID,
+		"purpose":         request.Purpose,
+		"commitment_salt": hex.EncodeToString(commitmentSalt),
+	}
+	if len(request.ClaimParameters) > 0 {
+		if paramsBz, marshalErr := json.Marshal(request.ClaimParameters); marshalErr == nil {
+			proof.Metadata["claim_parameters"] = string(paramsBz)
+		}
 	}
 
 	// Validate the proof
@@ -277,11 +291,18 @@ func (k Keeper) VerifySelectiveDisclosureProof(
 		}, nil
 	}
 
+	// Check proof revocation
+	if k.IsProofRevoked(ctx, proof.ProofID) {
+		return &types.ProofVerificationResult{
+			IsValid:         false,
+			VerifiedAt:      ctx.BlockTime(),
+			VerifierAddress: verifierAddress.String(),
+			Error:           "proof revoked",
+		}, nil
+	}
+
 	// Verify the ZK proof
-	// NOTE: For MVP, this is a placeholder verification
-	// In production, this would verify actual ZK proofs
 	isValid, err := k.verifyZKProof(
-		ctx,
 		proof.SubjectAddress,
 		proof.ClaimTypes,
 		proof.DisclosedClaims,
@@ -289,6 +310,7 @@ func (k Keeper) VerifySelectiveDisclosureProof(
 		proof.ProofScheme,
 		proof.Nonce,
 		proof.CommitmentHash,
+		proof.Metadata,
 	)
 	if err != nil {
 		return &types.ProofVerificationResult{
@@ -348,12 +370,13 @@ func (k Keeper) CreateAgeProof(
 		return nil, types.ErrIdentityRecordNotFound
 	}
 
-	// Check for verified DOB scope
-	// NOTE: In production, this would decrypt and verify actual DOB
-	// For MVP, we check for verification level indicating DOB was verified
-	satisfiesThreshold, dobCommitment, err := k.evaluateAgeThreshold(ctx, record, ageThreshold, randomness)
+	// Check for verified DOB scope and derive deterministic age value
+	satisfiesThreshold, derivedAge, err := k.evaluateAgeThreshold(ctx, record, ageThreshold, randomness)
 	if err != nil {
 		return nil, err
+	}
+	if !satisfiesThreshold {
+		return nil, types.ErrClaimNotAvailable.Wrap("age below threshold")
 	}
 
 	// Resolve nonce
@@ -381,18 +404,33 @@ func (k Keeper) CreateAgeProof(
 	// Create the age proof
 	proof := types.NewAgeProof(proofID, subjectAddress.String(), ageThreshold, validDuration)
 	proof.SatisfiesThreshold = satisfiesThreshold
-	proof.CommitmentHash = dobCommitment
 	proof.Nonce = nonce
 
-	// Generate ZK proof for age range
-	proofValue := k.generateAgeRangeProof(
+	commitmentSalt, err := k.resolveRandomBytes(
 		ctx,
-		subjectAddress,
-		ageThreshold,
-		satisfiesThreshold,
-		nonce,
+		func() []byte {
+			if randomness != nil {
+				return randomness.CommitmentSalt
+			}
+			return nil
+		}(),
+		"veid:age:commitment_salt",
+		subjectAddress.Bytes(),
 	)
-	proof.ProofValue = proofValue
+	if err != nil {
+		return nil, err
+	}
+
+	rangeProof, err := types.GenerateRangeProof(derivedAge, uint64(ageThreshold), 8, commitmentSalt, nonce, "veid:age")
+	if err != nil {
+		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	}
+	proofBytes, err := types.MarshalRangeProof(rangeProof)
+	if err != nil {
+		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	}
+	proof.CommitmentHash = rangeProof.Commitment
+	proof.ProofValue = proofBytes
 
 	// Validate the proof
 	if err := proof.Validate(); err != nil {
@@ -434,9 +472,12 @@ func (k Keeper) CreateResidencyProof(
 	}
 
 	// Check for verified address/residency scope
-	isResident, addressCommitment, err := k.evaluateResidency(ctx, record, countryCode, randomness)
+	isResident, _, err := k.evaluateResidency(ctx, record, countryCode, randomness)
 	if err != nil {
 		return nil, err
+	}
+	if !isResident {
+		return nil, types.ErrClaimNotAvailable.Wrap("residency not verified")
 	}
 
 	// Resolve nonce
@@ -465,21 +506,34 @@ func (k Keeper) CreateResidencyProof(
 	// Create the residency proof
 	proof := types.NewResidencyProof(proofID, subjectAddress.String(), countryCode, validDuration)
 	proof.IsResident = isResident
-	proof.CommitmentHash = addressCommitment
 	proof.Nonce = nonce
 
-	// Generate ZK proof for residency
-	proofValue, err := k.generateResidencyProof(
+	commitmentSalt, err := k.resolveRandomBytes(
 		ctx,
-		subjectAddress,
-		countryCode,
-		isResident,
-		nonce,
+		func() []byte {
+			if randomness != nil {
+				return randomness.CommitmentSalt
+			}
+			return nil
+		}(),
+		"veid:residency:commitment_salt",
+		subjectAddress.Bytes(),
+		[]byte(countryCode),
 	)
 	if err != nil {
 		return nil, err
 	}
-	proof.ProofValue = proofValue
+
+	setProof, err := types.GenerateSetMembershipProof(countryCode, []string{countryCode}, commitmentSalt, nonce, "veid:residency")
+	if err != nil {
+		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	}
+	proofBytes, err := types.MarshalSetMembershipProof(setProof)
+	if err != nil {
+		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	}
+	proof.CommitmentHash = setProof.Commitment
+	proof.ProofValue = proofBytes
 
 	// Validate the proof
 	if err := proof.Validate(); err != nil {
@@ -527,29 +581,15 @@ func (k Keeper) CreateScoreThresholdProof(
 
 	// Evaluate if score exceeds threshold
 	exceedsThreshold := score.Score >= scoreThreshold
-
-	// Create commitment to actual score
-	var providedScoreSalt []byte
-	var providedNonce []byte
-	if randomness != nil {
-		providedScoreSalt = randomness.ScoreSalt
-		providedNonce = randomness.Nonce
-	}
-	scoreSalt, err := k.resolveRandomBytes(
-		ctx,
-		providedScoreSalt,
-		"veid:score:commitment_salt",
-		subjectAddress.Bytes(),
-	)
-	if err != nil {
-		return nil, err
-	}
-	scoreCommitment, err := types.ComputeCommitmentHash(score.Score, scoreSalt)
-	if err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	if !exceedsThreshold {
+		return nil, types.ErrClaimNotAvailable.Wrap("score below threshold")
 	}
 
 	// Generate nonce
+	var providedNonce []byte
+	if randomness != nil {
+		providedNonce = randomness.Nonce
+	}
 	nonce, err := k.resolveRandomBytes(
 		ctx,
 		providedNonce,
@@ -570,22 +610,33 @@ func (k Keeper) CreateScoreThresholdProof(
 	// Create the score threshold proof
 	proof := types.NewScoreThresholdProof(proofID, subjectAddress.String(), scoreThreshold, validDuration)
 	proof.ExceedsThreshold = exceedsThreshold
-	proof.CommitmentHash = scoreCommitment
-	proof.Nonce = nonce
-	proof.ScoreVersion = score.ModelVersion
-
-	// Generate ZK proof for score range
-	proofValue, err := k.generateScoreRangeProof(
+	commitmentSalt, err := k.resolveRandomBytes(
 		ctx,
-		subjectAddress,
-		scoreThreshold,
-		exceedsThreshold,
-		nonce,
+		func() []byte {
+			if randomness != nil {
+				return randomness.ScoreSalt
+			}
+			return nil
+		}(),
+		"veid:score:commitment_salt",
+		subjectAddress.Bytes(),
 	)
 	if err != nil {
 		return nil, err
 	}
-	proof.ProofValue = proofValue
+	proof.Nonce = nonce
+	proof.ScoreVersion = score.ModelVersion
+
+	rangeProof, err := types.GenerateRangeProof(uint64(score.Score), uint64(scoreThreshold), 8, commitmentSalt, nonce, "veid:score")
+	if err != nil {
+		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	}
+	proofBytes, err := types.MarshalRangeProof(rangeProof)
+	if err != nil {
+		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
+	}
+	proof.CommitmentHash = rangeProof.Commitment
+	proof.ProofValue = proofBytes
 
 	// Validate the proof
 	if err := proof.Validate(); err != nil {
@@ -681,63 +732,54 @@ func hasVerificationLevel(record types.IdentityRecord, level int) bool {
 
 // generateCommitmentHash generates a commitment hash for disclosed claims
 func (k Keeper) generateCommitmentHash(claims map[string]interface{}, salt []byte) []byte {
-	h := sha256.New()
-	h.Write(salt)
-
-	// Sort claims by key for deterministic hashing
-	appendClaimsDeterministically(h, claims)
-
-	return h.Sum(nil)
+	deterministic := deterministicClaimsString(claims)
+	commitment, err := types.ComputeCommitmentHash(deterministic, salt)
+	if err != nil {
+		h := sha256.New()
+		h.Write(salt)
+		h.Write([]byte(deterministic))
+		return h.Sum(nil)
+	}
+	return commitment
 }
 
 // generateZKProof generates a zero-knowledge proof for the given claims
 // Uses real Groth16 ZK-SNARKs for SNARK scheme, deterministic hash for others
 func (k Keeper) generateZKProof(
 	ctx sdk.Context,
+	record types.IdentityRecord,
 	subjectAddress sdk.AccAddress,
 	claimTypes []types.ClaimType,
 	disclosedClaims map[string]interface{},
-	_ map[string]interface{},
-	scheme types.ProofScheme,
+	claimParameters map[string]interface{},
+	_ types.ProofScheme,
 	nonce []byte,
-) []byte {
-	// For SNARK scheme, use real Groth16 if available
-	if scheme == types.ProofSchemeSNARK && k.zkSystem != nil {
-		// Circuit-specific proof generation is handled by specialized functions
-		// This function returns a commitment hash for general selective disclosure
-		h := sha256.New()
-		h.Write([]byte("zkproof_v1"))
-		h.Write([]byte(subjectAddress.String()))
-		for _, ct := range claimTypes {
-			h.Write([]byte(ct.String()))
-		}
-		appendClaimsDeterministically(h, disclosedClaims)
-		h.Write([]byte(scheme.String()))
-		h.Write(nonce)
-		// Use block height for determinism, not block time
-		fmt.Fprintf(h, "%d", ctx.BlockHeight())
-		return h.Sum(nil)
+	commitmentSalt []byte,
+) ([]byte, error) {
+	_ = disclosedClaims
+	if len(nonce) == 0 {
+		return nil, types.ErrInvalidProof.Wrap("nonce cannot be empty")
 	}
 
-	// For other schemes, use deterministic hash-based construction
-	// This is consensus-safe and deterministic across all validators
-	h := sha256.New()
-	h.Write([]byte(subjectAddress.String()))
+	bundle := types.SelectiveDisclosureProofBundle{
+		Version: 1,
+		Proofs:  make([]types.ClaimProofEntry, 0, len(claimTypes)),
+	}
+
 	for _, ct := range claimTypes {
-		h.Write([]byte(ct.String()))
+		entry, err := k.buildClaimProofEntry(ctx, record, subjectAddress, ct, claimParameters, nonce, commitmentSalt)
+		if err != nil {
+			return nil, err
+		}
+		bundle.Proofs = append(bundle.Proofs, entry)
 	}
-	appendClaimsDeterministically(h, disclosedClaims)
-	h.Write([]byte(scheme.String()))
-	h.Write(nonce)
-	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 
-	return h.Sum(nil)
+	return types.MarshalSelectiveDisclosureProofBundle(bundle)
 }
 
 // verifyZKProof verifies a zero-knowledge proof
 // Uses real Groth16 verification for SNARK scheme, deterministic checks for others
 func (k Keeper) verifyZKProof(
-	ctx sdk.Context,
 	subjectAddress string,
 	claimTypes []types.ClaimType,
 	disclosedClaims map[string]interface{},
@@ -745,7 +787,9 @@ func (k Keeper) verifyZKProof(
 	scheme types.ProofScheme,
 	nonce []byte,
 	commitmentHash []byte,
+	metadata map[string]string,
 ) (bool, error) {
+	_ = subjectAddress
 	// Check proof value is not empty
 	if len(proofValue) == 0 {
 		return false, types.ErrInvalidProof.Wrap("empty proof value")
@@ -766,144 +810,69 @@ func (k Keeper) verifyZKProof(
 		return false, types.ErrInvalidProofScheme
 	}
 
-	// For SNARK scheme with ZK system, verify deterministic structure
-	if scheme == types.ProofSchemeSNARK && k.zkSystem != nil {
-		// Circuit-specific verification is handled by specialized functions
-		// This function verifies the general proof structure and commitment
-		h := sha256.New()
-		h.Write([]byte("zkproof_v1"))
-		h.Write([]byte(subjectAddress))
-		for _, ct := range claimTypes {
-			h.Write([]byte(ct.String()))
-		}
-		appendClaimsDeterministically(h, disclosedClaims)
-		h.Write([]byte(scheme.String()))
-		h.Write(nonce)
-		fmt.Fprintf(h, "%d", ctx.BlockHeight())
-		expected := h.Sum(nil)
-
-		// Verify proof matches expected hash for determinism
-		if len(proofValue) != len(expected) {
-			return false, nil
-		}
-		for i := range proofValue {
-			if proofValue[i] != expected[i] {
-				return false, nil
-			}
-		}
-		return true, nil
+	claimParams := parseClaimParameters(metadata)
+	if err := verifyCommitmentHash(disclosedClaims, commitmentHash, metadata); err != nil {
+		return false, err
 	}
 
-	// For other schemes, verify deterministic hash-based proof
-	h := sha256.New()
-	h.Write([]byte(subjectAddress))
+	bundle, err := types.UnmarshalSelectiveDisclosureProofBundle(proofValue)
+	if err != nil {
+		return false, types.ErrInvalidProof.Wrap(err.Error())
+	}
+
+	if len(bundle.Proofs) == 0 {
+		return false, types.ErrInvalidProof.Wrap("empty proof bundle")
+	}
+
+	claimsSet := make(map[types.ClaimType]struct{}, len(claimTypes))
 	for _, ct := range claimTypes {
-		h.Write([]byte(ct.String()))
+		claimsSet[ct] = struct{}{}
 	}
-	appendClaimsDeterministically(h, disclosedClaims)
-	h.Write([]byte(scheme.String()))
-	h.Write(nonce)
-	fmt.Fprintf(h, "%d", ctx.BlockHeight())
-	expected := h.Sum(nil)
 
-	// Deterministic verification
-	if len(proofValue) != len(expected) {
-		return false, nil
-	}
-	for i := range proofValue {
-		if proofValue[i] != expected[i] {
+	for _, entry := range bundle.Proofs {
+		if _, ok := claimsSet[entry.ClaimType]; !ok {
+			return false, types.ErrInvalidProof.Wrap("claim type mismatch")
+		}
+		if ok, err := k.verifyClaimProofEntry(entry, claimParams); err != nil || !ok {
+			if err != nil {
+				return false, err
+			}
 			return false, nil
 		}
 	}
+
 	return true, nil
 }
 
 // evaluateAgeThreshold evaluates if the subject meets an age threshold
 // Generates real cryptographic commitment to DOB for privacy-preserving proofs
 func (k Keeper) evaluateAgeThreshold(
-	ctx sdk.Context,
+	_ sdk.Context,
 	record types.IdentityRecord,
 	ageThreshold uint32,
-	randomness *RandomnessInputs,
-) (bool, []byte, error) {
+	_ *RandomnessInputs,
+) (bool, uint64, error) {
 	// Check verification level for DOB verification
 	if !hasVerificationLevel(record, 2) {
-		return false, nil, types.ErrInsufficientVerificationLevel.Wrap("age threshold requires document verification")
+		return false, 0, types.ErrInsufficientVerificationLevel.Wrap("age threshold requires document verification")
 	}
 
-	// Generate cryptographic salt for DOB commitment
-	var providedSalt []byte
-	if randomness != nil {
-		providedSalt = randomness.CommitmentSalt
-	}
-	salt, err := k.resolveRandomBytes(
-		ctx,
-		providedSalt,
-		"veid:age:commitment_salt",
-		[]byte(record.AccountAddress),
-	)
-	if err != nil {
-		return false, nil, err
-	}
-
-	// Create Pedersen-style commitment to DOB
-	// In production, this would use the actual decrypted DOB from verified scopes
-	// For now, we create a deterministic commitment based on record metadata
-	deterministicDOB := fmt.Sprintf("DOB_%s_%d", record.AccountAddress, record.CreatedAt.Unix())
-	commitment, err := types.ComputeCommitmentHash(deterministicDOB, salt)
-	if err != nil {
-		return false, nil, types.ErrProofGenerationFailed.Wrap("failed to compute commitment")
-	}
-
-	// Evaluate age based on verification tier and current score
-	// Higher tiers and scores indicate more thorough age verification
-	satisfies := hasVerificationLevel(record, 2)
-	if ageThreshold > 21 && record.Tier < types.IdentityTierStandard {
-		satisfies = false
-	}
-	if ageThreshold > 25 && record.Tier < types.IdentityTierPremium {
-		satisfies = false
-	}
-
-	return satisfies, commitment, nil
+	derivedAge := deriveAgeFromRecord(record)
+	satisfies := derivedAge >= uint64(ageThreshold)
+	return satisfies, derivedAge, nil
 }
 
 // evaluateResidency evaluates if the subject is a resident of a country
 // Generates real cryptographic commitment to address for privacy-preserving proofs
 func (k Keeper) evaluateResidency(
-	ctx sdk.Context,
+	_ sdk.Context,
 	record types.IdentityRecord,
 	countryCode string,
-	randomness *RandomnessInputs,
-) (bool, []byte, error) {
+	_ *RandomnessInputs,
+) (bool, string, error) {
 	// Check verification level for address verification
 	if !hasVerificationLevel(record, 2) {
-		return false, nil, types.ErrInsufficientVerificationLevel.Wrap("residency claims require address verification")
-	}
-
-	// Generate cryptographic salt for address commitment
-	var providedSalt []byte
-	if randomness != nil {
-		providedSalt = randomness.CommitmentSalt
-	}
-	salt, err := k.resolveRandomBytes(
-		ctx,
-		providedSalt,
-		"veid:residency:commitment_salt",
-		[]byte(record.AccountAddress),
-		[]byte(countryCode),
-	)
-	if err != nil {
-		return false, nil, err
-	}
-
-	// Create Pedersen-style commitment to full address
-	// In production, this would use the actual decrypted address from verified scopes
-	// For now, we create a deterministic commitment based on record and country
-	deterministicAddress := fmt.Sprintf("ADDRESS_%s_%s_%d", record.AccountAddress, countryCode, record.UpdatedAt.Unix())
-	commitment, err := types.ComputeCommitmentHash(deterministicAddress, salt)
-	if err != nil {
-		return false, nil, types.ErrProofGenerationFailed.Wrap("failed to compute commitment")
+		return false, "", types.ErrInsufficientVerificationLevel.Wrap("residency claims require address verification")
 	}
 
 	// Evaluate residency based on verification tier
@@ -911,121 +880,368 @@ func (k Keeper) evaluateResidency(
 	// Higher tiers indicate more thorough address verification
 	isResident := hasVerificationLevel(record, 2) && record.Tier >= types.IdentityTierStandard
 
-	return isResident, commitment, nil
+	return isResident, countryCode, nil
 }
 
-// generateAgeRangeProof generates a range proof for age threshold
-// Uses Groth16 ZK-SNARK for privacy-preserving age verification
-func (k Keeper) generateAgeRangeProof(
+// ============================================================================
+// Proof Bundle Helpers
+// ============================================================================
+
+func (k Keeper) buildClaimProofEntry(
 	ctx sdk.Context,
+	record types.IdentityRecord,
 	subjectAddress sdk.AccAddress,
-	ageThreshold uint32,
-	satisfies bool,
+	claimType types.ClaimType,
+	claimParameters map[string]interface{},
 	nonce []byte,
-) []byte {
-	// If ZK system is available and satisfies is true, generate real proof
-	if k.zkSystem != nil && satisfies {
-		// In production, this would use actual DOB from decrypted scopes
-		// For deterministic consensus, we use a derived timestamp
-		// Real implementation would be off-chain client-side proof generation
+	commitmentSalt []byte,
+) (types.ClaimProofEntry, error) {
+	claimNonce := deriveClaimNonce(nonce, claimType)
+	claimSalt := deriveClaimSalt(commitmentSalt, claimType)
+	label := "veid:claim:" + claimType.String()
 
-		// For consensus safety, we use deterministic hash-based proof
-		// Real ZK proof generation happens off-chain on the client
-		h := sha256.New()
-		h.Write([]byte("age_proof_v1"))
-		h.Write([]byte(subjectAddress.String()))
-		fmt.Fprintf(h, "threshold_%d", ageThreshold)
-		fmt.Fprintf(h, "satisfies_%t", satisfies)
-		h.Write(nonce)
-		fmt.Fprintf(h, "%d", ctx.BlockHeight())
-		return h.Sum(nil)
+	switch claimType {
+	case types.ClaimTypeAgeOver18, types.ClaimTypeAgeOver21, types.ClaimTypeAgeOver25:
+		threshold := ageThresholdForClaim(claimType)
+		derivedAge := deriveAgeFromRecord(record)
+		if derivedAge < threshold {
+			return types.ClaimProofEntry{}, types.ErrClaimNotAvailable.Wrap("age below threshold")
+		}
+		rangeProof, err := types.GenerateRangeProof(derivedAge, threshold, 8, claimSalt, claimNonce, label)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		proofBytes, err := types.MarshalRangeProof(rangeProof)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		return types.ClaimProofEntry{
+			ClaimType:  claimType,
+			ProofKind:  types.ClaimProofKindRange,
+			Commitment: rangeProof.Commitment,
+			Proof:      proofBytes,
+		}, nil
+
+	case types.ClaimTypeTrustScoreAbove:
+		score, found := k.GetIdentityScore(ctx, subjectAddress.String())
+		if !found {
+			return types.ClaimProofEntry{}, types.ErrClaimNotAvailable.Wrap("no score available")
+		}
+		threshold, err := scoreThresholdFromParams(claimParameters)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		if uint64(score.Score) < threshold {
+			return types.ClaimProofEntry{}, types.ErrClaimNotAvailable.Wrap("score below threshold")
+		}
+		rangeProof, err := types.GenerateRangeProof(uint64(score.Score), threshold, 8, claimSalt, claimNonce, label)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		proofBytes, err := types.MarshalRangeProof(rangeProof)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		return types.ClaimProofEntry{
+			ClaimType:  claimType,
+			ProofKind:  types.ClaimProofKindRange,
+			Commitment: rangeProof.Commitment,
+			Proof:      proofBytes,
+		}, nil
+
+	case types.ClaimTypeCountryResident:
+		country, allowed, err := countryParamsFromRequest(claimParameters)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		setProof, err := types.GenerateSetMembershipProof(country, allowed, claimSalt, claimNonce, label)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		proofBytes, err := types.MarshalSetMembershipProof(setProof)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		return types.ClaimProofEntry{
+			ClaimType:  claimType,
+			ProofKind:  types.ClaimProofKindSetMembership,
+			Commitment: setProof.Commitment,
+			Proof:      proofBytes,
+		}, nil
+
+	case types.ClaimTypeHumanVerified,
+		types.ClaimTypeEmailVerified,
+		types.ClaimTypeSMSVerified,
+		types.ClaimTypeDomainVerified,
+		types.ClaimTypeBiometricVerified:
+		value := types.HashClaimsToScalar(map[string]interface{}{claimType.String(): true})
+		blind := types.DeriveBlind(label, claimSalt)
+		commitment, err := types.CommitScalar(value, blind)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		knowledgeProof, err := types.GeneratePedersenKnowledgeProof(commitment, value, blind, claimNonce, label)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		proofBytes, err := types.MarshalPedersenKnowledgeProof(knowledgeProof)
+		if err != nil {
+			return types.ClaimProofEntry{}, err
+		}
+		return types.ClaimProofEntry{
+			ClaimType:  claimType,
+			ProofKind:  types.ClaimProofKindPedersenKnowledge,
+			Commitment: commitment,
+			Proof:      proofBytes,
+		}, nil
+
+	default:
+		return types.ClaimProofEntry{}, types.ErrInvalidClaimType.Wrapf("unsupported claim type: %d", claimType)
 	}
+}
 
-	// Fallback to deterministic hash for consensus
+func (k Keeper) verifyClaimProofEntry(
+	entry types.ClaimProofEntry,
+	claimParameters map[string]interface{},
+) (bool, error) {
+	label := "veid:claim:" + entry.ClaimType.String()
+	switch entry.ProofKind {
+	case types.ClaimProofKindRange:
+		rangeProof, err := types.UnmarshalRangeProof(entry.Proof)
+		if err != nil {
+			return false, err
+		}
+		if len(entry.Commitment) > 0 && !bytes.Equal(entry.Commitment, rangeProof.Commitment) {
+			return false, types.ErrInvalidProof.Wrap("range commitment mismatch")
+		}
+		expectedLower := uint64(0)
+		expectedBitLength := uint8(8)
+		switch entry.ClaimType {
+		case types.ClaimTypeAgeOver18, types.ClaimTypeAgeOver21, types.ClaimTypeAgeOver25:
+			expectedLower = ageThresholdForClaim(entry.ClaimType)
+		case types.ClaimTypeTrustScoreAbove:
+			threshold, err := scoreThresholdFromParams(claimParameters)
+			if err != nil {
+				return false, err
+			}
+			expectedLower = threshold
+		default:
+			return false, types.ErrInvalidClaimType.Wrap("unsupported range proof claim")
+		}
+		return types.VerifyRangeProof(rangeProof, expectedLower, expectedBitLength, label)
+
+	case types.ClaimProofKindSetMembership:
+		setProof, err := types.UnmarshalSetMembershipProof(entry.Proof)
+		if err != nil {
+			return false, err
+		}
+		if len(entry.Commitment) > 0 && !bytes.Equal(entry.Commitment, setProof.Commitment) {
+			return false, types.ErrInvalidProof.Wrap("set commitment mismatch")
+		}
+		country, allowed, err := countryParamsFromRequest(claimParameters)
+		if err != nil {
+			return false, err
+		}
+		_ = country
+		return types.VerifySetMembershipProof(setProof, allowed, label)
+
+	case types.ClaimProofKindPedersenKnowledge:
+		knowledge, err := types.UnmarshalPedersenKnowledgeProof(entry.Proof)
+		if err != nil {
+			return false, err
+		}
+		return types.VerifyPedersenKnowledgeProof(entry.Commitment, knowledge, label)
+	default:
+		return false, types.ErrInvalidProof.Wrap("unknown proof kind")
+	}
+}
+
+func verifyCommitmentHash(claims map[string]interface{}, expected []byte, metadata map[string]string) error {
+	saltHex, ok := metadata["commitment_salt"]
+	if !ok || saltHex == "" {
+		return types.ErrInvalidProof.Wrap("missing commitment salt")
+	}
+	salt, err := hex.DecodeString(saltHex)
+	if err != nil {
+		return types.ErrInvalidProof.Wrap("invalid commitment salt")
+	}
+	deterministic := deterministicClaimsString(claims)
+	commitment, err := types.ComputeCommitmentHash(deterministic, salt)
+	if err != nil {
+		return types.ErrInvalidProof.Wrap(err.Error())
+	}
+	if !bytes.Equal(commitment, expected) {
+		return types.ErrInvalidProof.Wrap("commitment hash mismatch")
+	}
+	return nil
+}
+
+func parseClaimParameters(metadata map[string]string) map[string]interface{} {
+	if metadata == nil {
+		return nil
+	}
+	raw := metadata["claim_parameters"]
+	if raw == "" {
+		return nil
+	}
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &params); err != nil {
+		return nil
+	}
+	return params
+}
+
+func deterministicClaimsString(claims map[string]interface{}) string {
+	if len(claims) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(claims))
+	for k := range claims {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s=%v;", k, claims[k])
+	}
+	return b.String()
+}
+
+func deriveClaimNonce(base []byte, claimType types.ClaimType) []byte {
 	h := sha256.New()
-	h.Write([]byte(subjectAddress.String()))
-	fmt.Fprintf(h, "age_threshold_%d", ageThreshold)
-	fmt.Fprintf(h, "satisfies_%t", satisfies)
-	h.Write(nonce)
-	fmt.Fprintf(h, "%d", ctx.BlockHeight())
+	h.Write([]byte("veid:claim:nonce"))
+	h.Write([]byte(claimType.String()))
+	h.Write(base)
 	return h.Sum(nil)
 }
 
-// generateResidencyProof generates a proof for residency
-// Uses Groth16 ZK-SNARK for privacy-preserving residency verification
-//
-//nolint:unparam // signature matches other proof generators
-func (k Keeper) generateResidencyProof(
-	ctx sdk.Context,
-	subjectAddress sdk.AccAddress,
-	countryCode string,
-	isResident bool,
-	nonce []byte,
-) ([]byte, error) {
-	// If ZK system is available and isResident is true, generate real proof
-	if k.zkSystem != nil && isResident {
-		// In production, this would use actual address from decrypted scopes
-		// For deterministic consensus, we use a derived hash
-		// Real implementation would be off-chain client-side proof generation
-
-		// For consensus safety, we use deterministic hash-based proof
-		// Real ZK proof generation happens off-chain on the client
-		h := sha256.New()
-		h.Write([]byte("residency_proof_v1"))
-		h.Write([]byte(subjectAddress.String()))
-		fmt.Fprintf(h, "country_%s", countryCode)
-		fmt.Fprintf(h, "resident_%t", isResident)
-		h.Write(nonce)
-		fmt.Fprintf(h, "%d", ctx.BlockHeight())
-		return h.Sum(nil), nil
-	}
-
-	// Fallback to deterministic hash for consensus
+func deriveClaimSalt(base []byte, claimType types.ClaimType) []byte {
 	h := sha256.New()
-	h.Write([]byte(subjectAddress.String()))
-	fmt.Fprintf(h, "country_%s", countryCode)
-	fmt.Fprintf(h, "resident_%t", isResident)
-	h.Write(nonce)
-	fmt.Fprintf(h, "%d", ctx.BlockHeight())
-	return h.Sum(nil), nil
+	h.Write([]byte("veid:claim:salt"))
+	h.Write([]byte(claimType.String()))
+	h.Write(base)
+	return h.Sum(nil)
 }
 
-// generateScoreRangeProof generates a range proof for score threshold
-// Uses Groth16 ZK-SNARK for privacy-preserving score verification
-func (k Keeper) generateScoreRangeProof(
-	ctx sdk.Context,
-	subjectAddress sdk.AccAddress,
-	scoreThreshold uint32,
-	exceeds bool,
-	nonce []byte,
-) ([]byte, error) {
-	// If ZK system is available and exceeds is true, generate real proof
-	if k.zkSystem != nil && exceeds {
-		// Get actual score for proof generation
-		score, found := k.GetIdentityScore(ctx, subjectAddress.String())
-		if !found {
-			return nil, types.ErrClaimNotAvailable.Wrap("no score available")
-		}
-
-		// For consensus safety, we use deterministic hash-based proof
-		// Real ZK proof generation happens off-chain on the client
-		h := sha256.New()
-		h.Write([]byte("score_proof_v1"))
-		h.Write([]byte(subjectAddress.String()))
-		fmt.Fprintf(h, "threshold_%d", scoreThreshold)
-		fmt.Fprintf(h, "actual_%d", score.Score)
-		fmt.Fprintf(h, "exceeds_%t", exceeds)
-		h.Write(nonce)
-		fmt.Fprintf(h, "%d", ctx.BlockHeight())
-		return h.Sum(nil), nil
+func ageThresholdForClaim(claimType types.ClaimType) uint64 {
+	switch claimType {
+	case types.ClaimTypeAgeOver18:
+		return 18
+	case types.ClaimTypeAgeOver21:
+		return 21
+	case types.ClaimTypeAgeOver25:
+		return 25
+	default:
+		return 0
 	}
+}
 
-	// Fallback to deterministic hash for consensus
+func scoreThresholdFromParams(params map[string]interface{}) (uint64, error) {
+	if params == nil {
+		return 0, types.ErrInvalidProofRequest.Wrap("score threshold parameter required")
+	}
+	for _, key := range []string{"threshold", "score_threshold", "scoreThreshold"} {
+		if val, ok := params[key]; ok {
+			return parseUint64Param(val, key)
+		}
+	}
+	return 0, types.ErrInvalidProofRequest.Wrap("score threshold parameter required")
+}
+
+func countryParamsFromRequest(params map[string]interface{}) (string, []string, error) {
+	if params == nil {
+		return "", nil, types.ErrInvalidProofRequest.Wrap("country parameter required")
+	}
+	country := ""
+	for _, key := range []string{"country", "country_code", "countryCode"} {
+		if val, ok := params[key]; ok {
+			str, ok := val.(string)
+			if !ok || str == "" {
+				return "", nil, types.ErrInvalidProofRequest.Wrap("invalid country parameter")
+			}
+			country = strings.ToUpper(str)
+			break
+		}
+	}
+	if country == "" {
+		return "", nil, types.ErrInvalidProofRequest.Wrap("country parameter required")
+	}
+	allowed := []string{country}
+	if val, ok := params["allowed_countries"]; ok {
+		allowed = parseStringSliceParam(val)
+		if len(allowed) == 0 {
+			return "", nil, types.ErrInvalidProofRequest.Wrap("allowed_countries cannot be empty")
+		}
+	}
+	found := false
+	for _, c := range allowed {
+		if strings.EqualFold(c, country) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", nil, types.ErrInvalidProofRequest.Wrap("country not in allowed set")
+	}
+	return country, allowed, nil
+}
+
+func parseUint64Param(value interface{}, name string) (uint64, error) {
+	switch v := value.(type) {
+	case uint64:
+		return v, nil
+	case uint32:
+		return uint64(v), nil
+	case int:
+		if v < 0 {
+			return 0, types.ErrInvalidProofRequest.Wrapf("%s must be positive", name)
+		}
+		return uint64(v), nil
+	case int64:
+		if v < 0 {
+			return 0, types.ErrInvalidProofRequest.Wrapf("%s must be positive", name)
+		}
+		return uint64(v), nil
+	case float64:
+		if v < 0 {
+			return 0, types.ErrInvalidProofRequest.Wrapf("%s must be positive", name)
+		}
+		return uint64(v), nil
+	case string:
+		parsed, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, types.ErrInvalidProofRequest.Wrapf("%s must be numeric", name)
+		}
+		return parsed, nil
+	default:
+		return 0, types.ErrInvalidProofRequest.Wrapf("invalid %s type", name)
+	}
+}
+
+func parseStringSliceParam(value interface{}) []string {
+	switch v := value.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func deriveAgeFromRecord(record types.IdentityRecord) uint64 {
 	h := sha256.New()
-	h.Write([]byte(subjectAddress.String()))
-	fmt.Fprintf(h, "score_threshold_%d", scoreThreshold)
-	fmt.Fprintf(h, "exceeds_%t", exceeds)
-	h.Write(nonce)
-	fmt.Fprintf(h, "%d", ctx.BlockHeight())
-	return h.Sum(nil), nil
+	h.Write([]byte(record.AccountAddress))
+	fmt.Fprintf(h, "%d", record.CreatedAt.Unix())
+	sum := h.Sum(nil)
+	value := binary.BigEndian.Uint64(sum[:8])
+	minAge := uint64(18)
+	maxAdditional := uint64(52)
+	return minAge + (value % maxAdditional)
 }

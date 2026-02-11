@@ -13,6 +13,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -136,6 +138,7 @@ type Keeper struct {
 	skey             storetypes.StoreKey
 	cdc              codec.BinaryCodec
 	bankKeeper       BankKeeper
+	escrowKeeper     EscrowKeeper
 	billingKeeper    BillingKeeper
 	dexSwap          DexSwapExecutor
 	offRampBridge    OffRampBridge
@@ -152,10 +155,19 @@ type Keeper struct {
 // BankKeeper defines the expected bank keeper interface
 type BankKeeper interface {
 	SendCoins(ctx context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error
+	SendCoinsFromModuleToModule(ctx context.Context, senderModule string, recipientModule string, amt sdk.Coins) error
 	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
 	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
 	SpendableCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
 	GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin
+}
+
+// EscrowKeeper defines the subset of escrow keeper functionality used by settlement.
+type EscrowKeeper interface {
+	AccountCreate(ctx sdk.Context, id escrowid.Account, owner sdk.AccAddress, deposits []etypes.Depositor) error
+	AccountDeposit(ctx sdk.Context, id escrowid.Account, deposits []etypes.Depositor) error
+	GetAccount(ctx sdk.Context, id escrowid.Account) (etypes.Account, error)
+	SaveAccount(ctx sdk.Context, account etypes.Account) error
 }
 
 // EncryptionKeeper defines the expected encryption keeper interface.
@@ -165,11 +177,12 @@ type EncryptionKeeper interface {
 }
 
 // NewKeeper creates and returns an instance for settlement keeper
-func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string, encryptionKeeper EncryptionKeeper) Keeper {
+func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, escrowKeeper EscrowKeeper, authority string, encryptionKeeper EncryptionKeeper) Keeper {
 	keeper := Keeper{
 		cdc:              cdc,
 		skey:             skey,
 		bankKeeper:       bankKeeper,
+		escrowKeeper:     escrowKeeper,
 		billingKeeper:    nil,
 		dexSwap:          nil,
 		offRampBridge:    nil,

@@ -136,20 +136,66 @@ export class AgentEndpoint {
    * Start the HTTP server.
    * @returns {Promise<void>}
    */
-  start() {
-    if (this._running) return Promise.resolve();
+  async start() {
+    if (this._running) return;
 
+    const MAX_PORT_RETRIES = 5;
+    let lastErr;
+
+    for (let attempt = 0; attempt < MAX_PORT_RETRIES; attempt++) {
+      const port = this._port + attempt;
+      try {
+        await this._tryListen(port);
+        this._port = port; // update in case we incremented
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (err.code === "EADDRINUSE") {
+          console.warn(
+            `${TAG} Port ${port} in use (attempt ${attempt + 1}/${MAX_PORT_RETRIES}), trying to free it...`,
+          );
+          // Try to kill the process holding the port (Windows)
+          await this._killProcessOnPort(port);
+          // Retry same port once after kill
+          try {
+            await this._tryListen(port);
+            this._port = port;
+            return;
+          } catch (retryErr) {
+            if (retryErr.code === "EADDRINUSE") {
+              console.warn(`${TAG} Port ${port} still in use after kill, trying next port`);
+              continue;
+            }
+            throw retryErr;
+          }
+        }
+        throw err;
+      }
+    }
+
+    // All retries exhausted — start without endpoint (non-fatal)
+    console.error(
+      `${TAG} Could not bind to any port after ${MAX_PORT_RETRIES} attempts: ${lastErr?.message}`,
+    );
+    console.warn(`${TAG} Running WITHOUT agent endpoint — agents can still work via poll-based completion`);
+  }
+
+  /**
+   * Attempt to listen on a specific port. Returns a promise.
+   * @param {number} port
+   * @returns {Promise<void>}
+   */
+  _tryListen(port) {
     return new Promise((resolveStart, rejectStart) => {
-      this._server = createServer((req, res) => this._handleRequest(req, res));
+      const server = createServer((req, res) => this._handleRequest(req, res));
+      server.setTimeout(REQUEST_TIMEOUT_MS);
 
-      this._server.setTimeout(REQUEST_TIMEOUT_MS);
-
-      this._server.on("timeout", (socket) => {
+      server.on("timeout", (socket) => {
         console.log(`${TAG} Request timed out, destroying socket`);
         socket.destroy();
       });
 
-      this._server.on("error", (err) => {
+      server.on("error", (err) => {
         if (!this._running) {
           rejectStart(err);
         } else {
@@ -157,14 +203,50 @@ export class AgentEndpoint {
         }
       });
 
-      this._server.listen(this._port, "127.0.0.1", () => {
+      server.listen(port, "127.0.0.1", () => {
+        this._server = server;
         this._running = true;
         this._startedAt = Date.now();
-        console.log(`${TAG} Listening on 127.0.0.1:${this._port}`);
+        console.log(`${TAG} Listening on 127.0.0.1:${port}`);
         this._writePortFile();
         resolveStart();
       });
     });
+  }
+
+  /**
+   * Attempt to kill whatever process is holding a port (Windows netstat+taskkill).
+   * @param {number} port
+   * @returns {Promise<void>}
+   */
+  async _killProcessOnPort(port) {
+    try {
+      const { execSync } = await import("node:child_process");
+      // Find PID holding the port on Windows
+      const output = execSync(
+        `netstat -ano | findstr ":${port}"`,
+        { encoding: "utf8", timeout: 5000 },
+      ).trim();
+      const lines = output.split("\n").filter((l) => l.includes("LISTENING"));
+      const pids = new Set();
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && /^\d+$/.test(pid) && pid !== String(process.pid)) {
+          pids.add(pid);
+        }
+      }
+      for (const pid of pids) {
+        console.log(`${TAG} Killing stale process PID ${pid} on port ${port}`);
+        try {
+          execSync(`taskkill /F /PID ${pid}`, { encoding: "utf8", timeout: 5000 });
+        } catch { /* may already be dead */ }
+      }
+      // Give OS time to release the port
+      await new Promise((r) => setTimeout(r, 1000));
+    } catch {
+      // netstat/taskkill may fail on non-Windows or if port already free
+    }
   }
 
   /**
