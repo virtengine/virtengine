@@ -1,17 +1,16 @@
 # VirtEngine Progress
 
-Last updated: 2026-02-10
-Status: Deep codebase audit + backlog quality overhaul
+Last updated: 2026-02-11
+Status: Backlog expansion + post-merge gap verification (PR #672)
 
 ## Inputs reviewed
 
 - \_docs/ralph/ralph_patent_text.txt (AU 2024203136 A1 — 2121 lines)
-- Full source code analysis via 3 parallel subagent domains:
-  - Domain 1: Chain modules (`x/` — all 25+ modules)
-  - Domain 2: Provider daemon (`pkg/provider_daemon/` — all 15+ files)
-  - Domain 3: Portal/SDK/App wiring (`portal/`, `sdk/ts/`, `app/`, simulation modules)
-- vibe-kanban backlog: 53 todo + 18 done tasks
-- \_docs/KANBAN_SPLIT_TRACKER.md (34 secondary kanban tasks)
+- Git history (latest 20 commits + PR #672 merge)
+- Open issues list (security meta + outstanding dependency remediation)
+- Targeted codebase scan for TODO/placeholder/stub markers across `x/`, `pkg/`, `app/`, `cmd/`
+- vibe-kanban backlog snapshot (todo/inprogress/done, created_at timestamps)
+- \_docs/KANBAN_SPLIT_TRACKER.md (secondary kanban tasks to avoid duplicating)
 - Prior progress.md (2026-02-10 baseline)
 
 ## Completed Tasks (18 done)
