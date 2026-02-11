@@ -1,13 +1,20 @@
+// @vitest-environment jsdom
 /**
  * Component Tests
  * VE-210: Unit tests for React capture components
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import { CaptureGuidance } from '../components/CaptureGuidance';
 import { QualityFeedback, QualityIndicator } from '../components/QualityFeedback';
 import type { GuidanceState, QualityCheckResult } from '../types/capture';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock guidance state
 const mockGuidanceReady: GuidanceState = {

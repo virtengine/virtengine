@@ -8,7 +8,13 @@
 
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  readFileSync,
+  existsSync,
+  appendFileSync,
+  mkdirSync,
+  writeFileSync,
+} from "node:fs";
 import { execSync, spawnSync } from "node:child_process";
 import {
   getKanbanAdapter,
@@ -31,7 +37,11 @@ import {
   releaseWorktree,
   getWorktreeStats,
 } from "./worktree-manager.mjs";
-import { loadConfig } from "./config.mjs";
+import {
+  loadConfig,
+  ExecutorScheduler,
+  loadExecutorConfig,
+} from "./config.mjs";
 import {
   loadStore as loadTaskStore,
   setTaskStatus as setInternalStatus,
@@ -44,6 +54,11 @@ import {
   getTask as getInternalTask,
 } from "./task-store.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
+import {
+  resolveExecutorForTask,
+  executorToSdk,
+  formatComplexityDecision,
+} from "./task-complexity.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -54,7 +69,11 @@ const GRACEFUL_SHUTDOWN_MS = 30_000; // 30 seconds
 const MAX_NO_COMMIT_ATTEMPTS = 3; // Stop picking up a task after N consecutive no-commit completions
 const NO_COMMIT_COOLDOWN_BASE_MS = 15 * 60 * 1000; // 15 minutes base cooldown for no-commit
 const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours max cooldown
-const NO_COMMIT_STATE_FILE = resolve(dirname(fileURLToPath(import.meta.url)), ".cache", "no-commit-state.json");
+const NO_COMMIT_STATE_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".cache",
+  "no-commit-state.json",
+);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -74,12 +93,22 @@ function createAgentLogStreamer(taskId, taskTitle) {
   const logFile = resolve(AGENT_LOGS_DIR, `agent-${shortId}.log`);
 
   // Ensure log dir exists
-  try { mkdirSync(AGENT_LOGS_DIR, { recursive: true }); } catch { /* ok */ }
+  try {
+    mkdirSync(AGENT_LOGS_DIR, { recursive: true });
+  } catch {
+    /* ok */
+  }
 
   // Write header
   try {
-    appendFileSync(logFile, `\n${"=".repeat(80)}\n[${new Date().toISOString()}] Task: ${taskTitle}\nTask ID: ${taskId}\n${"=".repeat(80)}\n`, "utf8");
-  } catch { /* ok */ }
+    appendFileSync(
+      logFile,
+      `\n${"=".repeat(80)}\n[${new Date().toISOString()}] Task: ${taskTitle}\nTask ID: ${taskId}\n${"=".repeat(80)}\n`,
+      "utf8",
+    );
+  } catch {
+    /* ok */
+  }
 
   return (event) => {
     try {
@@ -87,23 +116,41 @@ function createAgentLogStreamer(taskId, taskTitle) {
       if (event.type === "item.completed" && event.item) {
         const item = event.item;
         if (item.type === "agent_message" && item.text) {
-          appendFileSync(logFile, `[${ts}] AGENT: ${item.text.slice(0, 2000)}\n`, "utf8");
+          appendFileSync(
+            logFile,
+            `[${ts}] AGENT: ${item.text.slice(0, 2000)}\n`,
+            "utf8",
+          );
         } else if (item.type === "function_call") {
-          appendFileSync(logFile, `[${ts}] TOOL: ${item.name}(${(item.arguments || "").slice(0, 200)})\n`, "utf8");
+          appendFileSync(
+            logFile,
+            `[${ts}] TOOL: ${item.name}(${(item.arguments || "").slice(0, 200)})\n`,
+            "utf8",
+          );
         } else if (item.type === "function_call_output") {
           const out = (item.output || "").slice(0, 500);
           appendFileSync(logFile, `[${ts}] RESULT: ${out}\n`, "utf8");
         } else {
-          appendFileSync(logFile, `[${ts}] ITEM[${item.type}]: ${JSON.stringify(item).slice(0, 300)}\n`, "utf8");
+          appendFileSync(
+            logFile,
+            `[${ts}] ITEM[${item.type}]: ${JSON.stringify(item).slice(0, 300)}\n`,
+            "utf8",
+          );
         }
       } else if (event.type === "item.created") {
         const item = event.item || {};
-        appendFileSync(logFile, `[${ts}] +${item.type || event.type}\n`, "utf8");
+        appendFileSync(
+          logFile,
+          `[${ts}] +${item.type || event.type}\n`,
+          "utf8",
+        );
       } else if (event.type) {
         // Log any other event type for debugging
         appendFileSync(logFile, `[${ts}] EVT[${event.type}]\n`, "utf8");
       }
-    } catch { /* never let logging crash the agent */ }
+    } catch {
+      /* never let logging crash the agent */
+    }
   };
 }
 
@@ -197,6 +244,19 @@ class TaskExecutor {
     this.onTaskFailed = merged.onTaskFailed;
     this.sendTelegram = merged.sendTelegram;
 
+    // Initialize executor scheduler for per-task SDK routing
+    /** @type {ExecutorScheduler|null} */
+    this._executorScheduler = null;
+    try {
+      const execConfig = loadExecutorConfig(
+        merged.repoRoot || process.cwd(),
+        null,
+      );
+      this._executorScheduler = new ExecutorScheduler(execConfig);
+    } catch {
+      // Executor config not available — fall back to sdk field
+    }
+
     /** @type {Map<string, SlotInfo>} */
     this._activeSlots = new Map();
     /** @type {Map<string, number>} taskId → timestamp */
@@ -226,12 +286,14 @@ class TaskExecutor {
     this._errorDetector = createErrorDetector({
       sendTelegram: this.sendTelegram,
       onErrorDetected: (taskId, classification) => {
-        console.log(`${TAG} error detected for ${taskId}: ${classification.pattern} (${classification.confidence.toFixed(2)})`);
+        console.log(
+          `${TAG} error detected for ${taskId}: ${classification.pattern} (${classification.confidence.toFixed(2)})`,
+        );
       },
     });
 
     console.log(
-      `${TAG} initialized (mode=${this.mode}, maxParallel=${this.maxParallel}, sdk=${this.sdk})`
+      `${TAG} initialized (mode=${this.mode}, maxParallel=${this.maxParallel}, sdk=${this.sdk})`,
     );
   }
 
@@ -261,7 +323,9 @@ class TaskExecutor {
               this._prCreatedForBranch.add(id);
             }
           }
-          console.log(`${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`);
+          console.log(
+            `${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`,
+          );
         }
       }
     } catch (err) {
@@ -281,7 +345,11 @@ class TaskExecutor {
         prCreatedForBranch: Array.from(this._prCreatedForBranch),
         savedAt: new Date().toISOString(),
       };
-      writeFileSync(NO_COMMIT_STATE_FILE, JSON.stringify(data, null, 2), "utf8");
+      writeFileSync(
+        NO_COMMIT_STATE_FILE,
+        JSON.stringify(data, null, 2),
+        "utf8",
+      );
     } catch (err) {
       console.warn(`${TAG} failed to save anti-thrash state: ${err.message}`);
     }
@@ -294,7 +362,11 @@ class TaskExecutor {
    */
   start() {
     // Load internal task store
-    try { loadTaskStore(); } catch (err) { console.warn(`${TAG} task store load warning: ${err.message}`); }
+    try {
+      loadTaskStore();
+    } catch (err) {
+      console.warn(`${TAG} task store load warning: ${err.message}`);
+    }
     // Restore anti-thrash state from disk
     this._loadNoCommitState();
 
@@ -304,12 +376,17 @@ class TaskExecutor {
       console.log(`${TAG} cleaned up ${pruned} stale agent threads on startup`);
     }
 
+    // Recover orphaned worktrees from prior runs (async, non-blocking)
+    this._recoverOrphanedWorktrees().catch((err) => {
+      console.warn(`${TAG} orphan recovery failed: ${err.message}`);
+    });
+
     this._running = true;
     // Fire first poll immediately
     this._pollLoop();
     this._pollTimer = setInterval(() => this._pollLoop(), this.pollIntervalMs);
     console.log(
-      `${TAG} started — polling every ${this.pollIntervalMs / 1000}s for up to ${this.maxParallel} parallel tasks`
+      `${TAG} started — polling every ${this.pollIntervalMs / 1000}s for up to ${this.maxParallel} parallel tasks`,
     );
   }
 
@@ -326,7 +403,9 @@ class TaskExecutor {
 
     const activeCount = this._activeSlots.size;
     if (activeCount > 0) {
-      console.log(`${TAG} stopping — waiting for ${activeCount} active task(s) to finish (${GRACEFUL_SHUTDOWN_MS / 1000}s grace)...`);
+      console.log(
+        `${TAG} stopping — waiting for ${activeCount} active task(s) to finish (${GRACEFUL_SHUTDOWN_MS / 1000}s grace)...`,
+      );
       const deadline = Date.now() + GRACEFUL_SHUTDOWN_MS;
       while (this._activeSlots.size > 0 && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 1000));
@@ -334,6 +413,150 @@ class TaskExecutor {
     }
 
     console.log(`${TAG} stopped (${this._activeSlots.size} tasks were active)`);
+  }
+
+  /**
+   * Scan worktrees from prior runs for uncommitted/unpushed work.
+   * Attempts to commit, push, and create PRs for any orphaned work.
+   * @returns {Promise<void>}
+   */
+  async _recoverOrphanedWorktrees() {
+    const worktreeDir = resolve(this.repoRoot, ".cache", "worktrees");
+    if (!existsSync(worktreeDir)) return;
+
+    const { readdirSync, statSync } = await import("node:fs");
+    let dirs;
+    try {
+      dirs = readdirSync(worktreeDir);
+    } catch {
+      return;
+    }
+
+    let recovered = 0;
+    let skipped = 0;
+
+    for (const dirName of dirs) {
+      // Only process ve-<taskid>-* directories
+      const match = dirName.match(/^ve-([a-f0-9]{8})-/);
+      if (!match) continue;
+
+      const taskIdPrefix = match[1];
+      const wtPath = resolve(worktreeDir, dirName);
+
+      try {
+        const stat = statSync(wtPath);
+        if (!stat.isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      // Skip worktrees that are actively being used
+      const isActive = [...this._activeSlots.values()].some(
+        (s) => s.worktreePath && s.worktreePath.includes(dirName),
+      );
+      if (isActive) continue;
+
+      // Check for uncommitted changes
+      let hasChanges = false;
+      let branch = "";
+      try {
+        const status = execSync("git status --porcelain", {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 10000,
+        }).trim();
+        hasChanges = status.length > 0;
+
+        branch = execSync("git branch --show-current", {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 5000,
+        }).trim();
+      } catch {
+        continue; // Broken worktree, skip
+      }
+
+      if (!branch || !branch.startsWith("ve/")) continue;
+
+      // Check if we already created a PR for this branch
+      if (this._prCreatedForBranch.has(taskIdPrefix)) {
+        skipped++;
+        continue;
+      }
+
+      // Check for uncommitted changes OR unpushed commits
+      let hasUnpushed = false;
+      try {
+        const unpushed = execSync(`git log origin/main..HEAD --oneline`, {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 10000,
+        }).trim();
+        hasUnpushed = unpushed.length > 0;
+      } catch {
+        // No upstream tracking, that's ok
+      }
+
+      if (!hasChanges && !hasUnpushed) {
+        skipped++;
+        continue;
+      }
+
+      console.log(
+        `${TAG} [orphan-recovery] Found orphaned work in ${dirName}: ` +
+        `${hasChanges ? "uncommitted changes" : ""}${hasChanges && hasUnpushed ? " + " : ""}` +
+        `${hasUnpushed ? "unpushed commits" : ""} on branch ${branch}`,
+      );
+
+      // Commit uncommitted changes
+      if (hasChanges) {
+        try {
+          execSync("git add -A", { cwd: wtPath, timeout: 15000 });
+          execSync(
+            `git commit -m "feat: auto-commit orphaned agent work" --no-verify`,
+            { cwd: wtPath, timeout: 15000 },
+          );
+          console.log(`${TAG} [orphan-recovery] Committed changes in ${dirName}`);
+        } catch (err) {
+          console.warn(
+            `${TAG} [orphan-recovery] Failed to commit in ${dirName}: ${err.message}`,
+          );
+          continue;
+        }
+      }
+
+      // Build a minimal task object for _createPR
+      const taskObj = {
+        id: taskIdPrefix,
+        title: branch.replace("ve/", "").replace(/-/g, " ").substring(9), // Remove UUID prefix
+        description: "Auto-recovered from orphaned worktree",
+        branchName: branch,
+      };
+
+      // Try to create PR
+      try {
+        const prResult = await this._createPR(taskObj, wtPath, {
+          agentMadeNewCommits: true,
+        });
+        if (prResult) {
+          console.log(
+            `${TAG} [orphan-recovery] PR created for ${dirName}: ${prResult}`,
+          );
+          this._prCreatedForBranch.add(taskIdPrefix);
+          recovered++;
+        }
+      } catch (err) {
+        console.warn(
+          `${TAG} [orphan-recovery] PR creation failed for ${dirName}: ${err.message}`,
+        );
+      }
+    }
+
+    if (recovered > 0 || skipped > 0) {
+      console.log(
+        `${TAG} [orphan-recovery] complete: ${recovered} recovered, ${skipped} skipped`,
+      );
+    }
   }
 
   /**
@@ -424,19 +647,28 @@ class TaskExecutor {
             const projects = await listProjects();
             if (projects && projects.length > 0) {
               // Match by PROJECT_NAME if set, otherwise fall back to first project
-              const wantName = (process.env.PROJECT_NAME || process.env.VK_PROJECT_NAME || "").toLowerCase();
+              const wantName = (
+                process.env.PROJECT_NAME ||
+                process.env.VK_PROJECT_NAME ||
+                ""
+              ).toLowerCase();
               let matched;
               if (wantName) {
                 matched = projects.find(
-                  (p) => (p.name || p.title || "").toLowerCase() === wantName
+                  (p) => (p.name || p.title || "").toLowerCase() === wantName,
                 );
               }
               if (matched) {
                 this._resolvedProjectId = matched.id || matched.project_id;
-                console.log(`${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`);
+                console.log(
+                  `${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`,
+                );
               } else {
-                this._resolvedProjectId = projects[0].id || projects[0].project_id;
-                console.log(`${TAG} auto-detected project (first): ${this._resolvedProjectId}`);
+                this._resolvedProjectId =
+                  projects[0].id || projects[0].project_id;
+                console.log(
+                  `${TAG} auto-detected project (first): ${this._resolvedProjectId}`,
+                );
               }
             } else {
               console.warn(`${TAG} no projects found — skipping poll`);
@@ -463,7 +695,9 @@ class TaskExecutor {
         const before = tasks.length;
         tasks = tasks.filter((t) => t.status === "todo");
         if (tasks.length !== before) {
-          console.debug(`${TAG} filtered ${before - tasks.length} non-todo tasks (VK returned ${before}, kept ${tasks.length})`);
+          console.debug(
+            `${TAG} filtered ${before - tasks.length} non-todo tasks (VK returned ${before}, kept ${tasks.length})`,
+          );
         }
       }
 
@@ -508,7 +742,9 @@ class TaskExecutor {
         task.id = task.id || task.task_id;
         // Fire and forget — executeTask handles its own lifecycle
         this.executeTask(task).catch((err) => {
-          console.error(`${TAG} unhandled error in executeTask for "${task.title}": ${err.message}`);
+          console.error(
+            `${TAG} unhandled error in executeTask for "${task.title}": ${err.message}`,
+          );
         });
       }
     } catch (err) {
@@ -534,7 +770,36 @@ class TaskExecutor {
       task.meta?.branch_name ||
       `ve/${taskId.substring(0, 8)}-${slugify(taskTitle)}`;
 
-    // 1. Allocate slot
+    // 1. Resolve executor profile and SDK for this task
+    let resolvedSdk = this.sdk;
+    let executorProfile = null;
+    let complexityInfo = null;
+
+    if (this.sdk === "auto" && this._executorScheduler) {
+      // Pick executor profile from scheduler (weighted/round-robin/primary)
+      const baseProfile = this._executorScheduler.next();
+      // Resolve optimal model based on task complexity
+      const resolved = resolveExecutorForTask(task, baseProfile);
+      executorProfile = resolved;
+      complexityInfo = resolved.complexity;
+      // Map executor type to SDK name
+      resolvedSdk = executorToSdk(resolved.executor);
+      console.log(
+        `${TAG} task "${taskTitle}" → ${formatComplexityDecision(resolved)} → sdk=${resolvedSdk}`,
+      );
+    } else if (this.sdk !== "auto") {
+      resolvedSdk = this.sdk;
+    } else {
+      resolvedSdk = getPoolSdkName();
+    }
+
+    // Set model-related env vars for the agent if complexity routing produced them
+    if (executorProfile?.model && resolvedSdk === "claude") {
+      // Set CLAUDE_MODEL for the claude-shell / claude agent-pool launcher
+      process.env.CLAUDE_MODEL = executorProfile.model;
+    }
+
+    // 1b. Allocate slot
     /** @type {SlotInfo} */
     const slot = {
       taskId,
@@ -543,9 +808,11 @@ class TaskExecutor {
       worktreePath: null,
       threadKey: taskId,
       startedAt: Date.now(),
-      sdk: this.sdk === "auto" ? getPoolSdkName() : this.sdk,
+      sdk: resolvedSdk,
       attempt: 0,
       status: "running",
+      executorProfile: executorProfile || null,
+      complexity: complexityInfo || null,
     };
     this._activeSlots.set(taskId, slot);
 
@@ -559,7 +826,11 @@ class TaskExecutor {
         console.warn(`${TAG} failed to set task to inprogress: ${err.message}`);
       }
       // Mirror to internal store
-      try { setInternalStatus(taskId, "inprogress", "task-executor"); } catch { /* best-effort */ }
+      try {
+        setInternalStatus(taskId, "inprogress", "task-executor");
+      } catch {
+        /* best-effort */
+      }
 
       // 3. Acquire worktree
       let wt;
@@ -569,48 +840,69 @@ class TaskExecutor {
           baseBranch: "main",
         });
       } catch (err) {
-        console.error(`${TAG} worktree acquisition failed for "${taskTitle}": ${err.message}`);
+        console.error(
+          `${TAG} worktree acquisition failed for "${taskTitle}": ${err.message}`,
+        );
         this._taskCooldowns.set(taskId, Date.now());
         try {
           await updateTaskStatus(taskId, "todo");
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
         this._activeSlots.delete(taskId);
-        this.onTaskFailed?.(task, new Error(`Worktree acquisition failed: ${err.message}`));
+        this.onTaskFailed?.(
+          task,
+          new Error(`Worktree acquisition failed: ${err.message}`),
+        );
         return;
       }
 
       if (!wt || !wt.path || !existsSync(wt.path)) {
-        console.error(`${TAG} worktree path invalid for "${taskTitle}": ${wt?.path}`);
+        console.error(
+          `${TAG} worktree path invalid for "${taskTitle}": ${wt?.path}`,
+        );
         this._taskCooldowns.set(taskId, Date.now());
         try {
           await releaseWorktree(taskId);
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
         try {
           await updateTaskStatus(taskId, "todo");
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
         this._activeSlots.delete(taskId);
-        this.onTaskFailed?.(task, new Error("Worktree path invalid or missing"));
+        this.onTaskFailed?.(
+          task,
+          new Error("Worktree path invalid or missing"),
+        );
         return;
       }
 
       slot.worktreePath = wt.path;
 
       // 4. Record pre-execution HEAD hash (to detect if agent made NEW commits)
-      const preExecHead = spawnSync("git", ["rev-parse", "HEAD"], {
-        cwd: wt.path, encoding: "utf8", timeout: 5000,
-      }).stdout?.trim() || "";
+      const preExecHead =
+        spawnSync("git", ["rev-parse", "HEAD"], {
+          cwd: wt.path,
+          encoding: "utf8",
+          timeout: 5000,
+        }).stdout?.trim() || "";
 
       // 5. Build prompt
       const prompt = this._buildTaskPrompt(task, wt.path);
 
       // 6. Execute agent
-      console.log(`${TAG} executing task "${taskTitle}" in ${wt.path} on branch ${branch}`);
+      console.log(
+        `${TAG} executing task "${taskTitle}" in ${wt.path} on branch ${branch} (sdk=${resolvedSdk})`,
+      );
       const result = await execWithRetry(prompt, {
         taskKey: taskId,
         cwd: wt.path,
         timeoutMs: this.taskTimeoutMs,
         maxRetries: this.maxRetries,
-        sdk: this.sdk !== "auto" ? this.sdk : undefined,
+        sdk: resolvedSdk !== "auto" ? resolvedSdk : undefined,
         buildRetryPrompt: (lastResult, attempt) =>
           this._buildRetryPrompt(task, lastResult, attempt),
         onEvent: createAgentLogStreamer(taskId, taskTitle),
@@ -620,16 +912,33 @@ class TaskExecutor {
       task._executionResult = result;
 
       // Record post-execution HEAD hash
-      const postExecHead = spawnSync("git", ["rev-parse", "HEAD"], {
-        cwd: wt.path, encoding: "utf8", timeout: 5000,
-      }).stdout?.trim() || "";
-      const agentMadeNewCommits = preExecHead && postExecHead && preExecHead !== postExecHead;
+      const postExecHead =
+        spawnSync("git", ["rev-parse", "HEAD"], {
+          cwd: wt.path,
+          encoding: "utf8",
+          timeout: 5000,
+        }).stdout?.trim() || "";
+      const agentMadeNewCommits =
+        preExecHead && postExecHead && preExecHead !== postExecHead;
 
       // 7. Handle result
       slot.status = result.success ? "completing" : "failed";
-      await this._handleTaskResult(task, result, wt.path, { agentMadeNewCommits, preExecHead, postExecHead });
+      await this._handleTaskResult(task, result, wt.path, {
+        agentMadeNewCommits,
+        preExecHead,
+        postExecHead,
+      });
 
-      // 7. Cleanup
+      // 7a. Feed back success/failure to executor scheduler for failover tracking
+      if (this._executorScheduler && executorProfile?.name) {
+        if (result.success) {
+          this._executorScheduler.recordSuccess(executorProfile.name);
+        } else {
+          this._executorScheduler.recordFailure(executorProfile.name);
+        }
+      }
+
+      // 8. Cleanup
       try {
         await releaseWorktree(taskId);
       } catch (err) {
@@ -638,21 +947,27 @@ class TaskExecutor {
       this._activeSlots.delete(taskId);
     } catch (err) {
       // Catch-all: ensure slot is always cleaned up
-      console.error(`${TAG} fatal error executing task "${taskTitle}": ${err.message}`);
+      console.error(
+        `${TAG} fatal error executing task "${taskTitle}": ${err.message}`,
+      );
       slot.status = "failed";
       this._taskCooldowns.set(taskId, Date.now());
 
       try {
         await updateTaskStatus(taskId, "todo");
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
       try {
         await releaseWorktree(taskId);
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
 
       this._activeSlots.delete(taskId);
       this.onTaskFailed?.(task, err);
       this.sendTelegram?.(
-        `❌ Task executor error: "${taskTitle}" — ${(err.message || "").slice(0, 200)}`
+        `❌ Task executor error: "${taskTitle}" — ${(err.message || "").slice(0, 200)}`,
       );
     }
   }
@@ -681,7 +996,8 @@ class TaskExecutor {
       `# Task: ${task.title}`,
       ``,
       `## Description`,
-      task.description || "No description provided. Check the task URL for details.",
+      task.description ||
+        "No description provided. Check the task URL for details.",
       ``,
       `## Environment`,
       `- Working Directory: ${worktreePath}`,
@@ -746,13 +1062,13 @@ class TaskExecutor {
     // Check for plan-stuck pattern
     const classification = this._errorDetector.classify(
       lastResult?.output || "",
-      lastResult?.error || ""
+      lastResult?.error || "",
     );
 
     if (classification.pattern === "plan_stuck") {
       return this._errorDetector.getPlanStuckRecoveryPrompt(
         task.title,
-        lastResult?.output || ""
+        lastResult?.output || "",
       );
     }
 
@@ -766,7 +1082,10 @@ class TaskExecutor {
       ``,
       `Your previous attempt on task "${task.title}" encountered an issue:`,
       "```",
-      (lastResult?.error || lastResult?.output || "(unknown error)").slice(0, 3000),
+      (lastResult?.error || lastResult?.output || "(unknown error)").slice(
+        0,
+        3000,
+      ),
       "```",
       ``,
       `Error classification: ${classification.pattern} (confidence: ${classification.confidence.toFixed(2)})`,
@@ -790,7 +1109,10 @@ class TaskExecutor {
    */
   _getRepoContext() {
     const now = Date.now();
-    if (this._contextCache && now - this._contextCacheTime < CONTEXT_CACHE_TTL) {
+    if (
+      this._contextCache &&
+      now - this._contextCacheTime < CONTEXT_CACHE_TTL
+    ) {
       return this._contextCache;
     }
 
@@ -806,9 +1128,10 @@ class TaskExecutor {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, "utf8");
           // Truncate to 4000 chars to keep prompt reasonable
-          const truncated = content.length > 4000
-            ? content.slice(0, 4000) + "\n...(truncated)"
-            : content;
+          const truncated =
+            content.length > 4000
+              ? content.slice(0, 4000) + "\n...(truncated)"
+              : content;
           parts.push(`### ${cf.label}\n\n${truncated}`);
         }
       } catch {
@@ -836,7 +1159,9 @@ class TaskExecutor {
     const tag = `${TAG} task "${taskTitle}"`;
 
     if (result.success) {
-      console.log(`${tag} completed successfully (${result.attempts} attempt(s))`);
+      console.log(
+        `${tag} completed successfully (${result.attempts} attempt(s))`,
+      );
 
       // Use HEAD tracking to determine if agent made NEW commits (not old leftovers)
       const agentMadeNewCommits = execInfo.agentMadeNewCommits === true;
@@ -844,14 +1169,24 @@ class TaskExecutor {
 
       // If already completed+PR'd, skip re-processing
       if (this._completedWithPR.has(task.id)) {
-        console.log(`${tag} already completed with PR — skipping re-processing`);
-        try { await updateTaskStatus(task.id, "inreview"); } catch { /* best-effort */ }
+        console.log(
+          `${tag} already completed with PR — skipping re-processing`,
+        );
+        try {
+          await updateTaskStatus(task.id, "inreview");
+        } catch {
+          /* best-effort */
+        }
         return;
       }
 
       // Determine effective "has commits" — only TRUE if agent actually made new commits THIS run
       // OR if it's the first time we're seeing any commits on this branch (never PR'd before)
-      const hasCommits = agentMadeNewCommits || (hasAnyCommits && !this._completedWithPR.has(task.id) && !this._prCreatedForBranch.has(task.id));
+      const hasCommits =
+        agentMadeNewCommits ||
+        (hasAnyCommits &&
+          !this._completedWithPR.has(task.id) &&
+          !this._prCreatedForBranch.has(task.id));
 
       if (hasCommits && this.autoCreatePr) {
         // Real work done — reset the no-commit counter
@@ -861,30 +1196,41 @@ class TaskExecutor {
 
         // Record success in internal store
         try {
-          recordAgentAttempt(task.id, { output: result.output, hasCommits: true });
+          recordAgentAttempt(task.id, {
+            output: result.output,
+            hasCommits: true,
+          });
           setInternalStatus(task.id, "inreview", "task-executor");
           this._errorDetector.resetTask(task.id);
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
 
-        const pr = await this._createPR(task, worktreePath, { agentMadeNewCommits });
+        const pr = await this._createPR(task, worktreePath, {
+          agentMadeNewCommits,
+        });
         if (pr) {
           // Mark as completed with PR — prevents re-dispatch
           this._completedWithPR.add(task.id);
           this._prCreatedForBranch.add(task.id);
           try {
             await updateTaskStatus(task.id, "inreview");
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
           this.sendTelegram?.(
-            `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`
+            `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`,
           );
         } else {
           // PR creation failed but task has commits — mark as completed anyway to prevent loop
           this._completedWithPR.add(task.id);
           try {
             await updateTaskStatus(task.id, "inreview");
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
           this.sendTelegram?.(
-            `✅ Task completed: "${task.title}" (PR creation failed — manual review needed)`
+            `✅ Task completed: "${task.title}" (PR creation failed — manual review needed)`,
           );
         }
       } else if (hasCommits) {
@@ -895,16 +1241,23 @@ class TaskExecutor {
 
         // Record success in internal store
         try {
-          recordAgentAttempt(task.id, { output: result.output, hasCommits: true });
+          recordAgentAttempt(task.id, {
+            output: result.output,
+            hasCommits: true,
+          });
           setInternalStatus(task.id, "inreview", "task-executor");
           this._errorDetector.resetTask(task.id);
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
 
         try {
           await updateTaskStatus(task.id, "inreview");
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
         this.sendTelegram?.(
-          `✅ Task completed: "${task.title}" (auto-PR disabled)`
+          `✅ Task completed: "${task.title}" (auto-PR disabled)`,
         );
       } else {
         // No commits — agent completed without making changes.
@@ -915,16 +1268,27 @@ class TaskExecutor {
         this._saveNoCommitState();
 
         // Force fresh thread on next attempt — the current thread is clearly not productive
-        try { forceNewThread(task.id, `no-commit completion #${noCommitCount}`); } catch { /* ok */ }
+        try {
+          forceNewThread(task.id, `no-commit completion #${noCommitCount}`);
+        } catch {
+          /* ok */
+        }
 
         // Record no-commit attempt in internal store
         try {
-          recordAgentAttempt(task.id, { output: result.output, hasCommits: false });
-          const noCommitClassification = this._errorDetector.classify(result.output || "");
+          recordAgentAttempt(task.id, {
+            output: result.output,
+            hasCommits: false,
+          });
+          const noCommitClassification = this._errorDetector.classify(
+            result.output || "",
+          );
           if (noCommitClassification.pattern === "plan_stuck") {
             recordErrorPattern(task.id, "plan_stuck");
           }
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
 
         // Escalating cooldown: 15min → 30min → 1h → 2h (capped)
         const cooldownMs = Math.min(
@@ -942,7 +1306,9 @@ class TaskExecutor {
         // Set back to todo — NOT inreview (nothing to review)
         try {
           await updateTaskStatus(task.id, "todo");
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
 
         if (noCommitCount >= MAX_NO_COMMIT_ATTEMPTS) {
           console.warn(
@@ -961,45 +1327,70 @@ class TaskExecutor {
       this.onTaskCompleted?.(task, result);
     } else {
       console.warn(
-        `${tag} failed after ${result.attempts} attempt(s): ${result.error}`
+        `${tag} failed after ${result.attempts} attempt(s): ${result.error}`,
       );
       // Invalidate thread so next attempt starts fresh
-      try { forceNewThread(task.id, `task failed: ${(result.error || "").slice(0, 100)}`); } catch { /* ok */ }
+      try {
+        forceNewThread(
+          task.id,
+          `task failed: ${(result.error || "").slice(0, 100)}`,
+        );
+      } catch {
+        /* ok */
+      }
       this._taskCooldowns.set(task.id, Date.now());
 
       // Classify the error
       const classification = this._errorDetector.classify(
         result.output || "",
-        result.error || ""
+        result.error || "",
       );
       const recovery = this._errorDetector.recordError(task.id, classification);
 
       // Record in internal store
       try {
-        recordAgentAttempt(task.id, { output: result.output, error: result.error, hasCommits: false });
+        recordAgentAttempt(task.id, {
+          output: result.output,
+          error: result.error,
+          hasCommits: false,
+        });
         recordErrorPattern(task.id, classification.pattern);
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
 
       // If plan-stuck, use recovery prompt instead of generic retry
-      if (classification.pattern === "plan_stuck" && recovery.action === "retry_with_prompt") {
-        console.log(`${TAG} plan-stuck detected — will use recovery prompt on next attempt`);
+      if (
+        classification.pattern === "plan_stuck" &&
+        recovery.action === "retry_with_prompt"
+      ) {
+        console.log(
+          `${TAG} plan-stuck detected — will use recovery prompt on next attempt`,
+        );
       }
 
       // If rate limiting, check executor pause
       if (this._errorDetector.shouldPauseExecutor()) {
-        console.warn(`${TAG} too many rate limits — pausing executor for 5 minutes`);
+        console.warn(
+          `${TAG} too many rate limits — pausing executor for 5 minutes`,
+        );
         this._running = false;
-        setTimeout(() => {
-          this._running = true;
-          console.log(`${TAG} executor resumed after rate limit pause`);
-        }, 5 * 60 * 1000);
+        setTimeout(
+          () => {
+            this._running = true;
+            console.log(`${TAG} executor resumed after rate limit pause`);
+          },
+          5 * 60 * 1000,
+        );
       }
 
       try {
         await updateTaskStatus(task.id, "todo");
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
       this.sendTelegram?.(
-        `❌ Task failed: "${task.title}" — ${(result.error || "").slice(0, 200)}`
+        `❌ Task failed: "${task.title}" — ${(result.error || "").slice(0, 200)}`,
       );
       this.onTaskFailed?.(task, result);
     }
@@ -1032,7 +1423,9 @@ class TaskExecutor {
           encoding: "utf8",
           timeout: 15_000,
         });
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
 
       const diff = spawnSync("git", ["log", "origin/main..HEAD", "--oneline"], {
         cwd: worktreePath,
@@ -1069,23 +1462,32 @@ class TaskExecutor {
       // First merge upstream main to avoid conflicts
       try {
         spawnSync("git", ["fetch", "origin", "main", "--quiet"], {
-          cwd: worktreePath, encoding: "utf8", timeout: 30_000,
+          cwd: worktreePath,
+          encoding: "utf8",
+          timeout: 30_000,
         });
         const mergeResult = spawnSync(
-          "git", ["merge", "origin/main", "--no-edit", "--strategy-option=theirs"],
-          { cwd: worktreePath, encoding: "utf8", timeout: 30_000 }
+          "git",
+          ["merge", "origin/main", "--no-edit", "--strategy-option=theirs"],
+          { cwd: worktreePath, encoding: "utf8", timeout: 30_000 },
         );
         if (mergeResult.status !== 0) {
           const mergeErr = (mergeResult.stderr || "").trim();
           // If merge fails with conflicts, try aborting and continuing without merge
           if (mergeErr.includes("CONFLICT") || mergeErr.includes("conflict")) {
-            console.warn(`${TAG} merge conflict during upstream merge — aborting merge, will push as-is`);
+            console.warn(
+              `${TAG} merge conflict during upstream merge — aborting merge, will push as-is`,
+            );
             spawnSync("git", ["merge", "--abort"], {
-              cwd: worktreePath, encoding: "utf8", timeout: 10_000,
+              cwd: worktreePath,
+              encoding: "utf8",
+              timeout: 10_000,
             });
           }
         }
-      } catch { /* best-effort upstream merge */ }
+      } catch {
+        /* best-effort upstream merge */
+      }
 
       // Push with --set-upstream, skip pre-push hooks
       const result = spawnSync(
@@ -1096,7 +1498,7 @@ class TaskExecutor {
           encoding: "utf8",
           timeout: 120_000, // 2 min — push can be slow
           env: { ...process.env },
-        }
+        },
       );
 
       if (result.status === 0) {
@@ -1129,7 +1531,7 @@ class TaskExecutor {
           encoding: "utf8",
           timeout: 15_000,
           env: { ...process.env },
-        }
+        },
       );
       if (result.status === 0) {
         console.log(`${TAG} auto-merge enabled for PR #${prNumber}`);
@@ -1138,8 +1540,13 @@ class TaskExecutor {
       const stderr = (result.stderr || "").trim();
       // "clean status" means no required status checks — auto-merge not applicable.
       // Fall back to direct merge (squash) so the PR gets merged immediately.
-      if (stderr.includes("clean status") || stderr.includes("not in the correct state")) {
-        console.log(`${TAG} auto-merge not available for PR #${prNumber}, attempting direct merge`);
+      if (
+        stderr.includes("clean status") ||
+        stderr.includes("not in the correct state")
+      ) {
+        console.log(
+          `${TAG} auto-merge not available for PR #${prNumber}, attempting direct merge`,
+        );
         const directResult = spawnSync(
           "gh",
           ["pr", "merge", String(prNumber), "--squash"],
@@ -1148,14 +1555,18 @@ class TaskExecutor {
             encoding: "utf8",
             timeout: 30_000,
             env: { ...process.env },
-          }
+          },
         );
         if (directResult.status === 0) {
           console.log(`${TAG} ✅ directly merged PR #${prNumber}`);
         } else {
           const errMsg = (directResult.stderr || "").trim();
-          console.warn(`${TAG} direct merge also failed for PR #${prNumber}: ${errMsg}`);
-          console.log(`${TAG} PR #${prNumber} will be picked up by pr-cleanup-daemon`);
+          console.warn(
+            `${TAG} direct merge also failed for PR #${prNumber}: ${errMsg}`,
+          );
+          console.log(
+            `${TAG} PR #${prNumber} will be picked up by pr-cleanup-daemon`,
+          );
         }
       } else {
         console.warn(`${TAG} auto-merge failed for PR #${prNumber}: ${stderr}`);
@@ -1194,14 +1605,31 @@ class TaskExecutor {
       let existingPrNumber = null;
       try {
         const prList = spawnSync(
-          "gh", ["pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state", "--limit", "5"],
-          { cwd: worktreePath, encoding: "utf8", timeout: 10_000, env: { ...process.env } }
+          "gh",
+          [
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "all",
+            "--json",
+            "number,url,state",
+            "--limit",
+            "5",
+          ],
+          {
+            cwd: worktreePath,
+            encoding: "utf8",
+            timeout: 10_000,
+            env: { ...process.env },
+          },
         );
         if (prList.status === 0) {
           const prs = JSON.parse(prList.stdout || "[]");
           // Prefer open PR, fall back to most recent merged
-          const openPr = prs.find(p => p.state === "OPEN");
-          const mergedPr = prs.find(p => p.state === "MERGED");
+          const openPr = prs.find((p) => p.state === "OPEN");
+          const mergedPr = prs.find((p) => p.state === "MERGED");
           const existing = openPr || mergedPr;
           if (existing) {
             existingPrUrl = existing.url;
@@ -1209,27 +1637,41 @@ class TaskExecutor {
             if (mergedPr && !openPr) {
               if (!agentMadeNewCommits) {
                 // PR already merged and agent made no new commits — skip
-                console.log(`${TAG} PR already merged for branch ${branch}: #${existingPrNumber} (no new commits)`);
-                return { url: existingPrUrl, branch, prNumber: existingPrNumber };
+                console.log(
+                  `${TAG} PR already merged for branch ${branch}: #${existingPrNumber} (no new commits)`,
+                );
+                return {
+                  url: existingPrUrl,
+                  branch,
+                  prNumber: existingPrNumber,
+                };
               }
               // PR was merged but agent made NEW commits — need a new PR
-              console.log(`${TAG} PR #${existingPrNumber} was merged but agent made new commits — creating new PR`);
+              console.log(
+                `${TAG} PR #${existingPrNumber} was merged but agent made new commits — creating new PR`,
+              );
             }
             if (openPr) {
               // Open PR exists — just push latest commits and enable auto-merge
-              console.log(`${TAG} Open PR #${existingPrNumber} already exists for branch ${branch}`);
+              console.log(
+                `${TAG} Open PR #${existingPrNumber} already exists for branch ${branch}`,
+              );
               this._pushBranch(worktreePath, branch);
               this._enableAutoMerge(existingPrNumber, worktreePath);
               return { url: existingPrUrl, branch, prNumber: existingPrNumber };
             }
           }
         }
-      } catch { /* best-effort — continue to create PR */ }
+      } catch {
+        /* best-effort — continue to create PR */
+      }
 
       // ── Step 1: Push branch to origin ──────────────────────────────────
       const pushResult = this._pushBranch(worktreePath, branch);
       if (!pushResult.success) {
-        console.warn(`${TAG} cannot create PR — push failed: ${pushResult.error}`);
+        console.warn(
+          `${TAG} cannot create PR — push failed: ${pushResult.error}`,
+        );
         // Still try to create PR in case agent already pushed
       }
 
@@ -1237,7 +1679,9 @@ class TaskExecutor {
       const title = task.title;
       const body = [
         `## Summary`,
-        task.description ? task.description.slice(0, 2000) : "Automated task completion.",
+        task.description
+          ? task.description.slice(0, 2000)
+          : "Automated task completion.",
         ``,
         `## Task Reference`,
         `- Task ID: \`${task.id}\``,
@@ -1270,7 +1714,7 @@ class TaskExecutor {
           encoding: "utf8",
           timeout: 30_000,
           env: { ...process.env },
-        }
+        },
       );
 
       let prUrl = null;
@@ -1289,8 +1733,23 @@ class TaskExecutor {
           // Try to get the existing PR number
           try {
             const prList = spawnSync(
-              "gh", ["pr", "list", "--head", branch, "--json", "number,url", "--limit", "1"],
-              { cwd: worktreePath, encoding: "utf8", timeout: 10_000, env: { ...process.env } }
+              "gh",
+              [
+                "pr",
+                "list",
+                "--head",
+                branch,
+                "--json",
+                "number,url",
+                "--limit",
+                "1",
+              ],
+              {
+                cwd: worktreePath,
+                encoding: "utf8",
+                timeout: 10_000,
+                env: { ...process.env },
+              },
             );
             if (prList.status === 0) {
               const prs = JSON.parse(prList.stdout || "[]");
@@ -1299,7 +1758,9 @@ class TaskExecutor {
                 prNumber = String(prs[0].number);
               }
             }
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
           prUrl = prUrl || "(existing)";
         } else {
           console.warn(`${TAG} PR creation failed: ${stderr}`);
@@ -1355,19 +1816,21 @@ export function loadExecutorOptionsFromConfig() {
   return {
     mode: envMode || configExec.mode || "vk",
     maxParallel: Number(
-      process.env.INTERNAL_EXECUTOR_PARALLEL || configExec.maxParallel || 3
+      process.env.INTERNAL_EXECUTOR_PARALLEL || configExec.maxParallel || 3,
     ),
     pollIntervalMs: Number(
-      process.env.INTERNAL_EXECUTOR_POLL_MS || configExec.pollIntervalMs || 30_000
+      process.env.INTERNAL_EXECUTOR_POLL_MS ||
+        configExec.pollIntervalMs ||
+        30_000,
     ),
     sdk: process.env.INTERNAL_EXECUTOR_SDK || configExec.sdk || "auto",
     taskTimeoutMs: Number(
       process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
         configExec.taskTimeoutMs ||
-        90 * 60 * 1000
+        90 * 60 * 1000,
     ),
     maxRetries: Number(
-      process.env.INTERNAL_EXECUTOR_MAX_RETRIES || configExec.maxRetries || 2
+      process.env.INTERNAL_EXECUTOR_MAX_RETRIES || configExec.maxRetries || 2,
     ),
     autoCreatePr: configExec.autoCreatePr !== false,
     projectId:

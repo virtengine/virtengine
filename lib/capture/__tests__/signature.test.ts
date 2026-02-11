@@ -3,6 +3,7 @@
  * VE-210: Unit tests for signature creation utilities
  */
 
+import { describe, it, expect } from 'vitest';
 import {
   computeHash,
   createPayloadHash,
