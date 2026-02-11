@@ -84,7 +84,7 @@ func (c VEIDTestClient) ToApprovedClient() veidtypes.ApprovedClient {
 		ClientID:     c.ClientID,
 		Name:         c.Name,
 		PublicKey:    c.PublicKey,
-		Algorithm:    "Ed25519",
+		Algorithm:    "ed25519",
 		Active:       true,
 		RegisteredAt: TestBlockTimeUnix,
 	}
@@ -412,6 +412,7 @@ func EncryptedEnvelopeFixture(scopeID string) encryptiontypes.EncryptedPayloadEn
 	envelope.Nonce = bytes.Repeat([]byte{0x02}, encryptiontypes.XSalsa20NonceSize)
 	envelope.Ciphertext = []byte("e2e-encrypted-identity-payload-" + scopeID)
 	envelope.SenderPubKey = bytes.Repeat([]byte{0x03}, encryptiontypes.X25519PublicKeySize)
+	envelope.SenderSignature = bytes.Repeat([]byte{0x05}, 64)
 	return *envelope
 }
 

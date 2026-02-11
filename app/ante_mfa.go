@@ -83,17 +83,7 @@ func (d MFAGatingDecorator) checkMFAGating(ctx sdk.Context, hooks mfakeeper.MFAG
 }
 
 func isMFAEnforcedTx(transactionType mfatypes.SensitiveTransactionType) bool {
-	switch transactionType {
-	case mfatypes.SensitiveTxAccountRecovery,
-		mfatypes.SensitiveTxKeyRotation,
-		mfatypes.SensitiveTxProviderRegistration,
-		mfatypes.SensitiveTxValidatorRegistration,
-		mfatypes.SensitiveTxLargeWithdrawal,
-		mfatypes.SensitiveTxHighValueOrder:
-		return true
-	default:
-		return false
-	}
+	return transactionType.IsValid()
 }
 
 func firstSigner(sigTx signing.SigVerifiableTx) (sdk.AccAddress, error) {

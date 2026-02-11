@@ -51,6 +51,67 @@ type Keeper struct {
 	authority            string
 }
 
+// ====================================================================
+// Stake Queries (for staking reward/slashing integration)
+// ====================================================================
+
+// GetAllValidators returns all validators with recorded shares.
+func (k Keeper) GetAllValidators(ctx sdk.Context) []sdk.AccAddress {
+	validators := make([]sdk.AccAddress, 0)
+	seen := make(map[string]struct{})
+
+	k.WithValidatorShares(ctx, func(shares types.ValidatorShares) bool {
+		if shares.ValidatorAddress == "" {
+			return false
+		}
+		if _, ok := seen[shares.ValidatorAddress]; ok {
+			return false
+		}
+		addr, err := sdk.AccAddressFromBech32(shares.ValidatorAddress)
+		if err != nil {
+			return false
+		}
+		seen[shares.ValidatorAddress] = struct{}{}
+		validators = append(validators, addr)
+		return false
+	})
+
+	return validators
+}
+
+// GetValidatorStake returns the validator's total stake as int64 (capped).
+func (k Keeper) GetValidatorStake(ctx sdk.Context, validatorAddr sdk.AccAddress) int64 {
+	shares, found := k.GetValidatorShares(ctx, validatorAddr.String())
+	if !found {
+		return 0
+	}
+	return bigIntToInt64(shares.GetTotalStakeBigInt())
+}
+
+// GetTotalStake returns total stake across all validators as int64 (capped).
+func (k Keeper) GetTotalStake(ctx sdk.Context) int64 {
+	total := big.NewInt(0)
+	k.WithValidatorShares(ctx, func(shares types.ValidatorShares) bool {
+		total.Add(total, shares.GetTotalStakeBigInt())
+		return false
+	})
+	return bigIntToInt64(total)
+}
+
+func bigIntToInt64(value *big.Int) int64 {
+	if value == nil || value.Sign() <= 0 {
+		return 0
+	}
+	maxInt64 := int64(^uint64(0) >> 1)
+	if value.BitLen() > 63 {
+		return maxInt64
+	}
+	if value.Cmp(big.NewInt(maxInt64)) > 0 {
+		return maxInt64
+	}
+	return value.Int64()
+}
+
 // NewKeeper creates and returns an instance for delegation keeper
 func NewKeeper(
 	cdc codec.BinaryCodec,

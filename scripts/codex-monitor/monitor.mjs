@@ -135,6 +135,21 @@ import {
   loadExecutorOptionsFromConfig,
 } from "./task-executor.mjs";
 import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
+// ── Task management subsystem imports ──────────────────────────────────────
+import {
+  loadStore as loadTaskStore,
+  getStats as getTaskStoreStats,
+  setTaskStatus as setInternalTaskStatus,
+  setReviewResult,
+  getTasksPendingReview,
+  getStaleInProgressTasks,
+  getStaleInReviewTasks,
+  getAllTasks as getAllInternalTasks,
+} from "./task-store.mjs";
+import { createAgentEndpoint } from "./agent-endpoint.mjs";
+import { createReviewAgent } from "./review-agent.mjs";
+import { createSyncEngine } from "./sync-engine.mjs";
+import { createErrorDetector } from "./error-detector.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
@@ -533,7 +548,13 @@ let vkSessionDiscoveryTimer = null;
 let vkSessionDiscoveryInFlight = false;
 const vkSessionCache = new Map();
 
-const VK_SESSION_KEEP_STATUSES = new Set(["running", "review", "manual_review", "in_review", "inreview"]);
+const VK_SESSION_KEEP_STATUSES = new Set([
+  "running",
+  "review",
+  "manual_review",
+  "in_review",
+  "inreview",
+]);
 
 function normalizeAttemptStatus(status) {
   return String(status || "")
@@ -2509,6 +2530,18 @@ const freshSessionTaskRetries = new Map();
  * @returns {Promise<{success: boolean, sessionId?: string, reason?: string}>}
  */
 async function startFreshSession(workspaceId, prompt, taskId) {
+  // Guard: internal executor mode runs tasks via agent-pool, not VK sessions
+  const execMode = configExecutorMode || getExecutorMode();
+  if (execMode === "internal") {
+    console.log(
+      `[monitor] startFreshSession skipped — executor mode is "internal"`,
+    );
+    return {
+      success: false,
+      reason: "internal executor mode — VK sessions disabled",
+    };
+  }
+
   const now = Date.now();
 
   // Rate limit
@@ -2601,6 +2634,15 @@ async function startFreshSession(workspaceId, prompt, taskId) {
  * @returns {Promise<boolean>} true if fresh session started
  */
 async function attemptFreshSessionRetry(reason, logTail) {
+  // Guard: internal executor mode runs tasks via agent-pool, not VK sessions
+  const execMode = configExecutorMode || getExecutorMode();
+  if (execMode === "internal") {
+    console.log(
+      `[monitor] attemptFreshSessionRetry skipped — executor mode is "internal"`,
+    );
+    return false;
+  }
+
   if (!vkEndpointUrl) {
     console.log("[monitor] fresh session retry skipped — no VK endpoint");
     return false;
@@ -2809,6 +2851,10 @@ async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
  * @returns {Promise<boolean>} true if moved to todo, false if skipped/failed
  */
 async function safeRecoverTask(taskId, taskTitle, reason) {
+  // In internal executor mode, only update task status — never start VK sessions
+  const execMode = configExecutorMode || getExecutorMode();
+  const isInternal = execMode === "internal";
+
   try {
     const res = await fetchVk(`/api/tasks/${taskId}`);
     const liveStatus = res?.data?.status || res?.status;
@@ -2851,9 +2897,15 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
     }
     const success = await updateTaskStatus(taskId, "todo");
     if (success) {
-      console.log(
-        `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason})`,
-      );
+      if (isInternal) {
+        console.log(
+          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason}) [internal mode — VK session skipped]`,
+        );
+      } else {
+        console.log(
+          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason})`,
+        );
+      }
     }
     return success;
   } catch (err) {
@@ -3462,6 +3514,24 @@ async function checkMergedPRsAndUpdateTasks() {
       }
 
       if (candidates.length === 0) {
+        // ── Internal executor guard ──
+        // If the internal executor is managing this task (active, cooldown,
+        // or blocked), do NOT recover it — the executor handles its own lifecycle.
+        if (
+          internalTaskExecutor &&
+          internalTaskExecutor.isTaskManaged?.(task.id)
+        ) {
+          if (
+            shouldLogNoAttempt(task, taskStatus, "internal_executor_managed")
+          ) {
+            console.log(
+              `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) is managed by internal executor — skipping recovery`,
+            );
+            recordNoAttemptLog(task, taskStatus, "internal_executor_managed");
+          }
+          continue;
+        }
+
         // ── Only recover idle inprogress tasks — never inreview ──
         // inreview tasks are monitored by merge/conflict checks.
         // inprogress tasks with an active agent should not be touched.
@@ -7764,6 +7834,25 @@ function selfRestartForSourceChange(filename) {
     vkLogStream.stop();
     vkLogStream = null;
   }
+  // ── Stop internal executor + agent endpoint BEFORE exit ──
+  // This ensures running agents get a chance to finish and ports are released.
+  const shutdownPromises = [];
+  if (internalTaskExecutor) {
+    console.log("[monitor] stopping internal task executor for restart...");
+    shutdownPromises.push(
+      Promise.resolve(internalTaskExecutor.stop()).catch((e) =>
+        console.warn(`[monitor] executor stop error: ${e.message}`),
+      ),
+    );
+  }
+  if (agentEndpoint) {
+    console.log("[monitor] stopping agent endpoint for restart...");
+    shutdownPromises.push(
+      Promise.resolve(agentEndpoint.stop()).catch((e) =>
+        console.warn(`[monitor] endpoint stop error: ${e.message}`),
+      ),
+    );
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -7787,8 +7876,13 @@ function selfRestartForSourceChange(filename) {
   } catch {
     /* best effort */
   }
-  // Exit with special code — cli.mjs re-forks with fresh module cache
-  setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+  // Wait for executor/endpoint shutdown, then exit
+  Promise.allSettled(shutdownPromises).then(() => {
+    // Exit with special code — cli.mjs re-forks with fresh module cache
+    setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+  });
+  // Safety net: exit after 10s even if shutdown hangs
+  setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 10000);
 }
 
 function attemptSelfRestartAfterQuiet() {
@@ -8411,9 +8505,72 @@ try {
   console.warn(`[monitor] complexity matrix log failed: ${err.message}`);
 }
 
+// ── Clean stale status data on startup ─────────────────────────────────────
+try {
+  const statusRaw = existsSync(statusPath)
+    ? readFileSync(statusPath, "utf8")
+    : null;
+  if (statusRaw) {
+    const statusData = JSON.parse(statusRaw);
+    const attempts = statusData.attempts || {};
+    const STALE_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, attempt] of Object.entries(attempts)) {
+      const ts = attempt?.updated_at || attempt?.created_at;
+      if (!ts) continue;
+      const age = now - Date.parse(ts);
+      if (age > STALE_AGE_MS && attempt.status === "running") {
+        // Mark stale running attempts as "stale" so they don't show as active
+        attempt.status = "stale";
+        attempt._stale_reason = `No update for ${Math.round(age / 3600000)}h — marked stale on startup`;
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      statusData.updated_at = new Date().toISOString();
+      writeFileSync(statusPath, JSON.stringify(statusData, null, 2), "utf8");
+      console.log(
+        `[monitor] cleaned ${cleaned} stale attempts from status file`,
+      );
+    }
+  }
+} catch (err) {
+  console.warn(`[monitor] stale cleanup failed: ${err.message}`);
+}
+
 // ── Internal Executor / VK Orchestrator startup ──────────────────────────────
 /** @type {import("./task-executor.mjs").TaskExecutor|null} */
 let internalTaskExecutor = null;
+/** @type {import("./agent-endpoint.mjs").AgentEndpoint|null} */
+let agentEndpoint = null;
+/** @type {import("./review-agent.mjs").ReviewAgent|null} */
+let reviewAgent = null;
+/** @type {import("./sync-engine.mjs").SyncEngine|null} */
+let syncEngine = null;
+/** @type {import("./error-detector.mjs").ErrorDetector|null} */
+let errorDetector = null;
+
+// ── Task Management Subsystem Initialization ────────────────────────────────
+try {
+  loadTaskStore();
+  console.log("[monitor] internal task store loaded");
+} catch (err) {
+  console.warn(`[monitor] task store init warning: ${err.message}`);
+}
+
+// Error detector
+try {
+  errorDetector = createErrorDetector({
+    sendTelegram:
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null,
+  });
+  console.log("[monitor] error detector initialized");
+} catch (err) {
+  console.warn(`[monitor] error detector init failed: ${err.message}`);
+}
 
 const executorMode = configExecutorMode || getExecutorMode();
 console.log(`[monitor] executor mode: ${executorMode}`);
@@ -8425,32 +8582,178 @@ if (executorMode === "internal" || executorMode === "hybrid") {
       ...internalExecutorConfig,
       repoRoot,
       repoSlug,
-      sendTelegram: telegramToken && telegramChatId
-        ? (msg) => void sendTelegramMessage(msg)
-        : null,
+      sendTelegram:
+        telegramToken && telegramChatId
+          ? (msg) => void sendTelegramMessage(msg)
+          : null,
       onTaskStarted: (task, slot) => {
         console.log(
-          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) in ${slot.worktreePath}`
+          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) in ${slot.worktreePath}`,
         );
       },
       onTaskCompleted: (task, result) => {
         console.log(
-          `[task-executor] ✅ completed: "${task.title}" (${result.attempts} attempt(s))`
+          `[task-executor] ✅ completed: "${task.title}" (${result.attempts} attempt(s))`,
         );
+        // Queue review if task moved to inreview and has a PR
+        if (reviewAgent && result.success) {
+          try {
+            reviewAgent.queueReview({
+              id: task.id || task.task_id,
+              title: task.title,
+              branchName: task.branchName || task.meta?.branch_name,
+              description: task.description || "",
+            });
+          } catch {
+            /* best-effort */
+          }
+        }
       },
       onTaskFailed: (task, err) => {
         console.warn(
-          `[task-executor] ❌ failed: "${task.title}" — ${err?.message || err}`
+          `[task-executor] ❌ failed: "${task.title}" — ${err?.message || err}`,
         );
       },
     };
     internalTaskExecutor = getTaskExecutor(execOpts);
     internalTaskExecutor.start();
     console.log(
-      `[monitor] internal executor started (maxParallel=${execOpts.maxParallel || 3}, sdk=${execOpts.sdk || "auto"})`
+      `[monitor] internal executor started (maxParallel=${execOpts.maxParallel || 3}, sdk=${execOpts.sdk || "auto"})`,
     );
+
+    // ── Agent Endpoint ──
+    try {
+      agentEndpoint = createAgentEndpoint({
+        port: Number(process.env.AGENT_ENDPOINT_PORT || 18432),
+        onTaskComplete: (taskId, body) => {
+          console.log(`[monitor] agent self-reported complete for ${taskId}`);
+          try {
+            setInternalTaskStatus(taskId, "inreview", "agent-endpoint");
+          } catch {
+            /* best-effort */
+          }
+          if (reviewAgent) {
+            const task = internalTaskExecutor?._activeSlots?.get(taskId);
+            if (task)
+              reviewAgent.queueReview({
+                id: taskId,
+                title: task.taskTitle,
+                prNumber: body?.prNumber,
+                branchName: task.branch,
+                description: body?.description || "",
+              });
+          }
+        },
+        onTaskError: (taskId, body) => {
+          console.warn(
+            `[monitor] agent self-reported error for ${taskId}: ${body?.error}`,
+          );
+          if (errorDetector) {
+            const classification = errorDetector.classify(
+              body?.output || "",
+              body?.error || "",
+            );
+            errorDetector.recordError(taskId, classification);
+          }
+        },
+        onStatusChange: (taskId, newStatus) => {
+          console.log(
+            `[monitor] agent status change for ${taskId}: ${newStatus}`,
+          );
+          try {
+            setInternalTaskStatus(taskId, newStatus, "agent-endpoint");
+          } catch {
+            /* best-effort */
+          }
+        },
+      });
+      agentEndpoint.start().then(() => {
+        console.log("[monitor] agent endpoint started");
+      }).catch((err) => {
+        console.warn(`[monitor] agent endpoint failed to start: ${err.message}`);
+        agentEndpoint = null;
+      });
+    } catch (err) {
+      console.warn(`[monitor] agent endpoint creation failed: ${err.message}`);
+      agentEndpoint = null;
+    }
+
+    // ── Review Agent ──
+    try {
+      reviewAgent = createReviewAgent({
+        maxConcurrent: 2,
+        sendTelegram:
+          telegramToken && telegramChatId
+            ? (msg) => void sendTelegramMessage(msg)
+            : null,
+        onReviewComplete: (taskId, result) => {
+          console.log(
+            `[monitor] review complete for ${taskId}: ${result?.verdict || "unknown"}`,
+          );
+          try {
+            setReviewResult(taskId, {
+              approved: result?.verdict === "approved",
+              issues: result?.issues || [],
+            });
+          } catch {
+            /* best-effort */
+          }
+
+          if (result?.verdict === "approved") {
+            // Auto-mark as done since reviewer is happy
+            console.log(
+              `[monitor] review approved — marking ${taskId} as done`,
+            );
+            try {
+              setInternalTaskStatus(taskId, "done", "review-agent");
+            } catch {
+              /* best-effort */
+            }
+            try {
+              updateTaskStatus(taskId, "done");
+            } catch {
+              /* best-effort */
+            }
+          } else {
+            console.log(
+              `[monitor] review found issues for ${taskId} — task stays inreview`,
+            );
+          }
+        },
+      });
+      reviewAgent.start();
+      console.log("[monitor] review agent started");
+    } catch (err) {
+      console.warn(`[monitor] review agent failed to start: ${err.message}`);
+    }
+
+    // ── Sync Engine ──
+    try {
+      const projectId =
+        process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
+        process.env.VK_PROJECT_ID ||
+        internalExecutorConfig?.projectId;
+      if (projectId) {
+        syncEngine = createSyncEngine({
+          projectId,
+          syncIntervalMs: 60_000, // 1 minute
+          sendTelegram:
+            telegramToken && telegramChatId
+              ? (msg) => void sendTelegramMessage(msg)
+              : null,
+        });
+        syncEngine.start();
+        console.log("[monitor] sync engine started (interval: 60s)");
+      } else {
+        console.log("[monitor] sync engine skipped — no project ID configured");
+      }
+    } catch (err) {
+      console.warn(`[monitor] sync engine failed to start: ${err.message}`);
+    }
   } catch (err) {
-    console.error(`[monitor] internal executor failed to start: ${err.message}`);
+    console.error(
+      `[monitor] internal executor failed to start: ${err.message}`,
+    );
   }
 }
 
@@ -8493,6 +8796,17 @@ injectMonitorFunctions({
       : "Anomaly detector not running.",
   getInternalExecutor: () => internalTaskExecutor,
   getExecutorMode: () => executorMode,
+  getAgentEndpoint: () => agentEndpoint,
+  getReviewAgent: () => reviewAgent,
+  getSyncEngine: () => syncEngine,
+  getErrorDetector: () => errorDetector,
+  getTaskStoreStats: () => {
+    try {
+      return getTaskStoreStats();
+    } catch {
+      return null;
+    }
+  },
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
@@ -8529,6 +8843,11 @@ export {
   runTaskAssessment,
   // Internal executor
   internalTaskExecutor,
+  // Task management subsystems
+  agentEndpoint,
+  reviewAgent,
+  syncEngine,
+  errorDetector,
   // Fleet coordination re-exports for external consumers
   getFleetState,
   isFleetCoordinator,
