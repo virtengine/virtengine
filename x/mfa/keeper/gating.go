@@ -1,8 +1,10 @@
 package keeper
 
 import (
+	"encoding/json"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/mfa/types"
@@ -99,8 +101,8 @@ func (h MFAGatingHooks) ValidateMFAProof(
 		return types.ErrUnauthorized.Wrap("session belongs to different account")
 	}
 
-	// Verify session is for the correct transaction type
-	if session.TransactionType != txType {
+	// Verify session can authorize the transaction type (risk-based step-up)
+	if !session.TransactionType.CanAuthorize(txType) {
 		return types.ErrUnauthorized.Wrapf("session authorized for %s, not %s",
 			session.TransactionType.String(), txType.String())
 	}
@@ -365,11 +367,84 @@ func (h MFAGatingHooks) CleanupExpiredData(ctx sdk.Context) {
 
 // cleanupExpiredChallenges removes expired challenges
 func (h MFAGatingHooks) cleanupExpiredChallenges(ctx sdk.Context, now time.Time) {
-	// Implementation would iterate through challenges and delete expired ones
-	// For efficiency, this could be done with a secondary index by expiration time
+	store := ctx.KVStore(h.keeper.StoreKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixChallenge)
+	defer iterator.Close()
+
+	expiredIDs := make([]string, 0)
+
+	for ; iterator.Valid(); iterator.Next() {
+		var cs challengeStore
+		if err := json.Unmarshal(iterator.Value(), &cs); err != nil {
+			continue
+		}
+
+		if now.Unix() <= cs.ExpiresAt {
+			continue
+		}
+
+		if cs.Status == types.ChallengeStatusPending {
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					types.EventTypeChallengeExpired,
+					sdk.NewAttribute(types.AttributeKeyChallengeID, cs.ChallengeID),
+					sdk.NewAttribute(types.AttributeKeyAccountAddress, cs.AccountAddress),
+				),
+			)
+		}
+
+		expiredIDs = append(expiredIDs, cs.ChallengeID)
+	}
+
+	for _, id := range expiredIDs {
+		_ = h.keeper.DeleteChallenge(ctx, id)
+	}
 }
 
 // cleanupExpiredSessions removes expired sessions
 func (h MFAGatingHooks) cleanupExpiredSessions(ctx sdk.Context, now time.Time) {
-	// Implementation would iterate through sessions and delete expired ones
+	store := ctx.KVStore(h.keeper.StoreKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixAuthorizationSession)
+	defer iterator.Close()
+
+	expiredIDs := make([]string, 0)
+
+	for ; iterator.Valid(); iterator.Next() {
+		var ss sessionStore
+		if err := json.Unmarshal(iterator.Value(), &ss); err != nil {
+			continue
+		}
+
+		session := types.AuthorizationSession{
+			SessionID:         ss.SessionID,
+			AccountAddress:    ss.AccountAddress,
+			TransactionType:   ss.TransactionType,
+			VerifiedFactors:   ss.VerifiedFactors,
+			CreatedAt:         ss.CreatedAt,
+			ExpiresAt:         ss.ExpiresAt,
+			UsedAt:            ss.UsedAt,
+			IsSingleUse:       ss.IsSingleUse,
+			DeviceFingerprint: ss.DeviceFingerprint,
+		}
+
+		if session.IsValid(now) {
+			continue
+		}
+
+		if now.Unix() > session.ExpiresAt && session.UsedAt == 0 {
+			ctx.EventManager().EmitEvent(
+				sdk.NewEvent(
+					types.EventTypeSessionExpired,
+					sdk.NewAttribute(types.AttributeKeySessionID, session.SessionID),
+					sdk.NewAttribute(types.AttributeKeyAccountAddress, session.AccountAddress),
+				),
+			)
+		}
+
+		expiredIDs = append(expiredIDs, session.SessionID)
+	}
+
+	for _, id := range expiredIDs {
+		_ = h.keeper.DeleteAuthorizationSession(ctx, id)
+	}
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -24,6 +26,8 @@ func main() {
 	root.AddCommand(monteCarloCmd())
 	root.AddCommand(sensitivityCmd())
 	root.AddCommand(dashboardCmd())
+	root.AddCommand(suiteCmd())
+	root.AddCommand(checkCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -171,6 +175,129 @@ func dashboardCmd() *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", 8080, "Port to serve dashboard")
 	cmd.Flags().StringVar(&monteCarloPath, "monte-carlo", "", "Path to Monte Carlo results JSON")
 	cmd.Flags().StringVar(&sensitivityPath, "sensitivity", "", "Path to sensitivity results JSON")
+	return cmd
+}
+
+func suiteCmd() *cobra.Command {
+	var scenario string
+	var outputDir string
+	var runs int
+	var steps int
+	var param string
+	var min float64
+	var max float64
+	var configPath string
+	var exportDashboard bool
+	var exportCSV bool
+
+	cmd := &cobra.Command{
+		Use:   "suite",
+		Short: "Run the economics simulation suite and export reports",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := resolveConfig(scenario, configPath)
+			if err != nil {
+				return err
+			}
+			engine := core.NewEngine(cfg)
+			if err := engine.Initialize(context.Background()); err != nil {
+				return err
+			}
+			runResult, err := engine.Run(context.Background())
+			if err != nil {
+				return err
+			}
+
+			mc := analysis.NewMonteCarloAnalyzer(analysis.MonteCarloConfig{
+				Runs:         runs,
+				Parallelism:  4,
+				Confidence:   0.95,
+				ParamRanges:  defaultParamRanges(),
+				BaseConfig:   cfg,
+				ScenarioName: scenario,
+			})
+			monteCarlo, err := mc.Run(context.Background())
+			if err != nil {
+				return err
+			}
+
+			sensitivity, err := analysis.RunSensitivity(context.Background(), analysis.SensitivityConfig{
+				BaseConfig: cfg,
+				Steps:      steps,
+				Param:      param,
+				Min:        min,
+				Max:        max,
+			})
+			if err != nil {
+				return err
+			}
+
+			if err := analysis.WriteJSON(filepath.Join(outputDir, "simulation.json"), runResult); err != nil {
+				return err
+			}
+			if err := analysis.WriteJSON(filepath.Join(outputDir, "metrics.json"), runResult.Metrics); err != nil {
+				return err
+			}
+			if err := analysis.WriteJSON(filepath.Join(outputDir, "monte-carlo.json"), monteCarlo); err != nil {
+				return err
+			}
+			if err := analysis.WriteJSON(filepath.Join(outputDir, "sensitivity.json"), sensitivity); err != nil {
+				return err
+			}
+
+			if exportCSV {
+				if err := analysis.WriteMonteCarloCSV(filepath.Join(outputDir, "monte-carlo.csv"), monteCarlo); err != nil {
+					return err
+				}
+			}
+			if exportDashboard {
+				if err := analysis.WriteDashboardHTML(filepath.Join(outputDir, "dashboard.html"), monteCarlo, &sensitivity); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&scenario, "scenario", "baseline", "Scenario name")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "sim-output", "Output directory")
+	cmd.Flags().IntVar(&runs, "runs", 100, "Number of Monte Carlo runs")
+	cmd.Flags().StringVar(&param, "param", "inflation_target_bps", "Parameter to sweep")
+	cmd.Flags().Float64Var(&min, "min", 400, "Minimum parameter value")
+	cmd.Flags().Float64Var(&max, "max", 1200, "Maximum parameter value")
+	cmd.Flags().IntVar(&steps, "steps", 6, "Number of sweep steps")
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to JSON config (overrides scenario)")
+	cmd.Flags().BoolVar(&exportDashboard, "export-dashboard", true, "Export static HTML dashboard")
+	cmd.Flags().BoolVar(&exportCSV, "export-csv", true, "Export Monte Carlo metrics to CSV")
+	return cmd
+}
+
+func checkCmd() *cobra.Command {
+	var metricsPath string
+
+	cmd := &cobra.Command{
+		Use:   "check",
+		Short: "Validate economics metrics against thresholds",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var metrics core.Metrics
+			if err := readJSON(metricsPath, &metrics); err != nil {
+				return err
+			}
+
+			thresholds := analysis.DefaultThresholds()
+			if err := analysis.ValidateThresholds(thresholds); err != nil {
+				return err
+			}
+			violations := analysis.CheckThresholds(metrics, thresholds)
+			if len(violations) == 0 {
+				return nil
+			}
+
+			return fmt.Errorf("economics metrics regressed: %v", violations)
+		},
+	}
+
+	cmd.Flags().StringVar(&metricsPath, "metrics", "sim-output/metrics.json", "Path to metrics.json from suite output")
 	return cmd
 }
 
