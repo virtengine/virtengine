@@ -163,7 +163,9 @@ export class AgentEndpoint {
             return;
           } catch (retryErr) {
             if (retryErr.code === "EADDRINUSE") {
-              console.warn(`${TAG} Port ${port} still in use after kill, trying next port`);
+              console.warn(
+                `${TAG} Port ${port} still in use after kill, trying next port`,
+              );
               continue;
             }
             throw retryErr;
@@ -177,7 +179,9 @@ export class AgentEndpoint {
     console.error(
       `${TAG} Could not bind to any port after ${MAX_PORT_RETRIES} attempts: ${lastErr?.message}`,
     );
-    console.warn(`${TAG} Running WITHOUT agent endpoint — agents can still work via poll-based completion`);
+    console.warn(
+      `${TAG} Running WITHOUT agent endpoint — agents can still work via poll-based completion`,
+    );
   }
 
   /**
@@ -223,10 +227,10 @@ export class AgentEndpoint {
     try {
       const { execSync } = await import("node:child_process");
       // Find PID holding the port on Windows
-      const output = execSync(
-        `netstat -ano | findstr ":${port}"`,
-        { encoding: "utf8", timeout: 5000 },
-      ).trim();
+      const output = execSync(`netstat -ano | findstr ":${port}"`, {
+        encoding: "utf8",
+        timeout: 5000,
+      }).trim();
       const lines = output.split("\n").filter((l) => l.includes("LISTENING"));
       const pids = new Set();
       for (const line of lines) {
@@ -239,8 +243,13 @@ export class AgentEndpoint {
       for (const pid of pids) {
         console.log(`${TAG} Killing stale process PID ${pid} on port ${port}`);
         try {
-          execSync(`taskkill /F /PID ${pid}`, { encoding: "utf8", timeout: 5000 });
-        } catch { /* may already be dead */ }
+          execSync(`taskkill /F /PID ${pid}`, {
+            encoding: "utf8",
+            timeout: 5000,
+          });
+        } catch {
+          /* may already be dead */
+        }
       }
       // Give OS time to release the port
       await new Promise((r) => setTimeout(r, 1000));

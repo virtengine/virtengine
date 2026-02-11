@@ -8667,12 +8667,17 @@ if (executorMode === "internal" || executorMode === "hybrid") {
           }
         },
       });
-      agentEndpoint.start().then(() => {
-        console.log("[monitor] agent endpoint started");
-      }).catch((err) => {
-        console.warn(`[monitor] agent endpoint failed to start: ${err.message}`);
-        agentEndpoint = null;
-      });
+      agentEndpoint
+        .start()
+        .then(() => {
+          console.log("[monitor] agent endpoint started");
+        })
+        .catch((err) => {
+          console.warn(
+            `[monitor] agent endpoint failed to start: ${err.message}`,
+          );
+          agentEndpoint = null;
+        });
     } catch (err) {
       console.warn(`[monitor] agent endpoint creation failed: ${err.message}`);
       agentEndpoint = null;

@@ -525,6 +525,34 @@ class TaskExecutor {
         }
       }
 
+      // Verify branches actually has meaningful diff vs main BEFORE creating a PR
+      // This prevents empty PRs from being created when worktrees have merge artifacts.
+      try {
+        const diffCheck = execSync("git diff --name-only origin/main...HEAD", {
+          cwd: wtPath,
+          encoding: "utf8",
+          timeout: 15000,
+        }).trim();
+        if (diffCheck.length === 0) {
+          console.log(
+            `${TAG} [orphan-recovery] Skipping ${dirName} — 0 file changes vs main (would create empty PR)`,
+          );
+          skipped++;
+          continue;
+        }
+        const fileCount = diffCheck.split("\n").filter(Boolean).length;
+        console.log(
+          `${TAG} [orphan-recovery] ${dirName} has ${fileCount} changed file(s) vs main`,
+        );
+      } catch {
+        // If diff check fails, skip this worktree rather than creating a potentially empty PR
+        console.warn(
+          `${TAG} [orphan-recovery] Cannot verify diff for ${dirName} — skipping`,
+        );
+        skipped++;
+        continue;
+      }
+
       // Build a minimal task object for _createPR
       const taskObj = {
         id: taskIdPrefix,
@@ -1459,40 +1487,48 @@ class TaskExecutor {
    */
   _pushBranch(worktreePath, branch) {
     try {
-      // First merge upstream main to avoid conflicts
+      // First rebase onto upstream main to keep agent's work and stay up to date.
+      // We use rebase instead of merge to avoid polluting the branch with merge commits
+      // that can wipe out agent work (as --strategy-option=theirs did before).
       try {
         spawnSync("git", ["fetch", "origin", "main", "--quiet"], {
           cwd: worktreePath,
           encoding: "utf8",
           timeout: 30_000,
         });
-        const mergeResult = spawnSync(
+        // Try rebase — this keeps agent's commits on top of latest main
+        const rebaseResult = spawnSync(
           "git",
-          ["merge", "origin/main", "--no-edit", "--strategy-option=theirs"],
-          { cwd: worktreePath, encoding: "utf8", timeout: 30_000 },
+          ["rebase", "origin/main"],
+          { cwd: worktreePath, encoding: "utf8", timeout: 60_000 },
         );
-        if (mergeResult.status !== 0) {
-          const mergeErr = (mergeResult.stderr || "").trim();
-          // If merge fails with conflicts, try aborting and continuing without merge
-          if (mergeErr.includes("CONFLICT") || mergeErr.includes("conflict")) {
-            console.warn(
-              `${TAG} merge conflict during upstream merge — aborting merge, will push as-is`,
-            );
-            spawnSync("git", ["merge", "--abort"], {
-              cwd: worktreePath,
-              encoding: "utf8",
-              timeout: 10_000,
-            });
-          }
+        if (rebaseResult.status !== 0) {
+          // Rebase failed (conflicts) — abort and push as-is
+          console.warn(
+            `${TAG} rebase failed during upstream sync — aborting rebase, will push as-is`,
+          );
+          spawnSync("git", ["rebase", "--abort"], {
+            cwd: worktreePath,
+            encoding: "utf8",
+            timeout: 10_000,
+          });
         }
       } catch {
-        /* best-effort upstream merge */
+        /* best-effort upstream rebase */
       }
 
-      // Push with --set-upstream, skip pre-push hooks
+      // Push with --set-upstream, skip pre-push hooks.
+      // Use --force-with-lease after rebase since history may be rewritten.
       const result = spawnSync(
         "git",
-        ["push", "--set-upstream", "origin", branch, "--no-verify"],
+        [
+          "push",
+          "--set-upstream",
+          "--force-with-lease",
+          "origin",
+          branch,
+          "--no-verify",
+        ],
         {
           cwd: worktreePath,
           encoding: "utf8",
@@ -1673,6 +1709,30 @@ class TaskExecutor {
           `${TAG} cannot create PR — push failed: ${pushResult.error}`,
         );
         // Still try to create PR in case agent already pushed
+      }
+
+      // ── Step 1.5: Verify branch actually has a diff vs main ────────────
+      // If the branch is identical to main (0 file changes), skip PR creation.
+      // This prevents empty PRs from being created when merge/rebase wiped changes.
+      try {
+        const diffResult = spawnSync(
+          "git",
+          ["diff", "--name-only", "origin/main...HEAD"],
+          { cwd: worktreePath, encoding: "utf8", timeout: 15_000 },
+        );
+        const changedFiles = (diffResult.stdout || "").trim();
+        if (diffResult.status === 0 && changedFiles.length === 0) {
+          console.warn(
+            `${TAG} branch ${branch} has 0 file changes vs main — skipping PR creation (would be empty)`,
+          );
+          return null;
+        }
+        const fileCount = changedFiles.split("\n").filter(Boolean).length;
+        console.log(
+          `${TAG} branch ${branch} has ${fileCount} changed file(s) vs main`,
+        );
+      } catch {
+        // If diff check fails, continue with PR creation anyway
       }
 
       // ── Step 2: Create the PR ──────────────────────────────────────────
