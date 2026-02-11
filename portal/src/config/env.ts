@@ -37,6 +37,11 @@ export const env = {
     ','
   ),
 
+  // Capture Client (VEID submission)
+  captureClientId: getEnvVar('NEXT_PUBLIC_CAPTURE_CLIENT_ID', ''),
+  captureClientVersion: getEnvVar('NEXT_PUBLIC_CAPTURE_CLIENT_VERSION', '1.0.0'),
+  captureClientPrivateKey: getEnvVar('NEXT_PUBLIC_CAPTURE_CLIENT_PRIVATE_KEY', ''),
+
   // Feature Flags
   enableTestnet: getBoolEnvVar('NEXT_PUBLIC_ENABLE_TESTNET', false),
   enableMfa: getBoolEnvVar('NEXT_PUBLIC_ENABLE_MFA', true),
