@@ -462,7 +462,11 @@ func (c *DomainVerificationChecker) verifyHTTPWellKnown(ctx context.Context, rec
 }
 
 // submitConfirmation submits a MsgConfirmDomainVerification transaction.
-func (c *DomainVerificationChecker) submitConfirmation(_ context.Context, record *keeper.DomainVerificationRecord, _ string) {
+func (c *DomainVerificationChecker) submitConfirmation(
+	_ context.Context,
+	record *keeper.DomainVerificationRecord,
+	proof string,
+) {
 	log.Printf("[domain-verification] submitting confirmation for %s", record.Domain)
 	_ = proof
 
