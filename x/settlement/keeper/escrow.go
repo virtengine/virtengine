@@ -194,6 +194,12 @@ func (k Keeper) ReleaseEscrow(ctx sdk.Context, escrowID string, reason string) e
 		return err
 	}
 
+	if !releaseAmount.IsZero() {
+		if err := escrow.DeductBalance(releaseAmount); err != nil {
+			return err
+		}
+	}
+
 	// Transfer funds to recipient
 	if !releaseAmount.IsZero() {
 		if err := k.transferEscrowFundsToAccount(ctx, escrow, recipient, releaseAmount, true); err != nil {
@@ -209,6 +215,12 @@ func (k Keeper) ReleaseEscrow(ctx sdk.Context, escrowID string, reason string) e
 	escrow.Balance = sdk.NewCoins()
 	if err := k.SetEscrow(ctx, escrow); err != nil {
 		return err
+	}
+
+	if !releaseAmount.IsZero() {
+		if _, err := k.recordEscrowDisbursement(ctx, escrow, releaseAmount, recipient.String(), types.SettlementTypeFinal, true); err != nil {
+			return err
+		}
 	}
 
 	// Update state index
@@ -259,6 +271,12 @@ func (k Keeper) RefundEscrow(ctx sdk.Context, escrowID string, reason string) er
 		return err
 	}
 
+	if !refundAmount.IsZero() {
+		if err := escrow.DeductBalance(refundAmount); err != nil {
+			return err
+		}
+	}
+
 	// Transfer funds back to depositor
 	if !refundAmount.IsZero() {
 		if err := k.transferEscrowFundsToAccount(ctx, escrow, depositor, refundAmount, true); err != nil {
@@ -274,6 +292,12 @@ func (k Keeper) RefundEscrow(ctx sdk.Context, escrowID string, reason string) er
 	escrow.Balance = sdk.NewCoins()
 	if err := k.SetEscrow(ctx, escrow); err != nil {
 		return err
+	}
+
+	if !refundAmount.IsZero() {
+		if _, err := k.recordEscrowDisbursement(ctx, escrow, refundAmount, depositor.String(), types.SettlementTypeRefund, true); err != nil {
+			return err
+		}
 	}
 
 	// Update state index
@@ -300,6 +324,54 @@ func (k Keeper) RefundEscrow(ctx sdk.Context, escrowID string, reason string) er
 	)
 
 	return nil
+}
+
+func (k Keeper) recordEscrowDisbursement(
+	ctx sdk.Context,
+	escrow types.EscrowAccount,
+	amount sdk.Coins,
+	recipient string,
+	settlementType types.SettlementType,
+	isFinal bool,
+) (*types.SettlementRecord, error) {
+	if amount.IsZero() {
+		return nil, nil
+	}
+
+	seq := k.incrementSettlementSequence(ctx)
+	settlementID := generateIDWithTimestamp("settle", seq, ctx.BlockTime().Unix())
+
+	periodStart := escrow.CreatedAt
+	if escrow.ActivatedAt != nil {
+		periodStart = *escrow.ActivatedAt
+	}
+
+	settlement := types.NewSettlementRecord(
+		settlementID,
+		escrow.EscrowID,
+		escrow.OrderID,
+		escrow.LeaseID,
+		recipient,
+		escrow.Depositor,
+		amount,
+		amount,
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		nil,
+		0,
+		periodStart,
+		ctx.BlockTime(),
+		settlementType,
+		isFinal,
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	)
+
+	if err := k.SetSettlement(ctx, *settlement); err != nil {
+		return nil, err
+	}
+
+	return settlement, nil
 }
 
 // DisputeEscrow marks an escrow as disputed
