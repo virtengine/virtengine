@@ -5,6 +5,7 @@ package keeper
 
 import (
 	"encoding/json"
+	"math"
 
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -140,6 +141,10 @@ func updateAverageFixed(prev string, count uint64, value int64) string {
 		return formatFixedPoint(value)
 	}
 	prevVal := parseFixedPoint(prev)
-	newVal := (prevVal*int64(count) + value) / int64(count+1)
+	if count > math.MaxInt64-1 {
+		return formatFixedPoint(prevVal)
+	}
+	count64 := int64(count)
+	newVal := (prevVal*count64 + value) / (count64 + 1)
 	return formatFixedPoint(newVal)
 }

@@ -832,7 +832,7 @@ func (k Keeper) preemptionPlan(ctx sdk.Context, cluster types.HPCCluster, job *t
 	})
 
 	var freed int32
-	var preempted []string
+	preempted := make([]string, 0, len(running))
 	for _, entry := range running {
 		preempted = append(preempted, entry.job.JobID)
 		freed = saturatingAddInt32(freed, entry.job.Resources.Nodes)
