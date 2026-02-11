@@ -22,6 +22,7 @@ TEST_ENVIRONMENT="${TEST_ENVIRONMENT:-staging}"
 DR_BUCKET="${DR_BUCKET:-}"
 SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
 RESULTS_DIR="${RESULTS_DIR:-/var/log/dr-tests}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -187,6 +188,40 @@ test_key_backups() {
     
     local duration=$(($(date +%s) - start))
     record_result "key_backups" "$passed" "$duration" "$details"
+}
+
+# Test 4: Provider State Backup
+test_provider_state_backup() {
+    log_test "Testing provider state backups..."
+    local start=$(date +%s)
+    local passed=true
+    local details=""
+    local provider_dir="${PROVIDER_SNAPSHOT_DIR:-/data/provider-snapshots}"
+
+    if [ -d "$provider_dir" ]; then
+        local backups=$(ls "${provider_dir}"/provider_state_*_metadata.json 2>/dev/null | wc -l)
+        if [ "$backups" -lt 1 ]; then
+            passed=false
+            details="No provider state backups found"
+        else
+            if [ -x "${SCRIPT_DIR}/backup-provider-state.sh" ]; then
+                if ! "${SCRIPT_DIR}/backup-provider-state.sh" --verify > /dev/null 2>&1; then
+                    passed=false
+                    details="Provider backup verification failed"
+                else
+                    details="Provider backups present and verified"
+                fi
+            else
+                details="Provider backups present (verification script missing)"
+            fi
+        fi
+    else
+        passed=false
+        details="Provider backup directory not found: ${provider_dir}"
+    fi
+
+    local duration=$(($(date +%s) - start))
+    record_result "provider_state_backup" "$passed" "$duration" "$details"
 }
 
 # Test 4: State Sync Endpoints
@@ -417,6 +452,7 @@ run_all_tests() {
     test_backup_integrity
     test_backup_age
     test_key_backups
+    test_provider_state_backup
     test_state_sync_endpoints
     test_cross_region_connectivity
     test_dns_health
@@ -594,6 +630,7 @@ main() {
             test_backup_integrity
             test_backup_age
             test_key_backups
+            test_provider_state_backup
             test_backup_restore_dryrun
             ;;
         connectivity)
