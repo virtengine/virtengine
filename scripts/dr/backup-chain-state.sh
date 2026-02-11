@@ -263,6 +263,8 @@ create_snapshot() {
     log_info "Exporting state JSON..."
     if ! "$VIRTENGINE_CMD" export --height "$height" > "${SNAPSHOT_DIR}/${snapshot_name}.json" 2>/dev/null; then
         log_warn "State export failed or not supported, skipping JSON export"
+        json_exported=0
+        rm -f "${SNAPSHOT_DIR}/${snapshot_name}.json"
         touch "${SNAPSHOT_DIR}/${snapshot_name}.json.skipped"
     fi
     
@@ -295,9 +297,11 @@ EOF
 
     # Generate checksums
     cd "${SNAPSHOT_DIR}"
-    sha256sum "${snapshot_name}.json" "${snapshot_name}_data.tar.gz" "${snapshot_name}_metadata.json" 2>/dev/null \
-        > "${snapshot_name}.sha256" || \
-        sha256sum "${snapshot_name}_data.tar.gz" "${snapshot_name}_metadata.json" > "${snapshot_name}.sha256"
+    local checksum_files=("${snapshot_name}_data.tar.gz" "${snapshot_name}_metadata.json")
+    if [ "$json_exported" -eq 1 ] && [ -f "${snapshot_name}.json" ] && [ ! -f "${snapshot_name}.json.skipped" ]; then
+        checksum_files=("${snapshot_name}.json" "${checksum_files[@]}")
+    fi
+    sha256sum "${checksum_files[@]}" > "${snapshot_name}.sha256"
     
     sign_snapshot "$snapshot_name"
 
@@ -342,6 +346,12 @@ upload_to_remote() {
             --storage-class STANDARD_IA \
             --only-show-errors
     fi
+
+    if [ -f "${SNAPSHOT_DIR}/${snapshot_name}.json.skipped" ]; then
+        aws s3 cp "${SNAPSHOT_DIR}/${snapshot_name}.json.skipped" \
+            "${remote_path}/${snapshot_name}.json.skipped" \
+            --only-show-errors
+    fi
     
     # Upload checksums
     aws s3 cp "${SNAPSHOT_DIR}/${snapshot_name}.sha256" \
@@ -381,6 +391,7 @@ cleanup_old_snapshots() {
     ls -t state_*.sha256 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
     ls -t state_*.sig 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
     ls -t state_*.json 2>/dev/null | grep -v metadata | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
+    ls -t state_*.json.skipped 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
     
     log_info "Cleanup complete"
 }
@@ -404,10 +415,30 @@ verify_backup() {
     cd "${SNAPSHOT_DIR}"
     
     # Verify checksums
-    if sha256sum -c "${snapshot_name}.sha256"; then
+    local checksum_file="${snapshot_name}.sha256"
+    local verify_checksum_file="${checksum_file}"
+    if [ ! -f "${snapshot_name}.json" ] && grep -q " ${snapshot_name}.json$" "${checksum_file}"; then
+        if [ -f "${snapshot_name}.json.skipped" ]; then
+            log_warn "State export marked as skipped; verifying remaining files"
+        else
+            log_warn "State export missing; verifying remaining files"
+        fi
+        verify_checksum_file="$(mktemp)"
+        grep -v " ${snapshot_name}.json$" "${checksum_file}" > "${verify_checksum_file}"
+    fi
+
+    if sha256sum -c "${verify_checksum_file}"; then
         log_info "Local checksum verification: PASSED"
     else
         log_error "Local checksum verification: FAILED"
+        [ "${verify_checksum_file}" != "${checksum_file}" ] && rm -f "${verify_checksum_file}"
+        return 1
+    fi
+    [ "${verify_checksum_file}" != "${checksum_file}" ] && rm -f "${verify_checksum_file}"
+
+    # Verify signature
+    if ! verify_snapshot_signature "$snapshot_name"; then
+        log_error "Signature verification failed"
         return 1
     fi
 
