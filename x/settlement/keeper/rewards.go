@@ -9,6 +9,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -42,26 +43,30 @@ func (k Keeper) DistributeStakingRewards(ctx sdk.Context, epoch uint64) (*types.
 	// This would be integrated with the distribution module in production
 
 	params := k.GetParams(ctx)
-	_ = params
+	rewardPoolAddr := params.RewardPoolAddress
+	if rewardPoolAddr == "" {
+		rewardPoolAddr = authtypes.NewModuleAddress(authtypes.FeeCollectorName).String()
+	}
+
+	if _, err := sdk.AccAddressFromBech32(rewardPoolAddr); err != nil {
+		return nil, types.ErrInvalidReward.Wrap("invalid reward pool address")
+	}
 
 	// Generate distribution ID
 	seq := k.incrementDistributionSequence(ctx)
 	distributionID := generateIDWithTimestamp("staking", seq, ctx.BlockTime().Unix())
 
-	// Create a placeholder recipient using module account
-	// In production, this would be real delegators calculated from staking module
-	moduleAddr := sdk.AccAddress([]byte("placeholder_staking_"))
-	placeholderRecipient := types.RewardRecipient{
-		Address: moduleAddr.String(),
+	rewardRecipient := types.RewardRecipient{
+		Address: rewardPoolAddr,
 		Amount:  sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1))), // Minimum valid amount
-		Reason:  "epoch placeholder - staking rewards",
+		Reason:  "staking rewards to reward pool",
 	}
 
 	dist := types.NewRewardDistribution(
 		distributionID,
 		epoch,
 		types.RewardSourceStaking,
-		[]types.RewardRecipient{placeholderRecipient},
+		[]types.RewardRecipient{rewardRecipient},
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
@@ -106,7 +111,8 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 
 	k.Logger(ctx).Info("distributing provider rewards", "usage_records", len(usageRecords))
 
-	// Aggregate usage by provider
+	// Aggregate rewards by provider
+	providerRewards := make(map[string]sdk.Coins)
 	providerUsage := make(map[string]uint64)
 	providerOrderIDs := make(map[string][]string)
 
@@ -115,23 +121,26 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 		providerOrderIDs[usage.Provider] = append(providerOrderIDs[usage.Provider], usage.OrderID)
 	}
 
-	// Calculate rewards based on usage
-	// In production, you would have a reward rate per usage unit
 	params := k.GetParams(ctx)
-	_ = params
-
-	recipients := make([]types.RewardRecipient, 0, len(providerUsage))
-
-	for provider, units := range providerUsage {
-		// Calculate reward (placeholder: 1 token per 100 usage units)
-		rewardAmount := sdkmath.NewInt(safeInt64FromUint64(units / 100))
+	for _, usage := range usageRecords {
+		rewardAmount := k.calculateUsageReward(usage, params)
 		if rewardAmount.IsZero() {
+			continue
+		}
+		providerRewards[usage.Provider] = providerRewards[usage.Provider].Add(rewardAmount...)
+	}
+
+	recipients := make([]types.RewardRecipient, 0, len(providerRewards))
+
+	for provider, rewards := range providerRewards {
+		units := providerUsage[provider]
+		if rewards.IsZero() {
 			continue
 		}
 
 		recipients = append(recipients, types.RewardRecipient{
 			Address:     provider,
-			Amount:      sdk.NewCoins(sdk.NewCoin("uve", rewardAmount)),
+			Amount:      rewards,
 			Reason:      "provider usage reward",
 			UsageUnits:  units,
 			ReferenceID: providerOrderIDs[provider][0], // First order as reference
@@ -590,13 +599,6 @@ func (k Keeper) EndBlockerRewards(ctx sdk.Context) error {
 	k.ProcessRewardExpiry(ctx)
 
 	return nil
-}
-
-func safeInt64FromUint64(value uint64) int64 {
-	if value > uint64(^uint64(0)>>1) {
-		return int64(^uint64(0) >> 1)
-	}
-	return int64(value)
 }
 
 func safeUint32FromInt(value int) uint32 {

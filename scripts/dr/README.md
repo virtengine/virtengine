@@ -103,10 +103,6 @@ This directory contains scripts for disaster recovery operations including backu
 | `RETENTION_COUNT` | Local snapshots to keep | `10` |
 | `RESTORE_AUTO_APPROVE` | Skip restore delay | `0` |
 | `RESTORE_SKIP_SERVICE` | Skip systemctl stop/start | `0` |
-| `RESTORE_STATUS_TIMEOUT` | Wait for status after restore (seconds) | `60` |
-| `RESTORE_MAX_WAIT` | Seconds to wait for sync check | `300` |
-| `RESTORE_FALLBACK_ENABLED` | Allow fallback to older snapshots | `1` |
-| `RESTORE_ROLLBACK_ON_FAILURE` | Roll back to previous data on restore failure | `1` |
 
 ### Key Backup
 
@@ -125,9 +121,6 @@ This directory contains scripts for disaster recovery operations including backu
 | `PROVIDER_HOME` | Provider daemon home | `/opt/provider-daemon` |
 | `PROVIDER_SNAPSHOT_DIR` | Provider backup storage | `/data/provider-snapshots` |
 | `RETENTION_COUNT` | Backups to keep | `10` |
-| `RESTORE_FALLBACK_ENABLED` | Allow fallback to latest valid backup | `1` |
-| `RESTORE_ROLLBACK_ON_FAILURE` | Roll back to previous provider data/config on failure | `1` |
-| `PROVIDER_HEALTHCHECK_CMD` | Optional healthcheck command post-restore | (optional) |
 
 ### Snapshot Signing Keys
 

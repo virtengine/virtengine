@@ -765,12 +765,5 @@ func GenerateRequestID(requesterAddress, subjectAddress string, nonce []byte) st
 	return "req_" + hex.EncodeToString(h.Sum(nil)[:16])
 }
 
-// ComputeCommitmentHash computes a commitment hash for hidden values
-func ComputeCommitmentHash(value interface{}, salt []byte) ([]byte, error) {
-	h := sha256.New()
-	h.Write(salt)
-	// Use simple string representation for MVP
-	// In production, this would use a proper commitment scheme
-	fmt.Fprintf(h, "%v", value)
-	return h.Sum(nil), nil
-}
+// ComputeCommitmentHash computes a cryptographic commitment for hidden values.
+// Implemented in proof_types.go using Pedersen commitments.

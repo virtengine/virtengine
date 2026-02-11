@@ -25,9 +25,7 @@
 #   RESTORE_AUTO_APPROVE     Skip restore delay (default: 0)
 #   RESTORE_SKIP_SERVICE     Skip systemctl stop/start (default: 0)
 #   RESTORE_MAX_WAIT         Seconds to wait for sync check (default: 300)
-#   RESTORE_STATUS_TIMEOUT   Seconds to wait for status to become available (default: 60)
 #   RESTORE_FALLBACK_ENABLED Allow fallback to older snapshots (default: 1)
-#   RESTORE_ROLLBACK_ON_FAILURE Roll back to previous data on restore failure (default: 1)
 
 set -euo pipefail
 
@@ -48,9 +46,7 @@ ALERT_WEBHOOK_TIMEOUT="${ALERT_WEBHOOK_TIMEOUT:-5}"
 RESTORE_AUTO_APPROVE="${RESTORE_AUTO_APPROVE:-0}"
 RESTORE_SKIP_SERVICE="${RESTORE_SKIP_SERVICE:-0}"
 RESTORE_MAX_WAIT="${RESTORE_MAX_WAIT:-300}"
-RESTORE_STATUS_TIMEOUT="${RESTORE_STATUS_TIMEOUT:-60}"
 RESTORE_FALLBACK_ENABLED="${RESTORE_FALLBACK_ENABLED:-1}"
-RESTORE_ROLLBACK_ON_FAILURE="${RESTORE_ROLLBACK_ON_FAILURE:-1}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -265,7 +261,6 @@ create_snapshot() {
     
     # Export state JSON (lightweight, for genesis recreation if needed)
     log_info "Exporting state JSON..."
-    local json_exported=1
     if ! "$VIRTENGINE_CMD" export --height "$height" > "${SNAPSHOT_DIR}/${snapshot_name}.json" 2>/dev/null; then
         log_warn "State export failed or not supported, skipping JSON export"
         json_exported=0
@@ -446,6 +441,12 @@ verify_backup() {
         log_error "Signature verification failed"
         return 1
     fi
+
+    # Verify signature
+    if ! verify_snapshot_signature "$snapshot_name"; then
+        log_error "Signature verification failed"
+        return 1
+    fi
     
     # Test archive integrity
     if tar -tzf "${snapshot_name}_data.tar.gz" > /dev/null 2>&1; then
@@ -530,8 +531,6 @@ restore_snapshot() {
             aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}_data.tar.gz" "${SNAPSHOT_DIR}/" --only-show-errors
             aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sha256" "${SNAPSHOT_DIR}/" --only-show-errors
             aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}_metadata.json" "${SNAPSHOT_DIR}/" --only-show-errors
-            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.json" "${SNAPSHOT_DIR}/" --only-show-errors 2>/dev/null || true
-            aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.json.skipped" "${SNAPSHOT_DIR}/" --only-show-errors 2>/dev/null || true
             aws s3 cp "${DR_BUCKET}/${region}/state/${snapshot_name}.sig" "${SNAPSHOT_DIR}/" --only-show-errors 2>/dev/null || true
         fi
 
@@ -613,48 +612,9 @@ restore_snapshot() {
 
     if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
         log_info "Starting virtengine service..."
-        if ! "$SYSTEMCTL_CMD" start virtengine; then
-            log_error "virtengine failed to start"
-            if [ "$RESTORE_ROLLBACK_ON_FAILURE" != "0" ] && [ -n "$backup_dir" ] && [ -d "$backup_dir" ]; then
-                log_warn "Rolling back to previous data directory"
-                "$SYSTEMCTL_CMD" stop virtengine || true
-                rm -rf "${NODE_HOME}/data"
-                mv "$backup_dir" "${NODE_HOME}/data"
-                "$SYSTEMCTL_CMD" start virtengine || true
-                notify_webhook "snapshot.restore" "failure" "Restore rolled back (service start failed)" "$snapshot_name"
-            fi
-            return 1
-        fi
+        "$SYSTEMCTL_CMD" start virtengine
     else
         log_warn "RESTORE_SKIP_SERVICE=1 set; skipping service start"
-    fi
-
-    local status_wait=0
-    local status_ready=false
-    while [ $status_wait -lt "$RESTORE_STATUS_TIMEOUT" ]; do
-        if "$VIRTENGINE_CMD" status 2>&1 | jq -e '.sync_info' > /dev/null 2>&1; then
-            status_ready=true
-            break
-        fi
-        sleep 5
-        status_wait=$((status_wait + 5))
-    done
-
-    if [ "$status_ready" = false ]; then
-        log_error "virtengine status unavailable after ${RESTORE_STATUS_TIMEOUT}s"
-        if [ "$RESTORE_ROLLBACK_ON_FAILURE" != "0" ] && [ -n "$backup_dir" ] && [ -d "$backup_dir" ]; then
-            log_warn "Rolling back to previous data directory"
-            if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
-                "$SYSTEMCTL_CMD" stop virtengine || true
-            fi
-            rm -rf "${NODE_HOME}/data"
-            mv "$backup_dir" "${NODE_HOME}/data"
-            if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
-                "$SYSTEMCTL_CMD" start virtengine || true
-            fi
-            notify_webhook "snapshot.restore" "failure" "Restore rolled back (status unavailable)" "$snapshot_name"
-        fi
-        return 1
     fi
 
     log_info "Monitoring sync progress..."

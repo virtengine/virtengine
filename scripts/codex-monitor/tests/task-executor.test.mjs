@@ -16,8 +16,6 @@ vi.mock("../agent-pool.mjs", () => ({
     Promise.resolve({ success: true, output: "done", attempts: 1 }),
   ),
   invalidateThread: vi.fn(),
-  forceNewThread: vi.fn(),
-  pruneAllExhaustedThreads: vi.fn(() => 0),
   getActiveThreads: vi.fn(() => []),
   getPoolSdkName: vi.fn(() => "codex"),
 }));
@@ -32,54 +30,6 @@ vi.mock("../worktree-manager.mjs", () => ({
 
 vi.mock("../config.mjs", () => ({
   loadConfig: vi.fn(() => ({})),
-  ExecutorScheduler: vi.fn().mockImplementation(() => ({
-    next: vi.fn(() => ({ name: "codex-default", executor: "CODEX", variant: "DEFAULT", weight: 100 })),
-    recordSuccess: vi.fn(),
-    recordFailure: vi.fn(),
-  })),
-  loadExecutorConfig: vi.fn(() => ({
-    executors: [{ name: "codex-default", executor: "CODEX", variant: "DEFAULT", weight: 100, role: "primary" }],
-    distribution: "weighted",
-    failoverStrategy: "next-in-line",
-  })),
-}));
-
-vi.mock("../task-store.mjs", () => ({
-  loadStore: vi.fn(),
-  setTaskStatus: vi.fn(),
-  recordAgentAttempt: vi.fn(),
-  recordErrorPattern: vi.fn(),
-  setTaskCooldown: vi.fn(),
-  clearTaskCooldown: vi.fn(),
-  isTaskCoolingDown: vi.fn(() => false),
-  updateTask: vi.fn(),
-  getTask: vi.fn(() => null),
-}));
-
-vi.mock("../error-detector.mjs", () => ({
-  createErrorDetector: vi.fn(() => ({
-    detect: vi.fn(() => []),
-    classify: vi.fn(() => "unknown"),
-    recordError: vi.fn(() => ({ shouldRetry: false, cooldownMs: 0 })),
-    resetTask: vi.fn(),
-    shouldPauseExecutor: vi.fn(() => false),
-    getPlanStuckRecoveryPrompt: vi.fn(() => "continue"),
-    getTokenOverflowRecoveryPrompt: vi.fn(() => "summarize"),
-  })),
-}));
-
-vi.mock("../task-complexity.mjs", () => ({
-  resolveExecutorForTask: vi.fn((task, profile) => ({
-    ...profile,
-    resolvedModel: profile.variant || "DEFAULT",
-    complexity: "MEDIUM",
-  })),
-  executorToSdk: vi.fn((executor) => {
-    if (executor === "CLAUDE") return "claude";
-    if (executor === "COPILOT") return "copilot";
-    return "codex";
-  }),
-  formatComplexityDecision: vi.fn(() => "MEDIUM → codex-default (CODEX:DEFAULT)"),
 }));
 
 vi.mock("node:child_process", () => ({
@@ -90,9 +40,6 @@ vi.mock("node:child_process", () => ({
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(() => ""),
   existsSync: vi.fn(() => false),
-  appendFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  writeFileSync: vi.fn(),
 }));
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────

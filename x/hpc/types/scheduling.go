@@ -255,6 +255,39 @@ type SchedulingDecision struct {
 	// CombinedScore is the combined selection score (fixed-point, 6 decimals)
 	CombinedScore string `json:"combined_score"`
 
+	// PriorityScore is the priority score (fixed-point, 6 decimals)
+	PriorityScore string `json:"priority_score,omitempty"`
+
+	// FairShareScore is the fair-share score (fixed-point, 6 decimals)
+	FairShareScore string `json:"fair_share_score,omitempty"`
+
+	// AgeScore is the age-based priority score (fixed-point, 6 decimals)
+	AgeScore string `json:"age_score,omitempty"`
+
+	// JobSizeScore is the size-based priority score (fixed-point, 6 decimals)
+	JobSizeScore string `json:"job_size_score,omitempty"`
+
+	// PartitionScore is the partition priority score (fixed-point, 6 decimals)
+	PartitionScore string `json:"partition_score,omitempty"`
+
+	// PreemptionPlanned indicates if preemption is required to place the job
+	PreemptionPlanned bool `json:"preemption_planned,omitempty"`
+
+	// PreemptedJobIDs lists jobs planned for preemption
+	PreemptedJobIDs []string `json:"preempted_job_ids,omitempty"`
+
+	// BackfillUsed indicates if backfill scheduling was used
+	BackfillUsed bool `json:"backfill_used,omitempty"`
+
+	// BackfillWindowSeconds is the backfill window applied
+	BackfillWindowSeconds int64 `json:"backfill_window_seconds,omitempty"`
+
+	// QuotaBurstUsed indicates burst quota usage
+	QuotaBurstUsed bool `json:"quota_burst_used,omitempty"`
+
+	// QuotaReason explains quota usage or denial
+	QuotaReason string `json:"quota_reason,omitempty"`
+
 	// CreatedAt is when the decision was made
 	CreatedAt time.Time `json:"created_at"`
 
@@ -284,6 +317,27 @@ type ClusterCandidate struct {
 
 	// CombinedScore is the combined score (fixed-point, 6 decimals)
 	CombinedScore string `json:"combined_score"`
+
+	// PriorityScore is the priority score (fixed-point, 6 decimals)
+	PriorityScore string `json:"priority_score,omitempty"`
+
+	// FairShareScore is the fair-share score (fixed-point, 6 decimals)
+	FairShareScore string `json:"fair_share_score,omitempty"`
+
+	// AgeScore is the age-based priority score (fixed-point, 6 decimals)
+	AgeScore string `json:"age_score,omitempty"`
+
+	// JobSizeScore is the size-based priority score (fixed-point, 6 decimals)
+	JobSizeScore string `json:"job_size_score,omitempty"`
+
+	// PartitionScore is the partition priority score (fixed-point, 6 decimals)
+	PartitionScore string `json:"partition_score,omitempty"`
+
+	// PreemptionPossible indicates if preemption could satisfy capacity
+	PreemptionPossible bool `json:"preemption_possible,omitempty"`
+
+	// QuotaBurstUsed indicates burst quota usage for this candidate
+	QuotaBurstUsed bool `json:"quota_burst_used,omitempty"`
 
 	// Eligible indicates if the cluster was eligible
 	Eligible bool `json:"eligible"`

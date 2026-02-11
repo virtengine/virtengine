@@ -587,6 +587,11 @@ func (app *App) InitNormalKeepers(
 	// This enables validator-only operations like UpdateVerificationStatus and UpdateScore
 	app.Keepers.VirtEngine.VEID.SetStakingKeeper(app.Keepers.Cosmos.Staking)
 
+	// Set external keepers on VEID for GDPR portability exports
+	app.Keepers.VirtEngine.VEID.SetMarketKeeper(app.Keepers.VirtEngine.Market)
+	app.Keepers.VirtEngine.VEID.SetEscrowKeeper(app.Keepers.VirtEngine.Escrow)
+	app.Keepers.VirtEngine.VEID.SetDelegationKeeper(app.Keepers.VirtEngine.Delegation)
+
 	app.Keepers.VirtEngine.HPC = hpckeeper.NewKeeper(
 		cdc,
 		app.keys[hpctypes.StoreKey],
@@ -606,6 +611,7 @@ func (app *App) InitNormalKeepers(
 		cdc,
 		app.keys[settlementtypes.StoreKey],
 		app.Keepers.Cosmos.Bank,
+		app.Keepers.VirtEngine.Escrow,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		app.Keepers.VirtEngine.Encryption,
 	)
@@ -667,6 +673,8 @@ func (app *App) InitNormalKeepers(
 	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(hpckeeper.BillingKeeper); ok {
 		app.Keepers.VirtEngine.HPC.SetBillingKeeper(billingKeeper)
 	}
+
+	app.Keepers.VirtEngine.HPC.SetSettlementKeeper(app.Keepers.VirtEngine.Settlement)
 }
 
 func (app *App) SetupHooks() {

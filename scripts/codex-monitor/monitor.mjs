@@ -7834,6 +7834,25 @@ function selfRestartForSourceChange(filename) {
     vkLogStream.stop();
     vkLogStream = null;
   }
+  // ── Stop internal executor + agent endpoint BEFORE exit ──
+  // This ensures running agents get a chance to finish and ports are released.
+  const shutdownPromises = [];
+  if (internalTaskExecutor) {
+    console.log("[monitor] stopping internal task executor for restart...");
+    shutdownPromises.push(
+      Promise.resolve(internalTaskExecutor.stop()).catch((e) =>
+        console.warn(`[monitor] executor stop error: ${e.message}`),
+      ),
+    );
+  }
+  if (agentEndpoint) {
+    console.log("[monitor] stopping agent endpoint for restart...");
+    shutdownPromises.push(
+      Promise.resolve(agentEndpoint.stop()).catch((e) =>
+        console.warn(`[monitor] endpoint stop error: ${e.message}`),
+      ),
+    );
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -7857,8 +7876,13 @@ function selfRestartForSourceChange(filename) {
   } catch {
     /* best effort */
   }
-  // Exit with special code — cli.mjs re-forks with fresh module cache
-  setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+  // Wait for executor/endpoint shutdown, then exit
+  Promise.allSettled(shutdownPromises).then(() => {
+    // Exit with special code — cli.mjs re-forks with fresh module cache
+    setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+  });
+  // Safety net: exit after 10s even if shutdown hangs
+  setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 10000);
 }
 
 function attemptSelfRestartAfterQuiet() {
@@ -8643,10 +8667,15 @@ if (executorMode === "internal" || executorMode === "hybrid") {
           }
         },
       });
-      agentEndpoint.start();
-      console.log("[monitor] agent endpoint started");
+      agentEndpoint.start().then(() => {
+        console.log("[monitor] agent endpoint started");
+      }).catch((err) => {
+        console.warn(`[monitor] agent endpoint failed to start: ${err.message}`);
+        agentEndpoint = null;
+      });
     } catch (err) {
-      console.warn(`[monitor] agent endpoint failed to start: ${err.message}`);
+      console.warn(`[monitor] agent endpoint creation failed: ${err.message}`);
+      agentEndpoint = null;
     }
 
     // ── Review Agent ──

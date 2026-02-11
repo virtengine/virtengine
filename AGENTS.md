@@ -57,11 +57,6 @@ If you notice unexpected modified/untracked files, assume another agent/subagent
 - Code references use `path/to/file.ext:line` format to anchor guidance.
 - Update AGENTS.md in the same PR as code changes to keep documentation in sync.
 
-## Autonomous Execution
-
-- Agents must act autonomously: identify issues, implement fixes, and proceed without prompting the user to approve a plan.
-- Do not ask “Let me know if you want me to implement this” (or similar). Implement by default.
-
 ## Usage Examples
 
 ### Find module guidance

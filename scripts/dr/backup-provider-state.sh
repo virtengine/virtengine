@@ -22,10 +22,7 @@
 #   ALERT_WEBHOOK_TIMEOUT    Webhook timeout seconds (default: 5)
 #   RESTORE_AUTO_APPROVE     Skip restore delay (default: 0)
 #   RESTORE_SKIP_SERVICE     Skip systemctl stop/start (default: 0)
-#   RESTORE_FALLBACK_ENABLED Allow fallback to latest valid backup (default: 1)
-#   RESTORE_ROLLBACK_ON_FAILURE Roll back to previous data on restore failure (default: 1)
 #   SYSTEMCTL_CMD            Override systemctl command (default: systemctl)
-#   PROVIDER_HEALTHCHECK_CMD Optional command to validate provider health post-restore
 
 set -euo pipefail
 
@@ -41,10 +38,7 @@ ALERT_WEBHOOK="${ALERT_WEBHOOK:-}"
 ALERT_WEBHOOK_TIMEOUT="${ALERT_WEBHOOK_TIMEOUT:-5}"
 RESTORE_AUTO_APPROVE="${RESTORE_AUTO_APPROVE:-0}"
 RESTORE_SKIP_SERVICE="${RESTORE_SKIP_SERVICE:-0}"
-RESTORE_FALLBACK_ENABLED="${RESTORE_FALLBACK_ENABLED:-1}"
-RESTORE_ROLLBACK_ON_FAILURE="${RESTORE_ROLLBACK_ON_FAILURE:-1}"
 SYSTEMCTL_CMD="${SYSTEMCTL_CMD:-systemctl}"
-PROVIDER_HEALTHCHECK_CMD="${PROVIDER_HEALTHCHECK_CMD:-}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -350,126 +344,30 @@ verify_backup() {
     return 0
 }
 
-download_backup_from_remote() {
-    local backup_name="$1"
-
-    if [ -z "$DR_BUCKET" ]; then
-        return 1
-    fi
-
-    local region
-    region=$(get_region)
-
-    log_info "Downloading provider backup ${backup_name} from remote..."
-    aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}.tar.gz" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors
-    aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}.sha256" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors
-    aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}_metadata.json" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors
-    aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}.sig" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors 2>/dev/null || true
-}
-
-collect_restore_candidates() {
-    local requested="$1"
-    declare -A seen
-    local candidates=()
-
-    if [ -n "$requested" ]; then
-        candidates+=("$requested")
-        seen["$requested"]=1
-    fi
-
-    if [ "$RESTORE_FALLBACK_ENABLED" != "0" ]; then
-        while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            local name
-            name=$(basename "$line" .tar.gz)
-            if [ -z "${seen[$name]+x}" ]; then
-                candidates+=("$name")
-                seen["$name"]=1
-            fi
-        done < <(ls -t "${PROVIDER_SNAPSHOT_DIR}"/provider_state_*.tar.gz 2>/dev/null || true)
-
-        if [ -n "$DR_BUCKET" ]; then
-            local region
-            region=$(get_region)
-            while IFS= read -r line; do
-                [ -z "$line" ] && continue
-                local name
-                name=$(echo "$line" | awk '{print $4}' | sed 's/.tar.gz//')
-                if [ -n "$name" ] && [ -z "${seen[$name]+x}" ]; then
-                    candidates+=("$name")
-                    seen["$name"]=1
-                fi
-            done < <(aws s3 ls "${DR_BUCKET}/${region}/provider/" 2>/dev/null | grep "provider_state_" | grep ".tar.gz" || true)
-        fi
-    fi
-
-    for candidate in "${candidates[@]}"; do
-        echo "$candidate"
-    done
-}
-
-select_backup_for_restore() {
-    local requested="$1"
-    local candidate=""
-
-    while IFS= read -r candidate; do
-        [ -z "$candidate" ] && continue
-
-        if [ ! -f "${PROVIDER_SNAPSHOT_DIR}/${candidate}.tar.gz" ]; then
-            if [ -n "$DR_BUCKET" ]; then
-                if ! download_backup_from_remote "$candidate"; then
-                    log_warn "Unable to download backup ${candidate} from remote"
-                    continue
-                fi
-            else
-                continue
-            fi
-        fi
-
-        log_info "Validating provider backup candidate: ${candidate}"
-        if verify_backup "$candidate"; then
-            echo "$candidate"
-            return 0
-        fi
-
-        log_warn "Provider backup validation failed: ${candidate}"
-    done < <(collect_restore_candidates "$requested")
-
-    return 1
-}
-
-run_provider_healthcheck() {
-    if [ -z "$PROVIDER_HEALTHCHECK_CMD" ]; then
-        return 0
-    fi
-
-    log_info "Running provider healthcheck..."
-    if bash -c "$PROVIDER_HEALTHCHECK_CMD" > /dev/null 2>&1; then
-        log_info "Provider healthcheck: PASSED"
-        return 0
-    fi
-
-    log_error "Provider healthcheck: FAILED"
-    return 1
-}
-
 restore_backup() {
     local backup_name="$1"
 
-    if [ -z "$backup_name" ] && [ "$RESTORE_FALLBACK_ENABLED" = "0" ]; then
+    if [ -z "$backup_name" ]; then
         log_error "Backup name required for restore"
         return 1
     fi
 
-    local selected_backup
-    if ! selected_backup=$(select_backup_for_restore "$backup_name"); then
-        log_error "No valid provider backup found for restore"
-        notify_webhook "provider.restore" "failure" "No valid provider backup available for restore" ""
-        return 1
+    log_info "Restoring provider state from ${backup_name}"
+
+    if [ ! -f "${PROVIDER_SNAPSHOT_DIR}/${backup_name}.tar.gz" ] && [ -n "$DR_BUCKET" ]; then
+        local region
+        region=$(get_region)
+        log_info "Downloading provider backup from remote..."
+        aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}.tar.gz" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors
+        aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}.sha256" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors
+        aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}_metadata.json" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors
+        aws s3 cp "${DR_BUCKET}/${region}/provider/${backup_name}.sig" "${PROVIDER_SNAPSHOT_DIR}/" --only-show-errors 2>/dev/null || true
     fi
 
-    backup_name="$selected_backup"
-    log_info "Restoring provider state from ${backup_name}"
+    if ! verify_backup "$backup_name"; then
+        log_error "Backup verification failed, aborting restore"
+        return 1
+    fi
 
     log_warn "This will REPLACE the current provider daemon data/config!"
     if [ "$RESTORE_AUTO_APPROVE" = "0" ]; then
@@ -499,13 +397,11 @@ restore_backup() {
 
     if ! tar -xzf "${PROVIDER_SNAPSHOT_DIR}/${backup_name}.tar.gz" -C "$restore_dir"; then
         log_error "Provider backup extraction failed"
-        if [ "$RESTORE_ROLLBACK_ON_FAILURE" != "0" ]; then
-            if [ -d "$backup_dir" ]; then
-                mv "$backup_dir" "${PROVIDER_HOME}/data"
-            fi
-            if [ -d "$config_backup_dir" ]; then
-                mv "$config_backup_dir" "${PROVIDER_HOME}/config"
-            fi
+        if [ -d "$backup_dir" ]; then
+            mv "$backup_dir" "${PROVIDER_HOME}/data"
+        fi
+        if [ -d "$config_backup_dir" ]; then
+            mv "$config_backup_dir" "${PROVIDER_HOME}/config"
         fi
         rm -rf "$restore_dir"
         notify_webhook "provider.restore" "failure" "Provider backup extraction failed" "$backup_name"
@@ -524,52 +420,9 @@ restore_backup() {
 
     if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
         log_info "Starting provider-daemon service..."
-        if ! "$SYSTEMCTL_CMD" start provider-daemon; then
-            log_error "provider-daemon failed to start"
-            if [ "$RESTORE_ROLLBACK_ON_FAILURE" != "0" ]; then
-                log_warn "Rolling back to previous provider state"
-                if [ -d "${PROVIDER_HOME}/data" ]; then
-                    rm -rf "${PROVIDER_HOME}/data"
-                fi
-                if [ -d "${PROVIDER_HOME}/config" ]; then
-                    rm -rf "${PROVIDER_HOME}/config"
-                fi
-                if [ -d "$backup_dir" ]; then
-                    mv "$backup_dir" "${PROVIDER_HOME}/data"
-                fi
-                if [ -d "$config_backup_dir" ]; then
-                    mv "$config_backup_dir" "${PROVIDER_HOME}/config"
-                fi
-                "$SYSTEMCTL_CMD" start provider-daemon || true
-                notify_webhook "provider.restore" "failure" "Provider restore rolled back (service start failed)" "$backup_name"
-            fi
-            return 1
-        fi
+        "$SYSTEMCTL_CMD" start provider-daemon || true
     else
         log_warn "RESTORE_SKIP_SERVICE=1 set; skipping service start"
-    fi
-
-    if ! run_provider_healthcheck; then
-        if [ "$RESTORE_ROLLBACK_ON_FAILURE" != "0" ]; then
-            log_warn "Rolling back to previous provider state"
-            if [ -d "${PROVIDER_HOME}/data" ]; then
-                rm -rf "${PROVIDER_HOME}/data"
-            fi
-            if [ -d "${PROVIDER_HOME}/config" ]; then
-                rm -rf "${PROVIDER_HOME}/config"
-            fi
-            if [ -d "$backup_dir" ]; then
-                mv "$backup_dir" "${PROVIDER_HOME}/data"
-            fi
-            if [ -d "$config_backup_dir" ]; then
-                mv "$config_backup_dir" "${PROVIDER_HOME}/config"
-            fi
-            if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
-                "$SYSTEMCTL_CMD" restart provider-daemon || true
-            fi
-            notify_webhook "provider.restore" "failure" "Provider restore rolled back (healthcheck failed)" "$backup_name"
-        fi
-        return 1
     fi
 
     notify_webhook "provider.restore" "success" "Provider state restore completed" "$backup_name"

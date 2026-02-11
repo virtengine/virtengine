@@ -29,7 +29,6 @@ In that case:
 5. **Never bypass quality gates.** Do not use `--no-verify` on git push. Fix lint/test/build errors instead.
 6. **Conventional Commits required.** Format: `type(scope): description` (e.g., `feat(veid): add identity verification flow`).
 7. **Never Plan without Completing the task** For example, don't create a plan and ask the user for confirmation to execute the plan - make sure you actually implement the requirements as per the task outline.
-8. **No permission prompts**: Do not ask “let me know if you want me to implement this” or similar. If you identify a fix, implement it.
 
 ## Your Available Tools
 
@@ -39,6 +38,7 @@ You have access to:
 | --------------------- | -------------------------------------------------------------------------- |
 | **Shell** (bash/pwsh) | Run commands: `go test`, `go build`, `git`, `make`, `gh`                   |
 | **File read/write**   | Read, create, and edit files in the workspace                              |
+| **codex-cli MCP**     | Spawn sub-agents for parallel subtasks (use instead of `runSubagent`)      |
 | **GitHub MCP**        | Search code, create issues, list PRs — but NOT for creating this task's PR |
 | **Context7 MCP**      | Look up library documentation (Cosmos SDK, TensorFlow, gRPC, etc.)         |
 | **Exa MCP**           | Web search for up-to-date code examples and documentation                  |
@@ -96,7 +96,6 @@ Use this when a task has clearly separable, independent pieces. Do NOT use for s
 Codex does not have a native subagent tool like Copilot, so use:
 
 **CLI exec**: `codex exec` (best for file writes)
-
 - Put options **before** the prompt: `codex exec -s workspace-write -C <repo> "<prompt>"`
 - If writes are blocked by policy, use:
   `codex exec --dangerously-bypass-approvals-and-sandbox -C <repo> "<prompt>"`
