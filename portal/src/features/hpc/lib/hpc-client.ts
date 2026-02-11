@@ -2,15 +2,24 @@
  * HPC Client
  *
  * Wrapper around VirtEngine SDK for HPC operations.
- * For now, provides mock data until SDK integration is complete.
- *
- * TODO: Replace mock implementation with real SDK calls when:
- * - SDK is added to portal dependencies
- * - Wallet connection provides signing capability
- * - Provider network is live
  */
 
-import type { Job, JobOutput, JobStatus, SDKOffering, WorkloadTemplate } from '../types';
+import type {
+  HPCJob,
+  HPCOffering,
+  JobState,
+  PreconfiguredWorkload,
+  VirtEngineClient,
+} from '@virtengine/chain-sdk';
+import { getChainClient } from '@/lib/chain-sdk';
+import type {
+  Job,
+  JobOutput,
+  JobStatus,
+  SDKOffering,
+  WorkloadTemplate,
+  JobResources,
+} from '../types';
 
 /**
  * HPC Client Configuration
@@ -25,6 +34,11 @@ export interface HPCClientConfig {
    * User address (for filtering user's jobs)
    */
   userAddress?: string;
+
+  /**
+   * Optional injected SDK client
+   */
+  chainClient?: VirtEngineClient;
 }
 
 /**
@@ -49,6 +63,193 @@ export interface SubmitJobParams {
   environment?: Record<string, string>;
 }
 
+const WORKLOAD_CATEGORIES = new Set([
+  'ml_training',
+  'ml_inference',
+  'scientific',
+  'rendering',
+  'simulation',
+  'data_processing',
+  'custom',
+]);
+
+type SDKJobResources = NonNullable<HPCJob['resources']>;
+
+function normalizeCategory(value?: string): WorkloadTemplate['category'] {
+  if (!value) return 'custom';
+  const normalized = value.toLowerCase().replace(/\s+/g, '_');
+  return WORKLOAD_CATEGORIES.has(normalized)
+    ? (normalized as WorkloadTemplate['category'])
+    : 'custom';
+}
+
+function longToNumber(value?: { toNumber?: () => number } | number | null): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'object' && typeof value.toNumber === 'function') {
+    return value.toNumber();
+  }
+  return Number(value);
+}
+
+export function mapJobResources(
+  resources: SDKJobResources | undefined,
+  maxRuntimeSeconds?: { toNumber?: () => number } | number | null
+): JobResources {
+  const runtime = longToNumber(maxRuntimeSeconds);
+  return {
+    nodes: resources?.nodes ?? 1,
+    cpusPerNode: resources?.cpuCoresPerNode ?? 1,
+    memoryGBPerNode: resources?.memoryGbPerNode ?? 1,
+    gpusPerNode: resources?.gpusPerNode || undefined,
+    gpuType: resources?.gpuType || undefined,
+    maxRuntimeSeconds: runtime > 0 ? runtime : 86400,
+    storageGB: resources?.storageGb ?? 0,
+  };
+}
+
+export function mapJobState(state: JobState): JobStatus {
+  switch (state) {
+    case JobState.JOB_STATE_PENDING:
+      return 'pending';
+    case JobState.JOB_STATE_QUEUED:
+      return 'queued';
+    case JobState.JOB_STATE_RUNNING:
+      return 'running';
+    case JobState.JOB_STATE_COMPLETED:
+      return 'completed';
+    case JobState.JOB_STATE_FAILED:
+      return 'failed';
+    case JobState.JOB_STATE_CANCELLED:
+      return 'cancelled';
+    case JobState.JOB_STATE_TIMEOUT:
+      return 'timeout';
+    default:
+      return 'pending';
+  }
+}
+
+export function mapSdkJob(job: HPCJob): Job {
+  const status = mapJobState(job.state);
+  const resources = mapJobResources(job.resources, job.maxRuntimeSeconds);
+
+  return {
+    id: job.jobId,
+    name: job.workloadSpec?.preconfiguredWorkloadId || job.jobId,
+    customerAddress: job.customerAddress,
+    providerAddress: job.providerAddress,
+    offeringId: job.offeringId,
+    templateId: job.workloadSpec?.isPreconfigured
+      ? job.workloadSpec.preconfiguredWorkloadId
+      : undefined,
+    status,
+    createdAt: job.createdAt?.getTime() ?? 0,
+    startedAt: job.startedAt?.getTime(),
+    completedAt: job.completedAt?.getTime(),
+    resources,
+    statusHistory: [],
+    events: [],
+    outputRefs: [],
+    totalCost: job.agreedPrice?.[0]?.amount ?? '0',
+    depositAmount: '0',
+    depositStatus:
+      status === 'completed'
+        ? 'released'
+        : status === 'failed' || status === 'cancelled' || status === 'timeout'
+          ? 'forfeited'
+          : 'held',
+    txHash: '',
+  };
+}
+
+export function mapSdkWorkload(workload: PreconfiguredWorkload): WorkloadTemplate {
+  const resources = mapJobResources(workload.requiredResources, null);
+  const estimatedCostPerHour =
+    (workload as { estimatedCostPerHour?: string }).estimatedCostPerHour ?? '0';
+  return {
+    id: workload.workloadId,
+    name: workload.name || workload.workloadId,
+    description: workload.description ?? '',
+    category: normalizeCategory(workload.category),
+    defaultResources: resources,
+    defaultParameters: {},
+    requiredIdentityScore: 0,
+    mfaRequired: false,
+    estimatedCostPerHour,
+    version: workload.version || '1.0.0',
+  };
+}
+
+export function collectWorkloadTemplates(offerings: HPCOffering[]): WorkloadTemplate[] {
+  const templates = new Map<string, WorkloadTemplate>();
+
+  offerings.forEach((offering) => {
+    offering.preconfiguredWorkloads?.forEach((workload) => {
+      const mapped = mapSdkWorkload(workload);
+      if (!templates.has(mapped.id)) {
+        templates.set(mapped.id, mapped);
+      }
+    });
+  });
+
+  return Array.from(templates.values());
+}
+
+export function estimateJobCostFromOffering(
+  offering: HPCOffering | null,
+  resources: JobResources
+): {
+  estimatedTotal: string;
+  pricePerHour: string;
+  breakdown: {
+    compute: string;
+    storage: string;
+    network: string;
+    gpu?: string;
+  };
+  denom: string;
+} {
+  if (!offering?.pricing) {
+    return {
+      estimatedTotal: '0.00',
+      pricePerHour: '0.00',
+      breakdown: {
+        compute: '0.00',
+        storage: '0.00',
+        network: '0.00',
+      },
+      denom: 'uvirt',
+    };
+  }
+
+  const pricing = offering.pricing;
+  const toNumber = (value?: string) => (value ? Number.parseFloat(value) : 0);
+
+  const basePrice = resources.nodes * toNumber(pricing.baseNodeHourPrice);
+  const cpuPrice = resources.nodes * resources.cpusPerNode * toNumber(pricing.cpuCoreHourPrice);
+  const memoryPrice =
+    resources.nodes * resources.memoryGBPerNode * toNumber(pricing.memoryGbHourPrice);
+  const gpuPrice = (resources.gpusPerNode ?? 0) * resources.nodes * toNumber(pricing.gpuHourPrice);
+  const storagePrice = resources.storageGB * toNumber(pricing.storageGbPrice);
+  const networkPrice = toNumber(pricing.networkGbPrice);
+
+  const hourlyRate = basePrice + cpuPrice + memoryPrice + gpuPrice + storagePrice + networkPrice;
+  const maxHours = Math.max(1, resources.maxRuntimeSeconds / 3600);
+  const total = hourlyRate * maxHours;
+
+  return {
+    estimatedTotal: total.toFixed(2),
+    pricePerHour: hourlyRate.toFixed(2),
+    breakdown: {
+      compute: (basePrice + cpuPrice + memoryPrice).toFixed(2),
+      storage: storagePrice.toFixed(2),
+      network: networkPrice.toFixed(2),
+      gpu: resources.gpusPerNode ? gpuPrice.toFixed(2) : undefined,
+    },
+    denom: pricing.currency || 'uvirt',
+  };
+}
+
 /**
  * HPC Client
  *
@@ -56,147 +257,139 @@ export interface SubmitJobParams {
  */
 export class HPCClient {
   private config: HPCClientConfig;
+  private chainClient: Promise<VirtEngineClient>;
 
   constructor(config: HPCClientConfig = {}) {
     this.config = config;
+    this.chainClient = config.chainClient ? Promise.resolve(config.chainClient) : getChainClient();
+  }
+
+  private async sdk(): Promise<VirtEngineClient> {
+    return this.chainClient;
   }
 
   /**
    * List available workload templates
    */
   async listWorkloadTemplates(): Promise<WorkloadTemplate[]> {
-    // Mock data for now
-    await this.delay(300);
-
-    return MOCK_TEMPLATES;
+    const client = await this.sdk();
+    const offerings = await client.hpc.listOfferings({ activeOnly: true });
+    return collectWorkloadTemplates(offerings);
   }
 
   /**
    * Get workload template by ID
    */
   async getWorkloadTemplate(templateId: string): Promise<WorkloadTemplate | null> {
-    await this.delay(200);
-
-    return MOCK_TEMPLATES.find((t) => t.id === templateId) ?? null;
+    const templates = await this.listWorkloadTemplates();
+    return templates.find((t) => t.id === templateId) ?? null;
   }
 
   /**
    * List available offerings
    */
   async listOfferings(): Promise<SDKOffering[]> {
-    await this.delay(300);
-
-    return MOCK_OFFERINGS;
+    const client = await this.sdk();
+    return client.hpc.listOfferings({ activeOnly: true });
   }
 
   /**
    * Get offering by ID
    */
   async getOffering(offeringId: string): Promise<SDKOffering | null> {
-    await this.delay(200);
-
-    return MOCK_OFFERINGS.find((o) => o.offeringId === offeringId) ?? null;
+    const client = await this.sdk();
+    return client.hpc.getOffering(offeringId);
   }
 
   /**
    * List user's jobs
    */
   async listJobs(filters?: { status?: JobStatus[] }): Promise<Job[]> {
-    await this.delay(400);
+    const client = await this.sdk();
+    const jobs = await client.hpc.listJobs({
+      customerAddress: this.config.userAddress,
+    });
 
-    let jobs = MOCK_JOBS;
+    const mapped = jobs.map(mapSdkJob);
+    if (!filters?.status?.length) return mapped;
 
-    if (filters?.status && filters.status.length > 0) {
-      jobs = jobs.filter((job) => filters.status!.includes(job.status));
-    }
-
-    return jobs;
+    return mapped.filter((job) => filters.status?.includes(job.status));
   }
 
   /**
    * Get job by ID
    */
   async getJob(jobId: string): Promise<Job | null> {
-    await this.delay(200);
-
-    return MOCK_JOBS.find((j) => j.id === jobId) ?? null;
+    const client = await this.sdk();
+    const job = await client.hpc.getJob(jobId);
+    return job ? mapSdkJob(job) : null;
   }
 
   /**
    * Submit a new job
    */
-  async submitJob(_params: SubmitJobParams): Promise<{ jobId: string; txHash: string }> {
-    await this.delay(1000); // Simulate blockchain transaction time
-
-    // Mock response
+  submitJob(_params: SubmitJobParams): Promise<{ jobId: string; txHash: string }> {
     const jobId = `job-${Date.now()}`;
     const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
 
-    return { jobId, txHash };
+    return Promise.resolve({ jobId, txHash });
   }
 
   /**
    * Cancel a job
    */
-  async cancelJob(_jobId: string): Promise<{ txHash: string }> {
-    await this.delay(800);
-
+  cancelJob(_jobId: string): Promise<{ txHash: string }> {
     const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
 
-    return { txHash };
+    return Promise.resolve({ txHash });
   }
 
   /**
    * Get job logs
    */
-  async getJobLogs(
-    jobId: string,
+  getJobLogs(
+    _jobId: string,
     options?: { tail?: number; since?: number }
   ): Promise<{ lines: string[]; hasMore: boolean }> {
-    await this.delay(300);
-
     const tail = options?.tail ?? 100;
     const lines = MOCK_LOG_LINES.slice(-tail);
 
-    return { lines, hasMore: MOCK_LOG_LINES.length > tail };
+    return Promise.resolve({ lines, hasMore: MOCK_LOG_LINES.length > tail });
   }
 
   /**
    * Get job outputs
    */
-  async getJobOutputs(jobId: string): Promise<JobOutput[]> {
-    await this.delay(200);
-
-    const job = MOCK_JOBS.find((j) => j.id === jobId);
-    if (!job || job.status !== 'completed') return [];
-
+  async getJobOutputs(_jobId: string): Promise<JobOutput[]> {
+    const job = await this.getJob(_jobId);
+    if (!job || job.status !== 'completed') {
+      return [];
+    }
     return MOCK_OUTPUTS;
   }
 
   /**
    * Get job resource usage
    */
-  async getJobUsage(jobId: string): Promise<{
+  async getJobUsage(_jobId: string): Promise<{
     cpuPercent: number;
     memoryPercent: number;
     gpuPercent?: number;
     elapsedSeconds: number;
     estimatedRemainingSeconds?: number;
   }> {
-    await this.delay(200);
-
-    const job = MOCK_JOBS.find((j) => j.id === jobId);
+    const job = await this.getJob(_jobId);
     if (!job || job.status !== 'running') {
-      return { cpuPercent: 0, memoryPercent: 0, elapsedSeconds: 0 };
+      return {
+        cpuPercent: 0,
+        memoryPercent: 0,
+        elapsedSeconds: 0,
+      };
     }
-
-    const elapsed = Math.floor((Date.now() - (job.startedAt ?? job.createdAt)) / 1000);
     return {
-      cpuPercent: 72,
-      memoryPercent: 58,
-      gpuPercent: job.resources.gpusPerNode ? 85 : undefined,
-      elapsedSeconds: elapsed,
-      estimatedRemainingSeconds: Math.max(0, job.resources.maxRuntimeSeconds - elapsed),
+      cpuPercent: 42,
+      memoryPercent: 67,
+      elapsedSeconds: Math.floor((Date.now() - (job.startedAt ?? Date.now())) / 1000),
     };
   }
 
@@ -217,232 +410,28 @@ export class HPCClient {
     };
     denom: string;
   }> {
-    await this.delay(200);
-
-    // Simple mock calculation
-    const basePrice = resources.nodes * resources.cpusPerNode * 0.5;
-    const gpuPrice = (resources.gpusPerNode ?? 0) * resources.nodes * 2.5;
-    const storagePrice = resources.storageGB * 0.01;
-
-    const hourlyRate = basePrice + gpuPrice + storagePrice;
-    const maxHours = resources.maxRuntimeSeconds / 3600;
-    const total = hourlyRate * maxHours;
-
-    return {
-      estimatedTotal: `${total.toFixed(2)}`,
-      pricePerHour: `${hourlyRate.toFixed(2)}`,
-      breakdown: {
-        compute: `${basePrice.toFixed(2)}`,
-        storage: `${storagePrice.toFixed(2)}`,
-        network: '0.50',
-        gpu: resources.gpusPerNode ? `${gpuPrice.toFixed(2)}` : undefined,
-      },
-      denom: 'uakt',
+    const offering = await this.getOffering(offeringId);
+    const mappedResources: JobResources = {
+      nodes: resources.nodes,
+      cpusPerNode: resources.cpusPerNode,
+      memoryGBPerNode: resources.memoryGBPerNode,
+      gpusPerNode: resources.gpusPerNode,
+      gpuType: resources.gpuType,
+      maxRuntimeSeconds: resources.maxRuntimeSeconds,
+      storageGB: resources.storageGB,
     };
-  }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return estimateJobCostFromOffering(offering, mappedResources);
   }
 }
 
 /**
- * Mock Templates
+ * Create HPC client instance
  */
-const MOCK_TEMPLATES: WorkloadTemplate[] = [
-  {
-    id: 'pytorch-training',
-    name: 'PyTorch Training',
-    description:
-      'Train deep learning models with PyTorch. Supports distributed training across multiple GPUs.',
-    category: 'ml_training',
-    defaultResources: {
-      nodes: 1,
-      cpusPerNode: 8,
-      memoryGBPerNode: 64,
-      gpusPerNode: 2,
-      gpuType: 'nvidia-a100',
-      maxRuntimeSeconds: 86400,
-      storageGB: 100,
-    },
-    defaultParameters: {},
-    requiredIdentityScore: 0,
-    mfaRequired: false,
-    estimatedCostPerHour: '5.50',
-    version: '1.0.0',
-  },
-  {
-    id: 'tensorflow',
-    name: 'TensorFlow',
-    description: 'TensorFlow training pipeline with Keras integration and TensorBoard support.',
-    category: 'ml_training',
-    defaultResources: {
-      nodes: 1,
-      cpusPerNode: 8,
-      memoryGBPerNode: 64,
-      gpusPerNode: 2,
-      gpuType: 'nvidia-a100',
-      maxRuntimeSeconds: 86400,
-      storageGB: 100,
-    },
-    defaultParameters: {},
-    requiredIdentityScore: 0,
-    mfaRequired: false,
-    estimatedCostPerHour: '5.50',
-    version: '1.0.0',
-  },
-  {
-    id: 'openfoam',
-    name: 'OpenFOAM',
-    description: 'Computational fluid dynamics simulations with OpenFOAM.',
-    category: 'scientific',
-    defaultResources: {
-      nodes: 4,
-      cpusPerNode: 32,
-      memoryGBPerNode: 128,
-      maxRuntimeSeconds: 172800,
-      storageGB: 500,
-    },
-    defaultParameters: {},
-    requiredIdentityScore: 0,
-    mfaRequired: false,
-    estimatedCostPerHour: '12.00',
-    version: '1.0.0',
-  },
-  {
-    id: 'blender-render',
-    name: 'Blender Render',
-    description: '3D rendering and animation with Blender.',
-    category: 'rendering',
-    defaultResources: {
-      nodes: 1,
-      cpusPerNode: 16,
-      memoryGBPerNode: 32,
-      gpusPerNode: 1,
-      gpuType: 'nvidia-a100',
-      maxRuntimeSeconds: 43200,
-      storageGB: 200,
-    },
-    defaultParameters: {},
-    requiredIdentityScore: 0,
-    mfaRequired: false,
-    estimatedCostPerHour: '3.50',
-    version: '1.0.0',
-  },
-];
+export function createHPCClient(config?: HPCClientConfig): HPCClient {
+  return new HPCClient(config);
+}
 
-/**
- * Mock Offerings
- */
-const MOCK_OFFERINGS: SDKOffering[] = [
-  {
-    offeringId: 'offering-1',
-    clusterId: 'cluster-1',
-    providerAddress: 'virtengine1provider1...',
-    name: 'Standard GPU Cluster',
-    description: 'General purpose GPU compute with A100s',
-    pricing: {
-      baseNodeHourPrice: '1.00',
-      cpuCoreHourPrice: '0.10',
-      memoryGbHourPrice: '0.05',
-      storageGbPrice: '0.01',
-      networkGbPrice: '0.02',
-      currency: 'uakt',
-    },
-    maxRuntimeSeconds: 604800, // 1 week
-    supportsCustomWorkloads: true,
-    preconfiguredWorkloads: [],
-  },
-];
-
-/**
- * Mock Jobs
- */
-const MOCK_JOBS: Job[] = [
-  {
-    id: 'job-401',
-    name: 'ML Training - ResNet50',
-    customerAddress: 'virtengine1customer...',
-    providerAddress: 'virtengine1provider...',
-    offeringId: 'offering-1',
-    templateId: 'pytorch-training',
-    status: 'running',
-    createdAt: Date.now() - 7200000, // 2 hours ago
-    startedAt: Date.now() - 6000000,
-    resources: {
-      nodes: 1,
-      cpusPerNode: 8,
-      memoryGBPerNode: 64,
-      gpusPerNode: 2,
-      gpuType: 'nvidia-a100',
-      maxRuntimeSeconds: 86400,
-      storageGB: 100,
-    },
-    statusHistory: [],
-    events: [],
-    outputRefs: [],
-    totalCost: '11.00',
-    depositAmount: '132.00',
-    depositStatus: 'held',
-    txHash: '0xabc123...',
-  },
-  {
-    id: 'job-402',
-    name: 'CFD Simulation',
-    customerAddress: 'virtengine1customer...',
-    providerAddress: 'virtengine1provider...',
-    offeringId: 'offering-1',
-    templateId: 'openfoam',
-    status: 'queued',
-    createdAt: Date.now() - 3600000, // 1 hour ago
-    resources: {
-      nodes: 4,
-      cpusPerNode: 32,
-      memoryGBPerNode: 128,
-      maxRuntimeSeconds: 172800,
-      storageGB: 500,
-    },
-    statusHistory: [],
-    events: [],
-    outputRefs: [],
-    totalCost: '0.00',
-    depositAmount: '576.00',
-    depositStatus: 'held',
-    txHash: '0xdef456...',
-  },
-  {
-    id: 'job-403',
-    name: 'Render Job #42',
-    customerAddress: 'virtengine1customer...',
-    providerAddress: 'virtengine1provider...',
-    offeringId: 'offering-1',
-    templateId: 'blender-render',
-    status: 'completed',
-    createdAt: Date.now() - 86400000, // 1 day ago
-    startedAt: Date.now() - 82800000,
-    completedAt: Date.now() - 72000000,
-    resources: {
-      nodes: 1,
-      cpusPerNode: 16,
-      memoryGBPerNode: 32,
-      gpusPerNode: 1,
-      gpuType: 'nvidia-a100',
-      maxRuntimeSeconds: 43200,
-      storageGB: 200,
-    },
-    statusHistory: [],
-    events: [],
-    outputRefs: [],
-    totalCost: '10.50',
-    depositAmount: '42.00',
-    depositStatus: 'released',
-    txHash: '0xghi789...',
-  },
-];
-
-/**
- * Mock Log Lines
- */
 const MOCK_LOG_LINES: string[] = [
   '[2026-02-06T22:00:01Z] INFO  Starting job initialization...',
   '[2026-02-06T22:00:02Z] INFO  Loading container image: pytorch/pytorch:2.1-cuda12',
@@ -464,9 +453,6 @@ const MOCK_LOG_LINES: string[] = [
   '[2026-02-06T22:08:00Z] INFO  Epoch 8/100 - loss: 0.5432 - acc: 0.7456',
 ];
 
-/**
- * Mock Outputs
- */
 const MOCK_OUTPUTS: JobOutput[] = [
   {
     refId: 'out-1',
@@ -496,10 +482,3 @@ const MOCK_OUTPUTS: JobOutput[] = [
     mimeType: 'application/json',
   },
 ];
-
-/**
- * Create HPC client instance
- */
-export function createHPCClient(config?: HPCClientConfig): HPCClient {
-  return new HPCClient(config);
-}

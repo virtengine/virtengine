@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getChainClient } from '@/lib/chain-sdk';
 import {
   useOfferingStore,
   formatPrice,
@@ -140,6 +141,69 @@ const providerPayloads: Record<string, Record<string, unknown>> = {
   },
 };
 
+const mockChainOfferings = mockOfferings.map((offering, index) => {
+  const primaryPrice = offering.prices[0];
+  const pricing = {
+    currency: offering.pricing.currency,
+    baseNodeHourPrice: offering.pricing.base_price,
+    cpuCoreHourPrice: '0',
+    memoryGbHourPrice: '0',
+    gpuHourPrice: '0',
+    storageGbPrice: '0',
+    networkGbPrice: '0',
+  };
+
+  switch (primaryPrice.resource_type) {
+    case 'cpu':
+      pricing.cpuCoreHourPrice = primaryPrice.price.amount;
+      break;
+    case 'gpu':
+      pricing.gpuHourPrice = primaryPrice.price.amount;
+      break;
+    case 'storage':
+      pricing.storageGbPrice = primaryPrice.price.amount;
+      break;
+    default:
+      break;
+  }
+
+  return {
+    offeringId: `${offering.id.provider_address}/${offering.id.sequence}`,
+    providerAddress: offering.id.provider_address,
+    active: true,
+    category: offering.category,
+    name: offering.name,
+    description: offering.description,
+    pricing,
+    requiredIdentityThreshold: offering.identity_requirement.min_score,
+    preconfiguredWorkloads: offering.tags.map((tag, tagIndex) => ({
+      workloadId: `${offering.id.provider_address}-${tagIndex}`,
+      name: tag,
+      description: tag,
+      category: tag,
+      requiredResources: {
+        nodes: 1,
+        cpuCoresPerNode: 1,
+        memoryGbPerNode: 1,
+        gpusPerNode: offering.category === 'gpu' ? 1 : 0,
+        gpuType: offering.category === 'gpu' ? 'nvidia-a100' : '',
+        storageGb: 100,
+      },
+      isPreconfigured: true,
+      version: offering.version,
+    })),
+    regions: offering.regions,
+    clusterId: `cluster-${index + 1}`,
+    maxRuntimeSeconds: 86400,
+    queueOptions: [],
+    supportsCustomWorkloads: true,
+    createdAt: new Date(offering.created_at),
+    updatedAt: new Date(offering.updated_at),
+  };
+});
+
+const mockedGetChainClient = vi.mocked(getChainClient);
+
 function createResponse(payload: unknown, status = 200) {
   return {
     ok: status >= 200 && status < 300,
@@ -189,6 +253,17 @@ function setupFetchMock() {
 describe('offeringStore', () => {
   beforeEach(() => {
     setupFetchMock();
+    mockedGetChainClient.mockResolvedValue({
+      hpc: {
+        listOfferings: vi.fn().mockResolvedValue(mockChainOfferings),
+      },
+      provider: {
+        getProvider: vi.fn((address: string) => providerPayloads[address] ?? null),
+      },
+      market: {
+        listOrders: vi.fn().mockResolvedValue([]),
+      },
+    } as any);
     const { resetFilters, clearCompare, clearError } = useOfferingStore.getState();
     resetFilters();
     clearCompare();

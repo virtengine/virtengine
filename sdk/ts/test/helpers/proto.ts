@@ -1,22 +1,26 @@
-import { create, fromBinary, fromJson, toBinary, toJson, type AnyDesc, type DescFile, type DescMessage, type Message, type MessageInitShape } from "@bufbuild/protobuf";
+import { type AnyDesc, create, type DescFile, type DescMessage, fromBinary, fromJson, type Message, type MessageInitShape, toBinary, toJson } from "@bufbuild/protobuf";
 import type { GenMessage, GenService, GenServiceMethods } from "@bufbuild/protobuf/codegenv1";
 import { BinaryWriter } from "@bufbuild/protobuf/wire";
 import assert from "assert";
 import { exec } from "child_process";
 import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
-import { join as joinPath, relative as relativePath } from "path";
+import { delimiter as pathDelimiter, dirname, join as joinPath, relative as relativePath } from "path";
+import { fileURLToPath } from "url";
 import { promisify } from "util";
+
 import type { MessageDesc, MethodDesc } from "../../src/sdk/client/types.ts";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const execAsync = promisify(exec);
 const PWD = joinPath(__dirname, "..", "..", "..");
+const BIN_PATH = joinPath(PWD, "ts", "node_modules", ".bin");
 
 const cache: Record<string, DescFileDefinition> = Object.create(null);
 export async function proto(strings: TemplateStringsArray, ...values: unknown[]): Promise<DescFileDefinition> {
   const content = strings.reduce((result, string, index) => {
-    return result + string + (values[index] ?? '');
-  }, '');
+    return result + string + (values[index] ?? "");
+  }, "");
   const fileContent = [
     "syntax = \"proto3\";",
     "package virtengine.test.unit;",
@@ -29,41 +33,54 @@ export async function proto(strings: TemplateStringsArray, ...values: unknown[])
   const outputDir = joinPath(baseDir, "generated");
   const protoDir = joinPath(baseDir, "proto");
   const filePath = joinPath(protoDir, `${hash}.proto`);
+  const configPath = joinPath(baseDir, `${hash}.buf.config.json`);
+  const templatePath = joinPath(baseDir, `${hash}.buf.template.json`);
+  await mkdir(baseDir, { recursive: true });
+  await mkdir(outputDir, { recursive: true });
   await mkdir(protoDir, { recursive: true });
+  await writeFile(joinPath(outputDir, "package.json"), JSON.stringify({ type: "commonjs" }));
   await writeFile(filePath, fileContent);
 
+  const configPayload = {
+    version: "v2",
+    modules: [
+      { path: "go/vendor/github.com/cosmos/gogoproto" },
+      { path: relativePath(PWD, protoDir) },
+    ],
+  };
+  const templatePayload = {
+    version: "v2",
+    plugins: [
+      {
+        local: "protoc-gen-es",
+        strategy: "all",
+        out: ".",
+        include_imports: true,
+        opt: [
+          "target=js",
+          "js_import_style=legacy_commonjs",
+        ],
+      },
+    ],
+  };
+  await writeFile(configPath, JSON.stringify(configPayload));
+  await writeFile(templatePath, JSON.stringify(templatePayload));
+
   const command = [
-    `buf generate`,
-    `--config '${JSON.stringify({
-      version: "v2",
-      modules: [
-        { path: "go/vendor/github.com/cosmos/gogoproto" },
-        { path: relativePath(PWD, protoDir) },
-      ],
-    })}'`,
-    `--template '${JSON.stringify({
-      version: "v2",
-      plugins: [
-        {
-          local: "protoc-gen-es",
-          strategy: "all",
-          out: ".",
-          include_imports: true,
-          opt: [
-            "target=js",
-            "js_import_style=legacy_commonjs",
-          ],
-        },
-      ],
-    })}'`,
-    `-o '${outputDir}'`,
-    `--path '${filePath}'`,
+    "buf generate",
+    `--config "${configPath}"`,
+    `--template "${templatePath}"`,
+    `-o "${outputDir}"`,
+    `--path "${filePath}"`,
     relativePath(PWD, protoDir),
   ].join(" ");
 
   await execAsync(command, {
     cwd: PWD,
-    env: process.env,
+    env: {
+      ...process.env,
+      PATH: `${BIN_PATH}${pathDelimiter}${process.env.PATH ?? ""}`,
+    },
   });
 
   const module = await import(joinPath(outputDir, `${hash}_pb`)) as Record<string, AnyDesc>;
@@ -75,8 +92,7 @@ export async function proto(strings: TemplateStringsArray, ...values: unknown[])
 class DescFileDefinition {
   constructor(public readonly file: DescFile) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getMessage<Type extends string, TShape = Record<string, any>>(name: Type): GenMessage<Message<`virtengine.test.unit.${Type}`> & TShape> {
+  getMessage<Type extends string, TShape = Record<string, unknown>>(name: Type): GenMessage<Message<`virtengine.test.unit.${Type}`> & TShape> {
     const message = this.file.messages.find((type) => type.name === name);
     assert(message, `Message with name ${name} not found in this proto file`);
     return message as GenMessage<Message<`virtengine.test.unit.${Type}`> & TShape>;
@@ -122,8 +138,10 @@ function createMessageDesc<T extends DescMessage>(schema: T): MessageDesc<Messag
   return {
     $type: schema.typeName,
     encode(message, writer = new BinaryWriter()) {
-      const object = message.$typeName ? message as MessageInitShape<T> : create(schema, message as MessageInitShape<T>);
-      const bytes = toBinary(schema, object as any);
+      const object = message.$typeName
+        ? (message as MessageInitShape<T>)
+        : create(schema, message as MessageInitShape<T>);
+      const bytes = toBinary(schema, object);
       writer.raw(bytes);
       return writer;
     },
@@ -132,11 +150,11 @@ function createMessageDesc<T extends DescMessage>(schema: T): MessageDesc<Messag
       return fromBinary(schema, bytes);
     },
     fromPartial(message) {
-      const { $typeName, ...rest } = create(schema, message as any);
-      return rest as unknown as MessageInitShape<T>;
+      const { $typeName: _typeName, ...rest } = create(schema, message as MessageInitShape<T>);
+      return rest as MessageInitShape<T>;
     },
     toJSON(message) {
-      return toJson(schema, create(schema, message as any));
+      return toJson(schema, create(schema, message as MessageInitShape<T>));
     },
     fromJSON(message) {
       return fromJson(schema, message);

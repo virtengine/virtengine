@@ -8,6 +8,7 @@ import { IdentityRequirements } from '@/components/identity';
 import { formatCurrency, formatTokenAmount, generateId, truncateAddress } from '@/lib/utils';
 import { txLink } from '@/lib/explorer';
 import { formatPriceUSD, useOfferingStore } from '@/stores/offeringStore';
+import { useChainQuery } from '@/hooks/useChainQuery';
 
 const SIGNING_DELAY_MS = 1200;
 
@@ -57,6 +58,13 @@ export default function OrderCreateClient() {
   const [notes, setNotes] = useState('');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+
+  const { data: ownerOrders, isLoading: ordersLoading } = useChainQuery(
+    (client) =>
+      account?.address ? client.market.listOrders({ owner: account.address }) : Promise.resolve([]),
+    [account?.address]
+  );
+  const activeOrderCount = ownerOrders?.length ?? 0;
 
   useEffect(() => {
     if (provider && Number.isFinite(sequence)) {
@@ -222,6 +230,11 @@ export default function OrderCreateClient() {
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Provider</p>
                 <p className="font-medium">{truncateAddress(offering.id.providerAddress)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {ordersLoading
+                    ? 'Loading on-chain orders...'
+                    : `${activeOrderCount} on-chain orders`}
+                </p>
               </div>
             </div>
           </div>

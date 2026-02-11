@@ -25,6 +25,7 @@ export { usePriceConversion } from './usePriceConversion';
 
 export { useChainEvents } from './useChainEvents';
 export type { UseChainEventsOptions } from './useChainEvents';
+export { useChainQuery } from './useChainQuery';
 
 // Mobile / responsive hooks
 export {

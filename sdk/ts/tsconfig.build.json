@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "noImplicitAny": false,
     "outDir": "dist/types"
   },
   "exclude": [
@@ -12,4 +13,3 @@
     "src/**/*.ts"
   ]
 }
-

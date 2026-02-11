@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Job, WorkloadTemplate } from '@/features/hpc';
+import { getChainClient } from '@/lib/chain-sdk';
 
 const mockJobs: Job[] = [
   {
@@ -98,42 +99,133 @@ const mockTemplates: WorkloadTemplate[] = [
   },
 ];
 
-// Mock the HPC client at the source level so hooks get mock data
-vi.mock('@/features/hpc/lib/hpc-client', () => ({
-  createHPCClient: () => ({
-    listJobs: async (filters?: { status?: string[] }) => {
-      let filtered = mockJobs;
-      if (filters?.status && filters.status.length > 0) {
-        filtered = mockJobs.filter((j) => filters.status!.includes(j.status));
-      }
-      return filtered;
+const mockChainOfferings = [
+  {
+    offeringId: 'offering-1',
+    providerAddress: 'virtengine1prov...',
+    active: true,
+    name: 'HPC Cluster',
+    description: 'Mock offering for tests',
+    pricing: {
+      currency: 'uve',
+      baseNodeHourPrice: '1000000',
+      cpuCoreHourPrice: '10000',
+      memoryGbHourPrice: '5000',
+      gpuHourPrice: '2000000',
+      storageGbPrice: '1000',
+      networkGbPrice: '500',
     },
-    listWorkloadTemplates: async () => mockTemplates,
-    getJobStatistics: async () => ({ running: 1, queued: 0, completed: 1, failed: 0 }),
-    getJob: async () => null,
-    submitJob: async () => ({ jobId: 'new', txHash: '0x...' }),
-    cancelJob: async () => ({ txHash: '0x...' }),
-    estimateJobCost: async () => ({
-      estimatedTotal: '0',
-      pricePerHour: '0',
-      breakdown: { compute: '0', storage: '0', network: '0', gpu: '0' },
-      denom: 'uakt',
-    }),
-    getJobLogs: async () => ({ lines: [], hasMore: false }),
-    getJobOutputs: async () => [],
-    getJobUsage: async () => ({
-      cpuPercent: 0,
-      memoryPercent: 0,
-      gpuPercent: 0,
-      elapsedSeconds: 0,
-      remainingSeconds: 0,
-    }),
-    listOfferings: async () => [],
-    getWorkloadTemplate: async () => null,
-    delay: () => Promise.resolve(),
-  }),
-  HPCClient: class {},
+    requiredIdentityThreshold: 0,
+    preconfiguredWorkloads: mockTemplates.map((template) => ({
+      workloadId: template.id,
+      name: template.name,
+      description: template.description,
+      category: template.category,
+      estimatedCostPerHour: template.estimatedCostPerHour,
+      requiredResources: {
+        nodes: template.defaultResources.nodes,
+        cpuCoresPerNode: template.defaultResources.cpusPerNode,
+        memoryGbPerNode: template.defaultResources.memoryGBPerNode,
+        gpusPerNode: template.defaultResources.gpusPerNode ?? 0,
+        gpuType: template.defaultResources.gpuType ?? '',
+        storageGb: template.defaultResources.storageGB,
+      },
+      isPreconfigured: true,
+      version: template.version,
+    })),
+    createdAt: new Date(Date.now() - 86400000),
+    updatedAt: new Date(Date.now() - 3600000),
+    maxRuntimeSeconds: 86400,
+    queueOptions: [],
+    supportsCustomWorkloads: true,
+  },
+];
+
+const mockChainJobs = mockJobs.map((job) => ({
+  jobId: job.id,
+  workloadSpec: {
+    isPreconfigured: Boolean(job.templateId),
+    preconfiguredWorkloadId: job.name,
+  },
+  state: job.status === 'running' ? 3 : job.status === 'completed' ? 4 : 2,
+  resources: {
+    nodes: job.resources.nodes,
+    cpuCoresPerNode: job.resources.cpusPerNode,
+    memoryGbPerNode: job.resources.memoryGBPerNode,
+    gpusPerNode: job.resources.gpusPerNode ?? 0,
+    gpuType: job.resources.gpuType ?? '',
+    storageGb: job.resources.storageGB,
+  },
+  maxRuntimeSeconds: job.resources.maxRuntimeSeconds,
+  customerAddress: job.customerAddress,
+  providerAddress: job.providerAddress,
+  offeringId: job.offeringId,
+  createdAt: new Date(job.createdAt),
+  startedAt: job.startedAt ? new Date(job.startedAt) : undefined,
+  completedAt: job.completedAt ? new Date(job.completedAt) : undefined,
+  agreedPrice: [{ denom: 'uve', amount: job.totalCost }],
 }));
+
+const mockedGetChainClient = vi.mocked(getChainClient);
+
+beforeEach(() => {
+  mockedGetChainClient.mockResolvedValue({
+    hpc: {
+      listOfferings: vi.fn().mockResolvedValue(mockChainOfferings),
+      listJobs: vi.fn().mockResolvedValue(mockChainJobs),
+      getJob: vi.fn((jobId: string) => mockChainJobs.find((job) => job.jobId === jobId) ?? null),
+      getOffering: vi.fn().mockResolvedValue(mockChainOfferings[0]),
+    },
+    provider: {
+      getProvider: vi.fn().mockResolvedValue(null),
+    },
+    market: {
+      listOrders: vi.fn().mockResolvedValue([]),
+    },
+  } as any);
+});
+
+// Mock the HPC client at the source level so hooks get mock data
+vi.mock('@/features/hpc/lib/hpc-client', async () => {
+  const actual = await vi.importActual<typeof import('@/features/hpc/lib/hpc-client')>(
+    '@/features/hpc/lib/hpc-client'
+  );
+  return {
+    ...actual,
+    createHPCClient: () => ({
+      listJobs: async (filters?: { status?: string[] }) => {
+        let filtered = mockJobs;
+        if (filters?.status && filters.status.length > 0) {
+          filtered = mockJobs.filter((j) => filters.status!.includes(j.status));
+        }
+        return filtered;
+      },
+      listWorkloadTemplates: async () => mockTemplates,
+      getJobStatistics: async () => ({ running: 1, queued: 0, completed: 1, failed: 0 }),
+      getJob: async () => null,
+      submitJob: async () => ({ jobId: 'new', txHash: '0x...' }),
+      cancelJob: async () => ({ txHash: '0x...' }),
+      estimateJobCost: async () => ({
+        estimatedTotal: '0',
+        pricePerHour: '0',
+        breakdown: { compute: '0', storage: '0', network: '0', gpu: '0' },
+        denom: 'uakt',
+      }),
+      getJobLogs: async () => ({ lines: [], hasMore: false }),
+      getJobOutputs: async () => [],
+      getJobUsage: async () => ({
+        cpuPercent: 0,
+        memoryPercent: 0,
+        gpuPercent: 0,
+        elapsedSeconds: 0,
+        remainingSeconds: 0,
+      }),
+      listOfferings: async () => [],
+      getWorkloadTemplate: async () => null,
+      delay: () => Promise.resolve(),
+    }),
+  };
+});
 
 import { JobList } from '@/features/hpc/components/JobList';
 import { JobStatistics } from '@/features/hpc/components/JobStatistics';

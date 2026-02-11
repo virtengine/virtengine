@@ -66,6 +66,7 @@ export type {
   HPCCluster,
   HPCJob,
   HPCOffering,
+  PreconfiguredWorkload,
   JobState,
 } from "../generated/protos/virtengine/hpc/v1/types.ts";
 export type {
@@ -123,3 +124,171 @@ export type {
   Role,
   RoleAssignment,
 } from "../generated/protos/virtengine/roles/v1/types.ts";
+
+// Settlement module
+export { SettlementClient } from "./SettlementClient.ts";
+export type {
+  SettlementClientDeps,
+  SettlementEscrowFilters,
+  SettlementPayoutFilters,
+  SettlementUsageFilters,
+} from "./SettlementClient.ts";
+export type {
+  ClaimableRewards,
+  EscrowAccount as SettlementEscrowAccount,
+  FiatConversionAuditEntry,
+  FiatConversionRecord,
+  FiatPayoutPreference,
+  PayoutRecord,
+  ReleaseCondition,
+  RewardDistribution,
+  RewardEntry,
+  RewardHistoryEntry,
+  RewardRecipient,
+  SettlementRecord,
+  TokenSpec,
+  UsageRecord,
+  UsageSummary,
+  UsageTypeSummary,
+} from "./settlementTypes.ts";
+export type {
+  MsgActivateEscrow,
+  MsgCreateEscrow,
+  MsgDisputeEscrow,
+  MsgRecordUsage,
+  MsgRefundEscrow,
+  MsgReleaseEscrow,
+  MsgSettleOrder,
+} from "../generated/protos/virtengine/settlement/v1/tx.ts";
+
+// Delegation module
+export { DelegationClient } from "./DelegationClient.ts";
+export type { DelegationClientDeps, DelegationFilters } from "./DelegationClient.ts";
+export type {
+  Delegation,
+  DelegatorReward,
+  UnbondingDelegation,
+} from "../generated/protos/virtengine/delegation/v1/types.ts";
+export type {
+  MsgClaimRewards,
+  MsgDelegate,
+  MsgRedelegate,
+  MsgUndelegate,
+} from "../generated/protos/virtengine/delegation/v1/tx.ts";
+
+// Provider module
+export { ProviderClient } from "./ProviderClient.ts";
+export type { ProviderClientDeps, ProviderCapacityFilters } from "./ProviderClient.ts";
+export type { Provider } from "../generated/protos/virtengine/provider/v1beta4/provider.ts";
+export type {
+  MsgCreateProvider,
+  MsgDeleteProvider,
+  MsgUpdateProvider,
+} from "../generated/protos/virtengine/provider/v1beta4/msg.ts";
+
+// Support module
+export { SupportClient } from "./SupportClient.ts";
+export type { SupportClientDeps, SupportQueryOptions } from "./SupportClient.ts";
+export type {
+  MsgAddSupportResponse,
+  MsgArchiveSupportRequest,
+  MsgCreateSupportRequest,
+  MsgUpdateSupportRequest,
+  RelatedEntity,
+  SupportCategory,
+  SupportPriority,
+  SupportRequest,
+  SupportRequestId,
+  SupportResponse,
+  SupportStatus,
+} from "./supportTypes.ts";
+
+// Oracle module
+export { OracleClient } from "./OracleClient.ts";
+export type { OracleClientDeps, OraclePriceFilters } from "./OracleClient.ts";
+export type { AggregatedPrice, PriceData } from "../generated/protos/virtengine/oracle/v1/prices.ts";
+export type { MsgAddPriceEntry } from "../generated/protos/virtengine/oracle/v1/msgs.ts";
+
+// Deployment module
+export { DeploymentClient } from "./DeploymentClient.ts";
+export type { DeploymentClientDeps, DeploymentListFilters } from "./DeploymentClient.ts";
+export type { DeploymentID } from "../generated/protos/virtengine/deployment/v1/deployment.ts";
+export type { GroupID } from "../generated/protos/virtengine/deployment/v1/group.ts";
+export type { Group } from "../generated/protos/virtengine/deployment/v1beta4/group.ts";
+export type { QueryDeploymentResponse } from "../generated/protos/virtengine/deployment/v1beta4/query.ts";
+export type {
+  MsgCloseDeployment,
+  MsgCreateDeployment,
+  MsgUpdateDeployment,
+} from "../generated/protos/virtengine/deployment/v1beta4/deploymentmsg.ts";
+
+// Enclave module
+export { EnclaveClient } from "./EnclaveClient.ts";
+export type { EnclaveClientDeps } from "./EnclaveClient.ts";
+export type {
+  AttestedScoringResult,
+  EnclaveIdentity,
+  KeyRotationRecord,
+  MeasurementRecord,
+  ValidatorKeyInfo,
+} from "../generated/protos/virtengine/enclave/v1/types.ts";
+export type {
+  MsgProposeMeasurement,
+  MsgRegisterEnclaveIdentity,
+  MsgRevokeMeasurement,
+  MsgRotateEnclaveIdentity,
+} from "../generated/protos/virtengine/enclave/v1/tx.ts";
+
+// Benchmark module
+export { BenchmarkClient } from "./BenchmarkClient.ts";
+export type { BenchmarkClientDeps } from "./BenchmarkClient.ts";
+export type {
+  MsgFlagProvider,
+  MsgRequestChallenge,
+  MsgRespondChallenge,
+  MsgResolveAnomalyFlag,
+  MsgSubmitBenchmarks,
+  MsgUnflagProvider,
+} from "../generated/protos/virtengine/benchmark/v1/tx.ts";
+
+// Fraud module
+export { FraudClient } from "./FraudClient.ts";
+export type { FraudClientDeps } from "./FraudClient.ts";
+export type {
+  FraudAuditLog,
+  FraudReport,
+  ModeratorQueueEntry,
+} from "../generated/protos/virtengine/fraud/v1/types.ts";
+export type {
+  MsgAssignModerator,
+  MsgEscalateFraudReport,
+  MsgRejectFraudReport,
+  MsgResolveFraudReport,
+  MsgSubmitFraudReport,
+  MsgUpdateReportStatus,
+} from "../generated/protos/virtengine/fraud/v1/tx.ts";
+
+// Review module
+export { ReviewClient } from "./ReviewClient.ts";
+export type { ReviewClientDeps } from "./ReviewClient.ts";
+export type { MsgDeleteReview, MsgSubmitReview } from "../generated/protos/virtengine/review/v1/tx.ts";
+
+// Virt staking module
+export { VirtStakingClient } from "./VirtStakingClient.ts";
+export type { VirtStakingClientDeps } from "./VirtStakingClient.ts";
+export type {
+  MsgRecordPerformance,
+  MsgSlashValidator,
+  MsgUnjailValidator,
+} from "../generated/protos/virtengine/staking/v1/tx.ts";
+
+// Config module
+export { ConfigClient } from "./ConfigClient.ts";
+export type { ConfigClientDeps } from "./ConfigClient.ts";
+export type {
+  MsgReactivateApprovedClient,
+  MsgRegisterApprovedClient,
+  MsgRevokeApprovedClient,
+  MsgSuspendApprovedClient,
+  MsgUpdateApprovedClient,
+} from "../generated/protos/virtengine/config/v1/tx.ts";

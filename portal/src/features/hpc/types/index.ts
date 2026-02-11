@@ -5,6 +5,7 @@
  */
 
 // Import only types needed for local interface definitions
+import type { HPCCluster, HPCJob, HPCOffering, PreconfiguredWorkload } from '@virtengine/chain-sdk';
 import type { JobStatus, WorkloadCategory } from '@/lib/portal-adapter';
 
 // Re-export all types from portal-lib (via portal-adapter)
@@ -33,63 +34,12 @@ export type {
 } from '@/lib/portal-adapter';
 
 /**
- * HPC SDK types (these will come from @virtengine/chain-sdk when integrated)
+ * HPC SDK types (from @virtengine/chain-sdk)
  */
-export interface SDKJob {
-  jobId: string;
-  offeringId: string;
-  clusterId: string;
-  providerAddress: string;
-  customerAddress: string;
-  slurmJobId?: string;
-  state: string;
-  queueName: string;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  totalCost: string;
-}
-
-export interface SDKOffering {
-  offeringId: string;
-  clusterId: string;
-  providerAddress: string;
-  name: string;
-  description: string;
-  pricing: {
-    baseNodeHourPrice: string;
-    cpuCoreHourPrice: string;
-    memoryGbHourPrice: string;
-    storageGbPrice: string;
-    networkGbPrice: string;
-    currency: string;
-  };
-  maxRuntimeSeconds: number;
-  supportsCustomWorkloads: boolean;
-  preconfiguredWorkloads: SDKWorkloadTemplate[];
-}
-
-export interface SDKWorkloadTemplate {
-  templateId: string;
-  name: string;
-  description: string;
-  workloadType: string;
-  containerImage: string;
-  defaultCommand: string;
-  approvalStatus: string;
-  requiredIdentityThreshold: number;
-}
-
-export interface SDKCluster {
-  clusterId: string;
-  providerAddress: string;
-  name: string;
-  description: string;
-  region: string;
-  state: string;
-  totalNodes: number;
-  totalGpus: number;
-}
+export type SDKJob = HPCJob;
+export type SDKOffering = HPCOffering;
+export type SDKWorkloadTemplate = PreconfiguredWorkload;
+export type SDKCluster = HPCCluster;
 
 /**
  * Job filter options

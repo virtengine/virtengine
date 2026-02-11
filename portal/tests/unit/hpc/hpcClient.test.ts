@@ -1,5 +1,143 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHPCClient, HPCClient } from '@/features/hpc/lib/hpc-client';
+import { getChainClient } from '@/lib/chain-sdk';
+
+const mockChainOfferings = [
+  {
+    offeringId: 'offering-1',
+    providerAddress: 'virtengine1provider1abc',
+    active: true,
+    name: 'NVIDIA A100 Cluster',
+    description: 'High-performance GPU cluster',
+    pricing: {
+      currency: 'uve',
+      baseNodeHourPrice: '2500000',
+      cpuCoreHourPrice: '15000',
+      memoryGbHourPrice: '6000',
+      gpuHourPrice: '2500000',
+      storageGbPrice: '1000',
+      networkGbPrice: '500',
+    },
+    requiredIdentityThreshold: 0,
+    preconfiguredWorkloads: [
+      {
+        workloadId: 'pytorch-training',
+        name: 'PyTorch Training',
+        description: 'Train deep learning models with PyTorch.',
+        category: 'ml_training',
+        requiredResources: {
+          nodes: 1,
+          cpuCoresPerNode: 8,
+          memoryGbPerNode: 64,
+          gpusPerNode: 2,
+          gpuType: 'nvidia-a100',
+          storageGb: 100,
+        },
+        isPreconfigured: true,
+        version: '1.0.0',
+      },
+    ],
+    createdAt: new Date('2024-01-15T10:00:00Z'),
+    updatedAt: new Date('2024-02-01T15:30:00Z'),
+    maxRuntimeSeconds: 86400,
+    queueOptions: [],
+    supportsCustomWorkloads: true,
+  },
+];
+
+const mockChainJobs = [
+  {
+    jobId: 'job-401',
+    workloadSpec: {
+      isPreconfigured: true,
+      preconfiguredWorkloadId: 'ML Training - ResNet50',
+    },
+    state: 3,
+    resources: {
+      nodes: 1,
+      cpuCoresPerNode: 8,
+      memoryGbPerNode: 64,
+      gpusPerNode: 2,
+      gpuType: 'nvidia-a100',
+      storageGb: 100,
+    },
+    maxRuntimeSeconds: 86400,
+    customerAddress: 'virtengine1customer1',
+    providerAddress: 'virtengine1provider1abc',
+    offeringId: 'offering-1',
+    createdAt: new Date(Date.now() - 3600 * 1000),
+    startedAt: new Date(Date.now() - 3000 * 1000),
+    agreedPrice: [{ denom: 'uve', amount: '5500000' }],
+  },
+  {
+    jobId: 'job-402',
+    workloadSpec: {
+      isPreconfigured: true,
+      preconfiguredWorkloadId: 'Batch Simulation',
+    },
+    state: 2,
+    resources: {
+      nodes: 1,
+      cpuCoresPerNode: 4,
+      memoryGbPerNode: 32,
+      gpusPerNode: 0,
+      gpuType: '',
+      storageGb: 50,
+    },
+    maxRuntimeSeconds: 43200,
+    customerAddress: 'virtengine1customer1',
+    providerAddress: 'virtengine1provider1abc',
+    offeringId: 'offering-1',
+    createdAt: new Date(Date.now() - 7200 * 1000),
+    agreedPrice: [{ denom: 'uve', amount: '1200000' }],
+  },
+  {
+    jobId: 'job-403',
+    workloadSpec: {
+      isPreconfigured: true,
+      preconfiguredWorkloadId: 'Render Batch',
+    },
+    state: 4,
+    resources: {
+      nodes: 1,
+      cpuCoresPerNode: 16,
+      memoryGbPerNode: 32,
+      gpusPerNode: 0,
+      gpuType: '',
+      storageGb: 200,
+    },
+    maxRuntimeSeconds: 43200,
+    customerAddress: 'virtengine1customer1',
+    providerAddress: 'virtengine1provider1abc',
+    offeringId: 'offering-1',
+    createdAt: new Date(Date.now() - 86400 * 1000),
+    startedAt: new Date(Date.now() - 82800 * 1000),
+    completedAt: new Date(Date.now() - 72000 * 1000),
+    agreedPrice: [{ denom: 'uve', amount: '10500000' }],
+  },
+];
+
+const mockedGetChainClient = vi.mocked(getChainClient);
+
+beforeEach(() => {
+  mockedGetChainClient.mockResolvedValue({
+    hpc: {
+      listOfferings: vi.fn().mockResolvedValue(mockChainOfferings),
+      listJobs: vi.fn().mockResolvedValue(mockChainJobs),
+      getJob: vi.fn((jobId: string) => mockChainJobs.find((job) => job.jobId === jobId) ?? null),
+      getOffering: vi.fn(
+        (offeringId: string) =>
+          mockChainOfferings.find((offering) => offering.offeringId === offeringId) ?? null
+      ),
+    },
+    provider: {
+      getProvider: vi.fn().mockResolvedValue(null),
+    },
+    market: {
+      listOrders: vi.fn().mockResolvedValue([]),
+    },
+  } as any);
+});
 
 describe('HPCClient', () => {
   it('creates client instance via factory', () => {

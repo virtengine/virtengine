@@ -6,10 +6,18 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
-    get length() { return Object.keys(store).length; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
     key: (index: number) => Object.keys(store)[index] ?? null,
   };
 })();
@@ -70,4 +78,24 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn(),
+}));
+
+const defaultChainClient = {
+  hpc: {
+    listOfferings: vi.fn().mockResolvedValue([]),
+    listJobs: vi.fn().mockResolvedValue([]),
+    getJob: vi.fn().mockResolvedValue(null),
+    getOffering: vi.fn().mockResolvedValue(null),
+  },
+  provider: {
+    getProvider: vi.fn().mockResolvedValue(null),
+  },
+  market: {
+    listOrders: vi.fn().mockResolvedValue([]),
+  },
+};
+
+vi.mock('@/lib/chain-sdk', () => ({
+  getChainClient: vi.fn(async () => defaultChainClient),
+  getChainSdk: vi.fn(async () => defaultChainClient),
 }));

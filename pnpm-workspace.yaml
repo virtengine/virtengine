@@ -3,3 +3,4 @@ packages:
   - 'lib/capture'
   - 'lib/admin'
   - 'portal'
+  - 'sdk/ts'

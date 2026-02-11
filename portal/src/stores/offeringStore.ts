@@ -1,15 +1,13 @@
 import { create } from 'zustand';
+import type { HPCOffering, Provider as ChainProvider } from '@virtengine/chain-sdk';
 import type {
   Offering,
   OfferingCategory,
   OfferingFilters,
-  OfferingID,
-  OfferingState,
   PriceComponent,
-  PricingModel,
   Provider,
 } from '@/types/offerings';
-import { getChainInfo } from '@/config/chains';
+import { getChainClient } from '@/lib/chain-sdk';
 
 export interface OfferingStoreState {
   offerings: Offering[];
@@ -78,398 +76,114 @@ const initialState: OfferingStoreState = {
   },
 };
 
-const OFFERING_STATE_MAP: Record<number, OfferingState> = {
-  0: 'unspecified',
-  1: 'active',
-  2: 'paused',
-  3: 'suspended',
-  4: 'deprecated',
-  5: 'terminated',
-};
-
-const OFFERING_CATEGORY_MAP: Record<number, OfferingCategory> = {
-  0: 'other',
-  1: 'compute',
-  2: 'storage',
-  3: 'network',
-  4: 'hpc',
-  5: 'gpu',
-  6: 'ml',
-  7: 'other',
-};
-
-const PRICING_MODEL_MAP: Record<number, PricingModel> = {
-  0: 'hourly',
-  1: 'hourly',
-  2: 'daily',
-  3: 'monthly',
-  4: 'usage_based',
-  5: 'fixed',
-};
-
-const OFFERINGS_ENDPOINTS = ['/virtengine/market/v1/offerings', '/marketplace/offerings'];
-const OFFERING_ENDPOINTS = (offeringId: string) => [
-  `/virtengine/market/v1/offerings/${offeringId}`,
-  `/marketplace/offerings/${offeringId}`,
-];
-const PROVIDER_ENDPOINTS = (address: string) => [
-  `/virtengine/provider/v1beta4/providers/${address}`,
-  `/virtengine/provider/v1/providers/${address}`,
-];
-
-class ChainRequestError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = 'ChainRequestError';
-    this.status = status;
-  }
-}
-
-type ChainOffering = Record<string, unknown>;
-type ChainProvider = Record<string, unknown>;
-
-interface ChainOfferingsResponse {
-  offerings?: ChainOffering[];
-  pagination?: {
-    next_key?: string | null;
-    nextKey?: string | null;
-    total?: string | number;
-  };
-  next_key?: string | null;
-  total?: string | number;
-}
-
-const MAX_OFFERING_PAGES = 10;
-const OFFERING_PAGE_LIMIT = 200;
-
-function parseOfferingState(value: unknown): OfferingState {
-  if (typeof value === 'number') {
-    return OFFERING_STATE_MAP[value] ?? 'unspecified';
-  }
-  if (typeof value === 'string') {
-    const normalized = value.toLowerCase();
-    if (normalized.startsWith('offering_state_')) {
-      const name = value.replace(/offering_state_/i, '').toLowerCase();
-      return (name as OfferingState) || 'unspecified';
-    }
-    if (
-      normalized === 'unspecified' ||
-      normalized === 'active' ||
-      normalized === 'paused' ||
-      normalized === 'suspended' ||
-      normalized === 'deprecated' ||
-      normalized === 'terminated'
-    ) {
-      return normalized as OfferingState;
-    }
-  }
-  return 'unspecified';
-}
-
-function parseOfferingCategory(value: unknown): OfferingCategory {
-  if (typeof value === 'number') {
-    return OFFERING_CATEGORY_MAP[value] ?? 'other';
-  }
-  if (typeof value === 'string') {
-    const normalized = value.toLowerCase();
-    if (normalized.startsWith('offering_category_')) {
-      const name = value.replace(/offering_category_/i, '').toLowerCase();
-      return (name as OfferingCategory) || 'other';
-    }
-    if (
-      normalized === 'compute' ||
-      normalized === 'storage' ||
-      normalized === 'network' ||
-      normalized === 'hpc' ||
-      normalized === 'gpu' ||
-      normalized === 'ml' ||
-      normalized === 'other'
-    ) {
-      return normalized as OfferingCategory;
-    }
-  }
-  return 'other';
-}
-
-function parsePricingModel(value: unknown): PricingModel {
-  if (typeof value === 'number') {
-    return PRICING_MODEL_MAP[value] ?? 'hourly';
-  }
-  if (typeof value === 'string') {
-    const normalized = value.toLowerCase();
-    if (normalized.startsWith('pricing_model_')) {
-      const name = value.replace(/pricing_model_/i, '').toLowerCase();
-      return (name as PricingModel) || 'hourly';
-    }
-    if (
-      normalized === 'hourly' ||
-      normalized === 'daily' ||
-      normalized === 'monthly' ||
-      normalized === 'usage_based' ||
-      normalized === 'fixed'
-    ) {
-      return normalized as PricingModel;
-    }
-  }
-  return 'hourly';
-}
-
-function coerceInt(value: unknown, fallback = 0): number {
-  if (typeof value === 'number') return Math.floor(value);
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? fallback : parsed;
-  }
-  return fallback;
-}
-
 function coerceString(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return value.toString();
   return fallback;
 }
 
-function coerceDateString(value: unknown): string {
-  if (!value) return new Date(0).toISOString();
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number') {
-    const ms = value > 1e12 ? value : value * 1000;
-    return new Date(ms).toISOString();
+function deriveOfferingSequence(offeringId: string): number {
+  const parts = offeringId.split(/[/_-]/);
+  const last = parts[parts.length - 1] ?? offeringId;
+  const parsed = Number.parseInt(last, 10);
+  if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+
+  let hash = 0;
+  for (const char of offeringId) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 100000;
   }
-  return new Date(0).toISOString();
+  return Math.max(1, hash);
 }
 
-function parseOfferingId(rawId: unknown): OfferingID | null {
-  if (!rawId) return null;
-  if (typeof rawId === 'string') {
-    const parts = rawId.split('/');
-    if (parts.length === 2) {
-      const sequence = Number.parseInt(parts[1], 10);
-      if (!Number.isNaN(sequence)) {
-        return { providerAddress: parts[0], sequence };
-      }
-    }
-  }
-  if (typeof rawId === 'object') {
-    const record = rawId as Record<string, unknown>;
-    const provider = coerceString(record.provider_address ?? record.providerAddress, '');
-    const sequence = coerceInt(record.sequence, -1);
-    if (provider && sequence >= 0) {
-      return { providerAddress: provider, sequence };
-    }
-  }
-  return null;
+function buildPriceComponents(offering: HPCOffering): PriceComponent[] | undefined {
+  const pricing = offering.pricing;
+  if (!pricing) return undefined;
+
+  const denom = pricing.currency || 'uvirt';
+  const components: PriceComponent[] = [
+    {
+      resourceType: 'cpu',
+      unit: 'core-hour',
+      price: { denom, amount: pricing.cpuCoreHourPrice || '0' },
+    },
+    {
+      resourceType: 'ram',
+      unit: 'gb-hour',
+      price: { denom, amount: pricing.memoryGbHourPrice || '0' },
+    },
+    {
+      resourceType: 'gpu',
+      unit: 'gpu-hour',
+      price: { denom, amount: pricing.gpuHourPrice || '0' },
+    },
+    {
+      resourceType: 'storage',
+      unit: 'gb',
+      price: { denom, amount: pricing.storageGbPrice || '0' },
+    },
+    {
+      resourceType: 'network',
+      unit: 'gb',
+      price: { denom, amount: pricing.networkGbPrice || '0' },
+    },
+  ];
+
+  return components.filter((entry) => entry.price.amount !== '0');
 }
 
-function parsePriceComponents(rawPrices: unknown): PriceComponent[] | undefined {
-  if (!Array.isArray(rawPrices)) return undefined;
-  const mapped = rawPrices
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object') return null;
-      const record = entry as Record<string, unknown>;
-      const price = record.price as Record<string, unknown> | undefined;
-      return {
-        resourceType: coerceString(
-          record.resource_type ?? record.resourceType,
-          'cpu'
-        ) as PriceComponent['resourceType'],
-        unit: coerceString(record.unit, ''),
-        price: {
-          denom: coerceString(price?.denom, 'uve'),
-          amount: coerceString(price?.amount, '0'),
-        },
-        usdReference: coerceString(record.usd_reference ?? record.usdReference, ''),
-      } as PriceComponent;
-    })
-    .filter(Boolean) as PriceComponent[];
-
-  return mapped.length > 0 ? mapped : undefined;
-}
-
-function parseUsageRates(raw: unknown): Record<string, string> | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  const result: Record<string, string> = {};
-  Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
-    result[key] = coerceString(value, '0');
-  });
-  return Object.keys(result).length > 0 ? result : undefined;
-}
-
-function parseStringMap(raw: unknown): Record<string, string> | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  const result: Record<string, string> = {};
-  Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
-    if (value === null || value === undefined) return;
-    result[key] = coerceString(value, '');
-  });
-  return Object.keys(result).length > 0 ? result : undefined;
-}
-
-function mapOffering(raw: ChainOffering): Offering | null {
-  const id = parseOfferingId(raw.id ?? raw.offering_id ?? raw.offeringId);
-  const providerAddress =
-    id?.providerAddress ?? coerceString(raw.provider_address ?? raw.providerAddress, '');
-  const sequence = id?.sequence ?? coerceInt(raw.sequence, -1);
-  if (!providerAddress || sequence < 0) return null;
-
-  const pricing = (raw.pricing ?? {}) as Record<string, unknown>;
-  const identityRequirement = (raw.identity_requirement ?? raw.identityRequirement ?? {}) as Record<
-    string,
-    unknown
-  >;
+function mapOffering(offering: HPCOffering): Offering {
+  const sequence = deriveOfferingSequence(offering.offeringId);
+  const pricing = offering.pricing;
+  const category = (offering as { category?: OfferingCategory }).category ?? 'hpc';
+  const regions = (offering as { regions?: string[] }).regions ?? [];
 
   return {
-    id: { providerAddress, sequence },
-    state: parseOfferingState(raw.state),
-    category: parseOfferingCategory(raw.category),
-    name: coerceString(raw.name, 'Unnamed offering'),
-    description: coerceString(raw.description, ''),
-    version: coerceString(raw.version, ''),
+    id: { providerAddress: offering.providerAddress, sequence },
+    state: offering.active ? 'active' : 'paused',
+    category,
+    name: offering.name || `HPC Offering ${sequence}`,
+    description: offering.description ?? '',
+    version: offering.updatedAt?.toISOString() ?? '',
     pricing: {
-      model: parsePricingModel(pricing.model),
-      basePrice: coerceString(pricing.base_price ?? pricing.basePrice, '0'),
-      currency: coerceString(pricing.currency, 'uve'),
-      usageRates: parseUsageRates(pricing.usage_rates ?? pricing.usageRates),
-      minimumCommitment:
-        typeof pricing.minimum_commitment === 'number'
-          ? pricing.minimum_commitment
-          : typeof pricing.minimumCommitment === 'number'
-            ? pricing.minimumCommitment
-            : undefined,
-    },
-    prices: parsePriceComponents(raw.prices),
-    allowBidding: Boolean(raw.allow_bidding ?? raw.allowBidding),
-    minBid:
-      raw.min_bid || raw.minBid
+      model: 'hourly',
+      basePrice: pricing?.baseNodeHourPrice ?? '0',
+      currency: pricing?.currency ?? 'uvirt',
+      usageRates: pricing
         ? {
-            denom: coerceString(
-              ((raw.min_bid ?? raw.minBid) as Record<string, unknown>).denom,
-              'uve'
-            ),
-            amount: coerceString(
-              ((raw.min_bid ?? raw.minBid) as Record<string, unknown>).amount,
-              '0'
-            ),
+            cpu: pricing.cpuCoreHourPrice ?? '0',
+            memory: pricing.memoryGbHourPrice ?? '0',
+            gpu: pricing.gpuHourPrice ?? '0',
+            storage: pricing.storageGbPrice ?? '0',
+            network: pricing.networkGbPrice ?? '0',
           }
         : undefined,
+    },
+    prices: buildPriceComponents(offering),
+    allowBidding: false,
     identityRequirement: {
-      minScore: coerceInt(identityRequirement.min_score ?? identityRequirement.minScore, 0),
-      requiredStatus: coerceString(
-        identityRequirement.required_status ?? identityRequirement.requiredStatus,
-        ''
-      ),
-      requireVerifiedEmail: Boolean(
-        identityRequirement.require_verified_email ?? identityRequirement.requireVerifiedEmail
-      ),
-      requireVerifiedDomain: Boolean(
-        identityRequirement.require_verified_domain ?? identityRequirement.requireVerifiedDomain
-      ),
-      requireMFA: Boolean(identityRequirement.require_mfa ?? identityRequirement.requireMFA),
+      minScore: offering.requiredIdentityThreshold ?? 0,
+      requiredStatus: 'verified',
+      requireVerifiedEmail: false,
+      requireVerifiedDomain: false,
+      requireMFA: false,
     },
-    requireMFAForOrders: Boolean(raw.require_mfa_for_orders ?? raw.requireMFAForOrders),
-    publicMetadata: parseStringMap(raw.public_metadata ?? raw.publicMetadata),
-    specifications: parseStringMap(raw.specifications),
-    tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : [],
-    regions: Array.isArray(raw.regions) ? (raw.regions as string[]) : [],
-    createdAt: coerceDateString(raw.created_at ?? raw.createdAt),
-    updatedAt: coerceDateString(raw.updated_at ?? raw.updatedAt),
-    activatedAt: raw.activated_at ? coerceDateString(raw.activated_at) : undefined,
-    terminatedAt: raw.terminated_at ? coerceDateString(raw.terminated_at) : undefined,
-    maxConcurrentOrders: raw.max_concurrent_orders
-      ? coerceInt(raw.max_concurrent_orders, 0)
-      : undefined,
-    totalOrderCount: coerceInt(raw.total_order_count ?? raw.totalOrderCount, 0),
-    activeOrderCount: coerceInt(raw.active_order_count ?? raw.activeOrderCount, 0),
-  };
-}
-
-function extractOfferingsResponse(payload: unknown): {
-  offerings: ChainOffering[];
-  nextKey: string | null;
-  total: number | null;
-} {
-  if (!payload || typeof payload !== 'object') {
-    return { offerings: [], nextKey: null, total: null };
-  }
-
-  if (Array.isArray(payload)) {
-    return { offerings: payload as ChainOffering[], nextKey: null, total: null };
-  }
-
-  const record = payload as ChainOfferingsResponse & {
-    data?: ChainOfferingsResponse;
-    result?: ChainOfferingsResponse;
-  };
-
-  const response = record.offerings
-    ? record
-    : record.data?.offerings
-      ? record.data
-      : record.result?.offerings
-        ? record.result
-        : record;
-
-  const offerings = Array.isArray(response.offerings) ? response.offerings : [];
-  const pagination = response.pagination ?? {};
-  const nextKey =
-    pagination.next_key ??
-    pagination.nextKey ??
-    response.next_key ??
-    (response as unknown as { nextKey?: string }).nextKey ??
-    null;
-  const totalRaw = pagination.total ?? response.total ?? null;
-  const total = totalRaw !== null && totalRaw !== undefined ? coerceInt(totalRaw, 0) : null;
-
-  return { offerings, nextKey, total };
-}
-
-async function fetchChainJson<T>(path: string, params?: Record<string, string>) {
-  const { restEndpoint } = getChainInfo();
-  const url = new URL(path, restEndpoint);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') {
-        url.searchParams.set(key, value);
-      }
-    });
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      Accept: 'application/json',
+    requireMFAForOrders: false,
+    publicMetadata: {
+      offeringId: offering.offeringId,
+      clusterId: offering.clusterId,
+      supportsCustomWorkloads: String(Boolean(offering.supportsCustomWorkloads)),
     },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new ChainRequestError(
-      response.status,
-      text || `Chain request failed with status ${response.status}`
-    );
-  }
-
-  return (await response.json()) as T;
-}
-
-async function fetchChainJsonWithFallback<T>(paths: string[], params?: Record<string, string>) {
-  let lastError: Error | null = null;
-
-  for (const path of paths) {
-    try {
-      return await fetchChainJson<T>(path, params);
-    } catch (error) {
-      lastError = error as Error;
-      if (error instanceof ChainRequestError && (error.status === 404 || error.status === 501)) {
-        continue;
-      }
-      break;
-    }
-  }
-
-  throw lastError ?? new Error('Chain request failed');
+    specifications: {
+      max_runtime_seconds: String(offering.maxRuntimeSeconds ?? ''),
+      queue_options: String(offering.queueOptions?.length ?? 0),
+    },
+    tags: offering.preconfiguredWorkloads?.map((workload) => workload.name) ?? [],
+    regions,
+    createdAt: offering.createdAt?.toISOString() ?? new Date(0).toISOString(),
+    updatedAt: offering.updatedAt?.toISOString() ?? new Date(0).toISOString(),
+    totalOrderCount: 0,
+    activeOrderCount: 0,
+  };
 }
 
 function parseAttributeMap(attributes: unknown) {
@@ -573,7 +287,7 @@ function parseProvider(
   raw: ChainProvider,
   stats?: { totalOfferings: number; totalOrders: number; regions: Set<string> }
 ): Provider {
-  const address = coerceString(raw.owner ?? raw.address, '');
+  const address = coerceString(raw.owner ?? '', '');
   const attributes = parseAttributeMap(raw.attributes);
   const name = parseProviderName(attributes, address ? `${address.slice(0, 10)}...` : 'Unknown');
   const description = parseProviderDescription(attributes);
@@ -594,7 +308,7 @@ function parseProvider(
     totalOrders: stats?.totalOrders ?? 0,
     regions,
     website: coerceString(info.website, '') || undefined,
-    createdAt: coerceString(raw.created_at ?? raw.createdAt, ''),
+    createdAt: undefined,
   };
 }
 
@@ -649,7 +363,10 @@ function matchesFilters(
   providers: Map<string, Provider>
 ) {
   if (filters.category !== 'all' && offering.category !== filters.category) return false;
-  if (filters.region !== 'all' && !offering.regions?.includes(filters.region)) return false;
+  if (filters.region !== 'all') {
+    const regions = offering.regions ?? providers.get(offering.id.providerAddress)?.regions;
+    if (!regions?.includes(filters.region)) return false;
+  }
   if (filters.state !== 'all' && offering.state !== filters.state) return false;
 
   if (filters.search) {
@@ -703,32 +420,10 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
 
     try {
       const { filters, pagination } = get();
-      const offerings: Offering[] = [];
-
-      let nextKey: string | null = null;
-      let pageCount = 0;
-
-      do {
-        const params: Record<string, string> = {
-          'pagination.limit': OFFERING_PAGE_LIMIT.toString(),
-        };
-
-        if (nextKey) {
-          params['pagination.key'] = nextKey;
-        }
-
-        const payload = await fetchChainJsonWithFallback<unknown>(OFFERINGS_ENDPOINTS, params);
-        const extracted = extractOfferingsResponse(payload);
-
-        offerings.push(
-          ...extracted.offerings
-            .map((raw) => mapOffering(raw))
-            .filter((item): item is Offering => item !== null)
-        );
-
-        nextKey = extracted.nextKey ?? null;
-        pageCount += 1;
-      } while (nextKey && pageCount < MAX_OFFERING_PAGES);
+      const client = await getChainClient();
+      const offerings = (
+        await client.hpc.listOfferings({ activeOnly: filters.state === 'active' })
+      ).map((offering) => mapOffering(offering));
 
       const providerStats = buildProviderStats(offerings);
 
@@ -808,11 +503,12 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
     set({ isLoadingDetail: true, error: null, selectedOffering: null });
 
     try {
-      const offeringId = `${providerAddress}/${sequence}`;
-      const payload = await fetchChainJsonWithFallback<unknown>(OFFERING_ENDPOINTS(offeringId));
-      const rawOffering =
-        (payload as { offering?: ChainOffering }).offering ?? (payload as ChainOffering);
-      const offering = mapOffering(rawOffering);
+      const client = await getChainClient();
+      const offerings = await client.hpc.listOfferings({ activeOnly: false });
+      const mapped = offerings.map((offering) => mapOffering(offering));
+      const offering = mapped.find(
+        (entry) => entry.id.providerAddress === providerAddress && entry.id.sequence === sequence
+      );
 
       if (!offering) {
         throw new Error('Offering not found');
@@ -820,12 +516,7 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
 
       set({ selectedOffering: offering, isLoadingDetail: false });
     } catch (error) {
-      const message =
-        error instanceof ChainRequestError && error.status === 404
-          ? 'Offering not found'
-          : error instanceof Error
-            ? error.message
-            : 'Failed to fetch offering';
+      const message = error instanceof Error ? error.message : 'Failed to fetch offering';
       set({
         isLoadingDetail: false,
         error: message,
@@ -842,14 +533,9 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
 
     try {
       const providerStats = buildProviderStats(offerings).get(address);
-      const payload = await fetchChainJsonWithFallback<unknown>(PROVIDER_ENDPOINTS(address));
-      const rawProvider =
-        (payload as { provider?: ChainProvider }).provider ?? (payload as ChainProvider);
-
-      if (!rawProvider) {
-        return null;
-      }
-
+      const client = await getChainClient();
+      const rawProvider = await client.provider.getProvider(address);
+      if (!rawProvider) return null;
       const provider = parseProvider(rawProvider, providerStats);
 
       set((state) => ({

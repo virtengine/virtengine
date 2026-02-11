@@ -12,6 +12,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const mockStoreState: Record<string, unknown> = {
   factors: [] as unknown[],
   trustedBrowsers: [],
+  auditLog: [],
   revokeTrustedBrowser: vi.fn(),
 };
 
@@ -44,7 +45,7 @@ describe('MFAChallenge', () => {
       <MFAChallenge
         open={true}
         onOpenChange={vi.fn()}
-        transactionType="wallet_send"
+        transactionType="high_value_order"
         actionDescription="Send tokens"
       />
     );
@@ -61,7 +62,7 @@ describe('MFAChallenge', () => {
       <MFAChallenge
         open={true}
         onOpenChange={vi.fn()}
-        transactionType="wallet_send"
+        transactionType="high_value_order"
         actionDescription="Send tokens"
       />
     );

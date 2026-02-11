@@ -28,14 +28,26 @@ import { MemoryCache } from "../utils/cache.ts";
 import type { ChainInfo, WalletAdapter } from "../wallet/types.ts";
 import { WalletManager, type WalletType } from "../wallet/WalletManager.ts";
 import type { ClientOptions } from "./BaseClient.ts";
+import { BenchmarkClient } from "./BenchmarkClient.ts";
+import { ConfigClient } from "./ConfigClient.ts";
+import { DelegationClient } from "./DelegationClient.ts";
+import { DeploymentClient } from "./DeploymentClient.ts";
+import { EnclaveClient } from "./EnclaveClient.ts";
 import { EncryptionClient } from "./EncryptionClient.ts";
 import { EscrowClient } from "./EscrowClient.ts";
+import { FraudClient } from "./FraudClient.ts";
 import { HPCClient } from "./HPCClient.ts";
 import { MarketClient } from "./MarketClient.ts";
 import { MFAClient } from "./MFAClient.ts";
+import { OracleClient } from "./OracleClient.ts";
+import { ProviderClient } from "./ProviderClient.ts";
+import { ReviewClient } from "./ReviewClient.ts";
 import { RolesClient } from "./RolesClient.ts";
+import { SettlementClient } from "./SettlementClient.ts";
+import { SupportClient } from "./SupportClient.ts";
 import type { ChainNodeSDK } from "./types.ts";
 import { VEIDClient } from "./VEIDClient.ts";
+import { VirtStakingClient } from "./VirtStakingClient.ts";
 
 /**
  * Configuration options for the VirtEngine client
@@ -193,6 +205,42 @@ export class VirtEngineClient {
   /** Roles access control module */
   public readonly roles: RolesClient;
 
+  /** Settlement escrow and payouts module */
+  public readonly settlement: SettlementClient;
+
+  /** Delegation and staking rewards module */
+  public readonly delegation: DelegationClient;
+
+  /** Provider registry module */
+  public readonly provider: ProviderClient;
+
+  /** Support tickets module */
+  public readonly support: SupportClient;
+
+  /** Oracle price feeds module */
+  public readonly oracle: OracleClient;
+
+  /** Deployment lifecycle module */
+  public readonly deployment: DeploymentClient;
+
+  /** Enclave attestation module */
+  public readonly enclave: EnclaveClient;
+
+  /** Benchmark reporting module */
+  public readonly benchmark: BenchmarkClient;
+
+  /** Fraud reporting module */
+  public readonly fraud: FraudClient;
+
+  /** Review submission module */
+  public readonly review: ReviewClient;
+
+  /** VirtEngine staking module */
+  public readonly staking: VirtStakingClient;
+
+  /** Config management module */
+  public readonly config: ConfigClient;
+
   /** Wallet manager for handling wallet connections */
   public readonly wallets: WalletManager;
 
@@ -242,6 +290,18 @@ export class VirtEngineClient {
     this.escrow = new EscrowClient(deps, clientOptions);
     this.encryption = new EncryptionClient(deps, clientOptions);
     this.roles = new RolesClient(deps, clientOptions);
+    this.settlement = new SettlementClient(deps, clientOptions);
+    this.delegation = new DelegationClient(deps, clientOptions);
+    this.provider = new ProviderClient(deps, clientOptions);
+    this.support = new SupportClient(deps, clientOptions);
+    this.oracle = new OracleClient(deps, clientOptions);
+    this.deployment = new DeploymentClient(deps, clientOptions);
+    this.enclave = new EnclaveClient(deps, clientOptions);
+    this.benchmark = new BenchmarkClient(deps, clientOptions);
+    this.fraud = new FraudClient(deps, clientOptions);
+    this.review = new ReviewClient(deps, clientOptions);
+    this.staking = new VirtStakingClient(deps, clientOptions);
+    this.config = new ConfigClient(deps, clientOptions);
 
     // Initialize wallet manager
     this.wallets = new WalletManager();

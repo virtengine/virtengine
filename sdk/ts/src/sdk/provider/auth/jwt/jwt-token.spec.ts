@@ -3,6 +3,7 @@ import type { AccountData } from "@cosmjs/proto-signing";
 import { beforeAll, describe, expect, it } from "@jest/globals";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 import { toBase64Url } from "./base64.ts";
 import type { CreateJWTOptions } from "./jwt-token.ts";
@@ -11,6 +12,8 @@ import type { ClaimsTestCase, SigningTestCase } from "./test/test-utils.ts";
 import { replaceTemplateValues } from "./test/test-utils.ts";
 import { createOfflineDataSigner } from "./wallet-utils.ts";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 describe("JWT Claims Validation", () => {
   const testdataPath = path.join(__dirname, "../../../../../..", "testdata", "jwt");
   const jwtMnemonic = fs.readFileSync(path.join(testdataPath, "mnemonic"), "utf-8").trim();
@@ -18,12 +21,16 @@ describe("JWT Claims Validation", () => {
   const jwtClaimsTestCases = JSON.parse(fs.readFileSync(path.join(testdataPath, "cases_jwt.json.tmpl"), "utf-8")) as ClaimsTestCase[];
 
   let testWallet: Secp256k1HdWallet;
+  let signingWallet: Secp256k1HdWallet;
   let jwtToken: JwtTokenManager;
   let testAccount: AccountData;
 
   beforeAll(async () => {
     testWallet = await Secp256k1HdWallet.fromMnemonic(jwtMnemonic, {
-      prefix: "virtengine",
+      prefix: "ve",
+    });
+    signingWallet = await Secp256k1HdWallet.fromMnemonic(jwtMnemonic, {
+      prefix: "akash",
     });
     const [account] = await testWallet.getAccounts();
     testAccount = account;
@@ -64,8 +71,8 @@ describe("JWT Claims Validation", () => {
 
     const signingString = `${expectedHeader}.${expectedPayload}`;
 
-    const signer = createOfflineDataSigner(testWallet);
-    const [account] = await testWallet.getAccounts();
+    const signer = createOfflineDataSigner(signingWallet);
+    const [account] = await signingWallet.getAccounts();
     const signResponse = await signer.signArbitrary(account.address, signingString);
     const signature = toBase64Url(signResponse.signature);
 

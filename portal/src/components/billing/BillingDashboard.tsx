@@ -38,6 +38,9 @@ import { CostTrendChart } from './CostTrendChart';
 import { useUsageHistory } from '@virtengine/portal/hooks/useBilling';
 import { MFAChallenge } from '@/components/mfa';
 import { useMFAGate } from '@/features/mfa';
+import { useChainQuery } from '@/hooks/useChainQuery';
+import { useWallet } from '@/lib/portal-adapter';
+import { formatTokenAmount } from '@/lib/utils';
 
 function thirtyDaysAgo(): Date {
   const d = new Date();
@@ -69,6 +72,8 @@ export function BillingDashboard({
 }: BillingDashboardProps) {
   const [withdrawalNotice, setWithdrawalNotice] = useState(false);
   const { gateAction, challengeProps } = useMFAGate();
+  const wallet = useWallet();
+  const activeAddress = wallet.accounts?.[wallet.activeAccountIndex ?? 0]?.address ?? null;
 
   const { data: usage, isLoading: usageLoading } = useCurrentUsage();
   const { data: projection, isLoading: projectionLoading } = useCostProjection();
@@ -78,6 +83,21 @@ export function BillingDashboard({
     endDate: new Date(),
     granularity: 'day',
   });
+  const { data: claimableRewards, isLoading: rewardsLoading } = useChainQuery(
+    async (client) => {
+      if (!activeAddress) return null;
+      return client.settlement.estimateRewards(activeAddress);
+    },
+    [activeAddress]
+  );
+
+  const rewardCoin = claimableRewards?.totalClaimable?.[0];
+  const claimableValue = rewardCoin ? formatTokenAmount(rewardCoin.amount) : '0';
+  const claimableDenom = rewardCoin?.denom
+    ? rewardCoin.denom === 'uve'
+      ? 'VE'
+      : rewardCoin.denom.toUpperCase()
+    : 'VE';
 
   const outstanding = calculateOutstanding(invoices);
   const hasOverdue = hasOverdueInvoices(invoices);
@@ -138,6 +158,13 @@ export function BillingDashboard({
           value={usage?.byDeployment.length.toString() ?? '0'}
           subtitle="Active deployments"
           loading={usageLoading}
+        />
+        <UsageSummaryCard
+          title="Claimable Rewards"
+          value={claimableValue}
+          currency={claimableDenom}
+          subtitle={activeAddress ? undefined : 'Connect wallet'}
+          loading={rewardsLoading}
         />
       </div>
 

@@ -7,6 +7,7 @@
   - Barrel exports from `sdk/ts/src/index.ts:1`.
   - Chain SDK factories: `createChainNodeSDK`, `createChainNodeWebSDK` (`sdk/ts/src/sdk/index.ts:2`).
   - Provider SDK factory: `createProviderSDK` (`sdk/ts/src/sdk/index.ts:4`).
+  - Unified client exposes module clients (settlement, delegation, provider, support, oracle, deployment, enclave, benchmark, fraud, review, staking, config) via `sdk/ts/src/clients/VirtEngineClient.ts:1`.
 
 ## Architecture
 - Entry points:

@@ -25,6 +25,7 @@ export interface MessageFns<T, V extends string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
+  create?(base?: DeepPartial<T>): T;
   fromPartial(object: DeepPartial<T>): T;
 }
 

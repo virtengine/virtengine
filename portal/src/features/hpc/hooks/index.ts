@@ -2,143 +2,92 @@
  * HPC Hooks
  *
  * React hooks for HPC feature interactions.
- * Uses mock client for now, will be replaced with real SDK integration.
  */
 
-import { useEffect, useState } from 'react';
-import { createHPCClient } from '../lib/hpc-client';
-import type { Job, JobOutput, WorkloadTemplate, JobStatus } from '../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { VirtEngineClient } from '@virtengine/chain-sdk';
+import { useChainQuery } from '@/hooks/useChainQuery';
+import { collectWorkloadTemplates, createHPCClient, mapSdkJob } from '../lib/hpc-client';
+import type { JobOutput, JobStatus } from '../types';
 
 /**
  * Hook to fetch and manage workload templates
  */
 export function useWorkloadTemplates() {
-  const [templates, setTemplates] = useState<WorkloadTemplate[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    const client = createHPCClient();
-
-    client
-      .listWorkloadTemplates()
-      .then((data) => {
-        setTemplates(data);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        setError(err as Error);
-        setIsLoading(false);
-      });
+  const query = useCallback(async (client: VirtEngineClient) => {
+    const offerings = await client.hpc.listOfferings({ activeOnly: true });
+    return collectWorkloadTemplates(offerings);
   }, []);
 
-  return { templates, isLoading, error };
+  const { data, isLoading, error, refetch } = useChainQuery(query, []);
+
+  return { templates: data ?? [], isLoading, error, refetch };
 }
 
 /**
  * Hook to fetch a single template
  */
 export function useWorkloadTemplate(templateId: string | null) {
-  const [template, setTemplate] = useState<WorkloadTemplate | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const query = useCallback(
+    async (client: VirtEngineClient) => {
+      if (!templateId) return null;
+      const offerings = await client.hpc.listOfferings({ activeOnly: true });
+      const templates = collectWorkloadTemplates(offerings);
+      return templates.find((template) => template.id === templateId) ?? null;
+    },
+    [templateId]
+  );
 
-  useEffect(() => {
-    if (!templateId) {
-      setTemplate(null);
-      setIsLoading(false);
-      return;
-    }
+  const { data, isLoading, error, refetch } = useChainQuery(query, [templateId]);
 
-    const client = createHPCClient();
-
-    client
-      .getWorkloadTemplate(templateId)
-      .then((data) => {
-        setTemplate(data);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        setError(err as Error);
-        setIsLoading(false);
-      });
-  }, [templateId]);
-
-  return { template, isLoading, error };
+  return { template: data, isLoading: templateId ? isLoading : false, error, refetch };
 }
 
 /**
  * Hook to fetch and manage jobs
  */
 export function useJobs(filters?: { status?: JobStatus[] }) {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const statusFilter = useMemo(() => filters?.status ?? [], [filters?.status]);
+  const statusKey = useMemo(() => statusFilter.join(','), [statusFilter]);
 
-  const refetch = () => {
-    setIsLoading(true);
-    const client = createHPCClient();
+  const query = useCallback(
+    async (client: VirtEngineClient) => {
+      const jobs = await client.hpc.listJobs();
+      const mapped = jobs.map(mapSdkJob);
 
-    client
-      .listJobs(filters)
-      .then((data) => {
-        setJobs(data);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        setError(err as Error);
-        setIsLoading(false);
-      });
-  };
+      if (!statusFilter.length) return mapped;
+      return mapped.filter((job) => statusFilter.includes(job.status));
+    },
+    [statusFilter]
+  );
 
-  useEffect(() => {
-    refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.status?.join(',')]);
+  const { data, isLoading, error, refetch } = useChainQuery(query, [statusKey]);
 
-  return { jobs, isLoading, error, refetch };
+  return { jobs: data ?? [], isLoading, error, refetch };
 }
 
 /**
  * Hook to fetch a single job with auto-refresh
  */
 export function useJob(jobId: string | null, autoRefresh = true) {
-  const [job, setJob] = useState<Job | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const query = useCallback(
+    async (client: VirtEngineClient) => {
+      if (!jobId) return null;
+      const job = await client.hpc.getJob(jobId);
+      return job ? mapSdkJob(job) : null;
+    },
+    [jobId]
+  );
+
+  const { data, isLoading, error, refetch } = useChainQuery(query, [jobId]);
 
   useEffect(() => {
-    if (!jobId) {
-      setJob(null);
-      setIsLoading(false);
-      return;
-    }
+    if (!jobId || !autoRefresh) return;
+    const interval = setInterval(() => void refetch(), 10000);
+    return () => clearInterval(interval);
+  }, [jobId, autoRefresh, refetch]);
 
-    const client = createHPCClient();
-
-    const fetchJob = () => {
-      client
-        .getJob(jobId)
-        .then((data) => {
-          setJob(data);
-          setIsLoading(false);
-        })
-        .catch((err) => {
-          setError(err as Error);
-          setIsLoading(false);
-        });
-    };
-
-    fetchJob();
-
-    // Auto-refresh every 10 seconds for running/queued jobs
-    if (autoRefresh) {
-      const interval = setInterval(fetchJob, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [jobId, autoRefresh]);
-
-  return { job, isLoading, error };
+  return { job: data, isLoading: jobId ? isLoading : false, error };
 }
 
 /**

@@ -5,47 +5,47 @@ exports[`protoc-gen-customtype-patches plugin generates \`Set\` instance with al
 import { LegacyDec } from "../../encoding/customTypes/LegacyDec.ts";
 
 const p = {
-  "akash.test.functional.PetOwner"(value: _protos_customtype.PetOwner | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.test.functional.PetOwner"(value: _protos_customtype.PetOwner | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
-    if (value.pet != null) newValue.pet = p["akash.test.functional.Pet"](value.pet, transformType);
+    if (value.pet != null) newValue.pet = p["virtengine.test.functional.Pet"](value.pet, transformType);
     return newValue;
   },
-  "akash.test.functional.Pet"(value: _protos_customtype.Pet | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.test.functional.Pet"(value: _protos_customtype.Pet | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
     if (value.value?.case === "dog") {
       newValue.dog = {
         ...value.value,
-        value: p["akash.test.functional.Dog"](value.value.value, transformType)
+        value: p["virtengine.test.functional.Dog"](value.value.value, transformType)
       };
     }
     return newValue;
   },
-  "akash.test.functional.Dog"(value: _protos_customtype.Dog | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.test.functional.Dog"(value: _protos_customtype.Dog | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
     if (value.name != null) newValue.name = LegacyDec[transformType](value.name);
     return newValue;
   },
-  "akash.test.functional.PetClub"(value: _protos_customtype.PetClub | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.test.functional.PetClub"(value: _protos_customtype.PetClub | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
-    if (value.members) newValue.members = value.members.map((item) => p["akash.test.functional.PetOwner"](item, transformType)!);
-    if (value.allDogs) newValue.allDogs = value.allDogs.map((item) => p["akash.test.functional.Dog"](item, transformType)!);
+    if (value.members) newValue.members = value.members.map((item) => p["virtengine.test.functional.PetOwner"](item, transformType)!);
+    if (value.allDogs) newValue.allDogs = value.allDogs.map((item) => p["virtengine.test.functional.Dog"](item, transformType)!);
     if (value.ownerToDog) {
       newValue.ownerToDog = {};
-      Object.keys(value.ownerToDog).forEach(k => newValue.ownerToDog[k] = p["akash.test.functional.Dog"](value.ownerToDog[k], transformType)!);
+      Object.keys(value.ownerToDog).forEach(k => newValue.ownerToDog[k] = p["virtengine.test.functional.Dog"](value.ownerToDog[k], transformType)!);
     }
     return newValue;
   },
-  "akash.test.functional.PetClubItemsQueryResponse"(value: _protos_customtype.PetClubItemsQueryResponse | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.test.functional.PetClubItemsQueryResponse"(value: _protos_customtype.PetClubItemsQueryResponse | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
-    if (value.items) newValue.items = value.items.map((item) => p["akash.test.functional.PetClub"](item, transformType)!);
+    if (value.items) newValue.items = value.items.map((item) => p["virtengine.test.functional.PetClub"](item, transformType)!);
     return newValue;
   },
-  "akash.test.functional.Money"(value: _protos_customtype.Money | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.test.functional.Money"(value: _protos_customtype.Money | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
     if (value.amount != null) newValue.amount = LegacyDec[transformType](value.amount);

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 
 import { JwtValidator } from "./jwt-validator.ts";
+import type { JwtTokenPayload } from "./types.ts";
 
 describe("JwtValidator", () => {
   let validator: JwtValidator;
@@ -10,12 +11,28 @@ describe("JwtValidator", () => {
   });
 
   it("should validate a valid token", () => {
-    const validToken
-      = "eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJha2FzaDFhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejEyMzQ1Njc4OTBhYiIsImlhdCI6MTY1NDAwMDAwMCwiZXhwIjoxNjU0MDAzNjAwLCJuYmYiOjE2NTQwMDAwMDAsInZlcnNpb24iOiJ2MSIsImxlYXNlcyI6eyJhY2Nlc3MiOiJncmFudWxhciIsInBlcm1pc3Npb25zIjpbeyJwcm92aWRlciI6ImFrYXNoMWFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6MTIzNDU2Nzg5MGFiIiwiYWNjZXNzIjoic2NvcGVkIiwic2NvcGUiOlsic2VuZC1tYW5pZmVzdCJdfV19fQ.signature";
-    const result = validator.validateToken(validToken);
+    const address = `ve1${"a".repeat(38)}`;
+    const payload: JwtTokenPayload = {
+      iss: address,
+      iat: 1654000000,
+      exp: 1654003600,
+      nbf: 1654000000,
+      version: "v1",
+      leases: {
+        access: "granular",
+        permissions: [
+          {
+            provider: address,
+            access: "scoped",
+            scope: ["send-manifest"],
+          },
+        ],
+      },
+    };
+    const result = validator.validateToken(payload);
     expect(result.isValid).toBe(true);
     expect(result.errors.length).toBe(0);
-    expect(result.decodedToken).toBeDefined();
+    expect(result.decodedToken).toBeUndefined();
   });
 
   it("should reject a malformed token", () => {

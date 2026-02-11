@@ -1,14 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { faker } from "@faker-js/faker";
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import { createGroups, createManifest, createSdlJson, createSdlYml } from "@test/helpers/sdl";
 
-import { VE_DENOM, SANDBOX_ID, USDC_IBC_DENOMS } from "../../network/config.ts";
+import { SANDBOX_ID, USDC_IBC_DENOMS, VE_DENOM } from "../../network/config.ts";
 import type { v2ServiceImageCredentials } from "../types.ts";
 import { SDL } from "./SDL.ts";
 import { SdlValidationError } from "./SdlValidationError.ts";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("SDL", () => {
   describe("profiles placement pricing denomination", () => {
@@ -678,7 +681,7 @@ describe("SDL", () => {
     ];
 
     const expectedVersion = new Uint8Array([
-      117, 11, 114, 73, 243, 231, 14, 234, 211, 32, 100, 158, 202, 240, 89, 251, 6, 222, 2, 248, 30, 169, 146, 97, 176, 103, 44, 196, 64, 220, 97, 102,
+      171, 243, 14, 221, 4, 95, 61, 112, 108, 41, 207, 38, 208, 70, 234, 60, 164, 252, 16, 98, 250, 17, 72, 253, 219, 100, 105, 204, 57, 17, 100, 34,
     ]);
 
     describe("fromString", () => {
@@ -1188,7 +1191,7 @@ describe("SDL", () => {
       = "[{\"Name\":\"virtengine\",\"Services\":[{\"Args\":null,\"Command\":null,\"Count\":1,\"Env\":null,\"Expose\":[{\"EndpointSequenceNumber\":0,\"ExternalPort\":80,\"Global\":true,\"HTTPOptions\":{\"MaxBodySize\":1048576,\"NextCases\":[\"error\",\"timeout\"],\"NextTimeout\":0,\"NextTries\":3,\"ReadTimeout\":60000,\"SendTimeout\":60000},\"Hosts\":null,\"IP\":\"\",\"Port\":80,\"Proto\":\"TCP\",\"Service\":\"\"}],\"Image\":\"bsord/tetris\",\"Name\":\"tetris-main\",\"Resources\":{\"cpu\":{\"units\":{\"val\":\"1000\"}},\"endpoints\":null,\"memory\":{\"size\":{\"val\":\"536870912\"}},\"storage\":[{\"name\":\"default\",\"size\":{\"val\":\"536870912\"}}]}}]}]";
 
     const expectedVersion = new Uint8Array([
-      247, 77, 26, 95, 231, 205, 208, 76, 208, 217, 59, 106, 109, 76, 73, 196, 37, 14, 75, 170, 210, 120, 231, 213, 69, 226, 219, 203, 236, 116, 106, 135,
+      228, 88, 56, 83, 200, 83, 171, 90, 227, 196, 35, 12, 123, 189, 183, 19, 253, 204, 79, 178, 156, 41, 2, 192, 237, 102, 101, 247, 177, 55, 149, 38,
     ]);
 
     it("should create SDL instance from string", () => {
@@ -1372,7 +1375,7 @@ describe("SDL", () => {
       = "[{\"Name\":\"virtengine\",\"Services\":[{\"Args\":null,\"Command\":null,\"Count\":1,\"Env\":null,\"Expose\":[{\"EndpointSequenceNumber\":0,\"ExternalPort\":80,\"Global\":true,\"HTTPOptions\":{\"MaxBodySize\":1048576,\"NextCases\":[\"error\",\"timeout\"],\"NextTimeout\":0,\"NextTries\":3,\"ReadTimeout\":60000,\"SendTimeout\":60000},\"Hosts\":null,\"IP\":\"\",\"Port\":80,\"Proto\":\"TCP\",\"Service\":\"\"}],\"Image\":\"bsord/tetris\",\"Name\":\"tetris\",\"Resources\":{\"cpu\":{\"units\":{\"val\":\"1000\"}},\"endpoints\":null,\"memory\":{\"size\":{\"val\":\"536870912\"}},\"storage\":[{\"name\":\"default\",\"size\":{\"val\":\"536870912\"}}]}}]}]";
 
     const expectedVersion = new Uint8Array([
-      119, 216, 99, 142, 214, 87, 92, 43, 168, 216, 126, 234, 231, 181, 75, 175, 102, 90, 218, 232, 182, 53, 158, 91, 6, 246, 3, 15, 63, 120, 212, 176,
+      185, 8, 155, 4, 105, 231, 154, 21, 26, 179, 51, 211, 242, 97, 99, 189, 50, 208, 207, 244, 161, 24, 171, 155, 134, 226, 100, 22, 56, 217, 77, 46,
     ]);
 
     it("should create SDL instance from string", () => {
