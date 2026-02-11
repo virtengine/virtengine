@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -231,7 +231,7 @@ class WorktreeManager {
       args.push(branch);
     }
 
-    const result = gitSync(args, this.repoRoot);
+    let result = gitSync(args, this.repoRoot);
 
     if (result.status !== 0) {
       const stderr = (result.stderr || "").trim();
@@ -239,8 +239,61 @@ class WorktreeManager {
         `${TAG} Failed to create worktree for ${branch}: ${stderr}`,
       );
 
-      // If the branch is already checked out, try --detach
-      if (
+      // ── Branch or path already exists (from a prior run) ──
+      // `-b` fails because the branch ref already exists, OR
+      // the worktree directory itself already exists on disk.
+      if (stderr.includes("already exists")) {
+        console.warn(
+          `${TAG} branch/path "${branch}" already exists, attempting recovery`,
+        );
+        // Prune stale worktree refs first so the branch isn't considered "checked out"
+        gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+
+        // Remove stale worktree directory if it exists but isn't tracked by git
+        if (existsSync(worktreePath)) {
+          console.warn(`${TAG} removing stale worktree directory: ${worktreePath}`);
+          try {
+            rmSync(worktreePath, { recursive: true, force: true });
+          } catch (rmErr) {
+            console.error(`${TAG} failed to remove stale worktree dir: ${rmErr.message}`);
+          }
+        }
+
+        // Try checking out the existing branch into the new worktree (no -b)
+        const existingResult = gitSync(
+          ["worktree", "add", worktreePath, branch],
+          this.repoRoot,
+        );
+
+        if (existingResult.status !== 0) {
+          const stderr2 = (existingResult.stderr || "").trim();
+          if (
+            stderr2.includes("already checked out") ||
+            stderr2.includes("is already checked out") ||
+            stderr2.includes("is already used")
+          ) {
+            // Branch is checked out in another worktree — force-reset with -B
+            console.warn(
+              `${TAG} branch "${branch}" already checked out elsewhere, using -B to force-reset`,
+            );
+            const forceArgs = ["worktree", "add", worktreePath, "-B", branch];
+            if (opts.baseBranch) forceArgs.push(opts.baseBranch);
+            result = gitSync(forceArgs, this.repoRoot);
+            if (result.status !== 0) {
+              console.error(
+                `${TAG} Force-reset worktree also failed: ${(result.stderr || "").trim()}`,
+              );
+              return { path: worktreePath, created: false, existing: false };
+            }
+          } else {
+            console.error(
+              `${TAG} Checkout of existing branch also failed: ${stderr2}`,
+            );
+            return { path: worktreePath, created: false, existing: false };
+          }
+        }
+      // ── Branch already checked out in another worktree ──
+      } else if (
         stderr.includes("already checked out") ||
         stderr.includes("is already used")
       ) {
