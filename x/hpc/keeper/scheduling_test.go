@@ -739,3 +739,231 @@ func TestSchedulingWithHeterogeneousResources(t *testing.T) {
 	require.Len(t, eligible, 1)
 	require.Equal(t, "cluster-gpu", eligible[0].ClusterID)
 }
+
+// TestSchedulingFairShareBias ensures tenants with heavy usage are deprioritized.
+func TestSchedulingFairShareBias(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{12}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{13}, 20)).String()
+
+	clusterA := types.HPCCluster{
+		ClusterID:       "cluster-usage-heavy",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-usage-heavy",
+		State:           types.ClusterStateActive,
+		TotalNodes:      8,
+		AvailableNodes:  8,
+		Region:          "us-west-1",
+		Partitions: []types.Partition{
+			{Name: "default", Priority: 500},
+		},
+	}
+	clusterB := types.HPCCluster{
+		ClusterID:       "cluster-usage-light",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-usage-light",
+		State:           types.ClusterStateActive,
+		TotalNodes:      8,
+		AvailableNodes:  8,
+		Region:          "us-west-1",
+		Partitions: []types.Partition{
+			{Name: "default", Priority: 500},
+		},
+	}
+
+	mustSetCluster(t, ctx, k, clusterA)
+	mustSetCluster(t, ctx, k, clusterB)
+
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-a",
+		ClusterID:       "cluster-usage-heavy",
+		ProviderAddress: providerAddr,
+		Region:          "us-west-1",
+		AvgLatencyMs:    20,
+		Active:          true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-b",
+		ClusterID:       "cluster-usage-light",
+		ProviderAddress: providerAddr,
+		Region:          "us-west-1",
+		AvgLatencyMs:    20,
+		Active:          true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-fair-share",
+		ClusterID:         "cluster-usage-heavy",
+		ProviderAddress:   providerAddr,
+		Name:              "fair-share",
+		MaxRuntimeSeconds: 3600,
+		QueueOptions: []types.QueueOption{
+			{PartitionName: "default", DisplayName: "default"},
+		},
+		Active: true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	// Heavy usage on cluster A
+	mustSetJob(t, ctx, k, types.HPCJob{
+		JobID:           "job-running-heavy",
+		OfferingID:      offering.OfferingID,
+		ClusterID:       "cluster-usage-heavy",
+		ProviderAddress: providerAddr,
+		CustomerAddress: customerAddr,
+		QueueName:       "default",
+		State:           types.JobStateRunning,
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	})
+
+	job := types.HPCJob{
+		JobID:           "job-fairness",
+		OfferingID:      offering.OfferingID,
+		CustomerAddress: customerAddr,
+		QueueName:       "default",
+		Resources: types.JobResources{
+			Nodes: 1,
+		},
+	}
+
+	decision, err := k.ScheduleJob(ctx, &job)
+	require.NoError(t, err)
+	require.Equal(t, "cluster-usage-light", decision.SelectedClusterID)
+}
+
+// TestSchedulingQuotaEnforcement ensures tenant quotas are enforced.
+func TestSchedulingQuotaEnforcement(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{14}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{15}, 20)).String()
+
+	cluster := types.HPCCluster{
+		ClusterID:       "cluster-quota",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-quota",
+		State:           types.ClusterStateActive,
+		TotalNodes:      8,
+		AvailableNodes:  8,
+		Region:          "us-east-2",
+		Partitions: []types.Partition{
+			{Name: "default", Priority: 400},
+		},
+	}
+	mustSetCluster(t, ctx, k, cluster)
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-quota",
+		ClusterID:         "cluster-quota",
+		ProviderAddress:   providerAddr,
+		Name:              "quota",
+		MaxRuntimeSeconds: 3600,
+		QueueOptions: []types.QueueOption{
+			{PartitionName: "default", DisplayName: "default"},
+		},
+		Active: true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	// Existing running jobs already consume quota/burst
+	mustSetJob(t, ctx, k, types.HPCJob{
+		JobID:           "job-running-quota",
+		OfferingID:      offering.OfferingID,
+		ClusterID:       cluster.ClusterID,
+		ProviderAddress: providerAddr,
+		CustomerAddress: customerAddr,
+		QueueName:       "default",
+		State:           types.JobStateRunning,
+		Resources: types.JobResources{
+			Nodes: 4,
+		},
+	})
+
+	job := types.HPCJob{
+		JobID:           "job-quota-new",
+		OfferingID:      offering.OfferingID,
+		CustomerAddress: customerAddr,
+		QueueName:       "default",
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	}
+
+	_, err := k.ScheduleJob(ctx, &job)
+	require.ErrorIs(t, err, types.ErrTenantQuotaExceeded)
+}
+
+// TestSchedulingPreemptionPlan ensures preemption is planned deterministically.
+func TestSchedulingPreemptionPlan(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{16}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{17}, 20)).String()
+
+	cluster := types.HPCCluster{
+		ClusterID:       "cluster-preempt",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-preempt",
+		State:           types.ClusterStateActive,
+		TotalNodes:      8,
+		AvailableNodes:  0,
+		Region:          "eu-west-1",
+		Partitions: []types.Partition{
+			{Name: "low", Priority: 100},
+			{Name: "high", Priority: 900},
+		},
+	}
+	mustSetCluster(t, ctx, k, cluster)
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:          "node-preempt-1",
+		ClusterID:       cluster.ClusterID,
+		ProviderAddress: providerAddr,
+		Region:          "eu-west-1",
+		AvgLatencyMs:    15,
+		Active:          true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-preempt",
+		ClusterID:         cluster.ClusterID,
+		ProviderAddress:   providerAddr,
+		Name:              "preempt",
+		MaxRuntimeSeconds: 7200,
+		QueueOptions: []types.QueueOption{
+			{PartitionName: "low", DisplayName: "low"},
+			{PartitionName: "high", DisplayName: "high"},
+		},
+		Active: true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	// Low priority running job
+	mustSetJob(t, ctx, k, types.HPCJob{
+		JobID:           "job-preempted",
+		OfferingID:      offering.OfferingID,
+		ClusterID:       cluster.ClusterID,
+		ProviderAddress: providerAddr,
+		CustomerAddress: customerAddr,
+		QueueName:       "low",
+		State:           types.JobStateRunning,
+		Resources: types.JobResources{
+			Nodes: 4,
+		},
+	})
+
+	job := types.HPCJob{
+		JobID:           "job-preemptor",
+		OfferingID:      offering.OfferingID,
+		CustomerAddress: customerAddr,
+		QueueName:       "high",
+		Resources: types.JobResources{
+			Nodes: 4,
+		},
+	}
+
+	decision, err := k.ScheduleJob(ctx, &job)
+	require.NoError(t, err)
+	require.True(t, decision.PreemptionPlanned)
+	require.Contains(t, decision.PreemptedJobIDs, "job-preempted")
+	require.Equal(t, cluster.ClusterID, decision.SelectedClusterID)
+}
