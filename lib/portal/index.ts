@@ -35,6 +35,31 @@ export { PortalProvider, usePortal } from "./components/PortalProvider";
 export type { PortalProviderProps, PortalConfig } from "./types/config";
 
 // ============================================================================
+// Chat Agent (VE-70D)
+// ============================================================================
+
+export {
+  ChatAgent,
+  createChatAgent,
+  createChatProvider,
+  createDefaultChatTools,
+  createChatSystemMessage,
+  buildChatContext,
+  createChatSnapshot,
+} from "./src/chat";
+export type {
+  ChatMessage,
+  ChatAction,
+  ChatActionExecution,
+  ChatToolHandler,
+  ChatToolDefinition,
+  ChatToolContext,
+  ChatContextSnapshot,
+  ChatProviderConfig,
+  ChatProviderType,
+} from "./src/chat";
+
+// ============================================================================
 // Authentication (VE-700)
 // ============================================================================
 
