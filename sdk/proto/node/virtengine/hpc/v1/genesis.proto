@@ -71,6 +71,13 @@ message GenesisState {
     (gogoproto.moretags) = "yaml:\"disputes\""
   ];
 
+  // SchedulingMetrics are aggregated scheduling metrics
+  repeated SchedulingMetrics scheduling_metrics = 15 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scheduling_metrics",
+    (gogoproto.moretags) = "yaml:\"scheduling_metrics\""
+  ];
+
   // ClusterSequence is the next cluster sequence
   uint64 cluster_sequence = 10 [
     (gogoproto.jsontag) = "cluster_sequence",

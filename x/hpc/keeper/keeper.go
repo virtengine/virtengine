@@ -60,6 +60,8 @@ type IKeeper interface {
 	ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.SchedulingDecision, error)
 	GetSchedulingDecision(ctx sdk.Context, decisionID string) (types.SchedulingDecision, bool)
 	SetSchedulingDecision(ctx sdk.Context, decision types.SchedulingDecision) error
+	GetSchedulingMetrics(ctx sdk.Context, clusterID, queueName string) (types.SchedulingMetrics, bool)
+	SetSchedulingMetrics(ctx sdk.Context, metrics types.SchedulingMetrics) error
 
 	// Rewards
 	DistributeJobRewards(ctx sdk.Context, jobID string) (*types.HPCRewardRecord, error)
@@ -83,6 +85,7 @@ type IKeeper interface {
 	WithJobs(ctx sdk.Context, fn func(types.HPCJob) bool)
 	WithNodeMetadatas(ctx sdk.Context, fn func(types.NodeMetadata) bool)
 	WithSchedulingDecisions(ctx sdk.Context, fn func(types.SchedulingDecision) bool)
+	WithSchedulingMetrics(ctx sdk.Context, fn func(types.SchedulingMetrics) bool)
 	WithHPCRewards(ctx sdk.Context, fn func(types.HPCRewardRecord) bool)
 	WithDisputes(ctx sdk.Context, fn func(types.HPCDispute) bool)
 

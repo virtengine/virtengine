@@ -41,6 +41,7 @@ func (s *GenesisTestSuite) TestDefaultGenesisState() {
 	s.Require().Empty(genesis.Offerings)
 	s.Require().Empty(genesis.Jobs)
 	s.Require().Empty(genesis.SchedulingDecisions)
+	s.Require().Empty(genesis.SchedulingMetrics)
 	s.Require().Empty(genesis.HPCRewards)
 	s.Require().Empty(genesis.Disputes)
 }
@@ -589,6 +590,20 @@ func (s *GenesisTestSuite) TestSchedulingDecisionValidate() {
 	}
 }
 
+// Test: SchedulingMetrics Validate
+func (s *GenesisTestSuite) TestSchedulingMetricsValidate() {
+	metrics := types.SchedulingMetrics{
+		ClusterID:      "cluster-1",
+		QueueName:      "default",
+		TotalDecisions: 1,
+	}
+
+	s.Require().NoError(metrics.Validate())
+
+	metrics.ClusterID = ""
+	s.Require().Error(metrics.Validate())
+}
+
 // Test: Complete genesis state with all entities
 func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 	now := time.Now().UTC()
@@ -651,6 +666,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 				SelectedClusterID: "hpc-cluster-1",
 				DecisionReason:    "best capacity",
 				CreatedAt:         now,
+			},
+		},
+		SchedulingMetrics: []types.SchedulingMetrics{
+			{
+				ClusterID:      "hpc-cluster-1",
+				QueueName:      "default",
+				TotalDecisions: 1,
+				LastDecisionAt: now,
 			},
 		},
 		HPCRewards: []types.HPCRewardRecord{
