@@ -906,7 +906,7 @@ func TestSchedulingPreemptionPlan(t *testing.T) {
 		ProviderAddress: providerAddr,
 		Name:            "cluster-preempt",
 		State:           types.ClusterStateActive,
-		TotalNodes:      8,
+		TotalNodes:      16,
 		AvailableNodes:  0,
 		Region:          "eu-west-1",
 		Partitions: []types.Partition{

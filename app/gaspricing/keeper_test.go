@@ -36,9 +36,9 @@ func TestUpdateMinGasPrices(t *testing.T) {
 
 	highMinGas, _, err := keeper.UpdateMinGasPrices(ctx, 9000, 10000)
 	require.NoError(t, err)
-	require.True(t, decCoinsAllGTE(highMinGas, baseMinGas))
+	require.True(t, DecCoinsAllGTE(highMinGas, baseMinGas))
 
 	lowMinGas, _, err := keeper.UpdateMinGasPrices(ctx, 1000, 10000)
 	require.NoError(t, err)
-	require.True(t, decCoinsAllGTE(lowMinGas, baseMinGas))
+	require.True(t, DecCoinsAllGTE(lowMinGas, baseMinGas))
 }

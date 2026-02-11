@@ -498,7 +498,7 @@ func (app *VirtEngineApp) applyAdaptiveMinGasPrices(ctx sdk.Context) {
 	if len(state.CurrentMinGasPrices) == 0 {
 		state = gaspricing.DefaultState(params)
 	}
-	app.setMinGasPrices(state.CurrentMinGasPrices)
+	app.setAdaptiveMinGasPrices(state.CurrentMinGasPrices)
 }
 
 func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
@@ -522,17 +522,14 @@ func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
 		app.Logger().Error("failed to update adaptive min gas prices", "err", err)
 		return
 	}
-	app.setMinGasPrices(minGasPrices)
+	app.setAdaptiveMinGasPrices(minGasPrices)
 }
 
-type minGasPriceSetter interface {
-	setMinGasPrices(prices sdk.DecCoins)
-}
-
-func (app *VirtEngineApp) setMinGasPrices(prices sdk.DecCoins) {
-	if setter, ok := interface{}(app.BaseApp).(minGasPriceSetter); ok {
-		setter.setMinGasPrices(prices)
+func (app *VirtEngineApp) setAdaptiveMinGasPrices(minGasPrices sdk.DecCoins) {
+	if app.BaseApp == nil {
+		return
 	}
+	baseapp.SetMinGasPrices(minGasPrices.String())(app.BaseApp)
 }
 
 // LegacyAmino returns VirtEngineApp's amino codec.
