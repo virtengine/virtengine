@@ -25,8 +25,14 @@ type QueryServer interface {
 	// GetAuthorizationSession returns an authorization session by ID
 	GetAuthorizationSession(context.Context, *QueryAuthorizationSessionRequest) (*QueryAuthorizationSessionResponse, error)
 
+	// GetAuthorizationSessions returns authorization sessions for an account
+	GetAuthorizationSessions(context.Context, *QueryAuthorizationSessionsRequest) (*QueryAuthorizationSessionsResponse, error)
+
 	// GetTrustedDevices returns trusted devices for an account
 	GetTrustedDevices(context.Context, *QueryTrustedDevicesRequest) (*QueryTrustedDevicesResponse, error)
+
+	// GetTrustedDevice returns a trusted device by fingerprint
+	GetTrustedDevice(context.Context, *QueryTrustedDeviceRequest) (*QueryTrustedDeviceResponse, error)
 
 	// GetSensitiveTxConfig returns the configuration for a sensitive tx type
 	GetSensitiveTxConfig(context.Context, *QuerySensitiveTxConfigRequest) (*QuerySensitiveTxConfigResponse, error)
@@ -91,6 +97,17 @@ type QueryTrustedDevicesResponse struct {
 	Devices []TrustedDevice `json:"devices"`
 }
 
+// QueryTrustedDeviceRequest is the request for GetTrustedDevice
+type QueryTrustedDeviceRequest struct {
+	Address           string `json:"address"`
+	DeviceFingerprint string `json:"device_fingerprint"`
+}
+
+// QueryTrustedDeviceResponse is the response for GetTrustedDevice
+type QueryTrustedDeviceResponse struct {
+	Device *TrustedDevice `json:"device"`
+}
+
 // QuerySensitiveTxConfigRequest is the request for QuerySensitiveTxConfig
 type QuerySensitiveTxConfigRequest struct {
 	TransactionType SensitiveTransactionType `json:"transaction_type"`
@@ -142,6 +159,17 @@ type QueryAuthorizationSessionRequest struct {
 // QueryAuthorizationSessionResponse is the response for GetAuthorizationSession
 type QueryAuthorizationSessionResponse struct {
 	Session *AuthorizationSession `json:"session"`
+}
+
+// QueryAuthorizationSessionsRequest is the request for GetAuthorizationSessions
+type QueryAuthorizationSessionsRequest struct {
+	Address        string `json:"address"`
+	IncludeExpired bool   `json:"include_expired"`
+}
+
+// QueryAuthorizationSessionsResponse is the response for GetAuthorizationSessions
+type QueryAuthorizationSessionsResponse struct {
+	Sessions []AuthorizationSession `json:"sessions"`
 }
 
 // QueryAllSensitiveTxConfigsRequest is the request for GetAllSensitiveTxConfigs

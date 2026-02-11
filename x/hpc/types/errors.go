@@ -48,6 +48,9 @@ var (
 	// ErrNoAvailableCluster is returned when no cluster is available for scheduling
 	ErrNoAvailableCluster = errors.Register(ModuleName, 2112, "no available cluster for job")
 
+	// ErrTenantQuotaExceeded is returned when tenant quota or burst limits are exceeded
+	ErrTenantQuotaExceeded = errors.Register(ModuleName, 2153, "tenant quota exceeded")
+
 	// ErrInvalidReward is returned when a reward is invalid
 	ErrInvalidReward = errors.Register(ModuleName, 2113, "invalid HPC reward")
 

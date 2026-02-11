@@ -3,6 +3,7 @@
  * VE-210: Unit tests for salt generation utilities
  */
 
+import { describe, it, expect } from 'vitest';
 import {
   generateSalt,
   generateDeviceBoundSalt,

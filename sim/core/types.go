@@ -72,11 +72,13 @@ type Metrics struct {
 	SupplyGrowthBPS     int64
 	AverageVelocity     float64
 
-	AvgComputePrice float64
-	AvgStoragePrice float64
-	AvgGPUPrice     float64
-	AvgGasPrice     float64
-	FeeBurned       *big.Int
+	AvgComputePrice   float64
+	AvgStoragePrice   float64
+	AvgGPUPrice       float64
+	AvgGasPrice       float64
+	AvgMinGasPrice    float64
+	AvgGasUtilization float64
+	FeeBurned         *big.Int
 
 	SettlementFailures int64
 	EscrowUnderfunded  int64

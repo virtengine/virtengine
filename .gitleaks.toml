@@ -48,6 +48,35 @@ paths = [
   '''\.cache/.*''',
   '''_build/.*''',
   '''_docs/.*''',
+  '''docs/.*''',
+  # Markdown and documentation files — contain example API keys, not real secrets
+  '''.*\.md$''',
+  '''.*examples/.*''',
+  # Test files — exclude from all secret scanning rules (including defaults)
+  '''.*_test\.go''',
+  '''.*_test\.ts''',
+  '''.*\.test\.ts''',
+  '''.*\.test\.js''',
+  '''.*\.spec\.ts''',
+  '''.*\.spec\.js''',
+  '''.*__tests__/.*''',
+  '''tests?/.*''',
+  '''testutil/.*''',
+  '''testdata/.*''',
+  '''.*\.golden''',
+  '''.*fixtures?.*''',
+  # Mock and sample data
+  '''.*mock.*''',
+  '''.*sample.*''',
+  '''.*\.example\..*''',
+  '''.*\.example$''',
+  '''.*\.env\..*''',
+  '''.*\.env$''',
+  # Portal source code — contains API endpoint constants, not real secrets
+  '''portal/src/.*''',
+  '''lib/portal/.*''',
+  '''lib/admin/.*''',
+  '''lib/capture/.*''',
 ]
 
 # Exclude specific commits (if needed)

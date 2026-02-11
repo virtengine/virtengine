@@ -5,9 +5,23 @@ import {
   coerceNumber,
   coerceString,
   toDate,
+  getRestEndpoint,
   signAndBroadcastAmino,
   type WalletSigner,
 } from '@/lib/api/chain';
+import {
+  submitCaptureScope as submitCaptureScopePipeline,
+  type CaptureResult,
+  type ScopeTypeInput,
+  type SubmissionStatus,
+  type SubmissionUpdate,
+} from '@/lib/capture-adapter';
+import type { WalletContextValue } from '@/lib/portal-adapter';
+import {
+  createPortalClientKeyProvider,
+  createPortalTxBroadcaster,
+  createWalletUserKeyProvider,
+} from '@/lib/veid-submission';
 
 export interface VerificationScopeStatus {
   scope: string;
@@ -29,6 +43,10 @@ export interface IdentityState {
   hasCompletedOnboarding: boolean;
   /** Last verification submission timestamp */
   lastSubmissionAt: number | null;
+  submissionStatus: SubmissionStatus | null;
+  submissionMessage: string | null;
+  submissionTxHash: string | null;
+  submissionScopeId: string | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -36,6 +54,11 @@ export interface IdentityState {
 export interface IdentityActions {
   fetchIdentity: (address: string) => Promise<void>;
   requestVerification: (address: string, scopes: string[], wallet: WalletSigner) => Promise<void>;
+  submitCaptureScope: (
+    capture: CaptureResult,
+    scopeType: ScopeTypeInput,
+    wallet: WalletContextValue
+  ) => Promise<void>;
   setVeidScore: (score: number) => void;
   setVerified: (verified: boolean) => void;
   setWizardStep: (step: WizardStep | null) => void;
@@ -59,6 +82,10 @@ const initialState: IdentityState = {
   wizardStatus: 'idle',
   hasCompletedOnboarding: false,
   lastSubmissionAt: null,
+  submissionStatus: null,
+  submissionMessage: null,
+  submissionTxHash: null,
+  submissionScopeId: null,
   isLoading: false,
   error: null,
 };
@@ -136,6 +163,61 @@ export const useIdentityStore = create<IdentityStore>()((set, get) => ({
       status: 'pending',
       lastSubmissionAt: Date.now(),
     });
+  },
+
+  submitCaptureScope: async (capture, scopeType, wallet) => {
+    set({ isLoading: true, error: null });
+    try {
+      const account = wallet.accounts[wallet.activeAccountIndex];
+      if (!account) {
+        throw new Error('No active wallet account');
+      }
+
+      const clientKeyProvider = createPortalClientKeyProvider();
+      const userKeyProvider = createWalletUserKeyProvider(wallet);
+      const broadcaster = createPortalTxBroadcaster(wallet);
+
+      const result = await submitCaptureScopePipeline({
+        capture,
+        scopeType,
+        senderAddress: account.address,
+        restEndpoint: getRestEndpoint(),
+        clientKeyProvider,
+        userKeyProvider,
+        broadcaster,
+        approvedClientCheck: {
+          enabled: true,
+        },
+        onStatus: (update: SubmissionUpdate) => {
+          set({
+            submissionStatus: update.status,
+            submissionMessage: update.message ?? null,
+            submissionTxHash: update.txHash ?? null,
+            submissionScopeId: update.scopeId ?? null,
+            lastSubmissionAt: Date.now(),
+          });
+        },
+      });
+
+      if (result.score !== undefined) {
+        const minShellScore = get().minShellScore;
+        set({
+          veidScore: result.score,
+          isVerified: result.score >= minShellScore,
+        });
+      }
+
+      set({
+        isLoading: false,
+        status: 'pending',
+      });
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to submit capture',
+        submissionStatus: 'failed',
+      });
+    }
   },
 
   setVeidScore: (score: number) => {
