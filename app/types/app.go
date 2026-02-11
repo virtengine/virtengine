@@ -673,6 +673,8 @@ func (app *App) InitNormalKeepers(
 	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(hpckeeper.BillingKeeper); ok {
 		app.Keepers.VirtEngine.HPC.SetBillingKeeper(billingKeeper)
 	}
+
+	app.Keepers.VirtEngine.HPC.SetSettlementKeeper(app.Keepers.VirtEngine.Settlement)
 }
 
 func (app *App) SetupHooks() {

@@ -7,6 +7,33 @@ import i18n from '@/i18n';
 
 const initialState = useAdminStore.getState();
 
+const mockAuditLogs = [
+  {
+    id: 'audit-1',
+    actor: 've1admin...abc',
+    action: 'update_params',
+    target: 'market',
+    timestamp: new Date('2025-01-01'),
+    severity: 'info' as const,
+  },
+  {
+    id: 'audit-2',
+    actor: 've1mod...def',
+    action: 'toggle_flag',
+    target: 'feature_x',
+    timestamp: new Date('2025-01-02'),
+    severity: 'warning' as const,
+  },
+  {
+    id: 'audit-3',
+    actor: 've1sec...ghi',
+    action: 'suspend_user',
+    target: 've1user1',
+    timestamp: new Date('2025-01-03'),
+    severity: 'critical' as const,
+  },
+];
+
 expectTranslations([
   'Audit Logs',
   'Admin actions and security events',
@@ -15,7 +42,7 @@ expectTranslations([
 
 describe.each(TEST_LOCALES)('AdminAuditPage (%s)', (locale) => {
   beforeEach(async () => {
-    useAdminStore.setState(initialState, true);
+    useAdminStore.setState({ ...initialState, auditLogs: mockAuditLogs }, true);
     await setLocale(locale);
   });
 

@@ -7,11 +7,130 @@ import {
   selectOpenTickets,
   selectUrgentTickets,
 } from '@/stores/adminStore';
+import type { AdminRole } from '@/types/admin';
+
+function seedAdminData() {
+  const now = new Date();
+  useAdminStore.setState({
+    currentUserRoles: ['operator', 'governance', 'support', 'validator'] as AdminRole[],
+    users: [
+      {
+        address: 've1user1',
+        roles: ['operator', 'governance'] as AdminRole[],
+        displayName: 'Alice',
+        assignedAt: now,
+        lastActive: now,
+      },
+      {
+        address: 've1user2',
+        roles: ['support'] as AdminRole[],
+        displayName: 'Bob',
+        assignedAt: now,
+        lastActive: now,
+      },
+    ],
+    proposals: [
+      {
+        id: 'prop-1',
+        title: 'Upgrade v2',
+        description: 'Software upgrade proposal',
+        proposer: 've1proposer1',
+        status: 'voting',
+        submitTime: now,
+        votingEndTime: new Date(Date.now() + 86400000),
+        yesVotes: 10,
+        noVotes: 2,
+        abstainVotes: 1,
+        vetoVotes: 0,
+        totalDeposit: '1000000',
+      },
+      {
+        id: 'prop-2',
+        title: 'Params Change',
+        description: 'Parameter change proposal',
+        proposer: 've1proposer2',
+        status: 'passed',
+        submitTime: now,
+        votingEndTime: new Date(Date.now() - 86400000),
+        yesVotes: 20,
+        noVotes: 1,
+        abstainVotes: 0,
+        vetoVotes: 0,
+        totalDeposit: '500000',
+      },
+    ],
+    validators: [
+      {
+        operatorAddress: 've1val1',
+        moniker: 'Validator A',
+        status: 'active',
+        tokens: '10000000',
+        delegatorShares: '10000000',
+        commission: 0.1,
+        uptime: 99.9,
+        missedBlocks: 1,
+        slashingEvents: [],
+      },
+      {
+        operatorAddress: 've1val2',
+        moniker: 'Validator B',
+        status: 'jailed',
+        tokens: '5000000',
+        delegatorShares: '5000000',
+        commission: 0.05,
+        uptime: 85.0,
+        missedBlocks: 100,
+        jailedUntil: new Date(Date.now() + 86400000),
+        slashingEvents: [],
+      },
+    ],
+    supportTickets: [
+      {
+        id: 'ticket-1',
+        ticketNumber: 'TK-001',
+        subject: 'Deployment issue',
+        submitter: 've1user1',
+        provider: 've1prov1',
+        priority: 'urgent',
+        status: 'open',
+        category: 'deployment',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'ticket-2',
+        ticketNumber: 'TK-002',
+        subject: 'Billing question',
+        submitter: 've1user2',
+        provider: 've1prov2',
+        priority: 'normal',
+        status: 'assigned',
+        category: 'billing',
+        createdAt: now,
+        updatedAt: now,
+        assignedAgent: 'Agent One',
+      },
+    ],
+    systemHealth: {
+      blockHeight: 12345678,
+      blockTime: 6.2,
+      activeValidators: 42,
+      totalValidators: 50,
+      bondedTokens: '100000000',
+      inflationRate: 0.07,
+      communityPool: '50000',
+      txThroughput: 120,
+      avgGasPrice: 0.025,
+      networkUptime: 99.95,
+    },
+  });
+}
 
 describe('adminStore', () => {
   beforeEach(() => {
-    // Reset the store to initial state before each test
+    // Reset the store to initial state before each test, then seed data
     useAdminStore.setState(useAdminStore.getInitialState());
+    seedAdminData();
   });
 
   describe('role management', () => {
@@ -73,25 +192,25 @@ describe('adminStore', () => {
   });
 
   describe('ticket management', () => {
-    it('updateTicketStatus changes the ticket status', () => {
+    it('updateTicketStatus changes the ticket status', async () => {
       const { result } = renderHook(() => useAdminStore());
       const ticket = result.current.supportTickets[0];
 
-      act(() => {
-        result.current.updateTicketStatus(ticket.id, 'resolved');
+      await act(async () => {
+        await result.current.updateTicketStatus(ticket.id, 'resolved');
       });
 
       const updated = result.current.supportTickets.find((t) => t.id === ticket.id);
       expect(updated?.status).toBe('resolved');
     });
 
-    it('assignTicket sets agent and status', () => {
+    it('assignTicket sets agent and status', async () => {
       const { result } = renderHook(() => useAdminStore());
       const openTicket = result.current.supportTickets.find((t) => t.status === 'open');
       if (!openTicket) return;
 
-      act(() => {
-        result.current.assignTicket(openTicket.id, 'Agent Smith');
+      await act(async () => {
+        await result.current.assignTicket(openTicket.id, 'Agent Smith');
       });
 
       const updated = result.current.supportTickets.find((t) => t.id === openTicket.id);

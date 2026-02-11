@@ -24,6 +24,7 @@ export const env = {
   chainRpc: getEnvVar('NEXT_PUBLIC_CHAIN_RPC', 'https://rpc.virtengine.com'),
   chainRest: getEnvVar('NEXT_PUBLIC_CHAIN_REST', 'https://api.virtengine.com'),
   chainWs: getEnvVar('NEXT_PUBLIC_CHAIN_WS', 'wss://ws.virtengine.com'),
+  providerDaemonUrl: getEnvVar('NEXT_PUBLIC_PROVIDER_DAEMON_URL', ''),
 
   // API Configuration
   apiUrl: getEnvVar('NEXT_PUBLIC_API_URL', 'https://api.virtengine.io'),

@@ -7,11 +7,40 @@ import i18n from '@/i18n';
 
 const initialState = useAdminStore.getState();
 
+const mockAccounts = [
+  {
+    address: 've1user1abc',
+    displayName: 'Alice Tester',
+    veidStatus: 'verified' as const,
+    trustScore: 85,
+    createdAt: new Date('2025-01-01'),
+    lastActive: new Date('2025-06-01'),
+    flagged: false,
+    suspended: false,
+    kycStatus: 'approved' as const,
+    amlStatus: 'clear' as const,
+    riskLevel: 'low' as const,
+  },
+  {
+    address: 've1user2def',
+    displayName: 'Bob Mockson',
+    veidStatus: 'pending' as const,
+    trustScore: 60,
+    createdAt: new Date('2025-02-01'),
+    lastActive: new Date('2025-05-15'),
+    flagged: false,
+    suspended: false,
+    kycStatus: 'in_review' as const,
+    amlStatus: 'clear' as const,
+    riskLevel: 'medium' as const,
+  },
+];
+
 expectTranslations(['User Management', 'Admin roles, VEID oversight, and account operations']);
 
 describe.each(TEST_LOCALES)('AdminUsersPage (%s)', (locale) => {
   beforeEach(async () => {
-    useAdminStore.setState(initialState, true);
+    useAdminStore.setState({ ...initialState, accounts: mockAccounts }, true);
     await setLocale(locale);
   });
 
