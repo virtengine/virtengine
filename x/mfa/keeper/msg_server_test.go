@@ -461,3 +461,117 @@ func (s *MsgServerTestSuite) TestUpdateSensitiveTxConfig_Unauthorized() {
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "expected")
 }
+
+// Test: IssueSession - success
+func (s *MsgServerTestSuite) TestIssueSession_Success() {
+	address := sdk.AccAddress([]byte("test-issue-session"))
+
+	err := s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxLargeWithdrawal,
+		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+	})
+	s.Require().NoError(err)
+	err = s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxMediumWithdrawal,
+		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+	})
+	s.Require().NoError(err)
+
+	session := &types.AuthorizationSession{
+		SessionID:       "issue-source-session",
+		AccountAddress:  address.String(),
+		TransactionType: types.SensitiveTxLargeWithdrawal,
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 3600,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+	}
+	err = s.keeper.CreateAuthorizationSession(s.ctx, session)
+	s.Require().NoError(err)
+
+	msg := &types.MsgIssueSession{
+		Sender:          address.String(),
+		TransactionType: types.SensitiveTxMediumWithdrawal,
+		MFAProof: &types.MFAProof{
+			SessionID:       "issue-source-session",
+			VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+			Timestamp:       s.ctx.BlockTime().Unix(),
+		},
+	}
+
+	resp, err := s.msgServer.IssueSession(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(resp.SessionID)
+}
+
+// Test: RefreshSession - success
+func (s *MsgServerTestSuite) TestRefreshSession_Success() {
+	address := sdk.AccAddress([]byte("test-refresh-session"))
+
+	err := s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxHighValueOrder,
+		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+	})
+	s.Require().NoError(err)
+
+	session := &types.AuthorizationSession{
+		SessionID:       "refresh-session-id",
+		AccountAddress:  address.String(),
+		TransactionType: types.SensitiveTxHighValueOrder,
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 60,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+	}
+	err = s.keeper.CreateAuthorizationSession(s.ctx, session)
+	s.Require().NoError(err)
+
+	msg := &types.MsgRefreshSession{
+		Sender:    address.String(),
+		SessionID: "refresh-session-id",
+		MFAProof: &types.MFAProof{
+			SessionID:       "refresh-session-id",
+			VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+			Timestamp:       s.ctx.BlockTime().Unix(),
+		},
+	}
+
+	resp, err := s.msgServer.RefreshSession(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().Equal("refresh-session-id", resp.SessionID)
+	s.Require().Greater(resp.SessionExpiresAt, session.ExpiresAt)
+}
+
+// Test: RevokeSession - success
+func (s *MsgServerTestSuite) TestRevokeSession_Success() {
+	address := sdk.AccAddress([]byte("test-revoke-session"))
+
+	session := &types.AuthorizationSession{
+		SessionID:       "revoke-session-id",
+		AccountAddress:  address.String(),
+		TransactionType: types.SensitiveTxHighValueOrder,
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 3600,
+	}
+	err := s.keeper.CreateAuthorizationSession(s.ctx, session)
+	s.Require().NoError(err)
+
+	msg := &types.MsgRevokeSession{
+		Sender:    address.String(),
+		SessionID: "revoke-session-id",
+	}
+
+	resp, err := s.msgServer.RevokeSession(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().True(resp.Success)
+
+	_, found := s.keeper.GetAuthorizationSession(s.ctx, "revoke-session-id")
+	s.Require().False(found)
+}
