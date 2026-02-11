@@ -7,6 +7,7 @@ This directory contains scripts for disaster recovery operations including backu
 | Script | Purpose | Frequency |
 |--------|---------|-----------|
 | `backup-chain-state.sh` | Backup blockchain state and data | Every 4 hours (automated) |
+| `backup-provider-state.sh` | Backup provider daemon state | Every 4 hours (automated) |
 | `backup-keys.sh` | Backup validator and provider keys | Daily (automated) |
 | `dr-test.sh` | Automated DR validation tests | Daily (automated) |
 
@@ -51,6 +52,22 @@ This directory contains scripts for disaster recovery operations including backu
 ./backup-keys.sh --verify
 ```
 
+### Create Provider State Backups
+
+```bash
+# Backup provider daemon state
+./backup-provider-state.sh
+
+# List backups
+./backup-provider-state.sh --list
+
+# Verify latest backup
+./backup-provider-state.sh --verify
+
+# Restore a backup
+./backup-provider-state.sh --restore provider_state_YYYYMMDD_HHMMSS
+```
+
 ### Run DR Tests
 
 ```bash
@@ -73,6 +90,9 @@ This directory contains scripts for disaster recovery operations including backu
 |----------|-------------|---------|
 | `DR_BUCKET` | S3 bucket for remote backups | (required for remote) |
 | `SLACK_WEBHOOK` | Slack webhook for notifications | (optional) |
+| `ALERT_WEBHOOK` | Webhook for backup/restore events | (optional) |
+| `SNAPSHOT_SIGNING_KEY` | PEM private key for snapshot signing | (required) |
+| `SNAPSHOT_VERIFY_PUBKEY` | PEM public key for verification | (required) |
 
 ### Chain State Backup
 
@@ -81,6 +101,8 @@ This directory contains scripts for disaster recovery operations including backu
 | `NODE_HOME` | VirtEngine node home directory | `/opt/virtengine` |
 | `SNAPSHOT_DIR` | Local snapshot storage | `/data/snapshots` |
 | `RETENTION_COUNT` | Local snapshots to keep | `10` |
+| `RESTORE_AUTO_APPROVE` | Skip restore delay | `0` |
+| `RESTORE_SKIP_SERVICE` | Skip systemctl stop/start | `0` |
 
 ### Key Backup
 
@@ -91,6 +113,23 @@ This directory contains scripts for disaster recovery operations including backu
 | `HSM_ENABLED` | Enable HSM support | `0` |
 | `HSM_MODULE` | PKCS#11 module path | `/usr/lib/softhsm/libsofthsm2.so` |
 | `PROVIDER_HOME` | Provider daemon home | `/opt/provider-daemon` |
+
+### Provider State Backup
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROVIDER_HOME` | Provider daemon home | `/opt/provider-daemon` |
+| `PROVIDER_SNAPSHOT_DIR` | Provider backup storage | `/data/provider-snapshots` |
+| `RETENTION_COUNT` | Backups to keep | `10` |
+
+### Snapshot Signing Keys
+
+Generate a dedicated signing keypair for snapshots and distribute the public key to restore hosts:
+
+```bash
+openssl genpkey -algorithm RSA -out /secure/keys/snapshot_signing.pem -pkeyopt rsa_keygen_bits:2048
+openssl pkey -in /secure/keys/snapshot_signing.pem -pubout -out /secure/keys/snapshot_signing.pub
+```
 
 ## Automated Scheduling
 
@@ -153,6 +192,40 @@ spec:
             - name: backup-storage
               mountPath: /secure/backups
           restartPolicy: OnFailure
+```
+
+```yaml
+# Provider state backup - every 4 hours
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dr-backup-provider-state
+spec:
+  schedule: "30 */4 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: virtengine/dr-tools:latest
+            command: ["/scripts/dr/backup-provider-state.sh"]
+            env:
+            - name: DR_BUCKET
+              value: "s3://virtengine-dr-backups"
+            volumeMounts:
+            - name: provider-data
+              mountPath: /opt/provider-daemon
+            - name: provider-snapshots
+              mountPath: /data/provider-snapshots
+          restartPolicy: OnFailure
+          volumes:
+          - name: provider-data
+            persistentVolumeClaim:
+              claimName: provider-daemon-data
+          - name: provider-snapshots
+            persistentVolumeClaim:
+              claimName: provider-snapshots
 ```
 
 ```yaml
@@ -227,6 +300,23 @@ Environment=DR_BUCKET=s3://virtengine-dr-backups
    virtengine status | jq '.sync_info'
    ```
 
+### Provider Daemon Recovery
+
+1. **Stop provider daemon** (if running):
+   ```bash
+   systemctl stop provider-daemon
+   ```
+
+2. **Restore provider state**:
+   ```bash
+   ./backup-provider-state.sh --restore provider_state_YYYYMMDD_HHMMSS
+   ```
+
+3. **Validate service**:
+   ```bash
+   systemctl status provider-daemon
+   ```
+
 ### Key Recovery
 
 1. **Get passphrase from Secrets Manager**:
@@ -290,6 +380,7 @@ Environment=DR_BUCKET=s3://virtengine-dr-backups
 | `dr_backup_size_bytes` | < 1MB (likely failed) |
 | `dr_test_failures` | > 0 |
 | `dr_restore_duration_seconds` | > 3600 (1 hour) |
+| `dr_provider_backup_age_hours` | > 24 hours |
 
 ### Prometheus Rules
 

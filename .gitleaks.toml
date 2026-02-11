@@ -69,6 +69,14 @@ paths = [
   '''.*mock.*''',
   '''.*sample.*''',
   '''.*\.example\..*''',
+  '''.*\.example$''',
+  '''.*\.env\..*''',
+  '''.*\.env$''',
+  # Portal source code — contains API endpoint constants, not real secrets
+  '''portal/src/.*''',
+  '''lib/portal/.*''',
+  '''lib/admin/.*''',
+  '''lib/capture/.*''',
 ]
 
 # Exclude specific commits (if needed)

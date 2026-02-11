@@ -81,6 +81,51 @@ func (q *Querier) NodesByCluster(ctx context.Context, req *hpcv1.QueryNodesByClu
 	}, nil
 }
 
+// SchedulingDecision returns a scheduling decision by ID.
+func (q *Querier) SchedulingDecision(ctx context.Context, req *hpcv1.QuerySchedulingDecisionRequest) (*hpcv1.QuerySchedulingDecisionResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.DecisionId == "" {
+		return nil, status.Error(codes.InvalidArgument, "decision_id required")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	decision, found := q.GetSchedulingDecision(sdkCtx, req.DecisionId)
+	if !found {
+		return nil, status.Error(codes.NotFound, "scheduling decision not found")
+	}
+
+	return &hpcv1.QuerySchedulingDecisionResponse{
+		Decision: schedulingDecisionToProto(decision),
+	}, nil
+}
+
+// SchedulingDecisionByJob returns the scheduling decision for a job.
+func (q *Querier) SchedulingDecisionByJob(ctx context.Context, req *hpcv1.QuerySchedulingDecisionByJobRequest) (*hpcv1.QuerySchedulingDecisionByJobResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.JobId == "" {
+		return nil, status.Error(codes.InvalidArgument, "job_id required")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	job, found := q.GetJob(sdkCtx, req.JobId)
+	if !found || job.SchedulingDecisionID == "" {
+		return nil, status.Error(codes.NotFound, "scheduling decision not found")
+	}
+
+	decision, found := q.GetSchedulingDecision(sdkCtx, job.SchedulingDecisionID)
+	if !found {
+		return nil, status.Error(codes.NotFound, "scheduling decision not found")
+	}
+
+	return &hpcv1.QuerySchedulingDecisionByJobResponse{
+		Decision: schedulingDecisionToProto(decision),
+	}, nil
+}
+
 // Params returns module parameters.
 func (q *Querier) Params(ctx context.Context, _ *hpcv1.QueryParamsRequest) (*hpcv1.QueryParamsResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
@@ -154,6 +199,42 @@ func latencyMeasurementsToProto(measurements []types.LatencyMeasurement) []hpcv1
 		})
 	}
 	return out
+}
+
+func schedulingDecisionToProto(decision types.SchedulingDecision) hpcv1.SchedulingDecision {
+	candidates := make([]hpcv1.ClusterCandidate, 0, len(decision.CandidateClusters))
+	for _, candidate := range decision.CandidateClusters {
+		candidates = append(candidates, clusterCandidateToProto(candidate))
+	}
+
+	return hpcv1.SchedulingDecision{
+		DecisionId:        decision.DecisionID,
+		JobId:             decision.JobID,
+		SelectedClusterId: decision.SelectedClusterID,
+		CandidateClusters: candidates,
+		DecisionReason:    decision.DecisionReason,
+		IsFallback:        decision.IsFallback,
+		FallbackReason:    decision.FallbackReason,
+		LatencyScore:      decision.LatencyScore,
+		CapacityScore:     decision.CapacityScore,
+		CombinedScore:     decision.CombinedScore,
+		CreatedAt:         decision.CreatedAt,
+		BlockHeight:       decision.BlockHeight,
+	}
+}
+
+func clusterCandidateToProto(candidate types.ClusterCandidate) hpcv1.ClusterCandidate {
+	return hpcv1.ClusterCandidate{
+		ClusterId:           candidate.ClusterID,
+		Region:              candidate.Region,
+		AvgLatencyMs:        candidate.AvgLatencyMs,
+		AvailableNodes:      candidate.AvailableNodes,
+		LatencyScore:        candidate.LatencyScore,
+		CapacityScore:       candidate.CapacityScore,
+		CombinedScore:       candidate.CombinedScore,
+		Eligible:            candidate.Eligible,
+		IneligibilityReason: candidate.IneligibilityReason,
+	}
 }
 
 func nodeResourcesToProto(resources types.NodeResources) hpcv1.NodeResources {

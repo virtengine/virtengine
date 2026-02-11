@@ -1,17 +1,17 @@
 # VirtEngine Progress
 
 Last updated: 2026-02-11
-Status: Backlog expansion (72A-79B) + delta audit
+Status: Backlog expansion + post-merge gap verification (PR #672)
 
 ## Inputs reviewed
 
-- _docs/ralph/ralph_patent_text.txt (AU 2024203136 A1)
-- _docs/KANBAN_SPLIT_TRACKER.md (secondary kanban exclusions)
-- git log --oneline -20 (2026-02-11)
-- GitHub merged PRs: #669, #670, #671 (2026-02-11)
-- GitHub open issues: #151-#161 security tracker set (2026-01-31)
-- vibe-kanban backlog snapshot (todo/inprogress/done)
-- Prior progress.md (2026-02-11 baseline)
+- \_docs/ralph/ralph_patent_text.txt (AU 2024203136 A1 — 2121 lines)
+- Git history (latest 20 commits + PR #672 merge)
+- Open issues list (security meta + outstanding dependency remediation)
+- Targeted codebase scan for TODO/placeholder/stub markers across `x/`, `pkg/`, `app/`, `cmd/`
+- vibe-kanban backlog snapshot (todo/inprogress/done, created_at timestamps)
+- \_docs/KANBAN_SPLIT_TRACKER.md (secondary kanban tasks to avoid duplicating)
+- Prior progress.md (2026-02-10 baseline)
 
 ## Delta since 2026-02-11 (prior snapshot)
 
