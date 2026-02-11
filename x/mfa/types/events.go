@@ -22,6 +22,10 @@ const (
 	EventTypeSessionCreated = "session_created"
 	// EventTypeSessionUsed is emitted when an authorization session is used
 	EventTypeSessionUsed = "session_used"
+	// EventTypeSessionRefreshed is emitted when an authorization session is refreshed
+	EventTypeSessionRefreshed = "session_refreshed"
+	// EventTypeSessionRevoked is emitted when an authorization session is revoked
+	EventTypeSessionRevoked = "session_revoked"
 	// EventTypeSessionExpired is emitted when an authorization session expires
 	EventTypeSessionExpired = "session_expired"
 	// EventTypeTrustedDeviceAdded is emitted when a trusted device is added

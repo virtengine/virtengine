@@ -24,6 +24,12 @@ type MsgServer interface {
 	RemoveTrustedDevice(ctx context.Context, msg *MsgRemoveTrustedDevice) (*MsgRemoveTrustedDeviceResponse, error)
 	// UpdateSensitiveTxConfig updates sensitive transaction configuration
 	UpdateSensitiveTxConfig(ctx context.Context, msg *MsgUpdateSensitiveTxConfig) (*MsgUpdateSensitiveTxConfigResponse, error)
+	// IssueSession issues an authorization session for a transaction type
+	IssueSession(ctx context.Context, msg *MsgIssueSession) (*MsgIssueSessionResponse, error)
+	// RefreshSession refreshes an authorization session
+	RefreshSession(ctx context.Context, msg *MsgRefreshSession) (*MsgRefreshSessionResponse, error)
+	// RevokeSession revokes an authorization session
+	RevokeSession(ctx context.Context, msg *MsgRevokeSession) (*MsgRevokeSessionResponse, error)
 }
 
 // MsgEnrollFactor is the message for enrolling a new factor
@@ -211,6 +217,69 @@ type MsgUpdateSensitiveTxConfigResponse struct {
 	Success bool `json:"success"`
 }
 
+// MsgIssueSession is the message for issuing an authorization session
+type MsgIssueSession struct {
+	// Sender is the account requesting the session
+	Sender string `json:"sender"`
+
+	// TransactionType is the transaction type to authorize
+	TransactionType SensitiveTransactionType `json:"transaction_type"`
+
+	// MFAProof is proof of MFA for this operation
+	MFAProof *MFAProof `json:"mfa_proof"`
+
+	// DeviceFingerprint identifies the device for binding the session
+	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
+}
+
+// MsgIssueSessionResponse is the response for MsgIssueSession
+type MsgIssueSessionResponse struct {
+	// SessionID is the issued session ID
+	SessionID string `json:"session_id"`
+
+	// SessionExpiresAt is when the session expires
+	SessionExpiresAt int64 `json:"session_expires_at"`
+
+	// IsSingleUse indicates if the session is single-use
+	IsSingleUse bool `json:"is_single_use"`
+}
+
+// MsgRefreshSession is the message for refreshing an authorization session
+type MsgRefreshSession struct {
+	// Sender is the account refreshing the session
+	Sender string `json:"sender"`
+
+	// SessionID is the session to refresh
+	SessionID string `json:"session_id"`
+
+	// MFAProof is proof of MFA for this operation
+	MFAProof *MFAProof `json:"mfa_proof"`
+}
+
+// MsgRefreshSessionResponse is the response for MsgRefreshSession
+type MsgRefreshSessionResponse struct {
+	// SessionID is the refreshed session ID
+	SessionID string `json:"session_id"`
+
+	// SessionExpiresAt is the new expiration timestamp
+	SessionExpiresAt int64 `json:"session_expires_at"`
+}
+
+// MsgRevokeSession is the message for revoking an authorization session
+type MsgRevokeSession struct {
+	// Sender is the account revoking the session
+	Sender string `json:"sender"`
+
+	// SessionID is the session to revoke
+	SessionID string `json:"session_id"`
+}
+
+// MsgRevokeSessionResponse is the response for MsgRevokeSession
+type MsgRevokeSessionResponse struct {
+	// Success indicates if the session was revoked
+	Success bool `json:"success"`
+}
+
 // MFAProof represents proof of MFA verification
 type MFAProof struct {
 	// SessionID is the authorization session ID
@@ -259,6 +328,9 @@ const (
 	TypeMsgAddTrustedDevice        = "mfa/MsgAddTrustedDevice"
 	TypeMsgRemoveTrustedDevice     = "mfa/MsgRemoveTrustedDevice"
 	TypeMsgUpdateSensitiveTxConfig = "mfa/MsgUpdateSensitiveTxConfig"
+	TypeMsgIssueSession            = "mfa/MsgIssueSession"
+	TypeMsgRefreshSession          = "mfa/MsgRefreshSession"
+	TypeMsgRevokeSession           = "mfa/MsgRevokeSession"
 )
 
 // Implement sdk.Msg interface for all messages
@@ -424,4 +496,70 @@ func (m *MsgUpdateSensitiveTxConfig) ValidateBasic() error {
 		return ErrInvalidAddress.Wrapf("invalid authority address: %v", err)
 	}
 	return m.Config.Validate()
+}
+
+func (m *MsgIssueSession) Route() string { return RouterKey }
+func (m *MsgIssueSession) Type() string  { return TypeMsgIssueSession }
+func (m *MsgIssueSession) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Sender)
+	return []sdk.AccAddress{addr}
+}
+func (m *MsgIssueSession) GetSignBytes() []byte {
+	protoMsg := convertMsgIssueSessionToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
+}
+func (m *MsgIssueSession) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+	if !m.TransactionType.IsValid() {
+		return ErrInvalidSensitiveTxType.Wrapf("invalid transaction type: %d", m.TransactionType)
+	}
+	if m.MFAProof == nil {
+		return ErrMFARequired.Wrap("MFA proof required to issue session")
+	}
+	return m.MFAProof.Validate()
+}
+
+func (m *MsgRefreshSession) Route() string { return RouterKey }
+func (m *MsgRefreshSession) Type() string  { return TypeMsgRefreshSession }
+func (m *MsgRefreshSession) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Sender)
+	return []sdk.AccAddress{addr}
+}
+func (m *MsgRefreshSession) GetSignBytes() []byte {
+	protoMsg := convertMsgRefreshSessionToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
+}
+func (m *MsgRefreshSession) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+	if m.SessionID == "" {
+		return ErrInvalidProof.Wrap("session_id cannot be empty")
+	}
+	if m.MFAProof == nil {
+		return ErrMFARequired.Wrap("MFA proof required to refresh session")
+	}
+	return m.MFAProof.Validate()
+}
+
+func (m *MsgRevokeSession) Route() string { return RouterKey }
+func (m *MsgRevokeSession) Type() string  { return TypeMsgRevokeSession }
+func (m *MsgRevokeSession) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(m.Sender)
+	return []sdk.AccAddress{addr}
+}
+func (m *MsgRevokeSession) GetSignBytes() []byte {
+	protoMsg := convertMsgRevokeSessionToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
+}
+func (m *MsgRevokeSession) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+	if m.SessionID == "" {
+		return ErrInvalidProof.Wrap("session_id cannot be empty")
+	}
+	return nil
 }
