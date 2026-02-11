@@ -1,12 +1,15 @@
 package analysis
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -43,7 +46,7 @@ func WriteMonteCarloCSV(path string, results map[string]MonteCarloResult) error 
 	if err := writer.Write([]string{"metric", "mean", "std_dev", "median", "p5", "p95", "ci_lower", "ci_upper"}); err != nil {
 		return err
 	}
-	for _, result := range results {
+	for _, result := range orderedMonteCarloResults(results) {
 		row := []string{
 			result.Metric,
 			formatFloat(result.Mean),
@@ -61,19 +64,70 @@ func WriteMonteCarloCSV(path string, results map[string]MonteCarloResult) error 
 	return nil
 }
 
+// WriteMonteCarloJSON writes Monte Carlo results with deterministic ordering.
+func WriteMonteCarloJSON(path string, results map[string]MonteCarloResult) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	keys := make([]string, 0, len(results))
+	for key := range results {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	writer := bufio.NewWriter(file)
+	defer writer.Flush()
+
+	if _, err := writer.WriteString("{\n"); err != nil {
+		return err
+	}
+	for i, key := range keys {
+		result := results[key]
+		if result.Metric == "" {
+			result.Metric = key
+		}
+		valueBytes, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return err
+		}
+		value := indentLines(string(valueBytes), "  ")
+		value = strings.TrimPrefix(value, "  ")
+		if _, err := fmt.Fprintf(writer, "  %q: %s", key, value); err != nil {
+			return err
+		}
+		if i < len(keys)-1 {
+			if _, err := writer.WriteString(",\n"); err != nil {
+				return err
+			}
+		} else if _, err := writer.WriteString("\n"); err != nil {
+			return err
+		}
+	}
+
+	_, err = writer.WriteString("}\n")
+	return err
+}
+
 // WriteDashboardHTML renders a static dashboard HTML file with embedded data.
 func WriteDashboardHTML(path string, results map[string]MonteCarloResult, sensitivity *SensitivityResult) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	orderedResults := orderedMonteCarloResults(results)
 	payload := struct {
-		Results     map[string]MonteCarloResult
+		Results     []MonteCarloResult
 		Sensitivity *SensitivityResult
 		GeneratedAt time.Time
 	}{
-		Results:     results,
+		Results:     orderedResults,
 		Sensitivity: sensitivity,
-		GeneratedAt: time.Now().UTC(),
+		GeneratedAt: time.Unix(0, 0).UTC(),
 	}
 
 	file, err := os.Create(path)
@@ -99,6 +153,43 @@ func WriteDashboardHTML(path string, results map[string]MonteCarloResult, sensit
 
 func formatFloat(value float64) string {
 	return fmt.Sprintf("%.6f", value)
+}
+
+func orderedMonteCarloResults(results map[string]MonteCarloResult) []MonteCarloResult {
+	if len(results) == 0 {
+		return []MonteCarloResult{}
+	}
+
+	keys := make([]string, 0, len(results))
+	for key := range results {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	ordered := make([]MonteCarloResult, 0, len(keys))
+	for _, key := range keys {
+		result := results[key]
+		if result.Metric == "" {
+			result.Metric = key
+		}
+		ordered = append(ordered, result)
+	}
+	return ordered
+}
+
+func indentLines(value, indent string) string {
+	if value == "" {
+		return ""
+	}
+	lines := strings.Split(value, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = indent + line
+		} else {
+			lines[i] = indent
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 const exportTemplate = `<!DOCTYPE html>
@@ -146,8 +237,8 @@ const exportTemplate = `<!DOCTYPE html>
 
     function renderMonteCarlo() {
       const tbody = document.querySelector("#mc-table tbody");
-      if (!tbody || !results) return;
-      Object.values(results).forEach(function(metric) {
+      if (!tbody || !Array.isArray(results)) return;
+      results.forEach(function(metric) {
         const row = document.createElement("tr");
         row.innerHTML = "<td>" + metric.Metric + "</td><td>" + metric.Mean.toFixed(3) + "</td><td>" + metric.StdDev.toFixed(3) + "</td><td>" + metric.Median.toFixed(3) + "</td><td>" + metric.Percentile5.toFixed(3) + " - " + metric.Percentile95.toFixed(3) + "</td>";
         tbody.appendChild(row);

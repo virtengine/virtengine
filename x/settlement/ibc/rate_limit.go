@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -112,7 +113,7 @@ func (k IBCKeeper) CleanupRateLimitData(ctx sdk.Context) {
 	store := ctx.KVStore(k.storeKey)
 
 	cleanupPrefix := func(prefix []byte) {
-		iter := sdk.KVStorePrefixIterator(store, prefix)
+		iter := storetypes.KVStorePrefixIterator(store, prefix)
 		defer iter.Close()
 
 		for ; iter.Valid(); iter.Next() {

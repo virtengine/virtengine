@@ -71,3 +71,8 @@ func decCoinsAllGTE(value, min sdk.DecCoins) bool {
 	}
 	return true
 }
+
+// DecCoinsAllGTE reports whether all denominations in value are >= min.
+func DecCoinsAllGTE(value, min sdk.DecCoins) bool {
+	return decCoinsAllGTE(value, min)
+}

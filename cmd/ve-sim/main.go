@@ -92,7 +92,7 @@ func monteCarloCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeJSON(output, results)
+			return analysis.WriteMonteCarloJSON(output, results)
 		},
 	}
 
@@ -237,7 +237,7 @@ func suiteCmd() *cobra.Command {
 			if err := analysis.WriteJSON(filepath.Join(outputDir, "metrics.json"), runResult.Metrics); err != nil {
 				return err
 			}
-			if err := analysis.WriteJSON(filepath.Join(outputDir, "monte-carlo.json"), monteCarlo); err != nil {
+			if err := analysis.WriteMonteCarloJSON(filepath.Join(outputDir, "monte-carlo.json"), monteCarlo); err != nil {
 				return err
 			}
 			if err := analysis.WriteJSON(filepath.Join(outputDir, "sensitivity.json"), sensitivity); err != nil {
