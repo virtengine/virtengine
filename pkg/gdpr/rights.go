@@ -67,12 +67,13 @@ type DeletionRequest struct {
 
 // UserDataExport contains the aggregated export payload.
 type UserDataExport struct {
-	ExportedAt    time.Time           `json:"exported_at"`
-	DataSubject   string              `json:"data_subject"`
-	Identity      *IdentityExport     `json:"identity,omitempty"`
-	Consents      []ConsentExport     `json:"consents,omitempty"`
-	Transactions  []TransactionExport `json:"transactions,omitempty"`
-	EscrowRecords []EscrowExport      `json:"escrow_records,omitempty"`
+	ExportedAt      time.Time           `json:"exported_at"`
+	DataSubject     string              `json:"data_subject"`
+	Identity        *IdentityExport     `json:"identity,omitempty"`
+	Consents        []ConsentExport     `json:"consents,omitempty"`
+	Transactions    []TransactionExport `json:"transactions,omitempty"`
+	EscrowRecords   []EscrowExport      `json:"escrow_records,omitempty"`
+	SupportRequests []SupportExport     `json:"support_requests,omitempty"`
 }
 
 // =============================================================================
@@ -95,6 +96,12 @@ type IdentityProvider interface {
 type EscrowProvider interface {
 	GetUserEscrows(ctx context.Context, dataSubject string) ([]EscrowExport, error)
 	HasActiveEscrow(ctx context.Context, dataSubject string) (bool, error)
+}
+
+// SupportProvider exposes support records for export/deletion.
+type SupportProvider interface {
+	ListSupportRequests(ctx context.Context, dataSubject string) ([]SupportExport, error)
+	DeleteSupportRequests(ctx context.Context, dataSubject string) error
 }
 
 // ExportStore persists export and deletion requests.
@@ -123,6 +130,7 @@ type DataRightsService struct {
 	consents ConsentProvider
 	identity IdentityProvider
 	escrow   EscrowProvider
+	support  SupportProvider
 	store    ExportStore
 	notifier Notifier
 	audit    AuditLogger
@@ -131,7 +139,7 @@ type DataRightsService struct {
 }
 
 // NewDataRightsService constructs a DataRightsService.
-func NewDataRightsService(store ExportStore, consents ConsentProvider, identity IdentityProvider, escrow EscrowProvider, notifier Notifier, audit AuditLogger) *DataRightsService {
+func NewDataRightsService(store ExportStore, consents ConsentProvider, identity IdentityProvider, escrow EscrowProvider, support SupportProvider, notifier Notifier, audit AuditLogger) *DataRightsService {
 	if notifier == nil {
 		notifier = noopNotifier{}
 	}
@@ -142,6 +150,7 @@ func NewDataRightsService(store ExportStore, consents ConsentProvider, identity 
 		consents: consents,
 		identity: identity,
 		escrow:   escrow,
+		support:  support,
 		store:    store,
 		notifier: notifier,
 		audit:    audit,

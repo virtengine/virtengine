@@ -43,6 +43,18 @@ type Params struct {
 
 	// DefaultRetentionPolicy defines default retention policy for new tickets
 	DefaultRetentionPolicy RetentionPolicy `json:"default_retention_policy"`
+
+	// RetentionQueueBatchSize limits retention queue processing per block
+	RetentionQueueBatchSize uint32 `json:"retention_queue_batch_size"`
+
+	// RetentionQueueMaxRetries is the max retries for retention actions
+	RetentionQueueMaxRetries uint32 `json:"retention_queue_max_retries"`
+
+	// RetentionQueueRetryBaseSeconds is the base backoff delay in seconds
+	RetentionQueueRetryBaseSeconds int64 `json:"retention_queue_retry_base_seconds"`
+
+	// RetentionQueueRetryMaxSeconds is the max backoff delay in seconds
+	RetentionQueueRetryMaxSeconds int64 `json:"retention_queue_retry_max_seconds"`
 }
 
 // DefaultGenesisState returns the default genesis state
@@ -72,6 +84,10 @@ func DefaultParams() Params {
 			ArchiveAfterSeconds: int64((90 * 24 * time.Hour).Seconds()),
 			PurgeAfterSeconds:   int64((365 * 24 * time.Hour).Seconds()),
 		},
+		RetentionQueueBatchSize:        200,
+		RetentionQueueMaxRetries:       5,
+		RetentionQueueRetryBaseSeconds: int64((1 * time.Minute).Seconds()),
+		RetentionQueueRetryMaxSeconds:  int64((60 * time.Minute).Seconds()),
 	}
 }
 
@@ -139,6 +155,18 @@ func (p Params) Validate() error {
 
 	if err := p.DefaultRetentionPolicy.Validate(); err != nil {
 		return err
+	}
+	if p.RetentionQueueBatchSize == 0 {
+		return ErrInvalidParams.Wrap("retention_queue_batch_size must be greater than 0")
+	}
+	if p.RetentionQueueMaxRetries == 0 {
+		return ErrInvalidParams.Wrap("retention_queue_max_retries must be greater than 0")
+	}
+	if p.RetentionQueueRetryBaseSeconds <= 0 {
+		return ErrInvalidParams.Wrap("retention_queue_retry_base_seconds must be positive")
+	}
+	if p.RetentionQueueRetryMaxSeconds < p.RetentionQueueRetryBaseSeconds {
+		return ErrInvalidParams.Wrap("retention_queue_retry_max_seconds must be >= retention_queue_retry_base_seconds")
 	}
 
 	return nil

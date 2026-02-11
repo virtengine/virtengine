@@ -107,10 +107,14 @@ func TestGenesisValidation(t *testing.T) {
 	// Invalid genesis - invalid external system
 	invalidGenesis := &types.GenesisState{
 		Params: types.Params{
-			AllowedExternalSystems: []string{"waldur", "jira"},
-			AllowedExternalDomains: []string{"example.com"},
-			MaxResponsesPerRequest: 10,
-			DefaultRetentionPolicy: types.DefaultParams().DefaultRetentionPolicy,
+			AllowedExternalSystems:         []string{"waldur", "jira"},
+			AllowedExternalDomains:         []string{"example.com"},
+			MaxResponsesPerRequest:         10,
+			DefaultRetentionPolicy:         types.DefaultParams().DefaultRetentionPolicy,
+			RetentionQueueBatchSize:        200,
+			RetentionQueueMaxRetries:       3,
+			RetentionQueueRetryBaseSeconds: 60,
+			RetentionQueueRetryMaxSeconds:  600,
 		},
 		ExternalRefs: []types.ExternalTicketRef{
 			{

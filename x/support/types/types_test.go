@@ -189,6 +189,14 @@ func TestExternalSystem_IsValid(t *testing.T) {
 	assert.False(t, types.ExternalSystem("slack").IsValid())
 }
 
+func TestSupportAuditEntry_Validate(t *testing.T) {
+	entry := types.NewSupportAuditEntry(types.SupportAuditActionRequestCreated, "actor", "details", time.Now(), 10)
+	require.NoError(t, entry.Validate())
+
+	invalid := types.SupportAuditEntry{}
+	require.Error(t, invalid.Validate())
+}
+
 // --- ResourceType ---
 
 func TestResourceType_IsValid(t *testing.T) {

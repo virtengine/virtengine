@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -135,6 +136,10 @@ type paramsStore struct {
 	RequireSupportRecipients bool                  `json:"require_support_recipients"`
 	MaxResponsesPerRequest   uint32                `json:"max_responses_per_request"`
 	DefaultRetentionPolicy   types.RetentionPolicy `json:"default_retention_policy"`
+	RetentionQueueBatchSize  uint32                `json:"retention_queue_batch_size"`
+	RetentionQueueMaxRetries uint32                `json:"retention_queue_max_retries"`
+	RetentionQueueRetryBase  int64                 `json:"retention_queue_retry_base_seconds"`
+	RetentionQueueRetryMax   int64                 `json:"retention_queue_retry_max_seconds"`
 }
 
 // SetParams sets the module parameters
@@ -151,6 +156,10 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 		RequireSupportRecipients: params.RequireSupportRecipients,
 		MaxResponsesPerRequest:   params.MaxResponsesPerRequest,
 		DefaultRetentionPolicy:   params.DefaultRetentionPolicy,
+		RetentionQueueBatchSize:  params.RetentionQueueBatchSize,
+		RetentionQueueMaxRetries: params.RetentionQueueMaxRetries,
+		RetentionQueueRetryBase:  params.RetentionQueueRetryBaseSeconds,
+		RetentionQueueRetryMax:   params.RetentionQueueRetryMaxSeconds,
 	})
 	if err != nil {
 		return err
@@ -173,12 +182,16 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	return types.Params{
-		AllowedExternalSystems:   ps.AllowedExternalSystems,
-		AllowedExternalDomains:   ps.AllowedExternalDomains,
-		SupportRecipientKeyIDs:   ps.SupportRecipientKeyIDs,
-		RequireSupportRecipients: ps.RequireSupportRecipients,
-		MaxResponsesPerRequest:   ps.MaxResponsesPerRequest,
-		DefaultRetentionPolicy:   ps.DefaultRetentionPolicy,
+		AllowedExternalSystems:         ps.AllowedExternalSystems,
+		AllowedExternalDomains:         ps.AllowedExternalDomains,
+		SupportRecipientKeyIDs:         ps.SupportRecipientKeyIDs,
+		RequireSupportRecipients:       ps.RequireSupportRecipients,
+		MaxResponsesPerRequest:         ps.MaxResponsesPerRequest,
+		DefaultRetentionPolicy:         ps.DefaultRetentionPolicy,
+		RetentionQueueBatchSize:        ps.RetentionQueueBatchSize,
+		RetentionQueueMaxRetries:       ps.RetentionQueueMaxRetries,
+		RetentionQueueRetryBaseSeconds: ps.RetentionQueueRetryBase,
+		RetentionQueueRetryMaxSeconds:  ps.RetentionQueueRetryMax,
 	}
 }
 
@@ -528,6 +541,13 @@ func (k Keeper) ArchiveSupportRequest(ctx sdk.Context, id types.SupportRequestID
 	}
 
 	req.MarkArchived(reason, ctx.BlockTime())
+	req.AppendAuditEntry(types.NewSupportAuditEntry(
+		types.SupportAuditActionRequestArchived,
+		archivedBy,
+		reason,
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	))
 	if err := k.UpdateSupportRequest(ctx, &req); err != nil {
 		return err
 	}
@@ -558,6 +578,13 @@ func (k Keeper) PurgeSupportRequestPayload(ctx sdk.Context, id types.SupportRequ
 
 	req.Payload = req.Payload.CloneWithoutEnvelope()
 	req.MarkPurged(reason, ctx.BlockTime())
+	req.AppendAuditEntry(types.NewSupportAuditEntry(
+		types.SupportAuditActionRequestPurged,
+		purgedBy,
+		reason,
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	))
 	if err := k.UpdateSupportRequest(ctx, &req); err != nil {
 		return err
 	}
@@ -733,28 +760,265 @@ func (k Keeper) SetSupportResponseSequence(ctx sdk.Context, requestID string, se
 
 // ProcessRetentionPolicies checks and applies retention policies.
 func (k Keeper) ProcessRetentionPolicies(ctx sdk.Context) (int, int) {
+	params := k.GetParams(ctx)
 	now := ctx.BlockTime()
-	archived := 0
-	purged := 0
-	k.WithSupportRequests(ctx, func(req types.SupportRequest) bool {
-		if req.RetentionPolicy != nil {
-			if !req.Archived && req.RetentionPolicy.ShouldArchive(now) {
-				_ = k.ArchiveSupportRequest(ctx, req.ID, "retention policy", "system")
-				archived++
-			}
-			if !req.Purged && req.RetentionPolicy.ShouldPurge(now) {
-				_ = k.PurgeSupportRequestPayload(ctx, req.ID, "retention policy", "system")
-				purged++
-			}
-		}
-		return false
-	})
+	batch := int(params.RetentionQueueBatchSize)
+	archived := k.processRetentionQueue(ctx, types.RetentionActionArchive, now, batch)
+	purged := k.processRetentionQueue(ctx, types.RetentionActionPurge, now, batch)
 	return archived, purged
 }
 
-// enqueueRetention is a best-effort placeholder for future queueing.
-func (k Keeper) enqueueRetention(_ sdk.Context, _ *types.SupportRequest) {
-	// TODO: Add queueing when needed. Current implementation scans in ProcessRetentionPolicies.
+func (k Keeper) enqueueRetention(ctx sdk.Context, request *types.SupportRequest) {
+	if request == nil {
+		return
+	}
+	if request.RetentionPolicy == nil {
+		k.clearRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionArchive)
+		k.clearRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionPurge)
+		return
+	}
+
+	if request.Archived {
+		k.clearRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionArchive)
+	} else if archiveAt, ok := request.RetentionPolicy.ArchiveAt(); ok {
+		k.ensureRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionArchive, archiveAt)
+	}
+
+	if request.Purged {
+		k.clearRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionPurge)
+	} else if purgeAt, ok := request.RetentionPolicy.PurgeAt(); ok {
+		k.ensureRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionPurge, purgeAt)
+	}
+}
+
+// BuildRetentionStatus builds retention status for a support request.
+func (k Keeper) BuildRetentionStatus(ctx sdk.Context, request types.SupportRequest) types.RetentionStatus {
+	status := types.RetentionStatus{
+		TicketID: request.ID.String(),
+		Archived: request.Archived,
+		Purged:   request.Purged,
+	}
+	if request.RetentionPolicy != nil {
+		if archiveAt, ok := request.RetentionPolicy.ArchiveAt(); ok {
+			archiveAt = archiveAt.UTC()
+			status.ArchiveAt = &archiveAt
+		}
+		if purgeAt, ok := request.RetentionPolicy.PurgeAt(); ok {
+			purgeAt = purgeAt.UTC()
+			status.PurgeAt = &purgeAt
+		}
+	}
+	if entry, found := k.GetRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionArchive); found {
+		status.ArchiveQueue = &entry
+	}
+	if entry, found := k.GetRetentionQueueEntry(ctx, request.ID.String(), types.RetentionActionPurge); found {
+		status.PurgeQueue = &entry
+	}
+	return status
+}
+
+func (k Keeper) processRetentionQueue(ctx sdk.Context, action types.RetentionAction, now time.Time, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	store := ctx.KVStore(k.skey)
+	params := k.GetParams(ctx)
+
+	var prefix []byte
+	switch action {
+	case types.RetentionActionArchive:
+		prefix = types.PrefixSupportArchiveQueue
+	case types.RetentionActionPurge:
+		prefix = types.PrefixSupportPurgeQueue
+	default:
+		return 0
+	}
+
+	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	defer iter.Close()
+
+	type queued struct {
+		key       []byte
+		scheduled int64
+		requestID string
+	}
+	queuedItems := make([]queued, 0, limit)
+	nowUnix := now.Unix()
+
+	for ; iter.Valid(); iter.Next() {
+		scheduled, requestID, ok := types.ParseRetentionQueueKey(prefix, iter.Key())
+		if !ok {
+			continue
+		}
+		if scheduled > nowUnix {
+			// Keys are ordered by timestamp for new format; stop once we reach future entries.
+			break
+		}
+		queuedItems = append(queuedItems, queued{
+			key:       append([]byte(nil), iter.Key()...),
+			scheduled: scheduled,
+			requestID: requestID,
+		})
+		if len(queuedItems) >= limit {
+			break
+		}
+	}
+
+	processed := 0
+	for _, item := range queuedItems {
+		entry := types.RetentionQueueEntry{}
+		bz := store.Get(item.key)
+		if bz != nil {
+			if err := json.Unmarshal(bz, &entry); err != nil {
+				store.Delete(item.key)
+				continue
+			}
+		}
+		if entry.RequestID == "" {
+			entry.RequestID = item.requestID
+		}
+		entry.Action = action
+		entry.ScheduledAt = time.Unix(item.scheduled, 0).UTC()
+
+		if err := k.applyRetentionAction(ctx, entry); err != nil {
+			if errors.Is(err, types.ErrSupportRequestNotFound) {
+				k.deleteRetentionQueueEntry(ctx, entry, item.scheduled)
+				processed++
+				continue
+			}
+			entry.Attempts++
+			entry.LastError = err.Error()
+			nowUTC := now.UTC()
+			entry.LastAttemptAt = &nowUTC
+
+			if entry.Attempts >= params.RetentionQueueMaxRetries {
+				k.deleteRetentionQueueEntry(ctx, entry, item.scheduled)
+				processed++
+				continue
+			}
+
+			delay := retentionBackoffDelay(entry.Attempts, params.RetentionQueueRetryBaseSeconds, params.RetentionQueueRetryMaxSeconds)
+			entry.ScheduledAt = nowUTC.Add(delay)
+			k.rescheduleRetentionQueueEntry(ctx, entry, item.scheduled)
+			processed++
+			continue
+		}
+
+		k.deleteRetentionQueueEntry(ctx, entry, item.scheduled)
+		processed++
+	}
+
+	return processed
+}
+
+func (k Keeper) applyRetentionAction(ctx sdk.Context, entry types.RetentionQueueEntry) error {
+	reqID, err := types.ParseSupportRequestID(entry.RequestID)
+	if err != nil {
+		return err
+	}
+
+	switch entry.Action {
+	case types.RetentionActionArchive:
+		return k.ArchiveSupportRequest(ctx, reqID, "retention policy", "system")
+	case types.RetentionActionPurge:
+		return k.PurgeSupportRequestPayload(ctx, reqID, "retention policy", "system")
+	default:
+		return errors.New("unknown retention action")
+	}
+}
+
+func retentionBackoffDelay(attempts uint32, baseSeconds int64, maxSeconds int64) time.Duration {
+	if attempts == 0 {
+		return time.Duration(baseSeconds) * time.Second
+	}
+	base := time.Duration(baseSeconds) * time.Second
+	delay := base << (attempts - 1)
+	max := time.Duration(maxSeconds) * time.Second
+	if delay > max {
+		return max
+	}
+	return delay
+}
+
+func (k Keeper) ensureRetentionQueueEntry(ctx sdk.Context, requestID string, action types.RetentionAction, scheduledAt time.Time) {
+	if _, found := k.GetRetentionQueueEntry(ctx, requestID, action); found {
+		return
+	}
+	entry := types.RetentionQueueEntry{
+		RequestID:   requestID,
+		Action:      action,
+		ScheduledAt: scheduledAt.UTC(),
+	}
+	_ = k.setRetentionQueueEntry(ctx, entry)
+}
+
+func (k Keeper) GetRetentionQueueEntry(ctx sdk.Context, requestID string, action types.RetentionAction) (types.RetentionQueueEntry, bool) {
+	store := ctx.KVStore(k.skey)
+	key := types.SupportRetentionIndexKey(requestID, action)
+	bz := store.Get(key)
+	if bz == nil {
+		return types.RetentionQueueEntry{}, false
+	}
+	var entry types.RetentionQueueEntry
+	if err := json.Unmarshal(bz, &entry); err != nil {
+		return types.RetentionQueueEntry{}, false
+	}
+	return entry, true
+}
+
+func (k Keeper) clearRetentionQueueEntry(ctx sdk.Context, requestID string, action types.RetentionAction) {
+	entry, found := k.GetRetentionQueueEntry(ctx, requestID, action)
+	if !found {
+		return
+	}
+	k.deleteRetentionQueueEntry(ctx, entry, entry.ScheduledAt.Unix())
+}
+
+func (k Keeper) setRetentionQueueEntry(ctx sdk.Context, entry types.RetentionQueueEntry) error {
+	if entry.RequestID == "" || !entry.Action.IsValid() || entry.ScheduledAt.IsZero() {
+		return types.ErrInvalidRetentionPolicy.Wrap("invalid retention queue entry")
+	}
+	store := ctx.KVStore(k.skey)
+	bz, err := json.Marshal(&entry)
+	if err != nil {
+		return err
+	}
+
+	var queueKey []byte
+	switch entry.Action {
+	case types.RetentionActionArchive:
+		queueKey = types.SupportArchiveQueueKey(entry.ScheduledAt.Unix(), entry.RequestID)
+	case types.RetentionActionPurge:
+		queueKey = types.SupportPurgeQueueKey(entry.ScheduledAt.Unix(), entry.RequestID)
+	default:
+		return types.ErrInvalidRetentionPolicy.Wrap("unsupported retention action")
+	}
+
+	store.Set(queueKey, bz)
+	store.Set(types.SupportRetentionIndexKey(entry.RequestID, entry.Action), bz)
+	return nil
+}
+
+func (k Keeper) deleteRetentionQueueEntry(ctx sdk.Context, entry types.RetentionQueueEntry, scheduledAt int64) {
+	store := ctx.KVStore(k.skey)
+
+	var queueKey []byte
+	switch entry.Action {
+	case types.RetentionActionArchive:
+		queueKey = types.SupportArchiveQueueKey(scheduledAt, entry.RequestID)
+	case types.RetentionActionPurge:
+		queueKey = types.SupportPurgeQueueKey(scheduledAt, entry.RequestID)
+	default:
+		return
+	}
+
+	store.Delete(queueKey)
+	store.Delete(types.SupportRetentionIndexKey(entry.RequestID, entry.Action))
+}
+
+func (k Keeper) rescheduleRetentionQueueEntry(ctx sdk.Context, entry types.RetentionQueueEntry, previousScheduledAt int64) {
+	k.deleteRetentionQueueEntry(ctx, entry, previousScheduledAt)
+	_ = k.setRetentionQueueEntry(ctx, entry)
 }
 
 // ========================================================================

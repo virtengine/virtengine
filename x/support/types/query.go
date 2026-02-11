@@ -69,6 +69,30 @@ type QuerySupportResponsesByRequestResponse struct {
 	Responses []SupportResponse `json:"responses"`
 }
 
+// QuerySupportRetentionStatusRequest is the request for retention status of a ticket.
+type QuerySupportRetentionStatusRequest struct {
+	TicketID      string `json:"ticket_id"`
+	ViewerAddress string `json:"viewer_address,omitempty"`
+	ViewerKeyID   string `json:"viewer_key_id,omitempty"`
+}
+
+// QuerySupportRetentionStatusResponse is the response for retention status.
+type QuerySupportRetentionStatusResponse struct {
+	Status RetentionStatus `json:"status"`
+}
+
+// QuerySupportAuditTrailRequest is the request for audit trail of a ticket.
+type QuerySupportAuditTrailRequest struct {
+	TicketID      string `json:"ticket_id"`
+	ViewerAddress string `json:"viewer_address,omitempty"`
+	ViewerKeyID   string `json:"viewer_key_id,omitempty"`
+}
+
+// QuerySupportAuditTrailResponse is the response for audit trail.
+type QuerySupportAuditTrailResponse struct {
+	AuditTrail []SupportAuditEntry `json:"audit_trail"`
+}
+
 // Proto message interface stubs
 
 func (*QueryExternalRefRequest) ProtoMessage()    {}
@@ -124,3 +148,27 @@ func (m *QuerySupportResponsesByRequestResponse) Reset() {
 	*m = QuerySupportResponsesByRequestResponse{}
 }
 func (m *QuerySupportResponsesByRequestResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*QuerySupportRetentionStatusRequest) ProtoMessage() {}
+func (m *QuerySupportRetentionStatusRequest) Reset() {
+	*m = QuerySupportRetentionStatusRequest{}
+}
+func (m *QuerySupportRetentionStatusRequest) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*QuerySupportRetentionStatusResponse) ProtoMessage() {}
+func (m *QuerySupportRetentionStatusResponse) Reset() {
+	*m = QuerySupportRetentionStatusResponse{}
+}
+func (m *QuerySupportRetentionStatusResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*QuerySupportAuditTrailRequest) ProtoMessage() {}
+func (m *QuerySupportAuditTrailRequest) Reset() {
+	*m = QuerySupportAuditTrailRequest{}
+}
+func (m *QuerySupportAuditTrailRequest) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*QuerySupportAuditTrailResponse) ProtoMessage() {}
+func (m *QuerySupportAuditTrailResponse) Reset() {
+	*m = QuerySupportAuditTrailResponse{}
+}
+func (m *QuerySupportAuditTrailResponse) String() string { return fmt.Sprintf("%+v", *m) }

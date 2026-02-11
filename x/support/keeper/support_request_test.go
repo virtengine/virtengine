@@ -64,6 +64,8 @@ func TestMsgServer_CreateSupportRequest(t *testing.T) {
 	require.Equal(t, types.SupportStatusOpen, request.Status)
 	require.Equal(t, submitter.String(), request.SubmitterAddress)
 	require.Len(t, request.Recipients, 2)
+	require.Len(t, request.AuditTrail, 1)
+	require.Equal(t, types.SupportAuditActionRequestCreated, request.AuditTrail[0].Action)
 }
 
 func TestMsgServer_AddSupportResponse(t *testing.T) {
@@ -125,6 +127,15 @@ func TestMsgServer_AddSupportResponse(t *testing.T) {
 	request, found := keeper.GetSupportRequest(ctx, reqID)
 	require.True(t, found)
 	require.Equal(t, types.SupportStatusWaitingCustomer, request.Status)
+	require.GreaterOrEqual(t, len(request.AuditTrail), 2)
+	seenResponse := false
+	for _, entry := range request.AuditTrail {
+		if entry.Action == types.SupportAuditActionResponseAdded {
+			seenResponse = true
+			break
+		}
+	}
+	require.True(t, seenResponse)
 }
 
 func makeTestEnvelope(t *testing.T, recipients []string) *encryptiontypes.EncryptedPayloadEnvelope {

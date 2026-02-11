@@ -230,6 +230,8 @@ type SupportRequest struct {
 	Purged          bool             `json:"purged"`
 	PurgedAt        *time.Time       `json:"purged_at,omitempty"`
 	PurgeReason     string           `json:"purge_reason,omitempty"`
+
+	AuditTrail []SupportAuditEntry `json:"audit_trail,omitempty"`
 }
 
 // NewSupportRequest creates a new support request.
@@ -254,6 +256,7 @@ func NewSupportRequest(
 		PublicMetadata:   map[string]string{},
 		CreatedAt:        created,
 		UpdatedAt:        created,
+		AuditTrail:       []SupportAuditEntry{},
 	}
 }
 
@@ -291,10 +294,20 @@ func (r *SupportRequest) Validate() error {
 	if err := r.RetentionPolicy.Validate(); err != nil {
 		return err
 	}
+	for i := range r.AuditTrail {
+		if err := r.AuditTrail[i].Validate(); err != nil {
+			return ErrInvalidSupportRequest.Wrapf("invalid audit trail entry: %v", err)
+		}
+	}
 	if r.Archived && r.Status != SupportStatusArchived {
 		return ErrInvalidSupportRequest.Wrap("archived request must have archived status")
 	}
 	return nil
+}
+
+// AppendAuditEntry appends a support audit entry to the request.
+func (r *SupportRequest) AppendAuditEntry(entry SupportAuditEntry) {
+	r.AuditTrail = append(r.AuditTrail, entry)
 }
 
 // SetStatus transitions the request to a new status.

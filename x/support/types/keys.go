@@ -1,6 +1,9 @@
 package types
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 const (
 	// ModuleName is the module name constant used in many places
@@ -76,6 +79,10 @@ var (
 	// PrefixSupportPurgeQueue is the prefix for purge queue items
 	// Key: PrefixSupportPurgeQueue | purge_unix | "/" | request_id -> bool
 	PrefixSupportPurgeQueue = []byte{0x1B}
+
+	// PrefixSupportRetentionIndex is the prefix for retention queue index entries
+	// Key: PrefixSupportRetentionIndex | request_id | "/" | action -> RetentionQueueEntry
+	PrefixSupportRetentionIndex = []byte{0x1C}
 )
 
 // ExternalRefKey returns the store key for an external ticket reference
@@ -236,7 +243,7 @@ func SupportEventCheckpointKey(subscriberID string) []byte {
 
 // SupportArchiveQueueKey returns the archive queue key
 func SupportArchiveQueueKey(archiveAt int64, requestID string) []byte {
-	archive := []byte(fmt.Sprintf("%d", archiveAt))
+	archive := encodeQueueTime(archiveAt)
 	key := make([]byte, 0, len(PrefixSupportArchiveQueue)+len(archive)+len(requestID)+1)
 	key = append(key, PrefixSupportArchiveQueue...)
 	key = append(key, archive...)
@@ -247,7 +254,7 @@ func SupportArchiveQueueKey(archiveAt int64, requestID string) []byte {
 
 // SupportArchiveQueuePrefixKey returns the prefix for archive queue items
 func SupportArchiveQueuePrefixKey(archiveAt int64) []byte {
-	archive := []byte(fmt.Sprintf("%d", archiveAt))
+	archive := encodeQueueTime(archiveAt)
 	key := make([]byte, 0, len(PrefixSupportArchiveQueue)+len(archive)+1)
 	key = append(key, PrefixSupportArchiveQueue...)
 	key = append(key, archive...)
@@ -257,7 +264,7 @@ func SupportArchiveQueuePrefixKey(archiveAt int64) []byte {
 
 // SupportPurgeQueueKey returns the purge queue key
 func SupportPurgeQueueKey(purgeAt int64, requestID string) []byte {
-	purge := []byte(fmt.Sprintf("%d", purgeAt))
+	purge := encodeQueueTime(purgeAt)
 	key := make([]byte, 0, len(PrefixSupportPurgeQueue)+len(purge)+len(requestID)+1)
 	key = append(key, PrefixSupportPurgeQueue...)
 	key = append(key, purge...)
@@ -268,10 +275,39 @@ func SupportPurgeQueueKey(purgeAt int64, requestID string) []byte {
 
 // SupportPurgeQueuePrefixKey returns the prefix for purge queue items
 func SupportPurgeQueuePrefixKey(purgeAt int64) []byte {
-	purge := []byte(fmt.Sprintf("%d", purgeAt))
+	purge := encodeQueueTime(purgeAt)
 	key := make([]byte, 0, len(PrefixSupportPurgeQueue)+len(purge)+1)
 	key = append(key, PrefixSupportPurgeQueue...)
 	key = append(key, purge...)
 	key = append(key, '/')
 	return key
+}
+
+// SupportRetentionIndexKey returns the index key for retention queue entries by request.
+func SupportRetentionIndexKey(requestID string, action RetentionAction) []byte {
+	key := make([]byte, 0, len(PrefixSupportRetentionIndex)+len(requestID)+len(action)+1)
+	key = append(key, PrefixSupportRetentionIndex...)
+	key = append(key, []byte(requestID)...)
+	key = append(key, '/')
+	key = append(key, []byte(action)...)
+	return key
+}
+
+// SupportRetentionIndexPrefixKey returns the prefix for retention index entries for a request.
+func SupportRetentionIndexPrefixKey(requestID string) []byte {
+	key := make([]byte, 0, len(PrefixSupportRetentionIndex)+len(requestID)+1)
+	key = append(key, PrefixSupportRetentionIndex...)
+	key = append(key, []byte(requestID)...)
+	key = append(key, '/')
+	return key
+}
+
+func encodeQueueTime(at int64) []byte {
+	var buf [8]byte
+	if at < 0 {
+		at = 0
+	}
+	//nolint:gosec // at is clamped to non-negative to avoid overflow.
+	binary.BigEndian.PutUint64(buf[:], uint64(at))
+	return buf[:]
 }

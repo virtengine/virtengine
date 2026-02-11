@@ -32,5 +32,11 @@ func (s *DataRightsService) executeDeletion(ctx context.Context, dataSubject str
 		}
 	}
 
+	if s.support != nil {
+		if err := s.support.DeleteSupportRequests(ctx, dataSubject); err != nil {
+			return fmt.Errorf("delete support records: %w", err)
+		}
+	}
+
 	return nil
 }

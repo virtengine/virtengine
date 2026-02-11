@@ -35,6 +35,10 @@ type QueryServer interface {
 	SupportRequestsBySubmitter(context.Context, *QuerySupportRequestsBySubmitterRequest) (*QuerySupportRequestsBySubmitterResponse, error)
 	// SupportResponsesByRequest returns responses for a request
 	SupportResponsesByRequest(context.Context, *QuerySupportResponsesByRequestRequest) (*QuerySupportResponsesByRequestResponse, error)
+	// SupportRetentionStatus returns retention status for a request
+	SupportRetentionStatus(context.Context, *QuerySupportRetentionStatusRequest) (*QuerySupportRetentionStatusResponse, error)
+	// SupportAuditTrail returns audit trail for a request
+	SupportAuditTrail(context.Context, *QuerySupportAuditTrailRequest) (*QuerySupportAuditTrailResponse, error)
 	// ExternalRef returns a single external ticket reference
 	ExternalRef(context.Context, *QueryExternalRefRequest) (*QueryExternalRefResponse, error)
 	// ExternalRefsByOwner returns all external refs for a given owner

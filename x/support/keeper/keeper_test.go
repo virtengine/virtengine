@@ -310,10 +310,14 @@ func TestParams(t *testing.T) {
 
 	// Update params
 	newParams := types.Params{
-		AllowedExternalSystems: []string{"waldur"},
-		AllowedExternalDomains: []string{"custom.example.com"},
-		MaxResponsesPerRequest: 50,
-		DefaultRetentionPolicy: types.DefaultParams().DefaultRetentionPolicy,
+		AllowedExternalSystems:         []string{"waldur"},
+		AllowedExternalDomains:         []string{"custom.example.com"},
+		MaxResponsesPerRequest:         50,
+		DefaultRetentionPolicy:         types.DefaultParams().DefaultRetentionPolicy,
+		RetentionQueueBatchSize:        100,
+		RetentionQueueMaxRetries:       3,
+		RetentionQueueRetryBaseSeconds: 60,
+		RetentionQueueRetryMaxSeconds:  600,
 	}
 	require.NoError(t, keeper.SetParams(ctx, newParams))
 

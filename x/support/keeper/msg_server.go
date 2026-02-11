@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -82,6 +83,13 @@ func (ms msgServer) CreateSupportRequest(goCtx context.Context, msg *types.MsgCr
 	request.RelatedEntity = msg.RelatedEntity
 	request.Recipients = append([]string{}, payload.Envelope.RecipientKeyIDs...)
 	request.RetentionPolicy = params.DefaultRetentionPolicy.CopyWithTimestamps(ctx.BlockTime(), ctx.BlockHeight())
+	request.AppendAuditEntry(types.NewSupportAuditEntry(
+		types.SupportAuditActionRequestCreated,
+		msg.Sender,
+		fmt.Sprintf("ticket_number=%s", request.TicketNumber),
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	))
 
 	if err := ms.keeper.CreateSupportRequest(ctx, request); err != nil {
 		return nil, err
@@ -127,6 +135,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 
 	updated := false
 	oldStatus := request.Status
+	changes := make([]string, 0, 6)
 
 	if msg.Payload != nil {
 		if msg.Payload.Envelope == nil {
@@ -150,6 +159,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 		request.Payload = *msg.Payload
 		request.Recipients = append([]string{}, msg.Payload.Envelope.RecipientKeyIDs...)
 		updated = true
+		changes = append(changes, "payload_updated")
 	}
 
 	if msg.Category != "" {
@@ -158,6 +168,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 		}
 		request.Category = types.SupportCategory(msg.Category)
 		updated = true
+		changes = append(changes, fmt.Sprintf("category=%s", request.Category))
 	}
 
 	if msg.Priority != "" {
@@ -166,6 +177,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 		}
 		request.Priority = types.SupportPriority(msg.Priority)
 		updated = true
+		changes = append(changes, fmt.Sprintf("priority=%s", request.Priority))
 	}
 
 	if msg.AssignedAgent != "" {
@@ -176,6 +188,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 		assignedAt := ctx.BlockTime().UTC()
 		request.AssignedAt = &assignedAt
 		updated = true
+		changes = append(changes, fmt.Sprintf("assigned_agent=%s", request.AssignedAgent))
 	}
 
 	if msg.Status != "" {
@@ -190,6 +203,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 			return nil, err
 		}
 		updated = true
+		changes = append(changes, fmt.Sprintf("status=%s", request.Status))
 	}
 
 	if msg.PublicMetadata != nil {
@@ -198,6 +212,7 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 		}
 		request.PublicMetadata = msg.PublicMetadata
 		updated = true
+		changes = append(changes, "public_metadata")
 	}
 
 	if !updated {
@@ -205,6 +220,22 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 	}
 
 	request.UpdatedAt = ctx.BlockTime().UTC()
+	request.AppendAuditEntry(types.NewSupportAuditEntry(
+		types.SupportAuditActionRequestUpdated,
+		msg.Sender,
+		strings.Join(changes, ","),
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	))
+	if oldStatus != request.Status {
+		request.AppendAuditEntry(types.NewSupportAuditEntry(
+			types.SupportAuditActionStatusChanged,
+			msg.Sender,
+			fmt.Sprintf("%s->%s", oldStatus, request.Status),
+			ctx.BlockTime(),
+			ctx.BlockHeight(),
+		))
+	}
 	if err := ms.keeper.UpdateSupportRequest(ctx, &request); err != nil {
 		return nil, err
 	}
@@ -298,6 +329,22 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 		_ = request.SetStatus(targetStatus, ctx.BlockTime())
 	}
 	request.UpdatedAt = ctx.BlockTime().UTC()
+	request.AppendAuditEntry(types.NewSupportAuditEntry(
+		types.SupportAuditActionResponseAdded,
+		msg.Sender,
+		fmt.Sprintf("response_id=%s", response.ID.String()),
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	))
+	if oldStatus != request.Status {
+		request.AppendAuditEntry(types.NewSupportAuditEntry(
+			types.SupportAuditActionStatusChanged,
+			msg.Sender,
+			fmt.Sprintf("%s->%s", oldStatus, request.Status),
+			ctx.BlockTime(),
+			ctx.BlockHeight(),
+		))
+	}
 	if err := ms.keeper.UpdateSupportRequest(ctx, &request); err != nil {
 		return nil, err
 	}

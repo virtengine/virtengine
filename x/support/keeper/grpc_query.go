@@ -130,6 +130,75 @@ func (q GRPCQuerier) SupportResponsesByRequest(c context.Context, req *types.Que
 	return &types.QuerySupportResponsesByRequestResponse{Responses: responses}, nil
 }
 
+// SupportRetentionStatus returns retention status for a request.
+func (q GRPCQuerier) SupportRetentionStatus(c context.Context, req *types.QuerySupportRetentionStatusRequest) (*types.QuerySupportRetentionStatusResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.TicketID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ticket_id is required")
+	}
+	if req.ViewerAddress == "" {
+		return nil, status.Error(codes.PermissionDenied, "viewer_address is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	id, err := types.ParseSupportRequestID(req.TicketID)
+	if err != nil {
+		return nil, types.ErrInvalidSupportRequest.Wrap(err.Error())
+	}
+
+	request, found := q.GetSupportRequest(ctx, id)
+	if !found {
+		return nil, types.ErrSupportRequestNotFound
+	}
+
+	viewerAddr, err := sdk.AccAddressFromBech32(req.ViewerAddress)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+	if err := q.requireSupportPayloadAccess(ctx, &request.Payload, viewerAddr, req.ViewerKeyID); err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
+
+	status := q.BuildRetentionStatus(ctx, request)
+	return &types.QuerySupportRetentionStatusResponse{Status: status}, nil
+}
+
+// SupportAuditTrail returns audit trail for a request.
+func (q GRPCQuerier) SupportAuditTrail(c context.Context, req *types.QuerySupportAuditTrailRequest) (*types.QuerySupportAuditTrailResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.TicketID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ticket_id is required")
+	}
+	if req.ViewerAddress == "" {
+		return nil, status.Error(codes.PermissionDenied, "viewer_address is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	id, err := types.ParseSupportRequestID(req.TicketID)
+	if err != nil {
+		return nil, types.ErrInvalidSupportRequest.Wrap(err.Error())
+	}
+
+	request, found := q.GetSupportRequest(ctx, id)
+	if !found {
+		return nil, types.ErrSupportRequestNotFound
+	}
+
+	viewerAddr, err := sdk.AccAddressFromBech32(req.ViewerAddress)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+	if err := q.requireSupportPayloadAccess(ctx, &request.Payload, viewerAddr, req.ViewerKeyID); err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
+
+	return &types.QuerySupportAuditTrailResponse{AuditTrail: request.AuditTrail}, nil
+}
+
 // ExternalRef returns a single external ticket reference by resource type and ID
 func (q GRPCQuerier) ExternalRef(c context.Context, req *types.QueryExternalRefRequest) (*types.QueryExternalRefResponse, error) {
 	if req == nil {
