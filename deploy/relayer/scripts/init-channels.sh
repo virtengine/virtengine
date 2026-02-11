@@ -77,6 +77,15 @@ hermes create channel \
   --channel-version veid-1 \
   --order ordered
 
+# Settlement escrow channel (settlement-1, ordered)
+hermes create channel \
+  --a-chain virtengine-1 \
+  --b-chain cosmoshub-4 \
+  --a-port settlement \
+  --b-port settlement \
+  --channel-version settlement-1 \
+  --order ordered
+
 echo ""
 echo "=== Channel initialization complete ==="
 echo ""

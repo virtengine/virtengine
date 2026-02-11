@@ -50,7 +50,7 @@ func (d AdaptiveGasPriceDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 
 	fees := feeTx.GetFee()
 	feeDec := sdk.NewDecCoinsFromCoins(fees...)
-	gasDec := sdkmath.LegacyNewDec(int64(gas))
+	gasDec := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(gas))
 	gasPrices := feeDec.QuoDec(gasDec)
 
 	if !gaspricing.DecCoinsAllGTE(gasPrices, minGasPrices) {

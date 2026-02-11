@@ -105,6 +105,7 @@ import (
 	roleskeeper "github.com/virtengine/virtengine/x/roles/keeper"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
+	settlementibc "github.com/virtengine/virtengine/x/settlement/ibc"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 	virtstakingkeeper "github.com/virtengine/virtengine/x/staking/keeper"
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
@@ -163,6 +164,7 @@ type AppKeepers struct {
 		Benchmark   benchkeeper.Keeper
 		Enclave     enclavekeeper.Keeper
 		Settlement  settlementkeeper.Keeper
+		SettlementIBC settlementibc.IBCKeeper
 		Fraud       fraudkeeper.Keeper
 		Review      reviewkeeper.Keeper
 		Support     supportkeeper.Keeper
@@ -453,14 +455,6 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	transferIBCModule := transfer.NewIBCModule(app.Keepers.Cosmos.Transfer)
-
-	// Create static IBC router, add transfer route, then set and seal it
-	ibcRouter := porttypes.NewRouter()
-	ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferIBCModule)
-
-	app.Keepers.Cosmos.IBC.SetRouter(ibcRouter)
-
 	/// Light client modules
 	clientKeeper := app.Keepers.Cosmos.IBC.ClientKeeper
 	storeProvider := app.Keepers.Cosmos.IBC.ClientKeeper.GetStoreProvider()
@@ -618,6 +612,24 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		app.Keepers.VirtEngine.Encryption,
 	)
+
+	app.Keepers.VirtEngine.SettlementIBC = settlementibc.NewIBCKeeper(
+		cdc,
+		app.keys[settlementtypes.StoreKey],
+		app.Keepers.VirtEngine.Settlement,
+		app.Keepers.Cosmos.IBC.ChannelKeeper,
+		app.Keepers.Cosmos.IBC.PortKeeper,
+	)
+
+	transferIBCModule := transfer.NewIBCModule(app.Keepers.Cosmos.Transfer)
+	settlementIBCModule := settlementibc.NewIBCModule(app.Keepers.VirtEngine.SettlementIBC)
+
+	// Create static IBC router, add routes, then set and seal it.
+	ibcRouter := porttypes.NewRouter()
+	ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferIBCModule)
+	ibcRouter.AddRoute(settlementibc.PortID, settlementIBCModule)
+
+	app.Keepers.Cosmos.IBC.SetRouter(ibcRouter)
 
 	app.Keepers.VirtEngine.Fraud = fraudkeeper.NewKeeper(
 		cdc,

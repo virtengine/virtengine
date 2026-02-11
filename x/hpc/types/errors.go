@@ -45,6 +45,9 @@ var (
 	// ErrInvalidSchedulingDecision is returned when a scheduling decision is invalid
 	ErrInvalidSchedulingDecision = errors.Register(ModuleName, 2111, "invalid scheduling decision")
 
+	// ErrInvalidSchedulingMetrics is returned when scheduling metrics are invalid
+	ErrInvalidSchedulingMetrics = errors.Register(ModuleName, 2154, "invalid scheduling metrics")
+
 	// ErrNoAvailableCluster is returned when no cluster is available for scheduling
 	ErrNoAvailableCluster = errors.Register(ModuleName, 2112, "no available cluster for job")
 

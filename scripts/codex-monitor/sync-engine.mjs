@@ -209,17 +209,32 @@ export class SyncEngine {
           const oldExternalRank = statusRank(oldExternal);
 
           if (newExternalRank < oldExternalRank) {
-            // External moved BACKWARD (human override) → respect external
-            setTaskStatus(ext.id, newExternal, "external");
-            updateTask(ext.id, {
-              externalStatus: newExternal,
-              syncDirty: false,
-            });
-            result.pulled++;
-            console.log(
-              TAG,
-              `External moved backward ${ext.id}: ${oldExternal} → ${newExternal} (human override)`,
-            );
+            // External moved BACKWARD — but only accept as human override
+            // if internal is ALSO behind (i.e., orchestrator didn't advance it).
+            // When internal is at or ahead of the old external, the backward
+            // move is most likely a VK restart / state loss — re-push instead.
+            if (internalRank >= oldExternalRank) {
+              // Internal was actively progressed by orchestrator — ignore
+              // the stale external value and mark dirty for re-push.
+              updateTask(ext.id, { externalStatus: newExternal, syncDirty: true });
+              console.log(
+                TAG,
+                `External reverted ${ext.id}: ${oldExternal} → ${newExternal} but internal=${internal.status} is ahead — will re-push`,
+              );
+            } else {
+              // Internal is truly behind old-external, so external moving
+              // backward is a genuine human override — accept it.
+              setTaskStatus(ext.id, newExternal, "external");
+              updateTask(ext.id, {
+                externalStatus: newExternal,
+                syncDirty: false,
+              });
+              result.pulled++;
+              console.log(
+                TAG,
+                `External moved backward ${ext.id}: ${oldExternal} → ${newExternal} (human override)`,
+              );
+            }
           } else if (newExternalRank > internalRank) {
             // External moved FORWARD past internal → respect external
             setTaskStatus(ext.id, newExternal, "external");

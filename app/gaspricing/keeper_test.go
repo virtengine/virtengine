@@ -4,18 +4,19 @@ import (
 	"testing"
 
 	"cosmossdk.io/log"
-	store "cosmossdk.io/store"
+	"cosmossdk.io/store/metrics"
+	"cosmossdk.io/store/rootmulti"
 	storetypes "cosmossdk.io/store/types"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUpdateMinGasPrices(t *testing.T) {
 	key := storetypes.NewKVStoreKey("gaspricing-test")
 	db := dbm.NewMemDB()
-	cms := store.NewCommitMultiStore(db, log.NewNopLogger(), nil)
+	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, db)
 	require.NoError(t, cms.LoadLatestVersion())
 

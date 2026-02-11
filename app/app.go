@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -258,11 +259,11 @@ func NewApp(
 			SignModeHandler: encodingConfig.TxConfig.SignModeHandler(),
 			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		},
-		CDC:             app.cdc,
-		GovKeeper:       app.Keepers.Cosmos.Gov,
-		MFAGatingKeeper: &app.Keepers.VirtEngine.MFA,
-		VEIDKeeper:      &app.Keepers.VirtEngine.VEID,
-		RolesKeeper:     &app.Keepers.VirtEngine.Roles,
+		CDC:              app.cdc,
+		GovKeeper:        app.Keepers.Cosmos.Gov,
+		MFAGatingKeeper:  &app.Keepers.VirtEngine.MFA,
+		VEIDKeeper:       &app.Keepers.VirtEngine.VEID,
+		RolesKeeper:      &app.Keepers.VirtEngine.Roles,
 		GasPricingKeeper: &app.Keepers.VirtEngine.GasPricing,
 	}
 
@@ -428,6 +429,10 @@ func (app *VirtEngineApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChai
 		panic(err)
 	}
 
+	if err := app.Keepers.VirtEngine.SettlementIBC.BindPort(ctx); err != nil {
+		return nil, err
+	}
+
 	return app.MM.InitGenesis(ctx, app.cdc, genesisState)
 }
 
@@ -452,6 +457,8 @@ func (app *VirtEngineApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) 
 		patch.Begin(ctx, &app.Keepers)
 		app.Logger().Info(fmt.Sprintf("patch %s applied successfully at height %d", patch.Name(), ctx.BlockHeight()))
 	}
+
+	app.Keepers.VirtEngine.SettlementIBC.CleanupRateLimitData(ctx)
 
 	return app.MM.BeginBlock(ctx)
 }
@@ -502,7 +509,13 @@ func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
 	if !params.Enabled {
 		return
 	}
-	gasUsed := int64(ctx.BlockGasMeter().GasConsumed())
+	gasConsumed := ctx.BlockGasMeter().GasConsumed()
+	var gasUsed int64
+	if gasConsumed > math.MaxInt64 {
+		gasUsed = math.MaxInt64
+	} else {
+		gasUsed = int64(gasConsumed) //nolint:gosec // gasConsumed is clamped to MaxInt64 above
+	}
 	maxGas := ctx.ConsensusParams().Block.MaxGas
 	minGasPrices, _, err := app.Keepers.VirtEngine.GasPricing.UpdateMinGasPrices(ctx, gasUsed, maxGas)
 	if err != nil {

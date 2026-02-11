@@ -250,6 +250,7 @@ create_snapshot() {
     local app_hash=$(get_current_app_hash)
     local timestamp=$(date -u +%Y%m%d_%H%M%S)
     local snapshot_name="state_${height}_${timestamp}"
+    local json_exported=1
     
     log_info "Creating snapshot at height ${height}..."
     
@@ -435,12 +436,6 @@ verify_backup() {
         return 1
     fi
     [ "${verify_checksum_file}" != "${checksum_file}" ] && rm -f "${verify_checksum_file}"
-
-    # Verify signature
-    if ! verify_snapshot_signature "$snapshot_name"; then
-        log_error "Signature verification failed"
-        return 1
-    fi
 
     # Verify signature
     if ! verify_snapshot_signature "$snapshot_name"; then

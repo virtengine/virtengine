@@ -24,6 +24,9 @@ type GenesisState struct {
 	// SchedulingDecisions are the scheduling decision records
 	SchedulingDecisions []SchedulingDecision `json:"scheduling_decisions"`
 
+	// SchedulingMetrics are aggregated scheduling metrics
+	SchedulingMetrics []SchedulingMetrics `json:"scheduling_metrics"`
+
 	// HPCRewards are the HPC reward records
 	HPCRewards []HPCRewardRecord `json:"hpc_rewards"`
 
@@ -171,6 +174,7 @@ func DefaultGenesisState() *GenesisState {
 		JobAccountings:      []JobAccounting{},
 		NodeMetadatas:       []NodeMetadata{},
 		SchedulingDecisions: []SchedulingDecision{},
+		SchedulingMetrics:   []SchedulingMetrics{},
 		HPCRewards:          []HPCRewardRecord{},
 		Disputes:            []HPCDispute{},
 		ClusterSequence:     1,
@@ -222,6 +226,13 @@ func (gs *GenesisState) Validate() error {
 	for i, decision := range gs.SchedulingDecisions {
 		if err := decision.Validate(); err != nil {
 			return ErrInvalidSchedulingDecision.Wrapf("invalid scheduling decision at index %d: %s", i, err.Error())
+		}
+	}
+
+	// Validate scheduling metrics
+	for i, metrics := range gs.SchedulingMetrics {
+		if err := metrics.Validate(); err != nil {
+			return ErrInvalidSchedulingMetrics.Wrapf("invalid scheduling metrics at index %d: %s", i, err.Error())
 		}
 	}
 
