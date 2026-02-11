@@ -179,12 +179,13 @@ class VKAdapter {
 
   async listTasks(projectId, filters = {}) {
     const fetchVk = await this._getFetchVk();
-    let url = `/api/projects/${projectId}/tasks`;
-    const params = [];
+    // Use /api/tasks?project_id=... (query param style) instead of
+    // /api/projects/:id/tasks which gets caught by the SPA catch-all.
+    const params = [`project_id=${encodeURIComponent(projectId)}`];
     if (filters.status)
       params.push(`status=${encodeURIComponent(filters.status)}`);
     if (filters.limit) params.push(`limit=${filters.limit}`);
-    if (params.length) url += `?${params.join("&")}`;
+    const url = `/api/tasks?${params.join("&")}`;
     const result = await fetchVk(url);
     const tasks = Array.isArray(result)
       ? result
@@ -201,8 +202,9 @@ class VKAdapter {
 
   async updateTaskStatus(taskId, status) {
     const fetchVk = await this._getFetchVk();
+    // Use PUT instead of PATCH — VK API returns 405 for PATCH on /api/tasks/:id
     const result = await fetchVk(`/api/tasks/${taskId}`, {
-      method: "PATCH",
+      method: "PUT",
       body: { status },
     });
     const task = result?.data || result;
@@ -211,9 +213,11 @@ class VKAdapter {
 
   async createTask(projectId, taskData) {
     const fetchVk = await this._getFetchVk();
-    const result = await fetchVk(`/api/projects/${projectId}/tasks`, {
+    // Use /api/tasks with project_id in body instead of
+    // /api/projects/:id/tasks which gets caught by the SPA catch-all.
+    const result = await fetchVk(`/api/tasks`, {
       method: "POST",
-      body: taskData,
+      body: { ...taskData, project_id: projectId },
     });
     const task = result?.data || result;
     return this._normaliseTask(task, projectId);

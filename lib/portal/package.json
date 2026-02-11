@@ -5,7 +5,8 @@
   "type": "commonjs",
   "dependencies": {
     "@walletconnect/modal": "^2.7.0",
-    "@walletconnect/sign-client": "^2.7.0"
+    "@walletconnect/sign-client": "^2.7.0",
+    "eventsource-parser": "^1.1.1"
   },
   "scripts": {
     "test": "node scripts/run-vitest.cjs",

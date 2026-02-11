@@ -962,7 +962,41 @@ func (k Keeper) OnDisputeResolved(ctx sdk.Context, invoiceID string, resolution 
 		return k.RefundPayout(ctx, payout.PayoutID, "dispute resolved in customer's favor")
 
 	case billing.DisputeResolutionPartialRefund:
-		// TODO: Implement partial refund logic
+		refundAmount := payout.HoldbackAmount
+		if refundAmount.IsZero() {
+			return k.ReleasePayoutHold(ctx, payout.PayoutID)
+		}
+
+		customer, err := sdk.AccAddressFromBech32(payout.Customer)
+		if err != nil {
+			return types.ErrInvalidAddress.Wrap("invalid customer address")
+		}
+
+		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleAccountName, customer, refundAmount); err != nil {
+			return types.ErrPayoutExecutionFailed.Wrap(err.Error())
+		}
+
+		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryRefunded,
+			payout.State, payout.State,
+			refundAmount, "partial refund issued", "dispute_resolution")
+
+		k.recordTreasuryEntry(ctx, &payout, types.TreasuryRecordRefund, refundAmount)
+
+		if err := ctx.EventManager().EmitTypedEvent(&types.EventPayoutRefunded{
+			PayoutID:   payout.PayoutID,
+			Customer:   payout.Customer,
+			Amount:     refundAmount.String(),
+			Reason:     "partial refund",
+			RefundedAt: ctx.BlockTime().Unix(),
+		}); err != nil {
+			k.Logger(ctx).Error("failed to emit payout partial refund event", "error", err)
+		}
+
+		k.Logger(ctx).Info("payout partial refund issued",
+			"payout_id", payout.PayoutID,
+			"amount", refundAmount.String(),
+		)
+
 		return k.ReleasePayoutHold(ctx, payout.PayoutID)
 
 	case billing.DisputeResolutionMutualAgreement:

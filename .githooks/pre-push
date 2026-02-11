@@ -516,7 +516,12 @@ check_build() {
         return 0
     fi
     hook_warn "make bins failed, trying direct go build..."
-    go build ./cmd/... ./sdk/go/... 2>&1
+    local build_targets="./cmd/..."
+    if [ -d "./sdk/go" ]; then
+        build_targets="$build_targets ./sdk/go/..."
+    fi
+    # shellcheck disable=SC2086
+    go build $build_targets 2>&1
 }
 
 check_test_go() {
