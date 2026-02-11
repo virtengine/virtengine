@@ -87,6 +87,7 @@ import (
 	supporttypes "github.com/virtengine/virtengine/x/support/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 
+	"github.com/virtengine/virtengine/app/gaspricing"
 	apptypes "github.com/virtengine/virtengine/app/types"
 	utypes "github.com/virtengine/virtengine/upgrades/types"
 
@@ -180,6 +181,15 @@ func NewApp(
 		invCheckPeriod,
 	)
 
+	minGasPricesStr := cast.ToString(appOpts.Get(cflags.FlagMinGasPrices))
+	minGasPrices, err := sdk.ParseDecCoins(minGasPricesStr)
+	if err != nil {
+		logger.Error("invalid min gas prices, using defaults", "min_gas_prices", minGasPricesStr, "err", err)
+		minGasPrices = sdk.DecCoins{}
+	}
+	gasParams := gaspricing.DefaultParams(minGasPrices)
+	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.keys[apptypes.GasPricingStoreKey], logger, gasParams)
+
 	// TODO: There is a bug here, where we register the govRouter routes in InitNormalKeepers and then
 	// call setupHooks afterwards. Therefore, if a gov proposal needs to call a method and that method calls a
 	// hook, we will get a nil pointer dereference error due to the hooks in the keeper not being
@@ -253,6 +263,7 @@ func NewApp(
 		MFAGatingKeeper: &app.Keepers.VirtEngine.MFA,
 		VEIDKeeper:      &app.Keepers.VirtEngine.VEID,
 		RolesKeeper:     &app.Keepers.VirtEngine.Roles,
+		GasPricingKeeper: &app.Keepers.VirtEngine.GasPricing,
 	}
 
 	anteHandler, err := NewAnteHandler(anteOpts)
@@ -435,6 +446,7 @@ func (app *VirtEngineApp) PreBlocker(ctx sdk.Context, _ *abci.RequestFinalizeBlo
 
 // BeginBlocker is a function in which application updates every begin block
 func (app *VirtEngineApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) {
+	app.applyAdaptiveMinGasPrices(ctx)
 	if patch, exists := utypes.GetHeightPatchesList()[ctx.BlockHeight()]; exists {
 		app.Logger().Info(fmt.Sprintf("found patch %s for current height %d. applying...", patch.Name(), ctx.BlockHeight()))
 		patch.Begin(ctx, &app.Keepers)
@@ -446,7 +458,12 @@ func (app *VirtEngineApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) 
 
 // EndBlocker is a function in which application updates every end block
 func (app *VirtEngineApp) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
-	return app.MM.EndBlock(ctx)
+	res, err := app.MM.EndBlock(ctx)
+	if err != nil {
+		return res, err
+	}
+	app.updateAdaptiveMinGasPrices(ctx)
+	return res, nil
 }
 
 // Precommitter application updates before the commital of a block after all transactions have been delivered.
@@ -460,6 +477,39 @@ func (app *VirtEngineApp) PrepareCheckStater(ctx sdk.Context) {
 	if err := app.MM.PrepareCheckState(ctx); err != nil {
 		panic(err)
 	}
+}
+
+func (app *VirtEngineApp) applyAdaptiveMinGasPrices(ctx sdk.Context) {
+	if app.Keepers.VirtEngine.GasPricing == (gaspricing.Keeper{}) {
+		return
+	}
+	params := app.Keepers.VirtEngine.GasPricing.GetParams(ctx)
+	if !params.Enabled {
+		return
+	}
+	state := app.Keepers.VirtEngine.GasPricing.GetState(ctx)
+	if len(state.CurrentMinGasPrices) == 0 {
+		state = gaspricing.DefaultState(params)
+	}
+	app.SetMinGasPrices(state.CurrentMinGasPrices.String())
+}
+
+func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
+	if app.Keepers.VirtEngine.GasPricing == (gaspricing.Keeper{}) {
+		return
+	}
+	params := app.Keepers.VirtEngine.GasPricing.GetParams(ctx)
+	if !params.Enabled {
+		return
+	}
+	gasUsed := int64(ctx.BlockGasMeter().GasConsumed())
+	maxGas := ctx.ConsensusParams().Block.MaxGas
+	minGasPrices, _, err := app.Keepers.VirtEngine.GasPricing.UpdateMinGasPrices(ctx, gasUsed, maxGas)
+	if err != nil {
+		app.Logger().Error("failed to update adaptive min gas prices", "err", err)
+		return
+	}
+	app.SetMinGasPrices(minGasPrices.String())
 }
 
 // LegacyAmino returns VirtEngineApp's amino codec.
