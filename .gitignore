@@ -86,3 +86,5 @@ pkg/provider_daemon/audit.log
 scripts/.cache/ve-orchestrator-copilot.json
 scripts/.cache/*
 tmpclaude*
+vk-stdout.log
+vk-stderr.log
