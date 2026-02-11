@@ -106,6 +106,15 @@ type (
 
 	// MsgRemoveTrustedDevice is the message type alias
 	MsgRemoveTrustedDevice = types.MsgRemoveTrustedDevice
+
+	// MsgIssueSession is the message type alias
+	MsgIssueSession = types.MsgIssueSession
+
+	// MsgRefreshSession is the message type alias
+	MsgRefreshSession = types.MsgRefreshSession
+
+	// MsgRevokeSession is the message type alias
+	MsgRevokeSession = types.MsgRevokeSession
 )
 
 // Factor type constants

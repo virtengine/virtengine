@@ -153,3 +153,46 @@ export { DEFAULT_QUALITY_THRESHOLDS } from './types/capture';
 // ============================================================================
 
 export const VERSION = '1.0.0';
+
+// ============================================================================
+// Submission (On-chain VEID)
+// ============================================================================
+
+export {
+  submitCaptureScope,
+  createUploadNonce,
+  createUploadSignatures,
+  createUploadMetadata,
+  encryptPayloadForRecipients,
+  fetchValidatorEncryptionKeys,
+  buildUploadScopeMessage,
+  createCosmjsBroadcaster,
+  normalizeScopeType,
+  createScopeId,
+} from './src/submission';
+
+export type {
+  SubmissionRequest,
+  SubmissionResult,
+  SubmissionUpdate,
+  SubmissionStatus,
+  SubmissionErrorType,
+  ScopeTypeInput,
+  ValidatorRecipientKey,
+  EncryptedPayloadEnvelope,
+  UploadMetadata,
+  TxBroadcastResult,
+  TxBroadcaster,
+  UploadScopeMessage,
+  ScorePollOptions,
+  ApprovedClientCheckOptions,
+} from './src/submission';
+
+export {
+  SubmissionError,
+  CaptureValidationError,
+  EncryptionError,
+  SigningError,
+  BroadcastError,
+  SubmissionTimeoutError,
+} from './src/submission';

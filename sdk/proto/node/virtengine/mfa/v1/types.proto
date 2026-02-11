@@ -219,6 +219,18 @@ message MFAProof {
     (gogoproto.jsontag) = "signature,omitempty",
     (gogoproto.moretags) = "yaml:\"signature\""
   ];
+
+  // DeviceFingerprint identifies the device
+  string device_fingerprint = 5 [
+    (gogoproto.jsontag) = "device_fingerprint,omitempty",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+
+  // TrustToken is the trust token for a trusted device
+  string trust_token = 6 [
+    (gogoproto.jsontag) = "trust_token,omitempty",
+    (gogoproto.moretags) = "yaml:\"trust_token\""
+  ];
 }
 
 // FactorCombination represents a set of factors that must ALL be satisfied (AND logic)
@@ -311,6 +323,12 @@ message DeviceInfo {
   int64 trust_expires_at = 6 [
     (gogoproto.jsontag) = "trust_expires_at",
     (gogoproto.moretags) = "yaml:\"trust_expires_at\""
+  ];
+
+  // TrustTokenHash is the bcrypt hash of the trust token
+  string trust_token_hash = 7 [
+    (gogoproto.jsontag) = "trust_token_hash,omitempty",
+    (gogoproto.moretags) = "yaml:\"trust_token_hash\""
   ];
 }
 
