@@ -25,7 +25,6 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import type { CustomerAllocationStatus } from '@/types/customer';
 import { useTranslation } from 'react-i18next';
-import { useWallet } from '@/lib/portal-adapter';
 
 function StatCard({
   title,
@@ -72,8 +71,6 @@ export function CustomerDashboardPage() {
     markNotificationRead,
     dismissNotification,
   } = useCustomerDashboardStore();
-  const wallet = useWallet();
-  const account = wallet.accounts[wallet.activeAccountIndex];
 
   const filteredAllocations = useCustomerDashboardStore(selectFilteredCustomerAllocations);
   const unreadCount = useCustomerDashboardStore(selectUnreadNotificationCount);
@@ -86,13 +83,8 @@ export function CustomerDashboardPage() {
   ];
 
   useEffect(() => {
-    if (!account?.address) return;
-    void fetchDashboard(account.address);
-    const interval = setInterval(() => {
-      void fetchDashboard(account.address);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [account?.address, fetchDashboard]);
+    void fetchDashboard();
+  }, [fetchDashboard]);
 
   if (error) {
     return (

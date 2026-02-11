@@ -462,11 +462,7 @@ func (c *DomainVerificationChecker) verifyHTTPWellKnown(ctx context.Context, rec
 }
 
 // submitConfirmation submits a MsgConfirmDomainVerification transaction.
-func (c *DomainVerificationChecker) submitConfirmation(
-	_ context.Context,
-	record *keeper.DomainVerificationRecord,
-	proof string,
-) {
+func (c *DomainVerificationChecker) submitConfirmation(_ context.Context, record *keeper.DomainVerificationRecord, proof string) {
 	log.Printf("[domain-verification] submitting confirmation for %s", record.Domain)
 	_ = proof
 
@@ -565,18 +561,14 @@ func (c *DomainVerificationChecker) queryDomainVerificationRecord(ctx context.Co
 
 // buildAndSignTx builds and signs a transaction.
 // TODO: Implement actual transaction building and signing logic
-//
-//nolint:unused // placeholder for future MsgConfirmDomainVerification implementation
-func (c *DomainVerificationChecker) buildAndSignTx(_ context.Context, _ interface{}) ([]byte, error) {
+func (c *DomainVerificationChecker) buildAndSignTx(ctx context.Context, msgData interface{}) ([]byte, error) {
 	// This would use the key manager to sign the transaction
 	// For now, return an error as this is a placeholder
 	return nil, fmt.Errorf("transaction building not implemented yet - requires MsgConfirmDomainVerification proto generation")
 }
 
 // broadcastTx broadcasts a transaction to the chain.
-//
-//nolint:unused // placeholder for future transaction broadcasting implementation
-func (c *DomainVerificationChecker) broadcastTx(_ context.Context, _ []byte) error {
+func (c *DomainVerificationChecker) broadcastTx(ctx context.Context, txBytes []byte) error {
 	// TODO: Implement transaction broadcasting
 	// This would use the RPC client to broadcast the transaction
 	// For now, return an error

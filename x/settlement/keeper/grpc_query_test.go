@@ -60,8 +60,7 @@ func setupGRPCTest(t *testing.T) *grpcTestSuite {
 	ctx := sdk.NewContext(stateStore, tmproto.Header{Height: 1, Time: now}, false, testutil.Logger(t))
 
 	bankKeeper := NewMockBankKeeper()
-	escrowKeeper := NewMockEscrowKeeper(bankKeeper)
-	settlementKeeper := keeper.NewKeeper(cfg.Codec, storeKey, bankKeeper, escrowKeeper, "authority", mockEncryptionKeeper{})
+	settlementKeeper := keeper.NewKeeper(cfg.Codec, storeKey, bankKeeper, "authority", mockEncryptionKeeper{})
 
 	queryHelper := baseapp.NewQueryServerTestHelper(ctx, cfg.InterfaceRegistry)
 	settlementv1.RegisterQueryServer(queryHelper, keeper.GRPCQuerier{IKeeper: settlementKeeper})

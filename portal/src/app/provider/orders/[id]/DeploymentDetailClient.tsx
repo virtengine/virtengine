@@ -62,7 +62,7 @@ export default function DeploymentDetailClient() {
     restartDeployment,
     updateDeployment,
     terminateDeployment,
-    refreshDeployment,
+    tickDeployment,
     isLoading,
   } = useDeploymentStore();
   const wallet = useWallet();
@@ -98,10 +98,10 @@ export default function DeploymentDetailClient() {
   useEffect(() => {
     if (!deployment || deployment.status === 'terminated') return;
     const interval = setInterval(() => {
-      void refreshDeployment(id);
+      tickDeployment(id, 6);
     }, 6000);
     return () => clearInterval(interval);
-  }, [deployment, id, refreshDeployment]);
+  }, [deployment, id, tickDeployment]);
 
   useEffect(() => {
     if (containers.length === 0) return;
@@ -143,7 +143,7 @@ export default function DeploymentDetailClient() {
     action: string,
     messageType: 'MsgUpdateDeployment' | 'MsgCloseDeployment',
     memo: string,
-    actionFn: () => Promise<void>
+    actionFn: () => void
   ) => {
     if (wallet.status !== 'connected') {
       setActionError('Connect your wallet to sign this transaction.');
@@ -153,7 +153,7 @@ export default function DeploymentDetailClient() {
     setActionError(null);
     setPendingAction(action);
     await sleep(700);
-    await actionFn();
+    actionFn();
     setLastTx({
       id: `tx-${Math.random().toString(36).slice(2, 10)}`,
       type: messageType,

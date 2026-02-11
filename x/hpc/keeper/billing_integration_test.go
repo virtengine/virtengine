@@ -119,28 +119,18 @@ func TestUsageMeteringDuringExecution(t *testing.T) {
 }
 
 func TestSettlementAfterJobCompletion(t *testing.T) {
-	ctx, k, settlementKeeper, bank := setupHPCKeeperWithSettlement(t)
+	ctx, k, bank := setupHPCKeeper(t)
 
-	provider := sdk.AccAddress(bytes.Repeat([]byte{5}, 20))
-	customer := sdk.AccAddress(bytes.Repeat([]byte{6}, 20))
-	providerAddr := provider.String()
-	customerAddr := customer.String()
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{5}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{6}, 20)).String()
 	start := time.Unix(1_700_000_000, 0).UTC()
 	end := start.Add(2 * time.Hour)
-
-	ctx = ctx.WithBlockTime(start)
-	escrowAmount := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(1_000_000)))
-	bank.SetSpendable(customer, escrowAmount)
-	escrowID, err := settlementKeeper.CreateEscrow(ctx, "job-settle-1", customer, escrowAmount, 3*time.Hour, nil)
-	require.NoError(t, err)
-	require.NoError(t, settlementKeeper.ActivateEscrow(ctx, escrowID, "job-settle-1", provider))
 
 	job := types.HPCJob{
 		JobID:           "job-settle-1",
 		ClusterID:       "cluster-settle",
 		ProviderAddress: providerAddr,
 		CustomerAddress: customerAddr,
-		EscrowID:        escrowID,
 		Resources: types.JobResources{
 			Nodes:           1,
 			CPUCoresPerNode: 4,
@@ -254,11 +244,9 @@ func TestBillingInvoiceGeneration(t *testing.T) {
 }
 
 func TestRefundOnJobCancellation(t *testing.T) {
-	ctx, k, settlementKeeper, bank := setupHPCKeeperWithSettlement(t)
-	provider := sdk.AccAddress(bytes.Repeat([]byte{7}, 20))
-	customer := sdk.AccAddress(bytes.Repeat([]byte{8}, 20))
-	providerAddr := provider.String()
-	customerAddr := customer.String()
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{8}, 20)).String()
 
 	job := types.HPCJob{
 		JobID:           "job-refund-1",
@@ -266,15 +254,9 @@ func TestRefundOnJobCancellation(t *testing.T) {
 		ProviderAddress: providerAddr,
 		CustomerAddress: customerAddr,
 		State:           types.JobStateCancelled,
+		EscrowID:        "escrow-1",
 		AgreedPrice:     sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(1_000_000))),
 	}
-
-	bank.SetSpendable(customer, job.AgreedPrice)
-	escrowID, err := settlementKeeper.CreateEscrow(ctx, job.JobID, customer, job.AgreedPrice, time.Hour, nil)
-	require.NoError(t, err)
-	require.NoError(t, settlementKeeper.ActivateEscrow(ctx, escrowID, job.JobID, provider))
-	job.EscrowID = escrowID
-
 	mustSetJob(t, ctx, k, job)
 
 	record := &types.HPCAccountingRecord{

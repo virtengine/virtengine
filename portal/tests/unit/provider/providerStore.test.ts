@@ -5,189 +5,6 @@ import {
   selectActiveAllocations,
   selectTotalMonthlyRevenue,
 } from '@/stores/providerStore';
-import type {
-  Allocation,
-  Payout,
-  QueuedAllocation,
-  ProviderDashboardStats,
-  RevenueSummaryData,
-  CapacityData,
-  ProviderOfferingSummary,
-  PendingBid,
-  ProviderSyncStatus,
-} from '@/types/provider';
-
-const now = new Date().toISOString();
-
-const mockAllocations: Allocation[] = [
-  {
-    id: 'alloc-1',
-    offeringName: 'GPU VM',
-    offeringId: 'offer-1',
-    customerAddress: 've1cust1',
-    customerName: 'Customer A',
-    status: 'ok',
-    resources: { cpu: 8, memory: 32, storage: 500, gpu: 2 },
-    monthlyRevenue: 800,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: 'alloc-2',
-    offeringName: 'Storage',
-    offeringId: 'offer-2',
-    customerAddress: 've1cust2',
-    customerName: 'Customer B',
-    status: 'erred',
-    resources: { cpu: 2, memory: 4, storage: 1000 },
-    monthlyRevenue: 100,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: 'alloc-3',
-    offeringName: 'Compute',
-    offeringId: 'offer-3',
-    customerAddress: 've1cust3',
-    customerName: 'Customer C',
-    status: 'ok',
-    resources: { cpu: 4, memory: 16, storage: 200 },
-    monthlyRevenue: 400,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: 'alloc-4',
-    offeringName: 'ML Training',
-    offeringId: 'offer-4',
-    customerAddress: 've1cust4',
-    customerName: 'Customer D',
-    status: 'creating',
-    resources: { cpu: 16, memory: 64, storage: 1000, gpu: 4 },
-    monthlyRevenue: 1500,
-    createdAt: now,
-    updatedAt: now,
-  },
-];
-
-const mockPayouts: Payout[] = [
-  {
-    id: 'pay-1',
-    amount: 2000,
-    currency: 'uve',
-    status: 'completed',
-    txHash: '0xabc123',
-    period: '2026-01',
-    createdAt: now,
-    completedAt: now,
-  },
-  {
-    id: 'pay-2',
-    amount: 1500,
-    currency: 'uve',
-    status: 'pending',
-    period: '2026-02',
-    createdAt: now,
-  },
-  {
-    id: 'pay-3',
-    amount: 500,
-    currency: 'uve',
-    status: 'processing',
-    period: '2026-02',
-    createdAt: now,
-  },
-];
-
-const mockQueue: QueuedAllocation[] = [
-  {
-    id: 'q-1',
-    offeringName: 'GPU VM',
-    customerAddress: 've1cust5',
-    requestedAt: now,
-    resources: { cpu: 4, memory: 16, storage: 100 },
-    estimatedProvisionTime: '5 minutes',
-  },
-  {
-    id: 'q-2',
-    offeringName: 'Storage',
-    customerAddress: 've1cust6',
-    requestedAt: now,
-    resources: { cpu: 1, memory: 2, storage: 2000 },
-    estimatedProvisionTime: '2 minutes',
-  },
-];
-
-const mockStats: ProviderDashboardStats = {
-  activeAllocations: 2,
-  totalOfferings: 4,
-  publishedOfferings: 3,
-  monthlyRevenue: 2800,
-  revenueChange: 15,
-  uptime: 99.5,
-  pendingOrders: 2,
-  openTickets: 1,
-};
-
-const mockRevenue: RevenueSummaryData = {
-  currentMonth: 2800,
-  previousMonth: 2400,
-  changePercent: 16.7,
-  totalLifetime: 25000,
-  pendingPayouts: 2000,
-  byOffering: [
-    { offeringName: 'GPU VM', revenue: 1600, percentage: 57 },
-    { offeringName: 'Compute', revenue: 800, percentage: 29 },
-    { offeringName: 'Storage', revenue: 400, percentage: 14 },
-  ],
-  history: [
-    { period: '2026-01', revenue: 2800, orders: 5 },
-    { period: '2025-12', revenue: 2400, orders: 4 },
-    { period: '2025-11', revenue: 2200, orders: 4 },
-  ],
-};
-
-const mockCapacity: CapacityData = {
-  resources: [
-    { label: 'CPU', used: 30, total: 64, unit: 'cores' },
-    { label: 'Memory', used: 96, total: 256, unit: 'GB' },
-    { label: 'Storage', used: 1700, total: 4000, unit: 'GB' },
-    { label: 'GPU', used: 6, total: 8, unit: 'units' },
-  ],
-  overallUtilization: 47,
-};
-
-function seedProviderData() {
-  useProviderStore.setState({
-    stats: mockStats,
-    allocations: mockAllocations,
-    offerings: [],
-    pendingBids: [],
-    syncStatus: {
-      isRunning: true,
-      lastSyncAt: now,
-      nextSyncAt: now,
-      errorCount: 0,
-      pendingOfferings: 0,
-      pendingAllocations: 0,
-      waldur: { name: 'Waldur', status: 'synced', lastSuccessAt: now, lagSeconds: 0 },
-      chain: { name: 'VirtEngine Chain', status: 'synced', lastSuccessAt: now, lagSeconds: 0 },
-      providerDaemon: {
-        name: 'Provider Daemon',
-        status: 'synced',
-        lastSuccessAt: now,
-        lagSeconds: 0,
-      },
-    },
-    revenue: mockRevenue,
-    capacity: mockCapacity,
-    payouts: mockPayouts,
-    queue: mockQueue,
-    isLoading: false,
-    error: null,
-    allocationFilter: 'all',
-  });
-}
 
 describe('providerStore', () => {
   beforeEach(() => {
@@ -206,9 +23,15 @@ describe('providerStore', () => {
     vi.useRealTimers();
   });
 
+  async function runWithTimers<T>(fn: () => Promise<T>): Promise<T> {
+    const promise = fn();
+    await vi.advanceTimersByTimeAsync(1000);
+    return promise;
+  }
+
   describe('fetchDashboard', () => {
-    it('loads all dashboard data from seed', () => {
-      seedProviderData();
+    it('loads all dashboard data from mock', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const state = useProviderStore.getState();
       expect(state.isLoading).toBe(false);
@@ -221,11 +44,13 @@ describe('providerStore', () => {
       expect(state.capacity.resources.length).toBeGreaterThan(0);
     });
 
-    it('sets loading state while fetching', () => {
-      useProviderStore.setState({ isLoading: true });
+    it('sets loading state while fetching', async () => {
+      const promise = useProviderStore.getState().fetchDashboard();
       expect(useProviderStore.getState().isLoading).toBe(true);
 
-      useProviderStore.setState({ isLoading: false });
+      await vi.advanceTimersByTimeAsync(1000);
+      await promise;
+
       expect(useProviderStore.getState().isLoading).toBe(false);
     });
   });
@@ -250,16 +75,16 @@ describe('providerStore', () => {
   });
 
   describe('selectFilteredAllocations', () => {
-    it('returns all allocations when filter is all', () => {
-      seedProviderData();
+    it('returns all allocations when filter is all', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const state = useProviderStore.getState();
       const filtered = selectFilteredAllocations(state);
       expect(filtered.length).toBe(state.allocations.length);
     });
 
-    it('filters by status ok', () => {
-      seedProviderData();
+    it('filters by status ok', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
       useProviderStore.getState().setAllocationFilter('ok');
 
       const state = useProviderStore.getState();
@@ -268,8 +93,8 @@ describe('providerStore', () => {
       filtered.forEach((a) => expect(a.status).toBe('ok'));
     });
 
-    it('filters by status erred', () => {
-      seedProviderData();
+    it('filters by status erred', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
       useProviderStore.getState().setAllocationFilter('erred');
 
       const state = useProviderStore.getState();
@@ -278,8 +103,8 @@ describe('providerStore', () => {
       filtered.forEach((a) => expect(a.status).toBe('erred'));
     });
 
-    it('returns empty for status with no matches', () => {
-      seedProviderData();
+    it('returns empty for status with no matches', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
       useProviderStore.getState().setAllocationFilter('updating');
 
       const state = useProviderStore.getState();
@@ -289,8 +114,8 @@ describe('providerStore', () => {
   });
 
   describe('selectActiveAllocations', () => {
-    it('returns only ok/creating/updating allocations', () => {
-      seedProviderData();
+    it('returns only ok/creating/updating allocations', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const state = useProviderStore.getState();
       const active = selectActiveAllocations(state);
@@ -300,8 +125,8 @@ describe('providerStore', () => {
       });
     });
 
-    it('excludes terminated and erred allocations', () => {
-      seedProviderData();
+    it('excludes terminated and erred allocations', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const state = useProviderStore.getState();
       const active = selectActiveAllocations(state);
@@ -313,8 +138,8 @@ describe('providerStore', () => {
   });
 
   describe('selectTotalMonthlyRevenue', () => {
-    it('sums revenue from ok allocations only', () => {
-      seedProviderData();
+    it('sums revenue from ok allocations only', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const state = useProviderStore.getState();
       const total = selectTotalMonthlyRevenue(state);
@@ -333,8 +158,8 @@ describe('providerStore', () => {
   });
 
   describe('dashboard stats', () => {
-    it('has valid stats structure', () => {
-      seedProviderData();
+    it('has valid stats structure', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const { stats } = useProviderStore.getState();
       expect(stats.activeAllocations).toBeGreaterThanOrEqual(0);
@@ -346,8 +171,8 @@ describe('providerStore', () => {
   });
 
   describe('revenue data', () => {
-    it('has valid revenue structure', () => {
-      seedProviderData();
+    it('has valid revenue structure', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const { revenue } = useProviderStore.getState();
       expect(revenue.currentMonth).toBeGreaterThan(0);
@@ -361,8 +186,8 @@ describe('providerStore', () => {
   });
 
   describe('capacity data', () => {
-    it('has valid capacity structure', () => {
-      seedProviderData();
+    it('has valid capacity structure', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const { capacity } = useProviderStore.getState();
       expect(capacity.resources.length).toBeGreaterThan(0);
@@ -378,8 +203,8 @@ describe('providerStore', () => {
   });
 
   describe('payouts data', () => {
-    it('has valid payout structure', () => {
-      seedProviderData();
+    it('has valid payout structure', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const { payouts } = useProviderStore.getState();
       expect(payouts.length).toBeGreaterThan(0);
@@ -398,8 +223,8 @@ describe('providerStore', () => {
   });
 
   describe('queue data', () => {
-    it('has valid queue structure', () => {
-      seedProviderData();
+    it('has valid queue structure', async () => {
+      await runWithTimers(() => useProviderStore.getState().fetchDashboard());
 
       const { queue } = useProviderStore.getState();
       expect(queue.length).toBeGreaterThan(0);

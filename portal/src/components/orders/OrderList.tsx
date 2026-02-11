@@ -24,24 +24,16 @@ import {
   formatDuration,
 } from '@/features/orders/tracking-types';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
-import { useWallet } from '@/lib/portal-adapter';
 
 export function OrderList() {
   const { fetchOrders, isLoading, error, setFilter } = useOrderStore();
   const filteredOrders = useOrderStore(selectFilteredOrders);
   const [activeTab, setActiveTab] = useState<OrderTabFilter>('active');
   const [searchQuery, setSearchQuery] = useState('');
-  const wallet = useWallet();
-  const account = wallet.accounts[wallet.activeAccountIndex];
 
   useEffect(() => {
-    if (!account?.address) return;
-    void fetchOrders(account.address);
-    const interval = setInterval(() => {
-      void fetchOrders(account.address);
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [account?.address, fetchOrders]);
+    void fetchOrders();
+  }, [fetchOrders]);
 
   const handleTabChange = useCallback(
     (value: string) => {
@@ -103,11 +95,7 @@ export function OrderList() {
         </div>
         <h2 className="mt-4 text-lg font-medium">Failed to load orders</h2>
         <p className="mt-2 text-sm text-muted-foreground">{error}</p>
-        <Button
-          onClick={() => account?.address && fetchOrders(account.address)}
-          className="mt-4"
-          variant="outline"
-        >
+        <Button onClick={() => fetchOrders()} className="mt-4" variant="outline">
           Retry
         </Button>
       </div>

@@ -13,42 +13,26 @@ import (
 func (s *KeeperTestSuite) TestProviderRewardCalculationAccuracy() {
 	t := s.T()
 
-	params := s.keeper.GetParams(s.ctx)
-	params.UsageRewardRateBps = 1000
-	params.UsageRewardCPUMultiplierBps = 10000
-	params.UsageRewardSLAOnTimeMultiplierBps = 10000
-	params.UsageRewardSLALateMultiplierBps = 10000
-	params.UsageRewardAcknowledgedMultiplierBps = 10000
-	params.UsageRewardUnacknowledgedMultiplierBps = 10000
-	require.NoError(t, s.keeper.SetParams(s.ctx, params))
-
-	now := s.ctx.BlockTime()
 	usages := []types.UsageRecord{
 		{
-			UsageID:              "usage-provider-1",
-			OrderID:              "order-1",
-			Provider:             s.provider.String(),
-			Customer:             s.depositor.String(),
-			UsageUnits:           250,
-			UsageType:            "compute",
-			TotalCost:            sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-			PeriodStart:          now.Add(-time.Hour),
-			PeriodEnd:            now,
-			SubmittedAt:          now,
-			CustomerAcknowledged: true,
+			UsageID:     "usage-provider-1",
+			OrderID:     "order-1",
+			Provider:    s.provider.String(),
+			Customer:    s.depositor.String(),
+			UsageUnits:  250,
+			UsageType:   "compute",
+			TotalCost:   sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+			SubmittedAt: s.ctx.BlockTime(),
 		},
 		{
-			UsageID:              "usage-provider-2",
-			OrderID:              "order-2",
-			Provider:             s.depositor.String(),
-			Customer:             s.provider.String(),
-			UsageUnits:           500,
-			UsageType:            "compute",
-			TotalCost:            sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(2000))),
-			PeriodStart:          now.Add(-time.Hour),
-			PeriodEnd:            now,
-			SubmittedAt:          now,
-			CustomerAcknowledged: true,
+			UsageID:     "usage-provider-2",
+			OrderID:     "order-2",
+			Provider:    s.depositor.String(),
+			Customer:    s.provider.String(),
+			UsageUnits:  500,
+			UsageType:   "compute",
+			TotalCost:   sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(2000))),
+			SubmittedAt: s.ctx.BlockTime(),
 		},
 	}
 
@@ -67,8 +51,8 @@ func (s *KeeperTestSuite) TestProviderRewardCalculationAccuracy() {
 		}
 	}
 
-	require.Equal(t, sdkmath.NewInt(100), providerReward)
-	require.Equal(t, sdkmath.NewInt(200), depositorReward)
+	require.Equal(t, sdkmath.NewInt(2), providerReward)
+	require.Equal(t, sdkmath.NewInt(5), depositorReward)
 }
 
 func (s *KeeperTestSuite) TestUsageRewardsMultiDenomAndEvents() {

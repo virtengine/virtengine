@@ -179,7 +179,6 @@ When to add vs modify
 | scripts/compliance/collect-soc2-evidence.sh | Collect SOC2 evidence bundle. | ./scripts/compliance/collect-soc2-evidence.sh | bash, git, go (opt) |
 | scripts/compliance/soc2-evidence-manifest.yaml | Manifest for SOC2 collection. | Read by collector. | N/A |
 | scripts/dr/backup-chain-state.sh | Backup chain state to disk/S3. | ./scripts/dr/backup-chain-state.sh --snapshot-only | virtengine, jq, aws |
-| scripts/dr/backup-provider-state.sh | Backup provider daemon state. | ./scripts/dr/backup-provider-state.sh | tar, jq, aws |
 | scripts/dr/backup-keys.sh | Backup validator/provider keys; optional Shamir. | ./scripts/dr/backup-keys.sh --type validator | openssl, aws, jq |
 | scripts/dr/dr-test.sh | DR validation suite + optional Slack. | ./scripts/dr/dr-test.sh --report --notify | jq, aws, curl |
 | scripts/dr/README.md | DR playbook and scheduling examples. | Readme only. | N/A |
@@ -209,7 +208,6 @@ When to add vs modify
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
 | scripts/smoke-test.sh | Regional smoke test (k8s + RPC). | ./scripts/smoke-test.sh us-east-1 | kubectl, curl |
-| scripts/ci/backup-restore-smoke-test.sh | CI smoke test for DR backup/restore. | ./scripts/ci/backup-restore-smoke-test.sh | bash, openssl, jq |
 | scripts/verify-cross-region.sh | Cross-region connectivity checks. | ./scripts/verify-cross-region.sh | kubectl, aws, curl |
 | scripts/verify-db-replication.sh | CockroachDB multi-region checks. | ./scripts/verify-db-replication.sh | kubectl, aws |
 | scripts/update-global-lb.sh | Route53 weighted record mgmt. | ./scripts/update-global-lb.sh status | aws |
@@ -379,7 +377,6 @@ All .sh scripts assume bash unless stated. On Windows, run in Git Bash or WSL.
 ### Compliance + DR
 - scripts/compliance/collect-soc2-evidence.sh: Collect SOC2 evidence bundle.
 - scripts/dr/backup-chain-state.sh: Snapshot, upload, verify, restore chain data.
-- scripts/dr/backup-provider-state.sh: Backup/restore provider daemon state.
 - scripts/dr/backup-keys.sh: Backup validator/provider/node keys; optional Shamir.
 - scripts/dr/dr-test.sh: Run DR readiness tests; can emit report + Slack notify.
 

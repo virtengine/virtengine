@@ -27,14 +27,8 @@ type SetupView = 'none' | 'totp' | 'webauthn' | 'sms' | 'email' | 'backup' | 're
  * Full management page for MFA configuration, enrolled factors, trusted browsers, and audit.
  */
 export function MFASettings({ className }: MFASettingsProps) {
-  const {
-    isLoading,
-    isEnabled,
-    factors,
-    trustedBrowsers,
-    auditLog = [],
-    revokeTrustedBrowser,
-  } = useMFAStore();
+  const { isLoading, isEnabled, factors, trustedBrowsers, auditLog, revokeTrustedBrowser } =
+    useMFAStore();
   const [setupView, setSetupView] = useState<SetupView>('none');
   const safeFactors = factors ?? [];
   const safeTrustedBrowsers = trustedBrowsers ?? [];

@@ -285,7 +285,8 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
       success: false,
       output: "",
       items: [],
-      error: "Codex SDK startThread() returned null — SDK may be misconfigured or API unreachable",
+      error:
+        "Codex SDK startThread() returned null — SDK may be misconfigured or API unreachable",
       sdk: "codex",
       threadId: null,
     };
@@ -942,16 +943,27 @@ async function loadThreadRegistry() {
     let pruned = 0;
     for (const [key, record] of Object.entries(entries)) {
       // Expire old threads (by lastUsedAt)
-      if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) { pruned++; continue; }
-      // Expire threads that have been alive too long (absolute age)
-      if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) { pruned++; continue; }
-      // Expire high-turn threads (context exhaustion)
-      if (record.turnCount >= MAX_THREAD_TURNS) {
-        console.log(`${TAG} expiring exhausted thread for task "${key}" (${record.turnCount} turns)`);
+      if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) {
         pruned++;
         continue;
       }
-      if (!record.alive) { pruned++; continue; }
+      // Expire threads that have been alive too long (absolute age)
+      if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) {
+        pruned++;
+        continue;
+      }
+      // Expire high-turn threads (context exhaustion)
+      if (record.turnCount >= MAX_THREAD_TURNS) {
+        console.log(
+          `${TAG} expiring exhausted thread for task "${key}" (${record.turnCount} turns)`,
+        );
+        pruned++;
+        continue;
+      }
+      if (!record.alive) {
+        pruned++;
+        continue;
+      }
       threadRegistry.set(key, record);
     }
     // Persist the cleaned registry back to disk so stale entries don't linger
@@ -1191,72 +1203,72 @@ export async function launchOrResumeThread(
       saveThreadRegistry().catch(() => {});
       // Fall through to fresh launch below
     } else {
-    const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
+      const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
 
-    // Only attempt native resume for Codex (it has resumeThread API)
-    if (sdkName === "codex" && existing.sdk === "codex") {
-      console.log(
-        `${TAG} resuming Codex thread ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
-      );
-      const result = await resumeCodexThread(
-        existing.threadId,
-        prompt,
-        cwd,
-        timeoutMs,
-        restExtra,
-      );
+      // Only attempt native resume for Codex (it has resumeThread API)
+      if (sdkName === "codex" && existing.sdk === "codex") {
+        console.log(
+          `${TAG} resuming Codex thread ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
+        );
+        const result = await resumeCodexThread(
+          existing.threadId,
+          prompt,
+          cwd,
+          timeoutMs,
+          restExtra,
+        );
 
-      if (result.success) {
-        // Update registry
-        existing.turnCount += 1;
-        existing.lastUsedAt = Date.now();
-        existing.lastError = null;
-        if (result.threadId) existing.threadId = result.threadId;
+        if (result.success) {
+          // Update registry
+          existing.turnCount += 1;
+          existing.lastUsedAt = Date.now();
+          existing.lastError = null;
+          if (result.threadId) existing.threadId = result.threadId;
+          threadRegistry.set(taskKey, existing);
+          saveThreadRegistry().catch(() => {});
+          return { ...result, resumed: true };
+        }
+
+        // Resume failed — fall through to fresh launch
+        console.warn(
+          `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
+        );
+        existing.alive = false;
         threadRegistry.set(taskKey, existing);
-        saveThreadRegistry().catch(() => {});
-        return { ...result, resumed: true };
+      } else if (existing.sdk !== sdkName) {
+        // SDK changed — invalidate old thread
+        console.log(
+          `${TAG} SDK changed from ${existing.sdk} to ${sdkName} for task "${taskKey}", starting fresh`,
+        );
+        existing.alive = false;
+      } else {
+        // Non-Codex SDK: use context-carry resume
+        console.log(
+          `${TAG} context-carry resume for ${sdkName} thread, task "${taskKey}"`,
+        );
+        const result = await resumeGenericThread(
+          existing.threadId,
+          prompt,
+          cwd,
+          timeoutMs,
+          restExtra,
+          sdkName,
+        );
+
+        if (result.success) {
+          existing.turnCount += 1;
+          existing.lastUsedAt = Date.now();
+          existing.lastError = null;
+          threadRegistry.set(taskKey, existing);
+          saveThreadRegistry().catch(() => {});
+          return { ...result, resumed: true };
+        }
+
+        console.warn(
+          `${TAG} context-carry resume failed for task "${taskKey}": ${result.error}`,
+        );
+        existing.alive = false;
       }
-
-      // Resume failed — fall through to fresh launch
-      console.warn(
-        `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
-      );
-      existing.alive = false;
-      threadRegistry.set(taskKey, existing);
-    } else if (existing.sdk !== sdkName) {
-      // SDK changed — invalidate old thread
-      console.log(
-        `${TAG} SDK changed from ${existing.sdk} to ${sdkName} for task "${taskKey}", starting fresh`,
-      );
-      existing.alive = false;
-    } else {
-      // Non-Codex SDK: use context-carry resume
-      console.log(
-        `${TAG} context-carry resume for ${sdkName} thread, task "${taskKey}"`,
-      );
-      const result = await resumeGenericThread(
-        existing.threadId,
-        prompt,
-        cwd,
-        timeoutMs,
-        restExtra,
-        sdkName,
-      );
-
-      if (result.success) {
-        existing.turnCount += 1;
-        existing.lastUsedAt = Date.now();
-        existing.lastError = null;
-        threadRegistry.set(taskKey, existing);
-        saveThreadRegistry().catch(() => {});
-        return { ...result, resumed: true };
-      }
-
-      console.warn(
-        `${TAG} context-carry resume failed for task "${taskKey}": ${result.error}`,
-      );
-      existing.alive = false;
-    }
     } // close else for turn-count / absolute-age guard
   }
 
@@ -1407,7 +1419,9 @@ export function invalidateThread(taskKey) {
 export function forceNewThread(taskKey, reason = "manual") {
   const record = threadRegistry.get(taskKey);
   if (record) {
-    console.log(`${TAG} force-invalidating thread for task "${taskKey}": ${reason} (was turn ${record.turnCount})`);
+    console.log(
+      `${TAG} force-invalidating thread for task "${taskKey}": ${reason} (was turn ${record.turnCount})`,
+    );
     record.alive = false;
     threadRegistry.set(taskKey, record);
     saveThreadRegistry().catch(() => {});

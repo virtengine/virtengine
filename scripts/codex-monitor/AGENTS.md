@@ -43,6 +43,10 @@ flowchart TD
 - Error recovery: autofix patterns and circuit breakers prevent infinite loops. References: `scripts/codex-monitor/autofix.mjs:66`, `scripts/codex-monitor/monitor.mjs:400`
 - State persistence: orchestrator and fleet state stored in `.cache`. References: `scripts/codex-monitor/ve-orchestrator.ps1:144`, `scripts/codex-monitor/fleet-coordinator.mjs:745`
 
+## Autonomous Execution
+- Agents act without prompting for approval: identify issues, implement fixes, proceed.
+- Do not ask “let me know if you want me to implement this.”
+
 ## Usage Examples
 
 ### Start codex-monitor with defaults
