@@ -10,6 +10,7 @@ import (
 	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
+	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
@@ -105,21 +106,89 @@ func (c *rpcChainClient) GetProviderConfig(ctx context.Context, address string) 
 
 // GetOpenOrders retrieves open orders that match provider capabilities
 func (c *rpcChainClient) GetOpenOrders(ctx context.Context, offeringTypes []string, regions []string) ([]Order, error) {
-	// TODO: Implement actual gRPC query to market module
-	// For now return empty list
-	return []Order{}, nil
+	if c.grpcConn == nil {
+		return nil, fmt.Errorf("grpc endpoint not configured")
+	}
+
+	client := marketv1beta5.NewQueryClient(c.grpcConn)
+
+	// Query orders with state = "open"
+	req := &marketv1beta5.QueryOrdersRequest{
+		Filters: marketv1beta5.OrderFilters{
+			State: "open",
+		},
+		Pagination: &query.PageRequest{
+			Limit: defaultHPCPollPageLimit,
+		},
+	}
+
+	resp, err := client.Orders(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orders: %w", err)
+	}
+
+	orders := make([]Order, 0, len(resp.Orders))
+	for _, protoOrder := range resp.Orders {
+		// Convert proto order to daemon Order struct
+		order := orderFromProto(protoOrder)
+
+		// Filter by offering types if specified
+		if len(offeringTypes) > 0 && !contains(offeringTypes, order.OfferingType) {
+			continue
+		}
+
+		// Filter by regions if specified
+		if len(regions) > 0 && order.Region != "" && !contains(regions, order.Region) {
+			continue
+		}
+
+		orders = append(orders, order)
+	}
+
+	return orders, nil
 }
 
 // PlaceBid places a bid on an order
 func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Signature) error {
-	// TODO: Implement actual gRPC transaction to market module
-	return nil
+	if c.grpcConn == nil {
+		return fmt.Errorf("grpc endpoint not configured")
+	}
+
+	// TODO: Implement transaction building and signing
+	// For now return a placeholder error indicating this needs KeyManager integration
+	return fmt.Errorf("PlaceBid requires KeyManager integration for transaction signing (not yet implemented)")
 }
 
 // GetProviderBids retrieves bids placed by this provider
 func (c *rpcChainClient) GetProviderBids(ctx context.Context, address string) ([]Bid, error) {
-	// TODO: Implement actual gRPC query to market module
-	return []Bid{}, nil
+	if c.grpcConn == nil {
+		return nil, fmt.Errorf("grpc endpoint not configured")
+	}
+
+	client := marketv1beta5.NewQueryClient(c.grpcConn)
+
+	// Query bids filtered by provider address
+	req := &marketv1beta5.QueryBidsRequest{
+		Filters: marketv1beta5.BidFilters{
+			Provider: address,
+			State:    "open", // Only return open bids
+		},
+		Pagination: &query.PageRequest{
+			Limit: defaultHPCPollPageLimit,
+		},
+	}
+
+	resp, err := client.Bids(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query bids: %w", err)
+	}
+
+	bids := make([]Bid, 0, len(resp.Bids))
+	for _, queryBid := range resp.Bids {
+		bids = append(bids, bidFromProto(&queryBid.Bid))
+	}
+
+	return bids, nil
 }
 
 // Close closes the gRPC connection
@@ -502,4 +571,45 @@ func dataReferencesFromProto(references []hpcv1.DataReference) []hpctypes.DataRe
 		})
 	}
 	return out
+}
+
+// orderFromProto converts a proto Order to daemon Order struct
+func orderFromProto(protoOrder marketv1beta5.Order) Order {
+	return Order{
+		OrderID:         protoOrder.ID.String(),
+		CustomerAddress: protoOrder.ID.Owner,
+		OfferingType:    "compute", // Default, could be enhanced based on order spec
+		Requirements: ResourceRequirements{
+			CPUCores:  0, // TODO: Extract from order spec
+			MemoryGB:  0,
+			StorageGB: 0,
+		},
+		Region:    "",  // TODO: Extract from order spec attributes
+		MaxPrice:  "0", // TODO: Extract from order spec
+		Currency:  "uvirt",
+		CreatedAt: time.Unix(protoOrder.CreatedAt, 0),
+	}
+}
+
+// bidFromProto converts a proto Bid to daemon Bid struct
+func bidFromProto(protoBid *marketv1beta5.Bid) Bid {
+	return Bid{
+		BidID:           protoBid.ID.String(),
+		OrderID:         protoBid.ID.OrderID().String(),
+		ProviderAddress: protoBid.ID.Provider,
+		Price:           protoBid.Price.Amount.String(),
+		Currency:        protoBid.Price.Denom,
+		CreatedAt:       time.Unix(protoBid.CreatedAt, 0),
+		State:           protoBid.State.String(),
+	}
+}
+
+// contains checks if a string slice contains a value
+func contains(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }

@@ -75,9 +75,10 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	if err := marketplacev1.RegisterQueryHandlerClient(context.Background(), mux, marketplacev1.NewQueryClient(clientCtx)); err != nil {
-		panic(fmt.Errorf("couldn't register marketplace grpc routes: %s", err.Error()))
-	}
+	// TODO: RegisterQueryHandlerClient not generated for marketplace v1 - needs proto regeneration
+	// if err := marketplacev1.RegisterQueryHandlerClient(context.Background(), mux, marketplacev1.NewQueryClient(clientCtx)); err != nil {
+	// 	panic(fmt.Errorf("couldn't register marketplace grpc routes: %s", err.Error()))
+	// }
 }
 
 // GetTxCmd returns the root tx command for the module.
