@@ -3,6 +3,7 @@
  * VE-210: Unit tests for EXIF/GPS metadata removal
  */
 
+import { describe, it, expect } from 'vitest';
 import { stripMetadata, hasMetadata } from '../utils/metadata-strip';
 
 describe('metadata-strip', () => {

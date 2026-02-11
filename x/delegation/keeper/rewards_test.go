@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store"
 	"cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
@@ -87,7 +88,7 @@ func (s *RewardsTestSuite) TestDistributeValidatorRewardsToDelegators() {
 	delegator1 := testRewardDelegator1
 	delegator2 := testRewardDelegator2
 	epoch := uint64(10)
-	validatorReward := "10000000" // 10 tokens in reward
+	validatorReward := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000000))) // 10 tokens in reward
 
 	// Create validator shares with total stake of 10 tokens
 	valShares := types.NewValidatorShares(validatorAddr, s.ctx.BlockTime())
@@ -109,8 +110,10 @@ func (s *RewardsTestSuite) TestDistributeValidatorRewardsToDelegators() {
 	s.Require().NoError(err)
 
 	// Distribute rewards
-	err = s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
+	commission, delegatorRewards, err := s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
 	s.Require().NoError(err)
+	s.Require().Equal("1000000", commission.AmountOf("uve").String())
+	s.Require().Equal("9000000", delegatorRewards.AmountOf("uve").String())
 
 	// Check delegator1 reward
 	// Commission: 10% = 1,000,000
@@ -134,7 +137,7 @@ func (s *RewardsTestSuite) TestDistributeRewardsNoCommission() {
 	validatorAddr := testRewardValidatorAddr
 	delegator := "cosmos1delegator1111111111111111"
 	epoch := uint64(10)
-	validatorReward := "10000000"
+	validatorReward := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000000)))
 
 	// Set commission to 0
 	params := s.keeper.GetParams(s.ctx)
@@ -155,8 +158,10 @@ func (s *RewardsTestSuite) TestDistributeRewardsNoCommission() {
 	s.Require().NoError(err)
 
 	// Distribute rewards
-	err = s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
+	commission, delegatorRewards, err := s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
 	s.Require().NoError(err)
+	s.Require().True(commission.IsZero())
+	s.Require().Equal("10000000", delegatorRewards.AmountOf("uve").String())
 
 	// Delegator should get 100% (no commission)
 	reward, found := s.keeper.GetDelegatorReward(s.ctx, delegator, validatorAddr, epoch)
@@ -168,11 +173,13 @@ func (s *RewardsTestSuite) TestDistributeRewardsNoCommission() {
 func (s *RewardsTestSuite) TestDistributeRewardsNoDelegations() {
 	validatorAddr := testRewardValidatorAddr
 	epoch := uint64(10)
-	validatorReward := "10000000"
+	validatorReward := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000000)))
 
 	// No delegations or shares - should not error
-	err := s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
+	commission, delegatorRewards, err := s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
 	s.Require().NoError(err)
+	s.Require().Equal("10000000", commission.AmountOf("uve").String())
+	s.Require().True(delegatorRewards.IsZero())
 }
 
 // TestClaimRewards tests claiming rewards from a specific validator
@@ -355,7 +362,7 @@ func (s *RewardsTestSuite) TestRewardDistributionProportional() {
 	delegator2 := "cosmos1delegator2222222222222222"
 	delegator3 := "cosmos1delegator3333333333333333"
 	epoch := uint64(10)
-	validatorReward := "100000000" // 100 tokens
+	validatorReward := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000000))) // 100 tokens
 
 	// Set no commission for easier calculation
 	params := s.keeper.GetParams(s.ctx)
@@ -387,8 +394,10 @@ func (s *RewardsTestSuite) TestRewardDistributionProportional() {
 	s.Require().NoError(err)
 
 	// Distribute rewards
-	err = s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
+	commission, delegatorRewards, err := s.keeper.DistributeValidatorRewardsToDelegators(s.ctx, validatorAddr, epoch, validatorReward)
 	s.Require().NoError(err)
+	s.Require().True(commission.IsZero())
+	s.Require().Equal("100000000", delegatorRewards.AmountOf("uve").String())
 
 	// Check proportional distribution
 	reward1, _ := s.keeper.GetDelegatorReward(s.ctx, delegator1, validatorAddr, epoch)

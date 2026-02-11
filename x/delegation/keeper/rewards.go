@@ -13,23 +13,42 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
-// DefaultRewardDenom is the default denomination for rewards
+// DefaultRewardDenom is the fallback denomination for rewards
 const DefaultRewardDenom = "uve"
 
-// DistributeValidatorRewardsToDelegators distributes a validator's rewards to their delegators
-// This should be called after validator rewards are calculated in the staking module
-func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validatorAddr string, epoch uint64, validatorReward string) error {
-	params := k.GetParams(ctx)
-
-	rewardBig, ok := new(big.Int).SetString(validatorReward, 10)
-	if !ok || rewardBig.Sign() <= 0 {
-		return nil // No rewards to distribute
+// DistributeValidatorRewardsToDelegators distributes a validator's rewards to their delegators.
+// Returns the validator commission and total delegator rewards.
+// This should be called after validator rewards are calculated in the staking module.
+func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validatorAddr string, epoch uint64, validatorReward sdk.Coins) (sdk.Coins, sdk.Coins, error) {
+	if validatorReward.IsZero() {
+		return sdk.NewCoins(), sdk.NewCoins(), nil
 	}
+
+	params := k.GetParams(ctx)
+	rewardDenom := params.RewardDenom
+	if rewardDenom == "" {
+		rewardDenom = DefaultRewardDenom
+	}
+
+	if validatorReward.Len() > 1 {
+		return nil, nil, types.ErrInvalidAmount.Wrap("validator reward must use a single denom")
+	}
+	if validatorReward.Len() == 1 && validatorReward[0].Denom != rewardDenom {
+		return nil, nil, types.ErrInvalidAmount.Wrapf("unexpected reward denom: %s", validatorReward[0].Denom)
+	}
+
+	rewardAmount := validatorReward.AmountOf(rewardDenom)
+	if !rewardAmount.IsPositive() {
+		return sdk.NewCoins(), sdk.NewCoins(), nil
+	}
+
+	rewardBig := rewardAmount.BigInt()
 
 	// Get validator shares to determine proportions
 	valShares, found := k.GetValidatorShares(ctx, validatorAddr)
 	if !found || valShares.GetTotalSharesBigInt().Sign() == 0 {
-		return nil // No delegations
+		commissionCoins := sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(rewardBig)))
+		return commissionCoins, sdk.NewCoins(), nil // No delegations
 	}
 
 	// Calculate commission (goes to validator) using params commission rate
@@ -40,13 +59,15 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 	// Distributable = validatorReward - commission
 	distributable := new(big.Int).Sub(rewardBig, commission)
 	if distributable.Sign() <= 0 {
-		return nil
+		commissionCoins := sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(rewardBig)))
+		return commissionCoins, sdk.NewCoins(), nil
 	}
 
 	totalShares := valShares.GetTotalSharesBigInt()
 
 	// Get all delegations for this validator
 	delegations := k.GetValidatorDelegations(ctx, validatorAddr)
+	totalDelegatorReward := big.NewInt(0)
 
 	for _, del := range delegations {
 		delegatorShares := del.GetSharesBigInt()
@@ -62,6 +83,8 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 			continue
 		}
 
+		totalDelegatorReward.Add(totalDelegatorReward, delegatorReward)
+
 		// Create delegator reward record
 		reward := types.NewDelegatorReward(
 			del.DelegatorAddress,
@@ -75,7 +98,7 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 		)
 
 		if err := k.SetDelegatorReward(ctx, *reward); err != nil {
-			return fmt.Errorf("failed to set delegator reward: %w", err)
+			return nil, nil, fmt.Errorf("failed to set delegator reward: %w", err)
 		}
 
 		// Emit reward event
@@ -90,15 +113,28 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 		)
 	}
 
+	// Assign any remainder to commission to preserve totals.
+	remainder := new(big.Int).Sub(distributable, totalDelegatorReward)
+	if remainder.Sign() > 0 {
+		commission.Add(commission, remainder)
+	}
+
+	commissionCoins := sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(commission)))
+	delegatorCoins := sdk.NewCoins()
+	if totalDelegatorReward.Sign() > 0 {
+		delegatorCoins = sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(totalDelegatorReward)))
+	}
+
 	k.Logger(ctx).Info("distributed validator rewards to delegators",
 		"validator", validatorAddr,
 		"epoch", epoch,
-		"total_reward", validatorReward,
-		"distributable", distributable.String(),
+		"total_reward", rewardBig.String(),
+		"commission", commission.String(),
+		"delegator_total", totalDelegatorReward.String(),
 		"delegation_count", len(delegations),
 	)
 
-	return nil
+	return commissionCoins, delegatorCoins, nil
 }
 
 // ClaimRewards claims rewards for a delegator from a specific validator
@@ -129,13 +165,19 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, delegatorAddr, validatorAddr strin
 		return sdk.NewCoins(), nil
 	}
 
+	params := k.GetParams(ctx)
+
 	// Transfer rewards to delegator
 	delegatorAccAddr, err := sdk.AccAddressFromBech32(delegatorAddr)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(DefaultRewardDenom, math.NewIntFromBigInt(totalReward)))
+	rewardDenom := params.RewardDenom
+	if rewardDenom == "" {
+		rewardDenom = DefaultRewardDenom
+	}
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(totalReward)))
 
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {
@@ -191,13 +233,19 @@ func (k Keeper) ClaimAllRewards(ctx sdk.Context, delegatorAddr string) (sdk.Coin
 		return sdk.NewCoins(), nil
 	}
 
+	params := k.GetParams(ctx)
+
 	// Transfer rewards to delegator
 	delegatorAccAddr, err := sdk.AccAddressFromBech32(delegatorAddr)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(DefaultRewardDenom, math.NewIntFromBigInt(totalReward)))
+	rewardDenom := params.RewardDenom
+	if rewardDenom == "" {
+		rewardDenom = DefaultRewardDenom
+	}
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(rewardDenom, math.NewIntFromBigInt(totalReward)))
 
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {

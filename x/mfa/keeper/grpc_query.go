@@ -104,6 +104,25 @@ func (q GRPCQuerier) GetTrustedDevices(goCtx context.Context, req *types.QueryTr
 	}, nil
 }
 
+// GetTrustedDevice returns a trusted device by fingerprint
+func (q GRPCQuerier) GetTrustedDevice(goCtx context.Context, req *types.QueryTrustedDeviceRequest) (*types.QueryTrustedDeviceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	address, err := sdk.AccAddressFromBech32(req.Address)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrapf("invalid address: %v", err)
+	}
+
+	device, found := q.Keeper.GetTrustedDevice(ctx, address, req.DeviceFingerprint)
+	if !found {
+		return nil, types.ErrTrustedDeviceNotFound.Wrapf("device %s not found", req.DeviceFingerprint)
+	}
+
+	return &types.QueryTrustedDeviceResponse{
+		Device: device,
+	}, nil
+}
+
 // GetSensitiveTxConfig returns the configuration for a sensitive tx type
 func (q GRPCQuerier) GetSensitiveTxConfig(goCtx context.Context, req *types.QuerySensitiveTxConfigRequest) (*types.QuerySensitiveTxConfigResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
@@ -199,6 +218,27 @@ func (q GRPCQuerier) GetAuthorizationSession(goCtx context.Context, req *types.Q
 
 	return &types.QueryAuthorizationSessionResponse{
 		Session: session,
+	}, nil
+}
+
+// GetAuthorizationSessions returns authorization sessions for an account
+func (q GRPCQuerier) GetAuthorizationSessions(goCtx context.Context, req *types.QueryAuthorizationSessionsRequest) (*types.QueryAuthorizationSessionsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	address, err := sdk.AccAddressFromBech32(req.Address)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrapf("invalid address: %v", err)
+	}
+
+	var sessions []types.AuthorizationSession
+	if req.IncludeExpired {
+		sessions = q.Keeper.GetAccountSessions(ctx, address)
+	} else {
+		sessions = q.Keeper.GetValidSessionsForAccount(ctx, address)
+	}
+
+	return &types.QueryAuthorizationSessionsResponse{
+		Sessions: sessions,
 	}, nil
 }
 

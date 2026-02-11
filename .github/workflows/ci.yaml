@@ -153,6 +153,23 @@ jobs:
         run: node scripts/validate-agents-docs.mjs
 
   # ===========================================================================
+  # DR Backup/Restore Smoke Test
+  # ===========================================================================
+  backup-restore-smoke:
+    name: DR Backup/Restore Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run backup/restore smoke test
+        run: |
+          chmod +x scripts/ci/backup-restore-smoke-test.sh \
+            scripts/dr/backup-chain-state.sh \
+            scripts/dr/backup-provider-state.sh
+          scripts/ci/backup-restore-smoke-test.sh
+
+  # ===========================================================================
   # Go Test Job - Unit Tests
   # ===========================================================================
   test-go:
@@ -916,6 +933,7 @@ jobs:
       - build
       - integration
       - container-security
+      - backup-restore-smoke
     if: always()
     steps:
       - name: Generate CI Summary
@@ -934,6 +952,7 @@ jobs:
           echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Integration Tests | ${{ needs.integration.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Container Security | ${{ needs.container-security.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| DR Backup/Restore Smoke | ${{ needs.backup-restore-smoke.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Pre-push Parity" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
@@ -984,6 +1003,11 @@ jobs:
 
           if [ "${{ needs.container-security.result }}" == "failure" ]; then
             echo "::error::Container security checks failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.backup-restore-smoke.result }}" == "failure" ]; then
+            echo "::error::DR backup/restore smoke test failed"
             FAILED=1
           fi
 

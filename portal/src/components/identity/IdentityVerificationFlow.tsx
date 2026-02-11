@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useIdentity, ScopeRequirements } from '@/lib/portal-adapter';
+import { useState, useCallback, useMemo } from 'react';
+import { useIdentity, ScopeRequirements, useWallet } from '@/lib/portal-adapter';
 import {
   DocumentCapture,
   SelfieCapture,
@@ -9,6 +9,8 @@ import {
   type SelfieResult,
   type CaptureError,
 } from '@/lib/capture-adapter';
+import { useIdentityStore } from '@/stores/identityStore';
+import { createPortalClientKeyProvider, createWalletUserKeyProvider } from '@/lib/veid-submission';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -32,42 +34,65 @@ export function IdentityVerificationFlow({
   onCancel,
 }: IdentityVerificationFlowProps) {
   const { state } = useIdentity();
+  const wallet = useWallet();
+  const submitCaptureScope = useIdentityStore((store) => store.submitCaptureScope);
+  const submissionStatus = useIdentityStore((store) => store.submissionStatus);
+  const submissionMessage = useIdentityStore((store) => store.submissionMessage);
   const [step, setStep] = useState<VerificationStep>('requirements');
   const [error, setError] = useState<string | null>(null);
 
-  // Mock key providers for development - in production these would come from wallet
-  const mockClientKeyProvider = {
-    getClientId: () => Promise.resolve('virtengine-portal-v1'),
-    getClientVersion: () => Promise.resolve('1.0.0'),
-    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
-    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
-    getKeyType: () => Promise.resolve('ed25519' as const),
-  };
-
-  const mockUserKeyProvider = {
-    getAccountAddress: () => Promise.resolve('virtengine1...'),
-    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
-    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
-    getKeyType: () => Promise.resolve('ed25519' as const),
-  };
-
-  const handleDocumentFrontCapture = useCallback((_result: CaptureResult) => {
-    setStep('document-back');
-    setError(null);
+  const { clientKeyProvider, clientProviderError } = useMemo(() => {
+    try {
+      return { clientKeyProvider: createPortalClientKeyProvider(), clientProviderError: null };
+    } catch (err) {
+      return {
+        clientKeyProvider: null,
+        clientProviderError: err instanceof Error ? err.message : 'Capture client not configured',
+      };
+    }
   }, []);
 
-  const handleDocumentBackCapture = useCallback((_result: CaptureResult) => {
-    setStep('selfie');
-    setError(null);
-  }, []);
+  const userKeyProvider = useMemo(() => createWalletUserKeyProvider(wallet), [wallet]);
+  const canStart = Boolean(clientKeyProvider);
+
+  const handleDocumentFrontCapture = useCallback(
+    async (result: CaptureResult) => {
+      try {
+        await submitCaptureScope(result, 'id_document', wallet);
+        setStep('document-back');
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to submit document');
+      }
+    },
+    [submitCaptureScope, wallet]
+  );
+
+  const handleDocumentBackCapture = useCallback(
+    async (result: CaptureResult) => {
+      try {
+        await submitCaptureScope(result, 'id_document', wallet);
+        setStep('selfie');
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to submit document');
+      }
+    },
+    [submitCaptureScope, wallet]
+  );
 
   const handleSelfieCapture = useCallback(
-    (_result: SelfieResult) => {
-      setStep('complete');
-      setError(null);
-      onComplete?.();
+    async (result: SelfieResult) => {
+      try {
+        await submitCaptureScope(result, 'selfie', wallet);
+        setStep('complete');
+        setError(null);
+        onComplete?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to submit selfie');
+      }
     },
-    [onComplete]
+    [submitCaptureScope, wallet, onComplete]
   );
 
   const handleCaptureError = useCallback((captureError: CaptureError) => {
@@ -81,10 +106,27 @@ export function IdentityVerificationFlow({
 
   return (
     <div className={cn('space-y-6', className)}>
+      {clientProviderError && (
+        <Alert variant="destructive">
+          <AlertTitle>Capture Client Error</AlertTitle>
+          <AlertDescription>{clientProviderError}</AlertDescription>
+        </Alert>
+      )}
+
       {error && (
         <Alert variant="destructive">
           <AlertTitle>Capture Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {submissionStatus && submissionStatus !== 'failed' && (
+        <Alert>
+          <AlertTitle>Submission Status</AlertTitle>
+          <AlertDescription>
+            {submissionStatus.replace('_', ' ')}
+            {submissionMessage ? ` — ${submissionMessage}` : ''}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -97,7 +139,9 @@ export function IdentityVerificationFlow({
           <CardContent className="space-y-4">
             <ScopeRequirements action="place_order" completedScopes={state.completedScopes} />
             <div className="flex gap-2">
-              <Button onClick={handleStartVerification}>Start Verification</Button>
+              <Button onClick={handleStartVerification} disabled={!canStart}>
+                Start Verification
+              </Button>
               {onCancel && (
                 <Button variant="outline" onClick={onCancel}>
                   Cancel
@@ -117,14 +161,16 @@ export function IdentityVerificationFlow({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DocumentCapture
-              documentType="id_card"
-              documentSide="front"
-              onCapture={handleDocumentFrontCapture}
-              onError={handleCaptureError}
-              clientKeyProvider={mockClientKeyProvider}
-              userKeyProvider={mockUserKeyProvider}
-            />
+            {clientKeyProvider && (
+              <DocumentCapture
+                documentType="id_card"
+                documentSide="front"
+                onCapture={handleDocumentFrontCapture}
+                onError={handleCaptureError}
+                clientKeyProvider={clientKeyProvider}
+                userKeyProvider={userKeyProvider}
+              />
+            )}
           </CardContent>
         </Card>
       )}
@@ -136,14 +182,16 @@ export function IdentityVerificationFlow({
             <CardDescription>Now capture the back of your ID document</CardDescription>
           </CardHeader>
           <CardContent>
-            <DocumentCapture
-              documentType="id_card"
-              documentSide="back"
-              onCapture={handleDocumentBackCapture}
-              onError={handleCaptureError}
-              clientKeyProvider={mockClientKeyProvider}
-              userKeyProvider={mockUserKeyProvider}
-            />
+            {clientKeyProvider && (
+              <DocumentCapture
+                documentType="id_card"
+                documentSide="back"
+                onCapture={handleDocumentBackCapture}
+                onError={handleCaptureError}
+                clientKeyProvider={clientKeyProvider}
+                userKeyProvider={userKeyProvider}
+              />
+            )}
           </CardContent>
         </Card>
       )}
@@ -155,14 +203,16 @@ export function IdentityVerificationFlow({
             <CardDescription>Take a clear photo of your face</CardDescription>
           </CardHeader>
           <CardContent>
-            <SelfieCapture
-              mode="photo"
-              livenessCheck={true}
-              onCapture={handleSelfieCapture}
-              onError={handleCaptureError}
-              clientKeyProvider={mockClientKeyProvider}
-              userKeyProvider={mockUserKeyProvider}
-            />
+            {clientKeyProvider && (
+              <SelfieCapture
+                mode="photo"
+                livenessCheck={true}
+                onCapture={handleSelfieCapture}
+                onError={handleCaptureError}
+                clientKeyProvider={clientKeyProvider}
+                userKeyProvider={userKeyProvider}
+              />
+            )}
           </CardContent>
         </Card>
       )}
