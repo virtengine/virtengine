@@ -199,7 +199,9 @@ Based on analysis, the framework generates recommendations:
 
 ### Fee Market Recommendations
 - Set minimum gas price to deter spam
+- Enable adaptive minimum gas pricing tied to congestion metrics
 - Implement priority fee mechanisms for congestion
+- Validate fee market changes with `ve-sim suite` exports
 - Balance take rate for protocol sustainability
 
 ### Distribution Recommendations

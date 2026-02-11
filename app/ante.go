@@ -12,6 +12,8 @@ import (
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	roleskeeper "github.com/virtengine/virtengine/x/roles/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
+
+	"github.com/virtengine/virtengine/app/gaspricing"
 )
 
 // HandlerOptions extends the SDK's AnteHandler options
@@ -24,6 +26,7 @@ type HandlerOptions struct {
 	RolesKeeper     *roleskeeper.Keeper
 	RateLimitParams apptypes.RateLimitParams
 	Logger          log.Logger
+	GasPricingKeeper *gaspricing.Keeper
 }
 
 // NewAnteHandler returns an AnteHandler that checks and increments sequence
@@ -65,6 +68,9 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 	if options.FeegrantKeeper == nil {
 		return nil, sdkerrors.ErrLogic.Wrap("virtengine feegrant keeper is required for ante builder")
 	}
+	if options.GasPricingKeeper == nil {
+		return nil, sdkerrors.ErrLogic.Wrap("virtengine gas pricing keeper is required for ante builder")
+	}
 
 	// Get rate limit params, using defaults if not provided
 	rateLimitParams := options.RateLimitParams
@@ -82,6 +88,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewSetUpContextDecorator(),                         // outermost AnteDecorator. SetUpContext must be called first
 		NewRateLimitDecorator(rateLimitParams, rateLimitLogger), // Rate limiting early to block spam before expensive ops
 		ante.NewValidateBasicDecorator(),
+		NewAdaptiveGasPriceDecorator(*options.GasPricingKeeper),
 		ante.NewTxTimeoutHeightDecorator(),
 		ante.NewValidateMemoDecorator(options.AccountKeeper),
 		ante.NewConsumeGasForTxSizeDecorator(options.AccountKeeper),
