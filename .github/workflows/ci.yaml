@@ -153,6 +153,23 @@ jobs:
         run: node scripts/validate-agents-docs.mjs
 
   # ===========================================================================
+  # DR Backup/Restore Smoke Test
+  # ===========================================================================
+  backup-restore-smoke:
+    name: DR Backup/Restore Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run backup/restore smoke test
+        run: |
+          chmod +x scripts/ci/backup-restore-smoke-test.sh \
+            scripts/dr/backup-chain-state.sh \
+            scripts/dr/backup-provider-state.sh
+          scripts/ci/backup-restore-smoke-test.sh
+
+  # ===========================================================================
   # Go Test Job - Unit Tests
   # ===========================================================================
   test-go:
@@ -222,6 +239,28 @@ jobs:
           name: go-coverage
           path: coverage.out
           retention-days: 7
+
+  economics-sim:
+    name: Economics Simulation Suite
+    runs-on: ubuntu-latest
+    needs: test-go
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run economics simulation suite
+        run: |
+          chmod +x scripts/economics/run-sim-suite.sh
+          RUNS=60 scripts/economics/run-sim-suite.sh ./sim-output
 
   # ===========================================================================
   # Python Test Job - ML/Waldur Tests (Optional)
@@ -890,9 +929,11 @@ jobs:
       - vet
       - lint-shell
       - test-go
+      - economics-sim
       - build
       - integration
       - container-security
+      - backup-restore-smoke
     if: always()
     steps:
       - name: Generate CI Summary
@@ -907,9 +948,11 @@ jobs:
           echo "| Go Vet | ${{ needs.vet.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Shell Linting | ${{ needs.lint-shell.result }} | ⚠️ Warning only |" >> $GITHUB_STEP_SUMMARY
           echo "| Go Tests | ${{ needs.test-go.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Economics Sim | ${{ needs.economics-sim.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Integration Tests | ${{ needs.integration.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Container Security | ${{ needs.container-security.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| DR Backup/Restore Smoke | ${{ needs.backup-restore-smoke.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Pre-push Parity" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
@@ -943,6 +986,11 @@ jobs:
             FAILED=1
           fi
 
+          if [ "${{ needs.economics-sim.result }}" == "failure" ]; then
+            echo "::error::Economics simulation suite failed"
+            FAILED=1
+          fi
+
           if [ "${{ needs.build.result }}" == "failure" ]; then
             echo "::error::Build failed"
             FAILED=1
@@ -955,6 +1003,11 @@ jobs:
 
           if [ "${{ needs.container-security.result }}" == "failure" ]; then
             echo "::error::Container security checks failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.backup-restore-smoke.result }}" == "failure" ]; then
+            echo "::error::DR backup/restore smoke test failed"
             FAILED=1
           fi
 

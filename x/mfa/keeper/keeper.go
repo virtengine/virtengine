@@ -55,6 +55,8 @@ type IKeeper interface {
 	ValidateSessionForTransaction(ctx sdk.Context, sessionID string, address sdk.AccAddress, action types.SensitiveTransactionType, deviceFingerprint string) error
 	GetSessionDurationForAction(ctx sdk.Context, action types.SensitiveTransactionType) int64
 	IsActionSingleUse(ctx sdk.Context, action types.SensitiveTransactionType) bool
+	RefreshAuthorizationSession(ctx sdk.Context, sessionID string) (*types.AuthorizationSession, error)
+	RevokeAuthorizationSession(ctx sdk.Context, sessionID string) error
 
 	// Trusted devices
 	AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) (string, error)

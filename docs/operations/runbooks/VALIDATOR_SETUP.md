@@ -190,6 +190,8 @@ enable = false
 # Minimum gas prices
 minimum-gas-prices = "0.025uve"
 
+# Adaptive gas pricing will adjust this baseline automatically during congestion.
+
 # Pruning strategy
 pruning = "custom"
 pruning-keep-recent = "100"
