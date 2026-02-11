@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/dex"
 	"github.com/virtengine/virtengine/pkg/payments/offramp"
+	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -74,6 +76,52 @@ func (s *KeeperTestSuite) TestExecutePayoutSingleSettlement() {
 
 	entries := s.keeper.GetPayoutLedgerEntries(s.ctx, payout.PayoutID)
 	require.NotEmpty(t, entries)
+}
+
+func (s *KeeperTestSuite) TestDisputePartialRefundReleasesPayout() {
+	t := s.T()
+
+	gross := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000)))
+	holdback := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(200)))
+
+	payout := types.NewPayoutRecord(
+		"payout-partial-1",
+		"inv-partial-1",
+		"settle-partial-1",
+		"escrow-partial-1",
+		"order-partial-1",
+		"lease-partial-1",
+		s.provider.String(),
+		s.depositor.String(),
+		gross,
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		holdback,
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)
+
+	require.NoError(t, s.keeper.SetPayout(s.ctx, *payout))
+	require.NoError(t, s.keeper.HoldPayout(s.ctx, payout.PayoutID, "dispute-partial-1", "partial refund test"))
+
+	treasuryBz, err := json.Marshal(holdback)
+	require.NoError(t, err)
+	s.ctx.KVStore(s.storeKey).Set(types.PrefixTreasuryBalance, treasuryBz)
+
+	customerBefore := s.bankKeeper.GetBalance(s.ctx, s.depositor, "uve").Amount
+	providerBefore := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount
+
+	require.NoError(t, s.keeper.OnDisputeResolved(s.ctx, payout.InvoiceID, billing.DisputeResolutionPartialRefund))
+
+	updated, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateCompleted, updated.State)
+
+	customerAfter := s.bankKeeper.GetBalance(s.ctx, s.depositor, "uve").Amount
+	providerAfter := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount
+
+	require.Equal(t, customerBefore.Add(holdback.AmountOf("uve")), customerAfter)
+	require.Equal(t, providerBefore.Add(updated.NetAmount.AmountOf("uve")), providerAfter)
 }
 
 func (s *KeeperTestSuite) TestProcessPendingPayoutsBatch() {
