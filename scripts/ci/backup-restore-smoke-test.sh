@@ -22,10 +22,12 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 NODE_HOME="${TMP_DIR}/node"
 SNAPSHOT_DIR="${TMP_DIR}/snapshots"
+PROVIDER_HOME="${TMP_DIR}/provider"
+PROVIDER_SNAPSHOT_DIR="${TMP_DIR}/provider-snapshots"
 MOCK_BIN="${TMP_DIR}/bin"
 KEY_DIR="${TMP_DIR}/keys"
 
-mkdir -p "$NODE_HOME/data" "$SNAPSHOT_DIR" "$MOCK_BIN" "$KEY_DIR"
+mkdir -p "$NODE_HOME/data" "$SNAPSHOT_DIR" "$PROVIDER_HOME/data" "$PROVIDER_HOME/config" "$PROVIDER_SNAPSHOT_DIR" "$MOCK_BIN" "$KEY_DIR"
 
 # Create mock virtengine binary
 cat > "${MOCK_BIN}/virtengine" << 'EOF'
@@ -71,6 +73,8 @@ openssl pkey -in "${KEY_DIR}/snapshot_signing.pem" -pubout -out "${KEY_DIR}/snap
 export PATH="${MOCK_BIN}:$PATH"
 export NODE_HOME
 export SNAPSHOT_DIR
+export PROVIDER_HOME
+export PROVIDER_SNAPSHOT_DIR
 export SNAPSHOT_SIGNING_KEY="${KEY_DIR}/snapshot_signing.pem"
 export SNAPSHOT_VERIFY_PUBKEY="${KEY_DIR}/snapshot_signing.pub"
 export SNAPSHOT_SIGNING_REQUIRED=1
@@ -102,6 +106,28 @@ printf "corrupt" >> "${SNAPSHOT_DIR}/${latest_snapshot}_data.tar.gz"
 # Verify restored data matches first snapshot
 if ! grep -q "snapshot-one" "${NODE_HOME}/data/state.txt"; then
     echo "restore did not fallback to valid snapshot" >&2
+    exit 1
+fi
+
+echo "provider-one" > "${PROVIDER_HOME}/data/state.txt"
+echo "provider-config-one" > "${PROVIDER_HOME}/config/config.toml"
+"${SCRIPT_DIR}/backup-provider-state.sh" --backup > /dev/null
+
+first_provider_backup=$(ls -t "${PROVIDER_SNAPSHOT_DIR}"/provider_state_*.tar.gz | tail -1 | xargs -r basename | sed 's/.tar.gz//')
+
+sleep 1
+echo "provider-two" > "${PROVIDER_HOME}/data/state.txt"
+echo "provider-config-two" > "${PROVIDER_HOME}/config/config.toml"
+"${SCRIPT_DIR}/backup-provider-state.sh" --backup > /dev/null
+
+latest_provider_backup=$(ls -t "${PROVIDER_SNAPSHOT_DIR}"/provider_state_*.tar.gz | head -1 | xargs -r basename | sed 's/.tar.gz//')
+
+printf "corrupt" >> "${PROVIDER_SNAPSHOT_DIR}/${latest_provider_backup}.tar.gz"
+
+"${SCRIPT_DIR}/backup-provider-state.sh" --restore "${latest_provider_backup}" > /dev/null 2>&1
+
+if ! grep -q "provider-one" "${PROVIDER_HOME}/data/state.txt"; then
+    echo "provider restore did not fallback to valid backup" >&2
     exit 1
 fi
 
