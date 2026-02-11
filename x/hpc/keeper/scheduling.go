@@ -28,23 +28,23 @@ const (
 	priorityWeightJobSize   int64 = 300000
 	priorityWeightPartition int64 = 300000
 
-	priorityMaxAgeSeconds   int64 = 3600
-	backfillWindowSeconds   int64 = 1800
-	preemptionEnabled              = true
-	backfillEnabled                = true
+	priorityMaxAgeSeconds int64 = 3600
+	backfillWindowSeconds int64 = 1800
+	preemptionEnabled           = true
+	backfillEnabled             = true
 
 	quotaMaxRunningJobsPerTenant int32 = 12
 	quotaMaxQueuedJobsPerTenant  int32 = 24
 	quotaBurstRunningJobs        int32 = 6
 	quotaBurstQueuedJobs         int32 = 12
 
-	quotaMinRunningNodes      int32 = 2
-	quotaNodeShareDivisor     int32 = 4
+	quotaMinRunningNodes       int32 = 2
+	quotaNodeShareDivisor      int32 = 4
 	quotaBurstNodeShareDivisor int32 = 2
 
-	quotaMinRunningCPUCores   int32 = 32
-	quotaMinRunningMemoryGB   int32 = 64
-	quotaMinRunningGPUs       int32 = 1
+	quotaMinRunningCPUCores int32 = 32
+	quotaMinRunningMemoryGB int32 = 64
+	quotaMinRunningGPUs     int32 = 1
 )
 
 type tenantUsage struct {
@@ -171,28 +171,28 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 	// Create scheduling decision record
 	seq := k.incrementSequence(ctx, types.SequenceKeyDecision)
 	decision := &types.SchedulingDecision{
-		DecisionID:        fmt.Sprintf("hpc-decision-%d", seq),
-		JobID:             job.JobID,
-		SelectedClusterID: selectedCluster.ClusterID,
-		CandidateClusters: candidates,
-		IsFallback:        isFallback,
-		FallbackReason:    fallbackReason,
-		LatencyScore:      selectedCluster.LatencyScore,
-		CapacityScore:     selectedCluster.CapacityScore,
-		CombinedScore:     selectedCluster.CombinedScore,
-		PriorityScore:     selectedCluster.PriorityScore,
-		FairShareScore:    selectedCluster.FairShareScore,
-		AgeScore:          selectedCluster.AgeScore,
-		JobSizeScore:      selectedCluster.JobSizeScore,
-		PartitionScore:    selectedCluster.PartitionScore,
-		PreemptionPlanned: selectedMeta.preemptionPossible && len(selectedMeta.preemptedJobIDs) > 0,
-		PreemptedJobIDs:   selectedMeta.preemptedJobIDs,
-		BackfillUsed:      selectedMeta.backfillUsed,
+		DecisionID:            fmt.Sprintf("hpc-decision-%d", seq),
+		JobID:                 job.JobID,
+		SelectedClusterID:     selectedCluster.ClusterID,
+		CandidateClusters:     candidates,
+		IsFallback:            isFallback,
+		FallbackReason:        fallbackReason,
+		LatencyScore:          selectedCluster.LatencyScore,
+		CapacityScore:         selectedCluster.CapacityScore,
+		CombinedScore:         selectedCluster.CombinedScore,
+		PriorityScore:         selectedCluster.PriorityScore,
+		FairShareScore:        selectedCluster.FairShareScore,
+		AgeScore:              selectedCluster.AgeScore,
+		JobSizeScore:          selectedCluster.JobSizeScore,
+		PartitionScore:        selectedCluster.PartitionScore,
+		PreemptionPlanned:     selectedMeta.preemptionPossible && len(selectedMeta.preemptedJobIDs) > 0,
+		PreemptedJobIDs:       selectedMeta.preemptedJobIDs,
+		BackfillUsed:          selectedMeta.backfillUsed,
 		BackfillWindowSeconds: selectedMeta.backfillWindow,
-		QuotaBurstUsed:    selectedCluster.QuotaBurstUsed,
-		QuotaReason:       selectedMeta.quotaReason,
-		CreatedAt:         ctx.BlockTime(),
-		BlockHeight:       ctx.BlockHeight(),
+		QuotaBurstUsed:        selectedCluster.QuotaBurstUsed,
+		QuotaReason:           selectedMeta.quotaReason,
+		CreatedAt:             ctx.BlockTime(),
+		BlockHeight:           ctx.BlockHeight(),
 	}
 
 	decision.DecisionReason = formatDecisionReason(selectedCluster, isFallback, decision)
@@ -282,18 +282,6 @@ func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offerin
 			candidate.IneligibilityReason = queueLimitReason
 		}
 
-		// Quota enforcement
-		info.usage = k.tenantUsageForCluster(ctx, job.CustomerAddress, cluster.ClusterID)
-		info.quota = defaultTenantQuotaForCluster(cluster)
-		allowed, burstUsed, quotaReason := checkTenantQuota(info.usage, info.quota, job)
-		info.quotaBurstUsed = burstUsed
-		info.quotaReason = quotaReason
-		candidate.QuotaBurstUsed = burstUsed
-		if !allowed {
-			candidate.Eligible = false
-			candidate.IneligibilityReason = fmt.Sprintf("Tenant quota exceeded: %s", quotaReason)
-		}
-
 		// Capacity / preemption checks
 		if candidate.Eligible && cluster.AvailableNodes < job.Resources.Nodes {
 			if preemptionEnabled {
@@ -310,6 +298,26 @@ func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offerin
 			} else {
 				candidate.Eligible = false
 				candidate.IneligibilityReason = fmt.Sprintf("Insufficient nodes: need %d, have %d", job.Resources.Nodes, cluster.AvailableNodes)
+			}
+		}
+
+		// Quota enforcement (adjust for tenant-owned preemptions)
+		if candidate.Eligible {
+			info.usage = k.tenantUsageForCluster(ctx, job.CustomerAddress, cluster.ClusterID)
+			info.quota = defaultTenantQuotaForCluster(cluster)
+
+			usageForQuota := info.usage
+			if info.preemptionPossible && len(info.preemptedJobIDs) > 0 {
+				usageForQuota = k.adjustUsageForPreemption(ctx, usageForQuota, job.CustomerAddress, info.preemptedJobIDs)
+			}
+
+			allowed, burstUsed, quotaReason := checkTenantQuota(usageForQuota, info.quota, job)
+			info.quotaBurstUsed = burstUsed
+			info.quotaReason = quotaReason
+			candidate.QuotaBurstUsed = burstUsed
+			if !allowed {
+				candidate.Eligible = false
+				candidate.IneligibilityReason = fmt.Sprintf("Tenant quota exceeded: %s", quotaReason)
 			}
 		}
 
@@ -537,6 +545,39 @@ func (k Keeper) tenantUsageForCluster(ctx sdk.Context, tenant string, clusterID 
 	return usage
 }
 
+func (k Keeper) adjustUsageForPreemption(ctx sdk.Context, usage tenantUsage, tenant string, preemptedJobIDs []string) tenantUsage {
+	if tenant == "" || len(preemptedJobIDs) == 0 {
+		return usage
+	}
+
+	for _, jobID := range preemptedJobIDs {
+		job, found := k.GetJob(ctx, jobID)
+		if !found {
+			continue
+		}
+		if job.CustomerAddress != tenant || job.State != types.JobStateRunning {
+			continue
+		}
+
+		usage.RunningJobs = saturatingSubInt32(usage.RunningJobs, 1)
+		usage.RunningNodes = saturatingSubInt32(usage.RunningNodes, job.Resources.Nodes)
+		usage.RunningCPUCores = saturatingSubInt32(
+			usage.RunningCPUCores,
+			safeInt32Mul(job.Resources.Nodes, job.Resources.CPUCoresPerNode),
+		)
+		usage.RunningMemoryGB = saturatingSubInt32(
+			usage.RunningMemoryGB,
+			safeInt32Mul(job.Resources.Nodes, job.Resources.MemoryGBPerNode),
+		)
+		usage.RunningGPUs = saturatingSubInt32(
+			usage.RunningGPUs,
+			safeInt32Mul(job.Resources.Nodes, job.Resources.GPUsPerNode),
+		)
+	}
+
+	return usage
+}
+
 func defaultTenantQuotaForCluster(cluster types.HPCCluster) tenantQuota {
 	maxRunningNodes := int32(0)
 	if cluster.TotalNodes > 0 {
@@ -563,15 +604,15 @@ func defaultTenantQuotaForCluster(cluster types.HPCCluster) tenantQuota {
 	maxRunningGPUs, burstRunningGPUs := deriveQuotaFromTotal(cluster.ClusterMetadata.TotalGPUs, quotaMinRunningGPUs)
 
 	return tenantQuota{
-		MaxRunningJobs:     quotaMaxRunningJobsPerTenant,
-		MaxQueuedJobs:      quotaMaxQueuedJobsPerTenant,
-		MaxRunningNodes:    maxRunningNodes,
-		MaxRunningCPUCores: maxRunningCPUCores,
-		MaxRunningMemoryGB: maxRunningMemoryGB,
-		MaxRunningGPUs:     maxRunningGPUs,
-		BurstRunningJobs:   quotaBurstRunningJobs,
-		BurstQueuedJobs:    quotaBurstQueuedJobs,
-		BurstRunningNodes:  burstRunningNodes,
+		MaxRunningJobs:       quotaMaxRunningJobsPerTenant,
+		MaxQueuedJobs:        quotaMaxQueuedJobsPerTenant,
+		MaxRunningNodes:      maxRunningNodes,
+		MaxRunningCPUCores:   maxRunningCPUCores,
+		MaxRunningMemoryGB:   maxRunningMemoryGB,
+		MaxRunningGPUs:       maxRunningGPUs,
+		BurstRunningJobs:     quotaBurstRunningJobs,
+		BurstQueuedJobs:      quotaBurstQueuedJobs,
+		BurstRunningNodes:    burstRunningNodes,
 		BurstRunningCPUCores: burstRunningCPUCores,
 		BurstRunningMemoryGB: burstRunningMemoryGB,
 		BurstRunningGPUs:     burstRunningGPUs,
@@ -873,6 +914,14 @@ func safeInt32Mul(a, b int32) int32 {
 
 func saturatingAddInt32(a, b int32) int32 {
 	val := int64(a) + int64(b)
+	return clampInt32(val)
+}
+
+func saturatingSubInt32(a, b int32) int32 {
+	val := int64(a) - int64(b)
+	if val < 0 {
+		return 0
+	}
 	return clampInt32(val)
 }
 
