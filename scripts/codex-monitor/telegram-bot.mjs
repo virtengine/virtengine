@@ -1081,6 +1081,7 @@ const COMMANDS = {
     desc: "Active tasks, workspace metrics & retries",
   },
   "/logs": { handler: cmdLogs, desc: "Recent monitor logs" },
+  "/agentlogs": { handler: cmdAgentLogs, desc: "Agent output for branch: /agentlogs <branch>" },
   "/log": { handler: cmdLogs, desc: "Alias for /logs" },
   "/branches": { handler: cmdBranches, desc: "Recent git branches" },
   "/diff": { handler: cmdDiff, desc: "Git diff summary (staged)" },
@@ -1643,6 +1644,51 @@ async function cmdAnomalies(chatId) {
 
 async function cmdTasks(chatId) {
   try {
+    // ── Prefer live executor slots over stale status file ──
+    const executor = _getInternalExecutor?.();
+    const executorStatus = executor?.getStatus?.();
+
+    if (executorStatus && executorStatus.slots.length > 0) {
+      const lines = [`📋 Active Agents (${executorStatus.activeSlots}/${executorStatus.maxParallel} slots)\n`];
+
+      for (const slot of executorStatus.slots) {
+        const emoji = slot.status === "running" ? "🟢" : slot.status === "error" ? "❌" : "🔵";
+        const runMin = Math.round(slot.runningFor / 60);
+        const runStr = runMin >= 60 ? `${Math.floor(runMin / 60)}h${runMin % 60}m` : `${runMin}m`;
+
+        // Branch name is the agent ID — show it prominently
+        const branch = slot.branch || slot.taskId.substring(0, 8);
+        const shortBranch = branch.replace(/^ve\//, "");
+        lines.push(`${emoji} ${shortBranch}`);
+        lines.push(`   ${slot.taskTitle}`);
+        lines.push(`   SDK: ${slot.sdk} | ⏱️ ${runStr} | Attempt #${slot.attempt}`);
+
+        // Git diff stats
+        if (slot.branch) {
+          try {
+            const diffStat = execSync(
+              `git diff --shortstat main...${slot.branch} 2>nul || echo ""`,
+              { cwd: repoRoot, encoding: "utf8", timeout: 8000 },
+            ).trim();
+            if (diffStat) {
+              const insMatch = diffStat.match(/(\d+) insertion/);
+              const delMatch = diffStat.match(/(\d+) deletion/);
+              const filesMatch = diffStat.match(/(\d+) file/);
+              lines.push(`   📊 ${filesMatch?.[1] || 0} files | +${insMatch?.[1] || 0} -${delMatch?.[1] || 0}`);
+            }
+          } catch { /* branch not pushed yet */ }
+        }
+        lines.push(""); // spacing
+      }
+
+      lines.push("────────────────────────────");
+      lines.push(`Use /agentlogs <branch> for agent output`);
+
+      await sendReply(chatId, lines.join("\n"));
+      return;
+    }
+
+    // ── Fallback: read status file (legacy/VK mode) ──
     const raw = await readFile(statusPath, "utf8");
     const data = JSON.parse(raw);
     const attempts = data.attempts || {};
@@ -1657,27 +1703,17 @@ async function cmdTasks(chatId) {
     for (const [id, attempt] of Object.entries(attempts)) {
       if (!attempt) continue;
       const status = attempt.status || "unknown";
-      const emoji =
-        status === "running"
-          ? "🔄"
-          : status === "review"
-            ? "👀"
-            : status === "error"
-              ? "❌"
-              : status === "completed"
-                ? "✅"
-                : "⏸️";
+      const emoji = status === "running" ? "🟢" : status === "review" ? "👀" : status === "error" ? "❌" : status === "completed" ? "✅" : "⏸️";
       const branch = attempt.branch || "";
       const pr = attempt.pr_number ? ` PR#${attempt.pr_number}` : "";
       const title = attempt.task_title || attempt.task_id || id;
-      const executor = attempt.executor || "?";
+      const shortBranch = branch ? branch.replace(/^ve\//, "") : title;
 
-      lines.push(`${emoji} ${title}${pr}`);
-      lines.push(`   Status: ${status} | Agent: ${executor}`);
+      lines.push(`${emoji} ${shortBranch}${pr}`);
+      lines.push(`   ${title}`);
+      lines.push(`   Status: ${status} | Agent: ${attempt.executor || "?"}`);
 
-      // ── Workspace duration ──────────────────────────────────────
-      const started =
-        attempt.started_at || attempt.created_at || attempt.updated_at;
+      const started = attempt.started_at || attempt.created_at || attempt.updated_at;
       if (started) {
         const dur = Date.now() - Date.parse(started);
         const mins = Math.floor(dur / 60000);
@@ -1687,16 +1723,6 @@ async function cmdTasks(chatId) {
         lines.push(`   ⏱️ Active: ${durStr}`);
       }
 
-      // ── Retry count (from failure_counts tracked by auto-reattempt) ──
-      const failKey = attempt.task_id || id;
-      const failCount = data.task_failure_counts?.[failKey] || 0;
-      if (failCount > 0) {
-        lines.push(
-          `   🔁 Failures: ${failCount}/3${failCount >= 3 ? " → auto-reattempt" : ""}`,
-        );
-      }
-
-      // ── Git diff stats for the branch ──────────────────────────
       if (branch) {
         try {
           const diffStat = execSync(
@@ -1704,29 +1730,18 @@ async function cmdTasks(chatId) {
             { cwd: repoRoot, encoding: "utf8", timeout: 8000 },
           ).trim();
           if (diffStat) {
-            // Extract insertions/deletions from "N files changed, X insertions(+), Y deletions(-)"
             const insMatch = diffStat.match(/(\d+) insertion/);
             const delMatch = diffStat.match(/(\d+) deletion/);
             const filesMatch = diffStat.match(/(\d+) file/);
-            const ins = insMatch ? insMatch[1] : "0";
-            const del = delMatch ? delMatch[1] : "0";
-            const files = filesMatch ? filesMatch[1] : "0";
-            lines.push(`   📊 ${files} files | +${ins} -${del}`);
+            lines.push(`   📊 ${filesMatch?.[1] || 0} files | +${insMatch?.[1] || 0} -${delMatch?.[1] || 0}`);
           }
-        } catch {
-          /* git diff not available or branch doesn't exist */
-        }
+        } catch { /* git diff not available */ }
       }
-      lines.push(""); // spacing between tasks
+      lines.push("");
     }
 
-    // ── Overall workspace summary ────────────────────────────────
-    const running = Object.values(attempts).filter(
-      (a) => a?.status === "running",
-    ).length;
-    const errors = Object.values(attempts).filter(
-      (a) => a?.status === "error",
-    ).length;
+    const running = Object.values(attempts).filter((a) => a?.status === "running").length;
+    const errors = Object.values(attempts).filter((a) => a?.status === "error").length;
     const reviews = Object.values(attempts).filter(
       (a) => a?.status === "review" || a?.status === "manual_review",
     ).length;
@@ -1740,6 +1755,113 @@ async function cmdTasks(chatId) {
     await sendReply(chatId, `Error reading tasks: ${err.message}`);
   }
 }
+
+/**
+ * /agentlogs {branch} — Show agent output for a specific branch/worktree.
+ * The branch can be partial (e.g. "hpc-topology" matches "ve/73ea9114-xl-p1-feat-hpc-topology-aware-scheduling").
+ * Shows: last git log, last commit diff stat, worktree status.
+ */
+async function cmdAgentLogs(chatId, args) {
+  const query = (args || "").trim();
+  if (!query) {
+    await sendReply(chatId, "Usage: /agentlogs <branch-fragment>\n\nExample: /agentlogs hpc-topology");
+    return;
+  }
+
+  try {
+    // Find matching worktree
+    const worktreeDir = resolve(repoRoot, ".cache", "worktrees");
+    let dirs;
+    try {
+      dirs = await readdir(worktreeDir);
+    } catch {
+      await sendReply(chatId, "No worktrees directory found.");
+      return;
+    }
+
+    const matches = dirs.filter((d) => d.toLowerCase().includes(query.toLowerCase()));
+    if (matches.length === 0) {
+      await sendReply(chatId, `No worktree matching "${query}".\n\nAvailable:\n${dirs.slice(0, 15).join("\n")}`);
+      return;
+    }
+
+    const wtName = matches[0]; // Best match
+    const wtPath = resolve(worktreeDir, wtName);
+    const lines = [`📂 Agent: ${wtName}\n`];
+
+    // Git log (last 5 commits)
+    try {
+      const gitLog = execSync(
+        `git log --oneline -5 2>&1`,
+        { cwd: wtPath, encoding: "utf8", timeout: 10000 },
+      ).trim();
+      if (gitLog) {
+        lines.push("📝 Recent commits:");
+        lines.push(gitLog);
+      } else {
+        lines.push("📝 No commits yet");
+      }
+    } catch { lines.push("📝 Git log unavailable"); }
+
+    lines.push("");
+
+    // Git status
+    try {
+      const gitStatus = execSync(
+        `git status --short 2>&1`,
+        { cwd: wtPath, encoding: "utf8", timeout: 10000 },
+      ).trim();
+      if (gitStatus) {
+        const statusLines = gitStatus.split("\n");
+        lines.push(`📄 Working tree: ${statusLines.length} changed files`);
+        lines.push(statusLines.slice(0, 15).join("\n"));
+        if (statusLines.length > 15) lines.push(`... +${statusLines.length - 15} more`);
+      } else {
+        lines.push("📄 Working tree: clean");
+      }
+    } catch { lines.push("📄 Git status unavailable"); }
+
+    lines.push("");
+
+    // Diff stat vs main
+    try {
+      const branchName = execSync(`git branch --show-current 2>&1`, { cwd: wtPath, encoding: "utf8", timeout: 5000 }).trim();
+      const diffStat = execSync(
+        `git diff --stat main...${branchName} 2>&1`,
+        { cwd: wtPath, encoding: "utf8", timeout: 10000 },
+      ).trim();
+      if (diffStat) {
+        const statLines = diffStat.split("\n");
+        lines.push("📊 Diff vs main:");
+        // Show only summary line (last line)
+        lines.push(statLines[statLines.length - 1] || "(none)");
+      }
+    } catch { /* no diff available */ }
+
+    lines.push("");
+
+    // Check for active executor slot matching this branch
+    const executor = _getInternalExecutor?.();
+    if (executor) {
+      const executorStatus = executor.getStatus?.();
+      const slot = executorStatus?.slots?.find(
+        (s) => s.branch && wtName.includes(s.branch.replace("ve/", "").replace(/\//g, "-"))
+      );
+      if (slot) {
+        const runMin = Math.round(slot.runningFor / 60);
+        const runStr = runMin >= 60 ? `${Math.floor(runMin / 60)}h${runMin % 60}m` : `${runMin}m`;
+        lines.push(`🤖 Active agent: ${slot.sdk} | Running: ${runStr} | Attempt #${slot.attempt}`);
+      } else {
+        lines.push("🤖 No active agent on this branch");
+      }
+    }
+
+    await sendReply(chatId, lines.join("\n"));
+  } catch (err) {
+    await sendReply(chatId, `Error: ${err.message}`);
+  }
+}
+
 
 async function cmdLogs(chatId, _args) {
   const numLines = parseInt(_args, 10) || 30;
@@ -4702,4 +4824,61 @@ export function getDigestSnapshot() {
     startedAt: liveDigest.startedAt,
     sealed: liveDigest.sealed,
   };
+}
+
+
+// ── Periodic status file writer ─────────────────────────────────
+// Called by monitor to keep the status file in sync with live executor state
+let _statusWriterTimer = null;
+
+export function startStatusFileWriter(intervalMs = 30000) {
+  if (_statusWriterTimer) return;
+  _statusWriterTimer = setInterval(async () => {
+    try {
+      const executor = _getInternalExecutor?.();
+      if (!executor) return;
+      const status = executor.getStatus?.();
+      if (!status) return;
+
+      let data = {};
+      try {
+        const raw = await readFile(statusPath, "utf8");
+        data = JSON.parse(raw);
+      } catch { /* fresh file */ }
+
+      // Convert executor slots to the attempts format
+      const attempts = {};
+      for (const slot of status.slots) {
+        attempts[slot.taskId] = {
+          task_id: slot.taskId,
+          task_title: slot.taskTitle,
+          branch: slot.branch,
+          status: slot.status,
+          executor: slot.sdk,
+          started_at: new Date(Date.now() - slot.runningFor * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+          attempt: slot.attempt,
+        };
+      }
+
+      data.attempts = attempts;
+      data.last_executor_sync = new Date().toISOString();
+      data.executor_mode = status.mode || "unknown";
+      data.active_slots = `${status.activeSlots}/${status.maxParallel}`;
+
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(statusPath, JSON.stringify(data, null, 2));
+    } catch (err) {
+      console.warn("[telegram-bot] Status file write error:", err.message);
+    }
+  }, intervalMs);
+
+  if (_statusWriterTimer.unref) _statusWriterTimer.unref();
+}
+
+export function stopStatusFileWriter() {
+  if (_statusWriterTimer) {
+    clearInterval(_statusWriterTimer);
+    _statusWriterTimer = null;
+  }
 }

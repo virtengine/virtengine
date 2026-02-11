@@ -34,6 +34,8 @@ import {
   notify,
   restoreLiveDigest,
   getDigestSnapshot,
+  startStatusFileWriter,
+  stopStatusFileWriter,
 } from "./telegram-bot.mjs";
 import { PRCleanupDaemon } from "./pr-cleanup-daemon.mjs";
 import {
@@ -8190,6 +8192,7 @@ process.on("SIGINT", () => {
   }
   if (internalTaskExecutor) {
     void internalTaskExecutor.stop();
+    stopStatusFileWriter();
   }
   stopAutoUpdateLoop();
   stopSelfWatcher();
@@ -8617,6 +8620,9 @@ if (executorMode === "internal" || executorMode === "hybrid") {
     };
     internalTaskExecutor = getTaskExecutor(execOpts);
     internalTaskExecutor.start();
+
+    // Write executor slots to status file every 30s for Telegram /tasks
+    startStatusFileWriter(30000);
     console.log(
       `[monitor] internal executor started (maxParallel=${execOpts.maxParallel || 3}, sdk=${execOpts.sdk || "auto"})`,
     );
