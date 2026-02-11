@@ -429,6 +429,10 @@ func (app *VirtEngineApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChai
 		panic(err)
 	}
 
+	if err := app.Keepers.VirtEngine.SettlementIBC.BindPort(ctx); err != nil {
+		return nil, err
+	}
+
 	return app.MM.InitGenesis(ctx, app.cdc, genesisState)
 }
 
@@ -453,6 +457,8 @@ func (app *VirtEngineApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) 
 		patch.Begin(ctx, &app.Keepers)
 		app.Logger().Info(fmt.Sprintf("patch %s applied successfully at height %d", patch.Name(), ctx.BlockHeight()))
 	}
+
+	app.Keepers.VirtEngine.SettlementIBC.CleanupRateLimitData(ctx)
 
 	return app.MM.BeginBlock(ctx)
 }

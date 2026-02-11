@@ -1,4 +1,5 @@
 # Hermes Relayer Configuration for VirtEngine IBC
+# Supports transfer (ics20-1), veid (veid-1), and settlement (settlement-1) channels.
 # See: https://hermes.informal.systems/documentation/configuration
 
 [global]
