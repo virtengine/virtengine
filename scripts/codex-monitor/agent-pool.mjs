@@ -272,9 +272,13 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
   }
 
   // ── 2. Create an ephemeral thread ────────────────────────────────────────
+  // Sandbox policy: configurable via CODEX_SANDBOX env var or config
+  // Options: "workspace-write" (safe default), "danger-full-access" (legacy), "read-only"
+  const sandboxPolicy = process.env.CODEX_SANDBOX || "workspace-write";
+
   const codex = new CodexClass();
   const thread = codex.startThread({
-    sandboxMode: "danger-full-access",
+    sandboxMode: sandboxPolicy,
     workingDirectory: cwd,
     skipGitRepoCheck: true,
     approvalPolicy: "never",
@@ -1018,8 +1022,9 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
 
   let thread;
   try {
+    const sandboxPolicy = process.env.CODEX_SANDBOX || "workspace-write";
     thread = codex.resumeThread(threadId, {
-      sandboxMode: "danger-full-access",
+      sandboxMode: sandboxPolicy,
       workingDirectory: cwd,
       skipGitRepoCheck: true,
       approvalPolicy: "never",

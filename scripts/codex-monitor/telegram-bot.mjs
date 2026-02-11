@@ -1072,6 +1072,124 @@ async function handleUpdate(update) {
 
 // ── Command Router ────────────────────────────────────────────────────────────
 
+// ── Task Pause / Resume / Repos ──────────────────────────────────────────────
+
+/**
+ * /pausetasks — Pause the task executor (running agents continue, no new dispatch)
+ */
+async function cmdPauseTasks(chatId) {
+  const executor = _getInternalExecutor?.();
+  if (!executor) {
+    return sendDirect(chatId, "⚠️ Internal executor not enabled — nothing to pause.");
+  }
+  if (executor.isPaused()) {
+    const info = executor.getPauseInfo();
+    const dur = info.pauseDuration;
+    return sendDirect(chatId, `⏸ Already paused (${dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s"} ago).\nUse /resumetasks to resume.`);
+  }
+  executor.pause();
+  const status = executor.getStatus();
+  const lines = [`⏸ *Task executor paused*`];
+  if (status.activeSlots > 0) {
+    lines.push(`\n${status.activeSlots} running task(s) will continue to completion.`);
+    lines.push(`No new tasks will be dispatched until /resumetasks.`);
+  } else {
+    lines.push(`No tasks running. Use /resumetasks when ready.`);
+  }
+  return sendDirect(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+}
+
+/**
+ * /resumetasks — Resume the task executor
+ */
+async function cmdResumeTasks(chatId) {
+  const executor = _getInternalExecutor?.();
+  if (!executor) {
+    return sendDirect(chatId, "⚠️ Internal executor not enabled — nothing to resume.");
+  }
+  if (!executor.isPaused()) {
+    return sendDirect(chatId, "▶️ Executor is already running — not paused.");
+  }
+  const info = executor.getPauseInfo();
+  const dur = info.pauseDuration;
+  executor.resume();
+  const durStr = dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s";
+  return sendDirect(chatId, `▶️ *Task executor resumed* (was paused for ${durStr}).\nWill pick up tasks on next poll cycle.`, { parse_mode: "Markdown" });
+}
+
+/**
+ * /repos — View configured repositories and their status
+ */
+async function cmdRepos(chatId, _text) {
+  try {
+    const config = (await import("./config.mjs")).default;
+    const repos = config.repositories || [];
+    const selected = config.selectedRepository || config.repoSlug || "(default)";
+    
+    if (repos.length === 0) {
+      return sendDirect(chatId, [
+        "📁 *Repositories*",
+        "",
+        `Active: \`${config.repoSlug || config.repoRoot || "current directory"}\``,
+        "",
+        "_Single-repo mode. Add repositories in codex-monitor.config.json:_",
+        "\`\`\`json",
+        JSON.stringify({
+          repositories: [
+            { name: "backend", path: "./", slug: "org/backend", primary: true },
+            { name: "frontend", path: "../frontend", slug: "org/frontend" }
+          ]
+        }, null, 2),
+        "\`\`\`",
+      ].join("\n"), { parse_mode: "Markdown" });
+    }
+    
+    const lines = ["📁 *Repositories*", ""];
+    for (const repo of repos) {
+      const isCurrent = repo.name === selected || repo.slug === selected || repo.primary;
+      const icon = isCurrent ? "🟢" : "⚪";
+      const primary = repo.primary ? " _(primary)_" : "";
+      lines.push(`${icon} \`${repo.name}\` — ${repo.slug || repo.path || "?"}${primary}`);
+    }
+    lines.push("");
+    lines.push(`Selected: \`${selected}\``);
+    lines.push("Switch: \`/repos set <name>\`");
+    
+    return sendDirect(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+  } catch (err) {
+    return sendDirect(chatId, `❌ Failed to read repo config: ${err.message}`);
+  }
+}
+
+/**
+ * /maxparallel — View or set max parallel task slots
+ */
+async function cmdMaxParallel(chatId, text) {
+  const executor = _getInternalExecutor?.();
+  if (!executor) {
+    return sendDirect(chatId, "⚠️ Internal executor not enabled.");
+  }
+  const arg = (text || "").replace("/maxparallel", "").trim();
+  if (arg) {
+    const n = parseInt(arg, 10);
+    if (isNaN(n) || n < 0 || n > 20) {
+      return sendDirect(chatId, "⚠️ Provide a number between 0 and 20.");
+    }
+    const old = executor.maxParallel;
+    executor.maxParallel = n;
+    if (n === 0) {
+      executor.pause();
+      return sendDirect(chatId, `⏸ Max parallel set to 0 — executor paused. Use /maxparallel <n> to resume.`);
+    }
+    if (executor.isPaused() && n > 0) {
+      executor.resume();
+    }
+    return sendDirect(chatId, `✅ Max parallel: ${old} → ${n}`);
+  }
+  const status = executor.getStatus();
+  return sendDirect(chatId, `📊 Max parallel: ${status.maxParallel} (active: ${status.activeSlots})`);
+}
+
 const COMMANDS = {
   "/help": { handler: cmdHelp, desc: "Show available commands" },
   "/ask": { handler: cmdAsk, desc: "Send prompt to agent: /ask <prompt>" },
@@ -1196,6 +1314,30 @@ const COMMANDS = {
     handler: cmdCoordinator,
     desc: "Show current coordinator selection",
   },
+  "/pausetasks": {
+    handler: cmdPauseTasks,
+    desc: "Pause task dispatch (running tasks continue)",
+  },
+  "/resumetasks": {
+    handler: cmdResumeTasks,
+    desc: "Resume task dispatch after pause",
+  },
+  "/pause": {
+    handler: cmdPauseTasks,
+    desc: "Alias for /pausetasks",
+  },
+  "/resume": {
+    handler: cmdResumeTasks,
+    desc: "Alias for /resumetasks",
+  },
+  "/repos": {
+    handler: cmdRepos,
+    desc: "View configured repositories",
+  },
+  "/maxparallel": {
+    handler: cmdMaxParallel,
+    desc: "View/set max parallel slots: /maxparallel [n]",
+  },
 };
 
 /**
@@ -1285,6 +1427,12 @@ const FAST_COMMANDS = new Set([
   "/threads",
   "/worktrees",
   "/executor",
+  "/pausetasks",
+  "/resumetasks",
+  "/pause",
+  "/resume",
+  "/maxparallel",
+  "/repos",
 ]);
 
 async function handleCommand(text, chatId) {
@@ -1648,8 +1796,19 @@ async function cmdTasks(chatId) {
     const executor = _getInternalExecutor?.();
     const executorStatus = executor?.getStatus?.();
 
-    if (executorStatus && executorStatus.slots.length > 0) {
-      const lines = [`📋 Active Agents (${executorStatus.activeSlots}/${executorStatus.maxParallel} slots)\n`];
+    if (executorStatus) {
+      const lines = [];
+
+      // Show pause state prominently at top
+      if (executorStatus.paused) {
+        const dur = executorStatus.pauseDuration || 0;
+        const durStr = dur >= 3600 ? Math.round(dur / 3600) + "h" : dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s";
+        lines.push(`⏸ PAUSED (for ${durStr}) — /resumetasks to resume`);
+        lines.push("");
+      }
+
+      if (executorStatus.slots.length > 0) {
+        lines.push(`📋 Active Agents (${executorStatus.activeSlots}/${executorStatus.maxParallel} slots)\n`);
 
       for (const slot of executorStatus.slots) {
         const emoji = slot.status === "running" ? "🟢" : slot.status === "error" ? "❌" : "🔵";
@@ -1683,6 +1842,20 @@ async function cmdTasks(chatId) {
 
       lines.push("────────────────────────────");
       lines.push(`Use /agentlogs <branch> for agent output`);
+
+      await sendReply(chatId, lines.join("\n"));
+      return;
+      } else {
+        // No active slots — show status summary
+        lines.push(`📋 No active agents (0/${executorStatus.maxParallel} slots)`);
+        if (executorStatus.blockedTasks?.length > 0) {
+          lines.push(`\n⛔ ${executorStatus.blockedTasks.length} task(s) blocked (exceeded retry limit)`);
+        }
+        lines.push("");
+        lines.push(executorStatus.paused
+          ? `Use /resumetasks to start accepting tasks`
+          : `Waiting for todo tasks in kanban...`);
+      }
 
       await sendReply(chatId, lines.join("\n"));
       return;

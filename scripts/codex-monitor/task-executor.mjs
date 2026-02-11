@@ -262,6 +262,8 @@ class TaskExecutor {
     /** @type {Map<string, number>} taskId → timestamp */
     this._taskCooldowns = new Map();
     this._running = false;
+    this._paused = false;
+    this._pausedAt = null;
     this._pollTimer = null;
     this._pollInProgress = false;
     this._resolvedProjectId = null;
@@ -413,6 +415,51 @@ class TaskExecutor {
     }
 
     console.log(`${TAG} stopped (${this._activeSlots.size} tasks were active)`);
+  }
+
+  /**
+   * Pause task dispatch — running tasks continue, but no new tasks are picked up.
+   * @returns {boolean} true if paused (false if already paused)
+   */
+  pause() {
+    if (this._paused) return false;
+    this._paused = true;
+    this._pausedAt = Date.now();
+    console.log(`${TAG} paused — no new tasks will be dispatched (active: ${this._activeSlots.size})`);
+    return true;
+  }
+
+  /**
+   * Resume task dispatch after a pause.
+   * @returns {boolean} true if resumed (false if not paused)
+   */
+  resume() {
+    if (!this._paused) return false;
+    const pauseDuration = this._pausedAt ? Math.round((Date.now() - this._pausedAt) / 1000) : 0;
+    this._paused = false;
+    this._pausedAt = null;
+    console.log(`${TAG} resumed after ${pauseDuration}s pause — will pick up tasks on next poll`);
+    return true;
+  }
+
+  /**
+   * Check if executor is paused.
+   * @returns {boolean}
+   */
+  isPaused() {
+    return this._paused;
+  }
+
+  /**
+   * Get pause info for status display.
+   * @returns {{ paused: boolean, pausedAt: number|null, pauseDuration: number }}
+   */
+  getPauseInfo() {
+    return {
+      paused: this._paused,
+      pausedAt: this._pausedAt,
+      pauseDuration: this._pausedAt ? Math.round((Date.now() - this._pausedAt) / 1000) : 0,
+    };
   }
 
   /**
@@ -594,6 +641,9 @@ class TaskExecutor {
   getStatus() {
     return {
       running: this._running,
+      paused: this._paused,
+      pausedAt: this._pausedAt,
+      pauseDuration: this._pausedAt ? Math.round((Date.now() - this._pausedAt) / 1000) : 0,
       mode: this.mode,
       maxParallel: this.maxParallel,
       sdk: this.sdk === "auto" ? getPoolSdkName() : this.sdk,
@@ -661,6 +711,7 @@ class TaskExecutor {
    */
   async _pollLoop() {
     if (!this._running) return;
+    if (this._paused) return; // paused — skip picking new tasks (active tasks continue)
     if (this._pollInProgress) return;
     if (this._activeSlots.size >= this.maxParallel) return;
 

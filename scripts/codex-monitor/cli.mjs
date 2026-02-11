@@ -16,9 +16,9 @@
  */
 
 import { resolve, dirname } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { fork } from "node:child_process";
+import { fork, spawn } from "node:child_process";
 import os from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,6 +47,9 @@ function showHelp() {
     --update                    Check for and install latest version
     --no-update-check           Skip automatic update check on startup
     --no-auto-update            Disable background auto-update polling
+    --daemon, -d                Run as a background daemon (detached, with PID file)
+    --stop-daemon               Stop a running daemon process
+    --daemon-status             Check if daemon is running
 
   ORCHESTRATOR
     --script <path>             Path to the orchestrator script
@@ -137,6 +140,119 @@ function showHelp() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+// ── Daemon Mode ──────────────────────────────────────────────────────────────
+
+const PID_FILE = resolve(__dirname, ".cache", "codex-monitor.pid");
+const DAEMON_LOG = resolve(__dirname, "logs", "daemon.log");
+
+function getDaemonPid() {
+  try {
+    if (!existsSync(PID_FILE)) return null;
+    const pid = parseInt(readFileSync(PID_FILE, "utf8").trim(), 10);
+    if (isNaN(pid)) return null;
+    // Check if process is alive
+    try { process.kill(pid, 0); return pid; } catch { return null; }
+  } catch { return null; }
+}
+
+function writePidFile(pid) {
+  try {
+    mkdirSync(dirname(PID_FILE), { recursive: true });
+    writeFileSync(PID_FILE, String(pid), "utf8");
+  } catch { /* best effort */ }
+}
+
+function removePidFile() {
+  try { if (existsSync(PID_FILE)) unlinkSync(PID_FILE); } catch { /* ok */ }
+}
+
+function startDaemon() {
+  const existing = getDaemonPid();
+  if (existing) {
+    console.log(`  codex-monitor daemon is already running (PID ${existing})`);
+    console.log(`  Use --stop-daemon to stop it first.`);
+    process.exit(1);
+  }
+
+  // Ensure log directory exists
+  try { mkdirSync(dirname(DAEMON_LOG), { recursive: true }); } catch { /* ok */ }
+
+  const child = spawn(process.execPath, [
+    "--max-old-space-size=4096",
+    fileURLToPath(new URL("./cli.mjs", import.meta.url)),
+    ...process.argv.slice(2).filter(a => a !== "--daemon" && a !== "-d"),
+    "--daemon-child",
+  ], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, CODEX_MONITOR_DAEMON: "1" },
+    cwd: process.cwd(),
+  });
+
+  child.unref();
+  writePidFile(child.pid);
+
+  console.log(`
+  ╭──────────────────────────────────────────────────────────╮
+  │ codex-monitor daemon started (PID ${String(child.pid).padEnd(24)}│
+  ╰──────────────────────────────────────────────────────────╯
+
+  Logs: ${DAEMON_LOG}
+  PID:  ${PID_FILE}
+
+  Commands:
+    codex-monitor --daemon-status   Check if running
+    codex-monitor --stop-daemon     Stop the daemon
+  `);
+  process.exit(0);
+}
+
+function stopDaemon() {
+  const pid = getDaemonPid();
+  if (!pid) {
+    console.log("  No daemon running (PID file not found or process dead).");
+    removePidFile();
+    process.exit(0);
+  }
+  console.log(`  Stopping codex-monitor daemon (PID ${pid})...`);
+  try {
+    process.kill(pid, "SIGTERM");
+    // Wait briefly for graceful shutdown
+    let tries = 0;
+    const check = () => {
+      try { process.kill(pid, 0); } catch { 
+        removePidFile();
+        console.log("  ✓ Daemon stopped.");
+        process.exit(0);
+      }
+      if (++tries > 10) {
+        console.log("  Sending SIGKILL...");
+        try { process.kill(pid, "SIGKILL"); } catch { /* ok */ }
+        removePidFile();
+        console.log("  ✓ Daemon killed.");
+        process.exit(0);
+      }
+      setTimeout(check, 500);
+    };
+    setTimeout(check, 500);
+  } catch (err) {
+    console.error(`  Failed to stop daemon: ${err.message}`);
+    removePidFile();
+    process.exit(1);
+  }
+}
+
+function daemonStatus() {
+  const pid = getDaemonPid();
+  if (pid) {
+    console.log(`  codex-monitor daemon is running (PID ${pid})`);
+  } else {
+    console.log("  codex-monitor daemon is not running.");
+    removePidFile();
+  }
+  process.exit(0);
+}
+
 async function main() {
   // Handle --help
   if (args.includes("--help") || args.includes("-h")) {
@@ -148,6 +264,33 @@ async function main() {
   if (args.includes("--version") || args.includes("-v")) {
     console.log(`codex-monitor v${VERSION}`);
     process.exit(0);
+  }
+
+  // Handle --daemon
+  if (args.includes("--daemon") || args.includes("-d")) {
+    startDaemon();
+    return;
+  }
+  if (args.includes("--stop-daemon")) {
+    stopDaemon();
+    return;
+  }
+  if (args.includes("--daemon-status")) {
+    daemonStatus();
+    return;
+  }
+
+  // Write PID file if running as daemon child
+  if (args.includes("--daemon-child") || process.env.CODEX_MONITOR_DAEMON === "1") {
+    writePidFile(process.pid);
+    // Redirect console to log file on daemon child
+    const { createWriteStream } = await import("node:fs");
+    const logStream = createWriteStream(DAEMON_LOG, { flags: "a" });
+    const origStdout = process.stdout.write.bind(process.stdout);
+    const origStderr = process.stderr.write.bind(process.stderr);
+    process.stdout.write = (chunk, ...a) => { logStream.write(chunk); return origStdout(chunk, ...a); };
+    process.stderr.write = (chunk, ...a) => { logStream.write(chunk); return origStderr(chunk, ...a); };
+    console.log(`\n[daemon] codex-monitor started at ${new Date().toISOString()} (PID ${process.pid})`);
   }
 
   // Handle --update (force update)
