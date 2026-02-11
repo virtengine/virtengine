@@ -48,6 +48,19 @@ paths = [
   '''\.cache/.*''',
   '''_build/.*''',
   '''_docs/.*''',
+  # Test files — exclude from all secret scanning rules (including defaults)
+  '''.*_test\.go''',
+  '''.*_test\.ts''',
+  '''.*\.test\.ts''',
+  '''.*\.test\.js''',
+  '''.*\.spec\.ts''',
+  '''.*\.spec\.js''',
+  '''.*__tests__/.*''',
+  '''tests?/.*''',
+  '''testutil/.*''',
+  '''testdata/.*''',
+  '''.*\.golden''',
+  '''.*fixtures?.*''',
 ]
 
 # Exclude specific commits (if needed)

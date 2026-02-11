@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -442,6 +443,10 @@ func (s *VEIDE2ETestSuite) verifySSOProvider(customer sdk.AccAddress, fixture SS
 		fixture.Nonce,
 		FixedTimestampPlus(1),
 	)
+	// Evidence fields required for verified records
+	linkage.EvidenceHash = strings.Repeat("a", 64)
+	linkage.EvidenceStorageBackend = string(veidtypes.StorageBackendWaldur)
+	linkage.EvidenceStorageRef = "vault://evidence/sso-e2e"
 	require.NoError(s.T(), linkage.Validate())
 	require.True(s.T(), linkage.IsActive())
 

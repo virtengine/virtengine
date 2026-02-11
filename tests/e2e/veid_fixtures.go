@@ -84,7 +84,7 @@ func (c VEIDTestClient) ToApprovedClient() veidtypes.ApprovedClient {
 		ClientID:     c.ClientID,
 		Name:         c.Name,
 		PublicKey:    c.PublicKey,
-		Algorithm:    "Ed25519",
+		Algorithm:    "ed25519",
 		Active:       true,
 		RegisteredAt: TestBlockTimeUnix,
 	}
