@@ -77,7 +77,7 @@ func (k Keeper) GetState(ctx sdk.Context) State {
 	if err := json.Unmarshal(bz, &state); err != nil {
 		return DefaultState(k.GetParams(ctx))
 	}
-	if state.CurrentMinGasPrices == nil || len(state.CurrentMinGasPrices) == 0 {
+	if len(state.CurrentMinGasPrices) == 0 {
 		state.CurrentMinGasPrices = k.GetParams(ctx).MinGasPrices
 	}
 	return state
