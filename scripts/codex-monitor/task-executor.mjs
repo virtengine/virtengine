@@ -458,6 +458,15 @@ class TaskExecutor {
         return;
       }
 
+      // Client-side status filter — VK API may not respect the status query param
+      if (tasks && tasks.length > 0) {
+        const before = tasks.length;
+        tasks = tasks.filter((t) => t.status === "todo");
+        if (tasks.length !== before) {
+          console.debug(`${TAG} filtered ${before - tasks.length} non-todo tasks (VK returned ${before}, kept ${tasks.length})`);
+        }
+      }
+
       if (!tasks || tasks.length === 0) return;
 
       const now = Date.now();
@@ -857,7 +866,7 @@ class TaskExecutor {
           this._errorDetector.resetTask(task.id);
         } catch { /* best-effort */ }
 
-        const pr = await this._createPR(task, worktreePath);
+        const pr = await this._createPR(task, worktreePath, { agentMadeNewCommits });
         if (pr) {
           // Mark as completed with PR — prevents re-dispatch
           this._completedWithPR.add(task.id);
@@ -1163,7 +1172,8 @@ class TaskExecutor {
    * @returns {Promise<{url: string, branch: string}|null>}
    * @private
    */
-  async _createPR(task, worktreePath) {
+  async _createPR(task, worktreePath, opts = {}) {
+    const { agentMadeNewCommits = false } = opts;
     try {
       const branch =
         task.branchName ||
@@ -1197,9 +1207,13 @@ class TaskExecutor {
             existingPrUrl = existing.url;
             existingPrNumber = String(existing.number);
             if (mergedPr && !openPr) {
-              // PR already merged — no need to create or push
-              console.log(`${TAG} PR already merged for branch ${branch}: #${existingPrNumber}`);
-              return { url: existingPrUrl, branch, prNumber: existingPrNumber };
+              if (!agentMadeNewCommits) {
+                // PR already merged and agent made no new commits — skip
+                console.log(`${TAG} PR already merged for branch ${branch}: #${existingPrNumber} (no new commits)`);
+                return { url: existingPrUrl, branch, prNumber: existingPrNumber };
+              }
+              // PR was merged but agent made NEW commits — need a new PR
+              console.log(`${TAG} PR #${existingPrNumber} was merged but agent made new commits — creating new PR`);
             }
             if (openPr) {
               // Open PR exists — just push latest commits and enable auto-merge
