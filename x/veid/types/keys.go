@@ -260,6 +260,10 @@ var (
 	// Key: PrefixSecurityAudit | event_id -> SecurityAuditEvent
 	PrefixSecurityAudit = []byte{0x38}
 
+	// PrefixProofRevocation is the prefix for revoked proof records
+	// Key: PrefixProofRevocation | proof_id -> ProofRevocation
+	PrefixProofRevocation = []byte{0xE0}
+
 	// ============================================================================
 	// Waldur Integration Keys (VE-226)
 	// ============================================================================
@@ -2422,4 +2426,22 @@ func ClientKeyRotationKey(clientID string) []byte {
 	key = append(key, PrefixClientKeyRotation...)
 	key = append(key, idBytes...)
 	return key
+}
+
+// ============================================================================
+// Proof Revocation Key Functions (VE-3034)
+// ============================================================================
+
+// ProofRevocationKey returns the store key for a revoked proof record.
+func ProofRevocationKey(proofID string) []byte {
+	idBytes := []byte(proofID)
+	key := make([]byte, 0, len(PrefixProofRevocation)+len(idBytes))
+	key = append(key, PrefixProofRevocation...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// ProofRevocationPrefixKey returns the prefix for all proof revocations.
+func ProofRevocationPrefixKey() []byte {
+	return PrefixProofRevocation
 }

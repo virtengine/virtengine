@@ -61,6 +61,9 @@ const (
 	// ExportCategoryMarketplace exports marketplace activity
 	ExportCategoryMarketplace ExportCategory = "marketplace"
 
+	// ExportCategoryEscrow exports escrow account/payment data
+	ExportCategoryEscrow ExportCategory = "escrow"
+
 	// ExportCategoryDelegations exports delegation relationships
 	ExportCategoryDelegations ExportCategory = "delegations"
 
@@ -76,6 +79,7 @@ func AllExportCategories() []ExportCategory {
 		ExportCategoryVerificationHistory,
 		ExportCategoryTransactions,
 		ExportCategoryMarketplace,
+		ExportCategoryEscrow,
 		ExportCategoryDelegations,
 		ExportCategoryAll,
 	}
@@ -305,6 +309,9 @@ type PortableDataPackage struct {
 
 	// Marketplace contains marketplace activity
 	Marketplace *PortableMarketplaceData `json:"marketplace,omitempty"`
+
+	// Escrow contains escrow account/payment activity
+	Escrow *PortableEscrowData `json:"escrow,omitempty"`
 
 	// Delegations contains delegation relationships
 	Delegations *PortableDelegationData `json:"delegations,omitempty"`
@@ -582,11 +589,17 @@ type PortableMarketplaceData struct {
 	// TotalOrders is the total order count
 	TotalOrders int `json:"total_orders"`
 
+	// TotalBids is the total bid count
+	TotalBids int `json:"total_bids"`
+
 	// TotalLeases is the total lease count
 	TotalLeases int `json:"total_leases"`
 
 	// Orders lists marketplace orders
 	Orders []PortableOrder `json:"orders,omitempty"`
+
+	// Bids lists marketplace bids
+	Bids []PortableBid `json:"bids,omitempty"`
 
 	// Leases lists active and historical leases
 	Leases []PortableLease `json:"leases,omitempty"`
@@ -613,6 +626,30 @@ type PortableOrder struct {
 	Specifications map[string]interface{} `json:"specifications,omitempty"`
 }
 
+// PortableBid represents a marketplace bid
+type PortableBid struct {
+	// BidID is the bid identifier
+	BidID string `json:"bid_id"`
+
+	// OrderID is the associated order identifier
+	OrderID string `json:"order_id"`
+
+	// Provider is the provider address
+	Provider string `json:"provider"`
+
+	// Status is the bid status
+	Status string `json:"status"`
+
+	// CreatedAt is when the bid was created
+	CreatedAt time.Time `json:"created_at"`
+
+	// BlockHeight is the block height
+	BlockHeight int64 `json:"block_height"`
+
+	// Price is the bid price
+	Price string `json:"price,omitempty"`
+}
+
 // PortableLease represents a marketplace lease
 type PortableLease struct {
 	// LeaseID is the lease identifier
@@ -634,13 +671,65 @@ type PortableLease struct {
 	Price string `json:"price,omitempty"`
 }
 
+// PortableEscrowData contains escrow accounts and payments.
+type PortableEscrowData struct {
+	// TotalAccounts is the total number of escrow accounts
+	TotalAccounts int `json:"total_accounts"`
+
+	// TotalPayments is the total number of escrow payments
+	TotalPayments int `json:"total_payments"`
+
+	// Accounts lists escrow accounts owned by the address
+	Accounts []PortableEscrowAccount `json:"accounts,omitempty"`
+
+	// Payments lists escrow payments owned by the address
+	Payments []PortableEscrowPayment `json:"payments,omitempty"`
+}
+
+// PortableEscrowAccount represents an escrow account.
+type PortableEscrowAccount struct {
+	AccountID   string   `json:"account_id"`
+	Owner       string   `json:"owner"`
+	State       string   `json:"state"`
+	Deposits    []string `json:"deposits,omitempty"`
+	Funds       []string `json:"funds,omitempty"`
+	SettledAt   int64    `json:"settled_at"`
+	Transferred []string `json:"transferred,omitempty"`
+}
+
+// PortableEscrowPayment represents an escrow payment.
+type PortableEscrowPayment struct {
+	PaymentID string `json:"payment_id"`
+	Owner     string `json:"owner"`
+	State     string `json:"state"`
+	Rate      string `json:"rate,omitempty"`
+	Balance   string `json:"balance,omitempty"`
+	Unsettled string `json:"unsettled,omitempty"`
+	Withdrawn string `json:"withdrawn,omitempty"`
+}
+
 // PortableDelegationData contains delegation relationships
 type PortableDelegationData struct {
 	// TotalDelegations is the total count
 	TotalDelegations int `json:"total_delegations"`
 
-	// Delegations lists delegation relationships
+	// Delegations lists identity delegation relationships
 	Delegations []PortableDelegation `json:"delegations"`
+
+	// StakingDelegations lists staking delegations from x/delegation
+	StakingDelegations []PortableStakingDelegation `json:"staking_delegations,omitempty"`
+
+	// UnbondingDelegations lists unbonding delegations
+	UnbondingDelegations []PortableUnbondingDelegation `json:"unbonding_delegations,omitempty"`
+
+	// Redelegations lists redelegations
+	Redelegations []PortableRedelegation `json:"redelegations,omitempty"`
+
+	// Rewards lists delegator rewards
+	Rewards []PortableDelegationReward `json:"rewards,omitempty"`
+
+	// SlashingEvents lists delegator slashing events
+	SlashingEvents []PortableDelegationSlashingEvent `json:"slashing_events,omitempty"`
 }
 
 // PortableDelegation represents a delegation relationship
@@ -668,6 +757,53 @@ type PortableDelegation struct {
 
 	// RevokedAt is when the delegation was revoked
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+}
+
+// PortableStakingDelegation represents a staking delegation.
+type PortableStakingDelegation struct {
+	DelegatorAddress string    `json:"delegator_address"`
+	ValidatorAddress string    `json:"validator_address"`
+	Shares           string    `json:"shares,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	Status           string    `json:"status"`
+}
+
+// PortableUnbondingDelegation represents an unbonding delegation.
+type PortableUnbondingDelegation struct {
+	ID               string    `json:"id"`
+	DelegatorAddress string    `json:"delegator_address"`
+	ValidatorAddress string    `json:"validator_address"`
+	CompletionTime   time.Time `json:"completion_time"`
+	Balance          string    `json:"balance,omitempty"`
+}
+
+// PortableRedelegation represents a redelegation.
+type PortableRedelegation struct {
+	ID               string    `json:"id"`
+	DelegatorAddress string    `json:"delegator_address"`
+	ValidatorSrc     string    `json:"validator_src"`
+	ValidatorDst     string    `json:"validator_dst"`
+	CompletionTime   time.Time `json:"completion_time"`
+	Balance          string    `json:"balance,omitempty"`
+}
+
+// PortableDelegationReward represents a delegator reward.
+type PortableDelegationReward struct {
+	DelegatorAddress string `json:"delegator_address"`
+	ValidatorAddress string `json:"validator_address"`
+	Epoch            uint64 `json:"epoch"`
+	Amount           string `json:"amount,omitempty"`
+	Claimed          bool   `json:"claimed"`
+}
+
+// PortableDelegationSlashingEvent represents a slashing event.
+type PortableDelegationSlashingEvent struct {
+	ID               string `json:"id"`
+	DelegatorAddress string `json:"delegator_address"`
+	ValidatorAddress string `json:"validator_address"`
+	BlockHeight      int64  `json:"block_height"`
+	Reason           string `json:"reason,omitempty"`
+	Penalty          string `json:"penalty,omitempty"`
 }
 
 // ============================================================================
