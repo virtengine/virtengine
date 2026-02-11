@@ -16,6 +16,12 @@ import (
 	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
+const (
+	testProviderAddr = "virtengine1abcd1234"
+	testDomain       = "example.com"
+	testToken        = "abc123def456"
+)
+
 // mockDNSResolver implements DNSResolver for testing.
 type mockDNSResolver struct {
 	txtRecords   map[string][]string
@@ -79,7 +85,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 			name: "valid config",
 			config: DomainVerificationCheckerConfig{
 				Enabled:         true,
-				ProviderAddress: "virtengine1abcd1234",
+				ProviderAddress: testProviderAddr,
 				CometRPC:        "http://localhost:26657",
 				GRPCEndpoint:    "localhost:9090",
 			},
@@ -106,7 +112,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 			name: "missing rpc endpoint",
 			config: DomainVerificationCheckerConfig{
 				Enabled:         true,
-				ProviderAddress: "virtengine1abcd1234",
+				ProviderAddress: testProviderAddr,
 			},
 			expectError: true,
 			errorMsg:    "comet RPC endpoint or chain client is required",
@@ -115,7 +121,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 			name: "with chain client",
 			config: DomainVerificationCheckerConfig{
 				Enabled:         true,
-				ProviderAddress: "virtengine1abcd1234",
+				ProviderAddress: testProviderAddr,
 			},
 			expectError: false,
 		},
@@ -145,9 +151,9 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 }
 
 func TestVerifyDNSTXT(t *testing.T) {
-	providerAddr := "virtengine1abcd1234"
-	domain := "example.com"
-	token := "abc123def456"
+	providerAddr := testProviderAddr
+	domain := testDomain
+	token := testToken
 	verificationName := fmt.Sprintf("%s.%s", keeper.DNSVerificationPrefix, domain)
 
 	tests := []struct {
@@ -234,9 +240,9 @@ func TestVerifyDNSTXT(t *testing.T) {
 }
 
 func TestVerifyCNAME(t *testing.T) {
-	providerAddr := "virtengine1abcd1234"
-	domain := "example.com"
-	token := "abc123def456"
+	providerAddr := testProviderAddr
+	domain := testDomain
+	token := testToken
 	verificationName := fmt.Sprintf("%s.%s", keeper.DNSVerificationPrefix, domain)
 	expectedTarget := fmt.Sprintf("%s.virtengine.network", token)
 
@@ -264,7 +270,7 @@ func TestVerifyCNAME(t *testing.T) {
 		{
 			name: "wrong cname target",
 			cnameRecords: map[string]string{
-				verificationName: "wrong-target.example.com",
+				verificationName: fmt.Sprintf("wrong-target.%s", testDomain),
 			},
 			expectError: true,
 			errorMsg:    "does not match expected",
@@ -318,8 +324,8 @@ func TestVerifyCNAME(t *testing.T) {
 }
 
 func TestVerifyHTTPWellKnown(t *testing.T) {
-	providerAddr := "virtengine1abcd1234"
-	token := "abc123def456"
+	providerAddr := testProviderAddr
+	token := testToken
 
 	tests := []struct {
 		name         string
@@ -375,7 +381,8 @@ func TestVerifyHTTPWellKnown(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, keeper.HTTPWellKnownPath, r.URL.Path)
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.responseBody))
+				_, writeErr := w.Write([]byte(tt.responseBody))
+				require.NoError(t, writeErr)
 			}))
 			defer server.Close()
 
@@ -417,7 +424,7 @@ func TestVerifyHTTPWellKnown(t *testing.T) {
 func TestHandleVerificationFailure(t *testing.T) {
 	cfg := DefaultDomainVerificationCheckerConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "virtengine1abcd1234"
+	cfg.ProviderAddress = testProviderAddr
 	cfg.MaxRetries = 3
 	cfg.InitialBackoff = 1 * time.Second
 	cfg.MaxBackoff = 10 * time.Second
@@ -427,7 +434,7 @@ func TestHandleVerificationFailure(t *testing.T) {
 
 	record := &keeper.DomainVerificationRecord{
 		ProviderAddress: cfg.ProviderAddress,
-		Domain:          "example.com",
+		Domain:          testDomain,
 		Token:           "test-token",
 		Method:          keeper.VerificationMethodDNSTXT,
 		Status:          keeper.DomainVerificationPending,
@@ -465,12 +472,12 @@ func TestHandleVerificationFailure(t *testing.T) {
 func TestShouldRetry(t *testing.T) {
 	cfg := DefaultDomainVerificationCheckerConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "virtengine1abcd1234"
+	cfg.ProviderAddress = testProviderAddr
 
 	checker, err := NewDomainVerificationChecker(cfg, nil, &mockChainClient{})
 	require.NoError(t, err)
 
-	domain := "example.com"
+	domain := testDomain
 
 	// Should retry when no retry state exists
 	assert.True(t, checker.shouldRetry(domain))
@@ -493,7 +500,7 @@ func TestShouldRetry(t *testing.T) {
 func TestBackoffExponentialGrowth(t *testing.T) {
 	cfg := DefaultDomainVerificationCheckerConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "virtengine1abcd1234"
+	cfg.ProviderAddress = testProviderAddr
 	cfg.InitialBackoff = 1 * time.Second
 	cfg.MaxBackoff = 100 * time.Second
 
@@ -502,7 +509,7 @@ func TestBackoffExponentialGrowth(t *testing.T) {
 
 	record := &keeper.DomainVerificationRecord{
 		ProviderAddress: cfg.ProviderAddress,
-		Domain:          "example.com",
+		Domain:          testDomain,
 		Token:           "test-token",
 		Method:          keeper.VerificationMethodDNSTXT,
 		Status:          keeper.DomainVerificationPending,
@@ -532,13 +539,13 @@ func TestBackoffExponentialGrowth(t *testing.T) {
 func TestVerificationTimeout(t *testing.T) {
 	cfg := DefaultDomainVerificationCheckerConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "virtengine1abcd1234"
+	cfg.ProviderAddress = testProviderAddr
 	cfg.VerificationTimeout = 10 * time.Millisecond
 
 	// Create slow DNS resolver that will exceed timeout
 	cfg.DNSResolver = &mockDNSResolver{
 		txtRecords: map[string][]string{
-			"_virtengine-verification.example.com": {"test-token"},
+			fmt.Sprintf("%s.%s", keeper.DNSVerificationPrefix, testDomain): {"test-token"},
 		},
 		err: context.DeadlineExceeded,
 	}
@@ -548,7 +555,7 @@ func TestVerificationTimeout(t *testing.T) {
 
 	record := &keeper.DomainVerificationRecord{
 		ProviderAddress: cfg.ProviderAddress,
-		Domain:          "example.com",
+		Domain:          testDomain,
 		Token:           "test-token",
 		Method:          keeper.VerificationMethodDNSTXT,
 		Status:          keeper.DomainVerificationPending,
@@ -561,8 +568,8 @@ func TestVerificationTimeout(t *testing.T) {
 }
 
 func TestHTTPWellKnownJSONFormats(t *testing.T) {
-	providerAddr := "virtengine1abcd1234"
-	token := "abc123def456"
+	providerAddr := testProviderAddr
+	token := testToken
 
 	tests := []struct {
 		name         string
@@ -600,7 +607,8 @@ func TestHTTPWellKnownJSONFormats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(tt.responseBody))
+				_, writeErr := w.Write([]byte(tt.responseBody))
+				require.NoError(t, writeErr)
 			}))
 			defer server.Close()
 
@@ -636,8 +644,8 @@ func TestHTTPWellKnownJSONFormats(t *testing.T) {
 
 func TestDomainVerificationRecordJSON(t *testing.T) {
 	record := &keeper.DomainVerificationRecord{
-		ProviderAddress: "virtengine1abcd1234",
-		Domain:          "example.com",
+		ProviderAddress: testProviderAddr,
+		Domain:          testDomain,
 		Token:           "test-token",
 		Method:          keeper.VerificationMethodDNSTXT,
 		Status:          keeper.DomainVerificationPending,

@@ -44,7 +44,7 @@ describe('MFAChallenge', () => {
       <MFAChallenge
         open={true}
         onOpenChange={vi.fn()}
-        transactionType="wallet_send"
+        transactionType="withdrawal"
         actionDescription="Send tokens"
       />
     );
@@ -61,7 +61,7 @@ describe('MFAChallenge', () => {
       <MFAChallenge
         open={true}
         onOpenChange={vi.fn()}
-        transactionType="wallet_send"
+        transactionType="withdrawal"
         actionDescription="Send tokens"
       />
     );

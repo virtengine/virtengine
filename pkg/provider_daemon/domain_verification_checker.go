@@ -464,6 +464,7 @@ func (c *DomainVerificationChecker) verifyHTTPWellKnown(ctx context.Context, rec
 // submitConfirmation submits a MsgConfirmDomainVerification transaction.
 func (c *DomainVerificationChecker) submitConfirmation(_ context.Context, record *keeper.DomainVerificationRecord, proof string) {
 	log.Printf("[domain-verification] submitting confirmation for %s", record.Domain)
+	_ = proof
 
 	// TODO: Create and submit MsgConfirmDomainVerification transaction
 	// This requires:
@@ -573,3 +574,8 @@ func (c *DomainVerificationChecker) broadcastTx(ctx context.Context, txBytes []b
 	// For now, return an error
 	return fmt.Errorf("transaction broadcasting not implemented")
 }
+
+var (
+	_ = (*DomainVerificationChecker).buildAndSignTx
+	_ = (*DomainVerificationChecker).broadcastTx
+)

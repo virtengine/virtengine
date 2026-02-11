@@ -30,6 +30,9 @@ export function MFASettings({ className }: MFASettingsProps) {
   const { isLoading, isEnabled, factors, trustedBrowsers, auditLog, revokeTrustedBrowser } =
     useMFAStore();
   const [setupView, setSetupView] = useState<SetupView>('none');
+  const safeFactors = factors ?? [];
+  const safeTrustedBrowsers = trustedBrowsers ?? [];
+  const safeAuditLog = auditLog ?? [];
 
   if (isLoading) {
     return (
@@ -98,9 +101,9 @@ export function MFASettings({ className }: MFASettingsProps) {
 
       <Tabs defaultValue="factors">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="factors">Factors ({factors.length})</TabsTrigger>
+          <TabsTrigger value="factors">Factors ({safeFactors.length})</TabsTrigger>
           <TabsTrigger value="enroll">Add Factor</TabsTrigger>
-          <TabsTrigger value="browsers">Trusted ({trustedBrowsers.length})</TabsTrigger>
+          <TabsTrigger value="browsers">Trusted ({safeTrustedBrowsers.length})</TabsTrigger>
           <TabsTrigger value="audit">Audit Log</TabsTrigger>
         </TabsList>
 
@@ -179,14 +182,14 @@ export function MFASettings({ className }: MFASettingsProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {trustedBrowsers.length === 0 ? (
+              {safeTrustedBrowsers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No trusted browsers. When you verify with MFA and choose &quot;Trust this
                   browser&quot;, it will appear here.
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {trustedBrowsers.map((browser) => (
+                  {safeTrustedBrowsers.map((browser) => (
                     <div
                       key={browser.id}
                       className="flex items-center justify-between rounded-lg border bg-card p-3"
@@ -225,11 +228,11 @@ export function MFASettings({ className }: MFASettingsProps) {
               <CardDescription>Recent MFA verification activity on your account.</CardDescription>
             </CardHeader>
             <CardContent>
-              {auditLog.length === 0 ? (
+              {safeAuditLog.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No MFA activity recorded yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {auditLog.map((entry) => (
+                  {safeAuditLog.map((entry) => (
                     <div
                       key={entry.id}
                       className="flex items-center justify-between border-b py-2 last:border-0"
