@@ -19,6 +19,7 @@ This directory contains comprehensive operational runbooks for VirtEngine produc
 | [Validator Setup](VALIDATOR_SETUP.md) | Complete validator node setup and maintenance | Validators |
 | [Provider Operations](PROVIDER_OPERATIONS.md) | Provider daemon setup and daily operations | Providers |
 | [Performance Tuning](PERFORMANCE_TUNING.md) | System optimization and tuning guidelines | SRE/Operators |
+| [Economics Simulation](ECONOMICS_SIMULATION.md) | Run economics simulation suite and dashboards | SRE/Engineering |
 
 ### Incident Response
 
