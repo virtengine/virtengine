@@ -104,8 +104,8 @@ import (
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	roleskeeper "github.com/virtengine/virtengine/x/roles/keeper"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
-	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
 	settlementibc "github.com/virtengine/virtengine/x/settlement/ibc"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 	virtstakingkeeper "github.com/virtengine/virtengine/x/staking/keeper"
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
@@ -154,25 +154,25 @@ type AppKeepers struct {
 		Audit       akeeper.Keeper
 		Cert        ckeeper.Keeper
 		// VirtEngine patent-specific modules (AU2024203136A1)
-		Encryption  encryptionkeeper.Keeper
-		Roles       roleskeeper.Keeper
-		VEID        veidkeeper.Keeper
-		MFA         mfakeeper.Keeper
-		Config      configkeeper.Keeper
-		HPC         hpckeeper.Keeper
-		Resources   resourceskeeper.Keeper
-		Benchmark   benchkeeper.Keeper
-		Enclave     enclavekeeper.Keeper
-		Settlement  settlementkeeper.Keeper
+		Encryption    encryptionkeeper.Keeper
+		Roles         roleskeeper.Keeper
+		VEID          veidkeeper.Keeper
+		MFA           mfakeeper.Keeper
+		Config        configkeeper.Keeper
+		HPC           hpckeeper.Keeper
+		Resources     resourceskeeper.Keeper
+		Benchmark     benchkeeper.Keeper
+		Enclave       enclavekeeper.Keeper
+		Settlement    settlementkeeper.Keeper
 		SettlementIBC settlementibc.IBCKeeper
-		Fraud       fraudkeeper.Keeper
-		Review      reviewkeeper.Keeper
-		Support     supportkeeper.Keeper
-		Delegation  delegationkeeper.Keeper
-		VirtStaking virtstakingkeeper.Keeper
-		GasPricing  gaspricing.Keeper
-		BME         bmekeeper.IKeeper
-		Oracle      oraclekeeper.IKeeper
+		Fraud         fraudkeeper.Keeper
+		Review        reviewkeeper.Keeper
+		Support       supportkeeper.Keeper
+		Delegation    delegationkeeper.Keeper
+		VirtStaking   virtstakingkeeper.Keeper
+		GasPricing    gaspricing.Keeper
+		BME           bmekeeper.IKeeper
+		Oracle        oraclekeeper.IKeeper
 	}
 
 	Modules struct {
@@ -618,7 +618,7 @@ func (app *App) InitNormalKeepers(
 		app.keys[settlementtypes.StoreKey],
 		app.Keepers.VirtEngine.Settlement,
 		app.Keepers.Cosmos.IBC.ChannelKeeper,
-		app.Keepers.Cosmos.IBC.PortKeeper,
+		NewIBCPortKeeperAdapter(app.Keepers.Cosmos.IBC.PortKeeper),
 	)
 
 	transferIBCModule := transfer.NewIBCModule(app.Keepers.Cosmos.Transfer)

@@ -36,13 +36,12 @@ type Params struct {
 	// for drop in 1 basis point of circuit_breaker_warn_threshold
 	// Stored as basis points * 100 (e.g., 9500 = 0.95)
 	// e.g: runway_blocks = 100
+	//      min_runway_blocks_backoff = 1000
+	//      circuit_breaker_warn_threshold drops from 0.95 to 0.94
+	//      then runway_blocks = (100*0.1 + 100) = 110
 	//
-	//	min_runway_blocks_backoff = 1000
-	//	circuit_breaker_warn_threshold drops from 0.95 to 0.94
-	//	then runway_blocks = (100*0.1 + 100) = 110
-	//
-	//	circuit_breaker_warn_threshold drops from 0.94 to 0.92
-	//	then runway_blocks = (110*(0.1*2) + 110) = 132
+	//      circuit_breaker_warn_threshold drops from 0.94 to 0.92
+	//      then runway_blocks = (110*(0.1*2) + 110) = 132
 	EpochBlocksBackoff uint32 `protobuf:"varint,4,opt,name=epoch_blocks_backoff,json=epochBlocksBackoff,proto3" json:"epoch_blocks_backoff,omitempty"`
 	// mint_spread_bps is the spread in basis points applied during ACT mint
 	// (default: 25 bps = 0.25%)
