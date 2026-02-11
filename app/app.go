@@ -214,6 +214,7 @@ func NewApp(
 
 	// Tell the app's module manager how to set the order of BeginBlockers, which are run at the beginning of every block.
 	app.MM.SetOrderBeginBlockers(orderBeginBlockers(app.MM.ModuleNames())...)
+	app.MM.SetOrderEndBlockers(OrderEndBlockers(app.MM.ModuleNames())...)
 	app.MM.SetOrderInitGenesis(OrderInitGenesis(app.MM.ModuleNames())...)
 
 	app.Configurator = module.NewConfigurator(app.AppCodec(), app.MsgServiceRouter(), app.GRPCQueryRouter())
