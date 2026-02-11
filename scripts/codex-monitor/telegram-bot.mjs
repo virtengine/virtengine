@@ -15,7 +15,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   execPrimaryPrompt,
@@ -1670,21 +1670,78 @@ async function cmdTasks(chatId) {
       const branch = attempt.branch || "";
       const pr = attempt.pr_number ? ` PR#${attempt.pr_number}` : "";
       const title = attempt.task_title || attempt.task_id || id;
-      const executor = attempt.executor || "?";
+
+      // Determine executor/agent type
+      let executor = attempt.executor || "";
+      if (!executor) {
+        // Infer from context: check if internal executor is running this task
+        if (_getInternalExecutor) {
+          try {
+            const internalExec = _getInternalExecutor();
+            if (internalExec) {
+              const execStatus = internalExec.getStatus();
+              const inSlot = execStatus.slots?.find(
+                (s) => s.taskId === (attempt.task_id || id),
+              );
+              if (inSlot) {
+                executor = `internal/${inSlot.sdk || "auto"}`;
+              }
+            }
+          } catch { /* ignore */ }
+        }
+        // Fall back to executor mode detection
+        if (!executor) {
+          const execMode = _getExecutorMode ? _getExecutorMode() : "";
+          if (execMode === "internal") {
+            executor = "internal";
+          } else if (attempt.copilot_fix_requested) {
+            executor = "copilot-fix";
+          } else {
+            executor = "VK";
+          }
+        }
+      }
+
+      // Friendly agent ID: branch name + slot number (1-based), fallback to short attempt id.
+      const shortId = id ? String(id).slice(0, 8) : "";
+      let slotNum = 1;
+      if (_getInternalExecutor && executor.startsWith("internal")) {
+        try {
+          const internalExec = _getInternalExecutor();
+          const execStatus = internalExec?.getStatus?.();
+          const idx = execStatus?.slots?.findIndex(
+            (s) => s.taskId === (attempt.task_id || id),
+          );
+          if (idx >= 0) slotNum = idx + 1;
+        } catch {
+          /* ignore */
+        }
+      }
+      const displayId = branch
+        ? `${branch}-${slotNum}`
+        : shortId
+          ? `attempt-${shortId}`
+          : "attempt-unknown";
 
       lines.push(`${emoji} ${title}${pr}`);
-      lines.push(`   Status: ${status} | Agent: ${executor}`);
+      lines.push(`   Status: ${status} | Agent: ${executor} | ID: ${displayId}`);
 
       // ── Workspace duration ──────────────────────────────────────
-      const started =
-        attempt.started_at || attempt.created_at || attempt.updated_at;
-      if (started) {
-        const dur = Date.now() - Date.parse(started);
+      const lastActivity =
+        attempt.updated_at || attempt.started_at || attempt.created_at;
+      if (lastActivity) {
+        const dur = Date.now() - Date.parse(lastActivity);
         const mins = Math.floor(dur / 60000);
         const hrs = Math.floor(mins / 60);
         const remMin = mins % 60;
         const durStr = hrs > 0 ? `${hrs}h ${remMin}m` : `${mins}m`;
-        lines.push(`   ⏱️ Active: ${durStr}`);
+        const STALE_THRESHOLD_MS = 6 * 60 * 60 * 1000; // 6 hours
+        const isStale = dur > STALE_THRESHOLD_MS;
+        if (isStale) {
+          lines.push(`   ⏱️ Since last update: ${durStr} ⚠️ STALE`);
+        } else {
+          lines.push(`   ⏱️ Active: ${durStr}`);
+        }
       }
 
       // ── Retry count (from failure_counts tracked by auto-reattempt) ──
@@ -1742,13 +1799,50 @@ async function cmdTasks(chatId) {
 }
 
 async function cmdLogs(chatId, _args) {
-  const numLines = parseInt(_args, 10) || 30;
+  const args = String(_args || "").trim().split(/\s+/).filter(Boolean);
+  const attemptId = args[0] && !Number.isNaN(Number(args[0])) ? args[0] : "";
+  const numLines = parseInt(args[1] || args[0], 10) || 30;
   try {
+    if (attemptId) {
+      const shortId = attemptId.slice(0, 8);
+      const agentLogDir = resolve(repoRoot, ".cache", "agent-logs");
+      const sessionLogDir = resolve(__dirname, "logs", "vk-sessions");
+
+      const candidates = [
+        resolve(agentLogDir, `${shortId}.log`),
+        resolve(agentLogDir, `vk-exec-${shortId}.log`),
+      ];
+
+      const sessionFiles = await readdir(sessionLogDir).catch(() => []);
+      const sessionMatch = sessionFiles.find((f) =>
+        f.includes(shortId) && f.endsWith(".log"),
+      );
+      if (sessionMatch) {
+        candidates.unshift(resolve(sessionLogDir, sessionMatch));
+      }
+
+      const matchPath = candidates.find((p) => existsSync(p));
+      if (!matchPath) {
+        await sendReply(
+          chatId,
+          `No logs found for ${attemptId}. Try /logs to view the latest monitor log.`,
+        );
+        return;
+      }
+
+      const content = await readFile(matchPath, "utf8");
+      const lines = content.split("\n").filter(Boolean);
+      const tail = lines.slice(-numLines).join("\n");
+      const fileName = basename(matchPath);
+      await sendReply(
+        chatId,
+        `📄 Last ${numLines} lines of ${fileName}:\n\n${tail || "(empty)"}`,
+      );
+      return;
+    }
+
     const logFiles = await readdir(resolve(__dirname, "logs")).catch(() => []);
-    const logFile = logFiles
-      .filter((f) => f.endsWith(".log"))
-      .sort()
-      .pop(); // most recent
+    const logFile = logFiles.filter((f) => f.endsWith(".log")).sort().pop();
 
     if (!logFile) {
       await sendReply(chatId, "No log files found.");

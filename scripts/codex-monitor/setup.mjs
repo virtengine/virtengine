@@ -312,6 +312,31 @@ const EXECUTOR_PRESETS = {
       role: "tertiary",
     },
   ],
+  "claude-only": [
+    {
+      name: "claude-native",
+      executor: "CLAUDE",
+      variant: "OPUS_4_6",
+      weight: 100,
+      role: "primary",
+    },
+  ],
+  "claude-codex": [
+    {
+      name: "claude-native",
+      executor: "CLAUDE",
+      variant: "OPUS_4_6",
+      weight: 60,
+      role: "primary",
+    },
+    {
+      name: "codex-default",
+      executor: "CODEX",
+      variant: "DEFAULT",
+      weight: 40,
+      role: "backup",
+    },
+  ],
 };
 
 const FAILOVER_STRATEGIES = [
@@ -761,6 +786,8 @@ async function main() {
         "Codex only",
         "Copilot + Codex (50/50 split)",
         "Copilot only (Claude Opus 4.6)",
+        "Claude SDK only (native Claude Agent SDK)",
+        "Claude SDK + Codex (60/40 split)",
         "Triple (Copilot Claude 40%, Codex 35%, Copilot GPT 25%)",
         "Custom — I'll define my own executors",
       ],
@@ -771,6 +798,8 @@ async function main() {
       "codex-only",
       "copilot-codex",
       "copilot-only",
+      "claude-only",
+      "claude-codex",
       "triple",
       "custom",
     ];
@@ -1344,7 +1373,9 @@ async function main() {
 
       info("VK configuration will be applied on first launch.");
       info("Setup and cleanup scripts generated for your workspace.");
-      info(`PATH environment variable configured for ${configJson.executors.length} executor profile(s)`);
+      info(
+        `PATH environment variable configured for ${configJson.executors.length} executor profile(s)`,
+      );
     }
   } finally {
     prompt.close();
