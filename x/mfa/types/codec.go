@@ -31,6 +31,9 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &mfav1.MsgAddTrustedDevice{}, "mfa/MsgAddTrustedDevice")
 	legacy.RegisterAminoMsg(cdc, &mfav1.MsgRemoveTrustedDevice{}, "mfa/MsgRemoveTrustedDevice")
 	legacy.RegisterAminoMsg(cdc, &mfav1.MsgUpdateSensitiveTxConfig{}, "mfa/MsgUpdateSensitiveTxConfig")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgIssueSession{}, "mfa/MsgIssueSession")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgRefreshSession{}, "mfa/MsgRefreshSession")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgRevokeSession{}, "mfa/MsgRevokeSession")
 	legacy.RegisterAminoMsg(cdc, &mfav1.MsgUpdateParams{}, "mfa/MsgUpdateParams")
 }
 
@@ -46,6 +49,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&mfav1.MsgAddTrustedDevice{},
 		&mfav1.MsgRemoveTrustedDevice{},
 		&mfav1.MsgUpdateSensitiveTxConfig{},
+		&mfav1.MsgIssueSession{},
+		&mfav1.MsgRefreshSession{},
+		&mfav1.MsgRevokeSession{},
 		&mfav1.MsgUpdateParams{},
 	)
 

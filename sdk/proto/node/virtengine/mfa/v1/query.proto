@@ -53,11 +53,25 @@ service Query {
     option (google.api.http).get = "/virtengine/mfa/v1/session/{session_id}";
   }
 
+  // AuthorizationSessions returns authorization sessions for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AuthorizationSessions(QueryAuthorizationSessionsRequest) returns (QueryAuthorizationSessionsResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/sessions/{address}";
+  }
+
   // TrustedDevices returns trusted devices for an account
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc TrustedDevices(QueryTrustedDevicesRequest) returns (QueryTrustedDevicesResponse) {
     option (google.api.http).get = "/virtengine/mfa/v1/devices/{address}";
+  }
+
+  // TrustedDevice returns a trusted device by fingerprint
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc TrustedDevice(QueryTrustedDeviceRequest) returns (QueryTrustedDeviceResponse) {
+    option (google.api.http).get = "/virtengine/mfa/v1/device/{address}/{device_fingerprint}";
   }
 
   // SensitiveTxConfig returns the configuration for a sensitive tx type
@@ -275,6 +289,32 @@ message QueryAuthorizationSessionResponse {
   ];
 }
 
+// QueryAuthorizationSessionsRequest is the request for QueryAuthorizationSessions
+message QueryAuthorizationSessionsRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // IncludeExpired indicates whether to include expired/used sessions
+  bool include_expired = 2 [
+    (gogoproto.jsontag) = "include_expired",
+    (gogoproto.moretags) = "yaml:\"include_expired\""
+  ];
+}
+
+// QueryAuthorizationSessionsResponse is the response for QueryAuthorizationSessions
+message QueryAuthorizationSessionsResponse {
+  // Sessions is the list of authorization sessions
+  repeated AuthorizationSession sessions = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "sessions",
+    (gogoproto.moretags) = "yaml:\"sessions\""
+  ];
+}
+
 // QueryTrustedDevicesRequest is the request for QueryTrustedDevices
 message QueryTrustedDevicesRequest {
   // Address is the account address to query
@@ -304,6 +344,37 @@ message QueryTrustedDevicesResponse {
   cosmos.base.query.v1beta1.PageResponse pagination = 2 [
     (gogoproto.jsontag) = "pagination,omitempty",
     (gogoproto.moretags) = "yaml:\"pagination\""
+  ];
+}
+
+// QueryTrustedDeviceRequest is the request for QueryTrustedDevice
+message QueryTrustedDeviceRequest {
+  // Address is the account address to query
+  string address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // DeviceFingerprint is the device fingerprint to query
+  string device_fingerprint = 2 [
+    (gogoproto.jsontag) = "device_fingerprint",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+}
+
+// QueryTrustedDeviceResponse is the response for QueryTrustedDevice
+message QueryTrustedDeviceResponse {
+  // Device is the trusted device
+  TrustedDevice device = 1 [
+    (gogoproto.jsontag) = "device",
+    (gogoproto.moretags) = "yaml:\"device\""
+  ];
+
+  // Found indicates if the device was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
   ];
 }
 

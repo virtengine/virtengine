@@ -3,6 +3,7 @@
  * VE-210: Unit tests for quality validation functions
  */
 
+import { describe, it, expect } from 'vitest';
 import {
   checkResolution,
   checkBrightness,
