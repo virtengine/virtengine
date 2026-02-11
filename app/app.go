@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -188,7 +189,7 @@ func NewApp(
 		minGasPrices = sdk.DecCoins{}
 	}
 	gasParams := gaspricing.DefaultParams(minGasPrices)
-	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.keys[apptypes.GasPricingStoreKey], logger, gasParams)
+	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.GetKey(apptypes.GasPricingStoreKey), logger, gasParams)
 
 	// TODO: There is a bug here, where we register the govRouter routes in InitNormalKeepers and then
 	// call setupHooks afterwards. Therefore, if a gov proposal needs to call a method and that method calls a
@@ -228,7 +229,7 @@ func NewApp(
 	app.MM.SetOrderInitGenesis(OrderInitGenesis(app.MM.ModuleNames())...)
 
 	app.Configurator = module.NewConfigurator(app.AppCodec(), app.MsgServiceRouter(), app.GRPCQueryRouter())
-	err := app.MM.RegisterServices(app.Configurator)
+	err = app.MM.RegisterServices(app.Configurator)
 	if err != nil {
 		panic(err)
 	}
@@ -258,11 +259,11 @@ func NewApp(
 			SignModeHandler: encodingConfig.TxConfig.SignModeHandler(),
 			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		},
-		CDC:             app.cdc,
-		GovKeeper:       app.Keepers.Cosmos.Gov,
-		MFAGatingKeeper: &app.Keepers.VirtEngine.MFA,
-		VEIDKeeper:      &app.Keepers.VirtEngine.VEID,
-		RolesKeeper:     &app.Keepers.VirtEngine.Roles,
+		CDC:              app.cdc,
+		GovKeeper:        app.Keepers.Cosmos.Gov,
+		MFAGatingKeeper:  &app.Keepers.VirtEngine.MFA,
+		VEIDKeeper:       &app.Keepers.VirtEngine.VEID,
+		RolesKeeper:      &app.Keepers.VirtEngine.Roles,
 		GasPricingKeeper: &app.Keepers.VirtEngine.GasPricing,
 	}
 
@@ -480,7 +481,7 @@ func (app *VirtEngineApp) PrepareCheckStater(ctx sdk.Context) {
 }
 
 func (app *VirtEngineApp) applyAdaptiveMinGasPrices(ctx sdk.Context) {
-	if app.Keepers.VirtEngine.GasPricing == (gaspricing.Keeper{}) {
+	if app.Keepers.VirtEngine.GasPricing.IsZero() {
 		return
 	}
 	params := app.Keepers.VirtEngine.GasPricing.GetParams(ctx)
@@ -491,25 +492,41 @@ func (app *VirtEngineApp) applyAdaptiveMinGasPrices(ctx sdk.Context) {
 	if len(state.CurrentMinGasPrices) == 0 {
 		state = gaspricing.DefaultState(params)
 	}
-	app.SetMinGasPrices(state.CurrentMinGasPrices.String())
+	app.setMinGasPrices(state.CurrentMinGasPrices)
 }
 
 func (app *VirtEngineApp) updateAdaptiveMinGasPrices(ctx sdk.Context) {
-	if app.Keepers.VirtEngine.GasPricing == (gaspricing.Keeper{}) {
+	if app.Keepers.VirtEngine.GasPricing.IsZero() {
 		return
 	}
 	params := app.Keepers.VirtEngine.GasPricing.GetParams(ctx)
 	if !params.Enabled {
 		return
 	}
-	gasUsed := int64(ctx.BlockGasMeter().GasConsumed())
+	gasConsumed := ctx.BlockGasMeter().GasConsumed()
+	var gasUsed int64
+	if gasConsumed > math.MaxInt64 {
+		gasUsed = math.MaxInt64
+	} else {
+		gasUsed = int64(gasConsumed) //nolint:gosec // gasConsumed is clamped to MaxInt64 above
+	}
 	maxGas := ctx.ConsensusParams().Block.MaxGas
 	minGasPrices, _, err := app.Keepers.VirtEngine.GasPricing.UpdateMinGasPrices(ctx, gasUsed, maxGas)
 	if err != nil {
 		app.Logger().Error("failed to update adaptive min gas prices", "err", err)
 		return
 	}
-	app.SetMinGasPrices(minGasPrices.String())
+	app.setMinGasPrices(minGasPrices)
+}
+
+type minGasPriceSetter interface {
+	setMinGasPrices(prices sdk.DecCoins)
+}
+
+func (app *VirtEngineApp) setMinGasPrices(prices sdk.DecCoins) {
+	if setter, ok := interface{}(app.BaseApp).(minGasPriceSetter); ok {
+		setter.setMinGasPrices(prices)
+	}
 }
 
 // LegacyAmino returns VirtEngineApp's amino codec.

@@ -4,24 +4,26 @@ import (
 	"testing"
 
 	"cosmossdk.io/log"
-	store "cosmossdk.io/store"
+	"cosmossdk.io/store/metrics"
+	"cosmossdk.io/store/rootmulti"
 	storetypes "cosmossdk.io/store/types"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUpdateMinGasPrices(t *testing.T) {
 	key := storetypes.NewKVStoreKey("gaspricing-test")
 	db := dbm.NewMemDB()
-	cms := store.NewCommitMultiStore(db, log.NewNopLogger(), nil)
+	cms := rootmulti.NewStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, db)
 	require.NoError(t, cms.LoadLatestVersion())
 
 	ctx := sdk.NewContext(cms, tmproto.Header{Height: 10}, false, log.NewNopLogger())
 
-	baseMinGas := sdk.MustParseDecCoins("0.001uvirt")
+	baseMinGas, err := sdk.ParseDecCoins("0.001uvirt")
+	require.NoError(t, err)
 	params := DefaultParams(baseMinGas)
 	params.TargetBlockUtilizationBPS = 5000
 	params.AdjustmentRateBPS = 4000
@@ -34,10 +36,9 @@ func TestUpdateMinGasPrices(t *testing.T) {
 
 	highMinGas, _, err := keeper.UpdateMinGasPrices(ctx, 9000, 10000)
 	require.NoError(t, err)
-	require.True(t, highMinGas.IsAllGTE(baseMinGas))
+	require.True(t, decCoinsAllGTE(highMinGas, baseMinGas))
 
 	lowMinGas, _, err := keeper.UpdateMinGasPrices(ctx, 1000, 10000)
 	require.NoError(t, err)
-	require.True(t, lowMinGas.IsAllGTE(baseMinGas))
+	require.True(t, decCoinsAllGTE(lowMinGas, baseMinGas))
 }
-
