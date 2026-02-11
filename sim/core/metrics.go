@@ -19,6 +19,8 @@ type MetricsCollector struct {
 	storagePriceSum float64
 	gpuPriceSum     float64
 	gasPriceSum     float64
+	minGasPriceSum  float64
+	gasUtilSum      float64
 
 	feeBurned *big.Int
 
@@ -50,6 +52,8 @@ func (m *MetricsCollector) RecordStep(state model.State) {
 	m.storagePriceSum += state.Market.StoragePrice
 	m.gpuPriceSum += state.Market.GPUPrice
 	m.gasPriceSum += state.Market.GasPrice
+	m.minGasPriceSum += state.Market.GasMinPrice
+	m.gasUtilSum += state.Market.GasUtilization
 }
 
 // RecordFeeBurned accumulates fee burn totals.
@@ -100,6 +104,8 @@ func (m *MetricsCollector) Finalize(initial, final model.State) Metrics {
 	metrics.AvgStoragePrice = m.storagePriceSum / float64(m.steps)
 	metrics.AvgGPUPrice = m.gpuPriceSum / float64(m.steps)
 	metrics.AvgGasPrice = m.gasPriceSum / float64(m.steps)
+	metrics.AvgMinGasPrice = m.minGasPriceSum / float64(m.steps)
+	metrics.AvgGasUtilization = m.gasUtilSum / float64(m.steps)
 
 	metrics.SettlementFailures = m.settlementFailures
 	metrics.EscrowUnderfunded = m.escrowUnderfunded

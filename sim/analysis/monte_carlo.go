@@ -165,6 +165,16 @@ func applyParam(config *core.Config, param string, value float64) {
 		config.Market.GPUBasePrice = value
 	case "base_gas_price":
 		config.Market.GasBasePrice = value
+	case "gas_capacity":
+		config.Market.GasCapacity = value
+	case "gas_target_utilization_bps":
+		config.Market.GasTargetUtilizationBPS = int64(value)
+	case "gas_max_change_bps":
+		config.Market.GasMaxChangeBPS = int64(value)
+	case "gas_congestion_threshold_bps":
+		config.Market.GasCongestionThresholdBPS = int64(value)
+	case "gas_congestion_multiplier_bps":
+		config.Market.GasCongestionMultiplierBPS = int64(value)
 	case "user_demand_mean":
 		config.UserDemandMean = value
 	case "user_demand_stddev":
@@ -185,6 +195,8 @@ func extractMetrics(result core.SimulationResult) map[string]float64 {
 	metrics["avg_storage_price"] = result.Metrics.AvgStoragePrice
 	metrics["avg_gpu_price"] = result.Metrics.AvgGPUPrice
 	metrics["avg_gas_price"] = result.Metrics.AvgGasPrice
+	metrics["avg_min_gas_price"] = result.Metrics.AvgMinGasPrice
+	metrics["avg_gas_utilization"] = result.Metrics.AvgGasUtilization
 	metrics["attack_cost_usd"] = result.Metrics.AttackCostUSD
 	metrics["sybil_risk"] = result.Metrics.SybilRiskScore
 	metrics["collusion_risk"] = result.Metrics.CollusionRisk
