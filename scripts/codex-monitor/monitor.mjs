@@ -1481,7 +1481,7 @@ async function startVibeKanbanProcess() {
     env,
     cwd: repoRoot,
     stdio: "ignore",
-    shell: !useLocal,
+    shell: process.platform === "win32" || !useLocal,
     detached: true,
   });
   vibeKanbanProcess.unref();
