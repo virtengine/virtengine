@@ -50,10 +50,8 @@ type ChannelKeeper interface {
 }
 
 // PortKeeper defines the expected IBC port keeper.
-type PortKeeper interface {
-	BindPort(ctx sdk.Context, portID string)
-	IsBound(ctx sdk.Context, portID string) bool
-}
+// Port binding is handled by routers in IBC v10; keeper is retained for compatibility.
+type PortKeeper interface{}
 
 // IBCKeeper implements settlement IBC logic.
 type IBCKeeper struct {
@@ -97,18 +95,14 @@ func (k IBCKeeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+ModuleName)
 }
 
-// BindPort binds to the settlement IBC port.
-func (k IBCKeeper) BindPort(ctx sdk.Context) error {
-	if k.portKeeper.IsBound(ctx, PortID) {
-		return nil
-	}
-	k.portKeeper.BindPort(ctx, PortID)
+// BindPort is a no-op for IBC v10 (router-based port binding).
+func (k IBCKeeper) BindPort(_ sdk.Context) error {
 	return nil
 }
 
-// IsBound checks if the IBC port is bound.
-func (k IBCKeeper) IsBound(ctx sdk.Context) bool {
-	return k.portKeeper.IsBound(ctx, PortID)
+// IsBound always returns true for IBC v10 (router-based port binding).
+func (k IBCKeeper) IsBound(_ sdk.Context) bool {
+	return true
 }
 
 // StoreHandshakeRecord stores the handshake start info for timeout checks.

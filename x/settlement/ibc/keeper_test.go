@@ -115,11 +115,11 @@ type mockChannelKeeper struct {
 }
 
 type sentPacket struct {
-	sourcePort      string
-	sourceChannel   string
-	timeoutHeight   clienttypes.Height
+	sourcePort       string
+	sourceChannel    string
+	timeoutHeight    clienttypes.Height
 	timeoutTimestamp uint64
-	data            []byte
+	data             []byte
 }
 
 func (m *mockChannelKeeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
@@ -129,39 +129,22 @@ func (m *mockChannelKeeper) GetChannel(ctx sdk.Context, portID, channelID string
 func (m *mockChannelKeeper) SendPacket(ctx sdk.Context, sourcePort, sourceChannel string, timeoutHeight clienttypes.Height, timeoutTimestamp uint64, data []byte) (uint64, error) {
 	sequence := uint64(len(m.sent) + 1)
 	m.sent = append(m.sent, sentPacket{
-		sourcePort:      sourcePort,
-		sourceChannel:   sourceChannel,
-		timeoutHeight:   timeoutHeight,
+		sourcePort:       sourcePort,
+		sourceChannel:    sourceChannel,
+		timeoutHeight:    timeoutHeight,
 		timeoutTimestamp: timeoutTimestamp,
-		data:            data,
+		data:             data,
 	})
 	return sequence, nil
 }
 
-type mockPortKeeper struct {
-	bound map[string]bool
-}
-
-func newMockPortKeeper() *mockPortKeeper {
-	return &mockPortKeeper{bound: make(map[string]bool)}
-}
-
-func (m *mockPortKeeper) BindPort(ctx sdk.Context, portID string) {
-	m.bound[portID] = true
-}
-
-func (m *mockPortKeeper) IsBound(ctx sdk.Context, portID string) bool {
-	return m.bound[portID]
-}
-
 type ibcTestEnv struct {
-	ctx       sdk.Context
-	keeper    IBCKeeper
-	settle    *mockSettlementKeeper
-	channel   *mockChannelKeeper
-	port      *mockPortKeeper
-	storeKey  storetypes.StoreKey
-	codec     codec.BinaryCodec
+	ctx      sdk.Context
+	keeper   IBCKeeper
+	settle   *mockSettlementKeeper
+	channel  *mockChannelKeeper
+	storeKey storetypes.StoreKey
+	codec    codec.BinaryCodec
 }
 
 func setupIBCTestEnv(t *testing.T) ibcTestEnv {
@@ -185,16 +168,13 @@ func setupIBCTestEnv(t *testing.T) ibcTestEnv {
 	channel := &mockChannelKeeper{
 		channel: channeltypes.Channel{Version: Version},
 	}
-	port := newMockPortKeeper()
-
-	keeper := NewIBCKeeper(cdc, storeKey, settle, channel, port)
+	keeper := NewIBCKeeper(cdc, storeKey, settle, channel, nil)
 
 	return ibcTestEnv{
 		ctx:      ctx,
 		keeper:   keeper,
 		settle:   settle,
 		channel:  channel,
-		port:     port,
 		storeKey: storeKey,
 		codec:    cdc,
 	}
@@ -205,14 +185,14 @@ func TestIBCKeeperSendEscrowDepositDefaults(t *testing.T) {
 
 	depositor := sdk.AccAddress([]byte("depositor_addr______"))
 	deposit := EscrowDepositPacket{
-		DepositID:       "deposit-1",
-		OrderID:         "order-1",
-		Depositor:       depositor.String(),
-		Amount:          sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		DepositID:        "deposit-1",
+		OrderID:          "order-1",
+		Depositor:        depositor.String(),
+		Amount:           sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
 		ExpiresInSeconds: 3600,
-		SourceChainID:   "chain-a",
-		SourceChannel:   "channel-0",
-		RequestedAt:     env.ctx.BlockTime(),
+		SourceChainID:    "chain-a",
+		SourceChannel:    "channel-0",
+		RequestedAt:      env.ctx.BlockTime(),
 	}
 
 	sequence, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, deposit)
@@ -230,14 +210,14 @@ func TestIBCKeeperOnRecvEscrowDeposit(t *testing.T) {
 
 	depositor := sdk.AccAddress([]byte("depositor_addr______"))
 	deposit := EscrowDepositPacket{
-		DepositID:       "deposit-1",
-		OrderID:         "order-1",
-		Depositor:       depositor.String(),
-		Amount:          sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		DepositID:        "deposit-1",
+		OrderID:          "order-1",
+		Depositor:        depositor.String(),
+		Amount:           sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
 		ExpiresInSeconds: 3600,
-		SourceChainID:   "chain-a",
-		SourceChannel:   "channel-0",
-		RequestedAt:     env.ctx.BlockTime(),
+		SourceChainID:    "chain-a",
+		SourceChannel:    "channel-0",
+		RequestedAt:      env.ctx.BlockTime(),
 	}
 
 	packetData, err := NewPacketData(PacketTypeEscrowDeposit, deposit)
@@ -363,8 +343,8 @@ func TestIBCKeeperRateLimit(t *testing.T) {
 	env := setupIBCTestEnv(t)
 
 	cfg := RateLimitConfig{
-		Enabled:                     true,
-		MaxPacketsPerBlock:          1,
+		Enabled:                      true,
+		MaxPacketsPerBlock:           1,
 		MaxPacketsPerRelayerPerBlock: 1,
 	}
 	require.NoError(t, env.keeper.SetRateLimitConfig(env.ctx, cfg))
@@ -393,7 +373,7 @@ func TestIBCKeeperHandshakeTimeout(t *testing.T) {
 func TestIBCKeeperBindPort(t *testing.T) {
 	env := setupIBCTestEnv(t)
 
-	require.False(t, env.keeper.IsBound(env.ctx))
+	require.True(t, env.keeper.IsBound(env.ctx))
 	require.NoError(t, env.keeper.BindPort(env.ctx))
 	require.True(t, env.keeper.IsBound(env.ctx))
 }
