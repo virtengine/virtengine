@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"github.com/virtengine/virtengine/x/benchmark/client/cli"
 	"github.com/virtengine/virtengine/x/benchmark/keeper"
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
@@ -86,12 +87,12 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the root tx command for the Benchmark module.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetTxCmd()
 }
 
 // GetQueryCmd returns the root query command for the Benchmark module.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetQueryCmd()
 }
 
 // AppModule implements an application module for the Benchmark module.

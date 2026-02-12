@@ -21,6 +21,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"github.com/virtengine/virtengine/x/review/client/cli"
 	"github.com/virtengine/virtengine/x/review/keeper"
 	"github.com/virtengine/virtengine/x/review/types"
 )
@@ -88,12 +89,12 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the root tx command for the Review module.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetTxCmd()
 }
 
 // GetQueryCmd returns the root query command for the Review module.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetQueryCmd()
 }
 
 // AppModule implements an application module for the Review module.
