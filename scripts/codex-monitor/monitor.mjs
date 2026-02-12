@@ -4726,8 +4726,9 @@ async function actOnAssessment(ctx, decision) {
       console.log(`[${tag}] → reprompt new session`);
       if (typeof startFreshSession === "function") {
         startFreshSession(
+          null,
           decision.prompt || `Resume task: ${ctx.taskTitle}`,
-          decision.reason,
+          ctx.taskId || null,
         );
       } else if (typeof attemptFreshSessionRetry === "function") {
         await attemptFreshSessionRetry(
@@ -8336,6 +8337,13 @@ async function handleDigestSealed({ entries, text }) {
 }
 
 async function startProcess() {
+  // Guard: never spawn VK orchestrator when executor mode is internal or disabled
+  const execMode = configExecutorMode || getExecutorMode();
+  if (execMode === "internal" || isExecutorDisabled()) {
+    console.log(`[monitor] startProcess skipped — executor mode is "${execMode}" (VK orchestrator not needed)`);
+    return;
+  }
+
   const now = Date.now();
 
   // ── Minimum restart interval — never restart faster than 15s ──────
