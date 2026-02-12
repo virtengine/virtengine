@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, rmSync, statSync, readdirSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,6 +81,22 @@ function fixGitConfigCorruption(repoRoot) {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Get age in milliseconds from filesystem mtime.
+ * Used as fallback when no registry entry exists for a worktree.
+ * @param {string} dirPath
+ * @returns {number} Age in ms, or Infinity if path cannot be stat'd
+ */
+function _getFilesystemAgeMs(dirPath) {
+  try {
+    const stat = statSync(dirPath);
+    return Date.now() - stat.mtimeMs;
+  } catch {
+    return Infinity;
+  }
+}
+
 
 /**
  * Sanitize a branch name into a filesystem-safe directory name.
@@ -573,9 +589,11 @@ class WorktreeManager {
       if (isVK) {
         const registryKey = this._findKeyByPath(resolve(wt.path));
         const record = registryKey ? this.registry.get(registryKey) : null;
-        const ageMs = record ? Date.now() - record.lastUsedAt : -1;
+        const ageMs = record
+          ? Date.now() - record.lastUsedAt
+          : _getFilesystemAgeMs(wt.path);
 
-        // Only prune if we have age info and it's old, or if path doesn't exist
+        // Prune if age exceeds threshold or path doesn't exist
         if (ageMs > MAX_WORKTREE_AGE_MS || !existsSync(wt.path)) {
           console.log(
             `${TAG} ${dryRun ? "[dry-run] would remove" : "removing"} stale VK worktree: ${wt.path}`,
@@ -611,6 +629,74 @@ class WorktreeManager {
           }
         }
       }
+    }
+
+    // Step 3b: pr-cleanup temp worktrees (left by pr-cleanup-daemon)
+    for (const wt of allWorktrees) {
+      if (wt.isMainWorktree) continue;
+      if (wt.path.includes("pr-cleanup-")) {
+        const ageMs = _getFilesystemAgeMs(wt.path);
+        if (ageMs > MAX_WORKTREE_AGE_MS || !existsSync(wt.path)) {
+          console.log(
+            `${TAG} ${dryRun ? "[dry-run] would remove" : "removing"} stale pr-cleanup worktree: ${wt.path}`,
+          );
+          if (!dryRun) {
+            this._forceRemoveWorktreeSync(wt.path);
+            pruned++;
+          }
+        }
+      }
+    }
+
+    // Step 3c: catch-all — any other non-main worktree older than 7 days
+    for (const wt of allWorktrees) {
+      if (wt.isMainWorktree) continue;
+      const isVK = wt.path.includes("vibe-kanban") || (wt.branch && wt.branch.startsWith("ve/"));
+      const isCopilot = /copilot-worktree-\d{4}-\d{2}-\d{2}/.test(wt.path);
+      const isPrCleanup = wt.path.includes("pr-cleanup-");
+      if (isVK || isCopilot || isPrCleanup) continue;
+
+      const registryKey = this._findKeyByPath(resolve(wt.path));
+      const record = registryKey ? this.registry.get(registryKey) : null;
+      const ageMs = record ? Date.now() - record.lastUsedAt : _getFilesystemAgeMs(wt.path);
+      if (ageMs > COPILOT_WORKTREE_MAX_AGE_MS) {
+        console.log(
+          `${TAG} ${dryRun ? "[dry-run] would remove" : "removing"} old untracked worktree: ${wt.path} (age=${(ageMs / 3600000).toFixed(1)}h)`,
+        );
+        if (!dryRun) {
+          this._forceRemoveWorktreeSync(wt.path);
+          if (registryKey) { this.registry.delete(registryKey); evicted++; }
+          pruned++;
+        }
+      }
+    }
+
+    // Step 3d: scan .cache/worktrees/ for orphan dirs not tracked by git
+    try {
+      const cacheDir = resolve(this.repoRoot, DEFAULT_BASE_DIR);
+      if (existsSync(cacheDir)) {
+        const gitPaths = new Set(allWorktrees.map((wt) => resolve(wt.path)));
+        const entries = readdirSync(cacheDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const dirPath = resolve(cacheDir, entry.name);
+          if (gitPaths.has(dirPath)) continue;
+          const ageMs = _getFilesystemAgeMs(dirPath);
+          if (ageMs > MAX_WORKTREE_AGE_MS) {
+            console.log(
+              `${TAG} ${dryRun ? "[dry-run] would remove" : "removing"} orphan cache dir: ${dirPath} (age=${(ageMs / 3600000).toFixed(1)}h)`,
+            );
+            if (!dryRun) {
+              try { rmSync(dirPath, { recursive: true, force: true }); } catch (e) {
+                console.warn(`${TAG} rmSync failed for ${dirPath}: ${e.message}`);
+              }
+              pruned++;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`${TAG} cache dir scan failed: ${e.message}`);
     }
 
     // Step 4: Evict registry entries whose paths no longer exist on disk
