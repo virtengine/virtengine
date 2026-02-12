@@ -9,6 +9,13 @@ const (
 	errProviderNotFound uint32 = iota + 1
 	errInvalidAddress
 	errAttributeNotFound
+	// Audit log error codes
+	errAuditLogDisabled
+	errInvalidExportFormat
+	errExportJobNotFound
+	errInvalidRequest
+	errNotFound
+	errUnauthorized
 )
 
 var (
@@ -20,4 +27,12 @@ var (
 
 	// ErrAttributeNotFound attribute not found
 	ErrAttributeNotFound = sdkerrors.RegisterWithGRPCCode(ModuleName, errAttributeNotFound, codes.NotFound, "attribute not found")
+
+	// Audit log errors
+	ErrAuditLogDisabled    = sdkerrors.RegisterWithGRPCCode(ModuleName, errAuditLogDisabled, codes.FailedPrecondition, "audit logging is disabled")
+	ErrInvalidExportFormat = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidExportFormat, codes.InvalidArgument, "invalid export format")
+	ErrExportJobNotFound   = sdkerrors.RegisterWithGRPCCode(ModuleName, errExportJobNotFound, codes.NotFound, "export job not found")
+	ErrInvalidRequest      = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidRequest, codes.InvalidArgument, "invalid request")
+	ErrNotFound            = sdkerrors.RegisterWithGRPCCode(ModuleName, errNotFound, codes.NotFound, "not found")
+	ErrUnauthorized        = sdkerrors.RegisterWithGRPCCode(ModuleName, errUnauthorized, codes.PermissionDenied, "unauthorized")
 )
