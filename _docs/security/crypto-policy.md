@@ -153,9 +153,35 @@ config := TOTPConfig{
 }
 ```
 
+**Keycloak realm configuration:**
+- `config/waldur/keycloak/realm.json` uses `HmacSHA256` as of February 12, 2026.
+
 ### MD5 for Non-Security Checksums
 
 MD5 is **prohibited** for security purposes. For legacy file checksums where collision resistance is not a security requirement, use SHA-256 instead.
+
+**Updated tooling (February 12, 2026):**
+- `scripts/localnet.sh` uses `sha256sum` for change detection.
+- Runbooks now use `sha256sum` for deterministic hash checks.
+- Synthetic dataset generation uses SHA-256 for deterministic image seeds.
+
+## Migration Timeline
+
+**February 12, 2026**
+- Replace MD5-based checksums in localnet tooling with SHA-256.
+- Replace MD5-based deterministic seeds in ML synthetic dataset generation with SHA-256.
+- Replace SHA-1 based deterministic UUIDs in E2E tests with SHA-256 based derivation.
+- Update Keycloak TOTP configuration to HMAC-SHA256.
+
+**June 30, 2026**
+- Remove any remaining MD5-based checksum usage in scripts or runbooks.
+
+**December 31, 2026**
+- Re-evaluate third-party integrations that require SHA-1 (e.g., Twilio webhooks).
+- Migrate to HMAC-SHA256 when the provider supports it.
+
+**Ongoing**
+- SAML SHA-1 algorithm URIs remain defined only to detect and reject weak signatures until the SAML spec removes them.
 
 ## Security Utilities
 
