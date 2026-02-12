@@ -398,6 +398,17 @@ function isFalsyFlag(value) {
   );
 }
 
+function isReviewAgentEnabled() {
+  const explicit = process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
+  if (explicit !== undefined && String(explicit).trim() !== "") {
+    return !isFalsyFlag(explicit);
+  }
+  if (typeof internalExecutorConfig?.reviewAgentEnabled === "boolean") {
+    return internalExecutorConfig.reviewAgentEnabled;
+  }
+  return true;
+}
+
 function isMonitorMonitorEnabled() {
   if (process.env.VITEST) return false;
   if (!isDevMode()) return false;
@@ -1796,6 +1807,9 @@ function restartVibeKanbanProcess() {
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
+  }
+  if (prCleanupDaemon) {
+    prCleanupDaemon.stop();
   }
   // Just kill the process — the exit handler will auto-restart it
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
@@ -8209,6 +8223,25 @@ function refreshMonitorMonitorRuntime() {
   }
 }
 
+function getMonitorMonitorStatusSnapshot() {
+  const currentSdk = getCurrentMonitorSdk();
+  return {
+    enabled: !!monitorMonitor.enabled,
+    running: !!monitorMonitor.running,
+    currentSdk,
+    sdkOrder: [...(monitorMonitor.sdkOrder || [])],
+    intervalMs: monitorMonitor.intervalMs,
+    statusIntervalMs: monitorMonitor.statusIntervalMs,
+    timeoutMs: monitorMonitor.timeoutMs,
+    lastRunAt: monitorMonitor.lastRunAt || 0,
+    lastStatusAt: monitorMonitor.lastStatusAt || 0,
+    lastTrigger: monitorMonitor.lastTrigger || "",
+    lastOutcome: monitorMonitor.lastOutcome || "",
+    consecutiveFailures: monitorMonitor.consecutiveFailures || 0,
+    lastError: monitorMonitor.lastError || "",
+  };
+}
+
 async function buildMonitorMonitorPrompt({ trigger, entries, text }) {
   const digestSnapshot = getDigestSnapshot();
   const digestEntries =
@@ -8876,6 +8909,9 @@ function selfRestartForSourceChange(filename) {
     vkLogStream.stop();
     vkLogStream = null;
   }
+  if (prCleanupDaemon) {
+    prCleanupDaemon.stop();
+  }
   // ── Agent isolation: do NOT stop internal executor on self-restart ──
   // Task agents run as in-process SDK async iterators. Stopping the executor
   // here is pointless because process.exit(75) kills them anyway. Instead,
@@ -9316,6 +9352,9 @@ process.on("SIGINT", async () => {
     vkLogStream.stop();
     vkLogStream = null;
   }
+  if (prCleanupDaemon) {
+    prCleanupDaemon.stop();
+  }
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopEnvWatchers();
@@ -9707,6 +9746,8 @@ let reviewAgent = null;
 let syncEngine = null;
 /** @type {import("./error-detector.mjs").ErrorDetector|null} */
 let errorDetector = null;
+/** @type {import("./pr-cleanup-daemon.mjs").PRCleanupDaemon|null} */
+let prCleanupDaemon = null;
 
 // ── Task Management Subsystem Initialization ────────────────────────────────
 try {
@@ -9746,8 +9787,12 @@ if (isExecutorDisabled()) {
           ? (msg) => void sendTelegramMessage(msg)
           : null,
       onTaskStarted: (task, slot) => {
+        const agentId =
+          Number.isFinite(slot?.agentInstanceId) && slot.agentInstanceId > 0
+            ? `#${slot.agentInstanceId}`
+            : "n/a";
         console.log(
-          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) in ${slot.worktreePath}`,
+          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) agent=${agentId} branch=${slot.branch} worktree=${slot.worktreePath || "(pending)"}`,
         );
       },
       onTaskCompleted: (task, result) => {
@@ -9846,68 +9891,80 @@ if (isExecutorDisabled()) {
     }
 
     // ── Review Agent ──
-    try {
-      reviewAgent = createReviewAgent({
-        maxConcurrentReviews: 2,
-        autoFix: true,
-        waitForMerge: true,
-        sendTelegram:
-          telegramToken && telegramChatId
-            ? (msg) => void sendTelegramMessage(msg)
-            : null,
-        promptTemplate: agentPrompts?.reviewer,
-        onReviewComplete: (taskId, result) => {
-          console.log(
-            `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
-          );
-          try {
-            setReviewResult(taskId, {
-              approved: result?.approved ?? false,
-              issues: result?.issues || [],
-            });
-          } catch {
-            /* best-effort */
-          }
-
-          if (result?.approved && result?.prMerged) {
-            // PR merged and reviewer happy — fully done
+    if (isReviewAgentEnabled()) {
+      try {
+        reviewAgent = createReviewAgent({
+          maxConcurrentReviews: Number(
+            process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
+              internalExecutorConfig?.reviewMaxConcurrent ||
+              2,
+          ),
+          reviewTimeoutMs: Number(
+            process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
+              internalExecutorConfig?.reviewTimeoutMs ||
+              300_000,
+          ),
+          sendTelegram:
+            telegramToken && telegramChatId
+              ? (msg) => void sendTelegramMessage(msg)
+              : null,
+          promptTemplate: agentPrompts?.reviewer,
+          onReviewComplete: (taskId, result) => {
             console.log(
-              `[monitor] review approved + PR merged — marking ${taskId} as done`,
+              `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
             );
             try {
-              setInternalTaskStatus(taskId, "done", "review-agent");
+              setReviewResult(taskId, {
+                approved: result?.approved ?? false,
+                issues: result?.issues || [],
+              });
             } catch {
               /* best-effort */
             }
-            try {
-              updateTaskStatus(taskId, "done");
-            } catch {
-              /* best-effort */
-            }
-          } else if (result?.approved && !result?.prMerged) {
-            // Approved but PR not yet merged — stays in review
-            console.log(
-              `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
-            );
-          } else {
-            console.log(
-              `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
-            );
-          }
-        },
-      });
-      reviewAgent.start();
 
-      // Connect review agent to task executor for handoff
-      if (internalTaskExecutor) {
-        internalTaskExecutor.setReviewAgent(reviewAgent);
+            if (result?.approved && result?.prMerged) {
+              // PR merged and reviewer happy — fully done
+              console.log(
+                `[monitor] review approved + PR merged — marking ${taskId} as done`,
+              );
+              try {
+                setInternalTaskStatus(taskId, "done", "review-agent");
+              } catch {
+                /* best-effort */
+              }
+              try {
+                updateTaskStatus(taskId, "done");
+              } catch {
+                /* best-effort */
+              }
+            } else if (result?.approved && !result?.prMerged) {
+              // Approved but PR not yet merged — stays in review
+              console.log(
+                `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
+              );
+            } else {
+              console.log(
+                `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
+              );
+            }
+          },
+        });
+        reviewAgent.start();
+
+        // Connect review agent to task executor for handoff
+        if (internalTaskExecutor) {
+          internalTaskExecutor.setReviewAgent(reviewAgent);
+        }
+
+        console.log("[monitor] review agent started");
+      } catch (err) {
+        console.warn(`[monitor] review agent failed to start: ${err.message}`);
       }
-
+    } else {
+      reviewAgent = null;
       console.log(
-        "[monitor] review agent started (autoFix: true, waitForMerge: true)",
+        "[monitor] review agent disabled (INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED=0 or config override)",
       );
-    } catch (err) {
-      console.warn(`[monitor] review agent failed to start: ${err.message}`);
     }
 
     // ── Sync Engine ──
@@ -10003,8 +10060,12 @@ injectMonitorFunctions({
   getExecutorMode: () => executorMode,
   getAgentEndpoint: () => agentEndpoint,
   getReviewAgent: () => reviewAgent,
+  getReviewAgentEnabled: () => isReviewAgentEnabled(),
   getSyncEngine: () => syncEngine,
   getErrorDetector: () => errorDetector,
+  getPrCleanupDaemon: () => prCleanupDaemon,
+  getWorkspaceMonitor: () => workspaceMonitor,
+  getMonitorMonitorStatus: () => getMonitorMonitorStatusSnapshot(),
   getTaskStoreStats: () => {
     try {
       return getTaskStoreStats();
@@ -10019,7 +10080,6 @@ if (telegramBotEnabled) {
 
 // ── Start PR Cleanup Daemon ──────────────────────────────────────────────────
 // Automatically resolves PR conflicts and CI failures every 30 minutes
-let prCleanupDaemon = null;
 if (config.prCleanupEnabled !== false) {
   console.log("[monitor] Starting PR cleanup daemon...");
   prCleanupDaemon = new PRCleanupDaemon({

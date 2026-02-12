@@ -298,6 +298,22 @@ export class AgentEndpoint {
     return this._running;
   }
 
+  /**
+   * Lightweight status for diagnostics (/agents).
+   * @returns {{ running: boolean, port: number, startedAt: number|null, uptimeMs: number }}
+   */
+  getStatus() {
+    return {
+      running: this._running,
+      port: this._port,
+      startedAt: this._startedAt || null,
+      uptimeMs:
+        this._running && this._startedAt
+          ? Math.max(0, Date.now() - this._startedAt)
+          : 0,
+    };
+  }
+
   // ── Port Discovery File ─────────────────────────────────────────────────
 
   _writePortFile() {

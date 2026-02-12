@@ -99,6 +99,11 @@ const NO_COMMIT_STATE_FILE = resolve(
   ".cache",
   "no-commit-state.json",
 );
+const RUNTIME_STATE_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".cache",
+  "task-executor-runtime.json",
+);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -378,6 +383,7 @@ async function commentOnIssue(task, commentBody) {
  * @property {string} worktreePath
  * @property {string} threadKey       - agent-pool thread key (taskId used as threadKey)
  * @property {number} startedAt       - timestamp
+ * @property {number|null} agentInstanceId - monotonic task-agent instance ID
  * @property {string} sdk             - which SDK is running this
  * @property {number} attempt         - current attempt number
  * @property {"running"|"completing"|"failed"} status
@@ -475,6 +481,10 @@ class TaskExecutor {
     /** @type {Set<string>} taskId set — tracks tasks where a PR has been created for their branch */
     this._prCreatedForBranch = new Set();
 
+    /** @type {Map<string, { taskId: string, taskTitle: string, branch: string, sdk: string, attempt: number, startedAt: number, agentInstanceId: number|null, status: string, updatedAt: number }>} */
+    this._slotRuntimeState = new Map();
+    this._nextAgentInstanceId = 1;
+
     // Repo context cache (AGENTS.md, copilot-instructions.md)
     this._contextCache = null;
     this._contextCacheTime = 0;
@@ -552,6 +562,132 @@ class TaskExecutor {
     }
   }
 
+  /** Load active slot runtime state (instance IDs + startedAt) from disk. */
+  _loadRuntimeState() {
+    try {
+      if (!existsSync(RUNTIME_STATE_FILE)) return;
+      const raw = readFileSync(RUNTIME_STATE_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      const nextId = Number(parsed?.nextAgentInstanceId || 1);
+      if (Number.isFinite(nextId) && nextId > 0) {
+        this._nextAgentInstanceId = Math.floor(nextId);
+      }
+
+      const slots = parsed?.slots || {};
+      let restored = 0;
+      for (const [taskId, entry] of Object.entries(slots)) {
+        const startedAt = Number(entry?.startedAt || 0);
+        if (!taskId || !Number.isFinite(startedAt) || startedAt <= 0) continue;
+        const agentInstanceIdRaw = Number(entry?.agentInstanceId);
+        const agentInstanceId =
+          Number.isFinite(agentInstanceIdRaw) && agentInstanceIdRaw > 0
+            ? Math.floor(agentInstanceIdRaw)
+            : null;
+        if (agentInstanceId) {
+          this._nextAgentInstanceId = Math.max(
+            this._nextAgentInstanceId,
+            agentInstanceId + 1,
+          );
+        }
+        this._slotRuntimeState.set(taskId, {
+          taskId,
+          taskTitle: String(entry?.taskTitle || ""),
+          branch: String(entry?.branch || ""),
+          sdk: String(entry?.sdk || ""),
+          attempt: Number(entry?.attempt || 0),
+          startedAt,
+          agentInstanceId,
+          status: String(entry?.status || "running"),
+          updatedAt: Number(entry?.updatedAt || Date.now()),
+        });
+        restored++;
+      }
+      if (restored > 0) {
+        console.log(
+          `${TAG} restored runtime slot state for ${restored} task(s), next agent instance #${this._nextAgentInstanceId}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`${TAG} failed to load runtime slot state: ${err.message}`);
+    }
+  }
+
+  /** Persist active slot runtime state to disk (survives monitor restart). */
+  _saveRuntimeState() {
+    try {
+      const dir = resolve(__dirname, ".cache");
+      mkdirSync(dir, { recursive: true });
+
+      const slots = {};
+      for (const [taskId, entry] of this._slotRuntimeState.entries()) {
+        slots[taskId] = {
+          taskId,
+          taskTitle: entry.taskTitle || "",
+          branch: entry.branch || "",
+          sdk: entry.sdk || "",
+          attempt: Number(entry.attempt || 0),
+          startedAt: Number(entry.startedAt || Date.now()),
+          agentInstanceId:
+            Number.isFinite(entry.agentInstanceId) && entry.agentInstanceId > 0
+              ? Number(entry.agentInstanceId)
+              : null,
+          status: entry.status || "running",
+          updatedAt: Number(entry.updatedAt || Date.now()),
+        };
+      }
+
+      writeFileSync(
+        RUNTIME_STATE_FILE,
+        JSON.stringify(
+          {
+            nextAgentInstanceId: this._nextAgentInstanceId,
+            slots,
+            savedAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    } catch (err) {
+      console.warn(`${TAG} failed to save runtime slot state: ${err.message}`);
+    }
+  }
+
+  /**
+   * Mirror slot fields into persisted runtime state.
+   * @param {SlotInfo} slot
+   */
+  _upsertRuntimeSlot(slot) {
+    if (!slot?.taskId) return;
+    this._slotRuntimeState.set(slot.taskId, {
+      taskId: slot.taskId,
+      taskTitle: slot.taskTitle || "",
+      branch: slot.branch || "",
+      sdk: slot.sdk || "",
+      attempt: Number(slot.attempt || 0),
+      startedAt: Number(slot.startedAt || Date.now()),
+      agentInstanceId:
+        Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+          ? Number(slot.agentInstanceId)
+          : null,
+      status: slot.status || "running",
+      updatedAt: Date.now(),
+    });
+    this._saveRuntimeState();
+  }
+
+  /**
+   * Delete runtime state for a task slot after completion/failure reset.
+   * @param {string} taskId
+   */
+  _removeRuntimeSlot(taskId) {
+    if (!taskId) return;
+    if (this._slotRuntimeState.delete(taskId)) {
+      this._saveRuntimeState();
+    }
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /**
@@ -566,6 +702,8 @@ class TaskExecutor {
     }
     // Restore anti-thrash state from disk
     this._loadNoCommitState();
+    // Restore active slot metadata (agent instance IDs + original startedAt)
+    this._loadRuntimeState();
 
     // Clean up zombie threads from prior runs
     const pruned = pruneAllExhaustedThreads();
@@ -608,6 +746,9 @@ class TaskExecutor {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
     }
+
+    // Persist runtime state before waiting so unexpected exits still recover
+    this._saveRuntimeState();
 
     const activeCount = this._activeSlots.size;
     if (activeCount > 0) {
@@ -1073,6 +1214,24 @@ class TaskExecutor {
 
     if (!inProgressTasks.length) return;
 
+    // Runtime metadata can outlive crashes. Drop stale records that are no
+    // longer in-progress so new runs get fresh instance IDs and start times.
+    const inProgressIds = new Set(
+      inProgressTasks
+        .map((task) => task?.id || task?.task_id)
+        .filter((id) => !!id),
+    );
+    let prunedRuntime = 0;
+    for (const taskId of Array.from(this._slotRuntimeState.keys())) {
+      if (!inProgressIds.has(taskId) && !this._activeSlots.has(taskId)) {
+        this._slotRuntimeState.delete(taskId);
+        prunedRuntime++;
+      }
+    }
+    if (prunedRuntime > 0) {
+      this._saveRuntimeState();
+    }
+
     const activeThreads = new Set(
       getActiveThreads()
         .map((entry) => String(entry?.taskKey || "").trim())
@@ -1109,6 +1268,7 @@ class TaskExecutor {
       } catch {
         /* best effort */
       }
+      this._removeRuntimeSlot(id);
       resetToTodo++;
     }
 
@@ -1150,6 +1310,8 @@ class TaskExecutor {
         branch: s.branch,
         sdk: s.sdk,
         attempt: s.attempt,
+        agentInstanceId: s.agentInstanceId ?? null,
+        startedAt: s.startedAt,
         runningFor: Math.round((Date.now() - s.startedAt) / 1000),
         status: s.status,
       })),
@@ -1338,6 +1500,28 @@ class TaskExecutor {
     }
 
     // 1b. Allocate slot
+    const recoveredRuntime =
+      task?.status === "inprogress"
+        ? this._slotRuntimeState.get(taskId) || null
+        : null;
+    const recoveredAgentId = Number(recoveredRuntime?.agentInstanceId || 0);
+    const recoveredStartedAt = Number(recoveredRuntime?.startedAt || 0);
+    const validRecoveredStartedAt =
+      Number.isFinite(recoveredStartedAt) &&
+      recoveredStartedAt > 0 &&
+      recoveredStartedAt <= Date.now();
+
+    let agentInstanceId = null;
+    if (Number.isFinite(recoveredAgentId) && recoveredAgentId > 0) {
+      agentInstanceId = Math.floor(recoveredAgentId);
+      this._nextAgentInstanceId = Math.max(
+        this._nextAgentInstanceId,
+        agentInstanceId + 1,
+      );
+    } else {
+      agentInstanceId = this._nextAgentInstanceId++;
+    }
+
     /** @type {SlotInfo} */
     const slot = {
       taskId,
@@ -1345,7 +1529,8 @@ class TaskExecutor {
       branch,
       worktreePath: null,
       threadKey: taskId,
-      startedAt: Date.now(),
+      startedAt: validRecoveredStartedAt ? recoveredStartedAt : Date.now(),
+      agentInstanceId,
       sdk: resolvedSdk,
       attempt: 0,
       status: "running",
@@ -1353,6 +1538,7 @@ class TaskExecutor {
       complexity: complexityInfo || null,
     };
     this._activeSlots.set(taskId, slot);
+    this._upsertRuntimeSlot(slot);
 
     try {
       this.onTaskStarted?.(task, slot);
@@ -1408,6 +1594,7 @@ class TaskExecutor {
           /* best-effort */
         }
         this._activeSlots.delete(taskId);
+        this._removeRuntimeSlot(taskId);
         this.onTaskFailed?.(
           task,
           new Error(`Worktree acquisition failed: ${err.message}`),
@@ -1431,6 +1618,7 @@ class TaskExecutor {
           /* best-effort */
         }
         this._activeSlots.delete(taskId);
+        this._removeRuntimeSlot(taskId);
         this.onTaskFailed?.(
           task,
           new Error("Worktree path invalid or missing"),
@@ -1439,6 +1627,7 @@ class TaskExecutor {
       }
 
       slot.worktreePath = wt.path;
+      this._upsertRuntimeSlot(slot);
 
       // 4. Record pre-execution HEAD hash (to detect if agent made NEW commits)
       const preExecHead =
@@ -1613,6 +1802,7 @@ class TaskExecutor {
 
       // 7. Handle result
       slot.status = validatedResult.success ? "completing" : "failed";
+      this._upsertRuntimeSlot(slot);
       await this._handleTaskResult(task, validatedResult, wt.path, execInfo);
 
       // 7a. Feed back success/failure to executor scheduler for failover tracking
@@ -1632,6 +1822,7 @@ class TaskExecutor {
         console.warn(`${TAG} worktree release warning: ${err.message}`);
       }
       this._activeSlots.delete(taskId);
+      this._removeRuntimeSlot(taskId);
     } catch (err) {
       // Catch-all: ensure slot is always cleaned up
       console.error(
@@ -1653,6 +1844,7 @@ class TaskExecutor {
       }
 
       this._activeSlots.delete(taskId);
+      this._removeRuntimeSlot(taskId);
       this.onTaskFailed?.(task, err);
       this.sendTelegram?.(
         `❌ Task executor error: "${taskTitle}" — ${(err.message || "").slice(0, 200)}`,
@@ -3019,6 +3211,13 @@ export function loadExecutorOptionsFromConfig() {
 
   const envMode = (process.env.EXECUTOR_MODE || "").toLowerCase();
   const configExec = config.internalExecutor || config.taskExecutor || {};
+  const reviewAgentRaw = process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
+  const reviewAgentEnabled =
+    reviewAgentRaw !== undefined && String(reviewAgentRaw).trim() !== ""
+      ? !["0", "false", "no", "off"].includes(
+          String(reviewAgentRaw).trim().toLowerCase(),
+        )
+      : configExec.reviewAgentEnabled !== false;
 
   return {
     mode: envMode || configExec.mode || "vk",
@@ -3042,6 +3241,17 @@ export function loadExecutorOptionsFromConfig() {
     autoCreatePr: configExec.autoCreatePr !== false,
     projectId:
       process.env.INTERNAL_EXECUTOR_PROJECT_ID || configExec.projectId || null,
+    reviewAgentEnabled,
+    reviewMaxConcurrent: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
+        configExec.reviewMaxConcurrent ||
+        2,
+    ),
+    reviewTimeoutMs: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
+        configExec.reviewTimeoutMs ||
+        300000,
+    ),
     repoRoot: config.repoRoot || process.cwd(),
     repoSlug: config.repoSlug || "",
     agentPrompts: config.agentPrompts || {},
