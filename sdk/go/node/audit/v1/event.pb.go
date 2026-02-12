@@ -150,33 +150,333 @@ func (m *EventTrustedAuditorDeleted) GetAuditor() string {
 	return ""
 }
 
+// EventAuditLogCreated defines an event for when an audit log entry is created.
+type EventAuditLogCreated struct {
+	// Log entry ID
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id" yaml:"id"`
+	// Block height
+	Height int64 `protobuf:"varint,2,opt,name=height,proto3" json:"height" yaml:"height"`
+	// Actor address
+	Actor string `protobuf:"bytes,3,opt,name=actor,proto3" json:"actor" yaml:"actor"`
+	// Module name
+	Module string `protobuf:"bytes,4,opt,name=module,proto3" json:"module" yaml:"module"`
+	// Action name
+	Action string `protobuf:"bytes,5,opt,name=action,proto3" json:"action" yaml:"action"`
+	// Resource ID
+	ResourceId string `protobuf:"bytes,6,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty" yaml:"resource_id,omitempty"`
+}
+
+func (m *EventAuditLogCreated) Reset()         { *m = EventAuditLogCreated{} }
+func (m *EventAuditLogCreated) String() string { return proto.CompactTextString(m) }
+func (*EventAuditLogCreated) ProtoMessage()    {}
+func (*EventAuditLogCreated) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b7d37945b32690ef, []int{2}
+}
+func (m *EventAuditLogCreated) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EventAuditLogCreated) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EventAuditLogCreated.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *EventAuditLogCreated) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EventAuditLogCreated.Merge(m, src)
+}
+func (m *EventAuditLogCreated) XXX_Size() int {
+	return m.Size()
+}
+func (m *EventAuditLogCreated) XXX_DiscardUnknown() {
+	xxx_messageInfo_EventAuditLogCreated.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_EventAuditLogCreated proto.InternalMessageInfo
+
+func (m *EventAuditLogCreated) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *EventAuditLogCreated) GetHeight() int64 {
+	if m != nil {
+		return m.Height
+	}
+	return 0
+}
+
+func (m *EventAuditLogCreated) GetActor() string {
+	if m != nil {
+		return m.Actor
+	}
+	return ""
+}
+
+func (m *EventAuditLogCreated) GetModule() string {
+	if m != nil {
+		return m.Module
+	}
+	return ""
+}
+
+func (m *EventAuditLogCreated) GetAction() string {
+	if m != nil {
+		return m.Action
+	}
+	return ""
+}
+
+func (m *EventAuditLogCreated) GetResourceId() string {
+	if m != nil {
+		return m.ResourceId
+	}
+	return ""
+}
+
+// EventExportJobCreated defines an event for when an export job is created.
+type EventExportJobCreated struct {
+	// Export job ID
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id" yaml:"id"`
+	// Requester address
+	Requester string `protobuf:"bytes,2,opt,name=requester,proto3" json:"requester" yaml:"requester"`
+	// Export format
+	Format string `protobuf:"bytes,3,opt,name=format,proto3" json:"format" yaml:"format"`
+}
+
+func (m *EventExportJobCreated) Reset()         { *m = EventExportJobCreated{} }
+func (m *EventExportJobCreated) String() string { return proto.CompactTextString(m) }
+func (*EventExportJobCreated) ProtoMessage()    {}
+func (*EventExportJobCreated) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b7d37945b32690ef, []int{3}
+}
+func (m *EventExportJobCreated) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EventExportJobCreated) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EventExportJobCreated.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *EventExportJobCreated) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EventExportJobCreated.Merge(m, src)
+}
+func (m *EventExportJobCreated) XXX_Size() int {
+	return m.Size()
+}
+func (m *EventExportJobCreated) XXX_DiscardUnknown() {
+	xxx_messageInfo_EventExportJobCreated.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_EventExportJobCreated proto.InternalMessageInfo
+
+func (m *EventExportJobCreated) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *EventExportJobCreated) GetRequester() string {
+	if m != nil {
+		return m.Requester
+	}
+	return ""
+}
+
+func (m *EventExportJobCreated) GetFormat() string {
+	if m != nil {
+		return m.Format
+	}
+	return ""
+}
+
+// EventExportJobCompleted defines an event for when an export job completes.
+type EventExportJobCompleted struct {
+	// Export job ID
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id" yaml:"id"`
+	// Number of entries exported
+	EntryCount int64 `protobuf:"varint,2,opt,name=entry_count,json=entryCount,proto3" json:"entry_count" yaml:"entry_count"`
+	// File path
+	FilePath string `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path" yaml:"file_path"`
+}
+
+func (m *EventExportJobCompleted) Reset()         { *m = EventExportJobCompleted{} }
+func (m *EventExportJobCompleted) String() string { return proto.CompactTextString(m) }
+func (*EventExportJobCompleted) ProtoMessage()    {}
+func (*EventExportJobCompleted) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b7d37945b32690ef, []int{4}
+}
+func (m *EventExportJobCompleted) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EventExportJobCompleted) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EventExportJobCompleted.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *EventExportJobCompleted) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EventExportJobCompleted.Merge(m, src)
+}
+func (m *EventExportJobCompleted) XXX_Size() int {
+	return m.Size()
+}
+func (m *EventExportJobCompleted) XXX_DiscardUnknown() {
+	xxx_messageInfo_EventExportJobCompleted.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_EventExportJobCompleted proto.InternalMessageInfo
+
+func (m *EventExportJobCompleted) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *EventExportJobCompleted) GetEntryCount() int64 {
+	if m != nil {
+		return m.EntryCount
+	}
+	return 0
+}
+
+func (m *EventExportJobCompleted) GetFilePath() string {
+	if m != nil {
+		return m.FilePath
+	}
+	return ""
+}
+
+// EventExportJobFailed defines an event for when an export job fails.
+type EventExportJobFailed struct {
+	// Export job ID
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id" yaml:"id"`
+	// Error message
+	Error string `protobuf:"bytes,2,opt,name=error,proto3" json:"error" yaml:"error"`
+}
+
+func (m *EventExportJobFailed) Reset()         { *m = EventExportJobFailed{} }
+func (m *EventExportJobFailed) String() string { return proto.CompactTextString(m) }
+func (*EventExportJobFailed) ProtoMessage()    {}
+func (*EventExportJobFailed) Descriptor() ([]byte, []int) {
+	return fileDescriptor_b7d37945b32690ef, []int{5}
+}
+func (m *EventExportJobFailed) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EventExportJobFailed) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EventExportJobFailed.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *EventExportJobFailed) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EventExportJobFailed.Merge(m, src)
+}
+func (m *EventExportJobFailed) XXX_Size() int {
+	return m.Size()
+}
+func (m *EventExportJobFailed) XXX_DiscardUnknown() {
+	xxx_messageInfo_EventExportJobFailed.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_EventExportJobFailed proto.InternalMessageInfo
+
+func (m *EventExportJobFailed) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *EventExportJobFailed) GetError() string {
+	if m != nil {
+		return m.Error
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*EventTrustedAuditorCreated)(nil), "virtengine.audit.v1.EventTrustedAuditorCreated")
 	proto.RegisterType((*EventTrustedAuditorDeleted)(nil), "virtengine.audit.v1.EventTrustedAuditorDeleted")
+	proto.RegisterType((*EventAuditLogCreated)(nil), "virtengine.audit.v1.EventAuditLogCreated")
+	proto.RegisterType((*EventExportJobCreated)(nil), "virtengine.audit.v1.EventExportJobCreated")
+	proto.RegisterType((*EventExportJobCompleted)(nil), "virtengine.audit.v1.EventExportJobCompleted")
+	proto.RegisterType((*EventExportJobFailed)(nil), "virtengine.audit.v1.EventExportJobFailed")
 }
 
 func init() { proto.RegisterFile("virtengine/audit/v1/event.proto", fileDescriptor_b7d37945b32690ef) }
 
 var fileDescriptor_b7d37945b32690ef = []byte{
-	// 288 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x2f, 0xcb, 0x2c, 0x2a,
-	0x49, 0xcd, 0x4b, 0xcf, 0xcc, 0x4b, 0xd5, 0x4f, 0x2c, 0x4d, 0xc9, 0x2c, 0xd1, 0x2f, 0x33, 0xd4,
-	0x4f, 0x2d, 0x4b, 0xcd, 0x2b, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12, 0x46, 0x28, 0xd0,
-	0x03, 0x2b, 0xd0, 0x2b, 0x33, 0x94, 0x12, 0x49, 0xcf, 0x4f, 0xcf, 0x07, 0xcb, 0xeb, 0x83, 0x58,
-	0x10, 0xa5, 0x52, 0x92, 0xc9, 0xf9, 0xc5, 0xb9, 0xf9, 0xc5, 0xf1, 0x10, 0x09, 0x08, 0x07, 0x22,
-	0xa5, 0xb4, 0x87, 0x91, 0x4b, 0xca, 0x15, 0x64, 0x6a, 0x48, 0x51, 0x69, 0x71, 0x49, 0x6a, 0x8a,
-	0x23, 0xc8, 0xa4, 0xfc, 0x22, 0xe7, 0xa2, 0xd4, 0xc4, 0x92, 0xd4, 0x14, 0x21, 0x77, 0x2e, 0xd6,
-	0xfc, 0xf2, 0xbc, 0xd4, 0x22, 0x09, 0x46, 0x05, 0x46, 0x0d, 0x4e, 0x27, 0xc3, 0x57, 0xf7, 0xe4,
-	0x21, 0x02, 0x9f, 0xee, 0xc9, 0xf3, 0x54, 0x26, 0xe6, 0xe6, 0x58, 0x29, 0x81, 0xb9, 0x4a, 0x97,
-	0xb6, 0xe8, 0x8a, 0x40, 0x0d, 0x76, 0x4c, 0x49, 0x29, 0x4a, 0x2d, 0x2e, 0x0e, 0x2e, 0x29, 0xca,
-	0xcc, 0x4b, 0x0f, 0x82, 0x28, 0x17, 0xf2, 0xe7, 0x62, 0x4f, 0x84, 0x18, 0x2d, 0xc1, 0x04, 0x36,
-	0xca, 0xf4, 0xd5, 0x3d, 0x79, 0x98, 0xd0, 0xa7, 0x7b, 0xf2, 0x7c, 0x10, 0xc3, 0xa0, 0x02, 0xb8,
-	0x8d, 0x83, 0x69, 0xb1, 0x62, 0x79, 0xb1, 0x40, 0x9e, 0x11, 0x97, 0xf3, 0x5d, 0x52, 0x73, 0x52,
-	0x87, 0x80, 0xf3, 0x9d, 0xfc, 0x4f, 0x3c, 0x92, 0x63, 0xbc, 0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23,
-	0x39, 0xc6, 0x09, 0x8f, 0xe5, 0x18, 0x2e, 0x3c, 0x96, 0x63, 0xb8, 0xf1, 0x58, 0x8e, 0x21, 0xca,
-	0x34, 0x3d, 0xb3, 0x24, 0xa3, 0x34, 0x49, 0x2f, 0x39, 0x3f, 0x57, 0x1f, 0x29, 0x25, 0x20, 0x31,
-	0x8b, 0x53, 0xb2, 0xf5, 0xd3, 0xf3, 0xf5, 0xf3, 0xf2, 0x53, 0x10, 0x09, 0x24, 0x89, 0x0d, 0x1c,
-	0xab, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x1e, 0x82, 0xdf, 0x65, 0x3e, 0x02, 0x00, 0x00,
+	// 637 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x54, 0xcb, 0x6a, 0x14, 0x41,
+	0x14, 0x4d, 0x4f, 0x1e, 0x3a, 0x15, 0x15, 0xe9, 0x24, 0x38, 0x89, 0xd2, 0xa5, 0x25, 0x82, 0x0b,
+	0x9d, 0x26, 0x84, 0x2c, 0xcc, 0x42, 0x48, 0x62, 0x22, 0x8a, 0x10, 0x69, 0x05, 0x21, 0x9b, 0xa1,
+	0xd3, 0x55, 0xe9, 0x29, 0x9c, 0xee, 0x1a, 0xab, 0xab, 0x47, 0xf3, 0x01, 0xee, 0xfd, 0x04, 0x3f,
+	0xc2, 0xa5, 0x1f, 0xe0, 0xc2, 0x45, 0x70, 0xe5, 0xaa, 0x90, 0x64, 0x23, 0xbd, 0xec, 0x2f, 0x90,
+	0x7a, 0xf4, 0xd4, 0x20, 0x46, 0xe2, 0xd2, 0x5d, 0x9d, 0x73, 0xeb, 0x9e, 0x7b, 0xef, 0xa9, 0x07,
+	0x80, 0x23, 0xca, 0x05, 0xc9, 0x53, 0x9a, 0x93, 0x30, 0x2e, 0x31, 0x15, 0xe1, 0x68, 0x35, 0x24,
+	0x23, 0x92, 0x8b, 0xee, 0x90, 0x33, 0xc1, 0xfc, 0x05, 0xb7, 0xa1, 0xab, 0x37, 0x74, 0x47, 0xab,
+	0x2b, 0x8b, 0x29, 0x4b, 0x99, 0x8e, 0x87, 0x6a, 0x65, 0xb6, 0xae, 0x2c, 0x27, 0xac, 0xc8, 0x58,
+	0xd1, 0x33, 0x01, 0x03, 0x4c, 0x08, 0x7d, 0xf6, 0xc0, 0xca, 0x8e, 0x52, 0x7d, 0xc9, 0xcb, 0x42,
+	0x10, 0xbc, 0xa9, 0x94, 0x18, 0xdf, 0xe6, 0x24, 0x16, 0x04, 0xfb, 0x8f, 0xc1, 0x2c, 0x7b, 0x9b,
+	0x13, 0xde, 0xf1, 0x6e, 0x7a, 0x77, 0xdb, 0x5b, 0xab, 0x95, 0x84, 0x86, 0xa8, 0x25, 0xbc, 0x74,
+	0x14, 0x67, 0x83, 0x0d, 0xa4, 0x21, 0xfa, 0xf6, 0xe9, 0xfe, 0xa2, 0x15, 0xde, 0xc4, 0x98, 0x93,
+	0xa2, 0x78, 0x21, 0x38, 0xcd, 0xd3, 0xc8, 0x6c, 0xf7, 0xf7, 0xc0, 0x85, 0xd8, 0x48, 0x77, 0x5a,
+	0x5a, 0x6a, 0xbd, 0x92, 0xb0, 0xa1, 0x6a, 0x09, 0xaf, 0x18, 0x31, 0x4b, 0x9c, 0x2d, 0xd7, 0xa4,
+	0x6c, 0xcc, 0xfc, 0xfc, 0x08, 0xbd, 0xb3, 0xda, 0x7f, 0x44, 0x06, 0xe4, 0x7f, 0x68, 0xff, 0xfd,
+	0x34, 0x58, 0xd4, 0xed, 0xeb, 0xbe, 0x9f, 0xb1, 0xb4, 0xf1, 0xfd, 0x36, 0x68, 0x51, 0x6c, 0xbb,
+	0x5e, 0xa8, 0x24, 0x6c, 0x51, 0x5c, 0x4b, 0xd8, 0x36, 0x55, 0x28, 0x46, 0x51, 0x8b, 0x62, 0x7f,
+	0x0d, 0xcc, 0xf5, 0x09, 0x4d, 0xfb, 0x42, 0xf7, 0x34, 0xbd, 0x75, 0xbd, 0x92, 0xd0, 0x32, 0xb5,
+	0x84, 0x97, 0xcd, 0x66, 0x83, 0x51, 0x64, 0x03, 0xca, 0x92, 0x38, 0x51, 0x73, 0x4c, 0x3b, 0x4b,
+	0x34, 0xe1, 0x2c, 0xd1, 0xf0, 0x2f, 0x96, 0xe8, 0xb8, 0xaa, 0x9e, 0x31, 0x5c, 0x0e, 0x48, 0x67,
+	0x46, 0x2b, 0xe9, 0xea, 0x86, 0x71, 0xd5, 0x0d, 0x46, 0x91, 0x0d, 0xa8, 0xa4, 0x38, 0x11, 0x94,
+	0xe5, 0x9d, 0x59, 0x97, 0x64, 0x18, 0x97, 0x64, 0x30, 0x8a, 0x6c, 0xc0, 0xdf, 0x07, 0xf3, 0x9c,
+	0x14, 0xac, 0xe4, 0x09, 0xe9, 0x51, 0xdc, 0x99, 0xd3, 0x99, 0x0f, 0x2a, 0x09, 0x97, 0x26, 0xe8,
+	0x7b, 0x2c, 0xa3, 0x82, 0x64, 0x43, 0x71, 0x54, 0x4b, 0x78, 0xc3, 0x08, 0xfd, 0x31, 0x8c, 0x22,
+	0xd0, 0xf0, 0x4f, 0xb0, 0x3d, 0x87, 0x63, 0x0f, 0x2c, 0xe9, 0x73, 0xd8, 0x79, 0x37, 0x64, 0x5c,
+	0x3c, 0x65, 0x07, 0xff, 0x74, 0x10, 0xaf, 0x40, 0x9b, 0x93, 0x37, 0x25, 0x29, 0x04, 0x69, 0xee,
+	0x87, 0x6a, 0xcf, 0x91, 0xb5, 0x84, 0x57, 0x9b, 0x96, 0x2c, 0x75, 0xb6, 0xbf, 0x2e, 0x4d, 0xd9,
+	0x75, 0xc8, 0x78, 0x16, 0x0b, 0x7b, 0x5a, 0xda, 0x2e, 0xc3, 0x38, 0xbb, 0x0c, 0x46, 0x91, 0x0d,
+	0xd8, 0x91, 0xbe, 0x7a, 0xe0, 0xda, 0x6f, 0x23, 0xb1, 0x6c, 0x68, 0x9e, 0xc5, 0xb9, 0x86, 0xda,
+	0x05, 0xf3, 0x24, 0x17, 0xfc, 0xa8, 0x97, 0xb0, 0x32, 0x6f, 0xae, 0xd8, 0x9d, 0x4a, 0xc2, 0x49,
+	0xba, 0x96, 0xd0, 0x37, 0x69, 0x13, 0x24, 0x8a, 0x80, 0x46, 0xdb, 0x0a, 0xf8, 0x0f, 0x41, 0xfb,
+	0x90, 0x0e, 0x48, 0x6f, 0x18, 0x8b, 0xbe, 0x1d, 0xe3, 0x96, 0x32, 0x67, 0x4c, 0x3a, 0x73, 0xc6,
+	0x14, 0x8a, 0x2e, 0xaa, 0xf5, 0xf3, 0x58, 0xf4, 0xed, 0x38, 0xdc, 0x3e, 0x94, 0xf1, 0x34, 0xbb,
+	0x31, 0x1d, 0x9c, 0x77, 0x94, 0x10, 0xcc, 0x12, 0xce, 0xc7, 0x6f, 0x77, 0x59, 0xdd, 0x79, 0x4d,
+	0xb8, 0x3b, 0xaf, 0x21, 0x8a, 0x0c, 0x6d, 0x6a, 0x6e, 0xed, 0x7d, 0x39, 0x09, 0xbc, 0xe3, 0x93,
+	0xc0, 0xfb, 0x71, 0x12, 0x78, 0x1f, 0x4e, 0x83, 0xa9, 0xe3, 0xd3, 0x60, 0xea, 0xfb, 0x69, 0x30,
+	0xb5, 0xbf, 0x9e, 0x52, 0xd1, 0x2f, 0x0f, 0xba, 0x09, 0xcb, 0xc2, 0x89, 0x7f, 0x7a, 0x62, 0x59,
+	0xe0, 0xd7, 0x61, 0xca, 0xc2, 0x9c, 0x61, 0xf7, 0x7d, 0x1f, 0xcc, 0xe9, 0x3f, 0x77, 0xed, 0x57,
+	0x00, 0x00, 0x00, 0xff, 0xff, 0xa8, 0xc1, 0xa9, 0xd1, 0xdc, 0x05, 0x00, 0x00,
 }
 
 func (this *EventTrustedAuditorCreated) Equal(that interface{}) bool {
@@ -229,6 +529,132 @@ func (this *EventTrustedAuditorDeleted) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Auditor != that1.Auditor {
+		return false
+	}
+	return true
+}
+func (this *EventAuditLogCreated) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventAuditLogCreated)
+	if !ok {
+		that2, ok := that.(EventAuditLogCreated)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.Height != that1.Height {
+		return false
+	}
+	if this.Actor != that1.Actor {
+		return false
+	}
+	if this.Module != that1.Module {
+		return false
+	}
+	if this.Action != that1.Action {
+		return false
+	}
+	if this.ResourceId != that1.ResourceId {
+		return false
+	}
+	return true
+}
+func (this *EventExportJobCreated) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventExportJobCreated)
+	if !ok {
+		that2, ok := that.(EventExportJobCreated)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.Requester != that1.Requester {
+		return false
+	}
+	if this.Format != that1.Format {
+		return false
+	}
+	return true
+}
+func (this *EventExportJobCompleted) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventExportJobCompleted)
+	if !ok {
+		that2, ok := that.(EventExportJobCompleted)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.EntryCount != that1.EntryCount {
+		return false
+	}
+	if this.FilePath != that1.FilePath {
+		return false
+	}
+	return true
+}
+func (this *EventExportJobFailed) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventExportJobFailed)
+	if !ok {
+		that2, ok := that.(EventExportJobFailed)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.Error != that1.Error {
 		return false
 	}
 	return true
@@ -307,6 +733,192 @@ func (m *EventTrustedAuditorDeleted) MarshalToSizedBuffer(dAtA []byte) (int, err
 	return len(dAtA) - i, nil
 }
 
+func (m *EventAuditLogCreated) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EventAuditLogCreated) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventAuditLogCreated) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.ResourceId) > 0 {
+		i -= len(m.ResourceId)
+		copy(dAtA[i:], m.ResourceId)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.ResourceId)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Action) > 0 {
+		i -= len(m.Action)
+		copy(dAtA[i:], m.Action)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Action)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.Module) > 0 {
+		i -= len(m.Module)
+		copy(dAtA[i:], m.Module)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Module)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Actor) > 0 {
+		i -= len(m.Actor)
+		copy(dAtA[i:], m.Actor)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Actor)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Height != 0 {
+		i = encodeVarintEvent(dAtA, i, uint64(m.Height))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Id) > 0 {
+		i -= len(m.Id)
+		copy(dAtA[i:], m.Id)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Id)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *EventExportJobCreated) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EventExportJobCreated) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventExportJobCreated) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Format) > 0 {
+		i -= len(m.Format)
+		copy(dAtA[i:], m.Format)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Format)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Requester) > 0 {
+		i -= len(m.Requester)
+		copy(dAtA[i:], m.Requester)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Requester)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Id) > 0 {
+		i -= len(m.Id)
+		copy(dAtA[i:], m.Id)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Id)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *EventExportJobCompleted) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EventExportJobCompleted) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventExportJobCompleted) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.FilePath) > 0 {
+		i -= len(m.FilePath)
+		copy(dAtA[i:], m.FilePath)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.FilePath)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.EntryCount != 0 {
+		i = encodeVarintEvent(dAtA, i, uint64(m.EntryCount))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Id) > 0 {
+		i -= len(m.Id)
+		copy(dAtA[i:], m.Id)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Id)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *EventExportJobFailed) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EventExportJobFailed) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventExportJobFailed) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Error) > 0 {
+		i -= len(m.Error)
+		copy(dAtA[i:], m.Error)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Error)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Id) > 0 {
+		i -= len(m.Id)
+		copy(dAtA[i:], m.Id)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Id)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintEvent(dAtA []byte, offset int, v uint64) int {
 	offset -= sovEvent(v)
 	base := offset
@@ -346,6 +958,96 @@ func (m *EventTrustedAuditorDeleted) Size() (n int) {
 		n += 1 + l + sovEvent(uint64(l))
 	}
 	l = len(m.Auditor)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	return n
+}
+
+func (m *EventAuditLogCreated) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	if m.Height != 0 {
+		n += 1 + sovEvent(uint64(m.Height))
+	}
+	l = len(m.Actor)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Module)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Action)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.ResourceId)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	return n
+}
+
+func (m *EventExportJobCreated) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Requester)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Format)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	return n
+}
+
+func (m *EventExportJobCompleted) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	if m.EntryCount != 0 {
+		n += 1 + sovEvent(uint64(m.EntryCount))
+	}
+	l = len(m.FilePath)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	return n
+}
+
+func (m *EventExportJobFailed) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Error)
 	if l > 0 {
 		n += 1 + l + sovEvent(uint64(l))
 	}
@@ -564,6 +1266,628 @@ func (m *EventTrustedAuditorDeleted) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Auditor = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EventAuditLogCreated) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EventAuditLogCreated: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EventAuditLogCreated: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Height", wireType)
+			}
+			m.Height = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Height |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Actor", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Actor = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Module", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Module = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Action", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Action = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResourceId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ResourceId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EventExportJobCreated) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EventExportJobCreated: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EventExportJobCreated: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Requester", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Requester = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Format", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Format = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EventExportJobCompleted) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EventExportJobCompleted: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EventExportJobCompleted: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EntryCount", wireType)
+			}
+			m.EntryCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.EntryCount |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FilePath", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FilePath = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EventExportJobFailed) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EventExportJobFailed: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EventExportJobFailed: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Error", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Error = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
