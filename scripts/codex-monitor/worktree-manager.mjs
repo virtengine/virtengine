@@ -49,6 +49,37 @@ const GIT_ENV = {
   GIT_TERMINAL_PROMPT: "0",
 };
 
+/**
+ * Guard against git config corruption caused by worktree operations.
+ * Some git versions on Windows set core.bare=true on the main repo when
+ * adding worktrees, which conflicts with core.worktree and breaks git.
+ * This function cleans up those settings after every worktree operation.
+ * @param {string} repoRoot - Path to the main repository root
+ */
+function fixGitConfigCorruption(repoRoot) {
+  try {
+    const bareResult = spawnSync("git", ["config", "--local", "core.bare"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 5000,
+      env: { ...process.env, ...GIT_ENV },
+    });
+    if (bareResult.stdout?.trim() === "true") {
+      console.warn(
+        `${TAG} ⚠️ Detected core.bare=true on main repo — fixing git config corruption`,
+      );
+      spawnSync("git", ["config", "--unset", "core.bare"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+        timeout: 5000,
+        env: { ...process.env, ...GIT_ENV },
+      });
+    }
+  } catch {
+    /* best-effort — don't crash on config repair */
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -315,6 +346,11 @@ class WorktreeManager {
         return { path: worktreePath, created: false, existing: false };
       }
     }
+
+    // 2b. Guard against git config corruption after worktree operations.
+    // Some git versions on Windows set core.bare=true on the main repo
+    // when adding worktrees, which conflicts with core.worktree and breaks git.
+    fixGitConfigCorruption(this.repoRoot);
 
     // 3. Register the new worktree
     /** @type {WorktreeRecord} */

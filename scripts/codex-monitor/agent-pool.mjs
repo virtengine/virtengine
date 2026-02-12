@@ -52,6 +52,13 @@ const REPO_ROOT = resolve(__dirname, "..", "..");
 /** Default timeout: 90 minutes */
 const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
 
+/**
+ * Hard timeout buffer: added on top of the soft timeout.
+ * If the SDK's async iterator ignores the AbortSignal, this hard timeout
+ * forcibly breaks the Promise.race to prevent infinite hangs.
+ */
+const HARD_TIMEOUT_BUFFER_MS = 60_000; // 60 seconds
+
 /** Tag for console logging */
 const TAG = "[agent-pool]";
 
@@ -300,6 +307,10 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
   const controller = externalAC || new AbortController();
   const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
 
+  // Hard timeout: safety net if the SDK's async iterator ignores AbortSignal.
+  // Fires HARD_TIMEOUT_BUFFER_MS after the soft timeout to forcibly break the loop.
+  let hardTimer;
+
   // ── 4. Stream the turn ───────────────────────────────────────────────────
   try {
     const turn = await thread.runStreamed(prompt, {
@@ -309,23 +320,39 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
     let finalResponse = "";
     const allItems = [];
 
-    for await (const event of turn.events) {
-      if (typeof onEvent === "function") {
-        try {
-          onEvent(event);
-        } catch {
-          /* caller errors must not kill stream */
-        }
-      }
-      if (event.type === "item.completed") {
-        allItems.push(event.item);
-        if (event.item.type === "agent_message" && event.item.text) {
-          finalResponse += event.item.text + "\n";
-        }
-      }
-    }
+    // Race the event iterator against a hard timeout.
+    // The soft timeout fires controller.abort() which the SDK should honor.
+    // The hard timeout is a safety net in case the SDK iterator ignores the abort.
+    const hardTimeoutPromise = new Promise((_, reject) => {
+      hardTimer = setTimeout(
+        () => reject(new Error("hard_timeout")),
+        timeoutMs + HARD_TIMEOUT_BUFFER_MS,
+      );
+    });
 
+    const iterateEvents = async () => {
+      for await (const event of turn.events) {
+        if (controller.signal.aborted) break;
+        if (typeof onEvent === "function") {
+          try {
+            onEvent(event);
+          } catch {
+            /* caller errors must not kill stream */
+          }
+        }
+        if (event.type === "item.completed") {
+          allItems.push(event.item);
+          if (event.item.type === "agent_message" && event.item.text) {
+            finalResponse += event.item.text + "\n";
+          }
+        }
+      }
+    };
+
+    await Promise.race([iterateEvents(), hardTimeoutPromise]);
+    clearTimeout(hardTimer);
     clearTimeout(timer);
+
     const output =
       finalResponse.trim() || "(Agent completed with no text output)";
     return {
@@ -338,12 +365,17 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
     };
   } catch (err) {
     clearTimeout(timer);
-    if (err.name === "AbortError" || String(err) === "timeout") {
+    if (hardTimer) clearTimeout(hardTimer);
+    const isTimeout =
+      err.name === "AbortError" ||
+      String(err) === "timeout" ||
+      err.message === "hard_timeout";
+    if (isTimeout) {
       return {
         success: false,
         output: "",
         items: [],
-        error: `${TAG} codex timeout after ${timeoutMs}ms`,
+        error: `${TAG} codex timeout after ${timeoutMs}ms${err.message === "hard_timeout" ? " (hard timeout — SDK iterator unresponsive)" : ""}`,
         sdk: "codex",
         threadId: null,
       };
@@ -486,6 +518,18 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         };
         const off = session.on(idleHandler);
         Promise.resolve(sendPromise).catch(rejectP);
+        // Wire abort signal into this inner promise
+        if (controller.signal) {
+          const onAbort = () => {
+            if (typeof off === "function") off();
+            rejectP(new Error("timeout"));
+          };
+          if (controller.signal.aborted) {
+            onAbort();
+          } else {
+            controller.signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }
         setTimeout(() => {
           if (typeof off === "function") off();
           resolveP();
@@ -598,8 +642,22 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
           continue;
         }
         if (closed) return;
+        // Wire abort signal: if the controller fires while we're waiting
+        // for the next message, break out of the wait instead of hanging forever.
         await new Promise((r) => {
           resolver = r;
+          if (controller.signal) {
+            const onAbort = () => {
+              closed = true;
+              r();
+            };
+            if (controller.signal.aborted) {
+              closed = true;
+              r();
+              return;
+            }
+            controller.signal.addEventListener("abort", onAbort, { once: true });
+          }
         });
         resolver = null;
       }
@@ -1055,6 +1113,7 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
 
   const controller = externalAC || new AbortController();
   const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  let hardTimer;
 
   try {
     const turn = await thread.runStreamed(prompt, {
@@ -1063,22 +1122,36 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
     let finalResponse = "";
     const allItems = [];
 
-    for await (const event of turn.events) {
-      if (typeof onEvent === "function")
-        try {
-          onEvent(event);
-        } catch {
-          /* */
-        }
-      if (event.type === "item.completed") {
-        allItems.push(event.item);
-        if (event.item.type === "agent_message" && event.item.text) {
-          finalResponse += event.item.text + "\n";
+    // Hard timeout safety net (same as launchCodexThread)
+    const hardTimeoutPromise = new Promise((_, reject) => {
+      hardTimer = setTimeout(
+        () => reject(new Error("hard_timeout")),
+        timeoutMs + HARD_TIMEOUT_BUFFER_MS,
+      );
+    });
+
+    const iterateEvents = async () => {
+      for await (const event of turn.events) {
+        if (controller.signal.aborted) break;
+        if (typeof onEvent === "function")
+          try {
+            onEvent(event);
+          } catch {
+            /* */
+          }
+        if (event.type === "item.completed") {
+          allItems.push(event.item);
+          if (event.item.type === "agent_message" && event.item.text) {
+            finalResponse += event.item.text + "\n";
+          }
         }
       }
-    }
+    };
 
+    await Promise.race([iterateEvents(), hardTimeoutPromise]);
+    clearTimeout(hardTimer);
     clearTimeout(timer);
+
     const newThreadId = thread.id || threadId;
     return {
       success: true,
@@ -1090,13 +1163,17 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
     };
   } catch (err) {
     clearTimeout(timer);
-    const isTimeout = err.name === "AbortError" || String(err) === "timeout";
+    if (hardTimer) clearTimeout(hardTimer);
+    const isTimeout =
+      err.name === "AbortError" ||
+      String(err) === "timeout" ||
+      err.message === "hard_timeout";
     return {
       success: false,
       output: "",
       items: [],
       error: isTimeout
-        ? `${TAG} codex resume timeout after ${timeoutMs}ms`
+        ? `${TAG} codex resume timeout after ${timeoutMs}ms${err.message === "hard_timeout" ? " (hard timeout)" : ""}`
         : `Thread resume error: ${err.message}`,
       sdk: "codex",
       threadId: null,
@@ -1321,6 +1398,7 @@ export async function execWithRetry(prompt, options = {}) {
     buildRetryPrompt,
     sdk,
     onEvent,
+    abortController,
   } = options;
 
   if (!taskKey) {
@@ -1344,10 +1422,24 @@ export async function execWithRetry(prompt, options = {}) {
       `${TAG} execWithRetry: attempt ${attempt}/${totalAttempts} for task "${taskKey}"${attempt > 1 ? " (resume)" : ""}`,
     );
 
+    // Check if externally aborted (e.g. watchdog killed this slot)
+    if (abortController?.signal?.aborted) {
+      lastResult = {
+        success: false,
+        output: "",
+        items: [],
+        error: "Externally aborted (watchdog or manual kill)",
+        sdk: sdk || "unknown",
+        threadId: null,
+      };
+      break;
+    }
+
     lastResult = await launchOrResumeThread(currentPrompt, cwd, timeoutMs, {
       taskKey,
       sdk,
       onEvent,
+      abortController,
     });
 
     // Check if we should retry

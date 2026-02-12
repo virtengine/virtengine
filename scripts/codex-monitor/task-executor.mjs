@@ -68,7 +68,12 @@ const CONTEXT_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const GRACEFUL_SHUTDOWN_MS = 30_000; // 30 seconds
 const MAX_NO_COMMIT_ATTEMPTS = 3; // Stop picking up a task after N consecutive no-commit completions
 const NO_COMMIT_COOLDOWN_BASE_MS = 15 * 60 * 1000; // 15 minutes base cooldown for no-commit
-const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours max cooldown
+const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+/** Watchdog interval: how often to check for stalled agent slots */
+const WATCHDOG_INTERVAL_MS = 60_000; // 1 minute
+/** Grace period after task timeout before watchdog force-kills the slot */
+const WATCHDOG_GRACE_MS = 120_000; // 2 minutes // 2 hours max cooldown
 const NO_COMMIT_STATE_FILE = resolve(
   dirname(fileURLToPath(import.meta.url)),
   ".cache",
@@ -268,6 +273,11 @@ class TaskExecutor {
     this._pollInProgress = false;
     this._resolvedProjectId = null;
 
+    /** @type {Map<string, AbortController>} taskId → AbortController for per-slot abort */
+    this._slotAbortControllers = new Map();
+    /** @type {NodeJS.Timeout|null} watchdog interval handle */
+    this._watchdogTimer = null;
+
     // Anti-thrash: track consecutive no-commit completions per task
     /** @type {Map<string, number>} taskId → consecutive no-commit count */
     this._noCommitCounts = new Map();
@@ -384,6 +394,8 @@ class TaskExecutor {
     });
 
     this._running = true;
+    // Start watchdog to detect and kill stalled agent slots
+    this._startWatchdog();
     // Fire first poll immediately
     this._pollLoop();
     this._pollTimer = setInterval(() => this._pollLoop(), this.pollIntervalMs);
@@ -398,6 +410,7 @@ class TaskExecutor {
    */
   async stop() {
     this._running = false;
+    this._stopWatchdog();
     if (this._pollTimer) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
@@ -460,6 +473,63 @@ class TaskExecutor {
       pausedAt: this._pausedAt,
       pauseDuration: this._pausedAt ? Math.round((Date.now() - this._pausedAt) / 1000) : 0,
     };
+  }
+
+  // ── Slot Watchdog ──────────────────────────────────────────────────────
+
+  /**
+   * Start the watchdog timer that periodically checks for stalled agent slots.
+   * @private
+   */
+  _startWatchdog() {
+    this._watchdogTimer = setInterval(() => this._watchdog(), WATCHDOG_INTERVAL_MS);
+    console.log(
+      `${TAG} watchdog started — checking for stalled agents every ${WATCHDOG_INTERVAL_MS / 1000}s (kill after ${Math.round((this.taskTimeoutMs + WATCHDOG_GRACE_MS) / 60000)}min)`,
+    );
+  }
+
+  /**
+   * Stop the watchdog timer.
+   * @private
+   */
+  _stopWatchdog() {
+    if (this._watchdogTimer) {
+      clearInterval(this._watchdogTimer);
+      this._watchdogTimer = null;
+    }
+  }
+
+  /**
+   * Watchdog: scan active slots for agents that have exceeded deadline.
+   * Force-aborts them via their AbortController so Promise.race breaks the hang.
+   * @private
+   */
+  _watchdog() {
+    const now = Date.now();
+    const deadline = this.taskTimeoutMs + WATCHDOG_GRACE_MS;
+    for (const [taskId, slot] of this._activeSlots) {
+      const elapsed = now - slot.startedAt;
+      if (elapsed > deadline) {
+        const elapsedMin = Math.round(elapsed / 60000);
+        const deadlineMin = Math.round(deadline / 60000);
+        console.warn(
+          `${TAG} ⚠️ WATCHDOG: slot "${slot.taskTitle}" exceeded deadline (${elapsedMin}min > ${deadlineMin}min) — force-aborting`,
+        );
+        const ac = this._slotAbortControllers.get(taskId);
+        if (ac && !ac.signal.aborted) {
+          ac.abort("watchdog_timeout");
+          console.warn(`${TAG} WATCHDOG: abort signal sent for "${slot.taskTitle}"`);
+        } else if (!ac) {
+          console.warn(`${TAG} WATCHDOG: no AbortController for "${slot.taskTitle}" — slot may be stuck permanently`);
+        }
+        // Set cooldown so task isn't immediately re-dispatched
+        this._taskCooldowns.set(taskId, now);
+        // Notify via Telegram
+        this.sendTelegram?.(
+          `⚠️ Watchdog killed stalled agent: "${slot.taskTitle}" (was running ${elapsedMin}min, limit ${deadlineMin}min)`,
+        );
+      }
+    }
   }
 
   /**
@@ -972,6 +1042,10 @@ class TaskExecutor {
       // 5. Build prompt
       const prompt = this._buildTaskPrompt(task, wt.path);
 
+      // 5b. Create per-task AbortController for watchdog integration
+      const taskAbortController = new AbortController();
+      this._slotAbortControllers.set(taskId, taskAbortController);
+
       // 6. Execute agent
       console.log(
         `${TAG} executing task "${taskTitle}" in ${wt.path} on branch ${branch} (sdk=${resolvedSdk})`,
@@ -985,6 +1059,7 @@ class TaskExecutor {
         buildRetryPrompt: (lastResult, attempt) =>
           this._buildRetryPrompt(task, lastResult, attempt),
         onEvent: createAgentLogStreamer(taskId, taskTitle),
+        abortController: taskAbortController,
       });
 
       // Track attempts on task for PR body
@@ -1018,6 +1093,7 @@ class TaskExecutor {
       }
 
       // 8. Cleanup
+      this._slotAbortControllers.delete(taskId);
       try {
         await releaseWorktree(taskId);
       } catch (err) {
@@ -1031,6 +1107,7 @@ class TaskExecutor {
       );
       slot.status = "failed";
       this._taskCooldowns.set(taskId, Date.now());
+      this._slotAbortControllers.delete(taskId);
 
       try {
         await updateTaskStatus(taskId, "todo");
