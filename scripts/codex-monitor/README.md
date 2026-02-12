@@ -42,7 +42,7 @@ cd your-project
 codex-monitor          # auto-detects first run → launches setup wizard
 ```
 
-That's it. On first run, the setup wizard walks you through everything: executors, AI provider, Telegram, Vibe-Kanban, and agent templates.
+That's it. On first run, the setup wizard walks you through everything: executors, AI provider, Telegram, Vibe-Kanban, and prompt templates.
 
 ## Interactive Shell
 
@@ -105,7 +105,7 @@ Telegram users can also send explicit prompts with `/ask <prompt>` (free-text st
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
 - **Task planner** — Detects empty backlog and auto-generates new tasks via AI
-- **Auto-setup** — First-run wizard configures everything; generates agent templates, wires Vibe-Kanban
+- **Auto-setup** — First-run wizard configures everything; scaffolds `.codex-monitor/agents` prompt templates, wires Vibe-Kanban
 - **Multi-repo support** — Manage separate backend/frontend repos from one monitor instance
 - **Multi-workstation presence** — Discover and coordinate multiple codex-monitor instances via Telegram
 - **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
@@ -160,7 +160,7 @@ The wizard configures:
 - Telegram bot
 - Vibe-Kanban connection
 - **Orchestrator scripts** — Auto-detects bundled `ve-orchestrator.ps1` and `ve-kanban.ps1` and offers to use them
-- Agent template files (AGENTS.md, orchestrator.agent.md, task-planner.agent.md)
+- Prompt templates in `.codex-monitor/agents/*.md` (planner, monitor-monitor, task executor, reviewer, conflict resolver, autofix, merge strategy)
 - VK workspace scripts (setup, cleanup)
 
 ### Executor Configuration
@@ -434,8 +434,8 @@ See `codex-monitor.config.example.json` for the full model matrix.
 #### Task Planner Integration
 
 The built-in task planner (triggered when backlog is empty) instructs agents to
-include size labels on every created task. If you write a custom planner prompt,
-include the size label table in your instructions.
+include size labels on every created task. Planner prompts are scaffolded to
+`.codex-monitor/agents/task-planner.md` and can be customized per project.
 
 ### Dirty/Conflict Task Prioritization
 
@@ -955,15 +955,19 @@ Agent finishes task
 
 ## Agent Templates
 
-The setup wizard generates agent template files for your project:
+The setup wizard scaffolds prompt templates under `.codex-monitor/agents/*.md`.
+This folder is gitignored and loaded automatically by codex-monitor at runtime.
 
-| File                                   | Purpose                                                            |
-| -------------------------------------- | ------------------------------------------------------------------ |
-| `AGENTS.md`                            | Root-level guide for AI agents (commit conventions, quality gates) |
-| `.github/agents/orchestrator.agent.md` | Task orchestrator agent prompt (for Copilot/Codex)                 |
-| `.github/agents/task-planner.agent.md` | Auto-creates tasks when backlog is low                             |
-
-These are generic starting points. Customize them for your project's specific needs (build commands, test framework, architecture patterns).
+| File                                              | Purpose                             |
+| ------------------------------------------------- | ----------------------------------- |
+| `.codex-monitor/agents/task-planner.md`          | Backlog planning prompt             |
+| `.codex-monitor/agents/monitor-monitor.md`       | Devmode reliability guardian prompt |
+| `.codex-monitor/agents/task-executor.md`         | Implementation prompt for tasks     |
+| `.codex-monitor/agents/reviewer.md`              | Automated reviewer prompt           |
+| `.codex-monitor/agents/sdk-conflict-resolver.md` | Merge conflict resolver prompt      |
+| `.codex-monitor/agents/autofix-fix.md`           | Structured crash autofix prompt     |
+| `.codex-monitor/agents/autofix-fallback.md`      | Fallback crash-analysis prompt      |
+| `.codex-monitor/agents/merge-strategy.md`        | Merge strategy decision prompt      |
 
 ## AI Provider Examples
 

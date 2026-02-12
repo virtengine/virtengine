@@ -646,6 +646,24 @@ describe("worktree-manager", () => {
       expect(list[0].isMainWorktree).toBe(true);
     });
 
+    it("runs git without shell to avoid DEP0190 warnings", () => {
+      spawnSync.mockReturnValue({
+        status: 0,
+        stdout: porcelainOutput([
+          { path: mgr.repoRoot, branch: "refs/heads/main" },
+        ]),
+        stderr: "",
+      });
+
+      mgr.listAllWorktrees();
+
+      const listCall = spawnSync.mock.calls.find(
+        (_call) => _call[1]?.[0] === "worktree" && _call[1]?.[1] === "list",
+      );
+      expect(listCall).toBeTruthy();
+      expect(listCall[2]?.shell).toBe(false);
+    });
+
     it("includes registry metadata when available", () => {
       const wtPath = "/fake/repo/.cache/worktrees/ve-meta";
       mgr.registry.set("task-meta", {

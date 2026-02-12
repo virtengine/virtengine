@@ -20,6 +20,11 @@ import { resolve, basename } from "node:path";
 import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { launchEphemeralThread } from "./agent-pool.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
+import {
+  evaluateBranchSafetyForPush,
+  normalizeBaseBranch,
+} from "./git-safety.mjs";
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -65,7 +70,7 @@ function gitExec(args, cwd, timeoutMs = 30_000) {
     const child = spawn("git", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: process.platform === "win32",
+      shell: false,
       timeout: timeoutMs,
     });
 
@@ -86,6 +91,22 @@ function gitExec(args, cwd, timeoutMs = 30_000) {
       }),
     );
   });
+}
+
+async function pushBranchSafely(worktreePath, branch, baseBranch) {
+  const safety = evaluateBranchSafetyForPush(worktreePath, {
+    baseBranch,
+    remote: "origin",
+  });
+  if (!safety.safe) {
+    return {
+      success: false,
+      stderr: safety.reason || "safety check failed",
+      stdout: "",
+      code: 1,
+    };
+  }
+  return gitExec(["push", "origin", `HEAD:${branch}`], worktreePath, 60_000);
 }
 
 /**
@@ -251,6 +272,7 @@ export function buildSDKConflictPrompt({
   taskDescription = "",
   conflictedFiles = [],
   conflictDiffs = {},
+  promptTemplate = "",
 } = {}) {
   const autoFiles = [];
   const manualFiles = [];
@@ -285,23 +307,30 @@ export function buildSDKConflictPrompt({
     ``,
   ].filter(Boolean);
 
+  let autoFilesSection = "No auto-resolvable files.";
   // Auto-resolvable files
   if (autoFiles.length > 0) {
+    const autoLines = [];
     lines.push(`## Auto-Resolvable Files (handle these first)`);
     lines.push(`These files can be resolved mechanically. Run these commands:`);
     lines.push("```bash");
     lines.push(`cd "${worktreePath}"`);
+    autoLines.push(`cd "${worktreePath}"`);
     for (const { file, strategy } of autoFiles) {
       lines.push(
         `git checkout --${strategy} -- "${file}" && git add "${file}"`,
       );
+      autoLines.push(`git checkout --${strategy} -- "${file}" && git add "${file}"`);
     }
     lines.push("```");
     lines.push("");
+    autoFilesSection = autoLines.join("\n");
   }
 
+  let manualFilesSection = "No manual conflict files.";
   // Manual files — these need intelligent resolution
   if (manualFiles.length > 0) {
+    const manualLines = [];
     lines.push(`## Files Requiring Intelligent Resolution`);
     lines.push(
       `These files have semantic conflicts that need careful merging.`,
@@ -324,19 +353,24 @@ export function buildSDKConflictPrompt({
     );
     lines.push(`6. Run \`git add <file>\` after resolving each file`);
     lines.push(``);
+    manualLines.push(`Manual files: ${manualFiles.join(", ")}`);
 
     for (const file of manualFiles) {
       lines.push(`### \`${file}\``);
+      manualLines.push(`- ${file}`);
       if (conflictDiffs[file]) {
         lines.push("Conflict diff preview:");
         lines.push("```diff");
         lines.push(conflictDiffs[file]);
         lines.push("```");
+        manualLines.push(conflictDiffs[file]);
       } else {
         lines.push(`Read this file to see the conflicts.`);
+        manualLines.push("(read file to inspect markers)");
       }
       lines.push("");
     }
+    manualFilesSection = manualLines.join("\n");
   }
 
   // Resolution instructions
@@ -372,7 +406,23 @@ export function buildSDKConflictPrompt({
     `- After resolution, verify the code parses correctly (e.g., \`node --check\` for .mjs files).`,
   );
 
-  return lines.join("\n");
+  const fallback = lines.join("\n");
+  return resolvePromptTemplate(
+    promptTemplate,
+    {
+      WORKTREE_PATH: worktreePath || "",
+      BRANCH: branch || "",
+      BASE_BRANCH: baseBranch || "main",
+      PR_LINE: prNumber ? `- PR: #${prNumber}` : "",
+      TASK_TITLE_LINE: taskTitle ? `- Task: ${taskTitle}` : "",
+      TASK_DESCRIPTION_LINE: taskDescription
+        ? `- Description: ${taskDescription.slice(0, 500)}`
+        : "",
+      AUTO_FILES_SECTION: autoFilesSection,
+      MANUAL_FILES_SECTION: manualFilesSection,
+    },
+    fallback,
+  );
 }
 
 // ── Core SDK launcher ────────────────────────────────────────────────────────
@@ -391,6 +441,7 @@ export function buildSDKConflictPrompt({
  * @param {string} [opts.taskDescription] - Task description for context
  * @param {string} [opts.logDir] - Directory for resolution logs
  * @param {number} [opts.timeoutMs] - Timeout in ms
+ * @param {string} [opts.promptTemplate] - Optional custom prompt template
  * @returns {Promise<{success: boolean, resolvedFiles: string[], log: string, error?: string}>}
  */
 export async function resolveConflictsWithSDK({
@@ -402,8 +453,11 @@ export async function resolveConflictsWithSDK({
   taskDescription = "",
   logDir = null,
   timeoutMs = SDK_CONFLICT_TIMEOUT_MS,
+  promptTemplate = "",
 } = {}) {
   const tag = `[sdk-resolve(${branch?.slice(0, 20) || "?"})]`;
+  const { branch: normalizedBaseBranch, remoteRef: normalizedBaseRef } =
+    normalizeBaseBranch(baseBranch, "origin");
 
   // ── Guard: cooldown ─────────────────────────────────────────────
   if (isSDKResolutionOnCooldown(branch)) {
@@ -446,21 +500,35 @@ export async function resolveConflictsWithSDK({
 
   // ── Step 1: Check merge state ───────────────────────────────────
   const mergeActive = await isMergeInProgress(worktreePath);
+  let mergeAttemptError = "";
   if (!mergeActive) {
     console.log(
-      `${tag} no merge in progress — starting merge of origin/${baseBranch}`,
+      `${tag} no merge in progress — starting merge of ${normalizedBaseRef}`,
     );
     // Fetch and start the merge
-    await gitExec(["fetch", "origin", baseBranch], worktreePath);
+    await gitExec(["fetch", "origin", normalizedBaseBranch], worktreePath);
     const mergeResult = await gitExec(
-      ["merge", `origin/${baseBranch}`, "--no-edit"],
+      ["merge", normalizedBaseRef, "--no-edit"],
       worktreePath,
       60_000,
     );
+    mergeAttemptError = mergeResult.stderr || mergeResult.stdout || "";
     if (mergeResult.success) {
       console.log(`${tag} merge completed cleanly — no conflicts`);
-      // Push the merge
-      await gitExec(["push", "origin", `HEAD:${branch}`], worktreePath, 60_000);
+      const pushResult = await pushBranchSafely(
+        worktreePath,
+        branch,
+        normalizedBaseBranch,
+      );
+      if (!pushResult.success) {
+        recordSDKAttempt(branch, false);
+        return {
+          success: false,
+          resolvedFiles: [],
+          log: "Merge completed cleanly, but push was blocked",
+          error: pushResult.stderr || "push failed",
+        };
+      }
       recordSDKAttempt(branch, true);
       return {
         success: true,
@@ -474,9 +542,44 @@ export async function resolveConflictsWithSDK({
   // ── Step 2: Get conflicted files ────────────────────────────────
   const conflictedFiles = await getConflictedFiles(worktreePath);
   if (conflictedFiles.length === 0) {
+    // If merge isn't active and there are no conflicted files, we should not
+    // blindly commit. This means merge failed before entering a merge state.
+    const mergeStillActive = await isMergeInProgress(worktreePath);
+    if (!mergeStillActive) {
+      recordSDKAttempt(branch, false);
+      return {
+        success: false,
+        resolvedFiles: [],
+        log: "",
+        error: `Merge did not enter conflict state: ${mergeAttemptError || "unknown merge error"}`,
+      };
+    }
+
     console.log(`${tag} no conflicted files found — committing merge`);
-    await gitExec(["commit", "--no-edit"], worktreePath);
-    await gitExec(["push", "origin", `HEAD:${branch}`], worktreePath, 60_000);
+    const commitResult = await gitExec(["commit", "--no-edit"], worktreePath);
+    if (!commitResult.success) {
+      recordSDKAttempt(branch, false);
+      return {
+        success: false,
+        resolvedFiles: [],
+        log: "",
+        error: commitResult.stderr || "merge commit failed",
+      };
+    }
+    const pushResult = await pushBranchSafely(
+      worktreePath,
+      branch,
+      normalizedBaseBranch,
+    );
+    if (!pushResult.success) {
+      recordSDKAttempt(branch, false);
+      return {
+        success: false,
+        resolvedFiles: [],
+        log: "Merge committed, but push was blocked",
+        error: pushResult.stderr || "push failed",
+      };
+    }
     recordSDKAttempt(branch, true);
     return { success: true, resolvedFiles: [], log: "No conflicts to resolve" };
   }
@@ -512,7 +615,20 @@ export async function resolveConflictsWithSDK({
     console.log(`${tag} all ${autoResolved.length} files auto-resolved`);
     const commitResult = await gitExec(["commit", "--no-edit"], worktreePath);
     if (commitResult.success) {
-      await gitExec(["push", "origin", `HEAD:${branch}`], worktreePath, 60_000);
+      const pushResult = await pushBranchSafely(
+        worktreePath,
+        branch,
+        normalizedBaseBranch,
+      );
+      if (!pushResult.success) {
+        recordSDKAttempt(branch, false);
+        return {
+          success: false,
+          resolvedFiles: autoResolved,
+          log: `Auto-resolved ${autoResolved.length} files, but push was blocked`,
+          error: pushResult.stderr || "push failed",
+        };
+      }
       recordSDKAttempt(branch, true);
       return {
         success: true,
@@ -529,12 +645,13 @@ export async function resolveConflictsWithSDK({
   const prompt = buildSDKConflictPrompt({
     worktreePath,
     branch,
-    baseBranch,
+    baseBranch: normalizedBaseBranch,
     prNumber,
     taskTitle,
     taskDescription,
     conflictedFiles: needsSDK,
     conflictDiffs,
+    promptTemplate,
   });
 
   // ── Step 6: Launch SDK agent ────────────────────────────────────
@@ -561,7 +678,7 @@ export async function resolveConflictsWithSDK({
       [
         `SDK Conflict Resolution Log`,
         `Branch: ${branch}`,
-        `Base: ${baseBranch}`,
+        `Base: ${normalizedBaseBranch}`,
         `PR: #${prNumber || "?"}`,
         `Files: ${needsSDK.join(", ")}`,
         `Auto-resolved: ${autoResolved.join(", ") || "none"}`,
@@ -672,7 +789,7 @@ function isCommandAvailable(cmd) {
     const which = process.platform === "win32" ? "where" : "which";
     const child = spawn(which, [cmd], {
       stdio: ["ignore", "pipe", "pipe"],
-      shell: process.platform === "win32",
+      shell: false,
       timeout: 5000,
     });
     child.on("exit", (code) => resolve(code === 0));
@@ -699,13 +816,26 @@ function launchCodexExec(prompt, cwd, timeoutMs) {
         args.push("--add-dir", gitDir);
       }
 
-      child = spawn("codex", args, {
-        cwd,
-        stdio: ["pipe", "pipe", "pipe"],
-        shell: process.platform === "win32",
-        timeout: timeoutMs,
-        env: { ...process.env },
-      });
+      if (process.platform === "win32") {
+        const shellQuote = (value) =>
+          /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+        const fullCommand = ["codex", ...args].map(shellQuote).join(" ");
+        child = spawn(fullCommand, {
+          cwd,
+          stdio: ["pipe", "pipe", "pipe"],
+          shell: true,
+          timeout: timeoutMs,
+          env: { ...process.env },
+        });
+      } else {
+        child = spawn("codex", args, {
+          cwd,
+          stdio: ["pipe", "pipe", "pipe"],
+          shell: false,
+          timeout: timeoutMs,
+          env: { ...process.env },
+        });
+      }
     } catch (err) {
       return resolvePromise({
         success: false,
@@ -764,13 +894,28 @@ function launchCopilotExec(prompt, cwd, timeoutMs) {
   return new Promise((resolvePromise) => {
     let child;
     try {
-      child = spawn("github-copilot-cli", ["--prompt", prompt], {
-        cwd,
-        stdio: ["ignore", "pipe", "pipe"],
-        shell: process.platform === "win32",
-        timeout: timeoutMs,
-        env: { ...process.env },
-      });
+      if (process.platform === "win32") {
+        const shellQuote = (value) =>
+          /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+        const fullCommand = ["github-copilot-cli", "--prompt", prompt]
+          .map(shellQuote)
+          .join(" ");
+        child = spawn(fullCommand, {
+          cwd,
+          stdio: ["ignore", "pipe", "pipe"],
+          shell: true,
+          timeout: timeoutMs,
+          env: { ...process.env },
+        });
+      } else {
+        child = spawn("github-copilot-cli", ["--prompt", prompt], {
+          cwd,
+          stdio: ["ignore", "pipe", "pipe"],
+          shell: false,
+          timeout: timeoutMs,
+          env: { ...process.env },
+        });
+      }
     } catch (err) {
       return resolvePromise({
         success: false,

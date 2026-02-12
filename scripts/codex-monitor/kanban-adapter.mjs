@@ -254,12 +254,19 @@ class VKAdapter {
 class GitHubIssuesAdapter {
   constructor() {
     this.name = "github";
-    this._owner = process.env.GITHUB_REPO_OWNER || "virtengine";
-    this._repo = process.env.GITHUB_REPO_NAME || "virtengine";
+    const config = loadConfig();
+    const slug =
+      process.env.GITHUB_REPOSITORY ||
+      config?.repoSlug ||
+      "virtengine/virtengine";
+    const [slugOwner, slugRepo] = String(slug).split("/", 2);
+    this._owner = process.env.GITHUB_REPO_OWNER || slugOwner || "virtengine";
+    this._repo = process.env.GITHUB_REPO_NAME || slugRepo || "virtengine";
   }
 
   /** Execute a gh CLI command and return parsed JSON */
-  async _gh(args) {
+  async _gh(args, options = {}) {
+    const { parseJson = true } = options;
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const execFileAsync = promisify(execFile);
@@ -268,7 +275,10 @@ class GitHubIssuesAdapter {
         maxBuffer: 10 * 1024 * 1024,
         timeout: 30_000,
       });
-      return JSON.parse(stdout);
+      const text = String(stdout || "").trim();
+      if (!parseJson) return text;
+      if (!text) return null;
+      return JSON.parse(text);
     } catch (err) {
       throw new Error(`gh CLI failed: ${err.message}`);
     }
@@ -287,19 +297,23 @@ class GitHubIssuesAdapter {
   }
 
   async listTasks(_projectId, filters = {}) {
+    const limit =
+      Number(filters.limit || process.env.GITHUB_ISSUES_LIST_LIMIT || 1000) ||
+      1000;
     const args = [
       "issue",
       "list",
       "--repo",
       `${this._owner}/${this._repo}`,
       "--json",
-      "number,title,body,state,assignees,labels,milestone",
+      "number,title,body,state,url,assignees,labels,milestone",
       "--limit",
-      String(filters.limit || 50),
+      String(limit),
     ];
     if (filters.status === "done") {
       args.push("--state", "closed");
     } else if (filters.status && filters.status !== "todo") {
+      args.push("--state", "open");
       args.push("--label", filters.status);
     } else {
       args.push("--state", "open");
@@ -312,6 +326,11 @@ class GitHubIssuesAdapter {
 
   async getTask(issueNumber) {
     const num = String(issueNumber).replace(/^#/, "");
+    if (!/^\d+$/.test(num)) {
+      throw new Error(
+        `GitHub Issues: invalid issue number "${issueNumber}" — expected a numeric ID, got a UUID or non-numeric string`,
+      );
+    }
     const issue = await this._gh([
       "issue",
       "view",
@@ -319,45 +338,69 @@ class GitHubIssuesAdapter {
       "--repo",
       `${this._owner}/${this._repo}`,
       "--json",
-      "number,title,body,state,assignees,labels,milestone",
+      "number,title,body,state,url,assignees,labels,milestone",
     ]);
     return this._normaliseIssue(issue);
   }
 
   async updateTaskStatus(issueNumber, status) {
     const num = String(issueNumber).replace(/^#/, "");
+    if (!/^\d+$/.test(num)) {
+      throw new Error(
+        `GitHub Issues: invalid issue number "${issueNumber}" — expected a numeric ID, got a UUID or non-numeric string`,
+      );
+    }
     const normalised = normaliseStatus(status);
     if (normalised === "done" || normalised === "cancelled") {
-      await this._gh([
+      const closeArgs = [
         "issue",
         "close",
         num,
         "--repo",
         `${this._owner}/${this._repo}`,
-      ]);
+      ];
+      if (normalised === "cancelled") {
+        closeArgs.push("--reason", "not planned");
+      }
+      await this._gh(closeArgs, { parseJson: false });
     } else {
-      await this._gh([
+      await this._gh(
+        ["issue", "reopen", num, "--repo", `${this._owner}/${this._repo}`],
+        { parseJson: false },
+      );
+
+      // Keep status labels in sync for open issues.
+      const labelByStatus = {
+        inprogress: "inprogress",
+        inreview: "inreview",
+        blocked: "blocked",
+      };
+      const nextLabel = labelByStatus[normalised] || null;
+      const statusLabels = [
+        "inprogress",
+        "in-progress",
+        "inreview",
+        "in-review",
+        "blocked",
+      ];
+      const removeLabels = statusLabels.filter((label) => label !== nextLabel);
+      const editArgs = [
         "issue",
-        "reopen",
+        "edit",
         num,
         "--repo",
         `${this._owner}/${this._repo}`,
-      ]);
-      // Add label for tracking intermediate states
-      if (normalised !== "todo") {
-        try {
-          await this._gh([
-            "issue",
-            "edit",
-            num,
-            "--repo",
-            `${this._owner}/${this._repo}`,
-            "--add-label",
-            normalised,
-          ]);
-        } catch {
-          // Label might not exist — non-critical
-        }
+      ];
+      if (nextLabel) {
+        editArgs.push("--add-label", nextLabel);
+      }
+      for (const label of removeLabels) {
+        editArgs.push("--remove-label", label);
+      }
+      try {
+        await this._gh(editArgs, { parseJson: false });
+      } catch {
+        // Label might not exist — non-critical
       }
     }
     return this.getTask(issueNumber);
@@ -380,15 +423,29 @@ class GitHubIssuesAdapter {
         args.push("--label", label);
       }
     }
-    const result = await this._gh(args);
-    return typeof result === "object"
-      ? this._normaliseIssue(result)
-      : { id: result, backend: "github" };
+    const result = await this._gh(args, { parseJson: false });
+    const issueUrl = String(result || "").match(/https?:\/\/\S+/)?.[0] || "";
+    const issueNum = issueUrl.match(/\/issues\/(\d+)/)?.[1] || null;
+    if (issueNum) {
+      return this.getTask(issueNum);
+    }
+    const numericFallback = String(result || "")
+      .trim()
+      .match(/^#?(\d+)$/)?.[1];
+    if (numericFallback) {
+      return this.getTask(numericFallback);
+    }
+    return { id: issueUrl || String(result || "").trim(), backend: "github" };
   }
 
   async deleteTask(issueNumber) {
     // GitHub issues can't be deleted — close with "not planned"
     const num = String(issueNumber).replace(/^#/, "");
+    if (!/^\d+$/.test(num)) {
+      throw new Error(
+        `GitHub Issues: invalid issue number "${issueNumber}" — expected a numeric ID`,
+      );
+    }
     await this._gh([
       "issue",
       "close",
@@ -406,16 +463,22 @@ class GitHubIssuesAdapter {
     const labels = (issue.labels || []).map((l) =>
       typeof l === "string" ? l : l.name,
     );
+    const labelSet = new Set(
+      labels.map((l) =>
+        String(l || "")
+          .trim()
+          .toLowerCase(),
+      ),
+    );
     let status = "todo";
     if (issue.state === "closed" || issue.state === "CLOSED") {
       status = "done";
-    } else if (
-      labels.includes("inprogress") ||
-      labels.includes("in-progress")
-    ) {
+    } else if (labelSet.has("inprogress") || labelSet.has("in-progress")) {
       status = "inprogress";
-    } else if (labels.includes("inreview") || labels.includes("in-review")) {
+    } else if (labelSet.has("inreview") || labelSet.has("in-review")) {
       status = "inreview";
+    } else if (labelSet.has("blocked")) {
+      status = "blocked";
     }
 
     // Extract branch name from issue body if present
@@ -428,15 +491,16 @@ class GitHubIssuesAdapter {
       description: issue.body || "",
       status,
       assignee: issue.assignees?.[0]?.login || null,
-      priority: labels.includes("critical")
+      priority: labelSet.has("critical")
         ? "critical"
-        : labels.includes("high")
+        : labelSet.has("high")
           ? "high"
           : null,
       projectId: `${this._owner}/${this._repo}`,
       branchName: branchMatch?.[1] || null,
       prNumber: prMatch?.[1] || null,
-      meta: issue,
+      meta: { ...issue, task_url: issue.url || null },
+      taskUrl: issue.url || null,
       backend: "github",
     };
   }

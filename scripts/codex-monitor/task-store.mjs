@@ -65,6 +65,7 @@ function defaultTask(overrides = {}) {
     description: "",
     status: "todo",
     externalStatus: null,
+    externalId: null,
     externalBackend: null,
     assignee: null,
     priority: null,
@@ -546,6 +547,8 @@ export function upsertFromExternal(externalTask) {
       existing.meta = { ...existing.meta, ...externalTask.meta };
 
     // Update external tracking fields
+    if (externalTask.externalId !== undefined)
+      existing.externalId = externalTask.externalId;
     if (externalTask.externalBackend !== undefined)
       existing.externalBackend = externalTask.externalBackend;
 

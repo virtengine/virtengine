@@ -13,7 +13,7 @@ function runCommand(command, args, options = {}) {
     // Join command + args into a single string when using shell mode.
     if (useShell && args && args.length > 0) {
       const fullCommand = [command, ...args].join(" ");
-      return spawnSync(fullCommand, [], {
+      return spawnSync(fullCommand, {
         encoding: "utf8",
         windowsHide: true,
         shell: true,

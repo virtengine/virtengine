@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../kanban-adapter.mjs", () => ({
   getKanbanAdapter: vi.fn(),
+  getKanbanBackendName: vi.fn(() => "vk"),
   listTasks: vi.fn(() => []),
   listProjects: vi.fn(() => [{ id: "proj-1", name: "Test Project" }]),
   getTask: vi.fn(),
@@ -33,6 +34,10 @@ vi.mock("../config.mjs", () => ({
   loadConfig: vi.fn(() => ({})),
 }));
 
+vi.mock("../git-safety.mjs", () => ({
+  evaluateBranchSafetyForPush: vi.fn(() => ({ safe: true })),
+}));
+
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(() => ""),
   spawnSync: vi.fn(() => ({ status: 0, stdout: "", stderr: "" })),
@@ -55,11 +60,14 @@ import {
 import {
   listTasks,
   listProjects,
+  getKanbanBackendName,
   updateTaskStatus,
 } from "../kanban-adapter.mjs";
 import { execWithRetry, getPoolSdkName } from "../agent-pool.mjs";
 import { acquireWorktree, releaseWorktree } from "../worktree-manager.mjs";
 import { loadConfig } from "../config.mjs";
+import { evaluateBranchSafetyForPush } from "../git-safety.mjs";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -591,6 +599,91 @@ describe("task-executor", () => {
         throw new Error("fail");
       });
       expect(getExecutorMode()).toBe("vk");
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // branch safety guard
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe("branch safety guard", () => {
+    it("blocks push when branch safety check fails", () => {
+      const ex = new TaskExecutor();
+      evaluateBranchSafetyForPush.mockReturnValueOnce({
+        safe: false,
+        reason: "unsafe diff signature",
+      });
+
+      const result = ex._pushBranch("/fake/worktree", "ve/bad-branch");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("unsafe diff signature");
+      const pushCall = spawnSync.mock.calls.find(
+        ([bin, args]) => bin === "git" && args[0] === "push",
+      );
+      expect(pushCall).toBeUndefined();
+    });
+
+    it("blocks PR creation before push when branch safety fails", async () => {
+      const ex = new TaskExecutor();
+      evaluateBranchSafetyForPush.mockReturnValueOnce({
+        safe: false,
+        reason: "unsafe diff signature",
+      });
+
+      const pr = await ex._createPR(
+        { id: "task-123-uuid", title: "Bad branch", branchName: "ve/bad-branch" },
+        "/fake/worktree",
+      );
+      expect(pr).toBeNull();
+
+      const pushCall = spawnSync.mock.calls.find(
+        ([bin, args]) => bin === "git" && args[0] === "push",
+      );
+      expect(pushCall).toBeUndefined();
+    });
+
+    it("adds issue-closing keywords for GitHub-backed tasks", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor({ repoSlug: "acme/widgets" });
+
+      spawnSync.mockImplementation((bin, args) => {
+        if (bin === "gh" && args[0] === "pr" && args[1] === "list") {
+          return { status: 0, stdout: "[]", stderr: "" };
+        }
+        if (bin === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: "https://github.com/acme/widgets/pull/77\n",
+            stderr: "",
+          };
+        }
+        if (bin === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return { status: 0, stdout: "src/app.ts\n", stderr: "" };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      });
+
+      const pr = await ex._createPR(
+        {
+          id: "123",
+          title: "feat: test github issue linking",
+          description: "desc",
+          branchName: "ve/test-issue-linking",
+          backend: "github",
+        },
+        "/fake/worktree",
+      );
+
+      expect(pr?.prNumber).toBe("77");
+      const prCreateCall = spawnSync.mock.calls.find(
+        ([bin, args]) => bin === "gh" && args[0] === "pr" && args[1] === "create",
+      );
+      expect(prCreateCall).toBeTruthy();
+      const createArgs = prCreateCall[1];
+      const bodyArg = createArgs[createArgs.indexOf("--body") + 1];
+      expect(bodyArg).toContain("Closes #123");
+      expect(bodyArg).toContain("- GitHub Issue: #123");
     });
   });
 

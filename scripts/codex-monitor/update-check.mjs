@@ -28,6 +28,19 @@ const STARTUP_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour (startup notice)
 const AUTO_UPDATE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (polling loop)
 const IS_WIN = process.platform === "win32";
 
+function runNpmCommand(args, options = {}) {
+  if (IS_WIN) {
+    const shellQuote = (value) =>
+      /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+    const command = ["npm", ...args].map(shellQuote).join(" ");
+    return execSync(command, {
+      ...options,
+      shell: true,
+    });
+  }
+  return execFileSync("npm", args, options);
+}
+
 // ── Semver comparison ────────────────────────────────────────────────────────
 
 function parseVersion(v) {
@@ -81,11 +94,10 @@ async function fetchLatestVersion() {
   }
 
   try {
-    const out = execFileSync("npm", ["view", PKG_NAME, "version"], {
+    const out = runNpmCommand(["view", PKG_NAME, "version"], {
       encoding: "utf8",
       timeout: 15000,
       stdio: ["pipe", "pipe", "ignore"],
-      shell: IS_WIN,
     }).trim();
     return out || null;
   } catch {
@@ -157,10 +169,9 @@ export async function forceUpdate(currentVersion) {
   console.log(`\n  Installing ${PKG_NAME}@${latest}...\n`);
 
   try {
-    execFileSync("npm", ["install", "-g", `${PKG_NAME}@${latest}`], {
+    runNpmCommand(["install", "-g", `${PKG_NAME}@${latest}`], {
       stdio: "inherit",
       timeout: 120000,
-      shell: IS_WIN,
     });
     console.log(
       `\n  ✅ Updated to v${latest}. Restart codex-monitor to use the new version.\n`,
@@ -275,10 +286,9 @@ export function startAutoUpdateLoop(opts = {}) {
       onNotify(msg);
 
       try {
-        execFileSync("npm", ["install", "-g", `${PKG_NAME}@${latest}`], {
+        runNpmCommand(["install", "-g", `${PKG_NAME}@${latest}`], {
           timeout: 180000,
           stdio: ["pipe", "pipe", "pipe"],
-          shell: IS_WIN,
         });
       } catch (installErr) {
         const errMsg = `[auto-update] ❌ Install failed: ${installErr.message || installErr}`;

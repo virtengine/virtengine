@@ -43,6 +43,7 @@ import {
   ExecutorScheduler,
   loadExecutorConfig,
 } from "./config.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 import {
   loadStore as loadTaskStore,
   setTaskStatus as setInternalStatus,
@@ -189,7 +190,9 @@ function slugify(text) {
 
 function parseGitHubIssueNumber(value) {
   if (value == null) return null;
-  const numeric = String(value).trim().match(/^#?(\d+)$/);
+  const numeric = String(value)
+    .trim()
+    .match(/^#?(\d+)$/);
   if (numeric?.[1]) return numeric[1];
   const urlMatch = String(value).match(/\/issues\/(\d+)(?:\b|$)/i);
   return urlMatch?.[1] || null;
@@ -231,6 +234,7 @@ function getGitHubIssueNumber(task) {
  * @property {Function} onTaskCompleted - callback(task, result)
  * @property {Function} onTaskFailed    - callback(task, error)
  * @property {Function} sendTelegram    - optional telegram notifier function
+ * @property {Object}   agentPrompts    - optional prompt templates loaded from config
  */
 
 /**
@@ -269,6 +273,7 @@ class TaskExecutor {
       onTaskCompleted: null,
       onTaskFailed: null,
       sendTelegram: null,
+      agentPrompts: {},
     };
 
     const merged = { ...defaults, ...options };
@@ -287,6 +292,10 @@ class TaskExecutor {
     this.onTaskCompleted = merged.onTaskCompleted;
     this.onTaskFailed = merged.onTaskFailed;
     this.sendTelegram = merged.sendTelegram;
+    this._agentPrompts =
+      merged.agentPrompts && typeof merged.agentPrompts === "object"
+        ? merged.agentPrompts
+        : {};
 
     // Initialize executor scheduler for per-task SDK routing
     /** @type {ExecutorScheduler|null} */
@@ -1229,7 +1238,10 @@ class TaskExecutor {
         (result.continues || 0) < 3
       ) {
         const shouldAutoResume = this._shouldAutoResume(
-          taskId, taskTitle, sessionAnalysis, sessionMessages,
+          taskId,
+          taskTitle,
+          sessionAnalysis,
+          sessionMessages,
         );
         if (shouldAutoResume) {
           console.log(
@@ -1244,7 +1256,9 @@ class TaskExecutor {
           this._slotAbortControllers.set(taskId, resumeAC);
 
           const continuePrompt = this._buildContinuePrompt(
-            task, result, (result.attempts || 1) + 1,
+            task,
+            result,
+            (result.attempts || 1) + 1,
           );
 
           const resumeResult = await execWithRetry(continuePrompt, {
@@ -1254,8 +1268,10 @@ class TaskExecutor {
             maxRetries: 0,
             maxContinues: 1,
             sdk: resolvedSdk !== "auto" ? resolvedSdk : undefined,
-            buildRetryPrompt: (lr, att) => this._buildRetryPrompt(task, lr, att),
-            buildContinuePrompt: (lr, att) => this._buildContinuePrompt(task, lr, att),
+            buildRetryPrompt: (lr, att) =>
+              this._buildRetryPrompt(task, lr, att),
+            buildContinuePrompt: (lr, att) =>
+              this._buildContinuePrompt(task, lr, att),
             onEvent: createAgentLogStreamer(taskId, taskTitle),
             abortController: resumeAC,
             onAbortControllerReplaced: (newAC) => {
@@ -1268,9 +1284,13 @@ class TaskExecutor {
           task._executionResult = resumeResult;
 
           // Re-analyze after resume
-          sessionTracker.endSession(taskId, resumeResult.success ? "completed" : "failed");
+          sessionTracker.endSession(
+            taskId,
+            resumeResult.success ? "completed" : "failed",
+          );
           const newMessages = sessionTracker.getLastMessages(taskId);
-          const newAnalysis = this._errorDetector.analyzeMessageSequence(newMessages);
+          const newAnalysis =
+            this._errorDetector.analyzeMessageSequence(newMessages);
 
           // Re-check for commits
           const postResumeHead =
@@ -1345,6 +1365,11 @@ class TaskExecutor {
 
   // ── Prompt Building ───────────────────────────────────────────────────────
 
+  _resolveAgentPrompt(key, values, fallbackPrompt) {
+    const template = this._agentPrompts?.[key];
+    return resolvePromptTemplate(template, values, fallbackPrompt);
+  }
+
   /**
    * Build a comprehensive prompt for the agent from task details and repo context.
    * @param {Object} task
@@ -1418,7 +1443,24 @@ class TaskExecutor {
       lines.push(`## Repository Context`, ``, context, ``);
     }
 
-    return lines.join("\n");
+    const fallbackPrompt = lines.join("\n");
+    return this._resolveAgentPrompt(
+      "taskExecutor",
+      {
+        TASK_TITLE: task.title || "Untitled Task",
+        TASK_DESCRIPTION:
+          task.description ||
+          "No description provided. Check the task URL for details.",
+        WORKTREE_PATH: worktreePath,
+        BRANCH: branch,
+        REPO_SLUG: this.repoSlug || "unknown/unknown",
+        TASK_ID: task.id || task.task_id || "unknown",
+        ENDPOINT_PORT: endpointPort,
+        TASK_URL_LINE: taskUrl ? `- URL: ${taskUrl}` : "- URL: (not available)",
+        REPO_CONTEXT: context || "(no repository context available)",
+      },
+      fallbackPrompt,
+    );
   }
 
   /**
@@ -1469,7 +1511,7 @@ class TaskExecutor {
     }
 
     // Default retry prompt
-    return [
+    const fallbackPrompt = [
       `# ERROR RECOVERY — Attempt ${attemptNumber}`,
       ``,
       `Your previous attempt on task "${task.title}" encountered an issue:`,
@@ -1491,6 +1533,22 @@ class TaskExecutor {
       `Original task description:`,
       task.description || "See task URL for details.",
     ].join("\n");
+    return this._resolveAgentPrompt(
+      "taskExecutorRetry",
+      {
+        ATTEMPT_NUMBER: attemptNumber,
+        TASK_TITLE: task.title || "Untitled Task",
+        LAST_ERROR: (
+          lastResult?.error ||
+          lastResult?.output ||
+          "(unknown error)"
+        ).slice(0, 3000),
+        CLASSIFICATION_PATTERN: classification.pattern,
+        CLASSIFICATION_CONFIDENCE: classification.confidence.toFixed(2),
+        TASK_DESCRIPTION: task.description || "See task URL for details.",
+      },
+      fallbackPrompt,
+    );
   }
 
   /**
@@ -1531,7 +1589,7 @@ class TaskExecutor {
     const progress = tracker.getProgressStatus(task.id);
 
     if (progress.hasCommits) {
-      return [
+      const fallbackPrompt = [
         `# CONTINUE — Verify and Push`,
         ``,
         `You were working on "${task.title}" and appear to have stopped.`,
@@ -1541,10 +1599,18 @@ class TaskExecutor {
         `3. If tests fail, fix issues, commit, and push`,
         `4. The task is not done until the push succeeds`,
       ].join("\n");
+      return this._resolveAgentPrompt(
+        "taskExecutorContinueHasCommits",
+        {
+          TASK_TITLE: task.title || "Untitled Task",
+          TASK_DESCRIPTION: task.description || "",
+        },
+        fallbackPrompt,
+      );
     }
 
     if (progress.hasEdits) {
-      return [
+      const fallbackPrompt = [
         `# CONTINUE — Commit and Push`,
         ``,
         `You were working on "${task.title}" and appear to have stopped.`,
@@ -1554,9 +1620,17 @@ class TaskExecutor {
         `3. Stage and commit: git add -A && git commit -m "feat(scope): description"`,
         `4. Push: git push origin HEAD`,
       ].join("\n");
+      return this._resolveAgentPrompt(
+        "taskExecutorContinueHasEdits",
+        {
+          TASK_TITLE: task.title || "Untitled Task",
+          TASK_DESCRIPTION: task.description || "",
+        },
+        fallbackPrompt,
+      );
     }
 
-    return [
+    const fallbackPrompt = [
       `# CONTINUE — Resume Implementation`,
       ``,
       `You were working on "${task.title}" but stopped without making progress.`,
@@ -1574,6 +1648,14 @@ class TaskExecutor {
     ]
       .filter(Boolean)
       .join("\n");
+    return this._resolveAgentPrompt(
+      "taskExecutorContinueNoProgress",
+      {
+        TASK_TITLE: task.title || "Untitled Task",
+        TASK_DESCRIPTION: task.description || "",
+      },
+      fallbackPrompt,
+    );
   }
 
   /**
@@ -2262,11 +2344,15 @@ class TaskExecutor {
       });
       if (!safety.safe) {
         const reason = safety.reason || "unsafe branch diff";
-        console.error(`${TAG} branch safety guard blocked ${branch}: ${reason}`);
+        console.error(
+          `${TAG} branch safety guard blocked ${branch}: ${reason}`,
+        );
         this.sendTelegram?.(
           `🚨 Branch safety guard blocked push/PR for ${branch}: ${reason}`,
         );
-        const err = new Error(`Branch safety guard blocked ${branch}: ${reason}`);
+        const err = new Error(
+          `Branch safety guard blocked ${branch}: ${reason}`,
+        );
         err.name = "BranchSafetyError";
         throw err;
       }
@@ -2547,6 +2633,7 @@ export function loadExecutorOptionsFromConfig() {
       process.env.INTERNAL_EXECUTOR_PROJECT_ID || configExec.projectId || null,
     repoRoot: config.repoRoot || process.cwd(),
     repoSlug: config.repoSlug || "",
+    agentPrompts: config.agentPrompts || {},
   };
 }
 
@@ -2573,7 +2660,14 @@ export function isInternalExecutorEnabled() {
 }
 
 /** Valid executor modes — "disabled"/"none"/"monitor-only" stop all task execution. */
-const VALID_EXECUTOR_MODES = ["vk", "internal", "hybrid", "disabled", "none", "monitor-only"];
+const VALID_EXECUTOR_MODES = [
+  "vk",
+  "internal",
+  "hybrid",
+  "disabled",
+  "none",
+  "monitor-only",
+];
 const DISABLED_MODES = new Set(["disabled", "none", "monitor-only"]);
 
 /**

@@ -1,3 +1,5 @@
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
+
 const DEFAULT_AUTO_RESOLVE_THEIRS = [
   "pnpm-lock.yaml",
   "package-lock.json",
@@ -111,6 +113,7 @@ export function getDirtySlotReservation(tasks = [], opts = {}) {
 export function buildConflictResolutionPrompt({
   conflictFiles = [],
   upstreamBranch = "origin/main",
+  template = "",
 } = {}) {
   const files = Array.isArray(conflictFiles) ? conflictFiles : [];
   const classification = classifyConflictedFiles(files);
@@ -128,7 +131,19 @@ export function buildConflictResolutionPrompt({
     `Use 'git checkout --theirs <file>' for lockfiles and 'git checkout --ours <file>' for CHANGELOG.md/coverage.txt/results.txt.`,
   );
 
-  return lines.join("\n");
+  const fallback = lines.join("\n");
+  const manualSection = classification.manualFiles.length
+    ? ["Manual conflicts remain:", ...classification.manualFiles.map((f) => `- ${f}`)].join("\n")
+    : "Manual conflicts remain: none";
+  return resolvePromptTemplate(
+    template,
+    {
+      UPSTREAM_BRANCH: upstreamBranch,
+      AUTO_RESOLVE_SUMMARY: classification.summary,
+      MANUAL_CONFLICTS_SECTION: manualSection,
+    },
+    fallback,
+  );
 }
 
 export function isFileOverlapWithDirtyPR(files = [], dirtyFiles = []) {

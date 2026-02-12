@@ -13,11 +13,16 @@
  * Executor configuration supports N executors with weights and failover.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
+import {
+  ensureAgentPromptWorkspace,
+  getAgentPromptDefinitions,
+  resolveAgentPrompts,
+} from "./agent-prompts.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -50,6 +55,30 @@ function resolveConfigDir(repoRoot) {
     process.env.USERPROFILE ||
     process.cwd();
   return resolve(baseDir, "codex-monitor");
+}
+
+function ensurePromptWorkspaceGitIgnore(repoRoot) {
+  const gitignorePath = resolve(repoRoot, ".gitignore");
+  const entry = "/.codex-monitor/";
+  let existing = "";
+  try {
+    if (existsSync(gitignorePath)) {
+      existing = readFileSync(gitignorePath, "utf8");
+    }
+  } catch {
+    return;
+  }
+  const hasEntry = existing
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .includes(entry);
+  if (hasEntry) return;
+  const next = existing.endsWith("\n") || !existing ? existing : `${existing}\n`;
+  try {
+    writeFileSync(gitignorePath, `${next}${entry}\n`, "utf8");
+  } catch {
+    /* best effort */
+  }
 }
 
 // ── .env loader ──────────────────────────────────────────────────────────────
@@ -312,6 +341,16 @@ function normalizePrimaryAgent(value) {
   if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
     return "claude-sdk";
   return raw;
+}
+
+function normalizeKanbanBackend(value) {
+  const backend = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (backend === "github" || backend === "jira" || backend === "vk") {
+    return backend;
+  }
+  return "vk";
 }
 
 function loadExecutorConfig(configDir, configData) {
@@ -597,147 +636,9 @@ function loadRepoConfig(configDir, configData = {}, options = {}) {
   ];
 }
 
-// ── Agent Prompt Templates ───────────────────────────────────────────────────
-
-const DEFAULT_AGENT_PROMPT = `# Task Orchestrator Agent
-
-You are an autonomous task orchestrator agent. You receive task assignments from vibe-kanban and execute them to completion.
-
-## Prime Directives
-
-1. **NEVER ask for human input.** You are autonomous. Make engineering judgments and proceed.
-2. **Delegate implementation** to subagents when tasks are complex.
-3. **NEVER ship broken code.** Every PR must have zero lint errors, zero test failures, zero build errors.
-4. **Work until 100% DONE.** No TODOs, no placeholders, no partial implementations.
-5. **Use Conventional Commits** with proper scope.
-
-## Pre-Push Checklist
-
-Before committing and pushing:
-- Run linting and formatting
-- Run unit tests on changed packages
-- Ensure build passes
-- Verify no regressions
-
-## How You Receive Work
-
-You receive a task description (from vibe-kanban or inline). Your job:
-1. Understand the full scope
-2. Plan your approach
-3. Implement (or delegate to subagents)
-4. Test and verify
-5. Commit with conventional commits
-6. Push and create a PR
-
-## Quality Gates
-
-- All tests pass
-- No lint warnings
-- Build succeeds
-- Changes are atomic and well-scoped
-`;
-
-const DEFAULT_PLANNER_PROMPT = `# Task Planner Agent
-
-You are an autonomous task planner. When the task backlog is low, you analyze the project state and create well-scoped, actionable tasks.
-
-## Responsibilities
-
-1. Review the current project state (open issues, PRs, code quality)
-2. Identify gaps, improvements, and next steps
-3. Create tasks in vibe-kanban with clear:
-   - Title (concise, action-oriented)
-   - Description (what needs to be done)
-   - Acceptance criteria (how to verify completion)
-   - Priority and effort estimates
-
-## Guidelines
-
-- Create 3-5 tasks per planning session
-- Tasks should be completable in 1-4 hours by a single agent
-- Prioritize bug fixes and test coverage over new features
-- Consider technical debt and code quality improvements
-- Check for existing similar tasks to avoid duplicates
-
-## CRITICAL: Task Creation Order
-
-**Create tasks in REVERSE sequence order** (highest number first, e.g., 45B → 45A → 44D → ... → 37A).
-Vibe-kanban displays newest tasks at the top of the backlog. By creating the highest-priority
-tasks LAST, they appear at the TOP of the backlog for both the orchestrator and human review.
-The orchestrator uses sequence numbers (like 37A, 38B) to determine execution order regardless
-of creation order, but the visual backlog order matters for human-in-the-loop understanding.
-`;
-
 function loadAgentPrompts(configDir, repoRoot, configData) {
-  const prompts = {
-    orchestrator: DEFAULT_AGENT_PROMPT,
-    planner: DEFAULT_PLANNER_PROMPT,
-  };
-
-  // Try loading custom prompts from repo
-  const agentDirs = [
-    resolve(repoRoot, ".github", "agents"),
-    resolve(repoRoot, ".agents"),
-    resolve(configDir, "agents"),
-  ];
-
-  for (const dir of agentDirs) {
-    // Look for orchestrator agent
-    for (const name of [
-      "orchestrator.agent.md",
-      "ralph-orchestrator.agent.md",
-      "agent.md",
-    ]) {
-      const p = resolve(dir, name);
-      if (existsSync(p)) {
-        prompts.orchestrator = readFileSync(p, "utf8");
-        break;
-      }
-    }
-    // Look for planner agent
-    for (const name of [
-      "planner.agent.md",
-      "task-planner.agent.md",
-      "Task Planner.agent.md",
-    ]) {
-      const p = resolve(dir, name);
-      if (existsSync(p)) {
-        prompts.planner = readFileSync(p, "utf8");
-        break;
-      }
-    }
-  }
-
-  // Try config file overrides
-  let rawConfig = configData;
-  if (!rawConfig) {
-    for (const name of CONFIG_FILES) {
-      const p = resolve(configDir, name);
-      if (existsSync(p)) {
-        try {
-          rawConfig = JSON.parse(readFileSync(p, "utf8"));
-          break;
-        } catch {
-          /* skip */
-        }
-      }
-    }
-  }
-
-  if (rawConfig?.agentPrompts?.orchestrator) {
-    const opPath = resolve(configDir, rawConfig.agentPrompts.orchestrator);
-    if (existsSync(opPath)) {
-      prompts.orchestrator = readFileSync(opPath, "utf8");
-    }
-  }
-  if (rawConfig?.agentPrompts?.planner) {
-    const ppPath = resolve(configDir, rawConfig.agentPrompts.planner);
-    if (existsSync(ppPath)) {
-      prompts.planner = readFileSync(ppPath, "utf8");
-    }
-  }
-
-  return prompts;
+  const resolved = resolveAgentPrompts(configDir, repoRoot, configData);
+  return { ...resolved.prompts, _sources: resolved.sources };
 }
 
 // ── Main Configuration Loader ────────────────────────────────────────────────
@@ -1020,6 +921,15 @@ export function loadConfig(argv = process.argv, options = {}) {
   // ── Internal Executor ────────────────────────────────────
   // Allows the monitor to run tasks via agent-pool directly instead of
   // (or alongside) the VK executor. Modes: "vk" (default), "internal", "hybrid".
+  const kanbanBackend = normalizeKanbanBackend(
+    process.env.KANBAN_BACKEND || configData.kanban?.backend || "vk",
+  );
+  const kanban = Object.freeze({
+    backend: kanbanBackend,
+    projectId:
+      process.env.KANBAN_PROJECT_ID || configData.kanban?.projectId || null,
+  });
+
   const internalExecutorConfig = configData.internalExecutor || {};
   const executorMode = (
     process.env.EXECUTOR_MODE ||
@@ -1078,7 +988,12 @@ export function loadConfig(argv = process.argv, options = {}) {
     configData.vkSpawnEnabled !== undefined
       ? configData.vkSpawnEnabled
       : mode !== "generic";
+  const vkRequiredByExecutor =
+    internalExecutor.mode === "vk" || internalExecutor.mode === "hybrid";
+  const vkRequiredByBoard = kanban.backend === "vk";
+  const vkRuntimeRequired = vkRequiredByExecutor || vkRequiredByBoard;
   const vkSpawnEnabled =
+    vkRuntimeRequired &&
     !flags.has("no-vk-spawn") &&
     process.env.VK_NO_SPAWN !== "1" &&
     vkSpawnDefault;
@@ -1292,7 +1207,12 @@ export function loadConfig(argv = process.argv, options = {}) {
   const scheduler = new ExecutorScheduler(executorConfig);
 
   // ── Agent prompts ────────────────────────────────────────
+  ensurePromptWorkspaceGitIgnore(repoRoot);
+  ensureAgentPromptWorkspace(repoRoot);
   const agentPrompts = loadAgentPrompts(configDir, repoRoot, configData);
+  const agentPromptSources = agentPrompts._sources || {};
+  delete agentPrompts._sources;
+  const agentPromptCatalog = getAgentPromptDefinitions();
 
   // ── First-run detection ──────────────────────────────────
   const isFirstRun = !hasSetupMarkers(configDir);
@@ -1337,6 +1257,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     // Internal Executor
     internalExecutor,
     executorMode: internalExecutor.mode,
+    kanban,
 
     // Merge Strategy
     codexAnalyzeMergeStrategy:
@@ -1356,6 +1277,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     vkPublicUrl,
     vkTaskUrlTemplate,
     vkRecoveryCooldownMin,
+    vkRuntimeRequired,
     vkSpawnEnabled,
     vkEnsureIntervalMs,
 
@@ -1404,6 +1326,8 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Agent prompts
     agentPrompts,
+    agentPromptSources,
+    agentPromptCatalog,
 
     // First run
     isFirstRun,
@@ -1467,5 +1391,6 @@ export {
   loadExecutorConfig,
   loadRepoConfig,
   loadAgentPrompts,
+  getAgentPromptDefinitions,
 };
 export default loadConfig;

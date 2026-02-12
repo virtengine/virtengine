@@ -2,6 +2,12 @@
   "$schema": "./codex-monitor.schema.json",
   "projectName": "my-project",
   "primaryAgent": "codex-sdk",
+  "kanban": {
+    "backend": "vk"
+  },
+  "internalExecutor": {
+    "mode": "vk"
+  },
   "auth": {
     "copilot": {
       "sources": ["env", "cli"],
@@ -40,7 +46,27 @@
       "primary": true
     }
   ],
-  "agentPrompts": {},
+  "agentPrompts": {
+    "orchestrator": ".codex-monitor/agents/orchestrator.md",
+    "planner": ".codex-monitor/agents/task-planner.md",
+    "monitorMonitor": ".codex-monitor/agents/monitor-monitor.md",
+    "taskExecutor": ".codex-monitor/agents/task-executor.md",
+    "taskExecutorRetry": ".codex-monitor/agents/task-executor-retry.md",
+    "taskExecutorContinueHasCommits": ".codex-monitor/agents/task-executor-continue-has-commits.md",
+    "taskExecutorContinueHasEdits": ".codex-monitor/agents/task-executor-continue-has-edits.md",
+    "taskExecutorContinueNoProgress": ".codex-monitor/agents/task-executor-continue-no-progress.md",
+    "reviewer": ".codex-monitor/agents/reviewer.md",
+    "conflictResolver": ".codex-monitor/agents/conflict-resolver.md",
+    "sdkConflictResolver": ".codex-monitor/agents/sdk-conflict-resolver.md",
+    "mergeStrategy": ".codex-monitor/agents/merge-strategy.md",
+    "mergeStrategyFix": ".codex-monitor/agents/merge-strategy-fix.md",
+    "mergeStrategyReAttempt": ".codex-monitor/agents/merge-strategy-reattempt.md",
+    "autofixFix": ".codex-monitor/agents/autofix-fix.md",
+    "autofixFallback": ".codex-monitor/agents/autofix-fallback.md",
+    "autofixLoop": ".codex-monitor/agents/autofix-loop.md",
+    "monitorCrashFix": ".codex-monitor/agents/monitor-crash-fix.md",
+    "monitorRestartLoopFix": ".codex-monitor/agents/monitor-restart-loop-fix.md"
+  },
   "complexityRouting": {
     "enabled": true,
     "models": {

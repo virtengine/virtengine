@@ -164,6 +164,7 @@ import { createReviewAgent } from "./review-agent.mjs";
 import { createSyncEngine } from "./sync-engine.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
 import { getKanbanBackendName } from "./kanban-adapter.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
@@ -362,11 +363,7 @@ function getActiveKanbanBackend() {
 
 function isVkRuntimeRequired() {
   const backend = getActiveKanbanBackend();
-  return (
-    backend === "vk" ||
-    executorMode === "vk" ||
-    executorMode === "hybrid"
-  );
+  return backend === "vk" || executorMode === "vk" || executorMode === "hybrid";
 }
 
 function isVkSpawnAllowed() {
@@ -981,7 +978,7 @@ async function attemptMonitorFix({ error, logText }) {
   }
 
   const attemptNum = recordMonitorFixAttempt(signature);
-  const prompt = `You are debugging the ${projectName} codex-monitor.
+  const fallbackPrompt = `You are debugging the ${projectName} codex-monitor.
 
 The monitor process hit an unexpected exception and needs a fix.
 Please inspect and fix code in the codex-monitor directory:
@@ -1000,6 +997,15 @@ Instructions:
 2) Apply a minimal fix.
 3) Do not refactor unrelated code.
 4) Keep behavior stable and production-safe.`;
+  const prompt = resolvePromptTemplate(
+    agentPrompts?.monitorCrashFix,
+    {
+      PROJECT_NAME: projectName,
+      CRASH_INFO: error?.stack || error?.message || String(error),
+      LOG_TAIL: logText.slice(-4000),
+    },
+    fallbackPrompt,
+  );
 
   const filesBefore = detectChangedFiles(repoRoot);
   const result = await runCodexExec(prompt, repoRoot);
@@ -1188,7 +1194,7 @@ async function attemptCrashLoopFix({ reason, logText }) {
   }
 
   const attemptNum = recordCrashLoopFixAttempt(signature);
-  const prompt = `You are a reliability engineer debugging a crash loop in ${projectName} automation.
+  const fallbackPrompt = `You are a reliability engineer debugging a crash loop in ${projectName} automation.
 
 The orchestrator is restarting repeatedly within minutes.
 Please diagnose the likely root cause and apply a minimal fix.
@@ -1207,6 +1213,15 @@ Constraints:
 2) Keep behavior stable and production-safe.
 3) Do not refactor unrelated code.
 4) Prefer small guardrails over big rewrites.`;
+  const prompt = resolvePromptTemplate(
+    agentPrompts?.monitorRestartLoopFix,
+    {
+      PROJECT_NAME: projectName,
+      SCRIPT_PATH: scriptPath,
+      LOG_TAIL: logText.slice(-6000),
+    },
+    fallbackPrompt,
+  );
 
   const filesBefore = detectChangedFiles(repoRoot);
   const result = await runCodexExec(prompt, repoRoot, 1_800_000);
@@ -1330,6 +1345,7 @@ function triggerLoopFix(errorLine, repeatCount) {
         logDir,
         onTelegram: telegramFn,
         recentMessages: getTelegramHistory(),
+        promptTemplate: agentPrompts?.autofixLoop,
       });
 
       if (result.fixed) {
@@ -1594,13 +1610,24 @@ async function startVibeKanbanProcess() {
   // Use shell: true only when running through npx (string command).
   // When using the local binary directly, avoid shell to prevent DEP0190
   // deprecation warning ("Passing args to child process with shell true").
-  vibeKanbanProcess = spawn(spawnCmd, spawnArgs, {
+  const useShell = process.platform === "win32" || !useLocal;
+  const spawnOptions = {
     env,
     cwd: repoRoot,
     stdio: "ignore",
-    shell: process.platform === "win32" || !useLocal,
+    shell: useShell,
     detached: true,
-  });
+  };
+  if (useShell && spawnArgs.length > 0) {
+    const shellQuote = (value) =>
+      /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+    const fullCommand = [spawnCmd, ...spawnArgs].map(shellQuote).join(" ");
+    vibeKanbanProcess = spawn(fullCommand, spawnOptions);
+  } else if (useShell) {
+    vibeKanbanProcess = spawn(spawnCmd, spawnOptions);
+  } else {
+    vibeKanbanProcess = spawn(spawnCmd, spawnArgs, spawnOptions);
+  }
   vibeKanbanProcess.unref();
   vibeKanbanStartedAt = Date.now();
 
@@ -2237,7 +2264,7 @@ function findWorktreeForBranch(branch) {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 10000,
       encoding: "utf8",
-      shell: process.platform === "win32",
+      shell: false,
     });
     if (result.status !== 0 || !result.stdout) return null;
 
@@ -4009,6 +4036,7 @@ async function checkMergedPRsAndUpdateTasks() {
                         taskTitle: task.title,
                         taskDescription: task.description || "",
                         logDir: logDir,
+                        promptTemplate: agentPrompts?.sdkConflictResolver,
                       });
                       if (result.success) {
                         console.log(
@@ -4438,6 +4466,9 @@ async function runMergeStrategyAnalysis(ctx) {
         parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
       logDir,
       onTelegram: telegramFn,
+      promptTemplates: {
+        mergeStrategy: agentPrompts?.mergeStrategy,
+      },
     });
 
     if (!decision || !decision.success) {
@@ -4455,6 +4486,10 @@ async function runMergeStrategyAnalysis(ctx) {
       onTelegram: telegramFn,
       timeoutMs:
         parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 15 * 60 * 1000,
+      promptTemplates: {
+        mergeStrategyFix: agentPrompts?.mergeStrategyFix,
+        mergeStrategyReAttempt: agentPrompts?.mergeStrategyReAttempt,
+      },
     });
 
     // ── Post-execution handling ──────────────────────────────────
@@ -7635,6 +7670,10 @@ async function handleExit(code, signal, logPath) {
           logDir,
           onTelegram: telegramFn,
           recentMessages: getTelegramHistory(),
+          promptTemplates: {
+            autofixFix: agentPrompts?.autofixFix,
+            autofixFallback: agentPrompts?.autofixFallback,
+          },
         });
 
         if (result.fixed) {
@@ -7928,7 +7967,9 @@ function buildMonitorMonitorStatusText(reason = "heartbeat") {
   ];
 
   if (monitorMonitor.lastError) {
-    lines.push(`- Last error: ${String(monitorMonitor.lastError).slice(0, 180)}`);
+    lines.push(
+      `- Last error: ${String(monitorMonitor.lastError).slice(0, 180)}`,
+    );
   }
   if (lastDigestLine) {
     lines.push(`- Latest digest: ${lastDigestLine.slice(0, 180)}`);
@@ -7951,7 +7992,10 @@ async function publishMonitorMonitorStatus(reason = "heartbeat") {
   }
 }
 
-async function readLogTail(filePath, { maxLines = 120, maxChars = 12000 } = {}) {
+async function readLogTail(
+  filePath,
+  { maxLines = 120, maxChars = 12000 } = {},
+) {
   try {
     if (!existsSync(filePath)) {
       return `(missing: ${filePath})`;
@@ -8137,7 +8181,11 @@ async function buildMonitorMonitorPrompt({ trigger, entries, text }) {
   ].join("\n");
 }
 
-async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text = "" } = {}) {
+async function runMonitorMonitorCycle({
+  trigger = "interval",
+  entries = [],
+  text = "",
+} = {}) {
   refreshMonitorMonitorRuntime();
   if (!monitorMonitor.enabled) return;
   monitorMonitor.lastTrigger = trigger;
@@ -8171,7 +8219,9 @@ async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text
     prompt = await buildMonitorMonitorPrompt({ trigger, entries, text });
   } catch (err) {
     monitorMonitor.running = false;
-    console.warn(`[monitor-monitor] prompt build failed: ${err.message || err}`);
+    console.warn(
+      `[monitor-monitor] prompt build failed: ${err.message || err}`,
+    );
     return;
   }
 
@@ -8340,7 +8390,9 @@ async function startProcess() {
   // Guard: never spawn VK orchestrator when executor mode is internal or disabled
   const execMode = configExecutorMode || getExecutorMode();
   if (execMode === "internal" || isExecutorDisabled()) {
-    console.log(`[monitor] startProcess skipped — executor mode is "${execMode}" (VK orchestrator not needed)`);
+    console.log(
+      `[monitor] startProcess skipped — executor mode is "${execMode}" (VK orchestrator not needed)`,
+    );
     return;
   }
 
@@ -9416,6 +9468,7 @@ if (isExecutorDisabled()) {
       ...internalExecutorConfig,
       repoRoot,
       repoSlug,
+      agentPrompts,
       sendTelegram:
         telegramToken && telegramChatId
           ? (msg) => void sendTelegramMessage(msg)
@@ -9530,6 +9583,7 @@ if (isExecutorDisabled()) {
           telegramToken && telegramChatId
             ? (msg) => void sendTelegramMessage(msg)
             : null,
+        promptTemplate: agentPrompts?.reviewer,
         onReviewComplete: (taskId, result) => {
           console.log(
             `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,

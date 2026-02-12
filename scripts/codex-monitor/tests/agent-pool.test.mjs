@@ -6,32 +6,59 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // behaviour: by default they throw "not available" unless overridden.
 // ---------------------------------------------------------------------------
 
-const mockCodexThread = vi.fn();
-const mockCopilotThread = vi.fn();
-const mockClaudeThread = vi.fn();
+const mockCodexStartThread = vi.fn();
+const mockCodexResumeThread = vi.fn();
+
+function makeCodexMockThread(
+  threadId = "mock-codex-thread",
+  text = "codex-output",
+) {
+  return {
+    id: threadId,
+    runStreamed: async () => ({
+      events: {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: "item.completed",
+            item: { type: "agent_message", text },
+          };
+        },
+      },
+    }),
+  };
+}
 
 vi.mock("@openai/codex-sdk", () => {
-  if (process.env.__MOCK_CODEX_AVAILABLE === "1") {
-    return {
-      Codex: class MockCodex {
-        startThread() {
+  return {
+    Codex: class MockCodex {
+      startThread(...args) {
+        if (process.env.__MOCK_CODEX_AVAILABLE !== "1") {
           return {
-            runStreamed: async () => ({
-              events: {
-                async *[Symbol.asyncIterator]() {
-                  yield {
-                    type: "item.completed",
-                    item: { type: "agent_message", text: "codex-output" },
-                  };
-                },
-              },
-            }),
+            id: "mock-codex-unavailable",
+            runStreamed: async () => {
+              throw new Error("Codex SDK not available: mocked unavailable");
+            },
           };
         }
-      },
-    };
-  }
-  throw new Error("Cannot find module '@openai/codex-sdk'");
+        const injected = mockCodexStartThread(...args);
+        if (injected !== undefined) return injected;
+        return makeCodexMockThread("mock-codex-thread-new", "codex-output");
+      }
+
+      resumeThread(...args) {
+        if (process.env.__MOCK_CODEX_AVAILABLE !== "1") {
+          throw new Error("Codex SDK not available: mocked unavailable");
+        }
+        const injected = mockCodexResumeThread(...args);
+        if (injected !== undefined) return injected;
+        const [threadId] = args;
+        return makeCodexMockThread(
+          threadId || "mock-codex-thread-resumed",
+          "codex-resumed-output",
+        );
+      }
+    },
+  };
 });
 
 vi.mock("@github/copilot-sdk", () => {
@@ -144,11 +171,16 @@ let getPoolSdkName,
   resetPoolSdkCache,
   getAvailableSdks,
   launchEphemeralThread,
-  execPooledPrompt;
+  execPooledPrompt,
+  launchOrResumeThread,
+  getThreadRecord,
+  clearThreadRegistry,
+  ensureThreadRegistryLoaded;
 
 beforeEach(async () => {
   saveEnv();
   clearSdkEnv();
+  vi.resetModules();
 
   // Dynamic import to pick up mocks; then grab exports
   const mod = await import("../agent-pool.mjs");
@@ -158,9 +190,17 @@ beforeEach(async () => {
   getAvailableSdks = mod.getAvailableSdks;
   launchEphemeralThread = mod.launchEphemeralThread;
   execPooledPrompt = mod.execPooledPrompt;
+  launchOrResumeThread = mod.launchOrResumeThread;
+  getThreadRecord = mod.getThreadRecord;
+  clearThreadRegistry = mod.clearThreadRegistry;
+  ensureThreadRegistryLoaded = mod.ensureThreadRegistryLoaded;
 
   // Always reset the cache so each test starts clean
   resetPoolSdkCache();
+  mockCodexStartThread.mockReset();
+  mockCodexResumeThread.mockReset();
+  await ensureThreadRegistryLoaded();
+  clearThreadRegistry();
 });
 
 afterEach(() => {
@@ -415,7 +455,54 @@ describe("launchEphemeralThread", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. execPooledPrompt
+// 4. launchOrResumeThread
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("launchOrResumeThread", () => {
+  it("drops poisoned codex thread metadata when resume state is corrupted", async () => {
+    process.env.__MOCK_CODEX_AVAILABLE = "1";
+    setPoolSdk("codex");
+
+    const taskKey = "poisoned-resume-task";
+    mockCodexStartThread
+      .mockImplementationOnce(() =>
+        makeCodexMockThread("legacy-thread-id", "first-run"),
+      )
+      .mockImplementationOnce(() => null);
+
+    const first = await launchOrResumeThread("initial prompt", process.cwd(), 5000, {
+      taskKey,
+      sdk: "codex",
+    });
+
+    expect(first.success).toBe(true);
+    expect(first.threadId).toBe("legacy-thread-id");
+    expect(first.resumed).toBe(false);
+
+    mockCodexResumeThread.mockImplementation(() => {
+      throw new Error(
+        "state db missing rollout path for thread legacy-thread-id; invalid_encrypted_content; could not be verified",
+      );
+    });
+
+    const second = await launchOrResumeThread("follow-up prompt", process.cwd(), 5000, {
+      taskKey,
+      sdk: "codex",
+    });
+
+    expect(second.success).toBe(false);
+    expect(second.resumed).toBe(false);
+    expect(second.error).toMatch(/startThread\(\) returned null/i);
+
+    const record = getThreadRecord(taskKey);
+    expect(record).toBeTruthy();
+    expect(record.threadId).toBeNull();
+    expect(record.alive).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. execPooledPrompt
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("execPooledPrompt", () => {
@@ -485,7 +572,7 @@ describe("execPooledPrompt", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 5. Edge cases & integration of resolution + launch
+// 6. Edge cases & integration of resolution + launch
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("resolution and launch integration", () => {

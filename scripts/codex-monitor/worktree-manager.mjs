@@ -14,7 +14,14 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, rmSync, statSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  statSync,
+  readdirSync,
+} from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,7 +104,6 @@ function _getFilesystemAgeMs(dirPath) {
   }
 }
 
-
 /**
  * Sanitize a branch name into a filesystem-safe directory name.
  * Replaces `/` with `-`, strips characters that are unsafe on Windows or Unix.
@@ -138,7 +144,9 @@ function gitSync(args, cwd, opts = {}) {
     windowsHide: true,
     env: gitEnv(),
     stdio: ["ignore", "pipe", "pipe"],
-    shell: process.platform === "win32",
+    // Avoid shell invocation to prevent Node DEP0190 warnings and argument
+    // concatenation risks.
+    shell: false,
   });
 }
 
@@ -651,21 +659,28 @@ class WorktreeManager {
     // Step 3c: catch-all — any other non-main worktree older than 7 days
     for (const wt of allWorktrees) {
       if (wt.isMainWorktree) continue;
-      const isVK = wt.path.includes("vibe-kanban") || (wt.branch && wt.branch.startsWith("ve/"));
+      const isVK =
+        wt.path.includes("vibe-kanban") ||
+        (wt.branch && wt.branch.startsWith("ve/"));
       const isCopilot = /copilot-worktree-\d{4}-\d{2}-\d{2}/.test(wt.path);
       const isPrCleanup = wt.path.includes("pr-cleanup-");
       if (isVK || isCopilot || isPrCleanup) continue;
 
       const registryKey = this._findKeyByPath(resolve(wt.path));
       const record = registryKey ? this.registry.get(registryKey) : null;
-      const ageMs = record ? Date.now() - record.lastUsedAt : _getFilesystemAgeMs(wt.path);
+      const ageMs = record
+        ? Date.now() - record.lastUsedAt
+        : _getFilesystemAgeMs(wt.path);
       if (ageMs > COPILOT_WORKTREE_MAX_AGE_MS) {
         console.log(
           `${TAG} ${dryRun ? "[dry-run] would remove" : "removing"} old untracked worktree: ${wt.path} (age=${(ageMs / 3600000).toFixed(1)}h)`,
         );
         if (!dryRun) {
           this._forceRemoveWorktreeSync(wt.path);
-          if (registryKey) { this.registry.delete(registryKey); evicted++; }
+          if (registryKey) {
+            this.registry.delete(registryKey);
+            evicted++;
+          }
           pruned++;
         }
       }
@@ -687,8 +702,12 @@ class WorktreeManager {
               `${TAG} ${dryRun ? "[dry-run] would remove" : "removing"} orphan cache dir: ${dirPath} (age=${(ageMs / 3600000).toFixed(1)}h)`,
             );
             if (!dryRun) {
-              try { rmSync(dirPath, { recursive: true, force: true }); } catch (e) {
-                console.warn(`${TAG} rmSync failed for ${dirPath}: ${e.message}`);
+              try {
+                rmSync(dirPath, { recursive: true, force: true });
+              } catch (e) {
+                console.warn(
+                  `${TAG} rmSync failed for ${dirPath}: ${e.message}`,
+                );
               }
               pruned++;
             }

@@ -11,6 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { execWithRetry, getPoolSdkName } from "./agent-pool.mjs";
 import { loadConfig } from "./config.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 
 const TAG = "[review-agent]";
 
@@ -31,10 +32,11 @@ const DEFAULT_MAX_CONCURRENT = 2;
  * Build the structured review prompt.
  * @param {string} diff - PR diff content
  * @param {string} taskDescription - Task description for context
+ * @param {string} [template]
  * @returns {string}
  */
-function buildReviewPrompt(diff, taskDescription) {
-  return `You are a senior code reviewer for the VirtEngine blockchain project.
+function buildReviewPrompt(diff, taskDescription, template) {
+  const fallback = `You are a senior code reviewer for the VirtEngine blockchain project.
 
 Review the following PR diff for CRITICAL issues ONLY:
 
@@ -78,6 +80,14 @@ Respond with ONLY a JSON object (no markdown, no explanation):
 
 If no critical issues found, return:
 {"verdict": "approved", "issues": [], "summary": "No critical issues found"}`;
+  return resolvePromptTemplate(
+    template,
+    {
+      DIFF: diff,
+      TASK_DESCRIPTION: taskDescription || "(no description provided)",
+    },
+    fallback,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +270,9 @@ export class ReviewAgent {
   /** @type {Function|undefined} */
   #sendTelegram;
 
+  /** @type {string|undefined} */
+  #promptTemplate;
+
   /**
    * @param {Object} [options]
    * @param {string} [options.sdk]
@@ -268,6 +281,7 @@ export class ReviewAgent {
    * @param {number} [options.reviewTimeoutMs]
    * @param {Function} [options.onReviewComplete]
    * @param {Function} [options.sendTelegram]
+   * @param {string} [options.promptTemplate]
    */
   constructor(options = {}) {
     this.#sdk = options.sdk || getPoolSdkName();
@@ -278,6 +292,7 @@ export class ReviewAgent {
       options.reviewTimeoutMs ?? DEFAULT_REVIEW_TIMEOUT_MS;
     this.#onReviewComplete = options.onReviewComplete;
     this.#sendTelegram = options.sendTelegram;
+    this.#promptTemplate = options.promptTemplate;
     console.log(
       `${TAG} initialized (sdk=${this.#sdk}, maxConcurrent=${this.#maxConcurrent}, timeout=${this.#reviewTimeoutMs}ms)`,
     );
@@ -427,7 +442,11 @@ export class ReviewAgent {
     }
 
     // 2. Build prompt
-    const prompt = buildReviewPrompt(diff, task.description);
+    const prompt = buildReviewPrompt(
+      diff,
+      task.description,
+      this.#promptTemplate,
+    );
 
     // 3. Run agent
     let agentOutput = "";
@@ -523,5 +542,14 @@ export class ReviewAgent {
  * @returns {ReviewAgent}
  */
 export function createReviewAgent(options) {
-  return new ReviewAgent(options);
+  let promptTemplate = options?.promptTemplate;
+  if (!promptTemplate) {
+    try {
+      const config = loadConfig();
+      promptTemplate = config.agentPrompts?.reviewer;
+    } catch {
+      /* best effort */
+    }
+  }
+  return new ReviewAgent({ ...(options || {}), promptTemplate });
 }
