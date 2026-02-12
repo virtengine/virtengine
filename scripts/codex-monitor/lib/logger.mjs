@@ -56,8 +56,14 @@ let fileLevel = LogLevel.DEBUG;
 /** @type {string|null} Path to the log file */
 let logFilePath = null;
 
+/** @type {string|null} Path to the dedicated error/stderr log file */
+let errorLogFilePath = null;
+
 /** @type {boolean} Whether the log file directory has been ensured */
 let logDirEnsured = false;
+
+/** @type {boolean} Whether the error log directory has been ensured */
+let errorLogDirEnsured = false;
 
 /** @type {Set<string>} Modules to always show at DEBUG level even when console is at INFO */
 const verboseModules = new Set();
@@ -95,6 +101,24 @@ export function setFileLevel(level) {
 export function setLogFile(path) {
   logFilePath = path;
   logDirEnsured = false;
+}
+
+/**
+ * Set the dedicated error log file path.
+ * WARN, ERROR, uncaughtException/unhandledRejection, and raw stderr writes are appended here.
+ * @param {string|null} path
+ */
+export function setErrorLogFile(path) {
+  errorLogFilePath = path;
+  errorLogDirEnsured = false;
+}
+
+/**
+ * Get the current error log file path.
+ * @returns {string|null}
+ */
+export function getErrorLogFilePath() {
+  return errorLogFilePath;
 }
 
 /**
@@ -174,6 +198,32 @@ function writeToFile(levelName, module, msg) {
   const line = `${datestamp()} [${levelName}] [${module}] ${clean}\n`;
   try {
     appendFileSync(logFilePath, line);
+  } catch {
+    /* best effort */
+  }
+}
+
+/**
+ * Write a message to the dedicated error log file.
+ * Called for WARN, ERROR, and raw stderr writes.
+ * @param {string} levelName
+ * @param {string} module
+ * @param {string} msg
+ */
+function writeToErrorFile(levelName, module, msg) {
+  if (!errorLogFilePath) return;
+  if (!errorLogDirEnsured) {
+    try {
+      mkdirSync(dirname(errorLogFilePath), { recursive: true });
+    } catch {
+      /* best effort */
+    }
+    errorLogDirEnsured = true;
+  }
+  const clean = typeof msg === "string" ? stripAnsi(msg) : String(msg);
+  const line = `${datestamp()} [${levelName}] [${module}] ${clean}\n`;
+  try {
+    appendFileSync(errorLogFilePath, line);
   } catch {
     /* best effort */
   }
@@ -410,29 +460,65 @@ export function installConsoleInterceptor(opts = {}) {
 
   // console.warn → always WARN level
   console.warn = (...args) => {
-    if (logFilePath && LogLevel.WARN >= fileLevel) {
+    _inInterceptor = true;
+    try {
       const msg = args
         .map((a) => (typeof a === "string" ? a : String(a)))
         .join(" ");
       const tagMatch = typeof msg === "string" ? msg.match(TAG_RE) : null;
-      writeToFile("WARN", tagMatch?.[1] || "stderr", msg);
-    }
-    if (LogLevel.WARN >= consoleLevel) {
-      _origWarn(...args);
+      const mod = tagMatch?.[1] || "stderr";
+      if (logFilePath && LogLevel.WARN >= fileLevel) {
+        writeToFile("WARN", mod, msg);
+      }
+      // Also write to dedicated error log
+      writeToErrorFile("WARN", mod, msg);
+      if (LogLevel.WARN >= consoleLevel) {
+        _origWarn(...args);
+      }
+    } finally {
+      _inInterceptor = false;
     }
   };
 
   // console.error → always ERROR level (always passes through)
   console.error = (...args) => {
-    if (logFilePath && LogLevel.ERROR >= fileLevel) {
+    _inInterceptor = true;
+    try {
       const msg = args
-        .map((a) => (typeof a === "string" ? a : String(a)))
+        .map((a) => {
+          if (a instanceof Error) return a.stack || a.message;
+          return typeof a === "string" ? a : String(a);
+        })
         .join(" ");
       const tagMatch = typeof msg === "string" ? msg.match(TAG_RE) : null;
-      writeToFile("ERROR", tagMatch?.[1] || "stderr", msg);
+      const mod = tagMatch?.[1] || "stderr";
+      if (logFilePath && LogLevel.ERROR >= fileLevel) {
+        writeToFile("ERROR", mod, msg);
+      }
+      // Also write to dedicated error log
+      writeToErrorFile("ERROR", mod, msg);
+      // Errors always pass through
+      _origError(...args);
+    } finally {
+      _inInterceptor = false;
     }
-    // Errors always pass through
-    _origError(...args);
+  };
+
+  // ── Intercept raw process.stderr.write ────────────────────────────────
+  // Some code (uncaughtException handlers, native Node errors, child_process
+  // stderr leaks) writes to process.stderr directly, bypassing console.
+  // Tee those writes to the error log file, but skip writes that originate
+  // from our own console.warn/error interceptors to avoid duplicates.
+  let _inInterceptor = false;
+  const _origStderrWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (chunk, ...rest) => {
+    if (!_inInterceptor) {
+      const text = typeof chunk === "string" ? chunk : chunk?.toString?.("utf8") || "";
+      if (text.trim()) {
+        writeToErrorFile("STDERR", "process", text.replace(/\n$/, ""));
+      }
+    }
+    return _origStderrWrite(chunk, ...rest);
   };
 }
 

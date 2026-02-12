@@ -136,7 +136,8 @@ import {
   getExecutorMode,
   loadExecutorOptionsFromConfig,
 } from "./task-executor.mjs";
-import { configureFromArgs, installConsoleInterceptor } from "./lib/logger.mjs";
+import { configureFromArgs, installConsoleInterceptor, setErrorLogFile } from "./lib/logger.mjs";
+import { fixGitConfigCorruption } from "./worktree-manager.mjs";
 // ── Task management subsystem imports ──────────────────────────────────────
 import {
   loadStore as loadTaskStore,
@@ -207,8 +208,13 @@ let config = loadConfig();
 {
   const _logDir = config.logDir || resolve(__dirname, "logs");
   const _logFile = resolve(_logDir, "monitor.log");
+  const _errorLogFile = resolve(_logDir, "monitor-error.log");
   installConsoleInterceptor({ logFile: _logFile });
+  setErrorLogFile(_errorLogFile);
 }
+
+// Guard against core.bare=true corruption on the main repo at startup
+fixGitConfigCorruption(resolve(__dirname, "..", ".."));
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -8263,14 +8269,11 @@ process.on("uncaughtException", (err) => {
   const msg = err?.message || "";
   // Always suppress stream noise — not just during shutdown
   if (isStreamNoise(msg)) {
-    try {
-      process.stderr.write(`[monitor] suppressed stream noise: ${msg}\n`);
-    } catch {
-      /* even stderr might be broken */
-    }
+    console.error(`[monitor] suppressed stream noise (uncaughtException): ${msg}`);
     return;
   }
   if (shuttingDown) return;
+  console.error(`[monitor] uncaughtException: ${err?.stack || msg}`);
   void handleMonitorFailure("uncaughtException", err);
 });
 
@@ -8278,16 +8281,13 @@ process.on("unhandledRejection", (reason) => {
   const msg = reason?.message || String(reason || "");
   // Always suppress stream noise
   if (isStreamNoise(msg)) {
-    try {
-      process.stderr.write(`[monitor] suppressed stream noise: ${msg}\n`);
-    } catch {
-      /* even stderr might be broken */
-    }
+    console.error(`[monitor] suppressed stream noise (unhandledRejection): ${msg}`);
     return;
   }
   if (shuttingDown) return;
   const err =
     reason instanceof Error ? reason : new Error(String(reason || ""));
+  console.error(`[monitor] unhandledRejection: ${err?.stack || msg}`);
   void handleMonitorFailure("unhandledRejection", err);
 });
 
@@ -8692,28 +8692,30 @@ if (executorMode === "internal" || executorMode === "hybrid") {
     // ── Review Agent ──
     try {
       reviewAgent = createReviewAgent({
-        maxConcurrent: 2,
+        maxConcurrentReviews: 2,
+        autoFix: true,
+        waitForMerge: true,
         sendTelegram:
           telegramToken && telegramChatId
             ? (msg) => void sendTelegramMessage(msg)
             : null,
         onReviewComplete: (taskId, result) => {
           console.log(
-            `[monitor] review complete for ${taskId}: ${result?.verdict || "unknown"}`,
+            `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
           );
           try {
             setReviewResult(taskId, {
-              approved: result?.verdict === "approved",
+              approved: result?.approved ?? false,
               issues: result?.issues || [],
             });
           } catch {
             /* best-effort */
           }
 
-          if (result?.verdict === "approved") {
-            // Auto-mark as done since reviewer is happy
+          if (result?.approved && result?.prMerged) {
+            // PR merged and reviewer happy — fully done
             console.log(
-              `[monitor] review approved — marking ${taskId} as done`,
+              `[monitor] review approved + PR merged — marking ${taskId} as done`,
             );
             try {
               setInternalTaskStatus(taskId, "done", "review-agent");
@@ -8725,15 +8727,26 @@ if (executorMode === "internal" || executorMode === "hybrid") {
             } catch {
               /* best-effort */
             }
+          } else if (result?.approved && !result?.prMerged) {
+            // Approved but PR not yet merged — stays in review
+            console.log(
+              `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
+            );
           } else {
             console.log(
-              `[monitor] review found issues for ${taskId} — task stays inreview`,
+              `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
             );
           }
         },
       });
       reviewAgent.start();
-      console.log("[monitor] review agent started");
+
+      // Connect review agent to task executor for handoff
+      if (internalTaskExecutor) {
+        internalTaskExecutor.setReviewAgent(reviewAgent);
+      }
+
+      console.log("[monitor] review agent started (autoFix: true, waitForMerge: true)");
     } catch (err) {
       console.warn(`[monitor] review agent failed to start: ${err.message}`);
     }

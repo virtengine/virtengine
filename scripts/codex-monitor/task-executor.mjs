@@ -580,6 +580,7 @@ class TaskExecutor {
         const status = execSync("git status --porcelain", {
           cwd: wtPath,
           encoding: "utf8",
+          stdio: "pipe",
           timeout: 10000,
         }).trim();
         hasChanges = status.length > 0;
@@ -587,6 +588,7 @@ class TaskExecutor {
         branch = execSync("git branch --show-current", {
           cwd: wtPath,
           encoding: "utf8",
+          stdio: "pipe",
           timeout: 5000,
         }).trim();
       } catch {
@@ -607,6 +609,7 @@ class TaskExecutor {
         const unpushed = execSync(`git log origin/main..HEAD --oneline`, {
           cwd: wtPath,
           encoding: "utf8",
+          stdio: "pipe",
           timeout: 10000,
         }).trim();
         hasUnpushed = unpushed.length > 0;
@@ -628,10 +631,10 @@ class TaskExecutor {
       // Commit uncommitted changes
       if (hasChanges) {
         try {
-          execSync("git add -A", { cwd: wtPath, timeout: 15000 });
+          execSync("git add -A", { cwd: wtPath, stdio: "pipe", timeout: 15000 });
           execSync(
             `git commit -m "feat: auto-commit orphaned agent work" --no-verify`,
-            { cwd: wtPath, timeout: 15000 },
+            { cwd: wtPath, stdio: "pipe", timeout: 15000 },
           );
           console.log(`${TAG} [orphan-recovery] Committed changes in ${dirName}`);
         } catch (err) {
@@ -648,6 +651,7 @@ class TaskExecutor {
         const diffCheck = execSync("git diff --name-only origin/main...HEAD", {
           cwd: wtPath,
           encoding: "utf8",
+          stdio: "pipe",
           timeout: 15000,
         }).trim();
         if (diffCheck.length === 0) {

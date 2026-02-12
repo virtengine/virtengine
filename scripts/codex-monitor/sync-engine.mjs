@@ -22,6 +22,7 @@ import {
   markSynced,
   upsertFromExternal,
   setTaskStatus,
+  removeTask,
 } from "./task-store.mjs";
 
 import {
@@ -352,6 +353,13 @@ export class SyncEngine {
             console.warn(TAG, retryMsg);
             result.errors.push(retryMsg);
           }
+        } else if (this.#isNotFound(err)) {
+          // Task was deleted from the external kanban — stop retrying
+          console.warn(
+            TAG,
+            `Task ${task.id} returned 404 — removing orphaned task from internal store`,
+          );
+          removeTask(task.id);
         } else {
           const msg = `Push failed for ${task.id}: ${err.message}`;
           console.warn(TAG, msg);
@@ -552,6 +560,15 @@ export class SyncEngine {
       msg.includes("rate limit") ||
       msg.includes("too many requests")
     );
+  }
+
+  /**
+   * Determine whether an error is a 404 Not Found response.
+   */
+  #isNotFound(err) {
+    if (!err) return false;
+    const msg = String(err.message || err).toLowerCase();
+    return msg.includes("404") || msg.includes("not found");
   }
 
   /** Simple async sleep. */

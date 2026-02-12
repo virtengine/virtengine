@@ -12,7 +12,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { pruneStaleWorktrees, getWorktreeStats } from "./worktree-manager.mjs";
+import { pruneStaleWorktrees, getWorktreeStats, fixGitConfigCorruption } from "./worktree-manager.mjs";
 
 const isWindows = process.platform === "win32";
 
@@ -759,6 +759,12 @@ export async function runMaintenanceSweep(opts = {}) {
       console.warn(`[maintenance] task archiving failed: ${err.message}`);
     }
   }
+
+  // Guard against core.bare=true corruption that accumulates from worktree ops
+  try {
+    const repoRoot = resolve(import.meta.dirname || ".", "..", "..");
+    fixGitConfigCorruption(repoRoot);
+  } catch { /* best-effort */ }
 
   console.log(
     `[maintenance] sweep complete: ${staleKilled} stale orchestrators, ${pushesReaped} stuck pushes, ${worktreesPruned} worktrees pruned, ${branchesSynced} branches synced, ${branchesDeleted} stale branches deleted`,

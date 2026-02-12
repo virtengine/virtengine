@@ -18,6 +18,7 @@ vi.mock("../agent-pool.mjs", () => ({
   invalidateThread: vi.fn(),
   getActiveThreads: vi.fn(() => []),
   getPoolSdkName: vi.fn(() => "codex"),
+  pruneAllExhaustedThreads: vi.fn(() => 0),
 }));
 
 vi.mock("../worktree-manager.mjs", () => ({

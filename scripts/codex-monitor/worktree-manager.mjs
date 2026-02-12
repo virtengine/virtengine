@@ -282,11 +282,15 @@ class WorktreeManager {
 
         // Remove stale worktree directory if it exists but isn't tracked by git
         if (existsSync(worktreePath)) {
-          console.warn(`${TAG} removing stale worktree directory: ${worktreePath}`);
+          console.warn(
+            `${TAG} removing stale worktree directory: ${worktreePath}`,
+          );
           try {
             rmSync(worktreePath, { recursive: true, force: true });
           } catch (rmErr) {
-            console.error(`${TAG} failed to remove stale worktree dir: ${rmErr.message}`);
+            console.error(
+              `${TAG} failed to remove stale worktree dir: ${rmErr.message}`,
+            );
           }
         }
 
@@ -323,7 +327,7 @@ class WorktreeManager {
             return { path: worktreePath, created: false, existing: false };
           }
         }
-      // ── Branch already checked out in another worktree ──
+        // ── Branch already checked out in another worktree ──
       } else if (
         stderr.includes("already checked out") ||
         stderr.includes("is already used")
@@ -899,6 +903,7 @@ export {
   // Helpers (useful for consumers that build their own paths)
   sanitizeBranchName,
   gitEnv,
+  fixGitConfigCorruption,
   // Constants (allow consumers to reference)
   TAG,
   DEFAULT_BASE_DIR,

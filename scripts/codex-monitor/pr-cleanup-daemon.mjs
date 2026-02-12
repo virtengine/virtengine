@@ -19,6 +19,29 @@ import { join } from "path";
 
 const exec = promisify(execCallback);
 
+/**
+ * Check if a branch is already checked out in an existing git worktree.
+ * Returns the worktree path if claimed, or null if free.
+ */
+async function getWorktreeForBranch(branch) {
+  try {
+    const { stdout } = await exec(`git worktree list --porcelain`);
+    // Each worktree block is separated by a blank line.
+    // Look for a line like: branch refs/heads/<branch>
+    const blocks = stdout.split(/\n\n/);
+    for (const block of blocks) {
+      if (block.includes(`branch refs/heads/${branch}`)) {
+        const wtMatch = block.match(/^worktree\s+(.+)$/m);
+        return wtMatch ? wtMatch[1] : "unknown";
+      }
+    }
+    return null;
+  } catch {
+    // If git worktree list itself fails, assume branch is free
+    return null;
+  }
+}
+
 // ── Configuration ────────────────────────────────────────────────────────────
 
 const CONFIG = {
@@ -279,6 +302,15 @@ class PRCleanupDaemon {
       // Fetch all relevant refs
       await exec(`git fetch origin ${pr.headRefName} main`);
 
+      // Guard: skip if the branch is already claimed by another worktree
+      const existingWt = await getWorktreeForBranch(pr.headRefName);
+      if (existingWt) {
+        console.warn(
+          `[pr-cleanup-daemon] WARN: Branch "${pr.headRefName}" is in an active worktree at ${existingWt} — skipping conflict resolution`,
+        );
+        return;
+      }
+
       // Create worktree on the PR branch
       await exec(
         `git worktree add "${tmpDir}" "origin/${pr.headRefName}" --detach`,
@@ -391,6 +423,15 @@ class PRCleanupDaemon {
 
       // Fetch latest refs first
       await exec(`git fetch origin ${pr.headRefName}`);
+
+      // Guard: skip if the branch is already claimed by another worktree
+      const existingWt = await getWorktreeForBranch(pr.headRefName);
+      if (existingWt) {
+        console.warn(
+          `[pr-cleanup-daemon] WARN: Branch "${pr.headRefName}" is in an active worktree at ${existingWt} — skipping CI re-trigger`,
+        );
+        return;
+      }
 
       // Create a temporary worktree for the PR branch
       await exec(
