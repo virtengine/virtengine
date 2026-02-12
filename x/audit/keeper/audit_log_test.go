@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"testing"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
@@ -52,16 +53,19 @@ func TestAuditLog_AppendAndGet(t *testing.T) {
 func TestAuditLog_QueryByActor(t *testing.T) {
 	ctx, k := setupAuditLogKeeper(t)
 
-	actor1 := testutil.AccAddress(t).String()
-	actor2 := testutil.AccAddress(t).String()
+	// Use distinct actor addresses to avoid prefix collisions
+	actor1 := "ve1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	actor2 := "ve1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
-	// Append logs for actor1
+	// Append logs for actor1 (with timestamp separation to avoid ID collisions)
 	err := k.AppendLog(ctx, actor1, "veid", "action1", "res1", nil)
 	require.NoError(t, err)
+
+	ctx = ctx.WithBlockTime(ctx.BlockTime().Add(time.Microsecond))
 	err = k.AppendLog(ctx, actor1, "market", "action2", "res2", nil)
 	require.NoError(t, err)
 
-	// Append log for actor2
+	ctx = ctx.WithBlockTime(ctx.BlockTime().Add(time.Microsecond))
 	err = k.AppendLog(ctx, actor2, "veid", "action3", "res3", nil)
 	require.NoError(t, err)
 

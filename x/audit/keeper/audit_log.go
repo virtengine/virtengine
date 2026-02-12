@@ -157,13 +157,25 @@ func (k Keeper) QueryLogs(ctx sdk.Context, filter types.ExportFilter, limit int6
 		// For index keys, we need to get the actual entry
 		if filter.Actor != "" || filter.Module != "" {
 			// Extract ID from the end of the index key
-			// Index key format: prefix (1) + actor/module (variable) + height (8) + id (16)
+			// Index key format: prefix (1) + actor/module (variable) + height (8) + id (16 hex chars)
 			key := iter.Key()
-			if len(key) < 25 { // Minimum key length
+
+			// Calculate prefix length: 1 byte + actor/module string length
+			var prefixLen int
+			if filter.Actor != "" {
+				prefixLen = 1 + len(filter.Actor)
+			} else {
+				prefixLen = 1 + len(filter.Module)
+			}
+
+			// Check minimum key length
+			if len(key) < prefixLen+8+1 { // prefix + height + at least 1 char ID
 				continue
 			}
-			// ID is the last 16 bytes
-			idBytes := key[len(key)-16:]
+
+			// ID starts after prefix and height (8 bytes)
+			idStart := prefixLen + 8
+			idBytes := key[idStart:]
 			id := string(idBytes)
 
 			actualEntry, found := k.GetLogEntry(ctx, id)
@@ -349,8 +361,9 @@ func (k Keeper) PruneOldLogs(ctx sdk.Context) error {
 		k.cdc.MustUnmarshal(iter.Value(), &entry)
 
 		if entry.Height < cutoffHeight {
-			if params.PruneExported && !entry.Exported {
-				continue // Don't prune unexported entries
+			// Skip exported entries if prune_exported is false
+			if entry.Exported && !params.PruneExported {
+				continue // Keep exported entries
 			}
 
 			toDelete = append(toDelete, iter.Key())
