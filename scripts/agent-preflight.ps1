@@ -55,13 +55,16 @@ if ($hasGo -or $hasGoMod) {
     $goPkgs = $goPkgs | Where-Object { Test-Path $_ } | Where-Object {
         (Get-ChildItem -Path $_ -Filter *.go -File -ErrorAction SilentlyContinue).Count -gt 0
     }
+    $goPkgs = $goPkgs | ForEach-Object { $_ -replace '\\\\', '/' }
 
-    if ($goPkgs) {
+    $nonTestGoPkgs = $goPkgs | Where-Object { $_ -notmatch '^\\.\\/tests\\b' }
+
+    if ($goPkgs -and ($nonTestGoPkgs.Count -gt 0)) {
         Write-Host "  gofmt..."
         $hasGo | ForEach-Object { gofmt -w $_ 2>&1 | Out-Null }
 
         Write-Host "  go vet..."
-        go vet @($goPkgs) 2>&1 | Out-Null
+        go vet @($nonTestGoPkgs) 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go vet" -ForegroundColor Red; $errors++ }
 
         Write-Host "  go build..."
@@ -69,8 +72,11 @@ if ($hasGo -or $hasGoMod) {
         if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go build" -ForegroundColor Red; $errors++ }
 
         Write-Host "  go test (changed packages)..."
-        go test -short -count=1 @($goPkgs) 2>&1 | Out-Null
+        go test -short -count=1 @($nonTestGoPkgs) 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go test" -ForegroundColor Red; $errors++ }
+    }
+    elseif ($goPkgs) {
+        Write-Host "  Skipping Go build/vet/test for tests-only changes." -ForegroundColor DarkGray
     }
 }
 

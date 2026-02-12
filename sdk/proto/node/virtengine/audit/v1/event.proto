@@ -60,3 +60,109 @@ message EventTrustedAuditorDeleted {
     (gogoproto.moretags)  = "yaml:\"auditor\""
   ];
 }
+
+// EventAuditLogCreated defines an event for when an audit log entry is created.
+message EventAuditLogCreated {
+  option (gogoproto.equal) = true;
+
+  // Log entry ID
+  string id = 1 [
+    (gogoproto.jsontag)   = "id",
+    (gogoproto.moretags)  = "yaml:\"id\""
+  ];
+
+  // Block height
+  int64 height = 2 [
+    (gogoproto.jsontag)   = "height",
+    (gogoproto.moretags)  = "yaml:\"height\""
+  ];
+
+  // Actor address
+  string actor = 3 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "actor",
+    (gogoproto.moretags)  = "yaml:\"actor\""
+  ];
+
+  // Module name
+  string module = 4 [
+    (gogoproto.jsontag)   = "module",
+    (gogoproto.moretags)  = "yaml:\"module\""
+  ];
+
+  // Action name
+  string action = 5 [
+    (gogoproto.jsontag)   = "action",
+    (gogoproto.moretags)  = "yaml:\"action\""
+  ];
+
+  // Resource ID
+  string resource_id = 6 [
+    (gogoproto.jsontag)   = "resource_id,omitempty",
+    (gogoproto.moretags)  = "yaml:\"resource_id,omitempty\""
+  ];
+}
+
+// EventExportJobCreated defines an event for when an export job is created.
+message EventExportJobCreated {
+  option (gogoproto.equal) = true;
+
+  // Export job ID
+  string id = 1 [
+    (gogoproto.jsontag)   = "id",
+    (gogoproto.moretags)  = "yaml:\"id\""
+  ];
+
+  // Requester address
+  string requester = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "requester",
+    (gogoproto.moretags)  = "yaml:\"requester\""
+  ];
+
+  // Export format
+  string format = 3 [
+    (gogoproto.jsontag)   = "format",
+    (gogoproto.moretags)  = "yaml:\"format\""
+  ];
+}
+
+// EventExportJobCompleted defines an event for when an export job completes.
+message EventExportJobCompleted {
+  option (gogoproto.equal) = true;
+
+  // Export job ID
+  string id = 1 [
+    (gogoproto.jsontag)   = "id",
+    (gogoproto.moretags)  = "yaml:\"id\""
+  ];
+
+  // Number of entries exported
+  int64 entry_count = 2 [
+    (gogoproto.jsontag)   = "entry_count",
+    (gogoproto.moretags)  = "yaml:\"entry_count\""
+  ];
+
+  // File path
+  string file_path = 3 [
+    (gogoproto.jsontag)   = "file_path",
+    (gogoproto.moretags)  = "yaml:\"file_path\""
+  ];
+}
+
+// EventExportJobFailed defines an event for when an export job fails.
+message EventExportJobFailed {
+  option (gogoproto.equal) = true;
+
+  // Export job ID
+  string id = 1 [
+    (gogoproto.jsontag)   = "id",
+    (gogoproto.moretags)  = "yaml:\"id\""
+  ];
+
+  // Error message
+  string error = 2 [
+    (gogoproto.jsontag)   = "error",
+    (gogoproto.moretags)  = "yaml:\"error\""
+  ];
+}

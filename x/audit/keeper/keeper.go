@@ -12,12 +12,25 @@ import (
 )
 
 type IKeeper interface {
+	// Provider audit methods
 	GetProviderByAuditor(ctx sdk.Context, id types.ProviderID) (types.AuditedProvider, bool)
 	GetProviderAttributes(ctx sdk.Context, id sdk.Address) (types.AuditedProviders, bool)
 	CreateOrUpdateProviderAttributes(ctx sdk.Context, id types.ProviderID, attr attrv1.Attributes) error
 	DeleteProviderAttributes(ctx sdk.Context, id types.ProviderID, keys []string) error
 	WithProviders(ctx sdk.Context, fn func(types.AuditedProvider) bool)
 	WithProvider(ctx sdk.Context, id sdk.Address, fn func(types.AuditedProvider) bool)
+
+	// Audit log methods
+	AppendLog(ctx sdk.Context, actor, module, action, resourceID string, metadata map[string]interface{}) error
+	GetLogEntry(ctx sdk.Context, id string) (types.AuditLogEntry, bool)
+	QueryLogs(ctx sdk.Context, filter types.ExportFilter, limit int64) ([]types.AuditLogEntry, error)
+	CreateExportJob(ctx sdk.Context, requester string, filter types.ExportFilter, format string) (string, error)
+	GetExportJob(ctx sdk.Context, jobID string) (types.ExportJob, bool)
+	UpdateExportJob(ctx sdk.Context, job types.ExportJob) error
+	QueryExportJobs(ctx sdk.Context, requester string, status types.ExportStatus) ([]types.ExportJob, error)
+	GetAuditLogParams(ctx sdk.Context) types.AuditLogParams
+	SetAuditLogParams(ctx sdk.Context, params types.AuditLogParams) error
+	PruneOldLogs(ctx sdk.Context) error
 }
 
 // Keeper of the provider store

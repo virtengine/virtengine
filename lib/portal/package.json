@@ -3,7 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "commonjs",
+  "types": "index.d.ts",
   "dependencies": {
+    "@cosmjs/amino": "^0.33.0",
+    "@cosmjs/proto-signing": "^0.33.0",
+    "@cosmjs/stargate": "^0.33.0",
     "@walletconnect/modal": "^2.7.0",
     "@walletconnect/sign-client": "^2.7.0",
     "eventsource-parser": "^1.1.1"
@@ -12,12 +16,15 @@
     "test": "node scripts/run-vitest.cjs",
     "test:a11y": "vitest run -t 'Accessibility'",
     "test:watch": "vitest",
-    "lint:a11y": "node scripts/a11y-lint.js"
+    "lint": "node scripts/a11y-lint.js --changed",
+    "lint:a11y": "node scripts/a11y-lint.js",
+    "type-check": "tsc -p tsconfig.chain.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
     "@types/react": "^18.2.67",
     "axe-core": "^4.8.4",
+    "glob": "^10.4.5",
     "jsdom": "^24.0.0",
     "typescript": "^5.5.4",
     "vitest": "^1.6.0"
