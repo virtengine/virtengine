@@ -12,6 +12,8 @@ import (
 // - These functions attempt to zero memory before it's garbage collected
 // - Go's garbage collector may move memory, so these are best-effort
 // - For maximum security, use stack-allocated fixed-size arrays
+// - ScrubFixedSize uses unsafe to zero only the fixed-size value in place;
+//   it does not follow pointers or scrub shared backing stores
 // - Production enclaves should use platform-specific secure memory APIs
 
 // ScrubBytes overwrites a byte slice with zeros
@@ -42,8 +44,7 @@ func ScrubFixedSize[T any](data *T) {
 	if data == nil {
 		return
 	}
-	//nolint:gosec // G103: Sizeof is only used to bound the in-place scrub length (no pointer arithmetic).
-	size := unsafe.Sizeof(*data)
+	size := unsafe.Sizeof(*data) //nolint:gosec // G103: size only bounds the in-place scrub; no pointer arithmetic or address exposure.
 	if size == 0 {
 		return
 	}
@@ -51,12 +52,10 @@ func ScrubFixedSize[T any](data *T) {
 	if size > maxInt {
 		return
 	}
-	//nolint:gosec // G103: pointer conversion required to zero fixed-size sensitive data in place (no aliasing outside bounds).
-	ptr := unsafe.Pointer(data)
+	ptr := unsafe.Pointer(data) //nolint:gosec // G103: convert fixed-size value to byte view for in-place zeroing within validated bounds.
 
 	// Zero the memory
-	//nolint:gosec // G103: unsafe slice is intentional to zero fixed-size sensitive data without allocations; size is bounded.
-	bytes := unsafe.Slice((*byte)(ptr), int(size))
+	bytes := unsafe.Slice((*byte)(ptr), int(size)) //nolint:gosec // G103: bounded byte slice over fixed-size value; length validated before int conversion.
 	for i := range bytes {
 		bytes[i] = 0
 	}
