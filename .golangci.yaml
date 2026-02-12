@@ -23,6 +23,10 @@ linters:
       disabled-checks:
         - ifElseChain
         - singleCaseSwitch
+    gosec:
+      exclude-generated: true
+      severity: medium
+      confidence: medium
   exclusions:
     generated: lax
     presets:
