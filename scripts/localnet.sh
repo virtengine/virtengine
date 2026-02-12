@@ -232,14 +232,14 @@ get_service_source_hash() {
             find "${PROJECT_ROOT}/cmd/virtengine" "${PROJECT_ROOT}/x" "${PROJECT_ROOT}/app" \
                 "${PROJECT_ROOT}/_build/Dockerfile.virtengine" "${PROJECT_ROOT}/scripts/init-chain.sh" \
                 -type f \( -name "*.go" -o -name "Dockerfile*" -o -name "*.sh" \) 2>/dev/null | \
-                xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
+                xargs cat 2>/dev/null | sha256sum | cut -d' ' -f1
             ;;
         provider-daemon)
             # Hash key source files for provider daemon
             find "${PROJECT_ROOT}/cmd/provider-daemon" "${PROJECT_ROOT}/pkg/provider_daemon" \
                 "${PROJECT_ROOT}/_build/Dockerfile.provider-daemon" \
                 -type f \( -name "*.go" -o -name "Dockerfile*" \) 2>/dev/null | \
-                xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
+                xargs cat 2>/dev/null | sha256sum | cut -d' ' -f1
             ;;
         portal)
             # Hash key source files for the local portal UI
@@ -247,7 +247,7 @@ get_service_source_hash() {
                 "${PROJECT_ROOT}/lib/admin" "${PROJECT_ROOT}/_build/Dockerfile.portal" \
                 "${PROJECT_ROOT}/pnpm-workspace.yaml" "${PROJECT_ROOT}/pnpm-lock.yaml" \
                 -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.json" -o -name "*.css" -o -name "*.md" -o -name "Dockerfile*" \) 2>/dev/null | \
-                xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
+                xargs cat 2>/dev/null | sha256sum | cut -d' ' -f1
             ;;
         *)
             echo "upstream"  # Upstream images don't need rebuilding

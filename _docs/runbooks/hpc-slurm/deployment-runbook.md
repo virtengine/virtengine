@@ -288,7 +288,7 @@ kubectl exec -n slurm-prod slurm-cluster-compute-3 -c slurmd -- \
 
 ```bash
 # 1. Verify munge key consistency
-kubectl get secret -n slurm-prod slurm-cluster-munge -o jsonpath='{.data.munge\.key}' | base64 -d | md5sum
+kubectl get secret -n slurm-prod slurm-cluster-munge -o jsonpath='{.data.munge\.key}' | base64 -d | sha256sum
 
 # 2. If keys are mismatched, regenerate
 kubectl delete secret -n slurm-prod slurm-cluster-munge

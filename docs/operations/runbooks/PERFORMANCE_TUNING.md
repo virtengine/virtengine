@@ -504,7 +504,7 @@ virtengine = host=localhost port=5432 dbname=virtengine_db
 [pgbouncer]
 listen_addr = 127.0.0.1
 listen_port = 6432
-auth_type = md5
+auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 
 # Pool mode
