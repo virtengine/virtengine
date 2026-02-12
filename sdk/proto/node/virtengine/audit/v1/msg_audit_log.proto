@@ -1,0 +1,74 @@
+syntax = "proto3";
+package virtengine.audit.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "virtengine/audit/v1/audit_log.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/audit/v1";
+
+// MsgService defines the Msg service for audit log operations
+service MsgService {
+  option (cosmos.msg.v1.service) = true;
+
+  // CreateExportJob creates a new export job for audit logs
+  rpc CreateExportJob(MsgCreateExportJob) returns (MsgCreateExportJobResponse);
+
+  // UpdateParams updates the audit log module parameters
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// MsgCreateExportJob creates an export job for audit logs
+message MsgCreateExportJob {
+  option (cosmos.msg.v1.signer) = "requester";
+  option (gogoproto.equal) = false;
+  option (gogoproto.goproto_getters) = false;
+
+  // Requester is the address creating the export job
+  string requester = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.moretags) = "yaml:\"requester\""
+  ];
+
+  // Filter parameters for the export
+  ExportFilter filter = 2 [
+    (gogoproto.moretags) = "yaml:\"filter\""
+  ];
+
+  // Export format (json, csv)
+  string format = 3 [
+    (gogoproto.moretags) = "yaml:\"format\""
+  ];
+}
+
+// MsgCreateExportJobResponse is the response for MsgCreateExportJob
+message MsgCreateExportJobResponse {
+  // Job ID of the created export job
+  string job_id = 1 [
+    (gogoproto.jsontag) = "job_id",
+    (gogoproto.moretags) = "yaml:\"job_id\""
+  ];
+}
+
+// MsgUpdateParams updates the audit log module parameters
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (gogoproto.equal) = false;
+  option (gogoproto.goproto_getters) = false;
+
+  // Authority is the address that controls the module (gov module account)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Params are the new module parameters
+  AuditLogParams params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}

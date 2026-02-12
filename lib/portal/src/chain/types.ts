@@ -2,7 +2,9 @@
  * Chain client shared types and errors.
  */
 
-export type ChainEnvironment = 'mainnet' | 'testnet' | 'localnet' | 'custom';
+import type { EncodeObject } from "@cosmjs/proto-signing";
+
+export type ChainEnvironment = "mainnet" | "testnet" | "localnet" | "custom";
 
 export interface ChainEndpointConfig {
   /** Human-friendly network label. */
@@ -85,6 +87,13 @@ export interface ChainRequestResult<T> {
   status: number;
 }
 
+export interface ChainQueryOptions {
+  /** Pagination parameters to apply to list queries. */
+  pagination?: PaginationRequest;
+  /** Per-request overrides for chain client behavior. */
+  request?: ChainRequestOptions;
+}
+
 export interface ChainStatus {
   chainId: string;
   latestHeight: number | null;
@@ -94,16 +103,16 @@ export interface ChainStatus {
 }
 
 export type ChainErrorCode =
-  | 'timeout'
-  | 'network'
-  | 'http_error'
-  | 'invalid_response'
-  | 'not_found'
-  | 'retry_exhausted'
-  | 'connection_failed'
-  | 'wallet_error'
-  | 'signing_error'
-  | 'unknown';
+  | "timeout"
+  | "network"
+  | "http_error"
+  | "invalid_response"
+  | "not_found"
+  | "retry_exhausted"
+  | "connection_failed"
+  | "wallet_error"
+  | "signing_error"
+  | "unknown";
 
 /**
  * Base error for chain client failures.
@@ -117,10 +126,10 @@ export class ChainClientError extends Error {
   constructor(
     code: ChainErrorCode,
     message: string,
-    options?: { status?: number; endpoint?: string; cause?: unknown }
+    options?: { status?: number; endpoint?: string; cause?: unknown },
   ) {
     super(message);
-    this.name = 'ChainClientError';
+    this.name = "ChainClientError";
     this.code = code;
     this.status = options?.status;
     this.endpoint = options?.endpoint;
@@ -132,9 +141,18 @@ export class ChainClientError extends Error {
  * Error for HTTP responses that indicate a failure.
  */
 export class ChainHttpError extends ChainClientError {
-  constructor(message: string, status: number, endpoint?: string, cause?: unknown) {
-    super(status === 404 ? 'not_found' : 'http_error', message, { status, endpoint, cause });
-    this.name = 'ChainHttpError';
+  constructor(
+    message: string,
+    status: number,
+    endpoint?: string,
+    cause?: unknown,
+  ) {
+    super(status === 404 ? "not_found" : "http_error", message, {
+      status,
+      endpoint,
+      cause,
+    });
+    this.name = "ChainHttpError";
   }
 }
 
@@ -143,8 +161,8 @@ export class ChainHttpError extends ChainClientError {
  */
 export class ChainTimeoutError extends ChainClientError {
   constructor(message: string, endpoint?: string, cause?: unknown) {
-    super('timeout', message, { endpoint, cause });
-    this.name = 'ChainTimeoutError';
+    super("timeout", message, { endpoint, cause });
+    this.name = "ChainTimeoutError";
   }
 }
 
@@ -153,8 +171,8 @@ export class ChainTimeoutError extends ChainClientError {
  */
 export class ChainRetryError extends ChainClientError {
   constructor(message: string, endpoint?: string, cause?: unknown) {
-    super('retry_exhausted', message, { endpoint, cause });
-    this.name = 'ChainRetryError';
+    super("retry_exhausted", message, { endpoint, cause });
+    this.name = "ChainRetryError";
   }
 }
 
@@ -170,7 +188,7 @@ export function isChainClientError(error: unknown): error is ChainClientError {
  */
 export function isRetryableError(
   error: unknown,
-  retryableStatusCodes: number[]
+  retryableStatusCodes: number[],
 ): boolean {
   if (!error) return false;
   if (error instanceof ChainTimeoutError) return true;
@@ -178,7 +196,7 @@ export function isRetryableError(
     return retryableStatusCodes.includes(error.status ?? 0);
   }
   if (error instanceof ChainClientError) {
-    return error.code === 'network' || error.code === 'connection_failed';
+    return error.code === "network" || error.code === "connection_failed";
   }
   return false;
 }
@@ -193,4 +211,77 @@ export interface PaginationRequest {
 export interface PaginationResponse {
   next_key?: string | null;
   total?: string | number;
+}
+
+export interface NormalizedPagination {
+  /** Next pagination key to request additional data, if any. */
+  nextKey: string | null;
+  /** Total record count if provided by the chain. */
+  total: number | null;
+}
+
+export interface ChainTxMessage<
+  T = Record<string, unknown>,
+> extends EncodeObject {
+  value: T;
+}
+
+/**
+ * Build REST query parameters for pagination.
+ */
+export function buildPaginationParams(
+  pagination?: PaginationRequest,
+): Record<string, string> {
+  if (!pagination) return {};
+  const params: Record<string, string> = {};
+  if (pagination.key) params["pagination.key"] = pagination.key;
+  if (pagination.offset !== undefined)
+    params["pagination.offset"] = String(pagination.offset);
+  if (pagination.limit !== undefined)
+    params["pagination.limit"] = String(pagination.limit);
+  if (pagination.countTotal !== undefined) {
+    params["pagination.count_total"] = pagination.countTotal ? "true" : "false";
+  }
+  return params;
+}
+
+/**
+ * Normalize pagination responses from different REST endpoints.
+ */
+export function normalizePagination(
+  pagination?:
+    | PaginationResponse
+    | {
+        pagination?: PaginationResponse;
+        next_key?: string | null;
+        total?: string | number;
+      },
+): NormalizedPagination {
+  if (!pagination) {
+    return { nextKey: null, total: null };
+  }
+
+  const nextKey =
+    (pagination as PaginationResponse).next_key ??
+    (pagination as { next_key?: string | null }).next_key ??
+    (pagination as { pagination?: PaginationResponse }).pagination?.next_key ??
+    null;
+
+  const totalRaw =
+    (pagination as PaginationResponse).total ??
+    (pagination as { total?: string | number }).total ??
+    (pagination as { pagination?: PaginationResponse }).pagination?.total ??
+    null;
+
+  const parsedTotal =
+    typeof totalRaw === "string"
+      ? Number.parseInt(totalRaw, 10)
+      : typeof totalRaw === "number"
+        ? totalRaw
+        : null;
+
+  return {
+    nextKey,
+    total: Number.isNaN(parsedTotal) ? null : parsedTotal,
+  };
 }

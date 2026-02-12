@@ -7,6 +7,12 @@
 
 import { env } from '@/config/env';
 import { getChainInfo } from '@/config/chains';
+import {
+  createChainConfig,
+  createChainQueryClient,
+  type ChainClientConfig,
+  type ChainQueryClient,
+} from 'virtengine-portal-lib';
 
 export interface PortalEndpoints {
   chainRest: string;
@@ -14,6 +20,8 @@ export interface PortalEndpoints {
   chainRpc: string;
   providerDaemon: string | null;
 }
+
+let cachedChainClient: ChainQueryClient | null = null;
 
 export function getPortalEndpoints(): PortalEndpoints {
   const chain = getChainInfo();
@@ -23,4 +31,26 @@ export function getPortalEndpoints(): PortalEndpoints {
     chainRpc: env.chainRpc || chain.rpcEndpoint,
     providerDaemon: env.providerDaemonUrl || null,
   };
+}
+
+export function getPortalChainConfig(): ChainClientConfig {
+  const chain = getChainInfo();
+  const endpoints = getPortalEndpoints();
+  return createChainConfig({
+    chainId: env.chainId || chain.chainId,
+    rpcEndpoints: [endpoints.chainRpc],
+    restEndpoints: [endpoints.chainRest],
+    wsEndpoints: [endpoints.chainWs],
+    bech32Prefix: chain.bech32Config.bech32PrefixAccAddr,
+    feeDenom: chain.stakeCurrency.coinMinimalDenom,
+    coinDecimals: chain.stakeCurrency.coinDecimals,
+    gasPriceStep: chain.feeCurrencies?.[0]?.gasPriceStep,
+  });
+}
+
+export function getPortalChainClient(): ChainQueryClient {
+  if (!cachedChainClient) {
+    cachedChainClient = createChainQueryClient(getPortalChainConfig());
+  }
+  return cachedChainClient;
 }

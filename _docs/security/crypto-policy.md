@@ -1,104 +1,70 @@
-# VirtEngine Cryptography Policy
+# Cryptography Policy
 
-This document defines the cryptographic standards and policies for VirtEngine codebase.
+## Purpose
+This policy defines approved cryptographic algorithms, key sizes, protocols, and implementation requirements for VirtEngine. It applies to all code in this repository, including off-chain services and tooling.
+
+## Scope
+- On-chain module code (`x/`)
+- Off-chain services (`pkg/`)
+- CLI tools (`cmd/`, `sdk/`)
+- Infrastructure and test tooling when handling sensitive data
 
 ## Approved Algorithms
 
-### Hashing
-
-| Algorithm | Status | Use Case |
-|-----------|--------|----------|
-| SHA-256 | ✅ Approved | General-purpose hashing, content addressing |
-| SHA-384 | ✅ Approved | High-security hashing |
-| SHA-512 | ✅ Approved | High-security hashing |
-| SHA3-256 | ✅ Approved | Modern applications requiring SHA-3 |
-| BLAKE2b | ✅ Approved | High-performance hashing |
-| SHA-1 | ⚠️ Legacy Only | SAML 2.0 XML Encryption (see exceptions) |
-| MD5 | ⛔ Prohibited | Not to be used for any security purpose |
-
 ### Symmetric Encryption
+- AES-256-GCM
+- ChaCha20-Poly1305
 
-| Algorithm | Status | Use Case |
-|-----------|--------|----------|
-| AES-256-GCM | ✅ Approved | Symmetric encryption with authentication |
-| AES-128-GCM | ✅ Approved | Symmetric encryption with authentication |
-| ChaCha20-Poly1305 | ✅ Approved | Alternative to AES-GCM |
-| XSalsa20-Poly1305 | ✅ Approved | Used in VEID envelope encryption |
-| AES-CBC | ⚠️ Legacy Only | Only with HMAC authentication |
+### Asymmetric Encryption / Key Agreement
+- X25519 for key agreement
+- P-256 (ECDH) only when interoperability requires it
 
-### Asymmetric Encryption
+### Digital Signatures
+- Ed25519 (preferred)
+- secp256k1 (Cosmos SDK compatibility)
+- P-256 only when interoperability requires it
 
-| Algorithm | Status | Use Case |
-|-----------|--------|----------|
-| X25519 | ✅ Approved | Key exchange (ECDH) |
-| Ed25519 | ✅ Approved | Digital signatures |
-| RSA-4096 | ✅ Approved | Legacy systems requiring RSA |
-| RSA-2048 | ⚠️ Transitional | Migrate to 4096-bit or Ed25519 |
-| ECDSA P-256/P-384 | ✅ Approved | Digital signatures |
+### Hashing
+- SHA-256 / SHA-384 / SHA-512
+- BLAKE2b or BLAKE2s when performance or compatibility requires it
 
-### Key Derivation
+### Message Authentication
+- HMAC-SHA-256 / HMAC-SHA-512
 
-| Algorithm | Status | Use Case |
-|-----------|--------|----------|
-| HKDF-SHA256 | ✅ Approved | Key derivation |
-| Argon2id | ✅ Approved | Password hashing |
-| scrypt | ✅ Approved | Password hashing |
-| PBKDF2-SHA256 | ⚠️ Legacy Only | With iteration count ≥ 100,000 |
+### Password Hashing
+- Argon2id (preferred)
+- scrypt only for legacy compatibility
 
-### TLS Configuration
+### Randomness
+- Use `crypto/rand` for all security-sensitive randomness
+- `math/rand` is permitted only for tests, simulations, or non-security uses
 
-| Version | Status |
-|---------|--------|
-| TLS 1.3 | ✅ Preferred |
-| TLS 1.2 | ✅ Minimum Required |
-| TLS 1.1 | ⛔ Prohibited |
-| TLS 1.0 | ⛔ Prohibited |
-| SSL 3.0 | ⛔ Prohibited |
+## Disallowed Algorithms
+- MD5
+- SHA-1
+- RSA with keys < 2048 bits
+- RC4, DES, 3DES
+- ECB mode
 
-#### Approved TLS Cipher Suites (TLS 1.2)
+## TLS / HTTP Security
+- Minimum TLS version: 1.2 (1.3 preferred)
+- Disable insecure renegotiation
+- Use strong cipher suites aligned with the Go standard library defaults
+- Always verify TLS certificates; `InsecureSkipVerify` is prohibited
+- Require explicit timeouts for all outbound HTTP clients
 
-```
-TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
-TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-```
+## Key Management
+- Store secrets only in secure stores (KMS, HSM, secrets manager, or OS keychain)
+- Never hardcode credentials, API keys, or private keys
+- Rotate long-lived keys at least every 12 months or on suspected compromise
 
-## Random Number Generation
-
-### Security-Sensitive Operations
-
-**MUST use `crypto/rand`:**
-- Key generation
-- Nonce/IV generation
-- Token generation (API keys, session tokens, CSRF tokens)
-- Salt generation for password hashing
-- Any value that must be unpredictable
-
-**See:** `pkg/security/random.go` for approved utilities.
-
-### Non-Security Operations
-
-**MAY use `math/rand`:**
-- Simulation code (with documented seed for reproducibility)
-- Load balancing (when unpredictability is not required)
-- Test data generation
-- Jitter where prediction has no security impact
-
-**Requirements:**
-- Add `//nolint:gosec` with justification comment
-- Document why `crypto/rand` is not required
-
-### Consensus-Critical Code
-
-For blockchain consensus:
-- Use deterministic sources only
-- Document seed sources explicitly
-- See `x/enclave/keeper/committee.go` for patterns
+## Implementation Requirements
+- Use the helpers in `pkg/security/` for random generation, safe command execution, path validation, and HTTP defaults
+- All `//nolint` or `//nosec` annotations must include a justification comment
+- Any crypto-related change must include a security review checklist in the PR description
 
 ## Legacy Algorithm Exceptions
+Legacy exceptions are approved for compatibility with third-party standards or services. Any new exception must follow the approval process in the Exceptions section below.
 
 ### SHA-1 in SAML/XML Signatures (eduGAIN Federation)
 
@@ -183,117 +149,20 @@ MD5 is **prohibited** for security purposes. For legacy file checksums where col
 **Ongoing**
 - SAML SHA-1 algorithm URIs remain defined only to detect and reject weak signatures until the SAML spec removes them.
 
-## Security Utilities
+## Exceptions
+Exceptions require approval from security maintainers and must include:
+- Reason for the exception
+- Compensating controls
+- Expiry date and owner for remediation
 
-### HTTP Clients
-
-Always use `pkg/security/httpclient.go`:
-
-```go
-import "github.com/virtengine/virtengine/pkg/security"
-
-client := security.NewSecureHTTPClient()
-// or for TLS 1.3 only:
-client := security.NewSecureHTTPClientTLS13()
-```
-
-### Random Generation
-
-Always use `pkg/security/random.go`:
-
-```go
-import "github.com/virtengine/virtengine/pkg/security"
-
-token, err := security.SecureRandomToken(32)
-id, err := security.SecureRandomID(16)
-n, err := security.SecureRandomInt(100)
-```
-
-### Integer Overflow Protection
-
-Use `pkg/security/overflow.go` for safe conversions:
-
-```go
-import "github.com/virtengine/virtengine/pkg/security"
-
-v, err := security.SafeInt64(sdkMathInt)
-v, err := security.SafeUint64ToInt(uint64Value)
-```
-
-### Path Validation
-
-Use `pkg/security/path.go` for file operations:
-
-```go
-import "github.com/virtengine/virtengine/pkg/security"
-
-validator := security.NewPathValidator(baseDir)
-err := validator.ValidatePath(userInput)
-
-// Or for simple CLI paths:
-data, err := security.SafeReadFile(path)
-```
-
-### Command Execution
-
-Use `pkg/security/validation.go` for external commands:
-
-```go
-import "github.com/virtengine/virtengine/pkg/security"
-
-err := security.ValidateExecutable("ansible", path)
-args, err := security.PingArgs(target, count)
-```
-
-## Code Review Checklist
-
-When reviewing code for cryptographic security:
-
-- [ ] No hardcoded secrets or keys
-- [ ] TLS configuration uses minimum TLS 1.2
-- [ ] HTTP clients have proper timeouts
-- [ ] Random generation uses `crypto/rand` for security purposes
-- [ ] Integer conversions check for overflow
-- [ ] File paths are validated before use
-- [ ] External commands use allowlisted executables
-- [ ] Sensitive data is cleared from memory after use
-
-## Gosec Alert Handling
-
-### Legitimate Security Issues
-
-Fix immediately:
-- G101: Hardcoded credentials (if actual secrets)
-- G201: SQL query construction using format strings
-- G301: Poor file permissions
-- G304: File path from variable (path traversal)
-- G401: Use of weak crypto (MD5, SHA1) for security
-- G402: TLS InsecureSkipVerify
-- G501: Import of deprecated crypto package
-
-### Documented Exceptions
-
-Add `//nolint:gosec` with justification:
-- G103: Unsafe pointer (if reviewed and necessary)
-- G104: Unaudited defer Close (if error handling not critical)
-- G110: Decompression bomb (if input is trusted)
-- G306: Write file with broader permissions (if intentional)
-- G404: Weak random (if not security-sensitive)
-
-### False Positives
-
-Update `.golangci.yaml` exclusions:
-- G101 for config struct field names (not actual secrets)
-- Generated protobuf code
-- Test fixtures with fake credentials
-
-## Contact
-
-For questions about cryptographic policy, contact the security team or open an issue with the `security` label.
+## References
+- Go `crypto` package documentation
+- VirtEngine Security Architecture (`docs/security/SECURITY_ARCHITECTURE.md`)
 
 ## Revision History
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-12 | 1.2 | Documented legacy exceptions and deprecation timeline for weak crypto |
 | 2026-02-10 | 1.1 | Updated legacy exceptions with file paths; documented TOTP SHA-1 → SHA-256 migration |
 | 2026-02-06 | 1.0 | Initial policy document |
