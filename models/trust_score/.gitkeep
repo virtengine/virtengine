@@ -1,9 +1,0 @@
-# VirtEngine Trust Score Model Directory
-# This directory contains the trust score ML model artifacts:
-# - saved_model.pb and related TensorFlow SavedModel files
-# - MODEL_HASH.txt with SHA-256 hash
-# - manifest.json with model metadata
-# - MODEL_CARD.md with model documentation
-
-# Note: Large model files may be stored via Git LFS
-# Configure with: git lfs track "*.pb" "*/variables/*"

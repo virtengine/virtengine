@@ -1,8 +1,0 @@
-syntax = "proto3";
-package virtengine.take.v1beta3;
-
-option go_package = "github.com/virtengine/virtengine/sdk/go/node/take/v1beta3";
-
-// Query defines the gRPC querier service
-service Query {
-}
