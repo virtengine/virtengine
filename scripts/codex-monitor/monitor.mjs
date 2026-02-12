@@ -3078,9 +3078,25 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
     const liveStatus = res?.data?.status || res?.status;
     const liveUpdatedAt = res?.data?.updated_at || res?.data?.created_at || "";
     if (!liveStatus) {
-      console.warn(
-        `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping`,
-      );
+      // Cache the failure so we don't re-attempt every cycle (prevents log spam).
+      // Uses a shorter TTL (5 min) so we re-check sooner than successful skips.
+      const FETCH_FAIL_BACKOFF_MS = 5 * 60 * 1000;
+      const existingSkip = recoverySkipCache.get(taskId);
+      const alreadyBackedOff =
+        existingSkip?.resolvedStatus === "fetch-failed" &&
+        Date.now() - existingSkip.timestamp < FETCH_FAIL_BACKOFF_MS;
+      if (!alreadyBackedOff) {
+        console.warn(
+          `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping (backoff ${Math.round(FETCH_FAIL_BACKOFF_MS / 60000)}min)`,
+        );
+        recoverySkipCache.set(taskId, {
+          resolvedStatus: "fetch-failed",
+          timestamp: Date.now(),
+          updatedAt: "",
+          status: "fetch-failed",
+        });
+        scheduleRecoveryCacheSave();
+      }
       return false;
     }
     // If the user has moved the task out of inprogress (cancelled, done,
@@ -3127,9 +3143,24 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
     }
     return success;
   } catch (err) {
-    console.warn(
-      `[monitor] safeRecover failed for "${taskTitle}": ${err.message || err}`,
-    );
+    // Cache the exception so we don't retry every cycle (5 min backoff)
+    const FETCH_FAIL_BACKOFF_MS = 5 * 60 * 1000;
+    const existingSkip = recoverySkipCache.get(taskId);
+    const alreadyBackedOff =
+      existingSkip?.resolvedStatus === "fetch-failed" &&
+      Date.now() - existingSkip.timestamp < FETCH_FAIL_BACKOFF_MS;
+    if (!alreadyBackedOff) {
+      console.warn(
+        `[monitor] safeRecover failed for "${taskTitle}": ${err.message || err} (backoff ${Math.round(FETCH_FAIL_BACKOFF_MS / 60000)}min)`,
+      );
+      recoverySkipCache.set(taskId, {
+        resolvedStatus: "fetch-failed",
+        timestamp: Date.now(),
+        updatedAt: "",
+        status: "fetch-failed",
+      });
+      scheduleRecoveryCacheSave();
+    }
     return false;
   }
 }
@@ -3653,7 +3684,16 @@ async function checkMergedPRsAndUpdateTasks() {
       // so we skip the entire branch/PR lookup and recovery attempt.
       const skipEntry = recoverySkipCache.get(task.id);
       if (skipEntry) {
-        if (!taskVersionMatches(task, skipEntry, taskStatus)) {
+        // For fetch-failed entries, use a shorter TTL (5 min) regardless of task version.
+        // These aren't tied to a specific task state — just API unavailability.
+        if (skipEntry.resolvedStatus === "fetch-failed") {
+          const FETCH_FAIL_BACKOFF_MS = 5 * 60 * 1000;
+          if (Date.now() - skipEntry.timestamp < FETCH_FAIL_BACKOFF_MS) {
+            continue;
+          }
+          recoverySkipCache.delete(task.id);
+          scheduleRecoveryCacheSave();
+        } else if (!taskVersionMatches(task, skipEntry, taskStatus)) {
           recoverySkipCache.delete(task.id);
           scheduleRecoveryCacheSave();
         } else if (Date.now() - skipEntry.timestamp < RECOVERY_SKIP_CACHE_MS) {

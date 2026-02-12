@@ -234,6 +234,30 @@ jobs:
             gitleaks detect --source . --log-opts "${BASE_SHA}..HEAD" --verbose --redact --report-format sarif --report-path gitleaks.sarif
           fi
 
+      - name: Ensure gitleaks SARIF exists
+        if: always()
+        run: |
+          if [ ! -f gitleaks.sarif ]; then
+            cat > gitleaks.sarif <<'EOF'
+          {
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [
+              {
+                "tool": {
+                  "driver": {
+                    "name": "gitleaks",
+                    "informationUri": "https://github.com/gitleaks/gitleaks",
+                    "rules": []
+                  }
+                },
+                "results": []
+              }
+            ]
+          }
+          EOF
+          fi
+
       - name: Upload gitleaks results
         uses: github/codeql-action/upload-sarif@v3
         if: always()

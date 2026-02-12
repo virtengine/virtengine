@@ -247,14 +247,23 @@ export class AgentEndpoint {
             encoding: "utf8",
             timeout: 5000,
           });
-        } catch {
-          /* may already be dead */
+        } catch (killErr) {
+          /* may already be dead — log for diagnostics */
+          console.warn(
+            `${TAG} taskkill PID ${pid} failed: ${killErr.stderr?.trim() || killErr.message || "unknown error"}`,
+          );
         }
       }
       // Give OS time to release the port
       await new Promise((r) => setTimeout(r, 1000));
-    } catch {
+    } catch (outerErr) {
       // netstat/taskkill may fail on non-Windows or if port already free
+      if (outerErr.status !== 1) {
+        // status 1 = no matching netstat entries (port already free)
+        console.warn(
+          `${TAG} _killProcessOnPort(${port}) failed: ${outerErr.message || "unknown error"}`,
+        );
+      }
     }
   }
 
