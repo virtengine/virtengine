@@ -42,12 +42,21 @@ func ScrubFixedSize[T any](data *T) {
 	if data == nil {
 		return
 	}
+	//nolint:gosec // G103: Sizeof is only used to bound the in-place scrub length (no pointer arithmetic).
 	size := unsafe.Sizeof(*data)
-	//nolint:gosec // G103: unsafe is intentional for low-level memory scrubbing of sensitive data
+	if size == 0 {
+		return
+	}
+	maxInt := uintptr(^uint(0) >> 1)
+	if size > maxInt {
+		return
+	}
+	//nolint:gosec // G103: pointer conversion required to zero fixed-size sensitive data in place (no aliasing outside bounds).
 	ptr := unsafe.Pointer(data)
 
 	// Zero the memory
-	bytes := (*[1 << 30]byte)(ptr)[:size:size]
+	//nolint:gosec // G103: unsafe slice is intentional to zero fixed-size sensitive data without allocations; size is bounded.
+	bytes := unsafe.Slice((*byte)(ptr), int(size))
 	for i := range bytes {
 		bytes[i] = 0
 	}
