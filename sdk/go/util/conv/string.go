@@ -21,6 +21,9 @@ func UnsafeStrToBytes(s string) []byte {
 // Callers must ensure the byte slice is not mutated while the string is in use.
 // Prefer BytesToStr for safety unless a hot path requires zero-copy conversion.
 func UnsafeBytesToStr(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
 	//nolint:gosec // G103: zero-copy conversion; caller must not mutate b while the string is in use.
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
