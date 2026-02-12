@@ -80,6 +80,7 @@
     "README.md",
     "agent-endpoint.mjs",
     "agent-pool.mjs",
+    "agent-prompts.mjs",
     "agent-sdk.mjs",
     "anomaly-detector.mjs",
     "autofix.mjs",
