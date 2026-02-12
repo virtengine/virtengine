@@ -9,7 +9,13 @@ import type {
   PricingModel,
   Provider,
 } from '@/types/offerings';
-import { getChainInfo } from '@/config/chains';
+import { getPortalChainClient } from '@/lib/config';
+import {
+  ChainHttpError,
+  fetchMarketOffering,
+  fetchMarketOfferings,
+  fetchProviderRegistration,
+} from 'virtengine-portal-lib';
 
 export interface OfferingStoreState {
   offerings: Offering[];
@@ -107,25 +113,7 @@ const PRICING_MODEL_MAP: Record<number, PricingModel> = {
   5: 'fixed',
 };
 
-const OFFERINGS_ENDPOINTS = ['/virtengine/market/v1/offerings', '/marketplace/offerings'];
-const OFFERING_ENDPOINTS = (offeringId: string) => [
-  `/virtengine/market/v1/offerings/${offeringId}`,
-  `/marketplace/offerings/${offeringId}`,
-];
-const PROVIDER_ENDPOINTS = (address: string) => [
-  `/virtengine/provider/v1beta4/providers/${address}`,
-  `/virtengine/provider/v1/providers/${address}`,
-];
-
-class ChainRequestError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = 'ChainRequestError';
-    this.status = status;
-  }
-}
+const chainClient = getPortalChainClient();
 
 type ChainOffering = Record<string, unknown>;
 type ChainProvider = Record<string, unknown>;
@@ -426,52 +414,6 @@ function extractOfferingsResponse(payload: unknown): {
   return { offerings, nextKey, total };
 }
 
-async function fetchChainJson<T>(path: string, params?: Record<string, string>) {
-  const { restEndpoint } = getChainInfo();
-  const url = new URL(path, restEndpoint);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') {
-        url.searchParams.set(key, value);
-      }
-    });
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new ChainRequestError(
-      response.status,
-      text || `Chain request failed with status ${response.status}`
-    );
-  }
-
-  return (await response.json()) as T;
-}
-
-async function fetchChainJsonWithFallback<T>(paths: string[], params?: Record<string, string>) {
-  let lastError: Error | null = null;
-
-  for (const path of paths) {
-    try {
-      return await fetchChainJson<T>(path, params);
-    } catch (error) {
-      lastError = error as Error;
-      if (error instanceof ChainRequestError && (error.status === 404 || error.status === 501)) {
-        continue;
-      }
-      break;
-    }
-  }
-
-  throw lastError ?? new Error('Chain request failed');
-}
-
 function parseAttributeMap(attributes: unknown) {
   const map = new Map<string, string[]>();
   if (!Array.isArray(attributes)) return map;
@@ -709,16 +651,13 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
       let pageCount = 0;
 
       do {
-        const params: Record<string, string> = {
-          'pagination.limit': OFFERING_PAGE_LIMIT.toString(),
-        };
-
-        if (nextKey) {
-          params['pagination.key'] = nextKey;
-        }
-
-        const payload = await fetchChainJsonWithFallback<unknown>(OFFERINGS_ENDPOINTS, params);
-        const extracted = extractOfferingsResponse(payload);
+        const response = await fetchMarketOfferings(chainClient, {
+          pagination: {
+            limit: OFFERING_PAGE_LIMIT,
+            key: nextKey ?? undefined,
+          },
+        });
+        const extracted = extractOfferingsResponse(response.data);
 
         offerings.push(
           ...extracted.offerings
@@ -809,7 +748,8 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
 
     try {
       const offeringId = `${providerAddress}/${sequence}`;
-      const payload = await fetchChainJsonWithFallback<unknown>(OFFERING_ENDPOINTS(offeringId));
+      const response = await fetchMarketOffering(chainClient, offeringId);
+      const payload = response.data;
       const rawOffering =
         (payload as { offering?: ChainOffering }).offering ?? (payload as ChainOffering);
       const offering = mapOffering(rawOffering);
@@ -821,7 +761,7 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
       set({ selectedOffering: offering, isLoadingDetail: false });
     } catch (error) {
       const message =
-        error instanceof ChainRequestError && error.status === 404
+        error instanceof ChainHttpError && error.status === 404
           ? 'Offering not found'
           : error instanceof Error
             ? error.message
@@ -842,7 +782,8 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
 
     try {
       const providerStats = buildProviderStats(offerings).get(address);
-      const payload = await fetchChainJsonWithFallback<unknown>(PROVIDER_ENDPOINTS(address));
+      const response = await fetchProviderRegistration(chainClient, address);
+      const payload = response.data;
       const rawProvider =
         (payload as { provider?: ChainProvider }).provider ?? (payload as ChainProvider);
 
