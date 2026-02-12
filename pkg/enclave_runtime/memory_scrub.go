@@ -43,11 +43,17 @@ func ScrubFixedSize[T any](data *T) {
 		return
 	}
 	size := unsafe.Sizeof(*data)
-	//nolint:gosec // G103: unsafe is intentional for low-level memory scrubbing of sensitive data
+	if size == 0 {
+		return
+	}
+	if size > uintptr(^uint(0)>>1) {
+		return
+	}
 	ptr := unsafe.Pointer(data)
 
 	// Zero the memory
-	bytes := (*[1 << 30]byte)(ptr)[:size:size]
+	//nolint:gosec // G103: unsafe slice is intentional to zero fixed-size sensitive data without allocations.
+	bytes := unsafe.Slice((*byte)(ptr), int(size))
 	for i := range bytes {
 		bytes[i] = 0
 	}
