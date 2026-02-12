@@ -1,0 +1,119 @@
+syntax = "proto3";
+package virtengine.audit.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "virtengine/audit/v1/audit_log.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/audit/v1";
+
+// QueryAuditLog service defines the gRPC querier service for audit logs
+service QueryAuditLog {
+  // QueryLogEntries queries all audit log entries with optional filters
+  rpc QueryLogEntries(QueryLogEntriesRequest) returns (QueryLogEntriesResponse) {
+    option (google.api.http).get = "/virtengine/audit/v1/logs";
+  }
+
+  // QueryLogEntry queries a specific audit log entry by ID
+  rpc QueryLogEntry(QueryLogEntryRequest) returns (QueryLogEntryResponse) {
+    option (google.api.http).get = "/virtengine/audit/v1/logs/{id}";
+  }
+
+  // QueryExportJobs queries all export jobs
+  rpc QueryExportJobs(QueryExportJobsRequest) returns (QueryExportJobsResponse) {
+    option (google.api.http).get = "/virtengine/audit/v1/exports";
+  }
+
+  // QueryExportJob queries a specific export job by ID
+  rpc QueryExportJob(QueryExportJobRequest) returns (QueryExportJobResponse) {
+    option (google.api.http).get = "/virtengine/audit/v1/exports/{id}";
+  }
+
+  // QueryParams queries the audit log module parameters
+  rpc QueryParams(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/audit/v1/params";
+  }
+}
+
+// QueryLogEntriesRequest is the request type for QueryLogEntries
+message QueryLogEntriesRequest {
+  // Filter parameters
+  ExportFilter filter = 1;
+
+  // Pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryLogEntriesResponse is the response type for QueryLogEntries
+message QueryLogEntriesResponse {
+  // List of audit log entries
+  repeated AuditLogEntry entries = 1 [
+    (gogoproto.nullable) = false
+  ];
+
+  // Pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryLogEntryRequest is the request type for QueryLogEntry
+message QueryLogEntryRequest {
+  // Entry ID to query
+  string id = 1;
+}
+
+// QueryLogEntryResponse is the response type for QueryLogEntry
+message QueryLogEntryResponse {
+  // Audit log entry
+  AuditLogEntry entry = 1 [
+    (gogoproto.nullable) = false
+  ];
+}
+
+// QueryExportJobsRequest is the request type for QueryExportJobs
+message QueryExportJobsRequest {
+  // Filter by requester address (optional)
+  string requester = 1;
+
+  // Filter by status (optional)
+  ExportStatus status = 2;
+
+  // Pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 3;
+}
+
+// QueryExportJobsResponse is the response type for QueryExportJobs
+message QueryExportJobsResponse {
+  // List of export jobs
+  repeated ExportJob jobs = 1 [
+    (gogoproto.nullable) = false
+  ];
+
+  // Pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryExportJobRequest is the request type for QueryExportJob
+message QueryExportJobRequest {
+  // Job ID to query
+  string id = 1;
+}
+
+// QueryExportJobResponse is the response type for QueryExportJob
+message QueryExportJobResponse {
+  // Export job
+  ExportJob job = 1 [
+    (gogoproto.nullable) = false
+  ];
+}
+
+// QueryParamsRequest is the request type for QueryParams
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for QueryParams
+message QueryParamsResponse {
+  // Module parameters
+  AuditLogParams params = 1 [
+    (gogoproto.nullable) = false
+  ];
+}

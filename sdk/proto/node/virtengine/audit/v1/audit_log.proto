@@ -1,0 +1,247 @@
+syntax = "proto3";
+package virtengine.audit.v1;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/audit/v1";
+
+// AuditLogEntry represents an immutable audit log record
+message AuditLogEntry {
+  option (gogoproto.equal) = true;
+  option (gogoproto.goproto_stringer) = true;
+
+  // Unique identifier for this log entry
+  string id = 1 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+
+  // Block height when this entry was created
+  int64 height = 2 [
+    (gogoproto.jsontag) = "height",
+    (gogoproto.moretags) = "yaml:\"height\""
+  ];
+
+  // Timestamp when this entry was created
+  google.protobuf.Timestamp timestamp = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "timestamp",
+    (gogoproto.moretags) = "yaml:\"timestamp\""
+  ];
+
+  // Actor who performed the action (account address)
+  string actor = 4 [
+    (gogoproto.jsontag) = "actor",
+    (gogoproto.moretags) = "yaml:\"actor\""
+  ];
+
+  // Module where the action occurred
+  string module = 5 [
+    (gogoproto.jsontag) = "module",
+    (gogoproto.moretags) = "yaml:\"module\""
+  ];
+
+  // Action that was performed
+  string action = 6 [
+    (gogoproto.jsontag) = "action",
+    (gogoproto.moretags) = "yaml:\"action\""
+  ];
+
+  // Resource ID (optional - e.g., order ID, scope ID)
+  string resource_id = 7 [
+    (gogoproto.jsontag) = "resource_id",
+    (gogoproto.moretags) = "yaml:\"resource_id\""
+  ];
+
+  // Metadata as JSON string (flexible for different event types)
+  string metadata = 8 [
+    (gogoproto.jsontag) = "metadata",
+    (gogoproto.moretags) = "yaml:\"metadata\""
+  ];
+
+  // Whether this entry has been exported
+  bool exported = 9 [
+    (gogoproto.jsontag) = "exported",
+    (gogoproto.moretags) = "yaml:\"exported\""
+  ];
+
+  // Export job ID if exported
+  string export_job_id = 10 [
+    (gogoproto.jsontag) = "export_job_id,omitempty",
+    (gogoproto.moretags) = "yaml:\"export_job_id,omitempty\""
+  ];
+}
+
+// ExportJob represents a batch export job
+message ExportJob {
+  option (gogoproto.equal) = true;
+  option (gogoproto.goproto_stringer) = true;
+
+  // Unique identifier for this export job
+  string id = 1 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+
+  // Status of the export job
+  ExportStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // Timestamp when job was created
+  google.protobuf.Timestamp created_at = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+
+  // Timestamp when job was started
+  google.protobuf.Timestamp started_at = 4 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "started_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"started_at,omitempty\""
+  ];
+
+  // Timestamp when job was completed
+  google.protobuf.Timestamp completed_at = 5 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "completed_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"completed_at,omitempty\""
+  ];
+
+  // Requester who initiated the export
+  string requester = 6 [
+    (gogoproto.jsontag) = "requester",
+    (gogoproto.moretags) = "yaml:\"requester\""
+  ];
+
+  // Filter parameters for the export
+  ExportFilter filter = 7 [
+    (gogoproto.jsontag) = "filter",
+    (gogoproto.moretags) = "yaml:\"filter\""
+  ];
+
+  // Export format (json, csv)
+  string format = 8 [
+    (gogoproto.jsontag) = "format",
+    (gogoproto.moretags) = "yaml:\"format\""
+  ];
+
+  // Number of entries exported
+  int64 entry_count = 9 [
+    (gogoproto.jsontag) = "entry_count",
+    (gogoproto.moretags) = "yaml:\"entry_count\""
+  ];
+
+  // File path where export was saved
+  string file_path = 10 [
+    (gogoproto.jsontag) = "file_path,omitempty",
+    (gogoproto.moretags) = "yaml:\"file_path,omitempty\""
+  ];
+
+  // Cryptographic signature of the export
+  bytes signature = 11 [
+    (gogoproto.jsontag) = "signature,omitempty",
+    (gogoproto.moretags) = "yaml:\"signature,omitempty\""
+  ];
+
+  // Error message if job failed
+  string error = 12 [
+    (gogoproto.jsontag) = "error,omitempty",
+    (gogoproto.moretags) = "yaml:\"error,omitempty\""
+  ];
+}
+
+// ExportStatus represents the status of an export job
+enum ExportStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // Unspecified / pending export job
+  EXPORT_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ExportStatusUnspecified"];
+
+  // Export job is in progress
+  EXPORT_STATUS_IN_PROGRESS = 1 [(gogoproto.enumvalue_customname) = "ExportStatusInProgress"];
+
+  // Export job completed successfully
+  EXPORT_STATUS_COMPLETED = 2 [(gogoproto.enumvalue_customname) = "ExportStatusCompleted"];
+
+  // Export job failed
+  EXPORT_STATUS_FAILED = 3 [(gogoproto.enumvalue_customname) = "ExportStatusFailed"];
+}
+
+// ExportFilter defines filter parameters for export jobs
+message ExportFilter {
+  option (gogoproto.equal) = true;
+
+  // Filter by actor address
+  string actor = 1 [
+    (gogoproto.jsontag) = "actor,omitempty",
+    (gogoproto.moretags) = "yaml:\"actor,omitempty\""
+  ];
+
+  // Filter by module name
+  string module = 2 [
+    (gogoproto.jsontag) = "module,omitempty",
+    (gogoproto.moretags) = "yaml:\"module,omitempty\""
+  ];
+
+  // Filter by action name
+  string action = 3 [
+    (gogoproto.jsontag) = "action,omitempty",
+    (gogoproto.moretags) = "yaml:\"action,omitempty\""
+  ];
+
+  // Filter by start time
+  google.protobuf.Timestamp start_time = 4 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "start_time,omitempty",
+    (gogoproto.moretags) = "yaml:\"start_time,omitempty\""
+  ];
+
+  // Filter by end time
+  google.protobuf.Timestamp end_time = 5 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "end_time,omitempty",
+    (gogoproto.moretags) = "yaml:\"end_time,omitempty\""
+  ];
+
+  // Maximum number of entries to export (0 = no limit)
+  int64 limit = 6 [
+    (gogoproto.jsontag) = "limit,omitempty",
+    (gogoproto.moretags) = "yaml:\"limit,omitempty\""
+  ];
+}
+
+// AuditLogParams defines module parameters for audit logging
+message AuditLogParams {
+  option (gogoproto.equal) = true;
+  option (gogoproto.goproto_stringer) = true;
+
+  // Whether audit logging is enabled
+  bool enabled = 1 [
+    (gogoproto.jsontag) = "enabled",
+    (gogoproto.moretags) = "yaml:\"enabled\""
+  ];
+
+  // Retention period in blocks (0 = keep forever)
+  int64 retention_blocks = 2 [
+    (gogoproto.jsontag) = "retention_blocks",
+    (gogoproto.moretags) = "yaml:\"retention_blocks\""
+  ];
+
+  // Maximum entries per export batch
+  int64 max_export_batch_size = 3 [
+    (gogoproto.jsontag) = "max_export_batch_size",
+    (gogoproto.moretags) = "yaml:\"max_export_batch_size\""
+  ];
+
+  // Whether to prune exported entries
+  bool prune_exported = 4 [
+    (gogoproto.jsontag) = "prune_exported",
+    (gogoproto.moretags) = "yaml:\"prune_exported\""
+  ];
+}

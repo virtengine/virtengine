@@ -92,12 +92,13 @@ func (v *PathValidator) ValidatePath(path string) error {
 		return fmt.Errorf("cannot resolve path: %w", err)
 	}
 
-	// Try to resolve symlinks if file exists
+	// Resolve symlinks for existing paths so we can enforce allowed directories.
 	if _, err := os.Lstat(absPath); err == nil {
 		realPath, err := filepath.EvalSymlinks(absPath)
-		if err == nil {
-			absPath = realPath
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
 		}
+		absPath = realPath
 	}
 
 	// Check if path is within allowed directories
