@@ -45,7 +45,11 @@ import {
   getPrimaryAgentName,
   switchPrimaryAgent,
 } from "./primary-agent.mjs";
-import { execPooledPrompt } from "./agent-pool.mjs";
+import {
+  execPooledPrompt,
+  launchEphemeralThread,
+  getAvailableSdks,
+} from "./agent-pool.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
@@ -88,6 +92,7 @@ import {
   classifyComplexity,
   COMPLEXITY_TIERS,
   DEFAULT_MODEL_PROFILES,
+  executorToSdk,
 } from "./task-complexity.mjs";
 import {
   getDirtyTasks,
@@ -133,10 +138,15 @@ import {
 import {
   getTaskExecutor,
   isInternalExecutorEnabled,
+  isExecutorDisabled,
   getExecutorMode,
   loadExecutorOptionsFromConfig,
 } from "./task-executor.mjs";
-import { configureFromArgs, installConsoleInterceptor, setErrorLogFile } from "./lib/logger.mjs";
+import {
+  configureFromArgs,
+  installConsoleInterceptor,
+  setErrorLogFile,
+} from "./lib/logger.mjs";
 import { fixGitConfigCorruption } from "./worktree-manager.mjs";
 // ── Task management subsystem imports ──────────────────────────────────────
 import {
@@ -153,6 +163,7 @@ import { createAgentEndpoint } from "./agent-endpoint.mjs";
 import { createReviewAgent } from "./review-agent.mjs";
 import { createSyncEngine } from "./sync-engine.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
+import { getKanbanBackendName } from "./kanban-adapter.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
@@ -305,11 +316,13 @@ let {
   vkRecoveryCooldownMin,
   vkSpawnEnabled,
   vkEnsureIntervalMs,
+  kanban: kanbanConfig,
   plannerPerCapitaThreshold,
   plannerIdleSlotThreshold,
   plannerDedupMs,
   plannerMode: configPlannerMode,
   agentPrompts,
+  executorConfig: configExecutorConfig,
   scheduler: executorScheduler,
   agentSdk,
   envPaths,
@@ -327,9 +340,38 @@ let {
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
+let kanbanBackend = String(kanbanConfig?.backend || "vk").toLowerCase();
+let executorMode = configExecutorMode || getExecutorMode();
 console.log(`[monitor] task planner mode: ${plannerMode}`);
+console.log(`[monitor] kanban backend: ${kanbanBackend}`);
+console.log(`[monitor] executor mode: ${executorMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+
+function getActiveKanbanBackend() {
+  try {
+    return String(getKanbanBackendName() || kanbanBackend || "vk")
+      .trim()
+      .toLowerCase();
+  } catch {
+    return String(kanbanBackend || "vk")
+      .trim()
+      .toLowerCase();
+  }
+}
+
+function isVkRuntimeRequired() {
+  const backend = getActiveKanbanBackend();
+  return (
+    backend === "vk" ||
+    executorMode === "vk" ||
+    executorMode === "hybrid"
+  );
+}
+
+function isVkSpawnAllowed() {
+  return vkSpawnEnabled && isVkRuntimeRequired();
+}
 
 // ── Workspace monitor: track agent workspaces with git state + stuck detection ──
 const workspaceMonitor = new WorkspaceMonitor({
@@ -342,25 +384,83 @@ const workspaceMonitor = new WorkspaceMonitor({
   },
 });
 
-// ── Devmode Auto Code Fix: background agent that fixes issues from digest ──
-const devmodeAutoCodeFix = {
-  enabled: ["1", "true", "yes"].includes(
-    String(process.env.DEVMODE_AUTO_CODE_FIX || "").toLowerCase(),
+// ── Devmode Monitor-Monitor: long-running 24/7 reliability guardian ────────
+function isTruthyFlag(value) {
+  return ["1", "true", "yes", "on"].includes(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function isFalsyFlag(value) {
+  return ["0", "false", "no", "off"].includes(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function isMonitorMonitorEnabled() {
+  if (process.env.VITEST) return false;
+  if (!isDevMode()) return false;
+
+  const explicit = process.env.DEVMODE_MONITOR_MONITOR_ENABLED;
+  if (explicit !== undefined && String(explicit).trim() !== "") {
+    return !isFalsyFlag(explicit);
+  }
+  const legacy = process.env.DEVMODE_AUTO_CODE_FIX;
+  if (legacy !== undefined && String(legacy).trim() !== "") {
+    return isTruthyFlag(legacy);
+  }
+  // Default ON in devmode unless explicitly disabled.
+  return true;
+}
+
+const monitorMonitor = {
+  enabled: isMonitorMonitorEnabled(),
+  intervalMs: Math.max(
+    60_000,
+    Number(
+      process.env.DEVMODE_MONITOR_MONITOR_INTERVAL_MS ||
+        process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL ||
+        "180000",
+    ),
   ),
-  cycleCount: 0,
-  cycleInterval: Math.max(
-    1,
-    Number(process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL || "2"),
+  timeoutMs: Math.max(
+    120_000,
+    Number(
+      process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
+        process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
+        "900000",
+    ),
   ),
-  timeoutMs: Number(process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS || "300000"), // 5 min
+  statusIntervalMs: Math.max(
+    5 * 60_000,
+    Number(process.env.DEVMODE_MONITOR_MONITOR_STATUS_INTERVAL_MS || "1800000"),
+  ),
   running: false,
+  timer: null,
+  statusTimer: null,
+  heartbeatAt: 0,
   lastRunAt: 0,
+  lastStatusAt: 0,
+  lastTrigger: "startup",
+  lastOutcome: "not-started",
+  lastError: "",
   lastDigestText: "",
-  branch: process.env.DEVMODE_AUTO_CODE_FIX_BRANCH || "",
+  branch:
+    process.env.DEVMODE_MONITOR_MONITOR_BRANCH ||
+    process.env.DEVMODE_AUTO_CODE_FIX_BRANCH ||
+    "",
+  sdkOrder: [],
+  sdkIndex: 0,
+  consecutiveFailures: 0,
+  abortController: null,
 };
-if (devmodeAutoCodeFix.enabled) {
+if (monitorMonitor.enabled) {
   console.log(
-    `[monitor] devmode auto code fix ENABLED (every ${devmodeAutoCodeFix.cycleInterval} digest cycle(s), timeout ${devmodeAutoCodeFix.timeoutMs}ms)`,
+    `[monitor] monitor-monitor ENABLED (interval ${Math.round(monitorMonitor.intervalMs / 1000)}s, status ${Math.round(monitorMonitor.statusIntervalMs / 60_000)}m, timeout ${Math.round(monitorMonitor.timeoutMs / 1000)}s)`,
   );
 }
 
@@ -693,6 +793,15 @@ let backlogLowNotified = false;
 let idleAgentsNotified = false;
 let plannerTriggered = false;
 const plannerStatePath = resolve(logDir, "task-planner-state.json");
+const taskPlannerStatus = {
+  enabled: isDevMode(),
+  intervalMs: Math.max(
+    5 * 60_000,
+    Number(process.env.DEVMODE_TASK_PLANNER_STATUS_INTERVAL_MS || "1800000"),
+  ),
+  timer: null,
+  lastStatusAt: 0,
+};
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -1416,7 +1525,7 @@ const vkMaxRestarts = 20;
 const vkRestartDelayMs = 5000;
 
 async function startVibeKanbanProcess() {
-  if (!vkSpawnEnabled) {
+  if (!isVkSpawnAllowed()) {
     return;
   }
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
@@ -1516,7 +1625,7 @@ async function startVibeKanbanProcess() {
 
 function scheduleVibeKanbanRestart() {
   if (shuttingDown) return;
-  if (!vkSpawnEnabled) return;
+  if (!isVkSpawnAllowed()) return;
   vkRestartCount++;
   if (vkRestartCount > vkMaxRestarts) {
     console.error(
@@ -1555,6 +1664,9 @@ async function canConnectTcp(host, port, timeoutMs = 1200) {
 }
 
 async function isVibeKanbanOnline() {
+  if (!isVkRuntimeRequired()) {
+    return false;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2000);
   try {
@@ -1571,7 +1683,13 @@ async function isVibeKanbanOnline() {
 }
 
 async function ensureVibeKanbanRunning() {
-  if (!vkSpawnEnabled) {
+  if (!isVkRuntimeRequired()) {
+    return;
+  }
+  if (!isVkSpawnAllowed()) {
+    if (await isVibeKanbanOnline()) {
+      ensureVkLogStream();
+    }
     return;
   }
   if (await isVibeKanbanOnline()) {
@@ -1603,7 +1721,7 @@ async function ensureVibeKanbanRunning() {
 }
 
 function restartVibeKanbanProcess() {
-  if (!vkSpawnEnabled) {
+  if (!isVkSpawnAllowed()) {
     return;
   }
   // Stop log stream — will restart when VK comes back online
@@ -1639,6 +1757,7 @@ function restartVibeKanbanProcess() {
  * existing session IDs to connect to.
  */
 function ensureVkLogStream() {
+  if (!isVkRuntimeRequired()) return;
   if (vkLogStream) return;
   console.log("[monitor] ensureVkLogStream: creating VkLogStream instance");
 
@@ -1983,7 +2102,7 @@ async function fetchLatestVkSessionId(workspaceId) {
 }
 
 async function triggerVibeKanbanRecovery(reason) {
-  if (!vkSpawnEnabled) {
+  if (!isVkSpawnAllowed()) {
     return;
   }
   const now = Date.now();
@@ -5815,6 +5934,221 @@ function isPlannerDeduped(state, now) {
   return now - last < plannerDedupMs;
 }
 
+function truncateText(value, maxChars = 1200) {
+  const text = String(value || "");
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars - 3)}...`;
+}
+
+function formatRecentStatusItems(items, timestampField, maxItems = 6) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  return [...items]
+    .sort((a, b) => {
+      const ta = Date.parse(a?.[timestampField] || 0);
+      const tb = Date.parse(b?.[timestampField] || 0);
+      return tb - ta;
+    })
+    .slice(0, maxItems)
+    .map((entry) => {
+      const title = entry?.task_title || entry?.title || "Untitled task";
+      const id = (entry?.task_id || entry?.id || "").toString().slice(0, 8);
+      const suffix = id ? ` (${id})` : "";
+      return `- ${title}${suffix}`;
+    });
+}
+
+function safeJsonBlock(value, maxChars = 1600) {
+  const serialized = safeStringify(value);
+  if (!serialized) return "(unavailable)";
+  return truncateText(serialized, maxChars);
+}
+
+function readRecentGitCommits(limit = 12) {
+  try {
+    const output = execSync(`git log --oneline -${Math.max(1, limit)}`, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+async function buildPlannerRuntimeContext(reason, details, numTasks) {
+  const status = (await readStatusData()) || {};
+  const counts = status.counts || {};
+  const backlogRemaining = Number(status.backlog_remaining || 0);
+  const running = Number(counts.running || 0);
+  const review = Number(counts.review || 0);
+  const error = Number(counts.error || 0);
+  const manualReview = Number(counts.manual_review || 0);
+  const maxParallel = Math.max(1, getMaxParallelFromArgs(scriptArgs) || 1);
+  const backlogPerSlot = Number((backlogRemaining / maxParallel).toFixed(2));
+  const idleSlots = Math.max(0, maxParallel - running);
+  const recentCompleted = formatRecentStatusItems(
+    status.completed_tasks,
+    "completed_at",
+    8,
+  );
+  const recentSubmitted = formatRecentStatusItems(
+    status.submitted_tasks,
+    "submitted_at",
+    8,
+  );
+  const recentCommits = readRecentGitCommits(15);
+  const plannerState = (await readPlannerState()) || {};
+
+  return {
+    reason: reason || "manual",
+    numTasks,
+    counts: {
+      backlogRemaining,
+      running,
+      review,
+      error,
+      manualReview,
+      maxParallel,
+      backlogPerSlot,
+      idleSlots,
+    },
+    recentCompleted,
+    recentSubmitted,
+    recentCommits,
+    triggerDetails: details || null,
+    plannerState,
+  };
+}
+
+function buildPlannerTaskDescription({
+  plannerPrompt,
+  reason,
+  numTasks,
+  runtimeContext,
+}) {
+  return [
+    "## Task Planner — Auto-created by codex-monitor",
+    "",
+    `**Trigger reason:** ${reason || "manual"}`,
+    `**Requested task count:** ${numTasks}`,
+    "",
+    "### Planner Prompt (Injected by codex-monitor)",
+    "",
+    plannerPrompt,
+    "",
+    "### Runtime Context Snapshot",
+    "",
+    `- Backlog remaining: ${runtimeContext.counts.backlogRemaining}`,
+    `- Running: ${runtimeContext.counts.running}`,
+    `- In review: ${runtimeContext.counts.review}`,
+    `- Errors: ${runtimeContext.counts.error}`,
+    `- Manual review: ${runtimeContext.counts.manualReview}`,
+    `- Max parallel slots: ${runtimeContext.counts.maxParallel}`,
+    `- Backlog per slot: ${runtimeContext.counts.backlogPerSlot}`,
+    `- Idle slots: ${runtimeContext.counts.idleSlots}`,
+    "",
+    "Recent completed tasks:",
+    ...(runtimeContext.recentCompleted.length
+      ? runtimeContext.recentCompleted
+      : ["- (none recorded)"]),
+    "",
+    "Recently submitted tasks:",
+    ...(runtimeContext.recentSubmitted.length
+      ? runtimeContext.recentSubmitted
+      : ["- (none recorded)"]),
+    "",
+    "Recent commits:",
+    ...(runtimeContext.recentCommits.length
+      ? runtimeContext.recentCommits.map((line) => `- ${line}`)
+      : ["- (git log unavailable)"]),
+    "",
+    "Trigger details (JSON):",
+    "```json",
+    safeJsonBlock(runtimeContext.triggerDetails),
+    "```",
+    "",
+    "Previous planner state (JSON):",
+    "```json",
+    safeJsonBlock(runtimeContext.plannerState),
+    "```",
+    "",
+    "### Execution Rules",
+    "",
+    `1. Create at least ${numTasks} backlog tasks unless constrained by duplicate/overlap safeguards.`,
+    "2. Ensure each task title starts with one size label: [xs], [s], [m], [l], [xl], [xxl].",
+    "3. Every task description must include: problem, implementation steps, acceptance criteria, and verification plan.",
+    "4. Prioritize reliability and unblockers first when errors/review backlog is elevated.",
+    "5. Avoid duplicates with existing todo/inprogress/review tasks and open PRs.",
+    "6. Prefer task sets that can run in parallel with minimal file overlap.",
+  ].join("\n");
+}
+
+function buildTaskPlannerStatusText(plannerState, reason = "interval") {
+  const now = Date.now();
+  const lastTriggered = plannerState?.last_triggered_at
+    ? formatElapsedMs(now - Date.parse(plannerState.last_triggered_at))
+    : "never";
+  const lastSuccess = plannerState?.last_success_at
+    ? formatElapsedMs(now - Date.parse(plannerState.last_success_at))
+    : "never";
+  return [
+    "📋 Codex-Task-Planner Update",
+    `- Reason: ${reason}`,
+    `- Planner mode: ${plannerMode}`,
+    `- Trigger in progress: ${plannerTriggered ? "yes" : "no"}`,
+    `- Last triggered: ${lastTriggered}`,
+    `- Last success: ${lastSuccess}`,
+    `- Last trigger reason: ${plannerState?.last_trigger_reason || "n/a"}`,
+    `- Last trigger mode: ${plannerState?.last_trigger_mode || "n/a"}`,
+    plannerState?.last_error
+      ? `- Last error: ${truncateText(plannerState.last_error, 180)}`
+      : "- Last error: none",
+  ].join("\n");
+}
+
+async function publishTaskPlannerStatus(reason = "interval") {
+  if (!taskPlannerStatus.enabled || plannerMode === "disabled") return;
+  if (!telegramToken || !telegramChatId) return;
+  const state = (await readPlannerState()) || {};
+  const text = buildTaskPlannerStatusText(state, reason);
+  taskPlannerStatus.lastStatusAt = Date.now();
+  await sendTelegramMessage(text, {
+    dedupKey: `task-planner-status-${reason}-${plannerMode}`,
+    exactDedup: true,
+    skipDedup: reason === "interval",
+  });
+}
+
+function stopTaskPlannerStatusLoop() {
+  if (taskPlannerStatus.timer) {
+    clearInterval(taskPlannerStatus.timer);
+    taskPlannerStatus.timer = null;
+  }
+}
+
+function startTaskPlannerStatusLoop() {
+  stopTaskPlannerStatusLoop();
+  taskPlannerStatus.enabled = isDevMode();
+  taskPlannerStatus.intervalMs = Math.max(
+    5 * 60_000,
+    Number(process.env.DEVMODE_TASK_PLANNER_STATUS_INTERVAL_MS || "1800000"),
+  );
+  if (!taskPlannerStatus.enabled || plannerMode === "disabled") return;
+  taskPlannerStatus.timer = setInterval(() => {
+    if (shuttingDown) return;
+    void publishTaskPlannerStatus("interval");
+  }, taskPlannerStatus.intervalMs);
+  setTimeout(() => {
+    if (shuttingDown) return;
+    void publishTaskPlannerStatus("startup");
+  }, 25_000);
+}
+
 async function maybeTriggerTaskPlanner(reason, details) {
   if (plannerMode === "disabled") {
     console.log(`[monitor] task planner skipped: mode=disabled`);
@@ -6146,7 +6480,12 @@ async function buildAgentResponse() {
 }
 
 async function buildBackgroundResponse() {
-  const vkOnline = await isVibeKanbanOnline();
+  const vkOnline = isVkRuntimeRequired() ? await isVibeKanbanOnline() : false;
+  const vkStatus = isVkRuntimeRequired()
+    ? vkOnline
+      ? "online"
+      : "unreachable"
+    : "disabled";
   const now = Date.now();
   const halted =
     now < orchestratorHaltedUntil
@@ -6162,7 +6501,7 @@ async function buildBackgroundResponse() {
       ? `Orchestrator: running (pid ${currentChild.pid})`
       : "Orchestrator: stopped",
     `Monitor state: ${halted}, ${safeMode}`,
-    `Vibe-kanban: ${vkOnline ? "online" : "unreachable"}`,
+    `Vibe-kanban: ${vkStatus}`,
   ].join("\n");
   return { text: message, parseMode: null };
 }
@@ -6172,12 +6511,17 @@ async function buildHealthResponse() {
   const updatedAt = status?.updated_at
     ? new Date(status.updated_at).toISOString()
     : "unknown";
-  const vkOnline = await isVibeKanbanOnline();
+  const vkOnline = isVkRuntimeRequired() ? await isVibeKanbanOnline() : false;
+  const vkStatus = isVkRuntimeRequired()
+    ? vkOnline
+      ? "online"
+      : "unreachable"
+    : "disabled";
   const message = [
     `${projectName} Health`,
     `Orchestrator: ${currentChild ? "running" : "stopped"}`,
     `Status updated: ${updatedAt}`,
-    `Vibe-kanban: ${vkOnline ? "online" : "unreachable"}`,
+    `Vibe-kanban: ${vkStatus}`,
   ].join("\n");
   return { text: message, parseMode: null };
 }
@@ -6575,17 +6919,33 @@ async function triggerTaskPlanner(
   });
 
   try {
+    let result;
     if (plannerMode === "kanban") {
-      return await triggerTaskPlannerViaKanban(reason, { taskCount, notify });
+      result = await triggerTaskPlannerViaKanban(reason, details, {
+        taskCount,
+        notify,
+      });
+    } else {
+      result = await triggerTaskPlannerViaCodex(reason, details, {
+        taskCount,
+        notify,
+      });
     }
-    return await triggerTaskPlannerViaCodex(reason, { notify });
+    void publishTaskPlannerStatus("trigger-success");
+    return result;
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
+    await updatePlannerState({
+      last_error: message,
+      last_failure_at: new Date().toISOString(),
+      last_failure_reason: reason || "manual",
+    });
     if (notify) {
       await sendTelegramMessage(
         `Task planner run failed (${plannerMode}): ${message}`,
       );
     }
+    void publishTaskPlannerStatus("trigger-failed");
     throw err; // re-throw so callers (e.g. /plan command) know it failed
   } finally {
     plannerTriggered = false;
@@ -6598,6 +6958,7 @@ async function triggerTaskPlanner(
  */
 async function triggerTaskPlannerViaKanban(
   reason,
+  details,
   { taskCount, notify = true } = {},
 ) {
   const defaultPlannerTaskCount = Number(
@@ -6607,14 +6968,28 @@ async function triggerTaskPlannerViaKanban(
     taskCount && Number.isFinite(taskCount) && taskCount > 0
       ? taskCount
       : defaultPlannerTaskCount;
+  const plannerPrompt = agentPrompts.planner;
   const plannerTaskSizeLabel = String(
     process.env.TASK_PLANNER_TASK_SIZE_LABEL || "m",
   ).toLowerCase();
+  const runtimeContext = await buildPlannerRuntimeContext(
+    reason,
+    details,
+    numTasks,
+  );
   // Get project ID using the name-matched helper
   const projectId = await findVkProjectId();
   if (!projectId) {
     throw new Error("Cannot reach VK API or no project found");
   }
+
+  const desiredTitle = `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`;
+  const desiredDescription = buildPlannerTaskDescription({
+    plannerPrompt,
+    reason,
+    numTasks,
+    runtimeContext,
+  });
 
   // Check for existing planner tasks to avoid duplicates
   // Only block on TODO tasks whose title matches the exact format we create
@@ -6634,29 +7009,6 @@ async function triggerTaskPlannerViaKanban(
     console.log(
       `[monitor] task planner VK task already exists in backlog — skipping: "${existingPlanner.title}" (${existingPlanner.id})`,
     );
-    const desiredTitle = `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`;
-    const desiredDescription = [
-      "## Task Planner — Auto-created by codex-monitor",
-      "",
-      `**Trigger reason:** ${reason || "manual"}`,
-      "",
-      "### Instructions",
-      "",
-      plannerPrompt,
-      "",
-      "### Additional Context",
-      "",
-      "- Review recently merged PRs on GitHub to understand what was completed",
-      "- Check `git log --oneline -20` for the latest changes",
-      "- Look at open issues for inspiration",
-      `- Create ${numTasks} well-scoped tasks in vibe-kanban (minimum 30)`,
-      "- Tasks must be **production-ready** (no placeholders) and thorough",
-      "- Every created task should default to **[xl]** unless clearly smaller",
-      "- If a placeholder is unavoidable, create a paired follow-up task immediately",
-      "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
-      "  This drives automatic complexity-based model routing for task execution.",
-      "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
-    ].join("\n");
     // Best-effort: keep backlog task aligned with current requirements
     if (
       existingPlanner.title !== desiredTitle ||
@@ -6685,6 +7037,12 @@ async function triggerTaskPlannerViaKanban(
         `📋 Task planner skipped — existing planning task found (${projectId.substring(0, 8)}...).${suffix}`,
       );
     }
+    await updatePlannerState({
+      last_success_at: new Date().toISOString(),
+      last_success_reason: reason || "manual",
+      last_error: null,
+      last_result: "existing_planner_task",
+    });
     return {
       status: "skipped",
       reason: "existing_planner_task",
@@ -6695,31 +7053,9 @@ async function triggerTaskPlannerViaKanban(
     };
   }
 
-  const plannerPrompt = agentPrompts.planner;
   const taskBody = {
-    title: `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`,
-    description: [
-      "## Task Planner — Auto-created by codex-monitor",
-      "",
-      `**Trigger reason:** ${reason || "manual"}`,
-      "",
-      "### Instructions",
-      "",
-      plannerPrompt,
-      "",
-      "### Additional Context",
-      "",
-      "- Review recently merged PRs on GitHub to understand what was completed",
-      "- Check `git log --oneline -20` for the latest changes",
-      "- Look at open issues for inspiration",
-      `- Create ${numTasks} well-scoped tasks in vibe-kanban (minimum 30)`,
-      "- Tasks must be **production-ready** (no placeholders) and thorough",
-      "- Every created task should default to **[xl]** unless clearly smaller",
-      "- If a placeholder is unavoidable, create a paired follow-up task immediately",
-      "- **IMPORTANT:** Every task title MUST start with a size label: [xs], [s], [m], [l], [xl], or [xxl]",
-      "  This drives automatic complexity-based model routing for task execution.",
-      "- **NOTE:** The planner task itself is [m] so it fits in a single capacity slot",
-    ].join("\n"),
+    title: desiredTitle,
+    description: desiredDescription,
     status: "todo",
     project_id: projectId,
   };
@@ -6737,6 +7073,8 @@ async function triggerTaskPlannerViaKanban(
     await updatePlannerState({
       last_success_at: new Date().toISOString(),
       last_success_reason: reason || "manual",
+      last_error: null,
+      last_result: "kanban_task_created",
     });
     const createdId = result.data?.id || null;
     const createdUrl = buildVkTaskUrl(createdId, projectId);
@@ -6761,7 +7099,11 @@ async function triggerTaskPlannerViaKanban(
  * Trigger the task planner via Codex SDK — runs the planner prompt directly
  * in an in-process Codex thread.
  */
-async function triggerTaskPlannerViaCodex(reason, { notify = true } = {}) {
+async function triggerTaskPlannerViaCodex(
+  reason,
+  details,
+  { taskCount, notify = true } = {},
+) {
   if (!codexEnabled) {
     throw new Error(
       "Codex SDK disabled — use TASK_PLANNER_MODE=kanban instead",
@@ -6774,10 +7116,31 @@ async function triggerTaskPlannerViaCodex(reason, { notify = true } = {}) {
   if (!CodexClient) {
     throw new Error("Codex SDK not available");
   }
+  const numTasks =
+    taskCount && Number.isFinite(taskCount) && taskCount > 0
+      ? taskCount
+      : Number(process.env.TASK_PLANNER_DEFAULT_COUNT || "30");
+  const runtimeContext = await buildPlannerRuntimeContext(
+    reason,
+    details,
+    numTasks,
+  );
   const agentPrompt = agentPrompts.planner;
   const codex = new CodexClient();
   const thread = codex.startThread();
-  const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
+  const prompt = [
+    agentPrompt,
+    "",
+    "## Execution Context",
+    `- Trigger reason: ${reason || "manual"}`,
+    `- Requested task count: ${numTasks}`,
+    "Context JSON:",
+    "```json",
+    safeJsonBlock(runtimeContext),
+    "```",
+    "",
+    "Execute the planning instructions now and create the tasks.",
+  ].join("\n");
   const result = await thread.run(prompt);
   const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
   const output = formatCodexResult(result);
@@ -6786,6 +7149,8 @@ async function triggerTaskPlannerViaCodex(reason, { notify = true } = {}) {
   await updatePlannerState({
     last_success_at: new Date().toISOString(),
     last_success_reason: reason || "manual",
+    last_error: null,
+    last_result: "codex_planner_completed",
   });
   if (notify) {
     await sendTelegramMessage(
@@ -7419,115 +7784,421 @@ async function handleExit(code, signal, logPath) {
   setTimeout(startProcess, restartDelayMs);
 }
 
-// ── Devmode Auto Code Fix: background agent triggered after digest seal ──────
+// ── Devmode Monitor-Monitor supervisor (24/7 + auto-resume + failover) ─────
 
-/**
- * Called when a Live Digest window is sealed. Collects errors/warnings from the
- * digest, then dispatches a background Codex/Copilot agent to fix the issues.
- *
- * Only active when DEVMODE_AUTO_CODE_FIX=true env var is set.
- * Runs every N digest cycles (default 2) to allow the agent time to fix before
- * the next cycle's changes are picked up by the self-watcher.
- */
-async function handleDigestSealed({ entries, text }) {
-  if (!devmodeAutoCodeFix.enabled) return;
+function normalizeSdkName(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (raw.startsWith("copilot")) return "copilot";
+  if (raw.startsWith("claude")) return "claude";
+  if (raw.startsWith("codex")) return "codex";
+  return raw;
+}
 
-  devmodeAutoCodeFix.cycleCount++;
-  const cycle = devmodeAutoCodeFix.cycleCount;
-  const interval = devmodeAutoCodeFix.cycleInterval;
+function roleRank(role) {
+  const raw = String(role || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "primary") return 0;
+  if (raw === "backup") return 1;
+  if (raw === "tertiary") return 2;
+  const match = raw.match(/^executor-(\d+)$/);
+  if (match) return 100 + Number(match[1]);
+  return 50;
+}
 
-  // Only run every N cycles
-  if (cycle % interval !== 0) {
-    console.log(
-      `[devmode-fix] digest cycle ${cycle} — skipping (runs every ${interval} cycles)`,
-    );
-    return;
+function buildMonitorMonitorSdkOrder() {
+  const order = [];
+  const seen = new Set();
+  const add = (candidate) => {
+    const sdk = normalizeSdkName(candidate);
+    if (!["codex", "copilot", "claude"].includes(sdk)) return;
+    if (seen.has(sdk)) return;
+    seen.add(sdk);
+    order.push(sdk);
+  };
+
+  add(primaryAgentName);
+
+  const executors = Array.isArray(configExecutorConfig?.executors)
+    ? [...configExecutorConfig.executors]
+    : [];
+  executors.sort((a, b) => roleRank(a?.role) - roleRank(b?.role));
+  for (const profile of executors) {
+    add(executorToSdk(profile?.executor));
   }
 
-  // Don't run if already running
-  if (devmodeAutoCodeFix.running) {
-    console.log(`[devmode-fix] skipping — previous run still in progress`);
-    return;
+  for (const sdk of getAvailableSdks()) {
+    add(sdk);
   }
 
-  // Filter to error and warning entries only
-  const actionableEntries = entries.filter((e) => e.priority <= 3);
-  if (actionableEntries.length === 0) {
-    console.log(
-      `[devmode-fix] digest cycle ${cycle} — no errors/warnings, skipping`,
-    );
-    return;
+  if (!order.length) {
+    add("codex");
   }
+  return order;
+}
 
-  // Build the digest summary for the agent
-  const errorLines = actionableEntries
-    .map((e) => `${e.time} ${e.emoji} ${e.text}`)
-    .join("\n");
-
-  // Read recent orchestrator log tail for additional context
-  let recentLogTail = "";
-  try {
-    const activeLogPath = resolve(logDir, "orchestrator-active.log");
-    if (existsSync(activeLogPath)) {
-      const logContent = readFileSync(activeLogPath, "utf8");
-      const logLines = logContent.split("\n");
-      recentLogTail = logLines.slice(-100).join("\n");
-    }
-  } catch {
-    /* best effort */
+function getCurrentMonitorSdk() {
+  if (!monitorMonitor.sdkOrder.length) {
+    monitorMonitor.sdkOrder = buildMonitorMonitorSdkOrder();
   }
+  if (monitorMonitor.sdkIndex >= monitorMonitor.sdkOrder.length) {
+    monitorMonitor.sdkIndex = 0;
+  }
+  return monitorMonitor.sdkOrder[monitorMonitor.sdkIndex] || "codex";
+}
 
-  // Determine target branch
-  const targetBranch = devmodeAutoCodeFix.branch || "";
-  const branchInstruction = targetBranch
-    ? `Work on the existing branch: ${targetBranch}. Do NOT create a new branch.`
-    : "Work on the current branch.";
-
-  const prompt = [
-    "You are a background debugging agent for the VirtEngine codex-monitor orchestration system.",
-    "The following errors and warnings were collected from the most recent Live Digest cycle.",
-    "Your job is to identify the root causes and fix them by modifying the source code.",
-    "",
-    "## IMPORTANT RULES",
-    "- Do NOT commit your changes. Only modify files.",
-    "- Do NOT run git push or create PRs.",
-    `- ${branchInstruction}`,
-    "- Focus on fixing the ROOT CAUSE, not symptoms.",
-    "- The codex-monitor source code is in: scripts/codex-monitor/",
-    "- The orchestrator is: scripts/codex-monitor/ve-orchestrator.ps1",
-    "- The monitor is: scripts/codex-monitor/monitor.mjs",
-    "- After you make changes, the monitor will auto-restart (file watcher).",
-    "",
-    "## Live Digest Errors/Warnings",
-    "",
-    errorLines,
-    "",
-    "## Recent Orchestrator Log (last 100 lines)",
-    "",
-    recentLogTail,
-    "",
-    "## Instructions",
-    "",
-    "1. Analyze the errors above to identify root causes",
-    "2. Search the codebase for relevant code",
-    "3. Make targeted fixes to resolve the issues",
-    "4. Do NOT commit — the file watcher will auto-restart the monitor",
-  ].join("\n");
-
-  console.log(
-    `[devmode-fix] digest cycle ${cycle} — dispatching background agent (${actionableEntries.length} actionable entries)`,
+function rotateMonitorSdk(reason = "") {
+  if (monitorMonitor.sdkOrder.length < 2) return false;
+  monitorMonitor.sdkIndex =
+    (monitorMonitor.sdkIndex + 1) % monitorMonitor.sdkOrder.length;
+  const nextSdk = getCurrentMonitorSdk();
+  console.warn(
+    `[monitor-monitor] failover -> ${nextSdk}${reason ? ` (${reason})` : ""}`,
   );
-  devmodeAutoCodeFix.running = true;
-  devmodeAutoCodeFix.lastRunAt = Date.now();
-  devmodeAutoCodeFix.lastDigestText = text;
+  return true;
+}
 
-  // Log the dispatch
+function shouldFailoverMonitorSdk(message) {
+  const text = String(message || "").toLowerCase();
+  if (!text) return false;
+  const patterns = [
+    /rate.?limit/,
+    /\b429\b/,
+    /too many requests/,
+    /quota/,
+    /context window/,
+    /context length/,
+    /maximum context length/,
+    /token limit/,
+    /\b500\b/,
+    /\b502\b/,
+    /\b503\b/,
+    /\b504\b/,
+    /server error/,
+    /internal server error/,
+    /gateway timeout/,
+    /overloaded/,
+    /temporarily unavailable/,
+    /api error/,
+    /econnreset/,
+    /socket hang up/,
+  ];
+  return patterns.some((p) => p.test(text));
+}
+
+function formatElapsedMs(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return "just now";
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  return remMin > 0 ? `${hr}h ${remMin}m ago` : `${hr}h ago`;
+}
+
+function buildMonitorMonitorStatusText(reason = "heartbeat") {
+  const now = Date.now();
+  const currentSdk = getCurrentMonitorSdk();
+  const lastRun = monitorMonitor.lastRunAt
+    ? formatElapsedMs(now - monitorMonitor.lastRunAt)
+    : "never";
+  const lastStatus = monitorMonitor.lastStatusAt
+    ? formatElapsedMs(now - monitorMonitor.lastStatusAt)
+    : "first update";
+  const lastDigestLine = String(monitorMonitor.lastDigestText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  const lines = [
+    "🛰️ Codex-Monitor-Monitor Update",
+    `- Reason: ${reason}`,
+    `- Running: ${monitorMonitor.running ? "yes" : "no"}`,
+    `- Current SDK: ${currentSdk}`,
+    `- SDK order: ${monitorMonitor.sdkOrder.join(" -> ") || "codex"}`,
+    `- Last trigger: ${monitorMonitor.lastTrigger || "n/a"}`,
+    `- Last run: ${lastRun}`,
+    `- Previous status: ${lastStatus}`,
+    `- Consecutive failures: ${monitorMonitor.consecutiveFailures}`,
+    `- Last outcome: ${monitorMonitor.lastOutcome || "unknown"}`,
+  ];
+
+  if (monitorMonitor.lastError) {
+    lines.push(`- Last error: ${String(monitorMonitor.lastError).slice(0, 180)}`);
+  }
+  if (lastDigestLine) {
+    lines.push(`- Latest digest: ${lastDigestLine.slice(0, 180)}`);
+  }
+  return lines.join("\n");
+}
+
+async function publishMonitorMonitorStatus(reason = "heartbeat") {
+  const text = buildMonitorMonitorStatusText(reason);
+  monitorMonitor.lastStatusAt = Date.now();
+  console.log(
+    `[monitor-monitor] status (${reason}) sdk=${getCurrentMonitorSdk()} failures=${monitorMonitor.consecutiveFailures}`,
+  );
+  if (telegramToken && telegramChatId) {
+    await sendTelegramMessage(text, {
+      dedupKey: `monitor-monitor-status-${reason}-${getCurrentMonitorSdk()}`,
+      exactDedup: true,
+      skipDedup: reason === "interval",
+    });
+  }
+}
+
+async function readLogTail(filePath, { maxLines = 120, maxChars = 12000 } = {}) {
   try {
-    const fixLogDir = resolve(repoRoot, ".cache", "devmode-fix-logs");
-    await mkdir(fixLogDir, { recursive: true });
+    if (!existsSync(filePath)) {
+      return `(missing: ${filePath})`;
+    }
+    const raw = await readFile(filePath, "utf8");
+    const tail = raw.split(/\r?\n/).slice(-maxLines).join("\n");
+    return tail.length > maxChars ? tail.slice(-maxChars) : tail;
+  } catch (err) {
+    return `(unable to read ${filePath}: ${err.message || err})`;
+  }
+}
+
+function formatDigestLines(entries = []) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return "(no digest entries)";
+  }
+  return entries
+    .slice(-40)
+    .map((entry) => {
+      const time = entry?.time || "--:--:--";
+      const emoji = entry?.emoji || "";
+      const text = entry?.text || safeStringify(entry) || "(invalid entry)";
+      return `${time} ${emoji} ${text}`.trim();
+    })
+    .join("\n");
+}
+
+function parseCsvList(value) {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function getMonitorClaudeAllowedTools() {
+  const explicit = parseCsvList(
+    process.env.DEVMODE_MONITOR_MONITOR_CLAUDE_ALLOWED_TOOLS,
+  );
+  if (explicit.length) return explicit;
+  const standard = parseCsvList(process.env.CLAUDE_ALLOWED_TOOLS);
+  if (standard.length) return standard;
+  return [
+    "Read",
+    "Write",
+    "Edit",
+    "Grep",
+    "Glob",
+    "Bash",
+    "WebSearch",
+    "Task",
+    "Skill",
+  ];
+}
+
+function refreshMonitorMonitorRuntime() {
+  const wasEnabled = monitorMonitor.enabled;
+  const previousSdk = monitorMonitor.sdkOrder[monitorMonitor.sdkIndex] || null;
+
+  monitorMonitor.enabled = isMonitorMonitorEnabled();
+  monitorMonitor.intervalMs = Math.max(
+    60_000,
+    Number(
+      process.env.DEVMODE_MONITOR_MONITOR_INTERVAL_MS ||
+        process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL ||
+        "180000",
+    ),
+  );
+  monitorMonitor.timeoutMs = Math.max(
+    120_000,
+    Number(
+      process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
+        process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
+        "900000",
+    ),
+  );
+  monitorMonitor.statusIntervalMs = Math.max(
+    5 * 60_000,
+    Number(process.env.DEVMODE_MONITOR_MONITOR_STATUS_INTERVAL_MS || "1800000"),
+  );
+  monitorMonitor.branch =
+    process.env.DEVMODE_MONITOR_MONITOR_BRANCH ||
+    process.env.DEVMODE_AUTO_CODE_FIX_BRANCH ||
+    monitorMonitor.branch ||
+    "";
+
+  monitorMonitor.sdkOrder = buildMonitorMonitorSdkOrder();
+  if (previousSdk) {
+    const idx = monitorMonitor.sdkOrder.indexOf(previousSdk);
+    monitorMonitor.sdkIndex = idx >= 0 ? idx : 0;
+  } else {
+    monitorMonitor.sdkIndex = 0;
+  }
+
+  if (wasEnabled !== monitorMonitor.enabled) {
+    if (monitorMonitor.enabled) {
+      console.log(
+        `[monitor] monitor-monitor enabled (interval ${Math.round(monitorMonitor.intervalMs / 1000)}s, status ${Math.round(monitorMonitor.statusIntervalMs / 60_000)}m, timeout ${Math.round(monitorMonitor.timeoutMs / 1000)}s)`,
+      );
+    } else {
+      console.log("[monitor] monitor-monitor disabled");
+    }
+  }
+}
+
+async function buildMonitorMonitorPrompt({ trigger, entries, text }) {
+  const digestSnapshot = getDigestSnapshot();
+  const digestEntries =
+    Array.isArray(entries) && entries.length
+      ? entries
+      : digestSnapshot?.entries || [];
+  const latestDigestText = String(text || monitorMonitor.lastDigestText || "");
+  const actionableEntries = digestEntries.filter(
+    (entry) => Number(entry?.priority || 99) <= 3,
+  );
+  const modeHint =
+    actionableEntries.length > 0 ? "reliability-fix" : "code-analysis";
+  const currentSdk = getCurrentMonitorSdk();
+  const branchInstruction = monitorMonitor.branch
+    ? `Work on branch ${monitorMonitor.branch}. Do not create a new branch.`
+    : "Work on the current branch. Do not create a new branch.";
+
+  const orchestratorTail = await readLogTail(
+    resolve(logDir, "orchestrator-active.log"),
+    {
+      maxLines: 140,
+      maxChars: 14000,
+    },
+  );
+  const monitorTail = await readLogTail(resolve(logDir, "monitor-error.log"), {
+    maxLines: 120,
+    maxChars: 12000,
+  });
+
+  const anomalyReport = anomalyDetector
+    ? anomalyDetector.getStatusReport()
+    : "Anomaly detector not running.";
+  const monitorPrompt = agentPrompts?.monitorMonitor || "";
+  const claudeTools = getMonitorClaudeAllowedTools();
+
+  return [
+    monitorPrompt,
+    "",
+    "## Runtime Contract",
+    "- You are running under monitor.mjs in devmode.",
+    "- Fix reliability issues immediately; if smooth, perform code-analysis improvements.",
+    "- Apply fixes directly in scripts/codex-monitor and related prompt/config files.",
+    "- Do not commit, push, or open PRs from this run.",
+    `- ${branchInstruction}`,
+    "",
+    "## Orchestrator Requirements To Enforce",
+    "- Monitor-Monitor must run continuously (24/7 in devmode).",
+    "- If this run fails due to rate limit/API/context/server errors, next SDK must be used automatically.",
+    "- Keep monitoring after each improvement; regressions must be fixed immediately.",
+    "",
+    "## Current Context",
+    `- Trigger: ${trigger}`,
+    `- Mode hint: ${modeHint}`,
+    `- Current SDK slot: ${currentSdk}`,
+    `- SDK failover order: ${monitorMonitor.sdkOrder.join(" -> ") || "codex"}`,
+    `- Consecutive monitor failures: ${monitorMonitor.consecutiveFailures}`,
+    `- Claude allowed tools: ${claudeTools.join(", ")}`,
+    "",
+    "## Live Digest (latest)",
+    latestDigestText || "(no digest text)",
+    "",
+    "## Actionable Digest Entries",
+    formatDigestLines(actionableEntries),
+    "",
+    "## Anomaly Report",
+    anomalyReport || "(none)",
+    "",
+    "## Monitor Error Log Tail",
+    monitorTail,
+    "",
+    "## Orchestrator Log Tail",
+    orchestratorTail,
+    "",
+    "## Deliverable",
+    "1. Diagnose current reliability issues first and patch root causes.",
+    "2. If no active reliability issue exists, implement one meaningful codex-monitor quality/reliability improvement.",
+    "3. Run focused validation commands for touched files.",
+    "4. Summarize what changed and why.",
+  ].join("\n");
+}
+
+async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text = "" } = {}) {
+  refreshMonitorMonitorRuntime();
+  if (!monitorMonitor.enabled) return;
+  monitorMonitor.lastTrigger = trigger;
+
+  if (monitorMonitor.running) {
+    const runAge = Date.now() - monitorMonitor.heartbeatAt;
+    if (
+      monitorMonitor.abortController &&
+      runAge > monitorMonitor.timeoutMs + 60_000
+    ) {
+      console.warn(
+        `[monitor-monitor] watchdog abort after ${Math.round(runAge / 1000)}s (stuck run)`,
+      );
+      try {
+        monitorMonitor.abortController.abort("watchdog-timeout");
+      } catch {
+        /* best effort */
+      }
+    }
+    return;
+  }
+
+  monitorMonitor.running = true;
+  monitorMonitor.heartbeatAt = Date.now();
+  if (typeof text === "string" && text.trim()) {
+    monitorMonitor.lastDigestText = text;
+  }
+
+  let prompt = "";
+  try {
+    prompt = await buildMonitorMonitorPrompt({ trigger, entries, text });
+  } catch (err) {
+    monitorMonitor.running = false;
+    console.warn(`[monitor-monitor] prompt build failed: ${err.message || err}`);
+    return;
+  }
+
+  const runOnce = async (sdk) => {
+    const abortController = new AbortController();
+    monitorMonitor.abortController = abortController;
+    return await launchEphemeralThread(
+      prompt,
+      repoRoot,
+      monitorMonitor.timeoutMs,
+      {
+        sdk,
+        abortController,
+        claudeAllowedTools: getMonitorClaudeAllowedTools(),
+      },
+    );
+  };
+
+  const runLogDir = resolve(repoRoot, ".cache", "monitor-monitor-logs");
+  try {
+    await mkdir(runLogDir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const sdkForLog = getCurrentMonitorSdk();
     await writeFile(
-      resolve(fixLogDir, `devmode-fix-${stamp}.prompt.md`),
+      resolve(
+        runLogDir,
+        `monitor-monitor-${stamp}-${trigger}-${sdkForLog}.prompt.md`,
+      ),
       prompt,
       "utf8",
     );
@@ -7535,37 +8206,133 @@ async function handleDigestSealed({ entries, text }) {
     /* best effort */
   }
 
-  // Dispatch to Codex SDK in background
-  try {
-    const result = await runCodexExec(
-      prompt,
-      repoRoot,
-      devmodeAutoCodeFix.timeoutMs,
-      resolve(repoRoot, ".cache", "devmode-fix-logs"),
-    );
+  let sdk = getCurrentMonitorSdk();
+  let result = await runOnce(sdk);
 
-    if (result.success) {
-      console.log(`[devmode-fix] background agent completed successfully`);
-      void notify?.(
-        `🔧 Devmode auto-fix completed (cycle ${cycle}). ${actionableEntries.length} issues addressed. Monitor will auto-restart.`,
-        4,
-        { dedupKey: "devmode-fix-complete" },
-      );
-    } else {
-      console.warn(
-        `[devmode-fix] background agent failed: ${result.error || "unknown"}`,
-      );
-      void notify?.(
-        `⚠️ Devmode auto-fix failed (cycle ${cycle}): ${result.error || "no output"}`,
-        3,
-        { dedupKey: "devmode-fix-failed" },
-      );
+  if (!result.success && shouldFailoverMonitorSdk(result.error)) {
+    const canRotate = rotateMonitorSdk(result.error || "retryable failure");
+    if (canRotate) {
+      sdk = getCurrentMonitorSdk();
+      console.warn(`[monitor-monitor] retrying with ${sdk}`);
+      result = await runOnce(sdk);
     }
-  } catch (err) {
-    console.error(`[devmode-fix] dispatch error: ${err.message}`);
-  } finally {
-    devmodeAutoCodeFix.running = false;
   }
+
+  if (result.success) {
+    monitorMonitor.consecutiveFailures = 0;
+    monitorMonitor.lastOutcome = `success (${sdk})`;
+    monitorMonitor.lastError = "";
+    console.log(
+      `[monitor-monitor] cycle complete via ${sdk}${trigger ? ` (${trigger})` : ""}`,
+    );
+  } else {
+    monitorMonitor.consecutiveFailures += 1;
+    const errMsg = result.error || "unknown error";
+    monitorMonitor.lastOutcome = `failed (${sdk})`;
+    monitorMonitor.lastError = errMsg;
+    console.warn(`[monitor-monitor] run failed via ${sdk}: ${errMsg}`);
+    if (shouldFailoverMonitorSdk(errMsg)) {
+      rotateMonitorSdk("prepare next cycle");
+    }
+    void notify?.(
+      `⚠️ Monitor-Monitor failed (${sdk}): ${String(errMsg).slice(0, 240)}`,
+      3,
+      { dedupKey: "monitor-monitor-failed" },
+    );
+    try {
+      await publishMonitorMonitorStatus("failure");
+    } catch {
+      /* best effort */
+    }
+  }
+
+  monitorMonitor.lastRunAt = Date.now();
+  monitorMonitor.running = false;
+  monitorMonitor.abortController = null;
+}
+
+function startMonitorMonitorSupervisor() {
+  refreshMonitorMonitorRuntime();
+  if (!monitorMonitor.enabled) return;
+
+  if (monitorMonitor.timer) {
+    clearInterval(monitorMonitor.timer);
+    monitorMonitor.timer = null;
+  }
+  if (monitorMonitor.statusTimer) {
+    clearInterval(monitorMonitor.statusTimer);
+    monitorMonitor.statusTimer = null;
+  }
+
+  monitorMonitor.timer = setInterval(() => {
+    if (shuttingDown) return;
+    void runMonitorMonitorCycle({ trigger: "interval" });
+  }, monitorMonitor.intervalMs);
+  monitorMonitor.statusTimer = setInterval(() => {
+    if (shuttingDown) return;
+    void publishMonitorMonitorStatus("interval");
+  }, monitorMonitor.statusIntervalMs);
+
+  console.log(
+    `[monitor] monitor-monitor supervisor started (${Math.round(monitorMonitor.intervalMs / 1000)}s run interval, ${Math.round(monitorMonitor.statusIntervalMs / 60_000)}m status interval, sdk order: ${monitorMonitor.sdkOrder.join(" -> ")})`,
+  );
+
+  setTimeout(() => {
+    if (shuttingDown) return;
+    void runMonitorMonitorCycle({ trigger: "startup" });
+  }, 15_000);
+  setTimeout(() => {
+    if (shuttingDown) return;
+    void publishMonitorMonitorStatus("startup");
+  }, 20_000);
+}
+
+function stopMonitorMonitorSupervisor() {
+  if (monitorMonitor.timer) {
+    clearInterval(monitorMonitor.timer);
+    monitorMonitor.timer = null;
+  }
+  if (monitorMonitor.statusTimer) {
+    clearInterval(monitorMonitor.statusTimer);
+    monitorMonitor.statusTimer = null;
+  }
+  if (monitorMonitor.abortController) {
+    try {
+      monitorMonitor.abortController.abort("monitor-shutdown");
+    } catch {
+      /* best effort */
+    }
+    monitorMonitor.abortController = null;
+  }
+  monitorMonitor.running = false;
+}
+
+/**
+ * Called when a Live Digest window is sealed.
+ * This provides fresh high-priority context and triggers an immediate run.
+ */
+async function handleDigestSealed({ entries, text }) {
+  if (!monitorMonitor.enabled) return;
+
+  const actionableEntries = (entries || []).filter(
+    (entry) => Number(entry?.priority || 99) <= 3,
+  );
+
+  if (!actionableEntries.length) {
+    if (typeof text === "string" && text.trim()) {
+      monitorMonitor.lastDigestText = text;
+    }
+    return;
+  }
+
+  console.log(
+    `[monitor-monitor] digest trigger (${actionableEntries.length} actionable entries)`,
+  );
+  void runMonitorMonitorCycle({
+    trigger: "digest",
+    entries: actionableEntries,
+    text,
+  });
 }
 
 async function startProcess() {
@@ -7861,6 +8628,8 @@ function selfRestartForSourceChange(filename) {
       ),
     );
   }
+  stopTaskPlannerStatusLoop();
+  stopMonitorMonitorSupervisor();
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -8050,6 +8819,7 @@ function applyConfig(nextConfig, options = {}) {
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
   const prevPreflightEnabled = preflightEnabled;
+  const prevVkRuntimeRequired = isVkRuntimeRequired();
 
   config = nextConfig;
   projectName = nextConfig.projectName;
@@ -8089,14 +8859,42 @@ function applyConfig(nextConfig, options = {}) {
   vkRecoveryCooldownMin = nextConfig.vkRecoveryCooldownMin;
   vkSpawnEnabled = nextConfig.vkSpawnEnabled;
   vkEnsureIntervalMs = nextConfig.vkEnsureIntervalMs;
+  kanbanBackend = String(nextConfig.kanban?.backend || kanbanBackend || "vk")
+    .trim()
+    .toLowerCase();
+  executorMode = nextConfig.executorMode || getExecutorMode();
   plannerPerCapitaThreshold = nextConfig.plannerPerCapitaThreshold;
   plannerIdleSlotThreshold = nextConfig.plannerIdleSlotThreshold;
   plannerDedupMs = nextConfig.plannerDedupMs;
   plannerMode = nextConfig.plannerMode || "kanban";
   agentPrompts = nextConfig.agentPrompts;
+  configExecutorConfig = nextConfig.executorConfig;
   executorScheduler = nextConfig.scheduler;
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
+  const nextVkRuntimeRequired = isVkRuntimeRequired();
+
+  if (prevVkRuntimeRequired && !nextVkRuntimeRequired) {
+    if (vkLogStream) {
+      vkLogStream.stop();
+      vkLogStream = null;
+    }
+    if (vkSessionDiscoveryTimer) {
+      clearInterval(vkSessionDiscoveryTimer);
+      vkSessionDiscoveryTimer = null;
+    }
+    if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
+      try {
+        vibeKanbanProcess.kill();
+      } catch {
+        /* best effort */
+      }
+      vibeKanbanProcess = null;
+      vibeKanbanStartedAt = 0;
+    }
+  } else if (!prevVkRuntimeRequired && nextVkRuntimeRequired) {
+    void ensureVibeKanbanRunning();
+  }
 
   // ── Internal executor hot-reload ──────────────────────────────────────
   if (nextConfig.internalExecutor) {
@@ -8162,6 +8960,19 @@ function applyConfig(nextConfig, options = {}) {
     shellState.rl.close();
   }
 
+  if (plannerMode !== "disabled") {
+    startTaskPlannerStatusLoop();
+  } else {
+    stopTaskPlannerStatusLoop();
+  }
+
+  refreshMonitorMonitorRuntime();
+  if (monitorMonitor.enabled) {
+    startMonitorMonitorSupervisor();
+  } else {
+    stopMonitorMonitorSupervisor();
+  }
+
   const nextArgs = scriptArgs?.join(" ") || "";
   const scriptChanged = prevScriptPath !== scriptPath || prevArgs !== nextArgs;
   if (restartIfChanged && scriptChanged) {
@@ -8192,6 +9003,8 @@ async function reloadConfig(reason) {
 
 process.on("SIGINT", () => {
   shuttingDown = true;
+  stopTaskPlannerStatusLoop();
+  stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
@@ -8217,6 +9030,8 @@ process.on("SIGINT", () => {
 // Windows: closing the terminal window doesn't send SIGINT/SIGTERM reliably.
 process.on("exit", () => {
   shuttingDown = true;
+  stopTaskPlannerStatusLoop();
+  stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
@@ -8227,6 +9042,8 @@ process.on("exit", () => {
 
 process.on("SIGTERM", () => {
   shuttingDown = true;
+  stopTaskPlannerStatusLoop();
+  stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
@@ -8269,7 +9086,9 @@ process.on("uncaughtException", (err) => {
   const msg = err?.message || "";
   // Always suppress stream noise — not just during shutdown
   if (isStreamNoise(msg)) {
-    console.error(`[monitor] suppressed stream noise (uncaughtException): ${msg}`);
+    console.error(
+      `[monitor] suppressed stream noise (uncaughtException): ${msg}`,
+    );
     return;
   }
   if (shuttingDown) return;
@@ -8281,7 +9100,9 @@ process.on("unhandledRejection", (reason) => {
   const msg = reason?.message || String(reason || "");
   // Always suppress stream noise
   if (isStreamNoise(msg)) {
-    console.error(`[monitor] suppressed stream noise (unhandledRejection): ${msg}`);
+    console.error(
+      `[monitor] suppressed stream noise (unhandledRejection): ${msg}`,
+    );
     return;
   }
   if (shuttingDown) return;
@@ -8446,18 +9267,18 @@ startWatcher();
 startEnvWatchers();
 startSelfWatcher();
 startInteractiveShell();
-if (vkSpawnEnabled) {
+if (isVkSpawnAllowed()) {
   void ensureVibeKanbanRunning();
 }
 // When VK is externally managed (not spawned by monitor), still connect the
 // log stream so agent logs are captured to .cache/agent-logs/.
-if (!vkSpawnEnabled && vkEndpointUrl) {
+if (isVkRuntimeRequired() && !isVkSpawnAllowed() && vkEndpointUrl) {
   void isVibeKanbanOnline().then((online) => {
     if (online) ensureVkLogStream();
   });
 }
 if (
-  vkSpawnEnabled &&
+  isVkSpawnAllowed() &&
   Number.isFinite(vkEnsureIntervalMs) &&
   vkEnsureIntervalMs > 0
 ) {
@@ -8468,7 +9289,8 @@ if (
 // Periodically reconnect log stream for externally-managed VK (e.g. after VK restart).
 // Session discovery is handled by ensureVkSessionDiscoveryLoop() inside ensureVkLogStream().
 if (
-  !vkSpawnEnabled &&
+  isVkRuntimeRequired() &&
+  !isVkSpawnAllowed() &&
   vkEndpointUrl &&
   Number.isFinite(vkEnsureIntervalMs) &&
   vkEnsureIntervalMs > 0
@@ -8575,10 +9397,11 @@ try {
   console.warn(`[monitor] error detector init failed: ${err.message}`);
 }
 
-const executorMode = configExecutorMode || getExecutorMode();
-console.log(`[monitor] executor mode: ${executorMode}`);
-
-if (executorMode === "internal" || executorMode === "hybrid") {
+if (isExecutorDisabled()) {
+  console.log(
+    `[monitor] ⛔ task execution DISABLED (EXECUTOR_MODE=${executorMode}) — no tasks will be executed`,
+  );
+} else if (executorMode === "internal" || executorMode === "hybrid") {
   // Start internal executor
   try {
     const execOpts = {
@@ -8746,17 +9569,31 @@ if (executorMode === "internal" || executorMode === "hybrid") {
         internalTaskExecutor.setReviewAgent(reviewAgent);
       }
 
-      console.log("[monitor] review agent started (autoFix: true, waitForMerge: true)");
+      console.log(
+        "[monitor] review agent started (autoFix: true, waitForMerge: true)",
+      );
     } catch (err) {
       console.warn(`[monitor] review agent failed to start: ${err.message}`);
     }
 
     // ── Sync Engine ──
     try {
+      const activeKanbanBackend = getActiveKanbanBackend();
+      const githubProjectId =
+        process.env.GITHUB_REPOSITORY ||
+        (process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+          ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+          : null) ||
+        repoSlug ||
+        null;
       const projectId =
         process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
-        process.env.VK_PROJECT_ID ||
-        internalExecutorConfig?.projectId;
+        internalExecutorConfig?.projectId ||
+        config?.kanban?.projectId ||
+        process.env.KANBAN_PROJECT_ID ||
+        (activeKanbanBackend === "github"
+          ? githubProjectId
+          : process.env.VK_PROJECT_ID || null);
       if (projectId) {
         syncEngine = createSyncEngine({
           projectId,
@@ -8767,9 +9604,13 @@ if (executorMode === "internal" || executorMode === "hybrid") {
               : null,
         });
         syncEngine.start();
-        console.log("[monitor] sync engine started (interval: 60s)");
+        console.log(
+          `[monitor] sync engine started (interval: 60s, backend=${activeKanbanBackend}, project=${projectId})`,
+        );
       } else {
-        console.log("[monitor] sync engine skipped — no project ID configured");
+        console.log(
+          `[monitor] sync engine skipped — no project ID configured for backend=${activeKanbanBackend}`,
+        );
       }
     } catch (err) {
       console.warn(`[monitor] sync engine failed to start: ${err.message}`);
@@ -8781,7 +9622,9 @@ if (executorMode === "internal" || executorMode === "hybrid") {
   }
 }
 
-if (executorMode === "vk" || executorMode === "hybrid") {
+if (isExecutorDisabled()) {
+  // Already logged above
+} else if (executorMode === "vk" || executorMode === "hybrid") {
   // Start VK orchestrator (ve-orchestrator.ps1)
   startProcess();
 } else {
@@ -8796,6 +9639,10 @@ if (telegramCommandEnabled) {
 void restoreLiveDigest()
   .catch(() => {})
   .then(() => startTelegramNotifier());
+
+// ── Start long-running devmode monitor-monitor supervisor ───────────────────
+startMonitorMonitorSupervisor();
+startTaskPlannerStatusLoop();
 
 // ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({
@@ -8813,7 +9660,7 @@ injectMonitorFunctions({
   getActiveAttemptInfo,
   triggerTaskPlanner,
   reconcileTaskStatuses,
-  onDigestSealed: devmodeAutoCodeFix.enabled ? handleDigestSealed : null,
+  onDigestSealed: handleDigestSealed,
   getAnomalyReport: () =>
     anomalyDetector
       ? anomalyDetector.getStatusReport()
