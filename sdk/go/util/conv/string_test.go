@@ -47,6 +47,24 @@ func (s *StringSuite) TestUnsafeBytesToStr() {
 	}
 }
 
+func (s *StringSuite) TestStrToBytesCopy() {
+	source := "abc"
+	b := StrToBytes(source)
+	s.Equal("abc", string(b))
+	b[0] = 'z'
+	s.Equal("abc", source)
+	s.Equal("zbc", string(b))
+}
+
+func (s *StringSuite) TestBytesToStrCopy() {
+	source := []byte("abc")
+	str := BytesToStr(source)
+	s.Equal("abc", str)
+	source[0] = 'z'
+	s.Equal("abc", str)
+	s.Equal("zbc", string(source))
+}
+
 func BenchmarkUnsafeStrToBytes(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		UnsafeStrToBytes(strconv.Itoa(i))
