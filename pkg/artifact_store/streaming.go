@@ -172,8 +172,11 @@ func (u *StreamingUploader) Cancel() {
 
 // updateProgress updates and reports progress.
 func (u *StreamingUploader) updateProgress(bytesTransferred int64) {
+	var progressCopy StreamProgress
+	var callback ProgressCallback
+	shouldCall := false
+
 	u.mu.Lock()
-	defer u.mu.Unlock()
 
 	now := time.Now()
 	elapsed := now.Sub(u.started).Seconds()
@@ -195,8 +198,14 @@ func (u *StreamingUploader) updateProgress(bytesTransferred int64) {
 	// Call callback if enough time has passed
 	if u.callback != nil && now.Sub(u.lastUpdate) >= u.config.ProgressInterval {
 		u.lastUpdate = now
-		progressCopy := *u.progress
-		go u.callback(&progressCopy)
+		progressCopy = *u.progress
+		callback = u.callback
+		shouldCall = true
+	}
+	u.mu.Unlock()
+
+	if shouldCall {
+		callback(&progressCopy)
 	}
 }
 
@@ -343,8 +352,11 @@ func (d *StreamingDownloader) Cancel() {
 
 // updateProgress updates and reports progress.
 func (d *StreamingDownloader) updateProgress(bytesTransferred int64) {
+	var progressCopy StreamProgress
+	var callback ProgressCallback
+	shouldCall := false
+
 	d.mu.Lock()
-	defer d.mu.Unlock()
 
 	now := time.Now()
 	elapsed := now.Sub(d.started).Seconds()
@@ -366,8 +378,14 @@ func (d *StreamingDownloader) updateProgress(bytesTransferred int64) {
 	// Call callback if enough time has passed
 	if d.callback != nil && now.Sub(d.lastUpdate) >= d.config.ProgressInterval {
 		d.lastUpdate = now
-		progressCopy := *d.progress
-		go d.callback(&progressCopy)
+		progressCopy = *d.progress
+		callback = d.callback
+		shouldCall = true
+	}
+	d.mu.Unlock()
+
+	if shouldCall {
+		callback(&progressCopy)
 	}
 }
 

@@ -78,8 +78,31 @@ jobs:
           for module in infra/terraform/modules/*/; do
             echo "Validating $module"
             cd "$module"
+            if grep -R "configuration_aliases" -n . >/dev/null 2>&1 || grep -R "provider = aws\\." -n . >/dev/null 2>&1; then
+              cat > .ci-providers.tf <<'EOF'
+provider "aws" {
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "primary"
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "secondary"
+  region = "us-west-2"
+}
+
+provider "aws" {
+  alias  = "tertiary"
+  region = "us-west-1"
+}
+EOF
+            fi
             terraform init -backend=false
             terraform validate
+            rm -f .ci-providers.tf
             cd -
           done
 

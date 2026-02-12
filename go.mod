@@ -27,6 +27,7 @@ require (
 	github.com/cosmos/gogoproto v1.7.2
 	github.com/cosmos/ibc-go/v10 v10.5.0
 	github.com/cosmos/rosetta v0.50.12
+	github.com/dgraph-io/badger/v4 v4.6.0
 	github.com/ethereum/go-ethereum v1.16.8
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-github/v62 v62.0.0
@@ -196,7 +197,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/desertbit/timer v1.0.1 // indirect
-	github.com/dgraph-io/badger/v4 v4.6.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.1.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/distribution/reference v0.6.0 // indirect
