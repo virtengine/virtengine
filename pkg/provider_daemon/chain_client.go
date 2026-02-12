@@ -16,7 +16,9 @@ import (
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	providerv1beta4 "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	attributesv1 "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
@@ -26,6 +28,11 @@ import (
 const (
 	defaultHPCJobPollInterval = 10 * time.Second
 	defaultHPCPollPageLimit   = 200
+
+	// Offering types
+	offeringTypeCompute = "compute"
+	offeringTypeStorage = "storage"
+	offeringTypeGPU     = "gpu"
 )
 
 // RPCChainClientConfig configuration for RPC chain client
@@ -89,25 +96,42 @@ func NewHPCChainClient(config RPCChainClientConfig) (HPCChainClient, error) {
 
 // GetProviderConfig retrieves the provider's on-chain configuration
 func (c *rpcChainClient) GetProviderConfig(ctx context.Context, address string) (*ProviderConfig, error) {
-	// TODO: Implement actual gRPC query to market module
-	// For now return a default config to allow startup
-	return &ProviderConfig{
-		ProviderAddress: address,
-		Pricing: PricingConfig{
-			CPUPricePerCore:   "0.01",
-			MemoryPricePerGB:  "0.005",
-			StoragePricePerGB: "0.001",
-			NetworkPricePerGB: "0.001",
-			GPUPricePerHour:   "0.50",
-		},
-		Capacity:           CapacityConfig{},
-		SupportedOfferings: []string{"compute", "storage", "gpu"},
-		Regions:            []string{"us-west-1", "us-east-1", "eu-west-1"},
-		Attributes:         map[string]string{},
-		Active:             true,
-		LastUpdated:        time.Now(),
-		Version:            1,
-	}, nil
+	if c.grpcConn == nil {
+		return nil, fmt.Errorf("grpc endpoint not configured")
+	}
+
+	providerClient := providerv1beta4.NewQueryClient(c.grpcConn)
+
+	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	resp, err := providerClient.Provider(reqCtx, &providerv1beta4.QueryProviderRequest{
+		Owner: address,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query provider: %w", err)
+	}
+
+	if resp.Provider.Owner == "" {
+		return nil, fmt.Errorf("provider not found: %s", address)
+	}
+
+	// Convert provider proto to ProviderConfig
+	config := &ProviderConfig{
+		ProviderAddress: resp.Provider.Owner,
+		Pricing:         extractPricingFromAttributes(resp.Provider.Attributes),
+		Capacity:        CapacityConfig{}, // TODO: Extract from attributes if available
+		Regions:         extractRegionsFromAttributes(resp.Provider.Attributes),
+		Attributes:      attributesToMap(resp.Provider.Attributes),
+		Active:          true, // If provider exists, it's active
+		LastUpdated:     time.Now(),
+		Version:         1,
+	}
+
+	// Extract supported offerings from attributes
+	config.SupportedOfferings = extractSupportedOfferings(resp.Provider.Attributes)
+
+	return config, nil
 }
 
 // GetOpenOrders retrieves open orders that match provider capabilities
@@ -483,8 +507,9 @@ func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpct
 
 // GetBillingRules returns billing rules from on-chain params
 func (c *rpcChainClient) GetBillingRules(ctx context.Context, clusterID string) (*hpctypes.HPCBillingRules, error) {
-	// For now, just return default billing rules
-	// TODO: Query on-chain params when billing rules query is implemented
+	// For now, return default billing rules
+	// Market params don't directly contain HPC billing rules
+	// Those would need to be queried from the HPC module params if/when implemented
 	rules := hpctypes.DefaultHPCBillingRules("uvirt")
 	return &rules, nil
 }
@@ -724,19 +749,101 @@ func dataReferencesFromProto(references []hpcv1.DataReference) []hpctypes.DataRe
 
 // orderFromProto converts a proto Order to daemon Order struct
 func orderFromProto(protoOrder marketv1beta5.Order) Order {
+	// Extract resource requirements from order spec if available
+	requirements := ResourceRequirements{
+		CPUCores:  0,
+		MemoryGB:  0,
+		StorageGB: 0,
+	}
+
+	// Extract resources from order spec (GroupSpec.Resources is ResourceUnits)
+	if len(protoOrder.Spec.Resources) > 0 {
+		for _, res := range protoOrder.Spec.Resources {
+			// ResourceUnit has Resources embedded, can access fields directly
+			if res.CPU != nil {
+				if cpuVal := res.CPU.Units.Val; cpuVal.IsPositive() {
+					// Safe conversion: millicores divided by 1000 will not overflow int64
+					cpuCores := cpuVal.Uint64() / 1000
+					if cpuCores <= uint64(1<<63-1) {
+						requirements.CPUCores += int64(cpuCores)
+					}
+				}
+			}
+			if res.Memory != nil {
+				if memVal := res.Memory.Quantity.Val; memVal.IsPositive() {
+					// Safe conversion: bytes to GB, result will be much smaller
+					memGB := memVal.Uint64() / (1024 * 1024 * 1024)
+					if memGB <= uint64(1<<63-1) {
+						requirements.MemoryGB += int64(memGB)
+					}
+				}
+			}
+			if len(res.Storage) > 0 {
+				for _, storage := range res.Storage {
+					if storageVal := storage.Quantity.Val; storageVal.IsPositive() {
+						// Safe conversion: bytes to GB, result will be much smaller
+						storageGB := storageVal.Uint64() / (1024 * 1024 * 1024)
+						if storageGB <= uint64(1<<63-1) {
+							requirements.StorageGB += int64(storageGB)
+						}
+					}
+				}
+			}
+			// Check for GPU
+			if res.GPU != nil {
+				if gpuVal := res.GPU.Units.Val; gpuVal.IsPositive() {
+					gpuCount := gpuVal.Uint64()
+					if gpuCount <= uint64(1<<63-1) {
+						requirements.GPUs += int64(gpuCount)
+					}
+				}
+				// Extract GPU type from attributes
+				if len(res.GPU.Attributes) > 0 {
+					for _, attr := range res.GPU.Attributes {
+						if attr.Key == "model" || attr.Key == "type" {
+							requirements.GPUType = attr.Value
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Extract region from placement requirements attributes
+	region := ""
+	if len(protoOrder.Spec.Requirements.Attributes) > 0 {
+		for _, attr := range protoOrder.Spec.Requirements.Attributes {
+			if attr.Key == "region" {
+				region = attr.Value
+				break
+			}
+		}
+	}
+
+	// Determine offering type based on resources
+	offeringType := offeringTypeCompute
+	if requirements.StorageGB > 0 && requirements.CPUCores == 0 {
+		offeringType = offeringTypeStorage
+	}
+	if requirements.GPUs > 0 {
+		offeringType = offeringTypeGPU
+	}
+
+	// For now, use a default price since GroupSpec doesn't have Price field
+	// The actual bid price will be calculated by the bid engine
+	maxPrice := "1000000" // Default high value
+	currency := "uvirt"
+
 	return Order{
 		OrderID:         protoOrder.ID.String(),
 		CustomerAddress: protoOrder.ID.Owner,
-		OfferingType:    "compute", // Default, could be enhanced based on order spec
-		Requirements: ResourceRequirements{
-			CPUCores:  0, // TODO: Extract from order spec
-			MemoryGB:  0,
-			StorageGB: 0,
-		},
-		Region:    "",  // TODO: Extract from order spec attributes
-		MaxPrice:  "0", // TODO: Extract from order spec
-		Currency:  "uvirt",
-		CreatedAt: time.Unix(protoOrder.CreatedAt, 0),
+		OfferingType:    offeringType,
+		Requirements:    requirements,
+		Region:          region,
+		MaxPrice:        maxPrice,
+		Currency:        currency,
+		CreatedAt:       time.Unix(protoOrder.CreatedAt, 0),
 	}
 }
 
@@ -792,4 +899,78 @@ func parseOrderID(orderIDStr string) (marketv1.OrderID, error) {
 		GSeq:  uint32(gseq),
 		OSeq:  uint32(oseq),
 	}, nil
+}
+
+// extractPricingFromAttributes extracts pricing configuration from provider attributes
+func extractPricingFromAttributes(attrs attributesv1.Attributes) PricingConfig {
+	pricing := PricingConfig{
+		CPUPricePerCore:   "0.01", // Default values
+		MemoryPricePerGB:  "0.005",
+		StoragePricePerGB: "0.001",
+		NetworkPricePerGB: "0.001",
+		GPUPricePerHour:   "0.50",
+	}
+
+	attrMap := make(map[string]string)
+	for _, attr := range attrs {
+		attrMap[attr.Key] = attr.Value
+	}
+
+	// Extract pricing if available
+	if val, ok := attrMap["pricing-cpu"]; ok {
+		pricing.CPUPricePerCore = val
+	}
+	if val, ok := attrMap["pricing-memory"]; ok {
+		pricing.MemoryPricePerGB = val
+	}
+	if val, ok := attrMap["pricing-storage"]; ok {
+		pricing.StoragePricePerGB = val
+	}
+	if val, ok := attrMap["pricing-network"]; ok {
+		pricing.NetworkPricePerGB = val
+	}
+	if val, ok := attrMap["pricing-gpu"]; ok {
+		pricing.GPUPricePerHour = val
+	}
+
+	return pricing
+}
+
+// extractRegionsFromAttributes extracts supported regions from provider attributes
+func extractRegionsFromAttributes(attrs attributesv1.Attributes) []string {
+	regions := []string{}
+	for _, attr := range attrs {
+		if attr.Key == "region" {
+			regions = append(regions, attr.Value)
+		}
+	}
+	if len(regions) == 0 {
+		// Default regions if none specified
+		regions = []string{"us-west-1", "us-east-1", "eu-west-1"}
+	}
+	return regions
+}
+
+// extractSupportedOfferings extracts supported offering types from provider attributes
+func extractSupportedOfferings(attrs attributesv1.Attributes) []string {
+	offerings := []string{}
+	for _, attr := range attrs {
+		if attr.Key == "offering" {
+			offerings = append(offerings, attr.Value)
+		}
+	}
+	if len(offerings) == 0 {
+		// Default offerings if none specified
+		offerings = []string{"compute", "storage"}
+	}
+	return offerings
+}
+
+// attributesToMap converts provider attributes to a simple map
+func attributesToMap(attrs attributesv1.Attributes) map[string]string {
+	result := make(map[string]string)
+	for _, attr := range attrs {
+		result[attr.Key] = attr.Value
+	}
+	return result
 }
