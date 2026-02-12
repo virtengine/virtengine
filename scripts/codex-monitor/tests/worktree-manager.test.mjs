@@ -130,9 +130,9 @@ describe("worktree-manager", () => {
       expect(sanitizeBranchName("branch.")).toBe("branch");
     });
 
-    it("truncates to 100 characters", () => {
+    it("truncates to 60 characters", () => {
       const long = "a".repeat(150);
-      expect(sanitizeBranchName(long).length).toBe(100);
+      expect(sanitizeBranchName(long).length).toBe(60);
     });
   });
 
