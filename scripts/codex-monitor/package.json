@@ -50,7 +50,10 @@
     "./fleet-coordinator": "./fleet-coordinator.mjs",
     "./shared-knowledge": "./shared-knowledge.mjs",
     "./presence": "./presence.mjs",
-    "./vk-log-stream": "./vk-log-stream.mjs"
+    "./vk-log-stream": "./vk-log-stream.mjs",
+    "./session-tracker": "./session-tracker.mjs",
+    "./diff-stats": "./diff-stats.mjs",
+    "./review-agent": "./review-agent.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -93,6 +96,8 @@
     "task-store.mjs",
     "agent-endpoint.mjs",
     "review-agent.mjs",
+    "session-tracker.mjs",
+    "diff-stats.mjs",
     "sync-engine.mjs",
     "error-detector.mjs",
     "get-telegram-chat-id.mjs",

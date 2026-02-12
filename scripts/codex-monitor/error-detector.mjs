@@ -6,6 +6,8 @@
  * Returns recommended recovery actions so the orchestrator can respond automatically.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
+
 const TAG = "[error-detector]";
 
 // ── Detection patterns ──────────────────────────────────────────────────────
@@ -477,6 +479,265 @@ Do NOT restart from scratch — build on existing progress.`;
       rateLimitHitsLast5m,
       taskBreakdown,
     };
+  }
+
+  // ── Session-Aware Analysis ────────────────────────────────────────────────
+
+  /**
+   * Analyze a sequence of session messages (from SessionTracker) to detect
+   * behavioral patterns that single-event classification would miss.
+   *
+   * Detects:
+   * - tool_loop:           Same tools repeated 5+ times without progress
+   * - analysis_paralysis:  Only reading files, never editing (after 10+ tool calls)
+   * - plan_stuck:          Agent wrote a plan but stopped (plan keywords + no edits)
+   * - needs_clarification: Agent explicitly says it needs input/clarification
+   * - false_completion:    Agent claims done but there are no commits
+   * - rate_limited:        Multiple rate limit errors in sequence
+   *
+   * @param {Array<{type: string, content: string, meta?: {toolName?: string}}>} messages
+   * @returns {{ patterns: string[], primary: string|null, details: Record<string, string> }}
+   */
+  analyzeMessageSequence(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return { patterns: [], primary: null, details: {} };
+    }
+
+    const patterns = [];
+    const details = {};
+
+    // ── Tool loop detection ──
+    const toolCalls = messages.filter((m) => m.type === "tool_call");
+    if (toolCalls.length >= 5) {
+      const toolNames = toolCalls.map((m) => m.meta?.toolName || "unknown");
+      const lastFive = toolNames.slice(-5);
+      const uniqueInLastFive = new Set(lastFive).size;
+      if (uniqueInLastFive <= 2) {
+        patterns.push("tool_loop");
+        details.tool_loop = `Repeated tools: ${[...new Set(lastFive)].join(", ")} (${lastFive.length}x in last 5)`;
+      }
+    }
+
+    // ── Analysis paralysis ──
+    if (toolCalls.length >= 10) {
+      const readTools = toolCalls.filter((m) => {
+        const name = (m.meta?.toolName || m.content || "").toLowerCase();
+        return name.includes("read") || name.includes("search") || name.includes("grep") ||
+               name.includes("list") || name.includes("find") || name.includes("cat");
+      });
+      const editTools = toolCalls.filter((m) => {
+        const name = (m.meta?.toolName || m.content || "").toLowerCase();
+        return name.includes("write") || name.includes("edit") || name.includes("create") ||
+               name.includes("replace") || name.includes("patch") || name.includes("append");
+      });
+
+      if (readTools.length >= 8 && editTools.length === 0) {
+        patterns.push("analysis_paralysis");
+        details.analysis_paralysis = `${readTools.length} read ops, 0 write ops in ${toolCalls.length} tool calls`;
+      }
+    }
+
+    // ── Plan stuck ──
+    const agentMessages = messages.filter((m) => m.type === "agent_message");
+    const allAgentText = agentMessages.map((m) => m.content).join(" ").toLowerCase();
+    const planPhrases = [
+      "here's the plan", "here is my plan", "i'll create a plan",
+      "plan.md", "ready to start implementing", "ready to begin",
+      "would you like me to proceed", "shall i start", "would you like me to implement",
+    ];
+    const hasPlanPhrase = planPhrases.some((p) => allAgentText.includes(p));
+    const editToolCalls = toolCalls.filter((m) => {
+      const name = (m.meta?.toolName || m.content || "").toLowerCase();
+      return name.includes("write") || name.includes("edit") || name.includes("create") ||
+             name.includes("replace");
+    });
+    if (hasPlanPhrase && editToolCalls.length <= 1) {
+      patterns.push("plan_stuck");
+      details.plan_stuck = "Agent created a plan but did not implement it";
+    }
+
+    // ── Needs clarification ──
+    const clarificationPhrases = [
+      "need clarification", "need more information", "could you clarify",
+      "unclear", "ambiguous", "which approach", "please specify",
+      "i need to know", "can you provide", "what should i",
+    ];
+    if (clarificationPhrases.some((p) => allAgentText.includes(p))) {
+      patterns.push("needs_clarification");
+      details.needs_clarification = "Agent expressed uncertainty or asked for input";
+    }
+
+    // ── False completion ──
+    const completionPhrases = [
+      "task complete", "task is complete", "i've completed", "all done",
+      "successfully completed", "changes have been committed",
+      "pushed to", "pr created", "pull request created",
+    ];
+    const claimsDone = completionPhrases.some((p) => allAgentText.includes(p));
+    const hasGitCommit = toolCalls.some((m) => {
+      const content = (m.content || "").toLowerCase();
+      return content.includes("git commit") || content.includes("git push");
+    });
+    if (claimsDone && !hasGitCommit) {
+      patterns.push("false_completion");
+      details.false_completion = "Agent claims completion but no git commit/push detected in tool calls";
+    }
+
+    // ── Rate limited ──
+    const errors = messages.filter((m) => m.type === "error");
+    const rateLimitErrors = errors.filter((m) =>
+      /rate.?limit|429|too many requests|quota/i.test(m.content || ""),
+    );
+    if (rateLimitErrors.length >= 2) {
+      patterns.push("rate_limited");
+      details.rate_limited = `${rateLimitErrors.length} rate limit errors detected`;
+    }
+
+    // Determine primary pattern (most actionable)
+    const priority = ["rate_limited", "plan_stuck", "false_completion", "needs_clarification", "tool_loop", "analysis_paralysis"];
+    const primary = priority.find((p) => patterns.includes(p)) || null;
+
+    return { patterns, primary, details };
+  }
+
+  /**
+   * Analyze agent log files for historical error patterns.
+   * Reads log files from the agent logs directory and returns frequency data.
+   *
+   * @param {string} logsDir - Path to the agent logs directory
+   * @returns {{ patterns: Record<string, number>, recommendations: string[] }}
+   */
+  analyzeHistoricalErrors(logsDir) {
+    const patterns = {};
+    const recommendations = [];
+
+    try {
+      const files = readdirSync(logsDir).filter((f) => f.endsWith(".log"));
+
+      for (const file of files.slice(-20)) { // Only last 20 logs
+        try {
+          const content = readFileSync(`${logsDir}/${file}`, "utf8");
+          const classification = this.classify(content);
+          const pattern = classification.pattern;
+          patterns[pattern] = (patterns[pattern] || 0) + 1;
+        } catch {
+          /* skip unreadable files */
+        }
+      }
+
+      // Generate recommendations
+      if ((patterns.rate_limit || 0) > 3) {
+        recommendations.push("Frequent rate limiting — consider reducing parallelism or adding delays");
+      }
+      if ((patterns.plan_stuck || 0) > 3) {
+        recommendations.push("Agents frequently get stuck in planning mode — ensure instructions explicitly say 'implement immediately'");
+      }
+      if ((patterns.token_overflow || 0) > 2) {
+        recommendations.push("Token overflow occurring — consider splitting large tasks or using summarization");
+      }
+    } catch {
+      /* logsDir might not exist */
+    }
+
+    return { patterns, recommendations };
+  }
+
+  /**
+   * Generate a recovery prompt based on session analysis results.
+   * Used by task-executor when a behavioral pattern is detected mid-session.
+   *
+   * @param {string} taskTitle
+   * @param {{ primary: string|null, details: Record<string, string> }} analysis
+   * @param {string} [lastOutput] - Last agent output for additional context
+   * @returns {string}
+   */
+  getRecoveryPromptForAnalysis(taskTitle, analysis, lastOutput = "") {
+    if (!analysis?.primary) {
+      return `Continue working on task "${taskTitle}". Focus on implementation.`;
+    }
+
+    switch (analysis.primary) {
+      case "plan_stuck":
+        return [
+          `# CONTINUE IMPLEMENTATION — Do Not Plan`,
+          ``,
+          `You wrote a plan for "${taskTitle}" but stopped before implementing it.`,
+          ``,
+          `DO NOT create another plan. DO NOT ask for permission.`,
+          `Implement the changes NOW:`,
+          `1. Edit the necessary files`,
+          `2. Run tests to verify`,
+          `3. Commit with conventional commit message`,
+          `4. Push to the branch`,
+          ``,
+          `This is autonomous execution — implement immediately.`,
+        ].join("\n");
+
+      case "tool_loop":
+        return [
+          `# BREAK THE LOOP — Change Approach`,
+          ``,
+          `You've been repeating the same tools without making progress on "${taskTitle}".`,
+          analysis.details?.tool_loop ? `Detail: ${analysis.details.tool_loop}` : "",
+          ``,
+          `STOP and take a different approach:`,
+          `1. Summarize what you've learned so far`,
+          `2. Identify what's blocking you`,
+          `3. Try a completely different strategy`,
+          `4. Make incremental progress — edit files, commit, push`,
+        ].filter(Boolean).join("\n");
+
+      case "analysis_paralysis":
+        return [
+          `# START EDITING — Stop Just Reading`,
+          ``,
+          `You've been reading files but not making any changes for "${taskTitle}".`,
+          analysis.details?.analysis_paralysis ? `Detail: ${analysis.details.analysis_paralysis}` : "",
+          ``,
+          `You have enough context. Start implementing:`,
+          `1. Create or edit the files needed`,
+          `2. Don't try to understand everything first — work incrementally`,
+          `3. Commit and push after each meaningful change`,
+        ].filter(Boolean).join("\n");
+
+      case "needs_clarification":
+        return [
+          `# MAKE A DECISION — Do Not Wait for Input`,
+          ``,
+          `You expressed uncertainty about "${taskTitle}" but this is autonomous execution.`,
+          `No one will respond to your questions.`,
+          ``,
+          `Choose the most reasonable approach and proceed:`,
+          `1. Pick the simplest correct implementation`,
+          `2. Document any assumptions in code comments`,
+          `3. Implement, test, commit, and push`,
+        ].join("\n");
+
+      case "false_completion":
+        return [
+          `# ACTUALLY COMPLETE THE TASK`,
+          ``,
+          `You claimed "${taskTitle}" was complete, but no git commit or push was detected.`,
+          ``,
+          `The task is NOT complete until changes are committed and pushed:`,
+          `1. Stage your changes: git add -A`,
+          `2. Commit: git commit -m "feat(scope): description"`,
+          `3. Push: git push origin <branch>`,
+          `4. Verify the push succeeded`,
+        ].join("\n");
+
+      case "rate_limited":
+        return [
+          `# RATE LIMITED — Wait and Retry`,
+          ``,
+          `You hit rate limits while working on "${taskTitle}".`,
+          `Wait 30 seconds, then continue with smaller, focused operations.`,
+          `Avoid large file reads or many parallel tool calls.`,
+        ].join("\n");
+
+      default:
+        return `Continue working on task "${taskTitle}". Focus on making concrete progress.`;
+    }
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────

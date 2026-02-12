@@ -54,6 +54,8 @@ import {
   getTask as getInternalTask,
 } from "./task-store.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
+import { getSessionTracker } from "./session-tracker.mjs";
+import { getCompactDiffSummary, getRecentCommits } from "./diff-stats.mjs";
 import {
   resolveExecutorForTask,
   executorToSdk,
@@ -88,7 +90,8 @@ const __dirname = dirname(__filename);
 const AGENT_LOGS_DIR = resolve(__dirname, "logs", "agents");
 
 /**
- * Create an onEvent callback that streams agent SDK events to a per-task log file.
+ * Create an onEvent callback that streams agent SDK events to a per-task log file
+ * AND feeds the session tracker for review handoff context.
  * @param {string} taskId
  * @param {string} taskTitle
  * @returns {Function}
@@ -96,6 +99,7 @@ const AGENT_LOGS_DIR = resolve(__dirname, "logs", "agents");
 function createAgentLogStreamer(taskId, taskTitle) {
   const shortId = taskId.substring(0, 8);
   const logFile = resolve(AGENT_LOGS_DIR, `agent-${shortId}.log`);
+  const tracker = getSessionTracker();
 
   // Ensure log dir exists
   try {
@@ -116,6 +120,13 @@ function createAgentLogStreamer(taskId, taskTitle) {
   }
 
   return (event) => {
+    // Feed to session tracker (for review handoff)
+    try {
+      tracker.recordEvent(taskId, event);
+    } catch {
+      /* never let tracking crash the agent */
+    }
+
     try {
       const ts = new Date().toISOString();
       if (event.type === "item.completed" && event.item) {
@@ -1054,6 +1065,11 @@ class TaskExecutor {
       console.log(
         `${TAG} executing task "${taskTitle}" in ${wt.path} on branch ${branch} (sdk=${resolvedSdk})`,
       );
+
+      // 6a. Start session tracking for review handoff
+      const sessionTracker = getSessionTracker();
+      sessionTracker.startSession(taskId, taskTitle);
+
       const result = await execWithRetry(prompt, {
         taskKey: taskId,
         cwd: wt.path,
@@ -1068,6 +1084,22 @@ class TaskExecutor {
 
       // Track attempts on task for PR body
       task._executionResult = result;
+
+      // 6b. End session tracking and analyze session patterns
+      const sessionStatus = result.success ? "completed" : "failed";
+      sessionTracker.endSession(taskId, sessionStatus);
+
+      // Session-aware error analysis (detects behavioral patterns like tool loops, analysis paralysis)
+      const sessionMessages = sessionTracker.getLastMessages(taskId);
+      const sessionAnalysis = this._errorDetector.analyzeMessageSequence(sessionMessages);
+      if (sessionAnalysis.primary) {
+        console.log(
+          `${TAG} session analysis for "${taskTitle}": ${sessionAnalysis.primary} — ${JSON.stringify(sessionAnalysis.details)}`,
+        );
+      }
+
+      // Capture formatted session summary for review handoff
+      const sessionSummary = sessionTracker.getMessageSummary(taskId);
 
       // Record post-execution HEAD hash
       const postExecHead =
@@ -1085,6 +1117,8 @@ class TaskExecutor {
         agentMadeNewCommits,
         preExecHead,
         postExecHead,
+        sessionSummary,
+        sessionAnalysis,
       });
 
       // 7a. Feed back success/failure to executor scheduler for failover tracking
@@ -1236,6 +1270,25 @@ class TaskExecutor {
       return this._errorDetector.getTokenOverflowRecoveryPrompt(task.title);
     }
 
+    // Session-aware analysis: check for behavioral patterns in recent messages
+    try {
+      const tracker = getSessionTracker();
+      const messages = tracker.getLastMessages(task.id);
+      if (messages.length > 0) {
+        const analysis = this._errorDetector.analyzeMessageSequence(messages);
+        if (analysis.primary) {
+          console.log(`${TAG} retry using session-aware recovery: ${analysis.primary}`);
+          return this._errorDetector.getRecoveryPromptForAnalysis(
+            task.title,
+            analysis,
+            lastResult?.output || "",
+          );
+        }
+      }
+    } catch {
+      /* best-effort — fall through to default */
+    }
+
     // Default retry prompt
     return [
       `# ERROR RECOVERY — Attempt ${attemptNumber}`,
@@ -1381,6 +1434,9 @@ class TaskExecutor {
           this.sendTelegram?.(
             `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`,
           );
+
+          // Queue for review handoff — reviewer will identify issues, fix, push, wait for merge
+          this._queueReviewHandoff(task, worktreePath, pr, execInfo);
         } else {
           // PR creation failed but task has commits — mark as completed anyway to prevent loop
           this._completedWithPR.add(task.id);
@@ -1554,6 +1610,68 @@ class TaskExecutor {
       );
       this.onTaskFailed?.(task, result);
     }
+  }
+
+  // ── Review Handoff ────────────────────────────────────────────────────────
+
+  /**
+   * Queue a task for review handoff after successful PR creation.
+   * Collects diff stats + session context and passes to the review agent.
+   *
+   * @param {Object} task
+   * @param {string} worktreePath
+   * @param {Object} pr - { url, branch, prNumber }
+   * @param {Object} execInfo - { sessionSummary, sessionAnalysis, ... }
+   * @private
+   */
+  _queueReviewHandoff(task, worktreePath, pr, execInfo = {}) {
+    if (!this._reviewAgent) {
+      console.log(`${TAG} no review agent configured — skipping review handoff`);
+      return;
+    }
+
+    try {
+      // Collect diff stats
+      let diffStats = "";
+      try {
+        diffStats = getCompactDiffSummary(worktreePath);
+      } catch (err) {
+        diffStats = `(error: ${err.message})`;
+      }
+
+      // Get recent commits
+      let commitLog = "";
+      try {
+        commitLog = getRecentCommits(worktreePath, 10).join("\n");
+      } catch {
+        commitLog = "(no commits)";
+      }
+
+      // Queue the review
+      this._reviewAgent.queueReview({
+        id: task.id,
+        title: task.title,
+        branchName: task.branchName || pr.branch,
+        prUrl: pr.url,
+        description: task.description,
+        worktreePath,
+        sessionMessages: execInfo.sessionSummary || "",
+        diffStats,
+      });
+
+      console.log(`${TAG} queued review handoff for "${task.title}" (PR: ${pr.url})`);
+    } catch (err) {
+      console.warn(`${TAG} review handoff error: ${err.message}`);
+    }
+  }
+
+  /**
+   * Set the review agent instance (called by monitor.mjs during initialization).
+   * @param {import("./review-agent.mjs").ReviewAgent} agent
+   */
+  setReviewAgent(agent) {
+    this._reviewAgent = agent;
+    console.log(`${TAG} review agent connected`);
   }
 
   // ── Git Helpers ───────────────────────────────────────────────────────────

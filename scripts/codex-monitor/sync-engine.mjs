@@ -217,7 +217,10 @@ export class SyncEngine {
             if (internalRank >= oldExternalRank) {
               // Internal was actively progressed by orchestrator — ignore
               // the stale external value and mark dirty for re-push.
-              updateTask(ext.id, { externalStatus: newExternal, syncDirty: true });
+              updateTask(ext.id, {
+                externalStatus: newExternal,
+                syncDirty: true,
+              });
               console.log(
                 TAG,
                 `External reverted ${ext.id}: ${oldExternal} → ${newExternal} but internal=${internal.status} is ahead — will re-push`,
