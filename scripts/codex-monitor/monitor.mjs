@@ -1619,8 +1619,12 @@ async function startVibeKanbanProcess() {
     detached: true,
   };
   if (useShell && spawnArgs.length > 0) {
-    const shellQuote = (value) =>
-      /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+    const shellQuote = (value) => {
+      const str = String(value);
+      if (!/\s/.test(str)) return str;
+      const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    };
     const fullCommand = [spawnCmd, ...spawnArgs].map(shellQuote).join(" ");
     vibeKanbanProcess = spawn(fullCommand, spawnOptions);
   } else if (useShell) {
