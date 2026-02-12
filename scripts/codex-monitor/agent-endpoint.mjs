@@ -66,8 +66,10 @@ function parseBody(req) {
       }
       try {
         resolve(JSON.parse(raw));
-      } catch {
-        reject(new Error("Invalid JSON body"));
+      } catch (err) {
+        // Include preview of malformed JSON for debugging (truncate to 200 chars)
+        const preview = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
+        reject(new Error(`Invalid JSON body: ${err.message} — Preview: ${preview}`));
       }
     });
 

@@ -3066,6 +3066,121 @@ function Test-GitWorktreeClean {
     return $true
 }
 
+function Get-TempWorktreePath {
+    <#
+    .SYNOPSIS Create a unique temporary worktree path under the system temp dir.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$Prefix = "vk-rebase"
+    )
+
+    $tempRoot = Get-EnvFallback -Name "TEMP"
+    if (-not $tempRoot) { $tempRoot = Get-EnvFallback -Name "TMP" }
+    if (-not $tempRoot) { $tempRoot = [IO.Path]::GetTempPath() }
+
+    $safeBranch = ($Branch -replace '[^a-zA-Z0-9._-]', '-')
+    if ([string]::IsNullOrWhiteSpace($safeBranch)) { $safeBranch = "branch" }
+    if ($safeBranch.Length -gt 42) { $safeBranch = $safeBranch.Substring(0, 42) }
+
+    $suffix = [Guid]::NewGuid().ToString("N").Substring(0, 8)
+    $leaf = "$Prefix-$safeBranch-$suffix"
+    return (Join-Path $tempRoot $leaf)
+}
+
+function Invoke-DirectRebaseIsolatedWorktree {
+    <#
+    .SYNOPSIS Rebase/merge a branch using a detached temporary worktree.
+    .DESCRIPTION
+    Used when the branch's primary worktree is dirty or locked. This avoids
+    polluting active agent worktrees and prevents "full repo reupload" states.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [string]$BaseBranch = "main",
+        [string]$AttemptId
+    )
+
+    Write-Log "Attempting isolated direct rebase of $Branch onto $BaseBranch" -Level "ACTION"
+
+    $tempWorktreePath = $null
+    $addedWorktree = $false
+    try {
+        $tempWorktreePath = Get-TempWorktreePath -Branch $Branch -Prefix "vk-rebase"
+        $parentDir = Split-Path -Parent $tempWorktreePath
+        if ($parentDir -and -not (Test-Path $parentDir)) {
+            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+        }
+
+        $fetchOut = git fetch origin $Branch $BaseBranch 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "git fetch failed: $fetchOut"
+        }
+
+        $addOut = git worktree add "$tempWorktreePath" "origin/$Branch" --detach 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "git worktree add failed: $addOut"
+        }
+        $addedWorktree = $true
+
+        # Hard-clean the isolated worktree to remove any stale filesystem residue.
+        git -C $tempWorktreePath reset --hard HEAD 2>&1 | Out-Null
+        git -C $tempWorktreePath clean -fdx 2>&1 | Out-Null
+
+        $mergeOut = git -C $tempWorktreePath merge "origin/$BaseBranch" --no-edit 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "Isolated merge conflicts detected for $Branch — attempting auto-resolve" -Level "INFO"
+            Push-Location $tempWorktreePath
+            try {
+                $resolved = Resolve-MergeConflicts
+            }
+            finally {
+                Pop-Location
+            }
+
+            if (-not $resolved) {
+                Write-Log "Isolated merge has non-auto-resolvable conflicts for $Branch" -Level "WARN"
+                git -C $tempWorktreePath merge --abort 2>&1 | Out-Null
+                Set-RebaseCooldown -Branch $Branch -CooldownMinutes 10
+                if ($AttemptId) {
+                    return Rebase-VKAttempt -AttemptId $AttemptId -BaseBranch $BaseBranch
+                }
+                return $false
+            }
+            Write-Log "Isolated merge auto-resolved conflicts for $Branch" -Level "OK"
+        }
+
+        $pushOut = git -C $tempWorktreePath push origin "HEAD:$Branch" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $pushOut2 = git -C $tempWorktreePath push origin "HEAD:$Branch" --force-with-lease 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "push failed: $pushOut2"
+            }
+        }
+
+        Write-Log "Isolated direct rebase succeeded for $Branch onto $BaseBranch" -Level "OK"
+        return $true
+    }
+    catch {
+        Write-Log "Isolated direct rebase failed for ${Branch}: $($_.Exception.Message)" -Level "WARN"
+        Set-RebaseCooldown -Branch $Branch -CooldownMinutes 20
+        if ($AttemptId) {
+            return Rebase-VKAttempt -AttemptId $AttemptId -BaseBranch $BaseBranch
+        }
+        return $false
+    }
+    finally {
+        if ($addedWorktree -and $tempWorktreePath) {
+            git worktree remove "$tempWorktreePath" --force 2>&1 | Out-Null
+        }
+        if ($tempWorktreePath -and (Test-Path $tempWorktreePath)) {
+            Remove-Item -Path $tempWorktreePath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        git worktree prune 2>&1 | Out-Null
+    }
+}
+
 function Invoke-DirectRebase {
     <#
     .SYNOPSIS Smart rebase of a PR branch onto its base branch.
@@ -3101,12 +3216,8 @@ function Invoke-DirectRebase {
         }
         # ── Guard 4: Check for dirty working tree ───────────────────────
         if (-not (Test-GitWorktreeClean -RepoPath $worktreePath -Label $worktreePath)) {
-            Write-Log "Worktree $worktreePath has uncommitted changes — falling back to VK API rebase" -Level "INFO"
-            # Don't block background agents — fall back to VK API rebase instead
-            # This allows background agents to continue working even when user has local changes
-            if ($AttemptId) { return Rebase-VKAttempt -AttemptId $AttemptId }
-            # No AttemptId means this was called manually — skip for now
-            return $false
+            Write-Log "Worktree $worktreePath has uncommitted changes — using isolated worktree for rebase" -Level "INFO"
+            return Invoke-DirectRebaseIsolatedWorktree -Branch $Branch -BaseBranch $BaseBranch -AttemptId $AttemptId
         }
         $useWorktree = $true
         Write-Log "Using worktree at $worktreePath for rebase" -Level "INFO"

@@ -662,7 +662,9 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
 
   // ── 3. Build message queue ───────────────────────────────────────────────
   const controller = externalAC || new AbortController();
-  const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  const softTimer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  // Hard timeout: force-break Promise.race if SDK ignores abort signal
+  const hardTimeoutMs = timeoutMs + HARD_TIMEOUT_BUFFER_MS;
 
   /**
    * Minimal async message queue for the Claude SDK streaming interface.
@@ -791,36 +793,55 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     let finalResponse = "";
     const allItems = [];
 
-    for await (const message of result) {
-      // Extract text from assistant messages
-      const contentBlocks = message?.message?.content || message?.content || [];
+    // Wrap SDK execution in Promise.race to enforce hard timeout even if
+    // the SDK's async iterator ignores the abort signal.
+    const sdkExecution = (async () => {
+      for await (const message of result) {
+        // Check abort signal on every iteration
+        if (controller.signal.aborted) {
+          msgQueue.close();
+          throw new Error("timeout");
+        }
 
-      if (message?.type === "assistant" && Array.isArray(contentBlocks)) {
-        for (const block of contentBlocks) {
-          if (block?.type === "text" && block.text) {
-            finalResponse += block.text + "\n";
+        // Extract text from assistant messages
+        const contentBlocks = message?.message?.content || message?.content || [];
+
+        if (message?.type === "assistant" && Array.isArray(contentBlocks)) {
+          for (const block of contentBlocks) {
+            if (block?.type === "text" && block.text) {
+              finalResponse += block.text + "\n";
+            }
           }
         }
-      }
 
-      // Normalise to item-style events for the onEvent callback
-      const syntheticEvent = { type: message?.type || "unknown", message };
-      allItems.push(syntheticEvent);
-      if (typeof onEvent === "function") {
-        try {
-          onEvent(syntheticEvent);
-        } catch {
-          /* best effort */
+        // Normalise to item-style events for the onEvent callback
+        const syntheticEvent = { type: message?.type || "unknown", message };
+        allItems.push(syntheticEvent);
+        if (typeof onEvent === "function") {
+          try {
+            onEvent(syntheticEvent);
+          } catch {
+            /* best effort */
+          }
+        }
+
+        // If the SDK signals completion, close the queue
+        if (message?.type === "result") {
+          msgQueue.close();
         }
       }
+    })();
 
-      // If the SDK signals completion, close the queue
-      if (message?.type === "result") {
-        msgQueue.close();
-      }
-    }
+    const hardTimeout = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("hard-timeout")),
+        hardTimeoutMs,
+      ),
+    );
 
-    clearTimeout(timer);
+    await Promise.race([sdkExecution, hardTimeout]);
+
+    clearTimeout(softTimer);
     msgQueue.close();
 
     const output =
@@ -834,8 +855,11 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       threadId: null,
     };
   } catch (err) {
-    clearTimeout(timer);
-    if (err.name === "AbortError" || String(err) === "timeout") {
+    clearTimeout(softTimer);
+    const isTimeout = err.name === "AbortError" ||
+      String(err).includes("timeout") ||
+      String(err.message).includes("timeout");
+    if (isTimeout) {
       return {
         success: false,
         output: "",
