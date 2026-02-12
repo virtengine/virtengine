@@ -47,7 +47,7 @@ import {
 } from "./primary-agent.mjs";
 import {
   execPooledPrompt,
-  launchEphemeralThread,
+  launchOrResumeThread,
   getAvailableSdks,
 } from "./agent-pool.mjs";
 import { loadConfig } from "./config.mjs";
@@ -421,7 +421,7 @@ const monitorMonitor = {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_INTERVAL_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL ||
-        "180000",
+        "300000",
     ),
   ),
   timeoutMs: Math.max(
@@ -429,7 +429,7 @@ const monitorMonitor = {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "900000",
+        "2700000",
     ),
   ),
   statusIntervalMs: Math.max(
@@ -601,12 +601,21 @@ const SELF_RESTART_QUIET_MS = Math.max(
   90_000,
   Number(process.env.SELF_RESTART_QUIET_MS || "90000"),
 );
+const SELF_RESTART_RETRY_MS = Math.max(
+  15_000,
+  Number(process.env.SELF_RESTART_RETRY_MS || "30000"),
+);
+const ALLOW_INTERNAL_RUNTIME_RESTARTS = isTruthyFlag(
+  process.env.ALLOW_INTERNAL_RUNTIME_RESTARTS || "false",
+);
 let selfWatcher = null;
 let selfWatcherDebounce = null;
 let selfRestartTimer = null;
 let selfRestartLastChangeAt = 0;
 let selfRestartLastFile = null;
 let pendingSelfRestart = null; // filename that triggered a deferred restart
+let deferredMonitorRestartTimer = null;
+let pendingMonitorRestartReason = "";
 
 // ── Self-restart marker: detect if this process was spawned by a code-change restart
 const selfRestartMarkerPath = resolve(
@@ -641,6 +650,7 @@ let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
 let vkNonJsonNotifiedAt = 0;
+let vkNonJsonContentTypeLoggedAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
 
@@ -879,6 +889,28 @@ async function ensurePreflightReady(reason) {
 
 function restartSelf(reason) {
   if (shuttingDown) return;
+  const protection = getRuntimeRestartProtection();
+  if (protection.defer) {
+    const retrySec = Math.round(SELF_RESTART_RETRY_MS / 1000);
+    pendingMonitorRestartReason = reason || pendingMonitorRestartReason || "";
+    if (!deferredMonitorRestartTimer) {
+      console.warn(
+        `[monitor] deferring monitor restart (${reason || "unknown"}) — ${protection.reason}; retrying in ${retrySec}s`,
+      );
+      deferredMonitorRestartTimer = setTimeout(() => {
+        deferredMonitorRestartTimer = null;
+        const deferredReason = pendingMonitorRestartReason || "deferred";
+        pendingMonitorRestartReason = "";
+        restartSelf(deferredReason);
+      }, SELF_RESTART_RETRY_MS);
+    }
+    return;
+  }
+  pendingMonitorRestartReason = "";
+  if (deferredMonitorRestartTimer) {
+    clearTimeout(deferredMonitorRestartTimer);
+    deferredMonitorRestartTimer = null;
+  }
   const now = Date.now();
   lastMonitorRestartAt = now;
   console.warn(`[monitor] restarting self (${reason || "unknown"})`);
@@ -1087,6 +1119,14 @@ async function handleMonitorFailure(reason, err) {
       } catch {
         /* best effort */
       }
+    }
+    // Wait for active agents before killing process
+    const activeSlots = getInternalActiveSlotCount();
+    if (activeSlots > 0 && internalTaskExecutor) {
+      console.warn(
+        `[monitor] hard failure cap reached but ${activeSlots} agent(s) active — waiting for graceful shutdown`,
+      );
+      await internalTaskExecutor.stop();
     }
     process.exit(1);
     return;
@@ -2159,6 +2199,15 @@ async function triggerVibeKanbanRecovery(reason) {
  * @returns {Promise<object|null>} Parsed JSON body, or null on failure.
  */
 async function fetchVk(path, opts = {}) {
+  // Guard: if VK backend is not active, return null immediately instead of
+  // attempting to connect. This prevents "fetch failed" spam when using
+  // GitHub/Jira backends.
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    // Silent return for non-VK backends to avoid polluting logs
+    return null;
+  }
+
   const url = `${vkEndpointUrl}${path.startsWith("/") ? path : "/" + path}`;
   const method = (opts.method || "GET").toUpperCase();
   const controller = new AbortController();
@@ -2410,6 +2459,12 @@ async function getPullRequestByNumber(prNumber) {
 async function findVkProjectId() {
   if (cachedProjectId) return cachedProjectId;
 
+  // Skip VK API calls if not using VK backend
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    return null;
+  }
+
   const projectsRes = await fetchVk("/api/projects");
   if (
     !projectsRes?.success ||
@@ -2450,6 +2505,12 @@ async function getRepoId() {
   if (process.env.VK_REPO_ID) {
     cachedRepoId = process.env.VK_REPO_ID;
     return cachedRepoId;
+  }
+
+  // Skip VK API calls if not using VK backend
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    return null;
   }
 
   try {
@@ -2866,6 +2927,9 @@ function getTaskUpdatedAt(task) {
  * @returns {Promise<Array>} Array of task objects, or empty array on failure
  */
 async function fetchTasksByStatus(status) {
+  if (getActiveKanbanBackend() !== "vk") {
+    return [];
+  }
   try {
     // Find matching VK project
     const projectId = await findVkProjectId();
@@ -7912,6 +7976,10 @@ function shouldFailoverMonitorSdk(message) {
     /context length/,
     /maximum context length/,
     /token limit/,
+    /timeout/,
+    /timed out/,
+    /deadline exceeded/,
+    /abort(?:ed|ing) due to timeout/,
     /\b500\b/,
     /\b502\b/,
     /\b503\b/,
@@ -8060,7 +8128,7 @@ function refreshMonitorMonitorRuntime() {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_INTERVAL_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL ||
-        "180000",
+        "300000",
     ),
   );
   monitorMonitor.timeoutMs = Math.max(
@@ -8068,7 +8136,7 @@ function refreshMonitorMonitorRuntime() {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "900000",
+        "2700000",
     ),
   );
   monitorMonitor.statusIntervalMs = Math.max(
@@ -8196,20 +8264,40 @@ async function runMonitorMonitorCycle({
       monitorMonitor.abortController &&
       runAge > monitorMonitor.timeoutMs + 60_000
     ) {
+      const watchdogCount = (monitorMonitor._watchdogAbortCount || 0) + 1;
+      monitorMonitor._watchdogAbortCount = watchdogCount;
       console.warn(
-        `[monitor-monitor] watchdog abort after ${Math.round(runAge / 1000)}s (stuck run)`,
+        `[monitor-monitor] watchdog abort #${watchdogCount} after ${Math.round(runAge / 1000)}s (stuck run)`,
       );
       try {
         monitorMonitor.abortController.abort("watchdog-timeout");
       } catch {
         /* best effort */
       }
+      // After 2 consecutive watchdog aborts (abort signal didn't kill the run),
+      // force-reset the running flag so the next cycle can start fresh.
+      if (watchdogCount >= 2) {
+        console.warn(
+          `[monitor-monitor] force-resetting stuck run after ${watchdogCount} watchdog aborts`,
+        );
+        monitorMonitor.running = false;
+        monitorMonitor.abortController = null;
+        monitorMonitor._watchdogAbortCount = 0;
+        monitorMonitor.consecutiveFailures += 1;
+        monitorMonitor.lastOutcome = "force-reset (watchdog)";
+        monitorMonitor.lastError = `watchdog force-reset after ${Math.round(runAge / 1000)}s`;
+        // Don't return — allow the cycle to start fresh below
+      } else {
+        return;
+      }
+    } else {
+      return;
     }
-    return;
   }
 
   monitorMonitor.running = true;
   monitorMonitor.heartbeatAt = Date.now();
+  monitorMonitor._watchdogAbortCount = 0;
   if (typeof text === "string" && text.trim()) {
     monitorMonitor.lastDigestText = text;
   }
@@ -8228,11 +8316,12 @@ async function runMonitorMonitorCycle({
   const runOnce = async (sdk) => {
     const abortController = new AbortController();
     monitorMonitor.abortController = abortController;
-    return await launchEphemeralThread(
+    return await launchOrResumeThread(
       prompt,
       repoRoot,
       monitorMonitor.timeoutMs,
       {
+        taskKey: "monitor-monitor",
         sdk,
         abortController,
         claudeAllowedTools: getMonitorClaudeAllowedTools(),
@@ -8338,7 +8427,7 @@ function startMonitorMonitorSupervisor() {
   }, 20_000);
 }
 
-function stopMonitorMonitorSupervisor() {
+function stopMonitorMonitorSupervisor({ preserveRunning = false } = {}) {
   if (monitorMonitor.timer) {
     clearInterval(monitorMonitor.timer);
     monitorMonitor.timer = null;
@@ -8347,7 +8436,9 @@ function stopMonitorMonitorSupervisor() {
     clearInterval(monitorMonitor.statusTimer);
     monitorMonitor.statusTimer = null;
   }
-  if (monitorMonitor.abortController) {
+  // Only abort a running cycle if explicitly requested (hard shutdown).
+  // During self-restart, preserve the running agent so it completes its work.
+  if (!preserveRunning && monitorMonitor.abortController) {
     try {
       monitorMonitor.abortController.abort("monitor-shutdown");
     } catch {
@@ -8355,7 +8446,9 @@ function stopMonitorMonitorSupervisor() {
     }
     monitorMonitor.abortController = null;
   }
-  monitorMonitor.running = false;
+  if (!preserveRunning) {
+    monitorMonitor.running = false;
+  }
 }
 
 /**
@@ -8656,10 +8749,64 @@ function stopSelfWatcher() {
     clearTimeout(selfRestartTimer);
     selfRestartTimer = null;
   }
+  pendingSelfRestart = null;
+}
+
+function getInternalActiveSlotCount() {
+  try {
+    if (!internalTaskExecutor) return 0;
+    const status = internalTaskExecutor.getStatus?.();
+    if (Number.isFinite(status?.activeSlots)) {
+      return Number(status.activeSlots);
+    }
+    if (
+      internalTaskExecutor._activeSlots &&
+      Number.isFinite(internalTaskExecutor._activeSlots.size)
+    ) {
+      return Number(internalTaskExecutor._activeSlots.size);
+    }
+  } catch {
+    /* best effort */
+  }
+  return 0;
+}
+
+function getRuntimeRestartProtection() {
+  if (ALLOW_INTERNAL_RUNTIME_RESTARTS) {
+    return { defer: false, reason: "" };
+  }
+  const execMode = configExecutorMode || getExecutorMode();
+  if (execMode !== "internal" && execMode !== "hybrid") {
+    return { defer: false, reason: "" };
+  }
+  const activeSlots = getInternalActiveSlotCount();
+  if (activeSlots > 0) {
+    return {
+      defer: true,
+      reason: `${activeSlots} internal task agent(s) active`,
+    };
+  }
+  // NOTE: monitor-monitor is NOT included here — it's safely restartable
+  // and should never block source-change restarts. Only real task agents matter.
+  return { defer: false, reason: "" };
 }
 
 function selfRestartForSourceChange(filename) {
   pendingSelfRestart = null;
+
+  // ── SAFETY NET: Double-check no agents are running before killing process ──
+  // This should never trigger because attemptSelfRestartAfterQuiet() already
+  // defers, but provides defense-in-depth against race conditions.
+  const activeSlots = getInternalActiveSlotCount();
+  if (activeSlots > 0) {
+    console.warn(
+      `[monitor] SAFETY NET: selfRestartForSourceChange called with ${activeSlots} active agent(s)! Deferring instead of killing.`,
+    );
+    pendingSelfRestart = filename;
+    selfRestartTimer = setTimeout(retryDeferredSelfRestart, 30_000);
+    return;
+  }
+
   console.log(
     `\n[monitor] source files stable for ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s — restarting (${filename})`,
   );
@@ -8669,19 +8816,14 @@ function selfRestartForSourceChange(filename) {
     vkLogStream.stop();
     vkLogStream = null;
   }
-  // ── Stop internal executor + agent endpoint BEFORE exit ──
-  // This ensures running agents get a chance to finish and ports are released.
+  // ── Agent isolation: do NOT stop internal executor on self-restart ──
+  // Task agents run as in-process SDK async iterators. Stopping the executor
+  // here is pointless because process.exit(75) kills them anyway. Instead,
+  // defer the restart if agents are actively running — they should complete
+  // uninterrupted. The new process will recover orphaned worktrees on startup.
   const shutdownPromises = [];
-  if (internalTaskExecutor) {
-    console.log("[monitor] stopping internal task executor for restart...");
-    shutdownPromises.push(
-      Promise.resolve(internalTaskExecutor.stop()).catch((e) =>
-        console.warn(`[monitor] executor stop error: ${e.message}`),
-      ),
-    );
-  }
+  // Agent endpoint is lightweight — stop it so the new process can bind the port.
   if (agentEndpoint) {
-    console.log("[monitor] stopping agent endpoint for restart...");
     shutdownPromises.push(
       Promise.resolve(agentEndpoint.stop()).catch((e) =>
         console.warn(`[monitor] endpoint stop error: ${e.message}`),
@@ -8689,7 +8831,7 @@ function selfRestartForSourceChange(filename) {
     );
   }
   stopTaskPlannerStatusLoop();
-  stopMonitorMonitorSupervisor();
+  stopMonitorMonitorSupervisor({ preserveRunning: true });
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -8736,8 +8878,38 @@ function attemptSelfRestartAfterQuiet() {
     return;
   }
   const filename = selfRestartLastFile || "unknown";
-  // Self-restart no longer blocked by primary agent — ephemeral pool
-  // threads run independently and don't need to be drained.
+  const protection = getRuntimeRestartProtection();
+  if (protection.defer) {
+    pendingSelfRestart = filename;
+    const retrySec = Math.round(SELF_RESTART_RETRY_MS / 1000);
+    console.log(
+      `[monitor] deferring self-restart (${filename}) — ${protection.reason}; retrying in ${retrySec}s`,
+    );
+    selfRestartTimer = setTimeout(
+      retryDeferredSelfRestart,
+      SELF_RESTART_RETRY_MS,
+    );
+    return;
+  }
+
+  // ── Agent isolation: defer restart if task agents are actively running ──
+  // Task agents run inside this process. If we exit now, all running agents
+  // die and their work is lost. Wait for them to finish naturally.
+  if (internalTaskExecutor) {
+    const status = internalTaskExecutor.getStatus();
+    if (status.activeSlots > 0) {
+      const slotNames = (status.slots || []).map((s) => s.taskTitle).join(", ");
+      console.log(
+        `[monitor] self-restart deferred — ${status.activeSlots} agent(s) still running: ${slotNames}`,
+      );
+      console.log(
+        `[monitor] will retry restart in 60s (agents must finish first)`,
+      );
+      selfRestartTimer = setTimeout(attemptSelfRestartAfterQuiet, 60_000);
+      return;
+    }
+  }
+
   selfRestartForSourceChange(filename);
 }
 
@@ -8758,6 +8930,8 @@ function queueSelfRestart(filename) {
 
 function retryDeferredSelfRestart() {
   if (!pendingSelfRestart) return;
+  selfRestartLastFile = pendingSelfRestart;
+  selfRestartLastChangeAt = Date.now() - SELF_RESTART_QUIET_MS;
   attemptSelfRestartAfterQuiet();
 }
 
@@ -9061,17 +9235,14 @@ async function reloadConfig(reason) {
   }
 }
 
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  // Stop monitor-monitor immediately (it's safely restartable)
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
-  }
-  if (internalTaskExecutor) {
-    void internalTaskExecutor.stop();
-    stopStatusFileWriter();
   }
   stopAutoUpdateLoop();
   stopSelfWatcher();
@@ -9084,6 +9255,20 @@ process.on("SIGINT", () => {
   }
   void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
+
+  // Wait for active task agents to finish gracefully (up to 5 minutes)
+  if (internalTaskExecutor) {
+    const status = internalTaskExecutor.getStatus();
+    if (status.activeSlots > 0) {
+      const slotNames = (status.slots || []).map((s) => s.taskTitle).join(", ");
+      console.log(
+        `[monitor] SIGINT: waiting for ${status.activeSlots} active agent(s) to finish: ${slotNames}`,
+      );
+      console.log(`[monitor] (press Ctrl+C again to force exit)`);
+      await internalTaskExecutor.stop();
+    }
+    stopStatusFileWriter();
+  }
   process.exit(0);
 });
 
@@ -9100,16 +9285,14 @@ process.on("exit", () => {
   void releaseTelegramPollLock();
 });
 
-process.on("SIGTERM", () => {
+process.on("SIGTERM", async () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  // Stop monitor-monitor immediately (it's safely restartable)
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
-  }
-  if (internalTaskExecutor) {
-    void internalTaskExecutor.stop();
   }
   stopAutoUpdateLoop();
   stopSelfWatcher();
@@ -9123,6 +9306,18 @@ process.on("SIGTERM", () => {
   void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   stopTelegramBot();
+
+  // Wait for active task agents to finish gracefully (up to 5 minutes)
+  if (internalTaskExecutor) {
+    const status = internalTaskExecutor.getStatus();
+    if (status.activeSlots > 0) {
+      const slotNames = (status.slots || []).map((s) => s.taskTitle).join(", ");
+      console.log(
+        `[monitor] SIGTERM: waiting for ${status.activeSlots} active agent(s) to finish: ${slotNames}`,
+      );
+      await internalTaskExecutor.stop();
+    }
+  }
   process.exit(0);
 });
 

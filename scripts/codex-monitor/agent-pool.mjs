@@ -49,15 +49,15 @@ const __dirname = dirname(__filename);
 /** Repository root (two levels up from scripts/codex-monitor/) */
 const REPO_ROOT = resolve(__dirname, "..", "..");
 
-/** Default timeout: 90 minutes */
-const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
+/** Default timeout: 6 hours — agents should run until the stream-based watchdog detects real issues */
+const DEFAULT_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Hard timeout buffer: added on top of the soft timeout.
  * If the SDK's async iterator ignores the AbortSignal, this hard timeout
  * forcibly breaks the Promise.race to prevent infinite hangs.
  */
-const HARD_TIMEOUT_BUFFER_MS = 60_000; // 60 seconds
+const HARD_TIMEOUT_BUFFER_MS = 5 * 60_000; // 5 minutes
 
 /** Tag for console logging */
 const TAG = "[agent-pool]";
@@ -523,7 +523,10 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       throw new Error("Copilot session does not support send");
     }
 
-    const sendPromise = sendFn.call(session, { prompt: formattedPrompt });
+    // Pass timeout parameter to sendAndWait to override 60s SDK default
+    const sendPromise = session.sendAndWait
+      ? sendFn.call(session, { prompt: formattedPrompt }, timeoutMs)
+      : sendFn.call(session, { prompt: formattedPrompt });
 
     // If only send() (not sendAndWait), wait for idle event
     if (!session.sendAndWait && typeof session.on === "function") {
@@ -1034,13 +1037,13 @@ export async function execPooledPrompt(userMessage, options = {}) {
 const threadRegistry = new Map();
 
 const THREAD_REGISTRY_FILE = resolve(__dirname, "logs", "thread-registry.json");
-const THREAD_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours
+const THREAD_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /** Maximum turns before a thread is considered exhausted and must be replaced */
-const MAX_THREAD_TURNS = 30;
+const MAX_THREAD_TURNS = 100;
 
 /** Maximum absolute age for a thread (regardless of lastUsedAt) */
-const THREAD_MAX_ABSOLUTE_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const THREAD_MAX_ABSOLUTE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /** @type {Promise<void>|null} */
 let threadRegistryLoadPromise = null;

@@ -63,7 +63,11 @@ import {
   getKanbanBackendName,
   updateTaskStatus,
 } from "../kanban-adapter.mjs";
-import { execWithRetry, getPoolSdkName } from "../agent-pool.mjs";
+import {
+  execWithRetry,
+  getPoolSdkName,
+  getActiveThreads,
+} from "../agent-pool.mjs";
 import { acquireWorktree, releaseWorktree } from "../worktree-manager.mjs";
 import { loadConfig } from "../config.mjs";
 import { evaluateBranchSafetyForPush } from "../git-safety.mjs";
@@ -115,7 +119,7 @@ describe("task-executor", () => {
       expect(ex.maxParallel).toBe(3);
       expect(ex.pollIntervalMs).toBe(30_000);
       expect(ex.sdk).toBe("auto");
-      expect(ex.taskTimeoutMs).toBe(90 * 60 * 1000);
+      expect(ex.taskTimeoutMs).toBe(6 * 60 * 60 * 1000);
       expect(ex.maxRetries).toBe(2);
       expect(ex.autoCreatePr).toBe(true);
       expect(ex.projectId).toBeNull();
@@ -257,6 +261,56 @@ describe("task-executor", () => {
 
       await stopPromise;
       expect(ex._running).toBe(false);
+    });
+  });
+
+  describe("in-progress recovery", () => {
+    it("resumes fresh in-progress tasks on startup recovery", async () => {
+      const ex = new TaskExecutor({ projectId: "proj-1", maxParallel: 2 });
+      ex._running = true;
+      const executeSpy = vi
+        .spyOn(ex, "executeTask")
+        .mockResolvedValue(undefined);
+
+      listTasks.mockResolvedValueOnce([
+        {
+          id: "resume-1",
+          title: "Resume this",
+          status: "inprogress",
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+      getActiveThreads.mockReturnValueOnce([]);
+
+      await ex._recoverInterruptedInProgressTasks();
+
+      expect(executeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "resume-1" }),
+      );
+    });
+
+    it("moves stale in-progress tasks back to todo when no resumable thread exists", async () => {
+      const ex = new TaskExecutor({ projectId: "proj-1", maxParallel: 2 });
+      ex._running = true;
+      const executeSpy = vi
+        .spyOn(ex, "executeTask")
+        .mockResolvedValue(undefined);
+      const staleTs = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+
+      listTasks.mockResolvedValueOnce([
+        {
+          id: "stale-1",
+          title: "Old in-progress task",
+          status: "inprogress",
+          updated_at: staleTs,
+        },
+      ]);
+      getActiveThreads.mockReturnValueOnce([]);
+
+      await ex._recoverInterruptedInProgressTasks();
+
+      expect(updateTaskStatus).toHaveBeenCalledWith("stale-1", "todo");
+      expect(executeSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -632,7 +686,11 @@ describe("task-executor", () => {
       });
 
       const pr = await ex._createPR(
-        { id: "task-123-uuid", title: "Bad branch", branchName: "ve/bad-branch" },
+        {
+          id: "task-123-uuid",
+          title: "Bad branch",
+          branchName: "ve/bad-branch",
+        },
         "/fake/worktree",
       );
       expect(pr).toBeNull();
@@ -677,7 +735,8 @@ describe("task-executor", () => {
 
       expect(pr?.prNumber).toBe("77");
       const prCreateCall = spawnSync.mock.calls.find(
-        ([bin, args]) => bin === "gh" && args[0] === "pr" && args[1] === "create",
+        ([bin, args]) =>
+          bin === "gh" && args[0] === "pr" && args[1] === "create",
       );
       expect(prCreateCall).toBeTruthy();
       const createArgs = prCreateCall[1];

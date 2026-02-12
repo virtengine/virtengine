@@ -70,7 +70,7 @@ import { evaluateBranchSafetyForPush } from "./git-safety.mjs";
 const TAG = "[task-executor]";
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const CONTEXT_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-const GRACEFUL_SHUTDOWN_MS = 30_000; // 30 seconds
+const GRACEFUL_SHUTDOWN_MS = 5 * 60_000; // 5 minutes — give agents time to commit/push
 const MAX_NO_COMMIT_ATTEMPTS = 3; // Stop picking up a task after N consecutive no-commit completions
 const NO_COMMIT_COOLDOWN_BASE_MS = 15 * 60 * 1000; // 15 minutes base cooldown for no-commit
 const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
@@ -78,7 +78,21 @@ const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 /** Watchdog interval: how often to check for stalled agent slots */
 const WATCHDOG_INTERVAL_MS = 60_000; // 1 minute
 /** Grace period after task timeout before watchdog force-kills the slot */
-const WATCHDOG_GRACE_MS = 120_000; // 2 minutes // 2 hours max cooldown
+const WATCHDOG_GRACE_MS = 10 * 60_000; // 10 minutes — generous buffer, stream analysis handles real issues
+/** Max age for in-progress tasks to auto-resume after monitor restart */
+const INPROGRESS_RECOVERY_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours — agents should be resumable for a full day
+
+// ── Stream-Based Health Monitoring Constants ──────────────────────────────
+/** How long an agent can be truly silent (zero events) before we consider intervention */
+const STREAM_SILENT_THRESHOLD_MS = 10 * 60_000; // 10 minutes of absolute silence
+/** How long an agent can be idle (no meaningful progress) before we send CONTINUE */
+const STREAM_IDLE_THRESHOLD_MS = 5 * 60_000; // 5 minutes idle = send continue
+/** How long truly stalled (no events after continues) before force-kill */
+const STREAM_STALLED_KILL_MS = 20 * 60_000; // 20 minutes stalled after continues = kill
+/** Maximum idle continues before escalating to abort */
+const MAX_IDLE_CONTINUES = 5;
+/** Minimum elapsed time before watchdog even starts checking (agent setup phase) */
+const WATCHDOG_WARMUP_MS = 5 * 60_000; // 5 minutes warmup
 const NO_COMMIT_STATE_FILE = resolve(
   dirname(fileURLToPath(import.meta.url)),
   ".cache",
@@ -216,6 +230,15 @@ function getGitHubIssueNumber(task) {
   return null;
 }
 
+function getTaskAgeMs(task) {
+  const ts =
+    task?.updated_at || task?.updatedAt || task?.created_at || task?.createdAt;
+  if (!ts) return 0;
+  const parsed = new Date(ts).getTime();
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Date.now() - parsed);
+}
+
 // ── Typedefs ────────────────────────────────────────────────────────────────
 
 /**
@@ -263,7 +286,7 @@ class TaskExecutor {
       maxParallel: 3,
       pollIntervalMs: 30_000,
       sdk: "auto",
-      taskTimeoutMs: 90 * 60 * 1000,
+      taskTimeoutMs: 6 * 60 * 60 * 1000, // 6 hours — stream-based watchdog handles real issues
       maxRetries: 2,
       autoCreatePr: true,
       projectId: null,
@@ -448,8 +471,16 @@ class TaskExecutor {
     this._running = true;
     // Start watchdog to detect and kill stalled agent slots
     this._startWatchdog();
-    // Fire first poll immediately
-    this._pollLoop();
+    // Resume interrupted in-progress tasks first, then poll todo backlog.
+    void this._recoverInterruptedInProgressTasks()
+      .catch((err) => {
+        console.warn(
+          `${TAG} in-progress recovery warning: ${err.message || err}`,
+        );
+      })
+      .finally(() => {
+        void this._pollLoop();
+      });
     this._pollTimer = setInterval(() => this._pollLoop(), this.pollIntervalMs);
     console.log(
       `${TAG} started — polling every ${this.pollIntervalMs / 1000}s for up to ${this.maxParallel} parallel tasks`,
@@ -547,7 +578,9 @@ class TaskExecutor {
       WATCHDOG_INTERVAL_MS,
     );
     console.log(
-      `${TAG} watchdog started — checking for stalled agents every ${WATCHDOG_INTERVAL_MS / 1000}s (kill after ${Math.round((this.taskTimeoutMs + WATCHDOG_GRACE_MS) / 60000)}min)`,
+      `${TAG} stream-based watchdog started — analyzing agent health every ${WATCHDOG_INTERVAL_MS / 1000}s ` +
+        `(idle threshold: ${STREAM_IDLE_THRESHOLD_MS / 60000}min, stalled kill: ${STREAM_STALLED_KILL_MS / 60000}min, ` +
+        `max continues: ${MAX_IDLE_CONTINUES}, absolute limit: ${Math.round((this.taskTimeoutMs + WATCHDOG_GRACE_MS) / 60000)}min)`,
     );
   }
 
@@ -563,71 +596,122 @@ class TaskExecutor {
   }
 
   /**
-   * Watchdog: scan active slots for agents that have exceeded deadline.
-   * Force-aborts them via their AbortController so Promise.race breaks the hang.
-   * Also detects idle sessions (no SDK events for >2 min) and sends CONTINUE signals
-   * to nudge agents that have stopped working prematurely.
+   * Stream-Based Watchdog: Monitors agent health by analyzing the REAL event
+   * stream instead of relying on fixed timeouts. Only intervenes when actual
+   * problems are detected in the agent's output stream.
+   *
+   * Intervention ladder:
+   *  1. Agent idle for STREAM_IDLE_THRESHOLD_MS → send CONTINUE signal
+   *  2. Agent silent for STREAM_SILENT_THRESHOLD_MS after continues → escalate
+   *  3. Agent stalled for STREAM_STALLED_KILL_MS with no recovery → force-kill
+   *  4. Hard deadline (taskTimeoutMs + WATCHDOG_GRACE_MS) as absolute safety net
+   *
+   * This replaces the old approach of killing agents based on arbitrary time limits.
+   * Agents that are actively producing events (tool calls, messages, edits) are
+   * NEVER interrupted regardless of how long they've been running.
    * @private
    */
   _watchdog() {
     const now = Date.now();
-    const deadline = this.taskTimeoutMs + WATCHDOG_GRACE_MS;
+    const absoluteDeadline = this.taskTimeoutMs + WATCHDOG_GRACE_MS;
     const sessionTracker = getSessionTracker();
 
     for (const [taskId, slot] of this._activeSlots) {
       const elapsed = now - slot.startedAt;
 
-      // ── 1. Hard deadline exceeded — force kill ──
-      if (elapsed > deadline) {
+      // ── 0. Warmup phase — never interfere with agent setup ──
+      if (elapsed < WATCHDOG_WARMUP_MS) continue;
+
+      const progress = sessionTracker.getProgressStatus(taskId);
+      const continueCount = this._idleContinueCounts.get(taskId) || 0;
+      const ac = this._slotAbortControllers.get(taskId);
+
+      // ── 1. Stream health analysis — is the agent ACTUALLY working? ──
+      const isActivelyWorking =
+        progress.status === "active" &&
+        progress.totalEvents > 0 &&
+        progress.idleMs < STREAM_IDLE_THRESHOLD_MS;
+
+      // If agent is actively producing events, skip ALL intervention
+      if (isActivelyWorking) {
+        // Reset continue count when agent shows life
+        if (continueCount > 0) {
+          this._idleContinueCounts.set(taskId, 0);
+        }
+        continue;
+      }
+
+      // ── 2. Agent has meaningful progress (edits/commits) — be very patient ──
+      if (progress.hasEdits || progress.hasCommits) {
+        // Agent has done real work. Only intervene if it's been truly silent
+        // for a very long time (double the normal threshold)
+        if (progress.idleMs < STREAM_SILENT_THRESHOLD_MS * 2) {
+          continue; // Still within tolerance for an agent that has done work
+        }
+      }
+
+      // ── 3. Idle detection — agent went silent, try CONTINUE ──
+      if (
+        (progress.status === "idle" || progress.status === "stalled") &&
+        progress.idleMs >= STREAM_IDLE_THRESHOLD_MS
+      ) {
+        const idleSec = Math.round(progress.idleMs / 1000);
+
+        if (continueCount < MAX_IDLE_CONTINUES) {
+          if (ac && !ac.signal.aborted) {
+            console.log(
+              `${TAG} WATCHDOG: agent "${slot.taskTitle}" idle for ${idleSec}s ` +
+                `(events: ${progress.totalEvents}, edits: ${progress.hasEdits}, ` +
+                `commits: ${progress.hasCommits}) — sending CONTINUE signal ` +
+                `(${continueCount + 1}/${MAX_IDLE_CONTINUES})`,
+            );
+            this._idleContinueCounts.set(taskId, continueCount + 1);
+            ac.abort("idle_continue");
+          }
+          continue;
+        }
+
+        // ── 4. Exhausted continues — check if truly stalled ──
+        if (progress.idleMs >= STREAM_STALLED_KILL_MS) {
+          const elapsedMin = Math.round(elapsed / 60000);
+          console.warn(
+            `${TAG} ⚠️ WATCHDOG: agent "${slot.taskTitle}" stalled for ` +
+              `${Math.round(progress.idleMs / 60000)}min after ${continueCount} continues ` +
+              `(total runtime: ${elapsedMin}min, events: ${progress.totalEvents}) — force-aborting`,
+          );
+          if (ac && !ac.signal.aborted) {
+            ac.abort("watchdog_stalled");
+          }
+          this._taskCooldowns.set(taskId, now);
+          this.sendTelegram?.(
+            `⚠️ Watchdog killed stalled agent: "${slot.taskTitle}" ` +
+              `(idle ${Math.round(progress.idleMs / 60000)}min after ${continueCount} continues, ` +
+              `total ${elapsedMin}min, ${progress.totalEvents} events)`,
+          );
+          continue;
+        }
+      }
+
+      // ── 5. Absolute safety net — only triggers if stream analysis somehow missed ──
+      if (elapsed > absoluteDeadline) {
         const elapsedMin = Math.round(elapsed / 60000);
-        const deadlineMin = Math.round(deadline / 60000);
+        const deadlineMin = Math.round(absoluteDeadline / 60000);
         console.warn(
-          `${TAG} ⚠️ WATCHDOG: slot "${slot.taskTitle}" exceeded deadline (${elapsedMin}min > ${deadlineMin}min) — force-aborting`,
+          `${TAG} ⚠️ WATCHDOG: absolute deadline exceeded for "${slot.taskTitle}" ` +
+            `(${elapsedMin}min > ${deadlineMin}min, events: ${progress.totalEvents}, ` +
+            `edits: ${progress.hasEdits}, commits: ${progress.hasCommits}) — force-aborting`,
         );
-        const ac = this._slotAbortControllers.get(taskId);
         if (ac && !ac.signal.aborted) {
           ac.abort("watchdog_timeout");
-          console.warn(
-            `${TAG} WATCHDOG: abort signal sent for "${slot.taskTitle}"`,
-          );
         } else if (!ac) {
           console.warn(
             `${TAG} WATCHDOG: no AbortController for "${slot.taskTitle}" — slot may be stuck permanently`,
           );
         }
-        // Set cooldown so task isn't immediately re-dispatched
         this._taskCooldowns.set(taskId, now);
-        // Notify via Telegram
         this.sendTelegram?.(
-          `⚠️ Watchdog killed stalled agent: "${slot.taskTitle}" (was running ${elapsedMin}min, limit ${deadlineMin}min)`,
+          `⚠️ Watchdog hard limit: "${slot.taskTitle}" (${elapsedMin}min > ${deadlineMin}min absolute limit)`,
         );
-        continue;
-      }
-
-      // ── 2. Idle detection — agent went silent, send CONTINUE ──
-      // Only check after at least 3 minutes of execution (allow initial setup time)
-      if (elapsed < 180_000) continue;
-
-      const progress = sessionTracker.getProgressStatus(taskId);
-
-      if (progress.status === "idle" || progress.status === "stalled") {
-        const idleSec = Math.round(progress.idleMs / 1000);
-        const continueCount = this._idleContinueCounts.get(taskId) || 0;
-        const maxIdleContinues = 3;
-
-        if (continueCount >= maxIdleContinues) {
-          // Already sent max continues — don't spam, let it run or timeout naturally
-          continue;
-        }
-
-        const ac = this._slotAbortControllers.get(taskId);
-        if (ac && !ac.signal.aborted) {
-          console.log(
-            `${TAG} WATCHDOG: agent "${slot.taskTitle}" idle for ${idleSec}s (events: ${progress.totalEvents}, edits: ${progress.hasEdits}) — sending CONTINUE signal (${continueCount + 1}/${maxIdleContinues})`,
-          );
-          this._idleContinueCounts.set(taskId, continueCount + 1);
-          ac.abort("idle_continue");
-        }
       }
     }
   }
@@ -814,6 +898,126 @@ class TaskExecutor {
     }
   }
 
+  async _ensureResolvedProjectId() {
+    if (this._resolvedProjectId) {
+      return this._resolvedProjectId;
+    }
+    if (this.projectId) {
+      this._resolvedProjectId = this.projectId;
+      return this._resolvedProjectId;
+    }
+    try {
+      const projects = await listProjects();
+      if (projects && projects.length > 0) {
+        const wantName = (
+          process.env.PROJECT_NAME ||
+          process.env.VK_PROJECT_NAME ||
+          ""
+        ).toLowerCase();
+        let matched;
+        if (wantName) {
+          matched = projects.find(
+            (p) => (p.name || p.title || "").toLowerCase() === wantName,
+          );
+        }
+        if (matched) {
+          this._resolvedProjectId = matched.id || matched.project_id;
+          console.log(
+            `${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`,
+          );
+        } else {
+          this._resolvedProjectId = projects[0].id || projects[0].project_id;
+          console.log(
+            `${TAG} auto-detected project (first): ${this._resolvedProjectId}`,
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(`${TAG} failed to list projects: ${err.message}`);
+    }
+    return this._resolvedProjectId || null;
+  }
+
+  async _recoverInterruptedInProgressTasks() {
+    if (!this._running) return;
+    if (this._paused) return;
+    if (this._activeSlots.size >= this.maxParallel) return;
+
+    const projectId = await this._ensureResolvedProjectId();
+    if (!projectId) return;
+
+    let inProgressTasks = [];
+    try {
+      const fetched = await listTasks(projectId, { status: "inprogress" });
+      if (Array.isArray(fetched)) {
+        inProgressTasks = fetched.filter(
+          (task) => task?.status === "inprogress",
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `${TAG} in-progress recovery fetch failed: ${err.message || err}`,
+      );
+      return;
+    }
+
+    if (!inProgressTasks.length) return;
+
+    const activeThreads = new Set(
+      getActiveThreads()
+        .map((entry) => String(entry?.taskKey || "").trim())
+        .filter(Boolean),
+    );
+
+    const available = Math.max(0, this.maxParallel - this._activeSlots.size);
+    if (available === 0) return;
+
+    /** @type {Array<Object>} */
+    const resumable = [];
+    let resetToTodo = 0;
+
+    for (const task of inProgressTasks) {
+      const id = task?.id || task?.task_id;
+      if (!id || this._activeSlots.has(id)) continue;
+
+      const ageMs = getTaskAgeMs(task);
+      const hasThread = activeThreads.has(String(id));
+      const isFreshEnough =
+        ageMs === 0 || ageMs <= INPROGRESS_RECOVERY_MAX_AGE_MS;
+      if (hasThread || isFreshEnough) {
+        resumable.push({ ...task, id });
+        continue;
+      }
+
+      try {
+        await updateTaskStatus(id, "todo");
+      } catch {
+        /* best effort */
+      }
+      try {
+        setInternalStatus(id, "todo", "task-executor-recovery");
+      } catch {
+        /* best effort */
+      }
+      resetToTodo++;
+    }
+
+    const toDispatch = resumable.slice(0, available);
+    for (const task of toDispatch) {
+      void this.executeTask(task).catch((err) => {
+        console.error(
+          `${TAG} in-progress recovery executeTask failed for "${task?.title || task?.id}": ${err.message || err}`,
+        );
+      });
+    }
+
+    if (toDispatch.length > 0 || resetToTodo > 0) {
+      console.log(
+        `${TAG} in-progress recovery: resumed ${toDispatch.length}, reset ${resetToTodo} stale task(s) to todo`,
+      );
+    }
+  }
+
   /**
    * Returns the current executor status for monitoring / Telegram.
    * @returns {Object}
@@ -899,53 +1103,16 @@ class TaskExecutor {
 
     this._pollInProgress = true;
     try {
-      // Resolve project ID on first poll
-      if (!this._resolvedProjectId) {
-        if (this.projectId) {
-          this._resolvedProjectId = this.projectId;
-        } else {
-          try {
-            const projects = await listProjects();
-            if (projects && projects.length > 0) {
-              // Match by PROJECT_NAME if set, otherwise fall back to first project
-              const wantName = (
-                process.env.PROJECT_NAME ||
-                process.env.VK_PROJECT_NAME ||
-                ""
-              ).toLowerCase();
-              let matched;
-              if (wantName) {
-                matched = projects.find(
-                  (p) => (p.name || p.title || "").toLowerCase() === wantName,
-                );
-              }
-              if (matched) {
-                this._resolvedProjectId = matched.id || matched.project_id;
-                console.log(
-                  `${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`,
-                );
-              } else {
-                this._resolvedProjectId =
-                  projects[0].id || projects[0].project_id;
-                console.log(
-                  `${TAG} auto-detected project (first): ${this._resolvedProjectId}`,
-                );
-              }
-            } else {
-              console.warn(`${TAG} no projects found — skipping poll`);
-              return;
-            }
-          } catch (err) {
-            console.warn(`${TAG} failed to list projects: ${err.message}`);
-            return;
-          }
-        }
+      const projectId = await this._ensureResolvedProjectId();
+      if (!projectId) {
+        console.warn(`${TAG} no projects found — skipping poll`);
+        return;
       }
 
       // Fetch todo tasks
       let tasks;
       try {
-        tasks = await listTasks(this._resolvedProjectId, { status: "todo" });
+        tasks = await listTasks(projectId, { status: "todo" });
       } catch (err) {
         console.warn(`${TAG} failed to list tasks: ${err.message}`);
         return;
