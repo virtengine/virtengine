@@ -229,6 +229,10 @@ class VKAdapter {
     return true;
   }
 
+  async addComment(_taskId, _body) {
+    return false; // VK backend doesn't support issue comments
+  }
+
   _normaliseTask(raw, projectId = null) {
     if (!raw) return null;
     return {
@@ -458,6 +462,31 @@ class GitHubIssuesAdapter {
     return true;
   }
 
+  async addComment(issueNumber, body) {
+    const num = String(issueNumber).replace(/^#/, "");
+    if (!/^\d+$/.test(num) || !body) return false;
+    try {
+      await this._gh(
+        [
+          "issue",
+          "comment",
+          num,
+          "--repo",
+          `${this._owner}/${this._repo}`,
+          "--body",
+          String(body).slice(0, 65536),
+        ],
+        { parseJson: false },
+      );
+      return true;
+    } catch (err) {
+      console.warn(
+        `[kanban] failed to comment on issue #${num}: ${err.message}`,
+      );
+      return false;
+    }
+  }
+
   _normaliseIssue(issue) {
     if (!issue) return null;
     const labels = (issue.labels || []).map((l) =>
@@ -542,6 +571,10 @@ class JiraAdapter {
   }
   async deleteTask(_taskId) {
     this._notImplemented("deleteTask");
+  }
+
+  async addComment(_taskId, _body) {
+    return false; // Jira comments not yet implemented
   }
 }
 
@@ -664,4 +697,8 @@ export async function createTask(projectId, taskData) {
 
 export async function deleteTask(taskId) {
   return getKanbanAdapter().deleteTask(taskId);
+}
+
+export async function addComment(taskId, body) {
+  return getKanbanAdapter().addComment(taskId, body);
 }

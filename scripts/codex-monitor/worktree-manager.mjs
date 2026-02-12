@@ -892,7 +892,9 @@ class WorktreeManager {
     await this.saveRegistry();
 
     console.log(`${TAG} Released worktree: ${wtPath}`);
-    return { success: result.status === 0 || !existsSync(wtPath), path: wtPath };
+    // Report command outcome, not filesystem state. We still clean registry/path
+    // best-effort on failure to avoid stale worktree loops.
+    return { success: result.status === 0, path: wtPath };
   }
 
   /**

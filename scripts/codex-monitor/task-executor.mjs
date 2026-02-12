@@ -23,6 +23,7 @@ import {
   listProjects,
   getTask,
   updateTaskStatus,
+  addComment,
 } from "./kanban-adapter.mjs";
 import {
   launchOrResumeThread,
@@ -237,6 +238,115 @@ function getTaskAgeMs(task) {
   const parsed = new Date(ts).getTime();
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Date.now() - parsed);
+}
+
+// ── Issue Tracking Helpers ──────────────────────────────────────────────────
+
+/**
+ * Check whether the current kanban backend is GitHub Issues.
+ * @param {Object} [task] Optional task with backend info.
+ * @returns {boolean}
+ */
+function isGitHubBackend(task) {
+  const backend = String(
+    task?.backend || task?.externalBackend || getKanbanBackendName(),
+  ).toLowerCase();
+  return backend === "github";
+}
+
+/**
+ * Get the list of commits between two git refs, with titles and changed files.
+ * @param {string} worktreePath Git working directory.
+ * @param {string} fromRef      Starting ref (exclusive).
+ * @param {string} toRef        Ending ref (inclusive). Defaults to HEAD.
+ * @returns {{ sha: string, title: string, files: string[] }[]}
+ */
+function getCommitDetails(worktreePath, fromRef, toRef = "HEAD") {
+  if (!worktreePath || !fromRef) return [];
+  try {
+    // Get commit SHAs and messages
+    const logResult = spawnSync(
+      "git",
+      ["log", "--format=%H|%s", `${fromRef}..${toRef}`],
+      { cwd: worktreePath, encoding: "utf8", timeout: 10_000 },
+    );
+    if (logResult.status !== 0 || !logResult.stdout?.trim()) return [];
+
+    const commits = logResult.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, ...titleParts] = line.split("|");
+        return {
+          sha: sha.trim(),
+          title: titleParts.join("|").trim(),
+          files: [],
+        };
+      });
+
+    // Get changed files per commit
+    for (const commit of commits) {
+      try {
+        const filesResult = spawnSync(
+          "git",
+          ["diff-tree", "--no-commit-id", "--name-only", "-r", commit.sha],
+          { cwd: worktreePath, encoding: "utf8", timeout: 5_000 },
+        );
+        if (filesResult.status === 0 && filesResult.stdout) {
+          commit.files = filesResult.stdout.trim().split("\n").filter(Boolean);
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    return commits;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get the overall changed-file summary between two refs.
+ * @param {string} worktreePath
+ * @param {string} fromRef
+ * @param {string} toRef
+ * @returns {string} Formatted diff stat or empty string.
+ */
+function getChangedFilesSummary(worktreePath, fromRef, toRef = "HEAD") {
+  if (!worktreePath || !fromRef) return "";
+  try {
+    const result = spawnSync(
+      "git",
+      ["diff", "--stat", `${fromRef}..${toRef}`],
+      { cwd: worktreePath, encoding: "utf8", timeout: 10_000 },
+    );
+    return result.status === 0 ? (result.stdout || "").trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Post a structured comment on a GitHub issue for a task, if the backend is GitHub.
+ * Non-blocking, best-effort — failures are logged but don't affect task flow.
+ * @param {Object} task         Task object (must have id).
+ * @param {string} commentBody  Markdown body for the comment.
+ * @returns {Promise<boolean>}  true if comment was posted.
+ */
+async function commentOnIssue(task, commentBody) {
+  if (!isGitHubBackend(task)) return false;
+  const issueNumber = getGitHubIssueNumber(task);
+  if (!issueNumber) return false;
+  try {
+    return await addComment(issueNumber, commentBody);
+  } catch (err) {
+    console.warn(
+      `${TAG} failed to comment on issue #${issueNumber}: ${err.message}`,
+    );
+    return false;
+  }
 }
 
 // ── Typedefs ────────────────────────────────────────────────────────────────
@@ -1260,6 +1370,26 @@ class TaskExecutor {
         /* best-effort */
       }
 
+      // 2b. Comment on GitHub issue with start info
+      commentOnIssue(
+        task,
+        [
+          `## 🤖 Agent Started`,
+          ``,
+          `| Field | Value |`,
+          `|-------|-------|`,
+          `| **Started** | ${new Date().toISOString()} |`,
+          `| **Branch** | \`${branch}\` |`,
+          `| **SDK** | ${resolvedSdk} |`,
+          `| **Executor** | codex-monitor (internal) |`,
+          executorProfile ? `| **Profile** | ${executorProfile} |` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      ).catch(() => {
+        /* best-effort */
+      });
+
       // 3. Acquire worktree
       let wt;
       try {
@@ -1946,6 +2076,13 @@ class TaskExecutor {
             `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`,
           );
 
+          // Comment on issue with commit details and PR link
+          this._commentCommitsOnIssue(task, worktreePath, execInfo, pr).catch(
+            () => {
+              /* best-effort */
+            },
+          );
+
           // Queue for review handoff — reviewer will identify issues, fix, push, wait for merge
           this._queueReviewHandoff(task, worktreePath, pr, execInfo);
         } else {
@@ -2423,11 +2560,13 @@ class TaskExecutor {
 
   /**
    * Enable GitHub auto-merge on a PR so it merges automatically when CI passes.
+   * When direct merge succeeds (no required checks), also closes the linked issue.
    * @param {string|number} prNumber
    * @param {string} worktreePath
+   * @param {Object} [task] Optional task — used to close linked issue on direct merge.
    * @private
    */
-  _enableAutoMerge(prNumber, worktreePath) {
+  _enableAutoMerge(prNumber, worktreePath, task = null) {
     try {
       const result = spawnSync(
         "gh",
@@ -2465,6 +2604,12 @@ class TaskExecutor {
         );
         if (directResult.status === 0) {
           console.log(`${TAG} ✅ directly merged PR #${prNumber}`);
+          // PR merged → close the linked GitHub issue
+          if (task) {
+            this._closeIssueAfterMerge(task, prNumber).catch(() => {
+              /* best-effort */
+            });
+          }
         } else {
           const errMsg = (directResult.stderr || "").trim();
           console.warn(
@@ -2479,6 +2624,105 @@ class TaskExecutor {
       }
     } catch (err) {
       console.warn(`${TAG} auto-merge error: ${err.message}`);
+    }
+  }
+
+  /**
+   * Post a comment on the linked GitHub issue with commit details and PR info.
+   * @param {Object} task
+   * @param {string} worktreePath
+   * @param {Object} execInfo  Contains preExecHead, postExecHead
+   * @param {Object} pr        Contains url, branch, prNumber
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _commentCommitsOnIssue(task, worktreePath, execInfo, pr) {
+    if (!isGitHubBackend(task)) return;
+    const issueNumber = getGitHubIssueNumber(task);
+    if (!issueNumber) return;
+
+    const { preExecHead, postExecHead } = execInfo || {};
+    const commits = getCommitDetails(
+      worktreePath,
+      preExecHead,
+      postExecHead || "HEAD",
+    );
+    const diffStat = getChangedFilesSummary(
+      worktreePath,
+      preExecHead,
+      postExecHead || "HEAD",
+    );
+
+    const lines = [
+      `## 📝 Agent Completed — Commits & PR`,
+      ``,
+      `**PR:** ${pr.url || `#${pr.prNumber}`}`,
+      `**Branch:** \`${pr.branch}\``,
+      `**Completed:** ${new Date().toISOString()}`,
+      ``,
+    ];
+
+    if (commits.length > 0) {
+      lines.push(`### Commits (${commits.length})`, ``);
+      for (const c of commits.slice(0, 30)) {
+        lines.push(`- \`${c.sha.slice(0, 8)}\` ${c.title}`);
+        if (c.files.length > 0 && c.files.length <= 15) {
+          for (const f of c.files) {
+            lines.push(`  - ${f}`);
+          }
+        } else if (c.files.length > 15) {
+          lines.push(`  - _${c.files.length} files changed_`);
+        }
+      }
+      if (commits.length > 30) {
+        lines.push(``, `_...and ${commits.length - 30} more commits_`);
+      }
+    }
+
+    if (diffStat) {
+      lines.push(``, `### Diff Summary`, `\`\`\``, diffStat, `\`\`\``);
+    }
+
+    await addComment(issueNumber, lines.join("\n"));
+  }
+
+  /**
+   * Close the linked GitHub issue after a PR is merged.
+   * Posts a completion comment and updates the task status to done.
+   * @param {Object} task
+   * @param {string|number} prNumber
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _closeIssueAfterMerge(task, prNumber) {
+    if (!isGitHubBackend(task)) return;
+    const issueNumber = getGitHubIssueNumber(task);
+    if (!issueNumber) return;
+
+    // Comment on issue first, then close via status update
+    await commentOnIssue(
+      task,
+      [
+        `## ✅ Issue Resolved`,
+        ``,
+        `PR #${prNumber} has been merged. Closing this issue.`,
+        ``,
+        `| Field | Value |`,
+        `|-------|-------|`,
+        `| **Merged At** | ${new Date().toISOString()} |`,
+        `| **PR** | #${prNumber} |`,
+      ].join("\n"),
+    );
+
+    try {
+      await updateTaskStatus(task.id, "done");
+      console.log(
+        `${TAG} closed issue #${issueNumber} after PR #${prNumber} merge`,
+      );
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to close issue #${issueNumber}: ${err.message}`,
+      );
     }
   }
 
@@ -2582,7 +2826,7 @@ class TaskExecutor {
                 `${TAG} Open PR #${existingPrNumber} already exists for branch ${branch}`,
               );
               this._pushBranch(worktreePath, branch);
-              this._enableAutoMerge(existingPrNumber, worktreePath);
+              this._enableAutoMerge(existingPrNumber, worktreePath, task);
               return { url: existingPrUrl, branch, prNumber: existingPrNumber };
             }
           }
@@ -2733,7 +2977,7 @@ class TaskExecutor {
 
       // ── Step 3: Enable auto-merge ──────────────────────────────────────
       if (prNumber) {
-        this._enableAutoMerge(prNumber, worktreePath);
+        this._enableAutoMerge(prNumber, worktreePath, task);
       }
 
       return { url: prUrl, branch, prNumber };

@@ -559,7 +559,17 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         }, timeoutMs + 1000);
       });
     } else {
-      await sendPromise;
+      // Hard timeout safety net for sendAndWait — mirrors the Codex SDK path.
+      // If sendAndWait ignores the abort signal, this forcibly breaks the hang.
+      const copilotHardTimeout = new Promise((_, reject) => {
+        const ht = setTimeout(
+          () => reject(new Error("hard_timeout")),
+          timeoutMs + HARD_TIMEOUT_BUFFER_MS,
+        );
+        // Don't let this timer keep the process alive
+        if (ht && typeof ht.unref === "function") ht.unref();
+      });
+      await Promise.race([sendPromise, copilotHardTimeout]);
     }
 
     clearTimeout(timer);

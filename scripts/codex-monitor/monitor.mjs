@@ -614,6 +614,7 @@ let selfRestartTimer = null;
 let selfRestartLastChangeAt = 0;
 let selfRestartLastFile = null;
 let pendingSelfRestart = null; // filename that triggered a deferred restart
+let selfRestartDeferCount = 0;
 let deferredMonitorRestartTimer = null;
 let pendingMonitorRestartReason = "";
 
@@ -8328,6 +8329,25 @@ async function runMonitorMonitorCycle({
         monitorMonitor.lastError = `watchdog force-reset after ${Math.round(runAge / 1000)}s`;
         // Don't return — allow the cycle to start fresh below
       } else {
+        // Schedule an accelerated force-reset in 60s instead of waiting for
+        // the next full interval cycle (which could be 5+ minutes away).
+        // If the abort signal actually kills the run, the scheduled callback
+        // will find monitorMonitor.running === false and no-op.
+        if (!monitorMonitor._watchdogForceResetTimer) {
+          monitorMonitor._watchdogForceResetTimer = setTimeout(() => {
+            monitorMonitor._watchdogForceResetTimer = null;
+            if (!monitorMonitor.running) return; // Already resolved
+            console.warn(
+              `[monitor-monitor] accelerated force-reset — abort signal was ignored for 60s`,
+            );
+            monitorMonitor.running = false;
+            monitorMonitor.abortController = null;
+            monitorMonitor._watchdogAbortCount = 0;
+            monitorMonitor.consecutiveFailures += 1;
+            monitorMonitor.lastOutcome = "force-reset (watchdog-accelerated)";
+            monitorMonitor.lastError = `watchdog accelerated force-reset after ${Math.round((Date.now() - monitorMonitor.heartbeatAt) / 1000)}s`;
+          }, 60_000);
+        }
         return;
       }
     } else {
@@ -8921,9 +8941,21 @@ function attemptSelfRestartAfterQuiet() {
   const protection = getRuntimeRestartProtection();
   if (protection.defer) {
     pendingSelfRestart = filename;
+    // Track how many times we've deferred. After 20 deferrals (~10 min at 30s
+    // intervals), force the restart to prevent indefinite deferral loops.
+    const deferCount = (selfRestartDeferCount =
+      (selfRestartDeferCount || 0) + 1);
     const retrySec = Math.round(SELF_RESTART_RETRY_MS / 1000);
+    if (deferCount >= 20) {
+      console.warn(
+        `[monitor] self-restart deferred ${deferCount} times — forcing restart despite ${protection.reason}`,
+      );
+      selfRestartDeferCount = 0;
+      selfRestartForSourceChange(filename);
+      return;
+    }
     console.log(
-      `[monitor] deferring self-restart (${filename}) — ${protection.reason}; retrying in ${retrySec}s`,
+      `[monitor] deferring self-restart (${filename}) — ${protection.reason}; retrying in ${retrySec}s (defer #${deferCount})`,
     );
     selfRestartTimer = setTimeout(
       retryDeferredSelfRestart,
@@ -9373,7 +9405,12 @@ function isStreamNoise(msg) {
     msg.includes("Cannot read properties of null") ||
     msg.includes("ECONNRESET") ||
     msg.includes("ECONNREFUSED") ||
-    msg.includes("socket hang up")
+    msg.includes("socket hang up") ||
+    msg.includes("AbortError") ||
+    msg.includes("The operation was aborted") ||
+    msg.includes("This operation was aborted") ||
+    msg.includes("hard_timeout") ||
+    msg.includes("watchdog-timeout")
   );
 }
 
