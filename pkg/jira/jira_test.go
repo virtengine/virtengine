@@ -7,6 +7,7 @@ package jira
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -693,8 +695,7 @@ func TestWebhookHandler(t *testing.T) {
 
 // TestWebhookSignatureVerification tests webhook signature verification
 func TestWebhookSignatureVerification(t *testing.T) {
-	//nolint:gosec // G101: test file with test credentials
-	secret := "test-webhook-secret"
+	secret := testWebhookSecret(t)
 	handler := NewWebhookHandler(WebhookConfig{
 		Secret:           secret,
 		RequireSignature: true,
@@ -719,6 +720,21 @@ func TestWebhookSignatureVerification(t *testing.T) {
 	if handler.VerifySignature(payload, "") {
 		t.Error("expected empty signature to fail")
 	}
+}
+
+func testWebhookSecret(t *testing.T) string {
+	t.Helper()
+
+	if secret := os.Getenv("JIRA_TEST_WEBHOOK_SECRET"); secret != "" {
+		return secret
+	}
+
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		t.Fatalf("failed to generate webhook secret: %v", err)
+	}
+
+	return hex.EncodeToString(buf)
 }
 
 // computeSignature is a test helper to compute expected signature
