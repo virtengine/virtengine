@@ -220,7 +220,7 @@ func TestGetProviderBids_NoConnection(t *testing.T) {
 	assert.Contains(t, err.Error(), "grpc endpoint not configured")
 }
 
-func TestGetProviderConfig_ReturnsDefault(t *testing.T) {
+func TestGetProviderConfig_NoConnection(t *testing.T) {
 	client := &rpcChainClient{
 		config: RPCChainClientConfig{
 			RequestTimeout: 5 * time.Second,
@@ -230,13 +230,9 @@ func TestGetProviderConfig_ReturnsDefault(t *testing.T) {
 	ctx := context.Background()
 	config, err := client.GetProviderConfig(ctx, "ve1provider")
 
-	require.NoError(t, err)
-	assert.NotNil(t, config)
-	assert.Equal(t, "ve1provider", config.ProviderAddress)
-	assert.True(t, config.Active)
-	assert.NotEmpty(t, config.Pricing.CPUPricePerCore)
-	assert.NotEmpty(t, config.SupportedOfferings)
-	assert.NotEmpty(t, config.Regions)
+	require.Error(t, err)
+	assert.Nil(t, config)
+	assert.Contains(t, err.Error(), "grpc endpoint not configured")
 }
 
 func TestGetBillingRules_ReturnsDefault(t *testing.T) {
