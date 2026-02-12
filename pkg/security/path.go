@@ -93,10 +93,22 @@ func (v *PathValidator) ValidatePath(path string) error {
 	}
 
 	// Try to resolve symlinks if file exists
-	if _, err := os.Lstat(absPath); err == nil {
-		realPath, err := filepath.EvalSymlinks(absPath)
-		if err == nil {
-			absPath = realPath
+	if info, err := os.Lstat(absPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(absPath)
+			if err == nil {
+				if !filepath.IsAbs(linkTarget) {
+					linkTarget = filepath.Join(filepath.Dir(absPath), linkTarget)
+				}
+				if resolved, err := filepath.Abs(filepath.Clean(linkTarget)); err == nil {
+					absPath = resolved
+				}
+			}
+		} else {
+			realPath, err := filepath.EvalSymlinks(absPath)
+			if err == nil {
+				absPath = realPath
+			}
 		}
 	}
 
