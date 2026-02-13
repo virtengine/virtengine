@@ -151,6 +151,59 @@ function gitSync(args, cwd, opts = {}) {
 }
 
 /**
+ * Resolve the Git top-level directory for a candidate path.
+ * Returns null when the candidate is not inside a git worktree.
+ *
+ * @param {string} candidatePath
+ * @returns {string|null}
+ */
+function detectGitTopLevel(candidatePath) {
+  if (!candidatePath) return null;
+  try {
+    const result = gitSync(
+      ["rev-parse", "--show-toplevel"],
+      resolve(candidatePath),
+      { timeout: 5000 },
+    );
+    if (result.status !== 0) return null;
+    const topLevel = String(result.stdout || "").trim();
+    return topLevel ? resolve(topLevel) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the best repository root for singleton initialization.
+ * Priority:
+ *   1) explicit repoRoot arg
+ *   2) VE_REPO_ROOT / CODEX_MONITOR_REPO_ROOT env
+ *   3) current working directory's git top-level
+ *   4) module-relative git top-level (useful for local dev)
+ *   5) process.cwd() fallback
+ *
+ * @param {string|undefined} repoRoot
+ * @returns {string}
+ */
+function resolveDefaultRepoRoot(repoRoot) {
+  if (repoRoot) return resolve(repoRoot);
+
+  const envRoot =
+    process.env.VE_REPO_ROOT || process.env.CODEX_MONITOR_REPO_ROOT || "";
+  const fromEnv = detectGitTopLevel(envRoot) || (envRoot ? resolve(envRoot) : null);
+  if (fromEnv) return fromEnv;
+
+  const fromCwd = detectGitTopLevel(process.cwd());
+  if (fromCwd) return fromCwd;
+
+  const moduleRelativeCandidate = resolve(__dirname, "..", "..");
+  const fromModule = detectGitTopLevel(moduleRelativeCandidate);
+  if (fromModule) return fromModule;
+
+  return resolve(process.cwd());
+}
+
+/**
  * Convert a Windows path to an extended-length path so long paths delete cleanly.
  * @param {string} pathValue
  * @returns {string}
@@ -1097,12 +1150,15 @@ let _instance = null;
  * @returns {WorktreeManager}
  */
 function getWorktreeManager(repoRoot, opts) {
+  const resolvedRoot = resolveDefaultRepoRoot(repoRoot);
   if (!_instance) {
-    if (!repoRoot) {
-      // Try to resolve from __dirname (scripts/codex-monitor → repo root)
-      repoRoot = resolve(__dirname, "..", "..");
-    }
-    _instance = new WorktreeManager(repoRoot, opts);
+    _instance = new WorktreeManager(resolvedRoot, opts);
+    return _instance;
+  }
+
+  // Allow explicit repoRoot to rebind singleton for the current process.
+  if (repoRoot && _instance.repoRoot !== resolvedRoot) {
+    _instance = new WorktreeManager(resolvedRoot, opts);
   }
   return _instance;
 }

@@ -89,3 +89,4 @@ scripts/.cache/*
 tmpclaude*
 vk-stdout.log
 vk-stderr.log
+*.log

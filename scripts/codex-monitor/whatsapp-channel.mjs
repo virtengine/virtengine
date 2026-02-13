@@ -17,7 +17,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 
 const __dirname = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
@@ -45,6 +46,7 @@ let connected = false;
 let outgoingQueue = [];
 let flushing = false;
 let baileys = null; // Lazy-loaded
+const moduleRequire = createRequire(import.meta.url);
 
 // Callbacks set by the monitor
 let _onMessage = null;
@@ -54,16 +56,57 @@ let _sendToPrimaryAgent = null;
 
 async function loadBaileys() {
   if (baileys) return baileys;
+
+  const attempts = [];
+  const requireCandidates = [
+    {
+      label: "cwd resolve",
+      packageJson: resolve(process.cwd(), "package.json"),
+    },
+    {
+      label: "cwd/scripts/codex-monitor resolve",
+      packageJson: resolve(process.cwd(), "scripts", "codex-monitor", "package.json"),
+    },
+  ];
+
   try {
     baileys = await import("@whiskeysockets/baileys");
     return baileys;
   } catch (err) {
-    console.error(
-      `[whatsapp] Failed to load @whiskeysockets/baileys: ${err.message}\n` +
-        `  Install with: npm install @whiskeysockets/baileys`,
-    );
-    return null;
+    attempts.push(`default import: ${err.message}`);
   }
+
+  for (const candidate of requireCandidates) {
+    try {
+      if (!existsSync(candidate.packageJson)) {
+        attempts.push(`${candidate.label}: package.json not found (${candidate.packageJson})`);
+        continue;
+      }
+      const scopedRequire = createRequire(candidate.packageJson);
+      const resolved = scopedRequire.resolve("@whiskeysockets/baileys");
+      baileys = await import(pathToFileURL(resolved).href);
+      return baileys;
+    } catch (err) {
+      attempts.push(`${candidate.label}: ${err.message}`);
+    }
+  }
+
+  try {
+    const resolvedFromModule = moduleRequire.resolve("@whiskeysockets/baileys");
+    baileys = await import(pathToFileURL(resolvedFromModule).href);
+    return baileys;
+  } catch (err) {
+    attempts.push(`module resolve: ${err.message}`);
+  }
+
+  console.error(
+    `[whatsapp] Failed to load @whiskeysockets/baileys:\n` +
+      attempts.map((line) => `  - ${line}`).join("\n") +
+      `\n  Install in the same runtime context as codex-monitor:` +
+      `\n    - Global install: npm install -g @whiskeysockets/baileys` +
+      `\n    - Project install (run codex-monitor from that folder): npm install @whiskeysockets/baileys`,
+  );
+  return null;
 }
 
 // ── Channel Implementation ───────────────────────────────────────────────────

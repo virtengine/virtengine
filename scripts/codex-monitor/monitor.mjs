@@ -9482,6 +9482,7 @@ async function startWatcher(force = false) {
     stopWatcher();
   }
   let targetPath = watchPath;
+  let missingWatchPath = false;
   try {
     const stats = await (await import("node:fs/promises")).stat(watchPath);
     if (stats.isFile()) {
@@ -9489,20 +9490,52 @@ async function startWatcher(force = false) {
       targetPath = watchPath.split(/[\\/]/).slice(0, -1).join("/") || ".";
     }
   } catch {
-    // Default to watching the provided path.
+    // The configured path may not exist yet (common for stale ORCHESTRATOR_SCRIPT paths).
+    // Fall back to watching its parent directory if present; otherwise watch repoRoot.
+    missingWatchPath = true;
+    const candidateFile = watchPath.split(/[\\/]/).pop() || null;
+    const candidateDir = watchPath.split(/[\\/]/).slice(0, -1).join("/") || ".";
+    if (existsSync(candidateDir)) {
+      targetPath = candidateDir;
+      watchFileName = candidateFile;
+    } else if (existsSync(repoRoot)) {
+      targetPath = repoRoot;
+      watchFileName = null;
+    } else {
+      targetPath = process.cwd();
+      watchFileName = null;
+    }
   }
 
-  watcher = watch(targetPath, { persistent: true }, (_event, filename) => {
-    if (watchFileName && filename && filename !== watchFileName) {
-      return;
-    }
-    if (watcherDebounce) {
-      clearTimeout(watcherDebounce);
-    }
-    watcherDebounce = setTimeout(() => {
-      requestRestart("file-change");
-    }, 5000);
-  });
+  if (!existsSync(targetPath)) {
+    console.warn(
+      `[monitor] watcher disabled — target path does not exist: ${targetPath}`,
+    );
+    return;
+  }
+  if (missingWatchPath) {
+    console.warn(
+      `[monitor] watch path not found: ${watchPath} — watching ${targetPath} instead`,
+    );
+  }
+
+  try {
+    watcher = watch(targetPath, { persistent: true }, (_event, filename) => {
+      if (watchFileName && filename && filename !== watchFileName) {
+        return;
+      }
+      if (watcherDebounce) {
+        clearTimeout(watcherDebounce);
+      }
+      watcherDebounce = setTimeout(() => {
+        requestRestart("file-change");
+      }, 5000);
+    });
+  } catch (err) {
+    console.warn(
+      `[monitor] watcher failed for ${targetPath}: ${err?.message || err}`,
+    );
+  }
 }
 
 function stopEnvWatchers() {

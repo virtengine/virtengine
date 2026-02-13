@@ -89,9 +89,30 @@ const liveDigestStatePath = resolve(repoRoot, ".cache", "ve-live-digest.json");
 
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_API_BASE = String(
+  process.env.TELEGRAM_API_BASE_URL || "https://api.telegram.org",
+).replace(/\/+$/, "");
 const POLL_TIMEOUT_S = 30; // long-poll timeout
 const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
+const TELEGRAM_HTTP_TIMEOUT_MS = Math.max(
+  2000,
+  Number(process.env.TELEGRAM_HTTP_TIMEOUT_MS || "15000") || 15000,
+);
+const TELEGRAM_RETRY_ATTEMPTS = Math.max(
+  1,
+  Number(process.env.TELEGRAM_RETRY_ATTEMPTS || "4") || 4,
+);
+const TELEGRAM_RETRY_BASE_MS = Math.max(
+  100,
+  Number(process.env.TELEGRAM_RETRY_BASE_MS || "600") || 600,
+);
+const TELEGRAM_CURL_FALLBACK = !["0", "false", "no"].includes(
+  String(
+    process.env.TELEGRAM_CURL_FALLBACK ||
+      (process.env.WSL_DISTRO_NAME ? "true" : "false"),
+  ).toLowerCase(),
+);
 const AGENT_TIMEOUT_MS = (() => {
   const minRaw = Number(process.env.TELEGRAM_AGENT_TIMEOUT_MIN || "");
   if (Number.isFinite(minRaw) && minRaw > 0) return minRaw * 60 * 1000;
@@ -154,6 +175,286 @@ const liveDigestWindowSec = Number(
 const liveDigestEditDebounceMs = Number(
   process.env.TELEGRAM_LIVE_DIGEST_DEBOUNCE_MS || "3000",
 ); // 3 second debounce on edits
+
+function delayMs(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function toErrorCode(err) {
+  return String(
+    err?.cause?.code || err?.code || err?.cause?.name || err?.name || "",
+  ).toUpperCase();
+}
+
+function isRetryableNetworkError(err) {
+  const code = toErrorCode(err);
+  return [
+    "ABORTERROR",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_HEADERS_TIMEOUT",
+    "UND_ERR_SOCKET",
+  ].includes(code);
+}
+
+function isRetryableStatus(status) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+let _hasCurlBinary = null;
+function hasCurlBinary() {
+  if (_hasCurlBinary !== null) return _hasCurlBinary;
+  try {
+    const probe = spawnSync("curl", ["--version"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    _hasCurlBinary = probe?.status === 0;
+  } catch {
+    _hasCurlBinary = false;
+  }
+  return _hasCurlBinary;
+}
+
+function createTelegramResponse(status, bodyText) {
+  const text = String(bodyText || "");
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: "",
+    headers: { get: () => null },
+    body: {
+      cancel: async () => {},
+    },
+    async text() {
+      return text;
+    },
+    async json() {
+      return JSON.parse(text || "{}");
+    },
+  };
+}
+
+async function telegramApiFetchViaCurl(url, requestOptions = {}) {
+  const {
+    method: httpMethod = "POST",
+    payload,
+    timeoutMs = TELEGRAM_HTTP_TIMEOUT_MS,
+    operation = "telegram-api",
+  } = requestOptions;
+
+  if (!hasCurlBinary()) {
+    throw new Error("curl is not available for Telegram fallback");
+  }
+
+  const args = [
+    "--silent",
+    "--show-error",
+    "--location",
+    "--request",
+    String(httpMethod || "POST").toUpperCase(),
+    "--connect-timeout",
+    String(Math.max(2, Math.ceil(timeoutMs / 2000))),
+    "--max-time",
+    String(Math.max(5, Math.ceil(timeoutMs / 1000))),
+    "--write-out",
+    "\n__CODE__:%{http_code}",
+    String(url),
+  ];
+
+  if (payload !== undefined) {
+    args.push("--header", "Content-Type: application/json");
+    args.push("--data", JSON.stringify(payload));
+  }
+
+  const result = spawnSync("curl", args, {
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    const errText = String(result.stderr || result.stdout || "").trim();
+    throw new Error(
+      `curl failed for ${operation}: ${errText || `exit ${result.status}`}`,
+    );
+  }
+
+  const out = String(result.stdout || "");
+  const marker = out.lastIndexOf("\n__CODE__:");
+  if (marker === -1) {
+    throw new Error(`curl response missing HTTP code marker for ${operation}`);
+  }
+  const body = out.slice(0, marker);
+  const statusRaw = out.slice(marker + "\n__CODE__:".length).trim();
+  const status = Number(statusRaw);
+  if (!Number.isFinite(status)) {
+    throw new Error(`invalid curl HTTP status for ${operation}: ${statusRaw}`);
+  }
+  return createTelegramResponse(status, body);
+}
+
+function parseRetryAfterMs(response) {
+  const value = response?.headers?.get?.("retry-after");
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(30_000, seconds * 1000);
+  }
+  const absolute = Date.parse(value);
+  if (!Number.isFinite(absolute)) return null;
+  const delta = absolute - Date.now();
+  return delta > 0 ? Math.min(30_000, delta) : null;
+}
+
+function calcRetryDelayMs(attempt, response) {
+  const hinted = parseRetryAfterMs(response);
+  if (hinted != null) return hinted;
+  const expo = TELEGRAM_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1);
+  const jitter = Math.floor(Math.random() * Math.min(1500, expo * 0.4));
+  return Math.min(30_000, expo + jitter);
+}
+
+function createTelegramUrl(method, query = null) {
+  const url = new URL(
+    `/bot${telegramToken}/${method}`,
+    `${TELEGRAM_API_BASE}/`,
+  );
+  if (query && typeof query === "object") {
+    for (const [key, value] of Object.entries(query)) {
+      if (value == null) continue;
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return url;
+}
+
+async function telegramApiFetch(method, requestOptions = {}) {
+  const {
+    method: httpMethod = "POST",
+    payload,
+    query,
+    signal,
+    timeoutMs = TELEGRAM_HTTP_TIMEOUT_MS,
+    retries = TELEGRAM_RETRY_ATTEMPTS,
+    retryOnStatus = true,
+    operation = method,
+  } = requestOptions;
+
+  if (!telegramToken) {
+    throw new Error("Telegram bot token missing");
+  }
+
+  const url = createTelegramUrl(method, query);
+  const maxAttempts = Math.max(1, retries);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => {
+        try {
+          controller.abort(new Error("timeout"));
+        } catch {
+          controller.abort();
+        }
+      },
+      Math.max(1000, timeoutMs),
+    );
+
+    let abortListener = null;
+    if (signal) {
+      abortListener = () => {
+        try {
+          controller.abort(signal.reason || new Error("aborted"));
+        } catch {
+          controller.abort();
+        }
+      };
+      if (signal.aborted) {
+        abortListener();
+      } else {
+        signal.addEventListener("abort", abortListener, { once: true });
+      }
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: httpMethod,
+        headers: { "Content-Type": "application/json" },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (
+        response.ok ||
+        !retryOnStatus ||
+        !isRetryableStatus(response.status) ||
+        attempt >= maxAttempts
+      ) {
+        return response;
+      }
+
+      try {
+        await response.body?.cancel?.();
+      } catch {
+        /* ignore */
+      }
+
+      const waitMs = calcRetryDelayMs(attempt, response);
+      console.warn(
+        `[telegram-bot] ${operation} retry ${attempt}/${maxAttempts} after HTTP ${response.status} (${waitMs}ms)`,
+      );
+      await delayMs(waitMs);
+    } catch (err) {
+      if (signal?.aborted) {
+        throw err;
+      }
+      const retryable = isRetryableNetworkError(err);
+      if (
+        TELEGRAM_CURL_FALLBACK &&
+        retryable &&
+        hasCurlBinary() &&
+        attempt >= maxAttempts
+      ) {
+        console.warn(
+          `[telegram-bot] ${operation} switching to curl fallback after fetch failure: ${err?.message || err}`,
+        );
+        return await telegramApiFetchViaCurl(url, {
+          method: httpMethod,
+          payload,
+          timeoutMs,
+          operation,
+        });
+      }
+      if (!retryable || attempt >= maxAttempts) {
+        throw err;
+      }
+
+      const waitMs = calcRetryDelayMs(attempt);
+      console.warn(
+        `[telegram-bot] ${operation} network retry ${attempt}/${maxAttempts}: ${err?.message || err} (${waitMs}ms)`,
+      );
+      await delayMs(waitMs);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (signal && abortListener) {
+        signal.removeEventListener("abort", abortListener);
+      }
+    }
+  }
+
+  throw new Error(`Telegram request failed: ${operation}`);
+}
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -423,7 +724,6 @@ async function sendDirect(chatId, text, options = {}) {
   const chunks = splitMessage(text, MAX_MESSAGE_LEN);
   let lastMessageId = null;
   for (const chunk of chunks) {
-    const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
     const payload = {
       chat_id: chatId,
       text: chunk,
@@ -441,10 +741,10 @@ async function sendDirect(chatId, text, options = {}) {
 
     let res;
     try {
-      res = await fetch(url, {
+      res = await telegramApiFetch("sendMessage", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        payload,
+        operation: "sendMessage",
       });
     } catch (err) {
       console.warn(`[telegram-bot] send error: ${err.message}`);
@@ -494,7 +794,6 @@ async function editDirect(chatId, messageId, text, options = {}) {
       ? text.slice(0, MAX_MESSAGE_LEN - 20) + "\n\n…(truncated)"
       : text;
 
-  const url = `https://api.telegram.org/bot${telegramToken}/editMessageText`;
   const payload = {
     chat_id: chatId,
     message_id: messageId,
@@ -507,10 +806,10 @@ async function editDirect(chatId, messageId, text, options = {}) {
 
   let res;
   try {
-    res = await fetch(url, {
+    res = await telegramApiFetch("editMessageText", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      payload,
+      operation: "editMessageText",
     });
   } catch (err) {
     console.warn(`[telegram-bot] edit error: ${err.message}`);
@@ -554,12 +853,11 @@ async function editDirect(chatId, messageId, text, options = {}) {
  */
 async function deleteDirect(chatId, messageId) {
   if (!telegramToken || !messageId) return;
-  const url = `https://api.telegram.org/bot${telegramToken}/deleteMessage`;
   try {
-    await fetch(url, {
+    await telegramApiFetch("deleteMessage", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+      payload: { chat_id: chatId, message_id: messageId },
+      operation: "deleteMessage",
     });
   } catch {
     /* best effort */
@@ -574,15 +872,14 @@ async function deleteDirect(chatId, messageId) {
  */
 async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
   if (!telegramToken || !callbackQueryId) return;
-  const url = `https://api.telegram.org/bot${telegramToken}/answerCallbackQuery`;
   const payload = { callback_query_id: callbackQueryId };
   if (text) payload.text = text;
   if (showAlert) payload.show_alert = showAlert;
   try {
-    await fetch(url, {
+    await telegramApiFetch("answerCallbackQuery", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      payload,
+      operation: "answerCallbackQuery",
     });
   } catch (err) {
     console.warn(`[telegram-bot] answerCallbackQuery error: ${err.message}`);
@@ -1054,19 +1351,23 @@ function splitMessage(text, maxLen) {
 async function pollUpdates() {
   if (!telegramToken) return [];
 
-  const url = `https://api.telegram.org/bot${telegramToken}/getUpdates`;
-  const params = new URLSearchParams({
-    offset: String(lastUpdateId + 1),
-    timeout: String(POLL_TIMEOUT_S),
-    allowed_updates: JSON.stringify(["message", "callback_query"]),
-  });
-
   pollAbort = new AbortController();
   let res;
   try {
-    res = await fetch(`${url}?${params}`, {
+    res = await telegramApiFetch("getUpdates", {
+      method: "GET",
+      query: {
+        offset: String(lastUpdateId + 1),
+        timeout: String(POLL_TIMEOUT_S),
+        allowed_updates: JSON.stringify(["message", "callback_query"]),
+      },
       signal: pollAbort.signal,
-      // No explicit timeout — the Telegram API long-poll handles timing
+      timeoutMs: Math.max(
+        TELEGRAM_HTTP_TIMEOUT_MS,
+        POLL_TIMEOUT_S * 1000 + 15_000,
+      ),
+      retries: TELEGRAM_RETRY_ATTEMPTS,
+      operation: "getUpdates",
     });
   } catch (err) {
     if (err.name === "AbortError") return [];

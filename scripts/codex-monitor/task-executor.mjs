@@ -8,6 +8,7 @@
 
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import {
   readFileSync,
   existsSync,
@@ -72,6 +73,11 @@ import {
   executeHooks,
   executeBlockingHooks,
 } from "./agent-hooks.mjs";
+import {
+  initTaskClaims,
+  claimTask,
+  releaseTask as releaseTaskClaim,
+} from "./task-claims.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -82,6 +88,7 @@ const GRACEFUL_SHUTDOWN_MS = 5 * 60_000; // 5 minutes — give agents time to co
 const MAX_NO_COMMIT_ATTEMPTS = 3; // Stop picking up a task after N consecutive no-commit completions
 const NO_COMMIT_COOLDOWN_BASE_MS = 15 * 60 * 1000; // 15 minutes base cooldown for no-commit
 const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const CLAIM_CONFLICT_COMMENT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
 /** Watchdog interval: how often to check for stalled agent slots */
 const WATCHDOG_INTERVAL_MS = 60_000; // 1 minute
@@ -475,6 +482,15 @@ class TaskExecutor {
     this._pollTimer = null;
     this._pollInProgress = false;
     this._resolvedProjectId = null;
+    this._taskClaimsReady = false;
+    this._taskClaimsInitPromise = null;
+    this._claimConflictNotifiedAt = new Map();
+    this._instanceId =
+      String(
+        process.env.VE_INSTANCE_ID ||
+          process.env.CODEX_MONITOR_INSTANCE_ID ||
+          `${os.hostname() || "host"}-${process.pid}`,
+      ).trim() || `executor-${process.pid}`;
 
     /** @type {Map<string, AbortController>} taskId → AbortController for per-slot abort */
     this._slotAbortControllers = new Map();
@@ -1397,6 +1413,66 @@ class TaskExecutor {
     return blocked;
   }
 
+  /**
+   * Initialize distributed task claims backing store.
+   * Best-effort: execution continues even if claims are unavailable.
+   *
+   * @returns {Promise<boolean>}
+   * @private
+   */
+  async _ensureTaskClaimsInitialized() {
+    if (this._taskClaimsReady) return true;
+    if (this._taskClaimsInitPromise) return this._taskClaimsInitPromise;
+
+    this._taskClaimsInitPromise = initTaskClaims({ repoRoot: this.repoRoot })
+      .then(() => {
+        this._taskClaimsReady = true;
+        return true;
+      })
+      .catch((err) => {
+        this._taskClaimsReady = false;
+        console.warn(
+          `${TAG} task-claims init warning: ${err?.message || err}`,
+        );
+        return false;
+      })
+      .finally(() => {
+        this._taskClaimsInitPromise = null;
+      });
+
+    return this._taskClaimsInitPromise;
+  }
+
+  /**
+   * Claim TTL should outlive long-running agents by a safe margin.
+   *
+   * @returns {number}
+   * @private
+   */
+  _getTaskClaimTtlMinutes() {
+    const baseMs = Math.max(this.taskTimeoutMs || 0, 60 * 60 * 1000);
+    const withBufferMs = baseMs + 30 * 60 * 1000;
+    const minutes = Math.ceil(withBufferMs / 60_000);
+    return Math.min(Math.max(minutes, 60), 24 * 60);
+  }
+
+  /**
+   * Throttle duplicate "claimed by another orchestrator" issue comments.
+   *
+   * @param {string} taskId
+   * @returns {boolean}
+   * @private
+   */
+  _shouldNotifyClaimConflict(taskId) {
+    const now = Date.now();
+    const last = this._claimConflictNotifiedAt.get(taskId) || 0;
+    if (now - last < CLAIM_CONFLICT_COMMENT_COOLDOWN_MS) {
+      return false;
+    }
+    this._claimConflictNotifiedAt.set(taskId, now);
+    return true;
+  }
+
   // ── Poll Loop ─────────────────────────────────────────────────────────────
 
   /**
@@ -1506,6 +1582,24 @@ class TaskExecutor {
       task.branchName ||
       task.meta?.branch_name ||
       `ve/${taskId.substring(0, 8)}-${slugify(taskTitle)}`;
+    let taskClaimToken = null;
+
+    const releaseTaskClaimLock = async () => {
+      if (!taskClaimToken) return;
+      try {
+        await releaseTaskClaim({
+          taskId,
+          claimToken: taskClaimToken,
+          instanceId: this._instanceId,
+        });
+      } catch (err) {
+        console.warn(
+          `${TAG} task-claim release warning for "${taskTitle}": ${err?.message || err}`,
+        );
+      } finally {
+        taskClaimToken = null;
+      }
+    };
 
     // 1. Resolve executor profile and SDK for this task
     let resolvedSdk = this.sdk;
@@ -1597,6 +1691,67 @@ class TaskExecutor {
     this._upsertRuntimeSlot(slot);
 
     try {
+      // 0. Distributed task claim (multi-orchestrator coordination)
+      const claimsReady = await this._ensureTaskClaimsInitialized();
+      if (claimsReady) {
+        const claimResult = await claimTask({
+          taskId,
+          instanceId: this._instanceId,
+          ttlMinutes: this._getTaskClaimTtlMinutes(),
+          metadata: {
+            task_title: taskTitle,
+            branch,
+            owner: "task-executor",
+            sdk: resolvedSdk,
+            pid: process.pid,
+          },
+        });
+
+        if (claimResult?.success) {
+          taskClaimToken =
+            claimResult.token || claimResult.claim?.claim_token || null;
+        } else if (claimResult?.error === "task_already_claimed") {
+          const owner =
+            claimResult?.existing_instance ||
+            claimResult?.existing_claim?.instance_id ||
+            "unknown";
+          const claimedAt = claimResult?.existing_claim?.claimed_at || "unknown";
+          const expiresAt = claimResult?.existing_claim?.expires_at || "unknown";
+
+          console.log(
+            `${TAG} skipping "${taskTitle}" — claimed by orchestrator "${owner}" (claimed: ${claimedAt}, expires: ${expiresAt})`,
+          );
+          this._taskCooldowns.set(taskId, Date.now());
+
+          if (this._shouldNotifyClaimConflict(taskId)) {
+            commentOnIssue(
+              task,
+              [
+                `## ⏭️ Task Deferred`,
+                ``,
+                `This task is currently claimed by another orchestrator instance.`,
+                ``,
+                `- Task: \`${taskId}\``,
+                `- Current orchestrator: \`${this._instanceId}\``,
+                `- Claim owner: \`${owner}\``,
+                `- Claimed at: ${claimedAt}`,
+                `- Claim expires: ${expiresAt}`,
+              ].join("\n"),
+            ).catch(() => {
+              /* best-effort */
+            });
+          }
+
+          this._activeSlots.delete(taskId);
+          this._removeRuntimeSlot(taskId);
+          return;
+        } else {
+          console.warn(
+            `${TAG} task-claim warning for "${taskTitle}": ${claimResult?.error || "unknown claim error"} — continuing without claim lock`,
+          );
+        }
+      }
+
       this.onTaskStarted?.(task, slot);
 
       // Fire SessionStart hook
@@ -1658,6 +1813,7 @@ class TaskExecutor {
         } catch {
           /* best-effort */
         }
+        await releaseTaskClaimLock();
         this._activeSlots.delete(taskId);
         this._removeRuntimeSlot(taskId);
         this.onTaskFailed?.(
@@ -1682,6 +1838,7 @@ class TaskExecutor {
         } catch {
           /* best-effort */
         }
+        await releaseTaskClaimLock();
         this._activeSlots.delete(taskId);
         this._removeRuntimeSlot(taskId);
         this.onTaskFailed?.(
@@ -1887,6 +2044,7 @@ class TaskExecutor {
       } catch (err) {
         console.warn(`${TAG} worktree release warning: ${err.message}`);
       }
+      await releaseTaskClaimLock();
       this._activeSlots.delete(taskId);
       this._removeRuntimeSlot(taskId);
     } catch (err) {
@@ -1908,6 +2066,7 @@ class TaskExecutor {
       } catch {
         /* best-effort */
       }
+      await releaseTaskClaimLock();
 
       this._activeSlots.delete(taskId);
       this._removeRuntimeSlot(taskId);

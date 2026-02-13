@@ -85,8 +85,6 @@ function showHelp() {
   WHATSAPP
     --whatsapp-auth             Run WhatsApp authentication (QR code mode)
     --whatsapp-auth --pairing-code  Authenticate via pairing code instead of QR
-    Tip: if WHATSAPP_CHAT_ID is unknown, leave it blank, run monitor, send one
-         message from target chat, then copy jid from logs and set it in .env.
 
   CONTAINERS
     Container support is configured via environment variables:

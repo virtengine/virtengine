@@ -32,6 +32,12 @@ vi.mock("../worktree-manager.mjs", () => ({
   getWorktreeStats: vi.fn(() => ({ active: 0, total: 0 })),
 }));
 
+vi.mock("../task-claims.mjs", () => ({
+  initTaskClaims: vi.fn(() => Promise.resolve()),
+  claimTask: vi.fn(() => Promise.resolve({ success: true, token: "claim-1" })),
+  releaseTask: vi.fn(() => Promise.resolve({ success: true })),
+}));
+
 vi.mock("../config.mjs", () => ({
   loadConfig: vi.fn(() => ({})),
 }));
@@ -76,6 +82,7 @@ import {
   ensureThreadRegistryLoaded,
 } from "../agent-pool.mjs";
 import { acquireWorktree, releaseWorktree } from "../worktree-manager.mjs";
+import { claimTask, releaseTask as releaseTaskClaim } from "../task-claims.mjs";
 import { loadConfig } from "../config.mjs";
 import { evaluateBranchSafetyForPush } from "../git-safety.mjs";
 import { spawnSync } from "node:child_process";
@@ -468,6 +475,38 @@ describe("task-executor", () => {
       );
     });
 
+    it("skips execution when task is claimed by another orchestrator", async () => {
+      claimTask.mockResolvedValueOnce({
+        success: false,
+        error: "task_already_claimed",
+        existing_instance: "other-orchestrator-42",
+        existing_claim: {
+          claimed_at: "2026-02-13T09:00:00.000Z",
+          expires_at: "2026-02-13T10:00:00.000Z",
+        },
+      });
+
+      const onTaskFailed = vi.fn();
+      const ex = new TaskExecutor({ onTaskFailed });
+      await ex.executeTask({
+        ...mockTask,
+        backend: "github",
+        externalId: "#123",
+      });
+
+      expect(execWithRetry).not.toHaveBeenCalled();
+      expect(onTaskFailed).not.toHaveBeenCalled();
+      expect(updateTaskStatus).not.toHaveBeenCalledWith(
+        "task-123-uuid",
+        "inprogress",
+      );
+      expect(addComment).toHaveBeenCalledWith(
+        "123",
+        expect.stringContaining("Task Deferred"),
+      );
+      expect(releaseTaskClaim).not.toHaveBeenCalled();
+    });
+
     it("calls acquireWorktree with correct branch", async () => {
       const ex = new TaskExecutor();
       await ex.executeTask({ ...mockTask });
@@ -549,6 +588,12 @@ describe("task-executor", () => {
       const ex = new TaskExecutor();
       await ex.executeTask({ ...mockTask });
       expect(releaseWorktree).toHaveBeenCalledWith("task-123-uuid");
+      expect(releaseTaskClaim).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task-123-uuid",
+          claimToken: "claim-1",
+        }),
+      );
       expect(ex._activeSlots.has("task-123-uuid")).toBe(false);
     });
 

@@ -1,9 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname, relative } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_HOOK_SCHEMA = "https://json-schema.org/draft/2020-12/schema";

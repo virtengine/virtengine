@@ -42,18 +42,37 @@ function isPathInside(parent, child) {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+function isWslInteropRuntime() {
+  return Boolean(
+    process.env.WSL_DISTRO_NAME ||
+    process.env.WSL_INTEROP ||
+    (process.platform === "win32" &&
+      String(process.env.HOME || "")
+        .trim()
+        .startsWith("/home/")),
+  );
+}
+
 function resolveConfigDir(repoRoot) {
   const repoPath = resolve(repoRoot || process.cwd());
   const packageDir = resolve(__dirname);
   if (isPathInside(repoPath, packageDir) || hasSetupMarkers(packageDir)) {
     return packageDir;
   }
-  const baseDir =
-    process.env.APPDATA ||
-    process.env.LOCALAPPDATA ||
-    process.env.HOME ||
-    process.env.USERPROFILE ||
-    process.cwd();
+  const preferWindowsDirs =
+    process.platform === "win32" && !isWslInteropRuntime();
+  const baseDir = preferWindowsDirs
+    ? process.env.APPDATA ||
+      process.env.LOCALAPPDATA ||
+      process.env.USERPROFILE ||
+      process.env.HOME ||
+      process.cwd()
+    : process.env.HOME ||
+      process.env.XDG_CONFIG_HOME ||
+      process.env.USERPROFILE ||
+      process.env.APPDATA ||
+      process.env.LOCALAPPDATA ||
+      process.cwd();
   return resolve(baseDir, "codex-monitor");
 }
 

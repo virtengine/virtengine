@@ -267,6 +267,26 @@ describe("worktree-manager", () => {
       const mgr = getWorktreeManager("/custom/root");
       expect(mgr.repoRoot).toContain("custom");
     });
+
+    it("rebinds singleton when explicit repoRoot changes", () => {
+      const first = getWorktreeManager("/repo/one");
+      const second = getWorktreeManager("/repo/two");
+      expect(first).not.toBe(second);
+      expect(second.repoRoot).toContain("repo");
+      expect(second.repoRoot).toContain("two");
+    });
+
+    it("uses git top-level from cwd when repoRoot is omitted", () => {
+      spawnSync.mockImplementation((_, args) => {
+        if (args?.includes("--show-toplevel")) {
+          return { status: 0, stdout: "/detected/repo\n", stderr: "" };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      });
+
+      const mgr = getWorktreeManager();
+      expect(mgr.repoRoot.replace(/\\/g, "/")).toContain("/detected/repo");
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────
