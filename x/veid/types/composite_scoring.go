@@ -622,7 +622,7 @@ const (
 	CompositeReasonHighRisk CompositeReasonCode = "HIGH_RISK"
 
 	// CompositeReasonBelowPassThreshold indicates final score below pass threshold
-	CompositeReasonBelowPassThreshold CompositeReasonCode = "BELOW_PASS_THRESHOLD" //nolint:gosec // non-secret reason code
+	CompositeReasonBelowPassThreshold CompositeReasonCode = "BELOW_PASS_THRESHOLD" // #nosec G101 -- non-secret reason code
 )
 
 // ============================================================================

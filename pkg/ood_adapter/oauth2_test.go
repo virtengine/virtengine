@@ -2,6 +2,8 @@ package ood_adapter_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,13 +19,54 @@ const (
 	wellKnownConfigPath = "/.well-known/openid-configuration"
 	// tokenEndpointPath is the OAuth2 token endpoint path.
 	tokenEndpointPath = "/token"
-	// testJWTTokenVEID1User is a test JWT token for veid1user with identity score 0.95.
-	//nolint:gosec // G101: test JWT token, not a real credential
-	testJWTTokenVEID1User = "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIiLCJpZGVudGl0eV9zY29yZSI6MC45NX0.sig"
-	// testJWTTokenVEID1UserNoScore is a test JWT token for veid1user without identity score.
-	//nolint:gosec // G101: test JWT token, not a real credential
-	testJWTTokenVEID1UserNoScore = "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIifQ.sig"
 )
+
+func buildTestJWT(t *testing.T, payload map[string]interface{}) string {
+	t.Helper()
+
+	header := map[string]string{
+		"alg": "RS256",
+		"typ": "JWT",
+	}
+
+	headerJSON, err := json.Marshal(header)
+	require.NoError(t, err)
+
+	payloadJSON, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	return base64.RawURLEncoding.EncodeToString(headerJSON) + "." +
+		base64.RawURLEncoding.EncodeToString(payloadJSON) + ".signature"
+}
+
+func testJWTTokenVEID1User(t *testing.T) string {
+	t.Helper()
+
+	return buildTestJWT(t, map[string]interface{}{
+		"veid_address":   "veid1user",
+		"identity_score": 0.95,
+	})
+}
+
+func testJWTTokenVEID1UserNoScore(t *testing.T) string {
+	t.Helper()
+
+	return buildTestJWT(t, map[string]interface{}{
+		"veid_address": "veid1user",
+	})
+}
+
+func testJWTTokenCustomUser(t *testing.T) string {
+	t.Helper()
+
+	return buildTestJWT(t, map[string]interface{}{
+		"sub":            "user123",
+		"veid_address":   "veid1customuser",
+		"identity_score": 0.99,
+		"email":          "test@example.com",
+		"name":           "Test User",
+	})
+}
 
 // TestOAuth2ConfigDefaults tests default OAuth2 configuration.
 func TestOAuth2ConfigDefaults(t *testing.T) {
@@ -154,8 +197,7 @@ func TestOAuth2TokenManagerExchangeCode(t *testing.T) {
 
 		if r.URL.Path == tokenEndpointPath && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := testJWTTokenVEID1User
+			idToken := testJWTTokenVEID1User(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"access-token-123",
 				"token_type":"Bearer",
@@ -207,8 +249,7 @@ func TestOAuth2TokenManagerRefreshToken(t *testing.T) {
 
 		if r.URL.Path == tokenEndpointPath {
 			w.Header().Set("Content-Type", "application/json")
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := testJWTTokenVEID1User
+			idToken := testJWTTokenVEID1User(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"new-access-token",
 				"token_type":"Bearer",
@@ -264,8 +305,7 @@ func TestOAuth2TokenManagerGetValidToken(t *testing.T) {
 
 		if r.URL.Path == tokenEndpointPath {
 			w.Header().Set("Content-Type", "application/json")
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := testJWTTokenVEID1UserNoScore
+			idToken := testJWTTokenVEID1UserNoScore(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"token",
 				"expires_in":3600,
@@ -359,8 +399,7 @@ func TestOAuth2TokenManagerRevokeToken(t *testing.T) {
 
 		if r.URL.Path == tokenEndpointPath {
 			w.Header().Set("Content-Type", "application/json")
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := testJWTTokenVEID1UserNoScore
+			idToken := testJWTTokenVEID1UserNoScore(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"token-to-revoke",
 				"expires_in":3600,
@@ -486,8 +525,7 @@ func TestOAuth2ProviderAdapter(t *testing.T) {
 
 		if r.URL.Path == tokenEndpointPath {
 			w.Header().Set("Content-Type", "application/json")
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := testJWTTokenVEID1User
+			idToken := testJWTTokenVEID1User(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"access-token",
 				"expires_in":3600,
@@ -580,8 +618,7 @@ func TestManagedTokenOnRefreshCallback(t *testing.T) {
 
 		if r.URL.Path == tokenEndpointPath {
 			w.Header().Set("Content-Type", "application/json")
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := testJWTTokenVEID1UserNoScore
+			idToken := testJWTTokenVEID1UserNoScore(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"token",
 				"expires_in":3600,
@@ -639,8 +676,7 @@ func TestIDTokenParsing(t *testing.T) {
 		if r.URL.Path == tokenEndpointPath {
 			w.Header().Set("Content-Type", "application/json")
 			// Valid ID token with claims
-			//nolint:gosec // G101: test JWT token, not a real credential
-			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIiwidmVpZF9hZGRyZXNzIjoidmVpZDFjdXN0b211c2VyIiwiaWRlbnRpdHlfc2NvcmUiOjAuOTksImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsIm5hbWUiOiJUZXN0IFVzZXIifQ.signature"
+			idToken := testJWTTokenCustomUser(t)
 			_, _ = w.Write([]byte(`{
 				"access_token":"access",
 				"expires_in":3600,
