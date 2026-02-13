@@ -2,7 +2,7 @@ package testutil
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: test helpers use weak random for non-security data
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
@@ -32,7 +32,7 @@ func VECoinRandom(t testing.TB, minAmount, maxAmount int64) sdk.Coin {
 	}
 	amount := minAmount
 	if maxAmount > minAmount {
-		amount = minAmount + rand.Int63n(maxAmount-minAmount+1) // nolint: gosec
+		amount = minAmount + rand.Int63n(maxAmount-minAmount+1) //nolint:gosec // G404: test helper randomness is non-security-sensitive
 	}
 	return sdk.NewCoin(VEDenom, sdkmath.NewInt(amount))
 }
@@ -48,7 +48,7 @@ func VEDecCoin(t testing.TB, amount int64) sdk.DecCoin {
 func VEDecCoinRandom(t testing.TB) sdk.DecCoin {
 	t.Helper()
 	// Generate a random price between 1 and 1000 uve
-	amount := 1 + rand.Int63n(1000) // nolint: gosec
+	amount := 1 + rand.Int63n(1000) //nolint:gosec // G404: test helper randomness is non-security-sensitive
 	return sdk.NewDecCoin(VEDenom, sdkmath.NewInt(amount))
 }
 

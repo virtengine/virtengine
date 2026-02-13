@@ -2996,11 +2996,6 @@ export const MsgUpdateDerivedFeatures_DocFieldHashesEntry: MessageFns<
     return obj;
   },
 
-  create(
-    base?: DeepPartial<MsgUpdateDerivedFeatures_DocFieldHashesEntry>,
-  ): MsgUpdateDerivedFeatures_DocFieldHashesEntry {
-    return MsgUpdateDerivedFeatures_DocFieldHashesEntry.fromPartial(base ?? {});
-  },
   fromPartial(
     object: DeepPartial<MsgUpdateDerivedFeatures_DocFieldHashesEntry>,
   ): MsgUpdateDerivedFeatures_DocFieldHashesEntry {

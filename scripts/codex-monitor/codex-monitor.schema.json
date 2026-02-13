@@ -41,6 +41,17 @@
       "enum": ["codex-sdk", "copilot-sdk", "claude-sdk"]
     },
     "vkSpawnEnabled": { "type": "boolean" },
+    "kanban": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["vk", "github", "jira"]
+        },
+        "projectId": { "type": "string" }
+      }
+    },
     "plannerMode": {
       "type": "string",
       "enum": ["codex-sdk", "kanban", "disabled"]
@@ -87,7 +98,24 @@
       "additionalProperties": false,
       "properties": {
         "orchestrator": { "type": "string" },
-        "planner": { "type": "string" }
+        "planner": { "type": "string" },
+        "monitorMonitor": { "type": "string" },
+        "taskExecutor": { "type": "string" },
+        "taskExecutorRetry": { "type": "string" },
+        "taskExecutorContinueHasCommits": { "type": "string" },
+        "taskExecutorContinueHasEdits": { "type": "string" },
+        "taskExecutorContinueNoProgress": { "type": "string" },
+        "reviewer": { "type": "string" },
+        "conflictResolver": { "type": "string" },
+        "sdkConflictResolver": { "type": "string" },
+        "mergeStrategy": { "type": "string" },
+        "mergeStrategyFix": { "type": "string" },
+        "mergeStrategyReAttempt": { "type": "string" },
+        "autofixFix": { "type": "string" },
+        "autofixFallback": { "type": "string" },
+        "autofixLoop": { "type": "string" },
+        "monitorCrashFix": { "type": "string" },
+        "monitorRestartLoopFix": { "type": "string" }
       }
     },
     "auth": {

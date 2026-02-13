@@ -438,7 +438,10 @@ export async function execCopilotPrompt(userMessage, options = {}) {
       throw new Error("Copilot SDK session does not support send");
     }
 
-    const sendPromise = sendFn.call(session, { prompt });
+    // Pass timeout parameter to sendAndWait to override 60s SDK default
+    const sendPromise = session.sendAndWait
+      ? sendFn.call(session, { prompt }, timeoutMs)
+      : sendFn.call(session, { prompt });
 
     // If send() returns before idle, wait for session.idle if available
     if (!session.sendAndWait) {

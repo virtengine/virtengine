@@ -28,10 +28,10 @@ import (
 
 // Simulation operation weights constants
 const (
-	OpWeightMsgCreateDeployment = "op_weight_msg_create_deployment" // nolint gosec
-	OpWeightMsgUpdateDeployment = "op_weight_msg_update_deployment" // nolint gosec
-	OpWeightMsgCloseDeployment  = "op_weight_msg_close_deployment"  // nolint gosec
-	OpWeightMsgCloseGroup       = "op_weight_msg_close_group"       // nolint gosec
+	OpWeightMsgCreateDeployment = "op_weight_msg_create_deployment" //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgUpdateDeployment = "op_weight_msg_update_deployment" //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgCloseDeployment  = "op_weight_msg_close_deployment"  //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgCloseGroup       = "op_weight_msg_close_group"       //nolint:gosec // #nosec G101: simulation weight key
 )
 
 // WeightedOperations returns all the operations from the module with their respective weights

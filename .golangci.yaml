@@ -36,6 +36,14 @@ linters:
     rules:
       - path: (.+)\.go$
         text: comment on exported (method|function|type|const|var)
+      - path: _config\.go$
+        text: G101
+        linters:
+          - gosec
+      - path: (.+)/simulation/.+\.go$
+        text: G101
+        linters:
+          - gosec
     paths:
       - third_party$
       - builtin$

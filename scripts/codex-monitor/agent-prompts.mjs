@@ -39,7 +39,8 @@ const PROMPT_DEFS = [
   {
     key: "taskExecutorContinueHasCommits",
     filename: "task-executor-continue-has-commits.md",
-    description: "Continue prompt when edits were committed but not fully finalized.",
+    description:
+      "Continue prompt when edits were committed but not fully finalized.",
   },
   {
     key: "taskExecutorContinueHasEdits",
@@ -49,7 +50,8 @@ const PROMPT_DEFS = [
   {
     key: "taskExecutorContinueNoProgress",
     filename: "task-executor-continue-no-progress.md",
-    description: "Continue prompt when the task stalled without meaningful progress.",
+    description:
+      "Continue prompt when the task stalled without meaningful progress.",
   },
   {
     key: "reviewer",
@@ -74,22 +76,26 @@ const PROMPT_DEFS = [
   {
     key: "mergeStrategyFix",
     filename: "merge-strategy-fix.md",
-    description: "Prompt used when merge strategy decides to send a fix message.",
+    description:
+      "Prompt used when merge strategy decides to send a fix message.",
   },
   {
     key: "mergeStrategyReAttempt",
     filename: "merge-strategy-reattempt.md",
-    description: "Prompt used when merge strategy decides to re-attempt the task.",
+    description:
+      "Prompt used when merge strategy decides to re-attempt the task.",
   },
   {
     key: "autofixFix",
     filename: "autofix-fix.md",
-    description: "Prompt used by crash autofix when structured error data is available.",
+    description:
+      "Prompt used by crash autofix when structured error data is available.",
   },
   {
     key: "autofixFallback",
     filename: "autofix-fallback.md",
-    description: "Prompt used by crash autofix when only log-tail context is available.",
+    description:
+      "Prompt used by crash autofix when only log-tail context is available.",
   },
   {
     key: "autofixLoop",

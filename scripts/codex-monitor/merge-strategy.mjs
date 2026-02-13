@@ -38,6 +38,7 @@ import {
   getThreadRecord,
   invalidateThread,
 } from "./agent-pool.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -111,7 +112,7 @@ const ANALYSIS_COOLDOWN_MS = 10 * 60 * 1000; // 10 min per attempt
 /**
  * Build the analysis prompt for Codex SDK.
  */
-function buildMergeStrategyPrompt(ctx) {
+function buildMergeStrategyPrompt(ctx, promptTemplate = "") {
   const parts = [];
 
   parts.push(`# Merge Strategy Decision
@@ -243,7 +244,41 @@ Or for wait:
 
 RESPOND WITH ONLY THE JSON OBJECT.`);
 
-  return parts.join("\n");
+  const fallback = parts.join("\n");
+  const taskContextBlock = [
+    ctx.taskTitle ? `**Task:** ${ctx.taskTitle}` : "",
+    ctx.taskDescription
+      ? `**Description:** ${ctx.taskDescription.slice(0, 2000)}`
+      : "",
+    `**Status:** ${ctx.status}`,
+    ctx.branch ? `**Branch:** ${ctx.branch}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return resolvePromptTemplate(
+    promptTemplate,
+    {
+      TASK_CONTEXT_BLOCK: taskContextBlock,
+      AGENT_LAST_MESSAGE_BLOCK: ctx.agentLastMessage
+        ? `## Agent's Last Message\n\`\`\`\n${ctx.agentLastMessage.slice(0, 8000)}\n\`\`\``
+        : "",
+      PULL_REQUEST_BLOCK: ctx.prNumber
+        ? `## Pull Request\n- PR #${ctx.prNumber}: ${ctx.prTitle || "(no title)"}\n- State: ${ctx.prState || "unknown"}\n- URL: ${ctx.prUrl || "N/A"}\n- CI: ${ctx.ciStatus || "unknown"}`
+        : "## Pull Request\nNo PR has been created yet.",
+      CHANGES_BLOCK:
+        ctx.filesChanged != null || ctx.changedFiles?.length
+          ? `## Changes\n- Files changed: ${ctx.filesChanged ?? ctx.changedFiles?.length ?? "unknown"}\n- Commits ahead: ${ctx.commitsAhead ?? "unknown"}\n- Commits behind: ${ctx.commitsBehind ?? "unknown"}`
+          : "",
+      CHANGED_FILES_BLOCK: ctx.changedFiles?.length
+        ? `### Changed Files\n\`\`\`\n${ctx.changedFiles.slice(0, 50).join("\n")}${ctx.changedFiles.length > 50 ? `\n... and ${ctx.changedFiles.length - 50} more` : ""}\n\`\`\``
+        : "",
+      DIFF_STATS_BLOCK: ctx.diffStat
+        ? `### Diff Stats\n\`\`\`\n${ctx.diffStat.slice(0, 3000)}\n\`\`\``
+        : "",
+      WORKTREE_BLOCK: ctx.worktreeDir ? `## Worktree\nDirectory: ${ctx.worktreeDir}` : "",
+    },
+    fallback,
+  );
 }
 
 // ── JSON extraction ─────────────────────────────────────────────────────────
@@ -354,6 +389,7 @@ function getDiffDetails(worktreeDir, baseBranch) {
  * @param {string}   opts.logDir - Directory for audit logs
  * @param {function} [opts.onTelegram] - Telegram notification callback
  * @param {boolean}  [opts.useAgentPool=true] - When true and no execCodex, use agent-pool's execPooledPrompt
+ * @param {object}   [opts.promptTemplates] - Optional prompt template overrides
  * @returns {Promise<MergeDecision>}
  */
 export async function analyzeMergeStrategy(ctx, opts = {}) {
@@ -363,6 +399,7 @@ export async function analyzeMergeStrategy(ctx, opts = {}) {
     logDir,
     onTelegram,
     useAgentPool = true,
+    promptTemplates = {},
   } = opts;
 
   const tag = `merge-strategy(${ctx.shortId})`;
@@ -399,7 +436,7 @@ export async function analyzeMergeStrategy(ctx, opts = {}) {
   }
 
   // ── Build prompt ───────────────────────────────────────────
-  const prompt = buildMergeStrategyPrompt(ctx);
+  const prompt = buildMergeStrategyPrompt(ctx, promptTemplates.mergeStrategy);
 
   console.log(
     `[${tag}] starting Codex merge analysis (timeout: ${timeoutMs / 1000}s)...`,
@@ -569,6 +606,7 @@ export function resetMergeStrategyDedup() {
  * @param {function}      [opts.onTelegram] Telegram notification callback
  * @param {number}        [opts.timeoutMs]  Timeout for agent operations (default: 15 min)
  * @param {number}        [opts.maxRetries] Max retries for re_attempt (default: 2)
+ * @param {object}        [opts.promptTemplates] Optional prompt template overrides
  * @returns {Promise<ExecutionResult>}
  */
 export async function executeDecision(decision, ctx, opts = {}) {
@@ -577,6 +615,7 @@ export async function executeDecision(decision, ctx, opts = {}) {
     onTelegram,
     timeoutMs = 15 * 60 * 1000,
     maxRetries = 2,
+    promptTemplates = {},
   } = opts;
 
   const tag = `merge-exec(${ctx.shortId})`;
@@ -593,6 +632,7 @@ export async function executeDecision(decision, ctx, opts = {}) {
           timeoutMs,
           logDir,
           onTelegram,
+          promptTemplate: promptTemplates.mergeStrategyFix,
         });
 
       case "re_attempt":
@@ -604,6 +644,7 @@ export async function executeDecision(decision, ctx, opts = {}) {
           maxRetries,
           logDir,
           onTelegram,
+          promptTemplate: promptTemplates.mergeStrategyReAttempt,
         });
 
       case "merge_after_ci_pass":
@@ -664,7 +705,8 @@ export async function executeDecision(decision, ctx, opts = {}) {
  * 4. Return the agent's response
  */
 async function executePromptAction(decision, ctx, execOpts) {
-  const { tag, taskKey, cwd, timeoutMs, logDir, onTelegram } = execOpts;
+  const { tag, taskKey, cwd, timeoutMs, logDir, onTelegram, promptTemplate } =
+    execOpts;
 
   const fixMessage =
     decision.message ||
@@ -696,7 +738,12 @@ async function executePromptAction(decision, ctx, execOpts) {
   }
 
   // Build a rich prompt for the fix action
-  const fixPrompt = buildFixPrompt(fixMessage, ctx, hasLiveThread);
+  const fixPrompt = buildFixPrompt(
+    fixMessage,
+    ctx,
+    hasLiveThread,
+    promptTemplate,
+  );
 
   try {
     const result = await launchOrResumeThread(fixPrompt, cwd, timeoutMs, {
@@ -749,7 +796,7 @@ async function executePromptAction(decision, ctx, execOpts) {
  * If the thread is being resumed, the prompt is shorter (agent has context).
  * If starting fresh, includes full task context.
  */
-function buildFixPrompt(fixMessage, ctx, isResume) {
+function buildFixPrompt(fixMessage, ctx, isResume, promptTemplate = "") {
   const parts = [];
 
   if (isResume) {
@@ -784,7 +831,28 @@ function buildFixPrompt(fixMessage, ctx, isResume) {
     parts.push(`\n\nFix the issues, then commit and push.`);
   }
 
-  return parts.join("\n");
+  const fallback = parts.join("\n");
+  return resolvePromptTemplate(
+    promptTemplate,
+    {
+      FIX_MESSAGE: fixMessage,
+      TASK_CONTEXT_BLOCK: [
+        ctx.taskTitle ? `Task: ${ctx.taskTitle}` : "",
+        ctx.taskDescription
+          ? `Description: ${ctx.taskDescription.slice(0, 2000)}`
+          : "",
+        ctx.branch ? `Branch: ${ctx.branch}` : "",
+        ctx.prNumber ? `PR: #${ctx.prNumber}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      CI_STATUS_LINE:
+        ctx.ciStatus === "failing"
+          ? "CI is currently failing. Fix CI issues before pushing."
+          : "",
+    },
+    fallback,
+  );
 }
 
 // ── Re-attempt action ───────────────────────────────────────────────────────
@@ -793,8 +861,16 @@ function buildFixPrompt(fixMessage, ctx, isResume) {
  * Execute a "re_attempt" action: invalidate the old thread and start fresh with error recovery.
  */
 async function executeReAttemptAction(decision, ctx, execOpts) {
-  const { tag, taskKey, cwd, timeoutMs, maxRetries, logDir, onTelegram } =
-    execOpts;
+  const {
+    tag,
+    taskKey,
+    cwd,
+    timeoutMs,
+    maxRetries,
+    logDir,
+    onTelegram,
+    promptTemplate,
+  } = execOpts;
 
   const reason = decision.reason || "Previous attempt failed";
 
@@ -812,7 +888,7 @@ async function executeReAttemptAction(decision, ctx, execOpts) {
   }
 
   // Build the re-attempt prompt with full context
-  const reAttemptPrompt = buildReAttemptPrompt(ctx, reason);
+  const reAttemptPrompt = buildReAttemptPrompt(ctx, reason, promptTemplate);
 
   try {
     const result = await execWithRetry(reAttemptPrompt, {
@@ -872,7 +948,7 @@ async function executeReAttemptAction(decision, ctx, execOpts) {
 /**
  * Build a full-context prompt for re-attempting a task from scratch.
  */
-function buildReAttemptPrompt(ctx, reason) {
+function buildReAttemptPrompt(ctx, reason, promptTemplate = "") {
   const parts = [];
   parts.push(`# Task Re-Attempt\n`);
   parts.push(
@@ -886,7 +962,24 @@ function buildReAttemptPrompt(ctx, reason) {
   if (ctx.prNumber)
     parts.push(`**Existing PR:** #${ctx.prNumber} (may need amendment)`);
   parts.push(`\nPlease implement the task fully, run tests, commit, and push.`);
-  return parts.join("\n");
+  const fallback = parts.join("\n");
+  return resolvePromptTemplate(
+    promptTemplate,
+    {
+      FAILURE_REASON: reason,
+      TASK_CONTEXT_BLOCK: [
+        ctx.taskTitle ? `Task: ${ctx.taskTitle}` : "",
+        ctx.taskDescription
+          ? `Description: ${ctx.taskDescription.slice(0, 3000)}`
+          : "",
+        ctx.branch ? `Branch: ${ctx.branch}` : "",
+        ctx.prNumber ? `Existing PR: #${ctx.prNumber}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    },
+    fallback,
+  );
 }
 
 // ── Merge action ────────────────────────────────────────────────────────────

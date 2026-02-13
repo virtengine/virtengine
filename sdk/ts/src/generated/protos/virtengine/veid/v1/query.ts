@@ -4098,11 +4098,6 @@ export const QueryDerivedFeatureHashesResponse_DocFieldHashesEntry: MessageFns<
     return obj;
   },
 
-  create(
-    base?: DeepPartial<QueryDerivedFeatureHashesResponse_DocFieldHashesEntry>,
-  ): QueryDerivedFeatureHashesResponse_DocFieldHashesEntry {
-    return QueryDerivedFeatureHashesResponse_DocFieldHashesEntry.fromPartial(base ?? {});
-  },
   fromPartial(
     object: DeepPartial<QueryDerivedFeatureHashesResponse_DocFieldHashesEntry>,
   ): QueryDerivedFeatureHashesResponse_DocFieldHashesEntry {

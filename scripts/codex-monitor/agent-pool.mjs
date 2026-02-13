@@ -49,15 +49,15 @@ const __dirname = dirname(__filename);
 /** Repository root (two levels up from scripts/codex-monitor/) */
 const REPO_ROOT = resolve(__dirname, "..", "..");
 
-/** Default timeout: 90 minutes */
-const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
+/** Default timeout: 6 hours — agents should run until the stream-based watchdog detects real issues */
+const DEFAULT_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Hard timeout buffer: added on top of the soft timeout.
  * If the SDK's async iterator ignores the AbortSignal, this hard timeout
  * forcibly breaks the Promise.race to prevent infinite hangs.
  */
-const HARD_TIMEOUT_BUFFER_MS = 60_000; // 60 seconds
+const HARD_TIMEOUT_BUFFER_MS = 5 * 60_000; // 5 minutes
 
 /** Tag for console logging */
 const TAG = "[agent-pool]";
@@ -259,7 +259,20 @@ export function getAvailableSdks() {
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string }>}
  */
 async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
-  const { onEvent, abortController: externalAC } = extra;
+  const { onEvent, abortController: externalAC, onThreadReady = null } = extra;
+
+  let reportedThreadId = null;
+  const emitThreadReady = (threadId) => {
+    if (!threadId || threadId === reportedThreadId) return;
+    reportedThreadId = threadId;
+    if (typeof onThreadReady === "function") {
+      try {
+        onThreadReady(threadId, "codex");
+      } catch {
+        /* best effort */
+      }
+    }
+  };
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
   let CodexClass;
@@ -297,11 +310,13 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
       success: false,
       output: "",
       items: [],
-      error: "Codex SDK startThread() returned null — SDK may be misconfigured or API unreachable",
+      error:
+        "Codex SDK startThread() returned null — SDK may be misconfigured or API unreachable",
       sdk: "codex",
       threadId: null,
     };
   }
+  emitThreadReady(thread.id || null);
 
   // ── 3. Timeout / abort wiring ────────────────────────────────────────────
   const controller = externalAC || new AbortController();
@@ -333,6 +348,9 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
     const iterateEvents = async () => {
       for await (const event of turn.events) {
         if (controller.signal.aborted) break;
+        if (event?.type === "thread.started" && event?.thread_id) {
+          emitThreadReady(event.thread_id);
+        }
         if (typeof onEvent === "function") {
           try {
             onEvent(event);
@@ -505,7 +523,10 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       throw new Error("Copilot session does not support send");
     }
 
-    const sendPromise = sendFn.call(session, { prompt: formattedPrompt });
+    // Pass timeout parameter to sendAndWait to override 60s SDK default
+    const sendPromise = session.sendAndWait
+      ? sendFn.call(session, { prompt: formattedPrompt }, timeoutMs)
+      : sendFn.call(session, { prompt: formattedPrompt });
 
     // If only send() (not sendAndWait), wait for idle event
     if (!session.sendAndWait && typeof session.on === "function") {
@@ -527,7 +548,9 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
           if (controller.signal.aborted) {
             onAbort();
           } else {
-            controller.signal.addEventListener("abort", onAbort, { once: true });
+            controller.signal.addEventListener("abort", onAbort, {
+              once: true,
+            });
           }
         }
         setTimeout(() => {
@@ -536,7 +559,17 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         }, timeoutMs + 1000);
       });
     } else {
-      await sendPromise;
+      // Hard timeout safety net for sendAndWait — mirrors the Codex SDK path.
+      // If sendAndWait ignores the abort signal, this forcibly breaks the hang.
+      const copilotHardTimeout = new Promise((_, reject) => {
+        const ht = setTimeout(
+          () => reject(new Error("hard_timeout")),
+          timeoutMs + HARD_TIMEOUT_BUFFER_MS,
+        );
+        // Don't let this timer keep the process alive
+        if (ht && typeof ht.unref === "function") ht.unref();
+      });
+      await Promise.race([sendPromise, copilotHardTimeout]);
     }
 
     clearTimeout(timer);
@@ -596,7 +629,12 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string }>}
  */
 async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
-  const { onEvent, abortController: externalAC } = extra;
+  const {
+    onEvent,
+    abortController: externalAC,
+    claudeAllowedTools = null,
+    claudePermissionMode = null,
+  } = extra;
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
   let queryFn;
@@ -624,7 +662,9 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
 
   // ── 3. Build message queue ───────────────────────────────────────────────
   const controller = externalAC || new AbortController();
-  const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  const softTimer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  // Hard timeout: force-break Promise.race if SDK ignores abort signal
+  const hardTimeoutMs = timeoutMs + HARD_TIMEOUT_BUFFER_MS;
 
   /**
    * Minimal async message queue for the Claude SDK streaming interface.
@@ -656,7 +696,9 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
               r();
               return;
             }
-            controller.signal.addEventListener("abort", onAbort, { once: true });
+            controller.signal.addEventListener("abort", onAbort, {
+              once: true,
+            });
           }
         });
         resolver = null;
@@ -708,13 +750,33 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
 
     msgQueue.push(makeUserMessage(formattedPrompt));
 
+    const normalizeList = (value) => {
+      if (Array.isArray(value)) {
+        return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+      }
+      return String(value || "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    };
+
     /** @type {object} */
     const options = {
       cwd,
       settingSources: ["user", "project"],
-      permissionMode: process.env.CLAUDE_PERMISSION_MODE || "bypassPermissions",
+      permissionMode:
+        claudePermissionMode ||
+        process.env.CLAUDE_PERMISSION_MODE ||
+        "bypassPermissions",
     };
     if (apiKey) options.apiKey = apiKey;
+    const explicitAllowedTools = normalizeList(claudeAllowedTools);
+    const allowedTools = explicitAllowedTools.length
+      ? explicitAllowedTools
+      : normalizeList(process.env.CLAUDE_ALLOWED_TOOLS);
+    if (allowedTools.length) {
+      options.allowedTools = allowedTools;
+    }
 
     const model =
       process.env.CLAUDE_MODEL ||
@@ -731,36 +793,55 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     let finalResponse = "";
     const allItems = [];
 
-    for await (const message of result) {
-      // Extract text from assistant messages
-      const contentBlocks = message?.message?.content || message?.content || [];
+    // Wrap SDK execution in Promise.race to enforce hard timeout even if
+    // the SDK's async iterator ignores the abort signal.
+    const sdkExecution = (async () => {
+      for await (const message of result) {
+        // Check abort signal on every iteration
+        if (controller.signal.aborted) {
+          msgQueue.close();
+          throw new Error("timeout");
+        }
 
-      if (message?.type === "assistant" && Array.isArray(contentBlocks)) {
-        for (const block of contentBlocks) {
-          if (block?.type === "text" && block.text) {
-            finalResponse += block.text + "\n";
+        // Extract text from assistant messages
+        const contentBlocks = message?.message?.content || message?.content || [];
+
+        if (message?.type === "assistant" && Array.isArray(contentBlocks)) {
+          for (const block of contentBlocks) {
+            if (block?.type === "text" && block.text) {
+              finalResponse += block.text + "\n";
+            }
           }
         }
-      }
 
-      // Normalise to item-style events for the onEvent callback
-      const syntheticEvent = { type: message?.type || "unknown", message };
-      allItems.push(syntheticEvent);
-      if (typeof onEvent === "function") {
-        try {
-          onEvent(syntheticEvent);
-        } catch {
-          /* best effort */
+        // Normalise to item-style events for the onEvent callback
+        const syntheticEvent = { type: message?.type || "unknown", message };
+        allItems.push(syntheticEvent);
+        if (typeof onEvent === "function") {
+          try {
+            onEvent(syntheticEvent);
+          } catch {
+            /* best effort */
+          }
+        }
+
+        // If the SDK signals completion, close the queue
+        if (message?.type === "result") {
+          msgQueue.close();
         }
       }
+    })();
 
-      // If the SDK signals completion, close the queue
-      if (message?.type === "result") {
-        msgQueue.close();
-      }
-    }
+    const hardTimeout = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error("hard-timeout")),
+        hardTimeoutMs,
+      ),
+    );
 
-    clearTimeout(timer);
+    await Promise.race([sdkExecution, hardTimeout]);
+
+    clearTimeout(softTimer);
     msgQueue.close();
 
     const output =
@@ -774,8 +855,11 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       threadId: null,
     };
   } catch (err) {
-    clearTimeout(timer);
-    if (err.name === "AbortError" || String(err) === "timeout") {
+    clearTimeout(softTimer);
+    const isTimeout = err.name === "AbortError" ||
+      String(err).includes("timeout") ||
+      String(err.message).includes("timeout");
+    if (isTimeout) {
       return {
         success: false,
         output: "",
@@ -842,6 +926,8 @@ async function loadClaudeAdapter() {
  * @param {string}  [extra.sdk]             Force a specific SDK for this call.
  * @param {Function} [extra.onEvent]        Callback for raw SDK events.
  * @param {AbortController} [extra.abortController] External abort controller.
+ * @param {string[]|string} [extra.claudeAllowedTools] Claude tool allow-list.
+ * @param {string} [extra.claudePermissionMode] Claude permission mode override.
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string }>}
  */
 export async function launchEphemeralThread(
@@ -985,13 +1071,17 @@ export async function execPooledPrompt(userMessage, options = {}) {
 const threadRegistry = new Map();
 
 const THREAD_REGISTRY_FILE = resolve(__dirname, "logs", "thread-registry.json");
-const THREAD_MAX_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours
+const THREAD_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /** Maximum turns before a thread is considered exhausted and must be replaced */
-const MAX_THREAD_TURNS = 30;
+const MAX_THREAD_TURNS = 100;
 
 /** Maximum absolute age for a thread (regardless of lastUsedAt) */
-const THREAD_MAX_ABSOLUTE_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const THREAD_MAX_ABSOLUTE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/** @type {Promise<void>|null} */
+let threadRegistryLoadPromise = null;
+let threadRegistryLoaded = false;
 
 /**
  * Load thread registry from disk (best-effort).
@@ -1005,16 +1095,27 @@ async function loadThreadRegistry() {
     let pruned = 0;
     for (const [key, record] of Object.entries(entries)) {
       // Expire old threads (by lastUsedAt)
-      if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) { pruned++; continue; }
-      // Expire threads that have been alive too long (absolute age)
-      if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) { pruned++; continue; }
-      // Expire high-turn threads (context exhaustion)
-      if (record.turnCount >= MAX_THREAD_TURNS) {
-        console.log(`${TAG} expiring exhausted thread for task "${key}" (${record.turnCount} turns)`);
+      if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) {
         pruned++;
         continue;
       }
-      if (!record.alive) { pruned++; continue; }
+      // Expire threads that have been alive too long (absolute age)
+      if (now - record.createdAt > THREAD_MAX_ABSOLUTE_AGE_MS) {
+        pruned++;
+        continue;
+      }
+      // Expire high-turn threads (context exhaustion)
+      if (record.turnCount >= MAX_THREAD_TURNS) {
+        console.log(
+          `${TAG} expiring exhausted thread for task "${key}" (${record.turnCount} turns)`,
+        );
+        pruned++;
+        continue;
+      }
+      if (!record.alive) {
+        pruned++;
+        continue;
+      }
       threadRegistry.set(key, record);
     }
     // Persist the cleaned registry back to disk so stale entries don't linger
@@ -1040,12 +1141,48 @@ async function saveThreadRegistry() {
   }
 }
 
-// Load registry at module init
-loadThreadRegistry().catch(() => {});
+/**
+ * Ensure thread registry has been loaded from disk before use.
+ * This avoids a startup race where first tasks run before registry restore.
+ */
+export async function ensureThreadRegistryLoaded() {
+  if (threadRegistryLoaded) return;
+  if (!threadRegistryLoadPromise) {
+    threadRegistryLoadPromise = loadThreadRegistry()
+      .catch(() => {
+        /* best-effort */
+      })
+      .finally(() => {
+        threadRegistryLoaded = true;
+      });
+  }
+  await threadRegistryLoadPromise;
+}
+
+// Kick off async load at module init (non-blocking), callers can await explicitly.
+void ensureThreadRegistryLoaded();
 
 // ---------------------------------------------------------------------------
 // Per-SDK Resume Launchers
 // ---------------------------------------------------------------------------
+
+/**
+ * Detect unrecoverable Codex resume errors that indicate poisoned thread state.
+ * These failures should force dropping cached thread metadata.
+ *
+ * @param {unknown} errorValue
+ * @returns {boolean}
+ */
+function isPoisonedCodexResumeError(errorValue) {
+  const lower = String(errorValue || "").toLowerCase();
+  return (
+    lower.includes("invalid_encrypted_content") ||
+    lower.includes("encrypted content") ||
+    lower.includes("could not be verified") ||
+    lower.includes("state db missing rollout path") ||
+    lower.includes("missing rollout path")
+  );
+}
 
 /**
  * Resume an existing Codex thread and run a follow-up prompt.
@@ -1097,6 +1234,7 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
       error: `Thread resume failed: ${err.message}`,
       sdk: "codex",
       threadId: null,
+      poisonedResumeState: isPoisonedCodexResumeError(err.message),
     };
   }
 
@@ -1177,6 +1315,8 @@ async function resumeCodexThread(threadId, prompt, cwd, timeoutMs, extra = {}) {
         : `Thread resume error: ${err.message}`,
       sdk: "codex",
       threadId: null,
+      poisonedResumeState:
+        !isTimeout && isPoisonedCodexResumeError(err.message),
     };
   }
 }
@@ -1240,6 +1380,7 @@ export async function launchOrResumeThread(
   timeoutMs = DEFAULT_TIMEOUT_MS,
   extra = {},
 ) {
+  await ensureThreadRegistryLoaded();
   const { taskKey, ...restExtra } = extra;
 
   // No taskKey — pure ephemeral (backward compatible)
@@ -1274,94 +1415,156 @@ export async function launchOrResumeThread(
       saveThreadRegistry().catch(() => {});
       // Fall through to fresh launch below
     } else {
-    const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
+      const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
 
-    // Only attempt native resume for Codex (it has resumeThread API)
-    if (sdkName === "codex" && existing.sdk === "codex") {
-      console.log(
-        `${TAG} resuming Codex thread ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
-      );
-      const result = await resumeCodexThread(
-        existing.threadId,
-        prompt,
-        cwd,
-        timeoutMs,
-        restExtra,
-      );
+      // Only attempt native resume for Codex (it has resumeThread API)
+      if (sdkName === "codex" && existing.sdk === "codex") {
+        console.log(
+          `${TAG} resuming Codex thread ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
+        );
+        const result = await resumeCodexThread(
+          existing.threadId,
+          prompt,
+          cwd,
+          timeoutMs,
+          restExtra,
+        );
 
-      if (result.success) {
-        // Update registry
-        existing.turnCount += 1;
-        existing.lastUsedAt = Date.now();
-        existing.lastError = null;
-        if (result.threadId) existing.threadId = result.threadId;
+        if (result.success) {
+          // Update registry
+          existing.turnCount += 1;
+          existing.lastUsedAt = Date.now();
+          existing.lastError = null;
+          if (result.threadId) existing.threadId = result.threadId;
+          threadRegistry.set(taskKey, existing);
+          saveThreadRegistry().catch(() => {});
+          return { ...result, resumed: true };
+        }
+
+        // Resume failed — fall through to fresh launch
+        if (
+          result.poisonedResumeState ||
+          isPoisonedCodexResumeError(result.error)
+        ) {
+          console.warn(
+            `${TAG} resume failed for task "${taskKey}" with corrupted state: ${result.error}. Dropping cached thread metadata and starting fresh.`,
+          );
+          threadRegistry.delete(taskKey);
+        } else {
+          console.warn(
+            `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
+          );
+          existing.alive = false;
+          existing.lastError = result.error || existing.lastError || null;
+          threadRegistry.set(taskKey, existing);
+        }
+        saveThreadRegistry().catch(() => {});
+      } else if (existing.sdk !== sdkName) {
+        // SDK changed — invalidate old thread
+        console.log(
+          `${TAG} SDK changed from ${existing.sdk} to ${sdkName} for task "${taskKey}", starting fresh`,
+        );
+        existing.alive = false;
         threadRegistry.set(taskKey, existing);
         saveThreadRegistry().catch(() => {});
-        return { ...result, resumed: true };
-      }
+      } else {
+        // Non-Codex SDK: use context-carry resume
+        console.log(
+          `${TAG} context-carry resume for ${sdkName} thread, task "${taskKey}"`,
+        );
+        const result = await resumeGenericThread(
+          existing.threadId,
+          prompt,
+          cwd,
+          timeoutMs,
+          restExtra,
+          sdkName,
+        );
 
-      // Resume failed — fall through to fresh launch
-      console.warn(
-        `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
-      );
-      existing.alive = false;
-      threadRegistry.set(taskKey, existing);
-    } else if (existing.sdk !== sdkName) {
-      // SDK changed — invalidate old thread
-      console.log(
-        `${TAG} SDK changed from ${existing.sdk} to ${sdkName} for task "${taskKey}", starting fresh`,
-      );
-      existing.alive = false;
-    } else {
-      // Non-Codex SDK: use context-carry resume
-      console.log(
-        `${TAG} context-carry resume for ${sdkName} thread, task "${taskKey}"`,
-      );
-      const result = await resumeGenericThread(
-        existing.threadId,
-        prompt,
-        cwd,
-        timeoutMs,
-        restExtra,
-        sdkName,
-      );
+        if (result.success) {
+          existing.turnCount += 1;
+          existing.lastUsedAt = Date.now();
+          existing.lastError = null;
+          threadRegistry.set(taskKey, existing);
+          saveThreadRegistry().catch(() => {});
+          return { ...result, resumed: true };
+        }
 
-      if (result.success) {
-        existing.turnCount += 1;
-        existing.lastUsedAt = Date.now();
-        existing.lastError = null;
+        console.warn(
+          `${TAG} context-carry resume failed for task "${taskKey}": ${result.error}`,
+        );
+        existing.alive = false;
+        existing.lastError = result.error || existing.lastError || null;
         threadRegistry.set(taskKey, existing);
         saveThreadRegistry().catch(() => {});
-        return { ...result, resumed: true };
       }
-
-      console.warn(
-        `${TAG} context-carry resume failed for task "${taskKey}": ${result.error}`,
-      );
-      existing.alive = false;
-    }
     } // close else for turn-count / absolute-age guard
   }
 
-  // Fresh launch — register the new thread
-  const result = await launchEphemeralThread(prompt, cwd, timeoutMs, restExtra);
+  // Fresh launch — pre-register a thread as soon as the SDK exposes one.
+  // This improves restart recovery for long-running tasks interrupted mid-turn.
+  const callerOnThreadReady =
+    typeof restExtra.onThreadReady === "function"
+      ? restExtra.onThreadReady
+      : null;
+  const launchExtra = { ...restExtra };
+  launchExtra.onThreadReady = (threadId, sdkName = null) => {
+    if (threadId) {
+      const existing = threadRegistry.get(taskKey);
+      const createdAt = existing?.createdAt || Date.now();
+      const turnCount = Number(existing?.turnCount || 1);
+      threadRegistry.set(taskKey, {
+        threadId,
+        sdk:
+          sdkName || existing?.sdk || launchExtra.sdk || resolvePoolSdkName(),
+        taskKey,
+        cwd,
+        turnCount,
+        createdAt,
+        lastUsedAt: Date.now(),
+        lastError: null,
+        alive: true,
+      });
+      saveThreadRegistry().catch(() => {});
+    }
+    if (callerOnThreadReady) {
+      try {
+        callerOnThreadReady(threadId, sdkName);
+      } catch {
+        /* caller errors must not break execution */
+      }
+    }
+  };
 
-  // Register thread for future resume
+  const result = await launchEphemeralThread(
+    prompt,
+    cwd,
+    timeoutMs,
+    launchExtra,
+  );
+
+  // Register/update thread record for future resume
+  const existingRecord = threadRegistry.get(taskKey);
+  const finalThreadId = result.threadId || existingRecord?.threadId || null;
   const record = {
-    threadId: result.threadId || null,
-    sdk: result.sdk,
+    threadId: finalThreadId,
+    sdk:
+      result.sdk ||
+      existingRecord?.sdk ||
+      launchExtra.sdk ||
+      resolvePoolSdkName(),
     taskKey,
     cwd,
-    turnCount: 1,
-    createdAt: Date.now(),
+    turnCount: Number(existingRecord?.turnCount || 1),
+    createdAt: existingRecord?.createdAt || Date.now(),
     lastUsedAt: Date.now(),
     lastError: result.success ? null : result.error,
-    alive: result.success && !!result.threadId,
+    alive: result.success && !!finalThreadId,
   };
   threadRegistry.set(taskKey, record);
   saveThreadRegistry().catch(() => {});
 
-  return { ...result, threadId: result.threadId || null, resumed: false };
+  return { ...result, threadId: finalThreadId, resumed: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -1376,17 +1579,26 @@ export async function launchOrResumeThread(
  *   2. Ask the agent to diagnose and fix the issue
  *   3. Retry up to `maxRetries` times
  *
+ * Supports mid-execution CONTINUE signals:
+ *   When the AbortController is aborted with reason "idle_continue",
+ *   the current attempt is treated as a soft failure and retried with a
+ *   CONTINUE prompt. A fresh AbortController is created for the next attempt.
+ *   Up to `maxContinues` additional attempts are allowed for idle continues.
+ *
  * @param {string}  prompt      Initial prompt.
  * @param {object}  options     Options:
  * @param {string}  options.taskKey       Required — identifies the thread.
  * @param {string}  [options.cwd]         Working directory.
  * @param {number}  [options.timeoutMs]   Per-attempt timeout.
  * @param {number}  [options.maxRetries]  Max follow-up attempts (default: 2).
+ * @param {number}  [options.maxContinues] Max idle-continue attempts (default: 3).
  * @param {Function} [options.shouldRetry] Custom predicate: (result) => boolean.
  * @param {Function} [options.buildRetryPrompt] Custom retry prompt builder: (result, attempt) => string.
+ * @param {Function} [options.buildContinuePrompt] Custom continue prompt builder: (result, attempt) => string.
  * @param {string}  [options.sdk]         Force SDK.
  * @param {Function} [options.onEvent]    Event callback.
- * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, attempts: number, resumed: boolean }>}
+ * @param {Function} [options.onAbortControllerReplaced] Called when AbortController is replaced after idle_continue.
+ * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, attempts: number, continues: number, resumed: boolean }>}
  */
 export async function execWithRetry(prompt, options = {}) {
   const {
@@ -1394,12 +1606,17 @@ export async function execWithRetry(prompt, options = {}) {
     cwd = REPO_ROOT,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRetries = 2,
+    maxContinues = 3,
     shouldRetry,
     buildRetryPrompt,
+    buildContinuePrompt,
     sdk,
     onEvent,
-    abortController,
+    onAbortControllerReplaced,
   } = options;
+
+  // AbortController can be replaced on idle_continue, so track it mutably
+  let abortController = options.abortController ?? null;
 
   if (!taskKey) {
     throw new Error(
@@ -1409,26 +1626,67 @@ export async function execWithRetry(prompt, options = {}) {
 
   let lastResult = null;
   const totalAttempts = 1 + maxRetries;
+  let continuesUsed = 0;
+  let attempt = 0;
 
-  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+  while (attempt < totalAttempts + continuesUsed) {
+    attempt++;
+    const isIdleContinue =
+      lastResult?.error === "idle_continue" ||
+      lastResult?._idleContinue === true;
+
     const currentPrompt =
       attempt === 1
         ? prompt
-        : typeof buildRetryPrompt === "function"
-          ? buildRetryPrompt(lastResult, attempt)
-          : `# ERROR RECOVERY — Attempt ${attempt}/${totalAttempts}\n\nYour previous attempt failed with:\n\`\`\`\n${lastResult?.error || lastResult?.output || "(unknown error)"}\n\`\`\`\n\nPlease diagnose the issue, fix it, and try again. Here was the original task:\n\n${prompt}`;
+        : isIdleContinue && typeof buildContinuePrompt === "function"
+          ? buildContinuePrompt(lastResult, attempt)
+          : typeof buildRetryPrompt === "function"
+            ? buildRetryPrompt(lastResult, attempt)
+            : `# ERROR RECOVERY — Attempt ${attempt}/${totalAttempts}\n\nYour previous attempt failed with:\n\`\`\`\n${lastResult?.error || lastResult?.output || "(unknown error)"}\n\`\`\`\n\nPlease diagnose the issue, fix it, and try again. Here was the original task:\n\n${prompt}`;
 
     console.log(
-      `${TAG} execWithRetry: attempt ${attempt}/${totalAttempts} for task "${taskKey}"${attempt > 1 ? " (resume)" : ""}`,
+      `${TAG} execWithRetry: attempt ${attempt}/${totalAttempts + continuesUsed} for task "${taskKey}"${attempt > 1 ? (isIdleContinue ? " (idle-continue)" : " (resume)") : ""}`,
     );
 
-    // Check if externally aborted (e.g. watchdog killed this slot)
+    // Check if externally aborted (hard kill, not idle_continue)
     if (abortController?.signal?.aborted) {
+      const reason = abortController.signal.reason;
+
+      if (reason === "idle_continue" && continuesUsed < maxContinues) {
+        // Soft abort — agent went idle, send CONTINUE
+        continuesUsed++;
+        console.log(
+          `${TAG} idle_continue detected for "${taskKey}" (continue ${continuesUsed}/${maxContinues}) — sending CONTINUE prompt`,
+        );
+
+        // Replace the AbortController so the next attempt isn't pre-aborted
+        abortController = new AbortController();
+        if (typeof onAbortControllerReplaced === "function") {
+          try {
+            onAbortControllerReplaced(abortController);
+          } catch {
+            /* caller errors must not break execution */
+          }
+        }
+
+        lastResult = {
+          success: false,
+          output: lastResult?.output || "",
+          items: lastResult?.items || [],
+          error: "idle_continue",
+          sdk: sdk || "unknown",
+          threadId: lastResult?.threadId || null,
+          _idleContinue: true,
+        };
+        continue;
+      }
+
+      // Hard abort (watchdog_timeout or unknown)
       lastResult = {
         success: false,
         output: "",
         items: [],
-        error: "Externally aborted (watchdog or manual kill)",
+        error: `Externally aborted (${reason || "watchdog or manual kill"})`,
         sdk: sdk || "unknown",
         threadId: null,
       };
@@ -1442,6 +1700,31 @@ export async function execWithRetry(prompt, options = {}) {
       abortController,
     });
 
+    // Check post-launch if aborted with idle_continue (race: abort fired during execution)
+    if (
+      !lastResult.success &&
+      abortController?.signal?.aborted &&
+      abortController.signal.reason === "idle_continue" &&
+      continuesUsed < maxContinues
+    ) {
+      continuesUsed++;
+      console.log(
+        `${TAG} idle_continue (post-launch) for "${taskKey}" (continue ${continuesUsed}/${maxContinues})`,
+      );
+
+      abortController = new AbortController();
+      if (typeof onAbortControllerReplaced === "function") {
+        try {
+          onAbortControllerReplaced(abortController);
+        } catch {
+          /* best-effort */
+        }
+      }
+
+      lastResult._idleContinue = true;
+      continue;
+    }
+
     // Check if we should retry
     if (lastResult.success) {
       // If caller has custom shouldRetry (e.g. "output must contain 'PASS'"), check it
@@ -1451,23 +1734,24 @@ export async function execWithRetry(prompt, options = {}) {
         );
         continue;
       }
-      return { ...lastResult, attempts: attempt };
+      return { ...lastResult, attempts: attempt, continues: continuesUsed };
     }
 
     // Failed — should we retry?
-    if (attempt < totalAttempts) {
+    const retriesLeft = totalAttempts + continuesUsed - attempt;
+    if (retriesLeft > 0) {
       if (typeof shouldRetry === "function" && !shouldRetry(lastResult)) {
         // Custom predicate says don't retry
         console.log(`${TAG} shouldRetry returned false — not retrying`);
-        return { ...lastResult, attempts: attempt };
+        return { ...lastResult, attempts: attempt, continues: continuesUsed };
       }
       console.warn(
-        `${TAG} attempt ${attempt} failed, will retry: ${lastResult.error}`,
+        `${TAG} attempt ${attempt} failed, will retry (${retriesLeft} left): ${lastResult.error}`,
       );
     }
   }
 
-  return { ...lastResult, attempts: totalAttempts };
+  return { ...lastResult, attempts: attempt, continues: continuesUsed };
 }
 
 // ---------------------------------------------------------------------------
@@ -1505,7 +1789,9 @@ export function invalidateThread(taskKey) {
 export function forceNewThread(taskKey, reason = "manual") {
   const record = threadRegistry.get(taskKey);
   if (record) {
-    console.log(`${TAG} force-invalidating thread for task "${taskKey}": ${reason} (was turn ${record.turnCount})`);
+    console.log(
+      `${TAG} force-invalidating thread for task "${taskKey}": ${reason} (was turn ${record.turnCount})`,
+    );
     record.alive = false;
     threadRegistry.set(taskKey, record);
     saveThreadRegistry().catch(() => {});

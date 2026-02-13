@@ -10,12 +10,20 @@ if (!token) {
 const url = `https://api.telegram.org/bot${token}/getUpdates`;
 
 async function main() {
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    console.error(`Fetch error: ${err.message}`);
+    process.exit(1);
+  }
+
   if (!res.ok) {
     const body = await res.text();
     console.error(`Request failed: ${res.status} ${body}`);
     process.exit(1);
   }
+
   const data = await res.json();
   if (!data.result || data.result.length === 0) {
     console.log(

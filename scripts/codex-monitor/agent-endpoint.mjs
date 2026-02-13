@@ -66,8 +66,10 @@ function parseBody(req) {
       }
       try {
         resolve(JSON.parse(raw));
-      } catch {
-        reject(new Error("Invalid JSON body"));
+      } catch (err) {
+        // Include preview of malformed JSON for debugging (truncate to 200 chars)
+        const preview = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
+        reject(new Error(`Invalid JSON body: ${err.message} — Preview: ${preview}`));
       }
     });
 
@@ -247,14 +249,23 @@ export class AgentEndpoint {
             encoding: "utf8",
             timeout: 5000,
           });
-        } catch {
-          /* may already be dead */
+        } catch (killErr) {
+          /* may already be dead — log for diagnostics */
+          console.warn(
+            `${TAG} taskkill PID ${pid} failed: ${killErr.stderr?.trim() || killErr.message || "unknown error"}`,
+          );
         }
       }
       // Give OS time to release the port
       await new Promise((r) => setTimeout(r, 1000));
-    } catch {
+    } catch (outerErr) {
       // netstat/taskkill may fail on non-Windows or if port already free
+      if (outerErr.status !== 1) {
+        // status 1 = no matching netstat entries (port already free)
+        console.warn(
+          `${TAG} _killProcessOnPort(${port}) failed: ${outerErr.message || "unknown error"}`,
+        );
+      }
     }
   }
 
@@ -287,6 +298,22 @@ export class AgentEndpoint {
   /** @returns {boolean} */
   isRunning() {
     return this._running;
+  }
+
+  /**
+   * Lightweight status for diagnostics (/agents).
+   * @returns {{ running: boolean, port: number, startedAt: number|null, uptimeMs: number }}
+   */
+  getStatus() {
+    return {
+      running: this._running,
+      port: this._port,
+      startedAt: this._startedAt || null,
+      uptimeMs:
+        this._running && this._startedAt
+          ? Math.max(0, Date.now() - this._startedAt)
+          : 0,
+    };
   }
 
   // ── Port Discovery File ─────────────────────────────────────────────────
