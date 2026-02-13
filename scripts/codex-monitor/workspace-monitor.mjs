@@ -329,7 +329,7 @@ class WorkspaceMonitor {
    */
   async gitCommand(cwd, args) {
     return new Promise((resolve, reject) => {
-      const proc = spawn("git", args, { cwd, shell: true });
+      const proc = spawn("git", args, { cwd, shell: false });
       let stdout = "";
       let stderr = "";
 

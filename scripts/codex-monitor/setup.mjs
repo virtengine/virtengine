@@ -10,7 +10,7 @@
  *   - Executor/model configuration (N executors with weights & failover)
  *   - Multi-repo setup (separate backend/frontend repos)
  *   - Vibe-Kanban auto-wiring (project, repos, executor profiles, agent appends)
- *   - Agent prompt template generation (AGENTS.md, orchestrator agent)
+ *   - Prompt template scaffolding (.codex-monitor/agents/*.md)
  *   - First-run auto-detection (launches automatically on virgin installs)
  *
  * Usage:
@@ -33,6 +33,11 @@ import {
   ensureCodexConfig,
   printConfigSummary,
 } from "./codex-config.mjs";
+import {
+  ensureAgentPromptWorkspace,
+  getAgentPromptDefinitions,
+  PROMPT_WORKSPACE_DIR,
+} from "./agent-prompts.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -200,6 +205,36 @@ function detectProjectName(repoRoot) {
     }
   }
   return basename(repoRoot);
+}
+
+function getDefaultPromptOverrides() {
+  const entries = getAgentPromptDefinitions().map((def) => [
+    def.key,
+    `${PROMPT_WORKSPACE_DIR}/${def.filename}`,
+  ]);
+  return Object.fromEntries(entries);
+}
+
+function ensureRepoGitIgnoreEntry(repoRoot, entry) {
+  const gitignorePath = resolve(repoRoot, ".gitignore");
+  const normalizedEntry = String(entry || "").trim();
+  if (!normalizedEntry) return false;
+
+  let existing = "";
+  if (existsSync(gitignorePath)) {
+    existing = readFileSync(gitignorePath, "utf8");
+  }
+
+  const hasEntry = existing
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .includes(normalizedEntry);
+  if (hasEntry) return false;
+
+  const next =
+    existing.endsWith("\n") || !existing ? existing : `${existing}\n`;
+  writeFileSync(gitignorePath, `${next}${normalizedEntry}\n`, "utf8");
+  return true;
 }
 
 // ── Prompt System ────────────────────────────────────────────────────────────
@@ -388,125 +423,11 @@ Tests and builds are verified before push.
 `;
 }
 
-function generateOrchestratorAgent(projectName) {
-  return `---
-name: "Task Orchestrator"
-description: "Autonomous task orchestrator for ${projectName}. Receives task assignments, decomposes work, delegates to subagents, enforces quality gates, and ships PRs."
-tools:
-  [
-    "agent/runSubagent",
-    "execute/runInTerminal",
-    "execute/awaitTerminal",
-    "execute/killTerminal",
-    "execute/getTerminalOutput",
-    "execute/runTests",
-    "read/readFile",
-    "read/problems",
-    "search/changes",
-    "search/codebase",
-    "search/fileSearch",
-    "search/listDirectory",
-    "search/textSearch",
-    "search/usages",
-    "web/fetch",
-    "github/create_pull_request",
-    "github/get_file_contents",
-    "github/list_pull_requests",
-    "github/search_issues",
-    "github/push_files",
-    "vibe-kanban/get_task",
-    "vibe-kanban/list_projects",
-    "vibe-kanban/list_tasks",
-    "vibe-kanban/update_task",
-    "todo",
-    "edit/createFile",
-    "edit/editFiles",
-  ]
----
-
-# Task Orchestrator — Autonomous Agent
-
-You are an autonomous task orchestrator for the **${projectName}** project. You run in the background, receiving task assignments from vibe-kanban. Your job is to **ship completed, tested, lint-clean code via PR** without human input.
-
-## Prime Directives
-
-1. **NEVER ask for human input.** You are autonomous. Make engineering judgments and proceed.
-2. **Delegate** complex implementation to \`runSubagent\` for parallel work.
-3. **NEVER ship broken code.** Every PR must pass: lint, tests, build, pre-push hooks.
-4. **Work until 100% DONE.** No TODOs, no placeholders, no partial implementations.
-5. **Use Conventional Commits** with proper scope.
-
-## Workflow
-
-1. Receive task from vibe-kanban
-2. Read and understand the full scope
-3. Plan your approach
-4. Implement (directly for small tasks, delegate for complex ones)
-5. Test: run linting, tests, build
-6. Commit with conventional commits
-7. Push and create PR via \`gh pr create\`
-
-## Quality Gates
-
-Before pushing:
-- All tests pass on changed packages
-- No lint warnings
-- Build succeeds
-- Changes are atomic and well-scoped
-`;
-}
-
-function generateTaskPlannerAgent(projectName) {
-  return `# Task Planner — ${projectName}
-
-You are an autonomous task planner for the **${projectName}** project. When agent slots are idle and the task backlog is low, you analyze the project state and create actionable tasks.
-
-## Responsibilities
-
-1. Review current project state (open issues, PRs, code health)
-2. Identify gaps, improvements, and next steps
-3. Create 3-5 well-scoped tasks in vibe-kanban with:
-   - Title prefixed with a size label (see below)
-   - Detailed description of what needs to be done
-   - Acceptance criteria for verification
-   - Priority and effort estimates
-
-## Size Labels (REQUIRED)
-
-Every task title MUST start with a size label in brackets. This drives automatic
-complexity-based model routing — the orchestrator selects stronger/weaker AI
-models based on task size.
-
-| Label  | Scope                                      |
-|--------|--------------------------------------------|
-| [xs]   | < 30 min — config change, typo fix         |
-| [s]    | 30-60 min — small feature, docs update     |
-| [m]    | 1-2 hours — standard feature, bug fix      |
-| [l]    | 2-4 hours — multi-file change, test suite  |
-| [xl]   | 4-8 hours — cross-module, architecture     |
-| [xxl]  | 8+ hours — infrastructure, major refactor  |
-
-Examples:
-  - \`[xs] Fix typo in README\`
-  - \`[m] Add validation to user registration endpoint\`
-  - \`[xl] Implement distributed task claiming protocol\`
-
-## Guidelines
-
-- Tasks should be completable in 1-4 hours by a single agent
-- Prioritize: bug fixes > test coverage > tech debt > new features
-- Check for existing similar tasks to avoid duplicates
-- Consider dependencies between tasks
-- Use appropriate size labels based on estimated complexity
-`;
-}
-
 // ── VK Auto-Configuration ────────────────────────────────────────────────────
 
 function generateVkSetupScript(config) {
   const repoRoot = config.repoRoot.replace(/\\/g, "/");
   const monitorDir = config.monitorDir.replace(/\\/g, "/");
-  const agentAppend = config.agentFile ? ` --agent "${config.agentFile}"` : "";
 
   return `#!/usr/bin/env bash
 # Auto-generated by codex-monitor setup
@@ -1114,21 +1035,92 @@ async function main() {
       }
     }
 
-    // ── Step 7: Vibe-Kanban ───────────────────────────────
-    heading("Step 7 of 7 — Vibe-Kanban & Orchestration");
-    env.VK_BASE_URL = await prompt.ask(
-      "VK API URL",
-      process.env.VK_BASE_URL || "http://127.0.0.1:54089",
+    // ── Step 7: Kanban + Execution ─────────────────────────
+    heading("Step 7 of 7 — Kanban & Execution");
+    const backendDefault = String(
+      process.env.KANBAN_BACKEND || configJson.kanban?.backend || "vk",
+    )
+      .trim()
+      .toLowerCase();
+    const backendIdx = await prompt.choose(
+      "Select task board backend:",
+      ["Vibe-Kanban (vk)", "GitHub Issues (github)"],
+      backendDefault === "github" ? 1 : 0,
     );
-    env.VK_RECOVERY_PORT = await prompt.ask(
-      "VK port",
-      process.env.VK_RECOVERY_PORT || "54089",
+    const selectedKanbanBackend = backendIdx === 1 ? "github" : "vk";
+    env.KANBAN_BACKEND = selectedKanbanBackend;
+    configJson.kanban = { backend: selectedKanbanBackend };
+
+    const modeDefault = String(
+      process.env.EXECUTOR_MODE || configJson.internalExecutor?.mode || "vk",
+    )
+      .trim()
+      .toLowerCase();
+    const execModeIdx = await prompt.choose(
+      "Select execution mode:",
+      [
+        "Internal executor (recommended)",
+        "VK executor/orchestrator",
+        "Hybrid (internal + VK)",
+      ],
+      selectedKanbanBackend === "github"
+        ? 0
+        : modeDefault === "hybrid"
+          ? 2
+          : modeDefault === "internal"
+            ? 0
+            : 1,
     );
-    const spawnVk = await prompt.confirm(
-      "Auto-spawn vibe-kanban if not running?",
-      true,
-    );
-    if (!spawnVk) env.VK_NO_SPAWN = "1";
+    const selectedExecutorMode =
+      execModeIdx === 0 ? "internal" : execModeIdx === 1 ? "vk" : "hybrid";
+    env.EXECUTOR_MODE = selectedExecutorMode;
+    configJson.internalExecutor = {
+      ...(configJson.internalExecutor || {}),
+      mode: selectedExecutorMode,
+    };
+
+    const vkNeeded =
+      selectedKanbanBackend === "vk" ||
+      selectedExecutorMode === "vk" ||
+      selectedExecutorMode === "hybrid";
+
+    if (selectedKanbanBackend === "github") {
+      const [slugOwner, slugRepo] = String(slug || "").split("/", 2);
+      env.GITHUB_REPO_OWNER = await prompt.ask(
+        "GitHub owner/org",
+        process.env.GITHUB_REPO_OWNER || slugOwner || "",
+      );
+      env.GITHUB_REPO_NAME = await prompt.ask(
+        "GitHub repository name",
+        process.env.GITHUB_REPO_NAME || slugRepo || basename(repoRoot),
+      );
+      if (env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
+        env.GITHUB_REPOSITORY = `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`;
+        env.KANBAN_PROJECT_ID = env.GITHUB_REPOSITORY;
+      }
+      info(
+        "GitHub Issues selected as board. New issues and manual closes will sync into internal state.",
+      );
+    }
+
+    if (vkNeeded) {
+      env.VK_BASE_URL = await prompt.ask(
+        "VK API URL",
+        process.env.VK_BASE_URL || "http://127.0.0.1:54089",
+      );
+      env.VK_RECOVERY_PORT = await prompt.ask(
+        "VK port",
+        process.env.VK_RECOVERY_PORT || "54089",
+      );
+      const spawnVk = await prompt.confirm(
+        "Auto-spawn vibe-kanban if not running?",
+        true,
+      );
+      if (!spawnVk) env.VK_NO_SPAWN = "1";
+    } else {
+      env.VK_NO_SPAWN = "1";
+      info("VK runtime disabled (not selected as board or executor).");
+    }
 
     // ── Codex CLI Config (config.toml) ─────────────────────
     heading("Codex CLI Config");
@@ -1146,17 +1138,24 @@ async function main() {
     }
 
     // Check vibe-kanban MCP
-    if (existingToml && hasVibeKanbanMcp(existingToml)) {
-      info("Vibe-Kanban MCP server already configured in config.toml.");
-      const updateVk = await prompt.confirm(
-        "Update VK env vars to match your setup values?",
-        true,
-      );
-      if (!updateVk) {
-        env._SKIP_VK_TOML = "1";
+    if (vkNeeded) {
+      if (existingToml && hasVibeKanbanMcp(existingToml)) {
+        info("Vibe-Kanban MCP server already configured in config.toml.");
+        const updateVk = await prompt.confirm(
+          "Update VK env vars to match your setup values?",
+          true,
+        );
+        if (!updateVk) {
+          env._SKIP_VK_TOML = "1";
+        }
+      } else {
+        info("Will add Vibe-Kanban MCP server to Codex config for agent use.");
       }
     } else {
-      info("Will add Vibe-Kanban MCP server to Codex config for agent use.");
+      env._SKIP_VK_TOML = "1";
+      info(
+        "Skipping Vibe-Kanban MCP setup (VK not selected as board or executor).",
+      );
     }
 
     // Check stream timeouts
@@ -1246,105 +1245,102 @@ async function main() {
     heading("Agent Templates");
     console.log(
       chalk.dim(
-        "  Agent templates (AGENTS.md) guide AI agents working on your codebase.\n",
+        "  codex-monitor prompt templates are scaffolded to .codex-monitor/agents and loaded automatically.\n",
       ),
     );
     const generateAgents = await prompt.confirm(
-      "Generate agent template files for this project?",
+      "Scaffold .codex-monitor/agents prompt files?",
       true,
     );
 
     if (generateAgents) {
-      const agentDir = resolve(repoRoot, ".github", "agents");
-      mkdirSync(agentDir, { recursive: true });
+      const promptsResult = ensureAgentPromptWorkspace(repoRoot);
+      const addedGitIgnore = ensureRepoGitIgnoreEntry(
+        repoRoot,
+        "/.codex-monitor/",
+      );
+      configJson.agentPrompts = getDefaultPromptOverrides();
 
-      // AGENTS.md at repo root
+      if (addedGitIgnore) {
+        success("Updated .gitignore with '/.codex-monitor/'");
+      }
+      if (promptsResult.written.length > 0) {
+        success(
+          `Created ${promptsResult.written.length} prompt template file(s) in ${relative(repoRoot, promptsResult.workspaceDir)}`,
+        );
+      } else {
+        info("Prompt templates already exist — keeping existing files");
+      }
+
+      // Optional AGENTS.md seed
       const agentsMdPath = resolve(repoRoot, "AGENTS.md");
       if (!existsSync(agentsMdPath)) {
-        writeFileSync(
-          agentsMdPath,
-          generateAgentsMd(env.PROJECT_NAME, env.GITHUB_REPO),
-          "utf8",
+        const createAgentsGuide = await prompt.confirm(
+          "Create AGENTS.md guide file as well?",
+          true,
         );
-        success(`Created ${relative(repoRoot, agentsMdPath)}`);
+        if (createAgentsGuide) {
+          writeFileSync(
+            agentsMdPath,
+            generateAgentsMd(env.PROJECT_NAME, env.GITHUB_REPO),
+            "utf8",
+          );
+          success(`Created ${relative(repoRoot, agentsMdPath)}`);
+        }
       } else {
-        info(`AGENTS.md already exists — skipping`);
+        info("AGENTS.md already exists — leaving unchanged");
       }
-
-      // Orchestrator agent
-      const orchPath = resolve(agentDir, "orchestrator.agent.md");
-      if (!existsSync(orchPath)) {
-        writeFileSync(
-          orchPath,
-          generateOrchestratorAgent(env.PROJECT_NAME),
-          "utf8",
-        );
-        success(`Created ${relative(repoRoot, orchPath)}`);
-        configJson.agentPrompts.orchestrator = relative(__dirname, orchPath);
-      } else {
-        info(`orchestrator.agent.md already exists — using existing`);
-        configJson.agentPrompts.orchestrator = relative(__dirname, orchPath);
-      }
-
-      // Task planner agent
-      const plannerPath = resolve(agentDir, "task-planner.agent.md");
-      if (!existsSync(plannerPath)) {
-        writeFileSync(
-          plannerPath,
-          generateTaskPlannerAgent(env.PROJECT_NAME),
-          "utf8",
-        );
-        success(`Created ${relative(repoRoot, plannerPath)}`);
-        configJson.agentPrompts.planner = relative(__dirname, plannerPath);
-      } else {
-        info(`task-planner.agent.md already exists — using existing`);
-        configJson.agentPrompts.planner = relative(__dirname, plannerPath);
-      }
+    } else {
+      configJson.agentPrompts = getDefaultPromptOverrides();
     }
 
     // ── VK Auto-Wiring ────────────────────────────────────
-    heading("Vibe-Kanban Auto-Configuration");
-    const autoWireVk = await prompt.confirm(
-      "Auto-configure Vibe-Kanban project, repos, and executor profiles?",
-      true,
-    );
+    if (vkNeeded) {
+      heading("Vibe-Kanban Auto-Configuration");
+      const autoWireVk = await prompt.confirm(
+        "Auto-configure Vibe-Kanban project, repos, and executor profiles?",
+        true,
+      );
 
-    if (autoWireVk) {
-      const vkConfig = {
-        projectName: env.PROJECT_NAME,
-        repoRoot,
-        monitorDir: __dirname,
-        agentFile: configJson.agentPrompts.orchestrator
-          ? resolve(__dirname, configJson.agentPrompts.orchestrator)
-          : null,
-      };
+      if (autoWireVk) {
+        const vkConfig = {
+          projectName: env.PROJECT_NAME,
+          repoRoot,
+          monitorDir: __dirname,
+        };
 
-      // Generate VK scripts
-      const setupScript = generateVkSetupScript(vkConfig);
-      const cleanupScript = generateVkCleanupScript(vkConfig);
+        // Generate VK scripts
+        const setupScript = generateVkSetupScript(vkConfig);
+        const cleanupScript = generateVkCleanupScript(vkConfig);
 
-      // Get current PATH for VK executor profiles
-      const currentPath = process.env.PATH || "";
+        // Get current PATH for VK executor profiles
+        const currentPath = process.env.PATH || "";
 
-      // Write to config for VK API auto-wiring
-      configJson.vkAutoConfig = {
-        setupScript,
-        cleanupScript,
-        executorProfiles: configJson.executors.map((e) => ({
-          executor: e.executor,
-          variant: e.variant,
-          environmentVariables: {
-            PATH: currentPath,
-            // Ensure GitHub token is available in workspace
-            GH_TOKEN: "${GH_TOKEN}",
-            GITHUB_TOKEN: "${GITHUB_TOKEN}",
-          },
-        })),
-      };
+        // Write to config for VK API auto-wiring
+        configJson.vkAutoConfig = {
+          setupScript,
+          cleanupScript,
+          executorProfiles: configJson.executors.map((e) => ({
+            executor: e.executor,
+            variant: e.variant,
+            environmentVariables: {
+              PATH: currentPath,
+              // Ensure GitHub token is available in workspace
+              GH_TOKEN: "${GH_TOKEN}",
+              GITHUB_TOKEN: "${GITHUB_TOKEN}",
+            },
+          })),
+        };
 
-      info("VK configuration will be applied on first launch.");
-      info("Setup and cleanup scripts generated for your workspace.");
-      info(`PATH environment variable configured for ${configJson.executors.length} executor profile(s)`);
+        info("VK configuration will be applied on first launch.");
+        info("Setup and cleanup scripts generated for your workspace.");
+        info(
+          `PATH environment variable configured for ${configJson.executors.length} executor profile(s)`,
+        );
+      }
+    } else {
+      info("Skipping VK auto-configuration (VK not selected).");
+      delete configJson.vkAutoConfig;
     }
   } finally {
     prompt.close();
@@ -1369,8 +1365,22 @@ async function runNonInteractive({
   env.GITHUB_REPO = process.env.GITHUB_REPO || slug || "";
   env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
   env.TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+  env.KANBAN_BACKEND = process.env.KANBAN_BACKEND || "vk";
+  env.EXECUTOR_MODE = process.env.EXECUTOR_MODE || "vk";
   env.VK_BASE_URL = process.env.VK_BASE_URL || "http://127.0.0.1:54089";
   env.VK_RECOVERY_PORT = process.env.VK_RECOVERY_PORT || "54089";
+  env.GITHUB_REPO_OWNER =
+    process.env.GITHUB_REPO_OWNER || (slug ? String(slug).split("/")[0] : "");
+  env.GITHUB_REPO_NAME =
+    process.env.GITHUB_REPO_NAME || (slug ? String(slug).split("/")[1] : "");
+  env.GITHUB_REPOSITORY =
+    process.env.GITHUB_REPOSITORY ||
+    (env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME
+      ? `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`
+      : "");
+  if (!env.GITHUB_REPO && env.GITHUB_REPOSITORY) {
+    env.GITHUB_REPO = env.GITHUB_REPOSITORY;
+  }
   env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
   env.MAX_PARALLEL = process.env.MAX_PARALLEL || "6";
 
@@ -1402,6 +1412,11 @@ async function runNonInteractive({
   }
 
   configJson.projectName = env.PROJECT_NAME;
+  configJson.kanban = { backend: env.KANBAN_BACKEND || "vk" };
+  configJson.internalExecutor = {
+    ...(configJson.internalExecutor || {}),
+    mode: env.EXECUTOR_MODE || "vk",
+  };
   configJson.failover = {
     strategy: process.env.FAILOVER_STRATEGY || "next-in-line",
     maxRetries: Number(process.env.FAILOVER_MAX_RETRIES || "3"),
@@ -1418,6 +1433,17 @@ async function runNonInteractive({
       primary: true,
     },
   ];
+  configJson.agentPrompts = getDefaultPromptOverrides();
+  ensureAgentPromptWorkspace(repoRoot);
+  ensureRepoGitIgnoreEntry(repoRoot, "/.codex-monitor/");
+
+  if (
+    (env.KANBAN_BACKEND || "").toLowerCase() !== "vk" &&
+    !["vk", "hybrid"].includes((env.EXECUTOR_MODE || "").toLowerCase())
+  ) {
+    env.VK_NO_SPAWN = "1";
+    delete configJson.vkAutoConfig;
+  }
 
   await writeConfigFiles({ env, configJson, repoRoot, configDir });
 }
@@ -1428,6 +1454,14 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   heading("Writing Configuration");
   const targetDir = resolve(configDir || __dirname);
   mkdirSync(targetDir, { recursive: true });
+  ensureAgentPromptWorkspace(repoRoot);
+  ensureRepoGitIgnoreEntry(repoRoot, "/.codex-monitor/");
+  if (
+    !configJson.agentPrompts ||
+    Object.keys(configJson.agentPrompts).length === 0
+  ) {
+    configJson.agentPrompts = getDefaultPromptOverrides();
+  }
 
   // ── .env file ──────────────────────────────────────────
   const envPath = resolve(targetDir, ".env");
@@ -1472,14 +1506,17 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   // ── Codex CLI config.toml ─────────────────────────────
   heading("Codex CLI Config");
 
-  const vkPort = env.VK_RECOVERY_PORT || "54089";
-  const vkBaseUrl = env.VK_BASE_URL || `http://127.0.0.1:${vkPort}`;
-
-  const tomlResult = ensureCodexConfig({
-    vkBaseUrl,
-    dryRun: false,
-  });
-  printConfigSummary(tomlResult, (msg) => console.log(msg));
+  if (env._SKIP_VK_TOML === "1") {
+    info("Skipped Vibe-Kanban MCP config update.");
+  } else {
+    const vkPort = env.VK_RECOVERY_PORT || "54089";
+    const vkBaseUrl = env.VK_BASE_URL || `http://127.0.0.1:${vkPort}`;
+    const tomlResult = ensureCodexConfig({
+      vkBaseUrl,
+      dryRun: false,
+    });
+    printConfigSummary(tomlResult, (msg) => console.log(msg));
+  }
 
   // ── Install dependencies ───────────────────────────────
   heading("Installing Dependencies");

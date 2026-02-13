@@ -33,6 +33,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getConsoleLevel, LogLevel } from "./lib/logger.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -443,14 +444,27 @@ export function runCodexExec(
 
     let child;
     try {
-      child = spawn("codex", args, {
+      const spawnOptions = {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
-        shell: true,
         // Do NOT set spawn timeout — we manage our own setTimeout to avoid
         // Node double-killing the child with SIGTERM before our handler runs.
         env: { ...process.env },
-      });
+      };
+      if (process.platform === "win32") {
+        const shellQuote = (value) =>
+          /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+        const fullCommand = ["codex", ...args].map(shellQuote).join(" ");
+        child = spawn(fullCommand, {
+          ...spawnOptions,
+          shell: true,
+        });
+      } else {
+        child = spawn("codex", args, {
+          ...spawnOptions,
+          shell: false,
+        });
+      }
     } catch (err) {
       return promiseResolve({
         success: false,
@@ -598,11 +612,19 @@ function getChangeSummary(repoRoot, files) {
  * @param {string} opts.logDir — directory for fix audit logs
  * @param {function} [opts.onTelegram] — optional callback to send Telegram message
  * @param {string[]} [opts.recentMessages] — recent Telegram messages for context
+ * @param {object} [opts.promptTemplates] — optional prompt template overrides
  * @returns {Promise<{fixed: boolean, errors: object[], skipped: string[], outcome: string}>}
  */
 export async function attemptAutoFix(opts) {
-  const { logText, reason, repoRoot, logDir, onTelegram, recentMessages } =
-    opts;
+  const {
+    logText,
+    reason,
+    repoRoot,
+    logDir,
+    onTelegram,
+    recentMessages,
+    promptTemplates = {},
+  } = opts;
 
   const errors = extractErrors(logText);
 
@@ -659,7 +681,11 @@ export async function attemptAutoFix(opts) {
       );
     }
 
-    const prompt = buildFallbackPrompt(fallback, recentMessages);
+    const prompt = buildFallbackPrompt(
+      fallback,
+      recentMessages,
+      promptTemplates.autofixFallback,
+    );
 
     // Audit log
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -828,7 +854,13 @@ export async function attemptAutoFix(opts) {
         : "(file unknown — error extracted from log)";
 
     // Build a focused fix prompt
-    const prompt = buildFixPrompt(error, sourceContext, reason, recentMessages);
+    const prompt = buildFixPrompt(
+      error,
+      sourceContext,
+      reason,
+      recentMessages,
+      promptTemplates.autofixFix,
+    );
 
     // Write prompt to audit log
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -955,10 +987,16 @@ ${msgs.map((m, i) => `[${i + 1}] ${m}`).join("\n")}
 `;
 }
 
-function buildFixPrompt(error, sourceContext, reason, recentMessages) {
+function buildFixPrompt(
+  error,
+  sourceContext,
+  reason,
+  recentMessages,
+  promptTemplate = "",
+) {
   const messagesCtx = buildRecentMessagesContext(recentMessages);
 
-  return `You are a PowerShell expert fixing a crash in a running orchestrator script.
+  const fallback = `You are a PowerShell expert fixing a crash in a running orchestrator script.
 
 ## Error
 Type: ${error.errorType}
@@ -986,12 +1024,27 @@ ${messagesCtx}
    - ParserError: check for syntax issues like unclosed brackets, bad string interpolation
 5. Write the fix to the file. Do NOT create new files or refactor other functions.
 6. Keep all existing functionality intact.`;
+  return resolvePromptTemplate(
+    promptTemplate,
+    {
+      ERROR_TYPE: error.errorType,
+      ERROR_FILE: error.file,
+      ERROR_LINE: error.line,
+      ERROR_COLUMN_LINE: error.column ? `Column: ${error.column}` : "",
+      ERROR_MESSAGE: error.message,
+      ERROR_CODE_LINE: error.codeLine ? `Failing code: ${error.codeLine}` : "",
+      CRASH_REASON: reason,
+      SOURCE_CONTEXT: sourceContext,
+      RECENT_MESSAGES_CONTEXT: messagesCtx,
+    },
+    fallback,
+  );
 }
 
-function buildFallbackPrompt(fallback, recentMessages) {
+function buildFallbackPrompt(fallback, recentMessages, promptTemplate = "") {
   const messagesCtx = buildRecentMessagesContext(recentMessages);
 
-  return `You are a PowerShell expert analyzing an orchestrator script crash.
+  const defaultPrompt = `You are a PowerShell expert analyzing an orchestrator script crash.
 No structured error was extracted — the process terminated with: ${fallback.reason}
 
 ## Error indicators from log tail
@@ -1014,6 +1067,20 @@ ${messagesCtx}
    - Exit code 4294967295 = unsigned overflow from uncaught exception
 5. If the crash is external (SIGKILL, OOM) with no code bug, do nothing
 6. Write any fix directly to the file. Keep existing functionality intact.`;
+  return resolvePromptTemplate(
+    promptTemplate,
+    {
+      FALLBACK_REASON: fallback.reason,
+      FALLBACK_ERROR_LINES:
+        fallback.errorLines.length > 0
+          ? fallback.errorLines.join("\n")
+          : "(no explicit error lines detected — possible SIGKILL, OOM, or silent crash)",
+      FALLBACK_LINE_COUNT: Math.min(80, fallback.lineCount),
+      FALLBACK_TAIL: fallback.tail,
+      RECENT_MESSAGES_CONTEXT: messagesCtx,
+    },
+    defaultPrompt,
+  );
 }
 
 // ── Repeating error (loop) fixer ────────────────────────────────────────────
@@ -1033,6 +1100,7 @@ ${messagesCtx}
  * @param {string} opts.logDir — log directory
  * @param {function} [opts.onTelegram] — Telegram callback
  * @param {string[]} [opts.recentMessages] — recent Telegram messages for context
+ * @param {string} [opts.promptTemplate] — optional loop-fix prompt template
  * @returns {Promise<{fixed: boolean, outcome: string}>}
  */
 export async function fixLoopingError(opts) {
@@ -1043,6 +1111,7 @@ export async function fixLoopingError(opts) {
     logDir,
     onTelegram,
     recentMessages,
+    promptTemplate = "",
   } = opts;
 
   const signature = `loop:${errorLine.slice(0, 120)}`;
@@ -1068,7 +1137,7 @@ export async function fixLoopingError(opts) {
 
   const messagesCtx = buildRecentMessagesContext(recentMessages);
 
-  const prompt = `You are a PowerShell expert fixing a loop bug in a running orchestrator script.
+  const defaultPrompt = `You are a PowerShell expert fixing a loop bug in a running orchestrator script.
 
 ## Problem
 The following error line is repeating ${repeatCount} times in the orchestrator output,
@@ -1090,6 +1159,15 @@ ${messagesCtx}
    - Missing \`continue\` or state change in foreach loops over tracked attempts
 6. Apply a minimal fix. Do NOT refactor unrelated code.
 7. Write the fix directly to the file.`;
+  const prompt = resolvePromptTemplate(
+    promptTemplate,
+    {
+      REPEAT_COUNT: repeatCount,
+      ERROR_LINE: errorLine,
+      RECENT_MESSAGES_CONTEXT: messagesCtx,
+    },
+    defaultPrompt,
+  );
 
   // Audit log
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");

@@ -290,6 +290,15 @@ let _onDigestSealed = null;
 let _getAnomalyReport = null;
 let _getInternalExecutor = null;
 let _getExecutorMode = null;
+let _getAgentEndpoint = null;
+let _getReviewAgent = null;
+let _getReviewAgentEnabled = null;
+let _getSyncEngine = null;
+let _getErrorDetector = null;
+let _getPrCleanupDaemon = null;
+let _getWorkspaceMonitor = null;
+let _getMonitorMonitorStatus = null;
+let _getTaskStoreStats = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -314,6 +323,15 @@ export function injectMonitorFunctions({
   getAnomalyReport,
   getInternalExecutor,
   getExecutorMode,
+  getAgentEndpoint,
+  getReviewAgent,
+  getReviewAgentEnabled,
+  getSyncEngine,
+  getErrorDetector,
+  getPrCleanupDaemon,
+  getWorkspaceMonitor,
+  getMonitorMonitorStatus,
+  getTaskStoreStats,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -333,6 +351,15 @@ export function injectMonitorFunctions({
   _getAnomalyReport = getAnomalyReport || null;
   _getInternalExecutor = getInternalExecutor || null;
   _getExecutorMode = getExecutorMode || null;
+  _getAgentEndpoint = getAgentEndpoint || null;
+  _getReviewAgent = getReviewAgent || null;
+  _getReviewAgentEnabled = getReviewAgentEnabled || null;
+  _getSyncEngine = getSyncEngine || null;
+  _getErrorDetector = getErrorDetector || null;
+  _getPrCleanupDaemon = getPrCleanupDaemon || null;
+  _getWorkspaceMonitor = getWorkspaceMonitor || null;
+  _getMonitorMonitorStatus = getMonitorMonitorStatus || null;
+  _getTaskStoreStats = getTaskStoreStats || null;
 }
 
 /**
@@ -404,30 +431,43 @@ async function sendDirect(chatId, text, options = {}) {
     }
     payload.disable_web_page_preview = true;
 
+    let res;
     try {
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const body = await res.text();
-        console.warn(`[telegram-bot] send failed: ${res.status} ${body}`);
-        // If HTML parse mode fails, retry as plain text
-        if (options.parseMode && res.status === 400) {
-          return sendDirect(chatId, chunk, {
-            ...options,
-            parseMode: undefined,
-          });
-        }
-      } else {
+    } catch (err) {
+      console.warn(`[telegram-bot] send error: ${err.message}`);
+      continue;
+    }
+
+    // Safety: validate response object
+    if (!res || typeof res.ok === "undefined") {
+      console.warn(`[telegram-bot] send error: invalid response object`);
+      continue;
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[telegram-bot] send failed: ${res.status} ${body}`);
+      // If HTML parse mode fails, retry as plain text
+      if (options.parseMode && res.status === 400) {
+        return sendDirect(chatId, chunk, {
+          ...options,
+          parseMode: undefined,
+        });
+      }
+    } else {
+      try {
         const data = await res.json();
         if (data.ok && data.result?.message_id) {
           lastMessageId = data.result.message_id;
         }
+      } catch (err) {
+        console.warn(`[telegram-bot] send JSON parse error: ${err.message}`);
       }
-    } catch (err) {
-      console.warn(`[telegram-bot] send error: ${err.message}`);
     }
   }
   return lastMessageId;
@@ -457,38 +497,46 @@ async function editDirect(chatId, messageId, text, options = {}) {
     payload.parse_mode = options.parseMode;
   }
 
+  let res;
   try {
-    const res = await fetch(url, {
+    res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const body = await res.text();
-      // "message is not modified" is fine — content didn't change
-      if (body.includes("message is not modified")) return messageId;
-      // "message can't be edited" — send new message instead
-      if (
-        body.includes("can't be edited") ||
-        body.includes("MESSAGE_ID_INVALID")
-      ) {
-        console.warn(`[telegram-bot] edit failed, sending new message`);
-        return await sendDirect(chatId, truncated, options);
-      }
-      console.warn(`[telegram-bot] edit failed: ${res.status} ${body}`);
-      // For HTML parse errors, retry without parse mode
-      if (options.parseMode && res.status === 400) {
-        return editDirect(chatId, messageId, truncated, {
-          ...options,
-          parseMode: undefined,
-        });
-      }
-    }
-    return messageId;
   } catch (err) {
     console.warn(`[telegram-bot] edit error: ${err.message}`);
     return messageId;
   }
+
+  // Safety: validate response object
+  if (!res || typeof res.ok === "undefined") {
+    console.warn(`[telegram-bot] edit error: invalid response object`);
+    return messageId;
+  }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    // "message is not modified" is fine — content didn't change
+    if (body.includes("message is not modified")) return messageId;
+    // "message can't be edited" — send new message instead
+    if (
+      body.includes("can't be edited") ||
+      body.includes("MESSAGE_ID_INVALID")
+    ) {
+      console.warn(`[telegram-bot] edit failed, sending new message`);
+      return await sendDirect(chatId, truncated, options);
+    }
+    console.warn(`[telegram-bot] edit failed: ${res.status} ${body}`);
+    // For HTML parse errors, retry without parse mode
+    if (options.parseMode && res.status === 400) {
+      return editDirect(chatId, messageId, truncated, {
+        ...options,
+        parseMode: undefined,
+      });
+    }
+  }
+  return messageId;
 }
 
 // ── Action Summarizer ────────────────────────────────────────────────────────
@@ -983,28 +1031,42 @@ async function pollUpdates() {
   });
 
   pollAbort = new AbortController();
+  let res;
   try {
-    const res = await fetch(`${url}?${params}`, {
+    res = await fetch(`${url}?${params}`, {
       signal: pollAbort.signal,
       // No explicit timeout — the Telegram API long-poll handles timing
     });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
-      if (res.status === 409) {
-        polling = false;
-        await releaseTelegramPollLock();
-      }
-      return [];
-    }
-    const data = await res.json();
-    return data.ok ? data.result || [] : [];
   } catch (err) {
     if (err.name === "AbortError") return [];
     console.warn(`[telegram-bot] poll error: ${err.message}`);
     return [];
   } finally {
     pollAbort = null;
+  }
+
+  // Safety: validate response object
+  if (!res || typeof res.ok === "undefined") {
+    console.warn(`[telegram-bot] poll error: invalid response object`);
+    return [];
+  }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
+    if (res.status === 409) {
+      polling = false;
+      await releaseTelegramPollLock();
+    }
+    return [];
+  }
+
+  try {
+    const data = await res.json();
+    return data.ok ? data.result || [] : [];
+  } catch (err) {
+    console.warn(`[telegram-bot] poll JSON parse error: ${err.message}`);
+    return [];
   }
 }
 
@@ -1197,6 +1259,10 @@ const COMMANDS = {
   "/tasks": {
     handler: cmdTasks,
     desc: "Active tasks, workspace metrics & retries",
+  },
+  "/agents": {
+    handler: cmdAgents,
+    desc: "Show all active monitor/task/review/conflict agents",
   },
   "/logs": { handler: cmdLogs, desc: "Recent monitor logs" },
   "/agentlogs": { handler: cmdAgentLogs, desc: "Agent output for branch: /agentlogs <branch>" },
@@ -1395,8 +1461,9 @@ async function registerBotCommands() {
     commands.push({ command, description });
   }
 
+  let res;
   try {
-    const res = await fetch(
+    res = await fetch(
       `https://api.telegram.org/bot${telegramToken}/setMyCommands`,
       {
         method: "POST",
@@ -1404,6 +1471,12 @@ async function registerBotCommands() {
         body: JSON.stringify({ commands }),
       },
     );
+  } catch (err) {
+    console.warn(`[telegram-bot] setMyCommands error: ${err.message}`);
+    return;
+  }
+
+  try {
     const data = await res.json();
     if (data.ok) {
       console.log(
@@ -1415,13 +1488,14 @@ async function registerBotCommands() {
       );
     }
   } catch (err) {
-    console.warn(`[telegram-bot] setMyCommands error: ${err.message}`);
+    console.warn(`[telegram-bot] setMyCommands JSON parse error: ${err.message}`);
   }
 }
 
 const FAST_COMMANDS = new Set([
   "/status",
   "/tasks",
+  "/agents",
   "/sdk",
   "/kanban",
   "/threads",
@@ -1790,6 +1864,27 @@ async function cmdAnomalies(chatId) {
   }
 }
 
+function formatRuntimeSeconds(seconds) {
+  const safeSeconds =
+    Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+  const mins = Math.floor(safeSeconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMin = mins % 60;
+  return `${hours}h${remMin}m`;
+}
+
+function formatAgeFromTimestamp(timestampMs) {
+  const ts = Number(timestampMs || 0);
+  if (!Number.isFinite(ts) || ts <= 0) return "n/a";
+  const ageSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (ageSec < 60) return `${ageSec}s ago`;
+  if (ageSec < 3600) return `${Math.floor(ageSec / 60)}m ago`;
+  const hours = Math.floor(ageSec / 3600);
+  const remMin = Math.floor((ageSec % 3600) / 60);
+  return remMin > 0 ? `${hours}h ${remMin}m ago` : `${hours}h ago`;
+}
+
 async function cmdTasks(chatId) {
   try {
     // ── Prefer live executor slots over stale status file ──
@@ -1797,6 +1892,17 @@ async function cmdTasks(chatId) {
     const executorStatus = executor?.getStatus?.();
 
     if (executorStatus) {
+      let statusSnapshot = null;
+      if (_readStatusData) {
+        try {
+          statusSnapshot = await _readStatusData();
+        } catch {
+          /* best effort */
+        }
+      }
+      const reviewTaskIds = Array.isArray(statusSnapshot?.review_tasks)
+        ? statusSnapshot.review_tasks
+        : [];
       const lines = [];
 
       // Show pause state prominently at top
@@ -1812,15 +1918,18 @@ async function cmdTasks(chatId) {
 
       for (const slot of executorStatus.slots) {
         const emoji = slot.status === "running" ? "🟢" : slot.status === "error" ? "❌" : "🔵";
-        const runMin = Math.round(slot.runningFor / 60);
-        const runStr = runMin >= 60 ? `${Math.floor(runMin / 60)}h${runMin % 60}m` : `${runMin}m`;
+        const runStr = formatRuntimeSeconds(slot.runningFor);
+        const agentId =
+          Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+            ? `#${slot.agentInstanceId}`
+            : "n/a";
 
-        // Branch name is the agent ID — show it prominently
+        // Branch is still the best debug key for logs/worktrees.
         const branch = slot.branch || slot.taskId.substring(0, 8);
         const shortBranch = branch.replace(/^ve\//, "");
-        lines.push(`${emoji} ${shortBranch}`);
+        lines.push(`${emoji} Agent ${agentId} • ${shortBranch}`);
         lines.push(`   ${slot.taskTitle}`);
-        lines.push(`   SDK: ${slot.sdk} | ⏱️ ${runStr} | Attempt #${slot.attempt}`);
+        lines.push(`   SDK: ${slot.sdk} | ⏱️ ${runStr} | Attempt #${slot.attempt} | Task ${slot.taskId.substring(0, 8)}`);
 
         // Git diff stats
         if (slot.branch) {
@@ -1840,6 +1949,34 @@ async function cmdTasks(chatId) {
         lines.push(""); // spacing
       }
 
+      const reviewAgent = _getReviewAgent?.();
+      const reviewStatus =
+        reviewAgent && typeof reviewAgent.getStatus === "function"
+          ? reviewAgent.getStatus()
+          : null;
+      const reviewQueued =
+        Number(reviewStatus?.queuedReviews || 0) +
+        Number(reviewStatus?.activeReviews || 0);
+      const taskStoreStats = _getTaskStoreStats?.() || null;
+      const reviewCount = Math.max(
+        Number(taskStoreStats?.inreview || 0),
+        reviewQueued,
+      );
+      if (reviewCount > 0) {
+        lines.push(`👀 In review: ${reviewCount} task(s)`);
+        if (reviewStatus) {
+          lines.push(
+            `   Review agent queue: active=${reviewStatus.activeReviews || 0}, queued=${reviewStatus.queuedReviews || 0}, completed=${reviewStatus.completedReviews || 0}`,
+          );
+        }
+        if (reviewTaskIds.length > 0) {
+          for (const taskId of reviewTaskIds.slice(0, 5)) {
+            lines.push(`   - ${taskId}`);
+          }
+        }
+        lines.push("");
+      }
+
       lines.push("────────────────────────────");
       lines.push(`Use /agentlogs <branch> for agent output`);
 
@@ -1848,6 +1985,25 @@ async function cmdTasks(chatId) {
       } else {
         // No active slots — show status summary
         lines.push(`📋 No active agents (0/${executorStatus.maxParallel} slots)`);
+        const reviewAgent = _getReviewAgent?.();
+        const reviewStatus =
+          reviewAgent && typeof reviewAgent.getStatus === "function"
+            ? reviewAgent.getStatus()
+            : null;
+        const taskStoreStats = _getTaskStoreStats?.() || null;
+        const reviewCount = Math.max(
+          Number(taskStoreStats?.inreview || 0),
+          Number(reviewStatus?.activeReviews || 0) +
+            Number(reviewStatus?.queuedReviews || 0),
+        );
+        if (reviewCount > 0) {
+          lines.push(`👀 In review: ${reviewCount} task(s)`);
+          if (reviewTaskIds.length > 0) {
+            for (const taskId of reviewTaskIds.slice(0, 5)) {
+              lines.push(`   - ${taskId}`);
+            }
+          }
+        }
         if (executorStatus.blockedTasks?.length > 0) {
           lines.push(`\n⛔ ${executorStatus.blockedTasks.length} task(s) blocked (exceeded retry limit)`);
         }
@@ -1881,8 +2037,13 @@ async function cmdTasks(chatId) {
       const pr = attempt.pr_number ? ` PR#${attempt.pr_number}` : "";
       const title = attempt.task_title || attempt.task_id || id;
       const shortBranch = branch ? branch.replace(/^ve\//, "") : title;
+      const agentIdRaw = Number(attempt.agent_instance_id);
+      const agentId =
+        Number.isFinite(agentIdRaw) && agentIdRaw > 0 ? `#${agentIdRaw}` : null;
 
-      lines.push(`${emoji} ${shortBranch}${pr}`);
+      lines.push(
+        `${emoji} ${agentId ? `Agent ${agentId} • ` : ""}${shortBranch}${pr}`,
+      );
       lines.push(`   ${title}`);
       lines.push(`   Status: ${status} | Agent: ${attempt.executor || "?"}`);
 
@@ -1926,6 +2087,135 @@ async function cmdTasks(chatId) {
     await sendReply(chatId, lines.join("\n"));
   } catch (err) {
     await sendReply(chatId, `Error reading tasks: ${err.message}`);
+  }
+}
+
+async function cmdAgents(chatId) {
+  try {
+    const lines = ["🤖 Agent Fleet", ""];
+    let statusSnapshot = null;
+    if (_readStatusData) {
+      try {
+        statusSnapshot = await _readStatusData();
+      } catch {
+        /* best effort */
+      }
+    }
+
+    const executor = _getInternalExecutor?.();
+    const executorStatus = executor?.getStatus?.();
+    if (executorStatus) {
+      lines.push(
+        `Task Executor: ${executorStatus.running ? "running" : "stopped"} | mode=${executorStatus.mode} | slots=${executorStatus.activeSlots}/${executorStatus.maxParallel} | sdk=${executorStatus.sdk}`,
+      );
+      if (executorStatus.slots.length > 0) {
+        for (const slot of executorStatus.slots) {
+          const agentId =
+            Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+              ? `#${slot.agentInstanceId}`
+              : "n/a";
+          lines.push(
+            `  Agent ${agentId}: ${slot.taskTitle} | status=${slot.status} | run=${formatRuntimeSeconds(slot.runningFor)} | branch=${slot.branch || "-"}`,
+          );
+        }
+      }
+    } else {
+      lines.push("Task Executor: unavailable");
+    }
+
+    const threads = getActiveThreads();
+    lines.push(`Thread Registry: ${threads.length} active thread(s)`);
+    for (const entry of threads.slice(0, 5)) {
+      lines.push(
+        `  ${entry.taskKey}: ${entry.sdk} turn=${entry.turnCount} age=${Math.round(entry.age / 60_000)}m`,
+      );
+    }
+
+    const reviewEnabled = _getReviewAgentEnabled
+      ? !!_getReviewAgentEnabled()
+      : !!_getReviewAgent?.();
+    const reviewAgent = _getReviewAgent?.();
+    const reviewStatus =
+      reviewAgent && typeof reviewAgent.getStatus === "function"
+        ? reviewAgent.getStatus()
+        : null;
+    if (!reviewEnabled) {
+      lines.push("Review Agent: disabled");
+    } else if (reviewStatus) {
+      lines.push(
+        `Review Agent: running | active=${reviewStatus.activeReviews || 0} queued=${reviewStatus.queuedReviews || 0} completed=${reviewStatus.completedReviews || 0}`,
+      );
+    } else {
+      lines.push("Review Agent: enabled, not running");
+    }
+
+    const endpoint = _getAgentEndpoint?.();
+    const endpointStatus =
+      endpoint && typeof endpoint.getStatus === "function"
+        ? endpoint.getStatus()
+        : null;
+    if (endpointStatus) {
+      lines.push(
+        `Agent Endpoint: ${endpointStatus.running ? "listening" : "stopped"} | port=${endpointStatus.port} | uptime=${formatRuntimeSeconds(Math.floor((endpointStatus.uptimeMs || 0) / 1000))}`,
+      );
+    }
+
+    const prCleanup = _getPrCleanupDaemon?.();
+    const prStatus =
+      prCleanup && typeof prCleanup.getStatus === "function"
+        ? prCleanup.getStatus()
+        : null;
+    if (prStatus) {
+      lines.push(
+        `PR Cleanup Daemon: ${prStatus.running ? "running" : "stopped"} | active=${prStatus.activeCleanups} queued=${prStatus.queuedCleanups} | processed=${prStatus.stats?.prsProcessed || 0} resolved=${prStatus.stats?.conflictsResolved || 0}`,
+      );
+    }
+
+    const monitorMonitor = _getMonitorMonitorStatus?.();
+    if (monitorMonitor) {
+      lines.push(
+        `Monitor-Monitor: ${monitorMonitor.enabled ? (monitorMonitor.running ? "running" : "idle") : "disabled"} | sdk=${monitorMonitor.currentSdk || "n/a"} | failures=${monitorMonitor.consecutiveFailures || 0} | last=${formatAgeFromTimestamp(monitorMonitor.lastRunAt)}`,
+      );
+    }
+
+    const workspaceMonitor = _getWorkspaceMonitor?.();
+    if (workspaceMonitor && typeof workspaceMonitor.getAllStates === "function") {
+      const states = workspaceMonitor.getAllStates();
+      lines.push(`Workspace Monitor: tracking ${states.length} workspace(s)`);
+    }
+
+    const syncEngine = _getSyncEngine?.();
+    const syncStatus =
+      syncEngine && typeof syncEngine.getStatus === "function"
+        ? syncEngine.getStatus()
+        : null;
+    if (syncStatus) {
+      lines.push(
+        `Sync Engine: ${syncStatus.running ? "running" : "stopped"} | syncs=${syncStatus.syncsCompleted || 0} | failures=${syncStatus.consecutiveFailures || 0}`,
+      );
+    }
+
+    const storeStats = _getTaskStoreStats?.();
+    if (storeStats) {
+      lines.push(
+        `Task Store: todo=${storeStats.todo || 0} inprogress=${storeStats.inprogress || 0} inreview=${storeStats.inreview || 0} done=${storeStats.done || 0} blocked=${storeStats.blocked || 0}`,
+      );
+    }
+
+    const conflictResolvingCount = Number(
+      statusSnapshot?.counts?.conflict_resolving ||
+        statusSnapshot?.counts?.conflictResolving ||
+        0,
+    );
+    if (conflictResolvingCount > 0) {
+      lines.push(
+        `SDK Conflict Resolution Agents: active=${conflictResolvingCount}`,
+      );
+    }
+
+    await sendReply(chatId, lines.join("\n"));
+  } catch (err) {
+    await sendReply(chatId, `❌ Failed to read agent fleet status: ${err.message}`);
   }
 }
 
@@ -2966,13 +3256,15 @@ async function cmdExecutor(chatId, args) {
       `⚙️ Active Task Slots (${status.activeSlots}/${status.maxParallel}):\n`,
     ];
     for (const slot of status.slots) {
-      const runMin = Math.round(slot.runningFor / 60);
-      const runStr =
-        runMin >= 60
-          ? `${Math.round(runMin / 60)}h${runMin % 60}m`
-          : `${runMin}m`;
+      const runStr = formatRuntimeSeconds(slot.runningFor);
+      const agentId =
+        Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+          ? `#${slot.agentInstanceId}`
+          : "n/a";
       lines.push(`• ${slot.taskTitle}`);
-      lines.push(`  ID: ${slot.taskId.substring(0, 8)} | SDK: ${slot.sdk}`);
+      lines.push(
+        `  ID: ${slot.taskId.substring(0, 8)} | Agent: ${agentId} | SDK: ${slot.sdk}`,
+      );
       lines.push(`  Branch: ${slot.branch}`);
       lines.push(
         `  Running: ${runStr} | Attempt: ${slot.attempt} | Status: ${slot.status}`,
@@ -3247,34 +3539,40 @@ async function vkRequest(host, path, options = {}) {
   const url = new URL(path, base);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+
+  let res;
   try {
-    const res = await fetch(url.toString(), {
+    res = await fetch(url.toString(), {
       method,
       headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(
-        `VK ${res.status}: ${text.slice(0, 200) || res.statusText}`,
-      );
-    }
-    let data = null;
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch (err) {
-        throw new Error(`VK response parse error: ${err.message}`);
-      }
-    }
-    if (data && data.success === false) {
-      throw new Error(data.message || "VK API error");
-    }
-    return data?.data ?? data;
-  } finally {
+  } catch (err) {
     clearTimeout(timer);
+    throw new Error(`VK fetch error: ${err.message}`);
   }
+  clearTimeout(timer);
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `VK ${res.status}: ${text.slice(0, 200) || res.statusText}`,
+    );
+  }
+
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      throw new Error(`VK response parse error: ${err.message}`);
+    }
+  }
+  if (data && data.success === false) {
+    throw new Error(data.message || "VK API error");
+  }
+  return data?.data ?? data;
 }
 
 async function getWorkspaceSummaries(host) {
@@ -5028,9 +5326,15 @@ export function startStatusFileWriter(intervalMs = 30000) {
           branch: slot.branch,
           status: slot.status,
           executor: slot.sdk,
-          started_at: new Date(Date.now() - slot.runningFor * 1000).toISOString(),
+          started_at: new Date(
+            Number(slot.startedAt || Date.now()),
+          ).toISOString(),
           updated_at: new Date().toISOString(),
           attempt: slot.attempt,
+          agent_instance_id:
+            Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+              ? Number(slot.agentInstanceId)
+              : null,
         };
       }
 

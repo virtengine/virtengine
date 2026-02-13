@@ -60,7 +60,7 @@ export class SessionTracker {
    */
   constructor(options = {}) {
     this.#maxMessages = options.maxMessages ?? DEFAULT_MAX_MESSAGES;
-    this.#idleThresholdMs = options.idleThresholdMs ?? 120_000;
+    this.#idleThresholdMs = options.idleThresholdMs ?? 180_000; // 3 minutes — gives agents breathing room
   }
 
   /**
@@ -188,6 +188,98 @@ export class SessionTracker {
     const session = this.#sessions.get(taskId);
     if (!session || session.status !== "active") return false;
     return Date.now() - session.lastActivityAt > this.#idleThresholdMs;
+  }
+
+  /**
+   * Get detailed progress status for a running session.
+   * Returns a structured assessment of agent progress suitable for mid-execution monitoring.
+   *
+   * @param {string} taskId
+   * @returns {{ status: "active"|"idle"|"stalled"|"not_found"|"ended", idleMs: number, totalEvents: number, lastEventType: string|null, hasEdits: boolean, hasCommits: boolean, elapsedMs: number, recommendation: "none"|"continue"|"nudge"|"abort" }}
+   */
+  getProgressStatus(taskId) {
+    const session = this.#sessions.get(taskId);
+    if (!session) {
+      return {
+        status: "not_found", idleMs: 0, totalEvents: 0,
+        lastEventType: null, hasEdits: false, hasCommits: false,
+        elapsedMs: 0, recommendation: "none",
+      };
+    }
+
+    if (session.status !== "active") {
+      return {
+        status: "ended", idleMs: 0, totalEvents: session.totalEvents,
+        lastEventType: session.messages.at(-1)?.type ?? null,
+        hasEdits: false, hasCommits: false,
+        elapsedMs: (session.endedAt || Date.now()) - session.startedAt,
+        recommendation: "none",
+      };
+    }
+
+    const now = Date.now();
+    const idleMs = now - session.lastActivityAt;
+    const elapsedMs = now - session.startedAt;
+
+    // Check if agent has done any meaningful edits or commits
+    const hasEdits = session.messages.some((m) => {
+      if (m.type !== "tool_call") return false;
+      const c = (m.content || "").toLowerCase();
+      return c.includes("write") || c.includes("edit") || c.includes("create") ||
+        c.includes("replace") || c.includes("patch") || c.includes("append");
+    });
+
+    const hasCommits = session.messages.some((m) => {
+      if (m.type !== "tool_call") return false;
+      const c = (m.content || "").toLowerCase();
+      return c.includes("git commit") || c.includes("git push");
+    });
+
+    // Determine status — check stalled FIRST (it's the stricter condition)
+    let status = "active";
+    if (idleMs > this.#idleThresholdMs * 2) {
+      status = "stalled";
+    } else if (idleMs > this.#idleThresholdMs) {
+      status = "idle";
+    }
+
+    // Determine recommendation
+    let recommendation = "none";
+    if (status === "stalled") {
+      recommendation = "abort";
+    } else if (status === "idle") {
+      // If agent was idle but had some activity, try CONTINUE
+      recommendation = session.totalEvents > 0 ? "continue" : "nudge";
+    } else if (elapsedMs > 30 * 60_000 && session.totalEvents < 5) {
+      // 30 min with < 5 events — agent is stalled even if not technically idle
+      recommendation = "continue";
+    }
+
+    return {
+      status, idleMs, totalEvents: session.totalEvents,
+      lastEventType: session.messages.at(-1)?.type ?? null,
+      hasEdits, hasCommits, elapsedMs, recommendation,
+    };
+  }
+
+  /**
+   * Get all active sessions (for watchdog scanning).
+   * @returns {Array<{ taskId: string, taskTitle: string, idleMs: number, totalEvents: number, elapsedMs: number }>}
+   */
+  getActiveSessions() {
+    const result = [];
+    const now = Date.now();
+    for (const [taskId, session] of this.#sessions) {
+      if (session.status !== "active") continue;
+      result.push({
+        taskId,
+        taskTitle: session.taskTitle,
+        idleMs: now - session.lastActivityAt,
+        totalEvents: session.totalEvents,
+        elapsedMs: now - session.startedAt,
+      });
+    }
+    return result;
   }
 
   /**

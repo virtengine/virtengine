@@ -52,15 +52,22 @@ const CONFIG = {
   dryRun: false, // Set true to log actions without executing
   excludeLabels: ["do-not-merge", "wip", "draft"], // Skip PRs with these labels
   maxConflictSize: 500, // Max lines of conflict to auto-resolve (escalate if larger)
+  postConflictRecheckAttempts: 6, // GitHub mergeability can lag after force-push
+  postConflictRecheckDelayMs: 10_000,
 };
 
 // ── PR Cleanup Daemon ────────────────────────────────────────────────────────
 
 class PRCleanupDaemon {
   constructor(config = CONFIG) {
-    this.config = config;
+    this.config = {
+      ...CONFIG,
+      ...(config && typeof config === "object" ? config : {}),
+    };
     this.cleanupQueue = [];
     this.activeCleanups = new Map(); // pr# → cleanup state
+    this.lastRunStartedAt = 0;
+    this.lastRunFinishedAt = 0;
     this.stats = {
       totalRuns: 0,
       prsProcessed: 0,
@@ -77,6 +84,7 @@ class PRCleanupDaemon {
    */
   async run() {
     this.stats.totalRuns++;
+    this.lastRunStartedAt = Date.now();
     console.log(`[pr-cleanup-daemon] Run #${this.stats.totalRuns} starting...`);
 
     try {
@@ -125,6 +133,8 @@ class PRCleanupDaemon {
         `[pr-cleanup-daemon] Run failed:`,
         err?.message ?? String(err),
       );
+    } finally {
+      this.lastRunFinishedAt = Date.now();
     }
   }
 
@@ -206,14 +216,16 @@ class PRCleanupDaemon {
     );
 
     try {
+      let cleanupAttempted = false;
       if (pr.issue === "conflict") {
-        await this.resolveConflicts(pr);
+        cleanupAttempted = await this.resolveConflicts(pr);
       } else if (pr.issue === "ci_failure") {
         await this.fixCI(pr);
+        cleanupAttempted = true;
       }
 
       // After cleanup, check if ready to merge
-      if (this.config.autoMerge) {
+      if (this.config.autoMerge && cleanupAttempted) {
         await this.attemptAutoMerge(pr);
       }
     } catch (err) {
@@ -242,7 +254,7 @@ class PRCleanupDaemon {
       );
       await this.escalate(pr, "large_conflict", { lines: conflictSize });
       this.stats.escalations++;
-      return;
+      return false;
     }
 
     // 2. Try codex-sdk agent first, fall back to local merge
@@ -250,8 +262,10 @@ class PRCleanupDaemon {
       console.log(
         `[pr-cleanup-daemon] [DRY RUN] Would resolve conflicts for PR #${pr.number}`,
       );
-      return;
+      return true;
     }
+
+    let resolvedVia = null;
 
     try {
       await this.spawnCodexAgent({
@@ -261,11 +275,8 @@ class PRCleanupDaemon {
         strategy: this.config.conflictStrategy,
         ciWait: true,
       });
-
-      this.stats.conflictsResolved++;
-      console.log(
-        `[pr-cleanup-daemon] ✓ Resolved conflicts on PR #${pr.number}`,
-      );
+      resolvedVia = "agent";
+      console.log(`[pr-cleanup-daemon] ✓ Agent resolved PR #${pr.number}`);
     } catch (agentErr) {
       console.warn(
         `[pr-cleanup-daemon] Codex agent failed for PR #${pr.number}, trying local merge: ${agentErr.message}`,
@@ -274,10 +285,8 @@ class PRCleanupDaemon {
       // Fallback: resolve locally using temporary worktree
       try {
         await this.resolveConflictsLocally(pr);
-        this.stats.conflictsResolved++;
-        console.log(
-          `[pr-cleanup-daemon] ✓ Resolved conflicts locally on PR #${pr.number}`,
-        );
+        resolvedVia = "local";
+        console.log(`[pr-cleanup-daemon] ✓ Local merge resolved PR #${pr.number}`);
       } catch (localErr) {
         console.error(
           `[pr-cleanup-daemon] Failed to resolve conflicts on PR #${pr.number}:`,
@@ -287,8 +296,63 @@ class PRCleanupDaemon {
           error: localErr.message,
         });
         this.stats.escalations++;
+        return false;
       }
     }
+
+    if (!resolvedVia) return false;
+
+    const verified = await this.waitForMergeableState(pr.number, {
+      attempts: this.config.postConflictRecheckAttempts,
+      delayMs: this.config.postConflictRecheckDelayMs,
+      context: `post-${resolvedVia}-resolution`,
+    });
+
+    if (verified.mergeable === "MERGEABLE") {
+      this.stats.conflictsResolved++;
+      console.log(
+        `[pr-cleanup-daemon] ✅ Verified conflict resolution on PR #${pr.number} (mergeable=${verified.mergeable})`,
+      );
+      return true;
+    }
+
+    // A successful agent run can still leave GitHub in CONFLICTING state (stale
+    // merge base or partial resolution). Give one deterministic local pass.
+    if (resolvedVia !== "local") {
+      console.warn(
+        `[pr-cleanup-daemon] PR #${pr.number} still ${verified.mergeable || "UNMERGEABLE"} after agent resolution — attempting local fallback`,
+      );
+      try {
+        await this.resolveConflictsLocally(pr);
+        const verifiedLocal = await this.waitForMergeableState(pr.number, {
+          attempts: this.config.postConflictRecheckAttempts,
+          delayMs: this.config.postConflictRecheckDelayMs,
+          context: "post-local-fallback",
+        });
+        if (verifiedLocal.mergeable === "MERGEABLE") {
+          this.stats.conflictsResolved++;
+          console.log(
+            `[pr-cleanup-daemon] ✅ Verified conflict resolution on PR #${pr.number} after local fallback`,
+          );
+          return true;
+        }
+        console.warn(
+          `[pr-cleanup-daemon] PR #${pr.number} still not mergeable after local fallback: ${verifiedLocal.mergeable}`,
+        );
+      } catch (localFallbackErr) {
+        console.warn(
+          `[pr-cleanup-daemon] Local fallback failed for PR #${pr.number}: ${localFallbackErr.message}`,
+        );
+      }
+    }
+
+    await this.escalate(pr, "conflict_still_present_after_resolution", {
+      mergeable: verified.mergeable || "UNKNOWN",
+      strategy: this.config.conflictStrategy,
+      resolvedVia,
+    });
+    this.stats.escalations++;
+    return false;
   }
 
   /**
@@ -482,18 +546,24 @@ class PRCleanupDaemon {
    * @param {object} pr - PR metadata
    */
   async attemptAutoMerge(pr) {
-    let latest;
-    try {
-      const { stdout } = await exec(
-        `gh pr view ${pr.number} --json mergeable,statusCheckRollup`,
-      );
-      latest = JSON.parse(stdout);
-    } catch (err) {
+    let latest = await this.fetchPrMergeability(pr.number);
+    if (!latest) {
       console.error(
-        `[pr-cleanup-daemon] Failed to fetch PR #${pr.number} status for auto-merge:`,
-        err?.message ?? String(err),
+        `[pr-cleanup-daemon] Failed to fetch PR #${pr.number} status for auto-merge`,
       );
       return;
+    }
+
+    if (latest.mergeable !== "MERGEABLE") {
+      // Mergeability can be UNKNOWN briefly after pushes/rebases.
+      if (latest.mergeable === "UNKNOWN") {
+        const retry = await this.waitForMergeableState(pr.number, {
+          attempts: 3,
+          delayMs: 5000,
+          context: "auto-merge",
+        });
+        latest = retry.raw || latest;
+      }
     }
 
     if (latest.mergeable !== "MERGEABLE") {
@@ -762,6 +832,76 @@ class PRCleanupDaemon {
         );
       }
     }
+  }
+
+  /**
+   * Fetch current mergeability/check status for a PR.
+   * @param {number|string} prNumber
+   * @returns {Promise<object|null>}
+   */
+  async fetchPrMergeability(prNumber) {
+    try {
+      const { stdout } = await exec(
+        `gh pr view ${prNumber} --json mergeable,statusCheckRollup`,
+      );
+      return JSON.parse(stdout);
+    } catch (err) {
+      console.warn(
+        `[pr-cleanup-daemon] Failed to fetch PR #${prNumber} mergeability: ${err?.message ?? String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Wait for GitHub mergeability state to settle after conflict resolution.
+   * @param {number|string} prNumber
+   * @param {{ attempts?: number, delayMs?: number, context?: string }} [opts]
+   * @returns {Promise<{ mergeable: string, raw: object|null }>}
+   */
+  async waitForMergeableState(prNumber, opts = {}) {
+    const attempts = Math.max(1, Number(opts.attempts || 1));
+    const delayMs = Math.max(1000, Number(opts.delayMs || 5000));
+    const context = opts.context || "mergeability-check";
+
+    let last = null;
+    for (let i = 1; i <= attempts; i++) {
+      last = await this.fetchPrMergeability(prNumber);
+      const mergeable = String(last?.mergeable || "UNKNOWN").toUpperCase();
+      if (mergeable === "MERGEABLE") {
+        if (i > 1) {
+          console.log(
+            `[pr-cleanup-daemon] PR #${prNumber} mergeability settled (${mergeable}) after ${i}/${attempts} checks (${context})`,
+          );
+        }
+        return { mergeable, raw: last };
+      }
+      if (mergeable === "CONFLICTING" && i === attempts) {
+        return { mergeable, raw: last };
+      }
+      if (i < attempts) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
+      }
+    }
+    return {
+      mergeable: String(last?.mergeable || "UNKNOWN").toUpperCase(),
+      raw: last,
+    };
+  }
+
+  /**
+   * Lightweight status payload for /agents and health diagnostics.
+   */
+  getStatus() {
+    return {
+      running: !!this.interval,
+      intervalMs: this.config.intervalMs,
+      activeCleanups: this.activeCleanups.size,
+      queuedCleanups: this.cleanupQueue.length,
+      lastRunStartedAt: this.lastRunStartedAt || 0,
+      lastRunFinishedAt: this.lastRunFinishedAt || 0,
+      stats: { ...this.stats },
+    };
   }
 
   /**

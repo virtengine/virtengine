@@ -27,11 +27,44 @@ import {
 
 import {
   getKanbanAdapter,
+  getKanbanBackendName,
   listTasks,
   updateTaskStatus as updateExternalStatus,
 } from "./kanban-adapter.mjs";
 
 const TAG = "[sync-engine]";
+
+// ---------------------------------------------------------------------------
+// Task ID validation — ensure ID format is compatible with the target backend
+// ---------------------------------------------------------------------------
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Check whether a task ID is valid for the given kanban backend.
+ *
+ *   - GitHub Issues: expects a numeric issue number (e.g. "42")
+ *   - VK (Vibe-Kanban): expects a UUID
+ *   - Jira: expects a project-key string like "PROJ-123"
+ *
+ * @param {string} id   The task / issue ID
+ * @param {string} backend  Backend name ("github", "vk", "jira")
+ * @returns {boolean}
+ */
+function isIdValidForBackend(id, backend) {
+  if (!id) return false;
+  switch (backend) {
+    case "github":
+      return /^\d+$/.test(String(id));
+    case "vk":
+      return true; // VK accepts any string, UUIDs or otherwise
+    case "jira":
+      return /^[A-Z]+-\d+$/i.test(String(id));
+    default:
+      return true;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Status ordering — higher = more advanced
@@ -328,11 +361,29 @@ export class SyncEngine {
       return result;
     }
 
-    console.log(TAG, `Pushing ${dirtyTasks.length} dirty task(s) to external`);
+    const backendName = getKanbanBackendName();
+    console.log(
+      TAG,
+      `Pushing ${dirtyTasks.length} dirty task(s) to external (backend=${backendName})`,
+    );
 
     for (const task of dirtyTasks) {
+      // Skip tasks whose IDs are incompatible with the active backend.
+      // e.g. VK UUID tasks cannot be pushed to GitHub Issues (needs numeric IDs).
+      const pushId = task.externalId || task.id;
+      if (!isIdValidForBackend(pushId, backendName)) {
+        // If the task originated from a different backend, silently clear dirty
+        // flag — it will be synced when that backend is active.
+        markSynced(task.id);
+        console.log(
+          TAG,
+          `Skipped ${task.id} — ID format incompatible with ${backendName} backend`,
+        );
+        continue;
+      }
+
       try {
-        await this.#updateExternal(task.id, task.status);
+        await this.#updateExternal(pushId, task.status);
         markSynced(task.id);
         result.pushed++;
         console.log(TAG, `Pushed ${task.id} → ${task.status}`);
@@ -344,7 +395,7 @@ export class SyncEngine {
           await this.#sleep(SyncEngine.RATE_LIMIT_DELAY_MS);
           // Retry once after back-off
           try {
-            await this.#updateExternal(task.id, task.status);
+            await this.#updateExternal(pushId, task.status);
             markSynced(task.id);
             result.pushed++;
             console.log(
@@ -363,6 +414,13 @@ export class SyncEngine {
             `Task ${task.id} returned 404 — removing orphaned task from internal store`,
           );
           removeTask(task.id);
+        } else if (this.#isInvalidIdFormat(err)) {
+          // ID format mismatch (e.g. UUID pushed to GitHub) — skip silently
+          markSynced(task.id);
+          console.log(
+            TAG,
+            `Skipped ${task.id} — invalid ID format for current backend`,
+          );
         } else {
           const msg = `Push failed for ${task.id}: ${err.message}`;
           console.warn(TAG, msg);
@@ -572,6 +630,20 @@ export class SyncEngine {
     if (!err) return false;
     const msg = String(err.message || err).toLowerCase();
     return msg.includes("404") || msg.includes("not found");
+  }
+
+  /**
+   * Determine whether an error indicates an invalid task ID format
+   * (e.g. pushing a UUID to GitHub Issues).
+   */
+  #isInvalidIdFormat(err) {
+    if (!err) return false;
+    const msg = String(err.message || err).toLowerCase();
+    return (
+      msg.includes("invalid issue format") ||
+      msg.includes("invalid issue number") ||
+      msg.includes("expected a numeric id")
+    );
   }
 
   /** Simple async sleep. */

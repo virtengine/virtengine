@@ -5,7 +5,7 @@ function runGit(args, cwd, timeout = 15_000) {
     cwd,
     encoding: "utf8",
     timeout,
-    shell: process.platform === "win32",
+    shell: false,
   });
 }
 

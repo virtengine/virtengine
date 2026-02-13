@@ -14,6 +14,7 @@ const mockTaskStore = vi.hoisted(() => ({
 
 const mockKanban = vi.hoisted(() => ({
   getKanbanAdapter: vi.fn(),
+  getKanbanBackendName: vi.fn(() => "vk"),
   listTasks: vi.fn(() => Promise.resolve([])),
   updateTaskStatus: vi.fn(() => Promise.resolve({})),
 }));
@@ -122,5 +123,119 @@ describe("sync-engine push 404 orphan handling", () => {
     expect(mockTaskStore.removeTask).not.toHaveBeenCalled();
     expect(result.errors.length).toBe(1);
     expect(result.errors[0]).toContain("500");
+  });
+});
+
+describe("sync-engine UUID-to-GitHub ID mismatch handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTaskStore.getAllTasks.mockReturnValue([]);
+    mockKanban.listTasks.mockResolvedValue([]);
+  });
+
+  it("skips UUID tasks when backend is github", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    mockTaskStore.getDirtyTasks.mockReturnValue([
+      {
+        id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+        status: "cancelled",
+        syncDirty: true,
+      },
+      {
+        id: "ab411a51-5428-4075-a47d-9f208c7421eb",
+        status: "done",
+        syncDirty: true,
+      },
+    ]);
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pushToExternal();
+
+    // UUID tasks should be skipped, not pushed
+    expect(mockKanban.updateTaskStatus).not.toHaveBeenCalled();
+    // They should be marked as synced to clear the dirty flag
+    expect(mockTaskStore.markSynced).toHaveBeenCalledTimes(2);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.length).toBe(0);
+  });
+
+  it("pushes numeric ID tasks when backend is github", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    mockTaskStore.getDirtyTasks.mockReturnValue([
+      { id: "42", status: "done", syncDirty: true },
+    ]);
+    mockKanban.updateTaskStatus.mockResolvedValue({});
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pushToExternal();
+
+    expect(mockKanban.updateTaskStatus).toHaveBeenCalledWith("42", "done");
+    expect(mockTaskStore.markSynced).toHaveBeenCalledWith("42");
+    expect(result.pushed).toBe(1);
+    expect(result.errors.length).toBe(0);
+  });
+
+  it("pushes UUID tasks when backend is vk", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("vk");
+    mockTaskStore.getDirtyTasks.mockReturnValue([
+      {
+        id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+        status: "inprogress",
+        syncDirty: true,
+      },
+    ]);
+    mockKanban.updateTaskStatus.mockResolvedValue({});
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pushToExternal();
+
+    expect(mockKanban.updateTaskStatus).toHaveBeenCalledWith(
+      "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+      "inprogress",
+    );
+    expect(result.pushed).toBe(1);
+  });
+
+  it("uses externalId over id when available for github push", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    mockTaskStore.getDirtyTasks.mockReturnValue([
+      {
+        id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+        externalId: "99",
+        status: "done",
+        syncDirty: true,
+      },
+    ]);
+    mockKanban.updateTaskStatus.mockResolvedValue({});
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pushToExternal();
+
+    // Should use externalId "99" instead of the UUID
+    expect(mockKanban.updateTaskStatus).toHaveBeenCalledWith("99", "done");
+    expect(mockTaskStore.markSynced).toHaveBeenCalledWith(
+      "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+    );
+    expect(result.pushed).toBe(1);
+  });
+
+  it("handles invalid-id-format error gracefully as fallback", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    // Simulate a numeric-looking ID that somehow still fails with format error
+    mockTaskStore.getDirtyTasks.mockReturnValue([
+      { id: "123", status: "done", syncDirty: true },
+    ]);
+    mockKanban.updateTaskStatus.mockRejectedValue(
+      new Error(
+        'GitHub Issues: invalid issue number "123" — expected a numeric ID',
+      ),
+    );
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pushToExternal();
+
+    // Should be handled gracefully — no error in result
+    expect(mockTaskStore.markSynced).toHaveBeenCalledWith("123");
+    expect(result.errors.length).toBe(0);
   });
 });

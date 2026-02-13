@@ -446,7 +446,7 @@ function EnvironmentEditor({
 
 function ResourcesStep() {
   const { manifest, selectedTemplate, updateManifest } = useWizardStore();
-  const resources = manifest.resources ??
+  const resources: JobResources = manifest.resources ??
     selectedTemplate?.defaultResources ?? {
       nodes: 1,
       cpusPerNode: 8,
@@ -457,7 +457,7 @@ function ResourcesStep() {
 
   const updateResources = (updates: Partial<JobResources>) => {
     updateManifest({
-      resources: { ...resources, ...updates } as JobResources,
+      resources: { ...resources, ...updates },
     });
   };
 
