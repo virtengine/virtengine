@@ -162,6 +162,41 @@ function commandExists(cmd) {
   }
 }
 
+export function applyEnvFileToProcess(envPath, options = {}) {
+  const { override = true } = options;
+  const targetPath = resolve(envPath || "");
+  if (!targetPath || !existsSync(targetPath)) {
+    return { loaded: 0, path: targetPath, found: false };
+  }
+
+  let loaded = 0;
+  const lines = readFileSync(targetPath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx <= 0) continue;
+
+    const key = trimmed.slice(0, eqIdx).trim();
+    if (!key) continue;
+    let value = trimmed.slice(eqIdx + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    if (!override && Object.prototype.hasOwnProperty.call(process.env, key)) {
+      continue;
+    }
+    process.env[key] = value;
+    loaded++;
+  }
+
+  return { loaded, path: targetPath, found: true };
+}
+
 /**
  * Check if a binary exists in the package's own node_modules/.bin/.
  * When installed globally, npm only symlinks the top-level package's bin
@@ -288,6 +323,24 @@ function printHookScaffoldSummary(result) {
       warn(warning);
     }
   }
+}
+
+function printWhatsAppSetupGuide({ chatIdKnown }) {
+  console.log("");
+  console.log(chalk.bold("  WhatsApp setup guide:"));
+  console.log("    1) Link this machine to WhatsApp Web:");
+  console.log("       codex-monitor --whatsapp-auth");
+  console.log("    2) After auth, start monitor:");
+  console.log("       codex-monitor");
+  if (chatIdKnown) {
+    console.log("    3) Messages are restricted to your configured WHATSAPP_CHAT_ID.");
+  } else {
+    console.log("    3) Find your target chat/group JID from monitor logs.");
+    console.log("       Look for: [whatsapp] message ... (jid=<value>)");
+    console.log("       Then set WHATSAPP_CHAT_ID=<value> in your .env.");
+    console.log("       JID examples: 15551234567@s.whatsapp.net, 1234567890-111111@g.us");
+  }
+  console.log("");
 }
 
 // ── Prompt System ────────────────────────────────────────────────────────────
@@ -824,11 +877,21 @@ async function main() {
     Number(process.versions.node.split(".")[0]) >= 18,
   );
   const hasGit = check("git", commandExists("git"));
-  check(
-    "PowerShell (pwsh)",
-    commandExists("pwsh"),
-    "Install: https://github.com/PowerShell/PowerShell",
-  );
+  const hasPwsh = commandExists("pwsh");
+  const hasBash = commandExists("bash") || commandExists("sh");
+  if (process.platform === "win32") {
+    check(
+      "PowerShell (pwsh)",
+      hasPwsh,
+      "Install: https://github.com/PowerShell/PowerShell",
+    );
+  } else {
+    check(
+      "Shell runtime (bash/sh or pwsh)",
+      hasBash || hasPwsh,
+      "Install bash/sh (or PowerShell): https://github.com/PowerShell/PowerShell",
+    );
+  }
   check(
     "GitHub CLI (gh)",
     commandExists("gh"),
@@ -856,6 +919,15 @@ async function main() {
 
   const repoRoot = detectRepoRoot();
   const configDir = resolveConfigDir(repoRoot);
+  const existingEnvPath = resolve(configDir, ".env");
+  const loadedEnv = applyEnvFileToProcess(existingEnvPath, { override: true });
+  if (loadedEnv.found && loadedEnv.loaded > 0) {
+    info(
+      `Detected .env file at ${loadedEnv.path} — overriding setup defaults with existing config.`,
+    );
+    console.log("");
+  }
+
   const slug = detectRepoSlug();
   const projectName = detectProjectName(repoRoot);
 
@@ -1801,19 +1873,53 @@ async function main() {
     );
     if (enableWhatsApp) {
       env.WHATSAPP_ENABLED = "true";
-      env.WHATSAPP_CHAT_ID = await prompt.ask(
-        "WhatsApp Chat/Group ID (JID)",
-        process.env.WHATSAPP_CHAT_ID || "",
+      console.log(
+        chalk.dim(
+          "  WhatsApp linking uses a QR code by default: run `codex-monitor --whatsapp-auth` and scan in WhatsApp > Linked Devices.",
+        ),
       );
+      const existingChatId = String(process.env.WHATSAPP_CHAT_ID || "").trim();
+      const knowChatId = await prompt.confirm(
+        "Do you already know the WhatsApp Chat/Group JID?",
+        Boolean(existingChatId),
+      );
+
+      if (knowChatId) {
+        env.WHATSAPP_CHAT_ID = await prompt.ask(
+          "WhatsApp Chat/Group ID (JID)",
+          existingChatId,
+        );
+      } else {
+        env.WHATSAPP_CHAT_ID = "";
+        info(
+          "No problem — setup will continue without WHATSAPP_CHAT_ID. Monitor will accept inbound messages so you can capture the JID from logs first.",
+        );
+      }
       env.WHATSAPP_ASSISTANT_NAME = isAdvancedSetup
         ? await prompt.ask(
             "WhatsApp assistant display name",
             env.PROJECT_NAME || "Codex Monitor",
           )
         : env.PROJECT_NAME || "Codex Monitor";
-      info(
-        "Run `codex-monitor --whatsapp-auth` after setup to authenticate with WhatsApp.",
-      );
+      if (isAdvancedSetup) {
+        const authModeIdx = await prompt.choose(
+          "Preferred WhatsApp auth mode",
+          [
+            "QR scan (recommended)",
+            "Pairing code (requires phone number)",
+          ],
+          0,
+        );
+        if (authModeIdx === 1) {
+          env.WHATSAPP_PHONE_NUMBER = await prompt.ask(
+            "Phone number for pairing code (include country code)",
+            process.env.WHATSAPP_PHONE_NUMBER || "",
+          );
+        }
+      }
+      printWhatsAppSetupGuide({
+        chatIdKnown: Boolean(String(env.WHATSAPP_CHAT_ID || "").trim()),
+      });
     } else {
       env.WHATSAPP_ENABLED = "false";
     }
@@ -2129,6 +2235,15 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   );
   console.log("");
 
+  // Config location summary
+  console.log(chalk.bold("  Configuration Saved:"));
+  console.log(`    Directory: ${targetDir}`);
+  console.log(`    Environment: ${targetEnvPath}`);
+  if (targetEnvPath !== envPath) {
+    console.log(`    Existing env preserved at: ${envPath}`);
+  }
+  console.log(`    Config JSON: ${configPath}`);
+
   // Executor summary
   const totalWeight = configJson.executors.reduce((s, e) => s + e.weight, 0);
   console.log(chalk.bold("  Executors:"));
@@ -2150,6 +2265,11 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   if (!env.TELEGRAM_BOT_TOKEN) {
     info("Telegram not configured — add TELEGRAM_BOT_TOKEN to .env later.");
   }
+  if (parseBooleanEnvValue(env.WHATSAPP_ENABLED, false)) {
+    printWhatsAppSetupGuide({
+      chatIdKnown: Boolean(String(env.WHATSAPP_CHAT_ID || "").trim()),
+    });
+  }
   if (
     !env.OPENAI_API_KEY &&
     !parseBooleanEnvValue(env.CODEX_SDK_DISABLED, false)
@@ -2164,6 +2284,8 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   console.log(chalk.dim("    Start the orchestrator supervisor\n"));
   console.log(chalk.green("    codex-monitor --setup"));
   console.log(chalk.dim("    Re-run this wizard anytime\n"));
+  console.log(chalk.green(`    Edit ${targetEnvPath}`));
+  console.log(chalk.dim("    Make quick config changes directly in your .env\n"));
   console.log(chalk.green("    codex-monitor --enable-startup"));
   console.log(chalk.dim("    Register auto-start on login\n"));
   console.log(chalk.green("    codex-monitor --help"));

@@ -275,7 +275,7 @@ async function connectInternal(onFirstOpen) {
       ).toISOString();
 
       console.log(
-        `[whatsapp] message from ${senderName}: "${content.slice(0, 80)}${content.length > 80 ? "..." : ""}"`,
+        `[whatsapp] message from ${senderName} (jid=${rawJid}): "${content.slice(0, 80)}${content.length > 80 ? "..." : ""}"`,
       );
 
       // Route to primary agent
@@ -328,7 +328,7 @@ export async function startWhatsAppChannel(options = {}) {
 
   if (!whatsappChatId) {
     console.warn(
-      "[whatsapp] WHATSAPP_CHAT_ID not set — will accept messages from all chats (not recommended)",
+      "[whatsapp] WHATSAPP_CHAT_ID not set — accepting messages from all chats. Use logs to capture target jid, then set WHATSAPP_CHAT_ID (recommended).",
     );
   }
 
