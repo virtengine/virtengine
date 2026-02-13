@@ -4,8 +4,8 @@
     {
       "type": "command",
       "command": [
-        "node",
-        "scripts/codex-monitor/agent-hook-bridge.mjs",
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs",
         "--agent",
         "copilot",
         "--event",
@@ -18,8 +18,8 @@
     {
       "type": "command",
       "command": [
-        "node",
-        "scripts/codex-monitor/agent-hook-bridge.mjs",
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs",
         "--agent",
         "copilot",
         "--event",
@@ -33,8 +33,8 @@
       {
         "type": "command",
         "command": [
-          "node",
-          "scripts/codex-monitor/agent-hook-bridge.mjs",
+          "C:\\nvm4w\\nodejs\\node.exe",
+          "C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs",
           "--agent",
           "copilot",
           "--event",
@@ -49,8 +49,8 @@
       {
         "type": "command",
         "command": [
-          "node",
-          "scripts/codex-monitor/agent-hook-bridge.mjs",
+          "C:\\nvm4w\\nodejs\\node.exe",
+          "C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs",
           "--agent",
           "copilot",
           "--event",

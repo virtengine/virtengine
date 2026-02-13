@@ -7640,6 +7640,17 @@ function nowStamp() {
   )}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
+function commandExists(cmd) {
+  try {
+    execSync(`${process.platform === "win32" ? "where" : "which"} ${cmd}`, {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function safeStringify(value) {
   const seen = new Set();
   try {
@@ -7742,7 +7753,7 @@ ${logTail}
    - Mutex contention: multiple instances fighting over named mutex
    - VK API failures: wrong HTTP method, endpoint down, auth issues
    - Git rebase conflicts: agent branches conflict with main
-   - Exit 64: pwsh can't find the -File target
+   - Exit 64 / ENOENT: shell runtime can't locate the orchestrator target
    - SIGKILL: OOM or external termination
 7. Return a SHORT, ACTIONABLE diagnosis with the concrete fix.`;
 
@@ -9022,7 +9033,41 @@ async function startProcess() {
 
   // Reset mutex flag before spawn — will be re-set if this instance hits mutex
   restartController.noteProcessStarted(Date.now());
-  const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
+
+  const scriptLower = String(scriptPath).toLowerCase();
+  let orchestratorCmd = scriptPath;
+  let orchestratorArgs = [...scriptArgs];
+
+  if (scriptLower.endsWith(".ps1")) {
+    orchestratorCmd = process.env.PWSH_PATH || "pwsh";
+    orchestratorArgs = ["-File", scriptPath, ...scriptArgs];
+  } else if (scriptLower.endsWith(".sh")) {
+    const shellCmd =
+      process.platform === "win32"
+        ? commandExists("bash")
+          ? "bash"
+          : commandExists("sh")
+            ? "sh"
+            : ""
+        : commandExists("bash")
+          ? "bash"
+          : "sh";
+    if (!shellCmd) {
+      console.error(
+        "[monitor] shell-mode orchestrator selected (.sh) but no bash/sh runtime is available on PATH.",
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          "❌ shell-mode orchestrator selected (.sh), but bash/sh is missing on PATH.",
+        );
+      }
+      return;
+    }
+    orchestratorCmd = shellCmd;
+    orchestratorArgs = [scriptPath, ...scriptArgs];
+  }
+
+  const child = spawn(orchestratorCmd, orchestratorArgs, {
     stdio: ["ignore", "pipe", "pipe"],
   });
   currentChild = child;

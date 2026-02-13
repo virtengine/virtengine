@@ -19,3 +19,4 @@ vibe-kanban.ps1
 # npm artifacts
 node_modules/
 *.tgz
+/.codex-monitor/

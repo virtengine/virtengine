@@ -1376,34 +1376,55 @@ function detectProjectName(configDir, repoRoot) {
 }
 
 function findOrchestratorScript(configDir, repoRoot) {
-  // Search for orchestrator scripts in common locations
-  const candidates = [
-    // Bundled with codex-monitor (inside codex-monitor dir) - check first
+  const shellModeEnv = String(process.env.CODEX_MONITOR_SHELL_MODE || "")
+    .trim()
+    .toLowerCase();
+  const shellModeRequested = ["1", "true", "yes", "on"].includes(shellModeEnv);
+  const orchestratorEnv = String(process.env.ORCHESTRATOR_SCRIPT || "")
+    .trim()
+    .toLowerCase();
+  const preferShellScript =
+    shellModeRequested ||
+    orchestratorEnv.endsWith(".sh") ||
+    (process.platform !== "win32" && !orchestratorEnv.endsWith(".ps1"));
+
+  const shCandidates = [
+    resolve(configDir, "ve-orchestrator.sh"),
+    resolve(configDir, "orchestrator.sh"),
+    resolve(configDir, "..", "ve-orchestrator.sh"),
+    resolve(configDir, "..", "orchestrator.sh"),
+    resolve(repoRoot, "scripts", "ve-orchestrator.sh"),
+    resolve(repoRoot, "scripts", "orchestrator.sh"),
+    resolve(repoRoot, "ve-orchestrator.sh"),
+    resolve(repoRoot, "orchestrator.sh"),
+    resolve(process.cwd(), "ve-orchestrator.sh"),
+    resolve(process.cwd(), "orchestrator.sh"),
+    resolve(process.cwd(), "scripts", "ve-orchestrator.sh"),
+  ];
+
+  const psCandidates = [
     resolve(configDir, "ve-orchestrator.ps1"),
     resolve(configDir, "orchestrator.ps1"),
-    resolve(configDir, "orchestrator.sh"),
-    // Sibling to codex-monitor dir (scripts/ve-orchestrator.ps1)
     resolve(configDir, "..", "ve-orchestrator.ps1"),
     resolve(configDir, "..", "orchestrator.ps1"),
-    resolve(configDir, "..", "orchestrator.sh"),
-    // Repo root scripts dir
     resolve(repoRoot, "scripts", "ve-orchestrator.ps1"),
     resolve(repoRoot, "scripts", "orchestrator.ps1"),
-    resolve(repoRoot, "scripts", "orchestrator.sh"),
-    // Repo root
     resolve(repoRoot, "ve-orchestrator.ps1"),
     resolve(repoRoot, "orchestrator.ps1"),
-    resolve(repoRoot, "orchestrator.sh"),
-    // CWD
     resolve(process.cwd(), "ve-orchestrator.ps1"),
     resolve(process.cwd(), "orchestrator.ps1"),
     resolve(process.cwd(), "scripts", "ve-orchestrator.ps1"),
   ];
+
+  const candidates = preferShellScript
+    ? [...shCandidates, ...psCandidates]
+    : [...psCandidates, ...shCandidates];
   for (const p of candidates) {
     if (existsSync(p)) return p;
   }
-  // Default to sibling location (most common for npm-installed codex-monitor)
-  return resolve(configDir, "..", "ve-orchestrator.ps1");
+  return preferShellScript
+    ? resolve(configDir, "..", "ve-orchestrator.sh")
+    : resolve(configDir, "..", "ve-orchestrator.ps1");
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────

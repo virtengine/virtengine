@@ -1574,27 +1574,65 @@ async function main() {
       ),
     );
 
-    // Check for default scripts in codex-monitor directory
-    const defaultOrchestrator = resolve(__dirname, "ve-orchestrator.ps1");
-    const defaultKanban = resolve(__dirname, "ve-kanban.ps1");
-    const hasDefaultScripts =
-      existsSync(defaultOrchestrator) && existsSync(defaultKanban);
+    const shellModeRequested = parseBooleanEnvValue(
+      process.env.CODEX_MONITOR_SHELL_MODE,
+      false,
+    );
+    const orchestratorEnv = String(process.env.ORCHESTRATOR_SCRIPT || "")
+      .trim()
+      .toLowerCase();
+    const preferShellScript =
+      shellModeRequested ||
+      orchestratorEnv.endsWith(".sh") ||
+      (process.platform !== "win32" && !orchestratorEnv.endsWith(".ps1"));
+
+    const orchestratorShCandidates = [
+      resolve(__dirname, "ve-orchestrator.sh"),
+      resolve(__dirname, "orchestrator.sh"),
+    ];
+    const orchestratorPsCandidates = [
+      resolve(__dirname, "ve-orchestrator.ps1"),
+      resolve(__dirname, "orchestrator.ps1"),
+    ];
+    const kanbanShCandidates = [
+      resolve(__dirname, "ve-kanban.sh"),
+      resolve(__dirname, "kanban.sh"),
+    ];
+    const kanbanPsCandidates = [
+      resolve(__dirname, "ve-kanban.ps1"),
+      resolve(__dirname, "kanban.ps1"),
+    ];
+
+    const orderedOrchestratorCandidates = preferShellScript
+      ? [...orchestratorShCandidates, ...orchestratorPsCandidates]
+      : [...orchestratorPsCandidates, ...orchestratorShCandidates];
+    const orderedKanbanCandidates = preferShellScript
+      ? [...kanbanShCandidates, ...kanbanPsCandidates]
+      : [...kanbanPsCandidates, ...kanbanShCandidates];
+
+    const defaultOrchestrator =
+      orderedOrchestratorCandidates.find((path) => existsSync(path)) || "";
+    const defaultKanban =
+      orderedKanbanCandidates.find((path) => existsSync(path)) || "";
+    const hasDefaultScripts = Boolean(defaultOrchestrator);
 
     if (hasDefaultScripts) {
       info(`Found default orchestrator scripts in codex-monitor:`);
-      info(`  - ve-orchestrator.ps1`);
-      info(`  - ve-kanban.ps1`);
+      info(`  - ${basename(defaultOrchestrator)}`);
+      if (defaultKanban) {
+        info(`  - ${basename(defaultKanban)}`);
+      }
 
       const useDefault = isAdvancedSetup
         ? await prompt.confirm(
-            "Use the default ve-orchestrator.ps1 script?",
+            `Use the default ${basename(defaultOrchestrator)} script?`,
             true,
           )
         : true;
 
       if (useDefault) {
         env.ORCHESTRATOR_SCRIPT = defaultOrchestrator;
-        success("Using default ve-orchestrator.ps1");
+        success(`Using default ${basename(defaultOrchestrator)}`);
       } else {
         const customPath = await prompt.ask(
           "Path to your custom orchestrator script (or leave blank for Vibe-Kanban direct mode)",

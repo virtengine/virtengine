@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/codex-monitor/agent-hook-bridge.mjs --agent claude --event UserPromptSubmit"
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event UserPromptSubmit"
           }
         ]
       }
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/codex-monitor/agent-hook-bridge.mjs --agent claude --event PreToolUse"
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event PreToolUse"
           }
         ]
       }
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/codex-monitor/agent-hook-bridge.mjs --agent claude --event PostToolUse"
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event PostToolUse"
           }
         ]
       }
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/codex-monitor/agent-hook-bridge.mjs --agent claude --event Stop"
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event Stop"
           }
         ]
       }
