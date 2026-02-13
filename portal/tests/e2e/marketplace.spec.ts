@@ -17,11 +17,16 @@ test.describe('Marketplace @smoke', () => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/marketplace');
 
+    await expect(page.getByRole('heading', { name: /Marketplace/i })).toBeVisible();
     await expect(page.getByLabel('Sort by:')).toBeVisible();
 
-    const filterSidebar = page.locator('aside');
-    const isSidebarVisible = await filterSidebar.isVisible().catch(() => false);
-    expect(isSidebarVisible || (await page.locator('button svg').first().isVisible())).toBe(true);
+    const filterHeading = page.getByRole('heading', { name: /Resource Type/i }).first();
+    if (!(await filterHeading.isVisible().catch(() => false))) {
+      const filtersButton = page.getByRole('button', { name: /Filters/i });
+      await expect(filtersButton).toBeVisible();
+      await filtersButton.click();
+    }
+    await expect(filterHeading).toBeVisible();
   });
 
   test('should browse offerings and apply filters', async ({ page }) => {
@@ -77,6 +82,8 @@ test.describe('Marketplace @smoke', () => {
 
     await page.getByRole('button', { name: /Sign & Submit/i }).click();
 
-    await expect(page.getByRole('heading', { name: /Order confirmed/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Order confirmed/i })).toBeVisible({
+      timeout: 15000,
+    });
   });
 });

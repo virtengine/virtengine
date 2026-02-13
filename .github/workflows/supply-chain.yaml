@@ -309,8 +309,15 @@ jobs:
         run: |
           mkdir -p .cache
           cd scripts/supply-chain
-          go run assess-dependencies.go --json > ../../.cache/risk-assessment.json 2>/dev/null || true
+          set +e
+          go run assess-dependencies.go --json > ../../.cache/risk-assessment.json 2>/dev/null
+          json_status=$?
           go run assess-dependencies.go
+          text_status=$?
+          set -e
+          if [ "$json_status" -ne 0 ] || [ "$text_status" -ne 0 ]; then
+            echo "::warning::Dependency risk assessment reported issues"
+          fi
 
       - name: Check for high-risk dependencies
         run: |

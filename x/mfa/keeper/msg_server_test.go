@@ -533,6 +533,8 @@ func (s *MsgServerTestSuite) TestRefreshSession_Success() {
 	err = s.keeper.CreateAuthorizationSession(s.ctx, session)
 	s.Require().NoError(err)
 
+	s.ctx = s.ctx.WithBlockTime(s.ctx.BlockTime().Add(time.Second))
+
 	msg := &types.MsgRefreshSession{
 		Sender:    address.String(),
 		SessionID: "refresh-session-id",

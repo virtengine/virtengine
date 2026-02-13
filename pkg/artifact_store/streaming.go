@@ -160,7 +160,10 @@ func (u *StreamingUploader) Upload(ctx context.Context, req *PutStreamRequest) (
 	}
 
 	// Final progress update
-	u.updateProgress(u.progress.BytesTransferred)
+	u.mu.RLock()
+	finalBytes := u.progress.BytesTransferred
+	u.mu.RUnlock()
+	u.updateProgress(finalBytes)
 
 	return resp, nil
 }

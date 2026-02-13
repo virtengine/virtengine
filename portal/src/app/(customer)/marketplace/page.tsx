@@ -79,6 +79,8 @@ export default function MarketplacePage() {
           <button
             type="button"
             onClick={() => setShowMobileFilters(true)}
+            aria-label="Filters"
+            title="Filters"
             className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent lg:hidden"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

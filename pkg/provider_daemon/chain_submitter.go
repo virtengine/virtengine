@@ -531,13 +531,17 @@ func (s *ChainUsageSubmitterImpl) buildSignedTx(msg interface{}) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("sign message: %w", err)
 	}
+	s.mu.RLock()
+	sequence := s.sequence
+	accountNumber := s.accountNumber
+	s.mu.RUnlock()
 	tx := txEnvelope{
 		Msg:           msgBytes,
 		Signature:     sig.Signature,
 		ChainID:       s.cfg.ChainID,
-		Sequence:      s.sequence,
+		Sequence:      sequence,
 		GasLimit:      s.cfg.GasLimit,
-		AccountNumber: s.accountNumber,
+		AccountNumber: accountNumber,
 	}
 	return json.Marshal(tx)
 }
