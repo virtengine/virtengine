@@ -14,6 +14,9 @@ const nextConfig = {
   // Enable static export for GitHub Pages, standalone for Docker
   output: isPages ? 'export' : isDocker ? 'standalone' : undefined,
 
+  // Ensure Next.js resolves workspace root correctly in monorepo
+  outputFileTracingRoot: path.resolve(__dirname, '..'),
+
   // Use trailing slashes for better GitHub Pages compatibility
   trailingSlash: isPages,
 

@@ -2,11 +2,11 @@
 # Pin exact versions for deterministic builds
 
 # Deep Learning / U-Net
-tensorflow==2.13.0
-keras==2.13.1
+tensorflow==2.20.0
+keras==3.13.2
 
 # Image Processing
-opencv-python==4.8.0.74
+opencv-python==4.8.1.78
 Pillow==12.1.1
 
 # Numerical Computing
