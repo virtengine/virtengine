@@ -34,6 +34,26 @@ let activeTurn = false;
 let turnCount = 0;
 let workspacePath = null;
 
+function envFlagEnabled(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on", "y"].includes(raw);
+}
+
+function resolveCopilotTransport() {
+  const raw = String(process.env.COPILOT_TRANSPORT || "auto")
+    .trim()
+    .toLowerCase();
+  if (["auto", "sdk", "cli", "url"].includes(raw)) {
+    return raw;
+  }
+  console.warn(
+    `[copilot-shell] invalid COPILOT_TRANSPORT='${raw}', defaulting to 'auto'`,
+  );
+  return "auto";
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function timestamp() {
@@ -90,7 +110,10 @@ function logSessionEvent(logPath, event) {
   if (!logPath || !event) return;
   try {
     const payload = safeStringify(event);
-    appendFileSync(logPath, `${timestamp()} ${event.type || "event"} ${payload}\n`);
+    appendFileSync(
+      logPath,
+      `${timestamp()} ${event.type || "event"} ${payload}\n`,
+    );
   } catch {
     /* best effort */
   }
@@ -100,13 +123,14 @@ function logSessionEvent(logPath, event) {
 
 async function loadCopilotSdk() {
   if (CopilotClientClass) return CopilotClientClass;
-  if (process.env.COPILOT_SDK_DISABLED === "1") {
+  if (envFlagEnabled(process.env.COPILOT_SDK_DISABLED)) {
     console.warn("[copilot-shell] SDK disabled via COPILOT_SDK_DISABLED");
     return null;
   }
   try {
     const mod = await import("@github/copilot-sdk");
-    CopilotClientClass = mod.CopilotClient || mod.default?.CopilotClient || null;
+    CopilotClientClass =
+      mod.CopilotClient || mod.default?.CopilotClient || null;
     if (!CopilotClientClass) {
       throw new Error("CopilotClient export not found");
     }
@@ -146,9 +170,7 @@ function detectGitHubToken() {
 
   // 3. VS Code auth detection could be added here
   // For now, return undefined to let SDK use default auth flow
-  console.log(
-    "[copilot-shell] no pre-auth detected, using SDK default auth",
-  );
+  console.log("[copilot-shell] no pre-auth detected, using SDK default auth");
   return undefined;
 }
 
@@ -188,15 +210,32 @@ async function ensureClientStarted() {
     undefined;
   const cliUrl = process.env.COPILOT_CLI_URL || undefined;
   const token = detectGitHubToken();
+  const transport = resolveCopilotTransport();
+
+  let clientOptions;
+  if (transport === "url") {
+    if (!cliUrl) {
+      console.warn(
+        "[copilot-shell] COPILOT_TRANSPORT=url requested but COPILOT_CLI_URL is unset; falling back to auto",
+      );
+      clientOptions = cliPath || token ? { cliPath, token } : undefined;
+    } else {
+      clientOptions = { cliUrl };
+    }
+  } else if (transport === "cli") {
+    clientOptions = { cliPath: cliPath || "copilot", token };
+  } else if (transport === "sdk") {
+    clientOptions = token ? { token } : undefined;
+  } else {
+    clientOptions = cliUrl
+      ? { cliUrl }
+      : cliPath || token
+        ? { cliPath, token }
+        : undefined;
+  }
 
   await withSanitizedOpenAiEnv(async () => {
-    copilotClient = new Cls(
-      cliUrl
-        ? { cliUrl }
-        : cliPath || token
-          ? { cliPath, token }
-          : undefined,
-    );
+    copilotClient = new Cls(clientOptions);
     await copilotClient.start();
   });
   clientStarted = true;
@@ -298,7 +337,11 @@ function loadMcpServersFromFile(path) {
   if (parsed.mcpServers && typeof parsed.mcpServers === "object") {
     return parsed.mcpServers;
   }
-  if (parsed.mcp && parsed.mcp.servers && typeof parsed.mcp.servers === "object") {
+  if (
+    parsed.mcp &&
+    parsed.mcp.servers &&
+    typeof parsed.mcp.servers === "object"
+  ) {
     return parsed.mcp.servers;
   }
   if (parsed["github.copilot.mcpServers"]) {
@@ -317,8 +360,7 @@ function loadMcpServers() {
     }
   }
   const configPath =
-    process.env.COPILOT_MCP_CONFIG ||
-    resolve(REPO_ROOT, ".vscode", "mcp.json");
+    process.env.COPILOT_MCP_CONFIG || resolve(REPO_ROOT, ".vscode", "mcp.json");
   return loadMcpServersFromFile(configPath);
 }
 
@@ -350,7 +392,10 @@ async function getSession() {
 
   if (activeSessionId && typeof copilotClient?.resumeSession === "function") {
     try {
-      activeSession = await copilotClient.resumeSession(activeSessionId, config);
+      activeSession = await copilotClient.resumeSession(
+        activeSessionId,
+        config,
+      );
       workspacePath = activeSession?.workspacePath || workspacePath;
       console.log(`[copilot-shell] resumed session ${activeSessionId}`);
       return activeSession;

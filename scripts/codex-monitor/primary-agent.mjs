@@ -72,6 +72,13 @@ const ADAPTERS = {
   },
 };
 
+function envFlagEnabled(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on", "y"].includes(raw);
+}
+
 let activeAdapter = ADAPTERS["codex-sdk"];
 let primaryProfile = null;
 let primaryFallbackReason = null;
@@ -161,19 +168,19 @@ export async function initPrimaryAgent(nameOrConfig = null) {
 
   if (
     activeAdapter.name === "codex-sdk" &&
-    process.env.CODEX_SDK_DISABLED === "1"
+    envFlagEnabled(process.env.CODEX_SDK_DISABLED)
   ) {
     primaryFallbackReason = "Codex SDK disabled — attempting fallback";
-    if (process.env.COPILOT_SDK_DISABLED !== "1") {
+    if (!envFlagEnabled(process.env.COPILOT_SDK_DISABLED)) {
       setPrimaryAgent("copilot-sdk");
-    } else if (process.env.CLAUDE_SDK_DISABLED !== "1") {
+    } else if (!envFlagEnabled(process.env.CLAUDE_SDK_DISABLED)) {
       setPrimaryAgent("claude-sdk");
     }
   }
 
   if (
     activeAdapter.name === "claude-sdk" &&
-    process.env.CLAUDE_SDK_DISABLED === "1"
+    envFlagEnabled(process.env.CLAUDE_SDK_DISABLED)
   ) {
     primaryFallbackReason = "Claude SDK disabled — falling back to Codex";
     setPrimaryAgent("codex-sdk");

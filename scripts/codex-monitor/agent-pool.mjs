@@ -62,6 +62,13 @@ const HARD_TIMEOUT_BUFFER_MS = 5 * 60_000; // 5 minutes
 /** Tag for console logging */
 const TAG = "[agent-pool]";
 
+function envFlagEnabled(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on", "y"].includes(raw);
+}
+
 const OPENAI_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
@@ -141,7 +148,7 @@ let resolutionLogged = false;
 function isDisabled(name) {
   const adapter = SDK_ADAPTERS[name];
   if (!adapter) return true;
-  return process.env[adapter.envDisableKey] === "1";
+  return envFlagEnabled(process.env[adapter.envDisableKey]);
 }
 
 const MONITOR_MONITOR_TASK_KEY = "monitor-monitor";

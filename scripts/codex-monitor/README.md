@@ -190,6 +190,28 @@ Load order (highest priority first):
 - `codex-monitor.config.json` — structured config (executors, failover, repos, profiles)
 - `.codex-monitor/agents/*.md` — prompt templates scaffolded by setup
 
+### SDK transport defaults
+
+`codex-monitor` supports explicit transport selectors per SDK shell:
+
+- `CODEX_TRANSPORT=sdk|auto|cli`
+- `COPILOT_TRANSPORT=sdk|auto|cli|url`
+- `CLAUDE_TRANSPORT=sdk|auto|cli`
+
+Setup now defaults all three to `sdk` for predictable persistent-session behavior.
+`auto` remains available when you intentionally want endpoint/CLI auto-detection.
+
+### Recommended profile split
+
+- Local development profile:
+  - `DEVMODE=true`
+  - `DEVMODE_MONITOR_MONITOR_ENABLED=true`
+  - `*_TRANSPORT=sdk`
+- End-user stability profile:
+  - `DEVMODE=false`
+  - `DEVMODE_MONITOR_MONITOR_ENABLED=false`
+  - `*_TRANSPORT=sdk`
+
 ---
 
 ## Recommended configuration path

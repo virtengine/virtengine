@@ -3,6 +3,12 @@ import { resolve, dirname, relative } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_HOOK_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
+const LEGACY_BRIDGE_SNIPPET = "scripts/codex-monitor/agent-hook-bridge.mjs";
+
+const BRIDGE_COMMAND = Object.freeze([
+  process.execPath,
+  resolve(__dirname, "agent-hook-bridge.mjs"),
+]);
 
 export const HOOK_PROFILES = Object.freeze([
   "strict",
@@ -52,7 +58,8 @@ const PRESET_COMMANDS = Object.freeze({
   SessionStop: Object.freeze([
     {
       id: "session-stop-log",
-      command: 'echo "[hook] Agent session ended: task=${VE_TASK_ID} sdk=${VE_SDK}"',
+      command:
+        'echo "[hook] Agent session ended: task=${VE_TASK_ID} sdk=${VE_SDK}"',
       description: "Log agent session end for audit trail",
       blocking: false,
       timeout: 10_000,
@@ -113,12 +120,18 @@ function buildShellCommand(args) {
   return args.map((item) => quoteArg(item)).join(" ");
 }
 
+function makeBridgeCommandTokens(agent, event) {
+  return [...BRIDGE_COMMAND, "--agent", agent, "--event", event];
+}
+
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 function normalizeProfile(profile) {
-  const raw = String(profile || "").trim().toLowerCase();
+  const raw = String(profile || "")
+    .trim()
+    .toLowerCase();
   if (HOOK_PROFILES.includes(raw)) return raw;
   return "strict";
 }
@@ -164,7 +177,11 @@ export function normalizeHookTargets(value) {
     const arr = value
       .map((item) => String(item).trim().toLowerCase())
       .filter(Boolean);
-    return [...new Set(arr.filter((item) => ["codex", "claude", "copilot"].includes(item)))];
+    return [
+      ...new Set(
+        arr.filter((item) => ["codex", "claude", "copilot"].includes(item)),
+      ),
+    ];
   }
 
   const raw = String(value || "")
@@ -193,10 +210,14 @@ export function buildHookScaffoldOptionsFromEnv(env = process.env) {
       SessionStart: normalizeOverrideCommands(
         env.CODEX_MONITOR_HOOK_SESSION_START,
       ),
-      SessionStop: normalizeOverrideCommands(env.CODEX_MONITOR_HOOK_SESSION_STOP),
+      SessionStop: normalizeOverrideCommands(
+        env.CODEX_MONITOR_HOOK_SESSION_STOP,
+      ),
       PrePush: normalizeOverrideCommands(env.CODEX_MONITOR_HOOK_PREPUSH),
       PreCommit: normalizeOverrideCommands(env.CODEX_MONITOR_HOOK_PRECOMMIT),
-      TaskComplete: normalizeOverrideCommands(env.CODEX_MONITOR_HOOK_TASK_COMPLETE),
+      TaskComplete: normalizeOverrideCommands(
+        env.CODEX_MONITOR_HOOK_TASK_COMPLETE,
+      ),
     },
   };
 }
@@ -209,10 +230,12 @@ export function buildCanonicalHookConfig(options = {}) {
   const hooks = {};
 
   if (flags.includeSessionHooks) {
-    hooks.SessionStart = deepClone(PRESET_COMMANDS.SessionStart).map((item) => ({
-      ...item,
-      sdks: ["*"],
-    }));
+    hooks.SessionStart = deepClone(PRESET_COMMANDS.SessionStart).map(
+      (item) => ({
+        ...item,
+        sdks: ["*"],
+      }),
+    );
     hooks.SessionStop = deepClone(PRESET_COMMANDS.SessionStop).map((item) => ({
       ...item,
       sdks: ["*"],
@@ -231,10 +254,12 @@ export function buildCanonicalHookConfig(options = {}) {
     }));
   }
   if (flags.includeTaskComplete) {
-    hooks.TaskComplete = deepClone(PRESET_COMMANDS.TaskComplete).map((item) => ({
-      ...item,
-      sdks: ["*"],
-    }));
+    hooks.TaskComplete = deepClone(PRESET_COMMANDS.TaskComplete).map(
+      (item) => ({
+        ...item,
+        sdks: ["*"],
+      }),
+    );
   }
 
   for (const event of [
@@ -272,28 +297,14 @@ function createCopilotHookConfig() {
     sessionStart: [
       {
         type: "command",
-        command: [
-          "node",
-          "scripts/codex-monitor/agent-hook-bridge.mjs",
-          "--agent",
-          "copilot",
-          "--event",
-          "sessionStart",
-        ],
+        command: makeBridgeCommandTokens("copilot", "sessionStart"),
         timeout: 60,
       },
     ],
     sessionEnd: [
       {
         type: "command",
-        command: [
-          "node",
-          "scripts/codex-monitor/agent-hook-bridge.mjs",
-          "--agent",
-          "copilot",
-          "--event",
-          "sessionEnd",
-        ],
+        command: makeBridgeCommandTokens("copilot", "sessionEnd"),
         timeout: 60,
       },
     ],
@@ -301,14 +312,7 @@ function createCopilotHookConfig() {
       "*": [
         {
           type: "command",
-          command: [
-            "node",
-            "scripts/codex-monitor/agent-hook-bridge.mjs",
-            "--agent",
-            "copilot",
-            "--event",
-            "preToolUse",
-          ],
+          command: makeBridgeCommandTokens("copilot", "preToolUse"),
           timeout: 300,
         },
       ],
@@ -317,14 +321,7 @@ function createCopilotHookConfig() {
       "*": [
         {
           type: "command",
-          command: [
-            "node",
-            "scripts/codex-monitor/agent-hook-bridge.mjs",
-            "--agent",
-            "copilot",
-            "--event",
-            "postToolUse",
-          ],
+          command: makeBridgeCommandTokens("copilot", "postToolUse"),
           timeout: 120,
         },
       ],
@@ -341,14 +338,9 @@ function createClaudeHookConfig() {
           hooks: [
             {
               type: "command",
-              command: buildShellCommand([
-                "node",
-                "scripts/codex-monitor/agent-hook-bridge.mjs",
-                "--agent",
-                "claude",
-                "--event",
-                "UserPromptSubmit",
-              ]),
+              command: buildShellCommand(
+                makeBridgeCommandTokens("claude", "UserPromptSubmit"),
+              ),
             },
           ],
         },
@@ -359,14 +351,9 @@ function createClaudeHookConfig() {
           hooks: [
             {
               type: "command",
-              command: buildShellCommand([
-                "node",
-                "scripts/codex-monitor/agent-hook-bridge.mjs",
-                "--agent",
-                "claude",
-                "--event",
-                "PreToolUse",
-              ]),
+              command: buildShellCommand(
+                makeBridgeCommandTokens("claude", "PreToolUse"),
+              ),
             },
           ],
         },
@@ -377,14 +364,9 @@ function createClaudeHookConfig() {
           hooks: [
             {
               type: "command",
-              command: buildShellCommand([
-                "node",
-                "scripts/codex-monitor/agent-hook-bridge.mjs",
-                "--agent",
-                "claude",
-                "--event",
-                "PostToolUse",
-              ]),
+              command: buildShellCommand(
+                makeBridgeCommandTokens("claude", "PostToolUse"),
+              ),
             },
           ],
         },
@@ -395,14 +377,9 @@ function createClaudeHookConfig() {
           hooks: [
             {
               type: "command",
-              command: buildShellCommand([
-                "node",
-                "scripts/codex-monitor/agent-hook-bridge.mjs",
-                "--agent",
-                "claude",
-                "--event",
-                "Stop",
-              ]),
+              command: buildShellCommand(
+                makeBridgeCommandTokens("claude", "Stop"),
+              ),
             },
           ],
         },
@@ -438,14 +415,26 @@ function mergeClaudeSettings(existing, generated) {
 
   const mergedHooks = { ...existingHooks };
   for (const [event, generatedEntries] of Object.entries(generated.hooks)) {
-    const existingEntries = Array.isArray(mergedHooks[event])
+    let existingEntries = Array.isArray(mergedHooks[event])
       ? [...mergedHooks[event]]
       : [];
+
+    existingEntries = existingEntries.filter((entry) => {
+      if (!entry || typeof entry !== "object") return true;
+      const commands = Array.isArray(entry.hooks)
+        ? entry.hooks.map((h) => String(h?.command || ""))
+        : [];
+      const hasLegacyBridge = commands.some((cmd) =>
+        cmd.includes(LEGACY_BRIDGE_SNIPPET),
+      );
+      return !hasLegacyBridge;
+    });
 
     for (const generatedEntry of generatedEntries) {
       const exists = existingEntries.some((entry) => {
         if (!entry || typeof entry !== "object") return false;
-        const sameMatcher = String(entry.matcher || "") === String(generatedEntry.matcher || "");
+        const sameMatcher =
+          String(entry.matcher || "") === String(generatedEntry.matcher || "");
         if (!sameMatcher) return false;
 
         const entryCommands = Array.isArray(entry.hooks)
@@ -466,6 +455,21 @@ function mergeClaudeSettings(existing, generated) {
 
   base.hooks = mergedHooks;
   return base;
+}
+
+function hasLegacyBridgeInCopilotConfig(config) {
+  if (!config || typeof config !== "object") return false;
+  const scan = (value) => {
+    if (typeof value === "string") {
+      return value.includes(LEGACY_BRIDGE_SNIPPET);
+    }
+    if (Array.isArray(value)) {
+      return value.some((item) => scan(item));
+    }
+    if (!value || typeof value !== "object") return false;
+    return Object.values(value).some((item) => scan(item));
+  };
+  return scan(config);
 }
 
 function buildDisableEnv(hookConfig) {
@@ -525,15 +529,29 @@ export function scaffoldAgentHookFiles(repoRoot, options = {}) {
   }
 
   if (targets.includes("copilot")) {
-    const copilotPath = resolve(root, ".github", "hooks", "codex-monitor.hooks.json");
+    const copilotPath = resolve(
+      root,
+      ".github",
+      "hooks",
+      "codex-monitor.hooks.json",
+    );
     const config = createCopilotHookConfig();
     const existedBefore = existsSync(copilotPath);
-    if (existedBefore && !overwriteExisting) {
+    const existingCopilot = loadJson(copilotPath);
+    const forceLegacyMigration =
+      hasLegacyBridgeInCopilotConfig(existingCopilot);
+
+    if (existedBefore && !overwriteExisting && !forceLegacyMigration) {
       result.skipped.push(relative(root, copilotPath));
     } else {
       writeJson(copilotPath, config);
       if (existedBefore) {
         result.updated.push(relative(root, copilotPath));
+        if (forceLegacyMigration) {
+          result.warnings.push(
+            `${relative(root, copilotPath)} contained legacy bridge path and was auto-updated`,
+          );
+        }
       } else {
         result.written.push(relative(root, copilotPath));
       }

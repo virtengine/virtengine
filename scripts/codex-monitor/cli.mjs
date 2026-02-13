@@ -446,6 +446,14 @@ async function main() {
 
   // Handle --daemon
   if (args.includes("--daemon") || args.includes("-d")) {
+    const { shouldRunSetup, runSetup } = await import("./setup.mjs");
+    if (shouldRunSetup()) {
+      console.log(
+        "\n  🚀 First run detected — setup is required before daemon mode.\n",
+      );
+      await runSetup();
+      console.log("\n  Setup complete. Starting daemon...\n");
+    }
     startDaemon();
     return;
   }

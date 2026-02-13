@@ -46,6 +46,19 @@ function timestamp() {
   return new Date().toISOString();
 }
 
+function resolveCodexTransport() {
+  const raw = String(process.env.CODEX_TRANSPORT || "auto")
+    .trim()
+    .toLowerCase();
+  if (["auto", "sdk", "cli"].includes(raw)) {
+    return raw;
+  }
+  console.warn(
+    `[codex-shell] invalid CODEX_TRANSPORT='${raw}', defaulting to 'auto'`,
+  );
+  return "auto";
+}
+
 // ── SDK Loading ──────────────────────────────────────────────────────────────
 
 async function loadCodexSdk() {
@@ -55,6 +68,12 @@ async function loadCodexSdk() {
       `[codex-shell] agent_sdk.primary=${agentSdk.primary} — Codex SDK disabled`,
     );
     return null;
+  }
+  const transport = resolveCodexTransport();
+  if (transport === "cli") {
+    console.warn(
+      "[codex-shell] CODEX_TRANSPORT=cli is not yet implemented for persistent sessions; using SDK transport",
+    );
   }
   if (CodexClass) return CodexClass;
   try {

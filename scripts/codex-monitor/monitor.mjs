@@ -636,7 +636,7 @@ function startInteractiveShell() {
 }
 let codexDisabledReason = codexEnabled
   ? ""
-  : process.env.CODEX_SDK_DISABLED === "1"
+  : isTruthyFlag(process.env.CODEX_SDK_DISABLED)
     ? "disabled via CODEX_SDK_DISABLED"
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
@@ -779,8 +779,9 @@ function shouldKeepSessionForStatus(status) {
 
 // ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
 let anomalyDetector = null;
-const smartPrAllowRecreateClosed =
-  process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
+const smartPrAllowRecreateClosed = isTruthyFlag(
+  process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED,
+);
 const githubToken =
   process.env.GITHUB_TOKEN ||
   process.env.GH_TOKEN ||
@@ -9604,7 +9605,7 @@ function applyConfig(nextConfig, options = {}) {
   primaryAgentReady = nextConfig.primaryAgentEnabled;
   codexDisabledReason = codexEnabled
     ? ""
-    : process.env.CODEX_SDK_DISABLED === "1"
+    : isTruthyFlag(process.env.CODEX_SDK_DISABLED)
       ? "disabled via CODEX_SDK_DISABLED"
       : agentSdk?.primary && agentSdk.primary !== "codex"
         ? `disabled via agent_sdk.primary=${agentSdk.primary}`

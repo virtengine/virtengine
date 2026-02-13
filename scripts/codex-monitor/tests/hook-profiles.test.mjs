@@ -47,15 +47,8 @@ describe("hook-profiles", () => {
   });
 
   it("normalizes hook targets", () => {
-    expect(normalizeHookTargets("codex,claude")).toEqual([
-      "codex",
-      "claude",
-    ]);
-    expect(normalizeHookTargets("all")).toEqual([
-      "codex",
-      "claude",
-      "copilot",
-    ]);
+    expect(normalizeHookTargets("codex,claude")).toEqual(["codex", "claude"]);
+    expect(normalizeHookTargets("all")).toEqual(["codex", "claude", "copilot"]);
   });
 
   it("builds scaffold options from env", () => {
@@ -90,9 +83,16 @@ describe("hook-profiles", () => {
     expect(codexHooks.hooks.PrePush?.length).toBeGreaterThan(0);
 
     const claudeSettings = JSON.parse(
-      await readFile(resolve(rootDir, ".claude", "settings.local.json"), "utf8"),
+      await readFile(
+        resolve(rootDir, ".claude", "settings.local.json"),
+        "utf8",
+      ),
     );
     expect(claudeSettings.hooks.PreToolUse?.length).toBeGreaterThan(0);
+    const preToolCommand =
+      claudeSettings.hooks.PreToolUse?.[0]?.hooks?.[0]?.command || "";
+    expect(preToolCommand).toContain("agent-hook-bridge.mjs");
+    expect(preToolCommand).not.toContain("scripts/codex-monitor/");
 
     const copilotHooks = JSON.parse(
       await readFile(
@@ -102,6 +102,12 @@ describe("hook-profiles", () => {
     );
     expect(copilotHooks.version).toBe(1);
     expect(Array.isArray(copilotHooks.sessionStart)).toBe(true);
+    const copilotCmd = copilotHooks.sessionStart?.[0]?.command || [];
+    const copilotJoined = Array.isArray(copilotCmd)
+      ? copilotCmd.join(" ")
+      : String(copilotCmd || "");
+    expect(copilotJoined).toContain("agent-hook-bridge.mjs");
+    expect(copilotJoined).not.toContain("scripts/codex-monitor/");
   });
 
   it("merges with existing claude settings", async () => {

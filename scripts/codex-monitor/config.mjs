@@ -73,7 +73,8 @@ function ensurePromptWorkspaceGitIgnore(repoRoot) {
     .map((line) => line.trim())
     .includes(entry);
   if (hasEntry) return;
-  const next = existing.endsWith("\n") || !existing ? existing : `${existing}\n`;
+  const next =
+    existing.endsWith("\n") || !existing ? existing : `${existing}\n`;
   try {
     writeFileSync(gitignorePath, `${next}${entry}\n`, "utf8");
   } catch {
@@ -226,6 +227,20 @@ function resolveRepoPath(repoPath, baseDir) {
     );
   }
   return resolve(baseDir, repoPath);
+}
+
+function parseEnvBoolean(value, defaultValue) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+  const raw = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(raw)) return true;
+  if (["false", "0", "no", "n", "off"].includes(raw)) return false;
+  return defaultValue;
+}
+
+function isEnvEnabled(value, defaultValue = false) {
+  return parseEnvBoolean(value, defaultValue);
 }
 
 // ── Git helpers ──────────────────────────────────────────────────────────────
@@ -872,15 +887,15 @@ export function loadConfig(argv = process.argv, options = {}) {
   const interactiveShellEnabled =
     flags.has("shell") ||
     flags.has("interactive") ||
-    process.env.CODEX_MONITOR_SHELL === "1" ||
-    process.env.CODEX_MONITOR_INTERACTIVE === "1" ||
+    isEnvEnabled(process.env.CODEX_MONITOR_SHELL, false) ||
+    isEnvEnabled(process.env.CODEX_MONITOR_INTERACTIVE, false) ||
     configData.interactiveShellEnabled === true ||
     configData.shellEnabled === true;
   const preflightEnabled = flags.has("no-preflight")
     ? false
     : configData.preflightEnabled !== undefined
       ? configData.preflightEnabled
-      : process.env.CODEX_MONITOR_PREFLIGHT_DISABLED === "1"
+      : isEnvEnabled(process.env.CODEX_MONITOR_PREFLIGHT_DISABLED, false)
         ? false
         : true;
   const preflightRetryMs = Number(
@@ -892,7 +907,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const codexEnabled =
     !flags.has("no-codex") &&
     (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
-    process.env.CODEX_SDK_DISABLED !== "1" &&
+    !isEnvEnabled(process.env.CODEX_SDK_DISABLED, false) &&
     agentSdk.primary === "codex";
   const primaryAgent = normalizePrimaryAgent(
     cli["primary-agent"] ||
@@ -902,21 +917,23 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.primaryAgent ||
       "codex-sdk",
   );
-  const primaryAgentEnabled =
-    process.env.PRIMARY_AGENT_DISABLED === "1"
-      ? false
-      : primaryAgent === "codex-sdk"
-        ? codexEnabled
-        : primaryAgent === "copilot-sdk"
-          ? process.env.COPILOT_SDK_DISABLED !== "1"
-          : process.env.CLAUDE_SDK_DISABLED !== "1";
+  const primaryAgentEnabled = isEnvEnabled(
+    process.env.PRIMARY_AGENT_DISABLED,
+    false,
+  )
+    ? false
+    : primaryAgent === "codex-sdk"
+      ? codexEnabled
+      : primaryAgent === "copilot-sdk"
+        ? !isEnvEnabled(process.env.COPILOT_SDK_DISABLED, false)
+        : !isEnvEnabled(process.env.CLAUDE_SDK_DISABLED, false);
 
   // agentPoolEnabled: true when ANY agent SDK is available for pooled operations
   // This decouples pooled prompt execution from specific SDK selection
   const agentPoolEnabled =
-    process.env.CODEX_SDK_DISABLED !== "1" ||
-    process.env.COPILOT_SDK_DISABLED !== "1" ||
-    process.env.CLAUDE_SDK_DISABLED !== "1";
+    !isEnvEnabled(process.env.CODEX_SDK_DISABLED, false) ||
+    !isEnvEnabled(process.env.COPILOT_SDK_DISABLED, false) ||
+    !isEnvEnabled(process.env.CLAUDE_SDK_DISABLED, false);
 
   // ── Internal Executor ────────────────────────────────────
   // Allows the monitor to run tasks via agent-pool directly instead of
@@ -941,9 +958,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const reviewAgentEnabled =
     reviewAgentToggleRaw !== undefined &&
     String(reviewAgentToggleRaw).trim() !== ""
-      ? !["0", "false", "no", "off"].includes(
-          String(reviewAgentToggleRaw).trim().toLowerCase(),
-        )
+      ? isEnvEnabled(reviewAgentToggleRaw, true)
       : internalExecutorConfig.reviewAgentEnabled !== false;
   const internalExecutor = {
     mode: ["vk", "internal", "hybrid"].includes(executorMode)
@@ -960,9 +975,7 @@ export function loadConfig(argv = process.argv, options = {}) {
         30000,
     ),
     sdk:
-      process.env.INTERNAL_EXECUTOR_SDK ||
-      internalExecutorConfig.sdk ||
-      "auto",
+      process.env.INTERNAL_EXECUTOR_SDK || internalExecutorConfig.sdk || "auto",
     taskTimeoutMs: Number(
       process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
         internalExecutorConfig.taskTimeoutMs ||
@@ -1015,7 +1028,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const vkSpawnEnabled =
     vkRuntimeRequired &&
     !flags.has("no-vk-spawn") &&
-    process.env.VK_NO_SPAWN !== "1" &&
+    !isEnvEnabled(process.env.VK_NO_SPAWN, false) &&
     vkSpawnDefault;
   const vkEnsureIntervalMs = Number(
     cli["vk-ensure-interval"] || process.env.VK_ENSURE_INTERVAL || "60000",
@@ -1112,17 +1125,13 @@ export function loadConfig(argv = process.argv, options = {}) {
   for (const [key, val] of Object.entries(scopeMap)) {
     normalizedScopeMap[key.toLowerCase()] = val;
   }
-  const autoRebaseOnMerge = !["0", "false", "no"].includes(
-    String(
-      process.env.AUTO_REBASE_ON_MERGE ??
-        branchRoutingRaw.autoRebaseOnMerge ??
-        "true",
-    ).toLowerCase(),
+  const autoRebaseOnMerge = isEnvEnabled(
+    process.env.AUTO_REBASE_ON_MERGE ?? branchRoutingRaw.autoRebaseOnMerge,
+    true,
   );
-  const assessWithSdk = !["0", "false", "no"].includes(
-    String(
-      process.env.ASSESS_WITH_SDK ?? branchRoutingRaw.assessWithSdk ?? "true",
-    ).toLowerCase(),
+  const assessWithSdk = isEnvEnabled(
+    process.env.ASSESS_WITH_SDK ?? branchRoutingRaw.assessWithSdk,
+    true,
   );
   const branchRouting = Object.freeze({
     defaultBranch: defaultTargetBranch,
@@ -1135,10 +1144,9 @@ export function loadConfig(argv = process.argv, options = {}) {
   // Multi-workstation collaboration: when 2+ codex-monitor instances share
   // the same repo, the fleet system coordinates task planning, dispatch,
   // and conflict-aware ordering.
-  const fleetEnabled = !["0", "false", "no"].includes(
-    String(
-      process.env.FLEET_ENABLED ?? configData.fleetEnabled ?? "true",
-    ).toLowerCase(),
+  const fleetEnabled = isEnvEnabled(
+    process.env.FLEET_ENABLED ?? configData.fleetEnabled,
+    true,
   );
   const fleetBufferMultiplier = Number(
     process.env.FLEET_BUFFER_MULTIPLIER ||
@@ -1155,12 +1163,9 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.fleetPresenceTtlMs ||
       String(5 * 60 * 1000), // 5 minutes
   );
-  const fleetKnowledgeEnabled = !["0", "false", "no"].includes(
-    String(
-      process.env.FLEET_KNOWLEDGE_ENABLED ??
-        configData.fleetKnowledgeEnabled ??
-        "true",
-    ).toLowerCase(),
+  const fleetKnowledgeEnabled = isEnvEnabled(
+    process.env.FLEET_KNOWLEDGE_ENABLED ?? configData.fleetKnowledgeEnabled,
+    true,
   );
   const fleetKnowledgeFile = String(
     process.env.FLEET_KNOWLEDGE_FILE ||
@@ -1177,12 +1182,9 @@ export function loadConfig(argv = process.argv, options = {}) {
   });
 
   // ── Dependabot Auto-Merge ─────────────────────────────────
-  const dependabotAutoMerge = !["0", "false", "no"].includes(
-    String(
-      process.env.DEPENDABOT_AUTO_MERGE ??
-        configData.dependabotAutoMerge ??
-        "true",
-    ).toLowerCase(),
+  const dependabotAutoMerge = isEnvEnabled(
+    process.env.DEPENDABOT_AUTO_MERGE ?? configData.dependabotAutoMerge,
+    true,
   );
   const dependabotAutoMergeIntervalMin = Number(
     process.env.DEPENDABOT_AUTO_MERGE_INTERVAL_MIN || "10",
@@ -1411,6 +1413,7 @@ export {
   loadExecutorConfig,
   loadRepoConfig,
   loadAgentPrompts,
+  parseEnvBoolean,
   getAgentPromptDefinitions,
 };
 export default loadConfig;

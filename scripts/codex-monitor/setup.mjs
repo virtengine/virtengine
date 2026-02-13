@@ -450,6 +450,24 @@ function normalizeEnum(value, allowed, fallback) {
   return allowed.includes(normalized) ? normalized : fallback;
 }
 
+function parseBooleanEnvValue(value, fallback = false) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on", "y"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off", "n"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function toBooleanEnvString(value, fallback = false) {
+  return parseBooleanEnvValue(value, fallback) ? "true" : "false";
+}
+
 function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
   env.PROJECT_NAME =
     env.PROJECT_NAME || configJson.projectName || basename(repoRoot);
@@ -477,17 +495,25 @@ function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
     toPositiveInt(env.VK_RECOVERY_PORT || "54089", 54089),
   );
 
-  env.WHATSAPP_ENABLED = ["1", "true", "yes"].includes(
-    String(env.WHATSAPP_ENABLED || "0").toLowerCase(),
-  )
-    ? "1"
-    : "0";
+  env.CODEX_TRANSPORT = normalizeEnum(
+    env.CODEX_TRANSPORT || process.env.CODEX_TRANSPORT,
+    ["sdk", "auto", "cli"],
+    "sdk",
+  );
+  env.COPILOT_TRANSPORT = normalizeEnum(
+    env.COPILOT_TRANSPORT || process.env.COPILOT_TRANSPORT,
+    ["sdk", "auto", "cli", "url"],
+    "sdk",
+  );
+  env.CLAUDE_TRANSPORT = normalizeEnum(
+    env.CLAUDE_TRANSPORT || process.env.CLAUDE_TRANSPORT,
+    ["sdk", "auto", "cli"],
+    "sdk",
+  );
 
-  env.CONTAINER_ENABLED = ["1", "true", "yes"].includes(
-    String(env.CONTAINER_ENABLED || "0").toLowerCase(),
-  )
-    ? "1"
-    : "0";
+  env.WHATSAPP_ENABLED = toBooleanEnvString(env.WHATSAPP_ENABLED, false);
+
+  env.CONTAINER_ENABLED = toBooleanEnvString(env.CONTAINER_ENABLED, false);
 
   env.CONTAINER_RUNTIME = normalizeEnum(
     env.CONTAINER_RUNTIME,
@@ -573,7 +599,7 @@ function formatEnvValue(value) {
   return `"${raw.replace(/"/g, '\\"')}"`;
 }
 
-function buildStandardizedEnvFile(templateText, envEntries) {
+export function buildStandardizedEnvFile(templateText, envEntries) {
   const lines = templateText.split(/\r?\n/);
   const entryMap = new Map(
     Object.entries(envEntries)
@@ -582,13 +608,16 @@ function buildStandardizedEnvFile(templateText, envEntries) {
   );
 
   const consumed = new Set();
-  const updated = lines.map((line) => {
+  const seenKeys = new Set();
+  const updated = lines.flatMap((line) => {
     const match = line.match(/^\s*#?\s*([A-Z0-9_]+)=.*$/);
-    if (!match) return line;
+    if (!match) return [line];
     const key = match[1];
-    if (!entryMap.has(key)) return line;
+    if (seenKeys.has(key)) return [];
+    seenKeys.add(key);
+    if (!entryMap.has(key)) return [line];
     consumed.add(key);
-    return `${key}=${formatEnvValue(entryMap.get(key))}`;
+    return [`${key}=${formatEnvValue(entryMap.get(key))}`];
   });
 
   const extras = [...entryMap.keys()].filter((key) => !consumed.has(key));
@@ -1085,7 +1114,7 @@ async function main() {
       env.OPENAI_BASE_URL = await prompt.ask("API Base URL", "");
       env.CODEX_MODEL = await prompt.ask("Model name", "");
     } else if (providerIdx === 4) {
-      env.CODEX_SDK_DISABLED = "1";
+      env.CODEX_SDK_DISABLED = "true";
     }
 
     // ── Step 6: Telegram ──────────────────────────────────
@@ -1399,9 +1428,9 @@ async function main() {
         "Auto-spawn vibe-kanban if not running?",
         true,
       );
-      if (!spawnVk) env.VK_NO_SPAWN = "1";
+      if (!spawnVk) env.VK_NO_SPAWN = "true";
     } else {
-      env.VK_NO_SPAWN = "1";
+      env.VK_NO_SPAWN = "true";
       info("VK runtime disabled (not selected as board or executor).");
     }
 
@@ -1771,7 +1800,7 @@ async function main() {
       false,
     );
     if (enableWhatsApp) {
-      env.WHATSAPP_ENABLED = "1";
+      env.WHATSAPP_ENABLED = "true";
       env.WHATSAPP_CHAT_ID = await prompt.ask(
         "WhatsApp Chat/Group ID (JID)",
         process.env.WHATSAPP_CHAT_ID || "",
@@ -1786,7 +1815,7 @@ async function main() {
         "Run `codex-monitor --whatsapp-auth` after setup to authenticate with WhatsApp.",
       );
     } else {
-      env.WHATSAPP_ENABLED = "0";
+      env.WHATSAPP_ENABLED = "false";
     }
 
     // Container isolation
@@ -1795,7 +1824,7 @@ async function main() {
       false,
     );
     if (enableContainer) {
-      env.CONTAINER_ENABLED = "1";
+      env.CONTAINER_ENABLED = "true";
       if (isAdvancedSetup) {
         const runtimeIdx = await prompt.choose(
           "Container runtime",
@@ -1816,7 +1845,7 @@ async function main() {
         env.CONTAINER_IMAGE = process.env.CONTAINER_IMAGE || "node:22-slim";
       }
     } else {
-      env.CONTAINER_ENABLED = "0";
+      env.CONTAINER_ENABLED = "false";
     }
 
     // ── Step 9: Startup Service ────────────────────────────
@@ -1895,13 +1924,13 @@ async function runNonInteractive({
   env.MAX_PARALLEL = process.env.MAX_PARALLEL || "6";
 
   // Optional channels
-  env.WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED || "0";
+  env.WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED || "false";
   env.WHATSAPP_CHAT_ID = process.env.WHATSAPP_CHAT_ID || "";
-  env.CONTAINER_ENABLED = process.env.CONTAINER_ENABLED || "0";
+  env.CONTAINER_ENABLED = process.env.CONTAINER_ENABLED || "false";
   env.CONTAINER_RUNTIME = process.env.CONTAINER_RUNTIME || "auto";
 
   // Copilot cloud: disabled by default — set to 0 to allow @copilot PR comments
-  env.COPILOT_CLOUD_DISABLED = process.env.COPILOT_CLOUD_DISABLED || "1";
+  env.COPILOT_CLOUD_DISABLED = process.env.COPILOT_CLOUD_DISABLED || "true";
 
   // Parse EXECUTORS env if set, else use default preset
   if (process.env.EXECUTORS) {
@@ -1965,9 +1994,12 @@ async function runNonInteractive({
   printHookScaffoldSummary(hookResult);
 
   // Startup service: respect STARTUP_SERVICE env in non-interactive mode
-  if (process.env.STARTUP_SERVICE === "1") {
+  if (parseBooleanEnvValue(process.env.STARTUP_SERVICE, false)) {
     env._STARTUP_SERVICE = "1";
-  } else if (process.env.STARTUP_SERVICE === "0") {
+  } else if (
+    process.env.STARTUP_SERVICE !== undefined &&
+    !parseBooleanEnvValue(process.env.STARTUP_SERVICE, true)
+  ) {
     env._STARTUP_SERVICE = "0";
   }
   // else: don't set — writeConfigFiles will skip silently
@@ -1976,7 +2008,7 @@ async function runNonInteractive({
     (env.KANBAN_BACKEND || "").toLowerCase() !== "vk" &&
     !["vk", "hybrid"].includes((env.EXECUTOR_MODE || "").toLowerCase())
   ) {
-    env.VK_NO_SPAWN = "1";
+    env.VK_NO_SPAWN = "true";
     delete configJson.vkAutoConfig;
   }
 
@@ -2118,7 +2150,10 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   if (!env.TELEGRAM_BOT_TOKEN) {
     info("Telegram not configured — add TELEGRAM_BOT_TOKEN to .env later.");
   }
-  if (!env.OPENAI_API_KEY && env.CODEX_SDK_DISABLED !== "1") {
+  if (
+    !env.OPENAI_API_KEY &&
+    !parseBooleanEnvValue(env.CODEX_SDK_DISABLED, false)
+  ) {
     info("No API key set — AI analysis & autofix will be disabled.");
   }
 
