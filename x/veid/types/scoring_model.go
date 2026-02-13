@@ -742,7 +742,7 @@ const (
 	ScoringReasonLowCaptureQuality ScoringReasonCode = "LOW_CAPTURE_QUALITY"
 
 	// ScoringReasonBelowPassThreshold indicates final score below pass threshold
-	ScoringReasonBelowPassThreshold ScoringReasonCode = "BELOW_PASS_THRESHOLD" //nolint:gosec // non-secret reason code
+	ScoringReasonBelowPassThreshold ScoringReasonCode = "BELOW_PASS_THRESHOLD" // #nosec G101 -- non-secret reason code
 
 	// ScoringReasonFallbackApplied indicates fallback scoring was applied
 	ScoringReasonFallbackApplied ScoringReasonCode = "FALLBACK_APPLIED"

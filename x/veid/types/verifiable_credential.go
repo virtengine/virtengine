@@ -20,14 +20,14 @@ import (
 
 const (
 	// W3C standard contexts
-	ContextW3CCredentials = "https://www.w3.org/2018/credentials/v1" //nolint:gosec // non-secret identifier
+	ContextW3CCredentials = "https://www.w3.org/2018/credentials/v1" // #nosec G101 -- non-secret identifier
 	ContextVirtEngine     = "https://virtengine.com/credentials/v1"
 
 	// W3C standard types
-	TypeVerifiableCredential = "VerifiableCredential" //nolint:gosec // non-secret identifier
+	TypeVerifiableCredential = "VerifiableCredential" // #nosec G101 -- non-secret identifier
 
 	// VirtEngine credential types
-	TypeVEIDCredential        = "VEIDCredential" //nolint:gosec // non-secret identifier
+	TypeVEIDCredential        = "VEIDCredential" // #nosec G101 -- non-secret identifier
 	TypeIdentityVerification  = "IdentityVerificationCredential"
 	TypeFacialVerification    = "FacialVerificationCredential"
 	TypeDocumentVerification  = "DocumentVerificationCredential"

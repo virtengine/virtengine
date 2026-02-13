@@ -22,7 +22,7 @@ import (
 // AuditExportFormat represents the output format for audit log exports
 type AuditExportFormat string
 
-//nolint:gosec // audit event labels are not credentials
+//nolint:gosec // G101: audit export labels are not credentials
 const (
 	// AuditExportFormatJSON exports as a JSON array
 	AuditExportFormatJSON AuditExportFormat = "JSON"
@@ -90,10 +90,10 @@ const (
 	AuditEventTypeIdentityUnlock AuditEventType = "IDENTITY_UNLOCK"
 
 	// AuditEventTypeCredentialIssue represents credential issuance events
-	AuditEventTypeCredentialIssue AuditEventType = "CREDENTIAL_ISSUE" //nolint:gosec // non-secret audit label
+	AuditEventTypeCredentialIssue AuditEventType = "CREDENTIAL_ISSUE" // #nosec G101 -- non-secret audit label
 
 	// AuditEventTypeCredentialRevoke represents credential revocation events
-	AuditEventTypeCredentialRevoke AuditEventType = "CREDENTIAL_REVOKE" //nolint:gosec // non-secret audit label
+	AuditEventTypeCredentialRevoke AuditEventType = "CREDENTIAL_REVOKE" // #nosec G101 -- non-secret audit label
 
 	// AuditEventTypeGeoCheck represents geographic restriction check events
 	AuditEventTypeGeoCheck AuditEventType = "GEO_CHECK"
