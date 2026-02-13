@@ -26,8 +26,59 @@ const (
 	testIssueKey = "TEST-1"
 )
 
+func testCredential(t *testing.T, envVar string) string {
+	t.Helper()
+
+	if value := os.Getenv(envVar); value != "" {
+		return value
+	}
+
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		t.Fatalf("failed to generate test credential: %v", err)
+	}
+
+	return hex.EncodeToString(buf)
+}
+
+func testAPIToken(t *testing.T) string {
+	t.Helper()
+	return testCredential(t, "JIRA_TEST_API_TOKEN")
+}
+
+func testBearerToken(t *testing.T) string {
+	t.Helper()
+	return testCredential(t, "JIRA_TEST_BEARER_TOKEN")
+}
+
+func testBasicAuthConfig(t *testing.T, username string) AuthConfig {
+	t.Helper()
+
+	if username == "" {
+		username = "user@test.com"
+	}
+
+	return AuthConfig{
+		Type:     AuthTypeBasic,
+		Username: username,
+		APIToken: testAPIToken(t),
+	}
+}
+
+func testBearerAuthConfig(t *testing.T) AuthConfig {
+	t.Helper()
+
+	return AuthConfig{
+		Type:        AuthTypeBearer,
+		BearerToken: testBearerToken(t),
+	}
+}
+
 // TestNewClient tests client creation
 func TestNewClient(t *testing.T) {
+	basicAuth := testBasicAuthConfig(t, "user@test.com")
+	bearerAuth := testBearerAuthConfig(t)
+
 	tests := []struct {
 		name    string
 		config  ClientConfig
@@ -37,11 +88,7 @@ func TestNewClient(t *testing.T) {
 			name: "valid basic auth config",
 			config: ClientConfig{
 				BaseURL: "https://test.atlassian.net",
-				Auth: AuthConfig{
-					Type:     AuthTypeBasic,
-					Username: "user@test.com",
-					APIToken: "test-token",
-				},
+				Auth:    basicAuth,
 			},
 			wantErr: false,
 		},
@@ -49,21 +96,14 @@ func TestNewClient(t *testing.T) {
 			name: "valid bearer auth config",
 			config: ClientConfig{
 				BaseURL: "https://test.atlassian.net",
-				Auth: AuthConfig{
-					Type:        AuthTypeBearer,
-					BearerToken: "test-bearer-token",
-				},
+				Auth:    bearerAuth,
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing base URL",
 			config: ClientConfig{
-				Auth: AuthConfig{
-					Type:     AuthTypeBasic,
-					Username: "user@test.com",
-					APIToken: "test-token",
-				},
+				Auth: testBasicAuthConfig(t, "user@test.com"),
 			},
 			wantErr: true,
 		},
@@ -73,7 +113,7 @@ func TestNewClient(t *testing.T) {
 				BaseURL: "https://test.atlassian.net",
 				Auth: AuthConfig{
 					Type:     AuthTypeBasic,
-					APIToken: "test-token",
+					APIToken: testAPIToken(t),
 				},
 			},
 			wantErr: true,
@@ -175,7 +215,7 @@ func TestClientCreateIssue(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -234,7 +274,7 @@ func TestClientGetIssue(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -287,7 +327,7 @@ func TestClientAddComment(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -361,7 +401,7 @@ func TestClientAddAttachment(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -400,7 +440,7 @@ func TestClientGetAttachment(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -431,7 +471,7 @@ func TestClientDownloadAttachment(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -473,7 +513,7 @@ func TestClientSearchIssues(t *testing.T) {
 		Auth: AuthConfig{
 			Type:     AuthTypeBasic,
 			Username: "test",
-			APIToken: "test",
+			APIToken: testAPIToken(t),
 		},
 	})
 	if err != nil {
@@ -648,7 +688,7 @@ func TestSLABreach(t *testing.T) {
 // TestWebhookHandler tests webhook handling
 func TestWebhookHandler(t *testing.T) {
 	handler := NewWebhookHandler(WebhookConfig{
-		Secret:           "test-secret",
+		Secret:           testWebhookSecret(t),
 		RequireSignature: false,
 	})
 
@@ -724,17 +764,7 @@ func TestWebhookSignatureVerification(t *testing.T) {
 
 func testWebhookSecret(t *testing.T) string {
 	t.Helper()
-
-	if secret := os.Getenv("JIRA_TEST_WEBHOOK_SECRET"); secret != "" {
-		return secret
-	}
-
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		t.Fatalf("failed to generate webhook secret: %v", err)
-	}
-
-	return hex.EncodeToString(buf)
+	return testCredential(t, "JIRA_TEST_WEBHOOK_SECRET")
 }
 
 // computeSignature is a test helper to compute expected signature
