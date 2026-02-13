@@ -1,7 +1,7 @@
 package simulation
 
 import (
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
@@ -35,7 +35,7 @@ func SimulateMsgUpdateParams(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) 
 
 	params := types.DefaultParams()
 	params.BidMinDeposit = sdk.NewInt64Coin("uve", int64(simtypes.RandIntBetween(r, 500000, 50000000)))
-	params.OrderMaxBids = uint32(simtypes.RandIntBetween(r, 20, 500)) // nolint gosec
+	params.OrderMaxBids = uint32(simtypes.RandIntBetween(r, 20, 500)) //nolint:gosec // G404: simulation randomness for parameter fuzzing
 
 	return &types.MsgUpdateParams{
 		Authority: authority.String(),

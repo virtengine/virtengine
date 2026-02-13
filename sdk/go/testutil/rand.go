@@ -1,7 +1,7 @@
 package testutil
 
 import (
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: test helpers use weak random for non-security data
 	"time"
 )
 

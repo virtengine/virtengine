@@ -2,7 +2,7 @@ package sims
 
 import (
 	"context"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation helpers use weak random for reproducibility
 	"testing"
 	"time"
 
@@ -99,7 +99,7 @@ func SignCheckDeliver(
 	t.Helper()
 
 	tx, err := GenSignedMockTx(
-		rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec
+		rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // G404: simulation randomness for mock tx data
 		txCfg,
 		msgs,
 		sdk.Coins{sdk.NewInt64Coin(sdk.DefaultBondDenom, 0)},
