@@ -65,6 +65,12 @@ import {
   formatComplexityDecision,
 } from "./task-complexity.mjs";
 import { evaluateBranchSafetyForPush } from "./git-safety.mjs";
+import {
+  loadHooks,
+  registerBuiltinHooks,
+  executeHooks,
+  executeBlockingHooks,
+} from "./agent-hooks.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -221,6 +227,10 @@ function parseGitHubIssueNumber(value) {
 function getGitHubIssueNumber(task) {
   if (!task) return null;
   const candidates = [
+    task.externalId,
+    task.external_id,
+    task.meta?.externalId,
+    task.meta?.external_id,
     task.id,
     task.meta?.number,
     task.meta?.id,
@@ -700,6 +710,16 @@ class TaskExecutor {
     } catch (err) {
       console.warn(`${TAG} task store load warning: ${err.message}`);
     }
+
+    // Initialize agent lifecycle hooks
+    try {
+      loadHooks();
+      registerBuiltinHooks();
+      console.log(`${TAG} agent lifecycle hooks initialized`);
+    } catch (err) {
+      console.warn(`${TAG} hook initialization warning: ${err.message}`);
+    }
+
     // Restore anti-thrash state from disk
     this._loadNoCommitState();
     // Restore active slot metadata (agent instance IDs + original startedAt)
@@ -1543,6 +1563,15 @@ class TaskExecutor {
     try {
       this.onTaskStarted?.(task, slot);
 
+      // Fire SessionStart hook
+      executeHooks("SessionStart", {
+        taskId,
+        taskTitle,
+        branch,
+        sdk: slot.sdk || "unknown",
+        slot: slot.index,
+      }).catch(() => {});
+
       // 2. Update task status → "inprogress"
       try {
         await updateTaskStatus(taskId, "inprogress");
@@ -2204,6 +2233,15 @@ class TaskExecutor {
     const taskTitle = (task.title || "").slice(0, 50);
     const tag = `${TAG} task "${taskTitle}"`;
 
+    // Fire SessionStop hook
+    executeHooks("SessionStop", {
+      taskId: task.id || task.task_id,
+      taskTitle,
+      success: result.success,
+      attempts: result.attempts,
+      output: (result.output || "").slice(0, 500),
+    }).catch(() => {});
+
     if (result.success) {
       console.log(
         `${tag} completed successfully (${result.attempts} attempt(s))`,
@@ -2252,6 +2290,27 @@ class TaskExecutor {
           /* best-effort */
         }
 
+        // Run TaskComplete blocking validation before PR
+        try {
+          const hookResult = await executeBlockingHooks("TaskComplete", {
+            taskId: task.id || task.task_id,
+            taskTitle: task.title,
+            worktreePath,
+            success: true,
+            hasCommits: true,
+          });
+          if (hookResult?.abort) {
+            console.warn(
+              `${TAG} TaskComplete hook blocked PR: ${hookResult.reason || "unknown reason"}`,
+            );
+            this.sendTelegram?.(
+              `⚠️ TaskComplete hook blocked PR for "${task.title}": ${hookResult.reason || "hook validation failed"}`,
+            );
+          }
+        } catch (hookErr) {
+          console.warn(`${TAG} TaskComplete hook error: ${hookErr.message}`);
+        }
+
         const pr = await this._createPR(task, worktreePath, {
           agentMadeNewCommits,
         });
@@ -2267,6 +2326,14 @@ class TaskExecutor {
           this.sendTelegram?.(
             `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`,
           );
+
+          // Fire PostPR hook
+          executeHooks("PostPR", {
+            taskId: task.id || task.task_id,
+            taskTitle: task.title,
+            prUrl: pr.url || pr,
+            branch: pr.branch,
+          }).catch(() => {});
 
           // Comment on issue with commit details and PR link
           this._commentCommitsOnIssue(task, worktreePath, execInfo, pr).catch(
@@ -2654,6 +2721,14 @@ class TaskExecutor {
    */
   _pushBranch(worktreePath, branch) {
     try {
+      // Execute PrePush hook (blocking — can abort push)
+      // Note: executeBlockingHooks is async but _pushBranch is sync.
+      // We fire-and-forget here since blocking would require refactoring to async.
+      executeHooks("PrePush", {
+        worktreePath,
+        branch,
+      }).catch(() => {});
+
       // First rebase onto upstream main to keep agent's work and stay up to date.
       // We use rebase instead of merge to avoid polluting the branch with merge commits
       // that can wipe out agent work (as --strategy-option=theirs did before).
@@ -2907,7 +2982,11 @@ class TaskExecutor {
     );
 
     try {
-      await updateTaskStatus(task.id, "done");
+      if (task?.id) {
+        setInternalStatus(task.id, "done", "task-executor");
+        updateInternalTask(task.id, { externalStatus: "done" });
+      }
+      await updateTaskStatus(issueNumber, "done");
       console.log(
         `${TAG} closed issue #${issueNumber} after PR #${prNumber} merge`,
       );
@@ -2939,6 +3018,24 @@ class TaskExecutor {
       if (!branch) {
         console.warn(`${TAG} cannot create PR — no branch name detected`);
         return null;
+      }
+
+      // Fire PrePR hook
+      try {
+        const prHookResult = await executeBlockingHooks("PrePR", {
+          taskId: task.id || task.task_id,
+          taskTitle: task.title,
+          branch,
+          worktreePath,
+        });
+        if (prHookResult?.abort) {
+          console.warn(
+            `${TAG} PrePR hook blocked PR creation: ${prHookResult.reason || "unknown"}`,
+          );
+          return null;
+        }
+      } catch (hookErr) {
+        console.warn(`${TAG} PrePR hook error: ${hookErr.message}`);
       }
 
       const safety = evaluateBranchSafetyForPush(worktreePath, {

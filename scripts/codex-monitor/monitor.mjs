@@ -163,7 +163,11 @@ import { createAgentEndpoint } from "./agent-endpoint.mjs";
 import { createReviewAgent } from "./review-agent.mjs";
 import { createSyncEngine } from "./sync-engine.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
-import { getKanbanBackendName } from "./kanban-adapter.mjs";
+import {
+  getKanbanBackendName,
+  listTasks as listKanbanTasks,
+  updateTaskStatus as updateKanbanTaskStatus,
+} from "./kanban-adapter.mjs";
 import { resolvePromptTemplate } from "./agent-prompts.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -464,6 +468,7 @@ const monitorMonitor = {
   sdkOrder: [],
   sdkIndex: 0,
   consecutiveFailures: 0,
+  sdkFailures: new Map(),
   abortController: null,
 };
 if (monitorMonitor.enabled) {
@@ -473,7 +478,7 @@ if (monitorMonitor.enabled) {
   if (legacyTimeout && !explicitTimeout && Number(legacyTimeout) < 600_000) {
     console.warn(
       `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is too low for monitor-monitor (minimum 600s recommended). ` +
-      `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`
+        `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`,
     );
   }
   console.log(
@@ -2299,7 +2304,9 @@ async function fetchVk(path, opts = {}) {
   try {
     return await res.json();
   } catch (err) {
-    console.warn(`[monitor] fetchVk ${method} ${path} error: Invalid JSON - ${err.message}`);
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} error: Invalid JSON - ${err.message}`,
+    );
     return null;
   }
 }
@@ -2965,15 +2972,81 @@ function getTaskUpdatedAt(task) {
   return task?.updated_at || task?.created_at || "";
 }
 
+function parseGitHubIssueNumber(value) {
+  if (value == null) return null;
+  const numeric = String(value)
+    .trim()
+    .match(/^#?(\d+)$/);
+  if (numeric?.[1]) return numeric[1];
+  const urlMatch = String(value).match(/\/issues\/(\d+)(?:\b|$)/i);
+  return urlMatch?.[1] || null;
+}
+
+function getConfiguredKanbanProjectId(backend) {
+  const githubProjectId =
+    process.env.GITHUB_REPOSITORY ||
+    (process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+      ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+      : null) ||
+    repoSlug ||
+    null;
+  return (
+    process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
+    internalExecutorConfig?.projectId ||
+    config?.kanban?.projectId ||
+    process.env.KANBAN_PROJECT_ID ||
+    (backend === "github" ? githubProjectId : null)
+  );
+}
+
+function resolveTaskIdForBackend(taskId, backend) {
+  const rawId = String(taskId || "").trim();
+  if (!rawId) return null;
+  if (backend !== "github") return rawId;
+  const directMatch = parseGitHubIssueNumber(rawId);
+  if (directMatch) return directMatch;
+  try {
+    const internalTasks = getAllInternalTasks();
+    const internalTask = internalTasks.find(
+      (t) =>
+        String(t?.id || "").trim() === rawId ||
+        String(t?.externalId || "").trim() === rawId,
+    );
+    return (
+      parseGitHubIssueNumber(internalTask?.externalId) ||
+      parseGitHubIssueNumber(internalTask?.id) ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/projects/:project_id/tasks?status=<status>
- * Fetches tasks by status from VK API.
+ * Fetches tasks by status from active kanban backend.
  * @param {string} status - Task status (e.g., "inreview", "todo", "done")
  * @returns {Promise<Array>} Array of task objects, or empty array on failure
  */
 async function fetchTasksByStatus(status) {
-  if (getActiveKanbanBackend() !== "vk") {
-    return [];
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    try {
+      const projectId = getConfiguredKanbanProjectId(backend);
+      if (!projectId) {
+        console.warn(
+          `[monitor] No project ID configured for backend=${backend} task query`,
+        );
+        return [];
+      }
+      const tasks = await listKanbanTasks(projectId, { status });
+      return Array.isArray(tasks) ? tasks : [];
+    } catch (err) {
+      console.warn(
+        `[monitor] Error fetching tasks by status from ${backend}: ${err.message || err}`,
+      );
+      return [];
+    }
   }
   try {
     // Find matching VK project
@@ -3002,13 +3075,36 @@ async function fetchTasksByStatus(status) {
 }
 
 /**
- * PUT /api/tasks/:task_id
- * Updates task status via VK API.
- * @param {string} taskId - Task UUID
+ * Updates task status via active kanban backend.
+ * @param {string} taskId - Task ID (UUID for VK, issue number for GitHub)
  * @param {string} newStatus - New status ("todo", "inprogress", "inreview", "done", "cancelled")
  * @returns {Promise<boolean>} true if successful, false otherwise
  */
 async function updateTaskStatus(taskId, newStatus) {
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    const resolvedTaskId = resolveTaskIdForBackend(taskId, backend);
+    if (!resolvedTaskId) {
+      console.warn(
+        `[monitor] Skipping status update for ${taskId} — no compatible ${backend} task ID`,
+      );
+      return false;
+    }
+    try {
+      await updateKanbanTaskStatus(resolvedTaskId, newStatus);
+      clearRecoveryCaches(taskId);
+      if (resolvedTaskId !== taskId) {
+        clearRecoveryCaches(resolvedTaskId);
+      }
+      return true;
+    } catch (err) {
+      console.warn(
+        `[monitor] Failed to update task status via ${backend} (${resolvedTaskId} -> ${newStatus}): ${err.message || err}`,
+      );
+      return false;
+    }
+  }
+
   const res = await fetchVk(`/api/tasks/${taskId}`, {
     method: "PUT",
     body: { status: newStatus },
@@ -6798,9 +6894,7 @@ async function fetchTelegramUpdates() {
     if (!res || !res.ok) {
       const body = res ? await res.text() : "";
       const status = res?.status || "no response";
-      console.warn(
-        `[monitor] telegram getUpdates failed: ${status} ${body}`,
-      );
+      console.warn(`[monitor] telegram getUpdates failed: ${status} ${body}`);
       if (res?.status === 409) {
         telegramCommandEnabled = false;
         await releaseTelegramPollLock();
@@ -8050,6 +8144,78 @@ function rotateMonitorSdk(reason = "") {
   return true;
 }
 
+/**
+ * Record a failure for a specific monitor-monitor SDK.
+ * After 5 failures → 15min exclusion; after 10 failures → 60min exclusion.
+ * @param {string} sdk
+ */
+function recordMonitorSdkFailure(sdk) {
+  if (!sdk) return;
+  const entry = monitorMonitor.sdkFailures.get(sdk) || { count: 0, excludedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= 10) {
+    entry.excludedUntil = Date.now() + 60 * 60_000; // 60 min
+    console.warn(`[monitor-monitor] ${sdk} excluded for 60min after ${entry.count} failures`);
+  } else if (entry.count >= 5) {
+    entry.excludedUntil = Date.now() + 15 * 60_000; // 15 min
+    console.warn(`[monitor-monitor] ${sdk} excluded for 15min after ${entry.count} failures`);
+  }
+  monitorMonitor.sdkFailures.set(sdk, entry);
+  rebuildMonitorSdkOrder();
+}
+
+/**
+ * Clear failure count for a monitor-monitor SDK (on success).
+ * @param {string} sdk
+ */
+function clearMonitorSdkFailure(sdk) {
+  if (!sdk) return;
+  if (monitorMonitor.sdkFailures.has(sdk)) {
+    monitorMonitor.sdkFailures.delete(sdk);
+    rebuildMonitorSdkOrder();
+  }
+}
+
+/**
+ * Check if a monitor-monitor SDK is currently excluded.
+ * @param {string} sdk
+ * @returns {boolean}
+ */
+function isMonitorSdkExcluded(sdk) {
+  const entry = monitorMonitor.sdkFailures.get(sdk);
+  if (!entry || !entry.excludedUntil) return false;
+  if (Date.now() >= entry.excludedUntil) {
+    // Exclusion expired — clear it
+    entry.excludedUntil = 0;
+    entry.count = 0;
+    monitorMonitor.sdkFailures.set(sdk, entry);
+    console.log(`[monitor-monitor] ${sdk} exclusion expired, re-enabling`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Rebuild the SDK order excluding currently-excluded SDKs.
+ * If all SDKs are excluded, force the primary back in.
+ */
+function rebuildMonitorSdkOrder() {
+  const original = buildMonitorMonitorSdkOrder();
+  const filtered = original.filter(sdk => !isMonitorSdkExcluded(sdk));
+  if (filtered.length === 0) {
+    // All excluded — force primary back
+    const primary = original[0] || "codex";
+    console.warn(`[monitor-monitor] all SDKs excluded, forcing ${primary} back`);
+    monitorMonitor.sdkOrder = [primary];
+  } else {
+    monitorMonitor.sdkOrder = filtered;
+  }
+  // Reset index if out of bounds
+  if (monitorMonitor.sdkIndex >= monitorMonitor.sdkOrder.length) {
+    monitorMonitor.sdkIndex = 0;
+  }
+}
+
 function shouldFailoverMonitorSdk(message) {
   const text = String(message || "").toLowerCase();
   if (!text) return false;
@@ -8230,7 +8396,7 @@ function refreshMonitorMonitorRuntime() {
   if (legacyTimeout && !explicitTimeout && Number(legacyTimeout) < 600_000) {
     console.warn(
       `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is too low for monitor-monitor (minimum 600s recommended). ` +
-      `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`
+        `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`,
     );
   }
 
@@ -8402,6 +8568,7 @@ async function runMonitorMonitorCycle({
         monitorMonitor.abortController = null;
         monitorMonitor._watchdogAbortCount = 0;
         monitorMonitor.consecutiveFailures += 1;
+        recordMonitorSdkFailure(getCurrentMonitorSdk());
         monitorMonitor.lastOutcome = "force-reset (watchdog)";
         monitorMonitor.lastError = `watchdog force-reset after ${Math.round(runAge / 1000)}s`;
         // Don't return — allow the cycle to start fresh below
@@ -8421,6 +8588,7 @@ async function runMonitorMonitorCycle({
             monitorMonitor.abortController = null;
             monitorMonitor._watchdogAbortCount = 0;
             monitorMonitor.consecutiveFailures += 1;
+            recordMonitorSdkFailure(getCurrentMonitorSdk());
             monitorMonitor.lastOutcome = "force-reset (watchdog-accelerated)";
             monitorMonitor.lastError = `watchdog accelerated force-reset after ${Math.round((Date.now() - monitorMonitor.heartbeatAt) / 1000)}s`;
           }, 60_000);
@@ -8506,6 +8674,7 @@ async function runMonitorMonitorCycle({
     if (result.success) {
       const totalDuration = Math.round((Date.now() - runStartTime) / 1000);
       monitorMonitor.consecutiveFailures = 0;
+      clearMonitorSdkFailure(sdk);
       monitorMonitor.lastOutcome = `success (${sdk})`;
       monitorMonitor.lastError = "";
       console.log(
@@ -8514,6 +8683,7 @@ async function runMonitorMonitorCycle({
     } else {
       const totalDuration = Math.round((Date.now() - runStartTime) / 1000);
       monitorMonitor.consecutiveFailures += 1;
+      recordMonitorSdkFailure(sdk);
       const errMsg = result.error || "unknown error";
       const isTimeout = errMsg.includes("timeout");
       monitorMonitor.lastOutcome = `failed (${sdk})`;
@@ -8538,6 +8708,7 @@ async function runMonitorMonitorCycle({
   } catch (runErr) {
     // Uncaught exception during execution (e.g. launchOrResumeThread threw)
     monitorMonitor.consecutiveFailures += 1;
+    recordMonitorSdkFailure(sdk);
     const errMsg = String(runErr?.message || runErr || "unknown exception");
     monitorMonitor.lastOutcome = `exception (${sdk})`;
     monitorMonitor.lastError = errMsg;
@@ -10158,6 +10329,34 @@ injectMonitorFunctions({
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
+
+  // Process any commands queued by telegram-sentinel while monitor was down
+  try {
+    const { getQueuedCommands } = await import("./telegram-sentinel.mjs");
+    const queued = getQueuedCommands();
+    if (queued && queued.length > 0) {
+      console.log(`[monitor] processing ${queued.length} queued sentinel command(s)`);
+      for (const cmd of queued) {
+        try {
+          console.log(`[monitor] replaying sentinel command: ${cmd.command || cmd.type || JSON.stringify(cmd)}`);
+          // Handle known commands
+          if (cmd.command === "/status" || cmd.type === "status") {
+            // Will be covered by next status report
+            console.log("[monitor] sentinel queued /status — will send on next cycle");
+          } else if (cmd.command === "/pause" || cmd.type === "pause") {
+            console.log("[monitor] sentinel queued /pause — pausing task dispatch");
+            // Signal pause if task executor supports it
+          } else if (cmd.command === "/resume" || cmd.type === "resume") {
+            console.log("[monitor] sentinel queued /resume — resuming");
+          }
+        } catch (cmdErr) {
+          console.warn(`[monitor] failed to process queued command: ${cmdErr.message}`);
+        }
+      }
+    }
+  } catch {
+    // telegram-sentinel not available — ignore
+  }
 }
 
 // ── Start PR Cleanup Daemon ──────────────────────────────────────────────────

@@ -80,6 +80,17 @@ class PRCleanupDaemon {
   }
 
   /**
+   * Extract base branch from PR metadata, stripping origin/ prefix.
+   * Falls back to "main" if baseRefName is missing.
+   * @param {Object} pr - PR object with optional baseRefName
+   * @returns {string}
+   */
+  getBaseBranch(pr) {
+    const base = pr?.baseRefName || "main";
+    return base.replace(/^origin\//, "");
+  }
+
+  /**
    * Main daemon loop — fetch PRs and process cleanup queue
    */
   async run() {

@@ -16,7 +16,13 @@
  */
 
 import { resolve, dirname } from "node:path";
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+} from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fork, spawn } from "node:child_process";
 import os from "node:os";
@@ -78,6 +84,11 @@ function showHelp() {
   VIBE-KANBAN
     --no-vk-spawn               Don't auto-spawn Vibe-Kanban
     --vk-ensure-interval <ms>   VK health check interval (default: 60000)
+
+  SENTINEL
+    --sentinel                  Start telegram-sentinel in companion mode
+    --sentinel-stop             Stop a running sentinel
+    --sentinel-status           Show sentinel status
 
   FILE WATCHING
     --no-watch                  Disable file watching for auto-restart
@@ -151,19 +162,32 @@ function getDaemonPid() {
     const pid = parseInt(readFileSync(PID_FILE, "utf8").trim(), 10);
     if (isNaN(pid)) return null;
     // Check if process is alive
-    try { process.kill(pid, 0); return pid; } catch { return null; }
-  } catch { return null; }
+    try {
+      process.kill(pid, 0);
+      return pid;
+    } catch {
+      return null;
+    }
+  } catch {
+    return null;
+  }
 }
 
 function writePidFile(pid) {
   try {
     mkdirSync(dirname(PID_FILE), { recursive: true });
     writeFileSync(PID_FILE, String(pid), "utf8");
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 }
 
 function removePidFile() {
-  try { if (existsSync(PID_FILE)) unlinkSync(PID_FILE); } catch { /* ok */ }
+  try {
+    if (existsSync(PID_FILE)) unlinkSync(PID_FILE);
+  } catch {
+    /* ok */
+  }
 }
 
 function startDaemon() {
@@ -175,19 +199,27 @@ function startDaemon() {
   }
 
   // Ensure log directory exists
-  try { mkdirSync(dirname(DAEMON_LOG), { recursive: true }); } catch { /* ok */ }
+  try {
+    mkdirSync(dirname(DAEMON_LOG), { recursive: true });
+  } catch {
+    /* ok */
+  }
 
-  const child = spawn(process.execPath, [
-    "--max-old-space-size=4096",
-    fileURLToPath(new URL("./cli.mjs", import.meta.url)),
-    ...process.argv.slice(2).filter(a => a !== "--daemon" && a !== "-d"),
-    "--daemon-child",
-  ], {
-    detached: true,
-    stdio: "ignore",
-    env: { ...process.env, CODEX_MONITOR_DAEMON: "1" },
-    cwd: process.cwd(),
-  });
+  const child = spawn(
+    process.execPath,
+    [
+      "--max-old-space-size=4096",
+      fileURLToPath(new URL("./cli.mjs", import.meta.url)),
+      ...process.argv.slice(2).filter((a) => a !== "--daemon" && a !== "-d"),
+      "--daemon-child",
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env, CODEX_MONITOR_DAEMON: "1" },
+      cwd: process.cwd(),
+    },
+  );
 
   child.unref();
   writePidFile(child.pid);
@@ -220,14 +252,20 @@ function stopDaemon() {
     // Wait briefly for graceful shutdown
     let tries = 0;
     const check = () => {
-      try { process.kill(pid, 0); } catch { 
+      try {
+        process.kill(pid, 0);
+      } catch {
         removePidFile();
         console.log("  ✓ Daemon stopped.");
         process.exit(0);
       }
       if (++tries > 10) {
         console.log("  Sending SIGKILL...");
-        try { process.kill(pid, "SIGKILL"); } catch { /* ok */ }
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          /* ok */
+        }
         removePidFile();
         console.log("  ✓ Daemon killed.");
         process.exit(0);
@@ -281,16 +319,27 @@ async function main() {
   }
 
   // Write PID file if running as daemon child
-  if (args.includes("--daemon-child") || process.env.CODEX_MONITOR_DAEMON === "1") {
+  if (
+    args.includes("--daemon-child") ||
+    process.env.CODEX_MONITOR_DAEMON === "1"
+  ) {
     writePidFile(process.pid);
     // Redirect console to log file on daemon child
     const { createWriteStream } = await import("node:fs");
     const logStream = createWriteStream(DAEMON_LOG, { flags: "a" });
     const origStdout = process.stdout.write.bind(process.stdout);
     const origStderr = process.stderr.write.bind(process.stderr);
-    process.stdout.write = (chunk, ...a) => { logStream.write(chunk); return origStdout(chunk, ...a); };
-    process.stderr.write = (chunk, ...a) => { logStream.write(chunk); return origStderr(chunk, ...a); };
-    console.log(`\n[daemon] codex-monitor started at ${new Date().toISOString()} (PID ${process.pid})`);
+    process.stdout.write = (chunk, ...a) => {
+      logStream.write(chunk);
+      return origStdout(chunk, ...a);
+    };
+    process.stderr.write = (chunk, ...a) => {
+      logStream.write(chunk);
+      return origStderr(chunk, ...a);
+    };
+    console.log(
+      `\n[daemon] codex-monitor started at ${new Date().toISOString()} (PID ${process.pid})`,
+    );
   }
 
   // Handle --update (force update)
