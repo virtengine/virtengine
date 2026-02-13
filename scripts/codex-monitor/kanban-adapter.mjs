@@ -138,6 +138,8 @@ class VKAdapter {
         () => controller.abort(),
         opts.timeoutMs || 15_000,
       );
+
+      let res;
       try {
         const fetchOpts = {
           method,
@@ -150,16 +152,30 @@ class VKAdapter {
               ? opts.body
               : JSON.stringify(opts.body);
         }
-        const res = await fetch(url, fetchOpts);
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(
-            `VK API ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
-          );
-        }
-        return await res.json();
+        res = await fetch(url, fetchOpts);
+      } catch (err) {
+        // Network error, timeout, abort - res is undefined
+        throw new Error(
+          `VK API ${method} ${path} network error: ${err.message || err}`,
+        );
       } finally {
         clearTimeout(timeout);
+      }
+
+      // Now res is guaranteed to be defined
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `VK API ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
+        );
+      }
+
+      try {
+        return await res.json();
+      } catch (err) {
+        throw new Error(
+          `VK API ${method} ${path} invalid JSON: ${err.message}`,
+        );
       }
     };
     return this._fetchVk;
@@ -227,6 +243,10 @@ class VKAdapter {
     const fetchVk = await this._getFetchVk();
     await fetchVk(`/api/tasks/${taskId}`, { method: "DELETE" });
     return true;
+  }
+
+  async addComment(_taskId, _body) {
+    return false; // VK backend doesn't support issue comments
   }
 
   _normaliseTask(raw, projectId = null) {
@@ -458,6 +478,31 @@ class GitHubIssuesAdapter {
     return true;
   }
 
+  async addComment(issueNumber, body) {
+    const num = String(issueNumber).replace(/^#/, "");
+    if (!/^\d+$/.test(num) || !body) return false;
+    try {
+      await this._gh(
+        [
+          "issue",
+          "comment",
+          num,
+          "--repo",
+          `${this._owner}/${this._repo}`,
+          "--body",
+          String(body).slice(0, 65536),
+        ],
+        { parseJson: false },
+      );
+      return true;
+    } catch (err) {
+      console.warn(
+        `[kanban] failed to comment on issue #${num}: ${err.message}`,
+      );
+      return false;
+    }
+  }
+
   _normaliseIssue(issue) {
     if (!issue) return null;
     const labels = (issue.labels || []).map((l) =>
@@ -542,6 +587,10 @@ class JiraAdapter {
   }
   async deleteTask(_taskId) {
     this._notImplemented("deleteTask");
+  }
+
+  async addComment(_taskId, _body) {
+    return false; // Jira comments not yet implemented
   }
 }
 
@@ -664,4 +713,8 @@ export async function createTask(projectId, taskData) {
 
 export async function deleteTask(taskId) {
   return getKanbanAdapter().deleteTask(taskId);
+}
+
+export async function addComment(taskId, body) {
+  return getKanbanAdapter().addComment(taskId, body);
 }

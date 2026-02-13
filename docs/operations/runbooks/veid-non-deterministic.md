@@ -73,7 +73,7 @@ env | grep -E "(TF_|PYTHONHASHSEED|CUDA)"
 # Get model checksums on each node
 for node in validator1 validator2 validator3; do
   echo "=== $node ==="
-  ssh user@$node "md5sum /var/lib/virtengine/ml/models/*"
+  ssh user@$node "sha256sum /var/lib/virtengine/ml/models/*"
 done
 
 # Compare versions
@@ -196,7 +196,7 @@ virtengined tx gov submit-proposal param-change \
 REQUEST_ID=$(uuidgen)
 for node in validator1 validator2 validator3; do
   echo "=== $node ==="
-  ssh user@$node "virtengined debug inference-test --request-id $REQUEST_ID" | md5sum
+  ssh user@$node "virtengined debug inference-test --request-id $REQUEST_ID" | sha256sum
 done
 # All hashes should match
 

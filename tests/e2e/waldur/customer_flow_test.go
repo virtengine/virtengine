@@ -7,6 +7,7 @@ package waldur
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -70,13 +71,27 @@ func (s *CustomerFlowTestSuite) TearDownSuite() {
 	}
 }
 
+func deterministicUUID(namespace uuid.UUID, name string) uuid.UUID {
+	payload := make([]byte, 0, len(namespace)+len(name))
+	payload = append(payload, namespace[:]...)
+	payload = append(payload, []byte(name)...)
+	sum := sha256.Sum256(payload)
+
+	var id uuid.UUID
+	copy(id[:], sum[:16])
+	id[6] = (id[6] & 0x0f) | 0x40 // Version 4 (deterministic for tests)
+	id[8] = (id[8] & 0x3f) | 0x80 // RFC 4122 variant
+
+	return id
+}
+
 // generateTestUUIDs generates deterministic but valid UUIDs for testing
 func (s *CustomerFlowTestSuite) generateTestUUIDs() (computeUUID, gpuUUID, storageUUID string) {
-	// Use uuid.NewSHA1 with a fixed namespace for deterministic but valid UUIDs
+	// Use a deterministic SHA-256 based UUID to avoid SHA-1 in tests.
 	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // Standard namespace
-	computeUUID = uuid.NewSHA1(namespace, []byte("offering-compute-standard")).String()
-	gpuUUID = uuid.NewSHA1(namespace, []byte("offering-gpu-a100")).String()
-	storageUUID = uuid.NewSHA1(namespace, []byte("offering-storage-block")).String()
+	computeUUID = deterministicUUID(namespace, "offering-compute-standard").String()
+	gpuUUID = deterministicUUID(namespace, "offering-gpu-a100").String()
+	storageUUID = deterministicUUID(namespace, "offering-storage-block").String()
 	return
 }
 

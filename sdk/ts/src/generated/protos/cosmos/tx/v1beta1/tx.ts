@@ -220,7 +220,7 @@ export interface AuthInfo {
 export interface SignerInfo {
   /**
    * public_key is the public key of the signer. It is optional for accounts
-   * that already exist in state. If unset, the verifier can use the required \
+   * that already exist in state. If unset, the verifier can use the required /
    * signer address for this position and lookup the public key.
    */
   publicKey:

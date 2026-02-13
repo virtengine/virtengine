@@ -11,11 +11,8 @@ vi.mock("../config.mjs", () => ({
   loadConfig: loadConfigMock,
 }));
 
-const {
-  getKanbanAdapter,
-  setKanbanBackend,
-  getKanbanBackendName,
-} = await import("../kanban-adapter.mjs");
+const { getKanbanAdapter, setKanbanBackend, getKanbanBackendName } =
+  await import("../kanban-adapter.mjs");
 
 function mockGh(stdout, stderr = "") {
   execFileMock.mockImplementationOnce((_cmd, _args, _opts, cb) => {
@@ -94,5 +91,45 @@ describe("kanban-adapter github backend", () => {
     expect(task?.id).toBe("55");
     expect(task?.taskUrl).toBe("https://github.com/acme/widgets/issues/55");
     expect(getKanbanBackendName()).toBe("github");
+  });
+
+  it("addComment posts a comment on a github issue", async () => {
+    mockGh("ok");
+
+    const adapter = getKanbanAdapter();
+    const result = await adapter.addComment("42", "Hello from CI");
+
+    expect(result).toBe(true);
+    const call = execFileMock.mock.calls[0];
+    const args = call[1];
+    expect(args).toContain("issue");
+    expect(args).toContain("comment");
+    expect(args).toContain("42");
+    expect(args).toContain("--body");
+    expect(args).toContain("Hello from CI");
+  });
+
+  it("addComment returns false for invalid issue number", async () => {
+    const adapter = getKanbanAdapter();
+    const result = await adapter.addComment("not-a-number", "body");
+    expect(result).toBe(false);
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it("addComment returns false when body is empty", async () => {
+    const adapter = getKanbanAdapter();
+    const result = await adapter.addComment("42", "");
+    expect(result).toBe(false);
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it("addComment returns false when gh CLI fails", async () => {
+    execFileMock.mockImplementationOnce((_cmd, _args, _opts, cb) => {
+      cb(new Error("network error"), { stdout: "", stderr: "" });
+    });
+
+    const adapter = getKanbanAdapter();
+    const result = await adapter.addComment("42", "test body");
+    expect(result).toBe(false);
   });
 });

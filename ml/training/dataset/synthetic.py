@@ -353,7 +353,7 @@ class SyntheticDataGenerator:
         h, w = self.config.image_size
         
         # Generate deterministic noise pattern based on sample_id
-        seed = int(hashlib.md5(f"{sample_id}_{image_type}".encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(f"{sample_id}_{image_type}".encode()).hexdigest()[:8], 16)
         rng = np.random.RandomState(seed)
         
         # Create a simple synthetic image with patterns

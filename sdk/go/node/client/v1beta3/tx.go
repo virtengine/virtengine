@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/boz/go-lifecycle"
 	"github.com/edwingeng/deque/v2"
@@ -211,7 +210,6 @@ type broadcastResp struct {
 
 type broadcastReq struct {
 	ctx        context.Context
-	id         uintptr
 	responsech chan<- broadcastResp
 	data       interface{}
 	opts       *BroadcastOptions
@@ -362,8 +360,6 @@ func (c *serialBroadcaster) BroadcastMsgs(ctx context.Context, msgs []sdk.Msg, o
 		opts:       bOpts,
 	}
 
-	request.id = uintptr(unsafe.Pointer(&request)) //nolint: gosec
-
 	select {
 	case c.reqch <- request:
 	case <-ctx.Done():
@@ -411,8 +407,6 @@ func (c *serialBroadcaster) BroadcastTx(ctx context.Context, tx sdk.Tx, opts ...
 		data:       tx,
 		opts:       bOpts,
 	}
-
-	request.id = uintptr(unsafe.Pointer(&request)) //nolint: gosec
 
 	select {
 	case c.reqch <- request:
