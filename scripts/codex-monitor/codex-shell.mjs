@@ -72,7 +72,7 @@ async function loadCodexSdk() {
   const transport = resolveCodexTransport();
   if (transport === "cli") {
     console.warn(
-      "[codex-shell] CODEX_TRANSPORT=cli is not yet implemented for persistent sessions; using SDK transport",
+      "[codex-shell] CODEX_TRANSPORT=cli uses SDK compatibility mode with persistent thread resume",
     );
   }
   if (CodexClass) return CodexClass;
@@ -177,8 +177,8 @@ const THREAD_OPTIONS = {
 
 /**
  * Get or create a thread.
- * ALWAYS starts a fresh thread per task — never resumes a previous session.
- * This prevents token overflow from accumulated context across tasks.
+ * Uses fresh-thread mode by default to avoid context bloat.
+ * In CLI transport compatibility mode, reuse persisted thread IDs when possible.
  */
 async function getThread() {
   if (activeThread) return activeThread;
@@ -189,10 +189,33 @@ async function getThread() {
     codexInstance = new Cls();
   }
 
-  // Always start a new thread — never resume the old one.
-  // Token overflow (395k > 272k limit) is caused by accumulated context
-  // from reusing the same thread across multiple tasks.
-  if (activeThreadId) {
+  const transport = resolveCodexTransport();
+  const shouldResume = transport === "cli";
+
+  if (activeThreadId && shouldResume) {
+    if (typeof codexInstance.resumeThread === "function") {
+      try {
+        activeThread = codexInstance.resumeThread(activeThreadId, THREAD_OPTIONS);
+        if (activeThread) {
+          detectThreadCapabilities(activeThread);
+          console.log(`[codex-shell] resumed thread ${activeThreadId}`);
+          return activeThread;
+        }
+      } catch (err) {
+        console.warn(
+          `[codex-shell] failed to resume thread ${activeThreadId}: ${err.message} — starting fresh`,
+        );
+      }
+    } else {
+      console.warn(
+        "[codex-shell] SDK does not expose resumeThread(); starting fresh thread",
+      );
+    }
+    activeThreadId = null;
+  }
+
+  // Fresh-thread mode (default): avoid token overflow from long-running reuse.
+  if (activeThreadId && !shouldResume) {
     console.log(
       `[codex-shell] discarding previous thread ${activeThreadId} — creating fresh thread per task`,
     );
@@ -205,7 +228,7 @@ async function getThread() {
 
   // Prime the thread with the system prompt so subsequent turns have context
   try {
-    const primeResult = await activeThread.run(SYSTEM_PROMPT);
+    await activeThread.run(SYSTEM_PROMPT);
     // Capture the thread ID from the prime turn
     if (activeThread.id) {
       activeThreadId = activeThread.id;

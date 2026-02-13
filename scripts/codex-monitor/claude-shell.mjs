@@ -375,7 +375,7 @@ async function loadClaudeSdk() {
   const transport = resolveClaudeTransport();
   if (transport === "cli") {
     console.warn(
-      "[claude-shell] CLAUDE_TRANSPORT=cli is not yet implemented for persistent sessions; using SDK transport",
+      "[claude-shell] CLAUDE_TRANSPORT=cli uses SDK compatibility mode with session-id resume",
     );
   }
   try {
@@ -482,13 +482,18 @@ export async function execClaudePrompt(userMessage, options = {}) {
   activeTurn = true;
   toolUseById.clear();
 
-  // Always start a fresh session for each task to prevent token overflow
-  // from accumulated context across multiple tasks.
-  if (activeSessionId) {
+  const transport = resolveClaudeTransport();
+  const shouldResume = transport === "cli";
+
+  // Fresh-session mode (default): avoid token overflow from accumulated context.
+  // CLI compatibility mode: keep and reuse session_id for continuation.
+  if (activeSessionId && !shouldResume) {
     console.log(
       `[claude-shell] discarding previous session ${activeSessionId} — creating fresh session per task`,
     );
     activeSessionId = null;
+  } else if (activeSessionId && shouldResume) {
+    console.log(`[claude-shell] resuming session ${activeSessionId}`);
   }
 
   const controller = abortController || new AbortController();
@@ -525,8 +530,6 @@ export async function execClaudePrompt(userMessage, options = {}) {
     queue.push(makeUserMessage(buildPrompt(userMessage, statusData)));
 
     const optionsPayload = buildOptions();
-    // Never resume — always start fresh to avoid token overflow.
-    // activeSessionId is only used for tracking, not for resume.
 
     activeQuery = query({
       prompt: queue.iterator(),
