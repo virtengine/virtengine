@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ChainHealthChecker checks blockchain health
@@ -64,9 +66,7 @@ type APIEndpointChecker struct {
 func NewAPIEndpointChecker(endpoint string) *APIEndpointChecker {
 	return &APIEndpointChecker{
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+		client:   security.NewSecureHTTPClient(security.WithTimeout(5 * time.Second)),
 	}
 }
 

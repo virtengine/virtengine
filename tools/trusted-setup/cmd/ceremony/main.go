@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/tools/trusted-setup/coordinator"
 	"github.com/virtengine/virtengine/tools/trusted-setup/participant"
 	"github.com/virtengine/virtengine/tools/trusted-setup/transcript"
@@ -422,7 +424,8 @@ func fetchBinary(ctx context.Context, baseURL, phase string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(request)
+	client := security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second))
+	resp, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +453,8 @@ func submitContribution(ctx context.Context, baseURL, phase string, payload []by
 	req.Header.Set("X-Public-Key", meta.PublicKey)
 	req.Header.Set("X-Signature", meta.Signature)
 	req.Header.Set("X-Attestation", meta.Attestation)
-	resp, err := http.DefaultClient.Do(req)
+	client := security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second))
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

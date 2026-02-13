@@ -43,19 +43,20 @@ func NewHTTPClient(ctx context.Context, remoteAddr string) (*http.Client, error)
 		return nil, err
 	}
 
+	config := security.DefaultHTTPClientConfig()
 	client := &http.Client{
 		Transport: &http.Transport{
 			// Connection pooling settings
-			MaxIdleConns:          100,              // Maximum number of idle connections across all hosts
-			MaxIdleConnsPerHost:   10,               // Maximum number of idle connections per host
-			MaxConnsPerHost:       50,               // Maximum number of connections per host
-			IdleConnTimeout:       90 * time.Second, // How long idle connections are kept alive
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+			MaxIdleConns:          config.MaxIdleConns,        // Maximum number of idle connections across all hosts
+			MaxIdleConnsPerHost:   config.MaxIdleConnsPerHost, // Maximum number of idle connections per host
+			MaxConnsPerHost:       config.MaxConnsPerHost,     // Maximum number of connections per host
+			IdleConnTimeout:       config.IdleConnTimeout,     // How long idle connections are kept alive
+			TLSHandshakeTimeout:   config.TLSHandshakeTimeout,
+			ResponseHeaderTimeout: config.ResponseHeaderTimeout,
+			ExpectContinueTimeout: config.ExpectContinueTimeout,
 
 			// Enable connection reuse
-			DisableKeepAlives: false,
+			DisableKeepAlives: config.DisableKeepAlives,
 
 			// Set to true to prevent GZIP-bomb DoS attacks
 			DisableCompression: true,
@@ -66,6 +67,7 @@ func NewHTTPClient(ctx context.Context, remoteAddr string) (*http.Client, error)
 			// Some RPC nodes may not handle HTTP/2 connection pooling optimally
 			ForceAttemptHTTP2: false,
 		},
+		Timeout: config.Timeout,
 	}
 
 	return client, nil
