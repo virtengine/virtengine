@@ -84,6 +84,101 @@ describe("sync-engine backward external status handling", () => {
   });
 });
 
+describe("sync-engine external status normalization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTaskStore.getAllTasks.mockReturnValue([]);
+    mockKanban.listTasks.mockResolvedValue([]);
+  });
+
+  it("normalizes external closed to cancelled and updates internal status", async () => {
+    mockTaskStore.getAllTasks.mockReturnValue([
+      {
+        id: "task-closed",
+        projectId: "proj-1",
+        status: "inprogress",
+        externalStatus: "inprogress",
+        syncDirty: false,
+      },
+    ]);
+    mockKanban.listTasks.mockResolvedValue([
+      { id: "task-closed", status: "closed", projectId: "proj-1" },
+    ]);
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pullFromExternal();
+
+    expect(mockTaskStore.setTaskStatus).toHaveBeenCalledWith(
+      "task-closed",
+      "cancelled",
+      "external",
+    );
+    expect(mockTaskStore.updateTask).toHaveBeenCalledWith("task-closed", {
+      externalStatus: "cancelled",
+      syncDirty: false,
+    });
+    expect(result.pulled).toBe(1);
+  });
+
+  it("normalizes external merged to done and updates internal status", async () => {
+    mockTaskStore.getAllTasks.mockReturnValue([
+      {
+        id: "task-merged",
+        projectId: "proj-1",
+        status: "inreview",
+        externalStatus: "inreview",
+        syncDirty: false,
+      },
+    ]);
+    mockKanban.listTasks.mockResolvedValue([
+      { id: "task-merged", status: "merged", projectId: "proj-1" },
+    ]);
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pullFromExternal();
+
+    expect(mockTaskStore.setTaskStatus).toHaveBeenCalledWith(
+      "task-merged",
+      "done",
+      "external",
+    );
+    expect(mockTaskStore.updateTask).toHaveBeenCalledWith("task-merged", {
+      externalStatus: "done",
+      syncDirty: false,
+    });
+    expect(result.pulled).toBe(1);
+  });
+
+  it("normalizes mixed-case and spacing/hyphen variants", async () => {
+    mockTaskStore.getAllTasks.mockReturnValue([
+      {
+        id: "task-normalized",
+        projectId: "proj-1",
+        status: "todo",
+        externalStatus: "todo",
+        syncDirty: false,
+      },
+    ]);
+    mockKanban.listTasks.mockResolvedValue([
+      { id: "task-normalized", status: "In-Review", projectId: "proj-1" },
+    ]);
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    const result = await engine.pullFromExternal();
+
+    expect(mockTaskStore.setTaskStatus).toHaveBeenCalledWith(
+      "task-normalized",
+      "inreview",
+      "external",
+    );
+    expect(mockTaskStore.updateTask).toHaveBeenCalledWith("task-normalized", {
+      externalStatus: "inreview",
+      syncDirty: false,
+    });
+    expect(result.pulled).toBe(1);
+  });
+});
+
 describe("sync-engine push 404 orphan handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -237,5 +332,49 @@ describe("sync-engine UUID-to-GitHub ID mismatch handling", () => {
     // Should be handled gracefully — no error in result
     expect(mockTaskStore.markSynced).toHaveBeenCalledWith("123");
     expect(result.errors.length).toBe(0);
+  });
+});
+
+describe("sync-engine syncTask backend ID handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTaskStore.getAllTasks.mockReturnValue([]);
+    mockKanban.listTasks.mockResolvedValue([]);
+  });
+
+  it("syncTask uses externalId for github backend", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    mockTaskStore.getTask.mockReturnValue({
+      id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+      externalId: "151",
+      status: "done",
+      syncDirty: true,
+    });
+    mockKanban.updateTaskStatus.mockResolvedValue({});
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    await engine.syncTask("28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e");
+
+    expect(mockKanban.updateTaskStatus).toHaveBeenCalledWith("151", "done");
+    expect(mockTaskStore.markSynced).toHaveBeenCalledWith(
+      "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+    );
+  });
+
+  it("syncTask skips incompatible IDs for github backend", async () => {
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    mockTaskStore.getTask.mockReturnValue({
+      id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+      status: "inreview",
+      syncDirty: true,
+    });
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+    await engine.syncTask("28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e");
+
+    expect(mockKanban.updateTaskStatus).not.toHaveBeenCalled();
+    expect(mockTaskStore.markSynced).toHaveBeenCalledWith(
+      "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+    );
   });
 });

@@ -34,6 +34,10 @@ let activeThread = null; // Current persistent Thread
 let activeThreadId = null; // Thread ID for resume
 let activeTurn = null; // Whether a turn is in-flight
 let turnCount = 0; // Number of turns in this thread
+let codexRuntimeCaps = {
+  hasSteeringApi: false,
+  steeringMethod: null,
+};
 let agentSdk = resolveAgentSdkConfig();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,6 +182,7 @@ async function getThread() {
 
   // Start a new thread with the system prompt as the first turn
   activeThread = codexInstance.startThread(THREAD_OPTIONS);
+  detectThreadCapabilities(activeThread);
 
   // Prime the thread with the system prompt so subsequent turns have context
   try {
@@ -194,6 +199,21 @@ async function getThread() {
   }
 
   return activeThread;
+}
+
+function detectThreadCapabilities(thread) {
+  if (!thread || typeof thread !== "object") {
+    codexRuntimeCaps = { hasSteeringApi: false, steeringMethod: null };
+    return codexRuntimeCaps;
+  }
+  const candidates = ["steer", "sendSteer", "steering"];
+  const method =
+    candidates.find((name) => typeof thread?.[name] === "function") || null;
+  codexRuntimeCaps = {
+    hasSteeringApi: !!method,
+    steeringMethod: method,
+  };
+  return codexRuntimeCaps;
 }
 
 // ── Event Formatting ─────────────────────────────────────────────────────────
@@ -477,27 +497,24 @@ export async function steerCodexPrompt(message) {
       return { ok: false, reason: "steering_disabled" };
     }
     const thread = await getThread();
-    const steerFn =
-      thread?.steer || thread?.sendSteer || thread?.steering || null;
+    const runtimeCaps = detectThreadCapabilities(thread);
+    const steerFn = runtimeCaps.steeringMethod
+      ? thread?.[runtimeCaps.steeringMethod]
+      : null;
+
     if (typeof steerFn === "function") {
       await steerFn.call(thread, message);
       return { ok: true, mode: "steer" };
     }
 
-    const enqueueFn =
-      thread?.send || thread?.addMessage || thread?.enqueue || null;
-    if (typeof enqueueFn === "function") {
-      await enqueueFn.call(thread, {
-        role: "user",
-        content: message,
-        type: "steering",
-      });
-      return { ok: true, mode: "enqueue" };
-    }
+    return {
+      ok: false,
+      reason: "sdk_no_steering_api",
+      detail: "Current Codex SDK Thread exposes only run()/runStreamed()",
+    };
   } catch (err) {
     return { ok: false, reason: err.message || "steer_failed" };
   }
-  return { ok: false, reason: "unsupported" };
 }
 
 /**

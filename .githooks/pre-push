@@ -10,7 +10,7 @@
 #   DEPS     — go.mod, go.sum, pnpm-lock.yaml, package.json
 #   WORKFLOW — .github/workflows/ YAML files
 #   DOCS     — .md files, _docs/, docs/ (skip all checks)
-#   CODEX_MONITOR — scripts/codex-monitor/ (run codex-monitor tests)
+#   CODEX_MONITOR — scripts/codex-monitor/ (run syntax, prepublish, tests)
 #   TERRAFORM — infra/terraform .tf files
 #
 # Bypass:      git push --no-verify
@@ -26,7 +26,7 @@
 #   VE_HOOK_SKIP_BUILD=1     Skip build
 #   VE_HOOK_SKIP_TEST=1      Skip unit tests (Go + Portal)
 #   VE_HOOK_SKIP_PORTAL=1    Skip ALL portal checks (lint, type-check, tests, build)
-#   VE_HOOK_SKIP_CODEX_MONITOR=1  Skip codex-monitor tests
+#   VE_HOOK_SKIP_CODEX_MONITOR=1  Skip codex-monitor checks (syntax, prepublish, tests)
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -185,6 +185,7 @@ RUN_PRETTIER=false; RUN_PORTAL_LINT=false
 RUN_PORTAL_TYPECHECK=false; RUN_PORTAL_TEST=false; RUN_PORTAL_BUILD=false; RUN_PNPM_LOCK=false
 RUN_TERRAFORM_FMT=false
 RUN_CODEX_MONITOR_SYNTAX=false
+RUN_CODEX_MONITOR_PREPUBLISH=false
 RUN_CODEX_MONITOR_TEST=false
 
 # Go checks: Only if .go files or go.mod/sum/work changed
@@ -224,13 +225,14 @@ $HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
 # Codex Monitor checks: Only if scripts/codex-monitor changed
 if $HAS_CODEX_MONITOR; then
     RUN_CODEX_MONITOR_SYNTAX=true
+    RUN_CODEX_MONITOR_PREPUBLISH=true
     RUN_CODEX_MONITOR_TEST=true
 fi
 
 for flag in $RUN_GO_VET $RUN_GOFMT $RUN_GO_LINT $RUN_GO_BUILD $RUN_GO_TEST \
             $RUN_MOD_VENDOR $RUN_PRETTIER $RUN_PORTAL_LINT $RUN_PORTAL_TYPECHECK \
             $RUN_PORTAL_TEST $RUN_PORTAL_BUILD $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT \
-            $RUN_CODEX_MONITOR_SYNTAX $RUN_CODEX_MONITOR_TEST; do
+            $RUN_CODEX_MONITOR_SYNTAX $RUN_CODEX_MONITOR_PREPUBLISH $RUN_CODEX_MONITOR_TEST; do
     $flag && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 done
 
@@ -412,6 +414,16 @@ check_codex_monitor_test() {
     fi
     hook_step "Running codex-monitor tests (vitest)..."
     (cd "$REPO_ROOT/scripts/codex-monitor" && npm test 2>&1)
+}
+
+check_codex_monitor_prepublish() {
+    local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
+    if [ ! -f "$monitor_dir/prepublish-check.mjs" ]; then
+        hook_fail "prepublish-check.mjs not found in scripts/codex-monitor"
+        return 1
+    fi
+    hook_step "Running codex-monitor prepublish validation..."
+    (cd "$monitor_dir" && node prepublish-check.mjs 2>&1)
 }
 
 # =========================================================================
@@ -736,6 +748,7 @@ else
     $RUN_PNPM_LOCK  && { run_check "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true; }
     # === Codex Monitor checks ===
     $RUN_CODEX_MONITOR_SYNTAX && { run_check "Codex Monitor syntax" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_syntax || true; }
+    $RUN_CODEX_MONITOR_PREPUBLISH && { run_check "Codex Monitor prepublish validation" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_prepublish || true; }
     $RUN_CODEX_MONITOR_TEST && { run_check "Codex Monitor tests" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_test || true; }
     # === Terraform formatting ===
     $RUN_TERRAFORM_FMT && { run_check "terraform fmt" VE_HOOK_SKIP_TF check_terraform_fmt || true; }

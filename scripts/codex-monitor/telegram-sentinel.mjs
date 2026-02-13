@@ -45,6 +45,11 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import os from "node:os";
+import {
+  execPrimaryPrompt,
+  getPrimaryAgentInfo,
+  initPrimaryAgent,
+} from "./primary-agent.mjs";
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +65,10 @@ const SENTINEL_LOCK_FILE = resolve(cacheDir, "telegram-sentinel.lock");
 const SENTINEL_COMMAND_QUEUE_FILE = resolve(
   cacheDir,
   "sentinel-command-queue.json",
+);
+const SENTINEL_MONITOR_RECOVERY_FILE = resolve(
+  cacheDir,
+  "sentinel-monitor-recovery.json",
 );
 const MONITOR_POLL_LOCK_FILE = resolve(cacheDir, "telegram-getupdates.lock");
 const STATUS_FILE = resolve(cacheDir, "ve-orchestrator-status.json");
@@ -94,6 +103,28 @@ let commandQueue = [];
 /** @type {Promise<void> | null} */
 let monitorStartPromise = null;
 let sentinelPollLockHeld = false;
+let recoveryInProgress = false;
+let monitorRestartAttempts = [];
+let monitorCrashEvents = [];
+let lastRepairAt = 0;
+let lastMonitorStartAt = 0;
+let monitorManualStopUntil = 0;
+
+const sentinelConfig = {
+  autoRestartMonitor: true,
+  crashLoopThreshold: 3,
+  crashLoopWindowMs: 10 * 60 * 1000,
+  monitorStartGraceMs: 45 * 1000,
+  repairAgentEnabled: true,
+  repairCooldownMs: 15 * 60 * 1000,
+  repairTimeoutMs: 20 * 60 * 1000,
+  primaryAgentFallbackEnabled: true,
+  primaryAgentFallbackTimeoutMs: 15 * 60 * 1000,
+  restartBackoffMs: 5 * 1000,
+  manualStopHoldMs: 10 * 60 * 1000,
+  monitorMonitorCheckEnabled: true,
+  monitorMonitorMaxAgeMs: 20 * 60 * 1000,
+};
 
 // ── Environment ──────────────────────────────────────────────────────────────
 
@@ -145,14 +176,412 @@ function loadEnvCredentials() {
  * Initialize environment variables from .env and process.env.
  * Process.env takes precedence over .env file values.
  */
+function parseBool(value, defaultValue) {
+  if (value == null || value === "") return defaultValue;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return defaultValue;
+}
+
+function parseNumber(value, defaultValue, min = null, max = null) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return defaultValue;
+  let out = parsed;
+  if (Number.isFinite(min)) out = Math.max(min, out);
+  if (Number.isFinite(max)) out = Math.min(max, out);
+  return out;
+}
+
+function getEnvValue(fileVars, key, fallback = "") {
+  // .env is the PRIMARY source, then process env.
+  const fromFile = fileVars?.[key];
+  if (fromFile != null && String(fromFile).trim() !== "") return fromFile;
+  const fromProcess = process.env[key];
+  if (fromProcess != null && String(fromProcess).trim() !== "") {
+    return fromProcess;
+  }
+  return fallback;
+}
+
 function initEnv() {
   const fileVars = loadEnvCredentials();
-  telegramToken =
-    process.env.TELEGRAM_BOT_TOKEN || fileVars.TELEGRAM_BOT_TOKEN || "";
-  telegramChatId =
-    process.env.TELEGRAM_CHAT_ID || fileVars.TELEGRAM_CHAT_ID || "";
-  projectName =
-    process.env.PROJECT_NAME || fileVars.PROJECT_NAME || "virtengine";
+  telegramToken = getEnvValue(fileVars, "TELEGRAM_BOT_TOKEN", "");
+  telegramChatId = getEnvValue(fileVars, "TELEGRAM_CHAT_ID", "");
+  projectName = getEnvValue(fileVars, "PROJECT_NAME", "virtengine");
+
+  sentinelConfig.autoRestartMonitor = parseBool(
+    getEnvValue(fileVars, "SENTINEL_AUTO_RESTART_MONITOR", "1"),
+    true,
+  );
+  sentinelConfig.crashLoopThreshold = parseNumber(
+    getEnvValue(fileVars, "SENTINEL_CRASH_LOOP_THRESHOLD", "3"),
+    3,
+    2,
+    20,
+  );
+  sentinelConfig.crashLoopWindowMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_CRASH_LOOP_WINDOW_MIN", "10"),
+      10,
+      1,
+      120,
+    ) * 60_000;
+  sentinelConfig.monitorStartGraceMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_MONITOR_START_GRACE_SEC", "45"),
+      45,
+      10,
+      600,
+    ) * 1000;
+  sentinelConfig.repairAgentEnabled = parseBool(
+    getEnvValue(fileVars, "SENTINEL_REPAIR_AGENT_ENABLED", "1"),
+    true,
+  );
+  sentinelConfig.repairCooldownMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_REPAIR_COOLDOWN_MIN", "15"),
+      15,
+      1,
+      240,
+    ) * 60_000;
+  sentinelConfig.repairTimeoutMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_REPAIR_TIMEOUT_MIN", "20"),
+      20,
+      1,
+      240,
+    ) * 60_000;
+  sentinelConfig.primaryAgentFallbackEnabled = parseBool(
+    getEnvValue(fileVars, "SENTINEL_PRIMARY_AGENT_FALLBACK_ENABLED", "1"),
+    true,
+  );
+  sentinelConfig.primaryAgentFallbackTimeoutMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_PRIMARY_AGENT_TIMEOUT_MIN", "15"),
+      15,
+      1,
+      180,
+    ) * 60_000;
+  sentinelConfig.restartBackoffMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_RESTART_BACKOFF_SEC", "5"),
+      5,
+      0,
+      600,
+    ) * 1000;
+  sentinelConfig.manualStopHoldMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_MANUAL_STOP_HOLD_MIN", "10"),
+      10,
+      0,
+      240,
+    ) * 60_000;
+  sentinelConfig.monitorMonitorCheckEnabled = parseBool(
+    getEnvValue(fileVars, "SENTINEL_MONITOR_MONITOR_CHECK_ENABLED", "1"),
+    true,
+  );
+  sentinelConfig.monitorMonitorMaxAgeMs =
+    parseNumber(
+      getEnvValue(fileVars, "SENTINEL_MONITOR_MONITOR_MAX_AGE_MIN", "20"),
+      20,
+      1,
+      240,
+    ) * 60_000;
+}
+
+function pruneTimestamps(values, now = Date.now()) {
+  const floor = now - sentinelConfig.crashLoopWindowMs;
+  return (values || []).filter((ts) => Number.isFinite(ts) && ts >= floor);
+}
+
+function saveRecoveryState() {
+  try {
+    mkdirSync(dirname(SENTINEL_MONITOR_RECOVERY_FILE), { recursive: true });
+    writeFileSync(
+      SENTINEL_MONITOR_RECOVERY_FILE,
+      JSON.stringify(
+        {
+          monitorRestartAttempts,
+          monitorCrashEvents,
+          lastRepairAt,
+          lastMonitorStartAt,
+          monitorManualStopUntil,
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  } catch {
+    /* best effort */
+  }
+}
+
+function loadRecoveryState() {
+  try {
+    if (!existsSync(SENTINEL_MONITOR_RECOVERY_FILE)) return;
+    const raw = readFileSync(SENTINEL_MONITOR_RECOVERY_FILE, "utf8");
+    if (!raw || !raw.trim()) return;
+    const data = JSON.parse(raw);
+    monitorRestartAttempts = Array.isArray(data.monitorRestartAttempts)
+      ? data.monitorRestartAttempts
+      : [];
+    monitorCrashEvents = Array.isArray(data.monitorCrashEvents)
+      ? data.monitorCrashEvents
+      : [];
+    lastRepairAt = Number(data.lastRepairAt) || 0;
+    lastMonitorStartAt = Number(data.lastMonitorStartAt) || 0;
+    monitorManualStopUntil = Number(data.monitorManualStopUntil) || 0;
+  } catch {
+    /* best effort */
+  }
+}
+
+function recordMonitorRestartAttempt() {
+  const now = Date.now();
+  monitorRestartAttempts.push(now);
+  monitorRestartAttempts = pruneTimestamps(monitorRestartAttempts, now);
+  saveRecoveryState();
+}
+
+function recordMonitorCrashEvent() {
+  const now = Date.now();
+  monitorCrashEvents.push(now);
+  monitorCrashEvents = pruneTimestamps(monitorCrashEvents, now);
+  saveRecoveryState();
+}
+
+function isCrashLoopDetected(now = Date.now()) {
+  monitorRestartAttempts = pruneTimestamps(monitorRestartAttempts, now);
+  monitorCrashEvents = pruneTimestamps(monitorCrashEvents, now);
+  const threshold = sentinelConfig.crashLoopThreshold;
+  return (
+    monitorCrashEvents.length >= threshold ||
+    monitorRestartAttempts.length >= threshold
+  );
+}
+
+async function assessMonitorMonitorHealth() {
+  if (!sentinelConfig.monitorMonitorCheckEnabled) {
+    return { ok: true, reason: "check disabled" };
+  }
+  const devmodeEnabled = parseBool(
+    process.env.DEVMODE_MONITOR_MONITOR_ENABLED ?? "1",
+    true,
+  );
+  if (!devmodeEnabled) {
+    return { ok: true, reason: "devmode monitor-monitor disabled" };
+  }
+  try {
+    if (!existsSync(STATUS_FILE)) {
+      return { ok: false, reason: "status file missing" };
+    }
+    const statusRaw = await readFile(STATUS_FILE, "utf8");
+    const status = JSON.parse(statusRaw || "{}");
+    const mm = status?.monitor_monitor || status?.monitorMonitor || null;
+    if (!mm || typeof mm !== "object") {
+      return { ok: false, reason: "monitor-monitor section unavailable" };
+    }
+    if (mm.enabled === false) {
+      return { ok: true, reason: "monitor-monitor disabled in status" };
+    }
+    const lastRunAt = mm.lastRunAt || mm.last_run_at || mm.last_run || null;
+    if (!lastRunAt) {
+      return { ok: false, reason: "monitor-monitor missing last run timestamp" };
+    }
+    const ageMs = Date.now() - new Date(lastRunAt).getTime();
+    if (!Number.isFinite(ageMs) || ageMs < 0) {
+      return { ok: false, reason: "monitor-monitor timestamp invalid" };
+    }
+    if (ageMs > sentinelConfig.monitorMonitorMaxAgeMs) {
+      return {
+        ok: false,
+        reason: `monitor-monitor stale (${formatUptime(ageMs)} old)`,
+      };
+    }
+    return { ok: true, reason: `healthy (${formatUptime(ageMs)} old)` };
+  } catch (err) {
+    return { ok: false, reason: err?.message || "health check failed" };
+  }
+}
+
+function normalizeAgentResult(result) {
+  if (!result) return "(no response)";
+  if (typeof result === "string") return result;
+  if (typeof result.finalResponse === "string" && result.finalResponse.trim()) {
+    return result.finalResponse.trim();
+  }
+  if (typeof result.response === "string" && result.response.trim()) {
+    return result.response.trim();
+  }
+  try {
+    return JSON.stringify(result).slice(0, 3000);
+  } catch {
+    return String(result);
+  }
+}
+
+async function runRepairAgent(triggerReason, details = "") {
+  if (!sentinelConfig.repairAgentEnabled) return false;
+  if (recoveryInProgress) return false;
+
+  const now = Date.now();
+  const sinceLast = now - lastRepairAt;
+  if (lastRepairAt > 0 && sinceLast < sentinelConfig.repairCooldownMs) {
+    log(
+      "warn",
+      `repair-agent cooldown active (${Math.round((sentinelConfig.repairCooldownMs - sinceLast) / 1000)}s remaining)`,
+    );
+    return false;
+  }
+
+  recoveryInProgress = true;
+  lastRepairAt = now;
+  saveRecoveryState();
+
+  try {
+    await sendTelegram(
+      telegramChatId,
+      [
+        "🧰 Crash-loop detected. Launching repair agent.",
+        `Trigger: ${triggerReason}`,
+        details ? `Context: ${details}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+
+    await initPrimaryAgent();
+    const agentInfo = getPrimaryAgentInfo();
+    const mmHealth = await assessMonitorMonitorHealth();
+    const prompt = [
+      "Codex-monitor sentinel autonomous repair request.",
+      "",
+      `Trigger: ${triggerReason}`,
+      `Project: ${projectName}`,
+      `Host: ${os.hostname()}`,
+      `Crash events in window: ${monitorCrashEvents.length}`,
+      `Restart attempts in window: ${monitorRestartAttempts.length}`,
+      `Monitor-monitor health: ${mmHealth.ok ? "healthy" : "degraded"} (${mmHealth.reason})`,
+      details ? `Additional context: ${details}` : "",
+      "",
+      "Task:",
+      "1) Diagnose likely monitor crash-loop root cause.",
+      "2) Apply safe, minimal fixes directly in this workspace when possible.",
+      "3) Return concise summary: root cause, files changed, validation performed, residual risk.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const result = await execPrimaryPrompt(prompt, {
+      timeoutMs: sentinelConfig.repairTimeoutMs,
+    });
+    const summary = normalizeAgentResult(result);
+    await sendTelegram(
+      telegramChatId,
+      [
+        `✅ Repair agent completed via ${agentInfo.adapter}.`,
+        "",
+        summary.slice(0, 3500),
+      ].join("\n"),
+    );
+    return true;
+  } catch (err) {
+    await sendTelegram(
+      telegramChatId,
+      `❌ Repair agent failed: ${err?.message || err}`,
+    );
+    return false;
+  } finally {
+    recoveryInProgress = false;
+    saveRecoveryState();
+  }
+}
+
+async function runPrimaryAgentFallback(chatId, text, command) {
+  if (!sentinelConfig.primaryAgentFallbackEnabled) {
+    return false;
+  }
+  try {
+    await initPrimaryAgent();
+    const agentInfo = getPrimaryAgentInfo();
+    await sendTelegram(
+      chatId,
+      `🤖 codex-monitor is down. Running via sentinel fallback (${agentInfo.adapter})...`,
+    );
+
+    const prompt = [
+      "Telegram fallback request while codex-monitor is offline.",
+      "",
+      `Project: ${projectName}`,
+      `Host: ${os.hostname()}`,
+      `Command: ${command}`,
+      "",
+      "User input:",
+      text,
+      "",
+      "Execute this request directly and return a concise, actionable response suitable for Telegram.",
+      "If the exact command requires monitor internals, provide the closest equivalent action and clear next steps.",
+    ].join("\n");
+
+    const result = await execPrimaryPrompt(prompt, {
+      timeoutMs: sentinelConfig.primaryAgentFallbackTimeoutMs,
+    });
+    const message = normalizeAgentResult(result).slice(0, 3600);
+    await sendTelegram(chatId, message || "(fallback completed with no text output)");
+    return true;
+  } catch (err) {
+    await sendTelegram(
+      chatId,
+      `❌ Sentinel fallback failed: ${err?.message || err}`,
+    );
+    return false;
+  }
+}
+
+async function attemptMonitorRecovery(triggerReason) {
+  if (!sentinelConfig.autoRestartMonitor) return;
+  if (monitorStartPromise) return;
+  if (Date.now() < monitorManualStopUntil) {
+    log("info", "auto-restart suppressed due to recent manual stop");
+    return;
+  }
+
+  const loopDetected = isCrashLoopDetected();
+  if (loopDetected) {
+    const mmHealth = await assessMonitorMonitorHealth();
+    await sendTelegram(
+      telegramChatId,
+      [
+        "⚠️ Monitor crash-loop detected.",
+        `Window: ${Math.round(sentinelConfig.crashLoopWindowMs / 60000)}m | threshold: ${sentinelConfig.crashLoopThreshold}`,
+        `Monitor-monitor: ${mmHealth.ok ? "healthy" : "degraded"} (${mmHealth.reason})`,
+        "Attempting autonomous repair before restart.",
+      ].join("\n"),
+    );
+    await runRepairAgent(triggerReason, mmHealth.reason);
+  }
+
+  if (sentinelConfig.restartBackoffMs > 0) {
+    await sleep(sentinelConfig.restartBackoffMs);
+  }
+
+  try {
+    await ensureMonitorRunning(`sentinel recovery: ${triggerReason}`);
+    const pid = readAlivePid(MONITOR_PID_FILE);
+    const pidSuffix = pid ? ` (PID ${pid})` : "";
+    await sendTelegram(
+      telegramChatId,
+      `✅ codex-monitor recovered${pidSuffix}.`,
+    );
+  } catch (err) {
+    await sendTelegram(
+      telegramChatId,
+      `❌ codex-monitor auto-restart failed: ${err?.message || err}`,
+    );
+  }
 }
 
 // ── Process Utilities ────────────────────────────────────────────────────────
@@ -708,6 +1137,8 @@ async function handleStopMonitor(chatId) {
     }
     removePidFile(MONITOR_PID_FILE);
     await sendTelegram(chatId, "✅ codex-monitor stopped.");
+    monitorManualStopUntil = Date.now() + sentinelConfig.manualStopHoldMs;
+    saveRecoveryState();
     // Transition to standalone mode after stopping monitor
     await transitionToStandalone("monitor manually stopped");
   } catch (err) {
@@ -750,6 +1181,7 @@ async function handleHelp(chatId) {
  */
 async function handleMonitorCommand(chatId, text, command) {
   const monPid = readAlivePid(MONITOR_PID_FILE);
+  const requiresMonitor = MONITOR_REQUIRED_COMMANDS.has(command);
 
   if (monPid) {
     // Monitor is running but sentinel is somehow in standalone mode — this
@@ -761,28 +1193,37 @@ async function handleMonitorCommand(chatId, text, command) {
     return;
   }
 
-  // Monitor is not running — notify user and start it
-  await sendTelegram(
-    chatId,
-    "⏳ codex-monitor was not running — starting now...",
-  );
+  let fallbackHandled = false;
+  if (sentinelConfig.primaryAgentFallbackEnabled) {
+    fallbackHandled = await runPrimaryAgentFallback(chatId, text, command);
+  }
 
-  // Queue this command for replay after startup
-  queueCommand(chatId, text);
+  if (requiresMonitor) {
+    queueCommand(chatId, text);
+  }
+
+  if (!sentinelConfig.autoRestartMonitor && !requiresMonitor) {
+    return;
+  }
+
+  await sendTelegram(chatId, "⏳ Starting codex-monitor in the background...");
 
   try {
     await ensureMonitorRunning(`command: ${command}`);
-    // Write the command queue to disk so monitor can read it on startup
-    await writeCommandQueueFile();
+    if (commandQueue.length > 0) {
+      await writeCommandQueueFile();
+    }
     log(
       "info",
       `monitor started — ${commandQueue.length} command(s) queued for replay`,
     );
   } catch (err) {
-    await sendTelegram(
-      chatId,
-      `❌ Failed to start codex-monitor: ${err.message}\n\nYour command was not processed.`,
-    );
+    if (!fallbackHandled) {
+      await sendTelegram(
+        chatId,
+        `❌ Failed to start codex-monitor: ${err.message}\n\nYour command was not processed.`,
+      );
+    }
     // Clear the failed commands
     commandQueue = [];
   }
@@ -866,7 +1307,12 @@ export async function ensureMonitorRunning(reason) {
     return monitorStartPromise;
   }
 
-  monitorStartPromise = startAndWaitForMonitor(reason);
+  recordMonitorRestartAttempt();
+
+  monitorStartPromise = startAndWaitForMonitor(reason).catch((err) => {
+    recordMonitorCrashEvent();
+    throw err;
+  });
   try {
     await monitorStartPromise;
   } finally {
@@ -944,6 +1390,8 @@ async function startAndWaitForMonitor(reason) {
     const alivePid = readAlivePid(MONITOR_PID_FILE);
     if (alivePid) {
       log("info", `monitor is healthy (PID ${alivePid})`);
+      lastMonitorStartAt = Date.now();
+      saveRecoveryState();
       // Transition to companion mode
       await transitionToCompanion(alivePid);
       return;
@@ -1071,6 +1519,13 @@ async function healthCheck() {
       // Monitor died while in companion mode — send crash notification and go standalone
       log("warn", "monitor process died — transitioning to standalone");
       removePidFile(MONITOR_PID_FILE);
+      recordMonitorCrashEvent();
+
+      const recentStartAge =
+        lastMonitorStartAt > 0 ? Date.now() - lastMonitorStartAt : null;
+      const rapidCrash =
+        Number.isFinite(recentStartAge) &&
+        recentStartAge <= sentinelConfig.monitorStartGraceMs;
 
       // Notify user
       const host = os.hostname();
@@ -1082,13 +1537,17 @@ async function healthCheck() {
           "",
           `Host: \`${host}\``,
           `Time: ${new Date().toISOString()}`,
+          rapidCrash
+            ? `Detected rapid crash (${formatUptime(recentStartAge)} after startup).`
+            : "",
           "",
-          "Sentinel is switching to standalone mode. Use /start to restart codex-monitor.",
+          "Sentinel is switching to standalone mode and will attempt automatic recovery.",
         ].join("\n"),
         { parseMode: "Markdown" },
       );
 
       await transitionToStandalone("monitor process died");
+      await attemptMonitorRecovery("monitor crashed in companion mode");
     }
   } else if (mode === "standalone") {
     if (monPid) {
@@ -1116,6 +1575,10 @@ async function healthCheck() {
         // Neither is polling — sentinel should resume
         log("info", "no poller active — resuming sentinel polling");
         await transitionToStandalone("no active poller detected");
+      }
+
+      if (sentinelConfig.autoRestartMonitor && !monitorStartPromise) {
+        await attemptMonitorRecovery("monitor not running during standalone health check");
       }
     }
   }
@@ -1210,6 +1673,7 @@ export async function startSentinel(options = {}) {
 
   running = true;
   startedAt = new Date().toISOString();
+  loadRecoveryState();
   writePidFile(SENTINEL_PID_FILE, process.pid);
 
   log("info", `sentinel started (PID ${process.pid})`);
@@ -1327,6 +1791,33 @@ export function getSentinelStatus() {
     consecutivePollErrors,
     uptime: Date.now() - new Date(startedAt).getTime(),
   };
+}
+
+export function getSentinelRecoveryStatus() {
+  const now = Date.now();
+  const crashes = pruneTimestamps(monitorCrashEvents, now).length;
+  const restarts = pruneTimestamps(monitorRestartAttempts, now).length;
+  return {
+    crashLoopDetected: isCrashLoopDetected(now),
+    crashesInWindow: crashes,
+    restartsInWindow: restarts,
+    crashLoopThreshold: sentinelConfig.crashLoopThreshold,
+    crashLoopWindowMs: sentinelConfig.crashLoopWindowMs,
+    lastRepairAt,
+    recoveryInProgress,
+  };
+}
+
+export function __setRecoveryStateForTest(state = {}) {
+  monitorRestartAttempts = Array.isArray(state.monitorRestartAttempts)
+    ? [...state.monitorRestartAttempts]
+    : [];
+  monitorCrashEvents = Array.isArray(state.monitorCrashEvents)
+    ? [...state.monitorCrashEvents]
+    : [];
+  lastRepairAt = Number(state.lastRepairAt) || 0;
+  lastMonitorStartAt = Number(state.lastMonitorStartAt) || 0;
+  monitorManualStopUntil = Number(state.monitorManualStopUntil) || 0;
 }
 
 // ── Logging ──────────────────────────────────────────────────────────────────

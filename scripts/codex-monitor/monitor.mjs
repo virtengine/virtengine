@@ -53,6 +53,20 @@ import {
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
+import {
+  isWhatsAppEnabled,
+  startWhatsAppChannel,
+  stopWhatsAppChannel,
+  notifyWhatsApp,
+  getWhatsAppStatus,
+} from "./whatsapp-channel.mjs";
+import {
+  isContainerEnabled,
+  getContainerStatus,
+  ensureContainerRuntime,
+  stopAllContainers,
+  cleanupOrphanedContainers,
+} from "./container-runner.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
 import { RestartController } from "./restart-controller.mjs";
 import {
@@ -150,6 +164,8 @@ import {
 import { fixGitConfigCorruption } from "./worktree-manager.mjs";
 // ── Task management subsystem imports ──────────────────────────────────────
 import {
+  configureTaskStore,
+  getStorePath,
   loadStore as loadTaskStore,
   getStats as getTaskStoreStats,
   setTaskStatus as setInternalTaskStatus,
@@ -429,6 +445,75 @@ function isMonitorMonitorEnabled() {
   return true;
 }
 
+const MONITOR_MONITOR_DEFAULT_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+const MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS = 600_000;
+const monitorMonitorTimeoutWarningKeys = new Set();
+
+function parsePositiveMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.trunc(parsed);
+}
+
+function warnMonitorTimeoutConfig(key, message) {
+  if (!key || monitorMonitorTimeoutWarningKeys.has(key)) return;
+  monitorMonitorTimeoutWarningKeys.add(key);
+  console.warn(message);
+}
+
+function resolveMonitorMonitorTimeoutMs() {
+  const explicitTimeoutRaw = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS;
+  const legacyTimeoutRaw = process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS;
+  const minTimeoutRaw = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS;
+  const maxTimeoutRaw = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS;
+
+  const explicitTimeout = parsePositiveMs(explicitTimeoutRaw);
+  const legacyTimeout = parsePositiveMs(legacyTimeoutRaw);
+  const minTimeout = parsePositiveMs(minTimeoutRaw);
+  const maxTimeoutCandidate = parsePositiveMs(maxTimeoutRaw);
+
+  let maxTimeout = maxTimeoutCandidate;
+  if (minTimeout !== null && maxTimeout !== null && maxTimeout < minTimeout) {
+    warnMonitorTimeoutConfig(
+      `bounds:${minTimeout}:${maxTimeout}`,
+      `[monitor] ⚠️  Invalid monitor-monitor timeout bounds: DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS=${maxTimeout}ms is lower than DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS=${minTimeout}ms. Ignoring max bound.`,
+    );
+    maxTimeout = null;
+  }
+
+  const sourceTimeout =
+    explicitTimeout ?? legacyTimeout ?? MONITOR_MONITOR_DEFAULT_TIMEOUT_MS;
+
+  let timeoutMs = sourceTimeout;
+  if (minTimeout !== null && timeoutMs < minTimeout) timeoutMs = minTimeout;
+  if (maxTimeout !== null && timeoutMs > maxTimeout) timeoutMs = maxTimeout;
+
+  if (legacyTimeoutRaw && !explicitTimeoutRaw && legacyTimeout !== null) {
+    if (legacyTimeout < MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS) {
+      warnMonitorTimeoutConfig(
+        `legacy-low:${legacyTimeout}`,
+        `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is low for monitor-monitor (recommended >= ${MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS}ms). Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS to override explicitly.`,
+      );
+    }
+  }
+
+  if (timeoutMs !== sourceTimeout) {
+    warnMonitorTimeoutConfig(
+      `bounded:${sourceTimeout}:${timeoutMs}:${minTimeout ?? "off"}:${maxTimeout ?? "off"}`,
+      `[monitor] monitor-monitor timeout adjusted ${sourceTimeout}ms -> ${timeoutMs}ms (min=${minTimeout ?? "off"}, max=${maxTimeout ?? "off"})`,
+    );
+  }
+
+  if (timeoutMs < MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS) {
+    warnMonitorTimeoutConfig(
+      `effective-low:${timeoutMs}`,
+      `[monitor] ⚠️  monitor-monitor timeout is ${timeoutMs}ms. Values below ${MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS}ms can cause premature failover loops.`,
+    );
+  }
+
+  return timeoutMs;
+}
+
 const monitorMonitor = {
   enabled: isMonitorMonitorEnabled(),
   intervalMs: Math.max(
@@ -439,14 +524,7 @@ const monitorMonitor = {
         "300000",
     ),
   ),
-  timeoutMs: Math.max(
-    120_000,
-    Number(
-      process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
-        process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "600000", // Changed from 2700000 (45min) to 600000 (10min) to match refreshMonitorMonitorRuntime()
-    ),
-  ),
+  timeoutMs: resolveMonitorMonitorTimeoutMs(),
   statusIntervalMs: Math.max(
     5 * 60_000,
     Number(process.env.DEVMODE_MONITOR_MONITOR_STATUS_INTERVAL_MS || "1800000"),
@@ -472,15 +550,6 @@ const monitorMonitor = {
   abortController: null,
 };
 if (monitorMonitor.enabled) {
-  // Warn if legacy env var is dangerously low
-  const legacyTimeout = process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS;
-  const explicitTimeout = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS;
-  if (legacyTimeout && !explicitTimeout && Number(legacyTimeout) < 600_000) {
-    console.warn(
-      `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is too low for monitor-monitor (minimum 600s recommended). ` +
-        `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`,
-    );
-  }
   console.log(
     `[monitor] monitor-monitor ENABLED (interval ${Math.round(monitorMonitor.intervalMs / 1000)}s, status ${Math.round(monitorMonitor.statusIntervalMs / 60_000)}m, timeout ${Math.round(monitorMonitor.timeoutMs / 1000)}s)`,
   );
@@ -825,7 +894,11 @@ let allCompleteNotified = false;
 let backlogLowNotified = false;
 let idleAgentsNotified = false;
 let plannerTriggered = false;
-const plannerStatePath = resolve(logDir, "task-planner-state.json");
+const monitorStateCacheDir = resolve(repoRoot, ".codex-monitor", ".cache");
+const plannerStatePath = resolve(
+  monitorStateCacheDir,
+  "task-planner-state.json",
+);
 const taskPlannerStatus = {
   enabled: isDevMode(),
   intervalMs: Math.max(
@@ -2258,6 +2331,9 @@ async function fetchVk(path, opts = {}) {
     const msg = err?.message || String(err);
     if (!msg.includes("abort")) {
       console.warn(`[monitor] fetchVk ${method} ${path} error: ${msg}`);
+      void triggerVibeKanbanRecovery(
+        `fetchVk ${method} ${path} network error: ${msg}`,
+      );
     }
     return null;
   } finally {
@@ -2269,6 +2345,9 @@ async function fetchVk(path, opts = {}) {
     console.warn(
       `[monitor] fetchVk ${method} ${path} error: invalid response object (res=${!!res}, res.ok=${res?.ok})`,
     );
+    void triggerVibeKanbanRecovery(
+      `fetchVk ${method} ${path} invalid response object`,
+    );
     return null;
   }
 
@@ -2277,12 +2356,30 @@ async function fetchVk(path, opts = {}) {
     console.warn(
       `[monitor] fetchVk ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
     );
+    if (res.status >= 500) {
+      void triggerVibeKanbanRecovery(
+        `fetchVk ${method} ${path} HTTP ${res.status}`,
+      );
+    }
     return null;
   }
 
-  const contentType = res.headers.get("content-type") || "";
+  const contentTypeRaw =
+    typeof res.headers?.get === "function"
+      ? res.headers.get("content-type") || res.headers.get("Content-Type")
+      : res.headers?.["content-type"] || res.headers?.["Content-Type"] || "";
+  const contentType = String(contentTypeRaw || "").toLowerCase();
   if (!contentType.includes("application/json")) {
-    const text = await res.text().catch(() => "");
+    const text = await (typeof res.text === "function"
+      ? res.text().catch(() => "")
+      : "");
+    if (text) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        // Fall through to non-JSON handling below.
+      }
+    }
     console.warn(
       `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
     );
@@ -2291,6 +2388,9 @@ async function fetchVk(path, opts = {}) {
         `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
       );
     }
+    void triggerVibeKanbanRecovery(
+      `fetchVk ${method} ${path} non-JSON response`,
+    );
     const now = Date.now();
     if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
       vkNonJsonNotifiedAt = now;
@@ -6188,7 +6288,7 @@ async function readPlannerState() {
 }
 
 async function writePlannerState(nextState) {
-  await ensureLogDir();
+  await mkdir(monitorStateCacheDir, { recursive: true });
   await writeFile(plannerStatePath, JSON.stringify(nextState, null, 2), "utf8");
 }
 
@@ -6563,6 +6663,11 @@ async function sendTelegramMessage(text, options = {}) {
         ? 5
         : 4;
   if (priority > maxPriority) return; // filtered out by verbosity setting
+
+  // Also bridge critical/error notifications to WhatsApp (if enabled)
+  if (priority <= 2 && isWhatsAppEnabled()) {
+    notifyWhatsApp(stripAnsi(String(text || ""))).catch(() => {});
+  }
 
   return notify(text, priority, {
     category,
@@ -8151,14 +8256,21 @@ function rotateMonitorSdk(reason = "") {
  */
 function recordMonitorSdkFailure(sdk) {
   if (!sdk) return;
-  const entry = monitorMonitor.sdkFailures.get(sdk) || { count: 0, excludedUntil: 0 };
+  const entry = monitorMonitor.sdkFailures.get(sdk) || {
+    count: 0,
+    excludedUntil: 0,
+  };
   entry.count += 1;
   if (entry.count >= 10) {
     entry.excludedUntil = Date.now() + 60 * 60_000; // 60 min
-    console.warn(`[monitor-monitor] ${sdk} excluded for 60min after ${entry.count} failures`);
+    console.warn(
+      `[monitor-monitor] ${sdk} excluded for 60min after ${entry.count} failures`,
+    );
   } else if (entry.count >= 5) {
     entry.excludedUntil = Date.now() + 15 * 60_000; // 15 min
-    console.warn(`[monitor-monitor] ${sdk} excluded for 15min after ${entry.count} failures`);
+    console.warn(
+      `[monitor-monitor] ${sdk} excluded for 15min after ${entry.count} failures`,
+    );
   }
   monitorMonitor.sdkFailures.set(sdk, entry);
   rebuildMonitorSdkOrder();
@@ -8201,11 +8313,13 @@ function isMonitorSdkExcluded(sdk) {
  */
 function rebuildMonitorSdkOrder() {
   const original = buildMonitorMonitorSdkOrder();
-  const filtered = original.filter(sdk => !isMonitorSdkExcluded(sdk));
+  const filtered = original.filter((sdk) => !isMonitorSdkExcluded(sdk));
   if (filtered.length === 0) {
     // All excluded — force primary back
     const primary = original[0] || "codex";
-    console.warn(`[monitor-monitor] all SDKs excluded, forcing ${primary} back`);
+    console.warn(
+      `[monitor-monitor] all SDKs excluded, forcing ${primary} back`,
+    );
     monitorMonitor.sdkOrder = [primary];
   } else {
     monitorMonitor.sdkOrder = filtered;
@@ -8244,6 +8358,11 @@ function shouldFailoverMonitorSdk(message) {
     /api error/,
     /econnreset/,
     /socket hang up/,
+    /codex exec exited/,
+    /reading prompt from stdin/,
+    /exit code 3221225786/,
+    /exit code 1073807364/,
+    /serde error expected value/,
   ];
   return patterns.some((p) => p.test(text));
 }
@@ -8383,27 +8502,7 @@ function refreshMonitorMonitorRuntime() {
         "300000",
     ),
   );
-  // Monitor-monitor timeout: defaults to 10 minutes (600s).
-  // This is deliberately shorter than the legacy 45-minute default to enable
-  // faster failover when SDKs hang due to API issues, rate limits, or connectivity problems.
-  // Monitor-monitor should typically complete in 1-3 minutes; 10 minutes provides
-  // headroom for slower models while still triggering watchdog before 15 minutes.
-  const legacyTimeout = process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS;
-  const explicitTimeout = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS;
-  const defaultTimeout = "600000"; // 10 minutes
-
-  // Warn if legacy env var is set and less than recommended minimum
-  if (legacyTimeout && !explicitTimeout && Number(legacyTimeout) < 600_000) {
-    console.warn(
-      `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is too low for monitor-monitor (minimum 600s recommended). ` +
-        `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`,
-    );
-  }
-
-  monitorMonitor.timeoutMs = Math.max(
-    120_000,
-    Number(explicitTimeout || legacyTimeout || defaultTimeout),
-  );
+  monitorMonitor.timeoutMs = resolveMonitorMonitorTimeoutMs();
   monitorMonitor.statusIntervalMs = Math.max(
     5 * 60_000,
     Number(process.env.DEVMODE_MONITOR_MONITOR_STATUS_INTERVAL_MS || "1800000"),
@@ -9195,6 +9294,10 @@ function selfRestartForSourceChange(filename) {
   }
   void releaseTelegramPollLock();
   stopTelegramBot({ preserveDigest: true });
+  stopWhatsAppChannel();
+  if (isContainerEnabled()) {
+    void stopAllContainers().catch(() => {});
+  }
   // Write self-restart marker so the new process suppresses startup notifications
   try {
     writeFileSync(
@@ -9619,6 +9722,12 @@ process.on("SIGINT", async () => {
   }
   void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
+  stopWhatsAppChannel();
+  if (isContainerEnabled()) {
+    await stopAllContainers().catch((e) =>
+      console.warn(`[monitor] container cleanup error: ${e.message}`),
+    );
+  }
 
   // Wait for active task agents to finish gracefully (up to 5 minutes)
   if (internalTaskExecutor) {
@@ -9670,6 +9779,12 @@ process.on("SIGTERM", async () => {
   void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   stopTelegramBot();
+  stopWhatsAppChannel();
+  if (isContainerEnabled()) {
+    await stopAllContainers().catch((e) =>
+      console.warn(`[monitor] container cleanup error: ${e.message}`),
+    );
+  }
 
   // Wait for active task agents to finish gracefully (up to 5 minutes)
   if (internalTaskExecutor) {
@@ -10004,6 +10119,12 @@ let prCleanupDaemon = null;
 
 // ── Task Management Subsystem Initialization ────────────────────────────────
 try {
+  mkdirSync(monitorStateCacheDir, { recursive: true });
+  configureTaskStore({
+    storePath: resolve(monitorStateCacheDir, "kanban-state.json"),
+  });
+  console.log(`[monitor] planner state path: ${plannerStatePath}`);
+  console.log(`[monitor] task store path: ${getStorePath()}`);
   loadTaskStore();
   console.log("[monitor] internal task store loaded");
 } catch (err) {
@@ -10209,6 +10330,39 @@ if (isExecutorDisabled()) {
           internalTaskExecutor.setReviewAgent(reviewAgent);
         }
 
+        // Re-hydrate inreview tasks after restart so review queue is not empty
+        // while task-store still reports tasks awaiting review.
+        try {
+          const pending = getTasksPendingReview();
+          if (Array.isArray(pending) && pending.length > 0) {
+            let requeued = 0;
+            for (const task of pending) {
+              const taskId = String(task?.id || "").trim();
+              if (!taskId) continue;
+              reviewAgent.queueReview({
+                id: taskId,
+                title: task?.title || taskId,
+                branchName: task?.branchName || "",
+                prUrl: task?.prUrl || "",
+                description: task?.description || "",
+                worktreePath: null,
+                sessionMessages: "",
+                diffStats: "",
+              });
+              requeued += 1;
+            }
+            if (requeued > 0) {
+              console.log(
+                `[monitor] review agent rehydrated ${requeued} inreview task(s) from task-store`,
+              );
+            }
+          }
+        } catch (err) {
+          console.warn(
+            `[monitor] review agent rehydrate failed: ${err.message || err}`,
+          );
+        }
+
         console.log("[monitor] review agent started");
       } catch (err) {
         console.warn(`[monitor] review agent failed to start: ${err.message}`);
@@ -10326,6 +10480,13 @@ injectMonitorFunctions({
       return null;
     }
   },
+  getTasksPendingReview: () => {
+    try {
+      return getTasksPendingReview();
+    } catch {
+      return [];
+    }
+  },
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
@@ -10335,27 +10496,79 @@ if (telegramBotEnabled) {
     const { getQueuedCommands } = await import("./telegram-sentinel.mjs");
     const queued = getQueuedCommands();
     if (queued && queued.length > 0) {
-      console.log(`[monitor] processing ${queued.length} queued sentinel command(s)`);
+      console.log(
+        `[monitor] processing ${queued.length} queued sentinel command(s)`,
+      );
       for (const cmd of queued) {
         try {
-          console.log(`[monitor] replaying sentinel command: ${cmd.command || cmd.type || JSON.stringify(cmd)}`);
+          console.log(
+            `[monitor] replaying sentinel command: ${cmd.command || cmd.type || JSON.stringify(cmd)}`,
+          );
           // Handle known commands
           if (cmd.command === "/status" || cmd.type === "status") {
             // Will be covered by next status report
-            console.log("[monitor] sentinel queued /status — will send on next cycle");
+            console.log(
+              "[monitor] sentinel queued /status — will send on next cycle",
+            );
           } else if (cmd.command === "/pause" || cmd.type === "pause") {
-            console.log("[monitor] sentinel queued /pause — pausing task dispatch");
+            console.log(
+              "[monitor] sentinel queued /pause — pausing task dispatch",
+            );
             // Signal pause if task executor supports it
           } else if (cmd.command === "/resume" || cmd.type === "resume") {
             console.log("[monitor] sentinel queued /resume — resuming");
           }
         } catch (cmdErr) {
-          console.warn(`[monitor] failed to process queued command: ${cmdErr.message}`);
+          console.warn(
+            `[monitor] failed to process queued command: ${cmdErr.message}`,
+          );
         }
       }
     }
   } catch {
     // telegram-sentinel not available — ignore
+  }
+}
+
+// ── Start WhatsApp channel (when configured) ──────────────────────────────────
+if (isWhatsAppEnabled()) {
+  try {
+    await startWhatsAppChannel({
+      onMessage: async (msg) => {
+        // Route WhatsApp messages to primary agent (same as Telegram user messages)
+        if (primaryAgentReady && msg.text) {
+          try {
+            const response = await execPrimaryPrompt(msg.text);
+            if (response) {
+              await notifyWhatsApp(response);
+            }
+          } catch (err) {
+            console.warn(`[monitor] WhatsApp→agent failed: ${err.message}`);
+          }
+        }
+      },
+      onStatusChange: (status) => {
+        console.log(`[monitor] WhatsApp status: ${status}`);
+      },
+      logger: (level, ...args) => console.log(`[whatsapp] [${level}]`, ...args),
+    });
+    console.log("[monitor] WhatsApp channel started");
+  } catch (err) {
+    console.warn(`[monitor] WhatsApp channel failed to start: ${err.message}`);
+  }
+}
+
+// ── Container runtime initialization (when configured) ────────────────────
+if (isContainerEnabled()) {
+  try {
+    await ensureContainerRuntime();
+    await cleanupOrphanedContainers();
+    console.log("[monitor] Container runtime ready:", getContainerStatus());
+  } catch (err) {
+    console.warn(`[monitor] Container runtime not available: ${err.message}`);
+    console.warn(
+      "[monitor] Container isolation will be disabled for this session",
+    );
   }
 }
 
@@ -10405,4 +10618,7 @@ export {
   appendKnowledgeEntry,
   buildKnowledgeEntry,
   formatKnowledgeSummary,
+  // Container runner re-exports
+  getContainerStatus,
+  isContainerEnabled,
 };

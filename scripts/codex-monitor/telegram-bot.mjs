@@ -125,7 +125,9 @@ const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
 
-console.log(`[telegram-bot] agent timeout set to ${Math.round(AGENT_TIMEOUT_MS / 60000)} min`);
+console.log(
+  `[telegram-bot] agent timeout set to ${Math.round(AGENT_TIMEOUT_MS / 60000)} min`,
+);
 
 // ── Message Batching Configuration ──────────────────────────────────────────
 const batchingEnabled = !["0", "false", "no"].includes(
@@ -299,6 +301,7 @@ let _getPrCleanupDaemon = null;
 let _getWorkspaceMonitor = null;
 let _getMonitorMonitorStatus = null;
 let _getTaskStoreStats = null;
+let _getTasksPendingReview = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -332,6 +335,7 @@ export function injectMonitorFunctions({
   getWorkspaceMonitor,
   getMonitorMonitorStatus,
   getTaskStoreStats,
+  getTasksPendingReview,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -360,6 +364,7 @@ export function injectMonitorFunctions({
   _getWorkspaceMonitor = getWorkspaceMonitor || null;
   _getMonitorMonitorStatus = getMonitorMonitorStatus || null;
   _getTaskStoreStats = getTaskStoreStats || null;
+  _getTasksPendingReview = getTasksPendingReview || null;
 }
 
 /**
@@ -430,6 +435,9 @@ async function sendDirect(chatId, text, options = {}) {
       payload.disable_notification = true;
     }
     payload.disable_web_page_preview = true;
+    if (options.reply_markup) {
+      payload.reply_markup = options.reply_markup;
+    }
 
     let res;
     try {
@@ -555,6 +563,29 @@ async function deleteDirect(chatId, messageId) {
     });
   } catch {
     /* best effort */
+  }
+}
+
+/**
+ * Answer a Telegram callback query (required to dismiss the "loading" indicator).
+ * @param {string} callbackQueryId - The callback_query.id from the update
+ * @param {string} [text] - Optional toast notification text
+ * @param {boolean} [showAlert] - Show as alert popup instead of toast
+ */
+async function answerCallbackQuery(callbackQueryId, text, showAlert = false) {
+  if (!telegramToken || !callbackQueryId) return;
+  const url = `https://api.telegram.org/bot${telegramToken}/answerCallbackQuery`;
+  const payload = { callback_query_id: callbackQueryId };
+  if (text) payload.text = text;
+  if (showAlert) payload.show_alert = showAlert;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.warn(`[telegram-bot] answerCallbackQuery error: ${err.message}`);
   }
 }
 
@@ -1027,7 +1058,7 @@ async function pollUpdates() {
   const params = new URLSearchParams({
     offset: String(lastUpdateId + 1),
     timeout: String(POLL_TIMEOUT_S),
-    allowed_updates: JSON.stringify(["message"]),
+    allowed_updates: JSON.stringify(["message", "callback_query"]),
   });
 
   pollAbort = new AbortController();
@@ -1072,7 +1103,73 @@ async function pollUpdates() {
 
 // ── Update Handling ──────────────────────────────────────────────────────────
 
+/**
+ * Handle Telegram inline keyboard button presses (callback_query).
+ * Routes callback data to the appropriate command handler.
+ */
+async function handleCallbackQuery(query) {
+  const chatId = String(query.message?.chat?.id || "");
+  const data = query.data || "";
+  const callbackId = query.id;
+
+  // Security: only accept from configured chat
+  if (telegramChatId && chatId !== String(telegramChatId)) {
+    await answerCallbackQuery(callbackId, "Unauthorized", true);
+    return;
+  }
+
+  console.log(`[telegram-bot] callback: "${data}" from chat ${chatId}`);
+
+  // Always acknowledge the callback to dismiss loading indicator
+  await answerCallbackQuery(callbackId);
+
+  // Route callback data as if it were a slash command
+  if (data.startsWith("/")) {
+    const cmd = data.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
+    if (FAST_COMMANDS.has(cmd)) {
+      enqueueFastCommand(() => handleCommand(data, chatId));
+    } else {
+      enqueueCommand(() => handleCommand(data, chatId));
+    }
+    return;
+  }
+
+  // Handle special callback prefixes
+  if (data === "cb:confirm_pause") {
+    enqueueCommand(() => cmdPauseTasks(chatId));
+    return;
+  }
+  if (data === "cb:confirm_resume") {
+    enqueueCommand(() => cmdResumeTasks(chatId));
+    return;
+  }
+  if (data === "cb:confirm_restart") {
+    enqueueCommand(() => handleCommand("/restart", chatId));
+    return;
+  }
+  if (data === "cb:confirm_clear") {
+    enqueueCommand(() => handleCommand("/clear", chatId));
+    return;
+  }
+  if (data === "cb:dismiss") {
+    // Delete the message with the buttons
+    if (query.message?.message_id) {
+      await deleteDirect(chatId, query.message.message_id);
+    }
+    return;
+  }
+
+  // Fallback: treat as command text
+  await sendReply(chatId, `Unknown button action: ${data}`);
+}
+
 async function handleUpdate(update) {
+  // Handle inline keyboard button presses
+  if (update.callback_query) {
+    await handleCallbackQuery(update.callback_query);
+    return;
+  }
+
   if (!update.message) return;
 
   const msg = update.message;
@@ -1142,23 +1239,42 @@ async function handleUpdate(update) {
 async function cmdPauseTasks(chatId) {
   const executor = _getInternalExecutor?.();
   if (!executor) {
-    return sendDirect(chatId, "⚠️ Internal executor not enabled — nothing to pause.");
+    return sendDirect(
+      chatId,
+      "⚠️ Internal executor not enabled — nothing to pause.",
+    );
   }
   if (executor.isPaused()) {
     const info = executor.getPauseInfo();
     const dur = info.pauseDuration;
-    return sendDirect(chatId, `⏸ Already paused (${dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s"} ago).\nUse /resumetasks to resume.`);
+    return sendDirect(
+      chatId,
+      `⏸ Already paused (${dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s"} ago).\nUse /resumetasks to resume.`,
+    );
   }
   executor.pause();
   const status = executor.getStatus();
   const lines = [`⏸ *Task executor paused*`];
   if (status.activeSlots > 0) {
-    lines.push(`\n${status.activeSlots} running task(s) will continue to completion.`);
+    lines.push(
+      `\n${status.activeSlots} running task(s) will continue to completion.`,
+    );
     lines.push(`No new tasks will be dispatched until /resumetasks.`);
   } else {
     lines.push(`No tasks running. Use /resumetasks when ready.`);
   }
-  return sendDirect(chatId, lines.join("\n"), { parse_mode: "Markdown" });
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "▶️ Resume Tasks", callback_data: "cb:confirm_resume" },
+        { text: "📊 Status", callback_data: "/status" },
+      ],
+    ],
+  };
+  return sendDirect(chatId, lines.join("\n"), {
+    parse_mode: "Markdown",
+    reply_markup: keyboard,
+  });
 }
 
 /**
@@ -1167,7 +1283,10 @@ async function cmdPauseTasks(chatId) {
 async function cmdResumeTasks(chatId) {
   const executor = _getInternalExecutor?.();
   if (!executor) {
-    return sendDirect(chatId, "⚠️ Internal executor not enabled — nothing to resume.");
+    return sendDirect(
+      chatId,
+      "⚠️ Internal executor not enabled — nothing to resume.",
+    );
   }
   if (!executor.isPaused()) {
     return sendDirect(chatId, "▶️ Executor is already running — not paused.");
@@ -1176,7 +1295,19 @@ async function cmdResumeTasks(chatId) {
   const dur = info.pauseDuration;
   executor.resume();
   const durStr = dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s";
-  return sendDirect(chatId, `▶️ *Task executor resumed* (was paused for ${durStr}).\nWill pick up tasks on next poll cycle.`, { parse_mode: "Markdown" });
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "⏸ Pause Tasks", callback_data: "cb:confirm_pause" },
+        { text: "📋 Tasks", callback_data: "/tasks" },
+      ],
+    ],
+  };
+  return sendDirect(
+    chatId,
+    `▶️ *Task executor resumed* (was paused for ${durStr}).\nWill pick up tasks on next poll cycle.`,
+    { parse_mode: "Markdown", reply_markup: keyboard },
+  );
 }
 
 /**
@@ -1186,37 +1317,54 @@ async function cmdRepos(chatId, _text) {
   try {
     const config = (await import("./config.mjs")).default;
     const repos = config.repositories || [];
-    const selected = config.selectedRepository || config.repoSlug || "(default)";
-    
+    const selected =
+      config.selectedRepository || config.repoSlug || "(default)";
+
     if (repos.length === 0) {
-      return sendDirect(chatId, [
-        "📁 *Repositories*",
-        "",
-        `Active: \`${config.repoSlug || config.repoRoot || "current directory"}\``,
-        "",
-        "_Single-repo mode. Add repositories in codex-monitor.config.json:_",
-        "\`\`\`json",
-        JSON.stringify({
-          repositories: [
-            { name: "backend", path: "./", slug: "org/backend", primary: true },
-            { name: "frontend", path: "../frontend", slug: "org/frontend" }
-          ]
-        }, null, 2),
-        "\`\`\`",
-      ].join("\n"), { parse_mode: "Markdown" });
+      return sendDirect(
+        chatId,
+        [
+          "📁 *Repositories*",
+          "",
+          `Active: \`${config.repoSlug || config.repoRoot || "current directory"}\``,
+          "",
+          "_Single-repo mode. Add repositories in codex-monitor.config.json:_",
+          "\`\`\`json",
+          JSON.stringify(
+            {
+              repositories: [
+                {
+                  name: "backend",
+                  path: "./",
+                  slug: "org/backend",
+                  primary: true,
+                },
+                { name: "frontend", path: "../frontend", slug: "org/frontend" },
+              ],
+            },
+            null,
+            2,
+          ),
+          "\`\`\`",
+        ].join("\n"),
+        { parse_mode: "Markdown" },
+      );
     }
-    
+
     const lines = ["📁 *Repositories*", ""];
     for (const repo of repos) {
-      const isCurrent = repo.name === selected || repo.slug === selected || repo.primary;
+      const isCurrent =
+        repo.name === selected || repo.slug === selected || repo.primary;
       const icon = isCurrent ? "🟢" : "⚪";
       const primary = repo.primary ? " _(primary)_" : "";
-      lines.push(`${icon} \`${repo.name}\` — ${repo.slug || repo.path || "?"}${primary}`);
+      lines.push(
+        `${icon} \`${repo.name}\` — ${repo.slug || repo.path || "?"}${primary}`,
+      );
     }
     lines.push("");
     lines.push(`Selected: \`${selected}\``);
     lines.push("Switch: \`/repos set <name>\`");
-    
+
     return sendDirect(chatId, lines.join("\n"), { parse_mode: "Markdown" });
   } catch (err) {
     return sendDirect(chatId, `❌ Failed to read repo config: ${err.message}`);
@@ -1241,7 +1389,10 @@ async function cmdMaxParallel(chatId, text) {
     executor.maxParallel = n;
     if (n === 0) {
       executor.pause();
-      return sendDirect(chatId, `⏸ Max parallel set to 0 — executor paused. Use /maxparallel <n> to resume.`);
+      return sendDirect(
+        chatId,
+        `⏸ Max parallel set to 0 — executor paused. Use /maxparallel <n> to resume.`,
+      );
     }
     if (executor.isPaused() && n > 0) {
       executor.resume();
@@ -1249,11 +1400,76 @@ async function cmdMaxParallel(chatId, text) {
     return sendDirect(chatId, `✅ Max parallel: ${old} → ${n}`);
   }
   const status = executor.getStatus();
-  return sendDirect(chatId, `📊 Max parallel: ${status.maxParallel} (active: ${status.activeSlots})`);
+  return sendDirect(
+    chatId,
+    `📊 Max parallel: ${status.maxParallel} (active: ${status.activeSlots})`,
+  );
+}
+
+/**
+ * /whatsapp — Show WhatsApp channel status
+ */
+async function cmdWhatsApp(chatId) {
+  try {
+    const { isWhatsAppEnabled, getWhatsAppStatus } =
+      await import("./whatsapp-channel.mjs");
+    if (!isWhatsAppEnabled()) {
+      return sendDirect(
+        chatId,
+        "⚪ WhatsApp channel is not enabled.\n\nSet WHATSAPP_ENABLED=1 in your .env to enable.",
+      );
+    }
+    const status = getWhatsAppStatus();
+    const lines = [
+      "📱 <b>WhatsApp Channel Status</b>",
+      "",
+      `Status: ${status.connected ? "🟢 Connected" : "🔴 Disconnected"}`,
+      `Chat ID: <code>${status.chatId || "not set"}</code>`,
+      `Pending messages: ${status.pendingMessages || 0}`,
+    ];
+    if (status.connectedAt) {
+      const ago = Math.round((Date.now() - status.connectedAt) / 60000);
+      lines.push(`Connected: ${ago}m ago`);
+    }
+    return sendDirect(chatId, lines.join("\n"), { parse_mode: "HTML" });
+  } catch (err) {
+    return sendDirect(chatId, `❌ WhatsApp status error: ${err.message}`);
+  }
+}
+
+/**
+ * /container — Show container runtime status
+ */
+async function cmdContainer(chatId) {
+  try {
+    const { isContainerEnabled, getContainerStatus } =
+      await import("./container-runner.mjs");
+    if (!isContainerEnabled()) {
+      return sendDirect(
+        chatId,
+        "⚪ Container isolation is not enabled.\n\nSet CONTAINER_ENABLED=1 in your .env to enable.",
+      );
+    }
+    const status = getContainerStatus();
+    const lines = [
+      "📦 <b>Container Runtime Status</b>",
+      "",
+      `Runtime: ${status.runtime || "detecting..."}`,
+      `Active containers: ${status.activeContainers || 0}`,
+      `Max concurrent: ${status.maxConcurrent || "unlimited"}`,
+    ];
+    if (status.image) {
+      lines.push(`Image: <code>${status.image}</code>`);
+    }
+    return sendDirect(chatId, lines.join("\n"), { parse_mode: "HTML" });
+  } catch (err) {
+    return sendDirect(chatId, `❌ Container status error: ${err.message}`);
+  }
 }
 
 const COMMANDS = {
   "/help": { handler: cmdHelp, desc: "Show available commands" },
+  "/helpfull": { handler: cmdHelpFull, desc: "Show all commands (text list)" },
   "/ask": { handler: cmdAsk, desc: "Send prompt to agent: /ask <prompt>" },
   "/status": { handler: cmdStatus, desc: "Detailed orchestrator status" },
   "/tasks": {
@@ -1265,7 +1481,10 @@ const COMMANDS = {
     desc: "Show all active monitor/task/review/conflict agents",
   },
   "/logs": { handler: cmdLogs, desc: "Recent monitor logs" },
-  "/agentlogs": { handler: cmdAgentLogs, desc: "Agent output for branch: /agentlogs <branch>" },
+  "/agentlogs": {
+    handler: cmdAgentLogs,
+    desc: "Agent output for branch: /agentlogs <branch>",
+  },
   "/log": { handler: cmdLogs, desc: "Alias for /logs" },
   "/branches": { handler: cmdBranches, desc: "Recent git branches" },
   "/diff": { handler: cmdDiff, desc: "Git diff summary (staged)" },
@@ -1404,6 +1623,14 @@ const COMMANDS = {
     handler: cmdMaxParallel,
     desc: "View/set max parallel slots: /maxparallel [n]",
   },
+  "/whatsapp": {
+    handler: cmdWhatsApp,
+    desc: "WhatsApp channel status",
+  },
+  "/container": {
+    handler: cmdContainer,
+    desc: "Container runtime status",
+  },
 };
 
 /**
@@ -1488,7 +1715,9 @@ async function registerBotCommands() {
       );
     }
   } catch (err) {
-    console.warn(`[telegram-bot] setMyCommands JSON parse error: ${err.message}`);
+    console.warn(
+      `[telegram-bot] setMyCommands JSON parse error: ${err.message}`,
+    );
   }
 }
 
@@ -1507,6 +1736,8 @@ const FAST_COMMANDS = new Set([
   "/resume",
   "/maxparallel",
   "/repos",
+  "/whatsapp",
+  "/container",
 ]);
 
 async function handleCommand(text, chatId) {
@@ -1754,7 +1985,48 @@ async function loadWorkspaceStatusData(workspacePath) {
 }
 
 async function cmdHelp(chatId) {
-  const lines = ["🤖 VirtEngine Primary Agent Commands:\n"];
+  const text =
+    "🤖 *VirtEngine Primary Agent*\n\nChoose a category or type any message to chat with the agent:";
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "📊 Status", callback_data: "/status" },
+        { text: "📋 Tasks", callback_data: "/tasks" },
+        { text: "🤖 Agents", callback_data: "/agents" },
+      ],
+      [
+        { text: "📝 Logs", callback_data: "/logs" },
+        { text: "🌿 Branches", callback_data: "/branches" },
+        { text: "💡 Diff", callback_data: "/diff" },
+      ],
+      [
+        { text: "🔧 Executor", callback_data: "/executor" },
+        { text: "🧵 Threads", callback_data: "/threads" },
+        { text: "🌳 Worktrees", callback_data: "/worktrees" },
+      ],
+      [
+        { text: "⏸ Pause", callback_data: "/pausetasks" },
+        { text: "▶️ Resume", callback_data: "/resumetasks" },
+        { text: "🔄 Restart", callback_data: "/restart" },
+      ],
+      [
+        { text: "🏥 Health", callback_data: "/health" },
+        { text: "👁 Presence", callback_data: "/presence" },
+        { text: "📦 SDK", callback_data: "/sdk" },
+      ],
+      [{ text: "📖 All Commands", callback_data: "/helpfull" }],
+    ],
+  };
+
+  await sendDirect(chatId, text, {
+    parseMode: "Markdown",
+    reply_markup: keyboard,
+  });
+}
+
+async function cmdHelpFull(chatId) {
+  const lines = ["🤖 VirtEngine Primary Agent — All Commands:\n"];
   for (const [cmd, { desc }] of Object.entries(COMMANDS)) {
     lines.push(`${cmd} — ${desc}`);
   }
@@ -1900,91 +2172,121 @@ async function cmdTasks(chatId) {
           /* best effort */
         }
       }
-      const reviewTaskIds = Array.isArray(statusSnapshot?.review_tasks)
-        ? statusSnapshot.review_tasks
-        : [];
+      const reviewTaskIds = (() => {
+        try {
+          const pending = _getTasksPendingReview?.() || [];
+          if (Array.isArray(pending) && pending.length > 0) {
+            return pending.map((task) => task?.id).filter(Boolean);
+          }
+        } catch {
+          /* best effort */
+        }
+        return Array.isArray(statusSnapshot?.review_tasks)
+          ? statusSnapshot.review_tasks
+          : [];
+      })();
       const lines = [];
 
       // Show pause state prominently at top
       if (executorStatus.paused) {
         const dur = executorStatus.pauseDuration || 0;
-        const durStr = dur >= 3600 ? Math.round(dur / 3600) + "h" : dur >= 60 ? Math.round(dur / 60) + "m" : dur + "s";
+        const durStr =
+          dur >= 3600
+            ? Math.round(dur / 3600) + "h"
+            : dur >= 60
+              ? Math.round(dur / 60) + "m"
+              : dur + "s";
         lines.push(`⏸ PAUSED (for ${durStr}) — /resumetasks to resume`);
         lines.push("");
       }
 
       if (executorStatus.slots.length > 0) {
-        lines.push(`📋 Active Agents (${executorStatus.activeSlots}/${executorStatus.maxParallel} slots)\n`);
+        lines.push(
+          `📋 Active Agents (${executorStatus.activeSlots}/${executorStatus.maxParallel} slots)\n`,
+        );
 
-      for (const slot of executorStatus.slots) {
-        const emoji = slot.status === "running" ? "🟢" : slot.status === "error" ? "❌" : "🔵";
-        const runStr = formatRuntimeSeconds(slot.runningFor);
-        const agentId =
-          Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
-            ? `#${slot.agentInstanceId}`
-            : "n/a";
+        for (const slot of executorStatus.slots) {
+          const emoji =
+            slot.status === "running"
+              ? "🟢"
+              : slot.status === "error"
+                ? "❌"
+                : "🔵";
+          const runStr = formatRuntimeSeconds(slot.runningFor);
+          const agentId =
+            Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+              ? `#${slot.agentInstanceId}`
+              : "n/a";
 
-        // Branch is still the best debug key for logs/worktrees.
-        const branch = slot.branch || slot.taskId.substring(0, 8);
-        const shortBranch = branch.replace(/^ve\//, "");
-        lines.push(`${emoji} Agent ${agentId} • ${shortBranch}`);
-        lines.push(`   ${slot.taskTitle}`);
-        lines.push(`   SDK: ${slot.sdk} | ⏱️ ${runStr} | Attempt #${slot.attempt} | Task ${slot.taskId.substring(0, 8)}`);
-
-        // Git diff stats
-        if (slot.branch) {
-          try {
-            const diffStat = execSync(
-              `git diff --shortstat main...${slot.branch} 2>nul || echo ""`,
-              { cwd: repoRoot, encoding: "utf8", timeout: 8000 },
-            ).trim();
-            if (diffStat) {
-              const insMatch = diffStat.match(/(\d+) insertion/);
-              const delMatch = diffStat.match(/(\d+) deletion/);
-              const filesMatch = diffStat.match(/(\d+) file/);
-              lines.push(`   📊 ${filesMatch?.[1] || 0} files | +${insMatch?.[1] || 0} -${delMatch?.[1] || 0}`);
-            }
-          } catch { /* branch not pushed yet */ }
-        }
-        lines.push(""); // spacing
-      }
-
-      const reviewAgent = _getReviewAgent?.();
-      const reviewStatus =
-        reviewAgent && typeof reviewAgent.getStatus === "function"
-          ? reviewAgent.getStatus()
-          : null;
-      const reviewQueued =
-        Number(reviewStatus?.queuedReviews || 0) +
-        Number(reviewStatus?.activeReviews || 0);
-      const taskStoreStats = _getTaskStoreStats?.() || null;
-      const reviewCount = Math.max(
-        Number(taskStoreStats?.inreview || 0),
-        reviewQueued,
-      );
-      if (reviewCount > 0) {
-        lines.push(`👀 In review: ${reviewCount} task(s)`);
-        if (reviewStatus) {
+          // Branch is still the best debug key for logs/worktrees.
+          const branch = slot.branch || slot.taskId.substring(0, 8);
+          const shortBranch = branch.replace(/^ve\//, "");
+          lines.push(`${emoji} Agent ${agentId} • ${shortBranch}`);
+          lines.push(`   ${slot.taskTitle}`);
           lines.push(
-            `   Review agent queue: active=${reviewStatus.activeReviews || 0}, queued=${reviewStatus.queuedReviews || 0}, completed=${reviewStatus.completedReviews || 0}`,
+            `   SDK: ${slot.sdk} | ⏱️ ${runStr} | Attempt #${slot.attempt} | Task ${slot.taskId.substring(0, 8)}`,
           );
-        }
-        if (reviewTaskIds.length > 0) {
-          for (const taskId of reviewTaskIds.slice(0, 5)) {
-            lines.push(`   - ${taskId}`);
+
+          // Git diff stats
+          if (slot.branch) {
+            try {
+              const diffStat = execSync(
+                `git diff --shortstat main...${slot.branch} 2>nul || echo ""`,
+                { cwd: repoRoot, encoding: "utf8", timeout: 8000 },
+              ).trim();
+              if (diffStat) {
+                const insMatch = diffStat.match(/(\d+) insertion/);
+                const delMatch = diffStat.match(/(\d+) deletion/);
+                const filesMatch = diffStat.match(/(\d+) file/);
+                lines.push(
+                  `   📊 ${filesMatch?.[1] || 0} files | +${insMatch?.[1] || 0} -${delMatch?.[1] || 0}`,
+                );
+              }
+            } catch {
+              /* branch not pushed yet */
+            }
           }
+          lines.push(""); // spacing
         }
-        lines.push("");
-      }
 
-      lines.push("────────────────────────────");
-      lines.push(`Use /agentlogs <branch> for agent output`);
+        const reviewAgent = _getReviewAgent?.();
+        const reviewStatus =
+          reviewAgent && typeof reviewAgent.getStatus === "function"
+            ? reviewAgent.getStatus()
+            : null;
+        const reviewQueued =
+          Number(reviewStatus?.queuedReviews || 0) +
+          Number(reviewStatus?.activeReviews || 0);
+        const taskStoreStats = _getTaskStoreStats?.() || null;
+        const reviewCount = Math.max(
+          Number(taskStoreStats?.inreview || 0),
+          reviewQueued,
+        );
+        if (reviewCount > 0) {
+          lines.push(`👀 In review: ${reviewCount} task(s)`);
+          if (reviewStatus) {
+            lines.push(
+              `   Review agent queue: active=${reviewStatus.activeReviews || 0}, queued=${reviewStatus.queuedReviews || 0}, completed=${reviewStatus.completedReviews || 0}`,
+            );
+          }
+          if (reviewTaskIds.length > 0) {
+            for (const taskId of reviewTaskIds.slice(0, 5)) {
+              lines.push(`   - ${taskId}`);
+            }
+          }
+          lines.push("");
+        }
 
-      await sendReply(chatId, lines.join("\n"));
-      return;
+        lines.push("────────────────────────────");
+        lines.push(`Use /agentlogs <branch> for agent output`);
+
+        await sendReply(chatId, lines.join("\n"));
+        return;
       } else {
         // No active slots — show status summary
-        lines.push(`📋 No active agents (0/${executorStatus.maxParallel} slots)`);
+        lines.push(
+          `📋 No active agents (0/${executorStatus.maxParallel} slots)`,
+        );
         const reviewAgent = _getReviewAgent?.();
         const reviewStatus =
           reviewAgent && typeof reviewAgent.getStatus === "function"
@@ -2005,12 +2307,16 @@ async function cmdTasks(chatId) {
           }
         }
         if (executorStatus.blockedTasks?.length > 0) {
-          lines.push(`\n⛔ ${executorStatus.blockedTasks.length} task(s) blocked (exceeded retry limit)`);
+          lines.push(
+            `\n⛔ ${executorStatus.blockedTasks.length} task(s) blocked (exceeded retry limit)`,
+          );
         }
         lines.push("");
-        lines.push(executorStatus.paused
-          ? `Use /resumetasks to start accepting tasks`
-          : `Waiting for todo tasks in kanban...`);
+        lines.push(
+          executorStatus.paused
+            ? `Use /resumetasks to start accepting tasks`
+            : `Waiting for todo tasks in kanban...`,
+        );
       }
 
       await sendReply(chatId, lines.join("\n"));
@@ -2032,7 +2338,16 @@ async function cmdTasks(chatId) {
     for (const [id, attempt] of Object.entries(attempts)) {
       if (!attempt) continue;
       const status = attempt.status || "unknown";
-      const emoji = status === "running" ? "🟢" : status === "review" ? "👀" : status === "error" ? "❌" : status === "completed" ? "✅" : "⏸️";
+      const emoji =
+        status === "running"
+          ? "🟢"
+          : status === "review"
+            ? "👀"
+            : status === "error"
+              ? "❌"
+              : status === "completed"
+                ? "✅"
+                : "⏸️";
       const branch = attempt.branch || "";
       const pr = attempt.pr_number ? ` PR#${attempt.pr_number}` : "";
       const title = attempt.task_title || attempt.task_id || id;
@@ -2047,7 +2362,8 @@ async function cmdTasks(chatId) {
       lines.push(`   ${title}`);
       lines.push(`   Status: ${status} | Agent: ${attempt.executor || "?"}`);
 
-      const started = attempt.started_at || attempt.created_at || attempt.updated_at;
+      const started =
+        attempt.started_at || attempt.created_at || attempt.updated_at;
       if (started) {
         const dur = Date.now() - Date.parse(started);
         const mins = Math.floor(dur / 60000);
@@ -2067,15 +2383,23 @@ async function cmdTasks(chatId) {
             const insMatch = diffStat.match(/(\d+) insertion/);
             const delMatch = diffStat.match(/(\d+) deletion/);
             const filesMatch = diffStat.match(/(\d+) file/);
-            lines.push(`   📊 ${filesMatch?.[1] || 0} files | +${insMatch?.[1] || 0} -${delMatch?.[1] || 0}`);
+            lines.push(
+              `   📊 ${filesMatch?.[1] || 0} files | +${insMatch?.[1] || 0} -${delMatch?.[1] || 0}`,
+            );
           }
-        } catch { /* git diff not available */ }
+        } catch {
+          /* git diff not available */
+        }
       }
       lines.push("");
     }
 
-    const running = Object.values(attempts).filter((a) => a?.status === "running").length;
-    const errors = Object.values(attempts).filter((a) => a?.status === "error").length;
+    const running = Object.values(attempts).filter(
+      (a) => a?.status === "running",
+    ).length;
+    const errors = Object.values(attempts).filter(
+      (a) => a?.status === "error",
+    ).length;
     const reviews = Object.values(attempts).filter(
       (a) => a?.status === "review" || a?.status === "manual_review",
     ).length;
@@ -2179,7 +2503,10 @@ async function cmdAgents(chatId) {
     }
 
     const workspaceMonitor = _getWorkspaceMonitor?.();
-    if (workspaceMonitor && typeof workspaceMonitor.getAllStates === "function") {
+    if (
+      workspaceMonitor &&
+      typeof workspaceMonitor.getAllStates === "function"
+    ) {
       const states = workspaceMonitor.getAllStates();
       lines.push(`Workspace Monitor: tracking ${states.length} workspace(s)`);
     }
@@ -2215,7 +2542,10 @@ async function cmdAgents(chatId) {
 
     await sendReply(chatId, lines.join("\n"));
   } catch (err) {
-    await sendReply(chatId, `❌ Failed to read agent fleet status: ${err.message}`);
+    await sendReply(
+      chatId,
+      `❌ Failed to read agent fleet status: ${err.message}`,
+    );
   }
 }
 
@@ -2227,7 +2557,10 @@ async function cmdAgents(chatId) {
 async function cmdAgentLogs(chatId, args) {
   const query = (args || "").trim();
   if (!query) {
-    await sendReply(chatId, "Usage: /agentlogs <branch-fragment>\n\nExample: /agentlogs hpc-topology");
+    await sendReply(
+      chatId,
+      "Usage: /agentlogs <branch-fragment>\n\nExample: /agentlogs hpc-topology",
+    );
     return;
   }
 
@@ -2242,9 +2575,14 @@ async function cmdAgentLogs(chatId, args) {
       return;
     }
 
-    const matches = dirs.filter((d) => d.toLowerCase().includes(query.toLowerCase()));
+    const matches = dirs.filter((d) =>
+      d.toLowerCase().includes(query.toLowerCase()),
+    );
     if (matches.length === 0) {
-      await sendReply(chatId, `No worktree matching "${query}".\n\nAvailable:\n${dirs.slice(0, 15).join("\n")}`);
+      await sendReply(
+        chatId,
+        `No worktree matching "${query}".\n\nAvailable:\n${dirs.slice(0, 15).join("\n")}`,
+      );
       return;
     }
 
@@ -2254,52 +2592,66 @@ async function cmdAgentLogs(chatId, args) {
 
     // Git log (last 5 commits)
     try {
-      const gitLog = execSync(
-        `git log --oneline -5 2>&1`,
-        { cwd: wtPath, encoding: "utf8", timeout: 10000 },
-      ).trim();
+      const gitLog = execSync(`git log --oneline -5 2>&1`, {
+        cwd: wtPath,
+        encoding: "utf8",
+        timeout: 10000,
+      }).trim();
       if (gitLog) {
         lines.push("📝 Recent commits:");
         lines.push(gitLog);
       } else {
         lines.push("📝 No commits yet");
       }
-    } catch { lines.push("📝 Git log unavailable"); }
+    } catch {
+      lines.push("📝 Git log unavailable");
+    }
 
     lines.push("");
 
     // Git status
     try {
-      const gitStatus = execSync(
-        `git status --short 2>&1`,
-        { cwd: wtPath, encoding: "utf8", timeout: 10000 },
-      ).trim();
+      const gitStatus = execSync(`git status --short 2>&1`, {
+        cwd: wtPath,
+        encoding: "utf8",
+        timeout: 10000,
+      }).trim();
       if (gitStatus) {
         const statusLines = gitStatus.split("\n");
         lines.push(`📄 Working tree: ${statusLines.length} changed files`);
         lines.push(statusLines.slice(0, 15).join("\n"));
-        if (statusLines.length > 15) lines.push(`... +${statusLines.length - 15} more`);
+        if (statusLines.length > 15)
+          lines.push(`... +${statusLines.length - 15} more`);
       } else {
         lines.push("📄 Working tree: clean");
       }
-    } catch { lines.push("📄 Git status unavailable"); }
+    } catch {
+      lines.push("📄 Git status unavailable");
+    }
 
     lines.push("");
 
     // Diff stat vs main
     try {
-      const branchName = execSync(`git branch --show-current 2>&1`, { cwd: wtPath, encoding: "utf8", timeout: 5000 }).trim();
-      const diffStat = execSync(
-        `git diff --stat main...${branchName} 2>&1`,
-        { cwd: wtPath, encoding: "utf8", timeout: 10000 },
-      ).trim();
+      const branchName = execSync(`git branch --show-current 2>&1`, {
+        cwd: wtPath,
+        encoding: "utf8",
+        timeout: 5000,
+      }).trim();
+      const diffStat = execSync(`git diff --stat main...${branchName} 2>&1`, {
+        cwd: wtPath,
+        encoding: "utf8",
+        timeout: 10000,
+      }).trim();
       if (diffStat) {
         const statLines = diffStat.split("\n");
         lines.push("📊 Diff vs main:");
         // Show only summary line (last line)
         lines.push(statLines[statLines.length - 1] || "(none)");
       }
-    } catch { /* no diff available */ }
+    } catch {
+      /* no diff available */
+    }
 
     lines.push("");
 
@@ -2308,12 +2660,19 @@ async function cmdAgentLogs(chatId, args) {
     if (executor) {
       const executorStatus = executor.getStatus?.();
       const slot = executorStatus?.slots?.find(
-        (s) => s.branch && wtName.includes(s.branch.replace("ve/", "").replace(/\//g, "-"))
+        (s) =>
+          s.branch &&
+          wtName.includes(s.branch.replace("ve/", "").replace(/\//g, "-")),
       );
       if (slot) {
         const runMin = Math.round(slot.runningFor / 60);
-        const runStr = runMin >= 60 ? `${Math.floor(runMin / 60)}h${runMin % 60}m` : `${runMin}m`;
-        lines.push(`🤖 Active agent: ${slot.sdk} | Running: ${runStr} | Attempt #${slot.attempt}`);
+        const runStr =
+          runMin >= 60
+            ? `${Math.floor(runMin / 60)}h${runMin % 60}m`
+            : `${runMin}m`;
+        lines.push(
+          `🤖 Active agent: ${slot.sdk} | Running: ${runStr} | Attempt #${slot.attempt}`,
+        );
       } else {
         lines.push("🤖 No active agent on this branch");
       }
@@ -2324,7 +2683,6 @@ async function cmdAgentLogs(chatId, args) {
     await sendReply(chatId, `Error: ${err.message}`);
   }
 }
-
 
 async function cmdLogs(chatId, _args) {
   const numLines = parseInt(_args, 10) || 30;
@@ -5297,7 +5655,6 @@ export function getDigestSnapshot() {
   };
 }
 
-
 // ── Periodic status file writer ─────────────────────────────────
 // Called by monitor to keep the status file in sync with live executor state
 let _statusWriterTimer = null;
@@ -5315,7 +5672,9 @@ export function startStatusFileWriter(intervalMs = 30000) {
       try {
         const raw = await readFile(statusPath, "utf8");
         data = JSON.parse(raw);
-      } catch { /* fresh file */ }
+      } catch {
+        /* fresh file */
+      }
 
       // Convert executor slots to the attempts format
       const attempts = {};
@@ -5338,10 +5697,33 @@ export function startStatusFileWriter(intervalMs = 30000) {
         };
       }
 
+      let storeStats = null;
+      try {
+        storeStats = _getTaskStoreStats?.() || null;
+      } catch {
+        storeStats = null;
+      }
+
+      let reviewTasks = [];
+      try {
+        reviewTasks = (_getTasksPendingReview?.() || [])
+          .map((task) => task?.id)
+          .filter(Boolean);
+      } catch {
+        reviewTasks = [];
+      }
+
       data.attempts = attempts;
       data.last_executor_sync = new Date().toISOString();
       data.executor_mode = status.mode || "unknown";
       data.active_slots = `${status.activeSlots}/${status.maxParallel}`;
+      data.review_tasks = reviewTasks;
+      data.manual_review_tasks = [];
+      if (!data.counts || typeof data.counts !== "object") data.counts = {};
+      data.counts.running = Number(status.activeSlots || 0);
+      data.counts.review = Number(storeStats?.inreview || reviewTasks.length);
+      data.counts.error = Number(storeStats?.blocked || 0);
+      data.counts.manual_review = 0;
 
       const { writeFile } = await import("node:fs/promises");
       await writeFile(statusPath, JSON.stringify(data, null, 2));

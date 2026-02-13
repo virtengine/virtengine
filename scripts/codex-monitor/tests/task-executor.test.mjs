@@ -21,6 +21,7 @@ vi.mock("../agent-pool.mjs", () => ({
   getActiveThreads: vi.fn(() => []),
   getPoolSdkName: vi.fn(() => "codex"),
   pruneAllExhaustedThreads: vi.fn(() => 0),
+  ensureThreadRegistryLoaded: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("../worktree-manager.mjs", () => ({
@@ -72,6 +73,7 @@ import {
   execWithRetry,
   getPoolSdkName,
   getActiveThreads,
+  ensureThreadRegistryLoaded,
 } from "../agent-pool.mjs";
 import { acquireWorktree, releaseWorktree } from "../worktree-manager.mjs";
 import { loadConfig } from "../config.mjs";
@@ -98,6 +100,11 @@ const ENV_KEYS = [
   "INTERNAL_EXECUTOR_TIMEOUT_MS",
   "INTERNAL_EXECUTOR_MAX_RETRIES",
   "INTERNAL_EXECUTOR_PROJECT_ID",
+  "COPILOT_MODEL",
+  "COPILOT_SDK_MODEL",
+  "CLAUDE_MODEL",
+  "CLAUDE_CODE_MODEL",
+  "ANTHROPIC_MODEL",
 ];
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -228,6 +235,32 @@ describe("task-executor", () => {
       expect(ex._running).toBe(true);
       expect(ex._pollTimer).not.toBeNull();
       // cleanup
+      ex._running = false;
+      clearInterval(ex._pollTimer);
+    });
+
+    it("start() waits for thread registry load before in-progress recovery", async () => {
+      const ex = new TaskExecutor({ pollIntervalMs: 10_000 });
+      let releaseRegistryLoad = null;
+      const registryLoadGate = new Promise((resolve) => {
+        releaseRegistryLoad = resolve;
+      });
+      ensureThreadRegistryLoaded.mockReturnValueOnce(registryLoadGate);
+      const recoverySpy = vi
+        .spyOn(ex, "_recoverInterruptedInProgressTasks")
+        .mockResolvedValue(undefined);
+
+      ex.start();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(recoverySpy).not.toHaveBeenCalled();
+
+      releaseRegistryLoad?.();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(recoverySpy).toHaveBeenCalledTimes(1);
+
       ex._running = false;
       clearInterval(ex._pollTimer);
     });
@@ -453,6 +486,61 @@ describe("task-executor", () => {
         expect.objectContaining({
           taskKey: "task-123-uuid",
           cwd: "/fake/worktree",
+        }),
+      );
+    });
+
+    it("forwards COPILOT_MODEL override to background agent execution", async () => {
+      process.env.COPILOT_MODEL = "gpt-5.3-codex";
+      const ex = new TaskExecutor({ sdk: "auto" });
+      ex._executorScheduler = {
+        next: () => ({
+          name: "copilot-default",
+          executor: "COPILOT",
+          variant: "DEFAULT",
+          weight: 100,
+          role: "primary",
+          enabled: true,
+        }),
+        recordSuccess: vi.fn(),
+        recordFailure: vi.fn(),
+      };
+
+      await ex.executeTask({ ...mockTask });
+
+      expect(execWithRetry).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          sdk: "copilot",
+          model: "gpt-5.3-codex",
+        }),
+      );
+    });
+
+    it("uses complexity-routed Copilot model when no env override is set", async () => {
+      delete process.env.COPILOT_MODEL;
+      delete process.env.COPILOT_SDK_MODEL;
+      const ex = new TaskExecutor({ sdk: "auto" });
+      ex._executorScheduler = {
+        next: () => ({
+          name: "copilot-default",
+          executor: "COPILOT",
+          variant: "DEFAULT",
+          weight: 100,
+          role: "primary",
+          enabled: true,
+        }),
+        recordSuccess: vi.fn(),
+        recordFailure: vi.fn(),
+      };
+
+      await ex.executeTask({ ...mockTask });
+
+      expect(execWithRetry).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          sdk: "copilot",
+          model: "sonnet-4.5",
         }),
       );
     });
@@ -1096,6 +1184,26 @@ describe("task-executor", () => {
 
       // Should close the issue
       expect(updateTaskStatus).toHaveBeenCalledWith("42", "done");
+    });
+
+    it("_closeIssueAfterMerge uses externalId when task id is non-numeric", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor();
+
+      await ex._closeIssueAfterMerge(
+        {
+          id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+          externalId: "151",
+          backend: "github",
+        },
+        "747",
+      );
+
+      expect(addComment).toHaveBeenCalledWith(
+        "151",
+        expect.stringContaining("Issue Resolved"),
+      );
+      expect(updateTaskStatus).toHaveBeenCalledWith("151", "done");
     });
 
     it("_closeIssueAfterMerge skips for non-github backend", async () => {

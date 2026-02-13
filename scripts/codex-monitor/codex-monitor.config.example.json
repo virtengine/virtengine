@@ -67,6 +67,12 @@
     "monitorCrashFix": ".codex-monitor/agents/monitor-crash-fix.md",
     "monitorRestartLoopFix": ".codex-monitor/agents/monitor-restart-loop-fix.md"
   },
+  "hookProfiles": {
+    "enabled": true,
+    "profile": "strict",
+    "targets": ["codex", "claude", "copilot"],
+    "overwriteExisting": false
+  },
   "complexityRouting": {
     "enabled": true,
     "models": {

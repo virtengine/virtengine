@@ -12,6 +12,8 @@ import {
   startSentinel,
   stopSentinel,
   getSentinelStatus,
+  getSentinelRecoveryStatus,
+  __setRecoveryStateForTest,
   isMonitorRunning,
   ensureMonitorRunning,
   getQueuedCommands,
@@ -46,6 +48,8 @@ describe("telegram-sentinel", () => {
       expect(typeof startSentinel).toBe("function");
       expect(typeof stopSentinel).toBe("function");
       expect(typeof getSentinelStatus).toBe("function");
+      expect(typeof getSentinelRecoveryStatus).toBe("function");
+      expect(typeof __setRecoveryStateForTest).toBe("function");
       expect(typeof isMonitorRunning).toBe("function");
       expect(typeof ensureMonitorRunning).toBe("function");
       expect(typeof getQueuedCommands).toBe("function");
@@ -83,6 +87,19 @@ describe("telegram-sentinel", () => {
   describe("stopSentinel", () => {
     it("should be callable without error when not running", () => {
       expect(() => stopSentinel()).not.toThrow();
+    });
+  });
+
+  describe("recovery status", () => {
+    it("reports crash-loop when threshold is reached", () => {
+      const now = Date.now();
+      __setRecoveryStateForTest({
+        monitorCrashEvents: [now - 60_000, now - 30_000, now - 10_000],
+        monitorRestartAttempts: [now - 60_000],
+      });
+      const status = getSentinelRecoveryStatus();
+      expect(status.crashLoopDetected).toBe(true);
+      expect(status.crashesInWindow).toBeGreaterThanOrEqual(3);
     });
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "Apache 2.0",
@@ -33,6 +33,7 @@
   "exports": {
     ".": "./monitor.mjs",
     "./config": "./config.mjs",
+    "./config-doctor": "./config-doctor.mjs",
     "./codex-config": "./codex-config.mjs",
     "./setup": "./setup.mjs",
     "./autofix": "./autofix.mjs",
@@ -55,7 +56,12 @@
     "./diff-stats": "./diff-stats.mjs",
     "./review-agent": "./review-agent.mjs",
     "./agent-hooks": "./agent-hooks.mjs",
-    "./telegram-sentinel": "./telegram-sentinel.mjs"
+    "./hook-profiles": "./hook-profiles.mjs",
+    "./agent-hook-bridge": "./agent-hook-bridge.mjs",
+    "./startup-service": "./startup-service.mjs",
+    "./telegram-sentinel": "./telegram-sentinel.mjs",
+    "./whatsapp-channel": "./whatsapp-channel.mjs",
+    "./container-runner": "./container-runner.mjs"
   },
   "bin": {
     "codex-monitor": "cli.mjs",
@@ -97,6 +103,7 @@
     "codex-monitor.schema.json",
     "codex-shell.mjs",
     "config.mjs",
+    "config-doctor.mjs",
     "conflict-resolver.mjs",
     "copilot-shell.mjs",
     "diff-stats.mjs",
@@ -146,12 +153,17 @@
     "workspace-registry.mjs",
     "worktree-manager.mjs",
     "agent-hooks.mjs",
-    "telegram-sentinel.mjs"
+    "hook-profiles.mjs",
+    "agent-hook-bridge.mjs",
+    "startup-service.mjs",
+    "telegram-sentinel.mjs",
+    "whatsapp-channel.mjs",
+    "container-runner.mjs"
   ],
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.38",
-    "@github/copilot-sdk": "0.1.23",
-    "@openai/codex-sdk": "0.99.0-alpha.14",
+    "@anthropic-ai/claude-agent-sdk": "0.2.41",
+    "@github/copilot-sdk": "0.1.24-preview.0",
+    "@openai/codex-sdk": "0.102.0-alpha.4",
     "vibe-kanban": "0.1.7"
   },
   "devDependencies": {

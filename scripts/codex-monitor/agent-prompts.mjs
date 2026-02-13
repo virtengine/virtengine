@@ -179,7 +179,7 @@ You are the always-on reliability guardian for codex-monitor in devmode.
 - Do not commit/push/open PRs in this context.
 - Apply focused fixes, run focused validation, and keep monitoring.
 `,
-  taskExecutor: `# Task: {{TASK_TITLE}}
+  taskExecutor: `# {{TASK_ID}} — {{TASK_TITLE}}
 
 ## Description
 {{TASK_DESCRIPTION}}
@@ -214,7 +214,7 @@ You are the always-on reliability guardian for codex-monitor in devmode.
 ## Repository Context
 {{REPO_CONTEXT}}
 `,
-  taskExecutorRetry: `# ERROR RECOVERY - Attempt {{ATTEMPT_NUMBER}}
+  taskExecutorRetry: `# {{TASK_ID}} — ERROR RECOVERY (Attempt {{ATTEMPT_NUMBER}})
 
 Your previous attempt on task "{{TASK_TITLE}}" encountered an issue:
 
@@ -233,7 +233,7 @@ Please:
 Original task description:
 {{TASK_DESCRIPTION}}
 `,
-  taskExecutorContinueHasCommits: `# CONTINUE - Verify and Push
+  taskExecutorContinueHasCommits: `# {{TASK_ID}} — CONTINUE (Verify and Push)
 
 You were working on "{{TASK_TITLE}}" and appear to have stopped.
 You already made commits.
@@ -243,7 +243,7 @@ You already made commits.
 3. If failing, fix issues, commit, and push.
 4. Task is not complete until push succeeds.
 `,
-  taskExecutorContinueHasEdits: `# CONTINUE - Commit and Push
+  taskExecutorContinueHasEdits: `# {{TASK_ID}} — CONTINUE (Commit and Push)
 
 You were working on "{{TASK_TITLE}}" and appear to have stopped.
 You made file edits but no commit yet.

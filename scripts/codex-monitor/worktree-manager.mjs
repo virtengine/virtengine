@@ -150,6 +150,75 @@ function gitSync(args, cwd, opts = {}) {
   });
 }
 
+/**
+ * Convert a Windows path to an extended-length path so long paths delete cleanly.
+ * @param {string} pathValue
+ * @returns {string}
+ */
+function toWindowsExtendedPath(pathValue) {
+  if (process.platform !== "win32") return pathValue;
+  if (pathValue.startsWith("\\\\?\\")) return pathValue;
+  if (pathValue.startsWith("\\\\")) {
+    return `\\\\?\\UNC\\${pathValue.slice(2)}`;
+  }
+  return `\\\\?\\${pathValue}`;
+}
+
+/**
+ * Escape a string for use as a PowerShell single-quoted literal.
+ * @param {string} value
+ * @returns {string}
+ */
+function escapePowerShellLiteral(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+/**
+ * Remove a path on Windows using PowerShell, with optional attribute cleanup.
+ * Uses extended-length paths to avoid MAX_PATH errors.
+ * @param {string} targetPath
+ * @param {object} [opts]
+ * @param {boolean} [opts.clearAttributes=false]
+ * @param {number} [opts.timeoutMs=60000]
+ */
+function removePathWithPowerShell(targetPath, opts = {}) {
+  const pwsh = process.env.PWSH_PATH || "powershell.exe";
+  const extendedPath = toWindowsExtendedPath(targetPath);
+  const escapedPath = escapePowerShellLiteral(extendedPath);
+  const clearAttributes = opts.clearAttributes === true;
+  const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 60_000;
+  const preface = clearAttributes
+    ? "Get-ChildItem -LiteralPath '" +
+      escapedPath +
+      "' -Recurse -Force | ForEach-Object { $_.Attributes = 'Normal' } -ErrorAction SilentlyContinue; "
+    : "";
+  execSync(
+    `${pwsh} -NoProfile -Command "${preface}Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction Stop"`,
+    { timeout: timeoutMs, stdio: "pipe" },
+  );
+}
+
+/**
+ * Remove a path synchronously, using PowerShell on Windows for long paths.
+ * @param {string} targetPath
+ * @param {object} [opts]
+ * @param {boolean} [opts.clearAttributes=false]
+ * @param {number} [opts.timeoutMs=60000]
+ */
+function removePathSync(targetPath, opts = {}) {
+  if (!existsSync(targetPath)) return;
+  if (process.platform === "win32") {
+    removePathWithPowerShell(targetPath, opts);
+    return;
+  }
+  rmSync(targetPath, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 1000,
+  });
+}
+
 // ── WorktreeManager Class ───────────────────────────────────────────────────
 
 class WorktreeManager {
@@ -839,7 +908,7 @@ class WorktreeManager {
   _cleanupPartialWorktree(wtPath) {
     if (!existsSync(wtPath)) return;
     try {
-      rmSync(wtPath, { recursive: true, force: true });
+      removePathSync(wtPath, { clearAttributes: true });
       console.log(`${TAG} cleaned up partial worktree directory: ${wtPath}`);
     } catch (err) {
       console.warn(
@@ -881,25 +950,27 @@ class WorktreeManager {
         try {
           // Attempt 1: On Windows, use PowerShell first (most reliable for locked files + long paths)
           if (process.platform === "win32") {
-            const pwsh = process.env.PWSH_PATH || "powershell.exe";
-            const escapedPath = wtPath.replace(/'/g, "''");
-            // First, remove read-only/hidden attributes that can block deletion
-            execSync(
-              `${pwsh} -NoProfile -Command "Get-ChildItem -LiteralPath '${escapedPath}' -Recurse -Force | ForEach-Object { $_.Attributes = 'Normal' } -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction Stop"`,
-              { timeout: 60_000, stdio: "pipe" },
-            );
+            removePathWithPowerShell(wtPath, {
+              clearAttributes: true,
+              timeoutMs: 60_000,
+            });
             console.log(`${TAG} PowerShell cleanup succeeded for ${wtPath}`);
             gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
           } else {
             // Unix: Use rmSync with retries
-            rmSync(wtPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+            removePathSync(wtPath);
             console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
             gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
           }
         } catch (cleanupErr) {
           // Last resort: try basic Node.js rmSync (may partially succeed)
           try {
-            rmSync(wtPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+            rmSync(wtPath, {
+              recursive: true,
+              force: true,
+              maxRetries: 5,
+              retryDelay: 1000,
+            });
             console.log(`${TAG} Fallback cleanup succeeded for ${wtPath}`);
             gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
           } catch (finalErr) {
@@ -941,21 +1012,28 @@ class WorktreeManager {
       // Fall back to filesystem removal (handles "Directory not empty" on Windows)
       if (existsSync(wtPath)) {
         try {
-          // Attempt 1: Node.js rmSync with retries
-          rmSync(wtPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
+          // Attempt 1: On Windows, use PowerShell first (handles long paths better)
+          if (process.platform === "win32") {
+            removePathWithPowerShell(wtPath, { timeoutMs: 30_000 });
+          } else {
+            rmSync(wtPath, {
+              recursive: true,
+              force: true,
+              maxRetries: 3,
+              retryDelay: 500,
+            });
+          }
           gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
           success = true;
           console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
         } catch (rmErr) {
-          // Attempt 2: On Windows, use PowerShell for long paths + locked files
+          // Attempt 2: On Windows, retry with attribute cleanup
           if (process.platform === "win32") {
             try {
-              const pwsh = process.env.PWSH_PATH || "powershell.exe";
-              const escapedPath = wtPath.replace(/'/g, "''");
-              execSync(
-                `${pwsh} -NoProfile -Command "Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction SilentlyContinue"`,
-                { timeout: 30_000, stdio: "pipe" },
-              );
+              removePathWithPowerShell(wtPath, {
+                clearAttributes: true,
+                timeoutMs: 30_000,
+              });
               gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
               success = true;
               console.log(`${TAG} PowerShell cleanup succeeded for ${wtPath}`);
@@ -996,6 +1074,13 @@ class WorktreeManager {
       });
     } catch {
       // Best effort
+    }
+    if (existsSync(wtPath)) {
+      try {
+        removePathSync(wtPath, { clearAttributes: true, timeoutMs: 30_000 });
+      } catch {
+        // Best effort
+      }
     }
   }
 }

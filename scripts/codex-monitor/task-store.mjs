@@ -19,8 +19,28 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const TAG = "[task-store]";
 
-const STORE_PATH = resolve(__dirname, ".cache/kanban-state.json");
-const STORE_TMP = STORE_PATH + ".tmp";
+function inferRepoRoot(startDir) {
+  let current = resolve(startDir || process.cwd());
+  while (true) {
+    if (existsSync(resolve(current, ".git"))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
+function resolveDefaultStorePath() {
+  const repoRoot =
+    inferRepoRoot(process.cwd()) || resolve(__dirname, "..", "..");
+  return resolve(repoRoot, ".codex-monitor", ".cache", "kanban-state.json");
+}
+
+let storePath = resolveDefaultStorePath();
+let storeTmpPath = storePath + ".tmp";
 const MAX_STATUS_HISTORY = 50;
 const MAX_AGENT_OUTPUT = 2000;
 const MAX_ERROR_LENGTH = 1000;
@@ -32,6 +52,30 @@ const MAX_ERROR_LENGTH = 1000;
 let _store = null; // { _meta: {...}, tasks: { [id]: Task } }
 let _loaded = false;
 let _writeChain = Promise.resolve(); // simple write lock
+
+export function configureTaskStore(options = {}) {
+  const baseDir = options.baseDir ? resolve(options.baseDir) : null;
+  const nextPath = options.storePath
+    ? resolve(baseDir || process.cwd(), options.storePath)
+    : resolve(
+        baseDir ||
+          inferRepoRoot(process.cwd()) ||
+          resolve(__dirname, "..", ".."),
+        ".codex-monitor",
+        ".cache",
+        "kanban-state.json",
+      );
+
+  if (nextPath !== storePath) {
+    storePath = nextPath;
+    storeTmpPath = storePath + ".tmp";
+    _store = null;
+    _loaded = false;
+    _writeChain = Promise.resolve();
+  }
+
+  return storePath;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,8 +172,8 @@ function ensureLoaded() {
  */
 export function loadStore() {
   try {
-    if (existsSync(STORE_PATH)) {
-      const raw = readFileSync(STORE_PATH, "utf-8");
+    if (existsSync(storePath)) {
+      const raw = readFileSync(storePath, "utf-8");
       const data = JSON.parse(raw);
       _store = {
         _meta: { ...defaultMeta(), ...(data._meta || {}) },
@@ -160,13 +204,13 @@ export function saveStore() {
   _writeChain = _writeChain
     .then(() => {
       try {
-        const dir = dirname(STORE_PATH);
+        const dir = dirname(storePath);
         if (!existsSync(dir)) {
           mkdirSync(dir, { recursive: true });
         }
         const json = JSON.stringify(_store, null, 2);
-        writeFileSync(STORE_TMP, json, "utf-8");
-        renameSync(STORE_TMP, STORE_PATH);
+        writeFileSync(storeTmpPath, json, "utf-8");
+        renameSync(storeTmpPath, storePath);
       } catch (err) {
         console.error(TAG, "Failed to save store:", err.message);
       }
@@ -180,7 +224,7 @@ export function saveStore() {
  * Return the resolved path of the store file.
  */
 export function getStorePath() {
-  return STORE_PATH;
+  return storePath;
 }
 
 // ---------------------------------------------------------------------------

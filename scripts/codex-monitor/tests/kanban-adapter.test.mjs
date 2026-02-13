@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const execFileMock = vi.hoisted(() => vi.fn());
 const loadConfigMock = vi.hoisted(() => vi.fn());
@@ -21,13 +21,38 @@ function mockGh(stdout, stderr = "") {
 }
 
 describe("kanban-adapter github backend", () => {
+  const originalRepo = process.env.GITHUB_REPOSITORY;
+  const originalOwner = process.env.GITHUB_REPO_OWNER;
+  const originalName = process.env.GITHUB_REPO_NAME;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.GITHUB_REPOSITORY;
+    delete process.env.GITHUB_REPO_OWNER;
+    delete process.env.GITHUB_REPO_NAME;
     loadConfigMock.mockReturnValue({
       repoSlug: "acme/widgets",
       kanban: { backend: "github" },
     });
     setKanbanBackend("github");
+  });
+
+  afterEach(() => {
+    if (originalRepo === undefined) {
+      delete process.env.GITHUB_REPOSITORY;
+    } else {
+      process.env.GITHUB_REPOSITORY = originalRepo;
+    }
+    if (originalOwner === undefined) {
+      delete process.env.GITHUB_REPO_OWNER;
+    } else {
+      process.env.GITHUB_REPO_OWNER = originalOwner;
+    }
+    if (originalName === undefined) {
+      delete process.env.GITHUB_REPO_NAME;
+    } else {
+      process.env.GITHUB_REPO_NAME = originalName;
+    }
   });
 
   it("uses repo slug from config when owner/repo env vars are not set", async () => {
@@ -131,5 +156,53 @@ describe("kanban-adapter github backend", () => {
     const adapter = getKanbanAdapter();
     const result = await adapter.addComment("42", "test body");
     expect(result).toBe(false);
+  });
+});
+
+describe("kanban-adapter vk backend fallback fetch", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadConfigMock.mockReturnValue({
+      vkEndpointUrl: "http://127.0.0.1:54089",
+      kanban: { backend: "vk" },
+    });
+    setKanbanBackend("vk");
+    globalThis.fetch = originalFetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("throws a descriptive error for invalid fetch response objects", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(undefined);
+
+    const adapter = getKanbanAdapter();
+    await expect(adapter.listTasks("proj-1", { status: "todo" })).rejects.toThrow(
+      /invalid response object/,
+    );
+  });
+
+  it("accepts JSON payloads mislabeled as text/plain", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Map([["content-type", "text/plain"]]),
+      text: async () =>
+        JSON.stringify({
+          data: [{ id: "task-1", title: "Task One", status: "todo" }],
+        }),
+    });
+
+    const adapter = getKanbanAdapter();
+    const tasks = await adapter.listTasks("proj-1", { status: "todo" });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      id: "task-1",
+      title: "Task One",
+      status: "todo",
+      backend: "vk",
+    });
   });
 });

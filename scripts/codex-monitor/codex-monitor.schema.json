@@ -118,6 +118,8 @@
         "monitorRestartLoopFix": { "type": "string" }
       }
     },
+    "hookProfiles": { "$ref": "#/$defs/hookProfiles" },
+    "agentHooks": { "$ref": "#/$defs/agentHooks" },
     "auth": {
       "type": "object",
       "description": "Authentication configuration for agent SDKs",
@@ -269,6 +271,30 @@
           "settings": { "type": "object" }
         }
       }
+    },
+    "hookProfiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "profile": {
+          "type": "string",
+          "enum": ["strict", "balanced", "lightweight", "none"]
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["codex", "claude", "copilot"]
+          }
+        },
+        "overwriteExisting": { "type": "boolean" }
+      }
+    },
+    "agentHooks": {
+      "type": "object",
+      "description": "Hook definitions loaded by agent-hooks.mjs (event -> hook list).",
+      "additionalProperties": true
     }
   }
 }

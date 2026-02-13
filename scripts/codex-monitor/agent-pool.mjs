@@ -62,6 +62,30 @@ const HARD_TIMEOUT_BUFFER_MS = 5 * 60_000; // 5 minutes
 /** Tag for console logging */
 const TAG = "[agent-pool]";
 
+const OPENAI_ENV_KEYS = [
+  "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
+  "OPENAI_ORGANIZATION",
+  "OPENAI_PROJECT",
+];
+
+async function withSanitizedOpenAiEnv(fn) {
+  const saved = {};
+  for (const key of OPENAI_ENV_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value !== undefined) process.env[key] = value;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // SDK Adapter Registry
 // ---------------------------------------------------------------------------
@@ -118,6 +142,62 @@ function isDisabled(name) {
   const adapter = SDK_ADAPTERS[name];
   if (!adapter) return true;
   return process.env[adapter.envDisableKey] === "1";
+}
+
+const MONITOR_MONITOR_TASK_KEY = "monitor-monitor";
+let monitorMonitorTimeoutBoundsWarningKey = "";
+let monitorMonitorTimeoutAdjustmentKey = "";
+
+function parsePositiveTimeoutMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.trunc(parsed);
+}
+
+function clampMonitorMonitorTimeout(timeoutMs, taskKey) {
+  if (String(taskKey || "").trim() !== MONITOR_MONITOR_TASK_KEY) {
+    return timeoutMs;
+  }
+  const baseTimeoutMs = parsePositiveTimeoutMs(timeoutMs);
+  if (baseTimeoutMs === null) return timeoutMs;
+
+  const minMs = parsePositiveTimeoutMs(
+    process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS,
+  );
+  const maxEnv = parsePositiveTimeoutMs(
+    process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS,
+  );
+
+  let maxMs = maxEnv;
+  if (minMs !== null && maxMs !== null && maxMs < minMs) {
+    const warningKey = `${minMs}:${maxMs}`;
+    if (monitorMonitorTimeoutBoundsWarningKey !== warningKey) {
+      monitorMonitorTimeoutBoundsWarningKey = warningKey;
+      console.warn(
+        `${TAG} invalid monitor-monitor timeout bounds: DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS=${maxMs} is lower than DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS=${minMs}. Ignoring max bound.`,
+      );
+    }
+    maxMs = null;
+  }
+
+  if (minMs === null && maxMs === null) {
+    return baseTimeoutMs;
+  }
+
+  let bounded = baseTimeoutMs;
+  if (minMs !== null && bounded < minMs) bounded = minMs;
+  if (maxMs !== null && bounded > maxMs) bounded = maxMs;
+
+  if (bounded !== baseTimeoutMs) {
+    const adjustmentKey = `${baseTimeoutMs}:${bounded}:${minMs ?? "off"}:${maxMs ?? "off"}`;
+    if (monitorMonitorTimeoutAdjustmentKey !== adjustmentKey) {
+      monitorMonitorTimeoutAdjustmentKey = adjustmentKey;
+      console.log(
+        `${TAG} monitor-monitor timeout adjusted ${baseTimeoutMs}ms -> ${bounded}ms (min=${minMs ?? "off"}, max=${maxMs ?? "off"})`,
+      );
+    }
+  }
+  return bounded;
 }
 
 /**
@@ -412,17 +492,24 @@ async function launchCodexThread(prompt, cwd, timeoutMs, extra = {}) {
 /**
  * Launch a single ephemeral prompt via the **Copilot SDK**.
  *
- * Creates a fresh `CopilotClient`, starts it, opens an ephemeral session
- * (no reuse), sends the prompt, collects the response, and tears down.
+ * Creates a `CopilotClient`, starts it, resumes an existing session when
+ * available, otherwise creates a new one, sends the prompt, and collects the
+ * response.
  *
  * @param {string}  prompt     Prompt text.
  * @param {string}  cwd        Working directory.
  * @param {number}  timeoutMs  Abort timeout in ms.
- * @param {object}  extra      Optional { onEvent, abortController }.
+ * @param {object}  extra      Optional { onEvent, abortController, resumeThreadId, onThreadReady }.
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string }>}
  */
 async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
-  const { onEvent, abortController: externalAC } = extra;
+  const {
+    onEvent,
+    abortController: externalAC,
+    resumeThreadId = null,
+    onThreadReady = null,
+    model: requestedModel = null,
+  } = extra;
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
   let CopilotClientClass;
@@ -454,10 +541,15 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
   const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
 
   let client;
+  let unsubscribe = null;
+  let finalResponse = "";
+  const allItems = [];
   try {
-    const clientOpts = token ? { token } : undefined;
-    client = new CopilotClientClass(clientOpts);
-    await client.start();
+    await withSanitizedOpenAiEnv(async () => {
+      const clientOpts = token ? { token } : undefined;
+      client = new CopilotClientClass(clientOpts);
+      await client.start();
+    });
   } catch (err) {
     clearTimeout(timer);
     return {
@@ -470,7 +562,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
     };
   }
 
-  // ── 4. Create ephemeral session ──────────────────────────────────────────
+  // ── 4. Resume/create session ─────────────────────────────────────────────
   try {
     const sessionConfig = {
       streaming: true,
@@ -480,17 +572,40 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
           "You are an ephemeral task agent. Execute the given task immediately. " +
           "Do NOT ask for confirmation. Produce concise, actionable output.",
       },
-      infiniteSessions: { enabled: false },
+      infiniteSessions: { enabled: true },
     };
-
-    const session = await client.createSession(sessionConfig);
+    const copilotModel = String(
+      requestedModel ||
+        process.env.COPILOT_MODEL ||
+        process.env.COPILOT_SDK_MODEL ||
+        "",
+    ).trim();
+    if (copilotModel) sessionConfig.model = copilotModel;
+    let session = null;
+    if (resumeThreadId && typeof client.resumeSession === "function") {
+      try {
+        session = await client.resumeSession(resumeThreadId, sessionConfig);
+      } catch (resumeErr) {
+        console.warn(
+          `${TAG} copilot resume failed for session ${resumeThreadId}: ${resumeErr.message || resumeErr}. Starting fresh session.`,
+        );
+      }
+    }
+    if (!session) {
+      session = await client.createSession(sessionConfig);
+    }
+    const copilotSessionId =
+      session?.sessionId || session?.id || resumeThreadId || null;
+    if (copilotSessionId && typeof onThreadReady === "function") {
+      try {
+        onThreadReady(copilotSessionId, "copilot");
+      } catch {
+        /* best effort */
+      }
+    }
 
     // ── 5. Send prompt & collect response ──────────────────────────────────
-    let finalResponse = "";
-    const allItems = [];
-
     // Wire up event listener if session supports it
-    let unsubscribe = null;
     if (typeof session.on === "function") {
       unsubscribe = session.on((event) => {
         if (!event) return;
@@ -518,33 +633,52 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       `# YOUR TASK — EXECUTE NOW\n\n${prompt}\n\n---\n` +
       'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.';
 
-    const sendFn = session.sendAndWait || session.send;
-    if (typeof sendFn !== "function") {
+    const hasSend = typeof session.send === "function";
+    const hasSendAndWait = typeof session.sendAndWait === "function";
+    if (!hasSend && !hasSendAndWait) {
       throw new Error("Copilot session does not support send");
     }
 
-    // Pass timeout parameter to sendAndWait to override 60s SDK default
-    const sendPromise = session.sendAndWait
-      ? sendFn.call(session, { prompt: formattedPrompt }, timeoutMs)
-      : sendFn.call(session, { prompt: formattedPrompt });
+    // Prefer send()+idle when available. Some Copilot SDK builds enforce a
+    // fixed internal 300s idle timeout in sendAndWait() that ignores caller
+    // timeout, which can cause monitor-monitor failover loops.
+    const useRawSend = hasSend;
+    const sendPromise = useRawSend
+      ? session.send.call(session, { prompt: formattedPrompt })
+      : session.sendAndWait.call(
+          session,
+          { prompt: formattedPrompt },
+          timeoutMs,
+        );
 
-    // If only send() (not sendAndWait), wait for idle event
-    if (!session.sendAndWait && typeof session.on === "function") {
+    if (useRawSend && typeof session.on === "function") {
       await new Promise((resolveP, rejectP) => {
+        let settled = false;
+        let off = null;
+        let idleTimer = null;
+
+        const finish = (cb) => {
+          if (settled) return;
+          settled = true;
+          if (idleTimer) clearTimeout(idleTimer);
+          if (typeof off === "function") off();
+          cb();
+        };
+
         const idleHandler = (event) => {
-          if (event?.type === "session.idle") resolveP();
+          if (event?.type === "session.idle") return finish(resolveP);
           if (event?.type === "session.error") {
-            rejectP(new Error(event.data?.message || "session error"));
+            return finish(() =>
+              rejectP(new Error(event.data?.message || "session error")),
+            );
           }
         };
-        const off = session.on(idleHandler);
-        Promise.resolve(sendPromise).catch(rejectP);
+        off = session.on(idleHandler);
+        Promise.resolve(sendPromise).catch((err) => finish(() => rejectP(err)));
+
         // Wire abort signal into this inner promise
         if (controller.signal) {
-          const onAbort = () => {
-            if (typeof off === "function") off();
-            rejectP(new Error("timeout"));
-          };
+          const onAbort = () => finish(() => rejectP(new Error("timeout")));
           if (controller.signal.aborted) {
             onAbort();
           } else {
@@ -553,10 +687,16 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
             });
           }
         }
-        setTimeout(() => {
-          if (typeof off === "function") off();
-          resolveP();
+
+        idleTimer = setTimeout(() => {
+          // If assistant output arrived but session.idle is missing/late, allow
+          // the run to continue rather than stalling for the full hard timeout.
+          if (finalResponse.trim()) return finish(resolveP);
+          finish(() => rejectP(new Error("timeout_waiting_for_idle")));
         }, timeoutMs + 1000);
+        if (idleTimer && typeof idleTimer.unref === "function") {
+          idleTimer.unref();
+        }
       });
     } else {
       // Hard timeout safety net for sendAndWait — mirrors the Codex SDK path.
@@ -572,9 +712,6 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       await Promise.race([sendPromise, copilotHardTimeout]);
     }
 
-    clearTimeout(timer);
-    if (typeof unsubscribe === "function") unsubscribe();
-
     const output =
       finalResponse.trim() || "(Agent completed with no text output)";
     return {
@@ -583,29 +720,62 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       items: allItems,
       error: null,
       sdk: "copilot",
-      threadId: null,
+      threadId: copilotSessionId,
     };
   } catch (err) {
-    clearTimeout(timer);
-    if (err.name === "AbortError" || String(err) === "timeout") {
+    const errMsg = String(err?.message || err || "");
+    const hasAssistantOutput = !!finalResponse.trim();
+    const isIdleWaitTimeout =
+      /session\.idle/i.test(errMsg) && /timeout/i.test(errMsg);
+    const isTimeout =
+      err?.name === "AbortError" ||
+      errMsg === "timeout" ||
+      errMsg === "hard_timeout" ||
+      errMsg === "timeout_waiting_for_idle" ||
+      isIdleWaitTimeout;
+
+    // Copilot SDK can occasionally emit the full assistant message but still
+    // reject sendAndWait() due to a missing/late session.idle event. In that
+    // case, keep the run progressing by accepting the captured assistant output.
+    if (isIdleWaitTimeout && hasAssistantOutput) {
+      console.warn(
+        `${TAG} copilot sendAndWait timed out waiting for session.idle, but assistant output was received; accepting response`,
+      );
+      return {
+        success: true,
+        output: finalResponse.trim(),
+        items: allItems,
+        error: null,
+        sdk: "copilot",
+        threadId: resumeThreadId,
+      };
+    }
+
+    if (isTimeout) {
       return {
         success: false,
         output: "",
-        items: [],
-        error: `${TAG} copilot timeout after ${timeoutMs}ms`,
+        items: allItems,
+        error: `${TAG} copilot timeout after ${timeoutMs}ms${isIdleWaitTimeout ? " waiting for session.idle" : ""}`,
         sdk: "copilot",
-        threadId: null,
+        threadId: resumeThreadId,
       };
     }
     return {
       success: false,
       output: "",
-      items: [],
-      error: err.message,
+      items: allItems,
+      error: errMsg || "unknown copilot error",
       sdk: "copilot",
-      threadId: null,
+      threadId: resumeThreadId,
     };
   } finally {
+    clearTimeout(timer);
+    try {
+      if (typeof unsubscribe === "function") unsubscribe();
+    } catch {
+      /* ignore */
+    }
     // Best-effort teardown — don't let cleanup errors propagate
     try {
       if (client && typeof client.stop === "function") client.stop();
@@ -613,6 +783,30 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       /* ignore */
     }
   }
+}
+
+/**
+ * Resume an existing Copilot session and run a follow-up prompt.
+ * Falls back to fresh session if resume fails.
+ *
+ * @param {string} threadId
+ * @param {string} prompt
+ * @param {string} cwd
+ * @param {number} timeoutMs
+ * @param {object} extra
+ * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, threadId: string|null }>}
+ */
+async function resumeCopilotThread(
+  threadId,
+  prompt,
+  cwd,
+  timeoutMs,
+  extra = {},
+) {
+  return launchCopilotThread(prompt, cwd, timeoutMs, {
+    ...extra,
+    resumeThreadId: threadId,
+  });
 }
 
 /**
@@ -625,7 +819,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
  * @param {string}  prompt     Prompt text.
  * @param {string}  cwd        Working directory.
  * @param {number}  timeoutMs  Abort timeout in ms.
- * @param {object}  extra      Optional { onEvent, abortController }.
+ * @param {object}  extra      Optional { onEvent, abortController, resumeThreadId, onThreadReady }.
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string }>}
  */
 async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
@@ -634,6 +828,9 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     abortController: externalAC,
     claudeAllowedTools = null,
     claudePermissionMode = null,
+    resumeThreadId = null,
+    onThreadReady = null,
+    model: requestedModel = null,
   } = extra;
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
@@ -731,7 +928,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
   function makeUserMessage(text) {
     return {
       type: "user",
-      session_id: "",
+      session_id: resumeThreadId || "",
       message: {
         role: "user",
         content: [{ type: "text", text }],
@@ -778,11 +975,13 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       options.allowedTools = allowedTools;
     }
 
-    const model =
-      process.env.CLAUDE_MODEL ||
-      process.env.CLAUDE_CODE_MODEL ||
-      process.env.ANTHROPIC_MODEL ||
-      "";
+    const model = String(
+      requestedModel ||
+        process.env.CLAUDE_MODEL ||
+        process.env.CLAUDE_CODE_MODEL ||
+        process.env.ANTHROPIC_MODEL ||
+        "",
+    ).trim();
     if (model) options.model = model;
 
     const result = queryFn({
@@ -791,6 +990,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     });
 
     let finalResponse = "";
+    let activeClaudeSessionId = resumeThreadId || null;
     const allItems = [];
 
     // Wrap SDK execution in Promise.race to enforce hard timeout even if
@@ -803,8 +1003,22 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
           throw new Error("timeout");
         }
 
+        const messageSessionId =
+          message?.session_id || message?.sessionId || null;
+        if (messageSessionId && messageSessionId !== activeClaudeSessionId) {
+          activeClaudeSessionId = messageSessionId;
+          if (typeof onThreadReady === "function") {
+            try {
+              onThreadReady(messageSessionId, "claude");
+            } catch {
+              /* best effort */
+            }
+          }
+        }
+
         // Extract text from assistant messages
-        const contentBlocks = message?.message?.content || message?.content || [];
+        const contentBlocks =
+          message?.message?.content || message?.content || [];
 
         if (message?.type === "assistant" && Array.isArray(contentBlocks)) {
           for (const block of contentBlocks) {
@@ -833,10 +1047,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     })();
 
     const hardTimeout = new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error("hard-timeout")),
-        hardTimeoutMs,
-      ),
+      setTimeout(() => reject(new Error("hard-timeout")), hardTimeoutMs),
     );
 
     await Promise.race([sdkExecution, hardTimeout]);
@@ -852,11 +1063,12 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       items: allItems,
       error: null,
       sdk: "claude",
-      threadId: null,
+      threadId: activeClaudeSessionId,
     };
   } catch (err) {
     clearTimeout(softTimer);
-    const isTimeout = err.name === "AbortError" ||
+    const isTimeout =
+      err.name === "AbortError" ||
       String(err).includes("timeout") ||
       String(err.message).includes("timeout");
     if (isTimeout) {
@@ -866,7 +1078,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
         items: [],
         error: `${TAG} claude timeout after ${timeoutMs}ms`,
         sdk: "claude",
-        threadId: null,
+        threadId: resumeThreadId,
       };
     }
     return {
@@ -875,9 +1087,33 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
       items: [],
       error: err.message,
       sdk: "claude",
-      threadId: null,
+      threadId: resumeThreadId,
     };
   }
+}
+
+/**
+ * Resume an existing Claude session and run a follow-up prompt.
+ * Falls back to fresh session semantics if resume is not supported upstream.
+ *
+ * @param {string} threadId
+ * @param {string} prompt
+ * @param {string} cwd
+ * @param {number} timeoutMs
+ * @param {object} extra
+ * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, threadId: string|null }>}
+ */
+async function resumeClaudeThread(
+  threadId,
+  prompt,
+  cwd,
+  timeoutMs,
+  extra = {},
+) {
+  return launchClaudeThread(prompt, cwd, timeoutMs, {
+    ...extra,
+    resumeThreadId: threadId,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -924,6 +1160,7 @@ async function loadClaudeAdapter() {
  * @param {number}  [timeoutMs] Abort after this many ms (default 90 min).
  * @param {object}  [extra]     Optional extras:
  * @param {string}  [extra.sdk]             Force a specific SDK for this call.
+ * @param {string}  [extra.model]           Force model for SDKs that support it.
  * @param {Function} [extra.onEvent]        Callback for raw SDK events.
  * @param {AbortController} [extra.abortController] External abort controller.
  * @param {string[]|string} [extra.claudeAllowedTools] Claude tool allow-list.
@@ -1012,6 +1249,7 @@ export async function launchEphemeralThread(
  * @param {AbortController}    [options.abortController] External abort controller.
  * @param {string}             [options.cwd]             Working directory override.
  * @param {string}             [options.sdk]             Force a specific SDK.
+ * @param {string}             [options.model]           Force model for SDKs that support it.
  * @returns {Promise<{ finalResponse: string, items: Array, usage: object|null }>}
  */
 export async function execPooledPrompt(userMessage, options = {}) {
@@ -1021,6 +1259,7 @@ export async function execPooledPrompt(userMessage, options = {}) {
     abortController,
     cwd = REPO_ROOT,
     sdk,
+    model,
     // statusData and sendRawEvents are accepted but not used — keeps the
     // call-site compatible with execPrimaryPrompt without modification.
   } = options;
@@ -1029,6 +1268,7 @@ export async function execPooledPrompt(userMessage, options = {}) {
     onEvent,
     abortController,
     sdk,
+    model,
   });
 
   if (!result.success) {
@@ -1079,6 +1319,13 @@ const MAX_THREAD_TURNS = 100;
 /** Maximum absolute age for a thread (regardless of lastUsedAt) */
 const THREAD_MAX_ABSOLUTE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+/** SDKs that provide real resumable thread IDs */
+const PERSISTENT_THREAD_SDKS = new Set(["codex", "copilot", "claude"]);
+
+function sdkSupportsPersistentThreads(sdkName) {
+  return PERSISTENT_THREAD_SDKS.has(String(sdkName || "").toLowerCase());
+}
+
 /** @type {Promise<void>|null} */
 let threadRegistryLoadPromise = null;
 let threadRegistryLoaded = false;
@@ -1094,6 +1341,8 @@ async function loadThreadRegistry() {
     const now = Date.now();
     let pruned = 0;
     for (const [key, record] of Object.entries(entries)) {
+      const recordSdk = String(record?.sdk || "").toLowerCase();
+
       // Expire old threads (by lastUsedAt)
       if (now - record.lastUsedAt > THREAD_MAX_AGE_MS) {
         pruned++;
@@ -1370,6 +1619,7 @@ async function resumeGenericThread(
  * @param {object}  [extra]     Options:
  * @param {string}  [extra.taskKey]    Key for thread registry (task ID, PR number, etc.)
  * @param {string}  [extra.sdk]        Force a specific SDK.
+ * @param {string}  [extra.model]      Force model for SDKs that support it.
  * @param {Function} [extra.onEvent]   Event callback.
  * @param {AbortController} [extra.abortController]
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, threadId: string|null, resumed: boolean }>}
@@ -1382,6 +1632,7 @@ export async function launchOrResumeThread(
 ) {
   await ensureThreadRegistryLoaded();
   const { taskKey, ...restExtra } = extra;
+  timeoutMs = clampMonitorMonitorTimeout(timeoutMs, taskKey);
 
   // No taskKey — pure ephemeral (backward compatible)
   if (!taskKey) {
@@ -1417,7 +1668,7 @@ export async function launchOrResumeThread(
     } else {
       const sdkName = restExtra.sdk || existing.sdk || resolvePoolSdkName();
 
-      // Only attempt native resume for Codex (it has resumeThread API)
+      // Native resume for Codex threads
       if (sdkName === "codex" && existing.sdk === "codex") {
         console.log(
           `${TAG} resuming Codex thread ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
@@ -1458,6 +1709,66 @@ export async function launchOrResumeThread(
           existing.lastError = result.error || existing.lastError || null;
           threadRegistry.set(taskKey, existing);
         }
+        saveThreadRegistry().catch(() => {});
+      } else if (sdkName === "copilot" && existing.sdk === "copilot") {
+        console.log(
+          `${TAG} resuming Copilot session ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
+        );
+        const result = await resumeCopilotThread(
+          existing.threadId,
+          prompt,
+          cwd,
+          timeoutMs,
+          restExtra,
+        );
+
+        if (result.success) {
+          existing.turnCount += 1;
+          existing.lastUsedAt = Date.now();
+          existing.lastError = null;
+          if (result.threadId) existing.threadId = result.threadId;
+          existing.alive = !!existing.threadId;
+          threadRegistry.set(taskKey, existing);
+          saveThreadRegistry().catch(() => {});
+          return { ...result, resumed: true };
+        }
+
+        console.warn(
+          `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
+        );
+        existing.alive = false;
+        existing.lastError = result.error || existing.lastError || null;
+        threadRegistry.set(taskKey, existing);
+        saveThreadRegistry().catch(() => {});
+      } else if (sdkName === "claude" && existing.sdk === "claude") {
+        console.log(
+          `${TAG} resuming Claude session ${existing.threadId} for task "${taskKey}" (turn ${existing.turnCount + 1})`,
+        );
+        const result = await resumeClaudeThread(
+          existing.threadId,
+          prompt,
+          cwd,
+          timeoutMs,
+          restExtra,
+        );
+
+        if (result.success) {
+          existing.turnCount += 1;
+          existing.lastUsedAt = Date.now();
+          existing.lastError = null;
+          if (result.threadId) existing.threadId = result.threadId;
+          existing.alive = !!existing.threadId;
+          threadRegistry.set(taskKey, existing);
+          saveThreadRegistry().catch(() => {});
+          return { ...result, resumed: true };
+        }
+
+        console.warn(
+          `${TAG} resume failed for task "${taskKey}": ${result.error}. Starting fresh.`,
+        );
+        existing.alive = false;
+        existing.lastError = result.error || existing.lastError || null;
+        threadRegistry.set(taskKey, existing);
         saveThreadRegistry().catch(() => {});
       } else if (existing.sdk !== sdkName) {
         // SDK changed — invalidate old thread
@@ -1509,14 +1820,17 @@ export async function launchOrResumeThread(
       : null;
   const launchExtra = { ...restExtra };
   launchExtra.onThreadReady = (threadId, sdkName = null) => {
-    if (threadId) {
+    const resolvedSdk =
+      sdkName || launchExtra.sdk || resolvePoolSdkName() || "unknown";
+    const sdkCanPersist = sdkSupportsPersistentThreads(resolvedSdk);
+
+    if (threadId && sdkCanPersist) {
       const existing = threadRegistry.get(taskKey);
       const createdAt = existing?.createdAt || Date.now();
       const turnCount = Number(existing?.turnCount || 1);
       threadRegistry.set(taskKey, {
         threadId,
-        sdk:
-          sdkName || existing?.sdk || launchExtra.sdk || resolvePoolSdkName(),
+        sdk: resolvedSdk,
         taskKey,
         cwd,
         turnCount,
@@ -1545,21 +1859,28 @@ export async function launchOrResumeThread(
 
   // Register/update thread record for future resume
   const existingRecord = threadRegistry.get(taskKey);
-  const finalThreadId = result.threadId || existingRecord?.threadId || null;
+  const resultSdk =
+    result.sdk ||
+    launchExtra.sdk ||
+    existingRecord?.sdk ||
+    resolvePoolSdkName() ||
+    "unknown";
+  const sdkCanPersist = sdkSupportsPersistentThreads(resultSdk);
+  const finalThreadId = sdkCanPersist
+    ? result.threadId ||
+      (existingRecord?.sdk === resultSdk ? existingRecord?.threadId : null) ||
+      null
+    : null;
   const record = {
     threadId: finalThreadId,
-    sdk:
-      result.sdk ||
-      existingRecord?.sdk ||
-      launchExtra.sdk ||
-      resolvePoolSdkName(),
+    sdk: resultSdk,
     taskKey,
     cwd,
     turnCount: Number(existingRecord?.turnCount || 1),
     createdAt: existingRecord?.createdAt || Date.now(),
     lastUsedAt: Date.now(),
     lastError: result.success ? null : result.error,
-    alive: result.success && !!finalThreadId,
+    alive: result.success && sdkCanPersist && !!finalThreadId,
   };
   threadRegistry.set(taskKey, record);
   saveThreadRegistry().catch(() => {});
@@ -1596,6 +1917,7 @@ export async function launchOrResumeThread(
  * @param {Function} [options.buildRetryPrompt] Custom retry prompt builder: (result, attempt) => string.
  * @param {Function} [options.buildContinuePrompt] Custom continue prompt builder: (result, attempt) => string.
  * @param {string}  [options.sdk]         Force SDK.
+ * @param {string}  [options.model]       Force model for SDKs that support it.
  * @param {Function} [options.onEvent]    Event callback.
  * @param {Function} [options.onAbortControllerReplaced] Called when AbortController is replaced after idle_continue.
  * @returns {Promise<{ success: boolean, output: string, items: Array, error: string|null, sdk: string, attempts: number, continues: number, resumed: boolean }>}
@@ -1611,6 +1933,7 @@ export async function execWithRetry(prompt, options = {}) {
     buildRetryPrompt,
     buildContinuePrompt,
     sdk,
+    model,
     onEvent,
     onAbortControllerReplaced,
   } = options;
@@ -1696,6 +2019,7 @@ export async function execWithRetry(prompt, options = {}) {
     lastResult = await launchOrResumeThread(currentPrompt, cwd, timeoutMs, {
       taskKey,
       sdk,
+      model,
       onEvent,
       abortController,
     });
@@ -1767,16 +2091,43 @@ export function getThreadRecord(taskKey) {
   return threadRegistry.get(taskKey) || null;
 }
 
+function markThreadRecordDead(taskKey) {
+  const record = threadRegistry.get(taskKey);
+  if (!record) return false;
+  if (!record.alive) return false;
+  record.alive = false;
+  threadRegistry.set(taskKey, record);
+  return true;
+}
+
+/**
+ * Async invalidate helper that first loads persisted registry state.
+ * Useful at process startup to avoid races with lazy registry restore.
+ *
+ * @param {string} taskKey
+ * @returns {Promise<void>}
+ */
+export async function invalidateThreadAsync(taskKey) {
+  if (!taskKey) return;
+  await ensureThreadRegistryLoaded();
+  if (markThreadRecordDead(taskKey)) {
+    await saveThreadRegistry().catch(() => {});
+  }
+}
+
 /**
  * Invalidate (kill) a thread record so it won't be resumed.
  * @param {string} taskKey
  */
 export function invalidateThread(taskKey) {
-  const record = threadRegistry.get(taskKey);
-  if (record) {
-    record.alive = false;
-    threadRegistry.set(taskKey, record);
+  if (!taskKey) return;
+  if (markThreadRecordDead(taskKey)) {
     saveThreadRegistry().catch(() => {});
+    return;
+  }
+  // If registry hasn't loaded yet, defer invalidation until load completes.
+  if (!threadRegistryLoaded) {
+    void invalidateThreadAsync(taskKey);
   }
 }
 
@@ -1792,10 +2143,8 @@ export function forceNewThread(taskKey, reason = "manual") {
     console.log(
       `${TAG} force-invalidating thread for task "${taskKey}": ${reason} (was turn ${record.turnCount})`,
     );
-    record.alive = false;
-    threadRegistry.set(taskKey, record);
-    saveThreadRegistry().catch(() => {});
   }
+  invalidateThread(taskKey);
 }
 
 /**

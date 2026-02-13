@@ -82,6 +82,15 @@ const VALID_SDKS = Object.freeze(["codex", "copilot", "claude"]);
  */
 const SDK_WILDCARD = "*";
 
+function envFlag(name, defaultValue = false) {
+  const raw = process.env[name];
+  if (raw == null || raw === "") return defaultValue;
+  const normalized = String(raw).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return defaultValue;
+}
+
 // ── Types (JSDoc) ───────────────────────────────────────────────────────────
 
 /**
@@ -532,33 +541,68 @@ export async function executeBlockingHooks(event, context = {}) {
  *     `scripts/agent-preflight.sh` (Unix) to validate quality gates.
  *   - **TaskComplete** — Runs a basic acceptance-criteria check via git log.
  */
-export function registerBuiltinHooks() {
-  // ── PrePush: agent preflight quality gate ──
-  const preflightScript = IS_WINDOWS
-    ? "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/agent-preflight.ps1"
-    : "bash scripts/agent-preflight.sh";
+export function registerBuiltinHooks(options = {}) {
+  const modeRaw =
+    options.mode ??
+    process.env.CODEX_MONITOR_HOOKS_BUILTINS_MODE ??
+    process.env.VE_HOOK_BUILTINS_MODE ??
+    "force";
+  const mode = String(modeRaw).trim().toLowerCase();
+  if (mode === "off" || mode === "disabled" || mode === "none") {
+    console.log(`${TAG} built-in hooks disabled (mode=${mode})`);
+    return;
+  }
 
-  registerHook("PrePush", {
-    id: "builtin-prepush-preflight",
-    command: preflightScript,
-    description: "Run agent preflight quality gates before push",
-    timeout: 300_000, // 5 minutes
-    blocking: true,
-    sdks: [SDK_WILDCARD],
-    builtin: true,
-  });
+  const hasCustomPrePush = (_registry.get("PrePush") ?? []).some(
+    (hook) => !hook.builtin,
+  );
+  const hasCustomTaskComplete = (_registry.get("TaskComplete") ?? []).some(
+    (hook) => !hook.builtin,
+  );
+  const skipPrePush =
+    envFlag("CODEX_MONITOR_HOOKS_DISABLE_PREPUSH", false) ||
+    envFlag("VE_HOOK_DISABLE_PREPUSH", false) ||
+    (mode === "auto" && hasCustomPrePush);
+  const skipTaskComplete =
+    envFlag("CODEX_MONITOR_HOOKS_DISABLE_TASK_COMPLETE", false) ||
+    envFlag("CODEX_MONITOR_HOOKS_DISABLE_VALIDATION", false) ||
+    envFlag("VE_HOOK_DISABLE_TASK_COMPLETE", false) ||
+    (mode === "auto" && hasCustomTaskComplete);
+
+  // ── PrePush: agent preflight quality gate ──
+  if (!skipPrePush) {
+    const preflightScript = IS_WINDOWS
+      ? "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/agent-preflight.ps1"
+      : "bash scripts/agent-preflight.sh";
+
+    registerHook("PrePush", {
+      id: "builtin-prepush-preflight",
+      command: preflightScript,
+      description: "Run agent preflight quality gates before push",
+      timeout: 300_000, // 5 minutes
+      blocking: true,
+      sdks: [SDK_WILDCARD],
+      builtin: true,
+    });
+  } else {
+    console.log(`${TAG} skipped built-in PrePush hook (mode=${mode})`);
+  }
 
   // ── TaskComplete: verify at least one commit exists on the branch ──
-  registerHook("TaskComplete", {
-    id: "builtin-task-complete-validation",
-    command: _buildTaskCompleteCommand(),
-    description:
-      "Validate task produced at least one commit ahead of base branch",
-    timeout: 30_000, // 30 seconds
-    blocking: true,
-    sdks: [SDK_WILDCARD],
-    builtin: true,
-  });
+  if (!skipTaskComplete) {
+    registerHook("TaskComplete", {
+      id: "builtin-task-complete-validation",
+      command: _buildTaskCompleteCommand(),
+      description:
+        "Validate task produced at least one commit ahead of base branch",
+      timeout: 30_000, // 30 seconds
+      blocking: true,
+      sdks: [SDK_WILDCARD],
+      builtin: true,
+    });
+  } else {
+    console.log(`${TAG} skipped built-in TaskComplete hook (mode=${mode})`);
+  }
 
   console.log(`${TAG} built-in hooks registered`);
 }
@@ -571,13 +615,22 @@ export function registerBuiltinHooks() {
  */
 function _buildTaskCompleteCommand() {
   if (IS_WINDOWS) {
-    // PowerShell one-liner: count commits ahead of main
-    return [
-      "powershell -NoProfile -Command",
-      '"$ahead = git rev-list --count $(git merge-base HEAD origin/main)..HEAD;',
-      "if ([int]$ahead -lt 1) { Write-Error 'No commits ahead of origin/main'; exit 1 }",
-      'else { Write-Host "OK: $ahead commit(s) ahead of origin/main" }"',
-    ].join(" ");
+    // Use -EncodedCommand to avoid quoting/parsing issues with ".." in PowerShell.
+    // We also gracefully fallback to local "main" if "origin/main" is unavailable.
+    const psScript = [
+      "$null = git show-ref --verify --quiet refs/remotes/origin/main",
+      "if ($LASTEXITCODE -eq 0) { $baseRef = 'origin/main' } else {",
+      "  $null = git show-ref --verify --quiet refs/heads/main",
+      "  if ($LASTEXITCODE -eq 0) { $baseRef = 'main' } else { Write-Error 'Neither origin/main nor main exists'; exit 1 }",
+      "}",
+      "$mergeBase = git merge-base HEAD $baseRef",
+      "if (-not $mergeBase) { Write-Error \"Could not determine merge-base with $baseRef\"; exit 1 }",
+      "$ahead = [int](git rev-list --count \"$mergeBase..HEAD\")",
+      "if ($ahead -lt 1) { Write-Error \"No commits ahead of $baseRef\"; exit 1 }",
+      "Write-Host \"OK: $ahead commit(s) ahead of $baseRef\"",
+    ].join("; ");
+    const encoded = Buffer.from(psScript, "utf16le").toString("base64");
+    return `powershell -NoProfile -EncodedCommand ${encoded}`;
   }
 
   // Bash one-liner

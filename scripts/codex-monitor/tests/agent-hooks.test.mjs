@@ -23,15 +23,25 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = resolve(__dirname, "..", ".cache", "test-hooks");
+const HOOK_ENV_VARS = [
+  "CODEX_MONITOR_HOOKS_BUILTINS_MODE",
+  "CODEX_MONITOR_HOOKS_DISABLE_PREPUSH",
+  "CODEX_MONITOR_HOOKS_DISABLE_TASK_COMPLETE",
+  "CODEX_MONITOR_HOOKS_DISABLE_VALIDATION",
+  "VE_HOOK_DISABLE_PREPUSH",
+  "VE_HOOK_DISABLE_TASK_COMPLETE",
+];
 
 describe("agent-hooks", () => {
   beforeEach(() => {
     resetHooks();
     mkdirSync(fixtureDir, { recursive: true });
+    for (const name of HOOK_ENV_VARS) delete process.env[name];
   });
 
   afterEach(() => {
     resetHooks();
+    for (const name of HOOK_ENV_VARS) delete process.env[name];
     try {
       for (const f of ["hooks.json", "bad.json"]) {
         const p = resolve(fixtureDir, f);
@@ -328,6 +338,45 @@ describe("agent-hooks", () => {
         (h) => h.id === "builtin-prepush-preflight",
       ).length;
       expect(count).toBe(1);
+    });
+
+    it("should skip builtins when mode=off", () => {
+      process.env.CODEX_MONITOR_HOOKS_BUILTINS_MODE = "off";
+      registerBuiltinHooks();
+
+      expect(getRegisteredHooks("PrePush")).toEqual([]);
+      expect(getRegisteredHooks("TaskComplete")).toEqual([]);
+    });
+
+    it("should auto-skip prepush builtin when custom prepush exists", () => {
+      process.env.CODEX_MONITOR_HOOKS_BUILTINS_MODE = "auto";
+      registerHook("PrePush", {
+        id: "custom-prepush",
+        command: "echo custom",
+        blocking: true,
+      });
+      registerBuiltinHooks();
+
+      const prePush = getRegisteredHooks("PrePush");
+      expect(prePush.find((h) => h.id === "custom-prepush")).toBeDefined();
+      expect(
+        prePush.find((h) => h.id === "builtin-prepush-preflight"),
+      ).toBeUndefined();
+    });
+
+    it("should force builtins when mode=force even with custom hooks", () => {
+      process.env.CODEX_MONITOR_HOOKS_BUILTINS_MODE = "force";
+      registerHook("PrePush", {
+        id: "custom-prepush",
+        command: "echo custom",
+        blocking: true,
+      });
+      registerBuiltinHooks();
+
+      const prePush = getRegisteredHooks("PrePush");
+      expect(
+        prePush.find((h) => h.id === "builtin-prepush-preflight"),
+      ).toBeDefined();
     });
   });
 

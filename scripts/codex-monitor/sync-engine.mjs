@@ -83,6 +83,43 @@ function statusRank(s) {
   return STATUS_ORDER[s] ?? -1;
 }
 
+const TERMINAL_STATUS_ALIASES = {
+  closed: "cancelled",
+  close: "cancelled",
+  archived: "cancelled",
+  rejected: "cancelled",
+  wontfix: "cancelled",
+  merged: "done",
+  merge: "done",
+  completed: "done",
+  complete: "done",
+  resolved: "done",
+};
+
+const CANONICAL_STATUS_BY_KEY = {
+  todo: "todo",
+  inprogress: "inprogress",
+  inreview: "inreview",
+  blocked: "blocked",
+  done: "done",
+  cancelled: "cancelled",
+};
+
+function normalizeStatusLabel(status) {
+  if (status == null) return status;
+  const raw = String(status).trim();
+  if (!raw) return raw;
+
+  const key = raw.toLowerCase().replace(/[\s_-]+/g, "");
+  if (TERMINAL_STATUS_ALIASES[key]) {
+    return TERMINAL_STATUS_ALIASES[key];
+  }
+  if (CANONICAL_STATUS_BY_KEY[key]) {
+    return CANONICAL_STATUS_BY_KEY[key];
+  }
+  return raw;
+}
+
 // ---------------------------------------------------------------------------
 // SyncResult helper
 // ---------------------------------------------------------------------------
@@ -217,15 +254,21 @@ export class SyncEngine {
       if (!ext || !ext.id) continue;
       externalIds.add(ext.id);
 
+      const normalizedExternalStatus = normalizeStatusLabel(ext.status);
+      const normalizedExt = {
+        ...ext,
+        status: normalizedExternalStatus,
+      };
+
       try {
         const internal = internalById.get(ext.id);
 
         if (!internal) {
           // ── New task from external ──
           upsertFromExternal({
-            ...ext,
-            projectId: ext.projectId ?? this.#projectId,
-            externalBackend: ext.backend ?? null,
+            ...normalizedExt,
+            projectId: normalizedExt.projectId ?? this.#projectId,
+            externalBackend: normalizedExt.backend ?? null,
           });
           result.pulled++;
           console.log(TAG, `Pulled new task ${ext.id}: ${ext.title}`);
@@ -233,8 +276,8 @@ export class SyncEngine {
         }
 
         // ── Existing task — check for external status change ──
-        const oldExternal = internal.externalStatus;
-        const newExternal = ext.status;
+        const oldExternal = normalizeStatusLabel(internal.externalStatus);
+        const newExternal = normalizedExternalStatus;
 
         if (newExternal && newExternal !== oldExternal) {
           // External status changed (human edited it)
@@ -294,18 +337,18 @@ export class SyncEngine {
           } else {
             // Same rank, different status (e.g., blocked vs inprogress) or equal
             upsertFromExternal({
-              ...ext,
-              projectId: ext.projectId ?? this.#projectId,
-              externalBackend: ext.backend ?? null,
+              ...normalizedExt,
+              projectId: normalizedExt.projectId ?? this.#projectId,
+              externalBackend: normalizedExt.backend ?? null,
             });
             result.pulled++;
           }
         } else {
           // No status change — still update metadata (title, description, etc.)
           upsertFromExternal({
-            ...ext,
-            projectId: ext.projectId ?? this.#projectId,
-            externalBackend: ext.backend ?? null,
+            ...normalizedExt,
+            projectId: normalizedExt.projectId ?? this.#projectId,
+            externalBackend: normalizedExt.backend ?? null,
           });
         }
       } catch (err) {
@@ -530,11 +573,41 @@ export class SyncEngine {
       return;
     }
 
+    const backendName = getKanbanBackendName();
+    const pushId = task.externalId || task.id;
+    if (!isIdValidForBackend(pushId, backendName)) {
+      markSynced(task.id);
+      console.log(
+        TAG,
+        `Skipped ${task.id} — ID format incompatible with ${backendName} backend`,
+      );
+      return;
+    }
+
     try {
-      await this.#updateExternal(taskId, task.status);
+      await this.#updateExternal(pushId, task.status);
       markSynced(taskId);
-      console.log(TAG, `Force-synced task ${taskId} → ${task.status}`);
+      console.log(
+        TAG,
+        `Force-synced task ${taskId} (${pushId}) → ${task.status}`,
+      );
     } catch (err) {
+      if (this.#isNotFound(err)) {
+        console.warn(
+          TAG,
+          `Task ${task.id} returned 404 during force-sync — removing orphaned task from internal store`,
+        );
+        removeTask(task.id);
+        return;
+      }
+      if (this.#isInvalidIdFormat(err)) {
+        markSynced(task.id);
+        console.log(
+          TAG,
+          `Skipped ${task.id} — invalid ID format for current backend`,
+        );
+        return;
+      }
       console.warn(TAG, `syncTask failed for ${taskId}: ${err.message}`);
     }
   }

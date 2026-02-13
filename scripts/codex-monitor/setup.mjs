@@ -38,6 +38,11 @@ import {
   getAgentPromptDefinitions,
   PROMPT_WORKSPACE_DIR,
 } from "./agent-prompts.mjs";
+import {
+  buildHookScaffoldOptionsFromEnv,
+  normalizeHookTargets,
+  scaffoldAgentHookFiles,
+} from "./hook-profiles.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -237,6 +242,54 @@ function ensureRepoGitIgnoreEntry(repoRoot, entry) {
   return true;
 }
 
+function parseHookCommandInput(rawValue) {
+  const raw = String(rawValue || "").trim();
+  if (!raw) return null;
+  const lowered = raw.toLowerCase();
+  if (["none", "off", "disable", "disabled"].includes(lowered)) {
+    return [];
+  }
+  return raw
+    .split(/\s*;;\s*|\r?\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function printHookScaffoldSummary(result) {
+  if (!result || !result.enabled) {
+    info("Agent hook scaffolding disabled.");
+    return;
+  }
+
+  const totalChanged = result.written.length + result.updated.length;
+  if (totalChanged > 0) {
+    success(`Configured ${totalChanged} agent hook file(s).`);
+  } else {
+    info("Agent hook files already existed — no file changes needed.");
+  }
+
+  if (result.written.length > 0) {
+    for (const path of result.written) {
+      console.log(`    + ${path}`);
+    }
+  }
+  if (result.updated.length > 0) {
+    for (const path of result.updated) {
+      console.log(`    ~ ${path}`);
+    }
+  }
+  if (result.skipped.length > 0) {
+    for (const path of result.skipped) {
+      console.log(`    = ${path} (kept existing)`);
+    }
+  }
+  if (result.warnings.length > 0) {
+    for (const warning of result.warnings) {
+      warn(warning);
+    }
+  }
+}
+
 // ── Prompt System ────────────────────────────────────────────────────────────
 
 function createPrompt() {
@@ -372,6 +425,188 @@ const DISTRIBUTION_MODES = [
     desc: "Always use primary; others only for failover",
   },
 ];
+
+const SETUP_PROFILES = [
+  {
+    key: "recommended",
+    label: "Recommended — configure important choices, keep safe defaults",
+  },
+  {
+    key: "advanced",
+    label: "Advanced — full control over all setup options",
+  },
+];
+
+function toPositiveInt(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.round(n);
+}
+
+function normalizeEnum(value, allowed, fallback) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return allowed.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
+  env.PROJECT_NAME =
+    env.PROJECT_NAME || configJson.projectName || basename(repoRoot);
+  env.REPO_ROOT = env.REPO_ROOT || repoRoot;
+  env.GITHUB_REPO = env.GITHUB_REPO || slug || "";
+
+  env.MAX_PARALLEL = String(toPositiveInt(env.MAX_PARALLEL || "6", 6));
+  env.TELEGRAM_INTERVAL_MIN = String(
+    toPositiveInt(env.TELEGRAM_INTERVAL_MIN || "10", 10),
+  );
+
+  env.KANBAN_BACKEND = normalizeEnum(
+    env.KANBAN_BACKEND,
+    ["vk", "github", "jira"],
+    "vk",
+  );
+  env.EXECUTOR_MODE = normalizeEnum(
+    env.EXECUTOR_MODE,
+    ["internal", "vk", "hybrid"],
+    "internal",
+  );
+
+  env.VK_BASE_URL = env.VK_BASE_URL || "http://127.0.0.1:54089";
+  env.VK_RECOVERY_PORT = String(
+    toPositiveInt(env.VK_RECOVERY_PORT || "54089", 54089),
+  );
+
+  env.WHATSAPP_ENABLED = ["1", "true", "yes"].includes(
+    String(env.WHATSAPP_ENABLED || "0").toLowerCase(),
+  )
+    ? "1"
+    : "0";
+
+  env.CONTAINER_ENABLED = ["1", "true", "yes"].includes(
+    String(env.CONTAINER_ENABLED || "0").toLowerCase(),
+  )
+    ? "1"
+    : "0";
+
+  env.CONTAINER_RUNTIME = normalizeEnum(
+    env.CONTAINER_RUNTIME,
+    ["auto", "docker", "podman", "container"],
+    "auto",
+  );
+
+  if (
+    !Array.isArray(configJson.executors) ||
+    configJson.executors.length === 0
+  ) {
+    configJson.executors = EXECUTOR_PRESETS["codex-only"];
+  }
+  configJson.executors = configJson.executors.map((executor, index) => ({
+    ...executor,
+    name: executor.name || `executor-${index + 1}`,
+    executor: String(executor.executor || "CODEX").toUpperCase(),
+    variant: executor.variant || "DEFAULT",
+    weight: toPositiveInt(executor.weight || 1, 1),
+    role:
+      executor.role ||
+      (index === 0
+        ? "primary"
+        : index === 1
+          ? "backup"
+          : `executor-${index + 1}`),
+    enabled: executor.enabled !== false,
+  }));
+
+  configJson.failover = {
+    strategy: normalizeEnum(
+      configJson.failover?.strategy || env.FAILOVER_STRATEGY || "next-in-line",
+      ["next-in-line", "weighted-random", "round-robin"],
+      "next-in-line",
+    ),
+    maxRetries: toPositiveInt(
+      configJson.failover?.maxRetries || env.FAILOVER_MAX_RETRIES || 3,
+      3,
+    ),
+    cooldownMinutes: toPositiveInt(
+      configJson.failover?.cooldownMinutes || env.FAILOVER_COOLDOWN_MIN || 5,
+      5,
+    ),
+    disableOnConsecutiveFailures: toPositiveInt(
+      configJson.failover?.disableOnConsecutiveFailures ||
+        env.FAILOVER_DISABLE_AFTER ||
+        3,
+      3,
+    ),
+  };
+
+  configJson.distribution = normalizeEnum(
+    configJson.distribution || env.EXECUTOR_DISTRIBUTION || "weighted",
+    ["weighted", "round-robin", "primary-only"],
+    "weighted",
+  );
+
+  if (
+    !Array.isArray(configJson.repositories) ||
+    configJson.repositories.length === 0
+  ) {
+    configJson.repositories = [
+      {
+        name: basename(repoRoot),
+        slug: env.GITHUB_REPO,
+        primary: true,
+      },
+    ];
+  }
+
+  configJson.projectName = env.PROJECT_NAME;
+  configJson.kanban = { backend: env.KANBAN_BACKEND };
+  configJson.internalExecutor = {
+    ...(configJson.internalExecutor || {}),
+    mode: env.EXECUTOR_MODE,
+  };
+}
+
+function formatEnvValue(value) {
+  const raw = String(value ?? "");
+  const needsQuotes = /\s|#|=/.test(raw);
+  if (!needsQuotes) return raw;
+  return `"${raw.replace(/"/g, '\\"')}"`;
+}
+
+function buildStandardizedEnvFile(templateText, envEntries) {
+  const lines = templateText.split(/\r?\n/);
+  const entryMap = new Map(
+    Object.entries(envEntries)
+      .filter(([key]) => !key.startsWith("_"))
+      .map(([key, value]) => [key, String(value ?? "")]),
+  );
+
+  const consumed = new Set();
+  const updated = lines.map((line) => {
+    const match = line.match(/^\s*#?\s*([A-Z0-9_]+)=.*$/);
+    if (!match) return line;
+    const key = match[1];
+    if (!entryMap.has(key)) return line;
+    consumed.add(key);
+    return `${key}=${formatEnvValue(entryMap.get(key))}`;
+  });
+
+  const extras = [...entryMap.keys()].filter((key) => !consumed.has(key));
+  if (extras.length > 0) {
+    updated.push("");
+    updated.push("# Added by setup wizard");
+    for (const key of extras.sort()) {
+      updated.push(`${key}=${formatEnvValue(entryMap.get(key))}`);
+    }
+  }
+
+  const header = [
+    "# Generated by codex-monitor setup wizard",
+    `# ${new Date().toISOString()}`,
+    "",
+  ];
+  return [...header, ...updated].join("\n") + "\n";
+}
 
 // ── Agent Template ───────────────────────────────────────────────────────────
 
@@ -554,7 +789,7 @@ async function main() {
   printBanner();
 
   // ── Step 1: Prerequisites ───────────────────────────────
-  heading("Step 1 of 7 — Prerequisites");
+  heading("Step 1 of 9 — Prerequisites");
   const hasNode = check(
     "Node.js ≥ 18",
     Number(process.versions.node.split(".")[0]) >= 18,
@@ -621,8 +856,21 @@ async function main() {
   const prompt = createPrompt();
 
   try {
-    // ── Step 2: Project Identity ──────────────────────────
-    heading("Step 2 of 7 — Project Identity");
+    // ── Step 2: Setup Mode + Project Identity ─────────────
+    heading("Step 2 of 9 — Setup Mode & Project Identity");
+    const setupProfileIdx = await prompt.choose(
+      "How much setup detail do you want?",
+      SETUP_PROFILES.map((profile) => profile.label),
+      0,
+    );
+    const setupProfile = SETUP_PROFILES[setupProfileIdx]?.key || "recommended";
+    const isAdvancedSetup = setupProfile === "advanced";
+    info(
+      isAdvancedSetup
+        ? "Advanced mode enabled — all sections will prompt for detailed overrides."
+        : "Recommended mode enabled — only key decisions are prompted; safe defaults fill the rest.",
+    );
+
     env.PROJECT_NAME = await prompt.ask("Project name", projectName);
     env.GITHUB_REPO = await prompt.ask(
       "GitHub repo slug (org/repo)",
@@ -631,11 +879,13 @@ async function main() {
     configJson.projectName = env.PROJECT_NAME;
 
     // ── Step 3: Repository ─────────────────────────────────
-    heading("Step 3 of 7 — Repository Configuration");
-    const multiRepo = await prompt.confirm(
-      "Do you have multiple repositories (e.g. separate backend/frontend)?",
-      false,
-    );
+    heading("Step 3 of 9 — Repository Configuration");
+    const multiRepo = isAdvancedSetup
+      ? await prompt.confirm(
+          "Do you have multiple repositories (e.g. separate backend/frontend)?",
+          false,
+        )
+      : false;
 
     if (multiRepo) {
       info("Configure each repository. The first is the primary.\n");
@@ -670,32 +920,42 @@ async function main() {
         slug: env.GITHUB_REPO,
         primary: true,
       });
+      if (!isAdvancedSetup) {
+        info(
+          "Using single-repo defaults (recommended mode). Re-run setup in Advanced mode for multi-repo config.",
+        );
+      }
     }
 
     // ── Step 4: Executor Configuration ─────────────────────
-    heading("Step 4 of 7 — Executor / Agent Configuration");
+    heading("Step 4 of 9 — Executor / Agent Configuration");
     console.log("  Executors are the AI agents that work on tasks.\n");
+
+    const presetOptions = isAdvancedSetup
+      ? [
+          "Codex only",
+          "Copilot + Codex (50/50 split)",
+          "Copilot only (Claude Opus 4.6)",
+          "Triple (Copilot Claude 40%, Codex 35%, Copilot GPT 25%)",
+          "Custom — I'll define my own executors",
+        ]
+      : [
+          "Codex only",
+          "Copilot + Codex (50/50 split)",
+          "Copilot only (Claude Opus 4.6)",
+          "Triple (Copilot Claude 40%, Codex 35%, Copilot GPT 25%)",
+        ];
 
     const presetIdx = await prompt.choose(
       "Select executor preset:",
-      [
-        "Codex only",
-        "Copilot + Codex (50/50 split)",
-        "Copilot only (Claude Opus 4.6)",
-        "Triple (Copilot Claude 40%, Codex 35%, Copilot GPT 25%)",
-        "Custom — I'll define my own executors",
-      ],
+      presetOptions,
       0,
     );
 
-    const presetNames = [
-      "codex-only",
-      "copilot-codex",
-      "copilot-only",
-      "triple",
-      "custom",
-    ];
-    const presetKey = presetNames[presetIdx];
+    const presetNames = isAdvancedSetup
+      ? ["codex-only", "copilot-codex", "copilot-only", "triple", "custom"]
+      : ["codex-only", "copilot-codex", "copilot-only", "triple"];
+    const presetKey = presetNames[presetIdx] || "codex-only";
 
     if (presetKey === "custom") {
       info("Define your executors. Enter empty name to finish.\n");
@@ -734,37 +994,55 @@ async function main() {
       );
     }
 
-    // Failover strategy
-    console.log();
-    console.log(chalk.dim("  What happens when an executor fails repeatedly?"));
-    console.log();
+    if (isAdvancedSetup) {
+      console.log();
+      console.log(
+        chalk.dim("  What happens when an executor fails repeatedly?"),
+      );
+      console.log();
 
-    const failoverIdx = await prompt.choose(
-      "Select failover strategy:",
-      FAILOVER_STRATEGIES.map((f) => `${f.name} — ${f.desc}`),
-      0,
-    );
-    configJson.failover = {
-      strategy: FAILOVER_STRATEGIES[failoverIdx].name,
-      maxRetries: Number(await prompt.ask("Max retries before failover", "3")),
-      cooldownMinutes: Number(
-        await prompt.ask("Cooldown after disabling executor (minutes)", "5"),
-      ),
-      disableOnConsecutiveFailures: Number(
-        await prompt.ask("Disable executor after N consecutive failures", "3"),
-      ),
-    };
+      const failoverIdx = await prompt.choose(
+        "Select failover strategy:",
+        FAILOVER_STRATEGIES.map((f) => `${f.name} — ${f.desc}`),
+        0,
+      );
+      configJson.failover = {
+        strategy: FAILOVER_STRATEGIES[failoverIdx].name,
+        maxRetries: Number(
+          await prompt.ask("Max retries before failover", "3"),
+        ),
+        cooldownMinutes: Number(
+          await prompt.ask("Cooldown after disabling executor (minutes)", "5"),
+        ),
+        disableOnConsecutiveFailures: Number(
+          await prompt.ask(
+            "Disable executor after N consecutive failures",
+            "3",
+          ),
+        ),
+      };
 
-    // Distribution mode
-    const distIdx = await prompt.choose(
-      "\n  Task distribution mode:",
-      DISTRIBUTION_MODES.map((d) => `${d.name} — ${d.desc}`),
-      0,
-    );
-    configJson.distribution = DISTRIBUTION_MODES[distIdx].name;
+      const distIdx = await prompt.choose(
+        "\n  Task distribution mode:",
+        DISTRIBUTION_MODES.map((d) => `${d.name} — ${d.desc}`),
+        0,
+      );
+      configJson.distribution = DISTRIBUTION_MODES[distIdx].name;
+    } else {
+      configJson.failover = {
+        strategy: "next-in-line",
+        maxRetries: 3,
+        cooldownMinutes: 5,
+        disableOnConsecutiveFailures: 3,
+      };
+      configJson.distribution = "weighted";
+      info(
+        "Using recommended routing defaults: weighted distribution, next-in-line failover.",
+      );
+    }
 
     // ── Step 5: AI Provider ────────────────────────────────
-    heading("Step 5 of 7 — AI / Codex Provider");
+    heading("Step 5 of 9 — AI / Codex Provider");
     console.log(
       "  Codex Monitor uses the Codex SDK for crash analysis & autofix.\n",
     );
@@ -811,7 +1089,7 @@ async function main() {
     }
 
     // ── Step 6: Telegram ──────────────────────────────────
-    heading("Step 6 of 7 — Telegram Notifications");
+    heading("Step 6 of 9 — Telegram Notifications");
     console.log(
       "  The Telegram bot sends real-time notifications and lets you\n" +
         "  control the orchestrator via /status, /tasks, /restart, etc.\n",
@@ -1036,7 +1314,7 @@ async function main() {
     }
 
     // ── Step 7: Kanban + Execution ─────────────────────────
-    heading("Step 7 of 7 — Kanban & Execution");
+    heading("Step 7 of 9 — Kanban & Execution");
     const backendDefault = String(
       process.env.KANBAN_BACKEND || configJson.kanban?.backend || "vk",
     )
@@ -1104,14 +1382,19 @@ async function main() {
     }
 
     if (vkNeeded) {
-      env.VK_BASE_URL = await prompt.ask(
-        "VK API URL",
-        process.env.VK_BASE_URL || "http://127.0.0.1:54089",
-      );
-      env.VK_RECOVERY_PORT = await prompt.ask(
-        "VK port",
-        process.env.VK_RECOVERY_PORT || "54089",
-      );
+      if (isAdvancedSetup) {
+        env.VK_BASE_URL = await prompt.ask(
+          "VK API URL",
+          process.env.VK_BASE_URL || "http://127.0.0.1:54089",
+        );
+        env.VK_RECOVERY_PORT = await prompt.ask(
+          "VK port",
+          process.env.VK_RECOVERY_PORT || "54089",
+        );
+      } else {
+        env.VK_BASE_URL = process.env.VK_BASE_URL || "http://127.0.0.1:54089";
+        env.VK_RECOVERY_PORT = process.env.VK_RECOVERY_PORT || "54089";
+      }
       const spawnVk = await prompt.confirm(
         "Auto-spawn vibe-kanban if not running?",
         true,
@@ -1201,10 +1484,12 @@ async function main() {
       info(`  - ve-orchestrator.ps1`);
       info(`  - ve-kanban.ps1`);
 
-      const useDefault = await prompt.confirm(
-        "Use the default ve-orchestrator.ps1 script?",
-        true,
-      );
+      const useDefault = isAdvancedSetup
+        ? await prompt.confirm(
+            "Use the default ve-orchestrator.ps1 script?",
+            true,
+          )
+        : true;
 
       if (useDefault) {
         env.ORCHESTRATOR_SCRIPT = defaultOrchestrator;
@@ -1223,10 +1508,12 @@ async function main() {
         }
       }
     } else {
-      const hasOrcScript = await prompt.confirm(
-        "Do you have an existing orchestrator script?",
-        false,
-      );
+      const hasOrcScript = isAdvancedSetup
+        ? await prompt.confirm(
+            "Do you have an existing orchestrator script?",
+            false,
+          )
+        : false;
       if (hasOrcScript) {
         env.ORCHESTRATOR_SCRIPT = await prompt.ask(
           "Path to orchestrator script",
@@ -1239,7 +1526,10 @@ async function main() {
       }
     }
 
-    env.MAX_PARALLEL = await prompt.ask("Max parallel agent slots", "6");
+    env.MAX_PARALLEL = await prompt.ask(
+      "Max parallel agent slots",
+      process.env.MAX_PARALLEL || "6",
+    );
 
     // ── Agent Templates ───────────────────────────────────
     heading("Agent Templates");
@@ -1248,10 +1538,12 @@ async function main() {
         "  codex-monitor prompt templates are scaffolded to .codex-monitor/agents and loaded automatically.\n",
       ),
     );
-    const generateAgents = await prompt.confirm(
-      "Scaffold .codex-monitor/agents prompt files?",
-      true,
-    );
+    const generateAgents = isAdvancedSetup
+      ? await prompt.confirm(
+          "Scaffold .codex-monitor/agents prompt files?",
+          true,
+        )
+      : true;
 
     if (generateAgents) {
       const promptsResult = ensureAgentPromptWorkspace(repoRoot);
@@ -1294,13 +1586,134 @@ async function main() {
       configJson.agentPrompts = getDefaultPromptOverrides();
     }
 
+    // ── Agent Hooks ───────────────────────────────────────
+    heading("Agent Hooks");
+    console.log(
+      chalk.dim(
+        "  Configure shared hook policies for Codex, Claude Code, and Copilot CLI.\n",
+      ),
+    );
+
+    const scaffoldHooks = isAdvancedSetup
+      ? await prompt.confirm(
+          "Scaffold hook configs for Codex/Claude/Copilot?",
+          true,
+        )
+      : true;
+
+    if (scaffoldHooks) {
+      const profileMap = ["strict", "balanced", "lightweight", "none"];
+      let profile = "balanced";
+      let targets = ["codex", "claude", "copilot"];
+      let prePushRaw = process.env.CODEX_MONITOR_HOOK_PREPUSH || "";
+      let preCommitRaw = process.env.CODEX_MONITOR_HOOK_PRECOMMIT || "";
+      let taskCompleteRaw = process.env.CODEX_MONITOR_HOOK_TASK_COMPLETE || "";
+      let overwriteHooks = false;
+
+      if (isAdvancedSetup) {
+        const profileIdx = await prompt.choose(
+          "Select hook policy:",
+          [
+            "Strict — pre-commit + pre-push + task validation",
+            "Balanced — pre-push + task validation",
+            "Lightweight — session/audit hooks only (no validation gates)",
+            "None — disable codex-monitor built-in validation hooks",
+          ],
+          0,
+        );
+        profile = profileMap[profileIdx] || "strict";
+
+        const targetIdx = await prompt.choose(
+          "Hook files to scaffold:",
+          [
+            "All agents (Codex + Claude + Copilot)",
+            "Codex + Claude",
+            "Codex + Copilot",
+            "Codex only",
+            "Custom target list",
+          ],
+          0,
+        );
+
+        if (targetIdx === 0) targets = ["codex", "claude", "copilot"];
+        else if (targetIdx === 1) targets = ["codex", "claude"];
+        else if (targetIdx === 2) targets = ["codex", "copilot"];
+        else if (targetIdx === 3) targets = ["codex"];
+        else {
+          const customTargets = await prompt.ask(
+            "Custom targets (comma-separated: codex,claude,copilot)",
+            "codex,claude,copilot",
+          );
+          targets = normalizeHookTargets(customTargets);
+        }
+
+        console.log(
+          chalk.dim(
+            "  Optional command overrides: use ';;' between commands, or 'none' to disable a hook event.\n",
+          ),
+        );
+
+        prePushRaw = await prompt.ask(
+          "Pre-push command override",
+          process.env.CODEX_MONITOR_HOOK_PREPUSH || "",
+        );
+        preCommitRaw = await prompt.ask(
+          "Pre-commit command override",
+          process.env.CODEX_MONITOR_HOOK_PRECOMMIT || "",
+        );
+        taskCompleteRaw = await prompt.ask(
+          "Task-complete command override",
+          process.env.CODEX_MONITOR_HOOK_TASK_COMPLETE || "",
+        );
+
+        overwriteHooks = await prompt.confirm(
+          "Overwrite existing generated hook files when present?",
+          false,
+        );
+      } else {
+        info(
+          "Using recommended hook defaults: balanced policy for codex, claude, and copilot.",
+        );
+      }
+
+      const hookResult = scaffoldAgentHookFiles(repoRoot, {
+        enabled: true,
+        profile,
+        targets,
+        overwriteExisting: overwriteHooks,
+        commands: {
+          PrePush: parseHookCommandInput(prePushRaw),
+          PreCommit: parseHookCommandInput(preCommitRaw),
+          TaskComplete: parseHookCommandInput(taskCompleteRaw),
+        },
+      });
+
+      printHookScaffoldSummary(hookResult);
+      Object.assign(env, hookResult.env);
+      configJson.hookProfiles = {
+        enabled: true,
+        profile,
+        targets,
+        overwriteExisting: overwriteHooks,
+      };
+    } else {
+      const hookResult = scaffoldAgentHookFiles(repoRoot, { enabled: false });
+      Object.assign(env, hookResult.env);
+      configJson.hookProfiles = {
+        enabled: false,
+      };
+      info("Hook scaffolding skipped by user selection.");
+    }
+
     // ── VK Auto-Wiring ────────────────────────────────────
     if (vkNeeded) {
       heading("Vibe-Kanban Auto-Configuration");
-      const autoWireVk = await prompt.confirm(
-        "Auto-configure Vibe-Kanban project, repos, and executor profiles?",
-        true,
-      );
+      const autoWireVk = isAdvancedSetup
+        ? await prompt.confirm(
+            "Auto-configure Vibe-Kanban project, repos, and executor profiles?",
+            true,
+          )
+        : true;
 
       if (autoWireVk) {
         const vkConfig = {
@@ -1342,11 +1755,108 @@ async function main() {
       info("Skipping VK auto-configuration (VK not selected).");
       delete configJson.vkAutoConfig;
     }
+
+    // ── Step 8: Optional Channels ─────────────────────────
+    heading("Step 8 of 9 — Optional Channels (WhatsApp & Container)");
+
+    console.log(
+      chalk.dim(
+        "  These are optional features. Skip them if you only want Telegram.",
+      ),
+    );
+
+    // WhatsApp
+    const enableWhatsApp = await prompt.confirm(
+      "Enable WhatsApp channel?",
+      false,
+    );
+    if (enableWhatsApp) {
+      env.WHATSAPP_ENABLED = "1";
+      env.WHATSAPP_CHAT_ID = await prompt.ask(
+        "WhatsApp Chat/Group ID (JID)",
+        process.env.WHATSAPP_CHAT_ID || "",
+      );
+      env.WHATSAPP_ASSISTANT_NAME = isAdvancedSetup
+        ? await prompt.ask(
+            "WhatsApp assistant display name",
+            env.PROJECT_NAME || "Codex Monitor",
+          )
+        : env.PROJECT_NAME || "Codex Monitor";
+      info(
+        "Run `codex-monitor --whatsapp-auth` after setup to authenticate with WhatsApp.",
+      );
+    } else {
+      env.WHATSAPP_ENABLED = "0";
+    }
+
+    // Container isolation
+    const enableContainer = await prompt.confirm(
+      "Enable container isolation for agent execution?",
+      false,
+    );
+    if (enableContainer) {
+      env.CONTAINER_ENABLED = "1";
+      if (isAdvancedSetup) {
+        const runtimeIdx = await prompt.choose(
+          "Container runtime",
+          ["docker", "podman", "auto-detect"],
+          2,
+        );
+        env.CONTAINER_RUNTIME = ["docker", "podman", "auto"][runtimeIdx];
+        env.CONTAINER_IMAGE = await prompt.ask(
+          "Container image",
+          process.env.CONTAINER_IMAGE || "node:22-slim",
+        );
+        env.CONTAINER_MEMORY_LIMIT = await prompt.ask(
+          "Memory limit (e.g. 2g)",
+          process.env.CONTAINER_MEMORY_LIMIT || "4g",
+        );
+      } else {
+        env.CONTAINER_RUNTIME = process.env.CONTAINER_RUNTIME || "auto";
+        env.CONTAINER_IMAGE = process.env.CONTAINER_IMAGE || "node:22-slim";
+      }
+    } else {
+      env.CONTAINER_ENABLED = "0";
+    }
+
+    // ── Step 9: Startup Service ────────────────────────────
+    heading("Step 9 of 9 — Startup Service");
+
+    const { getStartupStatus, getStartupMethodName } =
+      await import("./startup-service.mjs");
+    const currentStartup = getStartupStatus();
+    const methodName = getStartupMethodName();
+
+    if (currentStartup.installed) {
+      info(`Startup service already installed via ${currentStartup.method}.`);
+      const reinstall = await prompt.confirm(
+        "Re-install startup service?",
+        false,
+      );
+      env._STARTUP_SERVICE = reinstall ? "1" : "skip";
+    } else {
+      console.log(
+        chalk.dim(
+          `  Auto-start codex-monitor when you log in using ${methodName}.`,
+        ),
+      );
+      console.log(
+        chalk.dim(
+          "  It will run in daemon mode (background) with auto-restart on failure.",
+        ),
+      );
+      const enableStartup = await prompt.confirm(
+        "Enable auto-start on login?",
+        true,
+      );
+      env._STARTUP_SERVICE = enableStartup ? "1" : "0";
+    }
   } finally {
     prompt.close();
   }
 
   // ── Write Files ─────────────────────────────────────────
+  normalizeSetupConfiguration({ env, configJson, repoRoot, slug });
   await writeConfigFiles({ env, configJson, repoRoot, configDir });
 }
 
@@ -1383,6 +1893,12 @@ async function runNonInteractive({
   }
   env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
   env.MAX_PARALLEL = process.env.MAX_PARALLEL || "6";
+
+  // Optional channels
+  env.WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED || "0";
+  env.WHATSAPP_CHAT_ID = process.env.WHATSAPP_CHAT_ID || "";
+  env.CONTAINER_ENABLED = process.env.CONTAINER_ENABLED || "0";
+  env.CONTAINER_RUNTIME = process.env.CONTAINER_RUNTIME || "auto";
 
   // Copilot cloud: disabled by default — set to 0 to allow @copilot PR comments
   env.COPILOT_CLOUD_DISABLED = process.env.COPILOT_CLOUD_DISABLED || "1";
@@ -1437,6 +1953,25 @@ async function runNonInteractive({
   ensureAgentPromptWorkspace(repoRoot);
   ensureRepoGitIgnoreEntry(repoRoot, "/.codex-monitor/");
 
+  const hookOptions = buildHookScaffoldOptionsFromEnv(process.env);
+  const hookResult = scaffoldAgentHookFiles(repoRoot, hookOptions);
+  Object.assign(env, hookResult.env);
+  configJson.hookProfiles = {
+    enabled: hookResult.enabled,
+    profile: hookResult.profile,
+    targets: hookResult.targets,
+    overwriteExisting: Boolean(hookOptions.overwriteExisting),
+  };
+  printHookScaffoldSummary(hookResult);
+
+  // Startup service: respect STARTUP_SERVICE env in non-interactive mode
+  if (process.env.STARTUP_SERVICE === "1") {
+    env._STARTUP_SERVICE = "1";
+  } else if (process.env.STARTUP_SERVICE === "0") {
+    env._STARTUP_SERVICE = "0";
+  }
+  // else: don't set — writeConfigFiles will skip silently
+
   if (
     (env.KANBAN_BACKEND || "").toLowerCase() !== "vk" &&
     !["vk", "hybrid"].includes((env.EXECUTOR_MODE || "").toLowerCase())
@@ -1445,6 +1980,7 @@ async function runNonInteractive({
     delete configJson.vkAutoConfig;
   }
 
+  normalizeSetupConfiguration({ env, configJson, repoRoot, slug });
   await writeConfigFiles({ env, configJson, repoRoot, configDir });
 }
 
@@ -1473,25 +2009,16 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
     warn(`.env already exists. Writing to .env.generated`);
   }
 
-  const lines = [
-    "# Generated by codex-monitor setup wizard",
-    `# ${new Date().toISOString()}`,
-    "",
-  ];
+  const envTemplatePath = resolve(__dirname, ".env.example");
+  const templateText = existsSync(envTemplatePath)
+    ? readFileSync(envTemplatePath, "utf8")
+    : "";
 
-  for (const [key, value] of Object.entries(env)) {
-    // Skip internal flags — not user-facing config
-    if (key.startsWith("_")) continue;
-    if (value) {
-      // Quote values that contain spaces or special chars
-      const needsQuotes = value.includes(" ") || value.includes("=");
-      lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
-    } else {
-      lines.push(`# ${key}=`);
-    }
-  }
+  const envOut = templateText
+    ? buildStandardizedEnvFile(templateText, env)
+    : buildStandardizedEnvFile("", env);
 
-  writeFileSync(targetEnvPath, lines.join("\n") + "\n", "utf8");
+  writeFileSync(targetEnvPath, envOut, "utf8");
   success(`Environment written to ${relative(repoRoot, targetEnvPath)}`);
 
   // ── codex-monitor.config.json ──────────────────────────
@@ -1530,6 +2057,30 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   } catch {
     warn(
       "Dependency install failed — run manually: pnpm install (or) npm install",
+    );
+  }
+
+  // ── Startup Service ────────────────────────────────────
+  if (env._STARTUP_SERVICE === "1") {
+    heading("Startup Service");
+    try {
+      const { installStartupService } = await import("./startup-service.mjs");
+      const result = await installStartupService({ daemon: true });
+      if (result.success) {
+        success(`Registered via ${result.method}`);
+        if (result.name) info(`Service name: ${result.name}`);
+        if (result.path) info(`Config path: ${result.path}`);
+      } else {
+        warn(`Could not register startup service: ${result.error}`);
+        info("You can try manually later: codex-monitor --enable-startup");
+      }
+    } catch (err) {
+      warn(`Startup service registration failed: ${err.message}`);
+      info("You can try manually later: codex-monitor --enable-startup");
+    }
+  } else if (env._STARTUP_SERVICE === "0") {
+    info(
+      "Startup service skipped — enable anytime: codex-monitor --enable-startup",
     );
   }
 
@@ -1578,6 +2129,8 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   console.log(chalk.dim("    Start the orchestrator supervisor\n"));
   console.log(chalk.green("    codex-monitor --setup"));
   console.log(chalk.dim("    Re-run this wizard anytime\n"));
+  console.log(chalk.green("    codex-monitor --enable-startup"));
+  console.log(chalk.dim("    Register auto-start on login\n"));
   console.log(chalk.green("    codex-monitor --help"));
   console.log(chalk.dim("    See all options & env vars\n"));
 }

@@ -152,6 +152,30 @@ function detectGitHubToken() {
   return undefined;
 }
 
+const OPENAI_ENV_KEYS = [
+  "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
+  "OPENAI_ORGANIZATION",
+  "OPENAI_PROJECT",
+];
+
+async function withSanitizedOpenAiEnv(fn) {
+  const saved = {};
+  for (const key of OPENAI_ENV_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value !== undefined) process.env[key] = value;
+    }
+  }
+}
+
 async function ensureClientStarted() {
   if (clientStarted && copilotClient) return true;
   const Cls = await loadCopilotSdk();
@@ -165,14 +189,16 @@ async function ensureClientStarted() {
   const cliUrl = process.env.COPILOT_CLI_URL || undefined;
   const token = detectGitHubToken();
 
-  copilotClient = new Cls(
-    cliUrl
-      ? { cliUrl }
-      : cliPath || token
-        ? { cliPath, token }
-        : undefined,
-  );
-  await copilotClient.start();
+  await withSanitizedOpenAiEnv(async () => {
+    copilotClient = new Cls(
+      cliUrl
+        ? { cliUrl }
+        : cliPath || token
+          ? { cliPath, token }
+          : undefined,
+    );
+    await copilotClient.start();
+  });
   clientStarted = true;
   console.log("[copilot-shell] client started");
   return true;

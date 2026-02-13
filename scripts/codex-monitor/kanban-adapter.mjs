@@ -141,6 +141,10 @@ class VKAdapter {
 
       let res;
       try {
+        const runtimeFetch = globalThis.fetch;
+        if (typeof runtimeFetch !== "function") {
+          throw new Error("global fetch is unavailable");
+        }
         const fetchOpts = {
           method,
           signal: controller.signal,
@@ -152,7 +156,7 @@ class VKAdapter {
               ? opts.body
               : JSON.stringify(opts.body);
         }
-        res = await fetch(url, fetchOpts);
+        res = await runtimeFetch(url, fetchOpts);
       } catch (err) {
         // Network error, timeout, abort - res is undefined
         throw new Error(
@@ -162,11 +166,39 @@ class VKAdapter {
         clearTimeout(timeout);
       }
 
-      // Now res is guaranteed to be defined
+      if (!res || typeof res.ok === "undefined") {
+        throw new Error(
+          `VK API ${method} ${path} invalid response object (res=${!!res}, res.ok=${res?.ok})`,
+        );
+      }
+
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
+        const text =
+          typeof res.text === "function" ? await res.text().catch(() => "") : "";
         throw new Error(
           `VK API ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
+        );
+      }
+
+      const contentTypeRaw =
+        typeof res.headers?.get === "function"
+          ? res.headers.get("content-type") || res.headers.get("Content-Type")
+          : res.headers?.["content-type"] || res.headers?.["Content-Type"] || "";
+      const contentType = String(contentTypeRaw || "").toLowerCase();
+
+      if (contentType && !contentType.includes("application/json")) {
+        const text =
+          typeof res.text === "function" ? await res.text().catch(() => "") : "";
+        // VK sometimes mislabels JSON as text/plain in proxy setups.
+        if (text) {
+          try {
+            return JSON.parse(text);
+          } catch {
+            // Fall through to explicit non-JSON error below.
+          }
+        }
+        throw new Error(
+          `VK API ${method} ${path} non-JSON response (${contentType})`,
         );
       }
 

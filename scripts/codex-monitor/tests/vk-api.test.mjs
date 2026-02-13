@@ -556,9 +556,8 @@ describe("VK API integration scenarios", () => {
 
     const result = await fetchVk("/api/tasks/123");
 
-    // Should return null because content-type is not application/json
-    expect(result).toBeNull();
-    expect(mockConsoleWarn).toHaveBeenCalledWith(
+    expect(result).toEqual({ success: true });
+    expect(mockConsoleWarn).not.toHaveBeenCalledWith(
       expect.stringContaining("non-JSON response"),
     );
   });

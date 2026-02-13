@@ -33,6 +33,7 @@ import {
   pruneAllExhaustedThreads,
   getActiveThreads,
   getPoolSdkName,
+  ensureThreadRegistryLoaded,
 } from "./agent-pool.mjs";
 import {
   acquireWorktree,
@@ -88,6 +89,11 @@ const WATCHDOG_INTERVAL_MS = 60_000; // 1 minute
 const WATCHDOG_GRACE_MS = 10 * 60_000; // 10 minutes — generous buffer, stream analysis handles real issues
 /** Max age for in-progress tasks to auto-resume after monitor restart */
 const INPROGRESS_RECOVERY_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours — agents should be resumable for a full day
+
+function normalizeModel(value) {
+  const model = String(value || "").trim();
+  return model ? model : null;
+}
 
 // ── Stream-Based Health Monitoring Constants ──────────────────────────────
 /** How long an agent can be truly silent (zero events) before we consider intervention */
@@ -725,12 +731,6 @@ class TaskExecutor {
     // Restore active slot metadata (agent instance IDs + original startedAt)
     this._loadRuntimeState();
 
-    // Clean up zombie threads from prior runs
-    const pruned = pruneAllExhaustedThreads();
-    if (pruned > 0) {
-      console.log(`${TAG} cleaned up ${pruned} stale agent threads on startup`);
-    }
-
     // Recover orphaned worktrees from prior runs (async, non-blocking)
     this._recoverOrphanedWorktrees().catch((err) => {
       console.warn(`${TAG} orphan recovery failed: ${err.message}`);
@@ -740,7 +740,21 @@ class TaskExecutor {
     // Start watchdog to detect and kill stalled agent slots
     this._startWatchdog();
     // Resume interrupted in-progress tasks first, then poll todo backlog.
-    void this._recoverInterruptedInProgressTasks()
+    void ensureThreadRegistryLoaded()
+      .catch((err) => {
+        console.warn(
+          `${TAG} thread registry load warning: ${err.message || err}`,
+        );
+      })
+      .then(() => {
+        const pruned = pruneAllExhaustedThreads();
+        if (pruned > 0) {
+          console.log(
+            `${TAG} cleaned up ${pruned} stale agent threads on startup`,
+          );
+        }
+      })
+      .then(() => this._recoverInterruptedInProgressTasks())
       .catch((err) => {
         console.warn(
           `${TAG} in-progress recovery warning: ${err.message || err}`,
@@ -1213,6 +1227,9 @@ class TaskExecutor {
     if (!this._running) return;
     if (this._paused) return;
     if (this._activeSlots.size >= this.maxParallel) return;
+    await ensureThreadRegistryLoaded().catch(() => {
+      /* best effort */
+    });
 
     const projectId = await this._ensureResolvedProjectId();
     if (!projectId) return;
@@ -1513,10 +1530,29 @@ class TaskExecutor {
       resolvedSdk = getPoolSdkName();
     }
 
-    // Set model-related env vars for the agent if complexity routing produced them
-    if (executorProfile?.model && resolvedSdk === "claude") {
-      // Set CLAUDE_MODEL for the claude-shell / claude agent-pool launcher
-      process.env.CLAUDE_MODEL = executorProfile.model;
+    const configuredCopilotModel =
+      normalizeModel(process.env.COPILOT_MODEL) ||
+      normalizeModel(process.env.COPILOT_SDK_MODEL);
+    const configuredClaudeModel =
+      normalizeModel(process.env.CLAUDE_MODEL) ||
+      normalizeModel(process.env.CLAUDE_CODE_MODEL) ||
+      normalizeModel(process.env.ANTHROPIC_MODEL);
+
+    let selectedModel = normalizeModel(executorProfile?.model);
+    if (resolvedSdk === "copilot" && configuredCopilotModel) {
+      if (selectedModel && selectedModel !== configuredCopilotModel) {
+        console.log(
+          `${TAG} overriding complexity model "${selectedModel}" with COPILOT_MODEL="${configuredCopilotModel}" for task "${taskTitle}"`,
+        );
+      }
+      selectedModel = configuredCopilotModel;
+    } else if (resolvedSdk === "claude" && configuredClaudeModel) {
+      if (selectedModel && selectedModel !== configuredClaudeModel) {
+        console.log(
+          `${TAG} overriding complexity model "${selectedModel}" with CLAUDE_MODEL="${configuredClaudeModel}" for task "${taskTitle}"`,
+        );
+      }
+      selectedModel = configuredClaudeModel;
     }
 
     // 1b. Allocate slot
@@ -1692,6 +1728,7 @@ class TaskExecutor {
         maxRetries: this.maxRetries,
         maxContinues: 3,
         sdk: resolvedSdk !== "auto" ? resolvedSdk : undefined,
+        model: selectedModel || undefined,
         buildRetryPrompt: (lastResult, attempt) =>
           this._buildRetryPrompt(task, lastResult, attempt),
         buildContinuePrompt: (lastResult, attempt) =>
@@ -1907,7 +1944,7 @@ class TaskExecutor {
       "unknown";
 
     const lines = [
-      `# Task: ${task.title}`,
+      `# ${task.id || task.task_id} — ${task.title}`,
       ``,
       `## Description`,
       task.description ||
@@ -2390,11 +2427,27 @@ class TaskExecutor {
         this._noCommitCounts.set(task.id, noCommitCount);
         this._saveNoCommitState();
 
-        // Force fresh thread on next attempt — the current thread is clearly not productive
-        try {
-          forceNewThread(task.id, `no-commit completion #${noCommitCount}`);
-        } catch {
-          /* ok */
+        // Only force fresh thread after 2+ consecutive no-commit completions.
+        // First no-commit may be an accidental pause — allow thread resume.
+        const noCommitClassificationForThread = this._errorDetector.classify(
+          result.output || "",
+        );
+        const shouldForceNewOnNoCommit =
+          noCommitCount >= 2 ||
+          noCommitClassificationForThread.pattern === "plan_stuck";
+        if (shouldForceNewOnNoCommit) {
+          try {
+            forceNewThread(
+              task.id,
+              `no-commit #${noCommitCount}${noCommitClassificationForThread.pattern === "plan_stuck" ? " (plan_stuck)" : ""}`,
+            );
+          } catch {
+            /* ok */
+          }
+        } else {
+          console.log(
+            `${TAG} no-commit #${noCommitCount} for "${task.title}" — keeping thread for resume attempt`,
+          );
         }
 
         // Record no-commit attempt in internal store
@@ -2403,10 +2456,7 @@ class TaskExecutor {
             output: result.output,
             hasCommits: false,
           });
-          const noCommitClassification = this._errorDetector.classify(
-            result.output || "",
-          );
-          if (noCommitClassification.pattern === "plan_stuck") {
+          if (noCommitClassificationForThread.pattern === "plan_stuck") {
             recordErrorPattern(task.id, "plan_stuck");
           }
         } catch {
@@ -2452,23 +2502,41 @@ class TaskExecutor {
       console.warn(
         `${tag} failed after ${result.attempts} attempt(s): ${result.error}`,
       );
-      // Invalidate thread so next attempt starts fresh
-      try {
-        forceNewThread(
-          task.id,
-          `task failed: ${(result.error || "").slice(0, 100)}`,
-        );
-      } catch {
-        /* ok */
-      }
       this._taskCooldowns.set(task.id, Date.now());
 
-      // Classify the error
+      // Classify the error FIRST to decide whether to force a new thread
       const classification = this._errorDetector.classify(
         result.output || "",
         result.error || "",
       );
       const recovery = this._errorDetector.recordError(task.id, classification);
+
+      // Only force fresh thread for errors that corrupt thread state or
+      // indicate irrecoverable session issues. For build/git/plan errors,
+      // keep the same thread so the agent can fix its own mistakes.
+      const THREAD_KILLING_ERRORS = new Set([
+        "rate_limit",
+        "api_error",
+        "token_overflow",
+        "session_expired",
+      ]);
+      const shouldForceNew =
+        THREAD_KILLING_ERRORS.has(classification.pattern) ||
+        recovery.errorCount >= 2; // 2+ consecutive errors → always fresh thread
+      if (shouldForceNew) {
+        try {
+          forceNewThread(
+            task.id,
+            `${classification.pattern} (count=${recovery.errorCount}): ${(result.error || "").slice(0, 80)}`,
+          );
+        } catch {
+          /* ok */
+        }
+      } else {
+        console.log(
+          `${TAG} task "${task.title || task.id}" failed (${classification.pattern}, count=${recovery.errorCount}) — keeping thread for resume`,
+        );
+      }
 
       // Record in internal store
       try {
