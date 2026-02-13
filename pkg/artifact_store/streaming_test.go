@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -28,9 +29,14 @@ func TestStreamingUploader(t *testing.T) {
 			t.Fatalf("failed to create backend: %v", err)
 		}
 
-		var lastProgress *StreamProgress
+		var (
+			lastProgress   *StreamProgress
+			progressLocker sync.Mutex
+		)
 		uploader := NewStreamingUploader(backend, DefaultStreamingConfig())
 		uploader.SetProgressCallback(func(p *StreamProgress) {
+			progressLocker.Lock()
+			defer progressLocker.Unlock()
 			lastProgress = p
 		})
 
@@ -57,7 +63,10 @@ func TestStreamingUploader(t *testing.T) {
 		}
 
 		// Progress should have been updated
-		if lastProgress == nil {
+		progressLocker.Lock()
+		progressSnapshot := lastProgress
+		progressLocker.Unlock()
+		if progressSnapshot == nil {
 			t.Skip("progress callback may not have been called due to timing")
 		}
 	})

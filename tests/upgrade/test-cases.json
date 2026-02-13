@@ -1,4 +1,12 @@
 {
+    "v1.3.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+        }
+    },
     "v1.2.0": {
         "modules": {
             "added": [

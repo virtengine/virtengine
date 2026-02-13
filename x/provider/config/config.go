@@ -3,10 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	tattr "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 )
@@ -29,7 +29,7 @@ func (c Config) GetAttributes() tattr.Attributes {
 
 // ReadConfigPath reads and parses file
 func ReadConfigPath(path string) (Config, error) {
-	buf, err := os.ReadFile(path) //nolint: gosec
+	buf, err := security.SafeReadFile(path)
 	if err != nil {
 		return Config{}, err
 	}

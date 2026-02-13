@@ -232,9 +232,9 @@ func (q GRPCQuerier) GetAuthorizationSessions(goCtx context.Context, req *types.
 
 	var sessions []types.AuthorizationSession
 	if req.IncludeExpired {
-		sessions = q.Keeper.GetAccountSessions(ctx, address)
+		sessions = q.GetAccountSessions(ctx, address)
 	} else {
-		sessions = q.Keeper.GetValidSessionsForAccount(ctx, address)
+		sessions = q.GetValidSessionsForAccount(ctx, address)
 	}
 
 	return &types.QueryAuthorizationSessionsResponse{

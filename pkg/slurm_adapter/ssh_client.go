@@ -23,6 +23,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // nullString represents the SLURM null value placeholder
@@ -141,7 +142,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 		}
 		clientConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
 	} else if sshConfig.PrivateKeyPath != "" {
-		key, err := os.ReadFile(sshConfig.PrivateKeyPath)
+		key, err := security.SafeReadFile(sshConfig.PrivateKeyPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key file: %w", err)
 		}
@@ -501,8 +502,13 @@ func (c *SSHSLURMClient) SCPUpload(ctx context.Context, localPath, remotePath st
 		return ErrSLURMNotConnected
 	}
 
+	if err := security.ValidateCLIPath(localPath); err != nil {
+		return err
+	}
+	cleanPath := filepath.Clean(localPath)
+
 	// Read local file
-	content, err := os.ReadFile(localPath)
+	content, err := os.ReadFile(cleanPath) //nolint:gosec // G304: path validated via ValidateCLIPath
 	if err != nil {
 		return fmt.Errorf("failed to read local file: %w", err)
 	}
@@ -557,13 +563,18 @@ func (c *SSHSLURMClient) SCPDownload(ctx context.Context, remotePath, localPath 
 		return ErrSLURMNotConnected
 	}
 
+	if err := security.ValidateCLIPath(localPath); err != nil {
+		return err
+	}
+	cleanPath := filepath.Clean(localPath)
+
 	content, err := c.SCPDownloadBytes(ctx, remotePath)
 	if err != nil {
 		return err
 	}
 
 	//nolint:gosec // G306: File permissions are intentional for downloaded content
-	return os.WriteFile(localPath, content, 0644)
+	return os.WriteFile(cleanPath, content, 0644)
 }
 
 // SCPDownloadBytes downloads a file from the remote host as bytes

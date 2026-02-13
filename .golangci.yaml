@@ -24,7 +24,6 @@ linters:
         - ifElseChain
         - singleCaseSwitch
     gosec:
-      exclude-generated: true
       severity: medium
       confidence: medium
   exclusions:

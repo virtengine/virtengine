@@ -27,7 +27,7 @@ onnxruntime==1.16.3
 
 # PyTorch (CPU-only) for CRAFT text detection
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.6.0+cpu
+torch==2.8.0+cpu
 
 # Tesseract OCR Python bindings
 pytesseract==0.3.10
@@ -38,7 +38,7 @@ grpcio==1.60.0
 grpcio-tools==1.60.0
 
 # Protobuf
-protobuf==4.25.2
+protobuf==5.29.6
 
 # Scipy for numerical operations
 scipy==1.12.0

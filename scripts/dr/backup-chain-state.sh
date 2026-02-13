@@ -255,7 +255,7 @@ create_snapshot() {
     log_info "Creating snapshot at height ${height}..."
     
     # Check if node is syncing
-    local catching_up=$("$VIRTENGINE_CMD" status 2>&1 | jq -r '.sync_info.catching_up')
+    local catching_up=$("$VIRTENGINE_CMD" status 2>/dev/null | jq -r '.sync_info.catching_up' 2>/dev/null || echo "false")
     if [ "$catching_up" == "true" ]; then
         log_warn "Node is still syncing, snapshot may be incomplete"
     fi
@@ -290,7 +290,7 @@ create_snapshot() {
     "node_home": "${NODE_HOME}",
     "region": "$(get_region)",
     "hostname": "$(hostname)",
-    "chain_id": "$("$VIRTENGINE_CMD" status 2>&1 | jq -r '.node_info.network' || echo 'unknown')"
+    "chain_id": "$("$VIRTENGINE_CMD" status 2>/dev/null | jq -r '.node_info.network' 2>/dev/null || echo 'unknown')"
 }
 EOF
     
@@ -385,14 +385,14 @@ cleanup_old_snapshots() {
     cd "${SNAPSHOT_DIR}"
     
     # Remove old data archives
-    ls -t state_*_data.tar.gz 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
+    ls -t state_*_data.tar.gz 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f || true
     
     # Remove corresponding metadata and checksums
-    ls -t state_*_metadata.json 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
-    ls -t state_*.sha256 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
-    ls -t state_*.sig 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
-    ls -t state_*.json 2>/dev/null | grep -v metadata | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
-    ls -t state_*.json.skipped 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
+    ls -t state_*_metadata.json 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f || true
+    ls -t state_*.sha256 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f || true
+    ls -t state_*.sig 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f || true
+    ls -t state_*.json 2>/dev/null | grep -v metadata | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f || true
+    ls -t state_*.json.skipped 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f || true
     
     log_info "Cleanup complete"
 }

@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
+import { mockChainResponses, mockKeplr, seedWalletSession, mockIdentity } from './utils';
 
 test.describe('Dashboard', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockChainResponses(page);
+    await mockKeplr(page);
+    await seedWalletSession(page);
+    await mockIdentity(page);
+  });
+
   test('should display allocations overview', async ({ page }) => {
     await page.goto('/dashboard');
 

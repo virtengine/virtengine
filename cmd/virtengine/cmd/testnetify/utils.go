@@ -11,6 +11,7 @@ import (
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/util/server"
 )
 
@@ -45,8 +46,14 @@ func openTraceWriter(traceWriterFile string) (w io.WriteCloser, err error) {
 	if traceWriterFile == "" {
 		return
 	}
-	return os.OpenFile( //nolint: gosec
-		traceWriterFile,
+
+	if err := security.ValidateCLIPath(traceWriterFile); err != nil {
+		return nil, err
+	}
+	cleanPath := filepath.Clean(traceWriterFile)
+
+	return os.OpenFile( //nolint:gosec // G304: path validated via ValidateCLIPath
+		cleanPath,
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o666,
 	)
