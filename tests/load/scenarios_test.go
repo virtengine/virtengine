@@ -10,7 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	mathrand "math/rand/v2"
+	mathrand "math/rand/v2" //nolint:gosec // G404: load tests use weak random for timing jitter
 	"sync"
 	"sync/atomic"
 	"testing"
