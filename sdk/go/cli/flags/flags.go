@@ -277,7 +277,7 @@ const (
 	FlagMaxCalls                  = "max-calls"
 	FlagMaxFunds                  = "max-funds"
 	FlagAllowAllMsgs              = "allow-all-messages"
-	FlagNoTokenTransfer           = "no-token-transfer" //nolint: gosec
+	FlagNoTokenTransfer           = "no-token-transfer" //nolint:gosec // #nosec G101: CLI flag name, not a credential
 	FlagExpedite                  = "expedite"
 
 	// oracle flags
@@ -294,7 +294,7 @@ const (
 	FlagWasmMemoryCacheSize        = "wasm.memory_cache_size"
 	FlagWasmQueryGasLimit          = "wasm.query_gas_limit"
 	FlagWasmSimulationGasLimit     = "wasm.simulation_gas_limit"
-	FlagWasmSkipWasmVMVersionCheck = "wasm.skip_wasmvm_version_check" //nolint: gosec
+	FlagWasmSkipWasmVMVersionCheck = "wasm.skip_wasmvm_version_check" //nolint:gosec // #nosec G101: CLI flag name, not a credential
 )
 
 // List of supported output formats

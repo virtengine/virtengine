@@ -3,7 +3,7 @@ package testutil
 import (
 	cryptorand "crypto/rand"
 	"crypto/sha256"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: test helpers use weak random for non-security data
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -16,7 +16,7 @@ func DeploymentID(t testing.TB) dtypes.DeploymentID {
 	t.Helper()
 	return dtypes.DeploymentID{
 		Owner: AccAddress(t).String(),
-		DSeq:  uint64(rand.Uint32()), // nolint: gosec
+		DSeq:  uint64(rand.Uint32()), //nolint:gosec // G404: test helper randomness is non-security-sensitive
 	}
 }
 
@@ -24,7 +24,7 @@ func DeploymentIDForAccount(t testing.TB, addr sdk.Address) dtypes.DeploymentID 
 	t.Helper()
 	return dtypes.DeploymentID{
 		Owner: addr.String(),
-		DSeq:  uint64(rand.Uint32()), // nolint: gosec
+		DSeq:  uint64(rand.Uint32()), //nolint:gosec // G404: test helper randomness is non-security-sensitive
 	}
 }
 
@@ -42,22 +42,22 @@ func DeploymentVersion(t testing.TB) []byte {
 
 func GroupID(t testing.TB) dtypes.GroupID {
 	t.Helper()
-	return dtypes.MakeGroupID(DeploymentID(t), rand.Uint32()) // nolint: gosec
+	return dtypes.MakeGroupID(DeploymentID(t), rand.Uint32()) //nolint:gosec // G404: test helper randomness is non-security-sensitive
 }
 
 func GroupIDForAccount(t testing.TB, addr sdk.Address) dtypes.GroupID {
 	t.Helper()
-	return dtypes.MakeGroupID(DeploymentIDForAccount(t, addr), rand.Uint32()) // nolint: gosec
+	return dtypes.MakeGroupID(DeploymentIDForAccount(t, addr), rand.Uint32()) //nolint:gosec // G404: test helper randomness is non-security-sensitive
 }
 
 func OrderID(t testing.TB) mtypes.OrderID {
 	t.Helper()
-	return mtypes.MakeOrderID(GroupID(t), rand.Uint32()) // nolint: gosec
+	return mtypes.MakeOrderID(GroupID(t), rand.Uint32()) //nolint:gosec // G404: test helper randomness is non-security-sensitive
 }
 
 func OrderIDForAccount(t testing.TB, addr sdk.Address) mtypes.OrderID {
 	t.Helper()
-	return mtypes.MakeOrderID(GroupIDForAccount(t, addr), rand.Uint32()) // nolint: gosec
+	return mtypes.MakeOrderID(GroupIDForAccount(t, addr), rand.Uint32()) //nolint:gosec // G404: test helper randomness is non-security-sensitive
 }
 
 func BidID(t testing.TB) mtypes.BidID {

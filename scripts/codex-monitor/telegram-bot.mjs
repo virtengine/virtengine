@@ -431,30 +431,43 @@ async function sendDirect(chatId, text, options = {}) {
     }
     payload.disable_web_page_preview = true;
 
+    let res;
     try {
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const body = await res.text();
-        console.warn(`[telegram-bot] send failed: ${res.status} ${body}`);
-        // If HTML parse mode fails, retry as plain text
-        if (options.parseMode && res.status === 400) {
-          return sendDirect(chatId, chunk, {
-            ...options,
-            parseMode: undefined,
-          });
-        }
-      } else {
+    } catch (err) {
+      console.warn(`[telegram-bot] send error: ${err.message}`);
+      continue;
+    }
+
+    // Safety: validate response object
+    if (!res || typeof res.ok === "undefined") {
+      console.warn(`[telegram-bot] send error: invalid response object`);
+      continue;
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[telegram-bot] send failed: ${res.status} ${body}`);
+      // If HTML parse mode fails, retry as plain text
+      if (options.parseMode && res.status === 400) {
+        return sendDirect(chatId, chunk, {
+          ...options,
+          parseMode: undefined,
+        });
+      }
+    } else {
+      try {
         const data = await res.json();
         if (data.ok && data.result?.message_id) {
           lastMessageId = data.result.message_id;
         }
+      } catch (err) {
+        console.warn(`[telegram-bot] send JSON parse error: ${err.message}`);
       }
-    } catch (err) {
-      console.warn(`[telegram-bot] send error: ${err.message}`);
     }
   }
   return lastMessageId;
@@ -484,38 +497,46 @@ async function editDirect(chatId, messageId, text, options = {}) {
     payload.parse_mode = options.parseMode;
   }
 
+  let res;
   try {
-    const res = await fetch(url, {
+    res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const body = await res.text();
-      // "message is not modified" is fine — content didn't change
-      if (body.includes("message is not modified")) return messageId;
-      // "message can't be edited" — send new message instead
-      if (
-        body.includes("can't be edited") ||
-        body.includes("MESSAGE_ID_INVALID")
-      ) {
-        console.warn(`[telegram-bot] edit failed, sending new message`);
-        return await sendDirect(chatId, truncated, options);
-      }
-      console.warn(`[telegram-bot] edit failed: ${res.status} ${body}`);
-      // For HTML parse errors, retry without parse mode
-      if (options.parseMode && res.status === 400) {
-        return editDirect(chatId, messageId, truncated, {
-          ...options,
-          parseMode: undefined,
-        });
-      }
-    }
-    return messageId;
   } catch (err) {
     console.warn(`[telegram-bot] edit error: ${err.message}`);
     return messageId;
   }
+
+  // Safety: validate response object
+  if (!res || typeof res.ok === "undefined") {
+    console.warn(`[telegram-bot] edit error: invalid response object`);
+    return messageId;
+  }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    // "message is not modified" is fine — content didn't change
+    if (body.includes("message is not modified")) return messageId;
+    // "message can't be edited" — send new message instead
+    if (
+      body.includes("can't be edited") ||
+      body.includes("MESSAGE_ID_INVALID")
+    ) {
+      console.warn(`[telegram-bot] edit failed, sending new message`);
+      return await sendDirect(chatId, truncated, options);
+    }
+    console.warn(`[telegram-bot] edit failed: ${res.status} ${body}`);
+    // For HTML parse errors, retry without parse mode
+    if (options.parseMode && res.status === 400) {
+      return editDirect(chatId, messageId, truncated, {
+        ...options,
+        parseMode: undefined,
+      });
+    }
+  }
+  return messageId;
 }
 
 // ── Action Summarizer ────────────────────────────────────────────────────────
@@ -1010,28 +1031,42 @@ async function pollUpdates() {
   });
 
   pollAbort = new AbortController();
+  let res;
   try {
-    const res = await fetch(`${url}?${params}`, {
+    res = await fetch(`${url}?${params}`, {
       signal: pollAbort.signal,
       // No explicit timeout — the Telegram API long-poll handles timing
     });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
-      if (res.status === 409) {
-        polling = false;
-        await releaseTelegramPollLock();
-      }
-      return [];
-    }
-    const data = await res.json();
-    return data.ok ? data.result || [] : [];
   } catch (err) {
     if (err.name === "AbortError") return [];
     console.warn(`[telegram-bot] poll error: ${err.message}`);
     return [];
   } finally {
     pollAbort = null;
+  }
+
+  // Safety: validate response object
+  if (!res || typeof res.ok === "undefined") {
+    console.warn(`[telegram-bot] poll error: invalid response object`);
+    return [];
+  }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.warn(`[telegram-bot] getUpdates failed: ${res.status} ${body}`);
+    if (res.status === 409) {
+      polling = false;
+      await releaseTelegramPollLock();
+    }
+    return [];
+  }
+
+  try {
+    const data = await res.json();
+    return data.ok ? data.result || [] : [];
+  } catch (err) {
+    console.warn(`[telegram-bot] poll JSON parse error: ${err.message}`);
+    return [];
   }
 }
 
@@ -1426,8 +1461,9 @@ async function registerBotCommands() {
     commands.push({ command, description });
   }
 
+  let res;
   try {
-    const res = await fetch(
+    res = await fetch(
       `https://api.telegram.org/bot${telegramToken}/setMyCommands`,
       {
         method: "POST",
@@ -1435,6 +1471,12 @@ async function registerBotCommands() {
         body: JSON.stringify({ commands }),
       },
     );
+  } catch (err) {
+    console.warn(`[telegram-bot] setMyCommands error: ${err.message}`);
+    return;
+  }
+
+  try {
     const data = await res.json();
     if (data.ok) {
       console.log(
@@ -1446,7 +1488,7 @@ async function registerBotCommands() {
       );
     }
   } catch (err) {
-    console.warn(`[telegram-bot] setMyCommands error: ${err.message}`);
+    console.warn(`[telegram-bot] setMyCommands JSON parse error: ${err.message}`);
   }
 }
 
@@ -3497,34 +3539,40 @@ async function vkRequest(host, path, options = {}) {
   const url = new URL(path, base);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+
+  let res;
   try {
-    const res = await fetch(url.toString(), {
+    res = await fetch(url.toString(), {
       method,
       headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(
-        `VK ${res.status}: ${text.slice(0, 200) || res.statusText}`,
-      );
-    }
-    let data = null;
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch (err) {
-        throw new Error(`VK response parse error: ${err.message}`);
-      }
-    }
-    if (data && data.success === false) {
-      throw new Error(data.message || "VK API error");
-    }
-    return data?.data ?? data;
-  } finally {
+  } catch (err) {
     clearTimeout(timer);
+    throw new Error(`VK fetch error: ${err.message}`);
   }
+  clearTimeout(timer);
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `VK ${res.status}: ${text.slice(0, 200) || res.statusText}`,
+    );
+  }
+
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      throw new Error(`VK response parse error: ${err.message}`);
+    }
+  }
+  if (data && data.success === false) {
+    throw new Error(data.message || "VK API error");
+  }
+  return data?.data ?? data;
 }
 
 async function getWorkspaceSummaries(host) {

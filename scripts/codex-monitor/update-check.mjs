@@ -26,18 +26,8 @@ const PKG_NAME = "@virtengine/codex-monitor";
 const CACHE_FILE = resolve(__dirname, "logs", ".update-check-cache.json");
 const STARTUP_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour (startup notice)
 const AUTO_UPDATE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (polling loop)
-const IS_WIN = process.platform === "win32";
 
 function runNpmCommand(args, options = {}) {
-  if (IS_WIN) {
-    const shellQuote = (value) =>
-      /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
-    const command = ["npm", ...args].map(shellQuote).join(" ");
-    return execSync(command, {
-      ...options,
-      shell: true,
-    });
-  }
   return execFileSync("npm", args, options);
 }
 

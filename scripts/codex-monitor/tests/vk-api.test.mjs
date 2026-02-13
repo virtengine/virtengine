@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+// Force VK backend so fetchVk() doesn't short-circuit when config says "github"
+process.env.KANBAN_BACKEND = "vk";
+
 // Mock fetch globally before importing monitor
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -667,12 +670,14 @@ describe("safeRecoverTask + recoverySkipCache", () => {
     expect(recoverySkipCache.has("task-4")).toBe(false);
   });
 
-  it("does NOT cache when fetch fails", async () => {
+  it("caches fetch-failed with backoff when fetch fails", async () => {
     mockFetch.mockRejectedValueOnce(new Error("network error"));
 
     const result = await safeRecoverTask("task-5", "Failing Task", "stale");
     expect(result).toBe(false);
-    expect(recoverySkipCache.has("task-5")).toBe(false);
+    // Implementation now caches fetch failures for backoff (5 min TTL)
+    expect(recoverySkipCache.has("task-5")).toBe(true);
+    expect(recoverySkipCache.get("task-5").resolvedStatus).toBe("fetch-failed");
   });
 
   it("updateTaskStatus clears recoverySkipCache on success", async () => {

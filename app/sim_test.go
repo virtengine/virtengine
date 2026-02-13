@@ -3,7 +3,7 @@ package app_test
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation tests use weak random for reproducibility, not security
 	"os"
 	"testing"
 	"time"
@@ -116,7 +116,7 @@ func TestFullAppSimulation(t *testing.T) {
 	appOpts := viper.New()
 	appOpts.Set("home", virtengine.DefaultHome)
 
-	r := rand.New(rand.NewSource(config.Seed)) // nolint: gosec
+	r := rand.New(rand.NewSource(config.Seed)) //nolint:gosec // G404: deterministic simulation RNG for reproducibility
 	genTime := sdksim.RandTimestamp(r)
 
 	appOpts.Set("GenesisTime", genTime)
@@ -158,7 +158,7 @@ func TestAppImportExport(t *testing.T) {
 	appOpts := viper.New()
 	appOpts.Set("home", virtengine.DefaultHome)
 
-	r := rand.New(rand.NewSource(config.Seed)) // nolint: gosec
+	r := rand.New(rand.NewSource(config.Seed)) //nolint:gosec // G404: deterministic simulation RNG for reproducibility
 	genTime := sdksim.RandTimestamp(r)
 
 	appOpts.Set("GenesisTime", genTime)
@@ -401,7 +401,7 @@ func TestAppSimulationAfterImport(t *testing.T) {
 
 	appOpts.Set("home", virtengine.DefaultHome)
 
-	r := rand.New(rand.NewSource(config.Seed)) // nolint: gosec
+	r := rand.New(rand.NewSource(config.Seed)) //nolint:gosec // G404: deterministic simulation RNG for reproducibility
 	genTime := sdksim.RandTimestamp(r)
 
 	appOpts.Set("GenesisTime", genTime)
@@ -473,7 +473,7 @@ func TestAppStateDeterminism(t *testing.T) {
 	appHashList := make([]json.RawMessage, numTimesToRunPerSeed)
 
 	for i := 0; i < numSeeds; i++ {
-		config.Seed = rand.Int63() // nolint:gosec
+		config.Seed = rand.Int63() //nolint:gosec // G404: deterministic simulation seed
 
 		for j := 0; j < numTimesToRunPerSeed; j++ {
 			var logger log.Logger
@@ -488,7 +488,7 @@ func TestAppStateDeterminism(t *testing.T) {
 			appOpts := viper.New()
 			appOpts.Set("home", virtengine.DefaultHome)
 
-			r := rand.New(rand.NewSource(config.Seed)) // nolint: gosec
+			r := rand.New(rand.NewSource(config.Seed)) //nolint:gosec // G404: deterministic simulation RNG for reproducibility
 			genTime := sdksim.RandTimestamp(r)
 
 			appOpts.Set("GenesisTime", genTime)

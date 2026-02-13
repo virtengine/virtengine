@@ -13,7 +13,7 @@
  *   - thread registry integration for agent <-> worktree linkage
  */
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, execSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -117,7 +117,7 @@ function sanitizeBranchName(branch) {
     .replace(/[^a-zA-Z0-9._-]/g, "")
     .replace(/^\.+/, "") // no leading dots
     .replace(/\.+$/, "") // no trailing dots
-    .slice(0, 100); // keep it reasonable
+    .slice(0, 60); // Windows MAX_PATH is 260, worktree base path ~60, leaves ~140 for this + git overhead
 }
 
 /**
@@ -879,11 +879,35 @@ class WorktreeManager {
       // If git fails (e.g. "Directory not empty"), fall back to filesystem removal
       if (existsSync(wtPath)) {
         try {
-          rmSync(wtPath, { recursive: true, force: true });
-          console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
-          gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
-        } catch (rmErr) {
-          console.warn(`${TAG} Filesystem cleanup also failed: ${rmErr.message}`);
+          // Attempt 1: On Windows, use PowerShell first (most reliable for locked files + long paths)
+          if (process.platform === "win32") {
+            const pwsh = process.env.PWSH_PATH || "powershell.exe";
+            const escapedPath = wtPath.replace(/'/g, "''");
+            // First, remove read-only/hidden attributes that can block deletion
+            execSync(
+              `${pwsh} -NoProfile -Command "Get-ChildItem -LiteralPath '${escapedPath}' -Recurse -Force | ForEach-Object { $_.Attributes = 'Normal' } -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction Stop"`,
+              { timeout: 60_000, stdio: "pipe" },
+            );
+            console.log(`${TAG} PowerShell cleanup succeeded for ${wtPath}`);
+            gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          } else {
+            // Unix: Use rmSync with retries
+            rmSync(wtPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+            console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
+            gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          }
+        } catch (cleanupErr) {
+          // Last resort: try basic Node.js rmSync (may partially succeed)
+          try {
+            rmSync(wtPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+            console.log(`${TAG} Fallback cleanup succeeded for ${wtPath}`);
+            gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          } catch (finalErr) {
+            console.warn(`${TAG} All cleanup attempts failed for ${wtPath}: ${cleanupErr.message || cleanupErr}`);
+            // Don't throw — mark as zombie and continue. Background cleanup will retry later.
+            this.registry.set(key, { ...record, status: "zombie", error: cleanupErr.message });
+            return { success: false, path: wtPath };
+          }
         }
       }
     }
@@ -917,12 +941,30 @@ class WorktreeManager {
       // Fall back to filesystem removal (handles "Directory not empty" on Windows)
       if (existsSync(wtPath)) {
         try {
-          rmSync(wtPath, { recursive: true, force: true });
+          // Attempt 1: Node.js rmSync with retries
+          rmSync(wtPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
           gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
           success = true;
           console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
         } catch (rmErr) {
-          console.warn(`${TAG} Filesystem cleanup also failed: ${rmErr.message}`);
+          // Attempt 2: On Windows, use PowerShell for long paths + locked files
+          if (process.platform === "win32") {
+            try {
+              const pwsh = process.env.PWSH_PATH || "powershell.exe";
+              const escapedPath = wtPath.replace(/'/g, "''");
+              execSync(
+                `${pwsh} -NoProfile -Command "Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction SilentlyContinue"`,
+                { timeout: 30_000, stdio: "pipe" },
+              );
+              gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+              success = true;
+              console.log(`${TAG} PowerShell cleanup succeeded for ${wtPath}`);
+            } catch (pwshErr) {
+              console.warn(`${TAG} All cleanup attempts failed for ${wtPath}: ${rmErr.message}`);
+            }
+          } else {
+            console.warn(`${TAG} Filesystem cleanup failed: ${rmErr.message}`);
+          }
         }
       } else {
         // Directory already gone, just needs prune

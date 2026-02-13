@@ -254,4 +254,29 @@ if git diff --cached --name-only | grep -qE '^go\.(mod|sum)$'; then
     hook_pass "[pre-commit] Module sync complete"
 fi
 
+# =========================================================================
+# Secret scanning with gitleaks (staged changes only)
+# =========================================================================
+if [ "${VE_HOOK_SKIP_SECRET_SCAN:-}" != "1" ]; then
+    GITLEAKS_BIN=""
+    if [ -x "${VE_DEVCACHE_BIN:-}/gitleaks" ]; then
+        GITLEAKS_BIN="${VE_DEVCACHE_BIN}/gitleaks"
+    elif command -v gitleaks >/dev/null 2>&1; then
+        GITLEAKS_BIN="$(command -v gitleaks)"
+    fi
+
+    if [ -n "$GITLEAKS_BIN" ]; then
+        hook_header "[pre-commit] Scanning staged changes for secrets (gitleaks)..."
+        if [ -f "$REPO_ROOT/.gitleaks.toml" ]; then
+            "$GITLEAKS_BIN" protect --staged --verbose --redact --config "$REPO_ROOT/.gitleaks.toml"
+        else
+            "$GITLEAKS_BIN" protect --staged --verbose --redact
+        fi
+        hook_pass "[pre-commit] gitleaks scan passed"
+    else
+        hook_warn "[pre-commit] gitleaks not available. Skipping secret scan."
+        hook_warn "            Run 'make setup-cache' to install gitleaks to .cache/bin."
+    fi
+fi
+
 exit 0

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // SnapshotManager handles snapshot lifecycle operations.
@@ -52,6 +53,9 @@ func NewSnapshotManager(config SnapshotConfig, baseDir string, logger log.Logger
 	if baseDir == "" {
 		return nil, fmt.Errorf("baseDir is required")
 	}
+	if err := security.ValidateCLIPath(baseDir); err != nil {
+		return nil, fmt.Errorf("invalid baseDir path: %w", err)
+	}
 	cleanBase := filepath.Clean(baseDir)
 	absBase, err := filepath.Abs(cleanBase)
 	if err != nil {
@@ -61,6 +65,26 @@ func NewSnapshotManager(config SnapshotConfig, baseDir string, logger log.Logger
 	snapshotDir := config.Directory
 	if snapshotDir == "" {
 		snapshotDir = filepath.Join(absBase, "data", "snapshots")
+		snapshotDir, err = security.CleanPathWithinBase(absBase, snapshotDir)
+		if err != nil {
+			return nil, fmt.Errorf("invalid snapshot directory: %w", err)
+		}
+	} else {
+		if filepath.IsAbs(snapshotDir) {
+			if err := security.ValidatePathWithinBase(absBase, snapshotDir); err != nil {
+				return nil, fmt.Errorf("snapshot directory must be within baseDir: %w", err)
+			}
+		} else {
+			if err := security.ValidateRelativePath(snapshotDir); err != nil {
+				return nil, fmt.Errorf("invalid snapshot directory: %w", err)
+			}
+			snapshotDir = filepath.Join(absBase, snapshotDir)
+		}
+
+		snapshotDir, err = security.CleanPathWithinBase(absBase, snapshotDir)
+		if err != nil {
+			return nil, fmt.Errorf("invalid snapshot directory: %w", err)
+		}
 	}
 
 	// Ensure directory exists
@@ -84,8 +108,11 @@ func NewSnapshotManager(config SnapshotConfig, baseDir string, logger log.Logger
 
 // loadSnapshots loads snapshot metadata from disk.
 func (sm *SnapshotManager) loadSnapshots() error {
-	metadataFile := filepath.Join(sm.baseDir, "metadata.json")
-	// #nosec G304 -- sm.baseDir is validated in constructor
+	metadataFile, err := sm.metadataFilePath()
+	if err != nil {
+		return err
+	}
+	// #nosec G304 -- metadataFile validated against snapshot base directory
 	data, err := os.ReadFile(metadataFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -113,8 +140,11 @@ func (sm *SnapshotManager) saveSnapshotsLocked() error {
 		return err
 	}
 
-	metadataFile := filepath.Join(sm.baseDir, "metadata.json")
-	// #nosec G304 -- sm.baseDir is validated in constructor
+	metadataFile, err := sm.metadataFilePath()
+	if err != nil {
+		return err
+	}
+	// #nosec G304 -- metadataFile validated against snapshot base directory
 	return os.WriteFile(metadataFile, data, 0600)
 }
 
@@ -204,6 +234,10 @@ func (sm *SnapshotManager) cleanupOldSnapshots() error {
 	}
 
 	return nil
+}
+
+func (sm *SnapshotManager) metadataFilePath() (string, error) {
+	return security.CleanPathWithinBase(sm.baseDir, filepath.Join(sm.baseDir, "metadata.json"))
 }
 
 // getSnapshotPath returns the path to a snapshot directory.

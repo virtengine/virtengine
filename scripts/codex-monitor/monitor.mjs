@@ -440,7 +440,7 @@ const monitorMonitor = {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "2700000",
+        "600000", // Changed from 2700000 (45min) to 600000 (10min) to match refreshMonitorMonitorRuntime()
     ),
   ),
   statusIntervalMs: Math.max(
@@ -467,6 +467,15 @@ const monitorMonitor = {
   abortController: null,
 };
 if (monitorMonitor.enabled) {
+  // Warn if legacy env var is dangerously low
+  const legacyTimeout = process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS;
+  const explicitTimeout = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS;
+  if (legacyTimeout && !explicitTimeout && Number(legacyTimeout) < 600_000) {
+    console.warn(
+      `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is too low for monitor-monitor (minimum 600s recommended). ` +
+      `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`
+    );
+  }
   console.log(
     `[monitor] monitor-monitor ENABLED (interval ${Math.round(monitorMonitor.intervalMs / 1000)}s, status ${Math.round(monitorMonitor.statusIntervalMs / 60_000)}m, timeout ${Math.round(monitorMonitor.timeoutMs / 1000)}s)`,
   );
@@ -1671,8 +1680,12 @@ async function startVibeKanbanProcess() {
     detached: true,
   };
   if (useShell && spawnArgs.length > 0) {
-    const shellQuote = (value) =>
-      /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
+    const shellQuote = (value) => {
+      const str = String(value);
+      if (!/\s/.test(str)) return str;
+      const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    };
     const fullCommand = [spawnCmd, ...spawnArgs].map(shellQuote).join(" ");
     vibeKanbanProcess = spawn(fullCommand, spawnOptions);
   } else if (useShell) {
@@ -2227,6 +2240,8 @@ async function fetchVk(path, opts = {}) {
   const method = (opts.method || "GET").toUpperCase();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs || 15000);
+
+  let res;
   try {
     const fetchOpts = {
       method,
@@ -2236,36 +2251,9 @@ async function fetchVk(path, opts = {}) {
     if (opts.body && method !== "GET") {
       fetchOpts.body = JSON.stringify(opts.body);
     }
-    const res = await fetch(url, fetchOpts);
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.warn(
-        `[monitor] fetchVk ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
-      );
-      return null;
-    }
-    const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      const text = await res.text().catch(() => "");
-      console.warn(
-        `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
-      );
-      if (text) {
-        console.warn(
-          `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
-        );
-      }
-      const now = Date.now();
-      if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
-        vkNonJsonNotifiedAt = now;
-        notifyVkError(
-          "Vibe-Kanban API returned HTML/non-JSON. Check VK_BASE_URL/VK_ENDPOINT_URL.",
-        );
-      }
-      return null;
-    }
-    return await res.json();
+    res = await fetch(url, fetchOpts);
   } catch (err) {
+    // Network error, timeout, abort, etc. - res is undefined
     const msg = err?.message || String(err);
     if (!msg.includes("abort")) {
       console.warn(`[monitor] fetchVk ${method} ${path} error: ${msg}`);
@@ -2273,6 +2261,50 @@ async function fetchVk(path, opts = {}) {
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+
+  // Safety: validate response object (guards against mock/test issues)
+  if (!res || typeof res.ok === "undefined") {
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} error: invalid response object (res=${!!res}, res.ok=${res?.ok})`,
+    );
+    return null;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
+    );
+    return null;
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await res.text().catch(() => "");
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
+    );
+    if (text) {
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
+      );
+    }
+    const now = Date.now();
+    if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
+      vkNonJsonNotifiedAt = now;
+      notifyVkError(
+        "Vibe-Kanban API returned HTML/non-JSON. Check VK_BASE_URL/VK_ENDPOINT_URL.",
+      );
+    }
+    return null;
+  }
+
+  try {
+    return await res.json();
+  } catch (err) {
+    console.warn(`[monitor] fetchVk ${method} ${path} error: Invalid JSON - ${err.message}`);
+    return null;
   }
 }
 
@@ -2399,10 +2431,11 @@ async function findExistingPrForBranchApi(branch) {
         "User-Agent": "codex-monitor",
       },
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
+    if (!res || !res.ok) {
+      const text = res ? await res.text().catch(() => "") : "";
+      const status = res?.status || "no response";
       console.warn(
-        `[monitor] GitHub API PR lookup failed (${res.status}): ${text.slice(0, 120)}`,
+        `[monitor] GitHub API PR lookup failed (${status}): ${text.slice(0, 120)}`,
       );
       return null;
     }
@@ -2451,10 +2484,11 @@ async function getPullRequestByNumber(prNumber) {
         "User-Agent": "codex-monitor",
       },
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
+    if (!res || !res.ok) {
+      const text = res ? await res.text().catch(() => "") : "";
+      const status = res?.status || "no response";
       console.warn(
-        `[monitor] GitHub API PR ${prNumber} lookup failed (${res.status}): ${text.slice(0, 120)}`,
+        `[monitor] GitHub API PR ${prNumber} lookup failed (${status}): ${text.slice(0, 120)}`,
       );
       return null;
     }
@@ -6765,12 +6799,13 @@ async function fetchTelegramUpdates() {
     const res = await fetch(`${url}?${params.toString()}`, {
       signal: controller.signal,
     });
-    if (!res.ok) {
-      const body = await res.text();
+    if (!res || !res.ok) {
+      const body = res ? await res.text() : "";
+      const status = res?.status || "no response";
       console.warn(
-        `[monitor] telegram getUpdates failed: ${res.status} ${body}`,
+        `[monitor] telegram getUpdates failed: ${status} ${body}`,
       );
-      if (res.status === 409) {
+      if (res?.status === 409) {
         telegramCommandEnabled = false;
         await releaseTelegramPollLock();
       }
@@ -8186,13 +8221,26 @@ function refreshMonitorMonitorRuntime() {
         "300000",
     ),
   );
+  // Monitor-monitor timeout: defaults to 10 minutes (600s).
+  // This is deliberately shorter than the legacy 45-minute default to enable
+  // faster failover when SDKs hang due to API issues, rate limits, or connectivity problems.
+  // Monitor-monitor should typically complete in 1-3 minutes; 10 minutes provides
+  // headroom for slower models while still triggering watchdog before 15 minutes.
+  const legacyTimeout = process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS;
+  const explicitTimeout = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS;
+  const defaultTimeout = "600000"; // 10 minutes
+
+  // Warn if legacy env var is set and less than recommended minimum
+  if (legacyTimeout && !explicitTimeout && Number(legacyTimeout) < 600_000) {
+    console.warn(
+      `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is too low for monitor-monitor (minimum 600s recommended). ` +
+      `Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS=600000 to override, or unset the legacy variable.`
+    );
+  }
+
   monitorMonitor.timeoutMs = Math.max(
     120_000,
-    Number(
-      process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
-        process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "2700000",
-    ),
+    Number(explicitTimeout || legacyTimeout || defaultTimeout),
   );
   monitorMonitor.statusIntervalMs = Math.max(
     5 * 60_000,
@@ -8440,48 +8488,75 @@ async function runMonitorMonitorCycle({
   }
 
   let sdk = getCurrentMonitorSdk();
-  let result = await runOnce(sdk);
+  let result;
+  const runStartTime = Date.now();
 
-  if (!result.success && shouldFailoverMonitorSdk(result.error)) {
-    const canRotate = rotateMonitorSdk(result.error || "retryable failure");
-    if (canRotate) {
-      sdk = getCurrentMonitorSdk();
-      console.warn(`[monitor-monitor] retrying with ${sdk}`);
-      result = await runOnce(sdk);
+  try {
+    result = await runOnce(sdk);
+    const runDuration = Math.round((Date.now() - runStartTime) / 1000);
+
+    if (!result.success && shouldFailoverMonitorSdk(result.error)) {
+      const canRotate = rotateMonitorSdk(result.error || "retryable failure");
+      if (canRotate) {
+        sdk = getCurrentMonitorSdk();
+        const isTimeout = result.error?.includes("timeout");
+        console.warn(
+          `[monitor-monitor] retrying with ${sdk} (previous ${isTimeout ? "timeout" : "failure"} after ${runDuration}s)`,
+        );
+        result = await runOnce(sdk);
+      }
     }
-  }
 
-  if (result.success) {
-    monitorMonitor.consecutiveFailures = 0;
-    monitorMonitor.lastOutcome = `success (${sdk})`;
-    monitorMonitor.lastError = "";
-    console.log(
-      `[monitor-monitor] cycle complete via ${sdk}${trigger ? ` (${trigger})` : ""}`,
-    );
-  } else {
+    if (result.success) {
+      const totalDuration = Math.round((Date.now() - runStartTime) / 1000);
+      monitorMonitor.consecutiveFailures = 0;
+      monitorMonitor.lastOutcome = `success (${sdk})`;
+      monitorMonitor.lastError = "";
+      console.log(
+        `[monitor-monitor] cycle complete via ${sdk} in ${totalDuration}s${trigger ? ` (${trigger})` : ""}`,
+      );
+    } else {
+      const totalDuration = Math.round((Date.now() - runStartTime) / 1000);
+      monitorMonitor.consecutiveFailures += 1;
+      const errMsg = result.error || "unknown error";
+      const isTimeout = errMsg.includes("timeout");
+      monitorMonitor.lastOutcome = `failed (${sdk})`;
+      monitorMonitor.lastError = errMsg;
+      console.warn(
+        `[monitor-monitor] run failed via ${sdk} after ${totalDuration}s${isTimeout ? " [TIMEOUT]" : ""}: ${errMsg}`,
+      );
+      if (shouldFailoverMonitorSdk(errMsg)) {
+        rotateMonitorSdk("prepare next cycle");
+      }
+      void notify?.(
+        `⚠️ Monitor-Monitor failed (${sdk}): ${String(errMsg).slice(0, 240)}`,
+        3,
+        { dedupKey: "monitor-monitor-failed" },
+      );
+      try {
+        await publishMonitorMonitorStatus("failure");
+      } catch {
+        /* best effort */
+      }
+    }
+  } catch (runErr) {
+    // Uncaught exception during execution (e.g. launchOrResumeThread threw)
     monitorMonitor.consecutiveFailures += 1;
-    const errMsg = result.error || "unknown error";
-    monitorMonitor.lastOutcome = `failed (${sdk})`;
+    const errMsg = String(runErr?.message || runErr || "unknown exception");
+    monitorMonitor.lastOutcome = `exception (${sdk})`;
     monitorMonitor.lastError = errMsg;
-    console.warn(`[monitor-monitor] run failed via ${sdk}: ${errMsg}`);
-    if (shouldFailoverMonitorSdk(errMsg)) {
-      rotateMonitorSdk("prepare next cycle");
-    }
+    console.error(`[monitor-monitor] uncaught exception via ${sdk}: ${errMsg}`);
     void notify?.(
-      `⚠️ Monitor-Monitor failed (${sdk}): ${String(errMsg).slice(0, 240)}`,
+      `⚠️ Monitor-Monitor exception (${sdk}): ${errMsg.slice(0, 240)}`,
       3,
-      { dedupKey: "monitor-monitor-failed" },
+      { dedupKey: "monitor-monitor-exception" },
     );
-    try {
-      await publishMonitorMonitorStatus("failure");
-    } catch {
-      /* best effort */
-    }
+  } finally {
+    // CRITICAL: Always reset running flag, even if runOnce throws or times out
+    monitorMonitor.lastRunAt = Date.now();
+    monitorMonitor.running = false;
+    monitorMonitor.abortController = null;
   }
-
-  monitorMonitor.lastRunAt = Date.now();
-  monitorMonitor.running = false;
-  monitorMonitor.abortController = null;
 }
 
 function startMonitorMonitorSupervisor() {
@@ -8864,6 +8939,18 @@ function getInternalActiveSlotCount() {
   return 0;
 }
 
+function isMonitorMonitorCycleActive() {
+  try {
+    return Boolean(
+      monitorMonitor &&
+      monitorMonitor.enabled &&
+      (monitorMonitor.running || monitorMonitor.abortController),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getRuntimeRestartProtection() {
   if (ALLOW_INTERNAL_RUNTIME_RESTARTS) {
     return { defer: false, reason: "" };
@@ -8899,7 +8986,6 @@ function selfRestartForSourceChange(filename) {
     selfRestartTimer = setTimeout(retryDeferredSelfRestart, 30_000);
     return;
   }
-
   console.log(
     `\n[monitor] source files stable for ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s — restarting (${filename})`,
   );

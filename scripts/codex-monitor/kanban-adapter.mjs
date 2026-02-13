@@ -138,6 +138,8 @@ class VKAdapter {
         () => controller.abort(),
         opts.timeoutMs || 15_000,
       );
+
+      let res;
       try {
         const fetchOpts = {
           method,
@@ -150,16 +152,30 @@ class VKAdapter {
               ? opts.body
               : JSON.stringify(opts.body);
         }
-        const res = await fetch(url, fetchOpts);
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(
-            `VK API ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
-          );
-        }
-        return await res.json();
+        res = await fetch(url, fetchOpts);
+      } catch (err) {
+        // Network error, timeout, abort - res is undefined
+        throw new Error(
+          `VK API ${method} ${path} network error: ${err.message || err}`,
+        );
       } finally {
         clearTimeout(timeout);
+      }
+
+      // Now res is guaranteed to be defined
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `VK API ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
+        );
+      }
+
+      try {
+        return await res.json();
+      } catch (err) {
+        throw new Error(
+          `VK API ${method} ${path} invalid JSON: ${err.message}`,
+        );
       }
     };
     return this._fetchVk;

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation helpers use weak random for reproducibility
 	"os"
 	"path/filepath"
 	"time"
@@ -208,11 +208,15 @@ func AppStateRandomizedFn(
 	)
 	appParams.GetOrGenerate(
 		StakePerAccount, &initialStake, r,
-		func(r *rand.Rand) { initialStake = sdk.DefaultPowerReduction.AddRaw(r.Int63n(1e12)) },
+		func(r *rand.Rand) {
+			initialStake = sdk.DefaultPowerReduction.AddRaw(r.Int63n(1e12)) //nolint:gosec // G404: simulation randomness for genesis params
+		},
 	)
 	appParams.GetOrGenerate(
 		InitiallyBondedValidators, &numInitiallyBonded, r,
-		func(r *rand.Rand) { numInitiallyBonded = int64(r.Intn(299) + 1) },
+		func(r *rand.Rand) {
+			numInitiallyBonded = int64(r.Intn(299) + 1) //nolint:gosec // G404: simulation randomness for genesis params
+		},
 	)
 
 	if numInitiallyBonded > numAccs {
