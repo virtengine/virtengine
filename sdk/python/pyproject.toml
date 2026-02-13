@@ -28,9 +28,9 @@ include = ["virtengine/py.typed"]
 [tool.poetry.dependencies]
 python = "^3.10"
 grpcio = "^1.60.0"
-protobuf = "^4.25.0"
+protobuf = "^5.29.6"
 bip-utils = "^2.9.0"
-ecdsa = "^0.18.0"
+cryptography = "^46.0.5"
 bech32 = "^1.2.0"
 websockets = "^12.0"
 
