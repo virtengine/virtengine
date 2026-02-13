@@ -195,7 +195,10 @@ async function getThread() {
   if (activeThreadId && shouldResume) {
     if (typeof codexInstance.resumeThread === "function") {
       try {
-        activeThread = codexInstance.resumeThread(activeThreadId, THREAD_OPTIONS);
+        activeThread = codexInstance.resumeThread(
+          activeThreadId,
+          THREAD_OPTIONS,
+        );
         if (activeThread) {
           detectThreadCapabilities(activeThread);
           console.log(`[codex-shell] resumed thread ${activeThreadId}`);
