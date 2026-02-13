@@ -345,33 +345,43 @@ check_codex_monitor_syntax() {
     hook_step "Syntax-checking codex-monitor .mjs files (node --check)..."
     local fail=0
     local checked=0
-    for f in "$monitor_dir"/*.mjs; do
+    pushd "$monitor_dir" >/dev/null
+    for f in ./*.mjs; do
         [ -f "$f" ] || continue
         checked=$((checked + 1))
+        # Run from monitor dir with relative paths to avoid MSYS path mangling
+        # of /mnt/... absolute paths when Node is a Windows binary.
         if ! node --check "$f" 2>&1; then
             hook_fail "Syntax error: $(basename "$f")"
             fail=1
         fi
     done
+    popd >/dev/null
     hook_step "Checked $checked .mjs files"
     # Also verify ESM import/export linkage for the main entry point.
     # node --check only catches parse errors; missing named exports are
     # module instantiation errors that only surface at import time.
     if [ $fail -eq 0 ]; then
         hook_step "Validating ESM exports (import check)..."
-        if ! VITEST=1 node -e "
-          import('file://${monitor_dir}/monitor.mjs')
-            .then(() => process.exit(0))
-            .catch(e => {
-              if (e instanceof SyntaxError || /does not provide an export named/.test(e.message)) {
-                console.error('ESM linkage error: ' + e.message);
-                process.exit(1);
-              }
-              // Other runtime errors (missing env vars, network, etc.) are OK — we
-              // only care about import-time failures here.
-              process.exit(0);
-            });
-        " 2>&1; then
+        if ! (
+            cd "$monitor_dir"
+            VITEST=1 node -e "
+              import('node:url').then(({ pathToFileURL }) => {
+                const target = pathToFileURL(process.cwd() + '/monitor.mjs').href;
+                return import(target);
+              })
+              .then(() => process.exit(0))
+              .catch(e => {
+                if (e instanceof SyntaxError || /does not provide an export named/.test(e.message)) {
+                  console.error('ESM linkage error: ' + e.message);
+                  process.exit(1);
+                }
+                // Other runtime errors (missing env vars, network, etc.) are OK — we
+                // only care about import-time failures here.
+                process.exit(0);
+              });
+            "
+        ) 2>&1; then
             hook_fail "ESM import validation failed for monitor.mjs"
             fail=1
         fi
