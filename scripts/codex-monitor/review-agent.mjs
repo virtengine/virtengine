@@ -342,10 +342,12 @@ export class ReviewAgent {
 
   /**
    * Get current review-agent status.
-   * @returns {{ activeReviews: number, queuedReviews: number, completedReviews: number }}
+   * @returns {{ running: boolean, sdk: string, activeReviews: number, queuedReviews: number, completedReviews: number }}
    */
   getStatus() {
     return {
+      running: this.#running,
+      sdk: this.#sdk,
       activeReviews: this.#activeReviews.size,
       queuedReviews: this.#queue.length,
       completedReviews: this.#completedCount,

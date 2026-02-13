@@ -1,7 +1,6 @@
 {
   "name": "@virtengine/chain-sdk",
   "version": "1.0.0-alpha.20",
-  "type": "module",
   "description": "VirtEngine API TypeScript client",
   "keywords": [],
   "repository": {
@@ -11,39 +10,37 @@
   },
   "license": "Apache-2.0",
   "author": "VirtEngine Team",
-  "publishConfig": {
-    "access": "public"
-  },
+  "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.cjs",
-      "import": "./dist/esm/index.js"
-    },
-    "./web": {
-      "types": "./dist/types/index.web.d.ts",
-      "require": "./dist/cjs/index.web.cjs",
-      "import": "./dist/esm/index.web.js"
+      "types": "./dist/types/index.d.ts"
     },
     "./private-types/*": {
-      "types": "./dist/types/generated/protos/index.*.d.ts",
+      "import": "./dist/esm/generated/protos/index.*.js",
       "require": "./dist/cjs/generated/protos/index.*.cjs",
-      "import": "./dist/esm/generated/protos/index.*.js"
+      "types": "./dist/types/generated/protos/index.*.d.ts"
+    },
+    "./web": {
+      "import": "./dist/esm/index.web.js",
+      "require": "./dist/cjs/index.web.cjs",
+      "types": "./dist/types/index.web.d.ts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "npm run compile:validators && node ./script/clean-dist.mjs && tsc -p tsconfig.build.json && node esbuild.config.mjs && ./script/validate-package-exports.ts",
+    "build": "npm run compile:validators && node ./script/clean-dist.mjs && tsc -p tsconfig.build.json && node esbuild.config.mjs && node --experimental-strip-types --no-warnings ./script/validate-package-exports.ts",
+    "compile:validators": "node --experimental-strip-types --no-warnings ./script/compile-json-schema-to-ts.ts",
     "lint": "eslint src",
     "lint:fix": "npm run lint -- --fix",
+    "release": "npm run build && npm test && npm publish --tag alpha",
     "test": "jest --selectProjects unit functional",
     "test:cov": "jest --selectProjects unit functional --coverage",
     "test:functional": "jest --selectProjects functional",
-    "test:unit": "jest --selectProjects unit",
-    "compile:validators": "node --experimental-strip-types --no-warnings ./script/compile-json-schema-to-ts.ts",
-    "release": "npm run build && npm test && npm publish --tag alpha"
+    "test:unit": "jest --selectProjects unit"
   },
   "lint-staged": {
     "*.json": [
@@ -109,5 +106,8 @@
   "volta": {
     "node": "24.12.0",
     "npm": "11.6.2"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

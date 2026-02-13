@@ -936,6 +936,15 @@ export function loadConfig(argv = process.argv, options = {}) {
     internalExecutorConfig.mode ||
     "vk"
   ).toLowerCase();
+  const reviewAgentToggleRaw =
+    process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
+  const reviewAgentEnabled =
+    reviewAgentToggleRaw !== undefined &&
+    String(reviewAgentToggleRaw).trim() !== ""
+      ? !["0", "false", "no", "off"].includes(
+          String(reviewAgentToggleRaw).trim().toLowerCase(),
+        )
+      : internalExecutorConfig.reviewAgentEnabled !== false;
   const internalExecutor = {
     mode: ["vk", "internal", "hybrid"].includes(executorMode)
       ? executorMode
@@ -969,6 +978,17 @@ export function loadConfig(argv = process.argv, options = {}) {
       process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
       internalExecutorConfig.projectId ||
       null,
+    reviewAgentEnabled,
+    reviewMaxConcurrent: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
+        internalExecutorConfig.reviewMaxConcurrent ||
+        2,
+    ),
+    reviewTimeoutMs: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
+        internalExecutorConfig.reviewTimeoutMs ||
+        300000,
+    ),
   };
 
   // ── Vibe-Kanban ──────────────────────────────────────────

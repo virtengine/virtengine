@@ -13,7 +13,7 @@
  *   - thread registry integration for agent <-> worktree linkage
  */
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, execSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -117,7 +117,7 @@ function sanitizeBranchName(branch) {
     .replace(/[^a-zA-Z0-9._-]/g, "")
     .replace(/^\.+/, "") // no leading dots
     .replace(/\.+$/, "") // no trailing dots
-    .slice(0, 100); // keep it reasonable
+    .slice(0, 60); // Windows MAX_PATH is 260, worktree base path ~60, leaves ~140 for this + git overhead
 }
 
 /**
@@ -286,7 +286,9 @@ class WorktreeManager {
       args.push(branch);
     }
 
-    let result = gitSync(args, this.repoRoot);
+    // Use extended timeout for large repos (7000+ files can take >120s on Windows)
+    const WT_TIMEOUT = 300_000;
+    let result = gitSync(args, this.repoRoot, { timeout: WT_TIMEOUT });
 
     if (result.status !== 0) {
       const stderr = (result.stderr || "").trim();
@@ -319,9 +321,11 @@ class WorktreeManager {
         }
 
         // Try checking out the existing branch into the new worktree (no -b)
+        // Use extended timeout for large repos (7000+ files can take >120s on Windows)
         const existingResult = gitSync(
           ["worktree", "add", worktreePath, branch],
           this.repoRoot,
+          { timeout: WT_TIMEOUT },
         );
 
         if (existingResult.status !== 0) {
@@ -337,17 +341,21 @@ class WorktreeManager {
             );
             const forceArgs = ["worktree", "add", worktreePath, "-B", branch];
             if (opts.baseBranch) forceArgs.push(opts.baseBranch);
-            result = gitSync(forceArgs, this.repoRoot);
+            result = gitSync(forceArgs, this.repoRoot, { timeout: WT_TIMEOUT });
             if (result.status !== 0) {
               console.error(
                 `${TAG} Force-reset worktree also failed: ${(result.stderr || "").trim()}`,
               );
+              // Clean up partial worktree directory to prevent repeat failures
+              this._cleanupPartialWorktree(worktreePath);
               return { path: worktreePath, created: false, existing: false };
             }
           } else {
             console.error(
               `${TAG} Checkout of existing branch also failed: ${stderr2}`,
             );
+            // Clean up partial worktree directory to prevent repeat failures
+            this._cleanupPartialWorktree(worktreePath);
             return { path: worktreePath, created: false, existing: false };
           }
         }
@@ -363,14 +371,20 @@ class WorktreeManager {
           worktreePath,
           branch,
         ];
-        const retryResult = gitSync(detachArgs, this.repoRoot);
+        const retryResult = gitSync(detachArgs, this.repoRoot, {
+          timeout: WT_TIMEOUT,
+        });
         if (retryResult.status !== 0) {
           console.error(
             `${TAG} Detached worktree also failed: ${(retryResult.stderr || "").trim()}`,
           );
+          // Clean up partial worktree directory to prevent repeat failures
+          this._cleanupPartialWorktree(worktreePath);
           return { path: worktreePath, created: false, existing: false };
         }
       } else {
+        // Unknown error — clean up any partial worktree directory
+        this._cleanupPartialWorktree(worktreePath);
         return { path: worktreePath, created: false, existing: false };
       }
     }
@@ -817,6 +831,30 @@ class WorktreeManager {
   }
 
   /**
+   * Clean up a partially-created worktree directory left behind by a failed
+   * `git worktree add` (e.g. timeout mid-checkout). If the directory remains,
+   * subsequent attempts will fail with "already exists" in an infinite loop.
+   * @param {string} wtPath  Absolute path to the worktree directory
+   */
+  _cleanupPartialWorktree(wtPath) {
+    if (!existsSync(wtPath)) return;
+    try {
+      rmSync(wtPath, { recursive: true, force: true });
+      console.log(`${TAG} cleaned up partial worktree directory: ${wtPath}`);
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to clean up partial worktree at ${wtPath}: ${err.message}`,
+      );
+    }
+    // Prune stale worktree refs that may reference the removed directory
+    try {
+      gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /**
    * Remove a worktree tracked in the registry.
    * @param {string} key   Registry key
    * @param {WorktreeRecord} record
@@ -832,19 +870,54 @@ class WorktreeManager {
     const result = gitSync(
       ["worktree", "remove", "--force", wtPath],
       this.repoRoot,
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
 
     if (result.status !== 0) {
       const stderr = (result.stderr || "").trim();
       console.warn(`${TAG} Failed to remove worktree at ${wtPath}: ${stderr}`);
-      // Even if git fails, clean up registry
+      // If git fails (e.g. "Directory not empty"), fall back to filesystem removal
+      if (existsSync(wtPath)) {
+        try {
+          // Attempt 1: On Windows, use PowerShell first (most reliable for locked files + long paths)
+          if (process.platform === "win32") {
+            const pwsh = process.env.PWSH_PATH || "powershell.exe";
+            const escapedPath = wtPath.replace(/'/g, "''");
+            // First, remove read-only/hidden attributes that can block deletion
+            execSync(
+              `${pwsh} -NoProfile -Command "Get-ChildItem -LiteralPath '${escapedPath}' -Recurse -Force | ForEach-Object { $_.Attributes = 'Normal' } -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction Stop"`,
+              { timeout: 60_000, stdio: "pipe" },
+            );
+            console.log(`${TAG} PowerShell cleanup succeeded for ${wtPath}`);
+            gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          } else {
+            // Unix: Use rmSync with retries
+            rmSync(wtPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+            console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
+            gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          }
+        } catch (cleanupErr) {
+          // Last resort: try basic Node.js rmSync (may partially succeed)
+          try {
+            rmSync(wtPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+            console.log(`${TAG} Fallback cleanup succeeded for ${wtPath}`);
+            gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          } catch (finalErr) {
+            console.warn(`${TAG} All cleanup attempts failed for ${wtPath}: ${cleanupErr.message || cleanupErr}`);
+            // Don't throw — mark as zombie and continue. Background cleanup will retry later.
+            this.registry.set(key, { ...record, status: "zombie", error: cleanupErr.message });
+            return { success: false, path: wtPath };
+          }
+        }
+      }
     }
 
     this.registry.delete(key);
     await this.saveRegistry();
 
     console.log(`${TAG} Released worktree: ${wtPath}`);
+    // Report command outcome, not filesystem state. We still clean registry/path
+    // best-effort on failure to avoid stale worktree loops.
     return { success: result.status === 0, path: wtPath };
   }
 
@@ -857,14 +930,47 @@ class WorktreeManager {
     const result = gitSync(
       ["worktree", "remove", "--force", wtPath],
       this.repoRoot,
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
 
-    const success = result.status === 0;
+    let success = result.status === 0;
     if (!success) {
       console.warn(
         `${TAG} Failed to force-remove worktree at ${wtPath}: ${(result.stderr || "").trim()}`,
       );
+      // Fall back to filesystem removal (handles "Directory not empty" on Windows)
+      if (existsSync(wtPath)) {
+        try {
+          // Attempt 1: Node.js rmSync with retries
+          rmSync(wtPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
+          gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+          success = true;
+          console.log(`${TAG} Filesystem cleanup succeeded for ${wtPath}`);
+        } catch (rmErr) {
+          // Attempt 2: On Windows, use PowerShell for long paths + locked files
+          if (process.platform === "win32") {
+            try {
+              const pwsh = process.env.PWSH_PATH || "powershell.exe";
+              const escapedPath = wtPath.replace(/'/g, "''");
+              execSync(
+                `${pwsh} -NoProfile -Command "Remove-Item -LiteralPath '${escapedPath}' -Recurse -Force -ErrorAction SilentlyContinue"`,
+                { timeout: 30_000, stdio: "pipe" },
+              );
+              gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+              success = true;
+              console.log(`${TAG} PowerShell cleanup succeeded for ${wtPath}`);
+            } catch (pwshErr) {
+              console.warn(`${TAG} All cleanup attempts failed for ${wtPath}: ${rmErr.message}`);
+            }
+          } else {
+            console.warn(`${TAG} Filesystem cleanup failed: ${rmErr.message}`);
+          }
+        }
+      } else {
+        // Directory already gone, just needs prune
+        gitSync(["worktree", "prune"], this.repoRoot, { timeout: 15_000 });
+        success = true;
+      }
     } else {
       console.log(`${TAG} Force-removed worktree: ${wtPath}`);
     }

@@ -304,9 +304,9 @@ describe("idle detection integration", () => {
     tracker.startSession("task-3", "Done");
     tracker.endSession("task-3", "completed");
 
-    // Make task-2 idle
+    // Make task-2 idle (between idleThreshold=50 and stalledThreshold=100)
     const session2 = tracker.getSession("task-2");
-    session2.lastActivityAt = Date.now() - 200;
+    session2.lastActivityAt = Date.now() - 80;
 
     const active = tracker.getActiveSessions();
     expect(active).toHaveLength(2);
@@ -314,7 +314,7 @@ describe("idle detection integration", () => {
     // Find idle session
     const idleSession = active.find((s) => s.taskId === "task-2");
     expect(idleSession).toBeTruthy();
-    expect(idleSession.idleMs).toBeGreaterThan(100);
+    expect(idleSession.idleMs).toBeGreaterThan(50);
 
     // Check if it should get a CONTINUE
     const progress = tracker.getProgressStatus("task-2");

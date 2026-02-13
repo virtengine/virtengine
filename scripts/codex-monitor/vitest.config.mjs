@@ -5,6 +5,7 @@ export default defineConfig({
     environment: "node",
     globals: true,
     include: ["tests/**/*.test.mjs"],
+    exclude: ["**/node_modules/**", "**/.cache/**"],
     testTimeout: 5000,
   },
 });

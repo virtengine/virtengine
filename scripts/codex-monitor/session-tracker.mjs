@@ -60,7 +60,7 @@ export class SessionTracker {
    */
   constructor(options = {}) {
     this.#maxMessages = options.maxMessages ?? DEFAULT_MAX_MESSAGES;
-    this.#idleThresholdMs = options.idleThresholdMs ?? 120_000;
+    this.#idleThresholdMs = options.idleThresholdMs ?? 180_000; // 3 minutes — gives agents breathing room
   }
 
   /**
@@ -235,12 +235,12 @@ export class SessionTracker {
       return c.includes("git commit") || c.includes("git push");
     });
 
-    // Determine status
+    // Determine status — check stalled FIRST (it's the stricter condition)
     let status = "active";
-    if (idleMs > this.#idleThresholdMs) {
-      status = "idle";
-    } else if (idleMs > this.#idleThresholdMs * 2) {
+    if (idleMs > this.#idleThresholdMs * 2) {
       status = "stalled";
+    } else if (idleMs > this.#idleThresholdMs) {
+      status = "idle";
     }
 
     // Determine recommendation

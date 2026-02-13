@@ -4,6 +4,9 @@ import (
 	"unsafe"
 )
 
+// Security note: unsafe conversions alias the original memory. Callers must treat
+// returned values as read-only and ensure the source outlives the alias.
+
 // StrToBytes performs a safe copy from string to []byte.
 func StrToBytes(s string) []byte {
 	return []byte(s)
@@ -13,8 +16,7 @@ func StrToBytes(s string) []byte {
 // Returned bytes must be treated as read-only and must not outlive the source string.
 // Prefer StrToBytes for safety unless a hot path requires zero-copy conversion.
 func UnsafeStrToBytes(s string) []byte {
-	//nolint:gosec // G103: zero-copy conversion for hot paths; returned slice is read-only and tied to string lifetime.
-	return unsafe.Slice(unsafe.StringData(s), len(s)) // ref https://github.com/golang/go/issues/53003#issuecomment-1140276077
+	return unsafe.Slice(unsafe.StringData(s), len(s)) //nolint:gosec // G103: zero-copy conversion; slice aliases string data and must remain read-only for the string's lifetime.
 }
 
 // UnsafeBytesToStr is meant to make a zero allocation conversion from []byte -> string.
@@ -24,8 +26,7 @@ func UnsafeBytesToStr(b []byte) string {
 	if len(b) == 0 {
 		return ""
 	}
-	//nolint:gosec // G103: zero-copy conversion; caller must not mutate b while the string is in use.
-	return unsafe.String(unsafe.SliceData(b), len(b))
+	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // G103: zero-copy conversion; caller must not mutate b while the string is in use.
 }
 
 // BytesToStr performs a safe copy from []byte to string.
