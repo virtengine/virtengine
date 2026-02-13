@@ -49,7 +49,7 @@ jobs:
 
           response=$(curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/staging-e2e.yml/runs?per_page=20")
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/staging-e2e.yaml/runs?per_page=20")
 
           conclusion=$(echo "$response" | jq -r --arg sha "$GITHUB_SHA" \
             '.workflow_runs[] | select(.head_sha == $sha) | .conclusion' | head -1)

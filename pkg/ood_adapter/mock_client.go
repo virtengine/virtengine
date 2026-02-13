@@ -289,7 +289,7 @@ func (c *MockOODClient) LaunchApp(ctx context.Context, spec *InteractiveAppSpec)
 	}(sessionID, spec.AppType, c.nextSessionID)
 
 	c.sessions[sessionID] = session
-	return session, nil
+	return cloneSession(session), nil
 }
 
 // GetSession gets session status
@@ -306,7 +306,7 @@ func (c *MockOODClient) GetSession(ctx context.Context, sessionID string) (*OODS
 		return nil, ErrSessionNotFound
 	}
 
-	return session, nil
+	return cloneSession(session), nil
 }
 
 // TerminateSession terminates a session
@@ -346,7 +346,7 @@ func (c *MockOODClient) ListSessions(ctx context.Context, veidAddress string) ([
 	sessions := make([]*OODSession, 0)
 	for _, session := range c.sessions {
 		if session.VEIDAddress == veidAddress {
-			sessions = append(sessions, session)
+			sessions = append(sessions, cloneSession(session))
 		}
 	}
 

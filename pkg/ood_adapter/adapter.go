@@ -283,12 +283,13 @@ func (a *OODAdapter) LaunchInteractiveApp(ctx context.Context, virtEngineSession
 	session.ExpiresAt = time.Now().Add(time.Duration(spec.Resources.Hours) * time.Hour)
 
 	// Store session
+	sessionCopy := cloneSession(session)
 	a.mu.Lock()
-	a.sessions[session.SessionID] = session
-	a.userSessions[veidAddress] = append(a.userSessions[veidAddress], session.SessionID)
+	a.sessions[sessionCopy.SessionID] = sessionCopy
+	a.userSessions[veidAddress] = append(a.userSessions[veidAddress], sessionCopy.SessionID)
 	a.mu.Unlock()
 
-	return session, nil
+	return cloneSession(sessionCopy), nil
 }
 
 // GetSession gets a session by ID
@@ -299,9 +300,10 @@ func (a *OODAdapter) GetSession(ctx context.Context, sessionID string) (*OODSess
 
 	a.mu.RLock()
 	session, exists := a.sessions[sessionID]
+	sessionSnapshot := cloneSession(session)
 	a.mu.RUnlock()
 
-	if !exists {
+	if !exists || sessionSnapshot == nil {
 		return nil, ErrSessionNotFound
 	}
 
@@ -309,20 +311,20 @@ func (a *OODAdapter) GetSession(ctx context.Context, sessionID string) (*OODSess
 	updatedSession, err := a.client.GetSession(ctx, sessionID)
 	if err != nil {
 		// Return cached session if query fails
-		return session, nil
+		return sessionSnapshot, nil
 	}
 
 	// Preserve VirtEngine-specific fields
-	updatedSession.VirtEngineSessionID = session.VirtEngineSessionID
-	updatedSession.VEIDAddress = session.VEIDAddress
-	updatedSession.ExpiresAt = session.ExpiresAt
+	updatedSession.VirtEngineSessionID = sessionSnapshot.VirtEngineSessionID
+	updatedSession.VEIDAddress = sessionSnapshot.VEIDAddress
+	updatedSession.ExpiresAt = sessionSnapshot.ExpiresAt
 
 	// Update cache
 	a.mu.Lock()
-	a.sessions[sessionID] = updatedSession
+	a.sessions[sessionID] = cloneSession(updatedSession)
 	a.mu.Unlock()
 
-	return updatedSession, nil
+	return cloneSession(updatedSession), nil
 }
 
 // TerminateSession terminates a session
@@ -333,9 +335,10 @@ func (a *OODAdapter) TerminateSession(ctx context.Context, sessionID string) err
 
 	a.mu.RLock()
 	session, exists := a.sessions[sessionID]
+	sessionSnapshot := cloneSession(session)
 	a.mu.RUnlock()
 
-	if !exists {
+	if !exists || sessionSnapshot == nil {
 		return ErrSessionNotFound
 	}
 
@@ -345,11 +348,16 @@ func (a *OODAdapter) TerminateSession(ctx context.Context, sessionID string) err
 
 	// Update local state
 	a.mu.Lock()
-	session.State = SessionStateCancelled
-	session.StatusMessage = "Terminated by user"
+	updatedSession := cloneSession(sessionSnapshot)
+	if updatedSession == nil {
+		a.mu.Unlock()
+		return ErrSessionNotFound
+	}
+	updatedSession.State = SessionStateCancelled
+	updatedSession.StatusMessage = "Terminated by user"
 	now := time.Now()
-	session.EndedAt = &now
-	a.sessions[sessionID] = session
+	updatedSession.EndedAt = &now
+	a.sessions[sessionID] = updatedSession
 	a.mu.Unlock()
 
 	return nil
@@ -366,7 +374,7 @@ func (a *OODAdapter) GetUserSessions(ctx context.Context, veidAddress string) ([
 	sessions := make([]*OODSession, 0, len(sessionIDs))
 	for _, id := range sessionIDs {
 		if session, exists := a.sessions[id]; exists {
-			sessions = append(sessions, session)
+			sessions = append(sessions, cloneSession(session))
 		}
 	}
 	a.mu.RUnlock()
@@ -382,7 +390,7 @@ func (a *OODAdapter) GetActiveSessions() []*OODSession {
 	sessions := make([]*OODSession, 0)
 	for _, session := range a.sessions {
 		if session.IsActive() {
-			sessions = append(sessions, session)
+			sessions = append(sessions, cloneSession(session))
 		}
 	}
 	return sessions
@@ -529,8 +537,11 @@ func (a *OODAdapter) updateSessionStatuses() {
 	ctx := context.Background()
 	for _, sessionID := range sessionIDs {
 		a.mu.RLock()
-		session := a.sessions[sessionID]
+		session := cloneSession(a.sessions[sessionID])
 		a.mu.RUnlock()
+		if session == nil {
+			continue
+		}
 
 		updatedSession, err := a.client.GetSession(ctx, sessionID)
 		if err != nil {
@@ -543,7 +554,7 @@ func (a *OODAdapter) updateSessionStatuses() {
 		updatedSession.ExpiresAt = session.ExpiresAt
 
 		a.mu.Lock()
-		a.sessions[sessionID] = updatedSession
+		a.sessions[sessionID] = cloneSession(updatedSession)
 		a.mu.Unlock()
 
 		// Check for session expiration

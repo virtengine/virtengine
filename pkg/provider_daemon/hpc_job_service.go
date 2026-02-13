@@ -277,8 +277,9 @@ func (s *HPCJobService) SubmitJob(ctx context.Context, job *hpctypes.HPCJob) (*H
 	}
 
 	// Track active job
+	jobSnapshot := cloneSchedulerJob(schedulerJob)
 	s.mu.Lock()
-	s.activeJobs[job.JobID] = schedulerJob
+	s.activeJobs[job.JobID] = jobSnapshot
 	s.mu.Unlock()
 
 	s.logAuditEvent("job_submitted", job.JobID, map[string]interface{}{
@@ -289,9 +290,9 @@ func (s *HPCJobService) SubmitJob(ctx context.Context, job *hpctypes.HPCJob) (*H
 	}, true)
 
 	// Report status on-chain with decision linkage
-	go s.reportJobStatusWithDecision(context.Background(), schedulerJob, job.SchedulingDecisionID)
+	go s.reportJobStatusWithDecision(context.Background(), jobSnapshot, job.SchedulingDecisionID)
 
-	return schedulerJob, nil
+	return cloneSchedulerJob(jobSnapshot), nil
 }
 
 // CancelJob cancels a job
@@ -347,23 +348,28 @@ func (s *HPCJobService) HandleJobCancellation(jobID string) error {
 
 // handleJobLifecycleEvent handles job lifecycle events from the scheduler
 func (s *HPCJobService) handleJobLifecycleEvent(job *HPCSchedulerJob, event HPCJobLifecycleEvent, prevState HPCJobState) {
-	s.logAuditEvent("job_lifecycle_event", job.VirtEngineJobID, map[string]interface{}{
+	jobSnapshot := cloneSchedulerJob(job)
+	if jobSnapshot == nil {
+		return
+	}
+
+	s.logAuditEvent("job_lifecycle_event", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 		"event":         string(event),
 		"prev_state":    string(prevState),
-		"current_state": string(job.State),
+		"current_state": string(jobSnapshot.State),
 	}, true)
 
 	// Report status change on-chain
-	go s.reportJobStatus(context.Background(), job)
+	go s.reportJobStatus(context.Background(), jobSnapshot)
 
 	// Handle terminal states
-	if job.State.IsTerminal() {
+	if jobSnapshot.State.IsTerminal() {
 		s.mu.Lock()
-		delete(s.activeJobs, job.VirtEngineJobID)
+		delete(s.activeJobs, jobSnapshot.VirtEngineJobID)
 		s.mu.Unlock()
 
 		// Report final accounting
-		go s.reportJobAccounting(context.Background(), job)
+		go s.reportJobAccounting(context.Background(), jobSnapshot)
 	}
 }
 
@@ -540,9 +546,14 @@ func (s *HPCJobService) reportJobStatus(ctx context.Context, job *HPCSchedulerJo
 		return
 	}
 
-	report, err := s.scheduler.CreateStatusReport(job)
+	jobSnapshot := cloneSchedulerJob(job)
+	if jobSnapshot == nil {
+		return
+	}
+
+	report, err := s.scheduler.CreateStatusReport(jobSnapshot)
 	if err != nil {
-		s.logAuditEvent("status_report_creation_failed", job.VirtEngineJobID, map[string]interface{}{
+		s.logAuditEvent("status_report_creation_failed", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 			"error": err.Error(),
 		}, false)
 		return
@@ -550,14 +561,14 @@ func (s *HPCJobService) reportJobStatus(ctx context.Context, job *HPCSchedulerJo
 
 	err = s.reporter.ReportJobStatus(ctx, report)
 	if err != nil {
-		s.logAuditEvent("status_report_failed", job.VirtEngineJobID, map[string]interface{}{
+		s.logAuditEvent("status_report_failed", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 			"error": err.Error(),
 		}, false)
 		return
 	}
 
-	s.logAuditEvent("status_reported", job.VirtEngineJobID, map[string]interface{}{
-		"state": string(job.State),
+	s.logAuditEvent("status_reported", jobSnapshot.VirtEngineJobID, map[string]interface{}{
+		"state": string(jobSnapshot.State),
 	}, true)
 }
 
@@ -567,9 +578,14 @@ func (s *HPCJobService) reportJobStatusWithDecision(ctx context.Context, job *HP
 		return
 	}
 
-	report, err := s.scheduler.CreateStatusReport(job)
+	jobSnapshot := cloneSchedulerJob(job)
+	if jobSnapshot == nil {
+		return
+	}
+
+	report, err := s.scheduler.CreateStatusReport(jobSnapshot)
 	if err != nil {
-		s.logAuditEvent("status_report_creation_failed", job.VirtEngineJobID, map[string]interface{}{
+		s.logAuditEvent("status_report_creation_failed", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 			"error": err.Error(),
 		}, false)
 		return
@@ -579,15 +595,15 @@ func (s *HPCJobService) reportJobStatusWithDecision(ctx context.Context, job *HP
 	// The report already has fields, but we add decision context in audit
 	err = s.reporter.ReportJobStatus(ctx, report)
 	if err != nil {
-		s.logAuditEvent("status_report_failed", job.VirtEngineJobID, map[string]interface{}{
+		s.logAuditEvent("status_report_failed", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 			"error":       err.Error(),
 			"decision_id": decisionID,
 		}, false)
 		return
 	}
 
-	s.logAuditEvent("status_reported_with_decision", job.VirtEngineJobID, map[string]interface{}{
-		"state":                  string(job.State),
+	s.logAuditEvent("status_reported_with_decision", jobSnapshot.VirtEngineJobID, map[string]interface{}{
+		"state":                  string(jobSnapshot.State),
 		"scheduling_decision_id": decisionID,
 	}, true)
 }
@@ -598,20 +614,25 @@ func (s *HPCJobService) reportJobAccounting(ctx context.Context, job *HPCSchedul
 		return
 	}
 
-	metrics, err := s.scheduler.GetJobAccounting(ctx, job.VirtEngineJobID)
+	jobSnapshot := cloneSchedulerJob(job)
+	if jobSnapshot == nil {
+		return
+	}
+
+	metrics, err := s.scheduler.GetJobAccounting(ctx, jobSnapshot.VirtEngineJobID)
 	if err != nil || metrics == nil {
 		return
 	}
 
-	err = s.reporter.ReportJobAccounting(ctx, job.VirtEngineJobID, metrics)
+	err = s.reporter.ReportJobAccounting(ctx, jobSnapshot.VirtEngineJobID, metrics)
 	if err != nil {
-		s.logAuditEvent("accounting_report_failed", job.VirtEngineJobID, map[string]interface{}{
+		s.logAuditEvent("accounting_report_failed", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 			"error": err.Error(),
 		}, false)
 		return
 	}
 
-	s.logAuditEvent("accounting_reported", job.VirtEngineJobID, map[string]interface{}{
+	s.logAuditEvent("accounting_reported", jobSnapshot.VirtEngineJobID, map[string]interface{}{
 		"wall_clock_seconds": metrics.WallClockSeconds,
 		"cpu_core_seconds":   metrics.CPUCoreSeconds,
 		"gpu_seconds":        metrics.GPUSeconds,
@@ -739,7 +760,7 @@ func (s *HPCJobService) recoverState() error {
 		}
 
 		s.mu.Lock()
-		s.activeJobs[pj.JobID] = job
+		s.activeJobs[pj.JobID] = cloneSchedulerJob(job)
 		s.mu.Unlock()
 	}
 

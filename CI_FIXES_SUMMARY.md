@@ -1,8 +1,8 @@
 # CI Workflow Fixes - Implementation Summary
 
 **PR**: #[TBD]
-**Branch**: `copilot/fix-failing-workflows`
-**Date**: 2026-02-08
+**Branch**: `ve/738-fix-all-common-ci-cd-failures-properly`
+**Date**: 2026-02-12
 
 ## Issues Resolved
 
@@ -11,11 +11,16 @@
 **Problem**: Workflow failing with:
 ```
 Found .yml files that should be .yaml:
-.github/workflows/dependabot-auto-merge.yml
+.github/workflows/dr-failover-test.yml
+.github/workflows/smoke-test.yml
+.github/workflows/staging-e2e.yml
 ```
 
 **Solution**: Renamed file to use `.yaml` extension
-- **File**: `.github/workflows/dependabot-auto-merge.yml` → `.yaml`
+- **Files**:
+  - `.github/workflows/dr-failover-test.yml` → `.github/workflows/dr-failover-test.yaml`
+  - `.github/workflows/smoke-test.yml` → `.github/workflows/smoke-test.yaml`
+  - `.github/workflows/staging-e2e.yml` → `.github/workflows/staging-e2e.yaml`
 - **Status**: ✅ Fixed in PR
 - **Expected Result**: Workflow will pass on next run
 
@@ -161,7 +166,7 @@ https://github.com/virtengine/virtengine/blob/main/_docs/operations/ci-troublesh
 ### Local Validation
 ```bash
 # Check for .yml files (passes)
-git ls-files '*.yml' ':!:codecov.yml' ':!:.github/dependabot.yml'
+git ls-files '*.yml' ':!:codecov.yml' ':!:sdk/codecov.yml' ':!:config/kong/prometheus.yml' ':!:.github/dependabot.yml' ':!:_config.yml'
 # Result: ✅ No files found
 
 # Verify workflow syntax
@@ -213,7 +218,7 @@ After merge to main:
 - 2 workflow files improved with better comments
 
 **Files Changed**:
-- 1 renamed (`.yml` → `.yaml`)
+- 3 renamed (`.yml` → `.yaml`)
 - 2 workflows enhanced with documentation
 - 1 new troubleshooting guide
 

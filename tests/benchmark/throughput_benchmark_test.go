@@ -155,11 +155,16 @@ func (p *MockTransactionProcessor) executeTransaction(tx *MockTransaction) error
 	time.Sleep(p.executionDelay)
 
 	// Update state root
-	h := sha256.New()
-	h.Write(p.stateRoot)
-	h.Write(tx.Hash)
 	p.mu.Lock()
-	p.stateRoot = h.Sum(nil)
+	stateRoot := append([]byte(nil), p.stateRoot...)
+	p.mu.Unlock()
+
+	h := sha256.New()
+	h.Write(stateRoot)
+	h.Write(tx.Hash)
+	newRoot := h.Sum(nil)
+	p.mu.Lock()
+	p.stateRoot = newRoot
 	p.mu.Unlock()
 
 	return nil
@@ -168,8 +173,9 @@ func (p *MockTransactionProcessor) executeTransaction(tx *MockTransaction) error
 // GetStats returns processing statistics
 func (p *MockTransactionProcessor) GetStats() (processed, failed int64, latencies []time.Duration) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.processedCount, p.failedCount, p.latencies
+	latencies = append([]time.Duration(nil), p.latencies...)
+	p.mu.Unlock()
+	return atomic.LoadInt64(&p.processedCount), atomic.LoadInt64(&p.failedCount), latencies
 }
 
 // BenchmarkTransactionValidation benchmarks transaction validation
@@ -259,6 +265,9 @@ func BenchmarkBlockProcessing(b *testing.B) {
 func TestTransactionThroughputBaseline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping throughput baseline test in short mode")
+	}
+	if raceEnabled {
+		t.Skip("Skipping throughput baseline test under race detector")
 	}
 
 	baseline := DefaultTransactionBaseline()

@@ -555,13 +555,14 @@ func (w *OODSchedulerWrapper) SubmitJob(ctx context.Context, job *hpctypes.HPCJo
 	}
 
 	// Store session
+	jobSnapshot := cloneSchedulerJob(hpcJob)
 	w.mu.Lock()
-	w.sessions[job.JobID] = hpcJob
+	w.sessions[job.JobID] = jobSnapshot
 	w.mu.Unlock()
 
-	w.notifyCallbacks(hpcJob, HPCJobEventSubmitted, HPCJobStatePending)
+	w.notifyCallbacks(jobSnapshot, HPCJobEventSubmitted, HPCJobStatePending)
 
-	return hpcJob, nil
+	return cloneSchedulerJob(jobSnapshot), nil
 }
 
 func (w *OODSchedulerWrapper) CancelJob(ctx context.Context, virtEngineJobID string) error {
@@ -583,9 +584,10 @@ func (w *OODSchedulerWrapper) CancelJob(ctx context.Context, virtEngineJobID str
 	job.State = HPCJobStateCancelled
 	now := time.Now()
 	job.EndTime = &now
+	jobSnapshot := cloneSchedulerJob(job)
 	w.mu.Unlock()
 
-	w.notifyCallbacks(job, HPCJobEventCancelled, prevState)
+	w.notifyCallbacks(jobSnapshot, HPCJobEventCancelled, prevState)
 
 	return nil
 }
@@ -601,7 +603,7 @@ func (w *OODSchedulerWrapper) GetJobStatus(ctx context.Context, virtEngineJobID 
 
 	session, err := w.adapter.GetSession(ctx, hpcJob.SchedulerJobID)
 	if err != nil {
-		return hpcJob, nil // Return cached state on error
+		return cloneSchedulerJob(hpcJob), nil // Return cached state on error
 	}
 
 	w.mu.Lock()
@@ -614,13 +616,14 @@ func (w *OODSchedulerWrapper) GetJobStatus(ctx context.Context, virtEngineJobID 
 	if session.EndedAt != nil {
 		hpcJob.EndTime = session.EndedAt
 	}
+	jobSnapshot := cloneSchedulerJob(hpcJob)
 	w.mu.Unlock()
 
-	if prevState != hpcJob.State {
-		w.notifyStateChange(hpcJob, prevState)
+	if prevState != jobSnapshot.State {
+		w.notifyStateChange(jobSnapshot, prevState)
 	}
 
-	return hpcJob, nil
+	return jobSnapshot, nil
 }
 
 func (w *OODSchedulerWrapper) GetJobAccounting(ctx context.Context, virtEngineJobID string) (*HPCSchedulerMetrics, error) {
@@ -647,7 +650,7 @@ func (w *OODSchedulerWrapper) ListActiveJobs(ctx context.Context) ([]*HPCSchedul
 	var activeJobs []*HPCSchedulerJob
 	for _, job := range w.sessions {
 		if !job.State.IsTerminal() {
-			activeJobs = append(activeJobs, job)
+			activeJobs = append(activeJobs, cloneSchedulerJob(job))
 		}
 	}
 	return activeJobs, nil
