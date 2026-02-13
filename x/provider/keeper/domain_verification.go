@@ -36,8 +36,7 @@ const (
 	DNSVerificationPrefix = "_virtengine-verification"
 
 	// HTTPWellKnownPath is the path for HTTP well-known verification.
-	//nolint:gosec // G101: public well-known path, not a credential
-	HTTPWellKnownPath = "/.well-known/virtengine-verification"
+	HTTPWellKnownPath = "/.well-known/virtengine-verification" // #nosec G101 -- public well-known path, not a credential
 )
 
 // VerificationMethodType represents the method used for domain verification

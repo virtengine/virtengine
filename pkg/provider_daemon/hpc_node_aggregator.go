@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/observability"
+	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 )
 
@@ -150,6 +151,7 @@ type HPCNodeAggregator struct {
 
 	chainReporter   HPCNodeChainReporter
 	checkpointStore *HPCNodeCheckpointStore
+	httpClient      *http.Client
 }
 
 // aggregatedNodeState tracks state for a node
@@ -397,6 +399,7 @@ func NewHPCNodeAggregator(config HPCNodeAggregatorConfig, keyManager *KeyManager
 		stopCh:          make(chan struct{}),
 		chainReporter:   config.ChainReporter,
 		checkpointStore: checkpointStore,
+		httpClient:      security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}, nil
 }
 
@@ -963,7 +966,7 @@ func (a *HPCNodeAggregator) submitOnChain(ctx context.Context, msg *hpcv1.MsgUpd
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return err
 	}

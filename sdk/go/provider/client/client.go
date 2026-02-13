@@ -23,6 +23,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	manifest "github.com/virtengine/virtengine/sdk/go/manifest/v2beta3"
 	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
@@ -47,6 +48,8 @@ const (
 
 	// PingPeriod Send pings to a client with this period. Must be less than pongWait.
 	PingPeriod = 10 * time.Second
+
+	defaultHTTPTimeout = 30 * time.Second
 )
 
 var (
@@ -311,17 +314,15 @@ func (c *client) NewReqClient(ctx context.Context) ReqClient {
 		addr: c.addr,
 	}
 
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: c.tlsCfg,
-		},
-		// Never follow redirects
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Jar:     nil,
-		Timeout: 0,
+	httpClient := security.NewSecureHTTPClient(security.WithTimeout(defaultHTTPTimeout))
+	if transport, ok := httpClient.Transport.(*http.Transport); ok {
+		transport.TLSClientConfig = c.tlsCfg
 	}
+	// Never follow redirects
+	httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	httpClient.Jar = nil
 
 	cl.hclient = httpClient
 
