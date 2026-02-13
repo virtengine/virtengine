@@ -328,6 +328,19 @@ class WorkspaceMonitor {
    * Execute git command in workspace
    */
   async gitCommand(cwd, args) {
+    // Basic safety check: prevent use of dangerous git options that can lead to
+    // command execution (e.g., via --upload-pack on certain subcommands).
+    if (!Array.isArray(args)) {
+      throw new TypeError("gitCommand expected args to be an array");
+    }
+
+    for (const arg of args) {
+      // Disallow --upload-pack and its variants (e.g., --upload-pack=/path/to/cmd)
+      if (typeof arg === "string" && (arg === "--upload-pack" || arg.startsWith("--upload-pack="))) {
+        throw new Error("Usage of --upload-pack is not allowed in gitCommand");
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const proc = spawn("git", args, { cwd, shell: false });
       let stdout = "";

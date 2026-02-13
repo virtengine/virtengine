@@ -452,12 +452,12 @@ export function runCodexExec(
         env: { ...process.env },
       };
       if (process.platform === "win32") {
-        const shellQuote = (value) =>
-          /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
-        const fullCommand = ["codex", ...args].map(shellQuote).join(" ");
-        child = spawn(fullCommand, {
+        // On Windows, avoid spawning via a shell with a concatenated command
+        // string. Instead, invoke the binary directly with an argument array
+        // just like on POSIX platforms to prevent command injection.
+        child = spawn("codex", args, {
           ...spawnOptions,
-          shell: true,
+          shell: false,
         });
       } else {
         child = spawn("codex", args, {

@@ -894,28 +894,13 @@ function launchCopilotExec(prompt, cwd, timeoutMs) {
   return new Promise((resolvePromise) => {
     let child;
     try {
-      if (process.platform === "win32") {
-        const shellQuote = (value) =>
-          /\s/.test(value) ? `"${String(value).replace(/"/g, '\\"')}"` : value;
-        const fullCommand = ["github-copilot-cli", "--prompt", prompt]
-          .map(shellQuote)
-          .join(" ");
-        child = spawn(fullCommand, {
-          cwd,
-          stdio: ["ignore", "pipe", "pipe"],
-          shell: true,
-          timeout: timeoutMs,
-          env: { ...process.env },
-        });
-      } else {
-        child = spawn("github-copilot-cli", ["--prompt", prompt], {
-          cwd,
-          stdio: ["ignore", "pipe", "pipe"],
-          shell: false,
-          timeout: timeoutMs,
-          env: { ...process.env },
-        });
-      }
+      child = spawn("github-copilot-cli", ["--prompt", prompt], {
+        cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: false,
+        timeout: timeoutMs,
+        env: { ...process.env },
+      });
     } catch (err) {
       return resolvePromise({
         success: false,

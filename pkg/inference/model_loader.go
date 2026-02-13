@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -58,6 +60,9 @@ func (ml *ModelLoader) Load() (*TFModel, error) {
 
 	// Validate model path against traversal attacks
 	modelPath := ml.config.ModelPath
+	if err := security.ValidateCLIPath(modelPath); err != nil {
+		return nil, fmt.Errorf("invalid model path: %w", err)
+	}
 	cleanPath := filepath.Clean(modelPath)
 	absPath, err := filepath.Abs(cleanPath)
 	if err != nil {
@@ -175,11 +180,20 @@ func (ml *ModelLoader) Unload() error {
 // loadMetadata loads the export_metadata.json file from the model directory
 func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 	// Look for metadata in the parent directory (version directory)
-	metadataPath := filepath.Join(filepath.Dir(modelPath), "export_metadata.json")
+	baseDir := filepath.Dir(modelPath)
+	metadataPath := filepath.Join(baseDir, "export_metadata.json")
+	metadataPath, err := security.CleanPathWithinBase(baseDir, metadataPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid metadata path: %w", err)
+	}
 
 	// If not found, try in the model directory itself
 	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
 		metadataPath = filepath.Join(modelPath, "export_metadata.json")
+		metadataPath, err = security.CleanPathWithinBase(baseDir, metadataPath)
+		if err != nil {
+			return nil, fmt.Errorf("invalid metadata path: %w", err)
+		}
 	}
 
 	// If still not found, return default metadata
@@ -194,7 +208,7 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 	}
 
 	// Read and parse metadata
-	//nolint:gosec // G304: metadataPath is from trusted model directory configuration
+	//nolint:gosec // G304: metadataPath validated against model base directory
 	data, err := os.ReadFile(metadataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
