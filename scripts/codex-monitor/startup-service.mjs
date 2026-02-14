@@ -27,10 +27,9 @@ import {
 } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
-const __dirname = dirname(
-  new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"),
-);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const SERVICE_LABEL = "com.virtengine.codex-monitor";
 const TASK_NAME = "VirtEngine-CodexMonitor";
@@ -145,7 +144,7 @@ function generateTaskSchedulerXml({ daemon = true } = {}) {
     <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
     <AllowStartOnDemand>true</AllowStartOnDemand>
     <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
+    <Hidden>true</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     <Priority>7</Priority>

@@ -26,6 +26,7 @@ import {
 import { fileURLToPath } from "node:url";
 import { fork, spawn } from "node:child_process";
 import os from "node:os";
+import { createDaemonCrashTracker } from "./daemon-restart-policy.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -172,7 +173,18 @@ function showHelp() {
 
 const PID_FILE = resolve(__dirname, ".cache", "codex-monitor.pid");
 const DAEMON_LOG = resolve(__dirname, "logs", "daemon.log");
-const SENTINEL_PID_FILE = resolve(__dirname, ".cache", "telegram-sentinel.pid");
+const SENTINEL_PID_FILE = resolve(
+  __dirname,
+  "..",
+  "..",
+  ".cache",
+  "telegram-sentinel.pid",
+);
+const SENTINEL_PID_FILE_LEGACY = resolve(
+  __dirname,
+  ".cache",
+  "telegram-sentinel.pid",
+);
 const SENTINEL_SCRIPT_PATH = fileURLToPath(
   new URL("./telegram-sentinel.mjs", import.meta.url),
 );
@@ -186,7 +198,20 @@ const DAEMON_MAX_RESTARTS = Math.max(
   0,
   Number(process.env.CODEX_MONITOR_DAEMON_MAX_RESTARTS || 0) || 0,
 );
+const DAEMON_INSTANT_CRASH_WINDOW_MS = Math.max(
+  1000,
+  Number(process.env.CODEX_MONITOR_DAEMON_INSTANT_CRASH_WINDOW_MS || 15000) ||
+    15000,
+);
+const DAEMON_MAX_INSTANT_RESTARTS = Math.max(
+  1,
+  Number(process.env.CODEX_MONITOR_DAEMON_MAX_INSTANT_RESTARTS || 3) || 3,
+);
 let daemonRestartCount = 0;
+const daemonCrashTracker = createDaemonCrashTracker({
+  instantCrashWindowMs: DAEMON_INSTANT_CRASH_WINDOW_MS,
+  maxInstantCrashes: DAEMON_MAX_INSTANT_RESTARTS,
+});
 
 function isProcessAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -233,7 +258,8 @@ async function runSentinelCli(flag) {
 
 async function ensureSentinelRunning(options = {}) {
   const { quiet = false } = options;
-  const existing = readAlivePid(SENTINEL_PID_FILE);
+  const existing =
+    readAlivePid(SENTINEL_PID_FILE) || readAlivePid(SENTINEL_PID_FILE_LEGACY);
   if (existing) {
     if (!quiet) {
       console.log(`  telegram-sentinel already running (PID ${existing})`);
@@ -244,6 +270,7 @@ async function ensureSentinelRunning(options = {}) {
   const child = spawn(process.execPath, [SENTINEL_SCRIPT_PATH], {
     detached: true,
     stdio: "ignore",
+    windowsHide: process.platform === "win32",
     env: {
       ...process.env,
       CODEX_MONITOR_SENTINEL_COMPANION: "1",
@@ -260,7 +287,8 @@ async function ensureSentinelRunning(options = {}) {
   const timeoutAt = Date.now() + 5000;
   while (Date.now() < timeoutAt) {
     await sleep(200);
-    const pid = readAlivePid(SENTINEL_PID_FILE);
+    const pid =
+      readAlivePid(SENTINEL_PID_FILE) || readAlivePid(SENTINEL_PID_FILE_LEGACY);
     if (pid) {
       if (!quiet) {
         console.log(`  telegram-sentinel started (PID ${pid})`);
@@ -341,6 +369,7 @@ function startDaemon() {
     {
       detached: true,
       stdio: "ignore",
+      windowsHide: process.platform === "win32",
       env: { ...process.env, CODEX_MONITOR_DAEMON: "1" },
       cwd: process.cwd(),
     },
@@ -702,7 +731,9 @@ function runMonitor() {
     monitorChild = fork(monitorPath, process.argv.slice(2), {
       stdio: "inherit",
       execArgv: ["--max-old-space-size=4096"],
+      windowsHide: IS_DAEMON_CHILD && process.platform === "win32",
     });
+    daemonCrashTracker.markStart();
 
     monitorChild.on("exit", (code, signal) => {
       monitorChild = null;
@@ -720,8 +751,26 @@ function runMonitor() {
           !gracefulShutdown &&
           (isOSKill || (IS_DAEMON_CHILD && exitCode !== 0));
         if (shouldAutoRestart) {
+          const crashState = daemonCrashTracker.recordExit();
           daemonRestartCount += 1;
           const delayMs = isOSKill ? 5000 : DAEMON_RESTART_DELAY_MS;
+          if (IS_DAEMON_CHILD && crashState.exceeded) {
+            const durationSec = Math.max(
+              1,
+              Math.round(crashState.runDurationMs / 1000),
+            );
+            const windowSec = Math.max(
+              1,
+              Math.round(crashState.instantCrashWindowMs / 1000),
+            );
+            console.error(
+              `\n  ✖ Monitor crashed too quickly ${crashState.instantCrashCount} times in a row (each <= ${windowSec}s, latest ${durationSec}s). Auto-restart is now paused.`,
+            );
+            sendCrashNotification(exitCode, signal).finally(() =>
+              process.exit(exitCode),
+            );
+            return;
+          }
           if (
             IS_DAEMON_CHILD &&
             DAEMON_MAX_RESTARTS > 0 &&
@@ -763,6 +812,7 @@ function runMonitor() {
           );
         } else {
           daemonRestartCount = 0;
+          daemonCrashTracker.reset();
           process.exit(exitCode);
         }
       }
