@@ -37,7 +37,7 @@ func NewSecureKeyStorage(baseDir string) (*SecureKeyStorage, error) {
 	}
 
 	// Verify permissions on the directory (skip on Windows)
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != osWindows {
 		info, err := os.Stat(baseDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to stat key storage directory: %w", err)

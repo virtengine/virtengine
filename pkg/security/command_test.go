@@ -2,6 +2,9 @@ package security
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -113,4 +116,41 @@ func TestCommandValidator_SafeCommand(t *testing.T) {
 			t.Error("SafeCommand() should reject unsafe arguments")
 		}
 	})
+}
+
+func TestCommandValidator_PathAllowlist(t *testing.T) {
+	dir := t.TempDir()
+	cmdName := "safe-cmd"
+	fileName := cmdName
+	if runtime.GOOS == "windows" {
+		fileName = cmdName + ".exe"
+	}
+
+	allowedPath := filepath.Join(dir, fileName)
+	if err := os.WriteFile(allowedPath, []byte(""), 0755); err != nil { //nolint:gosec // G306: test file requires exec bit for LookPath
+		t.Fatalf("failed to create allowed command: %v", err)
+	}
+
+	oldPath := os.Getenv("PATH")
+	t.Cleanup(func() {
+		_ = os.Setenv("PATH", oldPath)
+	})
+	if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+oldPath); err != nil {
+		t.Fatalf("failed to set PATH: %v", err)
+	}
+
+	cv := NewCommandValidator([]string{allowedPath}, 30*time.Second)
+
+	if err := cv.ValidateCommand(cmdName); err != nil {
+		t.Fatalf("ValidateCommand() with allowlisted path failed: %v", err)
+	}
+
+	otherPath := filepath.Join(t.TempDir(), fileName)
+	if err := os.WriteFile(otherPath, []byte(""), 0755); err != nil { //nolint:gosec // G306: test file requires exec bit for LookPath
+		t.Fatalf("failed to create other command: %v", err)
+	}
+
+	if err := cv.ValidateCommand(otherPath); err == nil {
+		t.Fatalf("ValidateCommand() should reject non-allowlisted path")
+	}
 }
