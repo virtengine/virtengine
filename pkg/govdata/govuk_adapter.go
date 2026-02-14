@@ -398,6 +398,7 @@ func (a *govUKAdapter) callGovUKAPI(ctx context.Context, govUKReq *GovUKVerifyRe
 	var resp *http.Response
 	var lastErr error
 	for i := 0; i <= a.govUKConfig.MaxRetries; i++ {
+		// #nosec G704 -- endpoint is operator-configured and validated.
 		resp, lastErr = a.httpClient.Do(httpReq)
 		if lastErr == nil && resp.StatusCode < 500 {
 			break

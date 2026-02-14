@@ -354,6 +354,7 @@ func (a *AAMVADMVAdapter) authenticate(ctx context.Context) error {
 		req.Header.Set("X-API-Key", a.config.APIKey)
 	}
 
+	// #nosec G704 -- endpoint is operator-configured and validated.
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrAAMVAAuthentication, err)
@@ -367,6 +368,7 @@ func (a *AAMVADMVAdapter) authenticate(ctx context.Context) error {
 	}
 
 	var tokenResp struct {
+		// #nosec G117 -- access token is required for adapter auth flow.
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 		TokenType   string `json:"token_type"`
@@ -643,6 +645,7 @@ func (a *AAMVADMVAdapter) doVerifyRequest(ctx context.Context, xmlData []byte, m
 		httpReq.Header.Set("X-API-Key", a.config.APIKey)
 	}
 
+	// #nosec G704 -- endpoint is operator-configured and validated.
 	resp, err := a.httpClient.Do(httpReq)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -666,7 +669,9 @@ func (a *AAMVADMVAdapter) doVerifyRequest(ctx context.Context, xmlData []byte, m
 	}
 
 	var dldvResp AAMVADLDVResponse
-	if err := xml.NewDecoder(resp.Body).Decode(&dldvResp); err != nil {
+	decoder := xml.NewDecoder(resp.Body)
+	decoder.Entity = map[string]string{}
+	if err := decoder.Decode(&dldvResp); err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("%w: %v", ErrAAMVAInvalidResponse, err)
 	}
 

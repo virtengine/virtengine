@@ -5,6 +5,7 @@ package govdata
 
 import (
 	"errors"
+	"net/url"
 	"time"
 )
 
@@ -147,9 +148,11 @@ type AdapterConfig struct {
 	Endpoint string `json:"endpoint" yaml:"endpoint"`
 
 	// APIKey is the API key (should be from secret store)
+	// #nosec G117 -- API key is loaded from config/secret store for adapter auth.
 	APIKey string `json:"api_key" yaml:"api_key"`
 
 	// APISecret is the API secret (should be from secret store)
+	// #nosec G117 -- API secret is loaded from config/secret store for adapter auth.
 	APISecret string `json:"api_secret" yaml:"api_secret"`
 
 	// Timeout is the request timeout
@@ -347,6 +350,24 @@ func (c *AdapterConfig) Validate() error {
 
 	if c.Enabled && c.Endpoint == "" {
 		return errors.New("endpoint is required when adapter is enabled")
+	}
+	if c.Endpoint != "" {
+		parsed, err := url.Parse(c.Endpoint)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return errors.New("endpoint must be an absolute URL")
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return errors.New("endpoint must use http or https")
+		}
+	}
+	if c.HealthCheckEndpoint != "" {
+		parsed, err := url.Parse(c.HealthCheckEndpoint)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return errors.New("health_check_endpoint must be an absolute URL")
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return errors.New("health_check_endpoint must use http or https")
+		}
 	}
 
 	if c.Timeout <= 0 {

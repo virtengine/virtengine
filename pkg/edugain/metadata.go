@@ -4,6 +4,7 @@
 package edugain
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -279,6 +280,7 @@ func (m *metadataService) fetchMetadata(ctx context.Context) ([]byte, error) {
 	req.Header.Set("Accept", "application/xml, application/samlmetadata+xml")
 	req.Header.Set("User-Agent", "VirtEngine-EduGAIN/"+EduGAINVersion)
 
+	// #nosec G704 -- metadata URL is operator-configured and validated.
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -296,7 +298,9 @@ func (m *metadataService) fetchMetadata(ctx context.Context) ([]byte, error) {
 func (m *metadataService) parseMetadata(data []byte) (*FederationMetadata, error) {
 	// Parse the entities descriptor
 	var entities EntitiesDescriptor
-	if err := xml.Unmarshal(data, &entities); err != nil {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.Entity = map[string]string{}
+	if err := decoder.Decode(&entities); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 

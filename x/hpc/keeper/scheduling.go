@@ -251,8 +251,8 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 //
 //nolint:unparam // offering kept for future offering-based cluster filtering
 func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offering *types.HPCOffering) ([]types.ClusterCandidate, map[string]*candidateMeta) {
-	candidates := make([]types.ClusterCandidate, 0)
-	meta := make(map[string]*candidateMeta)
+	candidates := make([]types.ClusterCandidate, 0, 16)
+	meta := make(map[string]*candidateMeta, 16)
 
 	queueName := resolveQueueName(job, offering)
 

@@ -8,11 +8,9 @@ package firebase
 import (
 	"context"
 	"fmt"
-	"os"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 
 	"github.com/virtengine/virtengine/pkg/notifications"
@@ -34,15 +32,7 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 	if config.CredentialsFile == "" {
 		return nil, fmt.Errorf("firebase credentials file required")
 	}
-	creds, err := os.ReadFile(config.CredentialsFile)
-	if err != nil {
-		return nil, fmt.Errorf("read firebase credentials: %w", err)
-	}
-	credentials, err := google.CredentialsFromJSON(ctx, creds, "https://www.googleapis.com/auth/firebase.messaging")
-	if err != nil {
-		return nil, fmt.Errorf("parse firebase credentials: %w", err)
-	}
-	opt := option.WithCredentials(credentials)
+	opt := option.WithCredentialsFile(config.CredentialsFile)
 	app, err := firebase.NewApp(ctx, nil, opt)
 	if err != nil {
 		return nil, fmt.Errorf("firebase app init: %w", err)

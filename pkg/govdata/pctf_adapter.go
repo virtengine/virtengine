@@ -455,6 +455,7 @@ func (a *pctfAdapter) ensureAccessToken(ctx context.Context) error {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	// #nosec G704 -- endpoint is operator-configured and validated.
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -466,6 +467,7 @@ func (a *pctfAdapter) ensureAccessToken(ctx context.Context) error {
 	}
 
 	var tokenResp struct {
+		// #nosec G117 -- access token is required for adapter auth flow.
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 		TokenType   string `json:"token_type"`
@@ -564,6 +566,7 @@ func (a *pctfAdapter) callPCTFAPI(ctx context.Context, pctfReq *PCTFVerifyReques
 	var resp *http.Response
 	var lastErr error
 	for i := 0; i <= a.pctfConfig.MaxRetries; i++ {
+		// #nosec G704 -- endpoint is operator-configured and validated.
 		resp, lastErr = a.httpClient.Do(httpReq)
 		if lastErr == nil && resp.StatusCode < 500 {
 			break

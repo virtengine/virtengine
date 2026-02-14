@@ -69,7 +69,7 @@ func UpdateGas(state MarketState, params MarketParams) MarketState {
 		if params.GasCongestionThresholdBPS > 0 && state.GasUtilizationEMA >= float64(params.GasCongestionThresholdBPS)/10000 {
 			congestion := 1 + float64(params.GasCongestionMultiplierBPS)/10000
 			state.GasCongestionMultiplier = congestion
-			minGas = minGas * congestion
+			minGas *= congestion
 		} else {
 			state.GasCongestionMultiplier = 1
 		}

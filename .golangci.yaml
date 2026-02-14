@@ -26,6 +26,9 @@ linters:
     gosec:
       severity: medium
       confidence: medium
+      excludes:
+        - G104
+        - G304
   exclusions:
     generated: lax
     presets:

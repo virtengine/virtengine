@@ -5,6 +5,7 @@ package edugain
 
 import (
 	"errors"
+	"net/url"
 	"time"
 )
 
@@ -247,6 +248,13 @@ func (c *Config) Validate() error {
 
 	if c.MetadataURL == "" {
 		return errors.New("metadata_url is required")
+	}
+	parsed, err := url.Parse(c.MetadataURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return errors.New("metadata_url must be an absolute URL")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return errors.New("metadata_url must use http or https")
 	}
 
 	if c.AssertionConsumerServiceURL == "" {

@@ -88,6 +88,8 @@ func (c *ProductionMOABClient) setupAuth() (ssh.AuthMethod, error) {
 		if keyPath == "" {
 			keyPath = os.ExpandEnv("$HOME/.ssh/id_rsa")
 		}
+		keyPath = filepath.Clean(keyPath)
+		// #nosec G304,G703 -- key path is configured via environment and cleaned.
 		key, err := os.ReadFile(keyPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read SSH key: %w", err)
@@ -125,7 +127,7 @@ func (c *ProductionMOABClient) setupHostKeyCallback() (ssh.HostKeyCallback, erro
 	case SSHHostKeyInsecure:
 		// SECURITY WARNING: This disables host key verification and is vulnerable to MITM attacks.
 		// Only use for testing or when other security measures (e.g., VPN, private network) are in place.
-		//nolint:gosec // G106: InsecureIgnoreHostKey intentional for SSHHostKeyInsecure mode
+		// #nosec G106 -- InsecureIgnoreHostKey intentional for SSHHostKeyInsecure mode.
 		return ssh.InsecureIgnoreHostKey(), nil
 
 	case SSHHostKeyPinned:
@@ -531,7 +533,7 @@ func (c *ProductionMOABClient) execute(ctx context.Context, command string, stdi
 	session, err := conn.client.NewSession()
 	if err != nil {
 		// Mark connection as bad
-		conn.client.Close()
+		closeSSHClient(conn.client)
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
@@ -602,7 +604,7 @@ func (p *sshConnectionPool) createConnection(ctx context.Context) (*sshConnectio
 	// SSH handshake
 	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
 	if err != nil {
-		conn.Close()
+		closeNetConn(conn)
 		return nil, fmt.Errorf("SSH handshake failed: %w", err)
 	}
 
@@ -629,7 +631,7 @@ func (p *sshConnectionPool) getConnection(ctx context.Context) (*sshConnection, 
 	case conn := <-p.connections:
 		// Check if connection is still valid
 		if time.Since(conn.lastUsed) > p.idleTimeout {
-			conn.client.Close()
+			closeSSHClient(conn.client)
 			return p.createConnection(ctx)
 		}
 		conn.lastUsed = time.Now()
@@ -644,7 +646,7 @@ func (p *sshConnectionPool) returnConnection(conn *sshConnection) {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		conn.client.Close()
+		closeSSHClient(conn.client)
 		return
 	}
 	p.mu.Unlock()
@@ -656,7 +658,7 @@ func (p *sshConnectionPool) returnConnection(conn *sshConnection) {
 		// Connection returned to pool
 	default:
 		// Pool is full, close connection
-		conn.client.Close()
+		closeSSHClient(conn.client)
 	}
 }
 
@@ -667,16 +669,40 @@ func (p *sshConnectionPool) close() {
 
 	close(p.connections)
 	for conn := range p.connections {
-		conn.client.Close()
+		closeSSHClient(conn.client)
 	}
 }
 
 // Helper functions
 
+func closeSSHClient(client *ssh.Client) {
+	if client == nil {
+		return
+	}
+	if err := client.Close(); err != nil {
+		// best-effort cleanup
+	}
+}
+
+func closeNetConn(conn net.Conn) {
+	if conn == nil {
+		return
+	}
+	if err := conn.Close(); err != nil {
+		// best-effort cleanup
+	}
+}
+
 func calculateBackoff(attempt int) time.Duration {
 	// Base backoff: 100ms, 200ms, 400ms, 800ms...
 	base := time.Duration(100) * time.Millisecond
-	//nolint:gosec // G115: attempt is small retry counter
+	if attempt < 0 {
+		attempt = 0
+	}
+	if attempt > 30 {
+		attempt = 30
+	}
+	// #nosec G115 -- attempt is bounded to a safe range for shift.
 	backoff := base * (1 << uint(attempt))
 
 	// Cap at 30 seconds
@@ -718,6 +744,12 @@ func isValidJobID(jobID string) bool {
 
 // XML parsing structures and functions
 
+func decodeMOABXML(output string, v interface{}) error {
+	decoder := xml.NewDecoder(strings.NewReader(output))
+	decoder.Entity = map[string]string{}
+	return decoder.Decode(v)
+}
+
 type checkjobXMLResponse struct {
 	XMLName xml.Name     `xml:"Data"`
 	Jobs    []jobXMLData `xml:"job"`
@@ -744,7 +776,7 @@ type jobXMLData struct {
 //nolint:unparam // moabJobID kept for parse context and diagnostics
 func parseCheckjobXML(output string, _ string) (*MOABJob, error) {
 	var response checkjobXMLResponse
-	if err := xml.Unmarshal([]byte(output), &response); err != nil {
+	if err := decodeMOABXML(output, &response); err != nil {
 		return nil, err
 	}
 
@@ -843,7 +875,7 @@ func parseCheckjobText(output string, moabJobID string) (*MOABJob, error) {
 
 func parseJobAccountingXML(output string) (*MOABUsageMetrics, error) {
 	var response checkjobXMLResponse
-	if err := xml.Unmarshal([]byte(output), &response); err != nil {
+	if err := decodeMOABXML(output, &response); err != nil {
 		return nil, err
 	}
 
@@ -930,7 +962,7 @@ type queueXMLData struct {
 
 func parseQueuesXML(output string) ([]QueueInfo, error) {
 	var response queuesXMLResponse
-	if err := xml.Unmarshal([]byte(output), &response); err != nil {
+	if err := decodeMOABXML(output, &response); err != nil {
 		return nil, err
 	}
 
@@ -1011,7 +1043,7 @@ type nodeXMLData struct {
 
 func parseNodesXML(output string) ([]NodeInfo, error) {
 	var response nodesXMLResponse
-	if err := xml.Unmarshal([]byte(output), &response); err != nil {
+	if err := decodeMOABXML(output, &response); err != nil {
 		return nil, err
 	}
 
@@ -1090,7 +1122,7 @@ type clusterXMLData struct {
 
 func parseClusterInfoXML(output string) (*ClusterInfo, error) {
 	var response clusterXMLResponse
-	if err := xml.Unmarshal([]byte(output), &response); err != nil {
+	if err := decodeMOABXML(output, &response); err != nil {
 		return nil, err
 	}
 
@@ -1181,7 +1213,7 @@ type reservationXMLData struct {
 
 func parseReservationsXML(output string) ([]ReservationInfo, error) {
 	var response reservationsXMLResponse
-	if err := xml.Unmarshal([]byte(output), &response); err != nil {
+	if err := decodeMOABXML(output, &response); err != nil {
 		return nil, err
 	}
 

@@ -453,6 +453,7 @@ func (a *eidasAdapter) callEIDASAPI(ctx context.Context, eidasReq *EIDASAuthRequ
 	var resp *http.Response
 	var lastErr error
 	for i := 0; i <= a.eidasConfig.MaxRetries; i++ {
+		// #nosec G704 -- endpoint is operator-configured and validated.
 		resp, lastErr = a.httpClient.Do(httpReq)
 		if lastErr == nil && resp.StatusCode < 500 {
 			break

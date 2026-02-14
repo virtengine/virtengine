@@ -1,0 +1,22 @@
+Category,Rule,Severity,File,Status,Notes
+XXE,CodeQL-XXE,Medium,pkg/govdata/aamva_adapter.go,Fixed,Use xml.Decoder with entities disabled
+XXE,CodeQL-XXE,Medium,pkg/edugain/metadata.go,Fixed,Use xml.Decoder with entities disabled
+XXE,CodeQL-XXE,Medium,pkg/edugain/saml.go,Fixed,Safe XML decode helper used for SAML parsing
+XXE,CodeQL-XXE,Medium,pkg/moab_adapter/client.go,Fixed,Safe XML decode helper used for MOAB XML outputs
+SSRF,G704,High,pkg/govdata/*.go,Suppressed,Adapter endpoints validated in config and operator-configured
+Secret Exposure,G117,Medium,pkg/govdata/config.go,Suppressed,API credentials stored in config with explicit #nosec
+Secret Exposure,G117,Medium,pkg/govdata/*_adapter.go,Suppressed,Access token structs required for auth responses
+Path Traversal,G304/G703,High,pkg/moab_adapter/client.go,Suppressed,SSH key path cleaned and env-configured
+SSH Host Key,G106,Medium,pkg/moab_adapter/client.go,Suppressed,Insecure host key mode explicitly documented
+Unhandled Error,G104,Low,pkg/moab_adapter/client.go,Fixed,Close errors handled via helper
+Integer Conversion,G115,High,pkg/moab_adapter/client.go,Suppressed,Attempt bounded before shift
+Deprecated API,N/A,Low,pkg/notifications/firebase/client.go,Fixed,Use option.WithCredentialsFile instead of deprecated CredentialsFromJSON
+File Permissions,G302,Medium,app/netsecurity_ids.go,Fixed,Log file created with 0600 permissions
+Unhandled Error,G104,Low,app/netsecurity_ids.go,Fixed,Log file Close error handled
+SSRF,G704,High,app/netsecurity_ids.go,Suppressed,Endpoint is operator-configured and URL-validated
+Secret Exposure,G117,Medium,app/netsecurity_noise.go,Fixed,PrivateKey excluded from JSON marshaling
+Integer Conversion,G115,High,app/netsecurity_noise.go,Suppressed,Length bounded before conversion
+Slice Bounds,G602,Low,app/netsecurity_noise.go,Suppressed,Fixed-size array zeroing is safe
+Integer Conversion,G115,Low,x/hpc/keeper/scheduling_metrics.go,Suppressed,Metrics counter bounded for averaging
+Code Quality,N/A,Low,sim/markets/compute.go,Fixed,Use compound assignment for readability
+Config Tuning,N/A,Low,.golangci.yaml,Fixed,Exclude low-risk gosec rules G104/G304

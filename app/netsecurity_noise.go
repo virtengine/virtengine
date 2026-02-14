@@ -53,8 +53,8 @@ type NoiseHandshakeState struct {
 
 // NoiseKeyPair holds a Curve25519 key pair.
 type NoiseKeyPair struct {
-	PrivateKey []byte
-	PublicKey  []byte
+	PrivateKey []byte `json:"-"`
+	PublicKey  []byte `json:"public_key,omitempty"`
 }
 
 // NoiseSession represents an established encrypted session.
@@ -479,12 +479,13 @@ func (s *NoiseSession) Write(b []byte) (int, error) {
 	ciphertext := s.sendCipher.Seal(nil, nonce, b, nil)
 
 	// Write length prefix
-	if len(ciphertext) > math.MaxUint16 {
+	length := len(ciphertext)
+	if length > math.MaxUint16 {
 		return 0, errors.New("ciphertext too large")
 	}
 	var lengthBuf [2]byte
-	//nolint:gosec // range checked above
-	binary.BigEndian.PutUint16(lengthBuf[:], uint16(len(ciphertext)))
+	// #nosec G115 -- length is bounded by MaxUint16 check above.
+	binary.BigEndian.PutUint16(lengthBuf[:], uint16(length))
 	if _, err := s.conn.Write(lengthBuf[:]); err != nil {
 		return 0, err
 	}
@@ -553,6 +554,7 @@ func curve25519DH(privateKey, publicKey []byte) ([]byte, error) {
 	}
 
 	// Clear private key from memory
+	// #nosec G602 -- fixed-size array bounds are safe.
 	for i := range priv {
 		priv[i] = 0
 	}

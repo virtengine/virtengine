@@ -4,6 +4,7 @@
 package edugain
 
 import (
+	"bytes"
 	"compress/flate"
 	"context"
 	"crypto/rand"
@@ -230,7 +231,7 @@ func (s *samlProvider) VerifyResponse(ctx context.Context, samlResponseBase64 st
 
 	// Parse response
 	var response SAMLResponse
-	if err := xml.Unmarshal(responseXML, &response); err != nil {
+	if err := decodeXML(responseXML, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
@@ -261,7 +262,7 @@ func (s *samlProvider) VerifyResponse(ctx context.Context, samlResponseBase64 st
 
 	// Parse assertion
 	var assertion SAMLAssertionXML
-	if err := xml.Unmarshal(assertionXML, &assertion); err != nil {
+	if err := decodeXML(assertionXML, &assertion); err != nil {
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
 	}
 
@@ -403,7 +404,7 @@ func (s *samlProvider) VerifyLogoutResponse(ctx context.Context, samlResponseBas
 		} `xml:"Status"`
 	}
 
-	if err := xml.Unmarshal(responseXML, &response); err != nil {
+	if err := decodeXML(responseXML, &response); err != nil {
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
@@ -645,6 +646,12 @@ type SAMLAttribute struct {
 // Helper Functions
 // ============================================================================
 
+func decodeXML(data []byte, v interface{}) error {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.Entity = map[string]string{}
+	return decoder.Decode(v)
+}
+
 // generateID generates a random SAML ID
 func generateID() (string, error) {
 	b := make([]byte, 16)
@@ -680,7 +687,7 @@ func parseIssuerFromXML(data []byte) (string, error) {
 	var response struct {
 		Issuer string `xml:"Issuer"`
 	}
-	if err := xml.Unmarshal(data, &response); err != nil {
+	if err := decodeXML(data, &response); err != nil {
 		return "", err
 	}
 	return response.Issuer, nil

@@ -134,7 +134,7 @@ func NewIDSIntegration(config IDSConfig, logger log.Logger) (*IDSIntegration, er
 	// Open log file if configured
 	if config.LogPath != "" {
 		var err error
-		ids.logFile, err = os.OpenFile(config.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		ids.logFile, err = os.OpenFile(config.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			cancel()
 			return nil, fmt.Errorf("failed to open IDS log file: %w", err)
@@ -156,7 +156,9 @@ func (ids *IDSIntegration) Stop() {
 	ids.wg.Wait()
 
 	if ids.logFile != nil {
-		ids.logFile.Close()
+		if err := ids.logFile.Close(); err != nil {
+			ids.logger.Warn("failed to close IDS log file", "error", err)
+		}
 	}
 }
 
@@ -284,6 +286,7 @@ func (ids *IDSIntegration) sendAlertHTTP(alert IDSAlert) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "VirtEngine-IDS/1.0")
 
+	// #nosec G704 -- alert endpoint is operator-configured and validated.
 	resp, err := ids.httpClient.Do(req)
 	if err != nil {
 		ids.logger.Error("failed to send alert to endpoint", "error", err)

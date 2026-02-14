@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"net/url"
 	"time"
 )
 
@@ -377,6 +378,15 @@ func (c *NetworkSecurityConfig) Validate() error {
 		validLevels := map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
 		if !validLevels[c.IDS.AlertLevel] {
 			return errors.New("invalid IDS alert level: " + c.IDS.AlertLevel)
+		}
+		if c.IDS.AlertEndpoint != "" {
+			endpoint, err := url.Parse(c.IDS.AlertEndpoint)
+			if err != nil || endpoint.Scheme == "" || endpoint.Host == "" {
+				return errors.New("invalid IDS alert endpoint")
+			}
+			if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
+				return errors.New("invalid IDS alert endpoint scheme: " + endpoint.Scheme)
+			}
 		}
 	}
 

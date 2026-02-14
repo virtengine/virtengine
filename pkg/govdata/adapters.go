@@ -160,6 +160,7 @@ func (a *baseAdapter) HealthCheck(ctx context.Context) error {
 			return err
 		}
 
+		// #nosec G704 -- endpoint is operator-configured and validated.
 		resp, err := a.httpClient.Do(req)
 		if err != nil {
 			a.available = false
