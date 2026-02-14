@@ -144,6 +144,10 @@ describe("telegram-bot inline keyboards", () => {
       expect(botSource).toContain("const UI_SCREENS");
       expect(botSource).toContain("handleUiAction");
       expect(botSource).toContain("data.startsWith(\"ui:\")");
+      expect(botSource).toContain("startTelegramUiServer");
+      expect(botSource).toContain("getTelegramUiUrl");
+      expect(botSource).toContain("setWebAppMenuButton");
+      expect(botSource).toContain("handleWebAppData");
     });
   });
 });

@@ -49,6 +49,7 @@ import {
   getWorktreeStats,
 } from "./worktree-manager.mjs";
 import { loadExecutorConfig } from "./config.mjs";
+import { getTelegramUiUrl, startTelegramUiServer } from "./ui-server.mjs";
 import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
@@ -603,6 +604,7 @@ let _getWorkspaceMonitor = null;
 let _getMonitorMonitorStatus = null;
 let _getTaskStoreStats = null;
 let _getTasksPendingReview = null;
+let telegramUiUrl = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -1513,6 +1515,11 @@ async function handleUpdate(update) {
     return;
   }
 
+  if (msg.web_app_data?.data) {
+    await handleWebAppData(msg.web_app_data.data, chatId);
+    return;
+  }
+
   if (!text) return;
 
   console.log(
@@ -2032,6 +2039,39 @@ async function registerBotCommands() {
   }
 }
 
+async function setWebAppMenuButton(url) {
+  if (!telegramToken || !url) return;
+  try {
+    await telegramApiFetch("setChatMenuButton", {
+      method: "POST",
+      payload: {
+        menu_button: {
+          type: "web_app",
+          text: "Control Center",
+          web_app: { url },
+        },
+      },
+      operation: "setChatMenuButton",
+    });
+    console.log(`[telegram-bot] chat menu button set to ${url}`);
+  } catch (err) {
+    console.warn(`[telegram-bot] setChatMenuButton error: ${err.message}`);
+  }
+}
+
+async function clearWebAppMenuButton() {
+  if (!telegramToken) return;
+  try {
+    await telegramApiFetch("setChatMenuButton", {
+      method: "POST",
+      payload: { menu_button: { type: "default" } },
+      operation: "clearChatMenuButton",
+    });
+  } catch {
+    /* best effort */
+  }
+}
+
 const FAST_COMMANDS = new Set([
   "/menu",
   "/status",
@@ -2195,7 +2235,48 @@ async function handleUiAction({ chatId, data }) {
 }
 
 async function cmdMenu(chatId) {
+  if (telegramUiUrl) {
+    await sendDirect(
+      chatId,
+      "🧭 Open the full VirtEngine Control Center Mini App:",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📱 Open Mini App", web_app: { url: telegramUiUrl } }],
+            [{ text: "↩️ Fallback Button Menu", callback_data: "ui:go:home" }],
+          ],
+        },
+      },
+    );
+    return;
+  }
   await renderUiScreen(chatId, "home");
+}
+
+async function handleWebAppData(raw, chatId) {
+  let payload = null;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = { type: "command", command: String(raw || "").trim() };
+  }
+
+  if (!payload || typeof payload !== "object") {
+    await sendReply(chatId, "⚠️ Web app sent an invalid payload.");
+    return;
+  }
+
+  if (payload.type === "command" && payload.command) {
+    await handleCommand(String(payload.command), chatId);
+    return;
+  }
+
+  if (payload.type === "menu" && payload.screen) {
+    await renderUiScreen(chatId, payload.screen);
+    return;
+  }
+
+  await sendReply(chatId, "⚠️ Web app request not recognized.");
 }
 
 async function handleCommand(text, chatId) {
@@ -2213,7 +2294,7 @@ async function handleCommand(text, chatId) {
   } else {
     await sendReply(
       chatId,
-      `Unknown command: ${cmd}\nType /help for available commands.`,
+      `Unknown command: ${cmd}\nType /menu (or /helpfull) for available commands.`,
     );
   }
 }
@@ -2444,11 +2525,13 @@ async function loadWorkspaceStatusData(workspacePath) {
 
 async function cmdHelp(chatId) {
   const text =
-    "🤖 *VirtEngine Primary Agent*\n\nChoose a category or type any message to chat with the agent:";
+    "🤖 *VirtEngine Primary Agent*\n\nOpen the Mini App for full GUI controls, or use quick actions below:";
 
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: "🧭 Control Center (V2)", callback_data: "/menu" }],
+  const keyboardRows = [
+    telegramUiUrl
+      ? [{ text: "📱 Open Full Mini App", web_app: { url: telegramUiUrl } }]
+      : [{ text: "🧭 Control Center (V2)", callback_data: "/menu" }],
+    [{ text: "🧭 Control Center (V2)", callback_data: "/menu" }],
       [
         { text: "📊 Status", callback_data: "/status" },
         { text: "📋 Tasks", callback_data: "/tasks" },
@@ -2475,8 +2558,8 @@ async function cmdHelp(chatId) {
         { text: "📦 SDK", callback_data: "/sdk" },
       ],
       [{ text: "📖 All Commands", callback_data: "/helpfull" }],
-    ],
-  };
+  ];
+  const keyboard = { inline_keyboard: keyboardRows };
 
   await sendDirect(chatId, text, {
     parseMode: "Markdown",
@@ -6005,6 +6088,28 @@ export async function startTelegramBot() {
   // Register bot commands with Telegram (updates the / menu)
   await registerBotCommands();
 
+  // Start Telegram UI server (Mini App) when configured
+  try {
+    await startTelegramUiServer({
+      dependencies: {
+        getInternalExecutor: _getInternalExecutor,
+        getExecutorMode: _getExecutorMode,
+        executeCommand: async (command, chatId) => {
+          const safeChatId = chatId || telegramChatId;
+          await handleCommand(String(command), String(safeChatId));
+        },
+      },
+    });
+    telegramUiUrl = getTelegramUiUrl();
+    if (telegramUiUrl) {
+      await setWebAppMenuButton(telegramUiUrl);
+    } else {
+      await clearWebAppMenuButton();
+    }
+  } catch (err) {
+    console.warn(`[telegram-bot] UI server start failed: ${err.message}`);
+  }
+
   // Start presence announcements for multi-workstation discovery
   startPresenceLoop();
 
@@ -6057,7 +6162,7 @@ export async function startTelegramBot() {
   } else {
     await sendDirect(
       telegramChatId,
-      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
+      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /menu for the control center${telegramUiUrl ? " (full Mini App available)" : ""} or send any message to chat with the agent.`,
     );
   }
 
