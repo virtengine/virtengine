@@ -3122,7 +3122,12 @@ async function cmdPlan(chatId, args) {
     const result = await _triggerTaskPlanner(
       "manual-telegram",
       { source: "telegram /plan command" },
-      { taskCount, notify: false },
+      {
+        taskCount,
+        notify: false,
+        preferredMode: "codex-sdk",
+        allowCodexWhenDisabled: true,
+      },
     );
     if (result?.status === "skipped") {
       if (result.reason === "planner_disabled") {
@@ -3165,9 +3170,17 @@ async function cmdPlan(chatId, args) {
       return;
     }
     if (result?.status === "completed") {
+      const createdCount = Number(result?.createdTaskCount || 0);
+      const requestedCount = Number(result?.requestedTaskCount || taskCount);
+      const createdInfo = Number.isFinite(createdCount)
+        ? `Created: ${createdCount}/${requestedCount}\n`
+        : "";
+      const artifactInfo = result?.artifactPath
+        ? `\nArtifact: ${result.artifactPath}`
+        : "";
       await sendReply(
         chatId,
-        `✅ Task planner completed. Output saved to ${result.outputPath}`,
+        `✅ Task planner completed.\n${createdInfo}Output: ${result.outputPath}${artifactInfo}`,
       );
       return;
     }

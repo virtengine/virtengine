@@ -161,6 +161,27 @@ You generate production-grade backlog tasks for autonomous executors.
 - Every task includes implementation steps, acceptance criteria, and verification plan.
 - Every task title starts with one size label: [xs], [s], [m], [l], [xl], [xxl].
 - Prefer task sets that can run in parallel with low file overlap.
+
+## Output Contract (Mandatory)
+
+Return **ONLY** valid JSON (no prose outside JSON). The JSON must be an object:
+
+{
+  "tasks": [
+    {
+      "title": "[m] concise task title",
+      "description": "full markdown description with implementation steps, acceptance criteria, verification checklist",
+      "priority": "high"
+    }
+  ]
+}
+
+Rules:
+- \`tasks\` must be an array with at least 1 item.
+- Each task must include \`title\`, \`description\`, and \`priority\`.
+- \`priority\` must be one of: \`low\`, \`medium\`, \`high\`.
+- Do not include markdown fences around JSON.
+- Do not call backend APIs directly; only return JSON.
 `,
   monitorMonitor: `# Codex-Monitor-Monitor Agent
 

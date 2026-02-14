@@ -182,6 +182,9 @@ import { createErrorDetector } from "./error-detector.mjs";
 import {
   getKanbanBackendName,
   listTasks as listKanbanTasks,
+  listProjects as listKanbanProjects,
+  createTask as createKanbanTask,
+  setKanbanBackend,
   updateTaskStatus as updateKanbanTaskStatus,
 } from "./kanban-adapter.mjs";
 import { resolvePromptTemplate } from "./agent-prompts.mjs";
@@ -368,6 +371,14 @@ console.log(`[monitor] kanban backend: ${kanbanBackend}`);
 console.log(`[monitor] executor mode: ${executorMode}`);
 let primaryAgentName = primaryAgent;
 let primaryAgentReady = primaryAgentEnabled;
+
+try {
+  setKanbanBackend(kanbanBackend);
+} catch (err) {
+  console.warn(
+    `[monitor] failed to set initial kanban backend "${kanbanBackend}": ${err?.message || err}`,
+  );
+}
 
 function getActiveKanbanBackend() {
   try {
@@ -6474,6 +6485,180 @@ function buildPlannerTaskDescription({
   ].join("\n");
 }
 
+function normalizePlannerTitleForComparison(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/^\[[^\]]+\]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePlannerTaskTitle(title, fallbackSize = "m") {
+  const trimmed = String(title || "").trim();
+  if (!trimmed) return null;
+  const hasSizePrefix = /^\[(xs|s|m|l|xl|xxl)\]\s+/i.test(trimmed);
+  if (hasSizePrefix) return trimmed;
+  return `[${fallbackSize}] ${trimmed}`;
+}
+
+function formatPlannerTaskDescription(task) {
+  const summary = String(task.description || task.summary || "").trim();
+  const implementationSteps = Array.isArray(task.implementation_steps)
+    ? task.implementation_steps
+    : Array.isArray(task.implementationSteps)
+      ? task.implementationSteps
+      : [];
+  const acceptanceCriteria = Array.isArray(task.acceptance_criteria)
+    ? task.acceptance_criteria
+    : Array.isArray(task.acceptanceCriteria)
+      ? task.acceptanceCriteria
+      : [];
+  const verificationPlan = Array.isArray(task.verification)
+    ? task.verification
+    : Array.isArray(task.verification_plan)
+      ? task.verification_plan
+      : Array.isArray(task.verificationPlan)
+        ? task.verificationPlan
+        : [];
+
+  const lines = [];
+  if (summary) {
+    lines.push(summary, "");
+  }
+  if (implementationSteps.length > 0) {
+    lines.push("## Implementation Steps", "");
+    for (const step of implementationSteps) {
+      lines.push(`- ${String(step || "").trim()}`);
+    }
+    lines.push("");
+  }
+  if (acceptanceCriteria.length > 0) {
+    lines.push("## Acceptance Criteria", "");
+    for (const criterion of acceptanceCriteria) {
+      lines.push(`- ${String(criterion || "").trim()}`);
+    }
+    lines.push("");
+  }
+  if (verificationPlan.length > 0) {
+    lines.push("## Verification", "");
+    for (const verificationStep of verificationPlan) {
+      lines.push(`- ${String(verificationStep || "").trim()}`);
+    }
+  }
+
+  const description = lines.join("\n").trim();
+  return description || "Planned by codex-monitor task planner.";
+}
+
+function parsePlannerTaskCollection(parsedValue) {
+  if (Array.isArray(parsedValue)) return parsedValue;
+  if (Array.isArray(parsedValue?.tasks)) return parsedValue.tasks;
+  if (Array.isArray(parsedValue?.backlog)) return parsedValue.backlog;
+  return [];
+}
+
+function extractPlannerTasksFromOutput(output, maxTasks) {
+  const text = String(output || "");
+  const candidates = [];
+  const fencedJsonPattern = /```json[^\n]*\n([\s\S]*?)```/gi;
+  let match = fencedJsonPattern.exec(text);
+  while (match) {
+    const candidate = String(match[1] || "").trim();
+    if (candidate) candidates.push(candidate);
+    match = fencedJsonPattern.exec(text);
+  }
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    candidates.push(trimmed);
+  }
+
+  const normalized = [];
+  const seenTitles = new Set();
+  const cap = Number.isFinite(maxTasks) && maxTasks > 0 ? maxTasks : Infinity;
+
+  for (const candidate of candidates) {
+    let parsed;
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      continue;
+    }
+    const tasks = parsePlannerTaskCollection(parsed);
+    if (!Array.isArray(tasks) || tasks.length === 0) continue;
+    for (const task of tasks) {
+      const title = normalizePlannerTaskTitle(task?.title, "m");
+      if (!title) continue;
+      const dedupKey = normalizePlannerTitleForComparison(title);
+      if (!dedupKey || seenTitles.has(dedupKey)) continue;
+      seenTitles.add(dedupKey);
+      normalized.push({
+        title,
+        description: formatPlannerTaskDescription(task),
+      });
+      if (normalized.length >= cap) return normalized;
+    }
+  }
+
+  return normalized;
+}
+
+async function findKanbanProjectId() {
+  if (cachedProjectId) return cachedProjectId;
+  try {
+    const projects = await listKanbanProjects();
+    if (!Array.isArray(projects) || projects.length === 0) {
+      return null;
+    }
+    const match = projects.find(
+      (p) => p.name?.toLowerCase() === projectName?.toLowerCase(),
+    );
+    const project = match || projects[0];
+    const id = project?.id || project?.project_id || null;
+    if (!id) return null;
+    cachedProjectId = id;
+    return cachedProjectId;
+  } catch {
+    return null;
+  }
+}
+
+async function materializePlannerTasksToKanban(projectId, tasks) {
+  const existingOpenTasks = await listKanbanTasks(projectId, { status: "todo" });
+  const existingTitles = new Set(
+    (Array.isArray(existingOpenTasks) ? existingOpenTasks : [])
+      .map((task) => normalizePlannerTitleForComparison(task?.title))
+      .filter(Boolean),
+  );
+
+  const created = [];
+  const skipped = [];
+
+  for (const task of tasks) {
+    const dedupKey = normalizePlannerTitleForComparison(task.title);
+    if (!dedupKey) {
+      skipped.push({ title: task.title || "", reason: "invalid_title" });
+      continue;
+    }
+    if (existingTitles.has(dedupKey)) {
+      skipped.push({ title: task.title, reason: "duplicate_title" });
+      continue;
+    }
+    const createdTask = await createKanbanTask(projectId, {
+      title: task.title,
+      description: task.description,
+      status: "todo",
+    });
+    if (createdTask?.id) {
+      created.push({ id: createdTask.id, title: task.title });
+      existingTitles.add(dedupKey);
+    } else {
+      skipped.push({ title: task.title, reason: "create_failed" });
+    }
+  }
+
+  return { created, skipped };
+}
+
 function buildTaskPlannerStatusText(plannerState, reason = "interval") {
   const now = Date.now();
   const lastTriggered = plannerState?.last_triggered_at
@@ -7292,7 +7477,12 @@ async function checkStatusMilestones() {
 async function triggerTaskPlanner(
   reason,
   details,
-  { taskCount, notify = true } = {},
+  {
+    taskCount,
+    notify = true,
+    preferredMode,
+    allowCodexWhenDisabled = false,
+  } = {},
 ) {
   if (plannerMode === "disabled") {
     return { status: "skipped", reason: "planner_disabled" };
@@ -7300,26 +7490,91 @@ async function triggerTaskPlanner(
   if (plannerTriggered) {
     return { status: "skipped", reason: "planner_busy" };
   }
+  const requestedMode =
+    preferredMode === "kanban" || preferredMode === "codex-sdk"
+      ? preferredMode
+      : null;
+  const effectiveMode = requestedMode || plannerMode;
+
   plannerTriggered = true;
   await updatePlannerState({
     last_triggered_at: new Date().toISOString(),
     last_trigger_reason: reason || "manual",
     last_trigger_details: details || null,
-    last_trigger_mode: plannerMode,
+    last_trigger_mode: effectiveMode,
   });
 
   try {
     let result;
-    if (plannerMode === "kanban") {
-      result = await triggerTaskPlannerViaKanban(reason, details, {
-        taskCount,
-        notify,
-      });
+    if (effectiveMode === "kanban") {
+      try {
+        result = await triggerTaskPlannerViaKanban(reason, details, {
+          taskCount,
+          notify,
+        });
+      } catch (kanbanErr) {
+        const message = kanbanErr?.message || String(kanbanErr || "");
+        const backend = getActiveKanbanBackend();
+        const fallbackEligible =
+          codexEnabled &&
+          [
+            "cannot reach",
+            "no project found",
+            "gh cli failed",
+            "vk api",
+            "network error",
+          ].some((token) => message.toLowerCase().includes(token));
+
+        if (!fallbackEligible) {
+          throw kanbanErr;
+        }
+
+        console.warn(
+          `[monitor] task planner kanban path failed on backend=${backend}; falling back to codex-sdk: ${message}`,
+        );
+        if (notify) {
+          await sendTelegramMessage(
+            `⚠️ Task planner kanban path failed on ${backend}; using codex fallback.\nReason: ${message}`,
+          );
+        }
+        result = await triggerTaskPlannerViaCodex(reason, details, {
+          taskCount,
+          notify,
+          allowWhenDisabled: allowCodexWhenDisabled,
+        });
+      }
+    } else if (effectiveMode === "codex-sdk") {
+      try {
+        result = await triggerTaskPlannerViaCodex(reason, details, {
+          taskCount,
+          notify,
+          allowWhenDisabled: allowCodexWhenDisabled,
+        });
+      } catch (codexErr) {
+        const codexMessage = codexErr?.message || String(codexErr || "");
+        const allowKanbanFallback =
+          requestedMode === "codex-sdk" && plannerMode === "kanban";
+
+        if (!allowKanbanFallback) {
+          throw codexErr;
+        }
+
+        console.warn(
+          `[monitor] task planner codex path failed; falling back to kanban planner mode: ${codexMessage}`,
+        );
+        if (notify) {
+          await sendTelegramMessage(
+            `⚠️ Task planner codex path failed; trying kanban fallback.\nReason: ${codexMessage}`,
+          );
+        }
+
+        result = await triggerTaskPlannerViaKanban(reason, details, {
+          taskCount,
+          notify,
+        });
+      }
     } else {
-      result = await triggerTaskPlannerViaCodex(reason, details, {
-        taskCount,
-        notify,
-      });
+      throw new Error(`Unknown planner mode: ${effectiveMode}`);
     }
     void publishTaskPlannerStatus("trigger-success");
     return result;
@@ -7332,7 +7587,7 @@ async function triggerTaskPlanner(
     });
     if (notify) {
       await sendTelegramMessage(
-        `Task planner run failed (${plannerMode}): ${message}`,
+        `Task planner run failed (${effectiveMode}): ${message}`,
       );
     }
     void publishTaskPlannerStatus("trigger-failed");
@@ -7492,9 +7747,9 @@ async function triggerTaskPlannerViaKanban(
 async function triggerTaskPlannerViaCodex(
   reason,
   details,
-  { taskCount, notify = true } = {},
+  { taskCount, notify = true, allowWhenDisabled = false } = {},
 ) {
-  if (!codexEnabled) {
+  if (!codexEnabled && !allowWhenDisabled) {
     throw new Error(
       "Codex SDK disabled — use TASK_PLANNER_MODE=kanban instead",
     );
@@ -7529,25 +7784,79 @@ async function triggerTaskPlannerViaCodex(
     safeJsonBlock(runtimeContext),
     "```",
     "",
-    "Execute the planning instructions now and create the tasks.",
+    "Produce the planning output now. Do not call any external task APIs.",
+    "Return a strict JSON code block with the tasks payload required by the prompt.",
   ].join("\n");
   const result = await thread.run(prompt);
   const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
   const output = formatCodexResult(result);
   await writeFile(outPath, output, "utf8");
+  const parsedTasks = extractPlannerTasksFromOutput(output, numTasks);
+  if (parsedTasks.length === 0) {
+    throw new Error(
+      "Task planner output did not contain parseable JSON tasks; expected a fenced ```json block with a tasks array",
+    );
+  }
+
+  const plannerArtifactDir = resolve(repoRoot, ".codex-monitor", ".cache");
+  await mkdir(plannerArtifactDir, { recursive: true });
+  const artifactPath = resolve(
+    plannerArtifactDir,
+    `task-planner-${nowStamp()}.tasks.json`,
+  );
+  await writeFile(
+    artifactPath,
+    JSON.stringify(
+      {
+        generated_at: new Date().toISOString(),
+        trigger_reason: reason || "manual",
+        requested_task_count: numTasks,
+        parsed_task_count: parsedTasks.length,
+        tasks: parsedTasks,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  const projectId = await findKanbanProjectId();
+  if (!projectId) {
+    throw new Error(
+      `Task planner produced ${parsedTasks.length} tasks, but no kanban project is reachable for backend "${getActiveKanbanBackend()}"`,
+    );
+  }
+  const { created, skipped } = await materializePlannerTasksToKanban(
+    projectId,
+    parsedTasks,
+  );
+
   console.log(`[monitor] task planner output saved: ${outPath}`);
+  console.log(
+    `[monitor] task planner artifact saved: ${artifactPath} (parsed=${parsedTasks.length}, created=${created.length}, skipped=${skipped.length})`,
+  );
   await updatePlannerState({
     last_success_at: new Date().toISOString(),
     last_success_reason: reason || "manual",
     last_error: null,
-    last_result: "codex_planner_completed",
+    last_result: `codex_planner_completed:${created.length}`,
   });
   if (notify) {
     await sendTelegramMessage(
-      `📋 Task planner run completed (${reason || "manual"}). Output saved: ${outPath}`,
+      `📋 Task planner run completed (${reason || "manual"}). Created ${created.length}/${parsedTasks.length} tasks.${
+        skipped.length > 0 ? ` Skipped ${skipped.length} duplicates/failed.` : ""
+      }\nOutput: ${outPath}\nArtifact: ${artifactPath}`,
     );
   }
-  return { status: "completed", outputPath: outPath };
+  return {
+    status: "completed",
+    outputPath: outPath,
+    artifactPath,
+    projectId,
+    parsedTaskCount: parsedTasks.length,
+    createdTaskCount: created.length,
+    skippedTaskCount: skipped.length,
+  };
 }
 
 async function ensureLogDir() {
@@ -9647,12 +9956,19 @@ function applyConfig(nextConfig, options = {}) {
   plannerPerCapitaThreshold = nextConfig.plannerPerCapitaThreshold;
   plannerIdleSlotThreshold = nextConfig.plannerIdleSlotThreshold;
   plannerDedupMs = nextConfig.plannerDedupMs;
-  plannerMode = nextConfig.plannerMode || "kanban";
+  plannerMode = nextConfig.plannerMode || "codex-sdk";
   agentPrompts = nextConfig.agentPrompts;
   configExecutorConfig = nextConfig.executorConfig;
   executorScheduler = nextConfig.scheduler;
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
+  try {
+    setKanbanBackend(kanbanBackend);
+  } catch (err) {
+    console.warn(
+      `[monitor] failed to set kanban backend "${kanbanBackend}" during reload: ${err?.message || err}`,
+    );
+  }
   const nextVkRuntimeRequired = isVkRuntimeRequired();
 
   if (prevVkRuntimeRequired && !nextVkRuntimeRequired) {
