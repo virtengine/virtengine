@@ -680,7 +680,7 @@ func closeSSHClient(client *ssh.Client) {
 		return
 	}
 	if err := client.Close(); err != nil {
-		// best-effort cleanup
+		_ = err
 	}
 }
 
@@ -689,7 +689,7 @@ func closeNetConn(conn net.Conn) {
 		return
 	}
 	if err := conn.Close(); err != nil {
-		// best-effort cleanup
+		_ = err
 	}
 }
 
