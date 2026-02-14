@@ -1424,6 +1424,15 @@ async function handleCallbackQuery(query) {
   // Always acknowledge the callback to dismiss loading indicator
   await answerCallbackQuery(callbackId);
 
+  if (data.startsWith("ui:")) {
+    await handleUiAction({
+      chatId,
+      data,
+      messageId: query.message?.message_id,
+    });
+    return;
+  }
+
   // Route callback data as if it were a slash command
   if (data.startsWith("/")) {
     const cmd = data.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
@@ -1769,6 +1778,7 @@ async function cmdContainer(chatId) {
 }
 
 const COMMANDS = {
+  "/menu": { handler: cmdMenu, desc: "Open V2 interactive control center" },
   "/help": { handler: cmdHelp, desc: "Show available commands" },
   "/helpfull": { handler: cmdHelpFull, desc: "Show all commands (text list)" },
   "/ask": { handler: cmdAsk, desc: "Send prompt to agent: /ask <prompt>" },
@@ -2023,6 +2033,7 @@ async function registerBotCommands() {
 }
 
 const FAST_COMMANDS = new Set([
+  "/menu",
   "/status",
   "/tasks",
   "/agents",
@@ -2040,6 +2051,152 @@ const FAST_COMMANDS = new Set([
   "/whatsapp",
   "/container",
 ]);
+
+function uiCallback(action) {
+  return `ui:${action}`;
+}
+
+function uiGoAction(screenId) {
+  return `go:${screenId}`;
+}
+
+function uiCmdAction(command) {
+  return `cmd:${command}`;
+}
+
+function uiButton(text, action) {
+  return { text, callback_data: uiCallback(action) };
+}
+
+function buildKeyboard(rows) {
+  return { inline_keyboard: rows };
+}
+
+function uiNavRow(parent) {
+  if (!parent) {
+    return [uiButton("🏠 Home", uiGoAction("home"))];
+  }
+  return [
+    uiButton("⬅️ Back", uiGoAction(parent)),
+    uiButton("🏠 Home", uiGoAction("home")),
+  ];
+}
+
+const UI_SCREENS = Object.freeze({
+  home: {
+    title: "VirtEngine Control Center",
+    body: () => "Choose a section to manage codex-monitor.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("📊 Overview", uiGoAction("overview")),
+          uiButton("🧭 Tasks", uiGoAction("tasks")),
+          uiButton("🤖 Agents", uiCmdAction("/agents")),
+        ],
+        [
+          uiButton("⚙️ Executor", uiGoAction("executor")),
+          uiButton("🌳 Worktrees", uiCmdAction("/worktrees")),
+          uiButton("🧵 Threads", uiCmdAction("/threads")),
+        ],
+        [uiButton("📖 All Commands", uiCmdAction("/helpfull"))],
+      ]),
+  },
+  overview: {
+    title: "Overview",
+    body: () => "Live status, health, and presence views.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("📊 Status", uiCmdAction("/status")),
+          uiButton("📋 Tasks", uiCmdAction("/tasks")),
+          uiButton("🏥 Health", uiCmdAction("/health")),
+        ],
+        [uiButton("👁 Presence", uiCmdAction("/presence"))],
+        uiNavRow("home"),
+      ]),
+  },
+  tasks: {
+    title: "Task Operations",
+    body: () => "Planner, pause/resume, and retry controls.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("⏸ Pause", uiCmdAction("/pausetasks")),
+          uiButton("▶️ Resume", uiCmdAction("/resumetasks")),
+          uiButton("🔄 Restart", uiCmdAction("/restart")),
+        ],
+        [
+          uiButton("Plan 3", uiCmdAction("/plan 3")),
+          uiButton("Plan 5", uiCmdAction("/plan 5")),
+          uiButton("Plan 10", uiCmdAction("/plan 10")),
+        ],
+        [uiButton("🔁 Retry", uiCmdAction("/retry manual_ui"))],
+        uiNavRow("home"),
+      ]),
+  },
+  executor: {
+    title: "Executor",
+    body: () => "Executor mode, slots, and max parallel tuning.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Status", uiCmdAction("/executor")),
+          uiButton("Slots", uiCmdAction("/executor slots")),
+          uiButton("Mode", uiCmdAction("/executor mode")),
+        ],
+        [
+          uiButton("0", uiCmdAction("/maxparallel 0")),
+          uiButton("1", uiCmdAction("/maxparallel 1")),
+          uiButton("2", uiCmdAction("/maxparallel 2")),
+        ],
+        [uiButton("4", uiCmdAction("/maxparallel 4"))],
+        uiNavRow("home"),
+      ]),
+  },
+});
+
+async function renderUiScreen(chatId, screenId = "home") {
+  const screen = UI_SCREENS[screenId] || UI_SCREENS.home;
+  const body =
+    typeof screen.body === "function" ? await screen.body(chatId) : screen.body;
+  const text = [`🧭 *${screen.title}*`, "", body].join("\n");
+  const keyboard =
+    typeof screen.keyboard === "function"
+      ? await screen.keyboard(chatId)
+      : screen.keyboard;
+  await sendDirect(chatId, text, {
+    parseMode: "Markdown",
+    reply_markup: keyboard,
+  });
+}
+
+async function handleUiAction({ chatId, data }) {
+  const payload = data.startsWith("ui:") ? data.slice(3) : data;
+  if (payload.startsWith("go:")) {
+    const target = payload.slice(3) || "home";
+    await renderUiScreen(chatId, target);
+    return;
+  }
+  if (payload.startsWith("cmd:")) {
+    const command = payload.slice(4).trim();
+    if (!command.startsWith("/")) {
+      await sendReply(chatId, "Unknown UI command.");
+      return;
+    }
+    const cmd = command.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
+    if (FAST_COMMANDS.has(cmd)) {
+      enqueueFastCommand(() => handleCommand(command, chatId));
+    } else {
+      enqueueCommand(() => handleCommand(command, chatId));
+    }
+    return;
+  }
+  await sendReply(chatId, "Unknown UI action.");
+}
+
+async function cmdMenu(chatId) {
+  await renderUiScreen(chatId, "home");
+}
 
 async function handleCommand(text, chatId) {
   const parts = text.split(/\s+/);
@@ -2291,6 +2448,7 @@ async function cmdHelp(chatId) {
 
   const keyboard = {
     inline_keyboard: [
+      [{ text: "🧭 Control Center (V2)", callback_data: "/menu" }],
       [
         { text: "📊 Status", callback_data: "/status" },
         { text: "📋 Tasks", callback_data: "/tasks" },
