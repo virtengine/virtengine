@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
+import { homedir } from "node:os";
 
 function toEnvSuffix(key) {
   return String(key)
@@ -535,6 +536,14 @@ export function getAgentPromptDefinitions() {
 }
 
 export function getDefaultPromptWorkspace(repoRoot) {
+  const override = String(
+    process.env.CODEX_MONITOR_PROMPT_WORKSPACE || "",
+  ).trim();
+  if (override) {
+    return isAbsolute(override)
+      ? override
+      : resolve(repoRoot || process.cwd(), override);
+  }
   return resolve(repoRoot || process.cwd(), PROMPT_WORKSPACE_DIR);
 }
 
@@ -567,8 +576,25 @@ export function resolvePromptTemplate(template, values, fallback) {
 
 export function ensureAgentPromptWorkspace(repoRoot) {
   const root = resolve(repoRoot || process.cwd());
-  const workspaceDir = getDefaultPromptWorkspace(root);
-  mkdirSync(workspaceDir, { recursive: true });
+  let workspaceDir = getDefaultPromptWorkspace(root);
+
+  try {
+    mkdirSync(workspaceDir, { recursive: true });
+  } catch (err) {
+    const fallbackRoot = resolve(
+      process.env.CODEX_MONITOR_HOME ||
+        process.env.HOME ||
+        process.env.USERPROFILE ||
+        homedir(),
+    );
+    const fallbackDir = resolve(fallbackRoot, PROMPT_WORKSPACE_DIR);
+    process.env.CODEX_MONITOR_PROMPT_WORKSPACE = fallbackDir;
+    workspaceDir = fallbackDir;
+    mkdirSync(workspaceDir, { recursive: true });
+    console.warn(
+      `[agent-prompts] prompt workspace fallback enabled: ${workspaceDir} (primary path failed: ${err?.code || err?.message || err})`,
+    );
+  }
 
   const written = [];
   for (const def of AGENT_PROMPT_DEFINITIONS) {
