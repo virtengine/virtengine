@@ -45,16 +45,23 @@ function isPathInside(parent, child) {
 function resolveConfigDir(repoRoot) {
   const repoPath = resolve(repoRoot || process.cwd());
   const packageDir = resolve(__dirname);
-  if (isPathInside(repoPath, packageDir) || hasSetupMarkers(packageDir)) {
-    return packageDir;
+
+  if (hasSetupMarkers(repoPath)) return repoPath;
+  if (hasSetupMarkers(packageDir)) return packageDir;
+
+  if (isPathInside(repoPath, packageDir)) {
+    return repoPath;
   }
+
   const baseDir =
     process.env.APPDATA ||
     process.env.LOCALAPPDATA ||
     process.env.HOME ||
     process.env.USERPROFILE ||
     process.cwd();
-  return resolve(baseDir, "codex-monitor");
+  const userConfigDir = resolve(baseDir, "codex-monitor");
+  if (hasSetupMarkers(userConfigDir)) return userConfigDir;
+  return userConfigDir;
 }
 
 function ensurePromptWorkspaceGitIgnore(repoRoot) {
