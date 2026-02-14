@@ -333,6 +333,12 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Set up pnpm
+        if: steps.detect.outputs.run == 'true'
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Set up Node.js
         if: steps.detect.outputs.run == 'true'
         uses: actions/setup-node@v4
@@ -340,12 +346,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
           cache-dependency-path: "pnpm-lock.yaml"
-
-      - name: Set up pnpm
-        if: steps.detect.outputs.run == 'true'
-        uses: pnpm/action-setup@v2
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Install dependencies
         if: steps.detect.outputs.run == 'true'
@@ -435,7 +435,8 @@ jobs:
       - name: Create archive
         run: |
           cd dist
-          ARCHIVE_NAME="virtengine-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          SAFE_VERSION=$(echo "${{ steps.version.outputs.version }}" | tr '/' '-')
+          ARCHIVE_NAME="virtengine-${SAFE_VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             zip "${ARCHIVE_NAME}.zip" virtengine.exe
           else

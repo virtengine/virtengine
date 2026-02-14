@@ -83,11 +83,12 @@ func (m *MockHPCScheduler) SubmitJob(ctx context.Context, job *hpctypes.HPCJob) 
 
 	m.mu.Lock()
 	m.jobs[job.JobID] = schedulerJob
+	jobSnapshot := cloneSchedulerJob(schedulerJob)
 	m.mu.Unlock()
 
-	m.notifyCallbacks(schedulerJob, HPCJobEventSubmitted, HPCJobStatePending)
+	m.notifyCallbacks(jobSnapshot, HPCJobEventSubmitted, HPCJobStatePending)
 
-	return schedulerJob, nil
+	return cloneSchedulerJob(jobSnapshot), nil
 }
 
 func (m *MockHPCScheduler) CancelJob(ctx context.Context, virtEngineJobID string) error {
@@ -101,8 +102,9 @@ func (m *MockHPCScheduler) CancelJob(ctx context.Context, virtEngineJobID string
 		job.State = HPCJobStateCancelled
 		now := time.Now()
 		job.EndTime = &now
+		jobSnapshot := cloneSchedulerJob(job)
 		m.mu.Unlock()
-		m.notifyCallbacks(job, HPCJobEventCancelled, prevState)
+		m.notifyCallbacks(jobSnapshot, HPCJobEventCancelled, prevState)
 		return nil
 	}
 	m.mu.Unlock()
@@ -119,7 +121,7 @@ func (m *MockHPCScheduler) GetJobStatus(ctx context.Context, virtEngineJobID str
 	defer m.mu.RUnlock()
 
 	if job, exists := m.jobs[virtEngineJobID]; exists {
-		return job, nil
+		return cloneSchedulerJob(job), nil
 	}
 
 	return nil, NewHPCSchedulerError(HPCErrorCodeJobNotFound, "job not found", nil)
@@ -130,7 +132,7 @@ func (m *MockHPCScheduler) GetJobAccounting(ctx context.Context, virtEngineJobID
 	defer m.mu.RUnlock()
 
 	if job, exists := m.jobs[virtEngineJobID]; exists {
-		return job.Metrics, nil
+		return cloneSchedulerMetrics(job.Metrics), nil
 	}
 
 	return nil, NewHPCSchedulerError(HPCErrorCodeJobNotFound, "job not found", nil)
@@ -143,7 +145,7 @@ func (m *MockHPCScheduler) ListActiveJobs(ctx context.Context) ([]*HPCSchedulerJ
 	var active []*HPCSchedulerJob
 	for _, job := range m.jobs {
 		if !job.State.IsTerminal() {
-			active = append(active, job)
+			active = append(active, cloneSchedulerJob(job))
 		}
 	}
 	return active, nil
@@ -189,8 +191,9 @@ func (m *MockHPCScheduler) SimulateJobStart(jobID string) {
 		job.State = HPCJobStateRunning
 		now := time.Now()
 		job.StartTime = &now
+		jobSnapshot := cloneSchedulerJob(job)
 		m.mu.Unlock()
-		m.notifyCallbacks(job, HPCJobEventStarted, prevState)
+		m.notifyCallbacks(jobSnapshot, HPCJobEventStarted, prevState)
 		return
 	}
 	m.mu.Unlock()
@@ -213,8 +216,9 @@ func (m *MockHPCScheduler) SimulateJobComplete(jobID string, exitCode int32) {
 			NodesUsed:        4,
 			NodeHours:        4.0,
 		}
+		jobSnapshot := cloneSchedulerJob(job)
 		m.mu.Unlock()
-		m.notifyCallbacks(job, HPCJobEventCompleted, prevState)
+		m.notifyCallbacks(jobSnapshot, HPCJobEventCompleted, prevState)
 		return
 	}
 	m.mu.Unlock()

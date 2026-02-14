@@ -27,6 +27,8 @@
   | codex-shell.mjs | Persistent Codex SDK agent sessions | `scripts/codex-monitor/codex-shell.mjs:1` |
   | copilot-shell.mjs | Persistent Copilot SDK agent sessions | `scripts/codex-monitor/copilot-shell.mjs:1` |
   | config.mjs | Unified config loader (CLI/env/.env/json/defaults) | `scripts/codex-monitor/config.mjs:4` |
+  | hook-profiles.mjs | Setup-time multi-agent hook scaffolding (Codex/Claude/Copilot) | `scripts/codex-monitor/hook-profiles.mjs:1` |
+  | agent-hook-bridge.mjs | Bridges Claude/Copilot hook callbacks to codex-monitor hook events | `scripts/codex-monitor/agent-hook-bridge.mjs:1` |
 
 ```mermaid
 flowchart TD

@@ -34,12 +34,29 @@ let activeThread = null; // Current persistent Thread
 let activeThreadId = null; // Thread ID for resume
 let activeTurn = null; // Whether a turn is in-flight
 let turnCount = 0; // Number of turns in this thread
+let codexRuntimeCaps = {
+  hasSteeringApi: false,
+  steeringMethod: null,
+};
 let agentSdk = resolveAgentSdkConfig();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function timestamp() {
   return new Date().toISOString();
+}
+
+function resolveCodexTransport() {
+  const raw = String(process.env.CODEX_TRANSPORT || "auto")
+    .trim()
+    .toLowerCase();
+  if (["auto", "sdk", "cli"].includes(raw)) {
+    return raw;
+  }
+  console.warn(
+    `[codex-shell] invalid CODEX_TRANSPORT='${raw}', defaulting to 'auto'`,
+  );
+  return "auto";
 }
 
 // ── SDK Loading ──────────────────────────────────────────────────────────────
@@ -51,6 +68,12 @@ async function loadCodexSdk() {
       `[codex-shell] agent_sdk.primary=${agentSdk.primary} — Codex SDK disabled`,
     );
     return null;
+  }
+  const transport = resolveCodexTransport();
+  if (transport === "cli") {
+    console.warn(
+      "[codex-shell] CODEX_TRANSPORT=cli uses SDK compatibility mode with persistent thread resume",
+    );
   }
   if (CodexClass) return CodexClass;
   try {
@@ -154,8 +177,8 @@ const THREAD_OPTIONS = {
 
 /**
  * Get or create a thread.
- * ALWAYS starts a fresh thread per task — never resumes a previous session.
- * This prevents token overflow from accumulated context across tasks.
+ * Uses fresh-thread mode by default to avoid context bloat.
+ * In CLI transport compatibility mode, reuse persisted thread IDs when possible.
  */
 async function getThread() {
   if (activeThread) return activeThread;
@@ -166,10 +189,36 @@ async function getThread() {
     codexInstance = new Cls();
   }
 
-  // Always start a new thread — never resume the old one.
-  // Token overflow (395k > 272k limit) is caused by accumulated context
-  // from reusing the same thread across multiple tasks.
-  if (activeThreadId) {
+  const transport = resolveCodexTransport();
+  const shouldResume = transport === "cli";
+
+  if (activeThreadId && shouldResume) {
+    if (typeof codexInstance.resumeThread === "function") {
+      try {
+        activeThread = codexInstance.resumeThread(
+          activeThreadId,
+          THREAD_OPTIONS,
+        );
+        if (activeThread) {
+          detectThreadCapabilities(activeThread);
+          console.log(`[codex-shell] resumed thread ${activeThreadId}`);
+          return activeThread;
+        }
+      } catch (err) {
+        console.warn(
+          `[codex-shell] failed to resume thread ${activeThreadId}: ${err.message} — starting fresh`,
+        );
+      }
+    } else {
+      console.warn(
+        "[codex-shell] SDK does not expose resumeThread(); starting fresh thread",
+      );
+    }
+    activeThreadId = null;
+  }
+
+  // Fresh-thread mode (default): avoid token overflow from long-running reuse.
+  if (activeThreadId && !shouldResume) {
     console.log(
       `[codex-shell] discarding previous thread ${activeThreadId} — creating fresh thread per task`,
     );
@@ -178,10 +227,11 @@ async function getThread() {
 
   // Start a new thread with the system prompt as the first turn
   activeThread = codexInstance.startThread(THREAD_OPTIONS);
+  detectThreadCapabilities(activeThread);
 
   // Prime the thread with the system prompt so subsequent turns have context
   try {
-    const primeResult = await activeThread.run(SYSTEM_PROMPT);
+    await activeThread.run(SYSTEM_PROMPT);
     // Capture the thread ID from the prime turn
     if (activeThread.id) {
       activeThreadId = activeThread.id;
@@ -194,6 +244,21 @@ async function getThread() {
   }
 
   return activeThread;
+}
+
+function detectThreadCapabilities(thread) {
+  if (!thread || typeof thread !== "object") {
+    codexRuntimeCaps = { hasSteeringApi: false, steeringMethod: null };
+    return codexRuntimeCaps;
+  }
+  const candidates = ["steer", "sendSteer", "steering"];
+  const method =
+    candidates.find((name) => typeof thread?.[name] === "function") || null;
+  codexRuntimeCaps = {
+    hasSteeringApi: !!method,
+    steeringMethod: method,
+  };
+  return codexRuntimeCaps;
 }
 
 // ── Event Formatting ─────────────────────────────────────────────────────────
@@ -477,27 +542,24 @@ export async function steerCodexPrompt(message) {
       return { ok: false, reason: "steering_disabled" };
     }
     const thread = await getThread();
-    const steerFn =
-      thread?.steer || thread?.sendSteer || thread?.steering || null;
+    const runtimeCaps = detectThreadCapabilities(thread);
+    const steerFn = runtimeCaps.steeringMethod
+      ? thread?.[runtimeCaps.steeringMethod]
+      : null;
+
     if (typeof steerFn === "function") {
       await steerFn.call(thread, message);
       return { ok: true, mode: "steer" };
     }
 
-    const enqueueFn =
-      thread?.send || thread?.addMessage || thread?.enqueue || null;
-    if (typeof enqueueFn === "function") {
-      await enqueueFn.call(thread, {
-        role: "user",
-        content: message,
-        type: "steering",
-      });
-      return { ok: true, mode: "enqueue" };
-    }
+    return {
+      ok: false,
+      reason: "sdk_no_steering_api",
+      detail: "Current Codex SDK Thread exposes only run()/runStreamed()",
+    };
   } catch (err) {
     return { ok: false, reason: err.message || "steer_failed" };
   }
-  return { ok: false, reason: "unsupported" };
 }
 
 /**

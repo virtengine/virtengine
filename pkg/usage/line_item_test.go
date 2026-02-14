@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: test-only deterministic randomness for reproducibility
 	"sort"
 	"strings"
 	"testing"

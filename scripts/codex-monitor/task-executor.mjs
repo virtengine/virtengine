@@ -23,6 +23,7 @@ import {
   listProjects,
   getTask,
   updateTaskStatus,
+  addComment,
 } from "./kanban-adapter.mjs";
 import {
   launchOrResumeThread,
@@ -32,6 +33,7 @@ import {
   pruneAllExhaustedThreads,
   getActiveThreads,
   getPoolSdkName,
+  ensureThreadRegistryLoaded,
 } from "./agent-pool.mjs";
 import {
   acquireWorktree,
@@ -43,6 +45,7 @@ import {
   ExecutorScheduler,
   loadExecutorConfig,
 } from "./config.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 import {
   loadStore as loadTaskStore,
   setTaskStatus as setInternalStatus,
@@ -63,13 +66,19 @@ import {
   formatComplexityDecision,
 } from "./task-complexity.mjs";
 import { evaluateBranchSafetyForPush } from "./git-safety.mjs";
+import {
+  loadHooks,
+  registerBuiltinHooks,
+  executeHooks,
+  executeBlockingHooks,
+} from "./agent-hooks.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const TAG = "[task-executor]";
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const CONTEXT_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-const GRACEFUL_SHUTDOWN_MS = 30_000; // 30 seconds
+const GRACEFUL_SHUTDOWN_MS = 5 * 60_000; // 5 minutes — give agents time to commit/push
 const MAX_NO_COMMIT_ATTEMPTS = 3; // Stop picking up a task after N consecutive no-commit completions
 const NO_COMMIT_COOLDOWN_BASE_MS = 15 * 60 * 1000; // 15 minutes base cooldown for no-commit
 const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
@@ -77,11 +86,35 @@ const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 /** Watchdog interval: how often to check for stalled agent slots */
 const WATCHDOG_INTERVAL_MS = 60_000; // 1 minute
 /** Grace period after task timeout before watchdog force-kills the slot */
-const WATCHDOG_GRACE_MS = 120_000; // 2 minutes // 2 hours max cooldown
+const WATCHDOG_GRACE_MS = 10 * 60_000; // 10 minutes — generous buffer, stream analysis handles real issues
+/** Max age for in-progress tasks to auto-resume after monitor restart */
+const INPROGRESS_RECOVERY_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours — agents should be resumable for a full day
+
+function normalizeModel(value) {
+  const model = String(value || "").trim();
+  return model ? model : null;
+}
+
+// ── Stream-Based Health Monitoring Constants ──────────────────────────────
+/** How long an agent can be truly silent (zero events) before we consider intervention */
+const STREAM_SILENT_THRESHOLD_MS = 10 * 60_000; // 10 minutes of absolute silence
+/** How long an agent can be idle (no meaningful progress) before we send CONTINUE */
+const STREAM_IDLE_THRESHOLD_MS = 5 * 60_000; // 5 minutes idle = send continue
+/** How long truly stalled (no events after continues) before force-kill */
+const STREAM_STALLED_KILL_MS = 20 * 60_000; // 20 minutes stalled after continues = kill
+/** Maximum idle continues before escalating to abort */
+const MAX_IDLE_CONTINUES = 5;
+/** Minimum elapsed time before watchdog even starts checking (agent setup phase) */
+const WATCHDOG_WARMUP_MS = 5 * 60_000; // 5 minutes warmup
 const NO_COMMIT_STATE_FILE = resolve(
   dirname(fileURLToPath(import.meta.url)),
   ".cache",
   "no-commit-state.json",
+);
+const RUNTIME_STATE_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".cache",
+  "task-executor-runtime.json",
 );
 
 const __filename = fileURLToPath(import.meta.url);
@@ -189,7 +222,9 @@ function slugify(text) {
 
 function parseGitHubIssueNumber(value) {
   if (value == null) return null;
-  const numeric = String(value).trim().match(/^#?(\d+)$/);
+  const numeric = String(value)
+    .trim()
+    .match(/^#?(\d+)$/);
   if (numeric?.[1]) return numeric[1];
   const urlMatch = String(value).match(/\/issues\/(\d+)(?:\b|$)/i);
   return urlMatch?.[1] || null;
@@ -198,6 +233,10 @@ function parseGitHubIssueNumber(value) {
 function getGitHubIssueNumber(task) {
   if (!task) return null;
   const candidates = [
+    task.externalId,
+    task.external_id,
+    task.meta?.externalId,
+    task.meta?.external_id,
     task.id,
     task.meta?.number,
     task.meta?.id,
@@ -211,6 +250,124 @@ function getGitHubIssueNumber(task) {
     if (issueNumber) return issueNumber;
   }
   return null;
+}
+
+function getTaskAgeMs(task) {
+  const ts =
+    task?.updated_at || task?.updatedAt || task?.created_at || task?.createdAt;
+  if (!ts) return 0;
+  const parsed = new Date(ts).getTime();
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Date.now() - parsed);
+}
+
+// ── Issue Tracking Helpers ──────────────────────────────────────────────────
+
+/**
+ * Check whether the current kanban backend is GitHub Issues.
+ * @param {Object} [task] Optional task with backend info.
+ * @returns {boolean}
+ */
+function isGitHubBackend(task) {
+  const backend = String(
+    task?.backend || task?.externalBackend || getKanbanBackendName(),
+  ).toLowerCase();
+  return backend === "github";
+}
+
+/**
+ * Get the list of commits between two git refs, with titles and changed files.
+ * @param {string} worktreePath Git working directory.
+ * @param {string} fromRef      Starting ref (exclusive).
+ * @param {string} toRef        Ending ref (inclusive). Defaults to HEAD.
+ * @returns {{ sha: string, title: string, files: string[] }[]}
+ */
+function getCommitDetails(worktreePath, fromRef, toRef = "HEAD") {
+  if (!worktreePath || !fromRef) return [];
+  try {
+    // Get commit SHAs and messages
+    const logResult = spawnSync(
+      "git",
+      ["log", "--format=%H|%s", `${fromRef}..${toRef}`],
+      { cwd: worktreePath, encoding: "utf8", timeout: 10_000 },
+    );
+    if (logResult.status !== 0 || !logResult.stdout?.trim()) return [];
+
+    const commits = logResult.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, ...titleParts] = line.split("|");
+        return {
+          sha: sha.trim(),
+          title: titleParts.join("|").trim(),
+          files: [],
+        };
+      });
+
+    // Get changed files per commit
+    for (const commit of commits) {
+      try {
+        const filesResult = spawnSync(
+          "git",
+          ["diff-tree", "--no-commit-id", "--name-only", "-r", commit.sha],
+          { cwd: worktreePath, encoding: "utf8", timeout: 5_000 },
+        );
+        if (filesResult.status === 0 && filesResult.stdout) {
+          commit.files = filesResult.stdout.trim().split("\n").filter(Boolean);
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    return commits;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get the overall changed-file summary between two refs.
+ * @param {string} worktreePath
+ * @param {string} fromRef
+ * @param {string} toRef
+ * @returns {string} Formatted diff stat or empty string.
+ */
+function getChangedFilesSummary(worktreePath, fromRef, toRef = "HEAD") {
+  if (!worktreePath || !fromRef) return "";
+  try {
+    const result = spawnSync(
+      "git",
+      ["diff", "--stat", `${fromRef}..${toRef}`],
+      { cwd: worktreePath, encoding: "utf8", timeout: 10_000 },
+    );
+    return result.status === 0 ? (result.stdout || "").trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Post a structured comment on a GitHub issue for a task, if the backend is GitHub.
+ * Non-blocking, best-effort — failures are logged but don't affect task flow.
+ * @param {Object} task         Task object (must have id).
+ * @param {string} commentBody  Markdown body for the comment.
+ * @returns {Promise<boolean>}  true if comment was posted.
+ */
+async function commentOnIssue(task, commentBody) {
+  if (!isGitHubBackend(task)) return false;
+  const issueNumber = getGitHubIssueNumber(task);
+  if (!issueNumber) return false;
+  try {
+    return await addComment(issueNumber, commentBody);
+  } catch (err) {
+    console.warn(
+      `${TAG} failed to comment on issue #${issueNumber}: ${err.message}`,
+    );
+    return false;
+  }
 }
 
 // ── Typedefs ────────────────────────────────────────────────────────────────
@@ -231,6 +388,7 @@ function getGitHubIssueNumber(task) {
  * @property {Function} onTaskCompleted - callback(task, result)
  * @property {Function} onTaskFailed    - callback(task, error)
  * @property {Function} sendTelegram    - optional telegram notifier function
+ * @property {Object}   agentPrompts    - optional prompt templates loaded from config
  */
 
 /**
@@ -241,6 +399,7 @@ function getGitHubIssueNumber(task) {
  * @property {string} worktreePath
  * @property {string} threadKey       - agent-pool thread key (taskId used as threadKey)
  * @property {number} startedAt       - timestamp
+ * @property {number|null} agentInstanceId - monotonic task-agent instance ID
  * @property {string} sdk             - which SDK is running this
  * @property {number} attempt         - current attempt number
  * @property {"running"|"completing"|"failed"} status
@@ -259,7 +418,7 @@ class TaskExecutor {
       maxParallel: 3,
       pollIntervalMs: 30_000,
       sdk: "auto",
-      taskTimeoutMs: 90 * 60 * 1000,
+      taskTimeoutMs: 6 * 60 * 60 * 1000, // 6 hours — stream-based watchdog handles real issues
       maxRetries: 2,
       autoCreatePr: true,
       projectId: null,
@@ -269,6 +428,7 @@ class TaskExecutor {
       onTaskCompleted: null,
       onTaskFailed: null,
       sendTelegram: null,
+      agentPrompts: {},
     };
 
     const merged = { ...defaults, ...options };
@@ -287,6 +447,10 @@ class TaskExecutor {
     this.onTaskCompleted = merged.onTaskCompleted;
     this.onTaskFailed = merged.onTaskFailed;
     this.sendTelegram = merged.sendTelegram;
+    this._agentPrompts =
+      merged.agentPrompts && typeof merged.agentPrompts === "object"
+        ? merged.agentPrompts
+        : {};
 
     // Initialize executor scheduler for per-task SDK routing
     /** @type {ExecutorScheduler|null} */
@@ -332,6 +496,10 @@ class TaskExecutor {
     this._completedWithPR = new Set();
     /** @type {Set<string>} taskId set — tracks tasks where a PR has been created for their branch */
     this._prCreatedForBranch = new Set();
+
+    /** @type {Map<string, { taskId: string, taskTitle: string, branch: string, sdk: string, attempt: number, startedAt: number, agentInstanceId: number|null, status: string, updatedAt: number }>} */
+    this._slotRuntimeState = new Map();
+    this._nextAgentInstanceId = 1;
 
     // Repo context cache (AGENTS.md, copilot-instructions.md)
     this._contextCache = null;
@@ -410,6 +578,132 @@ class TaskExecutor {
     }
   }
 
+  /** Load active slot runtime state (instance IDs + startedAt) from disk. */
+  _loadRuntimeState() {
+    try {
+      if (!existsSync(RUNTIME_STATE_FILE)) return;
+      const raw = readFileSync(RUNTIME_STATE_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      const nextId = Number(parsed?.nextAgentInstanceId || 1);
+      if (Number.isFinite(nextId) && nextId > 0) {
+        this._nextAgentInstanceId = Math.floor(nextId);
+      }
+
+      const slots = parsed?.slots || {};
+      let restored = 0;
+      for (const [taskId, entry] of Object.entries(slots)) {
+        const startedAt = Number(entry?.startedAt || 0);
+        if (!taskId || !Number.isFinite(startedAt) || startedAt <= 0) continue;
+        const agentInstanceIdRaw = Number(entry?.agentInstanceId);
+        const agentInstanceId =
+          Number.isFinite(agentInstanceIdRaw) && agentInstanceIdRaw > 0
+            ? Math.floor(agentInstanceIdRaw)
+            : null;
+        if (agentInstanceId) {
+          this._nextAgentInstanceId = Math.max(
+            this._nextAgentInstanceId,
+            agentInstanceId + 1,
+          );
+        }
+        this._slotRuntimeState.set(taskId, {
+          taskId,
+          taskTitle: String(entry?.taskTitle || ""),
+          branch: String(entry?.branch || ""),
+          sdk: String(entry?.sdk || ""),
+          attempt: Number(entry?.attempt || 0),
+          startedAt,
+          agentInstanceId,
+          status: String(entry?.status || "running"),
+          updatedAt: Number(entry?.updatedAt || Date.now()),
+        });
+        restored++;
+      }
+      if (restored > 0) {
+        console.log(
+          `${TAG} restored runtime slot state for ${restored} task(s), next agent instance #${this._nextAgentInstanceId}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`${TAG} failed to load runtime slot state: ${err.message}`);
+    }
+  }
+
+  /** Persist active slot runtime state to disk (survives monitor restart). */
+  _saveRuntimeState() {
+    try {
+      const dir = resolve(__dirname, ".cache");
+      mkdirSync(dir, { recursive: true });
+
+      const slots = {};
+      for (const [taskId, entry] of this._slotRuntimeState.entries()) {
+        slots[taskId] = {
+          taskId,
+          taskTitle: entry.taskTitle || "",
+          branch: entry.branch || "",
+          sdk: entry.sdk || "",
+          attempt: Number(entry.attempt || 0),
+          startedAt: Number(entry.startedAt || Date.now()),
+          agentInstanceId:
+            Number.isFinite(entry.agentInstanceId) && entry.agentInstanceId > 0
+              ? Number(entry.agentInstanceId)
+              : null,
+          status: entry.status || "running",
+          updatedAt: Number(entry.updatedAt || Date.now()),
+        };
+      }
+
+      writeFileSync(
+        RUNTIME_STATE_FILE,
+        JSON.stringify(
+          {
+            nextAgentInstanceId: this._nextAgentInstanceId,
+            slots,
+            savedAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    } catch (err) {
+      console.warn(`${TAG} failed to save runtime slot state: ${err.message}`);
+    }
+  }
+
+  /**
+   * Mirror slot fields into persisted runtime state.
+   * @param {SlotInfo} slot
+   */
+  _upsertRuntimeSlot(slot) {
+    if (!slot?.taskId) return;
+    this._slotRuntimeState.set(slot.taskId, {
+      taskId: slot.taskId,
+      taskTitle: slot.taskTitle || "",
+      branch: slot.branch || "",
+      sdk: slot.sdk || "",
+      attempt: Number(slot.attempt || 0),
+      startedAt: Number(slot.startedAt || Date.now()),
+      agentInstanceId:
+        Number.isFinite(slot.agentInstanceId) && slot.agentInstanceId > 0
+          ? Number(slot.agentInstanceId)
+          : null,
+      status: slot.status || "running",
+      updatedAt: Date.now(),
+    });
+    this._saveRuntimeState();
+  }
+
+  /**
+   * Delete runtime state for a task slot after completion/failure reset.
+   * @param {string} taskId
+   */
+  _removeRuntimeSlot(taskId) {
+    if (!taskId) return;
+    if (this._slotRuntimeState.delete(taskId)) {
+      this._saveRuntimeState();
+    }
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /**
@@ -422,14 +716,20 @@ class TaskExecutor {
     } catch (err) {
       console.warn(`${TAG} task store load warning: ${err.message}`);
     }
+
+    // Initialize agent lifecycle hooks
+    try {
+      loadHooks();
+      registerBuiltinHooks();
+      console.log(`${TAG} agent lifecycle hooks initialized`);
+    } catch (err) {
+      console.warn(`${TAG} hook initialization warning: ${err.message}`);
+    }
+
     // Restore anti-thrash state from disk
     this._loadNoCommitState();
-
-    // Clean up zombie threads from prior runs
-    const pruned = pruneAllExhaustedThreads();
-    if (pruned > 0) {
-      console.log(`${TAG} cleaned up ${pruned} stale agent threads on startup`);
-    }
+    // Restore active slot metadata (agent instance IDs + original startedAt)
+    this._loadRuntimeState();
 
     // Recover orphaned worktrees from prior runs (async, non-blocking)
     this._recoverOrphanedWorktrees().catch((err) => {
@@ -439,8 +739,30 @@ class TaskExecutor {
     this._running = true;
     // Start watchdog to detect and kill stalled agent slots
     this._startWatchdog();
-    // Fire first poll immediately
-    this._pollLoop();
+    // Resume interrupted in-progress tasks first, then poll todo backlog.
+    void ensureThreadRegistryLoaded()
+      .catch((err) => {
+        console.warn(
+          `${TAG} thread registry load warning: ${err.message || err}`,
+        );
+      })
+      .then(() => {
+        const pruned = pruneAllExhaustedThreads();
+        if (pruned > 0) {
+          console.log(
+            `${TAG} cleaned up ${pruned} stale agent threads on startup`,
+          );
+        }
+      })
+      .then(() => this._recoverInterruptedInProgressTasks())
+      .catch((err) => {
+        console.warn(
+          `${TAG} in-progress recovery warning: ${err.message || err}`,
+        );
+      })
+      .finally(() => {
+        void this._pollLoop();
+      });
     this._pollTimer = setInterval(() => this._pollLoop(), this.pollIntervalMs);
     console.log(
       `${TAG} started — polling every ${this.pollIntervalMs / 1000}s for up to ${this.maxParallel} parallel tasks`,
@@ -458,6 +780,9 @@ class TaskExecutor {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
     }
+
+    // Persist runtime state before waiting so unexpected exits still recover
+    this._saveRuntimeState();
 
     const activeCount = this._activeSlots.size;
     if (activeCount > 0) {
@@ -538,7 +863,9 @@ class TaskExecutor {
       WATCHDOG_INTERVAL_MS,
     );
     console.log(
-      `${TAG} watchdog started — checking for stalled agents every ${WATCHDOG_INTERVAL_MS / 1000}s (kill after ${Math.round((this.taskTimeoutMs + WATCHDOG_GRACE_MS) / 60000)}min)`,
+      `${TAG} stream-based watchdog started — analyzing agent health every ${WATCHDOG_INTERVAL_MS / 1000}s ` +
+        `(idle threshold: ${STREAM_IDLE_THRESHOLD_MS / 60000}min, stalled kill: ${STREAM_STALLED_KILL_MS / 60000}min, ` +
+        `max continues: ${MAX_IDLE_CONTINUES}, absolute limit: ${Math.round((this.taskTimeoutMs + WATCHDOG_GRACE_MS) / 60000)}min)`,
     );
   }
 
@@ -554,71 +881,122 @@ class TaskExecutor {
   }
 
   /**
-   * Watchdog: scan active slots for agents that have exceeded deadline.
-   * Force-aborts them via their AbortController so Promise.race breaks the hang.
-   * Also detects idle sessions (no SDK events for >2 min) and sends CONTINUE signals
-   * to nudge agents that have stopped working prematurely.
+   * Stream-Based Watchdog: Monitors agent health by analyzing the REAL event
+   * stream instead of relying on fixed timeouts. Only intervenes when actual
+   * problems are detected in the agent's output stream.
+   *
+   * Intervention ladder:
+   *  1. Agent idle for STREAM_IDLE_THRESHOLD_MS → send CONTINUE signal
+   *  2. Agent silent for STREAM_SILENT_THRESHOLD_MS after continues → escalate
+   *  3. Agent stalled for STREAM_STALLED_KILL_MS with no recovery → force-kill
+   *  4. Hard deadline (taskTimeoutMs + WATCHDOG_GRACE_MS) as absolute safety net
+   *
+   * This replaces the old approach of killing agents based on arbitrary time limits.
+   * Agents that are actively producing events (tool calls, messages, edits) are
+   * NEVER interrupted regardless of how long they've been running.
    * @private
    */
   _watchdog() {
     const now = Date.now();
-    const deadline = this.taskTimeoutMs + WATCHDOG_GRACE_MS;
+    const absoluteDeadline = this.taskTimeoutMs + WATCHDOG_GRACE_MS;
     const sessionTracker = getSessionTracker();
 
     for (const [taskId, slot] of this._activeSlots) {
       const elapsed = now - slot.startedAt;
 
-      // ── 1. Hard deadline exceeded — force kill ──
-      if (elapsed > deadline) {
+      // ── 0. Warmup phase — never interfere with agent setup ──
+      if (elapsed < WATCHDOG_WARMUP_MS) continue;
+
+      const progress = sessionTracker.getProgressStatus(taskId);
+      const continueCount = this._idleContinueCounts.get(taskId) || 0;
+      const ac = this._slotAbortControllers.get(taskId);
+
+      // ── 1. Stream health analysis — is the agent ACTUALLY working? ──
+      const isActivelyWorking =
+        progress.status === "active" &&
+        progress.totalEvents > 0 &&
+        progress.idleMs < STREAM_IDLE_THRESHOLD_MS;
+
+      // If agent is actively producing events, skip ALL intervention
+      if (isActivelyWorking) {
+        // Reset continue count when agent shows life
+        if (continueCount > 0) {
+          this._idleContinueCounts.set(taskId, 0);
+        }
+        continue;
+      }
+
+      // ── 2. Agent has meaningful progress (edits/commits) — be very patient ──
+      if (progress.hasEdits || progress.hasCommits) {
+        // Agent has done real work. Only intervene if it's been truly silent
+        // for a very long time (double the normal threshold)
+        if (progress.idleMs < STREAM_SILENT_THRESHOLD_MS * 2) {
+          continue; // Still within tolerance for an agent that has done work
+        }
+      }
+
+      // ── 3. Idle detection — agent went silent, try CONTINUE ──
+      if (
+        (progress.status === "idle" || progress.status === "stalled") &&
+        progress.idleMs >= STREAM_IDLE_THRESHOLD_MS
+      ) {
+        const idleSec = Math.round(progress.idleMs / 1000);
+
+        if (continueCount < MAX_IDLE_CONTINUES) {
+          if (ac && !ac.signal.aborted) {
+            console.log(
+              `${TAG} WATCHDOG: agent "${slot.taskTitle}" idle for ${idleSec}s ` +
+                `(events: ${progress.totalEvents}, edits: ${progress.hasEdits}, ` +
+                `commits: ${progress.hasCommits}) — sending CONTINUE signal ` +
+                `(${continueCount + 1}/${MAX_IDLE_CONTINUES})`,
+            );
+            this._idleContinueCounts.set(taskId, continueCount + 1);
+            ac.abort("idle_continue");
+          }
+          continue;
+        }
+
+        // ── 4. Exhausted continues — check if truly stalled ──
+        if (progress.idleMs >= STREAM_STALLED_KILL_MS) {
+          const elapsedMin = Math.round(elapsed / 60000);
+          console.warn(
+            `${TAG} ⚠️ WATCHDOG: agent "${slot.taskTitle}" stalled for ` +
+              `${Math.round(progress.idleMs / 60000)}min after ${continueCount} continues ` +
+              `(total runtime: ${elapsedMin}min, events: ${progress.totalEvents}) — force-aborting`,
+          );
+          if (ac && !ac.signal.aborted) {
+            ac.abort("watchdog_stalled");
+          }
+          this._taskCooldowns.set(taskId, now);
+          this.sendTelegram?.(
+            `⚠️ Watchdog killed stalled agent: "${slot.taskTitle}" ` +
+              `(idle ${Math.round(progress.idleMs / 60000)}min after ${continueCount} continues, ` +
+              `total ${elapsedMin}min, ${progress.totalEvents} events)`,
+          );
+          continue;
+        }
+      }
+
+      // ── 5. Absolute safety net — only triggers if stream analysis somehow missed ──
+      if (elapsed > absoluteDeadline) {
         const elapsedMin = Math.round(elapsed / 60000);
-        const deadlineMin = Math.round(deadline / 60000);
+        const deadlineMin = Math.round(absoluteDeadline / 60000);
         console.warn(
-          `${TAG} ⚠️ WATCHDOG: slot "${slot.taskTitle}" exceeded deadline (${elapsedMin}min > ${deadlineMin}min) — force-aborting`,
+          `${TAG} ⚠️ WATCHDOG: absolute deadline exceeded for "${slot.taskTitle}" ` +
+            `(${elapsedMin}min > ${deadlineMin}min, events: ${progress.totalEvents}, ` +
+            `edits: ${progress.hasEdits}, commits: ${progress.hasCommits}) — force-aborting`,
         );
-        const ac = this._slotAbortControllers.get(taskId);
         if (ac && !ac.signal.aborted) {
           ac.abort("watchdog_timeout");
-          console.warn(
-            `${TAG} WATCHDOG: abort signal sent for "${slot.taskTitle}"`,
-          );
         } else if (!ac) {
           console.warn(
             `${TAG} WATCHDOG: no AbortController for "${slot.taskTitle}" — slot may be stuck permanently`,
           );
         }
-        // Set cooldown so task isn't immediately re-dispatched
         this._taskCooldowns.set(taskId, now);
-        // Notify via Telegram
         this.sendTelegram?.(
-          `⚠️ Watchdog killed stalled agent: "${slot.taskTitle}" (was running ${elapsedMin}min, limit ${deadlineMin}min)`,
+          `⚠️ Watchdog hard limit: "${slot.taskTitle}" (${elapsedMin}min > ${deadlineMin}min absolute limit)`,
         );
-        continue;
-      }
-
-      // ── 2. Idle detection — agent went silent, send CONTINUE ──
-      // Only check after at least 3 minutes of execution (allow initial setup time)
-      if (elapsed < 180_000) continue;
-
-      const progress = sessionTracker.getProgressStatus(taskId);
-
-      if (progress.status === "idle" || progress.status === "stalled") {
-        const idleSec = Math.round(progress.idleMs / 1000);
-        const continueCount = this._idleContinueCounts.get(taskId) || 0;
-        const maxIdleContinues = 3;
-
-        if (continueCount >= maxIdleContinues) {
-          // Already sent max continues — don't spam, let it run or timeout naturally
-          continue;
-        }
-
-        const ac = this._slotAbortControllers.get(taskId);
-        if (ac && !ac.signal.aborted) {
-          console.log(
-            `${TAG} WATCHDOG: agent "${slot.taskTitle}" idle for ${idleSec}s (events: ${progress.totalEvents}, edits: ${progress.hasEdits}) — sending CONTINUE signal (${continueCount + 1}/${maxIdleContinues})`,
-          );
-          this._idleContinueCounts.set(taskId, continueCount + 1);
-          ac.abort("idle_continue");
-        }
       }
     }
   }
@@ -805,6 +1183,148 @@ class TaskExecutor {
     }
   }
 
+  async _ensureResolvedProjectId() {
+    if (this._resolvedProjectId) {
+      return this._resolvedProjectId;
+    }
+    if (this.projectId) {
+      this._resolvedProjectId = this.projectId;
+      return this._resolvedProjectId;
+    }
+    try {
+      const projects = await listProjects();
+      if (projects && projects.length > 0) {
+        const wantName = (
+          process.env.PROJECT_NAME ||
+          process.env.VK_PROJECT_NAME ||
+          ""
+        ).toLowerCase();
+        let matched;
+        if (wantName) {
+          matched = projects.find(
+            (p) => (p.name || p.title || "").toLowerCase() === wantName,
+          );
+        }
+        if (matched) {
+          this._resolvedProjectId = matched.id || matched.project_id;
+          console.log(
+            `${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`,
+          );
+        } else {
+          this._resolvedProjectId = projects[0].id || projects[0].project_id;
+          console.log(
+            `${TAG} auto-detected project (first): ${this._resolvedProjectId}`,
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(`${TAG} failed to list projects: ${err.message}`);
+    }
+    return this._resolvedProjectId || null;
+  }
+
+  async _recoverInterruptedInProgressTasks() {
+    if (!this._running) return;
+    if (this._paused) return;
+    if (this._activeSlots.size >= this.maxParallel) return;
+    await ensureThreadRegistryLoaded().catch(() => {
+      /* best effort */
+    });
+
+    const projectId = await this._ensureResolvedProjectId();
+    if (!projectId) return;
+
+    let inProgressTasks = [];
+    try {
+      const fetched = await listTasks(projectId, { status: "inprogress" });
+      if (Array.isArray(fetched)) {
+        inProgressTasks = fetched.filter(
+          (task) => task?.status === "inprogress",
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `${TAG} in-progress recovery fetch failed: ${err.message || err}`,
+      );
+      return;
+    }
+
+    if (!inProgressTasks.length) return;
+
+    // Runtime metadata can outlive crashes. Drop stale records that are no
+    // longer in-progress so new runs get fresh instance IDs and start times.
+    const inProgressIds = new Set(
+      inProgressTasks
+        .map((task) => task?.id || task?.task_id)
+        .filter((id) => !!id),
+    );
+    let prunedRuntime = 0;
+    for (const taskId of Array.from(this._slotRuntimeState.keys())) {
+      if (!inProgressIds.has(taskId) && !this._activeSlots.has(taskId)) {
+        this._slotRuntimeState.delete(taskId);
+        prunedRuntime++;
+      }
+    }
+    if (prunedRuntime > 0) {
+      this._saveRuntimeState();
+    }
+
+    const activeThreads = new Set(
+      getActiveThreads()
+        .map((entry) => String(entry?.taskKey || "").trim())
+        .filter(Boolean),
+    );
+
+    const available = Math.max(0, this.maxParallel - this._activeSlots.size);
+    if (available === 0) return;
+
+    /** @type {Array<Object>} */
+    const resumable = [];
+    let resetToTodo = 0;
+
+    for (const task of inProgressTasks) {
+      const id = task?.id || task?.task_id;
+      if (!id || this._activeSlots.has(id)) continue;
+
+      const ageMs = getTaskAgeMs(task);
+      const hasThread = activeThreads.has(String(id));
+      const isFreshEnough =
+        ageMs === 0 || ageMs <= INPROGRESS_RECOVERY_MAX_AGE_MS;
+      if (hasThread || isFreshEnough) {
+        resumable.push({ ...task, id });
+        continue;
+      }
+
+      try {
+        await updateTaskStatus(id, "todo");
+      } catch {
+        /* best effort */
+      }
+      try {
+        setInternalStatus(id, "todo", "task-executor-recovery");
+      } catch {
+        /* best effort */
+      }
+      this._removeRuntimeSlot(id);
+      resetToTodo++;
+    }
+
+    const toDispatch = resumable.slice(0, available);
+    for (const task of toDispatch) {
+      void this.executeTask(task).catch((err) => {
+        console.error(
+          `${TAG} in-progress recovery executeTask failed for "${task?.title || task?.id}": ${err.message || err}`,
+        );
+      });
+    }
+
+    if (toDispatch.length > 0 || resetToTodo > 0) {
+      console.log(
+        `${TAG} in-progress recovery: resumed ${toDispatch.length}, reset ${resetToTodo} stale task(s) to todo`,
+      );
+    }
+  }
+
   /**
    * Returns the current executor status for monitoring / Telegram.
    * @returns {Object}
@@ -827,6 +1347,8 @@ class TaskExecutor {
         branch: s.branch,
         sdk: s.sdk,
         attempt: s.attempt,
+        agentInstanceId: s.agentInstanceId ?? null,
+        startedAt: s.startedAt,
         runningFor: Math.round((Date.now() - s.startedAt) / 1000),
         status: s.status,
       })),
@@ -890,53 +1412,16 @@ class TaskExecutor {
 
     this._pollInProgress = true;
     try {
-      // Resolve project ID on first poll
-      if (!this._resolvedProjectId) {
-        if (this.projectId) {
-          this._resolvedProjectId = this.projectId;
-        } else {
-          try {
-            const projects = await listProjects();
-            if (projects && projects.length > 0) {
-              // Match by PROJECT_NAME if set, otherwise fall back to first project
-              const wantName = (
-                process.env.PROJECT_NAME ||
-                process.env.VK_PROJECT_NAME ||
-                ""
-              ).toLowerCase();
-              let matched;
-              if (wantName) {
-                matched = projects.find(
-                  (p) => (p.name || p.title || "").toLowerCase() === wantName,
-                );
-              }
-              if (matched) {
-                this._resolvedProjectId = matched.id || matched.project_id;
-                console.log(
-                  `${TAG} matched project by name "${wantName}": ${this._resolvedProjectId}`,
-                );
-              } else {
-                this._resolvedProjectId =
-                  projects[0].id || projects[0].project_id;
-                console.log(
-                  `${TAG} auto-detected project (first): ${this._resolvedProjectId}`,
-                );
-              }
-            } else {
-              console.warn(`${TAG} no projects found — skipping poll`);
-              return;
-            }
-          } catch (err) {
-            console.warn(`${TAG} failed to list projects: ${err.message}`);
-            return;
-          }
-        }
+      const projectId = await this._ensureResolvedProjectId();
+      if (!projectId) {
+        console.warn(`${TAG} no projects found — skipping poll`);
+        return;
       }
 
       // Fetch todo tasks
       let tasks;
       try {
-        tasks = await listTasks(this._resolvedProjectId, { status: "todo" });
+        tasks = await listTasks(projectId, { status: "todo" });
       } catch (err) {
         console.warn(`${TAG} failed to list tasks: ${err.message}`);
         return;
@@ -1045,13 +1530,54 @@ class TaskExecutor {
       resolvedSdk = getPoolSdkName();
     }
 
-    // Set model-related env vars for the agent if complexity routing produced them
-    if (executorProfile?.model && resolvedSdk === "claude") {
-      // Set CLAUDE_MODEL for the claude-shell / claude agent-pool launcher
-      process.env.CLAUDE_MODEL = executorProfile.model;
+    const configuredCopilotModel =
+      normalizeModel(process.env.COPILOT_MODEL) ||
+      normalizeModel(process.env.COPILOT_SDK_MODEL);
+    const configuredClaudeModel =
+      normalizeModel(process.env.CLAUDE_MODEL) ||
+      normalizeModel(process.env.CLAUDE_CODE_MODEL) ||
+      normalizeModel(process.env.ANTHROPIC_MODEL);
+
+    let selectedModel = normalizeModel(executorProfile?.model);
+    if (resolvedSdk === "copilot" && configuredCopilotModel) {
+      if (selectedModel && selectedModel !== configuredCopilotModel) {
+        console.log(
+          `${TAG} overriding complexity model "${selectedModel}" with COPILOT_MODEL="${configuredCopilotModel}" for task "${taskTitle}"`,
+        );
+      }
+      selectedModel = configuredCopilotModel;
+    } else if (resolvedSdk === "claude" && configuredClaudeModel) {
+      if (selectedModel && selectedModel !== configuredClaudeModel) {
+        console.log(
+          `${TAG} overriding complexity model "${selectedModel}" with CLAUDE_MODEL="${configuredClaudeModel}" for task "${taskTitle}"`,
+        );
+      }
+      selectedModel = configuredClaudeModel;
     }
 
     // 1b. Allocate slot
+    const recoveredRuntime =
+      task?.status === "inprogress"
+        ? this._slotRuntimeState.get(taskId) || null
+        : null;
+    const recoveredAgentId = Number(recoveredRuntime?.agentInstanceId || 0);
+    const recoveredStartedAt = Number(recoveredRuntime?.startedAt || 0);
+    const validRecoveredStartedAt =
+      Number.isFinite(recoveredStartedAt) &&
+      recoveredStartedAt > 0 &&
+      recoveredStartedAt <= Date.now();
+
+    let agentInstanceId = null;
+    if (Number.isFinite(recoveredAgentId) && recoveredAgentId > 0) {
+      agentInstanceId = Math.floor(recoveredAgentId);
+      this._nextAgentInstanceId = Math.max(
+        this._nextAgentInstanceId,
+        agentInstanceId + 1,
+      );
+    } else {
+      agentInstanceId = this._nextAgentInstanceId++;
+    }
+
     /** @type {SlotInfo} */
     const slot = {
       taskId,
@@ -1059,7 +1585,8 @@ class TaskExecutor {
       branch,
       worktreePath: null,
       threadKey: taskId,
-      startedAt: Date.now(),
+      startedAt: validRecoveredStartedAt ? recoveredStartedAt : Date.now(),
+      agentInstanceId,
       sdk: resolvedSdk,
       attempt: 0,
       status: "running",
@@ -1067,9 +1594,19 @@ class TaskExecutor {
       complexity: complexityInfo || null,
     };
     this._activeSlots.set(taskId, slot);
+    this._upsertRuntimeSlot(slot);
 
     try {
       this.onTaskStarted?.(task, slot);
+
+      // Fire SessionStart hook
+      executeHooks("SessionStart", {
+        taskId,
+        taskTitle,
+        branch,
+        sdk: slot.sdk || "unknown",
+        slot: slot.index,
+      }).catch(() => {});
 
       // 2. Update task status → "inprogress"
       try {
@@ -1083,6 +1620,26 @@ class TaskExecutor {
       } catch {
         /* best-effort */
       }
+
+      // 2b. Comment on GitHub issue with start info
+      commentOnIssue(
+        task,
+        [
+          `## 🤖 Agent Started`,
+          ``,
+          `| Field | Value |`,
+          `|-------|-------|`,
+          `| **Started** | ${new Date().toISOString()} |`,
+          `| **Branch** | \`${branch}\` |`,
+          `| **SDK** | ${resolvedSdk} |`,
+          `| **Executor** | codex-monitor (internal) |`,
+          executorProfile ? `| **Profile** | ${executorProfile} |` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      ).catch(() => {
+        /* best-effort */
+      });
 
       // 3. Acquire worktree
       let wt;
@@ -1102,6 +1659,7 @@ class TaskExecutor {
           /* best-effort */
         }
         this._activeSlots.delete(taskId);
+        this._removeRuntimeSlot(taskId);
         this.onTaskFailed?.(
           task,
           new Error(`Worktree acquisition failed: ${err.message}`),
@@ -1125,6 +1683,7 @@ class TaskExecutor {
           /* best-effort */
         }
         this._activeSlots.delete(taskId);
+        this._removeRuntimeSlot(taskId);
         this.onTaskFailed?.(
           task,
           new Error("Worktree path invalid or missing"),
@@ -1133,6 +1692,7 @@ class TaskExecutor {
       }
 
       slot.worktreePath = wt.path;
+      this._upsertRuntimeSlot(slot);
 
       // 4. Record pre-execution HEAD hash (to detect if agent made NEW commits)
       const preExecHead =
@@ -1168,6 +1728,7 @@ class TaskExecutor {
         maxRetries: this.maxRetries,
         maxContinues: 3,
         sdk: resolvedSdk !== "auto" ? resolvedSdk : undefined,
+        model: selectedModel || undefined,
         buildRetryPrompt: (lastResult, attempt) =>
           this._buildRetryPrompt(task, lastResult, attempt),
         buildContinuePrompt: (lastResult, attempt) =>
@@ -1229,7 +1790,10 @@ class TaskExecutor {
         (result.continues || 0) < 3
       ) {
         const shouldAutoResume = this._shouldAutoResume(
-          taskId, taskTitle, sessionAnalysis, sessionMessages,
+          taskId,
+          taskTitle,
+          sessionAnalysis,
+          sessionMessages,
         );
         if (shouldAutoResume) {
           console.log(
@@ -1244,7 +1808,9 @@ class TaskExecutor {
           this._slotAbortControllers.set(taskId, resumeAC);
 
           const continuePrompt = this._buildContinuePrompt(
-            task, result, (result.attempts || 1) + 1,
+            task,
+            result,
+            (result.attempts || 1) + 1,
           );
 
           const resumeResult = await execWithRetry(continuePrompt, {
@@ -1254,8 +1820,10 @@ class TaskExecutor {
             maxRetries: 0,
             maxContinues: 1,
             sdk: resolvedSdk !== "auto" ? resolvedSdk : undefined,
-            buildRetryPrompt: (lr, att) => this._buildRetryPrompt(task, lr, att),
-            buildContinuePrompt: (lr, att) => this._buildContinuePrompt(task, lr, att),
+            buildRetryPrompt: (lr, att) =>
+              this._buildRetryPrompt(task, lr, att),
+            buildContinuePrompt: (lr, att) =>
+              this._buildContinuePrompt(task, lr, att),
             onEvent: createAgentLogStreamer(taskId, taskTitle),
             abortController: resumeAC,
             onAbortControllerReplaced: (newAC) => {
@@ -1268,9 +1836,13 @@ class TaskExecutor {
           task._executionResult = resumeResult;
 
           // Re-analyze after resume
-          sessionTracker.endSession(taskId, resumeResult.success ? "completed" : "failed");
+          sessionTracker.endSession(
+            taskId,
+            resumeResult.success ? "completed" : "failed",
+          );
           const newMessages = sessionTracker.getLastMessages(taskId);
-          const newAnalysis = this._errorDetector.analyzeMessageSequence(newMessages);
+          const newAnalysis =
+            this._errorDetector.analyzeMessageSequence(newMessages);
 
           // Re-check for commits
           const postResumeHead =
@@ -1296,6 +1868,7 @@ class TaskExecutor {
 
       // 7. Handle result
       slot.status = validatedResult.success ? "completing" : "failed";
+      this._upsertRuntimeSlot(slot);
       await this._handleTaskResult(task, validatedResult, wt.path, execInfo);
 
       // 7a. Feed back success/failure to executor scheduler for failover tracking
@@ -1315,6 +1888,7 @@ class TaskExecutor {
         console.warn(`${TAG} worktree release warning: ${err.message}`);
       }
       this._activeSlots.delete(taskId);
+      this._removeRuntimeSlot(taskId);
     } catch (err) {
       // Catch-all: ensure slot is always cleaned up
       console.error(
@@ -1336,6 +1910,7 @@ class TaskExecutor {
       }
 
       this._activeSlots.delete(taskId);
+      this._removeRuntimeSlot(taskId);
       this.onTaskFailed?.(task, err);
       this.sendTelegram?.(
         `❌ Task executor error: "${taskTitle}" — ${(err.message || "").slice(0, 200)}`,
@@ -1344,6 +1919,11 @@ class TaskExecutor {
   }
 
   // ── Prompt Building ───────────────────────────────────────────────────────
+
+  _resolveAgentPrompt(key, values, fallbackPrompt) {
+    const template = this._agentPrompts?.[key];
+    return resolvePromptTemplate(template, values, fallbackPrompt);
+  }
 
   /**
    * Build a comprehensive prompt for the agent from task details and repo context.
@@ -1364,7 +1944,7 @@ class TaskExecutor {
       "unknown";
 
     const lines = [
-      `# Task: ${task.title}`,
+      `# ${task.id || task.task_id} — ${task.title}`,
       ``,
       `## Description`,
       task.description ||
@@ -1418,7 +1998,24 @@ class TaskExecutor {
       lines.push(`## Repository Context`, ``, context, ``);
     }
 
-    return lines.join("\n");
+    const fallbackPrompt = lines.join("\n");
+    return this._resolveAgentPrompt(
+      "taskExecutor",
+      {
+        TASK_TITLE: task.title || "Untitled Task",
+        TASK_DESCRIPTION:
+          task.description ||
+          "No description provided. Check the task URL for details.",
+        WORKTREE_PATH: worktreePath,
+        BRANCH: branch,
+        REPO_SLUG: this.repoSlug || "unknown/unknown",
+        TASK_ID: task.id || task.task_id || "unknown",
+        ENDPOINT_PORT: endpointPort,
+        TASK_URL_LINE: taskUrl ? `- URL: ${taskUrl}` : "- URL: (not available)",
+        REPO_CONTEXT: context || "(no repository context available)",
+      },
+      fallbackPrompt,
+    );
   }
 
   /**
@@ -1469,7 +2066,7 @@ class TaskExecutor {
     }
 
     // Default retry prompt
-    return [
+    const fallbackPrompt = [
       `# ERROR RECOVERY — Attempt ${attemptNumber}`,
       ``,
       `Your previous attempt on task "${task.title}" encountered an issue:`,
@@ -1491,6 +2088,22 @@ class TaskExecutor {
       `Original task description:`,
       task.description || "See task URL for details.",
     ].join("\n");
+    return this._resolveAgentPrompt(
+      "taskExecutorRetry",
+      {
+        ATTEMPT_NUMBER: attemptNumber,
+        TASK_TITLE: task.title || "Untitled Task",
+        LAST_ERROR: (
+          lastResult?.error ||
+          lastResult?.output ||
+          "(unknown error)"
+        ).slice(0, 3000),
+        CLASSIFICATION_PATTERN: classification.pattern,
+        CLASSIFICATION_CONFIDENCE: classification.confidence.toFixed(2),
+        TASK_DESCRIPTION: task.description || "See task URL for details.",
+      },
+      fallbackPrompt,
+    );
   }
 
   /**
@@ -1531,7 +2144,7 @@ class TaskExecutor {
     const progress = tracker.getProgressStatus(task.id);
 
     if (progress.hasCommits) {
-      return [
+      const fallbackPrompt = [
         `# CONTINUE — Verify and Push`,
         ``,
         `You were working on "${task.title}" and appear to have stopped.`,
@@ -1541,10 +2154,18 @@ class TaskExecutor {
         `3. If tests fail, fix issues, commit, and push`,
         `4. The task is not done until the push succeeds`,
       ].join("\n");
+      return this._resolveAgentPrompt(
+        "taskExecutorContinueHasCommits",
+        {
+          TASK_TITLE: task.title || "Untitled Task",
+          TASK_DESCRIPTION: task.description || "",
+        },
+        fallbackPrompt,
+      );
     }
 
     if (progress.hasEdits) {
-      return [
+      const fallbackPrompt = [
         `# CONTINUE — Commit and Push`,
         ``,
         `You were working on "${task.title}" and appear to have stopped.`,
@@ -1554,9 +2175,17 @@ class TaskExecutor {
         `3. Stage and commit: git add -A && git commit -m "feat(scope): description"`,
         `4. Push: git push origin HEAD`,
       ].join("\n");
+      return this._resolveAgentPrompt(
+        "taskExecutorContinueHasEdits",
+        {
+          TASK_TITLE: task.title || "Untitled Task",
+          TASK_DESCRIPTION: task.description || "",
+        },
+        fallbackPrompt,
+      );
     }
 
-    return [
+    const fallbackPrompt = [
       `# CONTINUE — Resume Implementation`,
       ``,
       `You were working on "${task.title}" but stopped without making progress.`,
@@ -1574,6 +2203,14 @@ class TaskExecutor {
     ]
       .filter(Boolean)
       .join("\n");
+    return this._resolveAgentPrompt(
+      "taskExecutorContinueNoProgress",
+      {
+        TASK_TITLE: task.title || "Untitled Task",
+        TASK_DESCRIPTION: task.description || "",
+      },
+      fallbackPrompt,
+    );
   }
 
   /**
@@ -1633,6 +2270,15 @@ class TaskExecutor {
     const taskTitle = (task.title || "").slice(0, 50);
     const tag = `${TAG} task "${taskTitle}"`;
 
+    // Fire SessionStop hook
+    executeHooks("SessionStop", {
+      taskId: task.id || task.task_id,
+      taskTitle,
+      success: result.success,
+      attempts: result.attempts,
+      output: (result.output || "").slice(0, 500),
+    }).catch(() => {});
+
     if (result.success) {
       console.log(
         `${tag} completed successfully (${result.attempts} attempt(s))`,
@@ -1681,6 +2327,27 @@ class TaskExecutor {
           /* best-effort */
         }
 
+        // Run TaskComplete blocking validation before PR
+        try {
+          const hookResult = await executeBlockingHooks("TaskComplete", {
+            taskId: task.id || task.task_id,
+            taskTitle: task.title,
+            worktreePath,
+            success: true,
+            hasCommits: true,
+          });
+          if (hookResult?.abort) {
+            console.warn(
+              `${TAG} TaskComplete hook blocked PR: ${hookResult.reason || "unknown reason"}`,
+            );
+            this.sendTelegram?.(
+              `⚠️ TaskComplete hook blocked PR for "${task.title}": ${hookResult.reason || "hook validation failed"}`,
+            );
+          }
+        } catch (hookErr) {
+          console.warn(`${TAG} TaskComplete hook error: ${hookErr.message}`);
+        }
+
         const pr = await this._createPR(task, worktreePath, {
           agentMadeNewCommits,
         });
@@ -1695,6 +2362,21 @@ class TaskExecutor {
           }
           this.sendTelegram?.(
             `✅ Task completed: "${task.title}"\nPR: ${pr.url || pr}`,
+          );
+
+          // Fire PostPR hook
+          executeHooks("PostPR", {
+            taskId: task.id || task.task_id,
+            taskTitle: task.title,
+            prUrl: pr.url || pr,
+            branch: pr.branch,
+          }).catch(() => {});
+
+          // Comment on issue with commit details and PR link
+          this._commentCommitsOnIssue(task, worktreePath, execInfo, pr).catch(
+            () => {
+              /* best-effort */
+            },
           );
 
           // Queue for review handoff — reviewer will identify issues, fix, push, wait for merge
@@ -1745,11 +2427,27 @@ class TaskExecutor {
         this._noCommitCounts.set(task.id, noCommitCount);
         this._saveNoCommitState();
 
-        // Force fresh thread on next attempt — the current thread is clearly not productive
-        try {
-          forceNewThread(task.id, `no-commit completion #${noCommitCount}`);
-        } catch {
-          /* ok */
+        // Only force fresh thread after 2+ consecutive no-commit completions.
+        // First no-commit may be an accidental pause — allow thread resume.
+        const noCommitClassificationForThread = this._errorDetector.classify(
+          result.output || "",
+        );
+        const shouldForceNewOnNoCommit =
+          noCommitCount >= 2 ||
+          noCommitClassificationForThread.pattern === "plan_stuck";
+        if (shouldForceNewOnNoCommit) {
+          try {
+            forceNewThread(
+              task.id,
+              `no-commit #${noCommitCount}${noCommitClassificationForThread.pattern === "plan_stuck" ? " (plan_stuck)" : ""}`,
+            );
+          } catch {
+            /* ok */
+          }
+        } else {
+          console.log(
+            `${TAG} no-commit #${noCommitCount} for "${task.title}" — keeping thread for resume attempt`,
+          );
         }
 
         // Record no-commit attempt in internal store
@@ -1758,10 +2456,7 @@ class TaskExecutor {
             output: result.output,
             hasCommits: false,
           });
-          const noCommitClassification = this._errorDetector.classify(
-            result.output || "",
-          );
-          if (noCommitClassification.pattern === "plan_stuck") {
+          if (noCommitClassificationForThread.pattern === "plan_stuck") {
             recordErrorPattern(task.id, "plan_stuck");
           }
         } catch {
@@ -1807,23 +2502,41 @@ class TaskExecutor {
       console.warn(
         `${tag} failed after ${result.attempts} attempt(s): ${result.error}`,
       );
-      // Invalidate thread so next attempt starts fresh
-      try {
-        forceNewThread(
-          task.id,
-          `task failed: ${(result.error || "").slice(0, 100)}`,
-        );
-      } catch {
-        /* ok */
-      }
       this._taskCooldowns.set(task.id, Date.now());
 
-      // Classify the error
+      // Classify the error FIRST to decide whether to force a new thread
       const classification = this._errorDetector.classify(
         result.output || "",
         result.error || "",
       );
       const recovery = this._errorDetector.recordError(task.id, classification);
+
+      // Only force fresh thread for errors that corrupt thread state or
+      // indicate irrecoverable session issues. For build/git/plan errors,
+      // keep the same thread so the agent can fix its own mistakes.
+      const THREAD_KILLING_ERRORS = new Set([
+        "rate_limit",
+        "api_error",
+        "token_overflow",
+        "session_expired",
+      ]);
+      const shouldForceNew =
+        THREAD_KILLING_ERRORS.has(classification.pattern) ||
+        recovery.errorCount >= 2; // 2+ consecutive errors → always fresh thread
+      if (shouldForceNew) {
+        try {
+          forceNewThread(
+            task.id,
+            `${classification.pattern} (count=${recovery.errorCount}): ${(result.error || "").slice(0, 80)}`,
+          );
+        } catch {
+          /* ok */
+        }
+      } else {
+        console.log(
+          `${TAG} task "${task.title || task.id}" failed (${classification.pattern}, count=${recovery.errorCount}) — keeping thread for resume`,
+        );
+      }
 
       // Record in internal store
       try {
@@ -2076,6 +2789,14 @@ class TaskExecutor {
    */
   _pushBranch(worktreePath, branch) {
     try {
+      // Execute PrePush hook (blocking — can abort push)
+      // Note: executeBlockingHooks is async but _pushBranch is sync.
+      // We fire-and-forget here since blocking would require refactoring to async.
+      executeHooks("PrePush", {
+        worktreePath,
+        branch,
+      }).catch(() => {});
+
       // First rebase onto upstream main to keep agent's work and stay up to date.
       // We use rebase instead of merge to avoid polluting the branch with merge commits
       // that can wipe out agent work (as --strategy-option=theirs did before).
@@ -2174,11 +2895,13 @@ class TaskExecutor {
 
   /**
    * Enable GitHub auto-merge on a PR so it merges automatically when CI passes.
+   * When direct merge succeeds (no required checks), also closes the linked issue.
    * @param {string|number} prNumber
    * @param {string} worktreePath
+   * @param {Object} [task] Optional task — used to close linked issue on direct merge.
    * @private
    */
-  _enableAutoMerge(prNumber, worktreePath) {
+  _enableAutoMerge(prNumber, worktreePath, task = null) {
     try {
       const result = spawnSync(
         "gh",
@@ -2216,6 +2939,12 @@ class TaskExecutor {
         );
         if (directResult.status === 0) {
           console.log(`${TAG} ✅ directly merged PR #${prNumber}`);
+          // PR merged → close the linked GitHub issue
+          if (task) {
+            this._closeIssueAfterMerge(task, prNumber).catch(() => {
+              /* best-effort */
+            });
+          }
         } else {
           const errMsg = (directResult.stderr || "").trim();
           console.warn(
@@ -2230,6 +2959,109 @@ class TaskExecutor {
       }
     } catch (err) {
       console.warn(`${TAG} auto-merge error: ${err.message}`);
+    }
+  }
+
+  /**
+   * Post a comment on the linked GitHub issue with commit details and PR info.
+   * @param {Object} task
+   * @param {string} worktreePath
+   * @param {Object} execInfo  Contains preExecHead, postExecHead
+   * @param {Object} pr        Contains url, branch, prNumber
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _commentCommitsOnIssue(task, worktreePath, execInfo, pr) {
+    if (!isGitHubBackend(task)) return;
+    const issueNumber = getGitHubIssueNumber(task);
+    if (!issueNumber) return;
+
+    const { preExecHead, postExecHead } = execInfo || {};
+    const commits = getCommitDetails(
+      worktreePath,
+      preExecHead,
+      postExecHead || "HEAD",
+    );
+    const diffStat = getChangedFilesSummary(
+      worktreePath,
+      preExecHead,
+      postExecHead || "HEAD",
+    );
+
+    const lines = [
+      `## 📝 Agent Completed — Commits & PR`,
+      ``,
+      `**PR:** ${pr.url || `#${pr.prNumber}`}`,
+      `**Branch:** \`${pr.branch}\``,
+      `**Completed:** ${new Date().toISOString()}`,
+      ``,
+    ];
+
+    if (commits.length > 0) {
+      lines.push(`### Commits (${commits.length})`, ``);
+      for (const c of commits.slice(0, 30)) {
+        lines.push(`- \`${c.sha.slice(0, 8)}\` ${c.title}`);
+        if (c.files.length > 0 && c.files.length <= 15) {
+          for (const f of c.files) {
+            lines.push(`  - ${f}`);
+          }
+        } else if (c.files.length > 15) {
+          lines.push(`  - _${c.files.length} files changed_`);
+        }
+      }
+      if (commits.length > 30) {
+        lines.push(``, `_...and ${commits.length - 30} more commits_`);
+      }
+    }
+
+    if (diffStat) {
+      lines.push(``, `### Diff Summary`, `\`\`\``, diffStat, `\`\`\``);
+    }
+
+    await addComment(issueNumber, lines.join("\n"));
+  }
+
+  /**
+   * Close the linked GitHub issue after a PR is merged.
+   * Posts a completion comment and updates the task status to done.
+   * @param {Object} task
+   * @param {string|number} prNumber
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _closeIssueAfterMerge(task, prNumber) {
+    if (!isGitHubBackend(task)) return;
+    const issueNumber = getGitHubIssueNumber(task);
+    if (!issueNumber) return;
+
+    // Comment on issue first, then close via status update
+    await commentOnIssue(
+      task,
+      [
+        `## ✅ Issue Resolved`,
+        ``,
+        `PR #${prNumber} has been merged. Closing this issue.`,
+        ``,
+        `| Field | Value |`,
+        `|-------|-------|`,
+        `| **Merged At** | ${new Date().toISOString()} |`,
+        `| **PR** | #${prNumber} |`,
+      ].join("\n"),
+    );
+
+    try {
+      if (task?.id) {
+        setInternalStatus(task.id, "done", "task-executor");
+        updateInternalTask(task.id, { externalStatus: "done" });
+      }
+      await updateTaskStatus(issueNumber, "done");
+      console.log(
+        `${TAG} closed issue #${issueNumber} after PR #${prNumber} merge`,
+      );
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to close issue #${issueNumber}: ${err.message}`,
+      );
     }
   }
 
@@ -2256,17 +3088,39 @@ class TaskExecutor {
         return null;
       }
 
+      // Fire PrePR hook
+      try {
+        const prHookResult = await executeBlockingHooks("PrePR", {
+          taskId: task.id || task.task_id,
+          taskTitle: task.title,
+          branch,
+          worktreePath,
+        });
+        if (prHookResult?.abort) {
+          console.warn(
+            `${TAG} PrePR hook blocked PR creation: ${prHookResult.reason || "unknown"}`,
+          );
+          return null;
+        }
+      } catch (hookErr) {
+        console.warn(`${TAG} PrePR hook error: ${hookErr.message}`);
+      }
+
       const safety = evaluateBranchSafetyForPush(worktreePath, {
         baseBranch: "main",
         remote: "origin",
       });
       if (!safety.safe) {
         const reason = safety.reason || "unsafe branch diff";
-        console.error(`${TAG} branch safety guard blocked ${branch}: ${reason}`);
+        console.error(
+          `${TAG} branch safety guard blocked ${branch}: ${reason}`,
+        );
         this.sendTelegram?.(
           `🚨 Branch safety guard blocked push/PR for ${branch}: ${reason}`,
         );
-        const err = new Error(`Branch safety guard blocked ${branch}: ${reason}`);
+        const err = new Error(
+          `Branch safety guard blocked ${branch}: ${reason}`,
+        );
         err.name = "BranchSafetyError";
         throw err;
       }
@@ -2329,7 +3183,7 @@ class TaskExecutor {
                 `${TAG} Open PR #${existingPrNumber} already exists for branch ${branch}`,
               );
               this._pushBranch(worktreePath, branch);
-              this._enableAutoMerge(existingPrNumber, worktreePath);
+              this._enableAutoMerge(existingPrNumber, worktreePath, task);
               return { url: existingPrUrl, branch, prNumber: existingPrNumber };
             }
           }
@@ -2480,7 +3334,7 @@ class TaskExecutor {
 
       // ── Step 3: Enable auto-merge ──────────────────────────────────────
       if (prNumber) {
-        this._enableAutoMerge(prNumber, worktreePath);
+        this._enableAutoMerge(prNumber, worktreePath, task);
       }
 
       return { url: prUrl, branch, prNumber };
@@ -2522,6 +3376,13 @@ export function loadExecutorOptionsFromConfig() {
 
   const envMode = (process.env.EXECUTOR_MODE || "").toLowerCase();
   const configExec = config.internalExecutor || config.taskExecutor || {};
+  const reviewAgentRaw = process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
+  const reviewAgentEnabled =
+    reviewAgentRaw !== undefined && String(reviewAgentRaw).trim() !== ""
+      ? !["0", "false", "no", "off"].includes(
+          String(reviewAgentRaw).trim().toLowerCase(),
+        )
+      : configExec.reviewAgentEnabled !== false;
 
   return {
     mode: envMode || configExec.mode || "vk",
@@ -2545,8 +3406,20 @@ export function loadExecutorOptionsFromConfig() {
     autoCreatePr: configExec.autoCreatePr !== false,
     projectId:
       process.env.INTERNAL_EXECUTOR_PROJECT_ID || configExec.projectId || null,
+    reviewAgentEnabled,
+    reviewMaxConcurrent: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
+        configExec.reviewMaxConcurrent ||
+        2,
+    ),
+    reviewTimeoutMs: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
+        configExec.reviewTimeoutMs ||
+        300000,
+    ),
     repoRoot: config.repoRoot || process.cwd(),
     repoSlug: config.repoSlug || "",
+    agentPrompts: config.agentPrompts || {},
   };
 }
 
@@ -2573,7 +3446,14 @@ export function isInternalExecutorEnabled() {
 }
 
 /** Valid executor modes — "disabled"/"none"/"monitor-only" stop all task execution. */
-const VALID_EXECUTOR_MODES = ["vk", "internal", "hybrid", "disabled", "none", "monitor-only"];
+const VALID_EXECUTOR_MODES = [
+  "vk",
+  "internal",
+  "hybrid",
+  "disabled",
+  "none",
+  "monitor-only",
+];
 const DISABLED_MODES = new Set(["disabled", "none", "monitor-only"]);
 
 /**

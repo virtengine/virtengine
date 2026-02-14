@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
@@ -51,8 +52,8 @@ func NewFileStorage(config FileStorageConfig) (*FileStorage, error) {
 	}
 
 	// Validate directory path to prevent traversal
-	if strings.Contains(config.Directory, "\x00") {
-		return nil, ErrInvalidConfig.Wrap("directory path contains null byte")
+	if err := security.ValidateCLIPath(config.Directory); err != nil {
+		return nil, ErrInvalidConfig.Wrapf("invalid directory path: %v", err)
 	}
 
 	// Clean and resolve to absolute path
@@ -104,7 +105,10 @@ func (f *FileStorage) StoreKey(ctx context.Context, keyInfo *veidtypes.SignerKey
 		return ErrStorageError.Wrap("storage is closed")
 	}
 
-	filename := f.keyFilePath(keyInfo.KeyID)
+	filename, err := f.safeKeyPath(keyInfo.KeyID)
+	if err != nil {
+		return ErrStorageError.Wrapf("invalid key path: %v", err)
+	}
 
 	// Check if file already exists
 	if _, err := os.Stat(filename); err == nil {
@@ -146,7 +150,7 @@ func (f *FileStorage) StoreKey(ctx context.Context, keyInfo *veidtypes.SignerKey
 	}
 
 	// Write to file
-	// #nosec G304 -- filename is constructed from validated keyID via keyFilePath()
+	// #nosec G304 -- filename validated via safeKeyPath
 	if err := os.WriteFile(filename, data, os.FileMode(f.config.FilePermissions)); err != nil {
 		return ErrStorageError.Wrapf("failed to write key file: %v", err)
 	}
@@ -282,9 +286,12 @@ func (f *FileStorage) UpdateKeyState(ctx context.Context, keyID string, state ve
 		return ErrStorageError.Wrap("storage is closed")
 	}
 
-	filename := f.keyFilePath(keyID)
+	filename, err := f.safeKeyPath(keyID)
+	if err != nil {
+		return ErrStorageError.Wrapf("invalid key path: %v", err)
+	}
 
-	// #nosec G304 -- filename is constructed from validated keyID via keyFilePath()
+	// #nosec G304 -- filename validated via safeKeyPath
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -321,7 +328,10 @@ func (f *FileStorage) DeleteKey(ctx context.Context, keyID string) error {
 		return ErrStorageError.Wrap("storage is closed")
 	}
 
-	filename := f.keyFilePath(keyID)
+	filename, err := f.safeKeyPath(keyID)
+	if err != nil {
+		return ErrStorageError.Wrapf("invalid key path: %v", err)
+	}
 
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return ErrKeyNotFound.Wrapf("key ID: %s", keyID)
@@ -382,36 +392,19 @@ func (f *FileStorage) keyFilePath(keyID string) string {
 	return filepath.Join(f.config.Directory, safeKeyID+keyFileExtension)
 }
 
-// validateKeyPath ensures a path is within the storage directory
-func (f *FileStorage) validateKeyPath(path string) error {
-	cleanPath := filepath.Clean(path)
-	absPath, err := filepath.Abs(cleanPath)
-	if err != nil {
-		return fmt.Errorf("cannot resolve path: %w", err)
-	}
-
-	absDir, err := filepath.Abs(f.config.Directory)
-	if err != nil {
-		return fmt.Errorf("cannot resolve directory: %w", err)
-	}
-
-	// Ensure path is within storage directory
-	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) && absPath != absDir {
-		return fmt.Errorf("path %s is outside storage directory", path)
-	}
-
-	return nil
+// safeKeyPath validates and returns a clean path within the storage directory.
+func (f *FileStorage) safeKeyPath(keyID string) (string, error) {
+	filename := f.keyFilePath(keyID)
+	return security.CleanPathWithinBase(f.config.Directory, filename)
 }
 
 func (f *FileStorage) readKeyFile(keyID string) (*encryptedKeyFile, error) {
-	filename := f.keyFilePath(keyID)
-
-	// Validate path before reading
-	if err := f.validateKeyPath(filename); err != nil {
+	filename, err := f.safeKeyPath(keyID)
+	if err != nil {
 		return nil, ErrStorageError.Wrapf("invalid key path: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Clean(filename)) // #nosec G304 -- path validated above
+	data, err := os.ReadFile(filename) // #nosec G304 -- filename validated via safeKeyPath
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrKeyNotFound.Wrapf("key ID: %s", keyID)

@@ -5,7 +5,7 @@ function runGit(args, cwd, timeout = 15_000) {
     cwd,
     encoding: "utf8",
     timeout,
-    shell: process.platform === "win32",
+    shell: false,
   });
 }
 
@@ -40,6 +40,43 @@ function getNumstat(cwd, rangeSpec) {
   return { files, inserted, deleted };
 }
 
+function isSafeGitBranchName(rawBranch) {
+  const branch = String(rawBranch || "").trim();
+  if (!branch) return false;
+
+  // Disallow anything that looks like a git option
+  if (branch.startsWith("-")) return false;
+
+  // Disallow whitespace and obvious ref/metacharacters that can change semantics
+  if (
+    /[\s]/.test(branch) ||
+    branch.includes("..") ||
+    branch.includes(":") ||
+    branch.includes("~") ||
+    branch.includes("^") ||
+    branch.includes("?") ||
+    branch.includes("*") ||
+    branch.includes("[") ||
+    branch.includes("\\")
+  ) {
+    return false;
+  }
+
+  // Disallow URL-like or SSH-style prefixes to avoid transport/URL interpretation
+  const lower = branch.toLowerCase();
+  if (
+    lower.startsWith("http://") ||
+    lower.startsWith("https://") ||
+    lower.startsWith("ssh://") ||
+    lower.startsWith("git@") ||
+    lower.startsWith("file://")
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export function normalizeBaseBranch(baseBranch = "main", remote = "origin") {
   let branch = String(baseBranch || "main").trim();
   if (!branch) branch = "main";
@@ -52,6 +89,11 @@ export function normalizeBaseBranch(baseBranch = "main", remote = "origin") {
   }
 
   if (!branch) branch = "main";
+
+  if (!isSafeGitBranchName(branch)) {
+    throw new Error(`Invalid base branch name: ${branch}`);
+  }
+
   return { branch, remoteRef: `${remote}/${branch}` };
 }
 

@@ -16,7 +16,13 @@
  */
 
 import { resolve, dirname } from "node:path";
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+} from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fork, spawn } from "node:child_process";
 import os from "node:os";
@@ -42,6 +48,7 @@ function showHelp() {
 
   COMMANDS
     --setup                     Run the interactive setup wizard
+    --doctor                    Validate codex-monitor .env/config setup
     --help                      Show this help
     --version                   Show version
     --update                    Check for and install latest version
@@ -75,9 +82,30 @@ function showHelp() {
     --no-telegram-bot           Disable the interactive Telegram bot
     --telegram-commands         Enable monitor-side Telegram polling (advanced)
 
+  WHATSAPP
+    --whatsapp-auth             Run WhatsApp authentication (QR code mode)
+    --whatsapp-auth --pairing-code  Authenticate via pairing code instead of QR
+    Tip: if WHATSAPP_CHAT_ID is unknown, leave it blank, run monitor, send one
+         message from target chat, then copy jid from logs and set it in .env.
+
+  CONTAINERS
+    Container support is configured via environment variables:
+      CONTAINER_ENABLED=1       Enable container isolation for agent execution
+      CONTAINER_RUNTIME=docker  Runtime to use (docker|podman|container)
+
   VIBE-KANBAN
     --no-vk-spawn               Don't auto-spawn Vibe-Kanban
     --vk-ensure-interval <ms>   VK health check interval (default: 60000)
+
+  STARTUP SERVICE
+    --enable-startup             Register codex-monitor to auto-start on login
+    --disable-startup           Remove codex-monitor from startup services
+    --startup-status            Check if startup service is installed
+
+  SENTINEL
+    --sentinel                  Start telegram-sentinel in companion mode
+    --sentinel-stop             Stop a running sentinel
+    --sentinel-status           Show sentinel status
 
   FILE WATCHING
     --no-watch                  Disable file watching for auto-restart
@@ -144,6 +172,114 @@ function showHelp() {
 
 const PID_FILE = resolve(__dirname, ".cache", "codex-monitor.pid");
 const DAEMON_LOG = resolve(__dirname, "logs", "daemon.log");
+const SENTINEL_PID_FILE = resolve(__dirname, ".cache", "telegram-sentinel.pid");
+const SENTINEL_SCRIPT_PATH = fileURLToPath(
+  new URL("./telegram-sentinel.mjs", import.meta.url),
+);
+const IS_DAEMON_CHILD =
+  args.includes("--daemon-child") || process.env.CODEX_MONITOR_DAEMON === "1";
+const DAEMON_RESTART_DELAY_MS = Math.max(
+  1000,
+  Number(process.env.CODEX_MONITOR_DAEMON_RESTART_DELAY_MS || 5000) || 5000,
+);
+const DAEMON_MAX_RESTARTS = Math.max(
+  0,
+  Number(process.env.CODEX_MONITOR_DAEMON_MAX_RESTARTS || 0) || 0,
+);
+let daemonRestartCount = 0;
+
+function isProcessAlive(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readAlivePid(pidFile) {
+  try {
+    if (!existsSync(pidFile)) return null;
+    const raw = readFileSync(pidFile, "utf8").trim();
+    const pid = Number(raw);
+    if (!Number.isFinite(pid) || pid <= 0) return null;
+    return isProcessAlive(pid) ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseBoolEnv(val, fallback = false) {
+  if (val == null || String(val).trim() === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(val).toLowerCase());
+}
+
+function sleep(ms) {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
+async function runSentinelCli(flag) {
+  return await new Promise((resolveExit) => {
+    const child = spawn(process.execPath, [SENTINEL_SCRIPT_PATH, flag], {
+      stdio: "inherit",
+      env: { ...process.env },
+      cwd: process.cwd(),
+    });
+    child.on("error", () => resolveExit(1));
+    child.on("exit", (code) => resolveExit(code ?? 1));
+  });
+}
+
+async function ensureSentinelRunning(options = {}) {
+  const { quiet = false } = options;
+  const existing = readAlivePid(SENTINEL_PID_FILE);
+  if (existing) {
+    if (!quiet) {
+      console.log(`  telegram-sentinel already running (PID ${existing})`);
+    }
+    return { ok: true, pid: existing, alreadyRunning: true };
+  }
+
+  const child = spawn(process.execPath, [SENTINEL_SCRIPT_PATH], {
+    detached: true,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      CODEX_MONITOR_SENTINEL_COMPANION: "1",
+    },
+    cwd: process.cwd(),
+  });
+  child.unref();
+
+  const spawnedPid = child.pid;
+  if (!spawnedPid) {
+    return { ok: false, error: "sentinel spawn returned no PID" };
+  }
+
+  const timeoutAt = Date.now() + 5000;
+  while (Date.now() < timeoutAt) {
+    await sleep(200);
+    const pid = readAlivePid(SENTINEL_PID_FILE);
+    if (pid) {
+      if (!quiet) {
+        console.log(`  telegram-sentinel started (PID ${pid})`);
+      }
+      return { ok: true, pid, alreadyRunning: false };
+    }
+    if (!isProcessAlive(spawnedPid)) {
+      return {
+        ok: false,
+        error: "telegram-sentinel exited during startup",
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "timed out waiting for telegram-sentinel to become healthy",
+  };
+}
 
 function getDaemonPid() {
   try {
@@ -151,19 +287,32 @@ function getDaemonPid() {
     const pid = parseInt(readFileSync(PID_FILE, "utf8").trim(), 10);
     if (isNaN(pid)) return null;
     // Check if process is alive
-    try { process.kill(pid, 0); return pid; } catch { return null; }
-  } catch { return null; }
+    try {
+      process.kill(pid, 0);
+      return pid;
+    } catch {
+      return null;
+    }
+  } catch {
+    return null;
+  }
 }
 
 function writePidFile(pid) {
   try {
     mkdirSync(dirname(PID_FILE), { recursive: true });
     writeFileSync(PID_FILE, String(pid), "utf8");
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 }
 
 function removePidFile() {
-  try { if (existsSync(PID_FILE)) unlinkSync(PID_FILE); } catch { /* ok */ }
+  try {
+    if (existsSync(PID_FILE)) unlinkSync(PID_FILE);
+  } catch {
+    /* ok */
+  }
 }
 
 function startDaemon() {
@@ -175,19 +324,27 @@ function startDaemon() {
   }
 
   // Ensure log directory exists
-  try { mkdirSync(dirname(DAEMON_LOG), { recursive: true }); } catch { /* ok */ }
+  try {
+    mkdirSync(dirname(DAEMON_LOG), { recursive: true });
+  } catch {
+    /* ok */
+  }
 
-  const child = spawn(process.execPath, [
-    "--max-old-space-size=4096",
-    fileURLToPath(new URL("./cli.mjs", import.meta.url)),
-    ...process.argv.slice(2).filter(a => a !== "--daemon" && a !== "-d"),
-    "--daemon-child",
-  ], {
-    detached: true,
-    stdio: "ignore",
-    env: { ...process.env, CODEX_MONITOR_DAEMON: "1" },
-    cwd: process.cwd(),
-  });
+  const child = spawn(
+    process.execPath,
+    [
+      "--max-old-space-size=4096",
+      fileURLToPath(new URL("./cli.mjs", import.meta.url)),
+      ...process.argv.slice(2).filter((a) => a !== "--daemon" && a !== "-d"),
+      "--daemon-child",
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env, CODEX_MONITOR_DAEMON: "1" },
+      cwd: process.cwd(),
+    },
+  );
 
   child.unref();
   writePidFile(child.pid);
@@ -220,14 +377,20 @@ function stopDaemon() {
     // Wait briefly for graceful shutdown
     let tries = 0;
     const check = () => {
-      try { process.kill(pid, 0); } catch { 
+      try {
+        process.kill(pid, 0);
+      } catch {
         removePidFile();
         console.log("  ✓ Daemon stopped.");
         process.exit(0);
       }
       if (++tries > 10) {
         console.log("  Sending SIGKILL...");
-        try { process.kill(pid, "SIGKILL"); } catch { /* ok */ }
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          /* ok */
+        }
         removePidFile();
         console.log("  ✓ Daemon killed.");
         process.exit(0);
@@ -266,8 +429,33 @@ async function main() {
     process.exit(0);
   }
 
+  // Handle --doctor
+  if (args.includes("--doctor") || args.includes("doctor")) {
+    const { runConfigDoctor, formatConfigDoctorReport } =
+      await import("./config-doctor.mjs");
+    const result = runConfigDoctor();
+    console.log(formatConfigDoctorReport(result));
+    process.exit(result.ok ? 0 : 1);
+  }
+
+  // Handle sentinel controls
+  if (args.includes("--sentinel-stop")) {
+    process.exit(await runSentinelCli("--stop"));
+  }
+  if (args.includes("--sentinel-status")) {
+    process.exit(await runSentinelCli("--status"));
+  }
+
   // Handle --daemon
   if (args.includes("--daemon") || args.includes("-d")) {
+    const { shouldRunSetup, runSetup } = await import("./setup.mjs");
+    if (shouldRunSetup()) {
+      console.log(
+        "\n  🚀 First run detected — setup is required before daemon mode.\n",
+      );
+      await runSetup();
+      console.log("\n  Setup complete. Starting daemon...\n");
+    }
     startDaemon();
     return;
   }
@@ -281,16 +469,88 @@ async function main() {
   }
 
   // Write PID file if running as daemon child
-  if (args.includes("--daemon-child") || process.env.CODEX_MONITOR_DAEMON === "1") {
+  if (
+    args.includes("--daemon-child") ||
+    process.env.CODEX_MONITOR_DAEMON === "1"
+  ) {
     writePidFile(process.pid);
     // Redirect console to log file on daemon child
     const { createWriteStream } = await import("node:fs");
     const logStream = createWriteStream(DAEMON_LOG, { flags: "a" });
     const origStdout = process.stdout.write.bind(process.stdout);
     const origStderr = process.stderr.write.bind(process.stderr);
-    process.stdout.write = (chunk, ...a) => { logStream.write(chunk); return origStdout(chunk, ...a); };
-    process.stderr.write = (chunk, ...a) => { logStream.write(chunk); return origStderr(chunk, ...a); };
-    console.log(`\n[daemon] codex-monitor started at ${new Date().toISOString()} (PID ${process.pid})`);
+    process.stdout.write = (chunk, ...a) => {
+      logStream.write(chunk);
+      return origStdout(chunk, ...a);
+    };
+    process.stderr.write = (chunk, ...a) => {
+      logStream.write(chunk);
+      return origStderr(chunk, ...a);
+    };
+    console.log(
+      `\n[daemon] codex-monitor started at ${new Date().toISOString()} (PID ${process.pid})`,
+    );
+  }
+
+  const sentinelRequested =
+    args.includes("--sentinel") ||
+    parseBoolEnv(process.env.CODEX_MONITOR_SENTINEL_AUTO_START, false);
+  if (sentinelRequested) {
+    const sentinel = await ensureSentinelRunning({ quiet: false });
+    if (!sentinel.ok) {
+      const mode = args.includes("--sentinel")
+        ? "requested by --sentinel"
+        : "requested by CODEX_MONITOR_SENTINEL_AUTO_START";
+      console.error(
+        `  ✖ Failed to start telegram-sentinel (${mode}): ${sentinel.error}`,
+      );
+      process.exit(1);
+    }
+  }
+
+  // Handle --enable-startup / --disable-startup / --startup-status
+  if (args.includes("--enable-startup")) {
+    const { installStartupService, getStartupMethodName } =
+      await import("./startup-service.mjs");
+    const result = await installStartupService({ daemon: true });
+    if (result.success) {
+      console.log(`  \u2705 Startup service installed via ${result.method}`);
+      if (result.path) console.log(`     Path: ${result.path}`);
+      if (result.name) console.log(`     Name: ${result.name}`);
+      console.log(`\n  codex-monitor will auto-start on login.`);
+    } else {
+      console.error(
+        `  \u274c Failed to install startup service: ${result.error}`,
+      );
+    }
+    process.exit(result.success ? 0 : 1);
+  }
+  if (args.includes("--disable-startup")) {
+    const { removeStartupService } = await import("./startup-service.mjs");
+    const result = await removeStartupService();
+    if (result.success) {
+      console.log(`  \u2705 Startup service removed (${result.method})`);
+    } else {
+      console.error(
+        `  \u274c Failed to remove startup service: ${result.error}`,
+      );
+    }
+    process.exit(result.success ? 0 : 1);
+  }
+  if (args.includes("--startup-status")) {
+    const { getStartupStatus } = await import("./startup-service.mjs");
+    const status = getStartupStatus();
+    if (status.installed) {
+      console.log(`  Startup service: installed (${status.method})`);
+      if (status.name) console.log(`  Name: ${status.name}`);
+      if (status.path) console.log(`  Path: ${status.path}`);
+      if (status.running !== undefined)
+        console.log(`  Running: ${status.running ? "yes" : "no"}`);
+    } else {
+      console.log(`  Startup service: not installed`);
+      console.log(`  Run 'codex-monitor --enable-startup' to register.`);
+    }
+    process.exit(0);
   }
 
   // Handle --update (force update)
@@ -324,6 +584,14 @@ async function main() {
   if (args.includes("--setup") || args.includes("setup")) {
     const { runSetup } = await import("./setup.mjs");
     await runSetup();
+    process.exit(0);
+  }
+
+  // Handle --whatsapp-auth
+  if (args.includes("--whatsapp-auth") || args.includes("whatsapp-auth")) {
+    const mode = args.includes("--pairing-code") ? "pairing-code" : "qr";
+    const { runWhatsAppAuth } = await import("./whatsapp-channel.mjs");
+    await runWhatsAppAuth(mode);
     process.exit(0);
   }
 
@@ -376,7 +644,8 @@ function readEnvCredentials() {
   return vars;
 }
 
-async function sendCrashNotification(exitCode, signal) {
+async function sendCrashNotification(exitCode, signal, options = {}) {
+  const { autoRestartInMs = 0, restartAttempt = 0, maxRestarts = 0 } = options;
   const env = readEnvCredentials();
   const token = env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chatId = env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
@@ -386,12 +655,23 @@ async function sendCrashNotification(exitCode, signal) {
   const host = os.hostname();
   const tag = project ? `[${project}]` : "";
   const reason = signal ? `signal ${signal}` : `exit code ${exitCode}`;
+  const isAutoRestart = Number(autoRestartInMs) > 0;
+  const restartLine = isAutoRestart
+    ? [
+        `Auto-restart scheduled in ${Math.max(1, Math.round(autoRestartInMs / 1000))}s.`,
+        restartAttempt > 0
+          ? `Restart attempt: ${restartAttempt}${maxRestarts > 0 ? `/${maxRestarts}` : ""}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "Monitor is no longer running. Manual restart required.";
   const text =
     `🔥 *CRASH* ${tag} codex-monitor v${VERSION} died unexpectedly\n` +
     `Host: \`${host}\`\n` +
     `Reason: \`${reason}\`\n` +
     `Time: ${new Date().toISOString()}\n\n` +
-    `Monitor is no longer running. Manual restart required.`;
+    restartLine;
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
   try {
@@ -435,15 +715,46 @@ function runMonitor() {
       } else {
         const exitCode = code ?? (signal ? 1 : 0);
         // 4294967295 (0xFFFFFFFF / -1 signed) = OS killed the process (OOM, external termination)
-        // Auto-restart after a cooldown instead of treating as a fatal crash
         const isOSKill = exitCode === 4294967295 || exitCode === -1;
-        if (isOSKill && !gracefulShutdown) {
+        const shouldAutoRestart =
+          !gracefulShutdown &&
+          (isOSKill || (IS_DAEMON_CHILD && exitCode !== 0));
+        if (shouldAutoRestart) {
+          daemonRestartCount += 1;
+          const delayMs = isOSKill ? 5000 : DAEMON_RESTART_DELAY_MS;
+          if (
+            IS_DAEMON_CHILD &&
+            DAEMON_MAX_RESTARTS > 0 &&
+            daemonRestartCount > DAEMON_MAX_RESTARTS
+          ) {
+            console.error(
+              `\n  ✖ Monitor crashed too many times (${daemonRestartCount - 1} restarts, max ${DAEMON_MAX_RESTARTS}).`,
+            );
+            sendCrashNotification(exitCode, signal).finally(() =>
+              process.exit(exitCode),
+            );
+            return;
+          }
+          const reasonLabel = signal
+            ? `signal ${signal}`
+            : `exit code ${exitCode}`;
+          const attemptLabel =
+            IS_DAEMON_CHILD && DAEMON_MAX_RESTARTS > 0
+              ? `${daemonRestartCount}/${DAEMON_MAX_RESTARTS}`
+              : `${daemonRestartCount}`;
           console.error(
-            `\n  ⚠ Monitor killed by OS (exit ${exitCode}) — likely OOM. Restarting in 5s...`,
+            `\n  ⚠ Monitor exited (${reasonLabel}) — auto-restarting in ${Math.max(1, Math.round(delayMs / 1000))}s${IS_DAEMON_CHILD ? ` [attempt ${attemptLabel}]` : ""}...`,
           );
-          sendCrashNotification(exitCode, signal).catch(() => {});
-          setTimeout(() => resolve(runMonitor()), 5000);
-        } else if (exitCode !== 0 && !gracefulShutdown) {
+          sendCrashNotification(exitCode, signal, {
+            autoRestartInMs: delayMs,
+            restartAttempt: daemonRestartCount,
+            maxRestarts: IS_DAEMON_CHILD ? DAEMON_MAX_RESTARTS : 0,
+          }).catch(() => {});
+          setTimeout(() => resolve(runMonitor()), delayMs);
+          return;
+        }
+
+        if (exitCode !== 0 && !gracefulShutdown) {
           console.error(
             `\n  ✖ Monitor crashed (${signal ? `signal ${signal}` : `exit code ${exitCode}`}) — sending crash notification...`,
           );
@@ -451,6 +762,7 @@ function runMonitor() {
             process.exit(exitCode),
           );
         } else {
+          daemonRestartCount = 0;
           process.exit(exitCode);
         }
       }

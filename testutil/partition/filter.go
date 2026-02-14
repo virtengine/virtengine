@@ -2,7 +2,7 @@ package partition
 
 import (
 	"context"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation uses weak random for non-security network conditions
 	"sync"
 	"time"
 )
@@ -60,7 +60,7 @@ func NewMessageFilter() *MessageFilter {
 		rules:            make(map[NodePair]FilterRule),
 		messageHistory:   make(map[string]time.Time),
 		historyRetention: 10 * time.Minute,
-		rand:             rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec
+		rand:             rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // G404: simulation randomness for fault injection
 	}
 }
 

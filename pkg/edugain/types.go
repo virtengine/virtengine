@@ -153,8 +153,7 @@ const (
 // SAML AuthnContext constants
 const (
 	// AuthnContextPasswordProtected is the password protected transport context
-	//nolint:gosec // G101: This is a SAML URN constant, not a credential
-	AuthnContextPasswordProtected = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+	AuthnContextPasswordProtected = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport" // #nosec G101 -- SAML URN constant, not a credential
 
 	// AuthnContextMFA is the REFEDS MFA profile context
 	AuthnContextMFA = "https://refeds.org/profile/mfa"

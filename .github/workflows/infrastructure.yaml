@@ -13,12 +13,14 @@ on:
       - 'infra/**'
       - 'deploy/**'
       - '.github/workflows/infrastructure.yml'
+      - '.github/workflows/infrastructure.yaml'
   pull_request:
     branches:
       - main
     paths:
       - 'infra/**'
       - 'deploy/**'
+      - '.github/workflows/infrastructure.yaml'
   workflow_dispatch:
     inputs:
       environment:
@@ -78,8 +80,55 @@ jobs:
           for module in infra/terraform/modules/*/; do
             echo "Validating $module"
             cd "$module"
-            terraform init -backend=false
+            cat > .ci-providers.tf <<'EOF'
+provider "aws" {
+  region = "us-east-1"
+  skip_credentials_validation = true
+  skip_metadata_api_check = true
+  skip_requesting_account_id = true
+}
+
+provider "aws" {
+  alias  = "primary"
+  region = "us-east-1"
+  skip_credentials_validation = true
+  skip_metadata_api_check = true
+  skip_requesting_account_id = true
+}
+
+provider "aws" {
+  alias  = "secondary"
+  region = "us-west-2"
+  skip_credentials_validation = true
+  skip_metadata_api_check = true
+  skip_requesting_account_id = true
+}
+
+provider "aws" {
+  alias  = "tertiary"
+  region = "us-west-1"
+  skip_credentials_validation = true
+  skip_metadata_api_check = true
+  skip_requesting_account_id = true
+}
+
+provider "kubernetes" {
+  host     = "https://127.0.0.1"
+  token    = "ci"
+  insecure = true
+}
+
+provider "helm" {
+  kubernetes {
+    host     = "https://127.0.0.1"
+    token    = "ci"
+    insecure = true
+  }
+}
+EOF
+            terraform init -backend=false -input=false
             terraform validate
+            rm -f .ci-providers.tf
             cd -
           done
 

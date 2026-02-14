@@ -3,6 +3,8 @@ package hpc
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/testutil"
 	"github.com/virtengine/virtengine/x/hpc/keeper"
 	"github.com/virtengine/virtengine/x/hpc/types"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 type integrationBankKeeper struct {
@@ -42,6 +45,140 @@ func (b *integrationBankKeeper) SendCoinsFromAccountToModule(_ context.Context, 
 
 func (b *integrationBankKeeper) SpendableCoins(_ context.Context, _ sdk.AccAddress) sdk.Coins {
 	return sdk.NewCoins()
+}
+
+type mockSettlementKeeper struct {
+	mu               sync.Mutex
+	escrowByOrder    map[string]settlementtypes.EscrowAccount
+	escrowByID       map[string]settlementtypes.EscrowAccount
+	usageRecords     map[string]settlementtypes.UsageRecord
+	usageByOrder     map[string][]string
+	usageCounter     int
+	settlementNumber int
+	bank             *integrationBankKeeper
+}
+
+func newMockSettlementKeeper(escrow settlementtypes.EscrowAccount, bank *integrationBankKeeper) *mockSettlementKeeper {
+	return &mockSettlementKeeper{
+		escrowByOrder: map[string]settlementtypes.EscrowAccount{
+			escrow.OrderID: escrow,
+		},
+		escrowByID: map[string]settlementtypes.EscrowAccount{
+			escrow.EscrowID: escrow,
+		},
+		usageRecords: make(map[string]settlementtypes.UsageRecord),
+		usageByOrder: make(map[string][]string),
+		bank:         bank,
+	}
+}
+
+func (m *mockSettlementKeeper) RecordUsage(_ sdk.Context, record *settlementtypes.UsageRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if record.UsageID == "" {
+		m.usageCounter++
+		record.UsageID = fmt.Sprintf("usage-%d", m.usageCounter)
+	}
+
+	m.usageRecords[record.UsageID] = *record
+	m.usageByOrder[record.OrderID] = append(m.usageByOrder[record.OrderID], record.UsageID)
+	return nil
+}
+
+func (m *mockSettlementKeeper) SettleOrder(
+	ctx sdk.Context,
+	orderID string,
+	usageRecordIDs []string,
+	isFinal bool,
+) (*settlementtypes.SettlementRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	escrow, ok := m.escrowByOrder[orderID]
+	if !ok {
+		return nil, fmt.Errorf("escrow not found for order %s", orderID)
+	}
+
+	records := usageRecordIDs
+	if len(records) == 0 {
+		records = m.usageByOrder[orderID]
+	}
+
+	total := sdk.NewCoins()
+	var provider string
+	var customer string
+	var totalUnits uint64
+	for _, id := range records {
+		if record, ok := m.usageRecords[id]; ok {
+			total = total.Add(record.TotalCost...)
+			totalUnits += record.UsageUnits
+			if provider == "" {
+				provider = record.Provider
+			}
+			if customer == "" {
+				customer = record.Customer
+			}
+		}
+	}
+
+	if total.IsZero() {
+		total = sdk.NewCoins(sdk.NewInt64Coin("uve", 1000))
+	}
+	if provider == "" {
+		provider = escrow.Recipient
+	}
+	if customer == "" {
+		customer = escrow.Depositor
+	}
+
+	m.settlementNumber++
+	settlementID := fmt.Sprintf("settlement-%d", m.settlementNumber)
+
+	record := settlementtypes.NewSettlementRecord(
+		settlementID,
+		escrow.EscrowID,
+		orderID,
+		escrow.LeaseID,
+		provider,
+		customer,
+		total,
+		total,
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		records,
+		totalUnits,
+		ctx.BlockTime(),
+		ctx.BlockTime(),
+		settlementtypes.SettlementTypeFinal,
+		isFinal,
+		ctx.BlockTime(),
+		ctx.BlockHeight(),
+	)
+
+	if m.bank != nil && !total.IsZero() {
+		if recipient, err := sdk.AccAddressFromBech32(provider); err == nil {
+			_ = m.bank.SendCoinsFromModuleToAccount(ctx, "settlement", recipient, total)
+		}
+	}
+
+	return record, nil
+}
+
+func (m *mockSettlementKeeper) GetEscrowByOrder(_ sdk.Context, orderID string) (settlementtypes.EscrowAccount, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	escrow, ok := m.escrowByOrder[orderID]
+	return escrow, ok
+}
+
+func (m *mockSettlementKeeper) GetEscrow(_ sdk.Context, escrowID string) (settlementtypes.EscrowAccount, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	escrow, ok := m.escrowByID[escrowID]
+	return escrow, ok
 }
 
 func setupIntegrationKeeper(t testing.TB) (sdk.Context, keeper.Keeper, *integrationBankKeeper) {
@@ -112,6 +249,7 @@ func TestJobLifecycleSubmitScheduleRunCompleteSettle(t *testing.T) {
 		JobID:           "job-lifecycle",
 		OfferingID:      offering.OfferingID,
 		CustomerAddress: customerAddr,
+		EscrowID:        "escrow-job-lifecycle",
 		QueueName:       "default",
 		WorkloadSpec: types.JobWorkloadSpec{
 			ContainerImage: "docker.io/library/alpine:latest",
@@ -126,6 +264,22 @@ func TestJobLifecycleSubmitScheduleRunCompleteSettle(t *testing.T) {
 		MaxRuntimeSeconds: 3600,
 	}
 	require.NoError(t, k.SubmitJob(ctx, &job))
+
+	escrow := settlementtypes.EscrowAccount{
+		EscrowID:     job.EscrowID,
+		OrderID:      job.JobID,
+		Depositor:    customerAddr,
+		Recipient:    providerAddr,
+		Amount:       sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		Balance:      sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		State:        settlementtypes.EscrowStateActive,
+		CreatedAt:    ctx.BlockTime(),
+		ExpiresAt:    ctx.BlockTime().Add(24 * time.Hour),
+		TotalSettled: sdk.NewCoins(),
+		BlockHeight:  ctx.BlockHeight(),
+	}
+
+	k.SetSettlementKeeper(newMockSettlementKeeper(escrow, bank))
 
 	decision, err := k.ScheduleJob(ctx, &job)
 	require.NoError(t, err)

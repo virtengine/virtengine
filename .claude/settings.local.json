@@ -22,5 +22,51 @@
       "mcp__vibe_kanban__get_repo",
       "WebFetch(domain:github.com)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\nvm4w\\nodejs\\node.exe' 'C:\\Users\\jON\\AppData\\Local\\nvm\\v24.11.1\\node_modules\\@virtengine\\codex-monitor\\agent-hook-bridge.mjs' --agent claude --event Stop"
+          }
+        ]
+      }
+    ]
   }
 }

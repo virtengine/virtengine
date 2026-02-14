@@ -1,0 +1,408 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve, dirname, isAbsolute, relative } from "node:path";
+import { execSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CONFIG_FILES = [
+  "codex-monitor.config.json",
+  ".codex-monitor.json",
+  "codex-monitor.json",
+];
+
+function parseBool(value) {
+  return ["1", "true", "yes", "on"].includes(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function isPositiveInt(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && Number.isInteger(n);
+}
+
+function isUrl(value) {
+  try {
+    if (!value) return false;
+    const parsed = new URL(String(value));
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function detectRepoRoot() {
+  try {
+    return execSync("git rev-parse --show-toplevel", {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return process.cwd();
+  }
+}
+
+function isPathInside(parent, child) {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function hasSetupMarkers(dir) {
+  const markers = [".env", ...CONFIG_FILES];
+  return markers.some((name) => existsSync(resolve(dir, name)));
+}
+
+function resolveConfigDir(repoRoot) {
+  const explicit = process.env.CODEX_MONITOR_DIR;
+  if (explicit) return resolve(explicit);
+
+  const repoPath = resolve(repoRoot || process.cwd());
+  const packageDir = resolve(__dirname);
+  if (isPathInside(repoPath, packageDir) || hasSetupMarkers(packageDir)) {
+    return packageDir;
+  }
+
+  const baseDir =
+    process.env.APPDATA ||
+    process.env.LOCALAPPDATA ||
+    process.env.HOME ||
+    process.env.USERPROFILE ||
+    process.cwd();
+  return resolve(baseDir, "codex-monitor");
+}
+
+function loadDotEnvToObject(envPath) {
+  if (!envPath || !existsSync(envPath)) return {};
+  const out = {};
+  const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    let val = trimmed.slice(idx + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    out[key] = val;
+  }
+  return out;
+}
+
+function mergeNoOverride(base, extra) {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(extra || {})) {
+    if (!(key in merged)) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function commandExists(command) {
+  try {
+    const checker = process.platform === "win32" ? "where" : "which";
+    spawnSync(checker, [command], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findConfigFile(configDir) {
+  for (const name of CONFIG_FILES) {
+    const p = resolve(configDir, name);
+    if (existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+}
+
+function validateExecutors(raw, issues) {
+  if (!raw) return;
+  const entries = String(raw)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (entries.length === 0) {
+    issues.errors.push({
+      code: "EXECUTORS_EMPTY",
+      message: "EXECUTORS is set but empty.",
+      fix: "Use format EXECUTOR:VARIANT:WEIGHT, e.g. EXECUTORS=CODEX:DEFAULT:100",
+    });
+    return;
+  }
+  for (const entry of entries) {
+    const [executor, variant, weight] = entry.split(":");
+    if (!executor || !variant) {
+      issues.errors.push({
+        code: "EXECUTORS_FORMAT",
+        message: `Invalid EXECUTORS entry: ${entry}`,
+        fix: "Each entry must be EXECUTOR:VARIANT[:WEIGHT]",
+      });
+      continue;
+    }
+    if (weight && !isPositiveInt(weight)) {
+      issues.errors.push({
+        code: "EXECUTORS_WEIGHT",
+        message: `Invalid executor weight in entry: ${entry}`,
+        fix: "Use integer weights > 0",
+      });
+    }
+  }
+}
+
+export function runConfigDoctor(options = {}) {
+  const repoRoot = resolve(options.repoRoot || detectRepoRoot());
+  const configDir = resolve(options.configDir || resolveConfigDir(repoRoot));
+  const configEnvPath = resolve(configDir, ".env");
+  const repoEnvPath = resolve(repoRoot, ".env");
+  const configFilePath = findConfigFile(configDir);
+
+  const fromConfigEnv = loadDotEnvToObject(configEnvPath);
+  const fromRepoEnv =
+    resolve(repoEnvPath) === resolve(configEnvPath)
+      ? {}
+      : loadDotEnvToObject(repoEnvPath);
+
+  let effective = {};
+  effective = mergeNoOverride(effective, fromConfigEnv);
+  effective = mergeNoOverride(effective, fromRepoEnv);
+  effective = { ...effective, ...process.env };
+
+  const issues = {
+    errors: [],
+    warnings: [],
+    infos: [],
+  };
+
+  const telegramToken = effective.TELEGRAM_BOT_TOKEN || "";
+  const telegramChatId = effective.TELEGRAM_CHAT_ID || "";
+  if (
+    (telegramToken && !telegramChatId) ||
+    (!telegramToken && telegramChatId)
+  ) {
+    issues.errors.push({
+      code: "TELEGRAM_PARTIAL",
+      message:
+        "Telegram is partially configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID mismatch).",
+      fix: "Set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID, or unset both.",
+    });
+  }
+
+  const telegramInterval = effective.TELEGRAM_INTERVAL_MIN;
+  if (telegramInterval && !isPositiveInt(telegramInterval)) {
+    issues.errors.push({
+      code: "TELEGRAM_INTERVAL_MIN",
+      message: `Invalid TELEGRAM_INTERVAL_MIN: ${telegramInterval}`,
+      fix: "Use a positive integer (minutes), e.g. TELEGRAM_INTERVAL_MIN=10",
+    });
+  }
+
+  const backend = String(effective.KANBAN_BACKEND || "vk").toLowerCase();
+  if (!["vk", "github", "jira"].includes(backend)) {
+    issues.errors.push({
+      code: "KANBAN_BACKEND",
+      message: `Invalid KANBAN_BACKEND: ${effective.KANBAN_BACKEND}`,
+      fix: "Use one of: vk, github, jira",
+    });
+  }
+
+  const mode = String(effective.EXECUTOR_MODE || "internal").toLowerCase();
+  if (!["internal", "vk", "hybrid"].includes(mode)) {
+    issues.errors.push({
+      code: "EXECUTOR_MODE",
+      message: `Invalid EXECUTOR_MODE: ${effective.EXECUTOR_MODE}`,
+      fix: "Use one of: internal, vk, hybrid",
+    });
+  }
+
+  validateExecutors(effective.EXECUTORS, issues);
+
+  if (backend === "github") {
+    const hasSlug =
+      Boolean(effective.GITHUB_REPO) ||
+      Boolean(effective.GITHUB_REPOSITORY) ||
+      (Boolean(effective.GITHUB_REPO_OWNER) &&
+        Boolean(effective.GITHUB_REPO_NAME));
+    if (!hasSlug) {
+      issues.errors.push({
+        code: "GITHUB_BACKEND_REPO",
+        message: "KANBAN_BACKEND=github requires repository identification.",
+        fix: "Set GITHUB_REPOSITORY=owner/repo (or GITHUB_REPO, or owner + name).",
+      });
+    }
+  }
+
+  const vkNeeded = backend === "vk" || mode === "vk" || mode === "hybrid";
+  if (vkNeeded) {
+    const vkBaseUrl = effective.VK_BASE_URL || "";
+    const vkPort = effective.VK_RECOVERY_PORT || "";
+    if (vkBaseUrl && !isUrl(vkBaseUrl)) {
+      issues.errors.push({
+        code: "VK_BASE_URL",
+        message: `Invalid VK_BASE_URL: ${vkBaseUrl}`,
+        fix: "Use a full URL, e.g. http://127.0.0.1:54089",
+      });
+    }
+    if (vkPort && !isPositiveInt(vkPort)) {
+      issues.errors.push({
+        code: "VK_RECOVERY_PORT",
+        message: `Invalid VK_RECOVERY_PORT: ${vkPort}`,
+        fix: "Use a positive integer port, e.g. VK_RECOVERY_PORT=54089",
+      });
+    }
+  }
+
+  if (parseBool(effective.WHATSAPP_ENABLED)) {
+    if (!effective.WHATSAPP_CHAT_ID) {
+      issues.warnings.push({
+        code: "WHATSAPP_CHAT_ID",
+        message: "WHATSAPP_ENABLED is on but WHATSAPP_CHAT_ID is not set.",
+        fix: "Set WHATSAPP_CHAT_ID to restrict accepted chat(s).",
+      });
+    }
+  }
+
+  if (parseBool(effective.CONTAINER_ENABLED)) {
+    const runtime = String(effective.CONTAINER_RUNTIME || "auto").toLowerCase();
+    if (!["auto", "docker", "podman", "container"].includes(runtime)) {
+      issues.errors.push({
+        code: "CONTAINER_RUNTIME",
+        message: `Invalid CONTAINER_RUNTIME: ${effective.CONTAINER_RUNTIME}`,
+        fix: "Use one of: auto, docker, podman, container",
+      });
+    }
+    if (runtime !== "auto" && !commandExists(runtime)) {
+      issues.warnings.push({
+        code: "CONTAINER_RUNTIME_MISSING",
+        message: `Container runtime not found on PATH: ${runtime}`,
+        fix: "Install runtime or set CONTAINER_RUNTIME=auto",
+      });
+    }
+  }
+
+  if (effective.MAX_PARALLEL && !isPositiveInt(effective.MAX_PARALLEL)) {
+    issues.errors.push({
+      code: "MAX_PARALLEL",
+      message: `Invalid MAX_PARALLEL: ${effective.MAX_PARALLEL}`,
+      fix: "Use a positive integer, e.g. MAX_PARALLEL=6",
+    });
+  }
+
+  if (effective.ORCHESTRATOR_SCRIPT) {
+    const scriptPath = resolve(configDir, effective.ORCHESTRATOR_SCRIPT);
+    if (!existsSync(scriptPath)) {
+      issues.warnings.push({
+        code: "ORCHESTRATOR_SCRIPT",
+        message: `ORCHESTRATOR_SCRIPT does not exist: ${effective.ORCHESTRATOR_SCRIPT}`,
+        fix: "Set a valid absolute path or path relative to config directory",
+      });
+    }
+  }
+
+  if (configFilePath && existsSync(configFilePath)) {
+    try {
+      JSON.parse(readFileSync(configFilePath, "utf8"));
+    } catch (error) {
+      issues.errors.push({
+        code: "CONFIG_JSON",
+        message: `Invalid JSON in ${configFilePath}`,
+        fix: `Fix JSON syntax (${error.message})`,
+      });
+    }
+  } else {
+    issues.warnings.push({
+      code: "CONFIG_JSON_MISSING",
+      message: "No codex-monitor config JSON found.",
+      fix: "Run codex-monitor --setup to generate codex-monitor.config.json",
+    });
+  }
+
+  if (!existsSync(configEnvPath) && !existsSync(repoEnvPath)) {
+    issues.warnings.push({
+      code: "ENV_MISSING",
+      message: "No .env file found in config directory or repo root.",
+      fix: "Run codex-monitor --setup to generate .env",
+    });
+  }
+
+  issues.infos.push({
+    code: "PATHS",
+    message: `Config directory: ${configDir}`,
+    fix: null,
+  });
+  issues.infos.push({
+    code: "PATHS",
+    message: `Repo root: ${repoRoot}`,
+    fix: null,
+  });
+
+  return {
+    ok: issues.errors.length === 0,
+    ...issues,
+    details: {
+      configDir,
+      repoRoot,
+      configFilePath,
+      configEnvPath: existsSync(configEnvPath) ? configEnvPath : null,
+      repoEnvPath:
+        existsSync(repoEnvPath) &&
+        resolve(repoEnvPath) !== resolve(configEnvPath)
+          ? repoEnvPath
+          : null,
+    },
+  };
+}
+
+export function formatConfigDoctorReport(result) {
+  const lines = [];
+  lines.push("=== codex-monitor config doctor ===");
+  lines.push(
+    `Status: ${result.ok ? "OK" : "FAILED"} (${result.errors.length} error(s), ${result.warnings.length} warning(s))`,
+  );
+  lines.push("");
+
+  if (result.errors.length > 0) {
+    lines.push("Errors:");
+    for (const issue of result.errors) {
+      lines.push(`  - ${issue.message}`);
+      if (issue.fix) lines.push(`    fix: ${issue.fix}`);
+    }
+    lines.push("");
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push("Warnings:");
+    for (const issue of result.warnings) {
+      lines.push(`  - ${issue.message}`);
+      if (issue.fix) lines.push(`    fix: ${issue.fix}`);
+    }
+    lines.push("");
+  }
+
+  if (result.infos.length > 0) {
+    lines.push("Info:");
+    for (const info of result.infos) {
+      lines.push(`  - ${info.message}`);
+    }
+    lines.push("");
+  }
+
+  if (result.ok) {
+    lines.push("Doctor check passed — configuration looks consistent.");
+  } else {
+    lines.push(
+      "Doctor check failed — fix the errors above and run: codex-monitor --doctor",
+    );
+  }
+
+  return lines.join("\n");
+}

@@ -13,11 +13,16 @@
  * Executor configuration supports N executors with weights and failover.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
+import {
+  ensureAgentPromptWorkspace,
+  getAgentPromptDefinitions,
+  resolveAgentPrompts,
+} from "./agent-prompts.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -50,6 +55,31 @@ function resolveConfigDir(repoRoot) {
     process.env.USERPROFILE ||
     process.cwd();
   return resolve(baseDir, "codex-monitor");
+}
+
+function ensurePromptWorkspaceGitIgnore(repoRoot) {
+  const gitignorePath = resolve(repoRoot, ".gitignore");
+  const entry = "/.codex-monitor/";
+  let existing = "";
+  try {
+    if (existsSync(gitignorePath)) {
+      existing = readFileSync(gitignorePath, "utf8");
+    }
+  } catch {
+    return;
+  }
+  const hasEntry = existing
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .includes(entry);
+  if (hasEntry) return;
+  const next =
+    existing.endsWith("\n") || !existing ? existing : `${existing}\n`;
+  try {
+    writeFileSync(gitignorePath, `${next}${entry}\n`, "utf8");
+  } catch {
+    /* best effort */
+  }
 }
 
 // ── .env loader ──────────────────────────────────────────────────────────────
@@ -199,6 +229,20 @@ function resolveRepoPath(repoPath, baseDir) {
   return resolve(baseDir, repoPath);
 }
 
+function parseEnvBoolean(value, defaultValue) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+  const raw = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(raw)) return true;
+  if (["false", "0", "no", "n", "off"].includes(raw)) return false;
+  return defaultValue;
+}
+
+function isEnvEnabled(value, defaultValue = false) {
+  return parseEnvBoolean(value, defaultValue);
+}
+
 // ── Git helpers ──────────────────────────────────────────────────────────────
 
 function detectRepoSlug() {
@@ -312,6 +356,16 @@ function normalizePrimaryAgent(value) {
   if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
     return "claude-sdk";
   return raw;
+}
+
+function normalizeKanbanBackend(value) {
+  const backend = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (backend === "github" || backend === "jira" || backend === "vk") {
+    return backend;
+  }
+  return "vk";
 }
 
 function loadExecutorConfig(configDir, configData) {
@@ -597,147 +651,9 @@ function loadRepoConfig(configDir, configData = {}, options = {}) {
   ];
 }
 
-// ── Agent Prompt Templates ───────────────────────────────────────────────────
-
-const DEFAULT_AGENT_PROMPT = `# Task Orchestrator Agent
-
-You are an autonomous task orchestrator agent. You receive task assignments from vibe-kanban and execute them to completion.
-
-## Prime Directives
-
-1. **NEVER ask for human input.** You are autonomous. Make engineering judgments and proceed.
-2. **Delegate implementation** to subagents when tasks are complex.
-3. **NEVER ship broken code.** Every PR must have zero lint errors, zero test failures, zero build errors.
-4. **Work until 100% DONE.** No TODOs, no placeholders, no partial implementations.
-5. **Use Conventional Commits** with proper scope.
-
-## Pre-Push Checklist
-
-Before committing and pushing:
-- Run linting and formatting
-- Run unit tests on changed packages
-- Ensure build passes
-- Verify no regressions
-
-## How You Receive Work
-
-You receive a task description (from vibe-kanban or inline). Your job:
-1. Understand the full scope
-2. Plan your approach
-3. Implement (or delegate to subagents)
-4. Test and verify
-5. Commit with conventional commits
-6. Push and create a PR
-
-## Quality Gates
-
-- All tests pass
-- No lint warnings
-- Build succeeds
-- Changes are atomic and well-scoped
-`;
-
-const DEFAULT_PLANNER_PROMPT = `# Task Planner Agent
-
-You are an autonomous task planner. When the task backlog is low, you analyze the project state and create well-scoped, actionable tasks.
-
-## Responsibilities
-
-1. Review the current project state (open issues, PRs, code quality)
-2. Identify gaps, improvements, and next steps
-3. Create tasks in vibe-kanban with clear:
-   - Title (concise, action-oriented)
-   - Description (what needs to be done)
-   - Acceptance criteria (how to verify completion)
-   - Priority and effort estimates
-
-## Guidelines
-
-- Create 3-5 tasks per planning session
-- Tasks should be completable in 1-4 hours by a single agent
-- Prioritize bug fixes and test coverage over new features
-- Consider technical debt and code quality improvements
-- Check for existing similar tasks to avoid duplicates
-
-## CRITICAL: Task Creation Order
-
-**Create tasks in REVERSE sequence order** (highest number first, e.g., 45B → 45A → 44D → ... → 37A).
-Vibe-kanban displays newest tasks at the top of the backlog. By creating the highest-priority
-tasks LAST, they appear at the TOP of the backlog for both the orchestrator and human review.
-The orchestrator uses sequence numbers (like 37A, 38B) to determine execution order regardless
-of creation order, but the visual backlog order matters for human-in-the-loop understanding.
-`;
-
 function loadAgentPrompts(configDir, repoRoot, configData) {
-  const prompts = {
-    orchestrator: DEFAULT_AGENT_PROMPT,
-    planner: DEFAULT_PLANNER_PROMPT,
-  };
-
-  // Try loading custom prompts from repo
-  const agentDirs = [
-    resolve(repoRoot, ".github", "agents"),
-    resolve(repoRoot, ".agents"),
-    resolve(configDir, "agents"),
-  ];
-
-  for (const dir of agentDirs) {
-    // Look for orchestrator agent
-    for (const name of [
-      "orchestrator.agent.md",
-      "ralph-orchestrator.agent.md",
-      "agent.md",
-    ]) {
-      const p = resolve(dir, name);
-      if (existsSync(p)) {
-        prompts.orchestrator = readFileSync(p, "utf8");
-        break;
-      }
-    }
-    // Look for planner agent
-    for (const name of [
-      "planner.agent.md",
-      "task-planner.agent.md",
-      "Task Planner.agent.md",
-    ]) {
-      const p = resolve(dir, name);
-      if (existsSync(p)) {
-        prompts.planner = readFileSync(p, "utf8");
-        break;
-      }
-    }
-  }
-
-  // Try config file overrides
-  let rawConfig = configData;
-  if (!rawConfig) {
-    for (const name of CONFIG_FILES) {
-      const p = resolve(configDir, name);
-      if (existsSync(p)) {
-        try {
-          rawConfig = JSON.parse(readFileSync(p, "utf8"));
-          break;
-        } catch {
-          /* skip */
-        }
-      }
-    }
-  }
-
-  if (rawConfig?.agentPrompts?.orchestrator) {
-    const opPath = resolve(configDir, rawConfig.agentPrompts.orchestrator);
-    if (existsSync(opPath)) {
-      prompts.orchestrator = readFileSync(opPath, "utf8");
-    }
-  }
-  if (rawConfig?.agentPrompts?.planner) {
-    const ppPath = resolve(configDir, rawConfig.agentPrompts.planner);
-    if (existsSync(ppPath)) {
-      prompts.planner = readFileSync(ppPath, "utf8");
-    }
-  }
-
-  return prompts;
+  const resolved = resolveAgentPrompts(configDir, repoRoot, configData);
+  return { ...resolved.prompts, _sources: resolved.sources };
 }
 
 // ── Main Configuration Loader ────────────────────────────────────────────────
@@ -971,15 +887,15 @@ export function loadConfig(argv = process.argv, options = {}) {
   const interactiveShellEnabled =
     flags.has("shell") ||
     flags.has("interactive") ||
-    process.env.CODEX_MONITOR_SHELL === "1" ||
-    process.env.CODEX_MONITOR_INTERACTIVE === "1" ||
+    isEnvEnabled(process.env.CODEX_MONITOR_SHELL, false) ||
+    isEnvEnabled(process.env.CODEX_MONITOR_INTERACTIVE, false) ||
     configData.interactiveShellEnabled === true ||
     configData.shellEnabled === true;
   const preflightEnabled = flags.has("no-preflight")
     ? false
     : configData.preflightEnabled !== undefined
       ? configData.preflightEnabled
-      : process.env.CODEX_MONITOR_PREFLIGHT_DISABLED === "1"
+      : isEnvEnabled(process.env.CODEX_MONITOR_PREFLIGHT_DISABLED, false)
         ? false
         : true;
   const preflightRetryMs = Number(
@@ -991,7 +907,7 @@ export function loadConfig(argv = process.argv, options = {}) {
   const codexEnabled =
     !flags.has("no-codex") &&
     (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
-    process.env.CODEX_SDK_DISABLED !== "1" &&
+    !isEnvEnabled(process.env.CODEX_SDK_DISABLED, false) &&
     agentSdk.primary === "codex";
   const primaryAgent = normalizePrimaryAgent(
     cli["primary-agent"] ||
@@ -1001,31 +917,49 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.primaryAgent ||
       "codex-sdk",
   );
-  const primaryAgentEnabled =
-    process.env.PRIMARY_AGENT_DISABLED === "1"
-      ? false
-      : primaryAgent === "codex-sdk"
-        ? codexEnabled
-        : primaryAgent === "copilot-sdk"
-          ? process.env.COPILOT_SDK_DISABLED !== "1"
-          : process.env.CLAUDE_SDK_DISABLED !== "1";
+  const primaryAgentEnabled = isEnvEnabled(
+    process.env.PRIMARY_AGENT_DISABLED,
+    false,
+  )
+    ? false
+    : primaryAgent === "codex-sdk"
+      ? codexEnabled
+      : primaryAgent === "copilot-sdk"
+        ? !isEnvEnabled(process.env.COPILOT_SDK_DISABLED, false)
+        : !isEnvEnabled(process.env.CLAUDE_SDK_DISABLED, false);
 
   // agentPoolEnabled: true when ANY agent SDK is available for pooled operations
   // This decouples pooled prompt execution from specific SDK selection
   const agentPoolEnabled =
-    process.env.CODEX_SDK_DISABLED !== "1" ||
-    process.env.COPILOT_SDK_DISABLED !== "1" ||
-    process.env.CLAUDE_SDK_DISABLED !== "1";
+    !isEnvEnabled(process.env.CODEX_SDK_DISABLED, false) ||
+    !isEnvEnabled(process.env.COPILOT_SDK_DISABLED, false) ||
+    !isEnvEnabled(process.env.CLAUDE_SDK_DISABLED, false);
 
   // ── Internal Executor ────────────────────────────────────
   // Allows the monitor to run tasks via agent-pool directly instead of
   // (or alongside) the VK executor. Modes: "vk" (default), "internal", "hybrid".
+  const kanbanBackend = normalizeKanbanBackend(
+    process.env.KANBAN_BACKEND || configData.kanban?.backend || "vk",
+  );
+  const kanban = Object.freeze({
+    backend: kanbanBackend,
+    projectId:
+      process.env.KANBAN_PROJECT_ID || configData.kanban?.projectId || null,
+  });
+
   const internalExecutorConfig = configData.internalExecutor || {};
   const executorMode = (
     process.env.EXECUTOR_MODE ||
     internalExecutorConfig.mode ||
     "vk"
   ).toLowerCase();
+  const reviewAgentToggleRaw =
+    process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
+  const reviewAgentEnabled =
+    reviewAgentToggleRaw !== undefined &&
+    String(reviewAgentToggleRaw).trim() !== ""
+      ? isEnvEnabled(reviewAgentToggleRaw, true)
+      : internalExecutorConfig.reviewAgentEnabled !== false;
   const internalExecutor = {
     mode: ["vk", "internal", "hybrid"].includes(executorMode)
       ? executorMode
@@ -1041,9 +975,7 @@ export function loadConfig(argv = process.argv, options = {}) {
         30000,
     ),
     sdk:
-      process.env.INTERNAL_EXECUTOR_SDK ||
-      internalExecutorConfig.sdk ||
-      "auto",
+      process.env.INTERNAL_EXECUTOR_SDK || internalExecutorConfig.sdk || "auto",
     taskTimeoutMs: Number(
       process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
         internalExecutorConfig.taskTimeoutMs ||
@@ -1059,6 +991,17 @@ export function loadConfig(argv = process.argv, options = {}) {
       process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
       internalExecutorConfig.projectId ||
       null,
+    reviewAgentEnabled,
+    reviewMaxConcurrent: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
+        internalExecutorConfig.reviewMaxConcurrent ||
+        2,
+    ),
+    reviewTimeoutMs: Number(
+      process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
+        internalExecutorConfig.reviewTimeoutMs ||
+        300000,
+    ),
   };
 
   // ── Vibe-Kanban ──────────────────────────────────────────
@@ -1078,9 +1021,14 @@ export function loadConfig(argv = process.argv, options = {}) {
     configData.vkSpawnEnabled !== undefined
       ? configData.vkSpawnEnabled
       : mode !== "generic";
+  const vkRequiredByExecutor =
+    internalExecutor.mode === "vk" || internalExecutor.mode === "hybrid";
+  const vkRequiredByBoard = kanban.backend === "vk";
+  const vkRuntimeRequired = vkRequiredByExecutor || vkRequiredByBoard;
   const vkSpawnEnabled =
+    vkRuntimeRequired &&
     !flags.has("no-vk-spawn") &&
-    process.env.VK_NO_SPAWN !== "1" &&
+    !isEnvEnabled(process.env.VK_NO_SPAWN, false) &&
     vkSpawnDefault;
   const vkEnsureIntervalMs = Number(
     cli["vk-ensure-interval"] || process.env.VK_ENSURE_INTERVAL || "60000",
@@ -1177,17 +1125,13 @@ export function loadConfig(argv = process.argv, options = {}) {
   for (const [key, val] of Object.entries(scopeMap)) {
     normalizedScopeMap[key.toLowerCase()] = val;
   }
-  const autoRebaseOnMerge = !["0", "false", "no"].includes(
-    String(
-      process.env.AUTO_REBASE_ON_MERGE ??
-        branchRoutingRaw.autoRebaseOnMerge ??
-        "true",
-    ).toLowerCase(),
+  const autoRebaseOnMerge = isEnvEnabled(
+    process.env.AUTO_REBASE_ON_MERGE ?? branchRoutingRaw.autoRebaseOnMerge,
+    true,
   );
-  const assessWithSdk = !["0", "false", "no"].includes(
-    String(
-      process.env.ASSESS_WITH_SDK ?? branchRoutingRaw.assessWithSdk ?? "true",
-    ).toLowerCase(),
+  const assessWithSdk = isEnvEnabled(
+    process.env.ASSESS_WITH_SDK ?? branchRoutingRaw.assessWithSdk,
+    true,
   );
   const branchRouting = Object.freeze({
     defaultBranch: defaultTargetBranch,
@@ -1200,10 +1144,9 @@ export function loadConfig(argv = process.argv, options = {}) {
   // Multi-workstation collaboration: when 2+ codex-monitor instances share
   // the same repo, the fleet system coordinates task planning, dispatch,
   // and conflict-aware ordering.
-  const fleetEnabled = !["0", "false", "no"].includes(
-    String(
-      process.env.FLEET_ENABLED ?? configData.fleetEnabled ?? "true",
-    ).toLowerCase(),
+  const fleetEnabled = isEnvEnabled(
+    process.env.FLEET_ENABLED ?? configData.fleetEnabled,
+    true,
   );
   const fleetBufferMultiplier = Number(
     process.env.FLEET_BUFFER_MULTIPLIER ||
@@ -1220,12 +1163,9 @@ export function loadConfig(argv = process.argv, options = {}) {
       configData.fleetPresenceTtlMs ||
       String(5 * 60 * 1000), // 5 minutes
   );
-  const fleetKnowledgeEnabled = !["0", "false", "no"].includes(
-    String(
-      process.env.FLEET_KNOWLEDGE_ENABLED ??
-        configData.fleetKnowledgeEnabled ??
-        "true",
-    ).toLowerCase(),
+  const fleetKnowledgeEnabled = isEnvEnabled(
+    process.env.FLEET_KNOWLEDGE_ENABLED ?? configData.fleetKnowledgeEnabled,
+    true,
   );
   const fleetKnowledgeFile = String(
     process.env.FLEET_KNOWLEDGE_FILE ||
@@ -1242,12 +1182,9 @@ export function loadConfig(argv = process.argv, options = {}) {
   });
 
   // ── Dependabot Auto-Merge ─────────────────────────────────
-  const dependabotAutoMerge = !["0", "false", "no"].includes(
-    String(
-      process.env.DEPENDABOT_AUTO_MERGE ??
-        configData.dependabotAutoMerge ??
-        "true",
-    ).toLowerCase(),
+  const dependabotAutoMerge = isEnvEnabled(
+    process.env.DEPENDABOT_AUTO_MERGE ?? configData.dependabotAutoMerge,
+    true,
   );
   const dependabotAutoMergeIntervalMin = Number(
     process.env.DEPENDABOT_AUTO_MERGE_INTERVAL_MIN || "10",
@@ -1292,7 +1229,12 @@ export function loadConfig(argv = process.argv, options = {}) {
   const scheduler = new ExecutorScheduler(executorConfig);
 
   // ── Agent prompts ────────────────────────────────────────
+  ensurePromptWorkspaceGitIgnore(repoRoot);
+  ensureAgentPromptWorkspace(repoRoot);
   const agentPrompts = loadAgentPrompts(configDir, repoRoot, configData);
+  const agentPromptSources = agentPrompts._sources || {};
+  delete agentPrompts._sources;
+  const agentPromptCatalog = getAgentPromptDefinitions();
 
   // ── First-run detection ──────────────────────────────────
   const isFirstRun = !hasSetupMarkers(configDir);
@@ -1337,6 +1279,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     // Internal Executor
     internalExecutor,
     executorMode: internalExecutor.mode,
+    kanban,
 
     // Merge Strategy
     codexAnalyzeMergeStrategy:
@@ -1356,6 +1299,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     vkPublicUrl,
     vkTaskUrlTemplate,
     vkRecoveryCooldownMin,
+    vkRuntimeRequired,
     vkSpawnEnabled,
     vkEnsureIntervalMs,
 
@@ -1404,6 +1348,8 @@ export function loadConfig(argv = process.argv, options = {}) {
 
     // Agent prompts
     agentPrompts,
+    agentPromptSources,
+    agentPromptCatalog,
 
     // First run
     isFirstRun,
@@ -1430,34 +1376,55 @@ function detectProjectName(configDir, repoRoot) {
 }
 
 function findOrchestratorScript(configDir, repoRoot) {
-  // Search for orchestrator scripts in common locations
-  const candidates = [
-    // Bundled with codex-monitor (inside codex-monitor dir) - check first
+  const shellModeEnv = String(process.env.CODEX_MONITOR_SHELL_MODE || "")
+    .trim()
+    .toLowerCase();
+  const shellModeRequested = ["1", "true", "yes", "on"].includes(shellModeEnv);
+  const orchestratorEnv = String(process.env.ORCHESTRATOR_SCRIPT || "")
+    .trim()
+    .toLowerCase();
+  const preferShellScript =
+    shellModeRequested ||
+    orchestratorEnv.endsWith(".sh") ||
+    (process.platform !== "win32" && !orchestratorEnv.endsWith(".ps1"));
+
+  const shCandidates = [
+    resolve(configDir, "ve-orchestrator.sh"),
+    resolve(configDir, "orchestrator.sh"),
+    resolve(configDir, "..", "ve-orchestrator.sh"),
+    resolve(configDir, "..", "orchestrator.sh"),
+    resolve(repoRoot, "scripts", "ve-orchestrator.sh"),
+    resolve(repoRoot, "scripts", "orchestrator.sh"),
+    resolve(repoRoot, "ve-orchestrator.sh"),
+    resolve(repoRoot, "orchestrator.sh"),
+    resolve(process.cwd(), "ve-orchestrator.sh"),
+    resolve(process.cwd(), "orchestrator.sh"),
+    resolve(process.cwd(), "scripts", "ve-orchestrator.sh"),
+  ];
+
+  const psCandidates = [
     resolve(configDir, "ve-orchestrator.ps1"),
     resolve(configDir, "orchestrator.ps1"),
-    resolve(configDir, "orchestrator.sh"),
-    // Sibling to codex-monitor dir (scripts/ve-orchestrator.ps1)
     resolve(configDir, "..", "ve-orchestrator.ps1"),
     resolve(configDir, "..", "orchestrator.ps1"),
-    resolve(configDir, "..", "orchestrator.sh"),
-    // Repo root scripts dir
     resolve(repoRoot, "scripts", "ve-orchestrator.ps1"),
     resolve(repoRoot, "scripts", "orchestrator.ps1"),
-    resolve(repoRoot, "scripts", "orchestrator.sh"),
-    // Repo root
     resolve(repoRoot, "ve-orchestrator.ps1"),
     resolve(repoRoot, "orchestrator.ps1"),
-    resolve(repoRoot, "orchestrator.sh"),
-    // CWD
     resolve(process.cwd(), "ve-orchestrator.ps1"),
     resolve(process.cwd(), "orchestrator.ps1"),
     resolve(process.cwd(), "scripts", "ve-orchestrator.ps1"),
   ];
+
+  const candidates = preferShellScript
+    ? [...shCandidates, ...psCandidates]
+    : [...psCandidates, ...shCandidates];
   for (const p of candidates) {
     if (existsSync(p)) return p;
   }
-  // Default to sibling location (most common for npm-installed codex-monitor)
-  return resolve(configDir, "..", "ve-orchestrator.ps1");
+  return preferShellScript
+    ? resolve(configDir, "..", "ve-orchestrator.sh")
+    : resolve(configDir, "..", "ve-orchestrator.ps1");
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
@@ -1467,5 +1434,7 @@ export {
   loadExecutorConfig,
   loadRepoConfig,
   loadAgentPrompts,
+  parseEnvBoolean,
+  getAgentPromptDefinitions,
 };
 export default loadConfig;

@@ -6,32 +6,62 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // behaviour: by default they throw "not available" unless overridden.
 // ---------------------------------------------------------------------------
 
-const mockCodexThread = vi.fn();
-const mockCopilotThread = vi.fn();
-const mockClaudeThread = vi.fn();
+const mockCodexStartThread = vi.fn();
+const mockCodexResumeThread = vi.fn();
+const mockCopilotCreateSession = vi.fn();
+const mockCopilotResumeSession = vi.fn();
+const mockClaudeQuery = vi.fn();
+
+function makeCodexMockThread(
+  threadId = "mock-codex-thread",
+  text = "codex-output",
+) {
+  return {
+    id: threadId,
+    runStreamed: async () => ({
+      events: {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: "item.completed",
+            item: { type: "agent_message", text },
+          };
+        },
+      },
+    }),
+  };
+}
 
 vi.mock("@openai/codex-sdk", () => {
-  if (process.env.__MOCK_CODEX_AVAILABLE === "1") {
-    return {
-      Codex: class MockCodex {
-        startThread() {
+  return {
+    Codex: class MockCodex {
+      startThread(...args) {
+        if (process.env.__MOCK_CODEX_AVAILABLE !== "1") {
           return {
-            runStreamed: async () => ({
-              events: {
-                async *[Symbol.asyncIterator]() {
-                  yield {
-                    type: "item.completed",
-                    item: { type: "agent_message", text: "codex-output" },
-                  };
-                },
-              },
-            }),
+            id: "mock-codex-unavailable",
+            runStreamed: async () => {
+              throw new Error("Codex SDK not available: mocked unavailable");
+            },
           };
         }
-      },
-    };
-  }
-  throw new Error("Cannot find module '@openai/codex-sdk'");
+        const injected = mockCodexStartThread(...args);
+        if (injected !== undefined) return injected;
+        return makeCodexMockThread("mock-codex-thread-new", "codex-output");
+      }
+
+      resumeThread(...args) {
+        if (process.env.__MOCK_CODEX_AVAILABLE !== "1") {
+          throw new Error("Codex SDK not available: mocked unavailable");
+        }
+        const injected = mockCodexResumeThread(...args);
+        if (injected !== undefined) return injected;
+        const [threadId] = args;
+        return makeCodexMockThread(
+          threadId || "mock-codex-thread-resumed",
+          "codex-resumed-output",
+        );
+      }
+    },
+  };
 });
 
 vi.mock("@github/copilot-sdk", () => {
@@ -40,8 +70,27 @@ vi.mock("@github/copilot-sdk", () => {
       CopilotClient: class MockCopilotClient {
         async start() {}
         async stop() {}
-        async createSession() {
+        async resumeSession(...args) {
+          const injected = mockCopilotResumeSession(...args);
+          if (injected !== undefined) return injected;
+          const [sessionId] = args;
           return {
+            sessionId: sessionId || "mock-copilot-session-resumed",
+            sendAndWait: async () => {},
+            on: (cb) => {
+              cb({
+                type: "assistant.message",
+                data: { content: "copilot-output" },
+              });
+              return () => {};
+            },
+          };
+        }
+        async createSession(...args) {
+          const injected = mockCopilotCreateSession(...args);
+          if (injected !== undefined) return injected;
+          return {
+            sessionId: "mock-copilot-session-new",
             sendAndWait: async () => {},
             on: (cb) => {
               cb({
@@ -61,16 +110,36 @@ vi.mock("@github/copilot-sdk", () => {
 vi.mock("@anthropic-ai/claude-agent-sdk", () => {
   if (process.env.__MOCK_CLAUDE_AVAILABLE === "1") {
     return {
-      query: function mockQuery() {
+      query: function mockQuery(payload = {}) {
+        const injected = mockClaudeQuery(payload);
+        if (injected !== undefined) return injected;
         return {
           async *[Symbol.asyncIterator]() {
+            let sessionId = "mock-claude-session-new";
+            try {
+              const promptIterator =
+                payload?.prompt?.[Symbol.asyncIterator]?.();
+              if (promptIterator) {
+                const first = await promptIterator.next();
+                if (!first?.done) {
+                  const incoming =
+                    first?.value?.session_id || first?.value?.sessionId;
+                  if (incoming) {
+                    sessionId = incoming;
+                  }
+                }
+              }
+            } catch {
+              /* best effort */
+            }
             yield {
               type: "assistant",
+              session_id: sessionId,
               message: {
                 content: [{ type: "text", text: "claude-output" }],
               },
             };
-            yield { type: "result" };
+            yield { type: "result", session_id: sessionId };
           },
         };
       },
@@ -102,6 +171,10 @@ const ENV_KEYS = [
   "__MOCK_CODEX_AVAILABLE",
   "__MOCK_COPILOT_AVAILABLE",
   "__MOCK_CLAUDE_AVAILABLE",
+  "DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS",
+  "DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS",
+  "COPILOT_MODEL",
+  "COPILOT_SDK_MODEL",
 ];
 
 /** @type {Record<string, string|undefined>} */
@@ -133,6 +206,10 @@ function clearSdkEnv() {
   delete process.env.__MOCK_CODEX_AVAILABLE;
   delete process.env.__MOCK_COPILOT_AVAILABLE;
   delete process.env.__MOCK_CLAUDE_AVAILABLE;
+  delete process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS;
+  delete process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS;
+  delete process.env.COPILOT_MODEL;
+  delete process.env.COPILOT_SDK_MODEL;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,11 +221,17 @@ let getPoolSdkName,
   resetPoolSdkCache,
   getAvailableSdks,
   launchEphemeralThread,
-  execPooledPrompt;
+  execPooledPrompt,
+  launchOrResumeThread,
+  invalidateThreadAsync,
+  getThreadRecord,
+  clearThreadRegistry,
+  ensureThreadRegistryLoaded;
 
 beforeEach(async () => {
   saveEnv();
   clearSdkEnv();
+  vi.resetModules();
 
   // Dynamic import to pick up mocks; then grab exports
   const mod = await import("../agent-pool.mjs");
@@ -158,9 +241,21 @@ beforeEach(async () => {
   getAvailableSdks = mod.getAvailableSdks;
   launchEphemeralThread = mod.launchEphemeralThread;
   execPooledPrompt = mod.execPooledPrompt;
+  launchOrResumeThread = mod.launchOrResumeThread;
+  invalidateThreadAsync = mod.invalidateThreadAsync;
+  getThreadRecord = mod.getThreadRecord;
+  clearThreadRegistry = mod.clearThreadRegistry;
+  ensureThreadRegistryLoaded = mod.ensureThreadRegistryLoaded;
 
   // Always reset the cache so each test starts clean
   resetPoolSdkCache();
+  mockCodexStartThread.mockReset();
+  mockCodexResumeThread.mockReset();
+  mockCopilotCreateSession.mockReset();
+  mockCopilotResumeSession.mockReset();
+  mockClaudeQuery.mockReset();
+  await ensureThreadRegistryLoaded();
+  clearThreadRegistry();
 });
 
 afterEach(() => {
@@ -412,15 +507,459 @@ describe("launchEphemeralThread", () => {
     // Invalid sdk in extra should fall through to resolved pool sdk
     expect(result.sdk).toBe("codex");
   });
+
+  it("accepts copilot output when sendAndWait times out waiting for session.idle", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    setPoolSdk("copilot");
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      sendAndWait: async () => {
+        throw new Error("Timeout after 300000ms waiting for session.idle");
+      },
+      on: (cb) => {
+        cb({
+          type: "assistant.message",
+          data: { content: "copilot-complete-output" },
+        });
+        return () => {};
+      },
+    }));
+
+    const result = await launchEphemeralThread(
+      "test prompt",
+      process.cwd(),
+      5000,
+    );
+    expect(result.success).toBe(true);
+    expect(result.sdk).toBe("copilot");
+    expect(result.output).toContain("copilot-complete-output");
+    expect(result.error).toBeNull();
+  });
+
+  it("fails copilot idle timeout when no assistant output was received", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    setPoolSdk("copilot");
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      sendAndWait: async () => {
+        throw new Error("Timeout after 300000ms waiting for session.idle");
+      },
+      on: () => () => {},
+    }));
+
+    const result = await launchEphemeralThread(
+      "test prompt",
+      process.cwd(),
+      5000,
+    );
+    expect(result.success).toBe(false);
+    expect(result.sdk).toBe("copilot");
+    expect(result.error).toMatch(
+      /\[agent-pool\] copilot timeout after 5000ms waiting for session\.idle/i,
+    );
+  });
+
+  it("prefers session.send over sendAndWait when both are available", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    setPoolSdk("copilot");
+
+    let listeners = [];
+    const sendAndWait = vi.fn(async () => {
+      throw new Error("Timeout after 300000ms waiting for session.idle");
+    });
+    const send = vi.fn(
+      async () =>
+        await new Promise((resolve) => {
+          setTimeout(() => {
+            for (const cb of listeners) {
+              cb({
+                type: "assistant.message",
+                data: { content: "copilot-send-output" },
+              });
+              cb({ type: "session.idle" });
+            }
+            resolve();
+          }, 0);
+        }),
+    );
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      send,
+      sendAndWait,
+      on: (cb) => {
+        listeners.push(cb);
+        return () => {
+          listeners = listeners.filter((x) => x !== cb);
+        };
+      },
+    }));
+
+    const result = await launchEphemeralThread(
+      "test prompt",
+      process.cwd(),
+      5000,
+    );
+    expect(result.success).toBe(true);
+    expect(result.sdk).toBe("copilot");
+    expect(result.output).toContain("copilot-send-output");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(sendAndWait).not.toHaveBeenCalled();
+  });
+
+  it("applies explicit extra.model to Copilot session config", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    setPoolSdk("copilot");
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      send: async () => {},
+      on: (cb) => {
+        cb({ type: "assistant.message", data: { content: "ok" } });
+        cb({ type: "session.idle" });
+        return () => {};
+      },
+    }));
+
+    const result = await launchEphemeralThread("test prompt", process.cwd(), 5000, {
+      sdk: "copilot",
+      model: "gpt-5.3-codex",
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockCopilotCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-5.3-codex",
+      }),
+    );
+  });
+
+  it("uses COPILOT_MODEL env when extra.model is not provided", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    process.env.COPILOT_MODEL = "gpt-5.3-codex";
+    setPoolSdk("copilot");
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      send: async () => {},
+      on: (cb) => {
+        cb({ type: "assistant.message", data: { content: "ok" } });
+        cb({ type: "session.idle" });
+        return () => {};
+      },
+    }));
+
+    const result = await launchEphemeralThread("test prompt", process.cwd(), 5000, {
+      sdk: "copilot",
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockCopilotCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-5.3-codex",
+      }),
+    );
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. execPooledPrompt
+// 4. launchOrResumeThread
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("launchOrResumeThread", () => {
+  it("applies configured monitor-monitor minimum timeout bound", async () => {
+    process.env.__MOCK_CODEX_AVAILABLE = "1";
+    process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS = "80";
+    setPoolSdk("codex");
+
+    mockCodexStartThread.mockImplementationOnce(() => ({
+      id: "timeout-thread-min-bound",
+      runStreamed: async (_prompt, { signal } = {}) => {
+        await new Promise((_, reject) => {
+          const abortNow = () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          };
+          if (signal?.aborted) {
+            abortNow();
+            return;
+          }
+          signal?.addEventListener("abort", abortNow, { once: true });
+        });
+      },
+    }));
+
+    const result = await launchOrResumeThread(
+      "monitor timeout test",
+      process.cwd(),
+      25,
+      {
+        taskKey: "monitor-monitor",
+        sdk: "codex",
+      },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/timeout after 80ms/i);
+  });
+
+  it("does not apply monitor timeout bounds to non-monitor task keys", async () => {
+    process.env.__MOCK_CODEX_AVAILABLE = "1";
+    process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS = "90";
+    setPoolSdk("codex");
+
+    mockCodexStartThread.mockImplementationOnce(() => ({
+      id: "timeout-thread-non-monitor",
+      runStreamed: async (_prompt, { signal } = {}) => {
+        await new Promise((_, reject) => {
+          const abortNow = () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          };
+          if (signal?.aborted) {
+            abortNow();
+            return;
+          }
+          signal?.addEventListener("abort", abortNow, { once: true });
+        });
+      },
+    }));
+
+    const result = await launchOrResumeThread("regular task timeout test", process.cwd(), 25, {
+      taskKey: "task-123",
+      sdk: "codex",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/timeout after 25ms/i);
+  });
+
+  it("drops poisoned codex thread metadata when resume state is corrupted", async () => {
+    process.env.__MOCK_CODEX_AVAILABLE = "1";
+    setPoolSdk("codex");
+
+    const taskKey = "poisoned-resume-task";
+    mockCodexStartThread
+      .mockImplementationOnce(() =>
+        makeCodexMockThread("legacy-thread-id", "first-run"),
+      )
+      .mockImplementationOnce(() => null);
+
+    const first = await launchOrResumeThread(
+      "initial prompt",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "codex",
+      },
+    );
+
+    expect(first.success).toBe(true);
+    expect(first.threadId).toBe("legacy-thread-id");
+    expect(first.resumed).toBe(false);
+
+    mockCodexResumeThread.mockImplementation(() => {
+      throw new Error(
+        "state db missing rollout path for thread legacy-thread-id; invalid_encrypted_content; could not be verified",
+      );
+    });
+
+    const second = await launchOrResumeThread(
+      "follow-up prompt",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "codex",
+      },
+    );
+
+    expect(second.success).toBe(false);
+    expect(second.resumed).toBe(false);
+    expect(second.error).toMatch(/startThread\(\) returned null/i);
+
+    const record = getThreadRecord(taskKey);
+    expect(record).toBeTruthy();
+    expect(record.threadId).toBeNull();
+    expect(record.alive).toBe(false);
+  });
+
+  it("invalidateThreadAsync prevents reuse of an existing thread", async () => {
+    process.env.__MOCK_CODEX_AVAILABLE = "1";
+    setPoolSdk("codex");
+
+    const taskKey = "monitor-monitor";
+    mockCodexStartThread
+      .mockImplementationOnce(() =>
+        makeCodexMockThread("thread-1", "first-run"),
+      )
+      .mockImplementationOnce(() =>
+        makeCodexMockThread("thread-2", "second-run"),
+      );
+
+    const first = await launchOrResumeThread(
+      "initial prompt",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "codex",
+      },
+    );
+    expect(first.success).toBe(true);
+    expect(first.threadId).toBe("thread-1");
+    expect(first.resumed).toBe(false);
+
+    await invalidateThreadAsync(taskKey);
+    const invalidatedRecord = getThreadRecord(taskKey);
+    expect(invalidatedRecord?.alive).toBe(false);
+
+    const second = await launchOrResumeThread(
+      "follow-up prompt",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "codex",
+      },
+    );
+
+    expect(second.success).toBe(true);
+    expect(second.resumed).toBe(false);
+    expect(second.threadId).toBe("thread-2");
+    expect(mockCodexResumeThread).not.toHaveBeenCalled();
+  });
+
+  it("uses persistent Copilot session IDs without carrying stale Codex thread IDs", async () => {
+    process.env.__MOCK_CODEX_AVAILABLE = "1";
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    const taskKey = "monitor-monitor";
+
+    mockCodexStartThread.mockImplementationOnce(() =>
+      makeCodexMockThread("legacy-thread-id", "codex-first-run"),
+    );
+
+    const first = await launchOrResumeThread(
+      "initial prompt",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "codex",
+      },
+    );
+    expect(first.success).toBe(true);
+    expect(first.threadId).toBe("legacy-thread-id");
+    expect(first.resumed).toBe(false);
+
+    const second = await launchOrResumeThread(
+      "switch to copilot",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "copilot",
+      },
+    );
+    expect(second.success).toBe(true);
+    expect(second.threadId).toBe("mock-copilot-session-new");
+    expect(second.resumed).toBe(false);
+
+    const recordAfterSecond = getThreadRecord(taskKey);
+    expect(recordAfterSecond?.sdk).toBe("copilot");
+    expect(recordAfterSecond?.threadId).toBe("mock-copilot-session-new");
+    expect(recordAfterSecond?.alive).toBe(true);
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    logSpy.mockClear();
+    const third = await launchOrResumeThread(
+      "copilot follow-up",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "copilot",
+      },
+    );
+    expect(third.success).toBe(true);
+    expect(third.resumed).toBe(true);
+    expect(third.threadId).toBe("mock-copilot-session-new");
+    const emittedLogs = logSpy.mock.calls
+      .map((args) => args.join(" "))
+      .join("\n");
+    expect(emittedLogs).toContain("resuming Copilot session");
+    expect(mockCopilotResumeSession).toHaveBeenCalledTimes(1);
+    logSpy.mockRestore();
+  });
+
+  it("persists and resumes Claude session IDs", async () => {
+    process.env.__MOCK_CLAUDE_AVAILABLE = "1";
+    const taskKey = "monitor-monitor-claude";
+
+    const first = await launchOrResumeThread(
+      "initial prompt",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "claude",
+      },
+    );
+    expect(first.success).toBe(true);
+    expect(first.threadId).toBe("mock-claude-session-new");
+    expect(first.resumed).toBe(false);
+
+    const firstRecord = getThreadRecord(taskKey);
+    expect(firstRecord?.sdk).toBe("claude");
+    expect(firstRecord?.threadId).toBe("mock-claude-session-new");
+    expect(firstRecord?.alive).toBe(true);
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    logSpy.mockClear();
+    const second = await launchOrResumeThread(
+      "claude follow-up",
+      process.cwd(),
+      5000,
+      {
+        taskKey,
+        sdk: "claude",
+      },
+    );
+
+    expect(second.success).toBe(true);
+    expect(second.resumed).toBe(true);
+    expect(second.threadId).toBe("mock-claude-session-new");
+    const emittedLogs = logSpy.mock.calls
+      .map((args) => args.join(" "))
+      .join("\n");
+    expect(emittedLogs).toContain("resuming Claude session");
+    expect(mockClaudeQuery).toHaveBeenCalledTimes(2);
+    logSpy.mockRestore();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. execPooledPrompt
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("execPooledPrompt", () => {
   it("returns finalResponse on failure with error prefix", async () => {
-    // SDKs not actually available → will fail
+    // Force all SDKs disabled so this path deterministically fails.
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.COPILOT_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    resetPoolSdkCache();
+
     const result = await execPooledPrompt("do something");
     expect(result).toHaveProperty("finalResponse");
     expect(result).toHaveProperty("items");
@@ -485,11 +1024,15 @@ describe("execPooledPrompt", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 5. Edge cases & integration of resolution + launch
+// 6. Edge cases & integration of resolution + launch
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("resolution and launch integration", () => {
   it("setPoolSdk affects subsequent launchEphemeralThread calls", async () => {
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.COPILOT_SDK_DISABLED = "1";
+    resetPoolSdkCache();
+
     setPoolSdk("claude");
     const result = await launchEphemeralThread("test", process.cwd(), 5000);
     expect(result.sdk).toBe("claude");

@@ -522,13 +522,25 @@ Do NOT restart from scratch — build on existing progress.`;
     if (toolCalls.length >= 10) {
       const readTools = toolCalls.filter((m) => {
         const name = (m.meta?.toolName || m.content || "").toLowerCase();
-        return name.includes("read") || name.includes("search") || name.includes("grep") ||
-               name.includes("list") || name.includes("find") || name.includes("cat");
+        return (
+          name.includes("read") ||
+          name.includes("search") ||
+          name.includes("grep") ||
+          name.includes("list") ||
+          name.includes("find") ||
+          name.includes("cat")
+        );
       });
       const editTools = toolCalls.filter((m) => {
         const name = (m.meta?.toolName || m.content || "").toLowerCase();
-        return name.includes("write") || name.includes("edit") || name.includes("create") ||
-               name.includes("replace") || name.includes("patch") || name.includes("append");
+        return (
+          name.includes("write") ||
+          name.includes("edit") ||
+          name.includes("create") ||
+          name.includes("replace") ||
+          name.includes("patch") ||
+          name.includes("append")
+        );
       });
 
       if (readTools.length >= 8 && editTools.length === 0) {
@@ -539,17 +551,30 @@ Do NOT restart from scratch — build on existing progress.`;
 
     // ── Plan stuck ──
     const agentMessages = messages.filter((m) => m.type === "agent_message");
-    const allAgentText = agentMessages.map((m) => m.content).join(" ").toLowerCase();
+    const allAgentText = agentMessages
+      .map((m) => m.content)
+      .join(" ")
+      .toLowerCase();
     const planPhrases = [
-      "here's the plan", "here is my plan", "i'll create a plan",
-      "plan.md", "ready to start implementing", "ready to begin",
-      "would you like me to proceed", "shall i start", "would you like me to implement",
+      "here's the plan",
+      "here is my plan",
+      "i'll create a plan",
+      "plan.md",
+      "ready to start implementing",
+      "ready to begin",
+      "would you like me to proceed",
+      "shall i start",
+      "would you like me to implement",
     ];
     const hasPlanPhrase = planPhrases.some((p) => allAgentText.includes(p));
     const editToolCalls = toolCalls.filter((m) => {
       const name = (m.meta?.toolName || m.content || "").toLowerCase();
-      return name.includes("write") || name.includes("edit") || name.includes("create") ||
-             name.includes("replace");
+      return (
+        name.includes("write") ||
+        name.includes("edit") ||
+        name.includes("create") ||
+        name.includes("replace")
+      );
     });
     if (hasPlanPhrase && editToolCalls.length <= 1) {
       patterns.push("plan_stuck");
@@ -558,20 +583,34 @@ Do NOT restart from scratch — build on existing progress.`;
 
     // ── Needs clarification ──
     const clarificationPhrases = [
-      "need clarification", "need more information", "could you clarify",
-      "unclear", "ambiguous", "which approach", "please specify",
-      "i need to know", "can you provide", "what should i",
+      "need clarification",
+      "need more information",
+      "could you clarify",
+      "unclear",
+      "ambiguous",
+      "which approach",
+      "please specify",
+      "i need to know",
+      "can you provide",
+      "what should i",
     ];
     if (clarificationPhrases.some((p) => allAgentText.includes(p))) {
       patterns.push("needs_clarification");
-      details.needs_clarification = "Agent expressed uncertainty or asked for input";
+      details.needs_clarification =
+        "Agent expressed uncertainty or asked for input";
     }
 
     // ── False completion ──
     const completionPhrases = [
-      "task complete", "task is complete", "i've completed", "all done",
-      "successfully completed", "changes have been committed",
-      "pushed to", "pr created", "pull request created",
+      "task complete",
+      "task is complete",
+      "i've completed",
+      "all done",
+      "successfully completed",
+      "changes have been committed",
+      "pushed to",
+      "pr created",
+      "pull request created",
     ];
     const claimsDone = completionPhrases.some((p) => allAgentText.includes(p));
     const hasGitCommit = toolCalls.some((m) => {
@@ -580,7 +619,8 @@ Do NOT restart from scratch — build on existing progress.`;
     });
     if (claimsDone && !hasGitCommit) {
       patterns.push("false_completion");
-      details.false_completion = "Agent claims completion but no git commit/push detected in tool calls";
+      details.false_completion =
+        "Agent claims completion but no git commit/push detected in tool calls";
     }
 
     // ── Rate limited ──
@@ -594,7 +634,14 @@ Do NOT restart from scratch — build on existing progress.`;
     }
 
     // Determine primary pattern (most actionable)
-    const priority = ["rate_limited", "plan_stuck", "false_completion", "needs_clarification", "tool_loop", "analysis_paralysis"];
+    const priority = [
+      "rate_limited",
+      "plan_stuck",
+      "false_completion",
+      "needs_clarification",
+      "tool_loop",
+      "analysis_paralysis",
+    ];
     const primary = priority.find((p) => patterns.includes(p)) || null;
 
     return { patterns, primary, details };
@@ -614,7 +661,8 @@ Do NOT restart from scratch — build on existing progress.`;
     try {
       const files = readdirSync(logsDir).filter((f) => f.endsWith(".log"));
 
-      for (const file of files.slice(-20)) { // Only last 20 logs
+      for (const file of files.slice(-20)) {
+        // Only last 20 logs
         try {
           const content = readFileSync(`${logsDir}/${file}`, "utf8");
           const classification = this.classify(content);
@@ -627,13 +675,19 @@ Do NOT restart from scratch — build on existing progress.`;
 
       // Generate recommendations
       if ((patterns.rate_limit || 0) > 3) {
-        recommendations.push("Frequent rate limiting — consider reducing parallelism or adding delays");
+        recommendations.push(
+          "Frequent rate limiting — consider reducing parallelism or adding delays",
+        );
       }
       if ((patterns.plan_stuck || 0) > 3) {
-        recommendations.push("Agents frequently get stuck in planning mode — ensure instructions explicitly say 'implement immediately'");
+        recommendations.push(
+          "Agents frequently get stuck in planning mode — ensure instructions explicitly say 'implement immediately'",
+        );
       }
       if ((patterns.token_overflow || 0) > 2) {
-        recommendations.push("Token overflow occurring — consider splitting large tasks or using summarization");
+        recommendations.push(
+          "Token overflow occurring — consider splitting large tasks or using summarization",
+        );
       }
     } catch {
       /* logsDir might not exist */
@@ -678,27 +732,35 @@ Do NOT restart from scratch — build on existing progress.`;
           `# BREAK THE LOOP — Change Approach`,
           ``,
           `You've been repeating the same tools without making progress on "${taskTitle}".`,
-          analysis.details?.tool_loop ? `Detail: ${analysis.details.tool_loop}` : "",
+          analysis.details?.tool_loop
+            ? `Detail: ${analysis.details.tool_loop}`
+            : "",
           ``,
           `STOP and take a different approach:`,
           `1. Summarize what you've learned so far`,
           `2. Identify what's blocking you`,
           `3. Try a completely different strategy`,
           `4. Make incremental progress — edit files, commit, push`,
-        ].filter(Boolean).join("\n");
+        ]
+          .filter(Boolean)
+          .join("\n");
 
       case "analysis_paralysis":
         return [
           `# START EDITING — Stop Just Reading`,
           ``,
           `You've been reading files but not making any changes for "${taskTitle}".`,
-          analysis.details?.analysis_paralysis ? `Detail: ${analysis.details.analysis_paralysis}` : "",
+          analysis.details?.analysis_paralysis
+            ? `Detail: ${analysis.details.analysis_paralysis}`
+            : "",
           ``,
           `You have enough context. Start implementing:`,
           `1. Create or edit the files needed`,
           `2. Don't try to understand everything first — work incrementally`,
           `3. Commit and push after each meaningful change`,
-        ].filter(Boolean).join("\n");
+        ]
+          .filter(Boolean)
+          .join("\n");
 
       case "needs_clarification":
         return [

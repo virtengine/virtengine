@@ -15,8 +15,8 @@
     "@cosmos-kit/keplr": "^2.7.1",
     "@cosmos-kit/leap": "^2.7.1",
     "@cosmos-kit/react": "^2.7.1",
-    "@cosmjs/proto-signing": "^0.33.0",
-    "@cosmjs/stargate": "^0.33.0",
+    "@cosmjs/proto-signing": "^0.36.2",
+    "@cosmjs/stargate": "^0.36.2",
     "@radix-ui/react-slot": "^1.0.2",
     "@tanstack/react-query": "^5.62.7",
     "class-variance-authority": "^0.7.0",
@@ -30,11 +30,31 @@
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^7.3.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "@cosmjs/amino": "0.36.2",
+      "@cosmjs/crypto": "0.36.2",
+      "@cosmjs/encoding": "0.36.2",
+      "@cosmjs/math": "0.36.2",
+      "@cosmjs/utils": "0.36.2",
+      "@keplr-wallet/common": "0.13.8",
+      "@keplr-wallet/cosmos": "0.13.8",
+      "@keplr-wallet/crypto": "0.13.8",
+      "@keplr-wallet/proto-types": "0.13.8",
+      "@keplr-wallet/provider": "0.13.8",
+      "@keplr-wallet/provider-extension": "0.13.8",
+      "@keplr-wallet/router": "0.13.8",
+      "@keplr-wallet/simple-fetch": "0.13.8",
+      "@keplr-wallet/types": "0.13.8",
+      "@keplr-wallet/unit": "0.13.8",
+      "tiny-secp256k1": "2.2.4"
+    }
   }
 }

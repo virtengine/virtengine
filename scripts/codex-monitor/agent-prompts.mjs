@@ -39,7 +39,8 @@ const PROMPT_DEFS = [
   {
     key: "taskExecutorContinueHasCommits",
     filename: "task-executor-continue-has-commits.md",
-    description: "Continue prompt when edits were committed but not fully finalized.",
+    description:
+      "Continue prompt when edits were committed but not fully finalized.",
   },
   {
     key: "taskExecutorContinueHasEdits",
@@ -49,7 +50,8 @@ const PROMPT_DEFS = [
   {
     key: "taskExecutorContinueNoProgress",
     filename: "task-executor-continue-no-progress.md",
-    description: "Continue prompt when the task stalled without meaningful progress.",
+    description:
+      "Continue prompt when the task stalled without meaningful progress.",
   },
   {
     key: "reviewer",
@@ -74,22 +76,26 @@ const PROMPT_DEFS = [
   {
     key: "mergeStrategyFix",
     filename: "merge-strategy-fix.md",
-    description: "Prompt used when merge strategy decides to send a fix message.",
+    description:
+      "Prompt used when merge strategy decides to send a fix message.",
   },
   {
     key: "mergeStrategyReAttempt",
     filename: "merge-strategy-reattempt.md",
-    description: "Prompt used when merge strategy decides to re-attempt the task.",
+    description:
+      "Prompt used when merge strategy decides to re-attempt the task.",
   },
   {
     key: "autofixFix",
     filename: "autofix-fix.md",
-    description: "Prompt used by crash autofix when structured error data is available.",
+    description:
+      "Prompt used by crash autofix when structured error data is available.",
   },
   {
     key: "autofixFallback",
     filename: "autofix-fallback.md",
-    description: "Prompt used by crash autofix when only log-tail context is available.",
+    description:
+      "Prompt used by crash autofix when only log-tail context is available.",
   },
   {
     key: "autofixLoop",
@@ -173,7 +179,7 @@ You are the always-on reliability guardian for codex-monitor in devmode.
 - Do not commit/push/open PRs in this context.
 - Apply focused fixes, run focused validation, and keep monitoring.
 `,
-  taskExecutor: `# Task: {{TASK_TITLE}}
+  taskExecutor: `# {{TASK_ID}} — {{TASK_TITLE}}
 
 ## Description
 {{TASK_DESCRIPTION}}
@@ -208,7 +214,7 @@ You are the always-on reliability guardian for codex-monitor in devmode.
 ## Repository Context
 {{REPO_CONTEXT}}
 `,
-  taskExecutorRetry: `# ERROR RECOVERY - Attempt {{ATTEMPT_NUMBER}}
+  taskExecutorRetry: `# {{TASK_ID}} — ERROR RECOVERY (Attempt {{ATTEMPT_NUMBER}})
 
 Your previous attempt on task "{{TASK_TITLE}}" encountered an issue:
 
@@ -227,7 +233,7 @@ Please:
 Original task description:
 {{TASK_DESCRIPTION}}
 `,
-  taskExecutorContinueHasCommits: `# CONTINUE - Verify and Push
+  taskExecutorContinueHasCommits: `# {{TASK_ID}} — CONTINUE (Verify and Push)
 
 You were working on "{{TASK_TITLE}}" and appear to have stopped.
 You already made commits.
@@ -237,7 +243,7 @@ You already made commits.
 3. If failing, fix issues, commit, and push.
 4. Task is not complete until push succeeds.
 `,
-  taskExecutorContinueHasEdits: `# CONTINUE - Commit and Push
+  taskExecutorContinueHasEdits: `# {{TASK_ID}} — CONTINUE (Commit and Push)
 
 You were working on "{{TASK_TITLE}}" and appear to have stopped.
 You made file edits but no commit yet.

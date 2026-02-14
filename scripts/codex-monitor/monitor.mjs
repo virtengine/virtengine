@@ -47,12 +47,26 @@ import {
 } from "./primary-agent.mjs";
 import {
   execPooledPrompt,
-  launchEphemeralThread,
+  launchOrResumeThread,
   getAvailableSdks,
 } from "./agent-pool.mjs";
 import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
+import {
+  isWhatsAppEnabled,
+  startWhatsAppChannel,
+  stopWhatsAppChannel,
+  notifyWhatsApp,
+  getWhatsAppStatus,
+} from "./whatsapp-channel.mjs";
+import {
+  isContainerEnabled,
+  getContainerStatus,
+  ensureContainerRuntime,
+  stopAllContainers,
+  cleanupOrphanedContainers,
+} from "./container-runner.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
 import { RestartController } from "./restart-controller.mjs";
 import {
@@ -150,6 +164,8 @@ import {
 import { fixGitConfigCorruption } from "./worktree-manager.mjs";
 // ── Task management subsystem imports ──────────────────────────────────────
 import {
+  configureTaskStore,
+  getStorePath,
   loadStore as loadTaskStore,
   getStats as getTaskStoreStats,
   setTaskStatus as setInternalTaskStatus,
@@ -163,7 +179,12 @@ import { createAgentEndpoint } from "./agent-endpoint.mjs";
 import { createReviewAgent } from "./review-agent.mjs";
 import { createSyncEngine } from "./sync-engine.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
-import { getKanbanBackendName } from "./kanban-adapter.mjs";
+import {
+  getKanbanBackendName,
+  listTasks as listKanbanTasks,
+  updateTaskStatus as updateKanbanTaskStatus,
+} from "./kanban-adapter.mjs";
+import { resolvePromptTemplate } from "./agent-prompts.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
@@ -362,11 +383,7 @@ function getActiveKanbanBackend() {
 
 function isVkRuntimeRequired() {
   const backend = getActiveKanbanBackend();
-  return (
-    backend === "vk" ||
-    executorMode === "vk" ||
-    executorMode === "hybrid"
-  );
+  return backend === "vk" || executorMode === "vk" || executorMode === "hybrid";
 }
 
 function isVkSpawnAllowed() {
@@ -401,6 +418,17 @@ function isFalsyFlag(value) {
   );
 }
 
+function isReviewAgentEnabled() {
+  const explicit = process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
+  if (explicit !== undefined && String(explicit).trim() !== "") {
+    return !isFalsyFlag(explicit);
+  }
+  if (typeof internalExecutorConfig?.reviewAgentEnabled === "boolean") {
+    return internalExecutorConfig.reviewAgentEnabled;
+  }
+  return true;
+}
+
 function isMonitorMonitorEnabled() {
   if (process.env.VITEST) return false;
   if (!isDevMode()) return false;
@@ -417,6 +445,75 @@ function isMonitorMonitorEnabled() {
   return true;
 }
 
+const MONITOR_MONITOR_DEFAULT_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+const MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS = 600_000;
+const monitorMonitorTimeoutWarningKeys = new Set();
+
+function parsePositiveMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.trunc(parsed);
+}
+
+function warnMonitorTimeoutConfig(key, message) {
+  if (!key || monitorMonitorTimeoutWarningKeys.has(key)) return;
+  monitorMonitorTimeoutWarningKeys.add(key);
+  console.warn(message);
+}
+
+function resolveMonitorMonitorTimeoutMs() {
+  const explicitTimeoutRaw = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS;
+  const legacyTimeoutRaw = process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS;
+  const minTimeoutRaw = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS;
+  const maxTimeoutRaw = process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS;
+
+  const explicitTimeout = parsePositiveMs(explicitTimeoutRaw);
+  const legacyTimeout = parsePositiveMs(legacyTimeoutRaw);
+  const minTimeout = parsePositiveMs(minTimeoutRaw);
+  const maxTimeoutCandidate = parsePositiveMs(maxTimeoutRaw);
+
+  let maxTimeout = maxTimeoutCandidate;
+  if (minTimeout !== null && maxTimeout !== null && maxTimeout < minTimeout) {
+    warnMonitorTimeoutConfig(
+      `bounds:${minTimeout}:${maxTimeout}`,
+      `[monitor] ⚠️  Invalid monitor-monitor timeout bounds: DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS=${maxTimeout}ms is lower than DEVMODE_MONITOR_MONITOR_TIMEOUT_MIN_MS=${minTimeout}ms. Ignoring max bound.`,
+    );
+    maxTimeout = null;
+  }
+
+  const sourceTimeout =
+    explicitTimeout ?? legacyTimeout ?? MONITOR_MONITOR_DEFAULT_TIMEOUT_MS;
+
+  let timeoutMs = sourceTimeout;
+  if (minTimeout !== null && timeoutMs < minTimeout) timeoutMs = minTimeout;
+  if (maxTimeout !== null && timeoutMs > maxTimeout) timeoutMs = maxTimeout;
+
+  if (legacyTimeoutRaw && !explicitTimeoutRaw && legacyTimeout !== null) {
+    if (legacyTimeout < MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS) {
+      warnMonitorTimeoutConfig(
+        `legacy-low:${legacyTimeout}`,
+        `[monitor] ⚠️  DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS=${legacyTimeout}ms is low for monitor-monitor (recommended >= ${MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS}ms). Set DEVMODE_MONITOR_MONITOR_TIMEOUT_MS to override explicitly.`,
+      );
+    }
+  }
+
+  if (timeoutMs !== sourceTimeout) {
+    warnMonitorTimeoutConfig(
+      `bounded:${sourceTimeout}:${timeoutMs}:${minTimeout ?? "off"}:${maxTimeout ?? "off"}`,
+      `[monitor] monitor-monitor timeout adjusted ${sourceTimeout}ms -> ${timeoutMs}ms (min=${minTimeout ?? "off"}, max=${maxTimeout ?? "off"})`,
+    );
+  }
+
+  if (timeoutMs < MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS) {
+    warnMonitorTimeoutConfig(
+      `effective-low:${timeoutMs}`,
+      `[monitor] ⚠️  monitor-monitor timeout is ${timeoutMs}ms. Values below ${MONITOR_MONITOR_RECOMMENDED_MIN_TIMEOUT_MS}ms can cause premature failover loops.`,
+    );
+  }
+
+  return timeoutMs;
+}
+
 const monitorMonitor = {
   enabled: isMonitorMonitorEnabled(),
   intervalMs: Math.max(
@@ -424,17 +521,10 @@ const monitorMonitor = {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_INTERVAL_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL ||
-        "180000",
+        "300000",
     ),
   ),
-  timeoutMs: Math.max(
-    120_000,
-    Number(
-      process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
-        process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "900000",
-    ),
-  ),
+  timeoutMs: resolveMonitorMonitorTimeoutMs(),
   statusIntervalMs: Math.max(
     5 * 60_000,
     Number(process.env.DEVMODE_MONITOR_MONITOR_STATUS_INTERVAL_MS || "1800000"),
@@ -456,6 +546,7 @@ const monitorMonitor = {
   sdkOrder: [],
   sdkIndex: 0,
   consecutiveFailures: 0,
+  sdkFailures: new Map(),
   abortController: null,
 };
 if (monitorMonitor.enabled) {
@@ -545,7 +636,7 @@ function startInteractiveShell() {
 }
 let codexDisabledReason = codexEnabled
   ? ""
-  : process.env.CODEX_SDK_DISABLED === "1"
+  : isTruthyFlag(process.env.CODEX_SDK_DISABLED)
     ? "disabled via CODEX_SDK_DISABLED"
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
@@ -604,12 +695,22 @@ const SELF_RESTART_QUIET_MS = Math.max(
   90_000,
   Number(process.env.SELF_RESTART_QUIET_MS || "90000"),
 );
+const SELF_RESTART_RETRY_MS = Math.max(
+  15_000,
+  Number(process.env.SELF_RESTART_RETRY_MS || "30000"),
+);
+const ALLOW_INTERNAL_RUNTIME_RESTARTS = isTruthyFlag(
+  process.env.ALLOW_INTERNAL_RUNTIME_RESTARTS || "false",
+);
 let selfWatcher = null;
 let selfWatcherDebounce = null;
 let selfRestartTimer = null;
 let selfRestartLastChangeAt = 0;
 let selfRestartLastFile = null;
 let pendingSelfRestart = null; // filename that triggered a deferred restart
+let selfRestartDeferCount = 0;
+let deferredMonitorRestartTimer = null;
+let pendingMonitorRestartReason = "";
 
 // ── Self-restart marker: detect if this process was spawned by a code-change restart
 const selfRestartMarkerPath = resolve(
@@ -644,6 +745,7 @@ let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
 let vkNonJsonNotifiedAt = 0;
+let vkNonJsonContentTypeLoggedAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
 
@@ -677,8 +779,9 @@ function shouldKeepSessionForStatus(status) {
 
 // ── Anomaly detector — plaintext pattern matching for death loops, stalls, etc. ──
 let anomalyDetector = null;
-const smartPrAllowRecreateClosed =
-  process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
+const smartPrAllowRecreateClosed = isTruthyFlag(
+  process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED,
+);
 const githubToken =
   process.env.GITHUB_TOKEN ||
   process.env.GH_TOKEN ||
@@ -792,7 +895,11 @@ let allCompleteNotified = false;
 let backlogLowNotified = false;
 let idleAgentsNotified = false;
 let plannerTriggered = false;
-const plannerStatePath = resolve(logDir, "task-planner-state.json");
+const monitorStateCacheDir = resolve(repoRoot, ".codex-monitor", ".cache");
+const plannerStatePath = resolve(
+  monitorStateCacheDir,
+  "task-planner-state.json",
+);
 const taskPlannerStatus = {
   enabled: isDevMode(),
   intervalMs: Math.max(
@@ -882,6 +989,28 @@ async function ensurePreflightReady(reason) {
 
 function restartSelf(reason) {
   if (shuttingDown) return;
+  const protection = getRuntimeRestartProtection();
+  if (protection.defer) {
+    const retrySec = Math.round(SELF_RESTART_RETRY_MS / 1000);
+    pendingMonitorRestartReason = reason || pendingMonitorRestartReason || "";
+    if (!deferredMonitorRestartTimer) {
+      console.warn(
+        `[monitor] deferring monitor restart (${reason || "unknown"}) — ${protection.reason}; retrying in ${retrySec}s`,
+      );
+      deferredMonitorRestartTimer = setTimeout(() => {
+        deferredMonitorRestartTimer = null;
+        const deferredReason = pendingMonitorRestartReason || "deferred";
+        pendingMonitorRestartReason = "";
+        restartSelf(deferredReason);
+      }, SELF_RESTART_RETRY_MS);
+    }
+    return;
+  }
+  pendingMonitorRestartReason = "";
+  if (deferredMonitorRestartTimer) {
+    clearTimeout(deferredMonitorRestartTimer);
+    deferredMonitorRestartTimer = null;
+  }
   const now = Date.now();
   lastMonitorRestartAt = now;
   console.warn(`[monitor] restarting self (${reason || "unknown"})`);
@@ -981,7 +1110,7 @@ async function attemptMonitorFix({ error, logText }) {
   }
 
   const attemptNum = recordMonitorFixAttempt(signature);
-  const prompt = `You are debugging the ${projectName} codex-monitor.
+  const fallbackPrompt = `You are debugging the ${projectName} codex-monitor.
 
 The monitor process hit an unexpected exception and needs a fix.
 Please inspect and fix code in the codex-monitor directory:
@@ -1000,6 +1129,15 @@ Instructions:
 2) Apply a minimal fix.
 3) Do not refactor unrelated code.
 4) Keep behavior stable and production-safe.`;
+  const prompt = resolvePromptTemplate(
+    agentPrompts?.monitorCrashFix,
+    {
+      PROJECT_NAME: projectName,
+      CRASH_INFO: error?.stack || error?.message || String(error),
+      LOG_TAIL: logText.slice(-4000),
+    },
+    fallbackPrompt,
+  );
 
   const filesBefore = detectChangedFiles(repoRoot);
   const result = await runCodexExec(prompt, repoRoot);
@@ -1081,6 +1219,14 @@ async function handleMonitorFailure(reason, err) {
       } catch {
         /* best effort */
       }
+    }
+    // Wait for active agents before killing process
+    const activeSlots = getInternalActiveSlotCount();
+    if (activeSlots > 0 && internalTaskExecutor) {
+      console.warn(
+        `[monitor] hard failure cap reached but ${activeSlots} agent(s) active — waiting for graceful shutdown`,
+      );
+      await internalTaskExecutor.stop();
     }
     process.exit(1);
     return;
@@ -1188,7 +1334,7 @@ async function attemptCrashLoopFix({ reason, logText }) {
   }
 
   const attemptNum = recordCrashLoopFixAttempt(signature);
-  const prompt = `You are a reliability engineer debugging a crash loop in ${projectName} automation.
+  const fallbackPrompt = `You are a reliability engineer debugging a crash loop in ${projectName} automation.
 
 The orchestrator is restarting repeatedly within minutes.
 Please diagnose the likely root cause and apply a minimal fix.
@@ -1207,6 +1353,15 @@ Constraints:
 2) Keep behavior stable and production-safe.
 3) Do not refactor unrelated code.
 4) Prefer small guardrails over big rewrites.`;
+  const prompt = resolvePromptTemplate(
+    agentPrompts?.monitorRestartLoopFix,
+    {
+      PROJECT_NAME: projectName,
+      SCRIPT_PATH: scriptPath,
+      LOG_TAIL: logText.slice(-6000),
+    },
+    fallbackPrompt,
+  );
 
   const filesBefore = detectChangedFiles(repoRoot);
   const result = await runCodexExec(prompt, repoRoot, 1_800_000);
@@ -1330,6 +1485,7 @@ function triggerLoopFix(errorLine, repeatCount) {
         logDir,
         onTelegram: telegramFn,
         recentMessages: getTelegramHistory(),
+        promptTemplate: agentPrompts?.autofixLoop,
       });
 
       if (result.fixed) {
@@ -1594,13 +1750,28 @@ async function startVibeKanbanProcess() {
   // Use shell: true only when running through npx (string command).
   // When using the local binary directly, avoid shell to prevent DEP0190
   // deprecation warning ("Passing args to child process with shell true").
-  vibeKanbanProcess = spawn(spawnCmd, spawnArgs, {
+  const useShell = process.platform === "win32" || !useLocal;
+  const spawnOptions = {
     env,
     cwd: repoRoot,
     stdio: "ignore",
-    shell: process.platform === "win32" || !useLocal,
+    shell: useShell,
     detached: true,
-  });
+  };
+  if (useShell && spawnArgs.length > 0) {
+    const shellQuote = (value) => {
+      const str = String(value);
+      if (!/\s/.test(str)) return str;
+      const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    };
+    const fullCommand = [spawnCmd, ...spawnArgs].map(shellQuote).join(" ");
+    vibeKanbanProcess = spawn(fullCommand, spawnOptions);
+  } else if (useShell) {
+    vibeKanbanProcess = spawn(spawnCmd, spawnOptions);
+  } else {
+    vibeKanbanProcess = spawn(spawnCmd, spawnArgs, spawnOptions);
+  }
   vibeKanbanProcess.unref();
   vibeKanbanStartedAt = Date.now();
 
@@ -1728,6 +1899,9 @@ function restartVibeKanbanProcess() {
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
+  }
+  if (prCleanupDaemon) {
+    prCleanupDaemon.stop();
   }
   // Just kill the process — the exit handler will auto-restart it
   if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
@@ -2132,10 +2306,21 @@ async function triggerVibeKanbanRecovery(reason) {
  * @returns {Promise<object|null>} Parsed JSON body, or null on failure.
  */
 async function fetchVk(path, opts = {}) {
+  // Guard: if VK backend is not active, return null immediately instead of
+  // attempting to connect. This prevents "fetch failed" spam when using
+  // GitHub/Jira backends.
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    // Silent return for non-VK backends to avoid polluting logs
+    return null;
+  }
+
   const url = `${vkEndpointUrl}${path.startsWith("/") ? path : "/" + path}`;
   const method = (opts.method || "GET").toUpperCase();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs || 15000);
+
+  let res;
   try {
     const fetchOpts = {
       method,
@@ -2145,43 +2330,89 @@ async function fetchVk(path, opts = {}) {
     if (opts.body && method !== "GET") {
       fetchOpts.body = JSON.stringify(opts.body);
     }
-    const res = await fetch(url, fetchOpts);
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.warn(
-        `[monitor] fetchVk ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
-      );
-      return null;
-    }
-    const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      const text = await res.text().catch(() => "");
-      console.warn(
-        `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
-      );
-      if (text) {
-        console.warn(
-          `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
-        );
-      }
-      const now = Date.now();
-      if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
-        vkNonJsonNotifiedAt = now;
-        notifyVkError(
-          "Vibe-Kanban API returned HTML/non-JSON. Check VK_BASE_URL/VK_ENDPOINT_URL.",
-        );
-      }
-      return null;
-    }
-    return await res.json();
+    res = await fetch(url, fetchOpts);
   } catch (err) {
+    // Network error, timeout, abort, etc. - res is undefined
     const msg = err?.message || String(err);
     if (!msg.includes("abort")) {
       console.warn(`[monitor] fetchVk ${method} ${path} error: ${msg}`);
+      void triggerVibeKanbanRecovery(
+        `fetchVk ${method} ${path} network error: ${msg}`,
+      );
     }
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+
+  // Safety: validate response object (guards against mock/test issues)
+  if (!res || typeof res.ok === "undefined") {
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} error: invalid response object (res=${!!res}, res.ok=${res?.ok})`,
+    );
+    void triggerVibeKanbanRecovery(
+      `fetchVk ${method} ${path} invalid response object`,
+    );
+    return null;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} failed: ${res.status} ${text.slice(0, 200)}`,
+    );
+    if (res.status >= 500) {
+      void triggerVibeKanbanRecovery(
+        `fetchVk ${method} ${path} HTTP ${res.status}`,
+      );
+    }
+    return null;
+  }
+
+  const contentTypeRaw =
+    typeof res.headers?.get === "function"
+      ? res.headers.get("content-type") || res.headers.get("Content-Type")
+      : res.headers?.["content-type"] || res.headers?.["Content-Type"] || "";
+  const contentType = String(contentTypeRaw || "").toLowerCase();
+  if (!contentType.includes("application/json")) {
+    const text = await (typeof res.text === "function"
+      ? res.text().catch(() => "")
+      : "");
+    if (text) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        // Fall through to non-JSON handling below.
+      }
+    }
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
+    );
+    if (text) {
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
+      );
+    }
+    void triggerVibeKanbanRecovery(
+      `fetchVk ${method} ${path} non-JSON response`,
+    );
+    const now = Date.now();
+    if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
+      vkNonJsonNotifiedAt = now;
+      notifyVkError(
+        "Vibe-Kanban API returned HTML/non-JSON. Check VK_BASE_URL/VK_ENDPOINT_URL.",
+      );
+    }
+    return null;
+  }
+
+  try {
+    return await res.json();
+  } catch (err) {
+    console.warn(
+      `[monitor] fetchVk ${method} ${path} error: Invalid JSON - ${err.message}`,
+    );
+    return null;
   }
 }
 
@@ -2237,7 +2468,7 @@ function findWorktreeForBranch(branch) {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 10000,
       encoding: "utf8",
-      shell: process.platform === "win32",
+      shell: false,
     });
     if (result.status !== 0 || !result.stdout) return null;
 
@@ -2308,10 +2539,11 @@ async function findExistingPrForBranchApi(branch) {
         "User-Agent": "codex-monitor",
       },
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
+    if (!res || !res.ok) {
+      const text = res ? await res.text().catch(() => "") : "";
+      const status = res?.status || "no response";
       console.warn(
-        `[monitor] GitHub API PR lookup failed (${res.status}): ${text.slice(0, 120)}`,
+        `[monitor] GitHub API PR lookup failed (${status}): ${text.slice(0, 120)}`,
       );
       return null;
     }
@@ -2360,10 +2592,11 @@ async function getPullRequestByNumber(prNumber) {
         "User-Agent": "codex-monitor",
       },
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
+    if (!res || !res.ok) {
+      const text = res ? await res.text().catch(() => "") : "";
+      const status = res?.status || "no response";
       console.warn(
-        `[monitor] GitHub API PR ${prNumber} lookup failed (${res.status}): ${text.slice(0, 120)}`,
+        `[monitor] GitHub API PR ${prNumber} lookup failed (${status}): ${text.slice(0, 120)}`,
       );
       return null;
     }
@@ -2382,6 +2615,12 @@ async function getPullRequestByNumber(prNumber) {
  */
 async function findVkProjectId() {
   if (cachedProjectId) return cachedProjectId;
+
+  // Skip VK API calls if not using VK backend
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    return null;
+  }
 
   const projectsRes = await fetchVk("/api/projects");
   if (
@@ -2423,6 +2662,12 @@ async function getRepoId() {
   if (process.env.VK_REPO_ID) {
     cachedRepoId = process.env.VK_REPO_ID;
     return cachedRepoId;
+  }
+
+  // Skip VK API calls if not using VK backend
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    return null;
   }
 
   try {
@@ -2832,13 +3077,82 @@ function getTaskUpdatedAt(task) {
   return task?.updated_at || task?.created_at || "";
 }
 
+function parseGitHubIssueNumber(value) {
+  if (value == null) return null;
+  const numeric = String(value)
+    .trim()
+    .match(/^#?(\d+)$/);
+  if (numeric?.[1]) return numeric[1];
+  const urlMatch = String(value).match(/\/issues\/(\d+)(?:\b|$)/i);
+  return urlMatch?.[1] || null;
+}
+
+function getConfiguredKanbanProjectId(backend) {
+  const githubProjectId =
+    process.env.GITHUB_REPOSITORY ||
+    (process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+      ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+      : null) ||
+    repoSlug ||
+    null;
+  return (
+    process.env.INTERNAL_EXECUTOR_PROJECT_ID ||
+    internalExecutorConfig?.projectId ||
+    config?.kanban?.projectId ||
+    process.env.KANBAN_PROJECT_ID ||
+    (backend === "github" ? githubProjectId : null)
+  );
+}
+
+function resolveTaskIdForBackend(taskId, backend) {
+  const rawId = String(taskId || "").trim();
+  if (!rawId) return null;
+  if (backend !== "github") return rawId;
+  const directMatch = parseGitHubIssueNumber(rawId);
+  if (directMatch) return directMatch;
+  try {
+    const internalTasks = getAllInternalTasks();
+    const internalTask = internalTasks.find(
+      (t) =>
+        String(t?.id || "").trim() === rawId ||
+        String(t?.externalId || "").trim() === rawId,
+    );
+    return (
+      parseGitHubIssueNumber(internalTask?.externalId) ||
+      parseGitHubIssueNumber(internalTask?.id) ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/projects/:project_id/tasks?status=<status>
- * Fetches tasks by status from VK API.
+ * Fetches tasks by status from active kanban backend.
  * @param {string} status - Task status (e.g., "inreview", "todo", "done")
  * @returns {Promise<Array>} Array of task objects, or empty array on failure
  */
 async function fetchTasksByStatus(status) {
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    try {
+      const projectId = getConfiguredKanbanProjectId(backend);
+      if (!projectId) {
+        console.warn(
+          `[monitor] No project ID configured for backend=${backend} task query`,
+        );
+        return [];
+      }
+      const tasks = await listKanbanTasks(projectId, { status });
+      return Array.isArray(tasks) ? tasks : [];
+    } catch (err) {
+      console.warn(
+        `[monitor] Error fetching tasks by status from ${backend}: ${err.message || err}`,
+      );
+      return [];
+    }
+  }
   try {
     // Find matching VK project
     const projectId = await findVkProjectId();
@@ -2866,13 +3180,36 @@ async function fetchTasksByStatus(status) {
 }
 
 /**
- * PUT /api/tasks/:task_id
- * Updates task status via VK API.
- * @param {string} taskId - Task UUID
+ * Updates task status via active kanban backend.
+ * @param {string} taskId - Task ID (UUID for VK, issue number for GitHub)
  * @param {string} newStatus - New status ("todo", "inprogress", "inreview", "done", "cancelled")
  * @returns {Promise<boolean>} true if successful, false otherwise
  */
 async function updateTaskStatus(taskId, newStatus) {
+  const backend = getActiveKanbanBackend();
+  if (backend !== "vk") {
+    const resolvedTaskId = resolveTaskIdForBackend(taskId, backend);
+    if (!resolvedTaskId) {
+      console.warn(
+        `[monitor] Skipping status update for ${taskId} — no compatible ${backend} task ID`,
+      );
+      return false;
+    }
+    try {
+      await updateKanbanTaskStatus(resolvedTaskId, newStatus);
+      clearRecoveryCaches(taskId);
+      if (resolvedTaskId !== taskId) {
+        clearRecoveryCaches(resolvedTaskId);
+      }
+      return true;
+    } catch (err) {
+      console.warn(
+        `[monitor] Failed to update task status via ${backend} (${resolvedTaskId} -> ${newStatus}): ${err.message || err}`,
+      );
+      return false;
+    }
+  }
+
   const res = await fetchVk(`/api/tasks/${taskId}`, {
     method: "PUT",
     body: { status: newStatus },
@@ -2987,9 +3324,25 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
     const liveStatus = res?.data?.status || res?.status;
     const liveUpdatedAt = res?.data?.updated_at || res?.data?.created_at || "";
     if (!liveStatus) {
-      console.warn(
-        `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping`,
-      );
+      // Cache the failure so we don't re-attempt every cycle (prevents log spam).
+      // Uses a shorter TTL (5 min) so we re-check sooner than successful skips.
+      const FETCH_FAIL_BACKOFF_MS = 5 * 60 * 1000;
+      const existingSkip = recoverySkipCache.get(taskId);
+      const alreadyBackedOff =
+        existingSkip?.resolvedStatus === "fetch-failed" &&
+        Date.now() - existingSkip.timestamp < FETCH_FAIL_BACKOFF_MS;
+      if (!alreadyBackedOff) {
+        console.warn(
+          `[monitor] safeRecover: could not re-fetch status for "${taskTitle}" (${taskId.substring(0, 8)}...) — skipping (backoff ${Math.round(FETCH_FAIL_BACKOFF_MS / 60000)}min)`,
+        );
+        recoverySkipCache.set(taskId, {
+          resolvedStatus: "fetch-failed",
+          timestamp: Date.now(),
+          updatedAt: "",
+          status: "fetch-failed",
+        });
+        scheduleRecoveryCacheSave();
+      }
       return false;
     }
     // If the user has moved the task out of inprogress (cancelled, done,
@@ -3036,9 +3389,24 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
     }
     return success;
   } catch (err) {
-    console.warn(
-      `[monitor] safeRecover failed for "${taskTitle}": ${err.message || err}`,
-    );
+    // Cache the exception so we don't retry every cycle (5 min backoff)
+    const FETCH_FAIL_BACKOFF_MS = 5 * 60 * 1000;
+    const existingSkip = recoverySkipCache.get(taskId);
+    const alreadyBackedOff =
+      existingSkip?.resolvedStatus === "fetch-failed" &&
+      Date.now() - existingSkip.timestamp < FETCH_FAIL_BACKOFF_MS;
+    if (!alreadyBackedOff) {
+      console.warn(
+        `[monitor] safeRecover failed for "${taskTitle}": ${err.message || err} (backoff ${Math.round(FETCH_FAIL_BACKOFF_MS / 60000)}min)`,
+      );
+      recoverySkipCache.set(taskId, {
+        resolvedStatus: "fetch-failed",
+        timestamp: Date.now(),
+        updatedAt: "",
+        status: "fetch-failed",
+      });
+      scheduleRecoveryCacheSave();
+    }
     return false;
   }
 }
@@ -3562,7 +3930,16 @@ async function checkMergedPRsAndUpdateTasks() {
       // so we skip the entire branch/PR lookup and recovery attempt.
       const skipEntry = recoverySkipCache.get(task.id);
       if (skipEntry) {
-        if (!taskVersionMatches(task, skipEntry, taskStatus)) {
+        // For fetch-failed entries, use a shorter TTL (5 min) regardless of task version.
+        // These aren't tied to a specific task state — just API unavailability.
+        if (skipEntry.resolvedStatus === "fetch-failed") {
+          const FETCH_FAIL_BACKOFF_MS = 5 * 60 * 1000;
+          if (Date.now() - skipEntry.timestamp < FETCH_FAIL_BACKOFF_MS) {
+            continue;
+          }
+          recoverySkipCache.delete(task.id);
+          scheduleRecoveryCacheSave();
+        } else if (!taskVersionMatches(task, skipEntry, taskStatus)) {
           recoverySkipCache.delete(task.id);
           scheduleRecoveryCacheSave();
         } else if (Date.now() - skipEntry.timestamp < RECOVERY_SKIP_CACHE_MS) {
@@ -4009,6 +4386,7 @@ async function checkMergedPRsAndUpdateTasks() {
                         taskTitle: task.title,
                         taskDescription: task.description || "",
                         logDir: logDir,
+                        promptTemplate: agentPrompts?.sdkConflictResolver,
                       });
                       if (result.success) {
                         console.log(
@@ -4438,6 +4816,9 @@ async function runMergeStrategyAnalysis(ctx) {
         parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
       logDir,
       onTelegram: telegramFn,
+      promptTemplates: {
+        mergeStrategy: agentPrompts?.mergeStrategy,
+      },
     });
 
     if (!decision || !decision.success) {
@@ -4455,6 +4836,10 @@ async function runMergeStrategyAnalysis(ctx) {
       onTelegram: telegramFn,
       timeoutMs:
         parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 15 * 60 * 1000,
+      promptTemplates: {
+        mergeStrategyFix: agentPrompts?.mergeStrategyFix,
+        mergeStrategyReAttempt: agentPrompts?.mergeStrategyReAttempt,
+      },
     });
 
     // ── Post-execution handling ──────────────────────────────────
@@ -5908,7 +6293,7 @@ async function readPlannerState() {
 }
 
 async function writePlannerState(nextState) {
-  await ensureLogDir();
+  await mkdir(monitorStateCacheDir, { recursive: true });
   await writeFile(plannerStatePath, JSON.stringify(nextState, null, 2), "utf8");
 }
 
@@ -6284,6 +6669,11 @@ async function sendTelegramMessage(text, options = {}) {
         : 4;
   if (priority > maxPriority) return; // filtered out by verbosity setting
 
+  // Also bridge critical/error notifications to WhatsApp (if enabled)
+  if (priority <= 2 && isWhatsAppEnabled()) {
+    notifyWhatsApp(stripAnsi(String(text || ""))).catch(() => {});
+  }
+
   return notify(text, priority, {
     category,
     silent: options.silent,
@@ -6611,12 +7001,11 @@ async function fetchTelegramUpdates() {
     const res = await fetch(`${url}?${params.toString()}`, {
       signal: controller.signal,
     });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(
-        `[monitor] telegram getUpdates failed: ${res.status} ${body}`,
-      );
-      if (res.status === 409) {
+    if (!res || !res.ok) {
+      const body = res ? await res.text() : "";
+      const status = res?.status || "no response";
+      console.warn(`[monitor] telegram getUpdates failed: ${status} ${body}`);
+      if (res?.status === 409) {
         telegramCommandEnabled = false;
         await releaseTelegramPollLock();
       }
@@ -7251,6 +7640,17 @@ function nowStamp() {
   )}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
+function commandExists(cmd) {
+  try {
+    execSync(`${process.platform === "win32" ? "where" : "which"} ${cmd}`, {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function safeStringify(value) {
   const seen = new Set();
   try {
@@ -7353,7 +7753,7 @@ ${logTail}
    - Mutex contention: multiple instances fighting over named mutex
    - VK API failures: wrong HTTP method, endpoint down, auth issues
    - Git rebase conflicts: agent branches conflict with main
-   - Exit 64: pwsh can't find the -File target
+   - Exit 64 / ENOENT: shell runtime can't locate the orchestrator target
    - SIGKILL: OOM or external termination
 7. Return a SHORT, ACTIONABLE diagnosis with the concrete fix.`;
 
@@ -7635,6 +8035,10 @@ async function handleExit(code, signal, logPath) {
           logDir,
           onTelegram: telegramFn,
           recentMessages: getTelegramHistory(),
+          promptTemplates: {
+            autofixFix: agentPrompts?.autofixFix,
+            autofixFallback: agentPrompts?.autofixFallback,
+          },
         });
 
         if (result.fixed) {
@@ -7861,6 +8265,87 @@ function rotateMonitorSdk(reason = "") {
   return true;
 }
 
+/**
+ * Record a failure for a specific monitor-monitor SDK.
+ * After 5 failures → 15min exclusion; after 10 failures → 60min exclusion.
+ * @param {string} sdk
+ */
+function recordMonitorSdkFailure(sdk) {
+  if (!sdk) return;
+  const entry = monitorMonitor.sdkFailures.get(sdk) || {
+    count: 0,
+    excludedUntil: 0,
+  };
+  entry.count += 1;
+  if (entry.count >= 10) {
+    entry.excludedUntil = Date.now() + 60 * 60_000; // 60 min
+    console.warn(
+      `[monitor-monitor] ${sdk} excluded for 60min after ${entry.count} failures`,
+    );
+  } else if (entry.count >= 5) {
+    entry.excludedUntil = Date.now() + 15 * 60_000; // 15 min
+    console.warn(
+      `[monitor-monitor] ${sdk} excluded for 15min after ${entry.count} failures`,
+    );
+  }
+  monitorMonitor.sdkFailures.set(sdk, entry);
+  rebuildMonitorSdkOrder();
+}
+
+/**
+ * Clear failure count for a monitor-monitor SDK (on success).
+ * @param {string} sdk
+ */
+function clearMonitorSdkFailure(sdk) {
+  if (!sdk) return;
+  if (monitorMonitor.sdkFailures.has(sdk)) {
+    monitorMonitor.sdkFailures.delete(sdk);
+    rebuildMonitorSdkOrder();
+  }
+}
+
+/**
+ * Check if a monitor-monitor SDK is currently excluded.
+ * @param {string} sdk
+ * @returns {boolean}
+ */
+function isMonitorSdkExcluded(sdk) {
+  const entry = monitorMonitor.sdkFailures.get(sdk);
+  if (!entry || !entry.excludedUntil) return false;
+  if (Date.now() >= entry.excludedUntil) {
+    // Exclusion expired — clear it
+    entry.excludedUntil = 0;
+    entry.count = 0;
+    monitorMonitor.sdkFailures.set(sdk, entry);
+    console.log(`[monitor-monitor] ${sdk} exclusion expired, re-enabling`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Rebuild the SDK order excluding currently-excluded SDKs.
+ * If all SDKs are excluded, force the primary back in.
+ */
+function rebuildMonitorSdkOrder() {
+  const original = buildMonitorMonitorSdkOrder();
+  const filtered = original.filter((sdk) => !isMonitorSdkExcluded(sdk));
+  if (filtered.length === 0) {
+    // All excluded — force primary back
+    const primary = original[0] || "codex";
+    console.warn(
+      `[monitor-monitor] all SDKs excluded, forcing ${primary} back`,
+    );
+    monitorMonitor.sdkOrder = [primary];
+  } else {
+    monitorMonitor.sdkOrder = filtered;
+  }
+  // Reset index if out of bounds
+  if (monitorMonitor.sdkIndex >= monitorMonitor.sdkOrder.length) {
+    monitorMonitor.sdkIndex = 0;
+  }
+}
+
 function shouldFailoverMonitorSdk(message) {
   const text = String(message || "").toLowerCase();
   if (!text) return false;
@@ -7873,6 +8358,10 @@ function shouldFailoverMonitorSdk(message) {
     /context length/,
     /maximum context length/,
     /token limit/,
+    /timeout/,
+    /timed out/,
+    /deadline exceeded/,
+    /abort(?:ed|ing) due to timeout/,
     /\b500\b/,
     /\b502\b/,
     /\b503\b/,
@@ -7885,6 +8374,11 @@ function shouldFailoverMonitorSdk(message) {
     /api error/,
     /econnreset/,
     /socket hang up/,
+    /codex exec exited/,
+    /reading prompt from stdin/,
+    /exit code 3221225786/,
+    /exit code 1073807364/,
+    /serde error expected value/,
   ];
   return patterns.some((p) => p.test(text));
 }
@@ -7928,7 +8422,9 @@ function buildMonitorMonitorStatusText(reason = "heartbeat") {
   ];
 
   if (monitorMonitor.lastError) {
-    lines.push(`- Last error: ${String(monitorMonitor.lastError).slice(0, 180)}`);
+    lines.push(
+      `- Last error: ${String(monitorMonitor.lastError).slice(0, 180)}`,
+    );
   }
   if (lastDigestLine) {
     lines.push(`- Latest digest: ${lastDigestLine.slice(0, 180)}`);
@@ -7951,7 +8447,10 @@ async function publishMonitorMonitorStatus(reason = "heartbeat") {
   }
 }
 
-async function readLogTail(filePath, { maxLines = 120, maxChars = 12000 } = {}) {
+async function readLogTail(
+  filePath,
+  { maxLines = 120, maxChars = 12000 } = {},
+) {
   try {
     if (!existsSync(filePath)) {
       return `(missing: ${filePath})`;
@@ -8016,17 +8515,10 @@ function refreshMonitorMonitorRuntime() {
     Number(
       process.env.DEVMODE_MONITOR_MONITOR_INTERVAL_MS ||
         process.env.DEVMODE_AUTO_CODE_FIX_CYCLE_INTERVAL ||
-        "180000",
+        "300000",
     ),
   );
-  monitorMonitor.timeoutMs = Math.max(
-    120_000,
-    Number(
-      process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MS ||
-        process.env.DEVMODE_AUTO_CODE_FIX_TIMEOUT_MS ||
-        "900000",
-    ),
-  );
+  monitorMonitor.timeoutMs = resolveMonitorMonitorTimeoutMs();
   monitorMonitor.statusIntervalMs = Math.max(
     5 * 60_000,
     Number(process.env.DEVMODE_MONITOR_MONITOR_STATUS_INTERVAL_MS || "1800000"),
@@ -8054,6 +8546,25 @@ function refreshMonitorMonitorRuntime() {
       console.log("[monitor] monitor-monitor disabled");
     }
   }
+}
+
+function getMonitorMonitorStatusSnapshot() {
+  const currentSdk = getCurrentMonitorSdk();
+  return {
+    enabled: !!monitorMonitor.enabled,
+    running: !!monitorMonitor.running,
+    currentSdk,
+    sdkOrder: [...(monitorMonitor.sdkOrder || [])],
+    intervalMs: monitorMonitor.intervalMs,
+    statusIntervalMs: monitorMonitor.statusIntervalMs,
+    timeoutMs: monitorMonitor.timeoutMs,
+    lastRunAt: monitorMonitor.lastRunAt || 0,
+    lastStatusAt: monitorMonitor.lastStatusAt || 0,
+    lastTrigger: monitorMonitor.lastTrigger || "",
+    lastOutcome: monitorMonitor.lastOutcome || "",
+    consecutiveFailures: monitorMonitor.consecutiveFailures || 0,
+    lastError: monitorMonitor.lastError || "",
+  };
 }
 
 async function buildMonitorMonitorPrompt({ trigger, entries, text }) {
@@ -8137,7 +8648,11 @@ async function buildMonitorMonitorPrompt({ trigger, entries, text }) {
   ].join("\n");
 }
 
-async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text = "" } = {}) {
+async function runMonitorMonitorCycle({
+  trigger = "interval",
+  entries = [],
+  text = "",
+} = {}) {
   refreshMonitorMonitorRuntime();
   if (!monitorMonitor.enabled) return;
   monitorMonitor.lastTrigger = trigger;
@@ -8148,20 +8663,61 @@ async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text
       monitorMonitor.abortController &&
       runAge > monitorMonitor.timeoutMs + 60_000
     ) {
+      const watchdogCount = (monitorMonitor._watchdogAbortCount || 0) + 1;
+      monitorMonitor._watchdogAbortCount = watchdogCount;
       console.warn(
-        `[monitor-monitor] watchdog abort after ${Math.round(runAge / 1000)}s (stuck run)`,
+        `[monitor-monitor] watchdog abort #${watchdogCount} after ${Math.round(runAge / 1000)}s (stuck run)`,
       );
       try {
         monitorMonitor.abortController.abort("watchdog-timeout");
       } catch {
         /* best effort */
       }
+      // After 2 consecutive watchdog aborts (abort signal didn't kill the run),
+      // force-reset the running flag so the next cycle can start fresh.
+      if (watchdogCount >= 2) {
+        console.warn(
+          `[monitor-monitor] force-resetting stuck run after ${watchdogCount} watchdog aborts`,
+        );
+        monitorMonitor.running = false;
+        monitorMonitor.abortController = null;
+        monitorMonitor._watchdogAbortCount = 0;
+        monitorMonitor.consecutiveFailures += 1;
+        recordMonitorSdkFailure(getCurrentMonitorSdk());
+        monitorMonitor.lastOutcome = "force-reset (watchdog)";
+        monitorMonitor.lastError = `watchdog force-reset after ${Math.round(runAge / 1000)}s`;
+        // Don't return — allow the cycle to start fresh below
+      } else {
+        // Schedule an accelerated force-reset in 60s instead of waiting for
+        // the next full interval cycle (which could be 5+ minutes away).
+        // If the abort signal actually kills the run, the scheduled callback
+        // will find monitorMonitor.running === false and no-op.
+        if (!monitorMonitor._watchdogForceResetTimer) {
+          monitorMonitor._watchdogForceResetTimer = setTimeout(() => {
+            monitorMonitor._watchdogForceResetTimer = null;
+            if (!monitorMonitor.running) return; // Already resolved
+            console.warn(
+              `[monitor-monitor] accelerated force-reset — abort signal was ignored for 60s`,
+            );
+            monitorMonitor.running = false;
+            monitorMonitor.abortController = null;
+            monitorMonitor._watchdogAbortCount = 0;
+            monitorMonitor.consecutiveFailures += 1;
+            recordMonitorSdkFailure(getCurrentMonitorSdk());
+            monitorMonitor.lastOutcome = "force-reset (watchdog-accelerated)";
+            monitorMonitor.lastError = `watchdog accelerated force-reset after ${Math.round((Date.now() - monitorMonitor.heartbeatAt) / 1000)}s`;
+          }, 60_000);
+        }
+        return;
+      }
+    } else {
+      return;
     }
-    return;
   }
 
   monitorMonitor.running = true;
   monitorMonitor.heartbeatAt = Date.now();
+  monitorMonitor._watchdogAbortCount = 0;
   if (typeof text === "string" && text.trim()) {
     monitorMonitor.lastDigestText = text;
   }
@@ -8171,18 +8727,21 @@ async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text
     prompt = await buildMonitorMonitorPrompt({ trigger, entries, text });
   } catch (err) {
     monitorMonitor.running = false;
-    console.warn(`[monitor-monitor] prompt build failed: ${err.message || err}`);
+    console.warn(
+      `[monitor-monitor] prompt build failed: ${err.message || err}`,
+    );
     return;
   }
 
   const runOnce = async (sdk) => {
     const abortController = new AbortController();
     monitorMonitor.abortController = abortController;
-    return await launchEphemeralThread(
+    return await launchOrResumeThread(
       prompt,
       repoRoot,
       monitorMonitor.timeoutMs,
       {
+        taskKey: "monitor-monitor",
         sdk,
         abortController,
         claudeAllowedTools: getMonitorClaudeAllowedTools(),
@@ -8208,48 +8767,78 @@ async function runMonitorMonitorCycle({ trigger = "interval", entries = [], text
   }
 
   let sdk = getCurrentMonitorSdk();
-  let result = await runOnce(sdk);
+  let result;
+  const runStartTime = Date.now();
 
-  if (!result.success && shouldFailoverMonitorSdk(result.error)) {
-    const canRotate = rotateMonitorSdk(result.error || "retryable failure");
-    if (canRotate) {
-      sdk = getCurrentMonitorSdk();
-      console.warn(`[monitor-monitor] retrying with ${sdk}`);
-      result = await runOnce(sdk);
+  try {
+    result = await runOnce(sdk);
+    const runDuration = Math.round((Date.now() - runStartTime) / 1000);
+
+    if (!result.success && shouldFailoverMonitorSdk(result.error)) {
+      const canRotate = rotateMonitorSdk(result.error || "retryable failure");
+      if (canRotate) {
+        sdk = getCurrentMonitorSdk();
+        const isTimeout = result.error?.includes("timeout");
+        console.warn(
+          `[monitor-monitor] retrying with ${sdk} (previous ${isTimeout ? "timeout" : "failure"} after ${runDuration}s)`,
+        );
+        result = await runOnce(sdk);
+      }
     }
-  }
 
-  if (result.success) {
-    monitorMonitor.consecutiveFailures = 0;
-    monitorMonitor.lastOutcome = `success (${sdk})`;
-    monitorMonitor.lastError = "";
-    console.log(
-      `[monitor-monitor] cycle complete via ${sdk}${trigger ? ` (${trigger})` : ""}`,
-    );
-  } else {
+    if (result.success) {
+      const totalDuration = Math.round((Date.now() - runStartTime) / 1000);
+      monitorMonitor.consecutiveFailures = 0;
+      clearMonitorSdkFailure(sdk);
+      monitorMonitor.lastOutcome = `success (${sdk})`;
+      monitorMonitor.lastError = "";
+      console.log(
+        `[monitor-monitor] cycle complete via ${sdk} in ${totalDuration}s${trigger ? ` (${trigger})` : ""}`,
+      );
+    } else {
+      const totalDuration = Math.round((Date.now() - runStartTime) / 1000);
+      monitorMonitor.consecutiveFailures += 1;
+      recordMonitorSdkFailure(sdk);
+      const errMsg = result.error || "unknown error";
+      const isTimeout = errMsg.includes("timeout");
+      monitorMonitor.lastOutcome = `failed (${sdk})`;
+      monitorMonitor.lastError = errMsg;
+      console.warn(
+        `[monitor-monitor] run failed via ${sdk} after ${totalDuration}s${isTimeout ? " [TIMEOUT]" : ""}: ${errMsg}`,
+      );
+      if (shouldFailoverMonitorSdk(errMsg)) {
+        rotateMonitorSdk("prepare next cycle");
+      }
+      void notify?.(
+        `⚠️ Monitor-Monitor failed (${sdk}): ${String(errMsg).slice(0, 240)}`,
+        3,
+        { dedupKey: "monitor-monitor-failed" },
+      );
+      try {
+        await publishMonitorMonitorStatus("failure");
+      } catch {
+        /* best effort */
+      }
+    }
+  } catch (runErr) {
+    // Uncaught exception during execution (e.g. launchOrResumeThread threw)
     monitorMonitor.consecutiveFailures += 1;
-    const errMsg = result.error || "unknown error";
-    monitorMonitor.lastOutcome = `failed (${sdk})`;
+    recordMonitorSdkFailure(sdk);
+    const errMsg = String(runErr?.message || runErr || "unknown exception");
+    monitorMonitor.lastOutcome = `exception (${sdk})`;
     monitorMonitor.lastError = errMsg;
-    console.warn(`[monitor-monitor] run failed via ${sdk}: ${errMsg}`);
-    if (shouldFailoverMonitorSdk(errMsg)) {
-      rotateMonitorSdk("prepare next cycle");
-    }
+    console.error(`[monitor-monitor] uncaught exception via ${sdk}: ${errMsg}`);
     void notify?.(
-      `⚠️ Monitor-Monitor failed (${sdk}): ${String(errMsg).slice(0, 240)}`,
+      `⚠️ Monitor-Monitor exception (${sdk}): ${errMsg.slice(0, 240)}`,
       3,
-      { dedupKey: "monitor-monitor-failed" },
+      { dedupKey: "monitor-monitor-exception" },
     );
-    try {
-      await publishMonitorMonitorStatus("failure");
-    } catch {
-      /* best effort */
-    }
+  } finally {
+    // CRITICAL: Always reset running flag, even if runOnce throws or times out
+    monitorMonitor.lastRunAt = Date.now();
+    monitorMonitor.running = false;
+    monitorMonitor.abortController = null;
   }
-
-  monitorMonitor.lastRunAt = Date.now();
-  monitorMonitor.running = false;
-  monitorMonitor.abortController = null;
 }
 
 function startMonitorMonitorSupervisor() {
@@ -8288,7 +8877,7 @@ function startMonitorMonitorSupervisor() {
   }, 20_000);
 }
 
-function stopMonitorMonitorSupervisor() {
+function stopMonitorMonitorSupervisor({ preserveRunning = false } = {}) {
   if (monitorMonitor.timer) {
     clearInterval(monitorMonitor.timer);
     monitorMonitor.timer = null;
@@ -8297,7 +8886,9 @@ function stopMonitorMonitorSupervisor() {
     clearInterval(monitorMonitor.statusTimer);
     monitorMonitor.statusTimer = null;
   }
-  if (monitorMonitor.abortController) {
+  // Only abort a running cycle if explicitly requested (hard shutdown).
+  // During self-restart, preserve the running agent so it completes its work.
+  if (!preserveRunning && monitorMonitor.abortController) {
     try {
       monitorMonitor.abortController.abort("monitor-shutdown");
     } catch {
@@ -8305,7 +8896,9 @@ function stopMonitorMonitorSupervisor() {
     }
     monitorMonitor.abortController = null;
   }
-  monitorMonitor.running = false;
+  if (!preserveRunning) {
+    monitorMonitor.running = false;
+  }
 }
 
 /**
@@ -8340,7 +8933,9 @@ async function startProcess() {
   // Guard: never spawn VK orchestrator when executor mode is internal or disabled
   const execMode = configExecutorMode || getExecutorMode();
   if (execMode === "internal" || isExecutorDisabled()) {
-    console.log(`[monitor] startProcess skipped — executor mode is "${execMode}" (VK orchestrator not needed)`);
+    console.log(
+      `[monitor] startProcess skipped — executor mode is "${execMode}" (VK orchestrator not needed)`,
+    );
     return;
   }
 
@@ -8438,7 +9033,41 @@ async function startProcess() {
 
   // Reset mutex flag before spawn — will be re-set if this instance hits mutex
   restartController.noteProcessStarted(Date.now());
-  const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
+
+  const scriptLower = String(scriptPath).toLowerCase();
+  let orchestratorCmd = scriptPath;
+  let orchestratorArgs = [...scriptArgs];
+
+  if (scriptLower.endsWith(".ps1")) {
+    orchestratorCmd = process.env.PWSH_PATH || "pwsh";
+    orchestratorArgs = ["-File", scriptPath, ...scriptArgs];
+  } else if (scriptLower.endsWith(".sh")) {
+    const shellCmd =
+      process.platform === "win32"
+        ? commandExists("bash")
+          ? "bash"
+          : commandExists("sh")
+            ? "sh"
+            : ""
+        : commandExists("bash")
+          ? "bash"
+          : "sh";
+    if (!shellCmd) {
+      console.error(
+        "[monitor] shell-mode orchestrator selected (.sh) but no bash/sh runtime is available on PATH.",
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          "❌ shell-mode orchestrator selected (.sh), but bash/sh is missing on PATH.",
+        );
+      }
+      return;
+    }
+    orchestratorCmd = shellCmd;
+    orchestratorArgs = [scriptPath, ...scriptArgs];
+  }
+
+  const child = spawn(orchestratorCmd, orchestratorArgs, {
     stdio: ["ignore", "pipe", "pipe"],
   });
   currentChild = child;
@@ -8604,10 +9233,75 @@ function stopSelfWatcher() {
     clearTimeout(selfRestartTimer);
     selfRestartTimer = null;
   }
+  pendingSelfRestart = null;
+}
+
+function getInternalActiveSlotCount() {
+  try {
+    if (!internalTaskExecutor) return 0;
+    const status = internalTaskExecutor.getStatus?.();
+    if (Number.isFinite(status?.activeSlots)) {
+      return Number(status.activeSlots);
+    }
+    if (
+      internalTaskExecutor._activeSlots &&
+      Number.isFinite(internalTaskExecutor._activeSlots.size)
+    ) {
+      return Number(internalTaskExecutor._activeSlots.size);
+    }
+  } catch {
+    /* best effort */
+  }
+  return 0;
+}
+
+function isMonitorMonitorCycleActive() {
+  try {
+    return Boolean(
+      monitorMonitor &&
+      monitorMonitor.enabled &&
+      (monitorMonitor.running || monitorMonitor.abortController),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getRuntimeRestartProtection() {
+  if (ALLOW_INTERNAL_RUNTIME_RESTARTS) {
+    return { defer: false, reason: "" };
+  }
+  const execMode = configExecutorMode || getExecutorMode();
+  if (execMode !== "internal" && execMode !== "hybrid") {
+    return { defer: false, reason: "" };
+  }
+  const activeSlots = getInternalActiveSlotCount();
+  if (activeSlots > 0) {
+    return {
+      defer: true,
+      reason: `${activeSlots} internal task agent(s) active`,
+    };
+  }
+  // NOTE: monitor-monitor is NOT included here — it's safely restartable
+  // and should never block source-change restarts. Only real task agents matter.
+  return { defer: false, reason: "" };
 }
 
 function selfRestartForSourceChange(filename) {
   pendingSelfRestart = null;
+
+  // ── SAFETY NET: Double-check no agents are running before killing process ──
+  // This should never trigger because attemptSelfRestartAfterQuiet() already
+  // defers, but provides defense-in-depth against race conditions.
+  const activeSlots = getInternalActiveSlotCount();
+  if (activeSlots > 0) {
+    console.warn(
+      `[monitor] SAFETY NET: selfRestartForSourceChange called with ${activeSlots} active agent(s)! Deferring instead of killing.`,
+    );
+    pendingSelfRestart = filename;
+    selfRestartTimer = setTimeout(retryDeferredSelfRestart, 30_000);
+    return;
+  }
   console.log(
     `\n[monitor] source files stable for ${Math.round(SELF_RESTART_QUIET_MS / 1000)}s — restarting (${filename})`,
   );
@@ -8617,19 +9311,17 @@ function selfRestartForSourceChange(filename) {
     vkLogStream.stop();
     vkLogStream = null;
   }
-  // ── Stop internal executor + agent endpoint BEFORE exit ──
-  // This ensures running agents get a chance to finish and ports are released.
-  const shutdownPromises = [];
-  if (internalTaskExecutor) {
-    console.log("[monitor] stopping internal task executor for restart...");
-    shutdownPromises.push(
-      Promise.resolve(internalTaskExecutor.stop()).catch((e) =>
-        console.warn(`[monitor] executor stop error: ${e.message}`),
-      ),
-    );
+  if (prCleanupDaemon) {
+    prCleanupDaemon.stop();
   }
+  // ── Agent isolation: do NOT stop internal executor on self-restart ──
+  // Task agents run as in-process SDK async iterators. Stopping the executor
+  // here is pointless because process.exit(75) kills them anyway. Instead,
+  // defer the restart if agents are actively running — they should complete
+  // uninterrupted. The new process will recover orphaned worktrees on startup.
+  const shutdownPromises = [];
+  // Agent endpoint is lightweight — stop it so the new process can bind the port.
   if (agentEndpoint) {
-    console.log("[monitor] stopping agent endpoint for restart...");
     shutdownPromises.push(
       Promise.resolve(agentEndpoint.stop()).catch((e) =>
         console.warn(`[monitor] endpoint stop error: ${e.message}`),
@@ -8637,7 +9329,7 @@ function selfRestartForSourceChange(filename) {
     );
   }
   stopTaskPlannerStatusLoop();
-  stopMonitorMonitorSupervisor();
+  stopMonitorMonitorSupervisor({ preserveRunning: true });
   stopAutoUpdateLoop();
   stopSelfWatcher();
   stopWatcher();
@@ -8652,6 +9344,10 @@ function selfRestartForSourceChange(filename) {
   }
   void releaseTelegramPollLock();
   stopTelegramBot({ preserveDigest: true });
+  stopWhatsAppChannel();
+  if (isContainerEnabled()) {
+    void stopAllContainers().catch(() => {});
+  }
   // Write self-restart marker so the new process suppresses startup notifications
   try {
     writeFileSync(
@@ -8684,8 +9380,50 @@ function attemptSelfRestartAfterQuiet() {
     return;
   }
   const filename = selfRestartLastFile || "unknown";
-  // Self-restart no longer blocked by primary agent — ephemeral pool
-  // threads run independently and don't need to be drained.
+  const protection = getRuntimeRestartProtection();
+  if (protection.defer) {
+    pendingSelfRestart = filename;
+    // Track how many times we've deferred. After 20 deferrals (~10 min at 30s
+    // intervals), force the restart to prevent indefinite deferral loops.
+    const deferCount = (selfRestartDeferCount =
+      (selfRestartDeferCount || 0) + 1);
+    const retrySec = Math.round(SELF_RESTART_RETRY_MS / 1000);
+    if (deferCount >= 20) {
+      console.warn(
+        `[monitor] self-restart deferred ${deferCount} times — forcing restart despite ${protection.reason}`,
+      );
+      selfRestartDeferCount = 0;
+      selfRestartForSourceChange(filename);
+      return;
+    }
+    console.log(
+      `[monitor] deferring self-restart (${filename}) — ${protection.reason}; retrying in ${retrySec}s (defer #${deferCount})`,
+    );
+    selfRestartTimer = setTimeout(
+      retryDeferredSelfRestart,
+      SELF_RESTART_RETRY_MS,
+    );
+    return;
+  }
+
+  // ── Agent isolation: defer restart if task agents are actively running ──
+  // Task agents run inside this process. If we exit now, all running agents
+  // die and their work is lost. Wait for them to finish naturally.
+  if (internalTaskExecutor) {
+    const status = internalTaskExecutor.getStatus();
+    if (status.activeSlots > 0) {
+      const slotNames = (status.slots || []).map((s) => s.taskTitle).join(", ");
+      console.log(
+        `[monitor] self-restart deferred — ${status.activeSlots} agent(s) still running: ${slotNames}`,
+      );
+      console.log(
+        `[monitor] will retry restart in 60s (agents must finish first)`,
+      );
+      selfRestartTimer = setTimeout(attemptSelfRestartAfterQuiet, 60_000);
+      return;
+    }
+  }
+
   selfRestartForSourceChange(filename);
 }
 
@@ -8706,6 +9444,8 @@ function queueSelfRestart(filename) {
 
 function retryDeferredSelfRestart() {
   if (!pendingSelfRestart) return;
+  selfRestartLastFile = pendingSelfRestart;
+  selfRestartLastChangeAt = Date.now() - SELF_RESTART_QUIET_MS;
   attemptSelfRestartAfterQuiet();
 }
 
@@ -8914,7 +9654,7 @@ function applyConfig(nextConfig, options = {}) {
   primaryAgentReady = nextConfig.primaryAgentEnabled;
   codexDisabledReason = codexEnabled
     ? ""
-    : process.env.CODEX_SDK_DISABLED === "1"
+    : isTruthyFlag(process.env.CODEX_SDK_DISABLED)
       ? "disabled via CODEX_SDK_DISABLED"
       : agentSdk?.primary && agentSdk.primary !== "codex"
         ? `disabled via agent_sdk.primary=${agentSdk.primary}`
@@ -9009,17 +9749,17 @@ async function reloadConfig(reason) {
   }
 }
 
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  // Stop monitor-monitor immediately (it's safely restartable)
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
   }
-  if (internalTaskExecutor) {
-    void internalTaskExecutor.stop();
-    stopStatusFileWriter();
+  if (prCleanupDaemon) {
+    prCleanupDaemon.stop();
   }
   stopAutoUpdateLoop();
   stopSelfWatcher();
@@ -9032,6 +9772,26 @@ process.on("SIGINT", () => {
   }
   void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
+  stopWhatsAppChannel();
+  if (isContainerEnabled()) {
+    await stopAllContainers().catch((e) =>
+      console.warn(`[monitor] container cleanup error: ${e.message}`),
+    );
+  }
+
+  // Wait for active task agents to finish gracefully (up to 5 minutes)
+  if (internalTaskExecutor) {
+    const status = internalTaskExecutor.getStatus();
+    if (status.activeSlots > 0) {
+      const slotNames = (status.slots || []).map((s) => s.taskTitle).join(", ");
+      console.log(
+        `[monitor] SIGINT: waiting for ${status.activeSlots} active agent(s) to finish: ${slotNames}`,
+      );
+      console.log(`[monitor] (press Ctrl+C again to force exit)`);
+      await internalTaskExecutor.stop();
+    }
+    stopStatusFileWriter();
+  }
   process.exit(0);
 });
 
@@ -9048,16 +9808,14 @@ process.on("exit", () => {
   void releaseTelegramPollLock();
 });
 
-process.on("SIGTERM", () => {
+process.on("SIGTERM", async () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  // Stop monitor-monitor immediately (it's safely restartable)
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
     vkLogStream = null;
-  }
-  if (internalTaskExecutor) {
-    void internalTaskExecutor.stop();
   }
   stopAutoUpdateLoop();
   stopSelfWatcher();
@@ -9071,6 +9829,24 @@ process.on("SIGTERM", () => {
   void workspaceMonitor.shutdown();
   void releaseTelegramPollLock();
   stopTelegramBot();
+  stopWhatsAppChannel();
+  if (isContainerEnabled()) {
+    await stopAllContainers().catch((e) =>
+      console.warn(`[monitor] container cleanup error: ${e.message}`),
+    );
+  }
+
+  // Wait for active task agents to finish gracefully (up to 5 minutes)
+  if (internalTaskExecutor) {
+    const status = internalTaskExecutor.getStatus();
+    if (status.activeSlots > 0) {
+      const slotNames = (status.slots || []).map((s) => s.taskTitle).join(", ");
+      console.log(
+        `[monitor] SIGTERM: waiting for ${status.activeSlots} active agent(s) to finish: ${slotNames}`,
+      );
+      await internalTaskExecutor.stop();
+    }
+  }
   process.exit(0);
 });
 
@@ -9086,7 +9862,12 @@ function isStreamNoise(msg) {
     msg.includes("Cannot read properties of null") ||
     msg.includes("ECONNRESET") ||
     msg.includes("ECONNREFUSED") ||
-    msg.includes("socket hang up")
+    msg.includes("socket hang up") ||
+    msg.includes("AbortError") ||
+    msg.includes("The operation was aborted") ||
+    msg.includes("This operation was aborted") ||
+    msg.includes("hard_timeout") ||
+    msg.includes("watchdog-timeout")
   );
 }
 
@@ -9383,9 +10164,17 @@ let reviewAgent = null;
 let syncEngine = null;
 /** @type {import("./error-detector.mjs").ErrorDetector|null} */
 let errorDetector = null;
+/** @type {import("./pr-cleanup-daemon.mjs").PRCleanupDaemon|null} */
+let prCleanupDaemon = null;
 
 // ── Task Management Subsystem Initialization ────────────────────────────────
 try {
+  mkdirSync(monitorStateCacheDir, { recursive: true });
+  configureTaskStore({
+    storePath: resolve(monitorStateCacheDir, "kanban-state.json"),
+  });
+  console.log(`[monitor] planner state path: ${plannerStatePath}`);
+  console.log(`[monitor] task store path: ${getStorePath()}`);
   loadTaskStore();
   console.log("[monitor] internal task store loaded");
 } catch (err) {
@@ -9416,13 +10205,18 @@ if (isExecutorDisabled()) {
       ...internalExecutorConfig,
       repoRoot,
       repoSlug,
+      agentPrompts,
       sendTelegram:
         telegramToken && telegramChatId
           ? (msg) => void sendTelegramMessage(msg)
           : null,
       onTaskStarted: (task, slot) => {
+        const agentId =
+          Number.isFinite(slot?.agentInstanceId) && slot.agentInstanceId > 0
+            ? `#${slot.agentInstanceId}`
+            : "n/a";
         console.log(
-          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) in ${slot.worktreePath}`,
+          `[task-executor] 🚀 started: "${task.title}" (${slot.sdk}) agent=${agentId} branch=${slot.branch} worktree=${slot.worktreePath || "(pending)"}`,
         );
       },
       onTaskCompleted: (task, result) => {
@@ -9521,67 +10315,113 @@ if (isExecutorDisabled()) {
     }
 
     // ── Review Agent ──
-    try {
-      reviewAgent = createReviewAgent({
-        maxConcurrentReviews: 2,
-        autoFix: true,
-        waitForMerge: true,
-        sendTelegram:
-          telegramToken && telegramChatId
-            ? (msg) => void sendTelegramMessage(msg)
-            : null,
-        onReviewComplete: (taskId, result) => {
-          console.log(
-            `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
+    if (isReviewAgentEnabled()) {
+      try {
+        reviewAgent = createReviewAgent({
+          maxConcurrentReviews: Number(
+            process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
+              internalExecutorConfig?.reviewMaxConcurrent ||
+              2,
+          ),
+          reviewTimeoutMs: Number(
+            process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
+              internalExecutorConfig?.reviewTimeoutMs ||
+              300_000,
+          ),
+          sendTelegram:
+            telegramToken && telegramChatId
+              ? (msg) => void sendTelegramMessage(msg)
+              : null,
+          promptTemplate: agentPrompts?.reviewer,
+          onReviewComplete: (taskId, result) => {
+            console.log(
+              `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
+            );
+            try {
+              setReviewResult(taskId, {
+                approved: result?.approved ?? false,
+                issues: result?.issues || [],
+              });
+            } catch {
+              /* best-effort */
+            }
+
+            if (result?.approved && result?.prMerged) {
+              // PR merged and reviewer happy — fully done
+              console.log(
+                `[monitor] review approved + PR merged — marking ${taskId} as done`,
+              );
+              try {
+                setInternalTaskStatus(taskId, "done", "review-agent");
+              } catch {
+                /* best-effort */
+              }
+              try {
+                updateTaskStatus(taskId, "done");
+              } catch {
+                /* best-effort */
+              }
+            } else if (result?.approved && !result?.prMerged) {
+              // Approved but PR not yet merged — stays in review
+              console.log(
+                `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
+              );
+            } else {
+              console.log(
+                `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
+              );
+            }
+          },
+        });
+        reviewAgent.start();
+
+        // Connect review agent to task executor for handoff
+        if (internalTaskExecutor) {
+          internalTaskExecutor.setReviewAgent(reviewAgent);
+        }
+
+        // Re-hydrate inreview tasks after restart so review queue is not empty
+        // while task-store still reports tasks awaiting review.
+        try {
+          const pending = getTasksPendingReview();
+          if (Array.isArray(pending) && pending.length > 0) {
+            let requeued = 0;
+            for (const task of pending) {
+              const taskId = String(task?.id || "").trim();
+              if (!taskId) continue;
+              reviewAgent.queueReview({
+                id: taskId,
+                title: task?.title || taskId,
+                branchName: task?.branchName || "",
+                prUrl: task?.prUrl || "",
+                description: task?.description || "",
+                worktreePath: null,
+                sessionMessages: "",
+                diffStats: "",
+              });
+              requeued += 1;
+            }
+            if (requeued > 0) {
+              console.log(
+                `[monitor] review agent rehydrated ${requeued} inreview task(s) from task-store`,
+              );
+            }
+          }
+        } catch (err) {
+          console.warn(
+            `[monitor] review agent rehydrate failed: ${err.message || err}`,
           );
-          try {
-            setReviewResult(taskId, {
-              approved: result?.approved ?? false,
-              issues: result?.issues || [],
-            });
-          } catch {
-            /* best-effort */
-          }
+        }
 
-          if (result?.approved && result?.prMerged) {
-            // PR merged and reviewer happy — fully done
-            console.log(
-              `[monitor] review approved + PR merged — marking ${taskId} as done`,
-            );
-            try {
-              setInternalTaskStatus(taskId, "done", "review-agent");
-            } catch {
-              /* best-effort */
-            }
-            try {
-              updateTaskStatus(taskId, "done");
-            } catch {
-              /* best-effort */
-            }
-          } else if (result?.approved && !result?.prMerged) {
-            // Approved but PR not yet merged — stays in review
-            console.log(
-              `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
-            );
-          } else {
-            console.log(
-              `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
-            );
-          }
-        },
-      });
-      reviewAgent.start();
-
-      // Connect review agent to task executor for handoff
-      if (internalTaskExecutor) {
-        internalTaskExecutor.setReviewAgent(reviewAgent);
+        console.log("[monitor] review agent started");
+      } catch (err) {
+        console.warn(`[monitor] review agent failed to start: ${err.message}`);
       }
-
+    } else {
+      reviewAgent = null;
       console.log(
-        "[monitor] review agent started (autoFix: true, waitForMerge: true)",
+        "[monitor] review agent disabled (INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED=0 or config override)",
       );
-    } catch (err) {
-      console.warn(`[monitor] review agent failed to start: ${err.message}`);
     }
 
     // ── Sync Engine ──
@@ -9677,8 +10517,12 @@ injectMonitorFunctions({
   getExecutorMode: () => executorMode,
   getAgentEndpoint: () => agentEndpoint,
   getReviewAgent: () => reviewAgent,
+  getReviewAgentEnabled: () => isReviewAgentEnabled(),
   getSyncEngine: () => syncEngine,
   getErrorDetector: () => errorDetector,
+  getPrCleanupDaemon: () => prCleanupDaemon,
+  getWorkspaceMonitor: () => workspaceMonitor,
+  getMonitorMonitorStatus: () => getMonitorMonitorStatusSnapshot(),
   getTaskStoreStats: () => {
     try {
       return getTaskStoreStats();
@@ -9686,14 +10530,100 @@ injectMonitorFunctions({
       return null;
     }
   },
+  getTasksPendingReview: () => {
+    try {
+      return getTasksPendingReview();
+    } catch {
+      return [];
+    }
+  },
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
+
+  // Process any commands queued by telegram-sentinel while monitor was down
+  try {
+    const { getQueuedCommands } = await import("./telegram-sentinel.mjs");
+    const queued = getQueuedCommands();
+    if (queued && queued.length > 0) {
+      console.log(
+        `[monitor] processing ${queued.length} queued sentinel command(s)`,
+      );
+      for (const cmd of queued) {
+        try {
+          console.log(
+            `[monitor] replaying sentinel command: ${cmd.command || cmd.type || JSON.stringify(cmd)}`,
+          );
+          // Handle known commands
+          if (cmd.command === "/status" || cmd.type === "status") {
+            // Will be covered by next status report
+            console.log(
+              "[monitor] sentinel queued /status — will send on next cycle",
+            );
+          } else if (cmd.command === "/pause" || cmd.type === "pause") {
+            console.log(
+              "[monitor] sentinel queued /pause — pausing task dispatch",
+            );
+            // Signal pause if task executor supports it
+          } else if (cmd.command === "/resume" || cmd.type === "resume") {
+            console.log("[monitor] sentinel queued /resume — resuming");
+          }
+        } catch (cmdErr) {
+          console.warn(
+            `[monitor] failed to process queued command: ${cmdErr.message}`,
+          );
+        }
+      }
+    }
+  } catch {
+    // telegram-sentinel not available — ignore
+  }
+}
+
+// ── Start WhatsApp channel (when configured) ──────────────────────────────────
+if (isWhatsAppEnabled()) {
+  try {
+    await startWhatsAppChannel({
+      onMessage: async (msg) => {
+        // Route WhatsApp messages to primary agent (same as Telegram user messages)
+        if (primaryAgentReady && msg.text) {
+          try {
+            const response = await execPrimaryPrompt(msg.text);
+            if (response) {
+              await notifyWhatsApp(response);
+            }
+          } catch (err) {
+            console.warn(`[monitor] WhatsApp→agent failed: ${err.message}`);
+          }
+        }
+      },
+      onStatusChange: (status) => {
+        console.log(`[monitor] WhatsApp status: ${status}`);
+      },
+      logger: (level, ...args) => console.log(`[whatsapp] [${level}]`, ...args),
+    });
+    console.log("[monitor] WhatsApp channel started");
+  } catch (err) {
+    console.warn(`[monitor] WhatsApp channel failed to start: ${err.message}`);
+  }
+}
+
+// ── Container runtime initialization (when configured) ────────────────────
+if (isContainerEnabled()) {
+  try {
+    await ensureContainerRuntime();
+    await cleanupOrphanedContainers();
+    console.log("[monitor] Container runtime ready:", getContainerStatus());
+  } catch (err) {
+    console.warn(`[monitor] Container runtime not available: ${err.message}`);
+    console.warn(
+      "[monitor] Container isolation will be disabled for this session",
+    );
+  }
 }
 
 // ── Start PR Cleanup Daemon ──────────────────────────────────────────────────
 // Automatically resolves PR conflicts and CI failures every 30 minutes
-let prCleanupDaemon = null;
 if (config.prCleanupEnabled !== false) {
   console.log("[monitor] Starting PR cleanup daemon...");
   prCleanupDaemon = new PRCleanupDaemon({
@@ -9738,4 +10668,7 @@ export {
   appendKnowledgeEntry,
   buildKnowledgeEntry,
   formatKnowledgeSummary,
+  // Container runner re-exports
+  getContainerStatus,
+  isContainerEnabled,
 };

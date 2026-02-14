@@ -59,7 +59,7 @@ func UpgradeInfoFromTag(ctx context.Context, tag string, pretty bool) (string, e
 		}
 	}
 
-	body, _, err := gh.Repositories.DownloadReleaseAsset(ctx, "virtengine", "virtengine", checksumsID, http.DefaultClient)
+	body, _, err := gh.Repositories.DownloadReleaseAsset(ctx, "virtengine", "virtengine", checksumsID, tc)
 	if err != nil {
 		return "", err
 	}

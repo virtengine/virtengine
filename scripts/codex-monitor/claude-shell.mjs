@@ -47,6 +47,26 @@ function normalizeList(value) {
     .filter(Boolean);
 }
 
+function envFlagEnabled(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on", "y"].includes(raw);
+}
+
+function resolveClaudeTransport() {
+  const raw = String(process.env.CLAUDE_TRANSPORT || "auto")
+    .trim()
+    .toLowerCase();
+  if (["auto", "sdk", "cli"].includes(raw)) {
+    return raw;
+  }
+  console.warn(
+    `[claude-shell] invalid CLAUDE_TRANSPORT='${raw}', defaulting to 'auto'`,
+  );
+  return "auto";
+}
+
 function getToolName(block) {
   return block?.name || block?.tool_name || block?.toolName || "";
 }
@@ -76,10 +96,16 @@ function extractResultText(block) {
 
 function formatEvent(event) {
   if (!event) return null;
-  if (event.type === "item.started" && event.item?.type === "command_execution") {
+  if (
+    event.type === "item.started" &&
+    event.item?.type === "command_execution"
+  ) {
     return `⚡ Running: \`${event.item.command}\``;
   }
-  if (event.type === "item.completed" && event.item?.type === "command_execution") {
+  if (
+    event.type === "item.completed" &&
+    event.item?.type === "command_execution"
+  ) {
     const status = event.item.exit_code === 0 ? "✅" : "❌";
     return `${status} Command done: \`${event.item.command}\``;
   }
@@ -213,7 +239,7 @@ function buildOptions() {
     options.maxTurns = maxTurns;
   }
 
-  const includePartial = process.env.CLAUDE_INCLUDE_PARTIAL === "1";
+  const includePartial = envFlagEnabled(process.env.CLAUDE_INCLUDE_PARTIAL);
   if (includePartial) {
     options.includePartialMessages = true;
   }
@@ -346,6 +372,12 @@ function buildToolResultEvent(toolName, toolInput, resultBlock) {
 
 async function loadClaudeSdk() {
   if (queryFn) return queryFn;
+  const transport = resolveClaudeTransport();
+  if (transport === "cli") {
+    console.warn(
+      "[claude-shell] CLAUDE_TRANSPORT=cli uses SDK compatibility mode with session-id resume",
+    );
+  }
   try {
     const mod = await import("@anthropic-ai/claude-agent-sdk");
     queryFn = mod.query;
@@ -431,7 +463,8 @@ export async function execClaudePrompt(userMessage, options = {}) {
 
   if (activeTurn) {
     return {
-      finalResponse: "⏳ Agent is still executing a previous task. Please wait.",
+      finalResponse:
+        "⏳ Agent is still executing a previous task. Please wait.",
       items: [],
       usage: null,
     };
@@ -449,13 +482,18 @@ export async function execClaudePrompt(userMessage, options = {}) {
   activeTurn = true;
   toolUseById.clear();
 
-  // Always start a fresh session for each task to prevent token overflow
-  // from accumulated context across multiple tasks.
-  if (activeSessionId) {
+  const transport = resolveClaudeTransport();
+  const shouldResume = transport === "cli";
+
+  // Fresh-session mode (default): avoid token overflow from accumulated context.
+  // CLI compatibility mode: keep and reuse session_id for continuation.
+  if (activeSessionId && !shouldResume) {
     console.log(
       `[claude-shell] discarding previous session ${activeSessionId} — creating fresh session per task`,
     );
     activeSessionId = null;
+  } else if (activeSessionId && shouldResume) {
+    console.log(`[claude-shell] resuming session ${activeSessionId}`);
   }
 
   const controller = abortController || new AbortController();
@@ -492,8 +530,6 @@ export async function execClaudePrompt(userMessage, options = {}) {
     queue.push(makeUserMessage(buildPrompt(userMessage, statusData)));
 
     const optionsPayload = buildOptions();
-    // Never resume — always start fresh to avoid token overflow.
-    // activeSessionId is only used for tracking, not for resume.
 
     activeQuery = query({
       prompt: queue.iterator(),
@@ -598,7 +634,11 @@ export async function execClaudePrompt(userMessage, options = {}) {
       return { finalResponse: msg, items: [], usage: null };
     }
     const message = err?.message || String(err || "unknown error");
-    return { finalResponse: `❌ Claude agent failed: ${message}`, items: [], usage: null };
+    return {
+      finalResponse: `❌ Claude agent failed: ${message}`,
+      items: [],
+      usage: null,
+    };
   } finally {
     if (activeQueue) activeQueue.close();
     activeQueue = null;

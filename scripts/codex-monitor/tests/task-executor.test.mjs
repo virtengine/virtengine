@@ -4,10 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../kanban-adapter.mjs", () => ({
   getKanbanAdapter: vi.fn(),
+  getKanbanBackendName: vi.fn(() => "vk"),
   listTasks: vi.fn(() => []),
   listProjects: vi.fn(() => [{ id: "proj-1", name: "Test Project" }]),
   getTask: vi.fn(),
   updateTaskStatus: vi.fn(() => Promise.resolve()),
+  addComment: vi.fn(() => Promise.resolve(true)),
 }));
 
 vi.mock("../agent-pool.mjs", () => ({
@@ -19,6 +21,7 @@ vi.mock("../agent-pool.mjs", () => ({
   getActiveThreads: vi.fn(() => []),
   getPoolSdkName: vi.fn(() => "codex"),
   pruneAllExhaustedThreads: vi.fn(() => 0),
+  ensureThreadRegistryLoaded: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("../worktree-manager.mjs", () => ({
@@ -33,6 +36,10 @@ vi.mock("../config.mjs", () => ({
   loadConfig: vi.fn(() => ({})),
 }));
 
+vi.mock("../git-safety.mjs", () => ({
+  evaluateBranchSafetyForPush: vi.fn(() => ({ safe: true })),
+}));
+
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(() => ""),
   spawnSync: vi.fn(() => ({ status: 0, stdout: "", stderr: "" })),
@@ -41,6 +48,9 @@ vi.mock("node:child_process", () => ({
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(() => ""),
   existsSync: vi.fn(() => false),
+  appendFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────
@@ -55,11 +65,20 @@ import {
 import {
   listTasks,
   listProjects,
+  getKanbanBackendName,
   updateTaskStatus,
+  addComment,
 } from "../kanban-adapter.mjs";
-import { execWithRetry, getPoolSdkName } from "../agent-pool.mjs";
+import {
+  execWithRetry,
+  getPoolSdkName,
+  getActiveThreads,
+  ensureThreadRegistryLoaded,
+} from "../agent-pool.mjs";
 import { acquireWorktree, releaseWorktree } from "../worktree-manager.mjs";
 import { loadConfig } from "../config.mjs";
+import { evaluateBranchSafetyForPush } from "../git-safety.mjs";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -81,6 +100,11 @@ const ENV_KEYS = [
   "INTERNAL_EXECUTOR_TIMEOUT_MS",
   "INTERNAL_EXECUTOR_MAX_RETRIES",
   "INTERNAL_EXECUTOR_PROJECT_ID",
+  "COPILOT_MODEL",
+  "COPILOT_SDK_MODEL",
+  "CLAUDE_MODEL",
+  "CLAUDE_CODE_MODEL",
+  "ANTHROPIC_MODEL",
 ];
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -107,7 +131,7 @@ describe("task-executor", () => {
       expect(ex.maxParallel).toBe(3);
       expect(ex.pollIntervalMs).toBe(30_000);
       expect(ex.sdk).toBe("auto");
-      expect(ex.taskTimeoutMs).toBe(90 * 60 * 1000);
+      expect(ex.taskTimeoutMs).toBe(6 * 60 * 60 * 1000);
       expect(ex.maxRetries).toBe(2);
       expect(ex.autoCreatePr).toBe(true);
       expect(ex.projectId).toBeNull();
@@ -187,6 +211,7 @@ describe("task-executor", () => {
       expect(status.slots[0].taskId).toBe("task-abc");
       expect(status.slots[0].taskTitle).toBe("Some task");
       expect(status.slots[0].status).toBe("running");
+      expect(status.slots[0].agentInstanceId).toBeNull();
       expect(status.slots[0].runningFor).toBeGreaterThanOrEqual(4);
     });
   });
@@ -210,6 +235,32 @@ describe("task-executor", () => {
       expect(ex._running).toBe(true);
       expect(ex._pollTimer).not.toBeNull();
       // cleanup
+      ex._running = false;
+      clearInterval(ex._pollTimer);
+    });
+
+    it("start() waits for thread registry load before in-progress recovery", async () => {
+      const ex = new TaskExecutor({ pollIntervalMs: 10_000 });
+      let releaseRegistryLoad = null;
+      const registryLoadGate = new Promise((resolve) => {
+        releaseRegistryLoad = resolve;
+      });
+      ensureThreadRegistryLoaded.mockReturnValueOnce(registryLoadGate);
+      const recoverySpy = vi
+        .spyOn(ex, "_recoverInterruptedInProgressTasks")
+        .mockResolvedValue(undefined);
+
+      ex.start();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(recoverySpy).not.toHaveBeenCalled();
+
+      releaseRegistryLoad?.();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(recoverySpy).toHaveBeenCalledTimes(1);
+
       ex._running = false;
       clearInterval(ex._pollTimer);
     });
@@ -249,6 +300,56 @@ describe("task-executor", () => {
 
       await stopPromise;
       expect(ex._running).toBe(false);
+    });
+  });
+
+  describe("in-progress recovery", () => {
+    it("resumes fresh in-progress tasks on startup recovery", async () => {
+      const ex = new TaskExecutor({ projectId: "proj-1", maxParallel: 2 });
+      ex._running = true;
+      const executeSpy = vi
+        .spyOn(ex, "executeTask")
+        .mockResolvedValue(undefined);
+
+      listTasks.mockResolvedValueOnce([
+        {
+          id: "resume-1",
+          title: "Resume this",
+          status: "inprogress",
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+      getActiveThreads.mockReturnValueOnce([]);
+
+      await ex._recoverInterruptedInProgressTasks();
+
+      expect(executeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "resume-1" }),
+      );
+    });
+
+    it("moves stale in-progress tasks back to todo when no resumable thread exists", async () => {
+      const ex = new TaskExecutor({ projectId: "proj-1", maxParallel: 2 });
+      ex._running = true;
+      const executeSpy = vi
+        .spyOn(ex, "executeTask")
+        .mockResolvedValue(undefined);
+      const staleTs = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+
+      listTasks.mockResolvedValueOnce([
+        {
+          id: "stale-1",
+          title: "Old in-progress task",
+          status: "inprogress",
+          updated_at: staleTs,
+        },
+      ]);
+      getActiveThreads.mockReturnValueOnce([]);
+
+      await ex._recoverInterruptedInProgressTasks();
+
+      expect(updateTaskStatus).toHaveBeenCalledWith("stale-1", "todo");
+      expect(executeSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -330,6 +431,31 @@ describe("task-executor", () => {
       const promise = ex.executeTask({ ...mockTask });
       // Slot should be set immediately (synchronous part)
       expect(ex._activeSlots.has("task-123-uuid")).toBe(true);
+      expect(ex._activeSlots.get("task-123-uuid")?.agentInstanceId).toBeTypeOf(
+        "number",
+      );
+      await promise;
+    });
+
+    it("reuses persisted slot runtime metadata for in-progress recovery", async () => {
+      const ex = new TaskExecutor();
+      const recoveredStartedAt = Date.now() - 20_000;
+      ex._slotRuntimeState.set("task-123-uuid", {
+        taskId: "task-123-uuid",
+        taskTitle: "Fix the bug",
+        branch: "ve/task-123-fix-the-bug",
+        sdk: "codex",
+        attempt: 0,
+        startedAt: recoveredStartedAt,
+        agentInstanceId: 41,
+        status: "running",
+        updatedAt: Date.now(),
+      });
+
+      const promise = ex.executeTask({ ...mockTask, status: "inprogress" });
+      const slot = ex._activeSlots.get("task-123-uuid");
+      expect(slot?.agentInstanceId).toBe(41);
+      expect(slot?.startedAt).toBe(recoveredStartedAt);
       await promise;
     });
 
@@ -360,6 +486,61 @@ describe("task-executor", () => {
         expect.objectContaining({
           taskKey: "task-123-uuid",
           cwd: "/fake/worktree",
+        }),
+      );
+    });
+
+    it("forwards COPILOT_MODEL override to background agent execution", async () => {
+      process.env.COPILOT_MODEL = "gpt-5.3-codex";
+      const ex = new TaskExecutor({ sdk: "auto" });
+      ex._executorScheduler = {
+        next: () => ({
+          name: "copilot-default",
+          executor: "COPILOT",
+          variant: "DEFAULT",
+          weight: 100,
+          role: "primary",
+          enabled: true,
+        }),
+        recordSuccess: vi.fn(),
+        recordFailure: vi.fn(),
+      };
+
+      await ex.executeTask({ ...mockTask });
+
+      expect(execWithRetry).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          sdk: "copilot",
+          model: "gpt-5.3-codex",
+        }),
+      );
+    });
+
+    it("uses complexity-routed Copilot model when no env override is set", async () => {
+      delete process.env.COPILOT_MODEL;
+      delete process.env.COPILOT_SDK_MODEL;
+      const ex = new TaskExecutor({ sdk: "auto" });
+      ex._executorScheduler = {
+        next: () => ({
+          name: "copilot-default",
+          executor: "COPILOT",
+          variant: "DEFAULT",
+          weight: 100,
+          role: "primary",
+          enabled: true,
+        }),
+        recordSuccess: vi.fn(),
+        recordFailure: vi.fn(),
+      };
+
+      await ex.executeTask({ ...mockTask });
+
+      expect(execWithRetry).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          sdk: "copilot",
+          model: "sonnet-4.5",
         }),
       );
     });
@@ -595,6 +776,96 @@ describe("task-executor", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // branch safety guard
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe("branch safety guard", () => {
+    it("blocks push when branch safety check fails", () => {
+      const ex = new TaskExecutor();
+      evaluateBranchSafetyForPush.mockReturnValueOnce({
+        safe: false,
+        reason: "unsafe diff signature",
+      });
+
+      const result = ex._pushBranch("/fake/worktree", "ve/bad-branch");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("unsafe diff signature");
+      const pushCall = spawnSync.mock.calls.find(
+        ([bin, args]) => bin === "git" && args[0] === "push",
+      );
+      expect(pushCall).toBeUndefined();
+    });
+
+    it("blocks PR creation before push when branch safety fails", async () => {
+      const ex = new TaskExecutor();
+      evaluateBranchSafetyForPush.mockReturnValueOnce({
+        safe: false,
+        reason: "unsafe diff signature",
+      });
+
+      const pr = await ex._createPR(
+        {
+          id: "task-123-uuid",
+          title: "Bad branch",
+          branchName: "ve/bad-branch",
+        },
+        "/fake/worktree",
+      );
+      expect(pr).toBeNull();
+
+      const pushCall = spawnSync.mock.calls.find(
+        ([bin, args]) => bin === "git" && args[0] === "push",
+      );
+      expect(pushCall).toBeUndefined();
+    });
+
+    it("adds issue-closing keywords for GitHub-backed tasks", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor({ repoSlug: "acme/widgets" });
+
+      spawnSync.mockImplementation((bin, args) => {
+        if (bin === "gh" && args[0] === "pr" && args[1] === "list") {
+          return { status: 0, stdout: "[]", stderr: "" };
+        }
+        if (bin === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: "https://github.com/acme/widgets/pull/77\n",
+            stderr: "",
+          };
+        }
+        if (bin === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return { status: 0, stdout: "src/app.ts\n", stderr: "" };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      });
+
+      const pr = await ex._createPR(
+        {
+          id: "123",
+          title: "feat: test github issue linking",
+          description: "desc",
+          branchName: "ve/test-issue-linking",
+          backend: "github",
+        },
+        "/fake/worktree",
+      );
+
+      expect(pr?.prNumber).toBe("77");
+      const prCreateCall = spawnSync.mock.calls.find(
+        ([bin, args]) =>
+          bin === "gh" && args[0] === "pr" && args[1] === "create",
+      );
+      expect(prCreateCall).toBeTruthy();
+      const createArgs = prCreateCall[1];
+      const bodyArg = createArgs[createArgs.indexOf("--body") + 1];
+      expect(bodyArg).toContain("Closes #123");
+      expect(bodyArg).toContain("- GitHub Issue: #123");
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // getTaskExecutor singleton
   // ────────────────────────────────────────────────────────────────────────
 
@@ -754,6 +1025,231 @@ describe("task-executor", () => {
       await ex._pollLoop();
 
       expect(listTasks).not.toHaveBeenCalled();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // GitHub Issue Tracking
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe("GitHub issue tracking", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      spawnSync.mockReturnValue({ status: 0, stdout: "", stderr: "" });
+    });
+
+    it("comments on GitHub issue when task starts (github backend)", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor({ maxParallel: 1 });
+      ex._running = true;
+
+      // Mock successful workflow: acquire worktree, run agent, done
+      const { acquireWorktree: mockAcquire } =
+        await import("../worktree-manager.mjs");
+      mockAcquire.mockResolvedValueOnce({ path: "/fake/wt", created: true });
+
+      const { execWithRetry: mockExec } = await import("../agent-pool.mjs");
+      mockExec.mockResolvedValueOnce({
+        success: true,
+        output: "done",
+        attempts: 1,
+      });
+
+      const githubTask = {
+        id: "42",
+        title: "Fix auth bug",
+        description: "Auth is broken",
+        status: "todo",
+        branchName: "ve/42-fix-auth",
+        backend: "github",
+      };
+
+      await ex.executeTask(githubTask);
+
+      // Should have called addComment with start info
+      expect(addComment).toHaveBeenCalledWith(
+        "42",
+        expect.stringContaining("Agent Started"),
+      );
+      expect(addComment).toHaveBeenCalledWith(
+        "42",
+        expect.stringContaining("ve/42-fix-auth"),
+      );
+    });
+
+    it("does NOT comment on issue when backend is vk", async () => {
+      getKanbanBackendName.mockReturnValue("vk");
+      const ex = new TaskExecutor({ maxParallel: 1 });
+      ex._running = true;
+
+      const { acquireWorktree: mockAcquire } =
+        await import("../worktree-manager.mjs");
+      mockAcquire.mockResolvedValueOnce({ path: "/fake/wt", created: true });
+
+      const { execWithRetry: mockExec } = await import("../agent-pool.mjs");
+      mockExec.mockResolvedValueOnce({
+        success: true,
+        output: "done",
+        attempts: 1,
+      });
+
+      await ex.executeTask({ ...mockTask, backend: "vk" });
+
+      // addComment should NOT have been called for VK backend
+      expect(addComment).not.toHaveBeenCalled();
+    });
+
+    it("_commentCommitsOnIssue posts commit details for github tasks", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor({ repoSlug: "acme/widgets" });
+
+      // Mock git log and diff-tree for commit details
+      spawnSync.mockImplementation((bin, args) => {
+        if (bin === "git" && args[0] === "log") {
+          return {
+            status: 0,
+            stdout:
+              "abc12345|feat: add auth flow\ndef67890|fix: typo in login\n",
+            stderr: "",
+          };
+        }
+        if (bin === "git" && args[0] === "diff-tree") {
+          return {
+            status: 0,
+            stdout: "src/auth.ts\nsrc/login.ts\n",
+            stderr: "",
+          };
+        }
+        if (bin === "git" && args[0] === "diff" && args[1] === "--stat") {
+          return {
+            status: 0,
+            stdout: " 2 files changed, 50 insertions(+), 10 deletions(-)\n",
+            stderr: "",
+          };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      });
+
+      const pr = {
+        url: "https://github.com/acme/widgets/pull/77",
+        branch: "ve/42-fix-auth",
+        prNumber: "77",
+      };
+
+      await ex._commentCommitsOnIssue(
+        { id: "42", backend: "github" },
+        "/fake/wt",
+        { preExecHead: "aaa111", postExecHead: "bbb222" },
+        pr,
+      );
+
+      expect(addComment).toHaveBeenCalledTimes(1);
+      const commentBody = addComment.mock.calls[0][1];
+      expect(commentBody).toContain("Agent Completed");
+      expect(commentBody).toContain("pull/77");
+      expect(commentBody).toContain("abc12345");
+      expect(commentBody).toContain("feat: add auth flow");
+      expect(commentBody).toContain("src/auth.ts");
+    });
+
+    it("_commentCommitsOnIssue skips for non-github backend", async () => {
+      getKanbanBackendName.mockReturnValue("vk");
+      const ex = new TaskExecutor();
+
+      await ex._commentCommitsOnIssue(
+        { id: "some-uuid", backend: "vk" },
+        "/fake/wt",
+        { preExecHead: "aaa", postExecHead: "bbb" },
+        { url: "http://x", branch: "b", prNumber: "1" },
+      );
+
+      expect(addComment).not.toHaveBeenCalled();
+    });
+
+    it("_closeIssueAfterMerge comments and closes issue", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor();
+
+      await ex._closeIssueAfterMerge({ id: "42", backend: "github" }, "77");
+
+      // Should comment with merge info
+      expect(addComment).toHaveBeenCalledWith(
+        "42",
+        expect.stringContaining("Issue Resolved"),
+      );
+      expect(addComment).toHaveBeenCalledWith(
+        "42",
+        expect.stringContaining("#77"),
+      );
+
+      // Should close the issue
+      expect(updateTaskStatus).toHaveBeenCalledWith("42", "done");
+    });
+
+    it("_closeIssueAfterMerge uses externalId when task id is non-numeric", async () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor();
+
+      await ex._closeIssueAfterMerge(
+        {
+          id: "28c1b2e9-0e9e-4eeb-83ac-90c80e7f4a2e",
+          externalId: "151",
+          backend: "github",
+        },
+        "747",
+      );
+
+      expect(addComment).toHaveBeenCalledWith(
+        "151",
+        expect.stringContaining("Issue Resolved"),
+      );
+      expect(updateTaskStatus).toHaveBeenCalledWith("151", "done");
+    });
+
+    it("_closeIssueAfterMerge skips for non-github backend", async () => {
+      getKanbanBackendName.mockReturnValue("vk");
+      const ex = new TaskExecutor();
+
+      await ex._closeIssueAfterMerge({ id: "uuid", backend: "vk" }, "10");
+
+      expect(addComment).not.toHaveBeenCalled();
+      expect(updateTaskStatus).not.toHaveBeenCalled();
+    });
+
+    it("_enableAutoMerge closes issue after direct merge for github tasks", () => {
+      getKanbanBackendName.mockReturnValue("github");
+      const ex = new TaskExecutor();
+      const closeSpy = vi
+        .spyOn(ex, "_closeIssueAfterMerge")
+        .mockResolvedValue(undefined);
+
+      // First call: auto-merge fails with "clean status"
+      // Second call: direct merge succeeds
+      let callCount = 0;
+      spawnSync.mockImplementation((bin, args) => {
+        if (bin === "gh" && args[0] === "pr" && args[1] === "merge") {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              status: 1,
+              stdout: "",
+              stderr: "pull request is in clean status",
+            };
+          }
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      });
+
+      ex._enableAutoMerge("77", "/fake/wt", {
+        id: "42",
+        backend: "github",
+      });
+
+      expect(closeSpy).toHaveBeenCalledWith(
+        { id: "42", backend: "github" },
+        "77",
+      );
     });
   });
 });

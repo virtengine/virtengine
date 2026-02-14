@@ -10,7 +10,7 @@
 #   DEPS     — go.mod, go.sum, pnpm-lock.yaml, package.json
 #   WORKFLOW — .github/workflows/ YAML files
 #   DOCS     — .md files, _docs/, docs/ (skip all checks)
-#   CODEX_MONITOR — scripts/codex-monitor/ (run codex-monitor tests)
+#   CODEX_MONITOR — scripts/codex-monitor/ (run syntax, prepublish, tests)
 #   TERRAFORM — infra/terraform .tf files
 #
 # Bypass:      git push --no-verify
@@ -26,7 +26,7 @@
 #   VE_HOOK_SKIP_BUILD=1     Skip build
 #   VE_HOOK_SKIP_TEST=1      Skip unit tests (Go + Portal)
 #   VE_HOOK_SKIP_PORTAL=1    Skip ALL portal checks (lint, type-check, tests, build)
-#   VE_HOOK_SKIP_CODEX_MONITOR=1  Skip codex-monitor tests
+#   VE_HOOK_SKIP_CODEX_MONITOR=1  Skip codex-monitor checks (syntax, prepublish, tests)
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -163,7 +163,7 @@ if $HAS_ONLY_DOCS; then
 fi
 
 # ── Windows Firewall check (non-blocking warning) ──────────────────────────
-if [ "$(uname -o 2>/dev/null)" = "Msys" ] || [ -n "$MSYSTEM" ] || [ -n "$OS" ] && echo "$OS" | grep -qi windows; then
+if [ "$(uname -o 2>/dev/null)" = "Msys" ] || [ -n "${MSYSTEM:-}" ] || { [ -n "${OS:-}" ] && echo "${OS:-}" | grep -qi windows; }; then
     if ($HAS_GO || $HAS_DEPS_GO) && command -v pwsh >/dev/null 2>&1; then
         if [ -f "scripts/setup-firewall.ps1" ]; then
             if ! pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup-firewall.ps1 -Check >/dev/null 2>&1; then
@@ -185,6 +185,7 @@ RUN_PRETTIER=false; RUN_PORTAL_LINT=false
 RUN_PORTAL_TYPECHECK=false; RUN_PORTAL_TEST=false; RUN_PORTAL_BUILD=false; RUN_PNPM_LOCK=false
 RUN_TERRAFORM_FMT=false
 RUN_CODEX_MONITOR_SYNTAX=false
+RUN_CODEX_MONITOR_PREPUBLISH=false
 RUN_CODEX_MONITOR_TEST=false
 
 # Go checks: Only if .go files or go.mod/sum/work changed
@@ -224,13 +225,14 @@ $HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
 # Codex Monitor checks: Only if scripts/codex-monitor changed
 if $HAS_CODEX_MONITOR; then
     RUN_CODEX_MONITOR_SYNTAX=true
+    RUN_CODEX_MONITOR_PREPUBLISH=true
     RUN_CODEX_MONITOR_TEST=true
 fi
 
 for flag in $RUN_GO_VET $RUN_GOFMT $RUN_GO_LINT $RUN_GO_BUILD $RUN_GO_TEST \
             $RUN_MOD_VENDOR $RUN_PRETTIER $RUN_PORTAL_LINT $RUN_PORTAL_TYPECHECK \
             $RUN_PORTAL_TEST $RUN_PORTAL_BUILD $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT \
-            $RUN_CODEX_MONITOR_SYNTAX $RUN_CODEX_MONITOR_TEST; do
+            $RUN_CODEX_MONITOR_SYNTAX $RUN_CODEX_MONITOR_PREPUBLISH $RUN_CODEX_MONITOR_TEST; do
     $flag && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 done
 
@@ -343,33 +345,43 @@ check_codex_monitor_syntax() {
     hook_step "Syntax-checking codex-monitor .mjs files (node --check)..."
     local fail=0
     local checked=0
-    for f in "$monitor_dir"/*.mjs; do
+    pushd "$monitor_dir" >/dev/null
+    for f in ./*.mjs; do
         [ -f "$f" ] || continue
         checked=$((checked + 1))
+        # Run from monitor dir with relative paths to avoid MSYS path mangling
+        # of /mnt/... absolute paths when Node is a Windows binary.
         if ! node --check "$f" 2>&1; then
             hook_fail "Syntax error: $(basename "$f")"
             fail=1
         fi
     done
+    popd >/dev/null
     hook_step "Checked $checked .mjs files"
     # Also verify ESM import/export linkage for the main entry point.
     # node --check only catches parse errors; missing named exports are
     # module instantiation errors that only surface at import time.
     if [ $fail -eq 0 ]; then
         hook_step "Validating ESM exports (import check)..."
-        if ! VITEST=1 node -e "
-          import('file://${monitor_dir}/monitor.mjs')
-            .then(() => process.exit(0))
-            .catch(e => {
-              if (e instanceof SyntaxError || /does not provide an export named/.test(e.message)) {
-                console.error('ESM linkage error: ' + e.message);
-                process.exit(1);
-              }
-              // Other runtime errors (missing env vars, network, etc.) are OK — we
-              // only care about import-time failures here.
-              process.exit(0);
-            });
-        " 2>&1; then
+        if ! (
+            cd "$monitor_dir"
+            VITEST=1 node -e "
+              import('node:url').then(({ pathToFileURL }) => {
+                const target = pathToFileURL(process.cwd() + '/monitor.mjs').href;
+                return import(target);
+              })
+              .then(() => process.exit(0))
+              .catch(e => {
+                if (e instanceof SyntaxError || /does not provide an export named/.test(e.message)) {
+                  console.error('ESM linkage error: ' + e.message);
+                  process.exit(1);
+                }
+                // Other runtime errors (missing env vars, network, etc.) are OK — we
+                // only care about import-time failures here.
+                process.exit(0);
+              });
+            "
+        ) 2>&1; then
             hook_fail "ESM import validation failed for monitor.mjs"
             fail=1
         fi
@@ -412,6 +424,16 @@ check_codex_monitor_test() {
     fi
     hook_step "Running codex-monitor tests (vitest)..."
     (cd "$REPO_ROOT/scripts/codex-monitor" && npm test 2>&1)
+}
+
+check_codex_monitor_prepublish() {
+    local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
+    if [ ! -f "$monitor_dir/prepublish-check.mjs" ]; then
+        hook_fail "prepublish-check.mjs not found in scripts/codex-monitor"
+        return 1
+    fi
+    hook_step "Running codex-monitor prepublish validation..."
+    (cd "$monitor_dir" && node prepublish-check.mjs 2>&1)
 }
 
 # =========================================================================
@@ -736,6 +758,7 @@ else
     $RUN_PNPM_LOCK  && { run_check "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true; }
     # === Codex Monitor checks ===
     $RUN_CODEX_MONITOR_SYNTAX && { run_check "Codex Monitor syntax" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_syntax || true; }
+    $RUN_CODEX_MONITOR_PREPUBLISH && { run_check "Codex Monitor prepublish validation" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_prepublish || true; }
     $RUN_CODEX_MONITOR_TEST && { run_check "Codex Monitor tests" VE_HOOK_SKIP_CODEX_MONITOR check_codex_monitor_test || true; }
     # === Terraform formatting ===
     $RUN_TERRAFORM_FMT && { run_check "terraform fmt" VE_HOOK_SKIP_TF check_terraform_fmt || true; }

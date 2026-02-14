@@ -13,7 +13,7 @@ function runCommand(command, args, options = {}) {
     // Join command + args into a single string when using shell mode.
     if (useShell && args && args.length > 0) {
       const fullCommand = [command, ...args].join(" ");
-      return spawnSync(fullCommand, [], {
+      return spawnSync(fullCommand, {
         encoding: "utf8",
         windowsHide: true,
         shell: true,
@@ -153,10 +153,33 @@ function checkToolVersion(label, command, args, hint) {
   return { label, ok: true, version };
 }
 
-// Tools that MUST be present — missing any of these is an error
-const REQUIRED_TOOLS = new Set(["git", "gh", "node", "pwsh"]);
+function parseEnvBool(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const raw = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on", "y"].includes(raw)) return true;
+  if (["0", "false", "no", "off", "n"].includes(raw)) return false;
+  return fallback;
+}
+
+function isShellModeRequested() {
+  const script = String(process.env.ORCHESTRATOR_SCRIPT || "")
+    .trim()
+    .toLowerCase();
+  if (script.endsWith(".sh")) return true;
+  if (script.endsWith(".ps1")) return false;
+  if (parseEnvBool(process.env.CODEX_MONITOR_SHELL_MODE, false)) return true;
+  return !isWindows;
+}
 
 function checkToolchain() {
+  const shellMode = isShellModeRequested();
+  const requiredTools = new Set([
+    "git",
+    "gh",
+    "node",
+    shellMode ? "shell" : "pwsh",
+  ]);
+
   const tools = [
     checkToolVersion(
       "git",
@@ -195,11 +218,31 @@ function checkToolchain() {
       "Install PowerShell 7+ (pwsh) and ensure it is on PATH.",
     ),
   ];
+  const bashVersion = checkToolVersion(
+    "bash",
+    "bash",
+    ["--version"],
+    "Install bash and ensure it is on PATH.",
+  );
+  const shVersion = checkToolVersion(
+    "sh",
+    "sh",
+    ["--version"],
+    "Install sh and ensure it is on PATH.",
+  );
+  const shellTool = {
+    label: "shell",
+    ok: bashVersion.ok || shVersion.ok,
+    version: bashVersion.ok ? bashVersion.version : shVersion.version,
+    hint: "Install bash/sh and ensure it is on PATH.",
+  };
+  tools.push(shellTool);
+
   // Only required tools determine pass/fail — optional tools are warnings
   const ok = tools
-    .filter((tool) => REQUIRED_TOOLS.has(tool.label))
+    .filter((tool) => requiredTools.has(tool.label))
     .every((tool) => tool.ok);
-  return { ok, tools };
+  return { ok, tools, requiredTools };
 }
 
 function checkGhAuth() {
@@ -226,7 +269,7 @@ export function runPreflightChecks(options = {}) {
   for (const tool of toolchain.tools) {
     if (tool.ok) continue;
     const entry = { title: `Missing tool: ${tool.label}`, message: tool.hint };
-    if (REQUIRED_TOOLS.has(tool.label)) {
+    if (toolchain.requiredTools.has(tool.label)) {
       errors.push(entry);
     } else {
       warnings.push(entry);

@@ -40,6 +40,7 @@ import (
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
 	virtengine "github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/util/server"
 )
 
@@ -94,7 +95,7 @@ you want to test the upgrade handler itself.
 			if err != nil {
 				return err
 			}
-			cfgFile, err := os.Open(cfgFilePath) //nolint: gosec
+			cfgFile, err := security.SafeOpen(cfgFilePath)
 			if err != nil {
 				return err
 			}
@@ -146,8 +147,24 @@ you want to test the upgrade handler itself.
 				return err
 			}
 
+			if err := security.ValidateCLIPath(rootDir); err != nil {
+				return err
+			}
+			absRoot, err := filepath.Abs(filepath.Clean(rootDir))
+			if err != nil {
+				return err
+			}
+
 			for i := range cfg.Validators {
-				cfg.Validators[i].Home = filepath.Join(rootDir, cfg.Validators[i].Home)
+				if err := security.ValidateRelativePath(cfg.Validators[i].Home); err != nil {
+					return fmt.Errorf("invalid validator home path: %w", err)
+				}
+				homePath := filepath.Join(absRoot, cfg.Validators[i].Home)
+				homePath, err = security.CleanPathWithinBase(absRoot, homePath)
+				if err != nil {
+					return fmt.Errorf("invalid validator home path: %w", err)
+				}
+				cfg.Validators[i].Home = homePath
 			}
 
 			home := sctx.Config.RootDir
@@ -366,6 +383,7 @@ func testnetify(sctx *sdksrv.Context, tcfg TestnetConfig, testnetAppCreator type
 		}
 
 		emptyAddrBook := []byte("{}")
+		// #nosec G304 -- addrBookPath derived from validated validator home directory
 		if err := os.WriteFile(addrBookPath, emptyAddrBook, 0o600); err != nil {
 			return nil, fmt.Errorf("failed to create empty addrbook.json: %w", err)
 		}
