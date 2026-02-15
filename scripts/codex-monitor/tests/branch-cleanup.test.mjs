@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdir, rm, writeFile, mkdtemp } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
 
@@ -14,7 +14,7 @@ let TEST_DIR = "";
  * then optionally create local-only branches for testing.
  */
 async function initTestRepo() {
-  TEST_DIR = await mkdtemp(resolve(tmpdir(), "branch-cleanup-test-"));
+  TEST_DIR = mkdtempSync(resolve(tmpdir(), "branch-cleanup-test-"));
   execSync("git init -b main", { cwd: TEST_DIR, windowsHide: true });
   execSync('git config user.email "test@test.com"', {
     cwd: TEST_DIR,
@@ -64,7 +64,7 @@ function branchExists(name) {
   }
 }
 
-describe("cleanupStaleBranches", () => {
+describe.sequential("cleanupStaleBranches", () => {
   beforeEach(async () => {
     await initTestRepo();
   });

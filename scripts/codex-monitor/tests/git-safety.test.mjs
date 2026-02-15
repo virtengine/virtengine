@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -9,11 +10,21 @@ import {
   normalizeBaseBranch,
 } from "../git-safety.mjs";
 
-describe("git-safety", () => {
+describe.sequential("git-safety", () => {
   let repoDir = "";
 
+  function createIsolatedRepoDir() {
+    const dir = mkdtempSync(resolve(tmpdir(), "git-safety-"));
+    const workspaceRoot = resolve(process.cwd());
+    const candidate = resolve(dir);
+    if (candidate === workspaceRoot || candidate.startsWith(`${workspaceRoot}/`) || candidate.startsWith(`${workspaceRoot}\\`)) {
+      throw new Error(`Refusing to run git-safety tests inside workspace: ${candidate}`);
+    }
+    return candidate;
+  }
+
   beforeEach(async () => {
-    repoDir = await mkdtemp(resolve(tmpdir(), "git-safety-"));
+    repoDir = createIsolatedRepoDir();
     execSync("git init -b main", { cwd: repoDir, stdio: "pipe" });
     execSync('git config user.email "test@test.com"', {
       cwd: repoDir,
