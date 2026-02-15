@@ -50,7 +50,7 @@ import {
   launchOrResumeThread,
   getAvailableSdks,
 } from "./agent-pool.mjs";
-import { loadConfig } from "./config.mjs";
+import { loadConfig, formatConfigValidationSummary } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import {
@@ -238,6 +238,20 @@ configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
+
+function logConfigHealth(currentConfig, context = "startup") {
+  const summary = formatConfigValidationSummary(currentConfig, {
+    context,
+    maxIssues: 4,
+  });
+  const logFn = summary.level === "error" ? console.warn : console.log;
+  logFn(summary.headline);
+  for (const line of summary.details) {
+    logFn(`[config] ${line}`);
+  }
+}
+
+logConfigHealth(config, "startup");
 
 // Install console interceptor with log file (after config provides logDir)
 {
@@ -10084,6 +10098,7 @@ function applyConfig(nextConfig, options = {}) {
 async function reloadConfig(reason) {
   try {
     const nextConfig = loadConfig(process.argv, { reloadEnv: true });
+    logConfigHealth(nextConfig, `reload:${reason || "env-change"}`);
     applyConfig(nextConfig, { restartIfChanged: true, reason });
     console.log(`[monitor] config reloaded (${reason})`);
     if (telegramToken && telegramChatId) {

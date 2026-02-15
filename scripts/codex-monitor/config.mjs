@@ -397,6 +397,281 @@ function normalizeKanbanBackend(value) {
   return "vk";
 }
 
+function ensureValidationState(state) {
+  if (state && Array.isArray(state.errors) && Array.isArray(state.warnings)) {
+    return state;
+  }
+  return { errors: [], warnings: [] };
+}
+
+function parseValidatedNumber(name, rawValue, fallback, options = {}) {
+  const {
+    integer = false,
+    min = Number.NEGATIVE_INFINITY,
+    max = Number.POSITIVE_INFINITY,
+    allowZero = true,
+    state,
+  } = options;
+
+  const validation = ensureValidationState(state);
+  const value = Number(rawValue);
+  if (!Number.isFinite(value)) {
+    validation.errors.push(
+      `${name} must be a finite number (received: ${String(rawValue)})`,
+    );
+    return fallback;
+  }
+
+  if (integer && !Number.isInteger(value)) {
+    validation.errors.push(
+      `${name} must be an integer (received: ${String(rawValue)})`,
+    );
+    return fallback;
+  }
+
+  if (!allowZero && value === 0) {
+    validation.errors.push(`${name} must be greater than 0`);
+    return fallback;
+  }
+
+  if (value < min || value > max) {
+    validation.errors.push(
+      `${name} must be between ${min} and ${max} (received: ${String(rawValue)})`,
+    );
+    return fallback;
+  }
+
+  return value;
+}
+
+function parseValidatedEnum(name, rawValue, allowed, fallback, state) {
+  const validation = ensureValidationState(state);
+  const value = String(rawValue || "")
+    .trim()
+    .toLowerCase();
+  if (!value) return fallback;
+  if (allowed.includes(value)) return value;
+  validation.errors.push(
+    `${name} must be one of: ${allowed.join(", ")} (received: ${String(rawValue)})`,
+  );
+  return fallback;
+}
+
+function applyConfigValidation(config, options = {}) {
+  const strict = options.strict === true;
+  const validation = config?.validation || { errors: [], warnings: [] };
+  if (validation.errors.length > 0) {
+    const message =
+      `[config] Validation failed with ${validation.errors.length} error(s):\n` +
+      validation.errors.map((entry) => `  - ${entry}`).join("\n");
+    if (strict) {
+      throw new Error(message);
+    }
+    console.warn(`${message}\n[config] Continuing with safe fallback values.`);
+  }
+  if (validation.warnings.length > 0) {
+    const warningLines = validation.warnings
+      .map((entry) => `  - ${entry}`)
+      .join("\n");
+    console.warn(
+      `[config] Validation warnings:\n${warningLines}`,
+    );
+  }
+}
+
+function isValidHttpUrl(value) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(String(value));
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function runCrossFieldValidation(config, state) {
+  const validation = ensureValidationState(state);
+
+  const hasTelegramToken = Boolean(config.telegramToken);
+  const hasTelegramChatId = Boolean(config.telegramChatId);
+  if (hasTelegramToken !== hasTelegramChatId) {
+    validation.errors.push(
+      "Telegram configuration is partial: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must both be set or both be empty.",
+    );
+  }
+
+  if (config.vkRuntimeRequired && !isValidHttpUrl(config.vkEndpointUrl)) {
+    validation.errors.push(
+      `vkEndpointUrl must be a valid http(s) URL when VK runtime is required (received: ${String(config.vkEndpointUrl)})`,
+    );
+  }
+
+  if (config.kanban?.backend === "github") {
+    const hasGithubProject =
+      Boolean(config.kanban?.projectId) ||
+      (Boolean(config.kanban?.githubProject?.owner) &&
+        Number.isFinite(config.kanban?.githubProject?.number));
+    if (!hasGithubProject) {
+      validation.errors.push(
+        "KANBAN_BACKEND=github requires KANBAN_PROJECT_ID or githubProject.owner + githubProject.number.",
+      );
+    }
+  }
+}
+
+function formatCountLabel(count, label) {
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
+}
+
+function formatValidationIssueList(items, maxItems = 3) {
+  return items.slice(0, maxItems).map((entry) => `- ${entry}`);
+}
+
+function formatConfigValidationSummary(config, options = {}) {
+  const { context = "startup", maxIssues = 3 } = options;
+  const validation = config?.validation || { errors: [], warnings: [] };
+  const errorCount = validation.errors.length;
+  const warningCount = validation.warnings.length;
+  const strict = config?.strictConfig === true;
+
+  if (errorCount === 0 && warningCount === 0) {
+    return {
+      headline: `[config] health(${context}): OK`,
+      details: [],
+      level: "ok",
+    };
+  }
+
+  const state = errorCount > 0 ? "DEGRADED" : "WARN";
+  const counts = [
+    formatCountLabel(errorCount, "error"),
+    formatCountLabel(warningCount, "warning"),
+  ].join(", ");
+
+  const detailItems = [
+    ...formatValidationIssueList(validation.errors, maxIssues),
+    ...formatValidationIssueList(validation.warnings, maxIssues),
+  ];
+
+  return {
+    headline: `[config] health(${context}): ${state} (${counts}, strict=${strict ? "on" : "off"})`,
+    details: detailItems,
+    level: errorCount > 0 ? "error" : "warn",
+  };
+}
+
+function normalizeExecutorConfig(rawConfig, state) {
+  const validation = ensureValidationState(state);
+  const input = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
+
+  const executorsInput = Array.isArray(input.executors) ? input.executors : [];
+  const normalizedExecutors = executorsInput
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry, index) => {
+      const name = String(
+        entry.name || `${String(entry.executor || "executor").toLowerCase()}-${index + 1}`,
+      )
+        .trim()
+        .toLowerCase();
+      const executor = String(entry.executor || "CODEX")
+        .trim()
+        .toUpperCase();
+      const variant = String(entry.variant || "DEFAULT").trim();
+      const weight = parseValidatedNumber(
+        `executors[${index}].weight`,
+        entry.weight ?? 100,
+        100,
+        {
+          integer: true,
+          min: 1,
+          max: 1000,
+          allowZero: false,
+          state: validation,
+        },
+      );
+
+      return {
+        name,
+        executor,
+        variant,
+        role: String(entry.role || `executor-${index + 1}`),
+        enabled: entry.enabled !== false,
+        weight,
+      };
+    });
+
+  const executors = normalizedExecutors.length
+    ? normalizedExecutors
+    : DEFAULT_EXECUTORS.executors;
+
+  if (normalizedExecutors.length === 0) {
+    validation.warnings.push(
+      "No valid executors configured; falling back to default CODEX executor.",
+    );
+  }
+
+  const failoverRaw =
+    input.failover && typeof input.failover === "object"
+      ? input.failover
+      : DEFAULT_EXECUTORS.failover;
+
+  const failover = {
+    strategy: parseValidatedEnum(
+      "failover.strategy",
+      failoverRaw.strategy,
+      ["next-in-line", "weighted-random", "round-robin"],
+      DEFAULT_EXECUTORS.failover.strategy,
+      validation,
+    ),
+    maxRetries: parseValidatedNumber(
+      "failover.maxRetries",
+      failoverRaw.maxRetries,
+      DEFAULT_EXECUTORS.failover.maxRetries,
+      {
+        integer: true,
+        min: 1,
+        max: 20,
+        allowZero: false,
+        state: validation,
+      },
+    ),
+    cooldownMinutes: parseValidatedNumber(
+      "failover.cooldownMinutes",
+      failoverRaw.cooldownMinutes,
+      DEFAULT_EXECUTORS.failover.cooldownMinutes,
+      {
+        integer: true,
+        min: 1,
+        max: 1440,
+        allowZero: false,
+        state: validation,
+      },
+    ),
+    disableOnConsecutiveFailures: parseValidatedNumber(
+      "failover.disableOnConsecutiveFailures",
+      failoverRaw.disableOnConsecutiveFailures,
+      DEFAULT_EXECUTORS.failover.disableOnConsecutiveFailures,
+      {
+        integer: true,
+        min: 1,
+        max: 20,
+        allowZero: false,
+        state: validation,
+      },
+    ),
+  };
+
+  const distribution = parseValidatedEnum(
+    "distribution",
+    input.distribution,
+    ["weighted", "round-robin", "primary-only"],
+    DEFAULT_EXECUTORS.distribution,
+    validation,
+  );
+
+  return { executors, failover, distribution };
+}
+
 function loadExecutorConfig(configDir, configData) {
   // 1. Try env var
   const fromEnv = parseExecutorsFromEnv();
@@ -694,6 +969,7 @@ function loadAgentPrompts(configDir, repoRoot, configData) {
 export function loadConfig(argv = process.argv, options = {}) {
   const { reloadEnv = false } = options;
   const cli = parseArgs(argv);
+  const validation = { errors: [], warnings: [] };
 
   const repoRootForConfig = detectRepoRoot();
   // Determine config directory (where codex-monitor stores its config)
@@ -704,6 +980,11 @@ export function loadConfig(argv = process.argv, options = {}) {
 
   const configFile = loadConfigFile(configDir);
   let configData = configFile.data || {};
+  if (configFile.error === "invalid-json") {
+    validation.errors.push(
+      `Invalid JSON in config file: ${configFile.path}. Fix the syntax or remove the file.`,
+    );
+  }
 
   const repoRootOverride = cli["repo-root"] || process.env.REPO_ROOT || "";
   let repositories = loadRepoConfig(configDir, configData, {
@@ -754,6 +1035,11 @@ export function loadConfig(argv = process.argv, options = {}) {
     defaultProfile ||
     "";
   const profile = profileName ? profiles[profileName] : null;
+  if (profileName && !profile) {
+    validation.errors.push(
+      `Profile '${profileName}' was requested but not found in config profiles.`,
+    );
+  }
 
   if (profile?.envFile) {
     const envFilePath = resolve(configDir, profile.envFile);
@@ -858,11 +1144,27 @@ export function loadConfig(argv = process.argv, options = {}) {
   const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
 
   // ── Timing ───────────────────────────────────────────────
-  const restartDelayMs = Number(
+  const restartDelayMs = parseValidatedNumber(
+    "restartDelayMs",
     cli["restart-delay"] || process.env.RESTART_DELAY_MS || "10000",
+    10000,
+    {
+      integer: true,
+      min: 0,
+      max: 60 * 60 * 1000,
+      state: validation,
+    },
   );
-  const maxRestarts = Number(
+  const maxRestarts = parseValidatedNumber(
+    "maxRestarts",
     cli["max-restarts"] || process.env.MAX_RESTARTS || "0",
+    0,
+    {
+      integer: true,
+      min: 0,
+      max: 1000,
+      state: validation,
+    },
   );
 
   // ── Logging ──────────────────────────────────────────────
@@ -874,14 +1176,30 @@ export function loadConfig(argv = process.argv, options = {}) {
       resolve(configDir, "logs"),
   );
   // Max total size of the log directory in MB. 0 = unlimited.
-  const logMaxSizeMb = Number(
+  const logMaxSizeMb = parseValidatedNumber(
+    "logMaxSizeMb",
     process.env.LOG_MAX_SIZE_MB ?? configData.logMaxSizeMb ?? 500,
+    500,
+    {
+      integer: true,
+      min: 0,
+      max: 1024 * 50,
+      state: validation,
+    },
   );
   // How often to check log folder size (minutes). 0 = only at startup.
-  const logCleanupIntervalMin = Number(
+  const logCleanupIntervalMin = parseValidatedNumber(
+    "logCleanupIntervalMin",
     process.env.LOG_CLEANUP_INTERVAL_MIN ??
       configData.logCleanupIntervalMin ??
       30,
+    30,
+    {
+      integer: true,
+      min: 0,
+      max: 24 * 60,
+      state: validation,
+    },
   );
 
   // ── Agent SDK Selection ───────────────────────────────────
@@ -927,11 +1245,19 @@ export function loadConfig(argv = process.argv, options = {}) {
       : isEnvEnabled(process.env.CODEX_MONITOR_PREFLIGHT_DISABLED, false)
         ? false
         : true;
-  const preflightRetryMs = Number(
+  const preflightRetryMs = parseValidatedNumber(
+    "preflightRetryMs",
     cli["preflight-retry"] ||
       process.env.CODEX_MONITOR_PREFLIGHT_RETRY_MS ||
       configData.preflightRetryMs ||
       "300000",
+    300000,
+    {
+      integer: true,
+      min: 1000,
+      max: 24 * 60 * 60 * 1000,
+      state: validation,
+    },
   );
   const codexEnabled =
     !flags.has("no-codex") &&
@@ -967,8 +1293,12 @@ export function loadConfig(argv = process.argv, options = {}) {
   // ── Internal Executor ────────────────────────────────────
   // Allows the monitor to run tasks via agent-pool directly instead of
   // (or alongside) the VK executor. Modes: "vk" (default), "internal", "hybrid".
-  const kanbanBackend = normalizeKanbanBackend(
+  const kanbanBackend = parseValidatedEnum(
+    "kanban.backend",
     process.env.KANBAN_BACKEND || configData.kanban?.backend || "vk",
+    ["vk", "github", "jira"],
+    "vk",
+    validation,
   );
   const configuredProjectNumber =
     process.env.GITHUB_PROJECT_NUMBER || configData.kanban?.githubProject?.number;
@@ -1017,30 +1347,69 @@ export function loadConfig(argv = process.argv, options = {}) {
       ? isEnvEnabled(reviewAgentToggleRaw, true)
       : internalExecutorConfig.reviewAgentEnabled !== false;
   const internalExecutor = {
-    mode: ["vk", "internal", "hybrid"].includes(executorMode)
-      ? executorMode
-      : "vk",
-    maxParallel: Number(
+    mode: parseValidatedEnum(
+      "internalExecutor.mode",
+      executorMode,
+      ["vk", "internal", "hybrid"],
+      "vk",
+      validation,
+    ),
+    maxParallel: parseValidatedNumber(
+      "internalExecutor.maxParallel",
       process.env.INTERNAL_EXECUTOR_PARALLEL ||
         internalExecutorConfig.maxParallel ||
         3,
+      3,
+      {
+        integer: true,
+        min: 1,
+        max: 128,
+        allowZero: false,
+        state: validation,
+      },
     ),
-    pollIntervalMs: Number(
+    pollIntervalMs: parseValidatedNumber(
+      "internalExecutor.pollIntervalMs",
       process.env.INTERNAL_EXECUTOR_POLL_MS ||
         internalExecutorConfig.pollIntervalMs ||
         30000,
+      30000,
+      {
+        integer: true,
+        min: 1000,
+        max: 24 * 60 * 60 * 1000,
+        allowZero: false,
+        state: validation,
+      },
     ),
     sdk:
       process.env.INTERNAL_EXECUTOR_SDK || internalExecutorConfig.sdk || "auto",
-    taskTimeoutMs: Number(
+    taskTimeoutMs: parseValidatedNumber(
+      "internalExecutor.taskTimeoutMs",
       process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
         internalExecutorConfig.taskTimeoutMs ||
         90 * 60 * 1000,
+      90 * 60 * 1000,
+      {
+        integer: true,
+        min: 60 * 1000,
+        max: 24 * 60 * 60 * 1000,
+        allowZero: false,
+        state: validation,
+      },
     ),
-    maxRetries: Number(
+    maxRetries: parseValidatedNumber(
+      "internalExecutor.maxRetries",
       process.env.INTERNAL_EXECUTOR_MAX_RETRIES ||
         internalExecutorConfig.maxRetries ||
         2,
+      2,
+      {
+        integer: true,
+        min: 0,
+        max: 20,
+        state: validation,
+      },
     ),
     autoCreatePr: internalExecutorConfig.autoCreatePr !== false,
     projectId:
@@ -1048,15 +1417,33 @@ export function loadConfig(argv = process.argv, options = {}) {
       internalExecutorConfig.projectId ||
       null,
     reviewAgentEnabled,
-    reviewMaxConcurrent: Number(
+    reviewMaxConcurrent: parseValidatedNumber(
+      "internalExecutor.reviewMaxConcurrent",
       process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
         internalExecutorConfig.reviewMaxConcurrent ||
         2,
+      2,
+      {
+        integer: true,
+        min: 1,
+        max: 64,
+        allowZero: false,
+        state: validation,
+      },
     ),
-    reviewTimeoutMs: Number(
+    reviewTimeoutMs: parseValidatedNumber(
+      "internalExecutor.reviewTimeoutMs",
       process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
         internalExecutorConfig.reviewTimeoutMs ||
         300000,
+      300000,
+      {
+        integer: true,
+        min: 1000,
+        max: 24 * 60 * 60 * 1000,
+        allowZero: false,
+        state: validation,
+      },
     ),
   };
 
@@ -1075,7 +1462,20 @@ export function loadConfig(argv = process.argv, options = {}) {
   });
 
   // ── Vibe-Kanban ──────────────────────────────────────────
-  const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
+  const vkRecoveryPort = String(
+    parseValidatedNumber(
+      "vkRecoveryPort",
+      process.env.VK_RECOVERY_PORT || "54089",
+      54089,
+      {
+        integer: true,
+        min: 1,
+        max: 65535,
+        allowZero: false,
+        state: validation,
+      },
+    ),
+  );
   const vkRecoveryHost =
     process.env.VK_RECOVERY_HOST || process.env.VK_HOST || "0.0.0.0";
   const vkEndpointUrl =
@@ -1084,8 +1484,16 @@ export function loadConfig(argv = process.argv, options = {}) {
     `http://127.0.0.1:${vkRecoveryPort}`;
   const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
   const vkTaskUrlTemplate = process.env.VK_TASK_URL_TEMPLATE || "";
-  const vkRecoveryCooldownMin = Number(
+  const vkRecoveryCooldownMin = parseValidatedNumber(
+    "vkRecoveryCooldownMin",
     process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
+    10,
+    {
+      integer: true,
+      min: 0,
+      max: 24 * 60,
+      state: validation,
+    },
   );
   const vkSpawnDefault =
     configData.vkSpawnEnabled !== undefined
@@ -1100,25 +1508,69 @@ export function loadConfig(argv = process.argv, options = {}) {
     !flags.has("no-vk-spawn") &&
     !isEnvEnabled(process.env.VK_NO_SPAWN, false) &&
     vkSpawnDefault;
-  const vkEnsureIntervalMs = Number(
+  const vkEnsureIntervalMs = parseValidatedNumber(
+    "vkEnsureIntervalMs",
     cli["vk-ensure-interval"] || process.env.VK_ENSURE_INTERVAL || "60000",
+    60000,
+    {
+      integer: true,
+      min: 1000,
+      max: 24 * 60 * 60 * 1000,
+      allowZero: false,
+      state: validation,
+    },
   );
 
   // ── Telegram ─────────────────────────────────────────────
   const telegramToken = process.env.TELEGRAM_BOT_TOKEN || "";
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || "";
-  const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
-  const telegramCommandPollTimeoutSec = Math.max(
-    5,
-    Number(process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20"),
+  const telegramIntervalMin = parseValidatedNumber(
+    "telegramIntervalMin",
+    process.env.TELEGRAM_INTERVAL_MIN || "10",
+    10,
+    {
+      integer: true,
+      min: 1,
+      max: 24 * 60,
+      allowZero: false,
+      state: validation,
+    },
   );
-  const telegramCommandConcurrency = Math.max(
-    1,
-    Number(process.env.TELEGRAM_COMMAND_CONCURRENCY || "2"),
+  const telegramCommandPollTimeoutSec = parseValidatedNumber(
+    "telegramCommandPollTimeoutSec",
+    process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20",
+    20,
+    {
+      integer: true,
+      min: 5,
+      max: 300,
+      allowZero: false,
+      state: validation,
+    },
   );
-  const telegramCommandMaxBatch = Math.max(
-    1,
-    Number(process.env.TELEGRAM_COMMAND_MAX_BATCH || "25"),
+  const telegramCommandConcurrency = parseValidatedNumber(
+    "telegramCommandConcurrency",
+    process.env.TELEGRAM_COMMAND_CONCURRENCY || "2",
+    2,
+    {
+      integer: true,
+      min: 1,
+      max: 64,
+      allowZero: false,
+      state: validation,
+    },
+  );
+  const telegramCommandMaxBatch = parseValidatedNumber(
+    "telegramCommandMaxBatch",
+    process.env.TELEGRAM_COMMAND_MAX_BATCH || "25",
+    25,
+    {
+      integer: true,
+      min: 1,
+      max: 500,
+      allowZero: false,
+      state: validation,
+    },
   );
   const telegramBotEnabled = !flags.has("no-telegram-bot") && !!telegramToken;
   const telegramCommandEnabled = flags.has("telegram-commands")
@@ -1126,27 +1578,58 @@ export function loadConfig(argv = process.argv, options = {}) {
     : false;
   // Verbosity: minimal (critical+error only), summary (default — up to warnings
   // + key info), detailed (everything including debug).
-  const telegramVerbosity = (
+  const telegramVerbosity = parseValidatedEnum(
+    "telegramVerbosity",
     process.env.TELEGRAM_VERBOSITY ||
-    configData.telegramVerbosity ||
-    "summary"
-  ).toLowerCase();
+      configData.telegramVerbosity ||
+      "summary",
+    ["minimal", "summary", "detailed"],
+    "summary",
+    validation,
+  );
 
   // ── Task Planner ─────────────────────────────────────────
   // Mode: "codex-sdk" (default) runs Codex directly, "kanban" creates a VK
   // task for a real agent to plan, "disabled" turns off the planner entirely.
-  const plannerMode = (
+  const plannerMode = parseValidatedEnum(
+    "plannerMode",
     process.env.TASK_PLANNER_MODE ||
-    configData.plannerMode ||
-    (mode === "generic" ? "disabled" : "kanban")
-  ).toLowerCase();
-  const plannerPerCapitaThreshold = Number(
+      configData.plannerMode ||
+      (mode === "generic" ? "disabled" : "kanban"),
+    ["codex-sdk", "kanban", "disabled"],
+    mode === "generic" ? "disabled" : "kanban",
+    validation,
+  );
+  const plannerPerCapitaThreshold = parseValidatedNumber(
+    "plannerPerCapitaThreshold",
     process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
+    1,
+    {
+      min: 0,
+      max: 100,
+      state: validation,
+    },
   );
-  const plannerIdleSlotThreshold = Number(
+  const plannerIdleSlotThreshold = parseValidatedNumber(
+    "plannerIdleSlotThreshold",
     process.env.TASK_PLANNER_IDLE_SLOT_THRESHOLD || "1",
+    1,
+    {
+      min: 0,
+      max: 100,
+      state: validation,
+    },
   );
-  const plannerDedupHours = Number(process.env.TASK_PLANNER_DEDUP_HOURS || "6");
+  const plannerDedupHours = parseValidatedNumber(
+    "plannerDedupHours",
+    process.env.TASK_PLANNER_DEDUP_HOURS || "6",
+    6,
+    {
+      min: 0,
+      max: 720,
+      state: validation,
+    },
+  );
   const plannerDedupMs = Number.isFinite(plannerDedupHours)
     ? plannerDedupHours * 60 * 60 * 1000
     : 24 * 60 * 60 * 1000;
@@ -1218,20 +1701,46 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.FLEET_ENABLED ?? configData.fleetEnabled,
     true,
   );
-  const fleetBufferMultiplier = Number(
+  const fleetBufferMultiplier = parseValidatedNumber(
+    "fleet.bufferMultiplier",
     process.env.FLEET_BUFFER_MULTIPLIER ||
       configData.fleetBufferMultiplier ||
       "3",
+    3,
+    {
+      min: 1,
+      max: 20,
+      allowZero: false,
+      state: validation,
+    },
   );
-  const fleetSyncIntervalMs = Number(
+  const fleetSyncIntervalMs = parseValidatedNumber(
+    "fleet.syncIntervalMs",
     process.env.FLEET_SYNC_INTERVAL_MS ||
       configData.fleetSyncIntervalMs ||
       String(2 * 60 * 1000), // 2 minutes
+    2 * 60 * 1000,
+    {
+      integer: true,
+      min: 1000,
+      max: 24 * 60 * 60 * 1000,
+      allowZero: false,
+      state: validation,
+    },
   );
-  const fleetPresenceTtlMs = Number(
+  const fleetPresenceTtlMs = parseValidatedNumber(
+    "fleet.presenceTtlMs",
     process.env.FLEET_PRESENCE_TTL_MS ||
       configData.fleetPresenceTtlMs ||
       String(5 * 60 * 1000), // 5 minutes
+    5 * 60 * 1000,
+    {
+      integer: true,
+      min: 1000,
+      max: 24 * 60 * 60 * 1000,
+      allowZero: false,
+      state: validation,
+    },
   );
   const fleetKnowledgeEnabled = isEnvEnabled(
     process.env.FLEET_KNOWLEDGE_ENABLED ?? configData.fleetKnowledgeEnabled,
@@ -1256,15 +1765,28 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.DEPENDABOT_AUTO_MERGE ?? configData.dependabotAutoMerge,
     true,
   );
-  const dependabotAutoMergeIntervalMin = Number(
+  const dependabotAutoMergeIntervalMin = parseValidatedNumber(
+    "dependabotAutoMergeIntervalMin",
     process.env.DEPENDABOT_AUTO_MERGE_INTERVAL_MIN || "10",
+    10,
+    {
+      integer: true,
+      min: 1,
+      max: 24 * 60,
+      allowZero: false,
+      state: validation,
+    },
   );
   // Merge method: squash (default), merge, rebase
-  const dependabotMergeMethod = String(
+  const dependabotMergeMethod = parseValidatedEnum(
+    "dependabotMergeMethod",
     process.env.DEPENDABOT_MERGE_METHOD ||
       configData.dependabotMergeMethod ||
       "squash",
-  ).toLowerCase();
+    ["squash", "merge", "rebase"],
+    "squash",
+    validation,
+  );
   // PR authors to auto-merge (comma-separated). Default: dependabot[bot]
   const dependabotAuthors = String(
     process.env.DEPENDABOT_AUTHORS ||
@@ -1295,7 +1817,10 @@ export function loadConfig(argv = process.argv, options = {}) {
     : resolve(lockBase, "telegram-getupdates.lock");
 
   // ── Executors ────────────────────────────────────────────
-  const executorConfig = loadExecutorConfig(configDir, configData);
+  const executorConfig = normalizeExecutorConfig(
+    loadExecutorConfig(configDir, configData),
+    validation,
+  );
   const scheduler = new ExecutorScheduler(executorConfig);
 
   // ── Agent prompts ────────────────────────────────────────
@@ -1308,6 +1833,22 @@ export function loadConfig(argv = process.argv, options = {}) {
 
   // ── First-run detection ──────────────────────────────────
   const isFirstRun = !hasSetupMarkers(configDir);
+
+  const strictConfig =
+    cli._flags.has("strict-config") ||
+    isEnvEnabled(process.env.CODEX_MONITOR_STRICT_CONFIG, false) ||
+    configData.strictConfig === true;
+
+  runCrossFieldValidation(
+    {
+      telegramToken,
+      telegramChatId,
+      vkRuntimeRequired,
+      vkEndpointUrl,
+      kanban,
+    },
+    validation,
+  );
 
   const config = {
     // Identity
@@ -1413,6 +1954,13 @@ export function loadConfig(argv = process.argv, options = {}) {
     executorConfig,
     scheduler,
 
+    // Config validation
+    strictConfig,
+    validation: Object.freeze({
+      errors: [...validation.errors],
+      warnings: [...validation.warnings],
+    }),
+
     // Multi-repo
     repositories,
     selectedRepository,
@@ -1425,6 +1973,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     // First run
     isFirstRun,
   };
+
+  applyConfigValidation(config, { strict: strictConfig });
 
   return Object.freeze(config);
 }
@@ -1506,6 +2056,7 @@ export {
   loadRepoConfig,
   loadAgentPrompts,
   parseEnvBoolean,
+  formatConfigValidationSummary,
   getAgentPromptDefinitions,
 };
 export default loadConfig;

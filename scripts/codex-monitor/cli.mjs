@@ -111,6 +111,7 @@ function showHelp() {
 
   CONFIGURATION
     --config-dir <path>         Directory containing config files
+    --strict-config             Fail fast when config validation detects errors
     --repo-root <path>          Repository root (auto-detected)
     --project-name <name>       Project name for display
     --repo <org/repo>           GitHub repo slug
