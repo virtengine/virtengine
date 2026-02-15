@@ -24,6 +24,7 @@ import { createInterface } from "node:readline";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   readCodexConfig,
@@ -162,6 +163,66 @@ function commandExists(cmd) {
   }
 }
 
+export function getScriptRuntimePrerequisiteStatus(
+  platform = process.platform,
+  checker = commandExists,
+) {
+  if (platform === "win32") {
+    return {
+      required: {
+        label: "PowerShell (pwsh)",
+        command: "pwsh",
+        ok: checker("pwsh"),
+        hint: "Install: https://github.com/PowerShell/PowerShell",
+      },
+      optionalPwsh: null,
+    };
+  }
+
+  return {
+    required: {
+      label: "bash",
+      command: "bash",
+      ok: checker("bash"),
+      hint: "Install bash via your system package manager",
+    },
+    optionalPwsh: {
+      label: "PowerShell (pwsh)",
+      command: "pwsh",
+      ok: checker("pwsh"),
+      hint: "Optional on macOS/Linux (needed only for .ps1 scripts)",
+    },
+  };
+}
+
+export function getDefaultOrchestratorScripts(
+  platform = process.platform,
+  baseDir = __dirname,
+) {
+  const variants = ["ps1", "sh"]
+    .map((ext) => {
+      const orchestratorPath = resolve(baseDir, `ve-orchestrator.${ext}`);
+      const kanbanPath = resolve(baseDir, `ve-kanban.${ext}`);
+      return {
+        ext,
+        orchestratorPath,
+        kanbanPath,
+        available: existsSync(orchestratorPath) && existsSync(kanbanPath),
+      };
+    })
+    .filter((variant) => variant.available);
+
+  const preferredExt = platform === "win32" ? "ps1" : "sh";
+  const selectedDefault =
+    variants.find((variant) => variant.ext === preferredExt) || variants[0] || null;
+
+  return {
+    preferredExt,
+    variants,
+    selectedDefault,
+  };
+}
+
 function parseEnvAssignmentLine(line) {
   const raw = String(line || "").trim();
   if (!raw || raw.startsWith("#")) return null;
@@ -275,12 +336,23 @@ function detectProjectName(repoRoot) {
 }
 
 function runGhCommand(args, cwd) {
-  const output = execSync(["gh", ...args].join(" "), {
+  const normalizedArgs = Array.isArray(args)
+    ? args.map((entry) => String(entry))
+    : [];
+  const output = execFileSync("gh", normalizedArgs, {
     encoding: "utf8",
     cwd: cwd || process.cwd(),
-    stdio: ["pipe", "pipe", "ignore"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
   return String(output || "").trim();
+}
+
+function formatGhErrorReason(err) {
+  if (!err) return "";
+  const stderr = String(err.stderr || "").trim();
+  const stdout = String(err.stdout || "").trim();
+  const message = String(err.message || "").trim();
+  return stderr || stdout || message;
 }
 
 function detectGitHubUserLogin(cwd) {
@@ -291,60 +363,232 @@ function detectGitHubUserLogin(cwd) {
   }
 }
 
-function extractProjectNumber(value) {
+function collectProjectCandidates(node, out) {
+  if (node === null || node === undefined) return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectProjectCandidates(item, out);
+    return;
+  }
+  if (typeof node !== "object") return;
+
+  if (
+    Object.prototype.hasOwnProperty.call(node, "title") ||
+    Object.prototype.hasOwnProperty.call(node, "number") ||
+    Object.prototype.hasOwnProperty.call(node, "url") ||
+    Object.prototype.hasOwnProperty.call(node, "projectNumber")
+  ) {
+    out.push(node);
+  }
+
+  for (const value of Object.values(node)) {
+    if (value && (Array.isArray(value) || typeof value === "object")) {
+      collectProjectCandidates(value, out);
+    }
+  }
+}
+
+function parseGitHubProjectList(rawOutput) {
+  const rawText = String(rawOutput || "").trim();
+  if (!rawText) return [];
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    return [];
+  }
+
+  const candidates = [];
+  collectProjectCandidates(parsed, candidates);
+  return candidates;
+}
+
+function extractProjectNumberFromText(value) {
   const text = String(value || "").trim();
   if (!text) return "";
   if (/^\d+$/.test(text)) return text;
-  const match = text.match(/\/projects\/(\d+)(?:\b|$)/i);
-  return match ? match[1] : "";
+
+  const patterns = [
+    /\/projects\/(\d+)(?:\b|$)/i,
+    /\/projects\/v2\/(\d+)(?:\b|$)/i,
+    /\bproject\s*(?:number|id)?\s*[:#=-]?\s*(\d+)\b/i,
+    /\bnumber\s*[:#=-]\s*(\d+)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+
+  if (/project/i.test(text)) {
+    const fallback = text.match(/\b(\d+)\b/);
+    if (fallback && fallback[1]) return fallback[1];
+  }
+
+  return "";
 }
 
-function resolveOrCreateGitHubProjectNumber({ owner, title, cwd }) {
+function extractProjectNumber(value) {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalized = Math.trunc(value);
+    return normalized > 0 ? String(normalized) : "";
+  }
+
+  if (typeof value === "string") {
+    return extractProjectNumberFromText(value);
+  }
+
+  if (typeof value === "object") {
+    const keys = [
+      "number",
+      "projectNumber",
+      "project_number",
+      "url",
+      "resourcePath",
+      "html_url",
+      "id",
+      "text",
+      "message",
+    ];
+    for (const key of keys) {
+      const nested = extractProjectNumber(value?.[key]);
+      if (nested) return nested;
+    }
+    return extractProjectNumberFromText(JSON.stringify(value));
+  }
+
+  return "";
+}
+
+function resolveOrCreateGitHubProject({
+  owner,
+  title,
+  cwd,
+  repoOwner,
+  githubLogin,
+  runCommand = runGhCommand,
+}) {
   const normalizedOwner = String(owner || "").trim();
+  const normalizedRepoOwner = String(repoOwner || "").trim();
+  const normalizedGithubLogin = String(githubLogin || "").trim();
   const normalizedTitle = String(title || "").trim();
-  if (!normalizedOwner || !normalizedTitle) return "";
-
-  try {
-    const listRaw = runGhCommand(
-      ["project", "list", "--owner", normalizedOwner, "--format", "json"],
-      cwd,
-    );
-    const parsed = JSON.parse(listRaw || "[]");
-    const projects = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.projects)
-        ? parsed.projects
-        : [];
-    const existing = projects.find(
-      (project) =>
-        String(project?.title || "")
-          .trim()
-          .toLowerCase() === normalizedTitle.toLowerCase(),
-    );
-    const existingNumber = extractProjectNumber(
-      existing?.number || existing?.url,
-    );
-    if (existingNumber) return existingNumber;
-  } catch {
-    /* ignore and try create */
+  if (!normalizedTitle) {
+    return {
+      number: "",
+      owner: "",
+      reason: "missing GitHub Project title",
+    };
   }
 
-  try {
-    const createRaw = runGhCommand(
-      [
-        "project",
-        "create",
-        "--owner",
-        normalizedOwner,
-        "--title",
-        `\"${normalizedTitle.replace(/\"/g, '\\\"')}\"`,
-      ],
-      cwd,
-    );
-    return extractProjectNumber(createRaw);
-  } catch {
-    return "";
+  const ownerCandidates = [];
+  for (const candidate of [
+    normalizedOwner,
+    normalizedGithubLogin,
+    normalizedRepoOwner,
+  ]) {
+    if (!candidate) continue;
+    if (!ownerCandidates.includes(candidate)) ownerCandidates.push(candidate);
   }
+
+  if (ownerCandidates.length === 0) {
+    return {
+      number: "",
+      owner: "",
+      reason: "missing GitHub Project owner",
+    };
+  }
+
+  const reasons = [];
+  const normalizedTitleLower = normalizedTitle.toLowerCase();
+
+  for (const candidateOwner of ownerCandidates) {
+    let listFailed = false;
+    let hadListProjects = false;
+
+    try {
+      const listRaw = runCommand(
+        ["project", "list", "--owner", candidateOwner, "--format", "json"],
+        cwd,
+      );
+      const projects = parseGitHubProjectList(listRaw);
+      hadListProjects = projects.length > 0;
+
+      const existing = projects.find(
+        (project) =>
+          String(project?.title || "")
+            .trim()
+            .toLowerCase() === normalizedTitleLower,
+      );
+      const existingNumber = extractProjectNumber(existing);
+      if (existingNumber) {
+        return {
+          number: existingNumber,
+          owner: candidateOwner,
+          reason: "",
+        };
+      }
+    } catch (err) {
+      listFailed = true;
+      const reason = formatGhErrorReason(err);
+      reasons.push(
+        reason
+          ? `list failed for owner '${candidateOwner}': ${reason}`
+          : `list failed for owner '${candidateOwner}'`,
+      );
+    }
+
+    try {
+      const createRaw = runCommand(
+        [
+          "project",
+          "create",
+          "--owner",
+          candidateOwner,
+          "--title",
+          normalizedTitle,
+        ],
+        cwd,
+      );
+      const createdNumber = extractProjectNumber(createRaw);
+      if (createdNumber) {
+        return {
+          number: createdNumber,
+          owner: candidateOwner,
+          reason: "",
+        };
+      }
+
+      reasons.push(
+        `create returned no project number for owner '${candidateOwner}'`,
+      );
+    } catch (err) {
+      const reason = formatGhErrorReason(err);
+      const context = listFailed
+        ? "list+create"
+        : hadListProjects
+          ? "create"
+          : "create";
+      reasons.push(
+        reason
+          ? `${context} failed for owner '${candidateOwner}': ${reason}`
+          : `${context} failed for owner '${candidateOwner}'`,
+      );
+    }
+  }
+
+  return {
+    number: "",
+    owner: ownerCandidates[0] || "",
+    reason:
+      reasons.find(Boolean) ||
+      "no matching project found and project creation failed",
+  };
+}
+
+function resolveOrCreateGitHubProjectNumber(options) {
+  return resolveOrCreateGitHubProject(options).number;
 }
 
 function getDefaultPromptOverrides() {
@@ -959,11 +1203,23 @@ async function main() {
     Number(process.versions.node.split(".")[0]) >= 18,
   );
   const hasGit = check("git", commandExists("git"));
+  const runtimeStatus = getScriptRuntimePrerequisiteStatus();
   check(
-    "PowerShell (pwsh)",
-    commandExists("pwsh"),
-    "Install: https://github.com/PowerShell/PowerShell",
+    runtimeStatus.required.label,
+    runtimeStatus.required.ok,
+    runtimeStatus.required.hint,
   );
+  if (runtimeStatus.optionalPwsh) {
+    if (runtimeStatus.optionalPwsh.ok) {
+      info(
+        `${runtimeStatus.optionalPwsh.label} detected (${runtimeStatus.optionalPwsh.hint}).`,
+      );
+    } else {
+      warn(
+        `${runtimeStatus.optionalPwsh.label} not found (${runtimeStatus.optionalPwsh.hint}).`,
+      );
+    }
+  }
   check(
     "GitHub CLI (gh)",
     commandExists("gh"),
@@ -1615,19 +1871,28 @@ async function main() {
             configJson.kanban?.github?.projectTitle ||
             "Codex-Monitor",
         );
-        const resolvedProjectNumber = resolveOrCreateGitHubProjectNumber({
+        const resolvedProject = resolveOrCreateGitHubProject({
           owner: env.GITHUB_PROJECT_OWNER,
           title: env.GITHUB_PROJECT_TITLE,
           cwd: repoRoot,
+          repoOwner: env.GITHUB_REPO_OWNER,
+          githubLogin: detectedLogin,
         });
-        if (resolvedProjectNumber) {
-          env.GITHUB_PROJECT_NUMBER = resolvedProjectNumber;
+        if (resolvedProject.number) {
+          env.GITHUB_PROJECT_NUMBER = resolvedProject.number;
+          const linkedOwner = resolvedProject.owner || env.GITHUB_PROJECT_OWNER;
+          if (linkedOwner) {
+            env.GITHUB_PROJECT_OWNER = linkedOwner;
+          }
           success(
-            `GitHub Project linked: ${env.GITHUB_PROJECT_OWNER}#${resolvedProjectNumber} (${env.GITHUB_PROJECT_TITLE})`,
+            `GitHub Project linked: ${env.GITHUB_PROJECT_OWNER}#${resolvedProject.number} (${env.GITHUB_PROJECT_TITLE})`,
           );
         } else {
+          const reasonSuffix = resolvedProject.reason
+            ? ` Reason: ${resolvedProject.reason}`
+            : "";
           warn(
-            "Could not auto-detect/create GitHub Project. Issues will still be created and can be linked later.",
+            `Could not auto-detect/create GitHub Project. Issues will still be created and can be linked later.${reasonSuffix}`,
           );
         }
       }
@@ -1740,26 +2005,30 @@ async function main() {
     );
 
     // Check for default scripts in codex-monitor directory
-    const defaultOrchestrator = resolve(__dirname, "ve-orchestrator.ps1");
-    const defaultKanban = resolve(__dirname, "ve-kanban.ps1");
-    const hasDefaultScripts =
-      existsSync(defaultOrchestrator) && existsSync(defaultKanban);
+    const orchestratorDefaults = getDefaultOrchestratorScripts();
+    const hasDefaultScripts = orchestratorDefaults.variants.length > 0;
+    const selectedDefault = orchestratorDefaults.selectedDefault;
 
     if (hasDefaultScripts) {
       info(`Found default orchestrator scripts in codex-monitor:`);
-      info(`  - ve-orchestrator.ps1`);
-      info(`  - ve-kanban.ps1`);
+      for (const variant of orchestratorDefaults.variants) {
+        const preferredTag =
+          variant.ext === orchestratorDefaults.preferredExt ? " (preferred)" : "";
+        info(
+          `  - ve-orchestrator.${variant.ext} + ve-kanban.${variant.ext}${preferredTag}`,
+        );
+      }
 
       const useDefault = isAdvancedSetup
         ? await prompt.confirm(
-            "Use the default ve-orchestrator.ps1 script?",
+            `Use the default ${basename(selectedDefault.orchestratorPath)} script?`,
             true,
           )
         : true;
 
       if (useDefault) {
-        env.ORCHESTRATOR_SCRIPT = defaultOrchestrator;
-        success("Using default ve-orchestrator.ps1");
+        env.ORCHESTRATOR_SCRIPT = selectedDefault.orchestratorPath;
+        success(`Using default ${basename(selectedDefault.orchestratorPath)}`);
       } else {
         const customPath = await prompt.ask(
           "Path to your custom orchestrator script (or leave blank for Vibe-Kanban direct mode)",
@@ -2425,6 +2694,13 @@ export function shouldRunSetup() {
 export async function runSetup() {
   await main();
 }
+
+export {
+  extractProjectNumber,
+  resolveOrCreateGitHubProjectNumber,
+  resolveOrCreateGitHubProject,
+  runGhCommand,
+};
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
 
