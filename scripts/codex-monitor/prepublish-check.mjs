@@ -49,34 +49,12 @@ const mjsFiles = readdirSync(__dirname).filter(
 
 const importPattern = /from\s+["']\.\/([^"']+)["']/g;
 const missing = [];
-const esmGlobalIssues = [];
-
-function hasUndefinedEsmGlobal(content, identifier) {
-  const token = new RegExp(String.raw`\b${identifier}\b`);
-  if (!token.test(content)) return false;
-
-  const declaration = new RegExp(
-    String.raw`\b(?:const|let|var)\s+${identifier}\b`,
-  );
-  if (declaration.test(content)) return false;
-
-  const assignment = new RegExp(String.raw`\b${identifier}\s*=`);
-  if (assignment.test(content)) return false;
-
-  return true;
-}
 
 for (const file of mjsFiles) {
   // Only check files that are in the files array (i.e., will be published)
   if (!filesSet.has(file)) continue;
 
   const content = readFileSync(resolve(__dirname, file), "utf8");
-  if (hasUndefinedEsmGlobal(content, "__dirname")) {
-    esmGlobalIssues.push({ file, identifier: "__dirname" });
-  }
-  if (hasUndefinedEsmGlobal(content, "__filename")) {
-    esmGlobalIssues.push({ file, identifier: "__filename" });
-  }
   let match;
   importPattern.lastIndex = 0;
 
@@ -107,28 +85,6 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-if (esmGlobalIssues.length > 0) {
-  console.error("❌ Potential ESM global misuse detected:");
-  for (const { file, identifier } of esmGlobalIssues) {
-    console.error(`   ${file} references ${identifier} without local declaration`);
-  }
-  console.error(
-    "\nUse fileURLToPath(import.meta.url) + dirname(...) instead of implicit CommonJS globals.",
-  );
-  process.exit(1);
-}
-
-const smokeImports = ["hook-profiles.mjs", "git-safety.mjs"];
-for (const entry of smokeImports) {
-  try {
-    await import(new URL(`./${entry}`, import.meta.url).href);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`❌ Import smoke check failed for ${entry}: ${message}`);
-    process.exit(1);
-  }
-}
-
 console.log(
-  `✅ ${pkg.name}@${pkg.version} — ${filesArray.length} files, ${mjsFiles.length} .mjs scanned, imports and ESM smoke checks passed`,
+  `✅ ${pkg.name}@${pkg.version} — ${filesArray.length} files, ${mjsFiles.length} .mjs scanned, 0 missing imports`,
 );

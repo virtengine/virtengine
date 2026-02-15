@@ -35,7 +35,16 @@ vi.mock("../worktree-manager.mjs", () => ({
 vi.mock("../task-claims.mjs", () => ({
   initTaskClaims: vi.fn(() => Promise.resolve()),
   claimTask: vi.fn(() => Promise.resolve({ success: true, token: "claim-1" })),
+  renewClaim: vi.fn(() => Promise.resolve({ success: true })),
   releaseTask: vi.fn(() => Promise.resolve({ success: true })),
+}));
+
+vi.mock("../presence.mjs", () => ({
+  initPresence: vi.fn(() => Promise.resolve()),
+  getPresenceState: vi.fn(() => ({
+    instance_id: "presence-instance-1",
+    coordinator_priority: 100,
+  })),
 }));
 
 vi.mock("../config.mjs", () => ({
@@ -83,6 +92,7 @@ import {
 } from "../agent-pool.mjs";
 import { acquireWorktree, releaseWorktree } from "../worktree-manager.mjs";
 import { claimTask, releaseTask as releaseTaskClaim } from "../task-claims.mjs";
+import { initPresence, getPresenceState } from "../presence.mjs";
 import { loadConfig } from "../config.mjs";
 import { evaluateBranchSafetyForPush } from "../git-safety.mjs";
 import { spawnSync } from "node:child_process";
@@ -112,6 +122,8 @@ const ENV_KEYS = [
   "CLAUDE_MODEL",
   "CLAUDE_CODE_MODEL",
   "ANTHROPIC_MODEL",
+  "VE_INSTANCE_ID",
+  "CODEX_MONITOR_INSTANCE_ID",
 ];
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -168,6 +180,32 @@ describe("task-executor", () => {
     it("sets _running to false initially", () => {
       const ex = new TaskExecutor();
       expect(ex._running).toBe(false);
+    });
+
+    it("adopts stable presence instance id when no explicit id is configured", async () => {
+      const ex = new TaskExecutor();
+      getPresenceState.mockReturnValueOnce({
+        instance_id: "stable-instance-99",
+        coordinator_priority: 50,
+      });
+
+      await ex._ensureTaskClaimsInitialized();
+
+      expect(initPresence).toHaveBeenCalled();
+      expect(ex._instanceId).toBe("stable-instance-99");
+    });
+
+    it("keeps explicit instance id when provided in env", async () => {
+      process.env.VE_INSTANCE_ID = "explicit-instance-1";
+      const ex = new TaskExecutor();
+      getPresenceState.mockReturnValueOnce({
+        instance_id: "stable-instance-99",
+        coordinator_priority: 50,
+      });
+
+      await ex._ensureTaskClaimsInitialized();
+
+      expect(ex._instanceId).toBe("explicit-instance-1");
     });
   });
 
@@ -335,7 +373,7 @@ describe("task-executor", () => {
       );
     });
 
-    it("moves stale in-progress tasks back to ready when no resumable thread exists", async () => {
+    it("moves stale in-progress tasks back to todo when no resumable thread exists", async () => {
       const ex = new TaskExecutor({ projectId: "proj-1", maxParallel: 2 });
       ex._running = true;
       const executeSpy = vi
@@ -355,7 +393,7 @@ describe("task-executor", () => {
 
       await ex._recoverInterruptedInProgressTasks();
 
-      expect(updateTaskStatus).toHaveBeenCalledWith("stale-1", "ready");
+      expect(updateTaskStatus).toHaveBeenCalledWith("stale-1", "todo");
       expect(executeSpy).not.toHaveBeenCalled();
     });
   });
@@ -645,6 +683,72 @@ describe("task-executor", () => {
         "abcd1234-uuid",
         expect.any(Object),
       );
+    });
+  });
+
+  describe("planner result handling", () => {
+    it("marks planner task done when no commits but planner created backlog tasks", async () => {
+      const onTaskCompleted = vi.fn();
+      const sendTelegram = vi.fn();
+      const ex = new TaskExecutor({ onTaskCompleted, sendTelegram });
+      const task = {
+        id: "planner-1",
+        title: "Plan next tasks (nightly)",
+        description: "Task Planner — Auto-created by codex-monitor",
+      };
+      ex._noCommitCounts.set(task.id, 2);
+      ex._skipUntil.set(task.id, Date.now() + 60_000);
+      vi.spyOn(ex, "_hasUnpushedCommits").mockReturnValue(false);
+      vi.spyOn(ex, "_verifyPlannerTaskCompletion").mockResolvedValue({
+        completed: true,
+        createdCount: 2,
+        sampleTitles: ["Task A", "Task B"],
+      });
+
+      await ex._handleTaskResult(
+        task,
+        { success: true, attempts: 1, output: "planner output" },
+        "/fake/worktree",
+        { agentMadeNewCommits: false },
+      );
+
+      expect(updateTaskStatus).toHaveBeenCalledWith("planner-1", "done");
+      expect(updateTaskStatus).not.toHaveBeenCalledWith("planner-1", "todo");
+      expect(ex._noCommitCounts.has("planner-1")).toBe(false);
+      expect(ex._skipUntil.has("planner-1")).toBe(false);
+      expect(onTaskCompleted).toHaveBeenCalledWith(
+        task,
+        expect.objectContaining({ success: true }),
+      );
+      expect(sendTelegram).toHaveBeenCalledWith(
+        expect.stringContaining("Planner task completed"),
+      );
+    });
+
+    it("keeps no-commit cooldown flow when planner produced no backlog tasks", async () => {
+      const ex = new TaskExecutor();
+      const task = {
+        id: "planner-2",
+        title: "Task planner follow-up",
+        description: "Task Planner — Auto-created by codex-monitor",
+      };
+      vi.spyOn(ex, "_hasUnpushedCommits").mockReturnValue(false);
+      vi.spyOn(ex, "_verifyPlannerTaskCompletion").mockResolvedValue({
+        completed: false,
+        createdCount: 0,
+      });
+
+      await ex._handleTaskResult(
+        task,
+        { success: true, attempts: 1, output: "no tasks generated" },
+        "/fake/worktree",
+        { agentMadeNewCommits: false },
+      );
+
+      expect(updateTaskStatus).toHaveBeenCalledWith("planner-2", "todo");
+      expect(updateTaskStatus).not.toHaveBeenCalledWith("planner-2", "done");
+      expect(ex._noCommitCounts.get("planner-2")).toBe(1);
+      expect(ex._skipUntil.has("planner-2")).toBe(true);
     });
   });
 
@@ -1013,9 +1117,27 @@ describe("task-executor", () => {
       existsSync.mockReturnValue(true);
 
       listTasks.mockResolvedValueOnce([
-        { id: "t1", title: "Task 1", status: "todo", branchName: "ve/t1" },
-        { id: "t2", title: "Task 2", status: "todo", branchName: "ve/t2" },
-        { id: "t3", title: "Task 3", status: "todo", branchName: "ve/t3" },
+        {
+          id: "t1",
+          title: "Task 1",
+          status: "todo",
+          branchName: "ve/t1",
+          backend: "vk",
+        },
+        {
+          id: "t2",
+          title: "Task 2",
+          status: "todo",
+          branchName: "ve/t2",
+          backend: "vk",
+        },
+        {
+          id: "t3",
+          title: "Task 3",
+          status: "todo",
+          branchName: "ve/t3",
+          backend: "vk",
+        },
       ]);
 
       await ex._pollLoop();
@@ -1033,8 +1155,20 @@ describe("task-executor", () => {
       ex._activeSlots.set("t1", { taskId: "t1" });
 
       listTasks.mockResolvedValueOnce([
-        { id: "t1", title: "Task 1", status: "todo", branchName: "ve/t1" },
-        { id: "t2", title: "Task 2", status: "todo", branchName: "ve/t2" },
+        {
+          id: "t1",
+          title: "Task 1",
+          status: "todo",
+          branchName: "ve/t1",
+          backend: "vk",
+        },
+        {
+          id: "t2",
+          title: "Task 2",
+          status: "todo",
+          branchName: "ve/t2",
+          backend: "vk",
+        },
       ]);
 
       existsSync.mockReturnValue(true);

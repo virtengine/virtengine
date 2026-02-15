@@ -17,7 +17,7 @@ import {
 } from "node:fs/promises";
 import { clearLine, createInterface, cursorTo } from "node:readline";
 import net from "node:net";
-import { resolve, dirname } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { archiveCompletedTasks } from "./task-archiver.mjs";
@@ -50,7 +50,7 @@ import {
   launchOrResumeThread,
   getAvailableSdks,
 } from "./agent-pool.mjs";
-import { loadConfig, formatConfigValidationSummary } from "./config.mjs";
+import { loadConfig } from "./config.mjs";
 import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import {
@@ -165,6 +165,11 @@ import { fixGitConfigCorruption } from "./worktree-manager.mjs";
 // ── Task management subsystem imports ──────────────────────────────────────
 import {
   configureTaskStore,
+  getTask as getInternalTask,
+  getTasksByStatus as getInternalTasksByStatus,
+  updateTask as updateInternalTask,
+  recordAgentAttempt,
+  recordErrorPattern,
   getStorePath,
   loadStore as loadTaskStore,
   getStats as getTaskStoreStats,
@@ -180,51 +185,27 @@ import { createReviewAgent } from "./review-agent.mjs";
 import { createSyncEngine } from "./sync-engine.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
 import {
+  startGitHubReconciler,
+  stopGitHubReconciler,
+} from "./github-reconciler.mjs";
+import {
   getKanbanBackendName,
+  setKanbanBackend,
   listTasks as listKanbanTasks,
+  updateTaskStatus as updateKanbanTaskStatus,
   listProjects as listKanbanProjects,
   createTask as createKanbanTask,
-  setKanbanBackend,
-  updateTaskStatus as updateKanbanTaskStatus,
 } from "./kanban-adapter.mjs";
 import { resolvePromptTemplate } from "./agent-prompts.mjs";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
-function readJsonWithLegacyFallback(primaryPath, legacyPaths = []) {
-  const candidates = [primaryPath, ...legacyPaths.filter(Boolean)];
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    try {
-      const raw = readFileSync(candidate, "utf8");
-      const parsed = JSON.parse(raw);
-      if (candidate !== primaryPath && !existsSync(primaryPath)) {
-        try {
-          mkdirSync(dirname(primaryPath), { recursive: true });
-          writeFileSync(primaryPath, raw, "utf8");
-        } catch {
-          /* best effort */
-        }
-      }
-      return parsed;
-    } catch {
-      /* continue */
-    }
-  }
-  return null;
-}
-
-const monitorSharedStatePaths = resolveRepoSharedStatePaths({
-  cwd: process.cwd(),
-});
-
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
-const ANOMALY_SIGNAL_PATH = monitorSharedStatePaths.file("anomaly-signals.json");
-const LEGACY_ANOMALY_SIGNAL_PATHS = [
-  resolve(monitorSharedStatePaths.legacyCacheDir, "anomaly-signals.json"),
-  resolve(monitorSharedStatePaths.legacyCodexCacheDir, "anomaly-signals.json"),
-  resolve(__dirname, "..", ".cache", "anomaly-signals.json"),
-];
+const ANOMALY_SIGNAL_PATH = resolve(
+  __dirname,
+  "..",
+  ".cache",
+  "anomaly-signals.json",
+);
 
 /**
  * Write an anomaly signal to the shared signal file for the orchestrator to pick up.
@@ -232,15 +213,15 @@ const LEGACY_ANOMALY_SIGNAL_PATHS = [
  */
 function writeAnomalySignal(anomaly) {
   try {
-    const dir = dirname(ANOMALY_SIGNAL_PATH);
+    const dir = resolve(__dirname, "..", ".cache");
     mkdirSync(dir, { recursive: true });
     let signals = [];
-    const loaded = readJsonWithLegacyFallback(
-      ANOMALY_SIGNAL_PATH,
-      LEGACY_ANOMALY_SIGNAL_PATHS,
-    );
-    if (Array.isArray(loaded)) {
-      signals = loaded;
+    try {
+      const raw = readFileSync(ANOMALY_SIGNAL_PATH, "utf8");
+      signals = JSON.parse(raw);
+      if (!Array.isArray(signals)) signals = [];
+    } catch {
+      /* file doesn't exist yet */
     }
     signals.push({
       type: anomaly.type,
@@ -266,20 +247,6 @@ configureFromArgs(process.argv.slice(2));
 
 // ── Load unified configuration ──────────────────────────────────────────────
 let config = loadConfig();
-
-function logConfigHealth(currentConfig, context = "startup") {
-  const summary = formatConfigValidationSummary(currentConfig, {
-    context,
-    maxIssues: 4,
-  });
-  const logFn = summary.level === "error" ? console.warn : console.log;
-  logFn(summary.headline);
-  for (const line of summary.details) {
-    logFn(`[config] ${line}`);
-  }
-}
-
-logConfigHealth(config, "startup");
 
 // Install console interceptor with log file (after config provides logDir)
 {
@@ -401,6 +368,7 @@ let {
   fleet: fleetConfig,
   internalExecutor: internalExecutorConfig,
   executorMode: configExecutorMode,
+  githubReconcile: githubReconcileConfig,
 } = config;
 
 let watchPath = resolve(configWatchPath);
@@ -408,6 +376,12 @@ let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
 let kanbanBackend = String(kanbanConfig?.backend || "vk").toLowerCase();
 let executorMode = configExecutorMode || getExecutorMode();
+let githubReconcile = githubReconcileConfig || {
+  enabled: false,
+  intervalMs: 5 * 60 * 1000,
+  mergedLookbackHours: 72,
+  trackingLabels: ["tracking"],
+};
 console.log(`[monitor] task planner mode: ${plannerMode}`);
 console.log(`[monitor] kanban backend: ${kanbanBackend}`);
 console.log(`[monitor] executor mode: ${executorMode}`);
@@ -765,28 +739,17 @@ let selfRestartDeferCount = 0;
 let deferredMonitorRestartTimer = null;
 let pendingMonitorRestartReason = "";
 
-const repoSharedStatePaths = resolveRepoSharedStatePaths({
-  repoRoot: config.repoRoot,
-  cwd: config.repoRoot,
-});
-const legacyRuntimeCacheDir = config.cacheDir || resolve(config.repoRoot, ".cache");
-
 // ── Self-restart marker: detect if this process was spawned by a code-change restart
-const selfRestartMarkerPath =
-  process.env.VE_SELF_RESTART_MARKER_PATH ||
-  repoSharedStatePaths.file("ve-self-restart.marker");
-const legacySelfRestartMarkerPaths = [
-  resolve(legacyRuntimeCacheDir, "ve-self-restart.marker"),
-  resolve(repoSharedStatePaths.legacyCacheDir, "ve-self-restart.marker"),
-  resolve(repoSharedStatePaths.legacyCodexCacheDir, "ve-self-restart.marker"),
-];
+const selfRestartMarkerPath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-self-restart.marker",
+);
 let isSelfRestart = false;
 try {
-  const markerPath = [selfRestartMarkerPath, ...legacySelfRestartMarkerPaths].find(
-    (path) => existsSync(path),
-  );
-  if (markerPath) {
-    const ts = Number((await import("node:fs")).readFileSync(markerPath, "utf8"));
+  if (existsSync(selfRestartMarkerPath)) {
+    const ts = Number(
+      (await import("node:fs")).readFileSync(selfRestartMarkerPath, "utf8"),
+    );
     // Marker is valid if written within the last 30 seconds
     if (Date.now() - ts < 30_000) {
       isSelfRestart = true;
@@ -794,26 +757,11 @@ try {
         "[monitor] detected self-restart marker — suppressing startup notifications",
       );
     }
-    if (markerPath !== selfRestartMarkerPath && !existsSync(selfRestartMarkerPath)) {
-      try {
-        mkdirSync(dirname(selfRestartMarkerPath), { recursive: true });
-        writeFileSync(selfRestartMarkerPath, String(ts));
-      } catch {
-        /* best effort */
-      }
-    }
     // Clean up marker regardless
     try {
-      (await import("node:fs")).unlinkSync(markerPath);
+      (await import("node:fs")).unlinkSync(selfRestartMarkerPath);
     } catch {
       /* best effort */
-    }
-    if (markerPath !== selfRestartMarkerPath) {
-      try {
-        (await import("node:fs")).unlinkSync(selfRestartMarkerPath);
-      } catch {
-        /* best effort */
-      }
     }
   }
 } catch {
@@ -825,6 +773,17 @@ let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
 let vkNonJsonNotifiedAt = 0;
 let vkNonJsonContentTypeLoggedAt = 0;
+let vkInvalidResponseLoggedAt = 0;
+let vkErrorBurstStartedAt = 0;
+let vkErrorBurstCount = 0;
+let vkErrorSuppressedUntil = 0;
+let vkErrorSuppressionReason = "";
+const VK_ERROR_SUPPRESSION_DISABLED =
+  isTruthyFlag(process.env.VITEST) ||
+  String(process.env.NODE_ENV || "").toLowerCase() === "test";
+const VK_ERROR_BURST_WINDOW_MS = 30_000;
+const VK_ERROR_BURST_THRESHOLD = 3;
+const VK_ERROR_SUPPRESSION_MS = 60_000;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
 
@@ -974,16 +933,11 @@ let allCompleteNotified = false;
 let backlogLowNotified = false;
 let idleAgentsNotified = false;
 let plannerTriggered = false;
-const monitorStateCacheDir = repoSharedStatePaths.repoStateDir;
+const monitorStateCacheDir = resolve(repoRoot, ".codex-monitor", ".cache");
 const plannerStatePath = resolve(
   monitorStateCacheDir,
   "task-planner-state.json",
 );
-const legacyPlannerStatePaths = [
-  resolve(legacyRuntimeCacheDir, "task-planner-state.json"),
-  resolve(repoSharedStatePaths.legacyCacheDir, "task-planner-state.json"),
-  resolve(repoSharedStatePaths.legacyCodexCacheDir, "task-planner-state.json"),
-];
 const taskPlannerStatus = {
   enabled: isDevMode(),
   intervalMs: Math.max(
@@ -2389,6 +2343,47 @@ async function triggerVibeKanbanRecovery(reason) {
  * @param {object} [opts] - { method, body, timeoutMs }
  * @returns {Promise<object|null>} Parsed JSON body, or null on failure.
  */
+function resetVkErrorBurst() {
+  vkErrorBurstStartedAt = 0;
+  vkErrorBurstCount = 0;
+  vkErrorSuppressedUntil = 0;
+  vkErrorSuppressionReason = "";
+}
+
+function noteVkErrorBurst(reason) {
+  if (VK_ERROR_SUPPRESSION_DISABLED) return;
+  const now = Date.now();
+  if (
+    !vkErrorBurstStartedAt ||
+    now - vkErrorBurstStartedAt > VK_ERROR_BURST_WINDOW_MS
+  ) {
+    vkErrorBurstStartedAt = now;
+    vkErrorBurstCount = 0;
+  }
+  vkErrorBurstCount += 1;
+  if (vkErrorBurstCount >= VK_ERROR_BURST_THRESHOLD) {
+    vkErrorSuppressedUntil = now + VK_ERROR_SUPPRESSION_MS;
+    vkErrorSuppressionReason = reason || "vk-unavailable";
+    vkErrorBurstCount = 0;
+    vkErrorBurstStartedAt = now;
+    console.warn(
+      `[monitor] fetchVk suppressing VK requests for ${Math.round(
+        VK_ERROR_SUPPRESSION_MS / 1000,
+      )}s (reason: ${vkErrorSuppressionReason})`,
+    );
+  }
+}
+
+function shouldSuppressVkRequest(method) {
+  if (VK_ERROR_SUPPRESSION_DISABLED) return false;
+  const now = Date.now();
+  if (vkErrorSuppressedUntil && now < vkErrorSuppressedUntil) {
+    // Allow non-GET methods to attempt recovery actions.
+    return method === "GET";
+  }
+  return false;
+}
+
 async function fetchVk(path, opts = {}) {
   // Guard: if VK backend is not active, return null immediately instead of
   // attempting to connect. This prevents "fetch failed" spam when using
@@ -2401,6 +2396,9 @@ async function fetchVk(path, opts = {}) {
 
   const url = `${vkEndpointUrl}${path.startsWith("/") ? path : "/" + path}`;
   const method = (opts.method || "GET").toUpperCase();
+  if (shouldSuppressVkRequest(method)) {
+    return null;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs || 15000);
 
@@ -2423,6 +2421,7 @@ async function fetchVk(path, opts = {}) {
       void triggerVibeKanbanRecovery(
         `fetchVk ${method} ${path} network error: ${msg}`,
       );
+      noteVkErrorBurst("network-error");
     }
     return null;
   } finally {
@@ -2431,12 +2430,21 @@ async function fetchVk(path, opts = {}) {
 
   // Safety: validate response object (guards against mock/test issues)
   if (!res || typeof res.ok === "undefined") {
-    console.warn(
-      `[monitor] fetchVk ${method} ${path} error: invalid response object (res=${!!res}, res.ok=${res?.ok})`,
-    );
+    const now = Date.now();
+    if (now - vkInvalidResponseLoggedAt > 5 * 60 * 1000) {
+      vkInvalidResponseLoggedAt = now;
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} error: invalid response object (res=${!!res}, res.ok=${res?.ok})`,
+      );
+    } else {
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} error: invalid response object [details suppressed]`,
+      );
+    }
     void triggerVibeKanbanRecovery(
       `fetchVk ${method} ${path} invalid response object`,
     );
+    noteVkErrorBurst("invalid-response");
     return null;
   }
 
@@ -2449,6 +2457,7 @@ async function fetchVk(path, opts = {}) {
       void triggerVibeKanbanRecovery(
         `fetchVk ${method} ${path} HTTP ${res.status}`,
       );
+      noteVkErrorBurst("http-5xx");
     }
     return null;
   }
@@ -2464,23 +2473,34 @@ async function fetchVk(path, opts = {}) {
       : "");
     if (text) {
       try {
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        resetVkErrorBurst();
+        return parsed;
       } catch {
         // Fall through to non-JSON handling below.
       }
     }
-    console.warn(
-      `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
-    );
-    if (text) {
+    const now = Date.now();
+    const shouldLogDetails = now - vkNonJsonContentTypeLoggedAt > 5 * 60 * 1000;
+    if (shouldLogDetails) {
+      vkNonJsonContentTypeLoggedAt = now;
       console.warn(
-        `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
+        `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"})`,
+      );
+      if (text) {
+        console.warn(
+          `[monitor] fetchVk ${method} ${path} body: ${text.slice(0, 200)}`,
+        );
+      }
+    } else {
+      console.warn(
+        `[monitor] fetchVk ${method} ${path} error: non-JSON response (${contentType || "unknown"}) [details suppressed]`,
       );
     }
     void triggerVibeKanbanRecovery(
       `fetchVk ${method} ${path} non-JSON response`,
     );
-    const now = Date.now();
+    noteVkErrorBurst("non-json");
     if (now - vkNonJsonNotifiedAt > 10 * 60 * 1000) {
       vkNonJsonNotifiedAt = now;
       notifyVkError(
@@ -2491,11 +2511,14 @@ async function fetchVk(path, opts = {}) {
   }
 
   try {
-    return await res.json();
+    const parsed = await res.json();
+    resetVkErrorBurst();
+    return parsed;
   } catch (err) {
     console.warn(
       `[monitor] fetchVk ${method} ${path} error: Invalid JSON - ${err.message}`,
     );
+    noteVkErrorBurst("invalid-json");
     return null;
   }
 }
@@ -2694,47 +2717,55 @@ async function getPullRequestByNumber(prNumber) {
 }
 
 /**
- * Find the matching VK project by projectName, with caching.
+ * Find the matching project by projectName, with caching.
  * Falls back to the first project if no name match.
+ * Works with any kanban backend (VK, GitHub, Jira).
  */
-async function findVkProjectId() {
+async function findKanbanProjectId() {
   if (cachedProjectId) return cachedProjectId;
 
-  // Skip VK API calls if not using VK backend
+  try {
+    const projects = await listKanbanProjects();
+    if (!Array.isArray(projects) || projects.length === 0) {
+      console.warn("[monitor] No projects found in kanban backend");
+      return null;
+    }
+
+    // Match by projectName (case-insensitive)
+    const match = projects.find(
+      (p) => p.name?.toLowerCase() === projectName?.toLowerCase(),
+    );
+    const project = match || projects[0];
+    if (!project?.id) {
+      console.warn("[monitor] No valid project found in kanban backend");
+      return null;
+    }
+    if (!match) {
+      console.warn(
+        `[monitor] No project matching "${projectName}" — using "${project.name}" as fallback`,
+      );
+    }
+    cachedProjectId = project.id;
+    console.log(
+      `[monitor] Cached project_id: ${String(cachedProjectId).substring(0, 16)}... (${project.name})`,
+    );
+    return cachedProjectId;
+  } catch (err) {
+    console.warn(`[monitor] Failed to fetch projects: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * VK-specific project lookup (returns null if not using VK backend).
+ * Legacy function for VK-specific code paths that haven't been migrated to kanban-adapter yet.
+ */
+async function findVkProjectId() {
   const backend = getActiveKanbanBackend();
   if (backend !== "vk") {
     return null;
   }
-
-  const projectsRes = await fetchVk("/api/projects");
-  if (
-    !projectsRes?.success ||
-    !Array.isArray(projectsRes.data) ||
-    projectsRes.data.length === 0
-  ) {
-    console.warn("[monitor] Failed to fetch projects from VK API");
-    return null;
-  }
-
-  // Match by projectName (case-insensitive)
-  const match = projectsRes.data.find(
-    (p) => p.name?.toLowerCase() === projectName?.toLowerCase(),
-  );
-  const project = match || projectsRes.data[0];
-  if (!project?.id) {
-    console.warn("[monitor] No projects found in VK API");
-    return null;
-  }
-  if (!match) {
-    console.warn(
-      `[monitor] No VK project matching "${projectName}" — using "${project.name}" as fallback`,
-    );
-  }
-  cachedProjectId = project.id;
-  console.log(
-    `[monitor] Cached project_id: ${cachedProjectId.substring(0, 8)}... (${project.name})`,
-  );
-  return cachedProjectId;
+  return findKanbanProjectId();
 }
 
 /**
@@ -3370,11 +3401,7 @@ async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
     if (!t?.status) return true;
     const status = String(t.status).toLowerCase();
     return (
-      status === "backlog" ||
-      status === "ready" ||
-      status === "todo" ||
-      status === "inprogress" ||
-      status === "inreview"
+      status === "todo" || status === "inprogress" || status === "inreview"
     );
   });
   const finalCandidates =
@@ -3400,7 +3427,7 @@ async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
  * @param {string} taskId - Task UUID
  * @param {string} taskTitle - Human-readable title (for logging)
  * @param {string} reason - Why the recovery is happening (for logging)
- * @returns {Promise<boolean>} true if moved to queue status, false if skipped/failed
+ * @returns {Promise<boolean>} true if moved to todo, false if skipped/failed
  */
 async function safeRecoverTask(taskId, taskTitle, reason) {
   // In internal executor mode, only update task status — never start VK sessions
@@ -3449,9 +3476,9 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       scheduleRecoveryCacheSave();
       return false;
     }
-    if (liveStatus === TASK_REQUEUE_STATUS || liveStatus === "todo") {
+    if (liveStatus === "todo") {
       console.log(
-        `[monitor] safeRecover: task "${taskTitle}" is already ${liveStatus} — no action needed`,
+        `[monitor] safeRecover: task "${taskTitle}" is already todo — no action needed`,
       );
       // Cache so we skip this task for RECOVERY_SKIP_CACHE_MS
       recoverySkipCache.set(taskId, {
@@ -3463,15 +3490,15 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       scheduleRecoveryCacheSave();
       return false;
     }
-    const success = await updateTaskStatus(taskId, TASK_REQUEUE_STATUS);
+    const success = await updateTaskStatus(taskId, "todo");
     if (success) {
       if (isInternal) {
         console.log(
-          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → ${TASK_REQUEUE_STATUS} (${reason}) [internal mode — VK session skipped]`,
+          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason}) [internal mode — VK session skipped]`,
         );
       } else {
         console.log(
-          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → ${TASK_REQUEUE_STATUS} (${reason})`,
+          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason})`,
         );
       }
     }
@@ -3619,21 +3646,17 @@ const mergedTaskCache = new Set();
 const mergedBranchCache = new Set();
 
 /** Path to the persistent merged-task cache file */
-const mergedTaskCachePath = repoSharedStatePaths.file("ve-merged-tasks.json");
-const legacyMergedTaskCachePaths = [
-  resolve(legacyRuntimeCacheDir, "ve-merged-tasks.json"),
-  resolve(repoSharedStatePaths.legacyCacheDir, "ve-merged-tasks.json"),
-  resolve(repoSharedStatePaths.legacyCodexCacheDir, "ve-merged-tasks.json"),
-];
+const mergedTaskCachePath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-merged-tasks.json",
+);
 
 /** Load persisted merged-task cache from disk (best-effort) */
 function loadMergedTaskCache() {
   try {
-    const data = readJsonWithLegacyFallback(
-      mergedTaskCachePath,
-      legacyMergedTaskCachePaths,
-    );
-    if (data && typeof data === "object") {
+    if (existsSync(mergedTaskCachePath)) {
+      const raw = readFileSync(mergedTaskCachePath, "utf8");
+      const data = JSON.parse(raw);
       // No expiry — merged PRs don't un-merge. Cache is permanent.
       const ids = data.taskIds ?? data; // back-compat: old format was flat {id:ts}
       for (const id of Object.keys(ids)) {
@@ -3659,7 +3682,6 @@ function loadMergedTaskCache() {
 /** Persist merged-task cache to disk (best-effort) */
 function saveMergedTaskCache() {
   try {
-    mkdirSync(dirname(mergedTaskCachePath), { recursive: true });
     const taskIds = {};
     const now = Date.now();
     for (const id of mergedTaskCache) {
@@ -3694,14 +3716,9 @@ const recoveryCacheMaxEntries = Number(
 );
 
 const recoveryCachePath = resolve(
-  repoSharedStatePaths.repoStateDir,
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
   "ve-task-recovery-cache.json",
 );
-const legacyRecoveryCachePaths = [
-  resolve(legacyRuntimeCacheDir, "ve-task-recovery-cache.json"),
-  resolve(repoSharedStatePaths.legacyCacheDir, "ve-task-recovery-cache.json"),
-  resolve(repoSharedStatePaths.legacyCodexCacheDir, "ve-task-recovery-cache.json"),
-];
 
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
@@ -3774,7 +3791,6 @@ function buildCacheObject(map, tsField) {
 function saveRecoveryCache() {
   if (!recoveryCacheEnabled) return;
   try {
-    mkdirSync(dirname(recoveryCachePath), { recursive: true });
     const payload = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -3791,11 +3807,9 @@ function saveRecoveryCache() {
 function loadRecoveryCache() {
   if (!recoveryCacheEnabled) return;
   try {
-    const data = readJsonWithLegacyFallback(
-      recoveryCachePath,
-      legacyRecoveryCachePaths,
-    );
-    if (!data || typeof data !== "object") return;
+    if (!existsSync(recoveryCachePath)) return;
+    const raw = readFileSync(recoveryCachePath, "utf8");
+    const data = JSON.parse(raw);
     const now = Date.now();
     const staleEntries = data?.staleCooldown || {};
     for (const [id, entry] of Object.entries(staleEntries)) {
@@ -5228,9 +5242,9 @@ async function actOnAssessment(ctx, decision) {
       console.log(
         `[${tag}] → new attempt (agent: ${decision.agentType || "auto"})`,
       );
-      // Move task back to queue status for re-scheduling
+      // Move task back to todo for re-scheduling
       if (ctx.taskId) {
-        await updateTaskStatus(ctx.taskId, TASK_REQUEUE_STATUS);
+        await updateTaskStatus(ctx.taskId, "todo");
       }
       void sendTelegramMessage(
         `🆕 Assessment: starting new attempt for "${ctx.taskTitle}" — ${decision.reason || ""}`,
@@ -5259,7 +5273,7 @@ async function actOnAssessment(ctx, decision) {
     case "close_and_replan":
       console.log(`[${tag}] → close and replan`);
       if (ctx.taskId) {
-        await updateTaskStatus(ctx.taskId, TASK_REQUEUE_STATUS);
+        await updateTaskStatus(ctx.taskId, "todo");
       }
       void sendTelegramMessage(
         `🚫 Assessment: closing and replanning "${ctx.taskTitle}" — ${decision.reason || ""}`,
@@ -5636,11 +5650,11 @@ async function smartPRFlow(attemptId, shortId, status) {
           console.warn(
             `[monitor] ${tag}: planner task incomplete — no new backlog tasks detected`,
           );
-          void updateTaskStatus(attemptInfo.task_id, TASK_REQUEUE_STATUS);
+          void updateTaskStatus(attemptInfo.task_id, "todo");
           await archiveAttempt(attemptId);
           if (telegramToken && telegramChatId) {
             void sendTelegramMessage(
-              `⚠️ Task planner incomplete: no new backlog tasks detected. Returned to ${TASK_REQUEUE_STATUS}.`,
+              "⚠️ Task planner incomplete: no new backlog tasks detected. Returned to todo.",
             );
           }
           return;
@@ -6386,14 +6400,8 @@ async function readStatusSummary() {
 
 async function readPlannerState() {
   try {
-    const loaded = readJsonWithLegacyFallback(
-      plannerStatePath,
-      legacyPlannerStatePaths,
-    );
-    if (loaded && typeof loaded === "object") {
-      return loaded;
-    }
-    return null;
+    const raw = await readFile(plannerStatePath, "utf8");
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -6698,28 +6706,10 @@ function extractPlannerTasksFromOutput(output, maxTasks) {
   return normalized;
 }
 
-async function findKanbanProjectId() {
-  if (cachedProjectId) return cachedProjectId;
-  try {
-    const projects = await listKanbanProjects();
-    if (!Array.isArray(projects) || projects.length === 0) {
-      return null;
-    }
-    const match = projects.find(
-      (p) => p.name?.toLowerCase() === projectName?.toLowerCase(),
-    );
-    const project = match || projects[0];
-    const id = project?.id || project?.project_id || null;
-    if (!id) return null;
-    cachedProjectId = id;
-    return cachedProjectId;
-  } catch {
-    return null;
-  }
-}
-
 async function materializePlannerTasksToKanban(projectId, tasks) {
-  const existingOpenTasks = await listKanbanTasks(projectId, { status: "todo" });
+  const existingOpenTasks = await listKanbanTasks(projectId, {
+    status: "todo",
+  });
   const existingTitles = new Set(
     (Array.isArray(existingOpenTasks) ? existingOpenTasks : [])
       .map((task) => normalizePlannerTitleForComparison(task?.title))
@@ -7019,21 +7009,47 @@ function limitLines(lines, limit = 8) {
   return [...lines.slice(0, limit), `- ...and ${remaining} more`];
 }
 
+function buildTaskUrl(task, projectId) {
+  if (!task) {
+    return null;
+  }
+
+  const taskId = task.id || task;
+  const backend = getActiveKanbanBackend();
+
+  // For GitHub, task object might have URL in meta
+  if (backend === "github") {
+    if (typeof task === "object" && task.meta?.url) {
+      return task.meta.url;
+    }
+    // GitHub issue URL format
+    const cfg = loadConfig();
+    const slug =
+      process.env.GITHUB_REPOSITORY || cfg?.repoSlug || "virtengine/virtengine";
+    return `https://github.com/${slug}/issues/${String(taskId).replace(/^#/, "")}`;
+  }
+
+  // For VK backend
+  if (backend === "vk") {
+    const template = String(vkTaskUrlTemplate || "").trim();
+    if (template) {
+      return template
+        .replace("{projectId}", projectId || "")
+        .replace("{taskId}", taskId);
+    }
+    const base = String(vkPublicUrl || vkEndpointUrl || "").replace(/\/+$/, "");
+    if (!base || !projectId) {
+      return null;
+    }
+    return `${base}/local-projects/${projectId}/tasks/${taskId}`;
+  }
+
+  // Fallback for other backends
+  return null;
+}
+
 function buildVkTaskUrl(taskId, projectId) {
-  if (!taskId) {
-    return null;
-  }
-  const template = String(vkTaskUrlTemplate || "").trim();
-  if (template) {
-    return template
-      .replace("{projectId}", projectId || "")
-      .replace("{taskId}", taskId);
-  }
-  const base = String(vkPublicUrl || vkEndpointUrl || "").replace(/\/+$/, "");
-  if (!base || !projectId) {
-    return null;
-  }
-  return `${base}/local-projects/${projectId}/tasks/${taskId}`;
+  return buildTaskUrl(taskId, projectId);
 }
 
 function formatTaskLink(item) {
@@ -7586,6 +7602,7 @@ async function triggerTaskPlanner(
   if (plannerTriggered) {
     return { status: "skipped", reason: "planner_busy" };
   }
+
   const requestedMode =
     preferredMode === "kanban" || preferredMode === "codex-sdk"
       ? preferredMode
@@ -7694,7 +7711,7 @@ async function triggerTaskPlanner(
 }
 
 /**
- * Trigger the task planner by creating a VK task — a real agent will
+ * Trigger the task planner by creating a kanban task — a real agent will
  * pick it up and plan the next phase of work.
  */
 async function triggerTaskPlannerViaKanban(
@@ -7718,10 +7735,12 @@ async function triggerTaskPlannerViaKanban(
     details,
     numTasks,
   );
-  // Get project ID using the name-matched helper
-  const projectId = await findVkProjectId();
+  // Get project ID using the kanban adapter
+  const projectId = await findKanbanProjectId();
   if (!projectId) {
-    throw new Error("Cannot reach VK API or no project found");
+    throw new Error(
+      `Cannot reach kanban backend (${getActiveKanbanBackend()}) or no project found`,
+    );
   }
 
   const desiredTitle = `[${plannerTaskSizeLabel}] Plan next tasks (${reason || "backlog-empty"})`;
@@ -7734,48 +7753,33 @@ async function triggerTaskPlannerViaKanban(
 
   // Check for existing planner tasks to avoid duplicates
   // Only block on TODO tasks whose title matches the exact format we create
-  const existingTasks = await fetchVk(
-    `/api/tasks?project_id=${projectId}&status=todo`,
-  );
-  const existingPlanner = (existingTasks?.data || []).find((t) => {
-    // Double-check status client-side — VK API filter may not work reliably
+  const existingTasks = await listKanbanTasks(projectId, { status: "todo" });
+  const existingPlanner = (
+    Array.isArray(existingTasks) ? existingTasks : []
+  ).find((t) => {
+    // Double-check status client-side
     if (t.status && t.status !== "todo") return false;
-    const title = (t.title || "").toLowerCase();
+    const title = String(t.title || "").toLowerCase();
+    const normalizedTitle = title.replace(/^\[[^\]]+\]\s*/, "").trim();
     // Only match the exact title format we create: "Plan next tasks (...)"
     return (
-      title.startsWith("plan next tasks") || title.startsWith("plan next phase")
+      normalizedTitle.startsWith("plan next tasks") ||
+      normalizedTitle.startsWith("plan next phase")
     );
   });
   if (existingPlanner) {
     console.log(
-      `[monitor] task planner VK task already exists in backlog — skipping: "${existingPlanner.title}" (${existingPlanner.id})`,
+      `[monitor] task planner task already exists in backlog — skipping: "${existingPlanner.title}" (${existingPlanner.id})`,
     );
     // Best-effort: keep backlog task aligned with current requirements
-    if (
-      existingPlanner.title !== desiredTitle ||
-      (existingPlanner.description || "") !== desiredDescription
-    ) {
-      try {
-        await fetchVk(`/api/tasks/${existingPlanner.id}`, {
-          method: "PUT",
-          body: {
-            title: desiredTitle,
-            description: desiredDescription,
-          },
-          timeoutMs: 15000,
-        });
-        console.log(
-          `[monitor] task planner VK task updated with latest requirements (${existingPlanner.id})`,
-        );
-      } catch {
-        /* best-effort */
-      }
-    }
-    const taskUrl = buildVkTaskUrl(existingPlanner.id, projectId);
+    // Note: For now, we skip updating existing tasks as not all backends support partial updates
+    // TODO: Implement backend-specific update logic if needed
+
+    const taskUrl = buildTaskUrl(existingPlanner, projectId);
     if (notify) {
       const suffix = taskUrl ? `\n${taskUrl}` : "";
       await sendTelegramMessage(
-        `📋 Task planner skipped — existing planning task found (${projectId.substring(0, 8)}...).${suffix}`,
+        `📋 Task planner skipped — existing planning task found.${suffix}`,
       );
     }
     await updatePlannerState({
@@ -7794,46 +7798,39 @@ async function triggerTaskPlannerViaKanban(
     };
   }
 
-  const taskBody = {
+  const taskData = {
     title: desiredTitle,
     description: desiredDescription,
     status: "todo",
-    project_id: projectId,
   };
 
-  const result = await fetchVk(`/api/tasks`, {
-    method: "POST",
-    body: taskBody,
-    timeoutMs: 15000,
-  });
+  const createdTask = await createKanbanTask(projectId, taskData);
 
-  if (result?.success) {
-    console.log(
-      `[monitor] task planner VK task created: ${result.data?.id || "ok"}`,
-    );
+  if (createdTask && createdTask.id) {
+    console.log(`[monitor] task planner task created: ${createdTask.id}`);
     await updatePlannerState({
       last_success_at: new Date().toISOString(),
       last_success_reason: reason || "manual",
       last_error: null,
       last_result: "kanban_task_created",
     });
-    const createdId = result.data?.id || null;
-    const createdUrl = buildVkTaskUrl(createdId, projectId);
+    const createdId = createdTask.id;
+    const createdUrl = buildTaskUrl(createdTask, projectId);
     if (notify) {
       const suffix = createdUrl ? `\n${createdUrl}` : "";
       await sendTelegramMessage(
-        `📋 Task planner: created VK task for next phase planning (${reason}).${suffix}`,
+        `📋 Task planner: created task for next phase planning (${reason}).${suffix}`,
       );
     }
     return {
       status: "created",
       taskId: createdId,
-      taskTitle: taskBody.title,
+      taskTitle: taskData.title,
       taskUrl: createdUrl,
       projectId,
     };
   }
-  throw new Error("VK task creation failed");
+  throw new Error("Task creation failed");
 }
 
 /**
@@ -7894,7 +7891,7 @@ async function triggerTaskPlannerViaCodex(
     );
   }
 
-  const plannerArtifactDir = monitorStateCacheDir;
+  const plannerArtifactDir = resolve(repoRoot, ".codex-monitor", ".cache");
   await mkdir(plannerArtifactDir, { recursive: true });
   const artifactPath = resolve(
     plannerArtifactDir,
@@ -7940,7 +7937,9 @@ async function triggerTaskPlannerViaCodex(
   if (notify) {
     await sendTelegramMessage(
       `📋 Task planner run completed (${reason || "manual"}). Created ${created.length}/${parsedTasks.length} tasks.${
-        skipped.length > 0 ? ` Skipped ${skipped.length} duplicates/failed.` : ""
+        skipped.length > 0
+          ? ` Skipped ${skipped.length} duplicates/failed.`
+          : ""
       }\nOutput: ${outPath}\nArtifact: ${artifactPath}`,
     );
   }
@@ -8868,6 +8867,34 @@ async function readLogTail(
   }
 }
 
+async function readLatestLogTail(
+  dirPath,
+  prefix,
+  { maxLines = 120, maxChars = 12000 } = {},
+) {
+  try {
+    const { readdir, stat } = await import("node:fs/promises");
+    const entries = await readdir(dirPath);
+    const candidates = entries.filter(
+      (name) => name.startsWith(prefix) && name.endsWith(".log"),
+    );
+    if (!candidates.length) return null;
+    const stats = await Promise.all(
+      candidates.map(async (name) => {
+        const path = resolve(dirPath, name);
+        const info = await stat(path);
+        return { name, path, mtimeMs: info.mtimeMs };
+      }),
+    );
+    stats.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const latest = stats[0];
+    const tail = await readLogTail(latest.path, { maxLines, maxChars });
+    return { name: latest.name, tail };
+  } catch {
+    return null;
+  }
+}
+
 function formatDigestLines(entries = []) {
   if (!Array.isArray(entries) || entries.length === 0) {
     return "(no digest entries)";
@@ -8989,13 +9016,33 @@ async function buildMonitorMonitorPrompt({ trigger, entries, text }) {
     ? `Work on branch ${monitorMonitor.branch}. Do not create a new branch.`
     : "Work on the current branch. Do not create a new branch.";
 
-  const orchestratorTail = await readLogTail(
+  let orchestratorTail = await readLogTail(
     resolve(logDir, "orchestrator-active.log"),
     {
       maxLines: 140,
       maxChars: 14000,
     },
   );
+  if (orchestratorTail.startsWith("(missing:")) {
+    const fallback = await readLatestLogTail(logDir, "orchestrator-", {
+      maxLines: 140,
+      maxChars: 14000,
+    });
+    if (fallback?.tail) {
+      orchestratorTail = `[fallback: ${fallback.name}]\n${fallback.tail}`;
+    } else {
+      const defaultLogDir = resolve(__dirname, "logs");
+      if (defaultLogDir !== logDir) {
+        const alt = await readLatestLogTail(defaultLogDir, "orchestrator-", {
+          maxLines: 140,
+          maxChars: 14000,
+        });
+        if (alt?.tail) {
+          orchestratorTail = `[fallback: ${alt.name}]\n${alt.tail}`;
+        }
+      }
+    }
+  }
   const monitorTail = await readLogTail(resolve(logDir, "monitor-error.log"), {
     maxLines: 120,
     maxChars: 12000,
@@ -9755,8 +9802,10 @@ function selfRestartForSourceChange(filename) {
   }
   // Write self-restart marker so the new process suppresses startup notifications
   try {
-    mkdirSync(dirname(selfRestartMarkerPath), { recursive: true });
-    writeFileSync(selfRestartMarkerPath, String(Date.now()));
+    writeFileSync(
+      resolve(repoRoot, ".cache", "ve-self-restart.marker"),
+      String(Date.now()),
+    );
   } catch {
     /* best effort */
   }
@@ -9786,18 +9835,16 @@ function attemptSelfRestartAfterQuiet() {
   const protection = getRuntimeRestartProtection();
   if (protection.defer) {
     pendingSelfRestart = filename;
-    // Track how many times we've deferred. After 20 deferrals (~10 min at 30s
-    // intervals), force the restart to prevent indefinite deferral loops.
+    // Track how many times we've deferred. Never force-restart when internal
+    // task agents are active; just keep retrying with periodic reminders.
     const deferCount = (selfRestartDeferCount =
       (selfRestartDeferCount || 0) + 1);
     const retrySec = Math.round(SELF_RESTART_RETRY_MS / 1000);
     if (deferCount >= 20) {
       console.warn(
-        `[monitor] self-restart deferred ${deferCount} times — forcing restart despite ${protection.reason}`,
+        `[monitor] self-restart deferred ${deferCount} times — still waiting for ${protection.reason}; continuing to defer`,
       );
       selfRestartDeferCount = 0;
-      selfRestartForSourceChange(filename);
-      return;
     }
     console.log(
       `[monitor] deferring self-restart (${filename}) — ${protection.reason}; retrying in ${retrySec}s (defer #${deferCount})`,
@@ -10046,23 +10093,24 @@ function applyConfig(nextConfig, options = {}) {
   kanbanBackend = String(nextConfig.kanban?.backend || kanbanBackend || "vk")
     .trim()
     .toLowerCase();
+  try {
+    setKanbanBackend(kanbanBackend);
+  } catch (err) {
+    console.warn(
+      `[monitor] failed to switch kanban backend to "${kanbanBackend}": ${err?.message || err}`,
+    );
+  }
   executorMode = nextConfig.executorMode || getExecutorMode();
   plannerPerCapitaThreshold = nextConfig.plannerPerCapitaThreshold;
   plannerIdleSlotThreshold = nextConfig.plannerIdleSlotThreshold;
   plannerDedupMs = nextConfig.plannerDedupMs;
   plannerMode = nextConfig.plannerMode || "codex-sdk";
+  githubReconcile = nextConfig.githubReconcile || githubReconcile;
   agentPrompts = nextConfig.agentPrompts;
   configExecutorConfig = nextConfig.executorConfig;
   executorScheduler = nextConfig.scheduler;
   agentSdk = nextConfig.agentSdk;
   envPaths = nextConfig.envPaths;
-  try {
-    setKanbanBackend(kanbanBackend);
-  } catch (err) {
-    console.warn(
-      `[monitor] failed to set kanban backend "${kanbanBackend}" during reload: ${err?.message || err}`,
-    );
-  }
   const nextVkRuntimeRequired = isVkRuntimeRequired();
 
   if (prevVkRuntimeRequired && !nextVkRuntimeRequired) {
@@ -10163,6 +10211,7 @@ function applyConfig(nextConfig, options = {}) {
   } else {
     stopMonitorMonitorSupervisor();
   }
+  restartGitHubReconciler();
 
   const nextArgs = scriptArgs?.join(" ") || "";
   const scriptChanged = prevScriptPath !== scriptPath || prevArgs !== nextArgs;
@@ -10174,7 +10223,6 @@ function applyConfig(nextConfig, options = {}) {
 async function reloadConfig(reason) {
   try {
     const nextConfig = loadConfig(process.argv, { reloadEnv: true });
-    logConfigHealth(nextConfig, `reload:${reason || "env-change"}`);
     applyConfig(nextConfig, { restartIfChanged: true, reason });
     console.log(`[monitor] config reloaded (${reason})`);
     if (telegramToken && telegramChatId) {
@@ -10196,6 +10244,7 @@ async function reloadConfig(reason) {
 process.on("SIGINT", async () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  stopGitHubReconciler();
   // Stop monitor-monitor immediately (it's safely restartable)
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
@@ -10243,6 +10292,7 @@ process.on("SIGINT", async () => {
 process.on("exit", () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  stopGitHubReconciler();
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
     vkLogStream.stop();
@@ -10255,6 +10305,7 @@ process.on("exit", () => {
 process.on("SIGTERM", async () => {
   shuttingDown = true;
   stopTaskPlannerStatusLoop();
+  stopGitHubReconciler();
   // Stop monitor-monitor immediately (it's safely restartable)
   stopMonitorMonitorSupervisor();
   if (vkLogStream) {
@@ -10610,19 +10661,49 @@ let syncEngine = null;
 let errorDetector = null;
 /** @type {import("./pr-cleanup-daemon.mjs").PRCleanupDaemon|null} */
 let prCleanupDaemon = null;
-const TASK_REQUEUE_STATUS = String(process.env.TASK_REQUEUE_STATUS || "ready")
-  .trim()
-  .toLowerCase();
-const MAX_REVIEW_ROUNDS = Number(
-  process.env.INTERNAL_EXECUTOR_REVIEW_MAX_ROUNDS || 3,
-);
+/** @type {import("./github-reconciler.mjs").GitHubReconciler|null} */
+let ghReconciler = null;
+
+function restartGitHubReconciler() {
+  try {
+    stopGitHubReconciler();
+    ghReconciler = null;
+  } catch {
+    /* best effort */
+  }
+
+  const activeKanbanBackend = getActiveKanbanBackend();
+  if (activeKanbanBackend !== "github") {
+    return;
+  }
+  if (!githubReconcile?.enabled) {
+    return;
+  }
+  const repo =
+    process.env.GITHUB_REPOSITORY ||
+    (process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+      ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+      : "") ||
+    repoSlug ||
+    "virtengine/virtengine";
+
+  ghReconciler = startGitHubReconciler({
+    repoSlug: repo,
+    intervalMs: githubReconcile.intervalMs,
+    mergedLookbackHours: githubReconcile.mergedLookbackHours,
+    trackingLabels: githubReconcile.trackingLabels,
+    sendTelegram:
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null,
+  });
+}
 
 // ── Task Management Subsystem Initialization ────────────────────────────────
 try {
   mkdirSync(monitorStateCacheDir, { recursive: true });
   configureTaskStore({
-    repoRoot,
-    cwd: repoRoot,
+    storePath: resolve(monitorStateCacheDir, "kanban-state.json"),
   });
   console.log(`[monitor] planner state path: ${plannerStatePath}`);
   console.log(`[monitor] task store path: ${getStorePath()}`);
@@ -10707,6 +10788,59 @@ if (isExecutorDisabled()) {
     try {
       agentEndpoint = createAgentEndpoint({
         port: Number(process.env.AGENT_ENDPOINT_PORT || 18432),
+        taskStore: {
+          listTasks: (_projectId, { status } = {}) => {
+            const normalized = String(status || "")
+              .trim()
+              .toLowerCase();
+            if (!normalized) return getAllInternalTasks();
+            return getInternalTasksByStatus(normalized);
+          },
+          getTask: (taskId) => getInternalTask(taskId),
+          updateTaskStatus: (taskId, status) =>
+            setInternalTaskStatus(taskId, status, "agent-endpoint"),
+          update: (taskId, updates) => updateInternalTask(taskId, updates),
+          recordAgentAttempt: (taskId, info) =>
+            recordAgentAttempt(taskId, info),
+          recordErrorPattern: (taskId, pattern) =>
+            recordErrorPattern(taskId, pattern),
+        },
+        getExecutorStatus: () => {
+          if (!internalTaskExecutor) {
+            return { running: false, paused: false, activeSlots: 0 };
+          }
+          return internalTaskExecutor.getStatus();
+        },
+        onPauseTasks: () => {
+          if (!internalTaskExecutor) {
+            return {
+              paused: false,
+              changed: false,
+              reason: "executor-not-ready",
+            };
+          }
+          const changed = internalTaskExecutor.pause();
+          return {
+            paused: true,
+            changed,
+            status: internalTaskExecutor.getStatus(),
+          };
+        },
+        onResumeTasks: () => {
+          if (!internalTaskExecutor) {
+            return {
+              paused: false,
+              changed: false,
+              reason: "executor-not-ready",
+            };
+          }
+          const changed = internalTaskExecutor.resume();
+          return {
+            paused: internalTaskExecutor.isPaused(),
+            changed,
+            status: internalTaskExecutor.getStatus(),
+          };
+        },
         onTaskComplete: (taskId, body) => {
           console.log(`[monitor] agent self-reported complete for ${taskId}`);
           try {
@@ -10788,9 +10922,8 @@ if (isExecutorDisabled()) {
             console.log(
               `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
             );
-            let reviewState = null;
             try {
-              reviewState = setReviewResult(taskId, {
+              setReviewResult(taskId, {
                 approved: result?.approved ?? false,
                 issues: result?.issues || [],
               });
@@ -10819,35 +10952,8 @@ if (isExecutorDisabled()) {
                 `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
               );
             } else {
-              const rounds = Number(reviewState?.reviewRounds || 1);
-              const hasRoundsRemaining = rounds < MAX_REVIEW_ROUNDS;
-              if (hasRoundsRemaining) {
-                try {
-                  setInternalTaskStatus(taskId, TASK_REQUEUE_STATUS, "review-agent");
-                } catch {
-                  /* best-effort */
-                }
-                try {
-                  void updateTaskStatus(taskId, TASK_REQUEUE_STATUS);
-                } catch {
-                  /* best-effort */
-                }
-                try {
-                  reviewAgent?.allowReReview?.(taskId);
-                } catch {
-                  /* best-effort */
-                }
-              } else {
-                try {
-                  setInternalTaskStatus(taskId, "blocked", "review-agent");
-                } catch {
-                  /* best-effort */
-                }
-              }
               console.log(
-                hasRoundsRemaining
-                  ? `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — moved to ${TASK_REQUEUE_STATUS} (round ${rounds}/${MAX_REVIEW_ROUNDS})`
-                  : `[monitor] review loop cap reached for ${taskId} (${rounds}/${MAX_REVIEW_ROUNDS}) — task marked blocked`,
+                `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
               );
             }
           },
@@ -10970,6 +11076,7 @@ void restoreLiveDigest()
 // ── Start long-running devmode monitor-monitor supervisor ───────────────────
 startMonitorMonitorSupervisor();
 startTaskPlannerStatusLoop();
+restartGitHubReconciler();
 
 // ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({

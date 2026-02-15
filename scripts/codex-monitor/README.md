@@ -123,24 +123,28 @@ Configured by `EXECUTOR_MODE`:
 
 Task board backend (`KANBAN_BACKEND`):
 
-- `vk`
-- `github`
-- `jira` (stub)
+- `vk` - Vibe-Kanban (default)
+- `github` - GitHub Issues with shared state persistence
+- `jira` (scaffolded, not yet implemented)
 
-When using `github`, you can optionally scope to a GitHub Projects v2 board:
+**GitHub adapter enhancements:**
+The GitHub Issues adapter now supports multi-agent coordination via structured state persistence:
 
-- `GITHUB_PROJECT_OWNER` + `GITHUB_PROJECT_NUMBER` (or `GITHUB_PROJECT_ID`)
-- `GITHUB_PROJECT_STATUS_FIELD` (defaults to `Status`)
+- Claim tracking with `codex:claimed`, `codex:working`, `codex:stale` labels
+- Heartbeat mechanism to detect stale/abandoned claims
+- Task exclusion via `codex:ignore` label
+- Structured comments with JSON state for agent coordination
 
-With project config enabled, `codex-monitor` reads tasks from project items and
-syncs task status back to the project status field.
+See [KANBAN_GITHUB_ENHANCEMENT.md](./KANBAN_GITHUB_ENHANCEMENT.md) for details.
 
-Setup (`codex-monitor --setup`) can auto-detect an existing project board using
-`GITHUB_PROJECT_MARKER` and project/repo name matching.
+**Jira adapter (future):**
+The Jira adapter is scaffolded with detailed JSDoc and implementation guidance:
 
-For multi-developer repos, todo pickup defaults to `open-or-self` via
-`GITHUB_TODO_ASSIGNEE_MODE`, and `GITHUB_AUTO_ASSIGN_ON_START=true` can assign
-tasks to the current GitHub user when work starts.
+- Method stubs: `persistSharedStateToIssue()`, `readSharedStateFromIssue()`, `markTaskIgnored()`
+- Planned approach using Jira custom fields, labels, or structured comments
+- Compatible API surface with GitHub adapter for drop-in replacement
+
+See [JIRA_INTEGRATION.md](./JIRA_INTEGRATION.md) for implementation guide.
 
 ---
 
@@ -213,12 +217,6 @@ Load order (highest priority first):
 - `COPILOT_TRANSPORT=sdk|auto|cli|url`
 - `CLAUDE_TRANSPORT=sdk|auto|cli`
 
-Copilot provider routing is also configurable:
-
-- `COPILOT_PROVIDER_MODE=github|openai-env`
-  - `github` (default): isolates `OPENAI_*`, `AZURE_*`, and `AI_FOUNDRY_*` env vars so Copilot SDK uses standard GitHub Copilot routing.
-  - `openai-env`: intentionally inherits OpenAI/Azure provider env vars when you want Copilot SDK requests routed via your own compatible endpoint/deployments.
-
 Setup now defaults all three to `sdk` for predictable persistent-session behavior.
 `auto` remains available when you intentionally want endpoint/CLI auto-detection.
 
@@ -264,47 +262,6 @@ Use **Advanced** mode when you need:
 ---
 
 ## Key config examples
-
----
-
-## Publishing (env-based, no credential leak)
-
-From `scripts/codex-monitor`:
-
-```bash
-npm run publish:dry-run
-```
-
-Real publish (token only via environment):
-
-```bash
-NPM_TOKEN=*** npm run publish:env
-```
-
-Optional publish env vars:
-
-- `NPM_TOKEN` (or `NODE_AUTH_TOKEN`) — required for real publish
-- `NPM_PUBLISH_TAG` — defaults to `latest`
-- `NPM_PUBLISH_ACCESS` — defaults to `public`
-- `NPM_REGISTRY_URL` — defaults to `https://registry.npmjs.org/`
-- `NPM_OTP` — optional 2FA OTP
-
-The publish helper creates a temporary `.npmrc` in the OS temp directory,
-uses it only for the publish command, and removes it immediately after.
-
-## Portable shared state (lightweight DB)
-
-`codex-monitor` now stores shared-workspace registry metadata in a lightweight
-JSON state DB outside repo-local caches, keyed by canonical repository identity.
-This keeps shared workspace state working when the same repository is opened
-from alternate directories/worktrees.
-
-- default state DB location:
-  - Windows: `%LOCALAPPDATA%/codex-monitor/state`
-  - macOS/Linux: `~/.codex-monitor/state`
-- override location with `VE_CODEX_MONITOR_STATE_DIR`
-- legacy repo cache (`.cache/codex-monitor/shared-workspaces.json`) is read and
-  auto-migrated to the global state path on first load
 
 ### Executor config (`codex-monitor.config.json`)
 
@@ -358,19 +315,6 @@ VK_RECOVERY_PORT=54089
 MAX_PARALLEL=6
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-```
-
-### GitHub Projects v2 example
-
-```env
-KANBAN_BACKEND=github
-GITHUB_REPO=virtengine/virtengine
-GITHUB_PROJECT_OWNER=virtengine
-GITHUB_PROJECT_NUMBER=3
-GITHUB_PROJECT_STATUS_FIELD=Status
-GITHUB_PROJECT_MARKER=codex-monitor
-GITHUB_TODO_ASSIGNEE_MODE=open-or-self
-GITHUB_AUTO_ASSIGN_ON_START=true
 ```
 
 For full variable documentation see `.env.example`.

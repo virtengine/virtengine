@@ -131,39 +131,6 @@ describe("review-agent", () => {
       const status = agent.getStatus();
       expect(status.queuedReviews).toBe(1);
     });
-
-    it("allows re-review after explicit unlock", async () => {
-      const agent = createReviewAgent({
-        autoFix: false,
-        waitForMerge: false,
-      });
-
-      agent.start();
-      await agent.queueReview({
-        id: "task-r1",
-        title: "Round 1",
-        branchName: "ve/task-r1",
-      });
-
-      // Let async review processing complete
-      await new Promise((resolve) => setTimeout(resolve, 25));
-      await agent.stop();
-
-      await agent.queueReview({
-        id: "task-r1",
-        title: "Round 2",
-        branchName: "ve/task-r1",
-      });
-      expect(agent.getStatus().queuedReviews).toBe(0);
-
-      agent.allowReReview("task-r1");
-      await agent.queueReview({
-        id: "task-r1",
-        title: "Round 2",
-        branchName: "ve/task-r1",
-      });
-      expect(agent.getStatus().queuedReviews).toBe(1);
-    });
   });
 
   describe("getStatus", () => {

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
+import { homedir } from "node:os";
 
 function toEnvSuffix(key) {
   return String(key)
@@ -161,27 +162,31 @@ You generate production-grade backlog tasks for autonomous executors.
 - Every task includes implementation steps, acceptance criteria, and verification plan.
 - Every task title starts with one size label: [xs], [s], [m], [l], [xl], [xxl].
 - Prefer task sets that can run in parallel with low file overlap.
+- Do not call any kanban API, CLI, or external service to create tasks.
+- Output must be machine-parseable JSON in a fenced json block.
 
 ## Output Contract (Mandatory)
 
-Return **ONLY** valid JSON (no prose outside JSON). The JSON must be an object:
+Return exactly one fenced json block with this shape:
 
+\`\`\`json
 {
   "tasks": [
     {
-      "title": "[m] concise task title",
-      "description": "full markdown description with implementation steps, acceptance criteria, verification checklist",
-      "priority": "high"
+      "title": "[m] Example task title",
+      "description": "Problem statement and scope",
+      "implementation_steps": ["step 1", "step 2"],
+      "acceptance_criteria": ["criterion 1", "criterion 2"],
+      "verification": ["test/check 1", "test/check 2"]
     }
   ]
 }
+\`\`\`
 
 Rules:
-- \`tasks\` must be an array with at least 1 item.
-- Each task must include \`title\`, \`description\`, and \`priority\`.
-- \`priority\` must be one of: \`low\`, \`medium\`, \`high\`.
-- Do not include markdown fences around JSON.
-- Do not call backend APIs directly; only return JSON.
+- Provide at least the requested task count unless blocked by duplicate safeguards.
+- Keep titles unique and specific.
+- Keep file overlap low across tasks to maximize parallel execution.
 `,
   monitorMonitor: `# Codex-Monitor-Monitor Agent
 
@@ -556,6 +561,14 @@ export function getAgentPromptDefinitions() {
 }
 
 export function getDefaultPromptWorkspace(repoRoot) {
+  const override = String(
+    process.env.CODEX_MONITOR_PROMPT_WORKSPACE || "",
+  ).trim();
+  if (override) {
+    return isAbsolute(override)
+      ? override
+      : resolve(repoRoot || process.cwd(), override);
+  }
   return resolve(repoRoot || process.cwd(), PROMPT_WORKSPACE_DIR);
 }
 
@@ -588,8 +601,25 @@ export function resolvePromptTemplate(template, values, fallback) {
 
 export function ensureAgentPromptWorkspace(repoRoot) {
   const root = resolve(repoRoot || process.cwd());
-  const workspaceDir = getDefaultPromptWorkspace(root);
-  mkdirSync(workspaceDir, { recursive: true });
+  let workspaceDir = getDefaultPromptWorkspace(root);
+
+  try {
+    mkdirSync(workspaceDir, { recursive: true });
+  } catch (err) {
+    const fallbackRoot = resolve(
+      process.env.CODEX_MONITOR_HOME ||
+        process.env.HOME ||
+        process.env.USERPROFILE ||
+        homedir(),
+    );
+    const fallbackDir = resolve(fallbackRoot, PROMPT_WORKSPACE_DIR);
+    process.env.CODEX_MONITOR_PROMPT_WORKSPACE = fallbackDir;
+    workspaceDir = fallbackDir;
+    mkdirSync(workspaceDir, { recursive: true });
+    console.warn(
+      `[agent-prompts] prompt workspace fallback enabled: ${workspaceDir} (primary path failed: ${err?.code || err?.message || err})`,
+    );
+  }
 
   const written = [];
   for (const def of AGENT_PROMPT_DEFINITIONS) {

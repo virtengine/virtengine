@@ -366,26 +366,6 @@ function formatEvent(event) {
   }
 }
 
-function deriveTaskHeading(text) {
-  const firstLine = String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean);
-  if (!firstLine) return "Task";
-  const heading = firstLine.replace(/^#+\s*/, "").trim();
-  if (!heading) return "Task";
-  return heading.length > 120 ? `${heading.slice(0, 117)}...` : heading;
-}
-
-function buildExecutionPrompt(userMessage, statusData = null) {
-  const heading = deriveTaskHeading(userMessage);
-  if (statusData) {
-    const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
-    return `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# ${heading}\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-  }
-  return `# ${heading}\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-}
-
 function isRecoverableThreadError(err) {
   const message = err?.message || String(err || "");
   const lower = message.toLowerCase();
@@ -446,7 +426,17 @@ export async function execCodexPrompt(userMessage, options = {}) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const thread = await getThread();
 
-      const prompt = buildExecutionPrompt(userMessage, statusData);
+      // Build the user prompt with optional status context
+      let prompt = userMessage;
+      if (statusData) {
+        const statusSnippet = JSON.stringify(statusData, null, 2).slice(
+          0,
+          2000,
+        );
+        prompt = `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+      } else {
+        prompt = `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+      }
 
       // Set up timeout
       const controller = abortController || new AbortController();

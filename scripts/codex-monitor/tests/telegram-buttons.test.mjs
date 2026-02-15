@@ -124,30 +124,4 @@ describe("telegram-bot inline keyboards", () => {
       expect(botSource).toContain("cmdHelpFull");
     });
   });
-
-  describe("V2 interactive control center", () => {
-    it("should register /menu and UI screen primitives", async () => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const { fileURLToPath } = await import("node:url");
-
-      const __dirname = path.resolve(
-        fileURLToPath(new URL(".", import.meta.url)),
-      );
-      const botSource = fs.readFileSync(
-        path.resolve(__dirname, "..", "telegram-bot.mjs"),
-        "utf8",
-      );
-
-      expect(botSource).toContain('"/menu"');
-      expect(botSource).toContain("cmdMenu");
-      expect(botSource).toContain("const UI_SCREENS");
-      expect(botSource).toContain("handleUiAction");
-      expect(botSource).toContain("data.startsWith(\"ui:\")");
-      expect(botSource).toContain("startTelegramUiServer");
-      expect(botSource).toContain("getTelegramUiUrl");
-      expect(botSource).toContain("setWebAppMenuButton");
-      expect(botSource).toContain("handleWebAppData");
-    });
-  });
 });

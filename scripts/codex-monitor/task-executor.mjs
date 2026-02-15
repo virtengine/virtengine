@@ -76,9 +76,10 @@ import {
 import {
   initTaskClaims,
   claimTask,
+  renewClaim,
   releaseTask as releaseTaskClaim,
 } from "./task-claims.mjs";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
+import { initPresence, getPresenceState } from "./presence.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -90,6 +91,16 @@ const MAX_NO_COMMIT_ATTEMPTS = 3; // Stop picking up a task after N consecutive 
 const NO_COMMIT_COOLDOWN_BASE_MS = 15 * 60 * 1000; // 15 minutes base cooldown for no-commit
 const NO_COMMIT_MAX_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const CLAIM_CONFLICT_COMMENT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+const CODEX_TASK_LABELS = (() => {
+  const raw = String(
+    process.env.CODEX_MONITOR_TASK_LABELS || "codex-monitor,codex-mointor",
+  );
+  const labels = raw
+    .split(",")
+    .map((label) => label.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set(labels.length > 0 ? labels : ["codex-monitor"]);
+})();
 
 /** Watchdog interval: how often to check for stalled agent slots */
 const WATCHDOG_INTERVAL_MS = 60_000; // 1 minute
@@ -114,77 +125,23 @@ const STREAM_STALLED_KILL_MS = 20 * 60_000; // 20 minutes stalled after continue
 const MAX_IDLE_CONTINUES = 5;
 /** Minimum elapsed time before watchdog even starts checking (agent setup phase) */
 const WATCHDOG_WARMUP_MS = 5 * 60_000; // 5 minutes warmup
-
-function resolveTaskExecutorStatePaths(options = {}) {
-  const shared = resolveRepoSharedStatePaths({
-    repoRoot: options.repoRoot,
-    cwd: options.cwd,
-    stateDir: options.stateDir,
-    stateRoot: options.stateRoot,
-    repoIdentity: options.repoIdentity,
-  });
-  const moduleLegacyCacheDir = resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    ".cache",
-  );
-  return {
-    noCommitPath: shared.file("no-commit-state.json"),
-    runtimePath: shared.file("task-executor-runtime.json"),
-    legacyNoCommitPaths: [
-      resolve(shared.legacyCacheDir, "no-commit-state.json"),
-      resolve(shared.legacyCodexCacheDir, "no-commit-state.json"),
-      resolve(moduleLegacyCacheDir, "no-commit-state.json"),
-    ],
-    legacyRuntimePaths: [
-      resolve(shared.legacyCacheDir, "task-executor-runtime.json"),
-      resolve(shared.legacyCodexCacheDir, "task-executor-runtime.json"),
-      resolve(moduleLegacyCacheDir, "task-executor-runtime.json"),
-    ],
-  };
-}
-
-const executorStatePaths = resolveTaskExecutorStatePaths();
-const NO_COMMIT_STATE_FILE = executorStatePaths.noCommitPath;
-const RUNTIME_STATE_FILE = executorStatePaths.runtimePath;
+const NO_COMMIT_STATE_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".cache",
+  "no-commit-state.json",
+);
+const RUNTIME_STATE_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".cache",
+  "task-executor-runtime.json",
+);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const REQUEUE_STATUS = String(process.env.TASK_REQUEUE_STATUS || "ready")
-  .trim()
-  .toLowerCase();
-const DEFAULT_DISPATCH_STATUSES = (
-  process.env.TASK_DISPATCH_STATUSES || "ready,todo"
-)
-  .split(",")
-  .map((status) => String(status || "").trim().toLowerCase())
-  .filter(Boolean);
 
 // ── Agent Log Streaming ─────────────────────────────────────────────────────
 
 const AGENT_LOGS_DIR = resolve(__dirname, "logs", "agents");
-
-function loadJsonWithLegacyFallback(primaryPath, legacyPaths = []) {
-  const candidates = [primaryPath, ...legacyPaths.filter(Boolean)];
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    try {
-      const raw = readFileSync(candidate, "utf8");
-      const parsed = JSON.parse(raw);
-      if (candidate !== primaryPath && !existsSync(primaryPath)) {
-        try {
-          mkdirSync(dirname(primaryPath), { recursive: true });
-          writeFileSync(primaryPath, raw, "utf8");
-        } catch {
-          /* best effort */
-        }
-      }
-      return parsed;
-    } catch {
-      /* continue */
-    }
-  }
-  return null;
-}
 
 /**
  * Create an onEvent callback that streams agent SDK events to a per-task log file
@@ -193,10 +150,10 @@ function loadJsonWithLegacyFallback(primaryPath, legacyPaths = []) {
  * @param {string} taskTitle
  * @returns {Function}
  */
-function createAgentLogStreamer(taskId, taskTitle, repoRoot) {
+function createAgentLogStreamer(taskId, taskTitle) {
   const shortId = taskId.substring(0, 8);
   const logFile = resolve(AGENT_LOGS_DIR, `agent-${shortId}.log`);
-  const tracker = getSessionTracker({ repoRoot });
+  const tracker = getSessionTracker();
 
   // Ensure log dir exists
   try {
@@ -321,6 +278,66 @@ function getTaskAgeMs(task) {
   const parsed = new Date(ts).getTime();
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Date.now() - parsed);
+}
+
+function parseTaskTimestamp(value) {
+  if (!value) return null;
+  const raw =
+    value.created_at ||
+    value.createdAt ||
+    value.created ||
+    value.updated_at ||
+    value.updatedAt ||
+    value.updated ||
+    value.started_at ||
+    value.startedAt ||
+    value;
+  if (!raw) return null;
+  const ts = Date.parse(raw);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function isPlannerTaskData(task) {
+  if (!task) return false;
+  const title = String(task.title || "").toLowerCase();
+  const desc = String(task.description || task.body || "").toLowerCase();
+  if (title.includes("plan next tasks") || title.includes("plan next phase")) {
+    return true;
+  }
+  if (title.includes("task planner")) {
+    return true;
+  }
+  return (
+    desc.includes("task planner — auto-created by codex-monitor") ||
+    desc.includes("task planner - auto-created by codex-monitor")
+  );
+}
+
+function getTaskLabelSet(task) {
+  const labels = Array.isArray(task?.meta?.labels)
+    ? task.meta.labels
+    : Array.isArray(task?.labels)
+      ? task.labels
+      : [];
+  return new Set(
+    labels
+      .map((entry) => (typeof entry === "string" ? entry : entry?.name))
+      .map((entry) =>
+        String(entry || "")
+          .trim()
+          .toLowerCase(),
+      )
+      .filter(Boolean),
+  );
+}
+
+function isCodexScopedTask(task) {
+  if (!isGitHubBackend(task)) return true;
+  const labelSet = getTaskLabelSet(task);
+  for (const label of CODEX_TASK_LABELS) {
+    if (labelSet.has(label)) return true;
+  }
+  return false;
 }
 
 // ── Issue Tracking Helpers ──────────────────────────────────────────────────
@@ -509,7 +526,6 @@ class TaskExecutor {
     this.onTaskCompleted = merged.onTaskCompleted;
     this.onTaskFailed = merged.onTaskFailed;
     this.sendTelegram = merged.sendTelegram;
-    getSessionTracker({ repoRoot: this.repoRoot });
     this._agentPrompts =
       merged.agentPrompts && typeof merged.agentPrompts === "object"
         ? merged.agentPrompts
@@ -541,12 +557,32 @@ class TaskExecutor {
     this._taskClaimsReady = false;
     this._taskClaimsInitPromise = null;
     this._claimConflictNotifiedAt = new Map();
+    this._instanceIdExplicit =
+      String(process.env.VE_INSTANCE_ID || "").trim() !== "" ||
+      String(process.env.CODEX_MONITOR_INSTANCE_ID || "").trim() !== "";
     this._instanceId =
       String(
         process.env.VE_INSTANCE_ID ||
           process.env.CODEX_MONITOR_INSTANCE_ID ||
           `${os.hostname() || "host"}-${process.pid}`,
       ).trim() || `executor-${process.pid}`;
+    this.taskClaimOwnerStaleTtlMs = Math.max(
+      60_000,
+      Number(
+        process.env.TASK_CLAIM_OWNER_STALE_TTL_MS ||
+          merged.taskClaimOwnerStaleTtlMs ||
+          10 * 60 * 1000,
+      ),
+    );
+    this.taskClaimRenewIntervalMs = Math.max(
+      30_000,
+      Number(
+        process.env.TASK_CLAIM_RENEW_INTERVAL_MS ||
+          merged.taskClaimRenewIntervalMs ||
+          5 * 60 * 1000,
+      ),
+    );
+    this._taskClaimRenewTimers = new Map();
 
     /** @type {Map<string, AbortController>} taskId → AbortController for per-slot abort */
     this._slotAbortControllers = new Map();
@@ -568,6 +604,12 @@ class TaskExecutor {
     this._completedWithPR = new Set();
     /** @type {Set<string>} taskId set — tracks tasks where a PR has been created for their branch */
     this._prCreatedForBranch = new Set();
+
+    // Throttle repeated listTasks failures to avoid log spam during VK outages
+    this._listTasksFailureWindowStart = 0;
+    this._listTasksFailureCount = 0;
+    this._listTasksBackoffUntil = 0;
+    this._listTasksBackoffReason = "";
 
     /** @type {Map<string, { taskId: string, taskTitle: string, branch: string, sdk: string, attempt: number, startedAt: number, agentInstanceId: number|null, status: string, updatedAt: number }>} */
     this._slotRuntimeState = new Map();
@@ -595,33 +637,33 @@ class TaskExecutor {
   /** Load anti-thrash state from disk (survives restarts). */
   _loadNoCommitState() {
     try {
-      const data = loadJsonWithLegacyFallback(
-        NO_COMMIT_STATE_FILE,
-        executorStatePaths.legacyNoCommitPaths,
-      );
-      if (data && typeof data === "object") {
-        for (const [id, count] of Object.entries(data.noCommitCounts || {})) {
-          this._noCommitCounts.set(id, count);
-        }
-        for (const [id, until] of Object.entries(data.skipUntil || {})) {
-          if (until > Date.now()) {
-            this._skipUntil.set(id, until);
+      if (existsSync(NO_COMMIT_STATE_FILE)) {
+        const raw = readFileSync(NO_COMMIT_STATE_FILE, "utf8");
+        const data = JSON.parse(raw);
+        if (data && typeof data === "object") {
+          for (const [id, count] of Object.entries(data.noCommitCounts || {})) {
+            this._noCommitCounts.set(id, count);
           }
-        }
-        // Restore completed-with-PR tracking
-        if (Array.isArray(data.completedWithPR)) {
-          for (const id of data.completedWithPR) {
-            this._completedWithPR.add(id);
+          for (const [id, until] of Object.entries(data.skipUntil || {})) {
+            if (until > Date.now()) {
+              this._skipUntil.set(id, until);
+            }
           }
-        }
-        if (Array.isArray(data.prCreatedForBranch)) {
-          for (const id of data.prCreatedForBranch) {
-            this._prCreatedForBranch.add(id);
+          // Restore completed-with-PR tracking
+          if (Array.isArray(data.completedWithPR)) {
+            for (const id of data.completedWithPR) {
+              this._completedWithPR.add(id);
+            }
           }
+          if (Array.isArray(data.prCreatedForBranch)) {
+            for (const id of data.prCreatedForBranch) {
+              this._prCreatedForBranch.add(id);
+            }
+          }
+          console.log(
+            `${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`,
+          );
         }
-        console.log(
-          `${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`,
-        );
       }
     } catch (err) {
       console.warn(`${TAG} failed to load anti-thrash state: ${err.message}`);
@@ -631,7 +673,7 @@ class TaskExecutor {
   /** Persist anti-thrash state to disk. */
   _saveNoCommitState() {
     try {
-      const dir = dirname(NO_COMMIT_STATE_FILE);
+      const dir = resolve(__dirname, ".cache");
       mkdirSync(dir, { recursive: true });
       const data = {
         noCommitCounts: Object.fromEntries(this._noCommitCounts),
@@ -653,11 +695,9 @@ class TaskExecutor {
   /** Load active slot runtime state (instance IDs + startedAt) from disk. */
   _loadRuntimeState() {
     try {
-      const parsed = loadJsonWithLegacyFallback(
-        RUNTIME_STATE_FILE,
-        executorStatePaths.legacyRuntimePaths,
-      );
-      if (!parsed || typeof parsed !== "object") return;
+      if (!existsSync(RUNTIME_STATE_FILE)) return;
+      const raw = readFileSync(RUNTIME_STATE_FILE, "utf8");
+      const parsed = JSON.parse(raw);
       const nextId = Number(parsed?.nextAgentInstanceId || 1);
       if (Number.isFinite(nextId) && nextId > 0) {
         this._nextAgentInstanceId = Math.floor(nextId);
@@ -705,7 +745,7 @@ class TaskExecutor {
   /** Persist active slot runtime state to disk (survives monitor restart). */
   _saveRuntimeState() {
     try {
-      const dir = dirname(RUNTIME_STATE_FILE);
+      const dir = resolve(__dirname, ".cache");
       mkdirSync(dir, { recursive: true });
 
       const slots = {};
@@ -778,6 +818,48 @@ class TaskExecutor {
     }
   }
 
+  _shouldBackoffListTasks() {
+    return (
+      this._listTasksBackoffUntil && Date.now() < this._listTasksBackoffUntil
+    );
+  }
+
+  _resetListTasksBackoff() {
+    this._listTasksFailureWindowStart = 0;
+    this._listTasksFailureCount = 0;
+    this._listTasksBackoffUntil = 0;
+    this._listTasksBackoffReason = "";
+  }
+
+  _noteListTasksFailure(err) {
+    const now = Date.now();
+    const windowMs = 30_000;
+    const threshold = 3;
+    const backoffMs = 60_000;
+    if (
+      !this._listTasksFailureWindowStart ||
+      now - this._listTasksFailureWindowStart > windowMs
+    ) {
+      this._listTasksFailureWindowStart = now;
+      this._listTasksFailureCount = 0;
+    }
+    this._listTasksFailureCount += 1;
+    const message = err?.message || String(err);
+    if (this._listTasksFailureCount >= threshold) {
+      this._listTasksBackoffUntil = now + backoffMs;
+      this._listTasksBackoffReason = message;
+      this._listTasksFailureCount = 0;
+      this._listTasksFailureWindowStart = now;
+      console.warn(
+        `${TAG} listTasks backing off for ${Math.round(
+          backoffMs / 1000,
+        )}s after repeated failures: ${message}`,
+      );
+      return;
+    }
+    console.warn(`${TAG} failed to list tasks: ${message}`);
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /**
@@ -813,7 +895,7 @@ class TaskExecutor {
     this._running = true;
     // Start watchdog to detect and kill stalled agent slots
     this._startWatchdog();
-    // Resume interrupted in-progress tasks first, then poll dispatch queue.
+    // Resume interrupted in-progress tasks first, then poll todo backlog.
     void ensureThreadRegistryLoaded()
       .catch((err) => {
         console.warn(
@@ -850,6 +932,7 @@ class TaskExecutor {
   async stop() {
     this._running = false;
     this._stopWatchdog();
+    this._stopAllTaskClaimRenewals();
     if (this._pollTimer) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
@@ -1301,6 +1384,7 @@ class TaskExecutor {
     if (!this._running) return;
     if (this._paused) return;
     if (this._activeSlots.size >= this.maxParallel) return;
+    if (this._shouldBackoffListTasks()) return;
     await ensureThreadRegistryLoaded().catch(() => {
       /* best effort */
     });
@@ -1316,10 +1400,9 @@ class TaskExecutor {
           (task) => task?.status === "inprogress",
         );
       }
+      this._resetListTasksBackoff();
     } catch (err) {
-      console.warn(
-        `${TAG} in-progress recovery fetch failed: ${err.message || err}`,
-      );
+      this._noteListTasksFailure(err);
       return;
     }
 
@@ -1354,7 +1437,7 @@ class TaskExecutor {
 
     /** @type {Array<Object>} */
     const resumable = [];
-    let resetToQueue = 0;
+    let resetToTodo = 0;
 
     for (const task of inProgressTasks) {
       const id = task?.id || task?.task_id;
@@ -1370,17 +1453,17 @@ class TaskExecutor {
       }
 
       try {
-        await updateTaskStatus(id, REQUEUE_STATUS);
+        await updateTaskStatus(id, "todo");
       } catch {
         /* best effort */
       }
       try {
-        setInternalStatus(id, REQUEUE_STATUS, "task-executor-recovery");
+        setInternalStatus(id, "todo", "task-executor-recovery");
       } catch {
         /* best effort */
       }
       this._removeRuntimeSlot(id);
-      resetToQueue++;
+      resetToTodo++;
     }
 
     const toDispatch = resumable.slice(0, available);
@@ -1392,9 +1475,9 @@ class TaskExecutor {
       });
     }
 
-    if (toDispatch.length > 0 || resetToQueue > 0) {
+    if (toDispatch.length > 0 || resetToTodo > 0) {
       console.log(
-        `${TAG} in-progress recovery: resumed ${toDispatch.length}, reset ${resetToQueue} stale task(s) to ${REQUEUE_STATUS}`,
+        `${TAG} in-progress recovery: resumed ${toDispatch.length}, reset ${resetToTodo} stale task(s) to todo`,
       );
     }
   }
@@ -1482,19 +1565,33 @@ class TaskExecutor {
     if (this._taskClaimsReady) return true;
     if (this._taskClaimsInitPromise) return this._taskClaimsInitPromise;
 
-    this._taskClaimsInitPromise = initTaskClaims({
-      repoRoot: this.repoRoot,
-      cwd: this.repoRoot,
-    })
-      .then(() => {
+    this._taskClaimsInitPromise = initTaskClaims({ repoRoot: this.repoRoot })
+      .then(async () => {
+        try {
+          await initPresence({ repoRoot: this.repoRoot });
+          const presenceState = getPresenceState();
+          const stableInstanceId = String(
+            presenceState?.instance_id || "",
+          ).trim();
+          if (
+            stableInstanceId &&
+            !this._instanceIdExplicit &&
+            stableInstanceId !== this._instanceId
+          ) {
+            this._instanceId = stableInstanceId;
+          }
+          console.log(
+            `${TAG} [task-claims] using instance_id=${this._instanceId}`,
+          );
+        } catch (err) {
+          console.warn(`${TAG} presence init warning: ${err?.message || err}`);
+        }
         this._taskClaimsReady = true;
         return true;
       })
       .catch((err) => {
         this._taskClaimsReady = false;
-        console.warn(
-          `${TAG} task-claims init warning: ${err?.message || err}`,
-        );
+        console.warn(`${TAG} task-claims init warning: ${err?.message || err}`);
         return false;
       })
       .finally(() => {
@@ -1517,6 +1614,58 @@ class TaskExecutor {
     return Math.min(Math.max(minutes, 60), 24 * 60);
   }
 
+  _startTaskClaimRenewal(taskId, claimToken, taskTitle = "") {
+    if (!taskId || !claimToken) return;
+    this._stopTaskClaimRenewal(taskId);
+    const intervalMs = this.taskClaimRenewIntervalMs;
+    const renew = async () => {
+      try {
+        const renewed = await renewClaim({
+          taskId,
+          claimToken,
+          instanceId: this._instanceId,
+          ttlMinutes: this._getTaskClaimTtlMinutes(),
+        });
+        if (!renewed?.success) {
+          console.warn(
+            `${TAG} claim renewal failed for "${taskTitle || taskId}": ${renewed?.error || "unknown"}`,
+          );
+          if (
+            renewed?.error === "task_claimed_by_different_instance" ||
+            renewed?.error === "claim_token_mismatch" ||
+            renewed?.error === "task_not_claimed"
+          ) {
+            this._stopTaskClaimRenewal(taskId);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `${TAG} claim renewal warning for "${taskTitle || taskId}": ${err?.message || err}`,
+        );
+      }
+    };
+    const timer = setInterval(() => {
+      void renew();
+    }, intervalMs);
+    if (timer?.unref) timer.unref();
+    this._taskClaimRenewTimers.set(taskId, timer);
+  }
+
+  _stopTaskClaimRenewal(taskId) {
+    const timer = this._taskClaimRenewTimers.get(taskId);
+    if (timer) {
+      clearInterval(timer);
+      this._taskClaimRenewTimers.delete(taskId);
+    }
+  }
+
+  _stopAllTaskClaimRenewals() {
+    for (const timer of this._taskClaimRenewTimers.values()) {
+      clearInterval(timer);
+    }
+    this._taskClaimRenewTimers.clear();
+  }
+
   /**
    * Throttle duplicate "claimed by another orchestrator" issue comments.
    *
@@ -1534,10 +1683,57 @@ class TaskExecutor {
     return true;
   }
 
+  async _verifyPlannerTaskCompletion(task) {
+    const projectId =
+      task?.projectId ||
+      task?.project_id ||
+      this.projectId ||
+      (await this._ensureResolvedProjectId());
+    if (!projectId) {
+      return { completed: false, reason: "project_not_found", createdCount: 0 };
+    }
+
+    const tasks = await listTasks(projectId);
+    const allTasks = Array.isArray(tasks) ? tasks : [];
+    const sinceMs = parseTaskTimestamp(task) || Date.now();
+    const candidates = allTasks.filter((candidate) => {
+      if (!candidate) return false;
+      if (
+        String(candidate.id || "") === String(task?.id || task?.task_id || "")
+      ) {
+        return false;
+      }
+      if (isPlannerTaskData(candidate)) return false;
+      const createdMs = parseTaskTimestamp(candidate);
+      return Number.isFinite(createdMs) && createdMs > sinceMs;
+    });
+    const backlogCandidates = candidates.filter((candidate) => {
+      const status = String(candidate?.status || "").toLowerCase();
+      return (
+        !status ||
+        status === "todo" ||
+        status === "inprogress" ||
+        status === "inreview"
+      );
+    });
+    const finalCandidates =
+      backlogCandidates.length > 0 ? backlogCandidates : candidates;
+
+    return {
+      completed: finalCandidates.length > 0,
+      createdCount: finalCandidates.length,
+      reason: finalCandidates.length > 0 ? "tasks_created" : "no_new_tasks",
+      sampleTitles: finalCandidates
+        .slice(0, 3)
+        .map((candidate) => candidate?.title || candidate?.id)
+        .filter(Boolean),
+    };
+  }
+
   // ── Poll Loop ─────────────────────────────────────────────────────────────
 
   /**
-  * Check kanban for dispatchable tasks and dispatch execution.
+   * Check kanban for todo tasks and dispatch execution.
    * Guarded against overlapping polls and slot saturation.
    * @private
    */
@@ -1555,31 +1751,37 @@ class TaskExecutor {
         return;
       }
 
-      // Fetch dispatchable tasks (prefer ready, then legacy todo)
-      let tasks = [];
-      try {
-        for (const status of DEFAULT_DISPATCH_STATUSES) {
-          const fetched = await listTasks(projectId, { status });
-          if (Array.isArray(fetched) && fetched.length > 0) {
-            tasks = fetched;
-            break;
-          }
-        }
-      } catch (err) {
-        console.warn(`${TAG} failed to list tasks: ${err.message}`);
+      if (this._shouldBackoffListTasks()) {
         return;
       }
 
-      // Client-side status filter — backends may not strictly honor status query params
+      // Fetch todo tasks
+      let tasks;
+      try {
+        tasks = await listTasks(projectId, { status: "todo" });
+        this._resetListTasksBackoff();
+      } catch (err) {
+        this._noteListTasksFailure(err);
+        return;
+      }
+
+      // Client-side status filter — VK API may not respect the status query param
       if (tasks && tasks.length > 0) {
         const before = tasks.length;
-        const allowed = new Set(DEFAULT_DISPATCH_STATUSES);
-        tasks = tasks.filter((t) =>
-          allowed.has(String(t.status || "").toLowerCase()),
-        );
+        tasks = tasks.filter((t) => t.status === "todo");
         if (tasks.length !== before) {
           console.debug(
-            `${TAG} filtered ${before - tasks.length} tasks outside dispatch statuses (${[...allowed].join(",")})`,
+            `${TAG} filtered ${before - tasks.length} non-todo tasks (VK returned ${before}, kept ${tasks.length})`,
+          );
+        }
+      }
+
+      if (tasks && tasks.length > 0) {
+        const before = tasks.length;
+        tasks = tasks.filter((task) => isCodexScopedTask(task));
+        if (tasks.length !== before) {
+          console.debug(
+            `${TAG} filtered ${before - tasks.length} non-codex-scoped task(s)`,
           );
         }
       }
@@ -1655,6 +1857,7 @@ class TaskExecutor {
     let taskClaimToken = null;
 
     const releaseTaskClaimLock = async () => {
+      this._stopTaskClaimRenewal(taskId);
       if (!taskClaimToken) return;
       try {
         await releaseTaskClaim({
@@ -1768,25 +1971,30 @@ class TaskExecutor {
           taskId,
           instanceId: this._instanceId,
           ttlMinutes: this._getTaskClaimTtlMinutes(),
+          ownerStaleTtlMs: this.taskClaimOwnerStaleTtlMs,
           metadata: {
             task_title: taskTitle,
             branch,
             owner: "task-executor",
             sdk: resolvedSdk,
             pid: process.pid,
+            host: os.hostname(),
           },
         });
 
         if (claimResult?.success) {
           taskClaimToken =
             claimResult.token || claimResult.claim?.claim_token || null;
+          this._startTaskClaimRenewal(taskId, taskClaimToken, taskTitle);
         } else if (claimResult?.error === "task_already_claimed") {
           const owner =
             claimResult?.existing_instance ||
             claimResult?.existing_claim?.instance_id ||
             "unknown";
-          const claimedAt = claimResult?.existing_claim?.claimed_at || "unknown";
-          const expiresAt = claimResult?.existing_claim?.expires_at || "unknown";
+          const claimedAt =
+            claimResult?.existing_claim?.claimed_at || "unknown";
+          const expiresAt =
+            claimResult?.existing_claim?.expires_at || "unknown";
 
           console.log(
             `${TAG} skipping "${taskTitle}" — claimed by orchestrator "${owner}" (claimed: ${claimedAt}, expires: ${expiresAt})`,
@@ -1879,7 +2087,7 @@ class TaskExecutor {
         );
         this._taskCooldowns.set(taskId, Date.now());
         try {
-          await updateTaskStatus(taskId, REQUEUE_STATUS);
+          await updateTaskStatus(taskId, "todo");
         } catch {
           /* best-effort */
         }
@@ -1904,7 +2112,7 @@ class TaskExecutor {
           /* best-effort */
         }
         try {
-          await updateTaskStatus(taskId, REQUEUE_STATUS);
+          await updateTaskStatus(taskId, "todo");
         } catch {
           /* best-effort */
         }
@@ -1960,7 +2168,7 @@ class TaskExecutor {
           this._buildRetryPrompt(task, lastResult, attempt),
         buildContinuePrompt: (lastResult, attempt) =>
           this._buildContinuePrompt(task, lastResult, attempt),
-        onEvent: createAgentLogStreamer(taskId, taskTitle, this.repoRoot),
+        onEvent: createAgentLogStreamer(taskId, taskTitle),
         abortController: taskAbortController,
         // When AbortController is replaced after idle_continue, update our reference
         onAbortControllerReplaced: (newAC) => {
@@ -2051,7 +2259,7 @@ class TaskExecutor {
               this._buildRetryPrompt(task, lr, att),
             buildContinuePrompt: (lr, att) =>
               this._buildContinuePrompt(task, lr, att),
-            onEvent: createAgentLogStreamer(taskId, taskTitle, this.repoRoot),
+            onEvent: createAgentLogStreamer(taskId, taskTitle),
             abortController: resumeAC,
             onAbortControllerReplaced: (newAC) => {
               this._slotAbortControllers.set(taskId, newAC);
@@ -2127,7 +2335,7 @@ class TaskExecutor {
       this._slotAbortControllers.delete(taskId);
 
       try {
-        await updateTaskStatus(taskId, REQUEUE_STATUS);
+        await updateTaskStatus(taskId, "todo");
       } catch {
         /* best-effort */
       }
@@ -2172,23 +2380,6 @@ class TaskExecutor {
       }).stdout?.trim() ||
       "unknown";
 
-    const internalTask = getInternalTask(task.id || task.task_id) || null;
-    const reviewIssues = Array.isArray(internalTask?.reviewIssues)
-      ? internalTask.reviewIssues
-      : [];
-    const reviewFeedback = reviewIssues
-      .filter((issue) => {
-        const severity = String(issue?.severity || "").toLowerCase();
-        return severity === "critical" || severity === "major";
-      })
-      .slice(0, 20)
-      .map((issue, index) => {
-        const file = issue?.file
-          ? `${issue.file}${issue?.line ? `:${issue.line}` : ""}`
-          : "(file not provided)";
-        return `${index + 1}. [${String(issue?.severity || "critical").toUpperCase()}/${String(issue?.category || "bug").toUpperCase()}] ${file} — ${issue?.description || "No description"}`;
-      });
-
     const lines = [
       `# ${task.id || task.task_id} — ${task.title}`,
       ``,
@@ -2196,14 +2387,6 @@ class TaskExecutor {
       task.description ||
         "No description provided. Check the task URL for details.",
       ``,
-      ...(reviewFeedback.length > 0
-        ? [
-            `## Review Feedback To Fix`,
-            `The previous review requested changes. Address ALL items below before moving back to inreview:`,
-            ...reviewFeedback,
-            ``,
-          ]
-        : []),
       `## Environment`,
       `- Working Directory: ${worktreePath}`,
       `- Branch: ${branch}`,
@@ -2563,6 +2746,50 @@ class TaskExecutor {
           !this._completedWithPR.has(task.id) &&
           !this._prCreatedForBranch.has(task.id));
 
+      if (!hasCommits && isPlannerTaskData(task)) {
+        try {
+          const verify = await this._verifyPlannerTaskCompletion(task);
+          if (verify.completed) {
+            this._noCommitCounts.delete(task.id);
+            this._skipUntil.delete(task.id);
+            this._saveNoCommitState();
+            try {
+              recordAgentAttempt(task.id, {
+                output: result.output,
+                hasCommits: false,
+              });
+              setInternalStatus(task.id, "done", "task-executor");
+              updateInternalTask(task.id, { externalStatus: "done" });
+              this._errorDetector.resetTask(task.id);
+            } catch {
+              /* best-effort */
+            }
+            try {
+              await updateTaskStatus(task.id, "done");
+            } catch {
+              /* best-effort */
+            }
+            const sample =
+              Array.isArray(verify.sampleTitles) &&
+              verify.sampleTitles.length > 0
+                ? ` Examples: ${verify.sampleTitles.join(", ")}`
+                : "";
+            this.sendTelegram?.(
+              `✅ Planner task completed: "${task.title}" (${verify.createdCount} new task(s)).${sample}`,
+            );
+            this.onTaskCompleted?.(task, result);
+            return;
+          }
+          console.warn(
+            `${tag} planner task incomplete: no new backlog tasks detected`,
+          );
+        } catch (verifyErr) {
+          console.warn(
+            `${tag} planner completion verification failed: ${verifyErr?.message || verifyErr}`,
+          );
+        }
+      }
+
       if (hasCommits && this.autoCreatePr) {
         // Real work done — reset the no-commit counter
         this._noCommitCounts.delete(task.id);
@@ -2730,9 +2957,9 @@ class TaskExecutor {
           `${tag} completed but no commits found (attempt ${noCommitCount}/${MAX_NO_COMMIT_ATTEMPTS}, cooldown ${cooldownMin}m)`,
         );
 
-        // Set back to queue status — NOT inreview (nothing to review)
+        // Set back to todo — NOT inreview (nothing to review)
         try {
-          await updateTaskStatus(task.id, REQUEUE_STATUS);
+          await updateTaskStatus(task.id, "todo");
         } catch {
           /* best-effort */
         }
@@ -2830,7 +3057,7 @@ class TaskExecutor {
       }
 
       try {
-        await updateTaskStatus(task.id, REQUEUE_STATUS);
+        await updateTaskStatus(task.id, "todo");
       } catch {
         /* best-effort */
       }
@@ -3671,6 +3898,16 @@ export function loadExecutorOptionsFromConfig() {
         configExec.reviewTimeoutMs ||
         300000,
     ),
+    taskClaimOwnerStaleTtlMs: Number(
+      process.env.TASK_CLAIM_OWNER_STALE_TTL_MS ||
+        configExec.taskClaimOwnerStaleTtlMs ||
+        10 * 60 * 1000,
+    ),
+    taskClaimRenewIntervalMs: Number(
+      process.env.TASK_CLAIM_RENEW_INTERVAL_MS ||
+        configExec.taskClaimRenewIntervalMs ||
+        5 * 60 * 1000,
+    ),
     repoRoot: config.repoRoot || process.cwd(),
     repoSlug: config.repoSlug || "",
     agentPrompts: config.agentPrompts || {},
@@ -3739,6 +3976,5 @@ export function isExecutorDisabled() {
   return DISABLED_MODES.has(getExecutorMode());
 }
 
-export { resolveTaskExecutorStatePaths };
 export { TaskExecutor };
 export default TaskExecutor;

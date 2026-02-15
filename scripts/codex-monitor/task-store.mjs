@@ -14,7 +14,6 @@ import {
   renameSync,
   existsSync,
 } from "node:fs";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -35,24 +34,13 @@ function inferRepoRoot(startDir) {
 }
 
 function resolveDefaultStorePath() {
-  const repoRoot = inferRepoRoot(process.cwd()) || resolve(__dirname, "..", "..");
-  return resolveRepoSharedStatePaths({ repoRoot }).file("kanban-state.json");
-}
-
-function resolveLegacyStorePaths(repoRoot) {
-  if (!repoRoot) return [];
-  return [
-    resolve(repoRoot, ".codex-monitor", ".cache", "kanban-state.json"),
-    resolve(repoRoot, ".cache", "kanban-state.json"),
-    resolve(repoRoot, ".cache", "codex-monitor", "kanban-state.json"),
-  ];
+  const repoRoot =
+    inferRepoRoot(process.cwd()) || resolve(__dirname, "..", "..");
+  return resolve(repoRoot, ".codex-monitor", ".cache", "kanban-state.json");
 }
 
 let storePath = resolveDefaultStorePath();
 let storeTmpPath = storePath + ".tmp";
-let legacyStorePaths = resolveLegacyStorePaths(
-  inferRepoRoot(process.cwd()) || resolve(__dirname, "..", ".."),
-);
 const MAX_STATUS_HISTORY = 50;
 const MAX_AGENT_OUTPUT = 2000;
 const MAX_ERROR_LENGTH = 1000;
@@ -67,27 +55,16 @@ let _writeChain = Promise.resolve(); // simple write lock
 
 export function configureTaskStore(options = {}) {
   const baseDir = options.baseDir ? resolve(options.baseDir) : null;
-  const repoRoot =
-    options.repoRoot ||
-    inferRepoRoot(options.cwd || process.cwd()) ||
-    resolve(__dirname, "..", "..");
   const nextPath = options.storePath
     ? resolve(baseDir || process.cwd(), options.storePath)
-    : baseDir
-      ? resolve(baseDir, ".codex-monitor", ".cache", "kanban-state.json")
-      : resolveRepoSharedStatePaths({
-          repoRoot,
-          cwd: options.cwd,
-          stateDir: options.stateDir,
-          stateRoot: options.stateRoot,
-          repoIdentity: options.repoIdentity,
-        }).file("kanban-state.json");
-
-  legacyStorePaths = Array.isArray(options.legacyStorePaths)
-    ? options.legacyStorePaths.map((path) => resolve(path))
-    : options.storePath || baseDir
-      ? []
-      : resolveLegacyStorePaths(repoRoot);
+    : resolve(
+        baseDir ||
+          inferRepoRoot(process.cwd()) ||
+          resolve(__dirname, "..", ".."),
+        ".codex-monitor",
+        ".cache",
+        "kanban-state.json",
+      );
 
   if (nextPath !== storePath) {
     storePath = nextPath;
@@ -120,15 +97,7 @@ function defaultMeta() {
     projectId: null,
     lastFullSync: null,
     taskCount: 0,
-    stats: {
-      backlog: 0,
-      todo: 0,
-      ready: 0,
-      inprogress: 0,
-      inreview: 0,
-      done: 0,
-      blocked: 0,
-    },
+    stats: { todo: 0, inprogress: 0, inreview: 0, done: 0, blocked: 0 },
   };
 }
 
@@ -163,7 +132,6 @@ function defaultTask(overrides = {}) {
     reviewStatus: null,
     reviewIssues: null,
     reviewedAt: null,
-    reviewRounds: 0,
 
     cooldownUntil: null,
     blockedReason: null,
@@ -177,15 +145,7 @@ function defaultTask(overrides = {}) {
 }
 
 function recalcStats() {
-  const stats = {
-    backlog: 0,
-    todo: 0,
-    ready: 0,
-    inprogress: 0,
-    inreview: 0,
-    done: 0,
-    blocked: 0,
-  };
+  const stats = { todo: 0, inprogress: 0, inreview: 0, done: 0, blocked: 0 };
   for (const t of Object.values(_store.tasks)) {
     if (t.status === "blocked") {
       stats.blocked++;
@@ -211,7 +171,6 @@ function ensureLoaded() {
  * Load store from disk. Called automatically on first access.
  */
 export function loadStore() {
-  let shouldPersistMigratedStore = false;
   try {
     if (existsSync(storePath)) {
       const raw = readFileSync(storePath, "utf-8");
@@ -225,42 +184,14 @@ export function loadStore() {
         `Loaded ${Object.keys(_store.tasks).length} tasks from disk`,
       );
     } else {
-      let migratedFrom = null;
-      for (const legacyPath of legacyStorePaths) {
-        if (!legacyPath || legacyPath === storePath || !existsSync(legacyPath)) continue;
-        try {
-          const raw = readFileSync(legacyPath, "utf-8");
-          const data = JSON.parse(raw);
-          _store = {
-            _meta: { ...defaultMeta(), ...(data._meta || {}) },
-            tasks: data.tasks || {},
-          };
-          migratedFrom = legacyPath;
-          break;
-        } catch {
-          // continue
-        }
-      }
-
-      if (migratedFrom) {
-        console.log(
-          TAG,
-          `Loaded ${Object.keys(_store.tasks).length} tasks from legacy path ${migratedFrom}`,
-        );
-        shouldPersistMigratedStore = true;
-      } else {
-        _store = { _meta: defaultMeta(), tasks: {} };
-        console.log(TAG, "No store file found — initialised empty store");
-      }
+      _store = { _meta: defaultMeta(), tasks: {} };
+      console.log(TAG, "No store file found — initialised empty store");
     }
   } catch (err) {
     console.error(TAG, "Failed to load store, starting fresh:", err.message);
     _store = { _meta: defaultMeta(), tasks: {} };
   }
   _loaded = true;
-  if (shouldPersistMigratedStore) {
-    saveStore();
-  }
 }
 
 /**
@@ -578,11 +509,6 @@ export function setReviewResult(taskId, { approved, issues } = {}) {
 
   task.reviewStatus = approved ? "approved" : "changes_requested";
   task.reviewIssues = issues || null;
-  if (approved) {
-    task.reviewRounds = 0;
-  } else {
-    task.reviewRounds = Number(task.reviewRounds || 0) + 1;
-  }
   task.reviewedAt = now();
   task.updatedAt = now();
   task.lastActivityAt = now();

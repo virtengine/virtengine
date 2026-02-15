@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile, mkdtemp } from "node:fs/promises";
 import { resolve } from "node:path";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
 
@@ -9,54 +9,45 @@ import { cleanupStaleBranches } from "../maintenance.mjs";
 
 let TEST_DIR = "";
 
-function buildIsolatedGitEnv(extra = {}) {
-  const env = { ...process.env, ...extra };
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
-  delete env.GIT_INDEX_FILE;
-  delete env.GIT_PREFIX;
-  delete env.GIT_OBJECT_DIRECTORY;
-  delete env.GIT_ALTERNATE_OBJECT_DIRECTORIES;
-  return env;
-}
-
-function execGit(command, cwd, extra = {}) {
-  return execSync(command, {
-    cwd,
-    windowsHide: true,
-    env: buildIsolatedGitEnv(extra),
-  });
-}
-
 /**
  * Helper: initialise a bare-bones git repo with an initial commit on `main`,
  * then optionally create local-only branches for testing.
  */
 async function initTestRepo() {
-  TEST_DIR = mkdtempSync(resolve(tmpdir(), "branch-cleanup-test-"));
-  execGit("git init -b main", TEST_DIR);
-  execGit('git config user.email "test@test.com"', TEST_DIR);
-  execGit('git config user.name "Test"', TEST_DIR);
+  TEST_DIR = await mkdtemp(resolve(tmpdir(), "branch-cleanup-test-"));
+  execSync("git init -b main", { cwd: TEST_DIR, windowsHide: true });
+  execSync('git config user.email "test@test.com"', {
+    cwd: TEST_DIR,
+    windowsHide: true,
+  });
+  execSync('git config user.name "Test"', {
+    cwd: TEST_DIR,
+    windowsHide: true,
+  });
   await writeFile(resolve(TEST_DIR, "README.md"), "# test");
-  execGit("git add -A && git commit -m init", TEST_DIR);
+  execSync("git add -A && git commit -m init", {
+    cwd: TEST_DIR,
+    windowsHide: true,
+  });
   return TEST_DIR;
 }
 
 function createBranch(name, { backdate } = {}) {
-  execGit(`git branch ${name}`, TEST_DIR);
+  execSync(`git branch ${name}`, { cwd: TEST_DIR, windowsHide: true });
   if (backdate) {
     // Create a commit on the branch with an old date
-    execGit(`git checkout ${name}`, TEST_DIR);
+    execSync(`git checkout ${name}`, { cwd: TEST_DIR, windowsHide: true });
     const dateStr = new Date(Date.now() - backdate).toISOString();
-    execGit(
-      `git commit --allow-empty -m "old commit" --date="${dateStr}"`,
-      TEST_DIR,
-      {
+    execSync(`git commit --allow-empty -m "old commit" --date="${dateStr}"`, {
+      cwd: TEST_DIR,
+      windowsHide: true,
+      env: {
+        ...process.env,
         GIT_COMMITTER_DATE: dateStr,
         GIT_AUTHOR_DATE: dateStr,
       },
-    );
-    execGit("git checkout main", TEST_DIR);
+    });
+    execSync("git checkout main", { cwd: TEST_DIR, windowsHide: true });
   }
 }
 
@@ -66,7 +57,6 @@ function branchExists(name) {
       cwd: TEST_DIR,
       windowsHide: true,
       stdio: "pipe",
-      env: buildIsolatedGitEnv(),
     });
     return true;
   } catch {
@@ -74,7 +64,7 @@ function branchExists(name) {
   }
 }
 
-describe.sequential("cleanupStaleBranches", () => {
+describe("cleanupStaleBranches", () => {
   beforeEach(async () => {
     await initTestRepo();
   });
@@ -110,7 +100,10 @@ describe.sequential("cleanupStaleBranches", () => {
   });
 
   it("should skip the currently checked-out branch", () => {
-    execGit("git checkout -b ve/current-branch", TEST_DIR);
+    execSync("git checkout -b ve/current-branch", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
     const result = cleanupStaleBranches(TEST_DIR, { minAgeMs: 0 });
     expect(result.deleted).toEqual([]);
     const skipped = result.skipped.find(
@@ -119,7 +112,7 @@ describe.sequential("cleanupStaleBranches", () => {
     expect(skipped).toBeDefined();
     expect(skipped.reason).toBe("checked-out");
     // Restore
-    execGit("git checkout main", TEST_DIR);
+    execSync("git checkout main", { cwd: TEST_DIR, windowsHide: true });
   });
 
   it("should delete old merged branches", () => {
@@ -128,7 +121,10 @@ describe.sequential("cleanupStaleBranches", () => {
     createBranch("ve/old-merged", { backdate: twodays });
 
     // Merge into main
-    execGit("git merge --no-ff ve/old-merged -m merge", TEST_DIR);
+    execSync("git merge --no-ff ve/old-merged -m merge", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
 
     expect(branchExists("ve/old-merged")).toBe(true);
     const result = cleanupStaleBranches(TEST_DIR);
@@ -150,7 +146,10 @@ describe.sequential("cleanupStaleBranches", () => {
   it("should support dry-run mode", () => {
     const twodays = 2 * 24 * 60 * 60 * 1000;
     createBranch("ve/dry-run-test", { backdate: twodays });
-    execGit("git merge --no-ff ve/dry-run-test -m merge", TEST_DIR);
+    execSync("git merge --no-ff ve/dry-run-test -m merge", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
 
     const result = cleanupStaleBranches(TEST_DIR, { dryRun: true });
     expect(result.deleted).toContain("ve/dry-run-test");
@@ -164,8 +163,14 @@ describe.sequential("cleanupStaleBranches", () => {
     createBranch("feature/should-ignore", { backdate: twodays });
 
     // Merge both
-    execGit("git merge --no-ff ve/should-target -m merge1", TEST_DIR);
-    execGit("git merge --no-ff feature/should-ignore -m merge2", TEST_DIR);
+    execSync("git merge --no-ff ve/should-target -m merge1", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
+    execSync("git merge --no-ff feature/should-ignore -m merge2", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
 
     const result = cleanupStaleBranches(TEST_DIR);
     expect(result.deleted).toContain("ve/should-target");
@@ -176,7 +181,10 @@ describe.sequential("cleanupStaleBranches", () => {
   it("should handle custom patterns", () => {
     const twodays = 2 * 24 * 60 * 60 * 1000;
     createBranch("custom/old-branch", { backdate: twodays });
-    execGit("git merge --no-ff custom/old-branch -m merge", TEST_DIR);
+    execSync("git merge --no-ff custom/old-branch -m merge", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
 
     const result = cleanupStaleBranches(TEST_DIR, {
       patterns: ["custom/"],
@@ -195,7 +203,10 @@ describe.sequential("cleanupStaleBranches", () => {
     // Branch is ~1 hour old
     const oneHour = 60 * 60 * 1000;
     createBranch("ve/hour-old", { backdate: oneHour + 5000 });
-    execGit("git merge --no-ff ve/hour-old -m merge", TEST_DIR);
+    execSync("git merge --no-ff ve/hour-old -m merge", {
+      cwd: TEST_DIR,
+      windowsHide: true,
+    });
 
     // With default 24h threshold, should skip
     const result1 = cleanupStaleBranches(TEST_DIR, {

@@ -19,7 +19,7 @@
 import { createServer } from "node:http";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { writeFileSync, mkdirSync, unlinkSync } from "node:fs";
+import { writeFileSync, mkdirSync, unlinkSync, readFileSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,12 +29,64 @@ const TAG = "[agent-endpoint]";
 const DEFAULT_PORT = 18432;
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
+const ACCESS_DENIED_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 // Valid status transitions when an agent self-reports
 const VALID_TRANSITIONS = {
   inprogress: ["inreview", "blocked", "done"],
   inreview: ["done"],
 };
+
+// Track ports where we lack permission to terminate the owning process.
+const accessDeniedPorts = new Map();
+const accessDeniedCachePath = resolve(
+  __dirname,
+  ".cache",
+  "agent-endpoint-access-denied.json",
+);
+
+function loadAccessDeniedCache() {
+  try {
+    const raw = readFileSync(accessDeniedCachePath, "utf8");
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return;
+    Object.entries(data).forEach(([port, ts]) => {
+      const parsedPort = Number(port);
+      const parsedTs = Number(ts);
+      if (Number.isFinite(parsedPort) && Number.isFinite(parsedTs)) {
+        accessDeniedPorts.set(parsedPort, parsedTs);
+      }
+    });
+  } catch {
+    // Ignore missing/invalid cache
+  }
+}
+
+function persistAccessDeniedCache() {
+  try {
+    mkdirSync(dirname(accessDeniedCachePath), { recursive: true });
+    const payload = Object.fromEntries(accessDeniedPorts.entries());
+    writeFileSync(accessDeniedCachePath, JSON.stringify(payload, null, 2));
+  } catch (err) {
+    console.warn(
+      `${TAG} Failed to persist access-denied cache: ${err.message || err}`,
+    );
+  }
+}
+
+function pruneAccessDeniedCache() {
+  const now = Date.now();
+  let changed = false;
+  for (const [port, ts] of accessDeniedPorts.entries()) {
+    if (!ts || now - ts > ACCESS_DENIED_COOLDOWN_MS) {
+      accessDeniedPorts.delete(port);
+      changed = true;
+    }
+  }
+  if (changed) persistAccessDeniedCache();
+}
+
+loadAccessDeniedCache();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,7 +121,9 @@ function parseBody(req) {
       } catch (err) {
         // Include preview of malformed JSON for debugging (truncate to 200 chars)
         const preview = raw.length > 200 ? raw.slice(0, 200) + "..." : raw;
-        reject(new Error(`Invalid JSON body: ${err.message} — Preview: ${preview}`));
+        reject(
+          new Error(`Invalid JSON body: ${err.message} — Preview: ${preview}`),
+        );
       }
     });
 
@@ -126,6 +180,9 @@ export class AgentEndpoint {
     this._onTaskComplete = options.onTaskComplete || null;
     this._onTaskError = options.onTaskError || null;
     this._onStatusChange = options.onStatusChange || null;
+    this._onPauseTasks = options.onPauseTasks || null;
+    this._onResumeTasks = options.onResumeTasks || null;
+    this._getExecutorStatus = options.getExecutorStatus || null;
     this._server = null;
     this._running = false;
     this._startedAt = null;
@@ -143,6 +200,7 @@ export class AgentEndpoint {
 
     const MAX_PORT_RETRIES = 5;
     let lastErr;
+    pruneAccessDeniedCache();
 
     for (let attempt = 0; attempt < MAX_PORT_RETRIES; attempt++) {
       const port = this._port + attempt;
@@ -153,6 +211,13 @@ export class AgentEndpoint {
       } catch (err) {
         lastErr = err;
         if (err.code === "EADDRINUSE") {
+          const deniedAt = accessDeniedPorts.get(port);
+          if (deniedAt && Date.now() - deniedAt < ACCESS_DENIED_COOLDOWN_MS) {
+            console.warn(
+              `${TAG} Port ${port} in use and kill blocked (access denied). Skipping retry during cooldown.`,
+            );
+            continue;
+          }
           console.warn(
             `${TAG} Port ${port} in use (attempt ${attempt + 1}/${MAX_PORT_RETRIES}), trying to free it...`,
           );
@@ -251,6 +316,11 @@ export class AgentEndpoint {
           });
         } catch (killErr) {
           /* may already be dead — log for diagnostics */
+          const stderrText = String(killErr.stderr || "");
+          if (stderrText.toLowerCase().includes("access is denied")) {
+            accessDeniedPorts.set(port, Date.now());
+            persistAccessDeniedCache();
+          }
           console.warn(
             `${TAG} taskkill PID ${pid} failed: ${killErr.stderr?.trim() || killErr.message || "unknown error"}`,
           );
@@ -368,6 +438,16 @@ export class AgentEndpoint {
 
       if (method === "GET" && pathname === "/api/tasks") {
         return await this._handleListTasks(url, res);
+      }
+
+      if (method === "GET" && pathname === "/api/executor") {
+        return this._handleExecutorStatus(res);
+      }
+      if (method === "POST" && pathname === "/api/executor/pause") {
+        return await this._handlePauseTasks(res);
+      }
+      if (method === "POST" && pathname === "/api/executor/resume") {
+        return await this._handleResumeTasks(res);
       }
 
       // ── Task-specific routes ────────────────────────────────────────
@@ -493,6 +573,47 @@ export class AgentEndpoint {
     }
   }
 
+  _handleExecutorStatus(res) {
+    if (typeof this._getExecutorStatus !== "function") {
+      sendJson(res, 503, { error: "Executor status provider not configured" });
+      return;
+    }
+    try {
+      const status = this._getExecutorStatus() || {};
+      sendJson(res, 200, { ok: true, status });
+    } catch (err) {
+      sendJson(res, 500, {
+        error: `Failed to get executor status: ${err.message}`,
+      });
+    }
+  }
+
+  async _handlePauseTasks(res) {
+    if (typeof this._onPauseTasks !== "function") {
+      sendJson(res, 503, { error: "Pause control not configured" });
+      return;
+    }
+    try {
+      const result = await this._onPauseTasks();
+      sendJson(res, 200, { ok: true, result: result ?? { paused: true } });
+    } catch (err) {
+      sendJson(res, 500, { error: `Failed to pause tasks: ${err.message}` });
+    }
+  }
+
+  async _handleResumeTasks(res) {
+    if (typeof this._onResumeTasks !== "function") {
+      sendJson(res, 503, { error: "Resume control not configured" });
+      return;
+    }
+    try {
+      const result = await this._onResumeTasks();
+      sendJson(res, 200, { ok: true, result: result ?? { paused: false } });
+    } catch (err) {
+      sendJson(res, 500, { error: `Failed to resume tasks: ${err.message}` });
+    }
+  }
+
   async _handleStatusChange(taskId, body, res) {
     if (!this._taskStore) {
       sendJson(res, 503, { error: "Task store not configured" });
@@ -591,11 +712,36 @@ export class AgentEndpoint {
   }
 
   async _handleComplete(taskId, body, res) {
-    const { hasCommits, branch, prUrl, output } = body;
+    const { hasCommits, branch, prUrl, output, prNumber } = body;
 
     console.log(
       `${TAG} Task ${taskId} complete: hasCommits=${!!hasCommits}, branch=${branch || "none"}, pr=${prUrl || "none"}`,
     );
+
+    if (this._taskStore) {
+      try {
+        if (typeof this._taskStore.recordAgentAttempt === "function") {
+          await this._taskStore.recordAgentAttempt(taskId, {
+            output,
+            hasCommits: !!hasCommits,
+          });
+        }
+
+        if (typeof this._taskStore.update === "function") {
+          const updates = {};
+          if (branch) updates.branchName = branch;
+          if (prUrl) updates.prUrl = prUrl;
+          if (prNumber) updates.prNumber = prNumber;
+          if (Object.keys(updates).length > 0) {
+            await this._taskStore.update(taskId, updates);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `${TAG} Failed to record completion details for ${taskId}: ${err.message || err}`,
+        );
+      }
+    }
 
     let nextAction = "cooldown";
 
@@ -654,7 +800,7 @@ export class AgentEndpoint {
   }
 
   async _handleError(taskId, body, res) {
-    const { error: errorMsg, pattern } = body;
+    const { error: errorMsg, pattern, output } = body;
 
     if (!errorMsg) {
       sendJson(res, 400, { error: "Missing 'error' in body" });
@@ -675,6 +821,28 @@ export class AgentEndpoint {
       console.log(
         `${TAG} Task ${taskId} error${pattern ? ` (${pattern})` : ""}: ${errorMsg}`,
       );
+    }
+
+    if (this._taskStore) {
+      try {
+        if (typeof this._taskStore.recordAgentAttempt === "function") {
+          await this._taskStore.recordAgentAttempt(taskId, {
+            output,
+            error: errorMsg,
+            hasCommits: false,
+          });
+        }
+        if (
+          pattern &&
+          typeof this._taskStore.recordErrorPattern === "function"
+        ) {
+          await this._taskStore.recordErrorPattern(taskId, pattern);
+        }
+      } catch (err) {
+        console.warn(
+          `${TAG} Failed to record error details for ${taskId}: ${err.message || err}`,
+        );
+      }
     }
 
     // Determine action based on pattern

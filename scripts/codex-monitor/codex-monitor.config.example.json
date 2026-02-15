@@ -3,16 +3,7 @@
   "projectName": "my-project",
   "primaryAgent": "codex-sdk",
   "kanban": {
-    "backend": "vk",
-    "githubProject": {
-      "owner": "virtengine",
-      "number": 3,
-      "statusFieldName": "Status",
-      "marker": "codex-monitor"
-    }
-  },
-  "copilot": {
-    "agentType": "local"
+    "backend": "vk"
   },
   "internalExecutor": {
     "mode": "vk"

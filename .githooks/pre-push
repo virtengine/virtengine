@@ -83,10 +83,15 @@ HAS_CODEX_MONITOR=false
 
 CHANGED_FILES=""
 DIFF_SOURCE=""
+DIFF_FROM_REF=""
+DIFF_TO_REF=""
+TRACKING_BRANCH=""
 
 # Option 1: Use the exact push range (remote_sha..local_sha)
 if [ -n "$PUSH_REMOTE_SHA" ] && [ "$PUSH_REMOTE_SHA" != "0000000000000000000000000000000000000000" ] && [ -n "$PUSH_LOCAL_SHA" ]; then
-    CHANGED_FILES=$(git diff --name-only "$PUSH_REMOTE_SHA" "$PUSH_LOCAL_SHA" 2>/dev/null || echo "")
+    DIFF_FROM_REF="$PUSH_REMOTE_SHA"
+    DIFF_TO_REF="$PUSH_LOCAL_SHA"
+    CHANGED_FILES=$(git diff --name-only "$DIFF_FROM_REF" "$DIFF_TO_REF" 2>/dev/null || echo "")
     [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="push-range"
 fi
 
@@ -94,20 +99,26 @@ fi
 if [ -z "$CHANGED_FILES" ]; then
     TRACKING_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
     if [ -n "$TRACKING_BRANCH" ]; then
-        CHANGED_FILES=$(git diff --name-only "$TRACKING_BRANCH" HEAD 2>/dev/null || echo "")
+        DIFF_FROM_REF="$TRACKING_BRANCH"
+        DIFF_TO_REF="HEAD"
+        CHANGED_FILES=$(git diff --name-only "$DIFF_FROM_REF" "$DIFF_TO_REF" 2>/dev/null || echo "")
         [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="tracking-branch"
     fi
 fi
 
 # Option 3: Fallback — full branch diff vs origin/main
 if [ -z "$CHANGED_FILES" ] && git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
-    CHANGED_FILES=$(git diff --name-only "$BASE_BRANCH" 2>/dev/null || echo "")
+    DIFF_FROM_REF="$BASE_BRANCH"
+    DIFF_TO_REF="HEAD"
+    CHANGED_FILES=$(git diff --name-only "$DIFF_FROM_REF" "$DIFF_TO_REF" 2>/dev/null || echo "")
     [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="base-branch"
 fi
 
 # Option 4: Last resort — diff vs previous commit
 if [ -z "$CHANGED_FILES" ]; then
-    CHANGED_FILES=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
+    DIFF_FROM_REF="HEAD~1"
+    DIFF_TO_REF="HEAD"
+    CHANGED_FILES=$(git diff --name-only "$DIFF_FROM_REF" "$DIFF_TO_REF" 2>/dev/null || echo "")
     [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="head~1"
 fi
 
@@ -153,6 +164,42 @@ else
     [ -n "$CODEX_MONITOR_FILES" ] && hook_step "Codex Monitor: $(echo "$CODEX_MONITOR_FILES" | wc -l | tr -d ' ') files"
     $HAS_ONLY_DOCS && hook_step "Docs/workflows/tooling only — skipping code checks"
     echo ""
+fi
+
+# =========================================================================
+# DESTRUCTIVE PUSH GUARD (deletion-heavy changes)
+# =========================================================================
+# Blocks pushes where >=95% of changed lines are deletions, e.g. 951 deletions / 49 additions.
+# Override only for emergency cases:
+#   VE_ALLOW_DESTRUCTIVE_PUSH=1 git push
+#   VE_HOOK_ALLOW_DELETION_HEAVY=1 git push
+if [ -n "$DIFF_FROM_REF" ] && [ -n "$DIFF_TO_REF" ]; then
+    NUMSTAT=$(git diff --numstat "$DIFF_FROM_REF" "$DIFF_TO_REF" 2>/dev/null || echo "")
+    if [ -n "$NUMSTAT" ]; then
+        TOTAL_ADDS=$(echo "$NUMSTAT" | awk '{ if ($1 ~ /^[0-9]+$/) a += $1 } END { print a + 0 }')
+        TOTAL_DELS=$(echo "$NUMSTAT" | awk '{ if ($2 ~ /^[0-9]+$/) d += $2 } END { print d + 0 }')
+        TOTAL_CHURN=$((TOTAL_ADDS + TOTAL_DELS))
+        DELETION_GUARD_MIN_CHURN=${VE_HOOK_DELETION_GUARD_MIN_CHURN:-200}
+
+        if [ "$TOTAL_CHURN" -ge "$DELETION_GUARD_MIN_CHURN" ] && [ "$TOTAL_DELS" -gt 0 ]; then
+            DELETE_RATIO=$((TOTAL_DELS * 100 / TOTAL_CHURN))
+            if [ "$DELETE_RATIO" -ge 95 ]; then
+                if [ "${VE_ALLOW_DESTRUCTIVE_PUSH:-0}" = "1" ] || [ "${VE_HOOK_ALLOW_DELETION_HEAVY:-0}" = "1" ]; then
+                    hook_warn "[pre-flight] deletion-heavy push bypassed via env override (${TOTAL_DELS} deletions, ${TOTAL_ADDS} additions, ${DELETE_RATIO}% deletions)"
+                    echo ""
+                else
+                    hook_fail "[pre-flight] blocked deletion-heavy push: ${TOTAL_DELS} deletions vs ${TOTAL_ADDS} additions (${DELETE_RATIO}% deletions)"
+                    hook_fail "This looks destructive and can nuke a branch/worktree state."
+                    echo ""
+                    hook_info "If intentional, override once with:"
+                    hook_info "  VE_ALLOW_DESTRUCTIVE_PUSH=1 git push"
+                    hook_info "Or lower sensitivity with:"
+                    hook_info "  VE_HOOK_DELETION_GUARD_MIN_CHURN=<n> git push"
+                    exit 1
+                fi
+            fi
+        fi
+    fi
 fi
 
 if $HAS_ONLY_DOCS; then
@@ -276,42 +323,6 @@ fi
 hook_pass "[pre-flight] Git push requirements OK"
 echo ""
 
-# ── Destructive push safety gate (codex-monitor git-safety) ─────────────────
-check_branch_safety_gate() {
-        local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
-        local safety_module="$monitor_dir/git-safety.mjs"
-
-        if [ ! -f "$safety_module" ]; then
-                hook_warn "git-safety.mjs not found — skipping destructive push safety gate"
-                return 0
-        fi
-
-        local output
-        if ! output=$(node --input-type=module -e "
-            import { pathToFileURL } from 'node:url';
-            const repoRoot = process.cwd();
-            const mod = await import(pathToFileURL(repoRoot + '/scripts/codex-monitor/git-safety.mjs').href);
-            const safety = mod.evaluateBranchSafetyForPush(repoRoot, { baseBranch: 'main' });
-            if (!safety.safe) {
-                console.error(safety.reason);
-                process.exit(2);
-            }
-            console.log('safe');
-        " 2>&1); then
-                hook_fail "Destructive push safety gate failed: ${output}"
-                hook_fail "Set VE_ALLOW_DESTRUCTIVE_PUSH=1 only for deliberate emergency bypasses"
-                return 1
-        fi
-
-        hook_pass "[pre-flight] Destructive push safety OK"
-        return 0
-}
-
-if ! check_branch_safety_gate; then
-        exit 1
-fi
-echo ""
-
 # =========================================================================
 # HELPERS
 # =========================================================================
@@ -398,7 +409,7 @@ check_codex_monitor_syntax() {
     # node --check only catches parse errors; missing named exports are
     # module instantiation errors that only surface at import time.
     if [ $fail -eq 0 ]; then
-                hook_step "Validating ESM exports (import check)..."
+        hook_step "Validating ESM exports (import check)..."
         if ! (
             cd "$monitor_dir"
             VITEST=1 node -e "
@@ -419,20 +430,6 @@ check_codex_monitor_syntax() {
             "
         ) 2>&1; then
             hook_fail "ESM import validation failed for monitor.mjs"
-            fail=1
-        fi
-    fi
-
-    if [ $fail -eq 0 ]; then
-        hook_step "Running codex-monitor module smoke checks..."
-        if ! (
-            cd "$monitor_dir"
-            node --input-type=module -e "
-              await import(new URL('./hook-profiles.mjs', import.meta.url).href);
-              await import(new URL('./git-safety.mjs', import.meta.url).href);
-            "
-        ) 2>&1; then
-            hook_fail "Codex-monitor module smoke checks failed"
             fail=1
         fi
     fi
@@ -472,30 +469,8 @@ check_codex_monitor_test() {
         hook_warn "Cannot run codex-monitor tests — deps not available"
         return 1
     fi
-    local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
-    local scope="${CODEX_MONITOR_HOOK_TEST_SCOPE:-safety}"
-
-    if [ "$scope" = "full" ]; then
-        hook_step "Running codex-monitor full test suite (vitest)..."
-        (
-            cd "$monitor_dir"
-            env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
-                -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
-                npm test 2>&1
-        )
-        return $?
-    fi
-
-    hook_step "Running codex-monitor safety test suite (vitest)..."
-    (
-        cd "$monitor_dir"
-        env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
-            -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
-            npm test -- \
-              tests/hook-profiles.test.mjs \
-              tests/git-safety.test.mjs \
-              tests/branch-cleanup.test.mjs 2>&1
-    )
+    hook_step "Running codex-monitor tests (vitest)..."
+    (cd "$REPO_ROOT/scripts/codex-monitor" && npm test 2>&1)
 }
 
 check_codex_monitor_prepublish() {

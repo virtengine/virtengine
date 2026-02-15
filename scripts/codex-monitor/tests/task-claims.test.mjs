@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -10,6 +9,7 @@ vi.mock("../presence.mjs", () => ({
     instance_id: "test-instance-1",
     coordinator_priority: 100,
   })),
+  listActiveInstances: vi.fn(() => []),
   selectCoordinator: vi.fn(() => ({
     instance_id: "coordinator-instance",
   })),
@@ -36,61 +36,6 @@ describe("task-claims", () => {
       const { initTaskClaims } = await import("../task-claims.mjs");
       await initTaskClaims({ repoRoot: tempRoot });
       // Should not throw
-    });
-
-    it("uses shared repo-scoped state path when stateDir is provided", async () => {
-      const stateDir = await mkdtemp(resolve(tmpdir(), "codex-claims-state-"));
-      const { initTaskClaims, _test } = await import("../task-claims.mjs");
-      await initTaskClaims({ repoRoot: tempRoot, cwd: tempRoot, stateDir });
-
-      const paths = _test.getPaths();
-      expect(paths.claimsPath.replace(/\\/g, "/")).toContain(
-        stateDir.replace(/\\/g, "/"),
-      );
-      expect(paths.claimsPath).toMatch(/repos[\\/]repo-[a-f0-9]{16}[\\/]task-claims\.json$/);
-
-      await rm(stateDir, { recursive: true, force: true });
-    });
-
-    it("migrates existing legacy claims file when shared file does not exist", async () => {
-      const stateDir = await mkdtemp(resolve(tmpdir(), "codex-claims-state-"));
-      const legacyDir = resolve(tempRoot, ".cache", "codex-monitor");
-      const legacyClaimsPath = resolve(legacyDir, "task-claims.json");
-
-      await mkdir(legacyDir, { recursive: true });
-      await writeFile(
-        legacyClaimsPath,
-        JSON.stringify(
-          {
-            version: 1,
-            claims: {
-              "legacy-task": {
-                task_id: "legacy-task",
-                instance_id: "legacy-instance",
-                claim_token: "legacy-token",
-                claimed_at: new Date().toISOString(),
-                expires_at: new Date(Date.now() + 60 * 1000).toISOString(),
-                ttl_minutes: 1,
-              },
-            },
-          },
-          null,
-          2,
-        ),
-        "utf8",
-      );
-
-      const { initTaskClaims, listClaims, _test } = await import("../task-claims.mjs");
-      await initTaskClaims({ repoRoot: tempRoot, cwd: tempRoot, stateDir });
-
-      const claims = await listClaims({ includeExpired: true });
-      expect(claims.some((claim) => claim.task_id === "legacy-task")).toBe(true);
-      const paths = _test.getPaths();
-      expect(existsSync(paths.claimsPath)).toBe(true);
-      const raw = await readFile(paths.claimsPath, "utf8");
-      expect(raw).toContain("legacy-task");
-
-      await rm(stateDir, { recursive: true, force: true });
     });
   });
 
@@ -166,6 +111,43 @@ describe("task-claims", () => {
       const claim = await getClaim("task-1");
       expect(claim.metadata.branch).toBe("ve/task-1");
       expect(claim.metadata.agent).toBe("codex");
+    });
+
+    it("reclaims a task when existing owner is stale/offline", async () => {
+      const { listActiveInstances } = vi.mocked(await import("../presence.mjs"));
+      await claimTask({
+        taskId: "task-stale",
+        instanceId: "instance-1",
+      });
+
+      listActiveInstances.mockReturnValueOnce([{ instance_id: "instance-2" }]);
+      const result = await claimTask({
+        taskId: "task-stale",
+        instanceId: "instance-2",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.resolution?.override).toBe(true);
+      expect(result.resolution?.reason).toBe("owner_stale");
+      expect(result.claim.instance_id).toBe("instance-2");
+    });
+
+    it("does not reclaim when existing owner is active", async () => {
+      const { listActiveInstances } = vi.mocked(await import("../presence.mjs"));
+      await claimTask({
+        taskId: "task-active",
+        instanceId: "instance-1",
+      });
+
+      listActiveInstances.mockReturnValue([{ instance_id: "instance-1" }]);
+      const result = await claimTask({
+        taskId: "task-active",
+        instanceId: "instance-2",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("task_already_claimed");
+      expect(result.existing_instance).toBe("instance-1");
     });
   });
 

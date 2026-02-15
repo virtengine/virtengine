@@ -13,12 +13,11 @@
  * Executor configuration supports N executors with weights and failover.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 import {
   ensureAgentPromptWorkspace,
   getAgentPromptDefinitions,
@@ -36,28 +35,6 @@ const CONFIG_FILES = [
 function hasSetupMarkers(dir) {
   const markers = [".env", ...CONFIG_FILES];
   return markers.some((name) => existsSync(resolve(dir, name)));
-}
-
-function firstExistingPath(paths = []) {
-  for (const candidate of paths) {
-    if (candidate && existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function migrateLegacyStateFile(primaryPath, legacyPaths = []) {
-  if (existsSync(primaryPath)) return;
-  const source = firstExistingPath(legacyPaths);
-  if (!source) return;
-  try {
-    const raw = readFileSync(source, "utf8");
-    mkdirSync(dirname(primaryPath), { recursive: true });
-    writeFileSync(primaryPath, raw, "utf8");
-  } catch {
-    /* best effort */
-  }
 }
 
 function isPathInside(parent, child) {
@@ -285,16 +262,6 @@ function isEnvEnabled(value, defaultValue = false) {
   return parseEnvBoolean(value, defaultValue);
 }
 
-function normalizeCopilotAgentType(value, fallback = "local") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (["local", "background", "cloud"].includes(normalized)) {
-    return normalized;
-  }
-  return fallback;
-}
-
 // ── Git helpers ──────────────────────────────────────────────────────────────
 
 function detectRepoSlug() {
@@ -418,281 +385,6 @@ function normalizeKanbanBackend(value) {
     return backend;
   }
   return "vk";
-}
-
-function ensureValidationState(state) {
-  if (state && Array.isArray(state.errors) && Array.isArray(state.warnings)) {
-    return state;
-  }
-  return { errors: [], warnings: [] };
-}
-
-function parseValidatedNumber(name, rawValue, fallback, options = {}) {
-  const {
-    integer = false,
-    min = Number.NEGATIVE_INFINITY,
-    max = Number.POSITIVE_INFINITY,
-    allowZero = true,
-    state,
-  } = options;
-
-  const validation = ensureValidationState(state);
-  const value = Number(rawValue);
-  if (!Number.isFinite(value)) {
-    validation.errors.push(
-      `${name} must be a finite number (received: ${String(rawValue)})`,
-    );
-    return fallback;
-  }
-
-  if (integer && !Number.isInteger(value)) {
-    validation.errors.push(
-      `${name} must be an integer (received: ${String(rawValue)})`,
-    );
-    return fallback;
-  }
-
-  if (!allowZero && value === 0) {
-    validation.errors.push(`${name} must be greater than 0`);
-    return fallback;
-  }
-
-  if (value < min || value > max) {
-    validation.errors.push(
-      `${name} must be between ${min} and ${max} (received: ${String(rawValue)})`,
-    );
-    return fallback;
-  }
-
-  return value;
-}
-
-function parseValidatedEnum(name, rawValue, allowed, fallback, state) {
-  const validation = ensureValidationState(state);
-  const value = String(rawValue || "")
-    .trim()
-    .toLowerCase();
-  if (!value) return fallback;
-  if (allowed.includes(value)) return value;
-  validation.errors.push(
-    `${name} must be one of: ${allowed.join(", ")} (received: ${String(rawValue)})`,
-  );
-  return fallback;
-}
-
-function applyConfigValidation(config, options = {}) {
-  const strict = options.strict === true;
-  const validation = config?.validation || { errors: [], warnings: [] };
-  if (validation.errors.length > 0) {
-    const message =
-      `[config] Validation failed with ${validation.errors.length} error(s):\n` +
-      validation.errors.map((entry) => `  - ${entry}`).join("\n");
-    if (strict) {
-      throw new Error(message);
-    }
-    console.warn(`${message}\n[config] Continuing with safe fallback values.`);
-  }
-  if (validation.warnings.length > 0) {
-    const warningLines = validation.warnings
-      .map((entry) => `  - ${entry}`)
-      .join("\n");
-    console.warn(
-      `[config] Validation warnings:\n${warningLines}`,
-    );
-  }
-}
-
-function isValidHttpUrl(value) {
-  if (!value) return false;
-  try {
-    const parsed = new URL(String(value));
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function runCrossFieldValidation(config, state) {
-  const validation = ensureValidationState(state);
-
-  const hasTelegramToken = Boolean(config.telegramToken);
-  const hasTelegramChatId = Boolean(config.telegramChatId);
-  if (hasTelegramToken !== hasTelegramChatId) {
-    validation.errors.push(
-      "Telegram configuration is partial: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must both be set or both be empty.",
-    );
-  }
-
-  if (config.vkRuntimeRequired && !isValidHttpUrl(config.vkEndpointUrl)) {
-    validation.errors.push(
-      `vkEndpointUrl must be a valid http(s) URL when VK runtime is required (received: ${String(config.vkEndpointUrl)})`,
-    );
-  }
-
-  if (config.kanban?.backend === "github") {
-    const hasGithubProject =
-      Boolean(config.kanban?.projectId) ||
-      (Boolean(config.kanban?.githubProject?.owner) &&
-        Number.isFinite(config.kanban?.githubProject?.number));
-    if (!hasGithubProject) {
-      validation.errors.push(
-        "KANBAN_BACKEND=github requires KANBAN_PROJECT_ID or githubProject.owner + githubProject.number.",
-      );
-    }
-  }
-}
-
-function formatCountLabel(count, label) {
-  return `${count} ${label}${count === 1 ? "" : "s"}`;
-}
-
-function formatValidationIssueList(items, maxItems = 3) {
-  return items.slice(0, maxItems).map((entry) => `- ${entry}`);
-}
-
-function formatConfigValidationSummary(config, options = {}) {
-  const { context = "startup", maxIssues = 3 } = options;
-  const validation = config?.validation || { errors: [], warnings: [] };
-  const errorCount = validation.errors.length;
-  const warningCount = validation.warnings.length;
-  const strict = config?.strictConfig === true;
-
-  if (errorCount === 0 && warningCount === 0) {
-    return {
-      headline: `[config] health(${context}): OK`,
-      details: [],
-      level: "ok",
-    };
-  }
-
-  const state = errorCount > 0 ? "DEGRADED" : "WARN";
-  const counts = [
-    formatCountLabel(errorCount, "error"),
-    formatCountLabel(warningCount, "warning"),
-  ].join(", ");
-
-  const detailItems = [
-    ...formatValidationIssueList(validation.errors, maxIssues),
-    ...formatValidationIssueList(validation.warnings, maxIssues),
-  ];
-
-  return {
-    headline: `[config] health(${context}): ${state} (${counts}, strict=${strict ? "on" : "off"})`,
-    details: detailItems,
-    level: errorCount > 0 ? "error" : "warn",
-  };
-}
-
-function normalizeExecutorConfig(rawConfig, state) {
-  const validation = ensureValidationState(state);
-  const input = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
-
-  const executorsInput = Array.isArray(input.executors) ? input.executors : [];
-  const normalizedExecutors = executorsInput
-    .filter((entry) => entry && typeof entry === "object")
-    .map((entry, index) => {
-      const name = String(
-        entry.name || `${String(entry.executor || "executor").toLowerCase()}-${index + 1}`,
-      )
-        .trim()
-        .toLowerCase();
-      const executor = String(entry.executor || "CODEX")
-        .trim()
-        .toUpperCase();
-      const variant = String(entry.variant || "DEFAULT").trim();
-      const weight = parseValidatedNumber(
-        `executors[${index}].weight`,
-        entry.weight ?? 100,
-        100,
-        {
-          integer: true,
-          min: 1,
-          max: 1000,
-          allowZero: false,
-          state: validation,
-        },
-      );
-
-      return {
-        name,
-        executor,
-        variant,
-        role: String(entry.role || `executor-${index + 1}`),
-        enabled: entry.enabled !== false,
-        weight,
-      };
-    });
-
-  const executors = normalizedExecutors.length
-    ? normalizedExecutors
-    : DEFAULT_EXECUTORS.executors;
-
-  if (normalizedExecutors.length === 0) {
-    validation.warnings.push(
-      "No valid executors configured; falling back to default CODEX executor.",
-    );
-  }
-
-  const failoverRaw =
-    input.failover && typeof input.failover === "object"
-      ? input.failover
-      : DEFAULT_EXECUTORS.failover;
-
-  const failover = {
-    strategy: parseValidatedEnum(
-      "failover.strategy",
-      failoverRaw.strategy,
-      ["next-in-line", "weighted-random", "round-robin"],
-      DEFAULT_EXECUTORS.failover.strategy,
-      validation,
-    ),
-    maxRetries: parseValidatedNumber(
-      "failover.maxRetries",
-      failoverRaw.maxRetries,
-      DEFAULT_EXECUTORS.failover.maxRetries,
-      {
-        integer: true,
-        min: 1,
-        max: 20,
-        allowZero: false,
-        state: validation,
-      },
-    ),
-    cooldownMinutes: parseValidatedNumber(
-      "failover.cooldownMinutes",
-      failoverRaw.cooldownMinutes,
-      DEFAULT_EXECUTORS.failover.cooldownMinutes,
-      {
-        integer: true,
-        min: 1,
-        max: 1440,
-        allowZero: false,
-        state: validation,
-      },
-    ),
-    disableOnConsecutiveFailures: parseValidatedNumber(
-      "failover.disableOnConsecutiveFailures",
-      failoverRaw.disableOnConsecutiveFailures,
-      DEFAULT_EXECUTORS.failover.disableOnConsecutiveFailures,
-      {
-        integer: true,
-        min: 1,
-        max: 20,
-        allowZero: false,
-        state: validation,
-      },
-    ),
-  };
-
-  const distribution = parseValidatedEnum(
-    "distribution",
-    input.distribution,
-    ["weighted", "round-robin", "primary-only"],
-    DEFAULT_EXECUTORS.distribution,
-    validation,
-  );
-
-  return { executors, failover, distribution };
 }
 
 function loadExecutorConfig(configDir, configData) {
@@ -992,7 +684,6 @@ function loadAgentPrompts(configDir, repoRoot, configData) {
 export function loadConfig(argv = process.argv, options = {}) {
   const { reloadEnv = false } = options;
   const cli = parseArgs(argv);
-  const validation = { errors: [], warnings: [] };
 
   const repoRootForConfig = detectRepoRoot();
   // Determine config directory (where codex-monitor stores its config)
@@ -1003,11 +694,6 @@ export function loadConfig(argv = process.argv, options = {}) {
 
   const configFile = loadConfigFile(configDir);
   let configData = configFile.data || {};
-  if (configFile.error === "invalid-json") {
-    validation.errors.push(
-      `Invalid JSON in config file: ${configFile.path}. Fix the syntax or remove the file.`,
-    );
-  }
 
   const repoRootOverride = cli["repo-root"] || process.env.REPO_ROOT || "";
   let repositories = loadRepoConfig(configDir, configData, {
@@ -1058,11 +744,6 @@ export function loadConfig(argv = process.argv, options = {}) {
     defaultProfile ||
     "";
   const profile = profileName ? profiles[profileName] : null;
-  if (profileName && !profile) {
-    validation.errors.push(
-      `Profile '${profileName}' was requested but not found in config profiles.`,
-    );
-  }
 
   if (profile?.envFile) {
     const envFilePath = resolve(configDir, profile.envFile);
@@ -1167,27 +848,11 @@ export function loadConfig(argv = process.argv, options = {}) {
   const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
 
   // ── Timing ───────────────────────────────────────────────
-  const restartDelayMs = parseValidatedNumber(
-    "restartDelayMs",
+  const restartDelayMs = Number(
     cli["restart-delay"] || process.env.RESTART_DELAY_MS || "10000",
-    10000,
-    {
-      integer: true,
-      min: 0,
-      max: 60 * 60 * 1000,
-      state: validation,
-    },
   );
-  const maxRestarts = parseValidatedNumber(
-    "maxRestarts",
+  const maxRestarts = Number(
     cli["max-restarts"] || process.env.MAX_RESTARTS || "0",
-    0,
-    {
-      integer: true,
-      min: 0,
-      max: 1000,
-      state: validation,
-    },
   );
 
   // ── Logging ──────────────────────────────────────────────
@@ -1199,30 +864,14 @@ export function loadConfig(argv = process.argv, options = {}) {
       resolve(configDir, "logs"),
   );
   // Max total size of the log directory in MB. 0 = unlimited.
-  const logMaxSizeMb = parseValidatedNumber(
-    "logMaxSizeMb",
+  const logMaxSizeMb = Number(
     process.env.LOG_MAX_SIZE_MB ?? configData.logMaxSizeMb ?? 500,
-    500,
-    {
-      integer: true,
-      min: 0,
-      max: 1024 * 50,
-      state: validation,
-    },
   );
   // How often to check log folder size (minutes). 0 = only at startup.
-  const logCleanupIntervalMin = parseValidatedNumber(
-    "logCleanupIntervalMin",
+  const logCleanupIntervalMin = Number(
     process.env.LOG_CLEANUP_INTERVAL_MIN ??
       configData.logCleanupIntervalMin ??
       30,
-    30,
-    {
-      integer: true,
-      min: 0,
-      max: 24 * 60,
-      state: validation,
-    },
   );
 
   // ── Agent SDK Selection ───────────────────────────────────
@@ -1268,19 +917,11 @@ export function loadConfig(argv = process.argv, options = {}) {
       : isEnvEnabled(process.env.CODEX_MONITOR_PREFLIGHT_DISABLED, false)
         ? false
         : true;
-  const preflightRetryMs = parseValidatedNumber(
-    "preflightRetryMs",
+  const preflightRetryMs = Number(
     cli["preflight-retry"] ||
       process.env.CODEX_MONITOR_PREFLIGHT_RETRY_MS ||
       configData.preflightRetryMs ||
       "300000",
-    300000,
-    {
-      integer: true,
-      min: 1000,
-      max: 24 * 60 * 60 * 1000,
-      state: validation,
-    },
   );
   const codexEnabled =
     !flags.has("no-codex") &&
@@ -1316,44 +957,13 @@ export function loadConfig(argv = process.argv, options = {}) {
   // ── Internal Executor ────────────────────────────────────
   // Allows the monitor to run tasks via agent-pool directly instead of
   // (or alongside) the VK executor. Modes: "vk" (default), "internal", "hybrid".
-  const kanbanBackend = parseValidatedEnum(
-    "kanban.backend",
+  const kanbanBackend = normalizeKanbanBackend(
     process.env.KANBAN_BACKEND || configData.kanban?.backend || "vk",
-    ["vk", "github", "jira"],
-    "vk",
-    validation,
   );
-  const configuredProjectNumber =
-    process.env.GITHUB_PROJECT_NUMBER || configData.kanban?.githubProject?.number;
-  const githubProjectNumber =
-    configuredProjectNumber != null && configuredProjectNumber !== ""
-      ? Number(configuredProjectNumber)
-      : null;
   const kanban = Object.freeze({
     backend: kanbanBackend,
     projectId:
       process.env.KANBAN_PROJECT_ID || configData.kanban?.projectId || null,
-    githubProject: Object.freeze({
-      owner:
-        process.env.GITHUB_PROJECT_OWNER ||
-        configData.kanban?.githubProject?.owner ||
-        null,
-      number: Number.isFinite(githubProjectNumber)
-        ? githubProjectNumber
-        : null,
-      id:
-        process.env.GITHUB_PROJECT_ID ||
-        configData.kanban?.githubProject?.id ||
-        null,
-      statusFieldName:
-        process.env.GITHUB_PROJECT_STATUS_FIELD ||
-        configData.kanban?.githubProject?.statusFieldName ||
-        "Status",
-      marker:
-        process.env.GITHUB_PROJECT_MARKER ||
-        configData.kanban?.githubProject?.marker ||
-        "codex-monitor",
-    }),
   });
 
   const internalExecutorConfig = configData.internalExecutor || {};
@@ -1370,69 +980,30 @@ export function loadConfig(argv = process.argv, options = {}) {
       ? isEnvEnabled(reviewAgentToggleRaw, true)
       : internalExecutorConfig.reviewAgentEnabled !== false;
   const internalExecutor = {
-    mode: parseValidatedEnum(
-      "internalExecutor.mode",
-      executorMode,
-      ["vk", "internal", "hybrid"],
-      "vk",
-      validation,
-    ),
-    maxParallel: parseValidatedNumber(
-      "internalExecutor.maxParallel",
+    mode: ["vk", "internal", "hybrid"].includes(executorMode)
+      ? executorMode
+      : "vk",
+    maxParallel: Number(
       process.env.INTERNAL_EXECUTOR_PARALLEL ||
         internalExecutorConfig.maxParallel ||
         3,
-      3,
-      {
-        integer: true,
-        min: 1,
-        max: 128,
-        allowZero: false,
-        state: validation,
-      },
     ),
-    pollIntervalMs: parseValidatedNumber(
-      "internalExecutor.pollIntervalMs",
+    pollIntervalMs: Number(
       process.env.INTERNAL_EXECUTOR_POLL_MS ||
         internalExecutorConfig.pollIntervalMs ||
         30000,
-      30000,
-      {
-        integer: true,
-        min: 1000,
-        max: 24 * 60 * 60 * 1000,
-        allowZero: false,
-        state: validation,
-      },
     ),
     sdk:
       process.env.INTERNAL_EXECUTOR_SDK || internalExecutorConfig.sdk || "auto",
-    taskTimeoutMs: parseValidatedNumber(
-      "internalExecutor.taskTimeoutMs",
+    taskTimeoutMs: Number(
       process.env.INTERNAL_EXECUTOR_TIMEOUT_MS ||
         internalExecutorConfig.taskTimeoutMs ||
         90 * 60 * 1000,
-      90 * 60 * 1000,
-      {
-        integer: true,
-        min: 60 * 1000,
-        max: 24 * 60 * 60 * 1000,
-        allowZero: false,
-        state: validation,
-      },
     ),
-    maxRetries: parseValidatedNumber(
-      "internalExecutor.maxRetries",
+    maxRetries: Number(
       process.env.INTERNAL_EXECUTOR_MAX_RETRIES ||
         internalExecutorConfig.maxRetries ||
         2,
-      2,
-      {
-        integer: true,
-        min: 0,
-        max: 20,
-        state: validation,
-      },
     ),
     autoCreatePr: internalExecutorConfig.autoCreatePr !== false,
     projectId:
@@ -1440,65 +1011,30 @@ export function loadConfig(argv = process.argv, options = {}) {
       internalExecutorConfig.projectId ||
       null,
     reviewAgentEnabled,
-    reviewMaxConcurrent: parseValidatedNumber(
-      "internalExecutor.reviewMaxConcurrent",
+    reviewMaxConcurrent: Number(
       process.env.INTERNAL_EXECUTOR_REVIEW_MAX_CONCURRENT ||
         internalExecutorConfig.reviewMaxConcurrent ||
         2,
-      2,
-      {
-        integer: true,
-        min: 1,
-        max: 64,
-        allowZero: false,
-        state: validation,
-      },
     ),
-    reviewTimeoutMs: parseValidatedNumber(
-      "internalExecutor.reviewTimeoutMs",
+    reviewTimeoutMs: Number(
       process.env.INTERNAL_EXECUTOR_REVIEW_TIMEOUT_MS ||
         internalExecutorConfig.reviewTimeoutMs ||
         300000,
-      300000,
-      {
-        integer: true,
-        min: 1000,
-        max: 24 * 60 * 60 * 1000,
-        allowZero: false,
-        state: validation,
-      },
+    ),
+    taskClaimOwnerStaleTtlMs: Number(
+      process.env.TASK_CLAIM_OWNER_STALE_TTL_MS ||
+        internalExecutorConfig.taskClaimOwnerStaleTtlMs ||
+        10 * 60 * 1000,
+    ),
+    taskClaimRenewIntervalMs: Number(
+      process.env.TASK_CLAIM_RENEW_INTERVAL_MS ||
+        internalExecutorConfig.taskClaimRenewIntervalMs ||
+        5 * 60 * 1000,
     ),
   };
 
-  const copilotConfigRaw =
-    configData.copilot && typeof configData.copilot === "object"
-      ? configData.copilot
-      : {};
-  const copilot = Object.freeze({
-    agentType: normalizeCopilotAgentType(
-      process.env.COPILOT_AGENT_TYPE ||
-        process.env.COPILOT_SESSION_TYPE ||
-        copilotConfigRaw.agentType ||
-        "local",
-      "local",
-    ),
-  });
-
   // ── Vibe-Kanban ──────────────────────────────────────────
-  const vkRecoveryPort = String(
-    parseValidatedNumber(
-      "vkRecoveryPort",
-      process.env.VK_RECOVERY_PORT || "54089",
-      54089,
-      {
-        integer: true,
-        min: 1,
-        max: 65535,
-        allowZero: false,
-        state: validation,
-      },
-    ),
-  );
+  const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
   const vkRecoveryHost =
     process.env.VK_RECOVERY_HOST || process.env.VK_HOST || "0.0.0.0";
   const vkEndpointUrl =
@@ -1507,16 +1043,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     `http://127.0.0.1:${vkRecoveryPort}`;
   const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
   const vkTaskUrlTemplate = process.env.VK_TASK_URL_TEMPLATE || "";
-  const vkRecoveryCooldownMin = parseValidatedNumber(
-    "vkRecoveryCooldownMin",
+  const vkRecoveryCooldownMin = Number(
     process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
-    10,
-    {
-      integer: true,
-      min: 0,
-      max: 24 * 60,
-      state: validation,
-    },
   );
   const vkSpawnDefault =
     configData.vkSpawnEnabled !== undefined
@@ -1531,69 +1059,25 @@ export function loadConfig(argv = process.argv, options = {}) {
     !flags.has("no-vk-spawn") &&
     !isEnvEnabled(process.env.VK_NO_SPAWN, false) &&
     vkSpawnDefault;
-  const vkEnsureIntervalMs = parseValidatedNumber(
-    "vkEnsureIntervalMs",
+  const vkEnsureIntervalMs = Number(
     cli["vk-ensure-interval"] || process.env.VK_ENSURE_INTERVAL || "60000",
-    60000,
-    {
-      integer: true,
-      min: 1000,
-      max: 24 * 60 * 60 * 1000,
-      allowZero: false,
-      state: validation,
-    },
   );
 
   // ── Telegram ─────────────────────────────────────────────
   const telegramToken = process.env.TELEGRAM_BOT_TOKEN || "";
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || "";
-  const telegramIntervalMin = parseValidatedNumber(
-    "telegramIntervalMin",
-    process.env.TELEGRAM_INTERVAL_MIN || "10",
-    10,
-    {
-      integer: true,
-      min: 1,
-      max: 24 * 60,
-      allowZero: false,
-      state: validation,
-    },
+  const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
+  const telegramCommandPollTimeoutSec = Math.max(
+    5,
+    Number(process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20"),
   );
-  const telegramCommandPollTimeoutSec = parseValidatedNumber(
-    "telegramCommandPollTimeoutSec",
-    process.env.TELEGRAM_COMMAND_POLL_TIMEOUT_SEC || "20",
-    20,
-    {
-      integer: true,
-      min: 5,
-      max: 300,
-      allowZero: false,
-      state: validation,
-    },
+  const telegramCommandConcurrency = Math.max(
+    1,
+    Number(process.env.TELEGRAM_COMMAND_CONCURRENCY || "2"),
   );
-  const telegramCommandConcurrency = parseValidatedNumber(
-    "telegramCommandConcurrency",
-    process.env.TELEGRAM_COMMAND_CONCURRENCY || "2",
-    2,
-    {
-      integer: true,
-      min: 1,
-      max: 64,
-      allowZero: false,
-      state: validation,
-    },
-  );
-  const telegramCommandMaxBatch = parseValidatedNumber(
-    "telegramCommandMaxBatch",
-    process.env.TELEGRAM_COMMAND_MAX_BATCH || "25",
-    25,
-    {
-      integer: true,
-      min: 1,
-      max: 500,
-      allowZero: false,
-      state: validation,
-    },
+  const telegramCommandMaxBatch = Math.max(
+    1,
+    Number(process.env.TELEGRAM_COMMAND_MAX_BATCH || "25"),
   );
   const telegramBotEnabled = !flags.has("no-telegram-bot") && !!telegramToken;
   const telegramCommandEnabled = flags.has("telegram-commands")
@@ -1601,61 +1085,54 @@ export function loadConfig(argv = process.argv, options = {}) {
     : false;
   // Verbosity: minimal (critical+error only), summary (default — up to warnings
   // + key info), detailed (everything including debug).
-  const telegramVerbosity = parseValidatedEnum(
-    "telegramVerbosity",
+  const telegramVerbosity = (
     process.env.TELEGRAM_VERBOSITY ||
-      configData.telegramVerbosity ||
-      "summary",
-    ["minimal", "summary", "detailed"],
-    "summary",
-    validation,
-  );
+    configData.telegramVerbosity ||
+    "summary"
+  ).toLowerCase();
 
   // ── Task Planner ─────────────────────────────────────────
   // Mode: "codex-sdk" (default) runs Codex directly, "kanban" creates a VK
   // task for a real agent to plan, "disabled" turns off the planner entirely.
-  const plannerMode = parseValidatedEnum(
-    "plannerMode",
+  const plannerMode = (
     process.env.TASK_PLANNER_MODE ||
-      configData.plannerMode ||
-      (mode === "generic" ? "disabled" : "kanban"),
-    ["codex-sdk", "kanban", "disabled"],
-    mode === "generic" ? "disabled" : "kanban",
-    validation,
-  );
-  const plannerPerCapitaThreshold = parseValidatedNumber(
-    "plannerPerCapitaThreshold",
+    configData.plannerMode ||
+    (mode === "generic" ? "disabled" : "codex-sdk")
+  ).toLowerCase();
+  const plannerPerCapitaThreshold = Number(
     process.env.TASK_PLANNER_PER_CAPITA_THRESHOLD || "1",
-    1,
-    {
-      min: 0,
-      max: 100,
-      state: validation,
-    },
   );
-  const plannerIdleSlotThreshold = parseValidatedNumber(
-    "plannerIdleSlotThreshold",
+  const plannerIdleSlotThreshold = Number(
     process.env.TASK_PLANNER_IDLE_SLOT_THRESHOLD || "1",
-    1,
-    {
-      min: 0,
-      max: 100,
-      state: validation,
-    },
   );
-  const plannerDedupHours = parseValidatedNumber(
-    "plannerDedupHours",
-    process.env.TASK_PLANNER_DEDUP_HOURS || "6",
-    6,
-    {
-      min: 0,
-      max: 720,
-      state: validation,
-    },
-  );
+  const plannerDedupHours = Number(process.env.TASK_PLANNER_DEDUP_HOURS || "6");
   const plannerDedupMs = Number.isFinite(plannerDedupHours)
     ? plannerDedupHours * 60 * 60 * 1000
     : 24 * 60 * 60 * 1000;
+
+  // ── GitHub Reconciler ───────────────────────────────────
+  const ghReconcileEnabled = isEnvEnabled(
+    process.env.GH_RECONCILE_ENABLED ?? configData.ghReconcileEnabled,
+    process.env.VITEST ? false : true,
+  );
+  const ghReconcileIntervalMs = Number(
+    process.env.GH_RECONCILE_INTERVAL_MS ||
+      configData.ghReconcileIntervalMs ||
+      5 * 60 * 1000,
+  );
+  const ghReconcileMergedLookbackHours = Number(
+    process.env.GH_RECONCILE_MERGED_LOOKBACK_HOURS ||
+      configData.ghReconcileMergedLookbackHours ||
+      72,
+  );
+  const ghReconcileTrackingLabels = String(
+    process.env.GH_RECONCILE_TRACKING_LABELS ||
+      configData.ghReconcileTrackingLabels ||
+      "tracking",
+  )
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 
   // ── Branch Routing ────────────────────────────────────────
   // Maps scope patterns (from conventional commit scopes in task titles) to
@@ -1724,46 +1201,20 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.FLEET_ENABLED ?? configData.fleetEnabled,
     true,
   );
-  const fleetBufferMultiplier = parseValidatedNumber(
-    "fleet.bufferMultiplier",
+  const fleetBufferMultiplier = Number(
     process.env.FLEET_BUFFER_MULTIPLIER ||
       configData.fleetBufferMultiplier ||
       "3",
-    3,
-    {
-      min: 1,
-      max: 20,
-      allowZero: false,
-      state: validation,
-    },
   );
-  const fleetSyncIntervalMs = parseValidatedNumber(
-    "fleet.syncIntervalMs",
+  const fleetSyncIntervalMs = Number(
     process.env.FLEET_SYNC_INTERVAL_MS ||
       configData.fleetSyncIntervalMs ||
       String(2 * 60 * 1000), // 2 minutes
-    2 * 60 * 1000,
-    {
-      integer: true,
-      min: 1000,
-      max: 24 * 60 * 60 * 1000,
-      allowZero: false,
-      state: validation,
-    },
   );
-  const fleetPresenceTtlMs = parseValidatedNumber(
-    "fleet.presenceTtlMs",
+  const fleetPresenceTtlMs = Number(
     process.env.FLEET_PRESENCE_TTL_MS ||
       configData.fleetPresenceTtlMs ||
       String(5 * 60 * 1000), // 5 minutes
-    5 * 60 * 1000,
-    {
-      integer: true,
-      min: 1000,
-      max: 24 * 60 * 60 * 1000,
-      allowZero: false,
-      state: validation,
-    },
   );
   const fleetKnowledgeEnabled = isEnvEnabled(
     process.env.FLEET_KNOWLEDGE_ENABLED ?? configData.fleetKnowledgeEnabled,
@@ -1788,28 +1239,15 @@ export function loadConfig(argv = process.argv, options = {}) {
     process.env.DEPENDABOT_AUTO_MERGE ?? configData.dependabotAutoMerge,
     true,
   );
-  const dependabotAutoMergeIntervalMin = parseValidatedNumber(
-    "dependabotAutoMergeIntervalMin",
+  const dependabotAutoMergeIntervalMin = Number(
     process.env.DEPENDABOT_AUTO_MERGE_INTERVAL_MIN || "10",
-    10,
-    {
-      integer: true,
-      min: 1,
-      max: 24 * 60,
-      allowZero: false,
-      state: validation,
-    },
   );
   // Merge method: squash (default), merge, rebase
-  const dependabotMergeMethod = parseValidatedEnum(
-    "dependabotMergeMethod",
+  const dependabotMergeMethod = String(
     process.env.DEPENDABOT_MERGE_METHOD ||
       configData.dependabotMergeMethod ||
       "squash",
-    ["squash", "merge", "rebase"],
-    "squash",
-    validation,
-  );
+  ).toLowerCase();
   // PR authors to auto-merge (comma-separated). Default: dependabot[bot]
   const dependabotAuthors = String(
     process.env.DEPENDABOT_AUTHORS ||
@@ -1825,40 +1263,22 @@ export function loadConfig(argv = process.argv, options = {}) {
     repoRoot,
     configData.cacheDir || selectedRepository?.cacheDir || ".cache",
   );
-  const sharedState = resolveRepoSharedStatePaths({ repoRoot, cwd: repoRoot });
-  const legacyStatusPaths = [
-    resolve(cacheDir, "ve-orchestrator-status.json"),
-    resolve(sharedState.legacyCacheDir, "ve-orchestrator-status.json"),
-    resolve(sharedState.legacyCodexCacheDir, "ve-orchestrator-status.json"),
-  ];
-  const legacyLockPaths = [
-    resolve(cacheDir, "telegram-getupdates.lock"),
-    resolve(sharedState.legacyCacheDir, "telegram-getupdates.lock"),
-    resolve(sharedState.legacyCodexCacheDir, "telegram-getupdates.lock"),
-  ];
-  const sharedStatusPath = sharedState.file("ve-orchestrator-status.json");
-  const sharedLockPath = sharedState.file("telegram-getupdates.lock");
-  migrateLegacyStateFile(sharedStatusPath, legacyStatusPaths);
-  migrateLegacyStateFile(sharedLockPath, legacyLockPaths);
   // Default matches ve-orchestrator.ps1's $script:StatusStatePath
   const statusPath =
     process.env.STATUS_FILE ||
     configData.statusPath ||
     selectedRepository?.statusPath ||
-    sharedStatusPath;
+    resolve(cacheDir, "ve-orchestrator-status.json");
   const lockBase =
     configData.telegramPollLockPath ||
     selectedRepository?.telegramPollLockPath ||
-    sharedLockPath;
+    resolve(cacheDir, "telegram-getupdates.lock");
   const telegramPollLockPath = lockBase.endsWith(".lock")
     ? resolve(lockBase)
     : resolve(lockBase, "telegram-getupdates.lock");
 
   // ── Executors ────────────────────────────────────────────
-  const executorConfig = normalizeExecutorConfig(
-    loadExecutorConfig(configDir, configData),
-    validation,
-  );
+  const executorConfig = loadExecutorConfig(configDir, configData);
   const scheduler = new ExecutorScheduler(executorConfig);
 
   // ── Agent prompts ────────────────────────────────────────
@@ -1871,22 +1291,6 @@ export function loadConfig(argv = process.argv, options = {}) {
 
   // ── First-run detection ──────────────────────────────────
   const isFirstRun = !hasSetupMarkers(configDir);
-
-  const strictConfig =
-    cli._flags.has("strict-config") ||
-    isEnvEnabled(process.env.CODEX_MONITOR_STRICT_CONFIG, false) ||
-    configData.strictConfig === true;
-
-  runCrossFieldValidation(
-    {
-      telegramToken,
-      telegramChatId,
-      vkRuntimeRequired,
-      vkEndpointUrl,
-      kanban,
-    },
-    validation,
-  );
 
   const config = {
     // Identity
@@ -1924,7 +1328,6 @@ export function loadConfig(argv = process.argv, options = {}) {
     agentPoolEnabled,
     primaryAgent,
     primaryAgentEnabled,
-    copilot,
 
     // Internal Executor
     internalExecutor,
@@ -1971,6 +1374,14 @@ export function loadConfig(argv = process.argv, options = {}) {
     plannerDedupHours,
     plannerDedupMs,
 
+    // GitHub Reconciler
+    githubReconcile: {
+      enabled: ghReconcileEnabled,
+      intervalMs: ghReconcileIntervalMs,
+      mergedLookbackHours: ghReconcileMergedLookbackHours,
+      trackingLabels: ghReconcileTrackingLabels,
+    },
+
     // Dependabot Auto-Merge
     dependabotAutoMerge,
     dependabotAutoMergeIntervalMin,
@@ -1992,13 +1403,6 @@ export function loadConfig(argv = process.argv, options = {}) {
     executorConfig,
     scheduler,
 
-    // Config validation
-    strictConfig,
-    validation: Object.freeze({
-      errors: [...validation.errors],
-      warnings: [...validation.warnings],
-    }),
-
     // Multi-repo
     repositories,
     selectedRepository,
@@ -2011,8 +1415,6 @@ export function loadConfig(argv = process.argv, options = {}) {
     // First run
     isFirstRun,
   };
-
-  applyConfigValidation(config, { strict: strictConfig });
 
   return Object.freeze(config);
 }
@@ -2094,7 +1496,6 @@ export {
   loadRepoConfig,
   loadAgentPrompts,
   parseEnvBoolean,
-  formatConfigValidationSummary,
   getAgentPromptDefinitions,
 };
 export default loadConfig;

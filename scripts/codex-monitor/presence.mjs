@@ -3,8 +3,7 @@ import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
-import { dirname, resolve } from "node:path";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
+import { resolve } from "node:path";
 
 const PRESENCE_PREFIX = "[ve-presence]";
 const PRESENCE_VERSION = 1;
@@ -28,40 +27,23 @@ function safeParseNumber(value, fallback) {
 }
 
 async function ensurePresenceDir(repoRoot) {
-  const dir = resolveRepoSharedStatePaths({ repoRoot }).repoStateDir;
+  const dir = resolve(repoRoot, ".cache", "codex-monitor");
   await mkdir(dir, { recursive: true });
   return dir;
 }
 
-async function loadOrCreateInstanceId(paths, explicitId) {
+async function loadOrCreateInstanceId(repoRoot, explicitId) {
   if (explicitId) {
     return String(explicitId).trim();
   }
-  await mkdir(dirname(paths.instanceIdPath), { recursive: true });
-  const candidatePaths = [
-    paths.instanceIdPath,
-    ...(paths.legacyInstanceIdPaths || []),
-  ];
-
-  for (const idPath of candidatePaths) {
-    if (!existsSync(idPath)) continue;
+  const dir = await ensurePresenceDir(repoRoot);
+  const idPath = resolve(dir, INSTANCE_ID_FILENAME);
+  if (existsSync(idPath)) {
     try {
       const raw = await readFile(idPath, "utf8");
       const parsed = JSON.parse(raw);
       if (parsed?.instance_id) {
-        const value = String(parsed.instance_id).trim();
-        if (idPath !== paths.instanceIdPath) {
-          await writeFile(
-            paths.instanceIdPath,
-            JSON.stringify(
-              { instance_id: value, created_at: parsed.created_at || new Date().toISOString() },
-              null,
-              2,
-            ),
-            "utf8",
-          );
-        }
-        return value;
+        return String(parsed.instance_id).trim();
       }
     } catch {
       // best effort
@@ -71,34 +53,11 @@ async function loadOrCreateInstanceId(paths, explicitId) {
   const suffix = crypto.randomUUID().slice(0, 8);
   const newId = `${host}-${suffix}`;
   await writeFile(
-    paths.instanceIdPath,
+    idPath,
     JSON.stringify({ instance_id: newId, created_at: new Date().toISOString() }, null, 2),
     "utf8",
   );
   return newId;
-}
-
-function resolvePresencePaths(options = {}) {
-  const shared = resolveRepoSharedStatePaths({
-    repoRoot: options.repoRoot,
-    cwd: options.cwd,
-    stateDir: options.stateDir,
-    stateRoot: options.stateRoot,
-    repoIdentity: options.repoIdentity,
-  });
-  return {
-    repoRoot: shared.repoRoot,
-    presencePath: options.presencePath || shared.file(PRESENCE_FILENAME),
-    instanceIdPath: options.instanceIdPath || shared.file(INSTANCE_ID_FILENAME),
-    legacyPresencePaths: [
-      resolve(shared.legacyCacheDir, PRESENCE_FILENAME),
-      resolve(shared.legacyCodexCacheDir, PRESENCE_FILENAME),
-    ],
-    legacyInstanceIdPaths: [
-      resolve(shared.legacyCacheDir, INSTANCE_ID_FILENAME),
-      resolve(shared.legacyCodexCacheDir, INSTANCE_ID_FILENAME),
-    ],
-  };
 }
 
 function readGitInfo(repoRoot) {
@@ -163,27 +122,21 @@ function buildLocalMeta() {
 }
 
 async function loadPresenceRegistry() {
-  if (!state.presencePath) return;
-  const candidatePaths = [state.presencePath, ...(state.legacyPresencePaths || [])];
-  for (const path of candidatePaths) {
-    if (!existsSync(path)) continue;
-    try {
-      const raw = await readFile(path, "utf8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed?.instances)) {
-        for (const entry of parsed.instances) {
-          if (entry?.instance_id) {
-            state.instances.set(String(entry.instance_id), entry);
-          }
+  if (!state.presencePath || !existsSync(state.presencePath)) {
+    return;
+  }
+  try {
+    const raw = await readFile(state.presencePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.instances)) {
+      for (const entry of parsed.instances) {
+        if (entry?.instance_id) {
+          state.instances.set(String(entry.instance_id), entry);
         }
-        if (path !== state.presencePath && !existsSync(state.presencePath)) {
-          await persistPresenceRegistry();
-        }
-        return;
       }
-    } catch {
-      // ignore
     }
+  } catch {
+    // ignore
   }
 }
 
@@ -223,20 +176,17 @@ export async function initPresence(options = {}) {
     state.localMeta = null;
     state.instances = new Map();
   }
-  const paths = resolvePresencePaths(options);
-  state.repoRoot = paths.repoRoot;
-  state.presencePath = paths.presencePath;
-  state.legacyPresencePaths = paths.legacyPresencePaths;
+  state.repoRoot = options.repoRoot || process.cwd();
+  state.presencePath =
+    options.presencePath ||
+    resolve(state.repoRoot, ".cache", "codex-monitor", PRESENCE_FILENAME);
   state.localWorkspace = options.localWorkspace || null;
   state.instanceId = await loadOrCreateInstanceId(
-    {
-      instanceIdPath: paths.instanceIdPath,
-      legacyInstanceIdPaths: paths.legacyInstanceIdPaths,
-    },
+    state.repoRoot,
     options.instanceId || process.env.VE_INSTANCE_ID,
   );
   state.localMeta = buildLocalMeta();
-  await mkdir(dirname(state.presencePath), { recursive: true });
+  await ensurePresenceDir(state.repoRoot);
   const shouldLoadRegistry =
     options.loadRegistry ?? (!options.skipLoad && !process.env.VITEST);
   if (shouldLoadRegistry) {

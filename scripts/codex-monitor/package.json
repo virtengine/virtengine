@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.19.3",
+  "version": "0.19.0",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "Apache 2.0",
@@ -85,9 +85,7 @@
     "sentinel": "node telegram-sentinel.mjs",
     "sentinel:stop": "node -e \"import('./telegram-sentinel.mjs').then(m => m.stopSentinel())\"",
     "sentinel:status": "node -e \"import('./telegram-sentinel.mjs').then(m => console.log(JSON.stringify(m.getSentinelStatus(), null, 2)))\"",
-    "prepublishOnly": "node prepublish-check.mjs",
-    "publish:env": "node publish.mjs",
-    "publish:dry-run": "node publish.mjs --dry-run"
+    "prepublishOnly": "node prepublish-check.mjs"
   },
   "files": [
     ".env.example",
@@ -112,6 +110,7 @@
     "diff-stats.mjs",
     "error-detector.mjs",
     "fleet-coordinator.mjs",
+    "github-reconciler.mjs",
     "get-telegram-chat-id.mjs",
     "git-safety.mjs",
     "kanban-adapter.mjs",
@@ -132,7 +131,7 @@
     "session-tracker.mjs",
     "setup.mjs",
     "shared-knowledge.mjs",
-    "shared-state-paths.mjs",
+    "shared-state-manager.mjs",
     "shared-workspace-cli.mjs",
     "shared-workspace-registry.mjs",
     "shared-workspaces.json",
@@ -148,8 +147,10 @@
     "ui/",
     "update-check.mjs",
     "utils.mjs",
+    "ve-kanban.mjs",
     "ve-kanban.ps1",
     "ve-kanban.sh",
+    "ve-orchestrator.mjs",
     "ve-orchestrator.ps1",
     "ve-orchestrator.sh",
     "vibe-kanban-wrapper.mjs",
@@ -165,7 +166,8 @@
     "startup-service.mjs",
     "telegram-sentinel.mjs",
     "whatsapp-channel.mjs",
-    "container-runner.mjs"
+    "container-runner.mjs",
+    "daemon-restart-policy.mjs"
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.41",

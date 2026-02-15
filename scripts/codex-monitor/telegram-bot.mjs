@@ -13,12 +13,10 @@
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { readFile, readdir, stat, unlink, writeFile, mkdir } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
 import {
   execPrimaryPrompt,
   isPrimaryBusy,
@@ -77,69 +75,21 @@ import {
   notePresence,
   parsePresenceMessage,
 } from "./presence.mjs";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
-const repoSharedStatePaths = resolveRepoSharedStatePaths({
+const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
+const telegramPollLockPath = resolve(
   repoRoot,
-  cwd: process.cwd(),
-});
-const legacyRepoCacheDir = resolve(repoRoot, ".cache");
+  ".cache",
+  "telegram-getupdates.lock",
+);
+const liveDigestStatePath = resolve(repoRoot, ".cache", "ve-live-digest.json");
 
-function migrateLegacyStateFile(primaryPath, legacyPaths = []) {
-  if (existsSync(primaryPath)) return;
-  for (const legacyPath of legacyPaths) {
-    if (!legacyPath || !existsSync(legacyPath)) continue;
-    try {
-      const raw = readFileSync(legacyPath, "utf8");
-      mkdirSync(dirname(primaryPath), { recursive: true });
-      writeFileSync(primaryPath, raw, "utf8");
-      return;
-    } catch {
-      /* continue */
-    }
-  }
-}
-
-function resolveStateFile(fileName, options = {}) {
-  const envKeys = Array.isArray(options.envKeys) ? options.envKeys : [];
-  for (const key of envKeys) {
-    const value = String(process.env[key] || "").trim();
-    if (value) {
-      return resolve(value);
-    }
-  }
-
-  const primaryPath = repoSharedStatePaths.file(fileName);
-  const legacyPaths = [
-    resolve(legacyRepoCacheDir, fileName),
-    resolve(repoSharedStatePaths.legacyCacheDir, fileName),
-    resolve(repoSharedStatePaths.legacyCodexCacheDir, fileName),
-  ];
-  migrateLegacyStateFile(primaryPath, legacyPaths);
-  return primaryPath;
-}
+// ── Configuration ────────────────────────────────────────────────────────────
 
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
-const statusPath = resolveStateFile("ve-orchestrator-status.json", {
-  envKeys: ["STATUS_FILE"],
-});
-const telegramTokenHash = createHash("sha256")
-  .update(String(telegramToken || "missing-token"))
-  .digest("hex")
-  .slice(0, 16);
-const telegramPollLockPath = resolve(
-  tmpdir(),
-  "virtengine-codex-monitor",
-  `telegram-getupdates-${telegramTokenHash}.lock`,
-);
-const liveDigestStatePath = resolveStateFile("ve-live-digest.json", {
-  envKeys: ["VE_LIVE_DIGEST_STATE_FILE"],
-});
-
-// ── Configuration ────────────────────────────────────────────────────────────
 const TELEGRAM_API_BASE = String(
   process.env.TELEGRAM_API_BASE_URL || "https://api.telegram.org",
 ).replace(/\/+$/, "");
@@ -446,6 +396,12 @@ async function telegramApiFetch(method, requestOptions = {}) {
         signal: controller.signal,
       });
 
+      if (!response || typeof response.ok === "undefined") {
+        throw new Error(
+          `[telegram-bot] ${operation} invalid response object (response=${!!response}, ok=${response?.ok})`,
+        );
+      }
+
       if (
         response.ok ||
         !retryOnStatus ||
@@ -520,14 +476,8 @@ function canSignalProcess(pid) {
 async function acquireTelegramPollLock(owner) {
   if (telegramPollLockHeld) return true;
   try {
-    await mkdir(dirname(telegramPollLockPath), { recursive: true });
     const payload = JSON.stringify(
-      {
-        owner,
-        pid: process.pid,
-        repo_root: repoRoot,
-        started_at: new Date().toISOString(),
-      },
+      { owner, pid: process.pid, started_at: new Date().toISOString() },
       null,
       2,
     );
@@ -581,6 +531,11 @@ let pollAbort = null;
 let presenceReady = false;
 let workspaceRegistryPromise = null;
 let localWorkspaceCache = null;
+let telegramUiUrl = null;
+const UI_TOKEN_TTL_MS = 30 * 60 * 1000;
+const UI_INPUT_TTL_MS = 15 * 60 * 1000;
+const uiTokenRegistry = new Map();
+const uiInputRequests = new Map();
 
 // ── Agent session state (for follow-up steering & bottom-pinning) ────────────
 
@@ -660,7 +615,6 @@ let _getWorkspaceMonitor = null;
 let _getMonitorMonitorStatus = null;
 let _getTaskStoreStats = null;
 let _getTasksPendingReview = null;
-let telegramUiUrl = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -860,6 +814,9 @@ async function editDirect(chatId, messageId, text, options = {}) {
   };
   if (options.parseMode) {
     payload.parse_mode = options.parseMode;
+  }
+  if (options.reply_markup) {
+    payload.reply_markup = options.reply_markup;
   }
 
   let res;
@@ -1404,6 +1361,71 @@ function splitMessage(text, maxLen) {
   return chunks;
 }
 
+// ── UI Menu Helpers ─────────────────────────────────────────────────────────
+
+function pruneUiTokens() {
+  const now = Date.now();
+  for (const [token, entry] of uiTokenRegistry.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      uiTokenRegistry.delete(token);
+    }
+  }
+}
+
+function issueUiToken(payload, ttlMs = UI_TOKEN_TTL_MS) {
+  pruneUiTokens();
+  let token = "";
+  for (let i = 0; i < 8; i += 1) {
+    token = Math.random().toString(36).slice(2, 8);
+    if (token && !uiTokenRegistry.has(token)) break;
+  }
+  uiTokenRegistry.set(token, {
+    payload,
+    expiresAt: Date.now() + ttlMs,
+  });
+  return token;
+}
+
+function readUiToken(token) {
+  const entry = uiTokenRegistry.get(token);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    uiTokenRegistry.delete(token);
+    return null;
+  }
+  return entry.payload || null;
+}
+
+function setPendingUiInput(chatId, request) {
+  if (!chatId || !request) return;
+  uiInputRequests.set(String(chatId), {
+    ...request,
+    expiresAt: Date.now() + UI_INPUT_TTL_MS,
+  });
+}
+
+function getPendingUiInput(chatId) {
+  const key = String(chatId || "");
+  const entry = uiInputRequests.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    uiInputRequests.delete(key);
+    return null;
+  }
+  return entry;
+}
+
+function clearPendingUiInput(chatId) {
+  uiInputRequests.delete(String(chatId || ""));
+}
+
+function consumePendingUiInput(chatId) {
+  const key = String(chatId || "");
+  const entry = getPendingUiInput(key);
+  if (entry) uiInputRequests.delete(key);
+  return entry;
+}
+
 // ── Polling ──────────────────────────────────────────────────────────────────
 
 async function pollUpdates() {
@@ -1485,8 +1507,8 @@ async function handleCallbackQuery(query) {
   if (data.startsWith("ui:")) {
     await handleUiAction({
       chatId,
-      data,
       messageId: query.message?.message_id,
+      data,
     });
     return;
   }
@@ -1581,6 +1603,23 @@ async function handleUpdate(update) {
   console.log(
     `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
   );
+
+  const pendingInput = getPendingUiInput(chatId);
+  if (pendingInput) {
+    const cmdText = text.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
+    if (cmdText === "/cancel") {
+      clearPendingUiInput(chatId);
+      await sendReply(chatId, "✅ Input cancelled.");
+      return;
+    }
+    if (!text.startsWith("/")) {
+      const request = consumePendingUiInput(chatId);
+      if (request) {
+        await handleUiInput(chatId, request, text);
+        return;
+      }
+    }
+  }
 
   // Route: slash command or free-text
   if (text.startsWith("/")) {
@@ -1841,14 +1880,19 @@ async function cmdContainer(chatId) {
 }
 
 const COMMANDS = {
-  "/menu": { handler: cmdMenu, desc: "Open V2 interactive control center" },
+  "/menu": { handler: cmdMenu, desc: "Open the control center UI" },
   "/help": { handler: cmdHelp, desc: "Show available commands" },
   "/helpfull": { handler: cmdHelpFull, desc: "Show all commands (text list)" },
+  "/cancel": { handler: cmdCancel, desc: "Cancel a pending input prompt" },
   "/ask": { handler: cmdAsk, desc: "Send prompt to agent: /ask <prompt>" },
   "/status": { handler: cmdStatus, desc: "Detailed orchestrator status" },
   "/tasks": {
     handler: cmdTasks,
     desc: "Active tasks, workspace metrics & retries",
+  },
+  "/starttask": {
+    handler: cmdStartTask,
+    desc: "Manual start of a task: /starttask <taskId>",
   },
   "/agents": {
     handler: cmdAgents,
@@ -2133,6 +2177,7 @@ const FAST_COMMANDS = new Set([
   "/status",
   "/tasks",
   "/agents",
+  "/cancel",
   "/sdk",
   "/kanban",
   "/threads",
@@ -2147,193 +2192,6 @@ const FAST_COMMANDS = new Set([
   "/whatsapp",
   "/container",
 ]);
-
-function uiCallback(action) {
-  return `ui:${action}`;
-}
-
-function uiGoAction(screenId) {
-  return `go:${screenId}`;
-}
-
-function uiCmdAction(command) {
-  return `cmd:${command}`;
-}
-
-function uiButton(text, action) {
-  return { text, callback_data: uiCallback(action) };
-}
-
-function buildKeyboard(rows) {
-  return { inline_keyboard: rows };
-}
-
-function uiNavRow(parent) {
-  if (!parent) {
-    return [uiButton("🏠 Home", uiGoAction("home"))];
-  }
-  return [
-    uiButton("⬅️ Back", uiGoAction(parent)),
-    uiButton("🏠 Home", uiGoAction("home")),
-  ];
-}
-
-const UI_SCREENS = Object.freeze({
-  home: {
-    title: "VirtEngine Control Center",
-    body: () => "Choose a section to manage codex-monitor.",
-    keyboard: () =>
-      buildKeyboard([
-        [
-          uiButton("📊 Overview", uiGoAction("overview")),
-          uiButton("🧭 Tasks", uiGoAction("tasks")),
-          uiButton("🤖 Agents", uiCmdAction("/agents")),
-        ],
-        [
-          uiButton("⚙️ Executor", uiGoAction("executor")),
-          uiButton("🌳 Worktrees", uiCmdAction("/worktrees")),
-          uiButton("🧵 Threads", uiCmdAction("/threads")),
-        ],
-        [uiButton("📖 All Commands", uiCmdAction("/helpfull"))],
-      ]),
-  },
-  overview: {
-    title: "Overview",
-    body: () => "Live status, health, and presence views.",
-    keyboard: () =>
-      buildKeyboard([
-        [
-          uiButton("📊 Status", uiCmdAction("/status")),
-          uiButton("📋 Tasks", uiCmdAction("/tasks")),
-          uiButton("🏥 Health", uiCmdAction("/health")),
-        ],
-        [uiButton("👁 Presence", uiCmdAction("/presence"))],
-        uiNavRow("home"),
-      ]),
-  },
-  tasks: {
-    title: "Task Operations",
-    body: () => "Planner, pause/resume, and retry controls.",
-    keyboard: () =>
-      buildKeyboard([
-        [
-          uiButton("⏸ Pause", uiCmdAction("/pausetasks")),
-          uiButton("▶️ Resume", uiCmdAction("/resumetasks")),
-          uiButton("🔄 Restart", uiCmdAction("/restart")),
-        ],
-        [
-          uiButton("Plan 3", uiCmdAction("/plan 3")),
-          uiButton("Plan 5", uiCmdAction("/plan 5")),
-          uiButton("Plan 10", uiCmdAction("/plan 10")),
-        ],
-        [uiButton("🔁 Retry", uiCmdAction("/retry manual_ui"))],
-        uiNavRow("home"),
-      ]),
-  },
-  executor: {
-    title: "Executor",
-    body: () => "Executor mode, slots, and max parallel tuning.",
-    keyboard: () =>
-      buildKeyboard([
-        [
-          uiButton("Status", uiCmdAction("/executor")),
-          uiButton("Slots", uiCmdAction("/executor slots")),
-          uiButton("Mode", uiCmdAction("/executor mode")),
-        ],
-        [
-          uiButton("0", uiCmdAction("/maxparallel 0")),
-          uiButton("1", uiCmdAction("/maxparallel 1")),
-          uiButton("2", uiCmdAction("/maxparallel 2")),
-        ],
-        [uiButton("4", uiCmdAction("/maxparallel 4"))],
-        uiNavRow("home"),
-      ]),
-  },
-});
-
-async function renderUiScreen(chatId, screenId = "home") {
-  const screen = UI_SCREENS[screenId] || UI_SCREENS.home;
-  const body =
-    typeof screen.body === "function" ? await screen.body(chatId) : screen.body;
-  const text = [`🧭 *${screen.title}*`, "", body].join("\n");
-  const keyboard =
-    typeof screen.keyboard === "function"
-      ? await screen.keyboard(chatId)
-      : screen.keyboard;
-  await sendDirect(chatId, text, {
-    parseMode: "Markdown",
-    reply_markup: keyboard,
-  });
-}
-
-async function handleUiAction({ chatId, data }) {
-  const payload = data.startsWith("ui:") ? data.slice(3) : data;
-  if (payload.startsWith("go:")) {
-    const target = payload.slice(3) || "home";
-    await renderUiScreen(chatId, target);
-    return;
-  }
-  if (payload.startsWith("cmd:")) {
-    const command = payload.slice(4).trim();
-    if (!command.startsWith("/")) {
-      await sendReply(chatId, "Unknown UI command.");
-      return;
-    }
-    const cmd = command.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
-    if (FAST_COMMANDS.has(cmd)) {
-      enqueueFastCommand(() => handleCommand(command, chatId));
-    } else {
-      enqueueCommand(() => handleCommand(command, chatId));
-    }
-    return;
-  }
-  await sendReply(chatId, "Unknown UI action.");
-}
-
-async function cmdMenu(chatId) {
-  if (telegramUiUrl) {
-    await sendDirect(
-      chatId,
-      "🧭 Open the full VirtEngine Control Center Mini App:",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "📱 Open Mini App", web_app: { url: telegramUiUrl } }],
-            [{ text: "↩️ Fallback Button Menu", callback_data: "ui:go:home" }],
-          ],
-        },
-      },
-    );
-    return;
-  }
-  await renderUiScreen(chatId, "home");
-}
-
-async function handleWebAppData(raw, chatId) {
-  let payload = null;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    payload = { type: "command", command: String(raw || "").trim() };
-  }
-
-  if (!payload || typeof payload !== "object") {
-    await sendReply(chatId, "⚠️ Web app sent an invalid payload.");
-    return;
-  }
-
-  if (payload.type === "command" && payload.command) {
-    await handleCommand(String(payload.command), chatId);
-    return;
-  }
-
-  if (payload.type === "menu" && payload.screen) {
-    await renderUiScreen(chatId, payload.screen);
-    return;
-  }
-
-  await sendReply(chatId, "⚠️ Web app request not recognized.");
-}
 
 async function handleCommand(text, chatId) {
   const parts = text.split(/\s+/);
@@ -2353,6 +2211,1241 @@ async function handleCommand(text, chatId) {
       `Unknown command: ${cmd}\nType /menu (or /helpfull) for available commands.`,
     );
   }
+}
+
+// ── UI Menu System ──────────────────────────────────────────────────────────
+
+const UI_INPUT_HANDLERS = {
+  ask: {
+    prompt: "Send your question for the primary agent.",
+    buildCommand: (input) => `/ask ${input}`,
+  },
+  agentlogs: {
+    prompt: "Enter a branch fragment to view logs.",
+    buildCommand: (input) => `/agentlogs ${input}`,
+  },
+  git: {
+    prompt: "Enter git arguments (example: log --oneline -5).",
+    buildCommand: (input) => `/git ${input}`,
+  },
+  shell: {
+    prompt: "Enter a shell command to run.",
+    buildCommand: (input) => `/shell ${input}`,
+  },
+  plan_count: {
+    prompt: "How many tasks should the planner generate?",
+    buildCommand: (input) => `/plan ${input}`,
+  },
+  starttask: {
+    prompt: "Enter the task ID to start manually.",
+    buildCommand: (input) => `/starttask ${input}`,
+  },
+  retry_reason: {
+    prompt: "Retry reason (any short label).",
+    buildCommand: (input) => `/retry ${input}`,
+  },
+  steer: {
+    prompt: "Send steering instructions for the active agent.",
+    buildCommand: (input) => `/steer ${input}`,
+  },
+  background: {
+    prompt: "Send the background task description.",
+    buildCommand: (input) => `/background ${input}`,
+  },
+  maxparallel: {
+    prompt: "Set max parallel slots (0-20).",
+    buildCommand: (input) => `/maxparallel ${input}`,
+  },
+  logs_lines: {
+    prompt: "How many log lines should I show?",
+    buildCommand: (input) => `/logs ${input}`,
+  },
+  threads_kill: {
+    prompt: "Task key to invalidate.",
+    buildCommand: (input) => `/threads kill ${input}`,
+  },
+  worktrees_release: {
+    prompt: "Task key to release.",
+    buildCommand: (input) => `/worktrees release ${input}`,
+  },
+  shared_detail: {
+    prompt: "Shared workspace ID to inspect.",
+    buildCommand: (input) => `/shared_workspaces ${input}`,
+  },
+  shared_claim: {
+    prompt: 'Claim workspace (id or full args, e.g. "cloud-01 --ttl 120").',
+    buildCommand: (input) => `/claim ${input}`,
+  },
+  shared_release: {
+    prompt: 'Release workspace (id or full args, e.g. "cloud-01 --force").',
+    buildCommand: (input) => `/release ${input}`,
+  },
+  agent_custom: {
+    prompt:
+      'Enter /agent arguments (everything after /agent). Example: "--workspace cloud-01 Update docs"',
+    buildCommand: (input) => `/agent ${input}`,
+  },
+  agent_workspace_task: {
+    prompt: (ctx) => `Task for workspace ${ctx.workspaceId}:`,
+    buildCommand: (input, ctx) => `${ctx.commandPrefix}${input}`,
+  },
+  agent_role_task: {
+    prompt: (ctx) => `Task for role ${ctx.role}:`,
+    buildCommand: (input, ctx) => `${ctx.commandPrefix}${input}`,
+  },
+};
+
+function uiCallback(action) {
+  return `ui:${action}`;
+}
+
+function uiGoAction(screenId, page = null) {
+  return page === null || page === undefined
+    ? `go:${screenId}`
+    : `go:${screenId}:${page}`;
+}
+
+function uiCmdAction(command) {
+  return `cmd:${command}`;
+}
+
+function uiInputAction(key) {
+  return `input:${key}`;
+}
+
+function uiTokenAction(token) {
+  return `token:${token}`;
+}
+
+function uiButton(text, action) {
+  return { text, callback_data: uiCallback(action) };
+}
+
+function buildKeyboard(rows) {
+  return { inline_keyboard: rows };
+}
+
+function chunkButtons(buttons, perRow = 2) {
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += perRow) {
+    rows.push(buttons.slice(i, i + perRow));
+  }
+  return rows;
+}
+
+function shortenLabel(value, maxLen = 24) {
+  const text = String(value || "");
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 1)}…`;
+}
+
+function parseUiAction(data) {
+  const payload = data.startsWith("ui:") ? data.slice(3) : data;
+  const [type, ...rest] = payload.split(":");
+  return { type, rest, raw: payload };
+}
+
+async function dispatchUiCommand(chatId, command) {
+  const cmd = command.split(/\s+/)[0].toLowerCase().replace(/@\w+/, "");
+  if (FAST_COMMANDS.has(cmd)) {
+    enqueueFastCommand(() => handleCommand(command, chatId));
+    return;
+  }
+  enqueueCommand(() => handleCommand(command, chatId));
+}
+
+async function promptUiInput(chatId, key, extra = {}) {
+  const handler = UI_INPUT_HANDLERS[key];
+  if (!handler) {
+    await sendReply(chatId, "Unknown input prompt.");
+    return;
+  }
+  const prompt =
+    extra.prompt ||
+    (typeof handler.prompt === "function"
+      ? handler.prompt(extra)
+      : handler.prompt);
+  setPendingUiInput(chatId, {
+    key,
+    buildCommand: handler.buildCommand,
+    ...extra,
+  });
+  const keyboard = buildKeyboard([
+    [{ text: "❌ Cancel", callback_data: uiCallback("cancel") }],
+  ]);
+  await sendReply(chatId, `${prompt}\n\nSend /cancel to abort.`, {
+    reply_markup: keyboard,
+  });
+}
+
+async function handleUiInput(chatId, request, text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    await sendReply(chatId, "⚠️ Input was empty. Prompt cancelled.");
+    return;
+  }
+  const buildCommand = request.buildCommand;
+  if (typeof buildCommand !== "function") {
+    await sendReply(chatId, "⚠️ Unable to process that input.");
+    return;
+  }
+  const command = buildCommand(trimmed, request);
+  if (!command) {
+    await sendReply(chatId, "⚠️ Could not build a command from that input.");
+    return;
+  }
+  await dispatchUiCommand(chatId, command);
+}
+
+function uiNavRow(parent) {
+  if (!parent) {
+    return [uiButton("🏠 Home", uiGoAction("home"))];
+  }
+  return [
+    uiButton("⬅️ Back", uiGoAction(parent)),
+    uiButton("🏠 Home", uiGoAction("home")),
+  ];
+}
+
+function parsePageParam(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+async function buildHomeStatusLine() {
+  const data = await readStatusSnapshot();
+  if (!data) return "Status: unavailable";
+  const counts = data.counts || {};
+  const backlog = data.backlog_remaining ?? "?";
+  const running = counts.running ?? 0;
+  const review = counts.review ?? 0;
+  const error = counts.error ?? 0;
+  return `Running ${running} • Review ${review} • Error ${error} • Backlog ${backlog}`;
+}
+
+async function listWorktreeNames() {
+  const worktreeDir = resolve(repoRoot, ".cache", "worktrees");
+  let names = [];
+  try {
+    names = await readdir(worktreeDir);
+  } catch {
+    return [];
+  }
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      const stats = await stat(resolve(worktreeDir, name)).catch(() => null);
+      return { name, mtime: stats?.mtimeMs || 0 };
+    }),
+  );
+  return entries.sort((a, b) => b.mtime - a.mtime).map((entry) => entry.name);
+}
+
+async function listThreadTaskKeys() {
+  try {
+    const threads = getActiveThreads();
+    return threads.map((t) => t.taskKey).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function listWorktreeTaskKeys() {
+  try {
+    const worktrees = await listManagedWorktrees();
+    return worktrees.map((wt) => wt.taskKey).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function listSharedWorkspaceEntries() {
+  try {
+    const registry = await loadSharedRegistry();
+    const sweep = await sweepSharedLeases({
+      registry,
+      actor: "telegram:ui",
+    });
+    return sweep.registry?.workspaces || [];
+  } catch {
+    return [];
+  }
+}
+
+async function listWorkspaceRegistryEntries() {
+  try {
+    const { registry } = await loadWorkspaceRegistry();
+    return registry?.workspaces || [];
+  } catch {
+    return [];
+  }
+}
+
+const UI_SCREENS = {};
+
+Object.assign(UI_SCREENS, {
+  home: {
+    title: "VirtEngine Control Center",
+    parent: null,
+    body: async () => {
+      const statusLine = await buildHomeStatusLine();
+      const executor = _getInternalExecutor?.();
+      let executorLine = "";
+      if (executor) {
+        const status = executor.getStatus();
+        const paused = executor.isPaused?.() ? "paused" : "running";
+        executorLine = `Executor: ${paused} • Slots ${status.activeSlots}/${status.maxParallel}`;
+      } else {
+        executorLine = `Executor: ${_getExecutorMode?.() || "vk"}`;
+      }
+      return [
+        "Pick a section below to manage Codex-Monitor.",
+        "",
+        statusLine,
+        executorLine,
+      ].join("\n");
+    },
+    keyboard: () => {
+      const rows = [
+        [
+          uiButton("📊 Overview", uiGoAction("overview")),
+          uiButton("🧭 Tasks", uiGoAction("tasks")),
+          uiButton("🤖 Agents", uiGoAction("agents")),
+        ],
+        [
+          uiButton("⚙️ Executor", uiGoAction("executor")),
+          uiButton("🌳 Workspaces", uiGoAction("workspaces")),
+          uiButton("🛰 Routing", uiGoAction("routing")),
+        ],
+        [
+          uiButton("📁 Logs & Git", uiGoAction("logs")),
+          uiButton("🔌 Integrations", uiGoAction("integrations")),
+          uiButton("🧠 Session", uiGoAction("session")),
+        ],
+        [
+          uiButton("💬 Ask Agent", uiInputAction("ask")),
+          uiButton("📖 All Commands", uiCmdAction("/helpfull")),
+        ],
+      ];
+      if (telegramUiUrl) {
+        rows.unshift([
+          {
+            text: "📱 Open Control Center",
+            web_app: { url: telegramUiUrl },
+          },
+        ]);
+      }
+      return buildKeyboard(rows);
+    },
+  },
+  overview: {
+    title: "Overview",
+    parent: "home",
+    body: () => "Live status, health, and presence dashboards.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("📊 Status", uiCmdAction("/status")),
+          uiButton("📋 Tasks", uiCmdAction("/tasks")),
+          uiButton("🤖 Agents", uiCmdAction("/agents")),
+        ],
+        [
+          uiButton("🏥 Health", uiCmdAction("/health")),
+          uiButton("⚠️ Anomalies", uiCmdAction("/anomalies")),
+          uiButton("👁 Presence", uiCmdAction("/presence")),
+        ],
+        [
+          uiButton("🎯 Coordinator", uiCmdAction("/coordinator")),
+          uiButton("📝 Logs", uiCmdAction("/logs 50")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  tasks: {
+    title: "Task Operations",
+    parent: "home",
+    body: () => "Pause/resume, plan, retry, and cleanup workflows.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          { text: "⏸ Pause", callback_data: "cb:confirm_pause" },
+          { text: "▶️ Resume", callback_data: "cb:confirm_resume" },
+          { text: "🔄 Restart", callback_data: "cb:confirm_restart" },
+        ],
+        [
+          uiButton("📋 Tasks", uiCmdAction("/tasks")),
+          uiButton("🧹 Cleanup", uiCmdAction("/cleanup")),
+          uiButton("📊 Status", uiCmdAction("/status")),
+        ],
+        [
+          uiButton("🗺️ Planner", uiGoAction("plan")),
+          uiButton("🔁 Retry", uiGoAction("retry")),
+          uiButton("⚙️ Executor", uiGoAction("executor")),
+        ],
+        [uiButton("▶️ Manual Start", uiInputAction("starttask"))],
+        uiNavRow("home"),
+      ]),
+  },
+  plan: {
+    title: "Task Planner",
+    parent: "tasks",
+    body: () => "Trigger the planner to seed new tasks.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Plan 3", uiCmdAction("/plan 3")),
+          uiButton("Plan 5", uiCmdAction("/plan 5")),
+          uiButton("Plan 10", uiCmdAction("/plan 10")),
+        ],
+        [uiButton("Custom Count", uiInputAction("plan_count"))],
+        uiNavRow("tasks"),
+      ]),
+  },
+  retry: {
+    title: "Fresh Retry",
+    parent: "tasks",
+    body: () => "Start a fresh session retry for the active task.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Manual", uiCmdAction("/retry manual_ui")),
+          uiButton("Stuck", uiCmdAction("/retry stuck")),
+          uiButton("Rate Limit", uiCmdAction("/retry rate_limit")),
+        ],
+        [uiButton("Custom Reason", uiInputAction("retry_reason"))],
+        uiNavRow("tasks"),
+      ]),
+  },
+  executor: {
+    title: "Executor",
+    parent: "home",
+    body: () => "Executor status, slots, and tuning.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Status", uiCmdAction("/executor")),
+          uiButton("Slots", uiCmdAction("/executor slots")),
+          uiButton("Mode", uiCmdAction("/executor mode")),
+        ],
+        [
+          uiButton("Max Parallel", uiGoAction("maxparallel")),
+          uiButton("Pause", uiCmdAction("/pausetasks")),
+          uiButton("Resume", uiCmdAction("/resumetasks")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  maxparallel: {
+    title: "Max Parallel",
+    parent: "executor",
+    body: () => "Set the max concurrent task slots.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("0 (Pause)", uiCmdAction("/maxparallel 0")),
+          uiButton("1", uiCmdAction("/maxparallel 1")),
+          uiButton("2", uiCmdAction("/maxparallel 2")),
+        ],
+        [
+          uiButton("3", uiCmdAction("/maxparallel 3")),
+          uiButton("4", uiCmdAction("/maxparallel 4")),
+          uiButton("6", uiCmdAction("/maxparallel 6")),
+        ],
+        [
+          uiButton("8", uiCmdAction("/maxparallel 8")),
+          uiButton("12", uiCmdAction("/maxparallel 12")),
+          uiButton("16", uiCmdAction("/maxparallel 16")),
+        ],
+        [uiButton("Custom", uiInputAction("maxparallel"))],
+        uiNavRow("executor"),
+      ]),
+  },
+  agents: {
+    title: "Agents",
+    parent: "home",
+    body: () => "Monitor and steer running agents.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("🤖 Agents", uiCmdAction("/agents")),
+          uiButton("📋 Tasks", uiCmdAction("/tasks")),
+          uiButton("📊 Status", uiCmdAction("/status")),
+        ],
+        [
+          uiButton("📂 Agent Logs", uiGoAction("agent_logs")),
+          uiButton("🧵 Threads", uiGoAction("threads")),
+          uiButton("🧠 History", uiCmdAction("/history")),
+        ],
+        [
+          uiButton("🧭 Steer", uiInputAction("steer")),
+          uiButton("🛑 Stop", uiCmdAction("/stop")),
+          uiButton("🛰 Background", uiGoAction("background")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  background: {
+    title: "Background Mode",
+    parent: "agents",
+    body: () => "Run tasks silently or background the active agent.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Background Active", uiCmdAction("/background")),
+          uiButton("New Background Task", uiInputAction("background")),
+        ],
+        [
+          uiButton("🧭 Steer", uiInputAction("steer")),
+          uiButton("🛑 Stop", uiCmdAction("/stop")),
+        ],
+        uiNavRow("agents"),
+      ]),
+  },
+  threads: {
+    title: "Threads",
+    parent: "agents",
+    body: () => "Manage persistent agent threads.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("List Threads", uiCmdAction("/threads")),
+          uiButton("Clear Registry", uiCmdAction("/threads clear")),
+        ],
+        [uiButton("Kill Thread", uiGoAction("threads_kill"))],
+        uiNavRow("agents"),
+      ]),
+  },
+});
+
+Object.assign(UI_SCREENS, {
+  agent_logs: {
+    title: "Agent Logs",
+    parent: "agents",
+    body: () => "Pick a worktree to view logs, or search by branch fragment.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const names = await listWorktreeNames();
+      if (names.length === 0) {
+        return buildKeyboard([
+          [uiButton("Search", uiInputAction("agentlogs"))],
+          uiNavRow("agents"),
+        ]);
+      }
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(names.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const start = safePage * perPage;
+      const slice = names.slice(start, start + perPage);
+      const rows = chunkButtons(
+        slice.map((name) => {
+          const token = issueUiToken({
+            type: "cmd",
+            command: `/agentlogs ${name}`,
+          });
+          return uiButton(shortenLabel(name), uiTokenAction(token));
+        }),
+        2,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("agent_logs", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("agent_logs", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([uiButton("Search", uiInputAction("agentlogs"))]);
+      rows.push(uiNavRow("agents"));
+      return buildKeyboard(rows);
+    },
+  },
+  threads_kill: {
+    title: "Kill Thread",
+    parent: "threads",
+    body: () => "Select a thread to invalidate.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const keys = await listThreadTaskKeys();
+      if (keys.length === 0) {
+        return buildKeyboard([
+          [uiButton("Custom Task Key", uiInputAction("threads_kill"))],
+          uiNavRow("threads"),
+        ]);
+      }
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(keys.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const slice = keys.slice(
+        safePage * perPage,
+        safePage * perPage + perPage,
+      );
+      const rows = chunkButtons(
+        slice.map((key) => {
+          const token = issueUiToken({
+            type: "cmd",
+            command: `/threads kill ${key}`,
+          });
+          return uiButton(shortenLabel(key), uiTokenAction(token));
+        }),
+        2,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("threads_kill", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("threads_kill", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([uiButton("Custom Task Key", uiInputAction("threads_kill"))]);
+      rows.push(uiNavRow("threads"));
+      return buildKeyboard(rows);
+    },
+  },
+});
+
+Object.assign(UI_SCREENS, {
+  routing: {
+    title: "Routing & Models",
+    parent: "home",
+    body: () => "Control model routing, SDKs, and workspace routing.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("🤖 Model", uiGoAction("model")),
+          uiButton("📦 SDK", uiGoAction("sdk")),
+          uiButton("📋 Kanban", uiGoAction("kanban")),
+        ],
+        [
+          uiButton("🌍 Region", uiGoAction("region")),
+          uiButton("🎯 Route Task", uiGoAction("route_task")),
+          uiButton("🏥 Health", uiCmdAction("/health")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  model: {
+    title: "Model Override",
+    parent: "routing",
+    body: () => "Override the executor model for the next few tasks.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("gpt-5.2-codex", uiCmdAction("/model gpt-5.2-codex")),
+          uiButton("gpt-5.1-max", uiCmdAction("/model gpt-5.1-codex-max")),
+        ],
+        [
+          uiButton("gpt-5.1-mini", uiCmdAction("/model gpt-5.1-codex-mini")),
+          uiButton("claude-opus-4.6", uiCmdAction("/model claude-opus-4.6")),
+        ],
+        [
+          uiButton("claude-code", uiCmdAction("/model claude-code")),
+          uiButton("Auto", uiCmdAction("/model auto")),
+        ],
+        uiNavRow("routing"),
+      ]),
+  },
+  sdk: {
+    title: "Agent SDK",
+    parent: "routing",
+    body: () => "Switch the agent pool SDK.",
+    keyboard: () => {
+      const available = getAvailableSdks();
+      const rows = [];
+      const buttons = ["codex", "copilot", "claude"].map((sdk) =>
+        uiButton(sdk, uiCmdAction(`/sdk ${sdk}`)),
+      );
+      rows.push(...chunkButtons(buttons, 2));
+      rows.push([uiButton("Auto", uiCmdAction("/sdk auto"))]);
+      if (available.length > 0) {
+        rows.unshift([
+          uiButton(`Available: ${available.join(", ")}`, uiCmdAction("/sdk")),
+        ]);
+      }
+      rows.push(uiNavRow("routing"));
+      return buildKeyboard(rows);
+    },
+  },
+  kanban: {
+    title: "Kanban Backend",
+    parent: "routing",
+    body: () => "Switch the Kanban backend.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("VK", uiCmdAction("/kanban vk")),
+          uiButton("GitHub", uiCmdAction("/kanban github")),
+          uiButton("Jira", uiCmdAction("/kanban jira")),
+        ],
+        [uiButton("Status", uiCmdAction("/kanban"))],
+        uiNavRow("routing"),
+      ]),
+  },
+  region: {
+    title: "Codex Region",
+    parent: "routing",
+    body: () => "Switch Codex region routing.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("US", uiCmdAction("/region us")),
+          uiButton("Sweden", uiCmdAction("/region sweden")),
+          uiButton("Auto", uiCmdAction("/region auto")),
+        ],
+        [uiButton("Status", uiCmdAction("/region"))],
+        uiNavRow("routing"),
+      ]),
+  },
+  route_task: {
+    title: "Route Task",
+    parent: "routing",
+    body: () => "Send tasks to a specific workspace or role.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("By Workspace", uiGoAction("route_workspace")),
+          uiButton("By Role", uiGoAction("route_role")),
+        ],
+        [uiButton("Custom /agent", uiInputAction("agent_custom"))],
+        uiNavRow("routing"),
+      ]),
+  },
+  route_workspace: {
+    title: "Route by Workspace",
+    parent: "route_task",
+    body: () => "Select a workspace to send a task.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const workspaces = await listWorkspaceRegistryEntries();
+      if (!workspaces.length) {
+        return buildKeyboard([
+          [uiButton("Custom /agent", uiInputAction("agent_custom"))],
+          uiNavRow("route_task"),
+        ]);
+      }
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(workspaces.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const slice = workspaces.slice(
+        safePage * perPage,
+        safePage * perPage + perPage,
+      );
+      const rows = chunkButtons(
+        slice.map((ws) => {
+          const token = issueUiToken({
+            type: "input",
+            key: "agent_workspace_task",
+            workspaceId: ws.id,
+            commandPrefix: `/agent --workspace ${ws.id} `,
+            prompt: `Task for workspace ${ws.id}:`,
+          });
+          const label = `${shortenLabel(ws.id)}${
+            ws.role ? ` (${ws.role})` : ""
+          }`;
+          return uiButton(label, uiTokenAction(token));
+        }),
+        1,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("route_workspace", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("route_workspace", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([uiButton("Custom /agent", uiInputAction("agent_custom"))]);
+      rows.push(uiNavRow("route_task"));
+      return buildKeyboard(rows);
+    },
+  },
+  route_role: {
+    title: "Route by Role",
+    parent: "route_task",
+    body: () => "Select a role to route tasks.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const workspaces = await listWorkspaceRegistryEntries();
+      const roles = Array.from(
+        new Set(workspaces.map((ws) => ws.role).filter(Boolean)),
+      );
+      if (!roles.length) {
+        return buildKeyboard([
+          [uiButton("Custom /agent", uiInputAction("agent_custom"))],
+          uiNavRow("route_task"),
+        ]);
+      }
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(roles.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const slice = roles.slice(
+        safePage * perPage,
+        safePage * perPage + perPage,
+      );
+      const rows = chunkButtons(
+        slice.map((role) => {
+          const token = issueUiToken({
+            type: "input",
+            key: "agent_role_task",
+            role,
+            commandPrefix: `/agent --role ${role} `,
+            prompt: `Task for role ${role}:`,
+          });
+          return uiButton(shortenLabel(role, 28), uiTokenAction(token));
+        }),
+        2,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("route_role", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("route_role", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([uiButton("Custom /agent", uiInputAction("agent_custom"))]);
+      rows.push(uiNavRow("route_task"));
+      return buildKeyboard(rows);
+    },
+  },
+});
+
+Object.assign(UI_SCREENS, {
+  workspaces: {
+    title: "Workspaces",
+    parent: "home",
+    body: () => "Worktree and shared workspace controls.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("🌳 Worktrees", uiCmdAction("/worktrees")),
+          uiButton("📊 Stats", uiCmdAction("/worktrees stats")),
+          uiButton("🧹 Prune", uiCmdAction("/worktrees prune")),
+        ],
+        [
+          uiButton("🔓 Release", uiGoAction("worktrees_release")),
+          uiButton("📁 Repos", uiCmdAction("/repos")),
+          uiButton("👁 Presence", uiCmdAction("/presence")),
+        ],
+        [
+          uiButton("📋 Shared", uiCmdAction("/shared_workspaces")),
+          uiButton("✅ Claim", uiGoAction("shared_claim")),
+          uiButton("🚪 Release", uiGoAction("shared_release")),
+        ],
+        [
+          uiButton("🎯 Coordinator", uiCmdAction("/coordinator")),
+          uiButton("📍 Worktree List", uiCmdAction("/worktrees")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  worktrees_release: {
+    title: "Release Worktree",
+    parent: "workspaces",
+    body: () => "Select a task key to release its worktree.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const keys = await listWorktreeTaskKeys();
+      if (keys.length === 0) {
+        return buildKeyboard([
+          [uiButton("Custom Task Key", uiInputAction("worktrees_release"))],
+          uiNavRow("workspaces"),
+        ]);
+      }
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(keys.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const slice = keys.slice(
+        safePage * perPage,
+        safePage * perPage + perPage,
+      );
+      const rows = chunkButtons(
+        slice.map((key) => {
+          const token = issueUiToken({
+            type: "cmd",
+            command: `/worktrees release ${key}`,
+          });
+          return uiButton(shortenLabel(key), uiTokenAction(token));
+        }),
+        2,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("worktrees_release", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("worktrees_release", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([
+        uiButton("Custom Task Key", uiInputAction("worktrees_release")),
+      ]);
+      rows.push(uiNavRow("workspaces"));
+      return buildKeyboard(rows);
+    },
+  },
+  shared_claim: {
+    title: "Claim Shared Workspace",
+    parent: "workspaces",
+    body: () => "Select an available workspace to claim.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const entries = await listSharedWorkspaceEntries();
+      if (!entries.length) {
+        return buildKeyboard([
+          [uiButton("Custom Claim", uiInputAction("shared_claim"))],
+          uiNavRow("workspaces"),
+        ]);
+      }
+      const available = entries.filter((ws) => ws.availability === "available");
+      const pool = available.length ? available : entries;
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(pool.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const slice = pool.slice(
+        safePage * perPage,
+        safePage * perPage + perPage,
+      );
+      const rows = chunkButtons(
+        slice.map((ws) => {
+          const token = issueUiToken({
+            type: "cmd",
+            command: `/claim ${ws.id}`,
+          });
+          const emoji = ws.availability === "available" ? "✅" : "🔒";
+          return uiButton(
+            `${emoji} ${shortenLabel(ws.id)}`,
+            uiTokenAction(token),
+          );
+        }),
+        2,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("shared_claim", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("shared_claim", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([uiButton("Custom Claim", uiInputAction("shared_claim"))]);
+      rows.push(uiNavRow("workspaces"));
+      return buildKeyboard(rows);
+    },
+  },
+  shared_release: {
+    title: "Release Shared Workspace",
+    parent: "workspaces",
+    body: () => "Release a shared workspace lease.",
+    keyboard: async (ctx) => {
+      const page = parsePageParam(ctx.params?.page);
+      const entries = await listSharedWorkspaceEntries();
+      if (!entries.length) {
+        return buildKeyboard([
+          [uiButton("Custom Release", uiInputAction("shared_release"))],
+          uiNavRow("workspaces"),
+        ]);
+      }
+      const perPage = 8;
+      const totalPages = Math.max(1, Math.ceil(entries.length / perPage));
+      const safePage = Math.min(page, totalPages - 1);
+      const slice = entries.slice(
+        safePage * perPage,
+        safePage * perPage + perPage,
+      );
+      const rows = chunkButtons(
+        slice.map((ws) => {
+          const token = issueUiToken({
+            type: "cmd",
+            command: `/release ${ws.id}`,
+          });
+          const emoji = ws.availability === "leased" ? "🔓" : "ℹ️";
+          return uiButton(
+            `${emoji} ${shortenLabel(ws.id)}`,
+            uiTokenAction(token),
+          );
+        }),
+        2,
+      );
+      if (totalPages > 1) {
+        const pager = [];
+        if (safePage > 0) {
+          pager.push(
+            uiButton("⬅️ Prev", uiGoAction("shared_release", safePage - 1)),
+          );
+        }
+        if (safePage < totalPages - 1) {
+          pager.push(
+            uiButton("Next ➡️", uiGoAction("shared_release", safePage + 1)),
+          );
+        }
+        if (pager.length) rows.push(pager);
+      }
+      rows.push([uiButton("Custom Release", uiInputAction("shared_release"))]);
+      rows.push(uiNavRow("workspaces"));
+      return buildKeyboard(rows);
+    },
+  },
+});
+
+Object.assign(UI_SCREENS, {
+  logs: {
+    title: "Logs & Git",
+    parent: "home",
+    body: () => "Logs, branches, diffs, and utilities.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("📝 Logs", uiGoAction("logs_tail")),
+          uiButton("🌿 Branches", uiCmdAction("/branches")),
+          uiButton("💡 Diff", uiCmdAction("/diff")),
+        ],
+        [
+          uiButton("🔎 Git", uiGoAction("git")),
+          uiButton("🖥 Shell", uiGoAction("shell")),
+          uiButton("📂 Agent Logs", uiGoAction("agent_logs")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  logs_tail: {
+    title: "Tail Logs",
+    parent: "logs",
+    body: () => "Choose how many log lines to show.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("30 lines", uiCmdAction("/logs 30")),
+          uiButton("100 lines", uiCmdAction("/logs 100")),
+          uiButton("300 lines", uiCmdAction("/logs 300")),
+        ],
+        [
+          uiButton("600 lines", uiCmdAction("/logs 600")),
+          uiButton("Custom", uiInputAction("logs_lines")),
+        ],
+        uiNavRow("logs"),
+      ]),
+  },
+  git: {
+    title: "Git",
+    parent: "logs",
+    body: () => "Quick git utilities.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Status", uiCmdAction("/git status")),
+          uiButton("Log -5", uiCmdAction("/git log --oneline -5")),
+        ],
+        [
+          uiButton(
+            "Branches",
+            uiCmdAction("/git branch -a --sort=-committerdate"),
+          ),
+          uiButton("Diff Stat", uiCmdAction("/git diff --stat")),
+        ],
+        [uiButton("Custom Git", uiInputAction("git"))],
+        uiNavRow("logs"),
+      ]),
+  },
+  shell: {
+    title: "Shell",
+    parent: "logs",
+    body: () => "Run safe shell commands.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("dir", uiCmdAction("/shell dir")),
+          uiButton("cd", uiCmdAction("/shell cd")),
+        ],
+        [
+          uiButton("whoami", uiCmdAction("/shell whoami")),
+          uiButton("ver", uiCmdAction("/shell ver")),
+        ],
+        [uiButton("Custom Shell", uiInputAction("shell"))],
+        uiNavRow("logs"),
+      ]),
+  },
+  integrations: {
+    title: "Integrations",
+    parent: "home",
+    body: () => "WhatsApp and container runtime status.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("📱 WhatsApp", uiCmdAction("/whatsapp")),
+          uiButton("📦 Container", uiCmdAction("/container")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+  session: {
+    title: "Session",
+    parent: "home",
+    body: () => "Primary agent session controls.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("🧠 History", uiCmdAction("/history")),
+          uiButton("💬 Ask", uiInputAction("ask")),
+        ],
+        [
+          uiButton("🧹 Clear", "confirm_clear"),
+          uiButton("🧭 Steer", uiInputAction("steer")),
+        ],
+        [
+          uiButton("🛰 Background", uiGoAction("background")),
+          uiButton("🛑 Stop", uiCmdAction("/stop")),
+        ],
+        uiNavRow("home"),
+      ]),
+  },
+});
+
+async function showUiScreen(chatId, messageId, screenId, params = {}) {
+  const screen = UI_SCREENS[screenId];
+  if (!screen) {
+    await sendReply(chatId, "Unknown menu.");
+    return;
+  }
+  const ctx = { chatId, params };
+  const body =
+    typeof screen.body === "function"
+      ? await screen.body(ctx)
+      : screen.body || "";
+  const title = screen.title ? `*${screen.title}*` : "";
+  const text = [title, body].filter(Boolean).join("\n\n");
+  const keyboard =
+    typeof screen.keyboard === "function"
+      ? await screen.keyboard(ctx)
+      : screen.keyboard;
+  const opts = {
+    parseMode: "Markdown",
+    reply_markup: keyboard,
+  };
+  if (messageId) {
+    await editDirect(chatId, messageId, text, opts);
+  } else {
+    await sendDirect(chatId, text, opts);
+  }
+}
+
+async function handleUiAction({ chatId, messageId, data }) {
+  const { type, rest, raw } = parseUiAction(data);
+  if (type === "cancel") {
+    clearPendingUiInput(chatId);
+    await sendReply(chatId, "✅ Input cancelled.");
+    return;
+  }
+  if (type === "confirm_clear") {
+    enqueueCommand(() => handleCommand("/clear", chatId));
+    return;
+  }
+  if (type === "go") {
+    const screenId = rest[0];
+    const page = rest[1] ? parsePageParam(rest[1]) : 0;
+    await showUiScreen(chatId, messageId, screenId, { page });
+    return;
+  }
+  if (type === "cmd") {
+    const command = raw.slice(4);
+    await dispatchUiCommand(chatId, command);
+    return;
+  }
+  if (type === "input") {
+    const key = rest[0];
+    await promptUiInput(chatId, key);
+    return;
+  }
+  if (type === "token") {
+    const token = rest[0];
+    const payload = readUiToken(token);
+    if (!payload) {
+      await sendReply(
+        chatId,
+        "⏳ That option expired. Please reopen the menu.",
+      );
+      return;
+    }
+    if (payload.type === "cmd") {
+      await dispatchUiCommand(chatId, payload.command);
+      return;
+    }
+    if (payload.type === "input") {
+      await promptUiInput(chatId, payload.key, payload);
+      return;
+    }
+    if (payload.type === "go") {
+      await showUiScreen(chatId, messageId, payload.screenId, payload.params);
+      return;
+    }
+  }
+  await sendReply(chatId, `Unknown UI action: ${data}`);
+}
+
+async function handleWebAppData(raw, chatId) {
+  let payload = null;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = { type: "command", command: String(raw || "").trim() };
+  }
+
+  if (!payload || typeof payload !== "object") {
+    await sendReply(chatId, "⚠️ Web app sent an invalid payload.");
+    return;
+  }
+
+  if (payload.type === "command" && payload.command) {
+    await dispatchUiCommand(chatId, payload.command);
+    return;
+  }
+
+  if (payload.type === "menu" && payload.screen) {
+    await showUiScreen(chatId, null, payload.screen, payload.params || {});
+    return;
+  }
+
+  if (payload.type === "prompt" && payload.key) {
+    await promptUiInput(chatId, payload.key, payload);
+    return;
+  }
+
+  await sendReply(chatId, "⚠️ Web app request not recognized.");
 }
 
 // ── Built-in Command Handlers ────────────────────────────────────────────────
@@ -2579,48 +3672,23 @@ async function loadWorkspaceStatusData(workspacePath) {
   }
 }
 
+async function cmdMenu(chatId) {
+  clearPendingUiInput(chatId);
+  await showUiScreen(chatId, null, "home");
+}
+
+async function cmdCancel(chatId) {
+  const pending = getPendingUiInput(chatId);
+  if (!pending) {
+    await sendReply(chatId, "No pending input to cancel.");
+    return;
+  }
+  clearPendingUiInput(chatId);
+  await sendReply(chatId, "✅ Input cancelled.");
+}
+
 async function cmdHelp(chatId) {
-  const text =
-    "🤖 *VirtEngine Primary Agent*\n\nOpen the Mini App for full GUI controls, or use quick actions below:";
-
-  const keyboardRows = [
-    telegramUiUrl
-      ? [{ text: "📱 Open Full Mini App", web_app: { url: telegramUiUrl } }]
-      : [{ text: "🧭 Control Center (V2)", callback_data: "/menu" }],
-    [{ text: "🧭 Control Center (V2)", callback_data: "/menu" }],
-      [
-        { text: "📊 Status", callback_data: "/status" },
-        { text: "📋 Tasks", callback_data: "/tasks" },
-        { text: "🤖 Agents", callback_data: "/agents" },
-      ],
-      [
-        { text: "📝 Logs", callback_data: "/logs" },
-        { text: "🌿 Branches", callback_data: "/branches" },
-        { text: "💡 Diff", callback_data: "/diff" },
-      ],
-      [
-        { text: "🔧 Executor", callback_data: "/executor" },
-        { text: "🧵 Threads", callback_data: "/threads" },
-        { text: "🌳 Worktrees", callback_data: "/worktrees" },
-      ],
-      [
-        { text: "⏸ Pause", callback_data: "/pausetasks" },
-        { text: "▶️ Resume", callback_data: "/resumetasks" },
-        { text: "🔄 Restart", callback_data: "/restart" },
-      ],
-      [
-        { text: "🏥 Health", callback_data: "/health" },
-        { text: "👁 Presence", callback_data: "/presence" },
-        { text: "📦 SDK", callback_data: "/sdk" },
-      ],
-      [{ text: "📖 All Commands", callback_data: "/helpfull" }],
-  ];
-  const keyboard = { inline_keyboard: keyboardRows };
-
-  await sendDirect(chatId, text, {
-    parseMode: "Markdown",
-    reply_markup: keyboard,
-  });
+  await cmdMenu(chatId);
 }
 
 async function cmdHelpFull(chatId) {
@@ -2631,6 +3699,7 @@ async function cmdHelpFull(chatId) {
   lines.push(
     "",
     "Any other text → sent to the primary agent (full repo + MCP access)",
+    "Use /menu for the full button-driven control center.",
   );
   await sendReply(chatId, lines.join("\n"));
 }
@@ -3009,6 +4078,37 @@ async function cmdTasks(chatId) {
     await sendReply(chatId, lines.join("\n"));
   } catch (err) {
     await sendReply(chatId, `Error reading tasks: ${err.message}`);
+  }
+}
+
+async function cmdStartTask(chatId, args) {
+  const taskId = String(args || "").trim();
+  if (!taskId) {
+    await sendReply(chatId, "Usage: /starttask <taskId>");
+    return;
+  }
+  const executor = _getInternalExecutor?.();
+  if (!executor) {
+    await sendReply(
+      chatId,
+      "⚠️ Manual start requires internal executor. Set EXECUTOR_MODE=internal or hybrid and restart the monitor.",
+    );
+    return;
+  }
+  try {
+    const adapter = getKanbanAdapter();
+    const task = await adapter.getTask(taskId);
+    if (!task) {
+      await sendReply(chatId, `Task "${taskId}" not found.`);
+      return;
+    }
+    void executor.executeTask(task);
+    await sendReply(
+      chatId,
+      `✅ Manual start queued for ${task.title || task.id}.`,
+    );
+  } catch (err) {
+    await sendReply(chatId, `❌ Manual start failed: ${err.message}`);
   }
 }
 
@@ -3467,12 +4567,12 @@ async function cmdPlan(chatId, args) {
       return;
     }
     if (result?.status === "completed") {
-      const createdCount = Number(result?.createdTaskCount || 0);
-      const requestedCount = Number(result?.requestedTaskCount || taskCount);
-      const createdInfo = Number.isFinite(createdCount)
-        ? `Created: ${createdCount}/${requestedCount}\n`
-        : "";
-      const artifactInfo = result?.artifactPath
+      const createdInfo =
+        Number.isFinite(result.createdTaskCount) &&
+        Number.isFinite(result.parsedTaskCount)
+          ? `Created ${result.createdTaskCount}/${result.parsedTaskCount} tasks.\n`
+          : "";
+      const artifactInfo = result.artifactPath
         ? `\nArtifact: ${result.artifactPath}`
         : "";
       await sendReply(
@@ -3901,9 +5001,7 @@ async function cmdCoordinator(chatId) {
 }
 
 /** State for model override — write a file that orchestrator reads */
-const modelOverridePath = resolveStateFile("executor-override.json", {
-  envKeys: ["VE_EXECUTOR_OVERRIDE_PATH"],
-});
+const modelOverridePath = resolve(repoRoot, ".cache", "executor-override.json");
 
 async function cmdModel(chatId, modelArg) {
   if (!modelArg || modelArg.trim() === "") {
@@ -6152,10 +7250,6 @@ export async function startTelegramBot() {
       dependencies: {
         getInternalExecutor: _getInternalExecutor,
         getExecutorMode: _getExecutorMode,
-        executeCommand: async (command, chatId) => {
-          const safeChatId = chatId || telegramChatId;
-          await handleCommand(String(command), String(safeChatId));
-        },
       },
     });
     telegramUiUrl = getTelegramUiUrl();
@@ -6191,12 +7285,8 @@ export async function startTelegramBot() {
 
   // Only send "online" notification on truly fresh starts, not code-change restarts.
   // Check the self-restart marker file first, then fall back to rapid-restart heuristic.
-  const botStartPath = resolveStateFile("ve-last-bot-start.txt", {
-    envKeys: ["VE_LAST_BOT_START_PATH"],
-  });
-  const selfRestartPath = resolveStateFile("ve-self-restart.marker", {
-    envKeys: ["VE_SELF_RESTART_MARKER_PATH"],
-  });
+  const botStartPath = resolve(repoRoot, ".cache", "ve-last-bot-start.txt");
+  const selfRestartPath = resolve(repoRoot, ".cache", "ve-self-restart.marker");
   let suppressOnline = false;
   try {
     if (existsSync(selfRestartPath)) {
@@ -6224,7 +7314,7 @@ export async function startTelegramBot() {
   } else {
     await sendDirect(
       telegramChatId,
-      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /menu for the control center${telegramUiUrl ? " (full Mini App available)" : ""} or send any message to chat with the agent.`,
+      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /menu for the control center or send any message to chat with the agent.`,
     );
   }
 

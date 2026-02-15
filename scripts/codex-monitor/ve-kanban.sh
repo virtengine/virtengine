@@ -2,26 +2,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PS1_SCRIPT="${SCRIPT_DIR}/ve-kanban.ps1"
+NODE_SCRIPT="${SCRIPT_DIR}/ve-kanban.mjs"
 
-if [[ ! -f "${PS1_SCRIPT}" ]]; then
-  echo "[ve-kanban.sh] Missing script: ${PS1_SCRIPT}" >&2
-  exit 1
-fi
-
-PWSH_BIN="${PWSH_PATH:-}"
-if [[ -z "${PWSH_BIN}" ]]; then
-  if command -v pwsh >/dev/null 2>&1; then
-    PWSH_BIN="pwsh"
-  elif command -v powershell >/dev/null 2>&1; then
-    PWSH_BIN="powershell"
+# Native Linux/macOS path only.
+if [[ -f "${NODE_SCRIPT}" ]] && command -v node >/dev/null 2>&1; then
+  NODE_SCRIPT_PATH="${NODE_SCRIPT}"
+  NODE_PLATFORM="$(node -p 'process.platform' 2>/dev/null || true)"
+  if [[ "${NODE_PLATFORM}" == "win32" ]] && command -v wslpath >/dev/null 2>&1; then
+    NODE_SCRIPT_PATH="$(wslpath -w "${NODE_SCRIPT}")"
   fi
+  exec node "${NODE_SCRIPT_PATH}" "$@"
 fi
 
-if [[ -z "${PWSH_BIN}" ]]; then
-  echo "[ve-kanban.sh] PowerShell runtime not found (pwsh/powershell)." >&2
-  echo "[ve-kanban.sh] Install pwsh or run codex-monitor in internal executor mode." >&2
-  exit 1
-fi
-
-exec "${PWSH_BIN}" -File "${PS1_SCRIPT}" "$@"
+echo "[ve-kanban.sh] Native runtime unavailable (need node + ve-kanban.mjs)." >&2
+exit 1

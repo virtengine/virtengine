@@ -69,106 +69,24 @@ function envFlagEnabled(value) {
   return ["1", "true", "yes", "on", "y"].includes(raw);
 }
 
-function normalizeCopilotAgentType(value, fallback = "local") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (["local", "background", "cloud"].includes(normalized)) {
-    return normalized;
-  }
-  return fallback;
-}
-
-function resolveCopilotAgentType(extra = {}) {
-  const explicit = normalizeCopilotAgentType(extra.agentType || "", "");
-  if (explicit) return explicit;
-
-  const envType = normalizeCopilotAgentType(
-    process.env.COPILOT_AGENT_TYPE || process.env.COPILOT_SESSION_TYPE || "",
-    "",
-  );
-  if (envType) return envType;
-
-  try {
-    const configType = normalizeCopilotAgentType(
-      loadConfig()?.copilot?.agentType || "",
-      "",
-    );
-    if (configType) return configType;
-  } catch {
-    /* best effort */
-  }
-
-  return "local";
-}
-
-function resolveCopilotProviderMode() {
-  const raw = String(process.env.COPILOT_PROVIDER_MODE || "github")
-    .trim()
-    .toLowerCase();
-  if (["github", "openai-env"].includes(raw)) {
-    return raw;
-  }
-  return "github";
-}
-
-function getCopilotAgentTypeCandidates(agentType) {
-  const normalized = normalizeCopilotAgentType(agentType, "local");
-  if (normalized === "background") return ["background", "local"];
-  if (normalized === "cloud") return ["cloud", "background", "local"];
-  return ["local", "background"];
-}
-
-function applyCopilotAgentTypeToSessionConfig(sessionConfig, agentType, cwd) {
-  const normalized = normalizeCopilotAgentType(agentType, "local");
-  if (normalized === "local") {
-    sessionConfig.workingDirectory = cwd;
-  } else {
-    delete sessionConfig.workingDirectory;
-  }
-}
-
-function deriveTaskHeading(text) {
-  const firstLine = String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean);
-  if (!firstLine) return "Task";
-  const heading = firstLine.replace(/^#+\s*/, "").trim();
-  if (!heading) return "Task";
-  return heading.length > 120 ? `${heading.slice(0, 117)}...` : heading;
-}
-
-function buildExecutionPrompt(taskText) {
-  const heading = deriveTaskHeading(taskText);
-  return (
-    `# ${heading}\n\n${taskText}\n\n---\n` +
-    'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.'
-  );
+function shouldFallbackForSdkError(error) {
+  if (!error) return false;
+  const message = String(error).toLowerCase();
+  if (!message) return false;
+  if (message.includes("not available")) return true;
+  if (message.includes("missing finish_reason")) return true;
+  if (message.includes("missing") && message.includes("finish_reason")) return true;
+  return false;
 }
 
 const OPENAI_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
-  "OPENAI_ENDPOINT",
-  "OPENAI_API_VERSION",
-  "OPENAI_DEPLOYMENT",
   "OPENAI_ORGANIZATION",
   "OPENAI_PROJECT",
-  "AZURE_OPENAI_API_KEY",
-  "AZURE_OPENAI_ENDPOINT",
-  "AZURE_OPENAI_API_VERSION",
-  "AZURE_OPENAI_DEPLOYMENT",
-  "AZURE_AI_ENDPOINT",
-  "AZURE_AI_API_KEY",
-  "AI_FOUNDRY_ENDPOINT",
-  "AI_FOUNDRY_API_KEY",
 ];
 
 async function withSanitizedOpenAiEnv(fn) {
-  if (resolveCopilotProviderMode() === "openai-env") {
-    return await fn();
-  }
   const saved = {};
   for (const key of OPENAI_ENV_KEYS) {
     if (Object.prototype.hasOwnProperty.call(process.env, key)) {
@@ -609,14 +527,6 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
     onThreadReady = null,
     model: requestedModel = null,
   } = extra;
-  const requestedAgentType = resolveCopilotAgentType(extra);
-  const agentTypeCandidates = getCopilotAgentTypeCandidates(requestedAgentType);
-  const providerMode = resolveCopilotProviderMode();
-  if (providerMode === "openai-env") {
-    console.warn(
-      `${TAG} COPILOT_PROVIDER_MODE=openai-env enabled — inheriting OPENAI/AZURE provider environment for Copilot SDK`,
-    );
-  }
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
   let CopilotClientClass;
@@ -671,7 +581,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
 
   // ── 4. Resume/create session ─────────────────────────────────────────────
   try {
-    const baseSessionConfig = {
+    const sessionConfig = {
       streaming: true,
       systemMessage: {
         mode: "replace",
@@ -687,68 +597,20 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         process.env.COPILOT_SDK_MODEL ||
         "",
     ).trim();
-    if (copilotModel) baseSessionConfig.model = copilotModel;
-
+    if (copilotModel) sessionConfig.model = copilotModel;
     let session = null;
-    let resolvedAgentType = null;
-    let lastSessionErr = null;
-
-    for (const candidateAgentType of agentTypeCandidates) {
-      const sessionConfig = { ...baseSessionConfig };
-      applyCopilotAgentTypeToSessionConfig(sessionConfig, candidateAgentType, cwd);
-
-      if (candidateAgentType === "cloud") {
-        console.warn(
-          `${TAG} COPILOT_AGENT_TYPE=cloud requested, but Copilot SDK does not expose an explicit cloud session mode. Trying background-compatible session settings.`,
-        );
-      }
-
+    if (resumeThreadId && typeof client.resumeSession === "function") {
       try {
-        if (resumeThreadId && typeof client.resumeSession === "function") {
-          try {
-            session = await withSanitizedOpenAiEnv(async () =>
-              client.resumeSession(resumeThreadId, sessionConfig),
-            );
-          } catch (resumeErr) {
-            console.warn(
-              `${TAG} copilot resume failed for session ${resumeThreadId}: ${resumeErr.message || resumeErr}. Starting fresh session.`,
-            );
-          }
-        }
-
-        if (!session) {
-          session = await withSanitizedOpenAiEnv(async () =>
-            client.createSession(sessionConfig),
-          );
-        }
-
-        resolvedAgentType = candidateAgentType;
-        break;
-      } catch (sessionErr) {
-        lastSessionErr = sessionErr;
-        session = null;
+        session = await client.resumeSession(resumeThreadId, sessionConfig);
+      } catch (resumeErr) {
         console.warn(
-          `${TAG} copilot session init failed with agentType=${candidateAgentType}: ${sessionErr?.message || sessionErr}`,
+          `${TAG} copilot resume failed for session ${resumeThreadId}: ${resumeErr.message || resumeErr}. Starting fresh session.`,
         );
       }
     }
-
     if (!session) {
-      throw lastSessionErr || new Error("failed to initialize Copilot session");
+      session = await client.createSession(sessionConfig);
     }
-
-    if (resolvedAgentType && resolvedAgentType !== requestedAgentType) {
-      console.warn(
-        `${TAG} copilot agent type fallback: requested=${requestedAgentType}, active=${resolvedAgentType}`,
-      );
-    }
-
-    if (resolvedAgentType !== "local" && cwd) {
-      console.warn(
-        `${TAG} copilot agent type '${resolvedAgentType}' is not pinned to the task worktree path (${cwd}); this can create parallel Copilot-managed workspaces. Prefer COPILOT_AGENT_TYPE=local to avoid double-worktree behavior.`,
-      );
-    }
-
     const copilotSessionId =
       session?.sessionId || session?.id || resumeThreadId || null;
     if (copilotSessionId && typeof onThreadReady === "function") {
@@ -784,7 +646,9 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       });
     }
 
-    const formattedPrompt = buildExecutionPrompt(prompt);
+    const formattedPrompt =
+      `# YOUR TASK — EXECUTE NOW\n\n${prompt}\n\n---\n` +
+      'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.';
 
     const hasSend = typeof session.send === "function";
     const hasSendAndWait = typeof session.sendAndWait === "function";
@@ -796,15 +660,13 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
     // fixed internal 300s idle timeout in sendAndWait() that ignores caller
     // timeout, which can cause monitor-monitor failover loops.
     const useRawSend = hasSend;
-    const sendPromise = withSanitizedOpenAiEnv(async () =>
-      useRawSend
-        ? session.send.call(session, { prompt: formattedPrompt })
-        : session.sendAndWait.call(
-            session,
-            { prompt: formattedPrompt },
-            timeoutMs,
-          ),
-    );
+    const sendPromise = useRawSend
+      ? session.send.call(session, { prompt: formattedPrompt })
+      : session.sendAndWait.call(
+          session,
+          { prompt: formattedPrompt },
+          timeoutMs,
+        );
 
     if (useRawSend && typeof session.on === "function") {
       await new Promise((resolveP, rejectP) => {
@@ -876,7 +738,6 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       error: null,
       sdk: "copilot",
       threadId: copilotSessionId,
-      copilotAgentType: resolvedAgentType,
     };
   } catch (err) {
     const errMsg = String(err?.message || err || "");
@@ -1098,7 +959,8 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     const msgQueue = createMessageQueue();
 
     const formattedPrompt =
-      buildExecutionPrompt(prompt);
+      `# YOUR TASK — EXECUTE NOW\n\n${prompt}\n\n---\n` +
+      'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.';
 
     msgQueue.push(makeUserMessage(formattedPrompt));
 
@@ -1346,13 +1208,13 @@ export async function launchEphemeralThread(
     const result = await launcher(prompt, cwd, timeoutMs, extra);
 
     // If it succeeded, or if the error isn't "not available", return as-is
-    if (result.success || !result.error?.includes("not available")) {
+    if (result.success || !shouldFallbackForSdkError(result.error)) {
       return result;
     }
 
     // Primary SDK not installed — fall through to fallback chain
     console.warn(
-      `${TAG} primary SDK "${primaryName}" not available, trying fallback chain`,
+      `${TAG} primary SDK "${primaryName}" failed (${result.error}); trying fallback chain`,
     );
   }
 
@@ -1368,7 +1230,7 @@ export async function launchEphemeralThread(
     const launcher = await adapter.load();
     const result = await launcher(prompt, cwd, timeoutMs, extra);
 
-    if (result.success || !result.error?.includes("not available")) {
+    if (result.success || !shouldFallbackForSdkError(result.error)) {
       return result;
     }
   }

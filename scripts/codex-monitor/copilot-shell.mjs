@@ -54,72 +54,6 @@ function resolveCopilotTransport() {
   return "auto";
 }
 
-function resolveCopilotProviderMode() {
-  const raw = String(process.env.COPILOT_PROVIDER_MODE || "github")
-    .trim()
-    .toLowerCase();
-  if (["github", "openai-env"].includes(raw)) {
-    return raw;
-  }
-  console.warn(
-    `[copilot-shell] invalid COPILOT_PROVIDER_MODE='${raw}', defaulting to 'github'`,
-  );
-  return "github";
-}
-
-function normalizeCopilotAgentType(value, fallback = "local") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (["local", "background", "cloud"].includes(normalized)) {
-    return normalized;
-  }
-  return fallback;
-}
-
-function resolveCopilotAgentType() {
-  return normalizeCopilotAgentType(
-    process.env.COPILOT_AGENT_TYPE || process.env.COPILOT_SESSION_TYPE || "",
-    "local",
-  );
-}
-
-function getCopilotAgentTypeCandidates(agentType) {
-  const normalized = normalizeCopilotAgentType(agentType, "local");
-  if (normalized === "background") return ["background", "local"];
-  if (normalized === "cloud") return ["cloud", "background", "local"];
-  return ["local", "background"];
-}
-
-function applyCopilotAgentTypeToSessionConfig(sessionConfig, agentType) {
-  const normalized = normalizeCopilotAgentType(agentType, "local");
-  if (normalized === "local") {
-    sessionConfig.workingDirectory = REPO_ROOT;
-  } else {
-    delete sessionConfig.workingDirectory;
-  }
-}
-
-function deriveTaskHeading(text) {
-  const firstLine = String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean);
-  if (!firstLine) return "Task";
-  const heading = firstLine.replace(/^#+\s*/, "").trim();
-  if (!heading) return "Task";
-  return heading.length > 120 ? `${heading.slice(0, 117)}...` : heading;
-}
-
-function buildExecutionPrompt(userMessage, statusData = null) {
-  const heading = deriveTaskHeading(userMessage);
-  if (statusData) {
-    const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
-    return `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# ${heading}\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-  }
-  return `# ${heading}\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function timestamp() {
@@ -243,25 +177,11 @@ function detectGitHubToken() {
 const OPENAI_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
-  "OPENAI_ENDPOINT",
-  "OPENAI_API_VERSION",
-  "OPENAI_DEPLOYMENT",
   "OPENAI_ORGANIZATION",
   "OPENAI_PROJECT",
-  "AZURE_OPENAI_API_KEY",
-  "AZURE_OPENAI_ENDPOINT",
-  "AZURE_OPENAI_API_VERSION",
-  "AZURE_OPENAI_DEPLOYMENT",
-  "AZURE_AI_ENDPOINT",
-  "AZURE_AI_API_KEY",
-  "AI_FOUNDRY_ENDPOINT",
-  "AI_FOUNDRY_API_KEY",
 ];
 
 async function withSanitizedOpenAiEnv(fn) {
-  if (resolveCopilotProviderMode() === "openai-env") {
-    return await fn();
-  }
   const saved = {};
   for (const key of OPENAI_ENV_KEYS) {
     if (Object.prototype.hasOwnProperty.call(process.env, key)) {
@@ -291,12 +211,6 @@ async function ensureClientStarted() {
   const cliUrl = process.env.COPILOT_CLI_URL || undefined;
   const token = detectGitHubToken();
   const transport = resolveCopilotTransport();
-  const providerMode = resolveCopilotProviderMode();
-  if (providerMode === "openai-env") {
-    console.warn(
-      "[copilot-shell] COPILOT_PROVIDER_MODE=openai-env enabled — inheriting OPENAI/AZURE provider environment for Copilot SDK",
-    );
-  }
 
   let clientOptions;
   if (transport === "url") {
@@ -474,72 +388,26 @@ async function getSession() {
   const started = await ensureClientStarted();
   if (!started) throw new Error("Copilot SDK not available");
 
-  const baseConfig = buildSessionConfig();
-  const requestedAgentType = resolveCopilotAgentType();
-  const agentTypeCandidates = getCopilotAgentTypeCandidates(requestedAgentType);
+  const config = buildSessionConfig();
 
-  let config = null;
-  let resolvedAgentType = null;
-  let lastErr = null;
-
-  for (const candidateAgentType of agentTypeCandidates) {
-    config = { ...baseConfig };
-    applyCopilotAgentTypeToSessionConfig(config, candidateAgentType);
-
-    if (candidateAgentType === "cloud") {
-      console.warn(
-        "[copilot-shell] COPILOT_AGENT_TYPE=cloud requested, but Copilot SDK does not expose an explicit cloud mode. Trying background-compatible session settings.",
-      );
-    }
-
+  if (activeSessionId && typeof copilotClient?.resumeSession === "function") {
     try {
-      if (activeSessionId && typeof copilotClient?.resumeSession === "function") {
-        try {
-          activeSession = await withSanitizedOpenAiEnv(async () =>
-            copilotClient.resumeSession(activeSessionId, config),
-          );
-          workspacePath = activeSession?.workspacePath || workspacePath;
-          resolvedAgentType = candidateAgentType;
-          console.log(`[copilot-shell] resumed session ${activeSessionId}`);
-          break;
-        } catch (err) {
-          console.warn(
-            `[copilot-shell] failed to resume session ${activeSessionId}: ${err.message} — starting fresh`,
-          );
-          activeSessionId = null;
-        }
-      }
-
-      activeSession = await withSanitizedOpenAiEnv(async () =>
-        copilotClient.createSession(config),
+      activeSession = await copilotClient.resumeSession(
+        activeSessionId,
+        config,
       );
-      resolvedAgentType = candidateAgentType;
-      break;
+      workspacePath = activeSession?.workspacePath || workspacePath;
+      console.log(`[copilot-shell] resumed session ${activeSessionId}`);
+      return activeSession;
     } catch (err) {
-      lastErr = err;
-      activeSession = null;
       console.warn(
-        `[copilot-shell] failed to initialize session with agentType=${candidateAgentType}: ${err?.message || err}`,
+        `[copilot-shell] failed to resume session ${activeSessionId}: ${err.message} — starting fresh`,
       );
+      activeSessionId = null;
     }
   }
 
-  if (!activeSession) {
-    throw lastErr || new Error("unable to initialize copilot session");
-  }
-
-  if (resolvedAgentType && resolvedAgentType !== requestedAgentType) {
-    console.warn(
-      `[copilot-shell] agent type fallback: requested=${requestedAgentType}, active=${resolvedAgentType}`,
-    );
-  }
-
-  if (resolvedAgentType !== "local") {
-    console.warn(
-      `[copilot-shell] active agent type '${resolvedAgentType}' is not pinned to repo root (${REPO_ROOT}); prefer COPILOT_AGENT_TYPE=local to avoid Copilot-managed parallel workspaces.`,
-    );
-  }
-
+  activeSession = await copilotClient.createSession(config);
   activeSessionId =
     activeSession?.sessionId || activeSession?.id || activeSessionId;
   workspacePath = activeSession?.workspacePath || workspacePath;
@@ -627,7 +495,14 @@ export async function execCopilotPrompt(userMessage, options = {}) {
       controller.signal.addEventListener("abort", onAbort, { once: true });
     }
 
-    const prompt = buildExecutionPrompt(userMessage, statusData);
+    // Build prompt with optional orchestrator status
+    let prompt = userMessage;
+    if (statusData) {
+      const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
+      prompt = `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+    } else {
+      prompt = `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+    }
 
     const sendFn = session.sendAndWait || session.send;
     if (typeof sendFn !== "function") {
@@ -635,11 +510,9 @@ export async function execCopilotPrompt(userMessage, options = {}) {
     }
 
     // Pass timeout parameter to sendAndWait to override 60s SDK default
-    const sendPromise = withSanitizedOpenAiEnv(async () =>
-      session.sendAndWait
-        ? sendFn.call(session, { prompt }, timeoutMs)
-        : sendFn.call(session, { prompt }),
-    );
+    const sendPromise = session.sendAndWait
+      ? sendFn.call(session, { prompt }, timeoutMs)
+      : sendFn.call(session, { prompt });
 
     // If send() returns before idle, wait for session.idle if available
     if (!session.sendAndWait) {

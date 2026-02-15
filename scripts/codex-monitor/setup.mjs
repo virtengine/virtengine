@@ -162,73 +162,66 @@ function commandExists(cmd) {
   }
 }
 
-function detectGitHubLogin() {
-  if (!commandExists("gh")) return "";
-  try {
-    const login = execSync("gh api user --jq .login", {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "ignore"],
-    }).trim();
-    return login || "";
-  } catch {
-    return "";
+function parseEnvAssignmentLine(line) {
+  const raw = String(line || "").trim();
+  if (!raw || raw.startsWith("#")) return null;
+  const normalized = raw.startsWith("export ") ? raw.slice(7).trim() : raw;
+  const match = normalized.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+  if (!match) return null;
+
+  const key = match[1];
+  let value = match[2] ?? "";
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    const quote = value[0];
+    value = value.slice(1, -1);
+    if (quote === '"') {
+      value = value
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\r")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\");
+    }
+  } else {
+    const hashIdx = value.indexOf("#");
+    if (hashIdx >= 0) {
+      value = value.slice(0, hashIdx).trimEnd();
+    }
   }
+
+  return { key, value };
 }
 
-function listGitHubProjects(owner) {
-  if (!owner || !commandExists("gh")) return [];
-  try {
-    const escapedOwner = String(owner).replace(/"/g, '\\"');
-    const raw = execSync(
-      `gh project list --owner "${escapedOwner}" --format json`,
-      {
-        encoding: "utf8",
-        stdio: ["pipe", "pipe", "ignore"],
-      },
-    ).trim();
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+export function applyEnvFileToProcess(envPath, options = {}) {
+  const override = Boolean(options.override);
+  const result = {
+    path: envPath,
+    found: false,
+    loaded: 0,
+    skipped: 0,
+  };
 
-export function findBestGitHubProjectMatch(projects, options = {}) {
-  if (!Array.isArray(projects) || projects.length === 0) return null;
-  const marker = String(options.marker || "codex-monitor")
-    .trim()
-    .toLowerCase();
-  const projectName = String(options.projectName || "")
-    .trim()
-    .toLowerCase();
-  const repo = String(options.repo || "")
-    .trim()
-    .toLowerCase();
-
-  let best = null;
-  for (const project of projects) {
-    const title = String(project?.title || "").trim();
-    if (!title) continue;
-    const lowerTitle = title.toLowerCase();
-    const description = String(project?.shortDescription || "").toLowerCase();
-    const readme = String(project?.readme || "").toLowerCase();
-
-    let score = 0;
-    if (marker && (lowerTitle.includes(marker) || description.includes(marker) || readme.includes(marker))) {
-      score += 100;
-    }
-    if (projectName && lowerTitle.includes(projectName)) score += 40;
-    if (repo && (lowerTitle.includes(repo) || description.includes(repo) || readme.includes(repo))) {
-      score += 20;
-    }
-    if (project?.closed === false) score += 10;
-
-    if (!best || score > best.score) {
-      best = { score, project };
-    }
+  if (!envPath || !existsSync(envPath)) {
+    return result;
   }
 
-  return best?.score > 0 ? best.project : null;
+  result.found = true;
+  const content = readFileSync(envPath, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const parsed = parseEnvAssignmentLine(line);
+    if (!parsed) continue;
+    if (!override && process.env[parsed.key] !== undefined) {
+      result.skipped += 1;
+      continue;
+    }
+    process.env[parsed.key] = parsed.value;
+    result.loaded += 1;
+  }
+
+  return result;
 }
 
 /**
@@ -279,6 +272,79 @@ function detectProjectName(repoRoot) {
     }
   }
   return basename(repoRoot);
+}
+
+function runGhCommand(args, cwd) {
+  const output = execSync(["gh", ...args].join(" "), {
+    encoding: "utf8",
+    cwd: cwd || process.cwd(),
+    stdio: ["pipe", "pipe", "ignore"],
+  });
+  return String(output || "").trim();
+}
+
+function detectGitHubUserLogin(cwd) {
+  try {
+    return runGhCommand(["api", "user", "--jq", ".login"], cwd);
+  } catch {
+    return "";
+  }
+}
+
+function extractProjectNumber(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^\d+$/.test(text)) return text;
+  const match = text.match(/\/projects\/(\d+)(?:\b|$)/i);
+  return match ? match[1] : "";
+}
+
+function resolveOrCreateGitHubProjectNumber({ owner, title, cwd }) {
+  const normalizedOwner = String(owner || "").trim();
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedOwner || !normalizedTitle) return "";
+
+  try {
+    const listRaw = runGhCommand(
+      ["project", "list", "--owner", normalizedOwner, "--format", "json"],
+      cwd,
+    );
+    const parsed = JSON.parse(listRaw || "[]");
+    const projects = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.projects)
+        ? parsed.projects
+        : [];
+    const existing = projects.find(
+      (project) =>
+        String(project?.title || "")
+          .trim()
+          .toLowerCase() === normalizedTitle.toLowerCase(),
+    );
+    const existingNumber = extractProjectNumber(
+      existing?.number || existing?.url,
+    );
+    if (existingNumber) return existingNumber;
+  } catch {
+    /* ignore and try create */
+  }
+
+  try {
+    const createRaw = runGhCommand(
+      [
+        "project",
+        "create",
+        "--owner",
+        normalizedOwner,
+        "--title",
+        `\"${normalizedTitle.replace(/\"/g, '\\\"')}\"`,
+      ],
+      cwd,
+    );
+    return extractProjectNumber(createRaw);
+  } catch {
+    return "";
+  }
 }
 
 function getDefaultPromptOverrides() {
@@ -654,27 +720,7 @@ function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
   }
 
   configJson.projectName = env.PROJECT_NAME;
-  const githubProject = {
-    owner: env.GITHUB_PROJECT_OWNER || configJson.kanban?.githubProject?.owner || null,
-    number:
-      env.GITHUB_PROJECT_NUMBER || configJson.kanban?.githubProject?.number || null,
-    id: env.GITHUB_PROJECT_ID || configJson.kanban?.githubProject?.id || null,
-    statusFieldName:
-      env.GITHUB_PROJECT_STATUS_FIELD ||
-      configJson.kanban?.githubProject?.statusFieldName ||
-      "Status",
-    marker:
-      env.GITHUB_PROJECT_MARKER ||
-      configJson.kanban?.githubProject?.marker ||
-      "codex-monitor",
-  };
-  configJson.kanban = {
-    backend: env.KANBAN_BACKEND,
-    ...(env.KANBAN_PROJECT_ID ? { projectId: env.KANBAN_PROJECT_ID } : {}),
-    ...(githubProject.owner || githubProject.number || githubProject.id
-      ? { githubProject }
-      : {}),
-  };
+  configJson.kanban = { backend: env.KANBAN_BACKEND };
   configJson.internalExecutor = {
     ...(configJson.internalExecutor || {}),
     mode: env.EXECUTOR_MODE,
@@ -686,38 +732,6 @@ function formatEnvValue(value) {
   const needsQuotes = /\s|#|=/.test(raw);
   if (!needsQuotes) return raw;
   return `"${raw.replace(/"/g, '\\"')}"`;
-}
-
-export function applyEnvFileToProcess(envPath, options = {}) {
-  const { override = false } = options;
-  const path = resolve(envPath || ".env");
-  if (!existsSync(path)) {
-    return { found: false, loaded: 0 };
-  }
-
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
-  let loaded = 0;
-  for (const line of lines) {
-    const trimmed = String(line || "").trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx <= 0) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    let value = trimmed.slice(eqIdx + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!override && Object.prototype.hasOwnProperty.call(process.env, key)) {
-      continue;
-    }
-    process.env[key] = value;
-    loaded++;
-  }
-
-  return { found: true, loaded };
 }
 
 export function buildStandardizedEnvFile(templateText, envEntries) {
@@ -979,6 +993,27 @@ async function main() {
   const configDir = resolveConfigDir(repoRoot);
   const slug = detectRepoSlug();
   const projectName = detectProjectName(repoRoot);
+  const envCandidates = [resolve(configDir, ".env"), resolve(repoRoot, ".env")];
+  const seenEnvPaths = new Set();
+  let detectedEnv = false;
+  let loadedEnvEntries = 0;
+  for (const envPath of envCandidates) {
+    if (seenEnvPaths.has(envPath)) continue;
+    seenEnvPaths.add(envPath);
+    const applied = applyEnvFileToProcess(envPath, { override: false });
+    if (applied.found) {
+      detectedEnv = true;
+      loadedEnvEntries += applied.loaded;
+    }
+  }
+  if (detectedEnv) {
+    info(
+      "Detected .env file -> overriding default setting with existing config",
+    );
+    info(
+      `Loaded ${loadedEnvEntries} value(s) from existing environment file(s).`,
+    );
+  }
 
   const env = {};
   const configJson = {
@@ -1524,55 +1559,91 @@ async function main() {
       );
       if (env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
         env.GITHUB_REPOSITORY = `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`;
+        env.KANBAN_PROJECT_ID = env.GITHUB_REPOSITORY;
       }
-      env.GITHUB_PROJECT_STATUS_FIELD =
-        process.env.GITHUB_PROJECT_STATUS_FIELD || "Status";
-      env.GITHUB_PROJECT_MARKER =
-        process.env.GITHUB_PROJECT_MARKER || "codex-monitor";
 
-      const shouldDetectProject = await prompt.confirm(
-        "Auto-detect an existing GitHub Project v2 board for task sync?",
-        true,
+      const githubTaskModeDefault = String(
+        process.env.GITHUB_PROJECT_MODE ||
+          configJson.kanban?.github?.mode ||
+          "kanban",
+      )
+        .trim()
+        .toLowerCase();
+      const githubTaskModeIdx = await prompt.choose(
+        "Use GitHub backend as:",
+        [
+          "GitHub Projects Kanban (default)",
+          "GitHub Issues only (no Projects board)",
+        ],
+        githubTaskModeDefault === "issues" ? 1 : 0,
       );
+      const githubTaskMode = githubTaskModeIdx === 1 ? "issues" : "kanban";
+      env.GITHUB_PROJECT_MODE = githubTaskMode;
 
-      if (shouldDetectProject) {
-        const discovered = findBestGitHubProjectMatch(
-          listGitHubProjects(env.GITHUB_REPO_OWNER),
-          {
-            marker: env.GITHUB_PROJECT_MARKER,
-            projectName: env.PROJECT_NAME,
-            repo: env.GITHUB_REPOSITORY,
-          },
+      const detectedLogin = detectGitHubUserLogin(repoRoot);
+      if (!env.GITHUB_DEFAULT_ASSIGNEE) {
+        env.GITHUB_DEFAULT_ASSIGNEE =
+          process.env.GITHUB_DEFAULT_ASSIGNEE ||
+          detectedLogin ||
+          env.GITHUB_REPO_OWNER ||
+          "";
+      }
+
+      const canonicalLabel = "codex-monitor";
+      const existingScopeLabels = String(
+        process.env.CODEX_MONITOR_TASK_LABELS || "",
+      )
+        .split(",")
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean);
+      if (!existingScopeLabels.includes(canonicalLabel)) {
+        existingScopeLabels.unshift(canonicalLabel);
+      }
+      if (!existingScopeLabels.includes("codex-mointor")) {
+        existingScopeLabels.push("codex-mointor");
+      }
+      env.CODEX_MONITOR_TASK_LABEL = canonicalLabel;
+      env.CODEX_MONITOR_TASK_LABELS = existingScopeLabels.join(",");
+      env.CODEX_MONITOR_ENFORCE_TASK_LABEL = "true";
+
+      if (githubTaskMode === "kanban") {
+        env.GITHUB_PROJECT_OWNER =
+          process.env.GITHUB_PROJECT_OWNER || env.GITHUB_REPO_OWNER || "";
+        env.GITHUB_PROJECT_TITLE = await prompt.ask(
+          "GitHub Project title",
+          process.env.GITHUB_PROJECT_TITLE ||
+            configJson.kanban?.github?.projectTitle ||
+            "Codex-Monitor",
         );
-        if (discovered?.number) {
-          env.GITHUB_PROJECT_OWNER = env.GITHUB_REPO_OWNER;
-          env.GITHUB_PROJECT_NUMBER = String(discovered.number);
-          if (discovered.id) env.GITHUB_PROJECT_ID = String(discovered.id);
-          env.KANBAN_PROJECT_ID = String(discovered.id || discovered.number);
-          info(
-            `Detected GitHub Project: #${discovered.number} ${discovered.title || ""}`,
+        const resolvedProjectNumber = resolveOrCreateGitHubProjectNumber({
+          owner: env.GITHUB_PROJECT_OWNER,
+          title: env.GITHUB_PROJECT_TITLE,
+          cwd: repoRoot,
+        });
+        if (resolvedProjectNumber) {
+          env.GITHUB_PROJECT_NUMBER = resolvedProjectNumber;
+          success(
+            `GitHub Project linked: ${env.GITHUB_PROJECT_OWNER}#${resolvedProjectNumber} (${env.GITHUB_PROJECT_TITLE})`,
           );
         } else {
           warn(
-            "No matching GitHub Project detected. You can set GITHUB_PROJECT_OWNER/GITHUB_PROJECT_NUMBER manually.",
+            "Could not auto-detect/create GitHub Project. Issues will still be created and can be linked later.",
           );
         }
       }
 
-      if (!env.GITHUB_PROJECT_OWNER) {
-        env.GITHUB_PROJECT_OWNER = await prompt.ask(
-          "GitHub Project owner (org/user)",
-          env.GITHUB_REPO_OWNER || "",
-        );
-      }
-      if (!env.GITHUB_PROJECT_NUMBER) {
-        env.GITHUB_PROJECT_NUMBER = await prompt.ask(
-          "GitHub Project number (optional)",
-          process.env.GITHUB_PROJECT_NUMBER || "",
-        );
-      }
+      configJson.kanban = {
+        backend: selectedKanbanBackend,
+        github: {
+          mode: githubTaskMode,
+          projectTitle: env.GITHUB_PROJECT_TITLE || "Codex-Monitor",
+          projectOwner: env.GITHUB_PROJECT_OWNER || env.GITHUB_REPO_OWNER || "",
+          projectNumber: env.GITHUB_PROJECT_NUMBER || "",
+          taskLabel: env.CODEX_MONITOR_TASK_LABEL || "codex-monitor",
+        },
+      };
       info(
-        "GitHub board selected. Tasks can be sourced from project items and status can sync via the Status field.",
+        "GitHub backend configured. codex-monitor-scoped issues are auto-assigned/labeled and can be linked to a Projects kanban board.",
       );
     }
 
@@ -2086,43 +2157,6 @@ async function runNonInteractive({
   if (!env.GITHUB_REPO && env.GITHUB_REPOSITORY) {
     env.GITHUB_REPO = env.GITHUB_REPOSITORY;
   }
-  env.GITHUB_PROJECT_STATUS_FIELD =
-    process.env.GITHUB_PROJECT_STATUS_FIELD || "Status";
-  env.GITHUB_PROJECT_MARKER = process.env.GITHUB_PROJECT_MARKER || "codex-monitor";
-  env.GITHUB_TODO_ASSIGNEE_MODE =
-    process.env.GITHUB_TODO_ASSIGNEE_MODE || "open-or-self";
-  env.GITHUB_AUTO_ASSIGN_ON_START =
-    process.env.GITHUB_AUTO_ASSIGN_ON_START || "true";
-
-  if ((env.KANBAN_BACKEND || "").toLowerCase() === "github") {
-    const ownerForProjects =
-      process.env.GITHUB_PROJECT_OWNER || env.GITHUB_REPO_OWNER || "";
-    const projectNumberRaw = process.env.GITHUB_PROJECT_NUMBER || "";
-
-    if (ownerForProjects) {
-      env.GITHUB_PROJECT_OWNER = ownerForProjects;
-      if (projectNumberRaw) {
-        env.GITHUB_PROJECT_NUMBER = projectNumberRaw;
-      } else {
-        const discovered = findBestGitHubProjectMatch(
-          listGitHubProjects(ownerForProjects),
-          {
-            marker: env.GITHUB_PROJECT_MARKER,
-            projectName: env.PROJECT_NAME,
-            repo: env.GITHUB_REPOSITORY,
-          },
-        );
-        if (discovered?.number) {
-          env.GITHUB_PROJECT_NUMBER = String(discovered.number);
-          if (discovered.id) env.GITHUB_PROJECT_ID = String(discovered.id);
-          env.KANBAN_PROJECT_ID = String(discovered.id || discovered.number);
-          info(
-            `Detected GitHub Project for non-interactive setup: #${discovered.number} ${discovered.title || ""}`,
-          );
-        }
-      }
-    }
-  }
   env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
   env.MAX_PARALLEL = process.env.MAX_PARALLEL || "6";
 
@@ -2160,23 +2194,7 @@ async function runNonInteractive({
   }
 
   configJson.projectName = env.PROJECT_NAME;
-  configJson.kanban = {
-    backend: env.KANBAN_BACKEND || "vk",
-    ...(env.KANBAN_PROJECT_ID ? { projectId: env.KANBAN_PROJECT_ID } : {}),
-    ...(env.GITHUB_PROJECT_OWNER || env.GITHUB_PROJECT_NUMBER || env.GITHUB_PROJECT_ID
-      ? {
-          githubProject: {
-            owner: env.GITHUB_PROJECT_OWNER || null,
-            number: env.GITHUB_PROJECT_NUMBER
-              ? Number(env.GITHUB_PROJECT_NUMBER)
-              : null,
-            id: env.GITHUB_PROJECT_ID || null,
-            statusFieldName: env.GITHUB_PROJECT_STATUS_FIELD || "Status",
-            marker: env.GITHUB_PROJECT_MARKER || "codex-monitor",
-          },
-        }
-      : {}),
-  };
+  configJson.kanban = { backend: env.KANBAN_BACKEND || "vk" };
   configJson.internalExecutor = {
     ...(configJson.internalExecutor || {}),
     mode: env.EXECUTOR_MODE || "vk",

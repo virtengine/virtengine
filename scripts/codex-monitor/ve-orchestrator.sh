@@ -2,26 +2,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PS1_SCRIPT="${SCRIPT_DIR}/ve-orchestrator.ps1"
+NODE_SCRIPT="${SCRIPT_DIR}/ve-orchestrator.mjs"
 
-if [[ ! -f "${PS1_SCRIPT}" ]]; then
-  echo "[ve-orchestrator.sh] Missing script: ${PS1_SCRIPT}" >&2
-  exit 1
-fi
-
-PWSH_BIN="${PWSH_PATH:-}"
-if [[ -z "${PWSH_BIN}" ]]; then
-  if command -v pwsh >/dev/null 2>&1; then
-    PWSH_BIN="pwsh"
-  elif command -v powershell >/dev/null 2>&1; then
-    PWSH_BIN="powershell"
+# Native Linux/macOS path only.
+if [[ -f "${NODE_SCRIPT}" ]] && command -v node >/dev/null 2>&1; then
+  NODE_SCRIPT_PATH="${NODE_SCRIPT}"
+  NODE_PLATFORM="$(node -p 'process.platform' 2>/dev/null || true)"
+  if [[ "${NODE_PLATFORM}" == "win32" ]] && command -v wslpath >/dev/null 2>&1; then
+    NODE_SCRIPT_PATH="$(wslpath -w "${NODE_SCRIPT}")"
   fi
+  exec node "${NODE_SCRIPT_PATH}" "$@"
 fi
 
-if [[ -z "${PWSH_BIN}" ]]; then
-  echo "[ve-orchestrator.sh] PowerShell runtime not found (pwsh/powershell)." >&2
-  echo "[ve-orchestrator.sh] Install pwsh or use internal executor mode (EXECUTOR_MODE=internal)." >&2
-  exit 1
-fi
-
-exec "${PWSH_BIN}" -File "${PS1_SCRIPT}" "$@"
+echo "[ve-orchestrator.sh] Native runtime unavailable (need node + ve-orchestrator.mjs)." >&2
+exit 1

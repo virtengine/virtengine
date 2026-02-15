@@ -32,16 +32,33 @@
 
 import crypto from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile, unlink } from "node:fs/promises";
+import os from "node:os";
 import { resolve } from "node:path";
-import { getPresenceState, selectCoordinator } from "./presence.mjs";
-import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
+import {
+  getPresenceState,
+  listActiveInstances,
+  selectCoordinator,
+} from "./presence.mjs";
+import {
+  claimTaskInSharedState,
+  renewSharedStateHeartbeat,
+  releaseSharedState,
+} from "./shared-state-manager.mjs";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const CLAIMS_FILENAME = "task-claims.json";
 const AUDIT_FILENAME = "task-claims-audit.jsonl";
 const DEFAULT_TTL_MINUTES = 60;
+const CACHE_DIR = ".cache/codex-monitor";
+const DEFAULT_OWNER_STALE_TTL_MS = 10 * 60 * 1000;
+
+// Shared state configuration from environment
+const SHARED_STATE_ENABLED = process.env.SHARED_STATE_ENABLED !== "false"; // default true
+const SHARED_STATE_HEARTBEAT_INTERVAL_MS = Number(process.env.SHARED_STATE_HEARTBEAT_INTERVAL_MS) || 60_000;
+const SHARED_STATE_STALE_THRESHOLD_MS = Number(process.env.SHARED_STATE_STALE_THRESHOLD_MS) || 300_000;
+const SHARED_STATE_MAX_RETRIES = Number(process.env.SHARED_STATE_MAX_RETRIES) || 3;
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +67,6 @@ const state = {
   repoRoot: null,
   claimsPath: null,
   auditPath: null,
-  legacyClaimsPath: null,
-  legacyAuditPath: null,
 };
 
 // ── Initialization ───────────────────────────────────────────────────────────
@@ -64,22 +79,11 @@ const state = {
  * @returns {Promise<void>}
  */
 export async function initTaskClaims(opts = {}) {
-  const shared = resolveRepoSharedStatePaths({
-    repoRoot: opts.repoRoot,
-    cwd: opts.cwd,
-    stateDir: opts.stateDir,
-    stateRoot: opts.stateRoot,
-    repoIdentity: opts.repoIdentity,
-  });
-  state.repoRoot = shared.repoRoot;
-  const cacheDir = shared.repoStateDir;
+  state.repoRoot = opts.repoRoot || process.cwd();
+  const cacheDir = resolve(state.repoRoot, CACHE_DIR);
   await mkdir(cacheDir, { recursive: true });
-  state.claimsPath = opts.claimsPath || resolve(cacheDir, CLAIMS_FILENAME);
-  state.auditPath = opts.auditPath || resolve(cacheDir, AUDIT_FILENAME);
-  state.legacyClaimsPath =
-    opts.legacyClaimsPath || resolve(shared.legacyCacheDir, CLAIMS_FILENAME);
-  state.legacyAuditPath =
-    opts.legacyAuditPath || resolve(shared.legacyCacheDir, AUDIT_FILENAME);
+  state.claimsPath = resolve(cacheDir, CLAIMS_FILENAME);
+  state.auditPath = resolve(cacheDir, AUDIT_FILENAME);
   state.initialized = true;
 }
 
@@ -98,27 +102,113 @@ function ensureInitialized() {
  */
 async function loadClaimsRegistry() {
   ensureInitialized();
-  const empty = { version: 1, claims: {}, updated_at: new Date().toISOString() };
-  const candidatePaths = [state.claimsPath, state.legacyClaimsPath].filter(Boolean);
-  for (const path of candidatePaths) {
-    if (!existsSync(path)) continue;
-    try {
-      const raw = await readFile(path, "utf8");
-      const data = JSON.parse(raw);
-      const registry = {
-        version: data.version || 1,
-        claims: data.claims || {},
-        updated_at: data.updated_at || new Date().toISOString(),
-      };
-      if (path !== state.claimsPath && !existsSync(state.claimsPath)) {
+  if (!existsSync(state.claimsPath)) {
+    return { version: 1, claims: {}, updated_at: new Date().toISOString() };
+  }
+  try {
+    const raw = await readFile(state.claimsPath, "utf8");
+    const parsed = parseRegistryPayload(raw);
+    const data = parsed.data;
+    const registry = {
+      version: data.version || 1,
+      claims: data.claims || {},
+      updated_at: data.updated_at || new Date().toISOString(),
+    };
+    if (parsed.recovered) {
+      const detail = parsed.details.length ? parsed.details.join(", ") : "partial";
+      console.warn(`[task-claims] Recovered registry (${detail}); rewriting clean copy.`);
+      try {
         await saveClaimsRegistry(registry);
+      } catch (rewriteErr) {
+        console.warn(
+          `[task-claims] Failed to rewrite recovered registry: ${rewriteErr.message}`,
+        );
       }
-      return registry;
-    } catch (err) {
-      console.warn(`[task-claims] Failed to load registry: ${err.message}`);
+    }
+    return registry;
+  } catch (err) {
+    console.warn(`[task-claims] Failed to load registry: ${err.message}`);
+    try {
+      const suffix = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-");
+      const corruptPath = `${state.claimsPath}.corrupt-${suffix}`;
+      await rename(state.claimsPath, corruptPath);
+      console.warn(
+        `[task-claims] Corrupt registry moved to ${corruptPath}`,
+      );
+    } catch {
+      /* best effort */
+    }
+    return { version: 1, claims: {}, updated_at: new Date().toISOString() };
+  }
+}
+
+function parseRegistryPayload(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("registry file empty");
+  }
+  try {
+    return { data: JSON.parse(trimmed), recovered: false, details: [] };
+  } catch (err) {
+    const extraction = extractJsonObject(raw);
+    if (!extraction) throw err;
+    const { jsonText, leadingJunk, trailingJunk } = extraction;
+    const data = JSON.parse(jsonText);
+    const details = [];
+    if (leadingJunk) details.push("leading junk trimmed");
+    if (trailingJunk) details.push("trailing junk trimmed");
+    return { data, recovered: true, details };
+  }
+}
+
+function extractJsonObject(raw) {
+  const firstNonWhitespace = raw.search(/\S/);
+  if (firstNonWhitespace === -1) return null;
+  const startIndex = raw.indexOf("{", firstNonWhitespace);
+  if (startIndex === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = startIndex; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") {
+      depth += 1;
+      continue;
+    }
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        const jsonText = raw.slice(startIndex, i + 1);
+        const trailing = raw.slice(i + 1);
+        return {
+          jsonText,
+          leadingJunk: startIndex > firstNonWhitespace,
+          trailingJunk: trailing.trim().length > 0,
+        };
+      }
     }
   }
-  return empty;
+  return null;
 }
 
 /**
@@ -130,7 +220,26 @@ async function loadClaimsRegistry() {
 async function saveClaimsRegistry(registry) {
   ensureInitialized();
   registry.updated_at = new Date().toISOString();
-  await writeFile(state.claimsPath, JSON.stringify(registry, null, 2), "utf8");
+  const payload = JSON.stringify(registry, null, 2);
+  const tmpPath = `${state.claimsPath}.tmp-${process.pid}-${Date.now()}`;
+  await writeFile(tmpPath, payload, "utf8");
+  try {
+    await rename(tmpPath, state.claimsPath);
+  } catch (err) {
+    // Windows can error if destination exists; fall back to direct write.
+    try {
+      await writeFile(state.claimsPath, payload, "utf8");
+    } finally {
+      try {
+        await unlink(tmpPath);
+      } catch {
+        /* best effort */
+      }
+    }
+    console.warn(
+      `[task-claims] Atomic rename failed (${err?.message || err}); fell back to direct write.`,
+    );
+  }
 }
 
 // ── Audit Log ────────────────────────────────────────────────────────────────
@@ -163,6 +272,54 @@ async function appendAuditEntry(entry) {
  */
 function generateClaimToken() {
   return crypto.randomUUID();
+}
+
+function parseDuration(value, fallbackMs) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
+}
+
+function isProcessAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isFinite(n) || n <= 0) return false;
+  try {
+    process.kill(Math.floor(n), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function shouldTreatClaimAsStale(claim, ownerStaleTtlMs) {
+  if (!claim || !claim.instance_id) {
+    return { stale: false, reason: null };
+  }
+
+  const activeInstances = listActiveInstances({ ttlMs: ownerStaleTtlMs });
+  if (Array.isArray(activeInstances) && activeInstances.length > 0) {
+    const ownerActive = activeInstances.some(
+      (entry) => String(entry?.instance_id || "") === String(claim.instance_id),
+    );
+    if (!ownerActive) {
+      return { stale: true, reason: "owner_stale" };
+    }
+  }
+
+  const claimHost = String(claim?.metadata?.host || "").trim();
+  const claimPid = Number(claim?.metadata?.pid);
+  const localHost = os.hostname();
+  if (
+    claimHost &&
+    localHost &&
+    claimHost.toLowerCase() === String(localHost).toLowerCase() &&
+    Number.isFinite(claimPid) &&
+    claimPid > 0 &&
+    !isProcessAlive(claimPid)
+  ) {
+    return { stale: true, reason: "owner_stale" };
+  }
+
+  return { stale: false, reason: null };
 }
 
 // ── Claim Expiry ─────────────────────────────────────────────────────────────
@@ -321,6 +478,10 @@ export async function claimTask(opts = {}) {
     ttlMinutes = DEFAULT_TTL_MINUTES,
     claimToken = generateClaimToken(),
     metadata = {},
+    ownerStaleTtlMs = parseDuration(
+      opts.ownerStaleTtlMs ?? process.env.TASK_CLAIM_OWNER_STALE_TTL_MS,
+      DEFAULT_OWNER_STALE_TTL_MS,
+    ),
   } = opts;
 
   if (!taskId) {
@@ -344,6 +505,14 @@ export async function claimTask(opts = {}) {
 
   // Build new claim
   const presenceState = getPresenceState();
+  const claimMetadata = {
+    ...metadata,
+    host: metadata?.host || os.hostname(),
+    pid: Number.isFinite(Number(metadata?.pid))
+      ? Number(metadata.pid)
+      : process.pid,
+  };
+
   const newClaim = {
     task_id: taskId,
     instance_id: instanceId,
@@ -352,7 +521,7 @@ export async function claimTask(opts = {}) {
     expires_at: expiresAt.toISOString(),
     ttl_minutes: ttlMinutes,
     coordinator_priority: presenceState.coordinator_priority ?? 100,
-    metadata,
+    metadata: claimMetadata,
   };
 
   // If no existing claim, grant immediately
@@ -366,12 +535,80 @@ export async function claimTask(opts = {}) {
       claim_token: claimToken,
       expires_at: expiresAt.toISOString(),
     });
+
+    // Sync to shared state (non-blocking, log on failure)
+    if (SHARED_STATE_ENABLED) {
+      try {
+        const sharedResult = await claimTaskInSharedState(
+          taskId,
+          instanceId,
+          claimToken,
+          Math.floor(SHARED_STATE_STALE_THRESHOLD_MS / 1000),
+          state.repoRoot
+        );
+        if (!sharedResult.success) {
+          console.info(`[task-claims] Shared state claim warning for ${taskId}: ${sharedResult.reason}`);
+        } else {
+          console.info(`[task-claims] Shared state synced for ${taskId}`);
+        }
+      } catch (err) {
+        console.warn(`[task-claims] Shared state sync failed for ${taskId}: ${err.message}`);
+      }
+    }
+
     return { success: true, token: claimToken, claim: newClaim };
   }
 
   // Idempotency: If existing claim has same token, return it
   if (existingClaim.claim_token === claimToken) {
     return { success: true, token: claimToken, claim: existingClaim, idempotent: true };
+  }
+
+  const staleCheck = shouldTreatClaimAsStale(existingClaim, ownerStaleTtlMs);
+  if (staleCheck.stale) {
+    registry.claims[taskId] = newClaim;
+    await saveClaimsRegistry(registry);
+    await appendAuditEntry({
+      action: "claim_override",
+      task_id: taskId,
+      instance_id: instanceId,
+      claim_token: claimToken,
+      expires_at: expiresAt.toISOString(),
+      previous_instance: existingClaim.instance_id,
+      previous_token: existingClaim.claim_token,
+      resolution_reason: staleCheck.reason,
+    });
+
+    // Sync to shared state after override
+    if (SHARED_STATE_ENABLED) {
+      try {
+        const sharedResult = await claimTaskInSharedState(
+          taskId,
+          instanceId,
+          claimToken,
+          Math.floor(SHARED_STATE_STALE_THRESHOLD_MS / 1000),
+          state.repoRoot
+        );
+        if (!sharedResult.success) {
+          console.info(`[task-claims] Shared state override warning for ${taskId}: ${sharedResult.reason}`);
+        } else {
+          console.info(`[task-claims] Shared state synced after override for ${taskId}`);
+        }
+      } catch (err) {
+        console.warn(`[task-claims] Shared state sync failed after override for ${taskId}: ${err.message}`);
+      }
+    }
+
+    return {
+      success: true,
+      token: claimToken,
+      claim: newClaim,
+      resolution: {
+        override: true,
+        reason: staleCheck.reason,
+        previous_instance: existingClaim.instance_id,
+      },
+    };
   }
 
   // Duplicate claim detected — resolve conflict
@@ -484,6 +721,26 @@ export async function releaseTask(opts = {}) {
     previous_owner: claim.instance_id,
   });
 
+  // Release shared state (mark complete if not forced, abandoned if forced)
+  if (SHARED_STATE_ENABLED) {
+    try {
+      const sharedResult = await releaseSharedState(
+        taskId,
+        claim.claim_token,
+        force ? "abandoned" : "complete",
+        force ? "Force released by user" : undefined,
+        state.repoRoot
+      );
+      if (!sharedResult.success) {
+        console.info(`[task-claims] Shared state release warning for ${taskId}: ${sharedResult.reason}`);
+      } else {
+        console.info(`[task-claims] Shared state released for ${taskId}`);
+      }
+    } catch (err) {
+      console.warn(`[task-claims] Shared state release failed for ${taskId}: ${err.message}`);
+    }
+  }
+
   return { success: true };
 }
 
@@ -548,6 +805,23 @@ export async function renewClaim(opts = {}) {
     claim_token: claimToken,
     expires_at: expiresAt.toISOString(),
   });
+
+  // Renew shared state heartbeat
+  if (SHARED_STATE_ENABLED) {
+    try {
+      const sharedResult = await renewSharedStateHeartbeat(
+        taskId,
+        instanceId,
+        claimToken,
+        state.repoRoot
+      );
+      if (!sharedResult.success) {
+        console.info(`[task-claims] Shared state heartbeat renewal warning for ${taskId}: ${sharedResult.reason}`);
+      }
+    } catch (err) {
+      console.warn(`[task-claims] Shared state heartbeat renewal failed for ${taskId}: ${err.message}`);
+    }
+  }
 
   return { success: true, claim };
 }
@@ -647,10 +921,4 @@ export const _test = {
   loadClaimsRegistry,
   saveClaimsRegistry,
   generateClaimToken,
-  getPaths: () => ({
-    claimsPath: state.claimsPath,
-    auditPath: state.auditPath,
-    legacyClaimsPath: state.legacyClaimsPath,
-    legacyAuditPath: state.legacyAuditPath,
-  }),
 };
