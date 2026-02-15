@@ -259,6 +259,33 @@ Use **Advanced** mode when you need:
 
 ## Key config examples
 
+---
+
+## Publishing (env-based, no credential leak)
+
+From `scripts/codex-monitor`:
+
+```bash
+npm run publish:dry-run
+```
+
+Real publish (token only via environment):
+
+```bash
+NPM_TOKEN=*** npm run publish:env
+```
+
+Optional publish env vars:
+
+- `NPM_ACCESS_TOKEN` (or `NODE_AUTH_TOKEN`) — required for real publish
+- `NPM_PUBLISH_TAG` — defaults to `latest`
+- `NPM_PUBLISH_ACCESS` — defaults to `public`
+- `NPM_REGISTRY_URL` — defaults to `https://registry.npmjs.org/`
+- `NPM_OTP` — optional 2FA OTP
+
+The publish helper creates a temporary `.npmrc` in the OS temp directory,
+uses it only for the publish command, and removes it immediately after.
+
 ### Executor config (`codex-monitor.config.json`)
 
 ```json

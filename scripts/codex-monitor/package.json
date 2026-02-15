@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "Apache 2.0",
@@ -85,7 +85,9 @@
     "sentinel": "node telegram-sentinel.mjs",
     "sentinel:stop": "node -e \"import('./telegram-sentinel.mjs').then(m => m.stopSentinel())\"",
     "sentinel:status": "node -e \"import('./telegram-sentinel.mjs').then(m => console.log(JSON.stringify(m.getSentinelStatus(), null, 2)))\"",
-    "prepublishOnly": "node prepublish-check.mjs"
+    "prepublishOnly": "node prepublish-check.mjs",
+    "publish:env": "node publish.mjs",
+    "publish:dry-run": "node publish.mjs --dry-run"
   },
   "files": [
     ".env.example",
