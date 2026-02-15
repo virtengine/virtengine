@@ -159,6 +159,36 @@ Core controls include:
 - `/pause`, `/resume`, `/restart`, `/retry`
 - `/executor`, `/sdk`, `/kanban`, `/maxparallel`
 
+### Telegram Mini App (Control Center)
+
+A full interactive web UI that runs inside Telegram as a Mini App. Enable it with two env vars:
+
+```env
+TELEGRAM_MINIAPP_ENABLED=true
+TELEGRAM_UI_PORT=3080
+```
+
+Once enabled, the server auto-detects your LAN IP and sets the bot menu button.
+Access the Mini App from Telegram via:
+
+- **`/app`** command — sends an inline button to open the Control Center
+- **Menu button** — tap the bot's menu button (set automatically)
+- **Browser** — open `http://<your-lan-ip>:3080` directly
+
+The Mini App provides 7 tabs: Dashboard, Tasks, Agents, Infra, Control, Logs, and Settings — all with real-time WebSocket updates, haptic feedback, and native Telegram theming.
+
+**For public/remote access**, set up a tunnel (ngrok, Cloudflare Tunnel) and configure:
+
+```env
+TELEGRAM_UI_BASE_URL=https://your-tunnel-domain.example.com
+```
+
+**For local browser testing** (without Telegram auth):
+
+```env
+TELEGRAM_UI_ALLOW_UNSAFE=true
+```
+
 ### WhatsApp (optional)
 
 Enable in env and authenticate:
