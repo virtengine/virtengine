@@ -51,6 +51,7 @@
  */
 
 import { loadConfig } from "./config.mjs";
+import { fetchWithFallback } from "./fetch-runtime.mjs";
 
 const TAG = "[kanban]";
 
@@ -197,10 +198,6 @@ class VKAdapter {
 
       let res;
       try {
-        const runtimeFetch = globalThis.fetch;
-        if (typeof runtimeFetch !== "function") {
-          throw new Error("global fetch is unavailable");
-        }
         const fetchOpts = {
           method,
           signal: controller.signal,
@@ -212,7 +209,7 @@ class VKAdapter {
               ? opts.body
               : JSON.stringify(opts.body);
         }
-        res = await runtimeFetch(url, fetchOpts);
+        res = await fetchWithFallback(url, fetchOpts);
       } catch (err) {
         // Network error, timeout, abort - res is undefined
         throw new Error(

@@ -85,6 +85,7 @@ import {
   getMaxParallelFromArgs,
   parsePrNumberFromUrl,
 } from "./utils.mjs";
+import { fetchWithFallback } from "./fetch-runtime.mjs";
 import {
   initFleet,
   refreshFleet,
@@ -1879,7 +1880,7 @@ async function isVibeKanbanOnline() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2000);
   try {
-    const res = await fetch(`${vkEndpointUrl}/api/projects`, {
+    const res = await fetchWithFallback(`${vkEndpointUrl}/api/projects`, {
       signal: controller.signal,
     });
     // Any HTTP response means the service is up, even if auth/route fails.
@@ -2412,7 +2413,7 @@ async function fetchVk(path, opts = {}) {
     if (opts.body && method !== "GET") {
       fetchOpts.body = JSON.stringify(opts.body);
     }
-    res = await fetch(url, fetchOpts);
+    res = await fetchWithFallback(url, fetchOpts);
   } catch (err) {
     // Network error, timeout, abort, etc. - res is undefined
     const msg = err?.message || String(err);
