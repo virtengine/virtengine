@@ -5,6 +5,7 @@ import { open, readFile, readdir, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { WebSocketServer } from "ws";
 import { getKanbanAdapter } from "./kanban-adapter.mjs";
 import { getActiveThreads } from "./agent-pool.mjs";
 import {
@@ -55,6 +56,8 @@ const MIME_TYPES = {
 
 let uiServer = null;
 let uiServerUrl = null;
+let wsServer = null;
+const wsClients = new Set();
 let uiDeps = {};
 
 export function injectUiDependencies(deps = {}) {
@@ -128,6 +131,48 @@ function requireAuth(req) {
   const token = process.env.TELEGRAM_BOT_TOKEN || "";
   if (!initData) return false;
   return validateInitData(String(initData), token);
+}
+
+function requireWsAuth(req, url) {
+  if (ALLOW_UNSAFE) return true;
+  const initData =
+    req.headers["x-telegram-initdata"] ||
+    req.headers["x-telegram-init-data"] ||
+    req.headers["x-telegram-init"] ||
+    url.searchParams.get("initData") ||
+    "";
+  const token = process.env.TELEGRAM_BOT_TOKEN || "";
+  if (!initData) return false;
+  return validateInitData(String(initData), token);
+}
+
+function sendWsMessage(socket, payload) {
+  try {
+    if (socket?.readyState === 1) {
+      socket.send(JSON.stringify(payload));
+    }
+  } catch {
+    // best effort
+  }
+}
+
+function broadcastUiEvent(channels, type, payload = {}) {
+  const required = new Set(Array.isArray(channels) ? channels : [channels]);
+  const message = {
+    type,
+    channels: Array.from(required),
+    payload,
+    ts: Date.now(),
+  };
+  for (const socket of wsClients) {
+    const subscribed = socket.__channels || new Set(["*"]);
+    const shouldSend =
+      subscribed.has("*") ||
+      Array.from(required).some((channel) => subscribed.has(channel));
+    if (shouldSend) {
+      sendWsMessage(socket, message);
+    }
+  }
 }
 
 async function readStatusSnapshot() {
@@ -281,6 +326,9 @@ async function handleApi(req, res, url) {
     }
     executor.pause();
     jsonResponse(res, 200, { ok: true, paused: true });
+    broadcastUiEvent(["executor", "overview", "agents"], "invalidate", {
+      reason: "executor-paused",
+    });
     return;
   }
 
@@ -292,6 +340,9 @@ async function handleApi(req, res, url) {
     }
     executor.resume();
     jsonResponse(res, 200, { ok: true, paused: false });
+    broadcastUiEvent(["executor", "overview", "agents"], "invalidate", {
+      reason: "executor-resumed",
+    });
     return;
   }
 
@@ -315,6 +366,10 @@ async function handleApi(req, res, url) {
         executor.resume();
       }
       jsonResponse(res, 200, { ok: true, maxParallel: executor.maxParallel });
+      broadcastUiEvent(["executor", "overview", "agents"], "invalidate", {
+        reason: "executor-maxparallel",
+        maxParallel: executor.maxParallel,
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -367,6 +422,22 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (path === "/api/tasks/detail") {
+    try {
+      const taskId = url.searchParams.get("taskId") || url.searchParams.get("id") || "";
+      if (!taskId) {
+        jsonResponse(res, 400, { ok: false, error: "taskId required" });
+        return;
+      }
+      const adapter = getKanbanAdapter();
+      const task = await adapter.getTask(taskId);
+      jsonResponse(res, 200, { ok: true, data: task || null });
+    } catch (err) {
+      jsonResponse(res, 500, { ok: false, error: err.message });
+    }
+    return;
+  }
+
   if (path === "/api/tasks/start") {
     try {
       const body = await readJsonBody(req);
@@ -389,8 +460,14 @@ async function handleApi(req, res, url) {
         jsonResponse(res, 404, { ok: false, error: "Task not found." });
         return;
       }
-      void executor.executeTask(task);
+      executor.executeTask(task).catch((error) => {
+        console.warn(`[telegram-ui] failed to execute task ${taskId}: ${error.message}`);
+      });
       jsonResponse(res, 200, { ok: true, taskId });
+      broadcastUiEvent(["tasks", "overview", "executor", "agents"], "invalidate", {
+        reason: "task-started",
+        taskId,
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -401,14 +478,72 @@ async function handleApi(req, res, url) {
     try {
       const body = await readJsonBody(req);
       const taskId = body?.taskId || body?.id;
-      const status = body?.status;
-      if (!taskId || !status) {
-        jsonResponse(res, 400, { ok: false, error: "taskId and status required" });
+      if (!taskId) {
+        jsonResponse(res, 400, { ok: false, error: "taskId required" });
         return;
       }
       const adapter = getKanbanAdapter();
-      const updated = await adapter.updateTaskStatus(taskId, status);
+      const patch = {
+        status: body?.status,
+        title: body?.title,
+        description: body?.description,
+        priority: body?.priority,
+      };
+      const hasPatch = Object.values(patch).some(
+        (value) => typeof value === "string" && value.trim(),
+      );
+      if (!hasPatch) {
+        jsonResponse(res, 400, { ok: false, error: "No update fields provided" });
+        return;
+      }
+      const updated =
+        typeof adapter.updateTask === "function"
+          ? await adapter.updateTask(taskId, patch)
+          : await adapter.updateTaskStatus(taskId, patch.status);
       jsonResponse(res, 200, { ok: true, data: updated });
+      broadcastUiEvent(["tasks", "overview"], "invalidate", {
+        reason: "task-updated",
+        taskId,
+        status: updated?.status || patch.status || null,
+      });
+    } catch (err) {
+      jsonResponse(res, 500, { ok: false, error: err.message });
+    }
+    return;
+  }
+
+  if (path === "/api/tasks/edit") {
+    try {
+      const body = await readJsonBody(req);
+      const taskId = body?.taskId || body?.id;
+      if (!taskId) {
+        jsonResponse(res, 400, { ok: false, error: "taskId required" });
+        return;
+      }
+      const adapter = getKanbanAdapter();
+      const patch = {
+        title: body?.title,
+        description: body?.description,
+        priority: body?.priority,
+        status: body?.status,
+      };
+      const hasPatch = Object.values(patch).some(
+        (value) => typeof value === "string" && value.trim(),
+      );
+      if (!hasPatch) {
+        jsonResponse(res, 400, { ok: false, error: "No edit fields provided" });
+        return;
+      }
+      const updated =
+        typeof adapter.updateTask === "function"
+          ? await adapter.updateTask(taskId, patch)
+          : await adapter.updateTaskStatus(taskId, patch.status);
+      jsonResponse(res, 200, { ok: true, data: updated });
+      broadcastUiEvent(["tasks", "overview"], "invalidate", {
+        reason: "task-edited",
+        taskId,
+        status: updated?.status || patch.status || null,
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -451,6 +586,7 @@ async function handleApi(req, res, url) {
     try {
       const result = await pruneStaleWorktrees({ actor: "telegram-ui" });
       jsonResponse(res, 200, { ok: true, data: result });
+      broadcastUiEvent(["worktrees"], "invalidate", { reason: "worktrees-pruned" });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -472,6 +608,7 @@ async function handleApi(req, res, url) {
         return;
       }
       jsonResponse(res, 200, { ok: true, data: released });
+      broadcastUiEvent(["worktrees"], "invalidate", { reason: "worktree-released" });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -530,6 +667,10 @@ async function handleApi(req, res, url) {
         return;
       }
       jsonResponse(res, 200, { ok: true, data: result.workspace, lease: result.lease });
+      broadcastUiEvent(["workspaces"], "invalidate", {
+        reason: "workspace-claimed",
+        workspaceId,
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -556,6 +697,10 @@ async function handleApi(req, res, url) {
         return;
       }
       jsonResponse(res, 200, { ok: true, data: result.workspace });
+      broadcastUiEvent(["workspaces"], "invalidate", {
+        reason: "workspace-released",
+        workspaceId,
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -581,6 +726,10 @@ async function handleApi(req, res, url) {
         return;
       }
       jsonResponse(res, 200, { ok: true, data: result.workspace, lease: result.lease });
+      broadcastUiEvent(["workspaces"], "invalidate", {
+        reason: "workspace-renewed",
+        workspaceId,
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -756,6 +905,66 @@ export async function startTelegramUiServer(options = {}) {
     await handleStatic(req, res, url);
   });
 
+  wsServer = new WebSocketServer({ noServer: true });
+  wsServer.on("connection", (socket) => {
+    socket.__channels = new Set(["*"]);
+    wsClients.add(socket);
+    sendWsMessage(socket, {
+      type: "hello",
+      channels: ["*"],
+      payload: { connected: true },
+      ts: Date.now(),
+    });
+
+    socket.on("message", (raw) => {
+      try {
+        const message = JSON.parse(String(raw || "{}"));
+        if (message?.type === "subscribe" && Array.isArray(message.channels)) {
+          const channels = message.channels
+            .filter((item) => typeof item === "string" && item.trim())
+            .map((item) => item.trim());
+          socket.__channels = new Set(channels.length ? channels : ["*"]);
+          sendWsMessage(socket, {
+            type: "subscribed",
+            channels: Array.from(socket.__channels),
+            payload: { ok: true },
+            ts: Date.now(),
+          });
+        }
+      } catch {
+        // Ignore malformed websocket payloads
+      }
+    });
+
+    socket.on("close", () => {
+      wsClients.delete(socket);
+    });
+
+    socket.on("error", () => {
+      wsClients.delete(socket);
+    });
+  });
+
+  uiServer.on("upgrade", (req, socket, head) => {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    if (!requireWsAuth(req, url)) {
+      try {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      } catch {
+        // no-op
+      }
+      socket.destroy();
+      return;
+    }
+    wsServer.handleUpgrade(req, socket, head, (ws) => {
+      wsServer.emit("connection", ws, req);
+    });
+  });
+
   await new Promise((resolveReady, rejectReady) => {
     uiServer.once("error", rejectReady);
     uiServer.listen(port, options.host || DEFAULT_HOST, () => {
@@ -773,6 +982,22 @@ export async function startTelegramUiServer(options = {}) {
 
 export function stopTelegramUiServer() {
   if (!uiServer) return;
+  for (const socket of wsClients) {
+    try {
+      socket.close();
+    } catch {
+      // best effort
+    }
+  }
+  wsClients.clear();
+  if (wsServer) {
+    try {
+      wsServer.close();
+    } catch {
+      // best effort
+    }
+  }
+  wsServer = null;
   try {
     uiServer.close();
   } catch {

@@ -49,7 +49,29 @@
           "type": "string",
           "enum": ["vk", "github", "jira"]
         },
-        "projectId": { "type": "string" }
+        "projectId": { "type": "string" },
+        "githubProject": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "owner": { "type": "string" },
+            "number": { "type": "number" },
+            "id": { "type": "string" },
+            "statusFieldName": { "type": "string" },
+            "marker": { "type": "string" }
+          }
+        }
+      }
+    },
+    "copilot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agentType": {
+          "type": "string",
+          "enum": ["local", "background", "cloud"],
+          "description": "Preferred Copilot SDK session mode. local pins workingDirectory to codex-monitor worktree; background/cloud rely on Copilot-managed context."
+        }
       }
     },
     "plannerMode": {

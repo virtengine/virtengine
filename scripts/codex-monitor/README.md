@@ -127,6 +127,21 @@ Task board backend (`KANBAN_BACKEND`):
 - `github`
 - `jira` (stub)
 
+When using `github`, you can optionally scope to a GitHub Projects v2 board:
+
+- `GITHUB_PROJECT_OWNER` + `GITHUB_PROJECT_NUMBER` (or `GITHUB_PROJECT_ID`)
+- `GITHUB_PROJECT_STATUS_FIELD` (defaults to `Status`)
+
+With project config enabled, `codex-monitor` reads tasks from project items and
+syncs task status back to the project status field.
+
+Setup (`codex-monitor --setup`) can auto-detect an existing project board using
+`GITHUB_PROJECT_MARKER` and project/repo name matching.
+
+For multi-developer repos, todo pickup defaults to `open-or-self` via
+`GITHUB_TODO_ASSIGNEE_MODE`, and `GITHUB_AUTO_ASSIGN_ON_START=true` can assign
+tasks to the current GitHub user when work starts.
+
 ---
 
 ## Channels and control surfaces
@@ -296,6 +311,19 @@ VK_RECOVERY_PORT=54089
 MAX_PARALLEL=6
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
+```
+
+### GitHub Projects v2 example
+
+```env
+KANBAN_BACKEND=github
+GITHUB_REPO=virtengine/virtengine
+GITHUB_PROJECT_OWNER=virtengine
+GITHUB_PROJECT_NUMBER=3
+GITHUB_PROJECT_STATUS_FIELD=Status
+GITHUB_PROJECT_MARKER=codex-monitor
+GITHUB_TODO_ASSIGNEE_MODE=open-or-self
+GITHUB_AUTO_ASSIGN_ON_START=true
 ```
 
 For full variable documentation see `.env.example`.

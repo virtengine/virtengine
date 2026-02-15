@@ -175,6 +175,8 @@ const ENV_KEYS = [
   "DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS",
   "COPILOT_MODEL",
   "COPILOT_SDK_MODEL",
+  "COPILOT_AGENT_TYPE",
+  "COPILOT_SESSION_TYPE",
 ];
 
 /** @type {Record<string, string|undefined>} */
@@ -210,6 +212,8 @@ function clearSdkEnv() {
   delete process.env.DEVMODE_MONITOR_MONITOR_TIMEOUT_MAX_MS;
   delete process.env.COPILOT_MODEL;
   delete process.env.COPILOT_SDK_MODEL;
+  delete process.env.COPILOT_AGENT_TYPE;
+  delete process.env.COPILOT_SESSION_TYPE;
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +670,91 @@ describe("launchEphemeralThread", () => {
         model: "gpt-5.3-codex",
       }),
     );
+  });
+
+  it("pins Copilot sessions to worktree when COPILOT_AGENT_TYPE=local", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    process.env.COPILOT_AGENT_TYPE = "local";
+    setPoolSdk("copilot");
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      send: async () => {},
+      on: (cb) => {
+        cb({ type: "assistant.message", data: { content: "ok" } });
+        cb({ type: "session.idle" });
+        return () => {};
+      },
+    }));
+
+    const cwd = process.cwd();
+    const result = await launchEphemeralThread("test prompt", cwd, 5000, {
+      sdk: "copilot",
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockCopilotCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workingDirectory: cwd,
+      }),
+    );
+  });
+
+  it("does not pin workingDirectory when COPILOT_AGENT_TYPE=background", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    process.env.COPILOT_AGENT_TYPE = "background";
+    setPoolSdk("copilot");
+
+    mockCopilotCreateSession.mockImplementation(() => ({
+      send: async () => {},
+      on: (cb) => {
+        cb({ type: "assistant.message", data: { content: "ok" } });
+        cb({ type: "session.idle" });
+        return () => {};
+      },
+    }));
+
+    const result = await launchEphemeralThread("test prompt", process.cwd(), 5000, {
+      sdk: "copilot",
+    });
+
+    expect(result.success).toBe(true);
+    const firstCallArg = mockCopilotCreateSession.mock.calls[0]?.[0] || {};
+    expect(firstCallArg.workingDirectory).toBeUndefined();
+  });
+
+  it("uses task title as first prompt heading for Copilot sessions", async () => {
+    process.env.__MOCK_COPILOT_AVAILABLE = "1";
+    process.env.CODEX_SDK_DISABLED = "1";
+    process.env.CLAUDE_SDK_DISABLED = "1";
+    setPoolSdk("copilot");
+
+    let capturedPrompt = "";
+    mockCopilotCreateSession.mockImplementation(() => ({
+      send: async ({ prompt }) => {
+        capturedPrompt = String(prompt || "");
+      },
+      on: (cb) => {
+        cb({ type: "assistant.message", data: { content: "ok" } });
+        cb({ type: "session.idle" });
+        return () => {};
+      },
+    }));
+
+    await launchEphemeralThread(
+      "# TASK-123 — Fix flaky agent routing\n\nBody here",
+      process.cwd(),
+      5000,
+      { sdk: "copilot" },
+    );
+
+    expect(capturedPrompt.startsWith("# TASK-123 — Fix flaky agent routing")).toBe(
+      true,
+    );
+    expect(capturedPrompt.includes("YOUR TASK — EXECUTE NOW")).toBe(false);
   });
 });
 

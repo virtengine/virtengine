@@ -262,6 +262,16 @@ function isEnvEnabled(value, defaultValue = false) {
   return parseEnvBoolean(value, defaultValue);
 }
 
+function normalizeCopilotAgentType(value, fallback = "local") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["local", "background", "cloud"].includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
+
 // ── Git helpers ──────────────────────────────────────────────────────────────
 
 function detectRepoSlug() {
@@ -960,10 +970,37 @@ export function loadConfig(argv = process.argv, options = {}) {
   const kanbanBackend = normalizeKanbanBackend(
     process.env.KANBAN_BACKEND || configData.kanban?.backend || "vk",
   );
+  const configuredProjectNumber =
+    process.env.GITHUB_PROJECT_NUMBER || configData.kanban?.githubProject?.number;
+  const githubProjectNumber =
+    configuredProjectNumber != null && configuredProjectNumber !== ""
+      ? Number(configuredProjectNumber)
+      : null;
   const kanban = Object.freeze({
     backend: kanbanBackend,
     projectId:
       process.env.KANBAN_PROJECT_ID || configData.kanban?.projectId || null,
+    githubProject: Object.freeze({
+      owner:
+        process.env.GITHUB_PROJECT_OWNER ||
+        configData.kanban?.githubProject?.owner ||
+        null,
+      number: Number.isFinite(githubProjectNumber)
+        ? githubProjectNumber
+        : null,
+      id:
+        process.env.GITHUB_PROJECT_ID ||
+        configData.kanban?.githubProject?.id ||
+        null,
+      statusFieldName:
+        process.env.GITHUB_PROJECT_STATUS_FIELD ||
+        configData.kanban?.githubProject?.statusFieldName ||
+        "Status",
+      marker:
+        process.env.GITHUB_PROJECT_MARKER ||
+        configData.kanban?.githubProject?.marker ||
+        "codex-monitor",
+    }),
   });
 
   const internalExecutorConfig = configData.internalExecutor || {};
@@ -1022,6 +1059,20 @@ export function loadConfig(argv = process.argv, options = {}) {
         300000,
     ),
   };
+
+  const copilotConfigRaw =
+    configData.copilot && typeof configData.copilot === "object"
+      ? configData.copilot
+      : {};
+  const copilot = Object.freeze({
+    agentType: normalizeCopilotAgentType(
+      process.env.COPILOT_AGENT_TYPE ||
+        process.env.COPILOT_SESSION_TYPE ||
+        copilotConfigRaw.agentType ||
+        "local",
+      "local",
+    ),
+  });
 
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
@@ -1294,6 +1345,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     agentPoolEnabled,
     primaryAgent,
     primaryAgentEnabled,
+    copilot,
 
     // Internal Executor
     internalExecutor,

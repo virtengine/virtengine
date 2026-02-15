@@ -28,6 +28,12 @@ const state = {
   agentContext: null,
   manualMode: false,
   connected: false,
+  ws: null,
+  wsConnected: false,
+  wsRetryMs: 1000,
+  wsReconnectTimer: null,
+  wsRefreshTimer: null,
+  pendingMutation: false,
   modal: null,
 };
 
@@ -42,8 +48,107 @@ function setConnection(status, detail = "") {
     : `Offline ${detail}`.trim();
 }
 
+function cloneStateValue(value) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return value;
+}
+
+function scheduleRefresh(delayMs = 100) {
+  if (state.wsRefreshTimer) {
+    clearTimeout(state.wsRefreshTimer);
+  }
+  state.wsRefreshTimer = setTimeout(async () => {
+    state.wsRefreshTimer = null;
+    if (state.pendingMutation) return;
+    try {
+      await refreshTab();
+    } catch {
+      // ignore transient refresh failures
+    }
+  }, delayMs);
+}
+
+function channelsForTab(tab) {
+  if (tab === "overview") return ["overview", "executor", "tasks", "agents"];
+  if (tab === "tasks") return ["tasks"];
+  if (tab === "agents") return ["agents", "executor"];
+  if (tab === "worktrees") return ["worktrees"];
+  if (tab === "workspaces") return ["workspaces"];
+  if (tab === "executor") return ["executor", "overview"];
+  return ["*"];
+}
+
+function connectRealtime() {
+  const tg = telegram();
+  const proto = globalThis.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = new URL(`${proto}://${globalThis.location.host}/ws`);
+  if (tg?.initData) {
+    wsUrl.searchParams.set("initData", tg.initData);
+  }
+  const socket = new WebSocket(wsUrl.toString());
+  state.ws = socket;
+
+  socket.addEventListener("open", () => {
+    state.wsConnected = true;
+    state.wsRetryMs = 1000;
+    setConnection(true, "live");
+    socket.send(
+      JSON.stringify({ type: "subscribe", channels: channelsForTab(state.tab) }),
+    );
+  });
+
+  socket.addEventListener("message", (event) => {
+    let message = null;
+    try {
+      message = JSON.parse(event.data || "{}");
+    } catch {
+      return;
+    }
+    if (message?.type !== "invalidate") return;
+    const channels = Array.isArray(message.channels) ? message.channels : [];
+    const interested = channelsForTab(state.tab);
+    const shouldRefresh =
+      channels.includes("*") || channels.some((channel) => interested.includes(channel));
+    if (shouldRefresh) {
+      scheduleRefresh(120);
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    state.wsConnected = false;
+    setConnection(false, "reconnecting");
+    if (state.wsReconnectTimer) clearTimeout(state.wsReconnectTimer);
+    state.wsReconnectTimer = setTimeout(() => {
+      connectRealtime();
+    }, state.wsRetryMs);
+    state.wsRetryMs = Math.min(10000, state.wsRetryMs * 2);
+  });
+
+  socket.addEventListener("error", () => {
+    setConnection(false, "ws error");
+  });
+}
+
+async function runOptimisticMutation(apply, request, rollback) {
+  state.pendingMutation = true;
+  try {
+    apply();
+    render();
+    const response = await request();
+    state.pendingMutation = false;
+    return response;
+  } catch (err) {
+    if (typeof rollback === "function") rollback();
+    state.pendingMutation = false;
+    render();
+    throw err;
+  }
+}
+
 function telegram() {
-  return window.Telegram ? window.Telegram.WebApp : null;
+  return globalThis.Telegram ? globalThis.Telegram.WebApp : null;
 }
 
 function sendCommandToChat(command) {
@@ -734,16 +839,36 @@ function renderModal() {
   if (state.modal.type === "task") {
     const task = state.modal.task;
     if (!task) return "";
+    const priority = task.priority || "";
+    const status = task.status || "todo";
     return `
       <div class="overlay" data-overlay="true">
         <div class="modal">
           <h2>${task.title || "(untitled task)"}</h2>
-          <p class="meta">ID: ${task.id} · Status: ${task.status}</p>
-          <p>${task.description || "No description provided."}</p>
+          <p class="meta">ID: ${task.id}</p>
+          <div class="input-row" style="margin-top:10px">
+            <input id="task-edit-title" type="text" value="${task.title || ""}" placeholder="Task title" />
+          </div>
+          <div class="input-row" style="margin-top:10px">
+            <textarea id="task-edit-description" rows="5" placeholder="Task description">${task.description || ""}</textarea>
+          </div>
+          <div class="input-row" style="margin-top:10px">
+            <select id="task-edit-status">
+              ${["todo", "inprogress", "inreview", "done", "cancelled"]
+                .map((item) => `<option value="${item}" ${item === status ? "selected" : ""}>${item}</option>`)
+                .join("")}
+            </select>
+            <select id="task-edit-priority">
+              <option value="" ${priority ? "" : "selected"}>priority: none</option>
+              ${["low", "medium", "high", "critical"]
+                .map((item) => `<option value="${item}" ${item === priority ? "selected" : ""}>priority: ${item}</option>`)
+                .join("")}
+            </select>
+          </div>
           <div class="button-row" style="margin-top:14px">
             ${state.manualMode && task.status === "todo" ? `<button class="action" data-action="task:start:${task.id}">Start</button>` : ""}
-            <button class="action secondary" data-action="task:update:${task.id}:inreview">Mark Review</button>
-            <button class="action muted" data-action="task:update:${task.id}:done">Mark Done</button>
+            <button class="action secondary" data-action="task:save:${task.id}">Save</button>
+            <button class="action muted" data-action="task:update:${task.id}:inreview">Mark Review</button>
             <button class="action muted" data-action="modal:close">Close</button>
           </div>
         </div>
@@ -777,6 +902,11 @@ async function handleAction(action, element) {
   if (action.startsWith("tab:")) {
     state.tab = action.replace("tab:", "");
     state.modal = null;
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      state.ws.send(
+        JSON.stringify({ type: "subscribe", channels: channelsForTab(state.tab) }),
+      );
+    }
     await refreshTab();
     return;
   }
@@ -816,29 +946,133 @@ async function handleAction(action, element) {
   }
   if (action.startsWith("task:start:")) {
     const taskId = action.replace("task:start:", "");
-    await apiFetch("/api/tasks/start", {
-      method: "POST",
-      body: JSON.stringify({ taskId }),
-    }).catch((err) => alert(err.message));
+    const previousTasks = cloneStateValue(state.tasks);
+    const previousModal = cloneStateValue(state.modal);
+    await runOptimisticMutation(
+      () => {
+        state.tasks = state.tasks.map((task) =>
+          task.id === taskId ? { ...task, status: "inprogress" } : task,
+        );
+        if (state.modal?.task?.id === taskId) {
+          state.modal.task.status = "inprogress";
+        }
+      },
+      () =>
+        apiFetch("/api/tasks/start", {
+          method: "POST",
+          body: JSON.stringify({ taskId }),
+        }),
+      () => {
+        state.tasks = previousTasks;
+        state.modal = previousModal;
+      },
+    ).catch((err) => alert(err.message));
     state.modal = null;
-    await refreshTab();
+    scheduleRefresh(150);
     return;
   }
   if (action.startsWith("task:detail:")) {
     const taskId = action.replace("task:detail:", "");
-    const task = state.tasks.find((t) => t.id === taskId) || null;
+    const localTask = state.tasks.find((t) => t.id === taskId) || null;
+    const result = await apiFetch(`/api/tasks/detail?taskId=${encodeURIComponent(taskId)}`).catch(
+      () => ({ data: localTask }),
+    );
+    const task = result.data || localTask;
     state.modal = { type: "task", task };
     render();
     return;
   }
+  if (action.startsWith("task:save:")) {
+    const taskId = action.replace("task:save:", "");
+    const title = document.getElementById("task-edit-title")?.value ?? "";
+    const description = document.getElementById("task-edit-description")?.value ?? "";
+    const status = document.getElementById("task-edit-status")?.value ?? "todo";
+    const priority = document.getElementById("task-edit-priority")?.value ?? "";
+    const previousTasks = cloneStateValue(state.tasks);
+    const previousModal = cloneStateValue(state.modal);
+    await runOptimisticMutation(
+      () => {
+        state.tasks = state.tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                title,
+                description,
+                status,
+                priority: priority || null,
+              }
+            : task,
+        );
+        if (state.modal?.task?.id === taskId) {
+          state.modal.task = {
+            ...state.modal.task,
+            title,
+            description,
+            status,
+            priority: priority || null,
+          };
+        }
+      },
+      async () => {
+        const response = await apiFetch("/api/tasks/edit", {
+          method: "POST",
+          body: JSON.stringify({ taskId, title, description, status, priority }),
+        });
+        if (response?.data) {
+          state.tasks = state.tasks.map((task) =>
+            task.id === taskId ? { ...task, ...response.data } : task,
+          );
+          if (state.modal?.task?.id === taskId) {
+            state.modal.task = { ...state.modal.task, ...response.data };
+          }
+        }
+        return response;
+      },
+      () => {
+        state.tasks = previousTasks;
+        state.modal = previousModal;
+      },
+    ).catch((err) => alert(err.message));
+    render();
+    return;
+  }
   if (action.startsWith("task:update:")) {
-    const [_, taskId, status] = action.split(":");
-    await apiFetch("/api/tasks/update", {
-      method: "POST",
-      body: JSON.stringify({ taskId, status }),
-    }).catch((err) => alert(err.message));
-    state.modal = null;
-    await refreshTab();
+    const [, taskId, status] = action.split(":");
+    const previousTasks = cloneStateValue(state.tasks);
+    const previousModal = cloneStateValue(state.modal);
+    await runOptimisticMutation(
+      () => {
+        state.tasks = state.tasks.map((task) =>
+          task.id === taskId ? { ...task, status } : task,
+        );
+        if (state.modal?.task?.id === taskId) {
+          state.modal.task.status = status;
+        }
+      },
+      async () => {
+        const response = await apiFetch("/api/tasks/update", {
+          method: "POST",
+          body: JSON.stringify({ taskId, status }),
+        });
+        if (response?.data) {
+          state.tasks = state.tasks.map((task) =>
+            task.id === taskId ? { ...task, ...response.data } : task,
+          );
+          if (state.modal?.task?.id === taskId) {
+            state.modal.task = { ...state.modal.task, ...response.data };
+          }
+        }
+        return response;
+      },
+      () => {
+        state.tasks = previousTasks;
+        state.modal = previousModal;
+      },
+    ).catch((err) => alert(err.message));
+    if (state.modal && status === "done") {
+      state.modal = null;
+    }
+    render();
     return;
   }
   if (action === "tasks:search" && element) {
@@ -847,26 +1081,52 @@ async function handleAction(action, element) {
     return;
   }
   if (action === "executor:pause") {
-    await apiFetch("/api/executor/pause", { method: "POST" }).catch((err) =>
-      alert(err.message),
-    );
-    await refreshTab();
+    const previous = cloneStateValue(state.executor);
+    await runOptimisticMutation(
+      () => {
+        if (state.executor) state.executor.paused = true;
+      },
+      () => apiFetch("/api/executor/pause", { method: "POST" }),
+      () => {
+        state.executor = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action === "executor:resume") {
-    await apiFetch("/api/executor/resume", { method: "POST" }).catch((err) =>
-      alert(err.message),
-    );
-    await refreshTab();
+    const previous = cloneStateValue(state.executor);
+    await runOptimisticMutation(
+      () => {
+        if (state.executor) state.executor.paused = false;
+      },
+      () => apiFetch("/api/executor/resume", { method: "POST" }),
+      () => {
+        state.executor = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action === "executor:maxparallel" && element) {
     const value = Number(element.value || "0");
-    await apiFetch("/api/executor/maxparallel", {
-      method: "POST",
-      body: JSON.stringify({ value }),
-    }).catch((err) => alert(err.message));
-    await refreshTab();
+    const previous = cloneStateValue(state.executor);
+    await runOptimisticMutation(
+      () => {
+        if (state.executor?.data) {
+          state.executor.data.maxParallel = value;
+        }
+      },
+      () =>
+        apiFetch("/api/executor/maxparallel", {
+          method: "POST",
+          body: JSON.stringify({ value }),
+        }),
+      () => {
+        state.executor = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action.startsWith("logs:lines:")) {
@@ -923,25 +1183,45 @@ async function handleAction(action, element) {
     await apiFetch("/api/worktrees/prune", { method: "POST" }).catch((err) =>
       alert(err.message),
     );
-    await refreshTab();
+    scheduleRefresh(120);
     return;
   }
   if (action.startsWith("worktrees:release-branch:")) {
     const branch = action.replace("worktrees:release-branch:", "");
-    await apiFetch("/api/worktrees/release", {
-      method: "POST",
-      body: JSON.stringify({ branch }),
-    }).catch((err) => alert(err.message));
-    await refreshTab();
+    const previous = cloneStateValue(state.worktrees);
+    await runOptimisticMutation(
+      () => {
+        state.worktrees = state.worktrees.filter((item) => item.branch !== branch);
+      },
+      () =>
+        apiFetch("/api/worktrees/release", {
+          method: "POST",
+          body: JSON.stringify({ branch }),
+        }),
+      () => {
+        state.worktrees = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action.startsWith("worktrees:release:")) {
     const taskKey = action.replace("worktrees:release:", "");
-    await apiFetch("/api/worktrees/release", {
-      method: "POST",
-      body: JSON.stringify({ taskKey }),
-    }).catch((err) => alert(err.message));
-    await refreshTab();
+    const previous = cloneStateValue(state.worktrees);
+    await runOptimisticMutation(
+      () => {
+        state.worktrees = state.worktrees.filter((item) => item.taskKey !== taskKey);
+      },
+      () =>
+        apiFetch("/api/worktrees/release", {
+          method: "POST",
+          body: JSON.stringify({ taskKey }),
+        }),
+      () => {
+        state.worktrees = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action === "worktrees:release-input") {
@@ -952,7 +1232,7 @@ async function handleAction(action, element) {
       method: "POST",
       body: JSON.stringify({ taskKey: value, branch: value }),
     }).catch((err) => alert(err.message));
-    await refreshTab();
+    scheduleRefresh(120);
     return;
   }
   if (action.startsWith("shared:claim:")) {
@@ -960,32 +1240,81 @@ async function handleAction(action, element) {
     const owner = document.getElementById("shared-owner")?.value?.trim() || "";
     const ttlMinutes = Number(document.getElementById("shared-ttl")?.value || "");
     const note = document.getElementById("shared-note")?.value?.trim() || "";
-    await apiFetch("/api/shared-workspaces/claim", {
-      method: "POST",
-      body: JSON.stringify({ workspaceId, owner, ttlMinutes, note }),
-    }).catch((err) => alert(err.message));
-    await refreshTab();
+    const previous = cloneStateValue(state.sharedWorkspaces);
+    await runOptimisticMutation(
+      () => {
+        const now = Date.now();
+        const ws = state.sharedWorkspaces?.workspaces?.find((item) => item.id === workspaceId);
+        if (ws) {
+          ws.availability = "leased";
+          ws.lease = {
+            owner: owner || "telegram-ui",
+            lease_expires_at: new Date(now + (ttlMinutes || 60) * 60000).toISOString(),
+            note,
+          };
+        }
+      },
+      () =>
+        apiFetch("/api/shared-workspaces/claim", {
+          method: "POST",
+          body: JSON.stringify({ workspaceId, owner, ttlMinutes, note }),
+        }),
+      () => {
+        state.sharedWorkspaces = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action.startsWith("shared:renew:")) {
     const workspaceId = action.replace("shared:renew:", "");
     const owner = document.getElementById("shared-owner")?.value?.trim() || "";
     const ttlMinutes = Number(document.getElementById("shared-ttl")?.value || "");
-    await apiFetch("/api/shared-workspaces/renew", {
-      method: "POST",
-      body: JSON.stringify({ workspaceId, owner, ttlMinutes }),
-    }).catch((err) => alert(err.message));
-    await refreshTab();
+    const previous = cloneStateValue(state.sharedWorkspaces);
+    await runOptimisticMutation(
+      () => {
+        const ws = state.sharedWorkspaces?.workspaces?.find((item) => item.id === workspaceId);
+        if (ws?.lease) {
+          ws.lease.owner = owner || ws.lease.owner;
+          ws.lease.lease_expires_at = new Date(
+            Date.now() + (ttlMinutes || 60) * 60000,
+          ).toISOString();
+        }
+      },
+      () =>
+        apiFetch("/api/shared-workspaces/renew", {
+          method: "POST",
+          body: JSON.stringify({ workspaceId, owner, ttlMinutes }),
+        }),
+      () => {
+        state.sharedWorkspaces = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action.startsWith("shared:release:")) {
     const workspaceId = action.replace("shared:release:", "");
     const owner = document.getElementById("shared-owner")?.value?.trim() || "";
-    await apiFetch("/api/shared-workspaces/release", {
-      method: "POST",
-      body: JSON.stringify({ workspaceId, owner }),
-    }).catch((err) => alert(err.message));
-    await refreshTab();
+    const previous = cloneStateValue(state.sharedWorkspaces);
+    await runOptimisticMutation(
+      () => {
+        const ws = state.sharedWorkspaces?.workspaces?.find((item) => item.id === workspaceId);
+        if (ws) {
+          ws.availability = "available";
+          ws.lease = null;
+        }
+      },
+      () =>
+        apiFetch("/api/shared-workspaces/release", {
+          method: "POST",
+          body: JSON.stringify({ workspaceId, owner }),
+        }),
+      () => {
+        state.sharedWorkspaces = previous;
+      },
+    ).catch((err) => alert(err.message));
+    scheduleRefresh(120);
     return;
   }
   if (action === "command:send") {
@@ -1114,6 +1443,7 @@ async function boot() {
   }
   try {
     await refreshTab();
+    connectRealtime();
   } catch (err) {
     console.error(err);
     setConnection(false, "(API unavailable)");
@@ -1122,3 +1452,13 @@ async function boot() {
 }
 
 boot();
+
+window.addEventListener("beforeunload", () => {
+  try {
+    state.ws?.close();
+  } catch {
+    // no-op
+  }
+  if (state.wsReconnectTimer) clearTimeout(state.wsReconnectTimer);
+  if (state.wsRefreshTimer) clearTimeout(state.wsRefreshTimer);
+});

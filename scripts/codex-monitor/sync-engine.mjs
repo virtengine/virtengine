@@ -71,12 +71,14 @@ function isIdValidForBackend(id, backend) {
 // ---------------------------------------------------------------------------
 
 const STATUS_ORDER = {
+  backlog: -1,
   todo: 0,
+  ready: 1,
   blocked: 1,
-  inprogress: 1,
+  inprogress: 2,
   inreview: 2,
-  done: 3,
-  cancelled: 3,
+  done: 4,
+  cancelled: 4,
 };
 
 function statusRank(s) {
@@ -97,7 +99,9 @@ const TERMINAL_STATUS_ALIASES = {
 };
 
 const CANONICAL_STATUS_BY_KEY = {
+  backlog: "backlog",
   todo: "todo",
+  ready: "ready",
   inprogress: "inprogress",
   inreview: "inreview",
   blocked: "blocked",

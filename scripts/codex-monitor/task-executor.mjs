@@ -126,6 +126,15 @@ const RUNTIME_STATE_FILE = resolve(
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const REQUEUE_STATUS = String(process.env.TASK_REQUEUE_STATUS || "ready")
+  .trim()
+  .toLowerCase();
+const DEFAULT_DISPATCH_STATUSES = (
+  process.env.TASK_DISPATCH_STATUSES || "ready,todo"
+)
+  .split(",")
+  .map((status) => String(status || "").trim().toLowerCase())
+  .filter(Boolean);
 
 // ── Agent Log Streaming ─────────────────────────────────────────────────────
 
@@ -755,7 +764,7 @@ class TaskExecutor {
     this._running = true;
     // Start watchdog to detect and kill stalled agent slots
     this._startWatchdog();
-    // Resume interrupted in-progress tasks first, then poll todo backlog.
+    // Resume interrupted in-progress tasks first, then poll dispatch queue.
     void ensureThreadRegistryLoaded()
       .catch((err) => {
         console.warn(
@@ -1296,7 +1305,7 @@ class TaskExecutor {
 
     /** @type {Array<Object>} */
     const resumable = [];
-    let resetToTodo = 0;
+    let resetToQueue = 0;
 
     for (const task of inProgressTasks) {
       const id = task?.id || task?.task_id;
@@ -1312,17 +1321,17 @@ class TaskExecutor {
       }
 
       try {
-        await updateTaskStatus(id, "todo");
+        await updateTaskStatus(id, REQUEUE_STATUS);
       } catch {
         /* best effort */
       }
       try {
-        setInternalStatus(id, "todo", "task-executor-recovery");
+        setInternalStatus(id, REQUEUE_STATUS, "task-executor-recovery");
       } catch {
         /* best effort */
       }
       this._removeRuntimeSlot(id);
-      resetToTodo++;
+      resetToQueue++;
     }
 
     const toDispatch = resumable.slice(0, available);
@@ -1334,9 +1343,9 @@ class TaskExecutor {
       });
     }
 
-    if (toDispatch.length > 0 || resetToTodo > 0) {
+    if (toDispatch.length > 0 || resetToQueue > 0) {
       console.log(
-        `${TAG} in-progress recovery: resumed ${toDispatch.length}, reset ${resetToTodo} stale task(s) to todo`,
+        `${TAG} in-progress recovery: resumed ${toDispatch.length}, reset ${resetToQueue} stale task(s) to ${REQUEUE_STATUS}`,
       );
     }
   }
@@ -1476,7 +1485,7 @@ class TaskExecutor {
   // ── Poll Loop ─────────────────────────────────────────────────────────────
 
   /**
-   * Check kanban for todo tasks and dispatch execution.
+  * Check kanban for dispatchable tasks and dispatch execution.
    * Guarded against overlapping polls and slot saturation.
    * @private
    */
@@ -1494,22 +1503,31 @@ class TaskExecutor {
         return;
       }
 
-      // Fetch todo tasks
-      let tasks;
+      // Fetch dispatchable tasks (prefer ready, then legacy todo)
+      let tasks = [];
       try {
-        tasks = await listTasks(projectId, { status: "todo" });
+        for (const status of DEFAULT_DISPATCH_STATUSES) {
+          const fetched = await listTasks(projectId, { status });
+          if (Array.isArray(fetched) && fetched.length > 0) {
+            tasks = fetched;
+            break;
+          }
+        }
       } catch (err) {
         console.warn(`${TAG} failed to list tasks: ${err.message}`);
         return;
       }
 
-      // Client-side status filter — VK API may not respect the status query param
+      // Client-side status filter — backends may not strictly honor status query params
       if (tasks && tasks.length > 0) {
         const before = tasks.length;
-        tasks = tasks.filter((t) => t.status === "todo");
+        const allowed = new Set(DEFAULT_DISPATCH_STATUSES);
+        tasks = tasks.filter((t) =>
+          allowed.has(String(t.status || "").toLowerCase()),
+        );
         if (tasks.length !== before) {
           console.debug(
-            `${TAG} filtered ${before - tasks.length} non-todo tasks (VK returned ${before}, kept ${tasks.length})`,
+            `${TAG} filtered ${before - tasks.length} tasks outside dispatch statuses (${[...allowed].join(",")})`,
           );
         }
       }
@@ -1809,7 +1827,7 @@ class TaskExecutor {
         );
         this._taskCooldowns.set(taskId, Date.now());
         try {
-          await updateTaskStatus(taskId, "todo");
+          await updateTaskStatus(taskId, REQUEUE_STATUS);
         } catch {
           /* best-effort */
         }
@@ -1834,7 +1852,7 @@ class TaskExecutor {
           /* best-effort */
         }
         try {
-          await updateTaskStatus(taskId, "todo");
+          await updateTaskStatus(taskId, REQUEUE_STATUS);
         } catch {
           /* best-effort */
         }
@@ -2057,7 +2075,7 @@ class TaskExecutor {
       this._slotAbortControllers.delete(taskId);
 
       try {
-        await updateTaskStatus(taskId, "todo");
+        await updateTaskStatus(taskId, REQUEUE_STATUS);
       } catch {
         /* best-effort */
       }
@@ -2102,6 +2120,23 @@ class TaskExecutor {
       }).stdout?.trim() ||
       "unknown";
 
+    const internalTask = getInternalTask(task.id || task.task_id) || null;
+    const reviewIssues = Array.isArray(internalTask?.reviewIssues)
+      ? internalTask.reviewIssues
+      : [];
+    const reviewFeedback = reviewIssues
+      .filter((issue) => {
+        const severity = String(issue?.severity || "").toLowerCase();
+        return severity === "critical" || severity === "major";
+      })
+      .slice(0, 20)
+      .map((issue, index) => {
+        const file = issue?.file
+          ? `${issue.file}${issue?.line ? `:${issue.line}` : ""}`
+          : "(file not provided)";
+        return `${index + 1}. [${String(issue?.severity || "critical").toUpperCase()}/${String(issue?.category || "bug").toUpperCase()}] ${file} — ${issue?.description || "No description"}`;
+      });
+
     const lines = [
       `# ${task.id || task.task_id} — ${task.title}`,
       ``,
@@ -2109,6 +2144,14 @@ class TaskExecutor {
       task.description ||
         "No description provided. Check the task URL for details.",
       ``,
+      ...(reviewFeedback.length > 0
+        ? [
+            `## Review Feedback To Fix`,
+            `The previous review requested changes. Address ALL items below before moving back to inreview:`,
+            ...reviewFeedback,
+            ``,
+          ]
+        : []),
       `## Environment`,
       `- Working Directory: ${worktreePath}`,
       `- Branch: ${branch}`,
@@ -2635,9 +2678,9 @@ class TaskExecutor {
           `${tag} completed but no commits found (attempt ${noCommitCount}/${MAX_NO_COMMIT_ATTEMPTS}, cooldown ${cooldownMin}m)`,
         );
 
-        // Set back to todo — NOT inreview (nothing to review)
+        // Set back to queue status — NOT inreview (nothing to review)
         try {
-          await updateTaskStatus(task.id, "todo");
+          await updateTaskStatus(task.id, REQUEUE_STATUS);
         } catch {
           /* best-effort */
         }
@@ -2735,7 +2778,7 @@ class TaskExecutor {
       }
 
       try {
-        await updateTaskStatus(task.id, "todo");
+        await updateTaskStatus(task.id, REQUEUE_STATUS);
       } catch {
         /* best-effort */
       }

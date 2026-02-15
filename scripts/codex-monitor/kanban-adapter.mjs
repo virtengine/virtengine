@@ -72,7 +72,12 @@ const TAG = "[kanban]";
 /** Map from various backend status strings to our canonical set */
 const STATUS_MAP = {
   // VK statuses
+  backlog: "backlog",
+  "to do": "backlog",
   todo: "todo",
+  ready: "ready",
+  queued: "ready",
+  triaged: "ready",
   inprogress: "inprogress",
   "in-progress": "inprogress",
   in_progress: "inprogress",
@@ -86,16 +91,15 @@ const STATUS_MAP = {
   open: "todo",
   closed: "done",
   // Jira-style
-  "to do": "todo",
   "in progress": "inprogress",
   review: "inreview",
   resolved: "done",
 };
 
 function normaliseStatus(raw) {
-  if (!raw) return "todo";
+  if (!raw) return "ready";
   const key = String(raw).toLowerCase().trim();
-  return STATUS_MAP[key] || "todo";
+  return STATUS_MAP[key] || "ready";
 }
 
 // ---------------------------------------------------------------------------
@@ -249,11 +253,30 @@ class VKAdapter {
   }
 
   async updateTaskStatus(taskId, status) {
+    return this.updateTask(taskId, { status });
+  }
+
+  async updateTask(taskId, patch = {}) {
     const fetchVk = await this._getFetchVk();
-    // Use PUT instead of PATCH — VK API returns 405 for PATCH on /api/tasks/:id
+    const body = {};
+    if (typeof patch.status === "string" && patch.status.trim()) {
+      body.status = patch.status.trim();
+    }
+    if (typeof patch.title === "string") {
+      body.title = patch.title;
+    }
+    if (typeof patch.description === "string") {
+      body.description = patch.description;
+    }
+    if (typeof patch.priority === "string" && patch.priority.trim()) {
+      body.priority = patch.priority.trim();
+    }
+    if (Object.keys(body).length === 0) {
+      return this.getTask(taskId);
+    }
     const result = await fetchVk(`/api/tasks/${taskId}`, {
       method: "PUT",
-      body: { status },
+      body,
     });
     const task = result?.data || result;
     return this._normaliseTask(task);
@@ -314,6 +337,49 @@ class GitHubIssuesAdapter {
     const [slugOwner, slugRepo] = String(slug).split("/", 2);
     this._owner = process.env.GITHUB_REPO_OWNER || slugOwner || "virtengine";
     this._repo = process.env.GITHUB_REPO_NAME || slugRepo || "virtengine";
+    const projectConfig = config?.kanban?.githubProject || {};
+    const genericProjectId =
+      process.env.KANBAN_PROJECT_ID || config?.kanban?.projectId || null;
+
+    this._projectOwner =
+      process.env.GITHUB_PROJECT_OWNER ||
+      projectConfig.owner ||
+      this._owner ||
+      null;
+
+    const configuredProjectNumber =
+      process.env.GITHUB_PROJECT_NUMBER || projectConfig.number || null;
+    this._projectNumber =
+      configuredProjectNumber != null && configuredProjectNumber !== ""
+        ? Number(configuredProjectNumber)
+        : genericProjectId && /^\d+$/.test(String(genericProjectId))
+          ? Number(genericProjectId)
+          : null;
+
+    this._projectId =
+      process.env.GITHUB_PROJECT_ID ||
+      projectConfig.id ||
+      (genericProjectId && /^PVT_/i.test(String(genericProjectId))
+        ? String(genericProjectId)
+        : null);
+
+    this._projectStatusFieldName =
+      process.env.GITHUB_PROJECT_STATUS_FIELD ||
+      projectConfig.statusFieldName ||
+      "Status";
+    this._todoAssigneeMode = (
+      process.env.GITHUB_TODO_ASSIGNEE_MODE || "open-or-self"
+    )
+      .trim()
+      .toLowerCase();
+    this._autoAssignOnStart =
+      String(process.env.GITHUB_AUTO_ASSIGN_ON_START || "true")
+        .trim()
+        .toLowerCase() !== "false";
+    this._ghLogin = null;
+    this._ghLoginLoaded = false;
+    this._projectContext = null;
+    this._projectContextLoaded = false;
   }
 
   /** Execute a gh CLI command and return parsed JSON */
@@ -336,8 +402,431 @@ class GitHubIssuesAdapter {
     }
   }
 
+  async _ghGraphql(query, variables = {}) {
+    const args = ["api", "graphql", "-f", `query=${query}`];
+    for (const [key, value] of Object.entries(variables || {})) {
+      if (value === undefined || value === null || value === "") continue;
+      if (typeof value === "number" && Number.isFinite(value)) {
+        args.push("-F", `${key}=${value}`);
+      } else {
+        args.push("-f", `${key}=${String(value)}`);
+      }
+    }
+    const result = await this._gh(args);
+    if (result?.errors?.length) {
+      throw new Error(
+        `gh GraphQL failed: ${result.errors.map((e) => e?.message || String(e)).join("; ")}`,
+      );
+    }
+    return result?.data || null;
+  }
+
+  async _getGhLogin() {
+    if (this._ghLoginLoaded) return this._ghLogin;
+    this._ghLoginLoaded = true;
+    try {
+      const login = await this._gh(["api", "user", "--jq", ".login"], {
+        parseJson: false,
+      });
+      this._ghLogin = String(login || "").trim().toLowerCase() || null;
+    } catch {
+      this._ghLogin = null;
+    }
+    return this._ghLogin;
+  }
+
+  async _filterDispatchableTasksByAssignee(tasks, filters = {}) {
+    if (!Array.isArray(tasks) || tasks.length === 0) return tasks || [];
+    const wantedStatus = filters?.status ? normaliseStatus(filters.status) : null;
+    if (!["todo", "ready"].includes(wantedStatus || "")) return tasks;
+    if (!["open-or-self", "self-only"].includes(this._todoAssigneeMode)) {
+      return tasks;
+    }
+    const login = await this._getGhLogin();
+    if (!login) return tasks;
+
+    return tasks.filter((task) => {
+      const assignee = String(task?.assignee || "")
+        .trim()
+        .toLowerCase();
+      if (!assignee) return this._todoAssigneeMode === "open-or-self";
+      return assignee === login;
+    });
+  }
+
+  async _maybeAutoAssignIssue(issueNumber, status) {
+    const normalized = normaliseStatus(status);
+    if (!this._autoAssignOnStart || normalized !== "inprogress") return;
+    try {
+      await this._gh(
+        [
+          "issue",
+          "edit",
+          String(issueNumber),
+          "--repo",
+          `${this._owner}/${this._repo}`,
+          "--add-assignee",
+          "@me",
+        ],
+        { parseJson: false },
+      );
+    } catch {
+      // Non-fatal: some repos restrict assignment permissions
+    }
+  }
+
+  _hasProjectConfig() {
+    return (
+      Number.isFinite(this._projectNumber) ||
+      Boolean(this._projectId && this._projectOwner)
+    );
+  }
+
+  _extractProjectFieldMeta(project) {
+    const fields = project?.fields?.nodes || [];
+    const statusField = fields.find(
+      (field) =>
+        String(field?.name || "").toLowerCase() ===
+        String(this._projectStatusFieldName || "status").toLowerCase(),
+    );
+    const optionByStatus = new Map();
+    const options = Array.isArray(statusField?.options) ? statusField.options : [];
+    for (const option of options) {
+      if (!option?.id || !option?.name) continue;
+      const direct = normaliseStatus(option.name);
+      optionByStatus.set(direct, option.id);
+
+      const key = String(option.name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]+/g, " ");
+      if (key.includes("backlog")) {
+        optionByStatus.set("backlog", option.id);
+      }
+      if (key.includes("ready") || key.includes("queue")) {
+        optionByStatus.set("ready", option.id);
+      }
+      if (key.includes("to do") || key.includes("backlog")) {
+        optionByStatus.set("todo", option.id);
+      }
+      if (key.includes("review")) {
+        optionByStatus.set("inreview", option.id);
+      }
+      if (key.includes("progress") || key.includes("doing")) {
+        optionByStatus.set("inprogress", option.id);
+      }
+      if (key.includes("done") || key.includes("complete") || key.includes("merged")) {
+        optionByStatus.set("done", option.id);
+      }
+      if (
+        key.includes("cancel") ||
+        key.includes("not planned") ||
+        key.includes("wontfix")
+      ) {
+        optionByStatus.set("cancelled", option.id);
+      }
+    }
+
+    return {
+      statusFieldId: statusField?.id || null,
+      optionByStatus,
+    };
+  }
+
+  async _loadProjectContext() {
+    if (!this._hasProjectConfig()) return null;
+    if (this._projectContextLoaded) return this._projectContext;
+
+    let project = null;
+    if (Number.isFinite(this._projectNumber) && this._projectOwner) {
+      const queryByNumber = `
+        query($owner: String!, $number: Int!) {
+          organization(login: $owner) {
+            projectV2(number: $number) {
+              id
+              number
+              title
+              fields(first: 50) {
+                nodes {
+                  ... on ProjectV2FieldCommon { id name }
+                  ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                    options { id name }
+                  }
+                }
+              }
+            }
+          }
+          user(login: $owner) {
+            projectV2(number: $number) {
+              id
+              number
+              title
+              fields(first: 50) {
+                nodes {
+                  ... on ProjectV2FieldCommon { id name }
+                  ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                    options { id name }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      const data = await this._ghGraphql(queryByNumber, {
+        owner: this._projectOwner,
+        number: this._projectNumber,
+      });
+      project = data?.organization?.projectV2 || data?.user?.projectV2 || null;
+    } else if (this._projectId) {
+      const queryById = `
+        query($projectId: ID!) {
+          node(id: $projectId) {
+            ... on ProjectV2 {
+              id
+              number
+              title
+              owner {
+                ... on Organization { login }
+                ... on User { login }
+              }
+              fields(first: 50) {
+                nodes {
+                  ... on ProjectV2FieldCommon { id name }
+                  ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                    options { id name }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      const data = await this._ghGraphql(queryById, {
+        projectId: this._projectId,
+      });
+      project = data?.node || null;
+      if (project?.owner?.login && !this._projectOwner) {
+        this._projectOwner = project.owner.login;
+      }
+      if (Number.isFinite(project?.number) && !Number.isFinite(this._projectNumber)) {
+        this._projectNumber = Number(project.number);
+      }
+    }
+
+    if (!project?.id || !Number.isFinite(Number(project?.number))) {
+      this._projectContextLoaded = true;
+      this._projectContext = null;
+      return null;
+    }
+
+    const fieldMeta = this._extractProjectFieldMeta(project);
+    this._projectContext = {
+      id: project.id,
+      number: Number(project.number),
+      owner: this._projectOwner,
+      title: project.title || `Project ${project.number}`,
+      statusFieldId: fieldMeta.statusFieldId,
+      optionByStatus: fieldMeta.optionByStatus,
+    };
+    this._projectContextLoaded = true;
+    return this._projectContext;
+  }
+
+  _extractProjectItemStatus(item) {
+    const fieldValues =
+      item?.fieldValues ||
+      item?.field_values ||
+      item?.fields ||
+      item?.fieldValueByName ||
+      [];
+    const values = Array.isArray(fieldValues)
+      ? fieldValues
+      : Object.values(fieldValues || {});
+    const wantedField = String(this._projectStatusFieldName || "status").toLowerCase();
+    for (const value of values) {
+      const fieldName = String(value?.field?.name || value?.name || "").toLowerCase();
+      if (fieldName !== wantedField && fieldName !== "status") continue;
+      const candidate =
+        value?.optionName ||
+        value?.name ||
+        value?.value ||
+        value?.text ||
+        value?.fieldValueName ||
+        value?.label;
+      if (candidate) return candidate;
+    }
+
+    const mapFields = [
+      item?.status,
+      item?.statusName,
+      item?.status_name,
+      item?.projectStatus,
+      item?.project_status,
+    ];
+    for (const candidate of mapFields) {
+      if (candidate) return candidate;
+    }
+    return null;
+  }
+
+  _normaliseProjectItem(item, projectContext) {
+    const content = item?.content || item?.issue || item?.task || item || {};
+    const number = content?.number || item?.number || null;
+    if (!number) return null;
+    const statusRaw = this._extractProjectItemStatus(item);
+    const labels = (content?.labels || item?.labels || []).map((label) =>
+      typeof label === "string" ? { name: label } : label,
+    );
+
+    return this._normaliseIssue({
+      number,
+      title: content?.title || item?.title || "",
+      body: content?.body || content?.description || item?.body || "",
+      state: content?.state || item?.state || "open",
+      url: content?.url || item?.url || null,
+      assignees: content?.assignees || item?.assignees || [],
+      labels,
+      status: statusRaw,
+      project_status: statusRaw,
+      projectId: projectContext?.id,
+      projectItemId: item?.id || item?.itemId || null,
+    });
+  }
+
+  async _listProjectItems(filters = {}) {
+    const project = await this._loadProjectContext();
+    if (!project?.owner || !Number.isFinite(project?.number)) return [];
+    const limit =
+      Number(filters.limit || process.env.GITHUB_PROJECT_ITEMS_LIMIT || 1000) ||
+      1000;
+    const args = [
+      "project",
+      "item-list",
+      String(project.number),
+      "--owner",
+      String(project.owner),
+      "--format",
+      "json",
+      "--limit",
+      String(limit),
+    ];
+    const items = await this._gh(args);
+    const normalized = (Array.isArray(items) ? items : [])
+      .map((item) => this._normaliseProjectItem(item, project))
+      .filter(Boolean);
+
+    if (filters.status) {
+      const wanted = normaliseStatus(filters.status);
+      return normalized.filter((task) => task.status === wanted);
+    }
+    return normalized;
+  }
+
+  async _resolveProjectItemIdForIssue(issueNumber) {
+    const projectItems = await this._listProjectItems({
+      limit: Number(process.env.GITHUB_PROJECT_ITEMS_LIMIT || 1000) || 1000,
+    });
+    const wanted = String(issueNumber).replace(/^#/, "");
+    const match = projectItems.find((task) => String(task.id) === wanted);
+    return match?.meta?.projectItemId || null;
+  }
+
+  async _syncProjectStatus(issueNumber, status) {
+    const project = await this._loadProjectContext();
+    if (!project?.id || !project?.statusFieldId) return;
+
+    const normalized = normaliseStatus(status);
+    const optionId = project.optionByStatus?.get(normalized) || null;
+    if (!optionId) {
+      console.warn(
+        `${TAG} github project status option missing for "${normalized}" in project ${project.owner}/${project.number}`,
+      );
+      return;
+    }
+
+    const itemId = await this._resolveProjectItemIdForIssue(issueNumber);
+    if (!itemId) {
+      console.warn(
+        `${TAG} github project item not found for issue #${issueNumber} in project ${project.owner}/${project.number}`,
+      );
+      return;
+    }
+
+    const mutation = `
+      mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+        updateProjectV2ItemFieldValue(
+          input: {
+            projectId: $projectId
+            itemId: $itemId
+            fieldId: $fieldId
+            value: { singleSelectOptionId: $optionId }
+          }
+        ) {
+          projectV2Item { id }
+        }
+      }
+    `;
+    await this._ghGraphql(mutation, {
+      projectId: project.id,
+      itemId,
+      fieldId: project.statusFieldId,
+      optionId,
+    });
+  }
+
+  async _addIssueToProject(issueUrl) {
+    const project = await this._loadProjectContext();
+    if (!project?.owner || !Number.isFinite(project?.number) || !issueUrl) {
+      return;
+    }
+    try {
+      await this._gh(
+        [
+          "project",
+          "item-add",
+          String(project.number),
+          "--owner",
+          String(project.owner),
+          "--url",
+          String(issueUrl),
+        ],
+        { parseJson: false },
+      );
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to add issue to github project ${project.owner}/${project.number}: ${err.message}`,
+      );
+    }
+  }
+
   async listProjects() {
-    // GitHub doesn't have "projects" in the same sense — return repo as project
+    const project = await this._loadProjectContext().catch((err) => {
+      console.warn(`${TAG} github project load failed: ${err.message}`);
+      return null;
+    });
+    if (project) {
+      return [
+        {
+          id: project.id,
+          name: project.title,
+          meta: {
+            owner: project.owner,
+            number: project.number,
+            statusFieldId: project.statusFieldId,
+          },
+          backend: "github",
+        },
+      ];
+    }
+
+    // Fallback: repo as a pseudo-project
     return [
       {
         id: `${this._owner}/${this._repo}`,
@@ -349,6 +838,17 @@ class GitHubIssuesAdapter {
   }
 
   async listTasks(_projectId, filters = {}) {
+    if (this._hasProjectConfig()) {
+      try {
+        const projectTasks = await this._listProjectItems(filters);
+        return await this._filterDispatchableTasksByAssignee(projectTasks, filters);
+      } catch (err) {
+        console.warn(
+          `${TAG} github project list failed, falling back to issues: ${err.message}`,
+        );
+      }
+    }
+
     const limit =
       Number(filters.limit || process.env.GITHUB_ISSUES_LIST_LIMIT || 1000) ||
       1000;
@@ -371,9 +871,10 @@ class GitHubIssuesAdapter {
       args.push("--state", "open");
     }
     const issues = await this._gh(args);
-    return (Array.isArray(issues) ? issues : []).map((i) =>
+    const normalized = (Array.isArray(issues) ? issues : []).map((i) =>
       this._normaliseIssue(i),
     );
+    return await this._filterDispatchableTasksByAssignee(normalized, filters);
   }
 
   async getTask(issueNumber) {
@@ -416,6 +917,7 @@ class GitHubIssuesAdapter {
       }
       await this._gh(closeArgs, { parseJson: false });
     } else {
+      await this._maybeAutoAssignIssue(num, normalised);
       await this._gh(
         ["issue", "reopen", num, "--repo", `${this._owner}/${this._repo}`],
         { parseJson: false },
@@ -423,6 +925,7 @@ class GitHubIssuesAdapter {
 
       // Keep status labels in sync for open issues.
       const labelByStatus = {
+        ready: "ready",
         inprogress: "inprogress",
         inreview: "inreview",
         blocked: "blocked",
@@ -455,7 +958,44 @@ class GitHubIssuesAdapter {
         // Label might not exist — non-critical
       }
     }
+
+    if (this._hasProjectConfig()) {
+      try {
+        await this._syncProjectStatus(num, status);
+      } catch (err) {
+        console.warn(
+          `${TAG} github project status sync failed for issue #${num}: ${err.message}`,
+        );
+      }
+    }
+
     return this.getTask(issueNumber);
+  }
+
+  async updateTask(issueNumber, patch = {}) {
+    const num = String(issueNumber).replace(/^#/, "");
+    if (!/^\d+$/.test(num)) {
+      throw new Error(
+        `GitHub Issues: invalid issue number "${issueNumber}" — expected a numeric ID, got a UUID or non-numeric string`,
+      );
+    }
+    const editArgs = ["issue", "edit", num, "--repo", `${this._owner}/${this._repo}`];
+    let hasEditArgs = false;
+    if (typeof patch.title === "string") {
+      editArgs.push("--title", patch.title);
+      hasEditArgs = true;
+    }
+    if (typeof patch.description === "string") {
+      editArgs.push("--body", patch.description);
+      hasEditArgs = true;
+    }
+    if (hasEditArgs) {
+      await this._gh(editArgs, { parseJson: false });
+    }
+    if (typeof patch.status === "string" && patch.status.trim()) {
+      return this.updateTaskStatus(num, patch.status.trim());
+    }
+    return this.getTask(num);
   }
 
   async createTask(_projectId, taskData) {
@@ -478,6 +1018,18 @@ class GitHubIssuesAdapter {
     const result = await this._gh(args, { parseJson: false });
     const issueUrl = String(result || "").match(/https?:\/\/\S+/)?.[0] || "";
     const issueNum = issueUrl.match(/\/issues\/(\d+)/)?.[1] || null;
+
+    if (issueUrl && this._hasProjectConfig()) {
+      await this._addIssueToProject(issueUrl);
+      if (taskData?.status && issueNum) {
+        try {
+          await this._syncProjectStatus(issueNum, taskData.status);
+        } catch {
+          // Non-critical: issue creation still succeeded
+        }
+      }
+    }
+
     if (issueNum) {
       return this.getTask(issueNum);
     }
@@ -550,6 +1102,8 @@ class GitHubIssuesAdapter {
     let status = "todo";
     if (issue.state === "closed" || issue.state === "CLOSED") {
       status = "done";
+    } else if (issue.project_status) {
+      status = normaliseStatus(issue.project_status);
     } else if (labelSet.has("inprogress") || labelSet.has("in-progress")) {
       status = "inprogress";
     } else if (labelSet.has("inreview") || labelSet.has("in-review")) {
@@ -573,10 +1127,14 @@ class GitHubIssuesAdapter {
         : labelSet.has("high")
           ? "high"
           : null,
-      projectId: `${this._owner}/${this._repo}`,
+      projectId: issue.projectId || `${this._owner}/${this._repo}`,
       branchName: branchMatch?.[1] || null,
       prNumber: prMatch?.[1] || null,
-      meta: { ...issue, task_url: issue.url || null },
+      meta: {
+        ...issue,
+        task_url: issue.url || null,
+        projectItemId: issue.projectItemId || null,
+      },
       taskUrl: issue.url || null,
       backend: "github",
     };
@@ -613,6 +1171,9 @@ class JiraAdapter {
   }
   async updateTaskStatus(_taskId, _status) {
     this._notImplemented("updateTaskStatus");
+  }
+  async updateTask(_taskId, _patch) {
+    this._notImplemented("updateTask");
   }
   async createTask(_projectId, _taskData) {
     this._notImplemented("createTask");
@@ -737,6 +1298,17 @@ export async function getTask(taskId) {
 
 export async function updateTaskStatus(taskId, status) {
   return getKanbanAdapter().updateTaskStatus(taskId, status);
+}
+
+export async function updateTask(taskId, patch) {
+  const adapter = getKanbanAdapter();
+  if (typeof adapter.updateTask === "function") {
+    return adapter.updateTask(taskId, patch);
+  }
+  if (patch?.status) {
+    return adapter.updateTaskStatus(taskId, patch.status);
+  }
+  return adapter.getTask(taskId);
 }
 
 export async function createTask(projectId, taskData) {

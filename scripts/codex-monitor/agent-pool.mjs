@@ -69,6 +69,74 @@ function envFlagEnabled(value) {
   return ["1", "true", "yes", "on", "y"].includes(raw);
 }
 
+function normalizeCopilotAgentType(value, fallback = "local") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["local", "background", "cloud"].includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
+
+function resolveCopilotAgentType(extra = {}) {
+  const explicit = normalizeCopilotAgentType(extra.agentType || "", "");
+  if (explicit) return explicit;
+
+  const envType = normalizeCopilotAgentType(
+    process.env.COPILOT_AGENT_TYPE || process.env.COPILOT_SESSION_TYPE || "",
+    "",
+  );
+  if (envType) return envType;
+
+  try {
+    const configType = normalizeCopilotAgentType(
+      loadConfig()?.copilot?.agentType || "",
+      "",
+    );
+    if (configType) return configType;
+  } catch {
+    /* best effort */
+  }
+
+  return "local";
+}
+
+function getCopilotAgentTypeCandidates(agentType) {
+  const normalized = normalizeCopilotAgentType(agentType, "local");
+  if (normalized === "background") return ["background", "local"];
+  if (normalized === "cloud") return ["cloud", "background", "local"];
+  return ["local", "background"];
+}
+
+function applyCopilotAgentTypeToSessionConfig(sessionConfig, agentType, cwd) {
+  const normalized = normalizeCopilotAgentType(agentType, "local");
+  if (normalized === "local") {
+    sessionConfig.workingDirectory = cwd;
+  } else {
+    delete sessionConfig.workingDirectory;
+  }
+}
+
+function deriveTaskHeading(text) {
+  const firstLine = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return "Task";
+  const heading = firstLine.replace(/^#+\s*/, "").trim();
+  if (!heading) return "Task";
+  return heading.length > 120 ? `${heading.slice(0, 117)}...` : heading;
+}
+
+function buildExecutionPrompt(taskText) {
+  const heading = deriveTaskHeading(taskText);
+  return (
+    `# ${heading}\n\n${taskText}\n\n---\n` +
+    'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.'
+  );
+}
+
 const OPENAI_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
@@ -517,6 +585,8 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
     onThreadReady = null,
     model: requestedModel = null,
   } = extra;
+  const requestedAgentType = resolveCopilotAgentType(extra);
+  const agentTypeCandidates = getCopilotAgentTypeCandidates(requestedAgentType);
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
   let CopilotClientClass;
@@ -571,7 +641,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
 
   // ── 4. Resume/create session ─────────────────────────────────────────────
   try {
-    const sessionConfig = {
+    const baseSessionConfig = {
       streaming: true,
       systemMessage: {
         mode: "replace",
@@ -587,20 +657,64 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         process.env.COPILOT_SDK_MODEL ||
         "",
     ).trim();
-    if (copilotModel) sessionConfig.model = copilotModel;
+    if (copilotModel) baseSessionConfig.model = copilotModel;
+
     let session = null;
-    if (resumeThreadId && typeof client.resumeSession === "function") {
-      try {
-        session = await client.resumeSession(resumeThreadId, sessionConfig);
-      } catch (resumeErr) {
+    let resolvedAgentType = null;
+    let lastSessionErr = null;
+
+    for (const candidateAgentType of agentTypeCandidates) {
+      const sessionConfig = { ...baseSessionConfig };
+      applyCopilotAgentTypeToSessionConfig(sessionConfig, candidateAgentType, cwd);
+
+      if (candidateAgentType === "cloud") {
         console.warn(
-          `${TAG} copilot resume failed for session ${resumeThreadId}: ${resumeErr.message || resumeErr}. Starting fresh session.`,
+          `${TAG} COPILOT_AGENT_TYPE=cloud requested, but Copilot SDK does not expose an explicit cloud session mode. Trying background-compatible session settings.`,
+        );
+      }
+
+      try {
+        if (resumeThreadId && typeof client.resumeSession === "function") {
+          try {
+            session = await client.resumeSession(resumeThreadId, sessionConfig);
+          } catch (resumeErr) {
+            console.warn(
+              `${TAG} copilot resume failed for session ${resumeThreadId}: ${resumeErr.message || resumeErr}. Starting fresh session.`,
+            );
+          }
+        }
+
+        if (!session) {
+          session = await client.createSession(sessionConfig);
+        }
+
+        resolvedAgentType = candidateAgentType;
+        break;
+      } catch (sessionErr) {
+        lastSessionErr = sessionErr;
+        session = null;
+        console.warn(
+          `${TAG} copilot session init failed with agentType=${candidateAgentType}: ${sessionErr?.message || sessionErr}`,
         );
       }
     }
+
     if (!session) {
-      session = await client.createSession(sessionConfig);
+      throw lastSessionErr || new Error("failed to initialize Copilot session");
     }
+
+    if (resolvedAgentType && resolvedAgentType !== requestedAgentType) {
+      console.warn(
+        `${TAG} copilot agent type fallback: requested=${requestedAgentType}, active=${resolvedAgentType}`,
+      );
+    }
+
+    if (resolvedAgentType !== "local" && cwd) {
+      console.warn(
+        `${TAG} copilot agent type '${resolvedAgentType}' is not pinned to the task worktree path (${cwd}); this can create parallel Copilot-managed workspaces. Prefer COPILOT_AGENT_TYPE=local to avoid double-worktree behavior.`,
+      );
+    }
+
     const copilotSessionId =
       session?.sessionId || session?.id || resumeThreadId || null;
     if (copilotSessionId && typeof onThreadReady === "function") {
@@ -636,9 +750,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       });
     }
 
-    const formattedPrompt =
-      `# YOUR TASK — EXECUTE NOW\n\n${prompt}\n\n---\n` +
-      'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.';
+    const formattedPrompt = buildExecutionPrompt(prompt);
 
     const hasSend = typeof session.send === "function";
     const hasSendAndWait = typeof session.sendAndWait === "function";
@@ -728,6 +840,7 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       error: null,
       sdk: "copilot",
       threadId: copilotSessionId,
+      copilotAgentType: resolvedAgentType,
     };
   } catch (err) {
     const errMsg = String(err?.message || err || "");
@@ -949,8 +1062,7 @@ async function launchClaudeThread(prompt, cwd, timeoutMs, extra = {}) {
     const msgQueue = createMessageQueue();
 
     const formattedPrompt =
-      `# YOUR TASK — EXECUTE NOW\n\n${prompt}\n\n---\n` +
-      'Do NOT respond with "Ready" or ask what to do. EXECUTE this task.';
+      buildExecutionPrompt(prompt);
 
     msgQueue.push(makeUserMessage(formattedPrompt));
 

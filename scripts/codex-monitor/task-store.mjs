@@ -97,7 +97,15 @@ function defaultMeta() {
     projectId: null,
     lastFullSync: null,
     taskCount: 0,
-    stats: { todo: 0, inprogress: 0, inreview: 0, done: 0, blocked: 0 },
+    stats: {
+      backlog: 0,
+      todo: 0,
+      ready: 0,
+      inprogress: 0,
+      inreview: 0,
+      done: 0,
+      blocked: 0,
+    },
   };
 }
 
@@ -132,6 +140,7 @@ function defaultTask(overrides = {}) {
     reviewStatus: null,
     reviewIssues: null,
     reviewedAt: null,
+    reviewRounds: 0,
 
     cooldownUntil: null,
     blockedReason: null,
@@ -145,7 +154,15 @@ function defaultTask(overrides = {}) {
 }
 
 function recalcStats() {
-  const stats = { todo: 0, inprogress: 0, inreview: 0, done: 0, blocked: 0 };
+  const stats = {
+    backlog: 0,
+    todo: 0,
+    ready: 0,
+    inprogress: 0,
+    inreview: 0,
+    done: 0,
+    blocked: 0,
+  };
   for (const t of Object.values(_store.tasks)) {
     if (t.status === "blocked") {
       stats.blocked++;
@@ -509,6 +526,11 @@ export function setReviewResult(taskId, { approved, issues } = {}) {
 
   task.reviewStatus = approved ? "approved" : "changes_requested";
   task.reviewIssues = issues || null;
+  if (approved) {
+    task.reviewRounds = 0;
+  } else {
+    task.reviewRounds = Number(task.reviewRounds || 0) + 1;
+  }
   task.reviewedAt = now();
   task.updatedAt = now();
   task.lastActivityAt = now();

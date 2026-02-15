@@ -3297,7 +3297,11 @@ async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
     if (!t?.status) return true;
     const status = String(t.status).toLowerCase();
     return (
-      status === "todo" || status === "inprogress" || status === "inreview"
+      status === "backlog" ||
+      status === "ready" ||
+      status === "todo" ||
+      status === "inprogress" ||
+      status === "inreview"
     );
   });
   const finalCandidates =
@@ -3323,7 +3327,7 @@ async function verifyPlannerTaskCompletion(taskData, attemptInfo) {
  * @param {string} taskId - Task UUID
  * @param {string} taskTitle - Human-readable title (for logging)
  * @param {string} reason - Why the recovery is happening (for logging)
- * @returns {Promise<boolean>} true if moved to todo, false if skipped/failed
+ * @returns {Promise<boolean>} true if moved to queue status, false if skipped/failed
  */
 async function safeRecoverTask(taskId, taskTitle, reason) {
   // In internal executor mode, only update task status — never start VK sessions
@@ -3372,9 +3376,9 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       scheduleRecoveryCacheSave();
       return false;
     }
-    if (liveStatus === "todo") {
+    if (liveStatus === TASK_REQUEUE_STATUS || liveStatus === "todo") {
       console.log(
-        `[monitor] safeRecover: task "${taskTitle}" is already todo — no action needed`,
+        `[monitor] safeRecover: task "${taskTitle}" is already ${liveStatus} — no action needed`,
       );
       // Cache so we skip this task for RECOVERY_SKIP_CACHE_MS
       recoverySkipCache.set(taskId, {
@@ -3386,15 +3390,15 @@ async function safeRecoverTask(taskId, taskTitle, reason) {
       scheduleRecoveryCacheSave();
       return false;
     }
-    const success = await updateTaskStatus(taskId, "todo");
+    const success = await updateTaskStatus(taskId, TASK_REQUEUE_STATUS);
     if (success) {
       if (isInternal) {
         console.log(
-          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason}) [internal mode — VK session skipped]`,
+          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → ${TASK_REQUEUE_STATUS} (${reason}) [internal mode — VK session skipped]`,
         );
       } else {
         console.log(
-          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → todo (${reason})`,
+          `[monitor] ♻️ Recovered "${taskTitle}" from ${liveStatus} → ${TASK_REQUEUE_STATUS} (${reason})`,
         );
       }
     }
@@ -5138,9 +5142,9 @@ async function actOnAssessment(ctx, decision) {
       console.log(
         `[${tag}] → new attempt (agent: ${decision.agentType || "auto"})`,
       );
-      // Move task back to todo for re-scheduling
+      // Move task back to queue status for re-scheduling
       if (ctx.taskId) {
-        await updateTaskStatus(ctx.taskId, "todo");
+        await updateTaskStatus(ctx.taskId, TASK_REQUEUE_STATUS);
       }
       void sendTelegramMessage(
         `🆕 Assessment: starting new attempt for "${ctx.taskTitle}" — ${decision.reason || ""}`,
@@ -5169,7 +5173,7 @@ async function actOnAssessment(ctx, decision) {
     case "close_and_replan":
       console.log(`[${tag}] → close and replan`);
       if (ctx.taskId) {
-        await updateTaskStatus(ctx.taskId, "todo");
+        await updateTaskStatus(ctx.taskId, TASK_REQUEUE_STATUS);
       }
       void sendTelegramMessage(
         `🚫 Assessment: closing and replanning "${ctx.taskTitle}" — ${decision.reason || ""}`,
@@ -5546,11 +5550,11 @@ async function smartPRFlow(attemptId, shortId, status) {
           console.warn(
             `[monitor] ${tag}: planner task incomplete — no new backlog tasks detected`,
           );
-          void updateTaskStatus(attemptInfo.task_id, "todo");
+          void updateTaskStatus(attemptInfo.task_id, TASK_REQUEUE_STATUS);
           await archiveAttempt(attemptId);
           if (telegramToken && telegramChatId) {
             void sendTelegramMessage(
-              "⚠️ Task planner incomplete: no new backlog tasks detected. Returned to todo.",
+              `⚠️ Task planner incomplete: no new backlog tasks detected. Returned to ${TASK_REQUEUE_STATUS}.`,
             );
           }
           return;
@@ -10515,6 +10519,12 @@ let syncEngine = null;
 let errorDetector = null;
 /** @type {import("./pr-cleanup-daemon.mjs").PRCleanupDaemon|null} */
 let prCleanupDaemon = null;
+const TASK_REQUEUE_STATUS = String(process.env.TASK_REQUEUE_STATUS || "ready")
+  .trim()
+  .toLowerCase();
+const MAX_REVIEW_ROUNDS = Number(
+  process.env.INTERNAL_EXECUTOR_REVIEW_MAX_ROUNDS || 3,
+);
 
 // ── Task Management Subsystem Initialization ────────────────────────────────
 try {
@@ -10686,8 +10696,9 @@ if (isExecutorDisabled()) {
             console.log(
               `[monitor] review complete for ${taskId}: ${result?.approved ? "approved" : "changes_requested"} — prMerged: ${result?.prMerged}`,
             );
+            let reviewState = null;
             try {
-              setReviewResult(taskId, {
+              reviewState = setReviewResult(taskId, {
                 approved: result?.approved ?? false,
                 issues: result?.issues || [],
               });
@@ -10716,8 +10727,35 @@ if (isExecutorDisabled()) {
                 `[monitor] review approved but PR not merged — ${taskId} stays inreview`,
               );
             } else {
+              const rounds = Number(reviewState?.reviewRounds || 1);
+              const hasRoundsRemaining = rounds < MAX_REVIEW_ROUNDS;
+              if (hasRoundsRemaining) {
+                try {
+                  setInternalTaskStatus(taskId, TASK_REQUEUE_STATUS, "review-agent");
+                } catch {
+                  /* best-effort */
+                }
+                try {
+                  void updateTaskStatus(taskId, TASK_REQUEUE_STATUS);
+                } catch {
+                  /* best-effort */
+                }
+                try {
+                  reviewAgent?.allowReReview?.(taskId);
+                } catch {
+                  /* best-effort */
+                }
+              } else {
+                try {
+                  setInternalTaskStatus(taskId, "blocked", "review-agent");
+                } catch {
+                  /* best-effort */
+                }
+              }
               console.log(
-                `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — task stays inreview`,
+                hasRoundsRemaining
+                  ? `[monitor] review found ${result?.issues?.length || 0} issue(s) for ${taskId} — moved to ${TASK_REQUEUE_STATUS} (round ${rounds}/${MAX_REVIEW_ROUNDS})`
+                  : `[monitor] review loop cap reached for ${taskId} (${rounds}/${MAX_REVIEW_ROUNDS}) — task marked blocked`,
               );
             }
           },

@@ -335,7 +335,7 @@ describe("task-executor", () => {
       );
     });
 
-    it("moves stale in-progress tasks back to todo when no resumable thread exists", async () => {
+    it("moves stale in-progress tasks back to ready when no resumable thread exists", async () => {
       const ex = new TaskExecutor({ projectId: "proj-1", maxParallel: 2 });
       ex._running = true;
       const executeSpy = vi
@@ -355,7 +355,7 @@ describe("task-executor", () => {
 
       await ex._recoverInterruptedInProgressTasks();
 
-      expect(updateTaskStatus).toHaveBeenCalledWith("stale-1", "todo");
+      expect(updateTaskStatus).toHaveBeenCalledWith("stale-1", "ready");
       expect(executeSpy).not.toHaveBeenCalled();
     });
   });

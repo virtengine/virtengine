@@ -54,6 +54,59 @@ function resolveCopilotTransport() {
   return "auto";
 }
 
+function normalizeCopilotAgentType(value, fallback = "local") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (["local", "background", "cloud"].includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
+
+function resolveCopilotAgentType() {
+  return normalizeCopilotAgentType(
+    process.env.COPILOT_AGENT_TYPE || process.env.COPILOT_SESSION_TYPE || "",
+    "local",
+  );
+}
+
+function getCopilotAgentTypeCandidates(agentType) {
+  const normalized = normalizeCopilotAgentType(agentType, "local");
+  if (normalized === "background") return ["background", "local"];
+  if (normalized === "cloud") return ["cloud", "background", "local"];
+  return ["local", "background"];
+}
+
+function applyCopilotAgentTypeToSessionConfig(sessionConfig, agentType) {
+  const normalized = normalizeCopilotAgentType(agentType, "local");
+  if (normalized === "local") {
+    sessionConfig.workingDirectory = REPO_ROOT;
+  } else {
+    delete sessionConfig.workingDirectory;
+  }
+}
+
+function deriveTaskHeading(text) {
+  const firstLine = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return "Task";
+  const heading = firstLine.replace(/^#+\s*/, "").trim();
+  if (!heading) return "Task";
+  return heading.length > 120 ? `${heading.slice(0, 117)}...` : heading;
+}
+
+function buildExecutionPrompt(userMessage, statusData = null) {
+  const heading = deriveTaskHeading(userMessage);
+  if (statusData) {
+    const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
+    return `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# ${heading}\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+  }
+  return `# ${heading}\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function timestamp() {
@@ -388,26 +441,68 @@ async function getSession() {
   const started = await ensureClientStarted();
   if (!started) throw new Error("Copilot SDK not available");
 
-  const config = buildSessionConfig();
+  const baseConfig = buildSessionConfig();
+  const requestedAgentType = resolveCopilotAgentType();
+  const agentTypeCandidates = getCopilotAgentTypeCandidates(requestedAgentType);
 
-  if (activeSessionId && typeof copilotClient?.resumeSession === "function") {
-    try {
-      activeSession = await copilotClient.resumeSession(
-        activeSessionId,
-        config,
-      );
-      workspacePath = activeSession?.workspacePath || workspacePath;
-      console.log(`[copilot-shell] resumed session ${activeSessionId}`);
-      return activeSession;
-    } catch (err) {
+  let config = null;
+  let resolvedAgentType = null;
+  let lastErr = null;
+
+  for (const candidateAgentType of agentTypeCandidates) {
+    config = { ...baseConfig };
+    applyCopilotAgentTypeToSessionConfig(config, candidateAgentType);
+
+    if (candidateAgentType === "cloud") {
       console.warn(
-        `[copilot-shell] failed to resume session ${activeSessionId}: ${err.message} — starting fresh`,
+        "[copilot-shell] COPILOT_AGENT_TYPE=cloud requested, but Copilot SDK does not expose an explicit cloud mode. Trying background-compatible session settings.",
       );
-      activeSessionId = null;
+    }
+
+    try {
+      if (activeSessionId && typeof copilotClient?.resumeSession === "function") {
+        try {
+          activeSession = await copilotClient.resumeSession(activeSessionId, config);
+          workspacePath = activeSession?.workspacePath || workspacePath;
+          resolvedAgentType = candidateAgentType;
+          console.log(`[copilot-shell] resumed session ${activeSessionId}`);
+          break;
+        } catch (err) {
+          console.warn(
+            `[copilot-shell] failed to resume session ${activeSessionId}: ${err.message} — starting fresh`,
+          );
+          activeSessionId = null;
+        }
+      }
+
+      activeSession = await copilotClient.createSession(config);
+      resolvedAgentType = candidateAgentType;
+      break;
+    } catch (err) {
+      lastErr = err;
+      activeSession = null;
+      console.warn(
+        `[copilot-shell] failed to initialize session with agentType=${candidateAgentType}: ${err?.message || err}`,
+      );
     }
   }
 
-  activeSession = await copilotClient.createSession(config);
+  if (!activeSession) {
+    throw lastErr || new Error("unable to initialize copilot session");
+  }
+
+  if (resolvedAgentType && resolvedAgentType !== requestedAgentType) {
+    console.warn(
+      `[copilot-shell] agent type fallback: requested=${requestedAgentType}, active=${resolvedAgentType}`,
+    );
+  }
+
+  if (resolvedAgentType !== "local") {
+    console.warn(
+      `[copilot-shell] active agent type '${resolvedAgentType}' is not pinned to repo root (${REPO_ROOT}); prefer COPILOT_AGENT_TYPE=local to avoid Copilot-managed parallel workspaces.`,
+    );
+  }
+
   activeSessionId =
     activeSession?.sessionId || activeSession?.id || activeSessionId;
   workspacePath = activeSession?.workspacePath || workspacePath;
@@ -495,14 +590,7 @@ export async function execCopilotPrompt(userMessage, options = {}) {
       controller.signal.addEventListener("abort", onAbort, { once: true });
     }
 
-    // Build prompt with optional orchestrator status
-    let prompt = userMessage;
-    if (statusData) {
-      const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
-      prompt = `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-    } else {
-      prompt = `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-    }
+    const prompt = buildExecutionPrompt(userMessage, statusData);
 
     const sendFn = session.sendAndWait || session.send;
     if (typeof sendFn !== "function") {

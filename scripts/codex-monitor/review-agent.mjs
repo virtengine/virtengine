@@ -309,8 +309,15 @@ export class ReviewAgent {
       return;
     }
 
-    if (this.#seen.has(task.id)) {
-      console.log(`${TAG} task ${task.id} already reviewed/queued — skipping`);
+    const alreadyQueued = this.#queue.some((queued) => queued.id === task.id);
+    const alreadyActive = this.#activeReviews.has(task.id);
+    if (alreadyQueued || alreadyActive || this.#seen.has(task.id)) {
+      const reason = alreadyActive
+        ? "active"
+        : alreadyQueued
+          ? "queued"
+          : "seen";
+      console.log(`${TAG} task ${task.id} already ${reason} — skipping`);
       return;
     }
 
@@ -324,6 +331,16 @@ export class ReviewAgent {
     if (this.#running) {
       this.#processQueue();
     }
+  }
+
+  /**
+   * Allow a task to be reviewed again in a later round.
+   * Useful after changes_requested when the task is re-implemented.
+   * @param {string} taskId
+   */
+  allowReReview(taskId) {
+    if (!taskId) return;
+    this.#seen.delete(taskId);
   }
 
   /**
@@ -499,6 +516,8 @@ export class ReviewAgent {
    * @param {Object} result
    */
   #emitResult(taskId, result) {
+    this.#seen.add(taskId);
+
     if (typeof this.#onReviewComplete === "function") {
       try {
         this.#onReviewComplete(taskId, result);

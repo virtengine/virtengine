@@ -431,11 +431,19 @@ async function saveState() {
 }
 
 function buildPrompt(userMessage, statusData) {
+  const firstLine = String(userMessage || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  const headingRaw = (firstLine || "Task").replace(/^#+\s*/, "").trim();
+  const heading =
+    headingRaw.length > 120 ? `${headingRaw.slice(0, 117)}...` : headingRaw;
+
   if (!statusData) {
-    return `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with \"Ready\" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+    return `# ${heading || "Task"}\n\n${userMessage}\n\n---\nDo NOT respond with \"Ready\" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
   }
   const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
-  return `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with \"Ready\" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+  return `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# ${heading || "Task"}\n\n${userMessage}\n\n---\nDo NOT respond with \"Ready\" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
 }
 
 // ── Main Execution ─────────────────────────────────────────────────────────
