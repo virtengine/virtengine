@@ -3,8 +3,21 @@ import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { open, readFile, readdir, stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { networkInterfaces } from "node:os";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+
+function getLocalLanIp() {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "localhost";
+}
 import { WebSocketServer } from "ws";
 import { getKanbanAdapter } from "./kanban-adapter.mjs";
 import { getActiveThreads } from "./agent-pool.mjs";
@@ -23,8 +36,15 @@ import {
   releaseSharedWorkspace,
   renewSharedWorkspaceLease,
 } from "./shared-workspace-registry.mjs";
-import { initPresence, listActiveInstances, selectCoordinator } from "./presence.mjs";
-import { loadWorkspaceRegistry, getLocalWorkspace } from "./workspace-registry.mjs";
+import {
+  initPresence,
+  listActiveInstances,
+  selectCoordinator,
+} from "./presence.mjs";
+import {
+  loadWorkspaceRegistry,
+  getLocalWorkspace,
+} from "./workspace-registry.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
@@ -41,9 +61,8 @@ const ALLOW_UNSAFE = ["1", "true", "yes"].includes(
 const AUTH_MAX_AGE_SEC = Number(
   process.env.TELEGRAM_UI_AUTH_MAX_AGE_SEC || "86400",
 );
-const PRESENCE_TTL_MS = Number(
-  process.env.TELEGRAM_PRESENCE_TTL_SEC || "180",
-) * 1000;
+const PRESENCE_TTL_MS =
+  Number(process.env.TELEGRAM_PRESENCE_TTL_SEC || "180") * 1000;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -66,7 +85,8 @@ export function injectUiDependencies(deps = {}) {
 }
 
 export function getTelegramUiUrl() {
-  const explicit = process.env.TELEGRAM_UI_BASE_URL || process.env.TELEGRAM_WEBAPP_URL;
+  const explicit =
+    process.env.TELEGRAM_UI_BASE_URL || process.env.TELEGRAM_WEBAPP_URL;
   if (explicit) return explicit.replace(/\/+$/, "");
   return uiServerUrl;
 }
@@ -216,7 +236,10 @@ async function readJsonBody(req) {
 
 async function getLatestLogTail(lineCount) {
   const files = await readdir(logsDir).catch(() => []);
-  const logFile = files.filter((f) => f.endsWith(".log")).sort().pop();
+  const logFile = files
+    .filter((f) => f.endsWith(".log"))
+    .sort()
+    .pop();
   if (!logFile) return { file: null, lines: [] };
   const logPath = resolve(logsDir, logFile);
   const content = await readFile(logPath, "utf8");
@@ -261,7 +284,8 @@ async function listAgentLogFiles(query = "", limit = 60) {
       entries.push({
         name,
         size: info.size,
-        mtime: info.mtime?.toISOString?.() || new Date(info.mtime).toISOString(),
+        mtime:
+          info.mtime?.toISOString?.() || new Date(info.mtime).toISOString(),
         mtimeMs: info.mtimeMs,
       });
     } catch {
@@ -322,7 +346,10 @@ async function handleApi(req, res, url) {
   if (path === "/api/executor/pause") {
     const executor = uiDeps.getInternalExecutor?.();
     if (!executor) {
-      jsonResponse(res, 400, { ok: false, error: "Internal executor not enabled." });
+      jsonResponse(res, 400, {
+        ok: false,
+        error: "Internal executor not enabled.",
+      });
       return;
     }
     executor.pause();
@@ -336,7 +363,10 @@ async function handleApi(req, res, url) {
   if (path === "/api/executor/resume") {
     const executor = uiDeps.getInternalExecutor?.();
     if (!executor) {
-      jsonResponse(res, 400, { ok: false, error: "Internal executor not enabled." });
+      jsonResponse(res, 400, {
+        ok: false,
+        error: "Internal executor not enabled.",
+      });
       return;
     }
     executor.resume();
@@ -351,13 +381,19 @@ async function handleApi(req, res, url) {
     try {
       const executor = uiDeps.getInternalExecutor?.();
       if (!executor) {
-        jsonResponse(res, 400, { ok: false, error: "Internal executor not enabled." });
+        jsonResponse(res, 400, {
+          ok: false,
+          error: "Internal executor not enabled.",
+        });
         return;
       }
       const body = await readJsonBody(req);
       const value = Number(body?.value ?? body?.maxParallel);
       if (!Number.isFinite(value) || value < 0 || value > 20) {
-        jsonResponse(res, 400, { ok: false, error: "value must be between 0 and 20" });
+        jsonResponse(res, 400, {
+          ok: false,
+          error: "value must be between 0 and 20",
+        });
         return;
       }
       executor.maxParallel = value;
@@ -402,10 +438,19 @@ async function handleApi(req, res, url) {
       const activeProject =
         projectId || projects[0]?.id || projects[0]?.project_id || "";
       if (!activeProject) {
-        jsonResponse(res, 200, { ok: true, data: [], page, pageSize, total: 0 });
+        jsonResponse(res, 200, {
+          ok: true,
+          data: [],
+          page,
+          pageSize,
+          total: 0,
+        });
         return;
       }
-      const tasks = await adapter.listTasks(activeProject, status ? { status } : {});
+      const tasks = await adapter.listTasks(
+        activeProject,
+        status ? { status } : {},
+      );
       const total = tasks.length;
       const start = page * pageSize;
       const slice = tasks.slice(start, start + pageSize);
@@ -425,7 +470,8 @@ async function handleApi(req, res, url) {
 
   if (path === "/api/tasks/detail") {
     try {
-      const taskId = url.searchParams.get("taskId") || url.searchParams.get("id") || "";
+      const taskId =
+        url.searchParams.get("taskId") || url.searchParams.get("id") || "";
       if (!taskId) {
         jsonResponse(res, 400, { ok: false, error: "taskId required" });
         return;
@@ -451,7 +497,8 @@ async function handleApi(req, res, url) {
       if (!executor) {
         jsonResponse(res, 400, {
           ok: false,
-          error: "Internal executor not enabled. Set EXECUTOR_MODE=internal or hybrid.",
+          error:
+            "Internal executor not enabled. Set EXECUTOR_MODE=internal or hybrid.",
         });
         return;
       }
@@ -462,13 +509,19 @@ async function handleApi(req, res, url) {
         return;
       }
       executor.executeTask(task).catch((error) => {
-        console.warn(`[telegram-ui] failed to execute task ${taskId}: ${error.message}`);
+        console.warn(
+          `[telegram-ui] failed to execute task ${taskId}: ${error.message}`,
+        );
       });
       jsonResponse(res, 200, { ok: true, taskId });
-      broadcastUiEvent(["tasks", "overview", "executor", "agents"], "invalidate", {
-        reason: "task-started",
-        taskId,
-      });
+      broadcastUiEvent(
+        ["tasks", "overview", "executor", "agents"],
+        "invalidate",
+        {
+          reason: "task-started",
+          taskId,
+        },
+      );
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -494,7 +547,10 @@ async function handleApi(req, res, url) {
         (value) => typeof value === "string" && value.trim(),
       );
       if (!hasPatch) {
-        jsonResponse(res, 400, { ok: false, error: "No update fields provided" });
+        jsonResponse(res, 400, {
+          ok: false,
+          error: "No update fields provided",
+        });
         return;
       }
       const updated =
@@ -580,7 +636,10 @@ async function handleApi(req, res, url) {
   }
 
   if (path === "/api/logs") {
-    const lines = Math.min(1000, Math.max(10, Number(url.searchParams.get("lines") || "200")));
+    const lines = Math.min(
+      1000,
+      Math.max(10, Number(url.searchParams.get("lines") || "200")),
+    );
     try {
       const tail = await getLatestLogTail(lines);
       jsonResponse(res, 200, { ok: true, data: tail });
@@ -615,7 +674,9 @@ async function handleApi(req, res, url) {
     try {
       const result = await pruneStaleWorktrees({ actor: "telegram-ui" });
       jsonResponse(res, 200, { ok: true, data: result });
-      broadcastUiEvent(["worktrees"], "invalidate", { reason: "worktrees-pruned" });
+      broadcastUiEvent(["worktrees"], "invalidate", {
+        reason: "worktrees-pruned",
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -633,11 +694,16 @@ async function handleApi(req, res, url) {
       } else if (branch) {
         released = await releaseWorktreeByBranch(branch);
       } else {
-        jsonResponse(res, 400, { ok: false, error: "taskKey or branch required" });
+        jsonResponse(res, 400, {
+          ok: false,
+          error: "taskKey or branch required",
+        });
         return;
       }
       jsonResponse(res, 200, { ok: true, data: released });
-      broadcastUiEvent(["worktrees"], "invalidate", { reason: "worktree-released" });
+      broadcastUiEvent(["worktrees"], "invalidate", {
+        reason: "worktree-released",
+      });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
@@ -695,7 +761,11 @@ async function handleApi(req, res, url) {
         jsonResponse(res, 400, { ok: false, error: result.error });
         return;
       }
-      jsonResponse(res, 200, { ok: true, data: result.workspace, lease: result.lease });
+      jsonResponse(res, 200, {
+        ok: true,
+        data: result.workspace,
+        lease: result.lease,
+      });
       broadcastUiEvent(["workspaces"], "invalidate", {
         reason: "workspace-claimed",
         workspaceId,
@@ -754,7 +824,11 @@ async function handleApi(req, res, url) {
         jsonResponse(res, 400, { ok: false, error: result.error });
         return;
       }
-      jsonResponse(res, 200, { ok: true, data: result.workspace, lease: result.lease });
+      jsonResponse(res, 200, {
+        ok: true,
+        data: result.workspace,
+        lease: result.lease,
+      });
       broadcastUiEvent(["workspaces"], "invalidate", {
         reason: "workspace-renewed",
         workspaceId,
@@ -867,7 +941,10 @@ async function handleApi(req, res, url) {
   if (path === "/api/git/branches") {
     try {
       const raw = runGit("branch -a --sort=-committerdate", 15000);
-      const lines = raw.split("\n").map((line) => line.trim()).filter(Boolean);
+      const lines = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
       jsonResponse(res, 200, { ok: true, data: lines.slice(0, 40) });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
@@ -882,6 +959,31 @@ async function handleApi(req, res, url) {
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });
     }
+    return;
+  }
+
+  if (path === "/api/health") {
+    jsonResponse(res, 200, {
+      ok: true,
+      uptime: process.uptime(),
+      wsClients: wsClients.size,
+      lanIp: getLocalLanIp(),
+      url: getTelegramUiUrl(),
+    });
+    return;
+  }
+
+  if (path === "/api/config") {
+    jsonResponse(res, 200, {
+      ok: true,
+      miniAppEnabled:
+        !!process.env.TELEGRAM_MINIAPP_ENABLED ||
+        !!process.env.TELEGRAM_UI_PORT,
+      uiUrl: getTelegramUiUrl(),
+      lanIp: getLocalLanIp(),
+      wsEnabled: true,
+      authRequired: !ALLOW_UNSAFE,
+    });
     return;
   }
 
@@ -926,7 +1028,10 @@ export async function startTelegramUiServer(options = {}) {
   injectUiDependencies(options.dependencies || {});
 
   uiServer = createServer(async (req, res) => {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const url = new URL(
+      req.url || "/",
+      `http://${req.headers.host || "localhost"}`,
+    );
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
       return;
@@ -975,7 +1080,10 @@ export async function startTelegramUiServer(options = {}) {
   });
 
   uiServer.on("upgrade", (req, socket, head) => {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const url = new URL(
+      req.url || "/",
+      `http://${req.headers.host || "localhost"}`,
+    );
     if (url.pathname !== "/ws") {
       socket.destroy();
       return;
@@ -1001,10 +1109,20 @@ export async function startTelegramUiServer(options = {}) {
     });
   });
 
-  const host = options.publicHost || process.env.TELEGRAM_UI_PUBLIC_HOST || "localhost";
-  const protocol = host === "localhost" || host.startsWith("127.") ? "http" : "https";
-  uiServerUrl = `${protocol}://${host}:${port}`;
+  const publicHost = options.publicHost || process.env.TELEGRAM_UI_PUBLIC_HOST;
+  const lanIp = getLocalLanIp();
+  const host = publicHost || lanIp;
+  const actualPort = uiServer.address().port;
+  const protocol =
+    publicHost &&
+    !publicHost.startsWith("192.") &&
+    !publicHost.startsWith("10.") &&
+    !publicHost.startsWith("172.")
+      ? "https"
+      : "http";
+  uiServerUrl = `${protocol}://${host}:${actualPort}`;
   console.log(`[telegram-ui] server listening on ${uiServerUrl}`);
+  console.log(`[telegram-ui] LAN access: http://${lanIp}:${actualPort}`);
 
   return uiServer;
 }
@@ -1034,3 +1152,5 @@ export function stopTelegramUiServer() {
   }
   uiServer = null;
 }
+
+export { getLocalLanIp };

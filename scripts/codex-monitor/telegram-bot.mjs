@@ -36,6 +36,7 @@ import {
   clearThreadRegistry,
   invalidateThread,
 } from "./agent-pool.mjs";
+import { fetchWithFallback } from "./fetch-runtime.mjs";
 import {
   getKanbanAdapter,
   setKanbanBackend,
@@ -49,7 +50,11 @@ import {
   getWorktreeStats,
 } from "./worktree-manager.mjs";
 import { loadExecutorConfig } from "./config.mjs";
-import { getTelegramUiUrl, startTelegramUiServer } from "./ui-server.mjs";
+import {
+  getTelegramUiUrl,
+  startTelegramUiServer,
+  getLocalLanIp,
+} from "./ui-server.mjs";
 import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
@@ -389,7 +394,7 @@ async function telegramApiFetch(method, requestOptions = {}) {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithFallback(url, {
         method: httpMethod,
         headers: { "Content-Type": "application/json" },
         body: payload === undefined ? undefined : JSON.stringify(payload),
@@ -1883,6 +1888,9 @@ const COMMANDS = {
   "/menu": { handler: cmdMenu, desc: "Open the control center UI" },
   "/help": { handler: cmdHelp, desc: "Show available commands" },
   "/helpfull": { handler: cmdHelpFull, desc: "Show all commands (text list)" },
+  "/app": { handler: cmdApp, desc: "Open the Control Center Mini App" },
+  "/miniapp": { handler: cmdApp, desc: "Open the Control Center Mini App" },
+  "/webapp": { handler: cmdApp, desc: "Open the Control Center Mini App" },
   "/cancel": { handler: cmdCancel, desc: "Cancel a pending input prompt" },
   "/ask": { handler: cmdAsk, desc: "Send prompt to agent: /ask <prompt>" },
   "/status": { handler: cmdStatus, desc: "Detailed orchestrator status" },
@@ -3670,6 +3678,33 @@ async function loadWorkspaceStatusData(workspacePath) {
   } catch {
     return null;
   }
+}
+
+async function cmdApp(chatId) {
+  const uiUrl = getTelegramUiUrl?.() || null;
+  if (!uiUrl) {
+    await sendReply(
+      chatId,
+      "⚠️ Mini App not configured. Set TELEGRAM_UI_PORT and TELEGRAM_MINIAPP_ENABLED=true in your environment.",
+    );
+    return;
+  }
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "📱 Open Control Center", web_app: { url: uiUrl } }],
+      [{ text: "🌐 Open in Browser", url: uiUrl }],
+    ],
+  };
+
+  await sendDirect(
+    chatId,
+    "🚀 *VirtEngine Control Center*\n\nOpen the Mini App or access via browser:",
+    {
+      parseMode: "Markdown",
+      reply_markup: keyboard,
+    },
+  );
 }
 
 async function cmdMenu(chatId) {
@@ -7245,21 +7280,30 @@ export async function startTelegramBot() {
   await registerBotCommands();
 
   // Start Telegram UI server (Mini App) when configured
-  try {
-    await startTelegramUiServer({
-      dependencies: {
-        getInternalExecutor: _getInternalExecutor,
-        getExecutorMode: _getExecutorMode,
-      },
-    });
-    telegramUiUrl = getTelegramUiUrl();
-    if (telegramUiUrl) {
-      await setWebAppMenuButton(telegramUiUrl);
-    } else {
-      await clearWebAppMenuButton();
+  const miniAppEnabled = ["1", "true", "yes"].includes(
+    String(process.env.TELEGRAM_MINIAPP_ENABLED || "").toLowerCase(),
+  );
+  const miniAppPort = Number(process.env.TELEGRAM_UI_PORT || "0");
+
+  if (miniAppEnabled || miniAppPort > 0) {
+    try {
+      await startTelegramUiServer({
+        dependencies: {
+          getInternalExecutor: _getInternalExecutor,
+          getExecutorMode: _getExecutorMode,
+        },
+      });
+      telegramUiUrl = getTelegramUiUrl();
+      if (telegramUiUrl) {
+        await setWebAppMenuButton(telegramUiUrl);
+      } else {
+        await clearWebAppMenuButton();
+      }
+    } catch (err) {
+      console.warn(`[telegram-bot] UI server start failed: ${err.message}`);
     }
-  } catch (err) {
-    console.warn(`[telegram-bot] UI server start failed: ${err.message}`);
+  } else {
+    await clearWebAppMenuButton();
   }
 
   // Start presence announcements for multi-workstation discovery

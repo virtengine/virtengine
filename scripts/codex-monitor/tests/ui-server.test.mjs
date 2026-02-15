@@ -7,5 +7,13 @@ describe("ui-server mini app", () => {
     expect(typeof mod.stopTelegramUiServer).toBe("function");
     expect(typeof mod.getTelegramUiUrl).toBe("function");
     expect(typeof mod.injectUiDependencies).toBe("function");
+    expect(typeof mod.getLocalLanIp).toBe("function");
+  });
+
+  it("getLocalLanIp returns a string", async () => {
+    const mod = await import("../ui-server.mjs");
+    const ip = mod.getLocalLanIp();
+    expect(typeof ip).toBe("string");
+    expect(ip.length).toBeGreaterThan(0);
   });
 });
