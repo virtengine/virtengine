@@ -1,14 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_HOOK_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
 const LEGACY_BRIDGE_SNIPPET = "scripts/codex-monitor/agent-hook-bridge.mjs";
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const IS_WINDOWS = process.platform === "win32";
 
 const BRIDGE_COMMAND = Object.freeze([
   process.execPath,
-  resolve(__dirname, "agent-hook-bridge.mjs"),
+  resolve(MODULE_DIR, "agent-hook-bridge.mjs"),
 ]);
+
+const CLAUDE_BRIDGE_COMMAND = Object.freeze(
+  IS_WINDOWS ? ["node", resolve(MODULE_DIR, "agent-hook-bridge.mjs")] : BRIDGE_COMMAND,
+);
 
 export const HOOK_PROFILES = Object.freeze([
   "strict",
@@ -122,6 +129,10 @@ function buildShellCommand(args) {
 
 function makeBridgeCommandTokens(agent, event) {
   return [...BRIDGE_COMMAND, "--agent", agent, "--event", event];
+}
+
+function makeClaudeBridgeCommandTokens(event) {
+  return [...CLAUDE_BRIDGE_COMMAND, "--agent", "claude", "--event", event];
 }
 
 function deepClone(value) {
@@ -339,7 +350,7 @@ function createClaudeHookConfig() {
             {
               type: "command",
               command: buildShellCommand(
-                makeBridgeCommandTokens("claude", "UserPromptSubmit"),
+                makeClaudeBridgeCommandTokens("UserPromptSubmit"),
               ),
             },
           ],
@@ -352,7 +363,7 @@ function createClaudeHookConfig() {
             {
               type: "command",
               command: buildShellCommand(
-                makeBridgeCommandTokens("claude", "PreToolUse"),
+                makeClaudeBridgeCommandTokens("PreToolUse"),
               ),
             },
           ],
@@ -365,7 +376,7 @@ function createClaudeHookConfig() {
             {
               type: "command",
               command: buildShellCommand(
-                makeBridgeCommandTokens("claude", "PostToolUse"),
+                makeClaudeBridgeCommandTokens("PostToolUse"),
               ),
             },
           ],
@@ -378,7 +389,7 @@ function createClaudeHookConfig() {
             {
               type: "command",
               command: buildShellCommand(
-                makeBridgeCommandTokens("claude", "Stop"),
+                makeClaudeBridgeCommandTokens("Stop"),
               ),
             },
           ],

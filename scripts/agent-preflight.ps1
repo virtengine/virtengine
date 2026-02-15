@@ -26,11 +26,38 @@ $hasGoMod = $changedFiles | Where-Object { $_ -match '^go\.(mod|sum)$' }
 $hasCodexMonitor = $changedFiles | Where-Object { $_ -match '^scripts/codex-monitor/' }
 $errors = 0
 
+function Test-CodexMonitorBranchSafety {
+    if (-not (Test-Path "scripts/codex-monitor/git-safety.mjs")) {
+        Write-Host "  [WARN] git-safety.mjs not found, skipping destructive-branch safety check" -ForegroundColor Yellow
+        return $true
+    }
+
+    $script = @"
+import { pathToFileURL } from 'node:url';
+const repoRoot = process.cwd();
+const mod = await import(pathToFileURL(repoRoot + '/scripts/codex-monitor/git-safety.mjs').href);
+const safety = mod.evaluateBranchSafetyForPush(repoRoot, { baseBranch: 'main' });
+if (!safety.safe) {
+  console.error('[git-safety] ' + safety.reason);
+  process.exit(2);
+}
+console.log('[git-safety] ok');
+"@
+
+    node --input-type=module -e $script 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "FAIL: destructive branch safety check" -ForegroundColor Red
+        Write-Host "  Set VE_ALLOW_DESTRUCTIVE_PUSH=1 only for deliberate emergency bypasses." -ForegroundColor DarkGray
+        return $false
+    }
+    return $true
+}
+
 # ── Windows Firewall check (non-blocking) ──────────────────────────────────
 if (($IsWindows -or ($env:OS -eq "Windows_NT")) -and ($hasGo -or $hasGoMod)) {
     $fwScript = Join-Path $PSScriptRoot "setup-firewall.ps1"
     if (Test-Path $fwScript) {
-        $fwResult = & pwsh -NoProfile -ExecutionPolicy Bypass -File $fwScript -Check 2>&1
+        & pwsh -NoProfile -ExecutionPolicy Bypass -File $fwScript -Check 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  [WARN] Windows Firewall not configured — Go tests may trigger popups" -ForegroundColor Yellow
             Write-Host "  Run: make setup-firewall" -ForegroundColor DarkGray
@@ -117,7 +144,14 @@ if ($hasCodexMonitor) {
     Push-Location scripts/codex-monitor
     node prepublish-check.mjs 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: prepublish check" -ForegroundColor Red; $errors++ }
+
+    Write-Host "  ESM module smoke check (hook-profiles, git-safety)..."
+    node --input-type=module -e "await import(new URL('./hook-profiles.mjs', import.meta.url).href); await import(new URL('./git-safety.mjs', import.meta.url).href);" 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: codex-monitor module smoke check" -ForegroundColor Red; $errors++ }
     Pop-Location
+
+    Write-Host "  Branch safety check (deletion-heavy push guard)..."
+    if (-not (Test-CodexMonitorBranchSafety)) { $errors++ }
 }
 
 Write-Host ""

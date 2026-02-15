@@ -276,6 +276,42 @@ fi
 hook_pass "[pre-flight] Git push requirements OK"
 echo ""
 
+# ── Destructive push safety gate (codex-monitor git-safety) ─────────────────
+check_branch_safety_gate() {
+        local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
+        local safety_module="$monitor_dir/git-safety.mjs"
+
+        if [ ! -f "$safety_module" ]; then
+                hook_warn "git-safety.mjs not found — skipping destructive push safety gate"
+                return 0
+        fi
+
+        local output
+        if ! output=$(node --input-type=module -e "
+            import { pathToFileURL } from 'node:url';
+            const repoRoot = process.cwd();
+            const mod = await import(pathToFileURL(repoRoot + '/scripts/codex-monitor/git-safety.mjs').href);
+            const safety = mod.evaluateBranchSafetyForPush(repoRoot, { baseBranch: 'main' });
+            if (!safety.safe) {
+                console.error(safety.reason);
+                process.exit(2);
+            }
+            console.log('safe');
+        " 2>&1); then
+                hook_fail "Destructive push safety gate failed: ${output}"
+                hook_fail "Set VE_ALLOW_DESTRUCTIVE_PUSH=1 only for deliberate emergency bypasses"
+                return 1
+        fi
+
+        hook_pass "[pre-flight] Destructive push safety OK"
+        return 0
+}
+
+if ! check_branch_safety_gate; then
+        exit 1
+fi
+echo ""
+
 # =========================================================================
 # HELPERS
 # =========================================================================
@@ -362,7 +398,7 @@ check_codex_monitor_syntax() {
     # node --check only catches parse errors; missing named exports are
     # module instantiation errors that only surface at import time.
     if [ $fail -eq 0 ]; then
-        hook_step "Validating ESM exports (import check)..."
+                hook_step "Validating ESM exports (import check)..."
         if ! (
             cd "$monitor_dir"
             VITEST=1 node -e "
@@ -383,6 +419,20 @@ check_codex_monitor_syntax() {
             "
         ) 2>&1; then
             hook_fail "ESM import validation failed for monitor.mjs"
+            fail=1
+        fi
+    fi
+
+    if [ $fail -eq 0 ]; then
+        hook_step "Running codex-monitor module smoke checks..."
+        if ! (
+            cd "$monitor_dir"
+            node --input-type=module -e "
+              await import(new URL('./hook-profiles.mjs', import.meta.url).href);
+              await import(new URL('./git-safety.mjs', import.meta.url).href);
+            "
+        ) 2>&1; then
+            hook_fail "Codex-monitor module smoke checks failed"
             fail=1
         fi
     fi
