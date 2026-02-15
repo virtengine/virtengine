@@ -132,6 +132,21 @@ if ($hasPortal) {
 if ($hasCodexMonitor) {
     Write-Host "--- Codex Monitor checks ---" -ForegroundColor Yellow
 
+    $savedGitEnv = @{
+        GIT_DIR = $env:GIT_DIR
+        GIT_WORK_TREE = $env:GIT_WORK_TREE
+        GIT_INDEX_FILE = $env:GIT_INDEX_FILE
+        GIT_PREFIX = $env:GIT_PREFIX
+        GIT_OBJECT_DIRECTORY = $env:GIT_OBJECT_DIRECTORY
+        GIT_ALTERNATE_OBJECT_DIRECTORIES = $env:GIT_ALTERNATE_OBJECT_DIRECTORIES
+    }
+    $env:GIT_DIR = $null
+    $env:GIT_WORK_TREE = $null
+    $env:GIT_INDEX_FILE = $null
+    $env:GIT_PREFIX = $null
+    $env:GIT_OBJECT_DIRECTORY = $null
+    $env:GIT_ALTERNATE_OBJECT_DIRECTORIES = $null
+
     if (-not (Test-Path "scripts/codex-monitor/node_modules")) {
         Write-Host "  npm install..."
         Push-Location scripts/codex-monitor
@@ -152,6 +167,15 @@ if ($hasCodexMonitor) {
 
     Write-Host "  Branch safety check (deletion-heavy push guard)..."
     if (-not (Test-CodexMonitorBranchSafety)) { $errors++ }
+
+    foreach ($k in $savedGitEnv.Keys) {
+        if ($null -eq $savedGitEnv[$k]) {
+            Remove-Item "Env:$k" -ErrorAction SilentlyContinue
+        }
+        else {
+            Set-Item "Env:$k" $savedGitEnv[$k]
+        }
+    }
 }
 
 Write-Host ""

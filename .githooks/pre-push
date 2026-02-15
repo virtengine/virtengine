@@ -472,8 +472,30 @@ check_codex_monitor_test() {
         hook_warn "Cannot run codex-monitor tests — deps not available"
         return 1
     fi
-    hook_step "Running codex-monitor tests (vitest)..."
-    (cd "$REPO_ROOT/scripts/codex-monitor" && npm test 2>&1)
+    local monitor_dir="$REPO_ROOT/scripts/codex-monitor"
+    local scope="${CODEX_MONITOR_HOOK_TEST_SCOPE:-safety}"
+
+    if [ "$scope" = "full" ]; then
+        hook_step "Running codex-monitor full test suite (vitest)..."
+        (
+            cd "$monitor_dir"
+            env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
+                -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+                npm test 2>&1
+        )
+        return $?
+    fi
+
+    hook_step "Running codex-monitor safety test suite (vitest)..."
+    (
+        cd "$monitor_dir"
+        env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
+            -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+            npm test -- \
+              tests/hook-profiles.test.mjs \
+              tests/git-safety.test.mjs \
+              tests/branch-cleanup.test.mjs 2>&1
+    )
 }
 
 check_codex_monitor_prepublish() {
