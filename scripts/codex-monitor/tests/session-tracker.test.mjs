@@ -1,5 +1,22 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { createSessionTracker, SessionTracker } from "../session-tracker.mjs";
+
+const tempDirs = [];
+
+function makeTempDir(prefix) {
+  const dir = mkdtempSync(resolve(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  while (tempDirs.length) {
+    rmSync(tempDirs.pop(), { recursive: true, force: true });
+  }
+});
 
 describe("session-tracker", () => {
   /** @type {SessionTracker} */
@@ -232,6 +249,80 @@ describe("session-tracker", () => {
       expect(stats.total).toBe(2);
       expect(stats.active).toBe(1);
       expect(stats.completed).toBe(1);
+    });
+  });
+
+  describe("persistence", () => {
+    it("persists and reloads sessions from shared state", () => {
+      const repoRoot = makeTempDir("codex-session-repo-");
+      const stateDir = makeTempDir("codex-session-state-");
+
+      const writer = createSessionTracker({ repoRoot, stateDir, persist: true, maxMessages: 5 });
+      writer.startSession("task-1", "Persistent Task");
+      writer.recordEvent("task-1", {
+        type: "item.completed",
+        item: { type: "agent_message", text: "persist me" },
+      });
+      writer.endSession("task-1", "completed");
+
+      const storagePath = writer.getStoragePath();
+      expect(storagePath).toBeTruthy();
+
+      const reader = createSessionTracker({ repoRoot, stateDir, persist: true, maxMessages: 5 });
+      const session = reader.getSession("task-1");
+      expect(session).not.toBeNull();
+      expect(session.taskTitle).toBe("Persistent Task");
+      expect(reader.getLastMessages("task-1")[0].content).toContain("persist me");
+    });
+
+    it("migrates legacy repo-local session file when shared file is absent", () => {
+      const repoRoot = makeTempDir("codex-session-legacy-repo-");
+      const stateDir = makeTempDir("codex-session-legacy-state-");
+      const legacyDir = resolve(repoRoot, ".cache", "codex-monitor");
+      const legacyPath = resolve(legacyDir, "session-tracker.json");
+
+      mkdirSync(legacyDir, { recursive: true });
+      writeFileSync(
+        legacyPath,
+        JSON.stringify(
+          {
+            version: 1,
+            sessions: [
+              {
+                taskId: "legacy-task",
+                taskTitle: "Legacy Session",
+                startedAt: Date.now() - 1000,
+                endedAt: Date.now(),
+                totalEvents: 1,
+                status: "completed",
+                lastActivityAt: Date.now(),
+                messages: [
+                  {
+                    type: "agent_message",
+                    content: "legacy message",
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const trackerWithMigration = createSessionTracker({
+        repoRoot,
+        stateDir,
+        persist: true,
+        maxMessages: 5,
+      });
+
+      expect(trackerWithMigration.getSession("legacy-task")).not.toBeNull();
+      const storagePath = trackerWithMigration.getStoragePath();
+      const persistedRaw = readFileSync(storagePath, "utf8");
+      expect(persistedRaw).toContain("legacy-task");
     });
   });
 });

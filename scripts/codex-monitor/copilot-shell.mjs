@@ -54,6 +54,19 @@ function resolveCopilotTransport() {
   return "auto";
 }
 
+function resolveCopilotProviderMode() {
+  const raw = String(process.env.COPILOT_PROVIDER_MODE || "github")
+    .trim()
+    .toLowerCase();
+  if (["github", "openai-env"].includes(raw)) {
+    return raw;
+  }
+  console.warn(
+    `[copilot-shell] invalid COPILOT_PROVIDER_MODE='${raw}', defaulting to 'github'`,
+  );
+  return "github";
+}
+
 function normalizeCopilotAgentType(value, fallback = "local") {
   const normalized = String(value || "")
     .trim()
@@ -230,11 +243,25 @@ function detectGitHubToken() {
 const OPENAI_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
+  "OPENAI_ENDPOINT",
+  "OPENAI_API_VERSION",
+  "OPENAI_DEPLOYMENT",
   "OPENAI_ORGANIZATION",
   "OPENAI_PROJECT",
+  "AZURE_OPENAI_API_KEY",
+  "AZURE_OPENAI_ENDPOINT",
+  "AZURE_OPENAI_API_VERSION",
+  "AZURE_OPENAI_DEPLOYMENT",
+  "AZURE_AI_ENDPOINT",
+  "AZURE_AI_API_KEY",
+  "AI_FOUNDRY_ENDPOINT",
+  "AI_FOUNDRY_API_KEY",
 ];
 
 async function withSanitizedOpenAiEnv(fn) {
+  if (resolveCopilotProviderMode() === "openai-env") {
+    return await fn();
+  }
   const saved = {};
   for (const key of OPENAI_ENV_KEYS) {
     if (Object.prototype.hasOwnProperty.call(process.env, key)) {
@@ -264,6 +291,12 @@ async function ensureClientStarted() {
   const cliUrl = process.env.COPILOT_CLI_URL || undefined;
   const token = detectGitHubToken();
   const transport = resolveCopilotTransport();
+  const providerMode = resolveCopilotProviderMode();
+  if (providerMode === "openai-env") {
+    console.warn(
+      "[copilot-shell] COPILOT_PROVIDER_MODE=openai-env enabled — inheriting OPENAI/AZURE provider environment for Copilot SDK",
+    );
+  }
 
   let clientOptions;
   if (transport === "url") {
@@ -462,7 +495,9 @@ async function getSession() {
     try {
       if (activeSessionId && typeof copilotClient?.resumeSession === "function") {
         try {
-          activeSession = await copilotClient.resumeSession(activeSessionId, config);
+          activeSession = await withSanitizedOpenAiEnv(async () =>
+            copilotClient.resumeSession(activeSessionId, config),
+          );
           workspacePath = activeSession?.workspacePath || workspacePath;
           resolvedAgentType = candidateAgentType;
           console.log(`[copilot-shell] resumed session ${activeSessionId}`);
@@ -475,7 +510,9 @@ async function getSession() {
         }
       }
 
-      activeSession = await copilotClient.createSession(config);
+      activeSession = await withSanitizedOpenAiEnv(async () =>
+        copilotClient.createSession(config),
+      );
       resolvedAgentType = candidateAgentType;
       break;
     } catch (err) {
@@ -598,9 +635,11 @@ export async function execCopilotPrompt(userMessage, options = {}) {
     }
 
     // Pass timeout parameter to sendAndWait to override 60s SDK default
-    const sendPromise = session.sendAndWait
-      ? sendFn.call(session, { prompt }, timeoutMs)
-      : sendFn.call(session, { prompt });
+    const sendPromise = withSanitizedOpenAiEnv(async () =>
+      session.sendAndWait
+        ? sendFn.call(session, { prompt }, timeoutMs)
+        : sendFn.call(session, { prompt }),
+    );
 
     // If send() returns before idle, wait for session.idle if available
     if (!session.sendAndWait) {

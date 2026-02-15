@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -35,6 +36,61 @@ describe("task-claims", () => {
       const { initTaskClaims } = await import("../task-claims.mjs");
       await initTaskClaims({ repoRoot: tempRoot });
       // Should not throw
+    });
+
+    it("uses shared repo-scoped state path when stateDir is provided", async () => {
+      const stateDir = await mkdtemp(resolve(tmpdir(), "codex-claims-state-"));
+      const { initTaskClaims, _test } = await import("../task-claims.mjs");
+      await initTaskClaims({ repoRoot: tempRoot, cwd: tempRoot, stateDir });
+
+      const paths = _test.getPaths();
+      expect(paths.claimsPath.replace(/\\/g, "/")).toContain(
+        stateDir.replace(/\\/g, "/"),
+      );
+      expect(paths.claimsPath).toMatch(/repos[\\/]repo-[a-f0-9]{16}[\\/]task-claims\.json$/);
+
+      await rm(stateDir, { recursive: true, force: true });
+    });
+
+    it("migrates existing legacy claims file when shared file does not exist", async () => {
+      const stateDir = await mkdtemp(resolve(tmpdir(), "codex-claims-state-"));
+      const legacyDir = resolve(tempRoot, ".cache", "codex-monitor");
+      const legacyClaimsPath = resolve(legacyDir, "task-claims.json");
+
+      await mkdir(legacyDir, { recursive: true });
+      await writeFile(
+        legacyClaimsPath,
+        JSON.stringify(
+          {
+            version: 1,
+            claims: {
+              "legacy-task": {
+                task_id: "legacy-task",
+                instance_id: "legacy-instance",
+                claim_token: "legacy-token",
+                claimed_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                ttl_minutes: 1,
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const { initTaskClaims, listClaims, _test } = await import("../task-claims.mjs");
+      await initTaskClaims({ repoRoot: tempRoot, cwd: tempRoot, stateDir });
+
+      const claims = await listClaims({ includeExpired: true });
+      expect(claims.some((claim) => claim.task_id === "legacy-task")).toBe(true);
+      const paths = _test.getPaths();
+      expect(existsSync(paths.claimsPath)).toBe(true);
+      const raw = await readFile(paths.claimsPath, "utf8");
+      expect(raw).toContain("legacy-task");
+
+      await rm(stateDir, { recursive: true, force: true });
     });
   });
 

@@ -14,6 +14,7 @@ import {
   renameSync,
   existsSync,
 } from "node:fs";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,13 +35,24 @@ function inferRepoRoot(startDir) {
 }
 
 function resolveDefaultStorePath() {
-  const repoRoot =
-    inferRepoRoot(process.cwd()) || resolve(__dirname, "..", "..");
-  return resolve(repoRoot, ".codex-monitor", ".cache", "kanban-state.json");
+  const repoRoot = inferRepoRoot(process.cwd()) || resolve(__dirname, "..", "..");
+  return resolveRepoSharedStatePaths({ repoRoot }).file("kanban-state.json");
+}
+
+function resolveLegacyStorePaths(repoRoot) {
+  if (!repoRoot) return [];
+  return [
+    resolve(repoRoot, ".codex-monitor", ".cache", "kanban-state.json"),
+    resolve(repoRoot, ".cache", "kanban-state.json"),
+    resolve(repoRoot, ".cache", "codex-monitor", "kanban-state.json"),
+  ];
 }
 
 let storePath = resolveDefaultStorePath();
 let storeTmpPath = storePath + ".tmp";
+let legacyStorePaths = resolveLegacyStorePaths(
+  inferRepoRoot(process.cwd()) || resolve(__dirname, "..", ".."),
+);
 const MAX_STATUS_HISTORY = 50;
 const MAX_AGENT_OUTPUT = 2000;
 const MAX_ERROR_LENGTH = 1000;
@@ -55,16 +67,27 @@ let _writeChain = Promise.resolve(); // simple write lock
 
 export function configureTaskStore(options = {}) {
   const baseDir = options.baseDir ? resolve(options.baseDir) : null;
+  const repoRoot =
+    options.repoRoot ||
+    inferRepoRoot(options.cwd || process.cwd()) ||
+    resolve(__dirname, "..", "..");
   const nextPath = options.storePath
     ? resolve(baseDir || process.cwd(), options.storePath)
-    : resolve(
-        baseDir ||
-          inferRepoRoot(process.cwd()) ||
-          resolve(__dirname, "..", ".."),
-        ".codex-monitor",
-        ".cache",
-        "kanban-state.json",
-      );
+    : baseDir
+      ? resolve(baseDir, ".codex-monitor", ".cache", "kanban-state.json")
+      : resolveRepoSharedStatePaths({
+          repoRoot,
+          cwd: options.cwd,
+          stateDir: options.stateDir,
+          stateRoot: options.stateRoot,
+          repoIdentity: options.repoIdentity,
+        }).file("kanban-state.json");
+
+  legacyStorePaths = Array.isArray(options.legacyStorePaths)
+    ? options.legacyStorePaths.map((path) => resolve(path))
+    : options.storePath || baseDir
+      ? []
+      : resolveLegacyStorePaths(repoRoot);
 
   if (nextPath !== storePath) {
     storePath = nextPath;
@@ -188,6 +211,7 @@ function ensureLoaded() {
  * Load store from disk. Called automatically on first access.
  */
 export function loadStore() {
+  let shouldPersistMigratedStore = false;
   try {
     if (existsSync(storePath)) {
       const raw = readFileSync(storePath, "utf-8");
@@ -201,14 +225,42 @@ export function loadStore() {
         `Loaded ${Object.keys(_store.tasks).length} tasks from disk`,
       );
     } else {
-      _store = { _meta: defaultMeta(), tasks: {} };
-      console.log(TAG, "No store file found — initialised empty store");
+      let migratedFrom = null;
+      for (const legacyPath of legacyStorePaths) {
+        if (!legacyPath || legacyPath === storePath || !existsSync(legacyPath)) continue;
+        try {
+          const raw = readFileSync(legacyPath, "utf-8");
+          const data = JSON.parse(raw);
+          _store = {
+            _meta: { ...defaultMeta(), ...(data._meta || {}) },
+            tasks: data.tasks || {},
+          };
+          migratedFrom = legacyPath;
+          break;
+        } catch {
+          // continue
+        }
+      }
+
+      if (migratedFrom) {
+        console.log(
+          TAG,
+          `Loaded ${Object.keys(_store.tasks).length} tasks from legacy path ${migratedFrom}`,
+        );
+        shouldPersistMigratedStore = true;
+      } else {
+        _store = { _meta: defaultMeta(), tasks: {} };
+        console.log(TAG, "No store file found — initialised empty store");
+      }
     }
   } catch (err) {
     console.error(TAG, "Failed to load store, starting fresh:", err.message);
     _store = { _meta: defaultMeta(), tasks: {} };
   }
   _loaded = true;
+  if (shouldPersistMigratedStore) {
+    saveStore();
+  }
 }
 
 /**

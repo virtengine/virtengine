@@ -102,6 +102,16 @@ function resolveCopilotAgentType(extra = {}) {
   return "local";
 }
 
+function resolveCopilotProviderMode() {
+  const raw = String(process.env.COPILOT_PROVIDER_MODE || "github")
+    .trim()
+    .toLowerCase();
+  if (["github", "openai-env"].includes(raw)) {
+    return raw;
+  }
+  return "github";
+}
+
 function getCopilotAgentTypeCandidates(agentType) {
   const normalized = normalizeCopilotAgentType(agentType, "local");
   if (normalized === "background") return ["background", "local"];
@@ -140,11 +150,25 @@ function buildExecutionPrompt(taskText) {
 const OPENAI_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
+  "OPENAI_ENDPOINT",
+  "OPENAI_API_VERSION",
+  "OPENAI_DEPLOYMENT",
   "OPENAI_ORGANIZATION",
   "OPENAI_PROJECT",
+  "AZURE_OPENAI_API_KEY",
+  "AZURE_OPENAI_ENDPOINT",
+  "AZURE_OPENAI_API_VERSION",
+  "AZURE_OPENAI_DEPLOYMENT",
+  "AZURE_AI_ENDPOINT",
+  "AZURE_AI_API_KEY",
+  "AI_FOUNDRY_ENDPOINT",
+  "AI_FOUNDRY_API_KEY",
 ];
 
 async function withSanitizedOpenAiEnv(fn) {
+  if (resolveCopilotProviderMode() === "openai-env") {
+    return await fn();
+  }
   const saved = {};
   for (const key of OPENAI_ENV_KEYS) {
     if (Object.prototype.hasOwnProperty.call(process.env, key)) {
@@ -587,6 +611,12 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
   } = extra;
   const requestedAgentType = resolveCopilotAgentType(extra);
   const agentTypeCandidates = getCopilotAgentTypeCandidates(requestedAgentType);
+  const providerMode = resolveCopilotProviderMode();
+  if (providerMode === "openai-env") {
+    console.warn(
+      `${TAG} COPILOT_PROVIDER_MODE=openai-env enabled — inheriting OPENAI/AZURE provider environment for Copilot SDK`,
+    );
+  }
 
   // ── 1. Load the SDK ──────────────────────────────────────────────────────
   let CopilotClientClass;
@@ -676,7 +706,9 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
       try {
         if (resumeThreadId && typeof client.resumeSession === "function") {
           try {
-            session = await client.resumeSession(resumeThreadId, sessionConfig);
+            session = await withSanitizedOpenAiEnv(async () =>
+              client.resumeSession(resumeThreadId, sessionConfig),
+            );
           } catch (resumeErr) {
             console.warn(
               `${TAG} copilot resume failed for session ${resumeThreadId}: ${resumeErr.message || resumeErr}. Starting fresh session.`,
@@ -685,7 +717,9 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
         }
 
         if (!session) {
-          session = await client.createSession(sessionConfig);
+          session = await withSanitizedOpenAiEnv(async () =>
+            client.createSession(sessionConfig),
+          );
         }
 
         resolvedAgentType = candidateAgentType;
@@ -762,13 +796,15 @@ async function launchCopilotThread(prompt, cwd, timeoutMs, extra = {}) {
     // fixed internal 300s idle timeout in sendAndWait() that ignores caller
     // timeout, which can cause monitor-monitor failover loops.
     const useRawSend = hasSend;
-    const sendPromise = useRawSend
-      ? session.send.call(session, { prompt: formattedPrompt })
-      : session.sendAndWait.call(
-          session,
-          { prompt: formattedPrompt },
-          timeoutMs,
-        );
+    const sendPromise = withSanitizedOpenAiEnv(async () =>
+      useRawSend
+        ? session.send.call(session, { prompt: formattedPrompt })
+        : session.sendAndWait.call(
+            session,
+            { prompt: formattedPrompt },
+            timeoutMs,
+          ),
+    );
 
     if (useRawSend && typeof session.on === "function") {
       await new Promise((resolveP, rejectP) => {

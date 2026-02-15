@@ -35,13 +35,13 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getPresenceState, selectCoordinator } from "./presence.mjs";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const CLAIMS_FILENAME = "task-claims.json";
 const AUDIT_FILENAME = "task-claims-audit.jsonl";
 const DEFAULT_TTL_MINUTES = 60;
-const CACHE_DIR = ".cache/codex-monitor";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,8 @@ const state = {
   repoRoot: null,
   claimsPath: null,
   auditPath: null,
+  legacyClaimsPath: null,
+  legacyAuditPath: null,
 };
 
 // ── Initialization ───────────────────────────────────────────────────────────
@@ -62,11 +64,22 @@ const state = {
  * @returns {Promise<void>}
  */
 export async function initTaskClaims(opts = {}) {
-  state.repoRoot = opts.repoRoot || process.cwd();
-  const cacheDir = resolve(state.repoRoot, CACHE_DIR);
+  const shared = resolveRepoSharedStatePaths({
+    repoRoot: opts.repoRoot,
+    cwd: opts.cwd,
+    stateDir: opts.stateDir,
+    stateRoot: opts.stateRoot,
+    repoIdentity: opts.repoIdentity,
+  });
+  state.repoRoot = shared.repoRoot;
+  const cacheDir = shared.repoStateDir;
   await mkdir(cacheDir, { recursive: true });
-  state.claimsPath = resolve(cacheDir, CLAIMS_FILENAME);
-  state.auditPath = resolve(cacheDir, AUDIT_FILENAME);
+  state.claimsPath = opts.claimsPath || resolve(cacheDir, CLAIMS_FILENAME);
+  state.auditPath = opts.auditPath || resolve(cacheDir, AUDIT_FILENAME);
+  state.legacyClaimsPath =
+    opts.legacyClaimsPath || resolve(shared.legacyCacheDir, CLAIMS_FILENAME);
+  state.legacyAuditPath =
+    opts.legacyAuditPath || resolve(shared.legacyCacheDir, AUDIT_FILENAME);
   state.initialized = true;
 }
 
@@ -85,21 +98,27 @@ function ensureInitialized() {
  */
 async function loadClaimsRegistry() {
   ensureInitialized();
-  if (!existsSync(state.claimsPath)) {
-    return { version: 1, claims: {}, updated_at: new Date().toISOString() };
+  const empty = { version: 1, claims: {}, updated_at: new Date().toISOString() };
+  const candidatePaths = [state.claimsPath, state.legacyClaimsPath].filter(Boolean);
+  for (const path of candidatePaths) {
+    if (!existsSync(path)) continue;
+    try {
+      const raw = await readFile(path, "utf8");
+      const data = JSON.parse(raw);
+      const registry = {
+        version: data.version || 1,
+        claims: data.claims || {},
+        updated_at: data.updated_at || new Date().toISOString(),
+      };
+      if (path !== state.claimsPath && !existsSync(state.claimsPath)) {
+        await saveClaimsRegistry(registry);
+      }
+      return registry;
+    } catch (err) {
+      console.warn(`[task-claims] Failed to load registry: ${err.message}`);
+    }
   }
-  try {
-    const raw = await readFile(state.claimsPath, "utf8");
-    const data = JSON.parse(raw);
-    return {
-      version: data.version || 1,
-      claims: data.claims || {},
-      updated_at: data.updated_at || new Date().toISOString(),
-    };
-  } catch (err) {
-    console.warn(`[task-claims] Failed to load registry: ${err.message}`);
-    return { version: 1, claims: {}, updated_at: new Date().toISOString() };
-  }
+  return empty;
 }
 
 /**
@@ -628,4 +647,10 @@ export const _test = {
   loadClaimsRegistry,
   saveClaimsRegistry,
   generateClaimToken,
+  getPaths: () => ({
+    claimsPath: state.claimsPath,
+    auditPath: state.auditPath,
+    legacyClaimsPath: state.legacyClaimsPath,
+    legacyAuditPath: state.legacyAuditPath,
+  }),
 };

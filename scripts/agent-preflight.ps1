@@ -133,11 +133,11 @@ if ($hasCodexMonitor) {
     Write-Host "--- Codex Monitor checks ---" -ForegroundColor Yellow
 
     $savedGitEnv = @{
-        GIT_DIR = $env:GIT_DIR
-        GIT_WORK_TREE = $env:GIT_WORK_TREE
-        GIT_INDEX_FILE = $env:GIT_INDEX_FILE
-        GIT_PREFIX = $env:GIT_PREFIX
-        GIT_OBJECT_DIRECTORY = $env:GIT_OBJECT_DIRECTORY
+        GIT_DIR                          = $env:GIT_DIR
+        GIT_WORK_TREE                    = $env:GIT_WORK_TREE
+        GIT_INDEX_FILE                   = $env:GIT_INDEX_FILE
+        GIT_PREFIX                       = $env:GIT_PREFIX
+        GIT_OBJECT_DIRECTORY             = $env:GIT_OBJECT_DIRECTORY
         GIT_ALTERNATE_OBJECT_DIRECTORIES = $env:GIT_ALTERNATE_OBJECT_DIRECTORIES
     }
     $env:GIT_DIR = $null

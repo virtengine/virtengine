@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoIdentity } from "./repo-root.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
-const repoRoot = resolve(__dirname, "..", "..");
 
 const DEFAULT_LEASE_TTL_MINUTES = 120;
 const DEFAULT_REGISTRY = {
@@ -13,6 +14,11 @@ const DEFAULT_REGISTRY = {
   registry_name: "shared-cloud-workspaces",
   default_lease_ttl_minutes: DEFAULT_LEASE_TTL_MINUTES,
   workspaces: [],
+};
+
+const DEFAULT_STATE_DB = {
+  version: 1,
+  repositories: {},
 };
 
 const AVAILABILITY_STATES = new Set([
@@ -108,6 +114,130 @@ function normalizeRegistry(raw) {
   };
 }
 
+function resolveStateDbDir(options = {}) {
+  if (options.stateDbDir) {
+    return resolve(options.stateDbDir);
+  }
+  const envPath =
+    process.env.VE_CODEX_MONITOR_STATE_DIR ||
+    process.env.VE_STATE_DB_DIR ||
+    process.env.VK_STATE_DB_DIR ||
+    "";
+  if (envPath) {
+    return resolve(envPath);
+  }
+  const localAppData = process.env.LOCALAPPDATA || "";
+  if (localAppData) {
+    return resolve(localAppData, "codex-monitor", "state");
+  }
+  return resolve(homedir(), ".codex-monitor", "state");
+}
+
+function getStateDbPath(options = {}) {
+  if (options.stateDbPath) {
+    return resolve(options.stateDbPath);
+  }
+  return resolve(resolveStateDbDir(options), "repositories.json");
+}
+
+function normalizeRepositoryRecord(value) {
+  const record = value && typeof value === "object" ? value : {};
+  return {
+    repo_id: String(record.repo_id || "").trim(),
+    identity_seed: String(record.identity_seed || "").trim(),
+    repo_root: String(record.repo_root || "").trim(),
+    git_common_dir: String(record.git_common_dir || "").trim(),
+    origin_url: String(record.origin_url || "").trim(),
+    registry_path: String(record.registry_path || "").trim(),
+    audit_log_path: String(record.audit_log_path || "").trim(),
+    legacy_registry_path: String(record.legacy_registry_path || "").trim(),
+    legacy_audit_log_path: String(record.legacy_audit_log_path || "").trim(),
+    created_at: toIso(record.created_at),
+    updated_at: toIso(record.updated_at),
+  };
+}
+
+function normalizeStateDb(raw) {
+  const payload = raw && typeof raw === "object" ? raw : {};
+  const repositories = {};
+  if (payload.repositories && typeof payload.repositories === "object") {
+    for (const [repoId, record] of Object.entries(payload.repositories)) {
+      const id = String(repoId || "").trim();
+      if (!id) continue;
+      repositories[id] = normalizeRepositoryRecord(record);
+    }
+  }
+  return {
+    version: payload.version || DEFAULT_STATE_DB.version,
+    repositories,
+  };
+}
+
+async function loadStateDb(path) {
+  if (!existsSync(path)) {
+    return normalizeStateDb(DEFAULT_STATE_DB);
+  }
+  try {
+    const raw = await readFile(path, "utf8");
+    return normalizeStateDb(JSON.parse(raw));
+  } catch {
+    return normalizeStateDb(DEFAULT_STATE_DB);
+  }
+}
+
+async function writeStateDb(path, payload) {
+  await mkdir(resolve(path, ".."), { recursive: true });
+  const tempPath = `${path}.tmp-${Date.now()}`;
+  await writeFile(tempPath, JSON.stringify(payload, null, 2), "utf8");
+  await rename(tempPath, path);
+}
+
+export function resolveSharedWorkspaceStatePaths(options = {}) {
+  const identity =
+    options.repoIdentity ||
+    resolveRepoIdentity({ cwd: options.cwd, repoRoot: options.repoRoot });
+  const stateDbDir = resolveStateDbDir(options);
+  const stateDbPath = getStateDbPath(options);
+  const repoDir = resolve(stateDbDir, "repos", identity.repoId);
+  const legacyBase = resolve(identity.repoRoot, ".cache", "codex-monitor");
+  return {
+    repo_id: identity.repoId,
+    identity_seed: identity.identitySeed,
+    repo_root: identity.repoRoot,
+    git_common_dir: identity.gitCommonDir || "",
+    origin_url: identity.originUrl || "",
+    state_db_dir: stateDbDir,
+    state_db_path: stateDbPath,
+    registry_path: resolve(repoDir, "shared-workspaces.json"),
+    audit_log_path: resolve(repoDir, "shared-workspace-audit.jsonl"),
+    legacy_registry_path: resolve(legacyBase, "shared-workspaces.json"),
+    legacy_audit_log_path: resolve(legacyBase, "shared-workspace-audit.jsonl"),
+  };
+}
+
+async function registerRepositoryState(options = {}) {
+  const context = resolveSharedWorkspaceStatePaths(options);
+  const db = await loadStateDb(context.state_db_path);
+  const existing = db.repositories[context.repo_id] || {};
+  const nowIso = ensureIso(new Date());
+  db.repositories[context.repo_id] = {
+    ...existing,
+    repo_id: context.repo_id,
+    identity_seed: context.identity_seed,
+    repo_root: context.repo_root,
+    git_common_dir: context.git_common_dir,
+    origin_url: context.origin_url,
+    registry_path: context.registry_path,
+    audit_log_path: context.audit_log_path,
+    legacy_registry_path: context.legacy_registry_path,
+    legacy_audit_log_path: context.legacy_audit_log_path,
+    created_at: toIso(existing.created_at) || nowIso,
+    updated_at: nowIso,
+  };
+  await writeStateDb(context.state_db_path, db);
+  return context;
+}
+
 function getRegistryPath(options = {}) {
   if (options.registryPath) {
     return resolve(options.registryPath);
@@ -120,7 +250,7 @@ function getRegistryPath(options = {}) {
   if (envPath) {
     return resolve(envPath);
   }
-  return resolve(repoRoot, ".cache", "codex-monitor", "shared-workspaces.json");
+  return resolveSharedWorkspaceStatePaths(options).registry_path;
 }
 
 function getSeedPath(options = {}) {
@@ -142,12 +272,7 @@ function getAuditPath(options = {}) {
   if (envPath) {
     return resolve(envPath);
   }
-  return resolve(
-    repoRoot,
-    ".cache",
-    "codex-monitor",
-    "shared-workspace-audit.jsonl",
-  );
+  return resolveSharedWorkspaceStatePaths(options).audit_log_path;
 }
 
 async function writeRegistryFile(path, registry) {
@@ -165,45 +290,66 @@ async function appendAuditEntry(entry, options = {}) {
   await writeFile(auditPath, payload, { encoding: "utf8", flag: "a" });
 }
 
+async function readRegistryFromFile(path, label = "registry") {
+  if (!path || !existsSync(path)) {
+    return null;
+  }
+  try {
+    const raw = await readFile(path, "utf8");
+    return normalizeRegistry(JSON.parse(raw));
+  } catch (err) {
+    console.warn(
+      `[shared-workspace-registry] failed to read ${label} ${path}: ${err.message || err}`,
+    );
+    return null;
+  }
+}
+
 export async function loadSharedWorkspaceRegistry(options = {}) {
-  const registryPath = getRegistryPath(options);
-  let registry = null;
-  if (existsSync(registryPath)) {
-    try {
-      const raw = await readFile(registryPath, "utf8");
-      registry = normalizeRegistry(JSON.parse(raw));
-    } catch (err) {
-      console.warn(
-        `[shared-workspace-registry] failed to read ${registryPath}: ${err.message || err}`,
-      );
-    }
+  const stateContext = await registerRepositoryState(options);
+  const registryPath = getRegistryPath({ ...options, ...stateContext });
+  const legacyRegistryPath =
+    options.legacyRegistryPath || stateContext.legacy_registry_path;
+  let registry = await readRegistryFromFile(registryPath, "registry");
+  let loadedFromLegacy = false;
+  if (!registry && legacyRegistryPath) {
+    registry = await readRegistryFromFile(legacyRegistryPath, "legacy registry");
+    loadedFromLegacy = Boolean(registry);
   }
   if (!registry) {
-    const seedPath = getSeedPath(options);
-    if (existsSync(seedPath)) {
-      try {
-        const raw = await readFile(seedPath, "utf8");
-        registry = normalizeRegistry(JSON.parse(raw));
-      } catch (err) {
-        console.warn(
-          `[shared-workspace-registry] failed to read seed ${seedPath}: ${err.message || err}`,
-        );
-      }
-    }
+    registry = await readRegistryFromFile(getSeedPath(options), "seed");
   }
   if (!registry) {
     registry = normalizeRegistry(DEFAULT_REGISTRY);
+  }
+  if (loadedFromLegacy && !existsSync(registryPath)) {
+    await writeRegistryFile(registryPath, {
+      version: registry.version || DEFAULT_REGISTRY.version,
+      registry_name: registry.registry_name || DEFAULT_REGISTRY.registry_name,
+      default_lease_ttl_minutes:
+        registry.default_lease_ttl_minutes ||
+        DEFAULT_REGISTRY.default_lease_ttl_minutes,
+      workspaces: registry.workspaces || [],
+    });
   }
   return {
     ...registry,
     registry_path: registryPath,
     registry_seed_path: getSeedPath(options),
-    audit_log_path: getAuditPath(options),
+    audit_log_path: getAuditPath({ ...options, ...stateContext }),
+    legacy_registry_path: legacyRegistryPath,
+    legacy_audit_log_path:
+      options.legacyAuditPath || stateContext.legacy_audit_log_path,
+    state_db_path: stateContext.state_db_path,
+    repo_id: stateContext.repo_id,
+    identity_seed: stateContext.identity_seed,
+    loaded_from_legacy_cache: loadedFromLegacy,
   };
 }
 
 export async function saveSharedWorkspaceRegistry(registry, options = {}) {
   if (!registry) return;
+  await registerRepositoryState(options);
   const path = registry.registry_path || getRegistryPath(options);
   const payload = {
     version: registry.version || DEFAULT_REGISTRY.version,
@@ -504,9 +650,11 @@ export function formatSharedWorkspaceDetail(workspace, options = {}) {
   lines.push(`availability: ${workspace.availability || "available"}`);
   if (workspace.lease) {
     const lease = workspace.lease;
-    lines.push(`lease owner: ${lease.owner}`);
-    lines.push(`lease expires: ${lease.lease_expires_at}`);
-    lines.push(`lease remaining: ${formatExpiresIn(lease.lease_expires_at, now)}`);
+    lines.push(
+      `lease owner: ${lease.owner}`,
+      `lease expires: ${lease.lease_expires_at}`,
+      `lease remaining: ${formatExpiresIn(lease.lease_expires_at, now)}`,
+    );
     if (lease.notes) {
       lines.push(`lease notes: ${lease.notes}`);
     }

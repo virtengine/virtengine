@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import {
@@ -12,7 +13,9 @@ import {
   getPresencePrefix,
   initPresence,
   getPresenceState,
+  notePresence,
 } from "../presence.mjs";
+import { resolveRepoSharedStatePaths } from "../shared-state-paths.mjs";
 
 let tempRoot = null;
 
@@ -36,6 +39,30 @@ afterEach(async () => {
 describe("getPresencePrefix", () => {
   it("returns the correct prefix", () => {
     expect(getPresencePrefix()).toBe("[ve-presence]");
+  });
+});
+
+describe("shared-state presence paths", () => {
+  it("uses shared repo-scoped state and stable identity across cwd values", async () => {
+    const repoRoot = await mkdtemp(resolve(tmpdir(), "codex-monitor-presence-repo-"));
+    const stateDir = await mkdtemp(resolve(tmpdir(), "codex-monitor-presence-state-"));
+    const cwdA = resolve(repoRoot, "worktree-a", "nested");
+    const cwdB = resolve(repoRoot, "worktree-b", "nested");
+
+    await initPresence({ repoRoot, cwd: cwdA, stateDir, force: true, skipLoad: true });
+    await notePresence({ instance_id: "shared-a" });
+
+    const paths = resolveRepoSharedStatePaths({ repoRoot, cwd: cwdB, stateDir });
+    const presencePath = paths.file("presence.json");
+
+    expect(existsSync(presencePath)).toBe(true);
+    const raw = await readFile(presencePath, "utf8");
+    const parsed = JSON.parse(raw);
+    const instanceIds = (parsed.instances || []).map((entry) => entry.instance_id);
+    expect(instanceIds).toContain("shared-a");
+
+    await rm(repoRoot, { recursive: true, force: true });
+    await rm(stateDir, { recursive: true, force: true });
   });
 });
 

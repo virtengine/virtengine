@@ -8,7 +8,12 @@
  * @module session-tracker
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
+
 const TAG = "[session-tracker]";
+const SESSION_TRACKER_FILENAME = "session-tracker.json";
 
 /** Default: keep last 10 messages per session. */
 const DEFAULT_MAX_MESSAGES = 10;
@@ -18,6 +23,53 @@ const MAX_MESSAGE_CHARS = 2000;
 
 /** Maximum total sessions to keep in memory. */
 const MAX_SESSIONS = 50;
+
+function sanitizeSessionRecord(raw, maxMessages) {
+  if (!raw || typeof raw !== "object") return null;
+  const taskId = String(raw.taskId || "").trim();
+  if (!taskId) return null;
+  const messages = Array.isArray(raw.messages) ? raw.messages : [];
+  const normalizedMessages = messages
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => ({
+      type: String(entry.type || "system"),
+      content: String(entry.content || "").slice(0, MAX_MESSAGE_CHARS),
+      timestamp: String(entry.timestamp || new Date().toISOString()),
+      meta: entry.meta && typeof entry.meta === "object" ? entry.meta : undefined,
+    }))
+    .slice(-Math.max(1, maxMessages));
+
+  return {
+    taskId,
+    taskTitle: String(raw.taskTitle || taskId),
+    startedAt: Number(raw.startedAt || Date.now()),
+    endedAt: raw.endedAt == null ? null : Number(raw.endedAt),
+    messages: normalizedMessages,
+    totalEvents: Number(raw.totalEvents || normalizedMessages.length || 0),
+    status: String(raw.status || "active"),
+    lastActivityAt: Number(raw.lastActivityAt || Date.now()),
+  };
+}
+
+function resolvePersistenceConfig(options = {}) {
+  const shared = resolveRepoSharedStatePaths({
+    repoRoot: options.repoRoot,
+    cwd: options.cwd,
+    stateDir: options.stateDir,
+    stateRoot: options.stateRoot,
+    repoIdentity: options.repoIdentity,
+  });
+  const storagePath = options.sessionPath
+    ? resolve(options.sessionPath)
+    : shared.file(SESSION_TRACKER_FILENAME);
+  const legacyPaths = Array.isArray(options.legacyPaths)
+    ? options.legacyPaths.map((path) => resolve(path))
+    : [
+        resolve(shared.legacyCacheDir, SESSION_TRACKER_FILENAME),
+        resolve(shared.legacyCodexCacheDir, SESSION_TRACKER_FILENAME),
+      ];
+  return { storagePath, legacyPaths };
+}
 
 // ── Message Types ───────────────────────────────────────────────────────────
 
@@ -53,6 +105,18 @@ export class SessionTracker {
   /** @type {number} idle threshold (ms) — 2 minutes without events = idle */
   #idleThresholdMs;
 
+  /** @type {boolean} */
+  #persist;
+
+  /** @type {string|null} */
+  #storagePath;
+
+  /** @type {string[]} */
+  #legacyPaths;
+
+  /** @type {boolean} */
+  #loaded = false;
+
   /**
    * @param {Object} [options]
    * @param {number} [options.maxMessages=10]
@@ -61,6 +125,57 @@ export class SessionTracker {
   constructor(options = {}) {
     this.#maxMessages = options.maxMessages ?? DEFAULT_MAX_MESSAGES;
     this.#idleThresholdMs = options.idleThresholdMs ?? 180_000; // 3 minutes — gives agents breathing room
+    const persistDefault = Boolean(options.sessionPath || options.repoRoot);
+    this.#persist = options.persist ?? persistDefault;
+
+    if (this.#persist) {
+      const persistence = resolvePersistenceConfig(options);
+      this.#storagePath = persistence.storagePath;
+      this.#legacyPaths = persistence.legacyPaths;
+      this.#loadFromDisk();
+    } else {
+      this.#storagePath = null;
+      this.#legacyPaths = [];
+    }
+  }
+
+  #loadFromDisk() {
+    if (!this.#persist || this.#loaded) return;
+    this.#loaded = true;
+
+    const candidatePaths = [this.#storagePath, ...this.#legacyPaths].filter(Boolean);
+    for (const path of candidatePaths) {
+      if (!existsSync(path)) continue;
+      try {
+        const raw = JSON.parse(readFileSync(path, "utf8"));
+        const items = Array.isArray(raw?.sessions) ? raw.sessions : [];
+        for (const item of items) {
+          const record = sanitizeSessionRecord(item, this.#maxMessages);
+          if (record) this.#sessions.set(record.taskId, record);
+        }
+        if (path !== this.#storagePath && this.#storagePath && !existsSync(this.#storagePath)) {
+          this.#persistNow();
+        }
+        return;
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  #persistNow() {
+    if (!this.#persist || !this.#storagePath) return;
+    try {
+      mkdirSync(dirname(this.#storagePath), { recursive: true });
+      const payload = {
+        version: 1,
+        updated_at: new Date().toISOString(),
+        sessions: [...this.#sessions.values()],
+      };
+      writeFileSync(this.#storagePath, JSON.stringify(payload, null, 2), "utf8");
+    } catch {
+      // best-effort persistence only
+    }
   }
 
   /**
@@ -91,6 +206,7 @@ export class SessionTracker {
       status: "active",
       lastActivityAt: Date.now(),
     });
+    this.#persistNow();
   }
 
   /**
@@ -113,13 +229,17 @@ export class SessionTracker {
     session.lastActivityAt = Date.now();
 
     const msg = this.#normalizeEvent(event);
-    if (!msg) return; // Skip uninteresting events
+    if (!msg) {
+      this.#persistNow();
+      return;
+    }
 
     // Push to ring buffer (keep only last N)
     session.messages.push(msg);
     if (session.messages.length > this.#maxMessages) {
       session.messages.shift();
     }
+    this.#persistNow();
   }
 
   /**
@@ -133,6 +253,7 @@ export class SessionTracker {
 
     session.endedAt = Date.now();
     session.status = status;
+    this.#persistNow();
   }
 
   /**
@@ -297,6 +418,7 @@ export class SessionTracker {
    */
   removeSession(taskId) {
     this.#sessions.delete(taskId);
+    this.#persistNow();
   }
 
   /**
@@ -311,6 +433,10 @@ export class SessionTracker {
       else completed++;
     }
     return { active, completed, total: this.#sessions.size };
+  }
+
+  getStoragePath() {
+    return this.#storagePath;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -445,9 +571,11 @@ let _instance = null;
  * @returns {SessionTracker}
  */
 export function getSessionTracker(options) {
-  if (!_instance) {
-    _instance = new SessionTracker(options);
-    console.log(`${TAG} initialized (maxMessages=${_instance.getStats ? DEFAULT_MAX_MESSAGES : "?"})`);
+  const opts = options || {};
+  const forcePersist = opts.persist ?? true;
+  if (!_instance || (opts.repoRoot && !_instance.getStoragePath())) {
+    _instance = new SessionTracker({ ...opts, persist: forcePersist });
+    console.log(`${TAG} initialized (maxMessages=${DEFAULT_MAX_MESSAGES})`);
   }
   return _instance;
 }

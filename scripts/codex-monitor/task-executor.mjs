@@ -78,6 +78,7 @@ import {
   claimTask,
   releaseTask as releaseTaskClaim,
 } from "./task-claims.mjs";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -113,16 +114,38 @@ const STREAM_STALLED_KILL_MS = 20 * 60_000; // 20 minutes stalled after continue
 const MAX_IDLE_CONTINUES = 5;
 /** Minimum elapsed time before watchdog even starts checking (agent setup phase) */
 const WATCHDOG_WARMUP_MS = 5 * 60_000; // 5 minutes warmup
-const NO_COMMIT_STATE_FILE = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  ".cache",
-  "no-commit-state.json",
-);
-const RUNTIME_STATE_FILE = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  ".cache",
-  "task-executor-runtime.json",
-);
+
+function resolveTaskExecutorStatePaths(options = {}) {
+  const shared = resolveRepoSharedStatePaths({
+    repoRoot: options.repoRoot,
+    cwd: options.cwd,
+    stateDir: options.stateDir,
+    stateRoot: options.stateRoot,
+    repoIdentity: options.repoIdentity,
+  });
+  const moduleLegacyCacheDir = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    ".cache",
+  );
+  return {
+    noCommitPath: shared.file("no-commit-state.json"),
+    runtimePath: shared.file("task-executor-runtime.json"),
+    legacyNoCommitPaths: [
+      resolve(shared.legacyCacheDir, "no-commit-state.json"),
+      resolve(shared.legacyCodexCacheDir, "no-commit-state.json"),
+      resolve(moduleLegacyCacheDir, "no-commit-state.json"),
+    ],
+    legacyRuntimePaths: [
+      resolve(shared.legacyCacheDir, "task-executor-runtime.json"),
+      resolve(shared.legacyCodexCacheDir, "task-executor-runtime.json"),
+      resolve(moduleLegacyCacheDir, "task-executor-runtime.json"),
+    ],
+  };
+}
+
+const executorStatePaths = resolveTaskExecutorStatePaths();
+const NO_COMMIT_STATE_FILE = executorStatePaths.noCommitPath;
+const RUNTIME_STATE_FILE = executorStatePaths.runtimePath;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -140,6 +163,29 @@ const DEFAULT_DISPATCH_STATUSES = (
 
 const AGENT_LOGS_DIR = resolve(__dirname, "logs", "agents");
 
+function loadJsonWithLegacyFallback(primaryPath, legacyPaths = []) {
+  const candidates = [primaryPath, ...legacyPaths.filter(Boolean)];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const raw = readFileSync(candidate, "utf8");
+      const parsed = JSON.parse(raw);
+      if (candidate !== primaryPath && !existsSync(primaryPath)) {
+        try {
+          mkdirSync(dirname(primaryPath), { recursive: true });
+          writeFileSync(primaryPath, raw, "utf8");
+        } catch {
+          /* best effort */
+        }
+      }
+      return parsed;
+    } catch {
+      /* continue */
+    }
+  }
+  return null;
+}
+
 /**
  * Create an onEvent callback that streams agent SDK events to a per-task log file
  * AND feeds the session tracker for review handoff context.
@@ -147,10 +193,10 @@ const AGENT_LOGS_DIR = resolve(__dirname, "logs", "agents");
  * @param {string} taskTitle
  * @returns {Function}
  */
-function createAgentLogStreamer(taskId, taskTitle) {
+function createAgentLogStreamer(taskId, taskTitle, repoRoot) {
   const shortId = taskId.substring(0, 8);
   const logFile = resolve(AGENT_LOGS_DIR, `agent-${shortId}.log`);
-  const tracker = getSessionTracker();
+  const tracker = getSessionTracker({ repoRoot });
 
   // Ensure log dir exists
   try {
@@ -463,6 +509,7 @@ class TaskExecutor {
     this.onTaskCompleted = merged.onTaskCompleted;
     this.onTaskFailed = merged.onTaskFailed;
     this.sendTelegram = merged.sendTelegram;
+    getSessionTracker({ repoRoot: this.repoRoot });
     this._agentPrompts =
       merged.agentPrompts && typeof merged.agentPrompts === "object"
         ? merged.agentPrompts
@@ -548,33 +595,33 @@ class TaskExecutor {
   /** Load anti-thrash state from disk (survives restarts). */
   _loadNoCommitState() {
     try {
-      if (existsSync(NO_COMMIT_STATE_FILE)) {
-        const raw = readFileSync(NO_COMMIT_STATE_FILE, "utf8");
-        const data = JSON.parse(raw);
-        if (data && typeof data === "object") {
-          for (const [id, count] of Object.entries(data.noCommitCounts || {})) {
-            this._noCommitCounts.set(id, count);
-          }
-          for (const [id, until] of Object.entries(data.skipUntil || {})) {
-            if (until > Date.now()) {
-              this._skipUntil.set(id, until);
-            }
-          }
-          // Restore completed-with-PR tracking
-          if (Array.isArray(data.completedWithPR)) {
-            for (const id of data.completedWithPR) {
-              this._completedWithPR.add(id);
-            }
-          }
-          if (Array.isArray(data.prCreatedForBranch)) {
-            for (const id of data.prCreatedForBranch) {
-              this._prCreatedForBranch.add(id);
-            }
-          }
-          console.log(
-            `${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`,
-          );
+      const data = loadJsonWithLegacyFallback(
+        NO_COMMIT_STATE_FILE,
+        executorStatePaths.legacyNoCommitPaths,
+      );
+      if (data && typeof data === "object") {
+        for (const [id, count] of Object.entries(data.noCommitCounts || {})) {
+          this._noCommitCounts.set(id, count);
         }
+        for (const [id, until] of Object.entries(data.skipUntil || {})) {
+          if (until > Date.now()) {
+            this._skipUntil.set(id, until);
+          }
+        }
+        // Restore completed-with-PR tracking
+        if (Array.isArray(data.completedWithPR)) {
+          for (const id of data.completedWithPR) {
+            this._completedWithPR.add(id);
+          }
+        }
+        if (Array.isArray(data.prCreatedForBranch)) {
+          for (const id of data.prCreatedForBranch) {
+            this._prCreatedForBranch.add(id);
+          }
+        }
+        console.log(
+          `${TAG} restored anti-thrash state: ${this._noCommitCounts.size} tasks tracked, ${this._completedWithPR.size} completed with PR`,
+        );
       }
     } catch (err) {
       console.warn(`${TAG} failed to load anti-thrash state: ${err.message}`);
@@ -584,7 +631,7 @@ class TaskExecutor {
   /** Persist anti-thrash state to disk. */
   _saveNoCommitState() {
     try {
-      const dir = resolve(__dirname, ".cache");
+      const dir = dirname(NO_COMMIT_STATE_FILE);
       mkdirSync(dir, { recursive: true });
       const data = {
         noCommitCounts: Object.fromEntries(this._noCommitCounts),
@@ -606,9 +653,11 @@ class TaskExecutor {
   /** Load active slot runtime state (instance IDs + startedAt) from disk. */
   _loadRuntimeState() {
     try {
-      if (!existsSync(RUNTIME_STATE_FILE)) return;
-      const raw = readFileSync(RUNTIME_STATE_FILE, "utf8");
-      const parsed = JSON.parse(raw);
+      const parsed = loadJsonWithLegacyFallback(
+        RUNTIME_STATE_FILE,
+        executorStatePaths.legacyRuntimePaths,
+      );
+      if (!parsed || typeof parsed !== "object") return;
       const nextId = Number(parsed?.nextAgentInstanceId || 1);
       if (Number.isFinite(nextId) && nextId > 0) {
         this._nextAgentInstanceId = Math.floor(nextId);
@@ -656,7 +705,7 @@ class TaskExecutor {
   /** Persist active slot runtime state to disk (survives monitor restart). */
   _saveRuntimeState() {
     try {
-      const dir = resolve(__dirname, ".cache");
+      const dir = dirname(RUNTIME_STATE_FILE);
       mkdirSync(dir, { recursive: true });
 
       const slots = {};
@@ -1433,7 +1482,10 @@ class TaskExecutor {
     if (this._taskClaimsReady) return true;
     if (this._taskClaimsInitPromise) return this._taskClaimsInitPromise;
 
-    this._taskClaimsInitPromise = initTaskClaims({ repoRoot: this.repoRoot })
+    this._taskClaimsInitPromise = initTaskClaims({
+      repoRoot: this.repoRoot,
+      cwd: this.repoRoot,
+    })
       .then(() => {
         this._taskClaimsReady = true;
         return true;
@@ -1908,7 +1960,7 @@ class TaskExecutor {
           this._buildRetryPrompt(task, lastResult, attempt),
         buildContinuePrompt: (lastResult, attempt) =>
           this._buildContinuePrompt(task, lastResult, attempt),
-        onEvent: createAgentLogStreamer(taskId, taskTitle),
+        onEvent: createAgentLogStreamer(taskId, taskTitle, this.repoRoot),
         abortController: taskAbortController,
         // When AbortController is replaced after idle_continue, update our reference
         onAbortControllerReplaced: (newAC) => {
@@ -1999,7 +2051,7 @@ class TaskExecutor {
               this._buildRetryPrompt(task, lr, att),
             buildContinuePrompt: (lr, att) =>
               this._buildContinuePrompt(task, lr, att),
-            onEvent: createAgentLogStreamer(taskId, taskTitle),
+            onEvent: createAgentLogStreamer(taskId, taskTitle, this.repoRoot),
             abortController: resumeAC,
             onAbortControllerReplaced: (newAC) => {
               this._slotAbortControllers.set(taskId, newAC);
@@ -3687,5 +3739,6 @@ export function isExecutorDisabled() {
   return DISABLED_MODES.has(getExecutorMode());
 }
 
+export { resolveTaskExecutorStatePaths };
 export { TaskExecutor };
 export default TaskExecutor;

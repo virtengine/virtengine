@@ -13,10 +13,12 @@
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFile, readdir, stat, unlink, writeFile, mkdir } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
 import {
   execPrimaryPrompt,
   isPrimaryBusy,
@@ -75,21 +77,69 @@ import {
   notePresence,
   parsePresenceMessage,
 } from "./presence.mjs";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
-const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
-const telegramPollLockPath = resolve(
+const repoSharedStatePaths = resolveRepoSharedStatePaths({
   repoRoot,
-  ".cache",
-  "telegram-getupdates.lock",
-);
-const liveDigestStatePath = resolve(repoRoot, ".cache", "ve-live-digest.json");
+  cwd: process.cwd(),
+});
+const legacyRepoCacheDir = resolve(repoRoot, ".cache");
 
-// ── Configuration ────────────────────────────────────────────────────────────
+function migrateLegacyStateFile(primaryPath, legacyPaths = []) {
+  if (existsSync(primaryPath)) return;
+  for (const legacyPath of legacyPaths) {
+    if (!legacyPath || !existsSync(legacyPath)) continue;
+    try {
+      const raw = readFileSync(legacyPath, "utf8");
+      mkdirSync(dirname(primaryPath), { recursive: true });
+      writeFileSync(primaryPath, raw, "utf8");
+      return;
+    } catch {
+      /* continue */
+    }
+  }
+}
+
+function resolveStateFile(fileName, options = {}) {
+  const envKeys = Array.isArray(options.envKeys) ? options.envKeys : [];
+  for (const key of envKeys) {
+    const value = String(process.env[key] || "").trim();
+    if (value) {
+      return resolve(value);
+    }
+  }
+
+  const primaryPath = repoSharedStatePaths.file(fileName);
+  const legacyPaths = [
+    resolve(legacyRepoCacheDir, fileName),
+    resolve(repoSharedStatePaths.legacyCacheDir, fileName),
+    resolve(repoSharedStatePaths.legacyCodexCacheDir, fileName),
+  ];
+  migrateLegacyStateFile(primaryPath, legacyPaths);
+  return primaryPath;
+}
 
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+const statusPath = resolveStateFile("ve-orchestrator-status.json", {
+  envKeys: ["STATUS_FILE"],
+});
+const telegramTokenHash = createHash("sha256")
+  .update(String(telegramToken || "missing-token"))
+  .digest("hex")
+  .slice(0, 16);
+const telegramPollLockPath = resolve(
+  tmpdir(),
+  "virtengine-codex-monitor",
+  `telegram-getupdates-${telegramTokenHash}.lock`,
+);
+const liveDigestStatePath = resolveStateFile("ve-live-digest.json", {
+  envKeys: ["VE_LIVE_DIGEST_STATE_FILE"],
+});
+
+// ── Configuration ────────────────────────────────────────────────────────────
 const TELEGRAM_API_BASE = String(
   process.env.TELEGRAM_API_BASE_URL || "https://api.telegram.org",
 ).replace(/\/+$/, "");
@@ -470,8 +520,14 @@ function canSignalProcess(pid) {
 async function acquireTelegramPollLock(owner) {
   if (telegramPollLockHeld) return true;
   try {
+    await mkdir(dirname(telegramPollLockPath), { recursive: true });
     const payload = JSON.stringify(
-      { owner, pid: process.pid, started_at: new Date().toISOString() },
+      {
+        owner,
+        pid: process.pid,
+        repo_root: repoRoot,
+        started_at: new Date().toISOString(),
+      },
       null,
       2,
     );
@@ -3845,7 +3901,9 @@ async function cmdCoordinator(chatId) {
 }
 
 /** State for model override — write a file that orchestrator reads */
-const modelOverridePath = resolve(repoRoot, ".cache", "executor-override.json");
+const modelOverridePath = resolveStateFile("executor-override.json", {
+  envKeys: ["VE_EXECUTOR_OVERRIDE_PATH"],
+});
 
 async function cmdModel(chatId, modelArg) {
   if (!modelArg || modelArg.trim() === "") {
@@ -6133,8 +6191,12 @@ export async function startTelegramBot() {
 
   // Only send "online" notification on truly fresh starts, not code-change restarts.
   // Check the self-restart marker file first, then fall back to rapid-restart heuristic.
-  const botStartPath = resolve(repoRoot, ".cache", "ve-last-bot-start.txt");
-  const selfRestartPath = resolve(repoRoot, ".cache", "ve-self-restart.marker");
+  const botStartPath = resolveStateFile("ve-last-bot-start.txt", {
+    envKeys: ["VE_LAST_BOT_START_PATH"],
+  });
+  const selfRestartPath = resolveStateFile("ve-self-restart.marker", {
+    envKeys: ["VE_SELF_RESTART_MARKER_PATH"],
+  });
   let suppressOnline = false;
   try {
     if (existsSync(selfRestartPath)) {

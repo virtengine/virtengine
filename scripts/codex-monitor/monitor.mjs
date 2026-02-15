@@ -17,7 +17,7 @@ import {
 } from "node:fs/promises";
 import { clearLine, createInterface, cursorTo } from "node:readline";
 import net from "node:net";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { archiveCompletedTasks } from "./task-archiver.mjs";
@@ -188,15 +188,43 @@ import {
   updateTaskStatus as updateKanbanTaskStatus,
 } from "./kanban-adapter.mjs";
 import { resolvePromptTemplate } from "./agent-prompts.mjs";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
+function readJsonWithLegacyFallback(primaryPath, legacyPaths = []) {
+  const candidates = [primaryPath, ...legacyPaths.filter(Boolean)];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const raw = readFileSync(candidate, "utf8");
+      const parsed = JSON.parse(raw);
+      if (candidate !== primaryPath && !existsSync(primaryPath)) {
+        try {
+          mkdirSync(dirname(primaryPath), { recursive: true });
+          writeFileSync(primaryPath, raw, "utf8");
+        } catch {
+          /* best effort */
+        }
+      }
+      return parsed;
+    } catch {
+      /* continue */
+    }
+  }
+  return null;
+}
+
+const monitorSharedStatePaths = resolveRepoSharedStatePaths({
+  cwd: process.cwd(),
+});
+
 // ── Anomaly signal file path (shared with ve-orchestrator.ps1) ──────────────
-const ANOMALY_SIGNAL_PATH = resolve(
-  __dirname,
-  "..",
-  ".cache",
-  "anomaly-signals.json",
-);
+const ANOMALY_SIGNAL_PATH = monitorSharedStatePaths.file("anomaly-signals.json");
+const LEGACY_ANOMALY_SIGNAL_PATHS = [
+  resolve(monitorSharedStatePaths.legacyCacheDir, "anomaly-signals.json"),
+  resolve(monitorSharedStatePaths.legacyCodexCacheDir, "anomaly-signals.json"),
+  resolve(__dirname, "..", ".cache", "anomaly-signals.json"),
+];
 
 /**
  * Write an anomaly signal to the shared signal file for the orchestrator to pick up.
@@ -204,15 +232,15 @@ const ANOMALY_SIGNAL_PATH = resolve(
  */
 function writeAnomalySignal(anomaly) {
   try {
-    const dir = resolve(__dirname, "..", ".cache");
+    const dir = dirname(ANOMALY_SIGNAL_PATH);
     mkdirSync(dir, { recursive: true });
     let signals = [];
-    try {
-      const raw = readFileSync(ANOMALY_SIGNAL_PATH, "utf8");
-      signals = JSON.parse(raw);
-      if (!Array.isArray(signals)) signals = [];
-    } catch {
-      /* file doesn't exist yet */
+    const loaded = readJsonWithLegacyFallback(
+      ANOMALY_SIGNAL_PATH,
+      LEGACY_ANOMALY_SIGNAL_PATHS,
+    );
+    if (Array.isArray(loaded)) {
+      signals = loaded;
     }
     signals.push({
       type: anomaly.type,
@@ -737,17 +765,28 @@ let selfRestartDeferCount = 0;
 let deferredMonitorRestartTimer = null;
 let pendingMonitorRestartReason = "";
 
+const repoSharedStatePaths = resolveRepoSharedStatePaths({
+  repoRoot: config.repoRoot,
+  cwd: config.repoRoot,
+});
+const legacyRuntimeCacheDir = config.cacheDir || resolve(config.repoRoot, ".cache");
+
 // ── Self-restart marker: detect if this process was spawned by a code-change restart
-const selfRestartMarkerPath = resolve(
-  config.cacheDir || resolve(config.repoRoot, ".cache"),
-  "ve-self-restart.marker",
-);
+const selfRestartMarkerPath =
+  process.env.VE_SELF_RESTART_MARKER_PATH ||
+  repoSharedStatePaths.file("ve-self-restart.marker");
+const legacySelfRestartMarkerPaths = [
+  resolve(legacyRuntimeCacheDir, "ve-self-restart.marker"),
+  resolve(repoSharedStatePaths.legacyCacheDir, "ve-self-restart.marker"),
+  resolve(repoSharedStatePaths.legacyCodexCacheDir, "ve-self-restart.marker"),
+];
 let isSelfRestart = false;
 try {
-  if (existsSync(selfRestartMarkerPath)) {
-    const ts = Number(
-      (await import("node:fs")).readFileSync(selfRestartMarkerPath, "utf8"),
-    );
+  const markerPath = [selfRestartMarkerPath, ...legacySelfRestartMarkerPaths].find(
+    (path) => existsSync(path),
+  );
+  if (markerPath) {
+    const ts = Number((await import("node:fs")).readFileSync(markerPath, "utf8"));
     // Marker is valid if written within the last 30 seconds
     if (Date.now() - ts < 30_000) {
       isSelfRestart = true;
@@ -755,11 +794,26 @@ try {
         "[monitor] detected self-restart marker — suppressing startup notifications",
       );
     }
+    if (markerPath !== selfRestartMarkerPath && !existsSync(selfRestartMarkerPath)) {
+      try {
+        mkdirSync(dirname(selfRestartMarkerPath), { recursive: true });
+        writeFileSync(selfRestartMarkerPath, String(ts));
+      } catch {
+        /* best effort */
+      }
+    }
     // Clean up marker regardless
     try {
-      (await import("node:fs")).unlinkSync(selfRestartMarkerPath);
+      (await import("node:fs")).unlinkSync(markerPath);
     } catch {
       /* best effort */
+    }
+    if (markerPath !== selfRestartMarkerPath) {
+      try {
+        (await import("node:fs")).unlinkSync(selfRestartMarkerPath);
+      } catch {
+        /* best effort */
+      }
     }
   }
 } catch {
@@ -920,11 +974,16 @@ let allCompleteNotified = false;
 let backlogLowNotified = false;
 let idleAgentsNotified = false;
 let plannerTriggered = false;
-const monitorStateCacheDir = resolve(repoRoot, ".codex-monitor", ".cache");
+const monitorStateCacheDir = repoSharedStatePaths.repoStateDir;
 const plannerStatePath = resolve(
   monitorStateCacheDir,
   "task-planner-state.json",
 );
+const legacyPlannerStatePaths = [
+  resolve(legacyRuntimeCacheDir, "task-planner-state.json"),
+  resolve(repoSharedStatePaths.legacyCacheDir, "task-planner-state.json"),
+  resolve(repoSharedStatePaths.legacyCodexCacheDir, "task-planner-state.json"),
+];
 const taskPlannerStatus = {
   enabled: isDevMode(),
   intervalMs: Math.max(
@@ -3560,17 +3619,21 @@ const mergedTaskCache = new Set();
 const mergedBranchCache = new Set();
 
 /** Path to the persistent merged-task cache file */
-const mergedTaskCachePath = resolve(
-  config.cacheDir || resolve(config.repoRoot, ".cache"),
-  "ve-merged-tasks.json",
-);
+const mergedTaskCachePath = repoSharedStatePaths.file("ve-merged-tasks.json");
+const legacyMergedTaskCachePaths = [
+  resolve(legacyRuntimeCacheDir, "ve-merged-tasks.json"),
+  resolve(repoSharedStatePaths.legacyCacheDir, "ve-merged-tasks.json"),
+  resolve(repoSharedStatePaths.legacyCodexCacheDir, "ve-merged-tasks.json"),
+];
 
 /** Load persisted merged-task cache from disk (best-effort) */
 function loadMergedTaskCache() {
   try {
-    if (existsSync(mergedTaskCachePath)) {
-      const raw = readFileSync(mergedTaskCachePath, "utf8");
-      const data = JSON.parse(raw);
+    const data = readJsonWithLegacyFallback(
+      mergedTaskCachePath,
+      legacyMergedTaskCachePaths,
+    );
+    if (data && typeof data === "object") {
       // No expiry — merged PRs don't un-merge. Cache is permanent.
       const ids = data.taskIds ?? data; // back-compat: old format was flat {id:ts}
       for (const id of Object.keys(ids)) {
@@ -3596,6 +3659,7 @@ function loadMergedTaskCache() {
 /** Persist merged-task cache to disk (best-effort) */
 function saveMergedTaskCache() {
   try {
+    mkdirSync(dirname(mergedTaskCachePath), { recursive: true });
     const taskIds = {};
     const now = Date.now();
     for (const id of mergedTaskCache) {
@@ -3630,9 +3694,14 @@ const recoveryCacheMaxEntries = Number(
 );
 
 const recoveryCachePath = resolve(
-  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  repoSharedStatePaths.repoStateDir,
   "ve-task-recovery-cache.json",
 );
+const legacyRecoveryCachePaths = [
+  resolve(legacyRuntimeCacheDir, "ve-task-recovery-cache.json"),
+  resolve(repoSharedStatePaths.legacyCacheDir, "ve-task-recovery-cache.json"),
+  resolve(repoSharedStatePaths.legacyCodexCacheDir, "ve-task-recovery-cache.json"),
+];
 
 /**
  * Cooldown cache for tasks whose branches are all unresolvable (deleted,
@@ -3705,6 +3774,7 @@ function buildCacheObject(map, tsField) {
 function saveRecoveryCache() {
   if (!recoveryCacheEnabled) return;
   try {
+    mkdirSync(dirname(recoveryCachePath), { recursive: true });
     const payload = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -3721,9 +3791,11 @@ function saveRecoveryCache() {
 function loadRecoveryCache() {
   if (!recoveryCacheEnabled) return;
   try {
-    if (!existsSync(recoveryCachePath)) return;
-    const raw = readFileSync(recoveryCachePath, "utf8");
-    const data = JSON.parse(raw);
+    const data = readJsonWithLegacyFallback(
+      recoveryCachePath,
+      legacyRecoveryCachePaths,
+    );
+    if (!data || typeof data !== "object") return;
     const now = Date.now();
     const staleEntries = data?.staleCooldown || {};
     for (const [id, entry] of Object.entries(staleEntries)) {
@@ -6314,8 +6386,14 @@ async function readStatusSummary() {
 
 async function readPlannerState() {
   try {
-    const raw = await readFile(plannerStatePath, "utf8");
-    return JSON.parse(raw);
+    const loaded = readJsonWithLegacyFallback(
+      plannerStatePath,
+      legacyPlannerStatePaths,
+    );
+    if (loaded && typeof loaded === "object") {
+      return loaded;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -7816,7 +7894,7 @@ async function triggerTaskPlannerViaCodex(
     );
   }
 
-  const plannerArtifactDir = resolve(repoRoot, ".codex-monitor", ".cache");
+  const plannerArtifactDir = monitorStateCacheDir;
   await mkdir(plannerArtifactDir, { recursive: true });
   const artifactPath = resolve(
     plannerArtifactDir,
@@ -9677,10 +9755,8 @@ function selfRestartForSourceChange(filename) {
   }
   // Write self-restart marker so the new process suppresses startup notifications
   try {
-    writeFileSync(
-      resolve(repoRoot, ".cache", "ve-self-restart.marker"),
-      String(Date.now()),
-    );
+    mkdirSync(dirname(selfRestartMarkerPath), { recursive: true });
+    writeFileSync(selfRestartMarkerPath, String(Date.now()));
   } catch {
     /* best effort */
   }
@@ -10545,7 +10621,8 @@ const MAX_REVIEW_ROUNDS = Number(
 try {
   mkdirSync(monitorStateCacheDir, { recursive: true });
   configureTaskStore({
-    storePath: resolve(monitorStateCacheDir, "kanban-state.json"),
+    repoRoot,
+    cwd: repoRoot,
   });
   console.log(`[monitor] planner state path: ${plannerStatePath}`);
   console.log(`[monitor] task store path: ${getStorePath()}`);

@@ -213,6 +213,12 @@ Load order (highest priority first):
 - `COPILOT_TRANSPORT=sdk|auto|cli|url`
 - `CLAUDE_TRANSPORT=sdk|auto|cli`
 
+Copilot provider routing is also configurable:
+
+- `COPILOT_PROVIDER_MODE=github|openai-env`
+  - `github` (default): isolates `OPENAI_*`, `AZURE_*`, and `AI_FOUNDRY_*` env vars so Copilot SDK uses standard GitHub Copilot routing.
+  - `openai-env`: intentionally inherits OpenAI/Azure provider env vars when you want Copilot SDK requests routed via your own compatible endpoint/deployments.
+
 Setup now defaults all three to `sdk` for predictable persistent-session behavior.
 `auto` remains available when you intentionally want endpoint/CLI auto-detection.
 
@@ -277,7 +283,7 @@ NPM_TOKEN=*** npm run publish:env
 
 Optional publish env vars:
 
-- `NPM_ACCESS_TOKEN` (or `NODE_AUTH_TOKEN`) — required for real publish
+- `NPM_TOKEN` (or `NODE_AUTH_TOKEN`) — required for real publish
 - `NPM_PUBLISH_TAG` — defaults to `latest`
 - `NPM_PUBLISH_ACCESS` — defaults to `public`
 - `NPM_REGISTRY_URL` — defaults to `https://registry.npmjs.org/`
@@ -285,6 +291,20 @@ Optional publish env vars:
 
 The publish helper creates a temporary `.npmrc` in the OS temp directory,
 uses it only for the publish command, and removes it immediately after.
+
+## Portable shared state (lightweight DB)
+
+`codex-monitor` now stores shared-workspace registry metadata in a lightweight
+JSON state DB outside repo-local caches, keyed by canonical repository identity.
+This keeps shared workspace state working when the same repository is opened
+from alternate directories/worktrees.
+
+- default state DB location:
+  - Windows: `%LOCALAPPDATA%/codex-monitor/state`
+  - macOS/Linux: `~/.codex-monitor/state`
+- override location with `VE_CODEX_MONITOR_STATE_DIR`
+- legacy repo cache (`.cache/codex-monitor/shared-workspaces.json`) is read and
+  auto-migrated to the global state path on first load
 
 ### Executor config (`codex-monitor.config.json`)
 

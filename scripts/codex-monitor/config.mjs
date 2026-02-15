@@ -13,11 +13,12 @@
  * Executor configuration supports N executors with weights and failover.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname, basename, relative, isAbsolute } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveAgentSdkConfig } from "./agent-sdk.mjs";
+import { resolveRepoSharedStatePaths } from "./shared-state-paths.mjs";
 import {
   ensureAgentPromptWorkspace,
   getAgentPromptDefinitions,
@@ -35,6 +36,28 @@ const CONFIG_FILES = [
 function hasSetupMarkers(dir) {
   const markers = [".env", ...CONFIG_FILES];
   return markers.some((name) => existsSync(resolve(dir, name)));
+}
+
+function firstExistingPath(paths = []) {
+  for (const candidate of paths) {
+    if (candidate && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function migrateLegacyStateFile(primaryPath, legacyPaths = []) {
+  if (existsSync(primaryPath)) return;
+  const source = firstExistingPath(legacyPaths);
+  if (!source) return;
+  try {
+    const raw = readFileSync(source, "utf8");
+    mkdirSync(dirname(primaryPath), { recursive: true });
+    writeFileSync(primaryPath, raw, "utf8");
+  } catch {
+    /* best effort */
+  }
 }
 
 function isPathInside(parent, child) {
@@ -1802,16 +1825,31 @@ export function loadConfig(argv = process.argv, options = {}) {
     repoRoot,
     configData.cacheDir || selectedRepository?.cacheDir || ".cache",
   );
+  const sharedState = resolveRepoSharedStatePaths({ repoRoot, cwd: repoRoot });
+  const legacyStatusPaths = [
+    resolve(cacheDir, "ve-orchestrator-status.json"),
+    resolve(sharedState.legacyCacheDir, "ve-orchestrator-status.json"),
+    resolve(sharedState.legacyCodexCacheDir, "ve-orchestrator-status.json"),
+  ];
+  const legacyLockPaths = [
+    resolve(cacheDir, "telegram-getupdates.lock"),
+    resolve(sharedState.legacyCacheDir, "telegram-getupdates.lock"),
+    resolve(sharedState.legacyCodexCacheDir, "telegram-getupdates.lock"),
+  ];
+  const sharedStatusPath = sharedState.file("ve-orchestrator-status.json");
+  const sharedLockPath = sharedState.file("telegram-getupdates.lock");
+  migrateLegacyStateFile(sharedStatusPath, legacyStatusPaths);
+  migrateLegacyStateFile(sharedLockPath, legacyLockPaths);
   // Default matches ve-orchestrator.ps1's $script:StatusStatePath
   const statusPath =
     process.env.STATUS_FILE ||
     configData.statusPath ||
     selectedRepository?.statusPath ||
-    resolve(cacheDir, "ve-orchestrator-status.json");
+    sharedStatusPath;
   const lockBase =
     configData.telegramPollLockPath ||
     selectedRepository?.telegramPollLockPath ||
-    resolve(cacheDir, "telegram-getupdates.lock");
+    sharedLockPath;
   const telegramPollLockPath = lockBase.endsWith(".lock")
     ? resolve(lockBase)
     : resolve(lockBase, "telegram-getupdates.lock");
