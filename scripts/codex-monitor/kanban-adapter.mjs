@@ -114,6 +114,18 @@ function normaliseStatus(raw) {
   return STATUS_MAP[key] || "todo";
 }
 
+/**
+ * Configurable mapping from internal statuses to GitHub Project v2 status names.
+ * Override via GITHUB_PROJECT_STATUS_* env vars.
+ */
+const PROJECT_STATUS_MAP = {
+  todo: process.env.GITHUB_PROJECT_STATUS_TODO || "Todo",
+  inprogress: process.env.GITHUB_PROJECT_STATUS_INPROGRESS || "In Progress",
+  inreview: process.env.GITHUB_PROJECT_STATUS_INREVIEW || "In Review",
+  done: process.env.GITHUB_PROJECT_STATUS_DONE || "Done",
+  cancelled: process.env.GITHUB_PROJECT_STATUS_CANCELLED || "Cancelled",
+};
+
 function parseBooleanEnv(value, fallback = false) {
   if (value == null || value === "") return fallback;
   const key = String(value).trim().toLowerCase();
@@ -433,13 +445,29 @@ class GitHubIssuesAdapter {
       process.env.GITHUB_PROJECT_ID ||
       null;
     this._cachedProjectNumber = this._projectNumber;
-    this._projectFieldsCache = null;
-    this._projectFieldsCacheTime = 0;
+
+    // --- Caching infrastructure for GitHub Projects v2 ---
+    /** @type {Map<string, string>} projectNumber → project node ID */
+    this._projectNodeIdCache = new Map();
+    /** @type {Map<string, string>} "projectNum:issueNum" → project item ID */
+    this._projectItemCache = new Map();
+    /** @type {Map<string, {fields: any, time: number}>} projectNumber → {fields, time} */
+    this._projectFieldsCache = new Map();
     this._projectFieldsCacheTTL = 300_000; // 5 minutes
+
+    // Auto-sync toggle: set GITHUB_PROJECT_AUTO_SYNC=false to disable project sync
+    this._projectAutoSync = parseBooleanEnv(
+      process.env.GITHUB_PROJECT_AUTO_SYNC,
+      true,
+    );
+
+    // Rate limit retry delay (ms) — configurable for tests
+    this._rateLimitRetryDelayMs =
+      Number(process.env.GH_RATE_LIMIT_RETRY_MS) || 60_000;
   }
 
   /**
-   * Get project fields with caching.
+   * Get project fields with caching (private — returns legacy format for _syncStatusToProject).
    * Returns status field ID and options for project board.
    * @private
    * @param {string} projectNumber - GitHub project number
@@ -450,11 +478,10 @@ class GitHubIssuesAdapter {
 
     // Return cached value if still valid
     const now = Date.now();
-    if (
-      this._projectFieldsCache &&
-      now - this._projectFieldsCacheTime < this._projectFieldsCacheTTL
-    ) {
-      return this._projectFieldsCache;
+    const cacheKey = String(projectNumber);
+    const cached = this._projectFieldsCache.get(cacheKey);
+    if (cached && now - cached.time < this._projectFieldsCacheTTL) {
+      return cached.fields;
     }
 
     try {
@@ -501,9 +528,12 @@ class GitHubIssuesAdapter {
         statusOptions,
       };
 
-      // Cache the result
-      this._projectFieldsCache = result;
-      this._projectFieldsCacheTime = now;
+      // Cache the result (also cache the raw fields array for getProjectFields)
+      this._projectFieldsCache.set(cacheKey, {
+        fields: result,
+        rawFields: fields,
+        time: now,
+      });
 
       return result;
     } catch (err) {
@@ -515,13 +545,400 @@ class GitHubIssuesAdapter {
   }
 
   /**
-   * List tasks from a GitHub Project board.
-   * Fetches project items, extracts issue URLs, and normalizes them.
+   * Get full project fields map for a GitHub Project board.
+   * Returns a Map keyed by lowercase field name with {id, name, type, options}.
+   * @public
+   * @param {string} projectNumber - GitHub project number
+   * @returns {Promise<Map<string, {id: string, name: string, type: string, options: Array<{id: string, name: string}>}>>}
+   */
+  async getProjectFields(projectNumber) {
+    if (!projectNumber) return new Map();
+    const cacheKey = String(projectNumber);
+    const now = Date.now();
+    const cached = this._projectFieldsCache.get(cacheKey);
+
+    let rawFields;
+    if (
+      cached &&
+      cached.rawFields &&
+      now - cached.time < this._projectFieldsCacheTTL
+    ) {
+      rawFields = cached.rawFields;
+    } else {
+      // Trigger a fresh fetch via _getProjectFields which populates both caches
+      await this._getProjectFields(projectNumber);
+      const freshCached = this._projectFieldsCache.get(cacheKey);
+      rawFields = freshCached?.rawFields;
+    }
+
+    if (!Array.isArray(rawFields)) return new Map();
+
+    /** @type {Map<string, {id: string, name: string, type: string, options: Array}>} */
+    const fieldMap = new Map();
+    for (const f of rawFields) {
+      if (!f.name) continue;
+      fieldMap.set(f.name.toLowerCase(), {
+        id: f.id,
+        name: f.name,
+        type: f.type || f.data_type || "UNKNOWN",
+        options: (f.options || []).map((opt) => ({
+          id: opt.id,
+          name: opt.name,
+        })),
+      });
+    }
+    return fieldMap;
+  }
+
+  /**
+   * Get the GraphQL node ID for a GitHub Project v2 board.
+   * Resolves org or user project. Cached for session lifetime.
+   * @public
+   * @param {string} projectNumber - GitHub project number
+   * @returns {Promise<string|null>} Project node ID or null
+   */
+  async getProjectNodeId(projectNumber) {
+    if (!projectNumber) return null;
+    const cacheKey = String(projectNumber);
+    if (this._projectNodeIdCache.has(cacheKey)) {
+      return this._projectNodeIdCache.get(cacheKey);
+    }
+
+    const owner = String(this._projectOwner || this._owner).trim();
+    const query = `
+      query {
+        user(login: "${owner}") {
+          projectV2(number: ${projectNumber}) {
+            id
+          }
+        }
+        organization(login: "${owner}") {
+          projectV2(number: ${projectNumber}) {
+            id
+          }
+        }
+      }
+    `;
+
+    try {
+      const data = await this._gh(["api", "graphql", "-f", `query=${query}`]);
+      const nodeId =
+        data?.data?.user?.projectV2?.id ||
+        data?.data?.organization?.projectV2?.id ||
+        null;
+      if (nodeId) {
+        this._projectNodeIdCache.set(cacheKey, nodeId);
+      }
+      return nodeId;
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to resolve project node ID for ${owner}/${projectNumber}: ${err.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Normalize a GitHub Project v2 status name to internal codex status.
+   * Also supports reverse mapping (internal → project).
+   *
+   * Bidirectional:
+   *   - project → internal: _normalizeProjectStatus("In Progress") → "inprogress"
+   *   - internal → project: _normalizeProjectStatus("inprogress", true) → "In Progress"
+   *
+   * @param {string} statusName - Status name to normalize
+   * @param {boolean} [toProject=false] - If true, map internal→project; otherwise project→internal
+   * @returns {string} Normalized status
+   */
+  _normalizeProjectStatus(statusName, toProject = false) {
+    if (!statusName) return toProject ? PROJECT_STATUS_MAP.todo : "todo";
+
+    if (toProject) {
+      // internal → project
+      const key = String(statusName).toLowerCase().trim();
+      return PROJECT_STATUS_MAP[key] || PROJECT_STATUS_MAP.todo;
+    }
+
+    // project → internal: build reverse map from PROJECT_STATUS_MAP
+    const lcInput = String(statusName).toLowerCase().trim();
+    for (const [internal, projectName] of Object.entries(PROJECT_STATUS_MAP)) {
+      if (String(projectName).toLowerCase() === lcInput) {
+        return internal;
+      }
+    }
+    // Fallback to standard normalisation
+    return normaliseStatus(statusName);
+  }
+
+  /**
+   * Normalize a project item (from `gh project item-list`) into KanbanTask format
+   * without issuing individual issue fetches (fixes N+1 problem).
    * @private
+   * @param {Object} projectItem - Raw project item from item-list
+   * @returns {KanbanTask|null}
+   */
+  _normaliseProjectItem(projectItem) {
+    if (!projectItem) return null;
+
+    const content = projectItem.content || {};
+    // content may have: number, title, body, url, type, repository, labels, assignees
+    const issueNumber = content.number;
+    if (!issueNumber && !content.url) return null; // skip draft items without info
+
+    // Extract issue number from URL if not directly available
+    const num =
+      issueNumber || String(content.url || "").match(/\/issues\/(\d+)/)?.[1];
+    if (!num) return null;
+
+    // Extract labels
+    const rawLabels = content.labels || projectItem.labels || [];
+    const labels = rawLabels.map((l) =>
+      typeof l === "string" ? l : l?.name || "",
+    );
+    const labelSet = new Set(
+      labels.map((l) =>
+        String(l || "")
+          .trim()
+          .toLowerCase(),
+      ),
+    );
+
+    // Determine status from project Status field value
+    const projectStatus =
+      projectItem.status || projectItem.fieldValues?.Status || null;
+    let status;
+    if (projectStatus) {
+      status = this._normalizeProjectStatus(projectStatus);
+    } else {
+      // Fallback to content state + labels
+      if (content.state === "closed" || content.state === "CLOSED") {
+        status = "done";
+      } else if (labelSet.has("inprogress") || labelSet.has("in-progress")) {
+        status = "inprogress";
+      } else if (labelSet.has("inreview") || labelSet.has("in-review")) {
+        status = "inreview";
+      } else if (labelSet.has("blocked")) {
+        status = "blocked";
+      } else {
+        status = "todo";
+      }
+    }
+
+    // Codex meta flags
+    const codexMeta = {
+      isIgnored: labelSet.has("codex:ignore"),
+      isClaimed: labelSet.has("codex:claimed"),
+      isWorking: labelSet.has("codex:working"),
+      isStale: labelSet.has("codex:stale"),
+    };
+
+    // Extract branch/PR from body if available
+    const body = content.body || "";
+    const branchMatch = body.match(/branch:\s*`?([^\s`]+)`?/i);
+    const prMatch = body.match(/pr:\s*#?(\d+)/i);
+
+    // Assignees
+    const assignees = content.assignees || [];
+    const assignee =
+      assignees.length > 0
+        ? typeof assignees[0] === "string"
+          ? assignees[0]
+          : assignees[0]?.login
+        : null;
+
+    const issueUrl =
+      content.url ||
+      `https://github.com/${this._owner}/${this._repo}/issues/${num}`;
+
+    return {
+      id: String(num),
+      title: content.title || projectItem.title || "",
+      description: body,
+      status,
+      assignee: assignee || null,
+      priority: labelSet.has("critical")
+        ? "critical"
+        : labelSet.has("high")
+          ? "high"
+          : null,
+      projectId: `${this._owner}/${this._repo}`,
+      branchName: branchMatch?.[1] || null,
+      prNumber: prMatch?.[1] || null,
+      meta: {
+        number: Number(num),
+        title: content.title || projectItem.title || "",
+        body,
+        state: content.state || null,
+        url: issueUrl,
+        labels: rawLabels,
+        assignees,
+        task_url: issueUrl,
+        codex: codexMeta,
+        projectNumber: null, // set by caller
+        projectItemId: projectItem.id || null,
+        projectStatus: projectStatus || null,
+      },
+      taskUrl: issueUrl,
+      backend: "github",
+    };
+  }
+
+  /**
+   * Get project item ID for an issue within a project (cached).
+   * @private
+   * @param {string} projectNumber - GitHub project number
+   * @param {string|number} issueNumber - Issue number
+   * @returns {Promise<string|null>} Project item ID or null
+   */
+  async _getProjectItemIdForIssue(projectNumber, issueNumber) {
+    if (!projectNumber || !issueNumber) return null;
+    const cacheKey = `${projectNumber}:${issueNumber}`;
+    if (this._projectItemCache.has(cacheKey)) {
+      return this._projectItemCache.get(cacheKey);
+    }
+
+    // Try GraphQL resource query
+    const issueUrl = `https://github.com/${this._owner}/${this._repo}/issues/${issueNumber}`;
+    const projectId = await this.getProjectNodeId(projectNumber);
+    if (!projectId) return null;
+
+    const query = `
+      query {
+        resource(url: "${issueUrl}") {
+          ... on Issue {
+            projectItems(first: 10) {
+              nodes {
+                id
+                project {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const data = await this._gh(["api", "graphql", "-f", `query=${query}`]);
+      const items = data?.data?.resource?.projectItems?.nodes || [];
+      const match = items.find((item) => item.project?.id === projectId);
+      const itemId = match?.id || null;
+      if (itemId) {
+        this._projectItemCache.set(cacheKey, itemId);
+      }
+      return itemId;
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to get project item ID for issue #${issueNumber}: ${err.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Update a generic field value on a project item via GraphQL mutation.
+   * Supports text, number, date, and single_select field types.
+   * @public
+   * @param {string|number} issueNumber - Issue number
+   * @param {string} projectNumber - GitHub project number
+   * @param {string} fieldName - Field name (case-insensitive)
+   * @param {string|number} value - Value to set
+   * @returns {Promise<boolean>} Success status
+   */
+  async syncFieldToProject(issueNumber, projectNumber, fieldName, value) {
+    if (!issueNumber || !projectNumber || !fieldName) return false;
+
+    try {
+      const projectId = await this.getProjectNodeId(projectNumber);
+      if (!projectId) {
+        console.warn(`${TAG} syncFieldToProject: cannot resolve project ID`);
+        return false;
+      }
+
+      const fieldMap = await this.getProjectFields(projectNumber);
+      const fieldKey = String(fieldName).toLowerCase().trim();
+      const field = fieldMap.get(fieldKey);
+      if (!field) {
+        console.warn(
+          `${TAG} syncFieldToProject: field "${fieldName}" not found in project`,
+        );
+        return false;
+      }
+
+      const itemId = await this._getProjectItemIdForIssue(
+        projectNumber,
+        issueNumber,
+      );
+      if (!itemId) {
+        console.warn(
+          `${TAG} syncFieldToProject: issue #${issueNumber} not found in project`,
+        );
+        return false;
+      }
+
+      // Build value object based on field type
+      let valueJson;
+      const fieldType = String(field.type).toUpperCase();
+      if (fieldType === "SINGLE_SELECT") {
+        const option = field.options.find(
+          (opt) =>
+            String(opt.name).toLowerCase() === String(value).toLowerCase(),
+        );
+        if (!option) {
+          console.warn(
+            `${TAG} syncFieldToProject: option "${value}" not found for field "${fieldName}"`,
+          );
+          return false;
+        }
+        valueJson = `{singleSelectOptionId: "${option.id}"}`;
+      } else if (fieldType === "NUMBER") {
+        valueJson = `{number: ${Number(value)}}`;
+      } else if (fieldType === "DATE") {
+        valueJson = `{date: "${String(value)}"}`;
+      } else {
+        // TEXT and other types
+        valueJson = `{text: "${String(value).replace(/"/g, '\\"')}"}`;
+      }
+
+      const mutation = `
+        mutation {
+          updateProjectV2ItemFieldValue(
+            input: {
+              projectId: "${projectId}",
+              itemId: "${itemId}",
+              fieldId: "${field.id}",
+              value: ${valueJson}
+            }
+          ) {
+            projectV2Item {
+              id
+            }
+          }
+        }
+      `;
+
+      await this._gh(["api", "graphql", "-f", `query=${mutation}`]);
+      console.log(
+        `${TAG} synced field "${fieldName}" = "${value}" for issue #${issueNumber}`,
+      );
+      return true;
+    } catch (err) {
+      console.warn(
+        `${TAG} syncFieldToProject failed for issue #${issueNumber}: ${err.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * List tasks from a GitHub Project board.
+   * Fetches project items and normalizes them directly (no N+1 issue fetches).
+   * @public
    * @param {string} projectNumber - GitHub project number
    * @returns {Promise<KanbanTask[]>}
    */
-  async _listTasksFromProject(projectNumber) {
+  async listTasksFromProject(projectNumber) {
     if (!projectNumber) return [];
 
     try {
@@ -543,45 +960,19 @@ class GitHubIssuesAdapter {
         return [];
       }
 
-      // Extract issue URLs and fetch issue details
       const tasks = [];
       for (const item of items) {
-        const issueUrl = item.content?.url;
-        if (!issueUrl || !issueUrl.includes("/issues/")) {
-          continue; // Skip non-issue items (e.g., draft issues, PRs)
-        }
+        // Skip non-issue items (draft issues without content, PRs)
+        if (item.content?.type === "PullRequest") continue;
 
-        // Extract issue number from URL
-        const issueMatch = issueUrl.match(/\/issues\/(\d+)/);
-        if (!issueMatch) continue;
-
-        const issueNumber = issueMatch[1];
-
-        try {
-          // Fetch full issue details
-          const issue = await this._gh([
-            "issue",
-            "view",
-            issueNumber,
-            "--repo",
-            `${this._owner}/${this._repo}`,
-            "--json",
-            "number,title,body,state,url,assignees,labels,milestone,comments",
-          ]);
-
-          const task = this._normaliseIssue(issue);
-          if (task) {
-            // Add project metadata
-            task.meta.projectNumber = projectNumber;
-            task.meta.projectItemId = item.id;
-            task.meta.projectStatus = item.status || null;
-
-            tasks.push(task);
+        const task = this._normaliseProjectItem(item);
+        if (task) {
+          task.meta.projectNumber = projectNumber;
+          // Cache the project item ID for later lookups
+          if (task.id && item.id) {
+            this._projectItemCache.set(`${projectNumber}:${task.id}`, item.id);
           }
-        } catch (err) {
-          console.warn(
-            `${TAG} failed to fetch issue ${issueNumber} from project: ${err.message}`,
-          );
+          tasks.push(task);
         }
       }
 
@@ -597,6 +988,7 @@ class GitHubIssuesAdapter {
   /**
    * Sync task status to GitHub Project board.
    * Maps codex status to project Status field and updates via GraphQL.
+   * Uses configurable PROJECT_STATUS_MAP for status name resolution.
    * @private
    * @param {string} issueUrl - Full GitHub issue URL
    * @param {string} projectNumber - GitHub project number
@@ -616,16 +1008,8 @@ class GitHubIssuesAdapter {
         return false;
       }
 
-      // Map codex status to project status option
-      const statusMapping = {
-        todo: "Todo",
-        inprogress: "In Progress",
-        inreview: "In Review",
-        done: "Done",
-        cancelled: "Done",
-      };
-
-      const targetStatusName = statusMapping[status] || "Todo";
+      // Map codex status to project status option using configurable mapping
+      const targetStatusName = this._normalizeProjectStatus(status, true);
       const statusOption = fields.statusOptions.find(
         (opt) => opt.name.toLowerCase() === targetStatusName.toLowerCase(),
       );
@@ -771,24 +1155,52 @@ class GitHubIssuesAdapter {
     }
   }
 
-  /** Execute a gh CLI command and return parsed JSON */
+  /** Execute a gh CLI command and return parsed JSON (with rate limit retry) */
   async _gh(args, options = {}) {
     const { parseJson = true } = options;
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const execFileAsync = promisify(execFile);
-    try {
-      const { stdout } = await execFileAsync("gh", args, {
+
+    const attempt = async () => {
+      const { stdout, stderr } = await execFileAsync("gh", args, {
         maxBuffer: 10 * 1024 * 1024,
         timeout: 30_000,
       });
-      const text = String(stdout || "").trim();
-      if (!parseJson) return text;
-      if (!text) return null;
-      return JSON.parse(text);
+      return { stdout, stderr };
+    };
+
+    let result;
+    try {
+      result = await attempt();
     } catch (err) {
-      throw new Error(`gh CLI failed: ${err.message}`);
+      const errText = String(err?.message || err?.stderr || err).toLowerCase();
+      // Rate limit detection: "API rate limit exceeded" or HTTP 403
+      if (
+        errText.includes("rate limit") ||
+        errText.includes("api rate limit exceeded") ||
+        (errText.includes("403") && errText.includes("limit"))
+      ) {
+        console.warn(`${TAG} rate limit detected, waiting 60s before retry...`);
+        await new Promise((resolve) =>
+          setTimeout(resolve, this._rateLimitRetryDelayMs),
+        );
+        try {
+          result = await attempt();
+        } catch (retryErr) {
+          throw new Error(
+            `gh CLI failed (after rate limit retry): ${retryErr.message}`,
+          );
+        }
+      } else {
+        throw new Error(`gh CLI failed: ${err.message}`);
+      }
     }
+
+    const text = String(result.stdout || "").trim();
+    if (!parseJson) return text;
+    if (!text) return null;
+    return JSON.parse(text);
   }
 
   async listProjects() {
@@ -809,7 +1221,7 @@ class GitHubIssuesAdapter {
       const projectNumber = await this._resolveProjectNumber();
       if (projectNumber) {
         try {
-          const tasks = await this._listTasksFromProject(projectNumber);
+          const tasks = await this.listTasksFromProject(projectNumber);
 
           // Apply filters
           let filtered = tasks;
@@ -1008,8 +1420,12 @@ class GitHubIssuesAdapter {
       }
     }
 
-    // Sync to project if configured
-    if (this._projectMode === "kanban" && this._projectNumber) {
+    // Sync to project if configured and auto-sync is enabled
+    if (
+      this._projectMode === "kanban" &&
+      this._projectNumber &&
+      this._projectAutoSync
+    ) {
       const projectNumber = await this._resolveProjectNumber();
       if (projectNumber) {
         const task = await this.getTask(num);

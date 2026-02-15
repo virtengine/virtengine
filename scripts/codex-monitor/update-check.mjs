@@ -14,10 +14,10 @@
  *   - Caches the last check timestamp so we don't query npm too aggressively
  */
 
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
@@ -28,7 +28,29 @@ const STARTUP_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour (startup notice)
 const AUTO_UPDATE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (polling loop)
 
 function runNpmCommand(args, options = {}) {
-  return execFileSync("npm", args, options);
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath && existsSync(npmExecPath)) {
+    return execFileSync(process.execPath, [npmExecPath, ...args], options);
+  }
+
+  const nodeBinDir = dirname(process.execPath);
+  const candidates =
+    process.platform === "win32"
+      ? [
+          join(nodeBinDir, "npm.cmd"),
+          join(nodeBinDir, "npm.exe"),
+          join(nodeBinDir, "npm"),
+        ]
+      : [join(nodeBinDir, "npm")];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return execFileSync(candidate, args, options);
+    }
+  }
+
+  const fallback = process.platform === "win32" ? "npm.cmd" : "npm";
+  return execFileSync(fallback, args, options);
 }
 
 // ── Semver comparison ────────────────────────────────────────────────────────
@@ -249,7 +271,9 @@ export function startAutoUpdateLoop(opts = {}) {
   async function poll() {
     // Safety check: Is parent process still alive?
     if (!isParentAlive()) {
-      console.log(`[auto-update] Parent process ${parentPid} no longer exists. Terminating.`);
+      console.log(
+        `[auto-update] Parent process ${parentPid} no longer exists. Terminating.`,
+      );
       stopAutoUpdateLoop();
       process.exit(0);
     }

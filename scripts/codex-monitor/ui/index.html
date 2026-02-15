@@ -1,50 +1,18 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VirtEngine Control Center</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  </head>
-  <body>
-    <div id="app">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">VirtEngine</p>
-          <h1>Codex Monitor</h1>
-        </div>
-        <div class="status-pill" id="connection-pill">Connecting...</div>
-      </header>
-
-      <nav class="tab-bar" id="tab-bar">
-        <button data-action="tab:overview" class="tab active">Overview</button>
-        <button data-action="tab:tasks" class="tab">Tasks</button>
-        <button data-action="tab:agents" class="tab">Agents</button>
-        <button data-action="tab:worktrees" class="tab">Worktrees</button>
-        <button data-action="tab:workspaces" class="tab">Workspaces</button>
-        <button data-action="tab:presence" class="tab">Presence</button>
-        <button data-action="tab:logs" class="tab">Logs</button>
-        <button data-action="tab:git" class="tab">Git</button>
-        <button data-action="tab:agentlogs" class="tab">Agent Logs</button>
-        <button data-action="tab:executor" class="tab">Executor</button>
-        <button data-action="tab:commands" class="tab">Command</button>
-      </nav>
-
-      <main id="view" class="view"></main>
-
-      <footer class="footer">
-        <span>Telegram Mini App</span>
-        <button class="ghost" data-action="refresh">Refresh</button>
-      </footer>
-    </div>
-
-    <script src="app.js"></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>VirtEngine Control Center</title>
+  <meta name="theme-color" content="#1a1a2e" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="app.js"></script>
+</body>
 </html>

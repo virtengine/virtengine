@@ -15,7 +15,7 @@ describe("telegram mini app realtime wiring", () => {
     const source = readFileSync(resolve(process.cwd(), "ui/app.js"), "utf8");
     expect(source).toContain("connectRealtime");
     expect(source).toContain("new WebSocket");
-    expect(source).toContain("runOptimisticMutation");
-    expect(source).toContain("task:save:");
+    expect(source).toContain("runOptimistic");
+    expect(source).toContain("/api/tasks/edit");
   });
 });

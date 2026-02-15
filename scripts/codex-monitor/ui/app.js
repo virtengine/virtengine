@@ -1,1464 +1,1428 @@
-const state = {
-  tab: "overview",
-  status: null,
-  executor: null,
-  tasks: [],
-  tasksTotal: 0,
-  tasksPage: 0,
-  tasksPageSize: 8,
-  tasksStatus: "todo",
-  tasksProject: "",
-  tasksQuery: "",
-  projects: [],
-  logs: null,
-  logsLines: 200,
-  threads: [],
-  worktrees: [],
-  worktreeStats: null,
-  presence: null,
-  sharedWorkspaces: null,
-  sharedAvailability: null,
-  gitBranches: [],
-  gitDiff: "",
-  agentLogFiles: [],
-  agentLogFile: "",
-  agentLogLines: 200,
-  agentLogQuery: "",
-  agentLogTail: null,
-  agentContext: null,
-  manualMode: false,
-  connected: false,
-  ws: null,
-  wsConnected: false,
-  wsRetryMs: 1000,
-  wsReconnectTimer: null,
-  wsRefreshTimer: null,
-  pendingMutation: false,
-  modal: null,
+/* ─────────────────────────────────────────────────────────────
+ *  VirtEngine Control Center – Preact + HTM SPA
+ *  Single-file Telegram Mini App (no build step)
+ * ────────────────────────────────────────────────────────────── */
+
+import { h, render as preactRender } from "https://esm.sh/preact@10.25.4";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "https://esm.sh/preact@10.25.4/hooks";
+import { signal, computed, effect } from "https://esm.sh/@preact/signals@1.3.1";
+import htm from "https://esm.sh/htm@3.1.1";
+
+const html = htm.bind(h);
+
+/* ─── SVG Icons (inline) ─── */
+const ICONS = {
+  grid: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
+  check: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  cpu: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>`,
+  server: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`,
+  sliders: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`,
+  terminal: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
+  plus: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  chevronDown: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="6 9 12 15 18 9"/></svg>`,
+  send: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+  refresh: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
 };
 
-const view = document.getElementById("view");
-const connectionPill = document.getElementById("connection-pill");
-const tabs = document.querySelectorAll(".tab");
-
-function setConnection(status, detail = "") {
-  state.connected = status;
-  connectionPill.textContent = status
-    ? `Connected ${detail}`.trim()
-    : `Offline ${detail}`.trim();
+/* ─── Telegram SDK ─── */
+function getTg() {
+  return globalThis.Telegram?.WebApp || null;
 }
 
-function cloneStateValue(value) {
-  if (typeof structuredClone === "function") {
-    return structuredClone(value);
+function haptic(type = "light") {
+  try { getTg()?.HapticFeedback?.impactOccurred(type); } catch { /* noop */ }
+}
+
+function applyTgTheme() {
+  const tg = getTg();
+  if (!tg?.themeParams) return;
+  const tp = tg.themeParams;
+  const root = document.documentElement;
+  root.setAttribute("data-tg-theme", "true");
+  if (tp.bg_color) root.style.setProperty("--bg-primary", tp.bg_color);
+  if (tp.secondary_bg_color) {
+    root.style.setProperty("--bg-secondary", tp.secondary_bg_color);
+    root.style.setProperty("--bg-card", tp.secondary_bg_color);
   }
-  return value;
-}
-
-function scheduleRefresh(delayMs = 100) {
-  if (state.wsRefreshTimer) {
-    clearTimeout(state.wsRefreshTimer);
+  if (tp.text_color) root.style.setProperty("--text-primary", tp.text_color);
+  if (tp.hint_color) {
+    root.style.setProperty("--text-secondary", tp.hint_color);
+    root.style.setProperty("--text-hint", tp.hint_color);
   }
-  state.wsRefreshTimer = setTimeout(async () => {
-    state.wsRefreshTimer = null;
-    if (state.pendingMutation) return;
-    try {
-      await refreshTab();
-    } catch {
-      // ignore transient refresh failures
-    }
-  }, delayMs);
+  if (tp.link_color) root.style.setProperty("--accent", tp.link_color);
+  if (tp.button_color) root.style.setProperty("--accent", tp.button_color);
+  if (tp.button_text_color) root.style.setProperty("--accent-text", tp.button_text_color);
 }
 
-function channelsForTab(tab) {
-  if (tab === "overview") return ["overview", "executor", "tasks", "agents"];
-  if (tab === "tasks") return ["tasks"];
-  if (tab === "agents") return ["agents", "executor"];
-  if (tab === "worktrees") return ["worktrees"];
-  if (tab === "workspaces") return ["workspaces"];
-  if (tab === "executor") return ["executor", "overview"];
-  return ["*"];
+/* ─── Global Signals ─── */
+const activeTab = signal("dashboard");
+const connected = signal(false);
+const wsConnected = signal(false);
+
+// Per-tab data signals
+const statusData = signal(null);
+const executorData = signal(null);
+const tasksData = signal([]);
+const tasksTotal = signal(0);
+const tasksPage = signal(0);
+const tasksPageSize = signal(8);
+const tasksStatus = signal("todo");
+const tasksProject = signal("");
+const tasksQuery = signal("");
+const projectsData = signal([]);
+const logsData = signal(null);
+const logsLines = signal(200);
+const threadsData = signal([]);
+const worktreesData = signal([]);
+const worktreeStats = signal(null);
+const presenceData = signal(null);
+const sharedWorkspacesData = signal(null);
+const sharedAvailability = signal(null);
+const gitBranches = signal([]);
+const gitDiff = signal("");
+const agentLogFiles = signal([]);
+const agentLogFile = signal("");
+const agentLogLines = signal(200);
+const agentLogQuery = signal("");
+const agentLogTail = signal(null);
+const agentContext = signal(null);
+const manualMode = signal(false);
+const modalState = signal(null);
+const toasts = signal([]);
+const loading = signal(false);
+
+// WebSocket state
+let ws = null;
+let wsRetryMs = 1000;
+let wsReconnectTimer = null;
+let wsRefreshTimer = null;
+let pendingMutation = false;
+
+/* ─── Toast System ─── */
+let toastId = 0;
+function addToast(message, type = "info") {
+  const id = ++toastId;
+  toasts.value = [...toasts.value, { id, message, type }];
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((t) => t.id !== id);
+  }, 3500);
 }
 
-function connectRealtime() {
-  const tg = telegram();
-  const proto = globalThis.location.protocol === "https:" ? "wss" : "ws";
-  const wsUrl = new URL(`${proto}://${globalThis.location.host}/ws`);
+/* ─── API Client ─── */
+async function apiFetch(path, options = {}) {
+  const headers = { "Content-Type": "application/json" };
+  const tg = getTg();
   if (tg?.initData) {
-    wsUrl.searchParams.set("initData", tg.initData);
+    headers["X-Telegram-InitData"] = tg.initData;
   }
-  const socket = new WebSocket(wsUrl.toString());
-  state.ws = socket;
-
-  socket.addEventListener("open", () => {
-    state.wsConnected = true;
-    state.wsRetryMs = 1000;
-    setConnection(true, "live");
-    socket.send(
-      JSON.stringify({ type: "subscribe", channels: channelsForTab(state.tab) }),
-    );
-  });
-
-  socket.addEventListener("message", (event) => {
-    let message = null;
-    try {
-      message = JSON.parse(event.data || "{}");
-    } catch {
-      return;
-    }
-    if (message?.type !== "invalidate") return;
-    const channels = Array.isArray(message.channels) ? message.channels : [];
-    const interested = channelsForTab(state.tab);
-    const shouldRefresh =
-      channels.includes("*") || channels.some((channel) => interested.includes(channel));
-    if (shouldRefresh) {
-      scheduleRefresh(120);
-    }
-  });
-
-  socket.addEventListener("close", () => {
-    state.wsConnected = false;
-    setConnection(false, "reconnecting");
-    if (state.wsReconnectTimer) clearTimeout(state.wsReconnectTimer);
-    state.wsReconnectTimer = setTimeout(() => {
-      connectRealtime();
-    }, state.wsRetryMs);
-    state.wsRetryMs = Math.min(10000, state.wsRetryMs * 2);
-  });
-
-  socket.addEventListener("error", () => {
-    setConnection(false, "ws error");
-  });
-}
-
-async function runOptimisticMutation(apply, request, rollback) {
-  state.pendingMutation = true;
   try {
-    apply();
-    render();
-    const response = await request();
-    state.pendingMutation = false;
-    return response;
+    const res = await fetch(path, { ...options, headers });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `Request failed (${res.status})`);
+    }
+    return res.json();
   } catch (err) {
-    if (typeof rollback === "function") rollback();
-    state.pendingMutation = false;
-    render();
+    if (!options._silent) addToast(err.message, "error");
     throw err;
   }
 }
 
-function telegram() {
-  return globalThis.Telegram ? globalThis.Telegram.WebApp : null;
-}
-
 function sendCommandToChat(command) {
-  const tg = telegram();
+  const tg = getTg();
   if (!tg) return;
   tg.sendData(JSON.stringify({ type: "command", command }));
   if (tg.showPopup) {
     tg.showPopup({ title: "Sent", message: command, buttons: [{ type: "ok" }] });
   }
+  haptic("medium");
 }
 
-async function apiFetch(path, options = {}) {
-  const headers = { "Content-Type": "application/json" };
-  const tg = telegram();
-  if (tg?.initData) {
-    headers["X-Telegram-InitData"] = tg.initData;
-  }
-  const res = await fetch(path, { ...options, headers });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
-
+/* ─── Data Loaders ─── */
 async function loadOverview() {
-  const status = await apiFetch("/api/status").catch(() => ({ data: null }));
-  const executor = await apiFetch("/api/executor").catch(() => ({ data: null }));
-  state.status = status.data || null;
-  state.executor = executor;
+  const [status, executor] = await Promise.all([
+    apiFetch("/api/status", { _silent: true }).catch(() => ({ data: null })),
+    apiFetch("/api/executor", { _silent: true }).catch(() => ({ data: null })),
+  ]);
+  statusData.value = status.data || null;
+  executorData.value = executor;
 }
 
 async function loadProjects() {
-  const res = await apiFetch("/api/projects").catch(() => ({ data: [] }));
-  state.projects = res.data || [];
-  if (!state.tasksProject && state.projects.length) {
-    state.tasksProject = state.projects[0].id || "";
+  const res = await apiFetch("/api/projects", { _silent: true }).catch(() => ({ data: [] }));
+  projectsData.value = res.data || [];
+  if (!tasksProject.value && projectsData.value.length) {
+    tasksProject.value = projectsData.value[0].id || "";
   }
 }
 
 async function loadTasks() {
   const params = new URLSearchParams({
-    status: state.tasksStatus,
-    page: String(state.tasksPage),
-    pageSize: String(state.tasksPageSize),
+    status: tasksStatus.value,
+    page: String(tasksPage.value),
+    pageSize: String(tasksPageSize.value),
   });
-  if (state.tasksProject) params.set("project", state.tasksProject);
-  const res = await apiFetch(`/api/tasks?${params.toString()}`);
-  state.tasks = res.data || [];
-  state.tasksTotal = res.total || 0;
+  if (tasksProject.value) params.set("project", tasksProject.value);
+  const res = await apiFetch(`/api/tasks?${params}`, { _silent: true }).catch(() => ({ data: [], total: 0 }));
+  tasksData.value = res.data || [];
+  tasksTotal.value = res.total || 0;
 }
 
 async function loadLogs() {
-  const res = await apiFetch(`/api/logs?lines=${state.logsLines}`);
-  state.logs = res.data || null;
+  const res = await apiFetch(`/api/logs?lines=${logsLines.value}`, { _silent: true }).catch(() => ({ data: null }));
+  logsData.value = res.data || null;
 }
 
 async function loadThreads() {
-  const res = await apiFetch("/api/threads").catch(() => ({ data: [] }));
-  state.threads = res.data || [];
+  const res = await apiFetch("/api/threads", { _silent: true }).catch(() => ({ data: [] }));
+  threadsData.value = res.data || [];
 }
 
 async function loadWorktrees() {
-  const res = await apiFetch("/api/worktrees").catch(() => ({ data: [], stats: null }));
-  state.worktrees = res.data || [];
-  state.worktreeStats = res.stats || null;
+  const res = await apiFetch("/api/worktrees", { _silent: true }).catch(() => ({ data: [], stats: null }));
+  worktreesData.value = res.data || [];
+  worktreeStats.value = res.stats || null;
 }
 
 async function loadPresence() {
-  const res = await apiFetch("/api/presence").catch(() => ({ data: null }));
-  state.presence = res.data || null;
+  const res = await apiFetch("/api/presence", { _silent: true }).catch(() => ({ data: null }));
+  presenceData.value = res.data || null;
 }
 
 async function loadSharedWorkspaces() {
-  const res = await apiFetch("/api/shared-workspaces").catch(() => ({
-    data: null,
-    availability: null,
-  }));
-  state.sharedWorkspaces = res.data || null;
-  state.sharedAvailability = res.availability || null;
+  const res = await apiFetch("/api/shared-workspaces", { _silent: true }).catch(() => ({ data: null, availability: null }));
+  sharedWorkspacesData.value = res.data || null;
+  sharedAvailability.value = res.availability || null;
 }
 
 async function loadGit() {
-  const branches = await apiFetch("/api/git/branches").catch(() => ({ data: [] }));
-  const diff = await apiFetch("/api/git/diff").catch(() => ({ data: "" }));
-  state.gitBranches = branches.data || [];
-  state.gitDiff = diff.data || "";
+  const [branches, diff] = await Promise.all([
+    apiFetch("/api/git/branches", { _silent: true }).catch(() => ({ data: [] })),
+    apiFetch("/api/git/diff", { _silent: true }).catch(() => ({ data: "" })),
+  ]);
+  gitBranches.value = branches.data || [];
+  gitDiff.value = diff.data || "";
 }
 
-async function loadAgentLogFiles() {
+async function loadAgentLogFileList() {
   const params = new URLSearchParams();
-  if (state.agentLogQuery) params.set("query", state.agentLogQuery);
-  const path = params.toString()
-    ? `/api/agent-logs?${params.toString()}`
-    : "/api/agent-logs";
-  const res = await apiFetch(path).catch(() => ({
-    data: [],
-  }));
-  state.agentLogFiles = res.data || [];
+  if (agentLogQuery.value) params.set("query", agentLogQuery.value);
+  const path = params.toString() ? `/api/agent-logs?${params}` : "/api/agent-logs";
+  const res = await apiFetch(path, { _silent: true }).catch(() => ({ data: [] }));
+  agentLogFiles.value = res.data || [];
 }
 
-async function loadAgentLogTail() {
-  if (!state.agentLogFile) {
-    state.agentLogTail = null;
-    return;
-  }
-  const params = new URLSearchParams({
-    file: state.agentLogFile,
-    lines: String(state.agentLogLines),
-  });
-  const res = await apiFetch(`/api/agent-logs?${params.toString()}`).catch(() => ({
-    data: null,
-  }));
-  state.agentLogTail = res.data || null;
+async function loadAgentLogTailData() {
+  if (!agentLogFile.value) { agentLogTail.value = null; return; }
+  const params = new URLSearchParams({ file: agentLogFile.value, lines: String(agentLogLines.value) });
+  const res = await apiFetch(`/api/agent-logs?${params}`, { _silent: true }).catch(() => ({ data: null }));
+  agentLogTail.value = res.data || null;
 }
 
-async function loadAgentContext(query) {
-  if (!query) {
-    state.agentContext = null;
-    return;
-  }
-  const res = await apiFetch(`/api/agent-logs/context?query=${encodeURIComponent(query)}`).catch(
-    () => ({ data: null }),
-  );
-  state.agentContext = res.data || null;
+async function loadAgentContextData(query) {
+  if (!query) { agentContext.value = null; return; }
+  const res = await apiFetch(`/api/agent-logs/context?query=${encodeURIComponent(query)}`, { _silent: true }).catch(() => ({ data: null }));
+  agentContext.value = res.data || null;
 }
 
+/* ─── Tab Refresh ─── */
 async function refreshTab() {
-  if (state.tab === "overview") {
-    await loadOverview();
-  }
-  if (state.tab === "tasks") {
-    await loadProjects();
-    await loadTasks();
-  }
-  if (state.tab === "agents") {
-    await loadOverview();
-    await loadThreads();
-  }
-  if (state.tab === "worktrees") {
-    await loadWorktrees();
-  }
-  if (state.tab === "workspaces") {
-    await loadSharedWorkspaces();
-  }
-  if (state.tab === "presence") {
-    await loadPresence();
-  }
-  if (state.tab === "executor") {
-    await loadOverview();
-  }
-  if (state.tab === "logs") {
-    await loadLogs();
-  }
-  if (state.tab === "git") {
-    await loadGit();
-  }
-  if (state.tab === "agentlogs") {
-    await loadAgentLogFiles();
-    await loadAgentLogTail();
-  }
-  render();
+  loading.value = true;
+  try {
+    const tab = activeTab.value;
+    if (tab === "dashboard") { await loadOverview(); }
+    if (tab === "tasks") { await loadProjects(); await loadTasks(); }
+    if (tab === "agents") { await loadOverview(); await loadThreads(); }
+    if (tab === "infra") { await Promise.all([loadWorktrees(), loadSharedWorkspaces(), loadPresence()]); }
+    if (tab === "control") { await loadOverview(); }
+    if (tab === "logs") { await Promise.all([loadLogs(), loadAgentLogFileList(), loadAgentLogTailData()]); }
+  } catch { /* handled by apiFetch */ }
+  loading.value = false;
 }
 
-function renderOverview() {
-  const counts = state.status?.counts || {};
-  const summary = state.status?.success_metrics || {};
-  const executor = state.executor?.data;
-  const mode = state.executor?.mode || "vk";
-  const totalActive =
-    Number(counts.running || 0) +
-    Number(counts.review || 0) +
-    Number(counts.error || 0);
-  const backlog = Number(state.status?.backlog_remaining || 0) || 0;
-  const progressPct = backlog + totalActive > 0 ? Math.round((totalActive / (backlog + totalActive)) * 100) : 0;
-  return `
-    <section class="card">
-      <h2>Today at a glance</h2>
-      <div class="grid columns-2">
-        <div class="stat"><strong>${counts.running ?? 0}</strong>Running</div>
-        <div class="stat"><strong>${counts.review ?? 0}</strong>In Review</div>
-        <div class="stat"><strong>${counts.error ?? 0}</strong>Blocked</div>
-        <div class="stat"><strong>${state.status?.backlog_remaining ?? "?"}</strong>Backlog</div>
-      </div>
-      <div style="margin-top:14px">
-        <div class="meta">Active progress · ${progressPct}% engaged</div>
-        <div class="progress" style="margin-top:6px"><span style="width:${progressPct}%"></span></div>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Executor</h3>
-      <p>Mode: ${mode} · Slots: ${executor?.activeSlots ?? 0}/${executor?.maxParallel ?? "-"}</p>
-      <p>Paused: ${state.executor?.paused ? "Yes" : "No"}</p>
-      <div class="button-row">
-        <button class="action" data-action="executor:pause">Pause</button>
-        <button class="action secondary" data-action="executor:resume">Resume</button>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Quality</h3>
-      <p>First-shot: ${summary.first_shot_rate ?? 0}% · Needed fix: ${summary.needed_fix ?? 0} · Failed: ${summary.failed ?? 0}</p>
-      <div class="button-row">
-        <button class="action muted" data-action="command:/status">Send /status to chat</button>
-        <button class="action muted" data-action="command:/health">Send /health</button>
-      </div>
-    </section>
+/* ─── WebSocket ─── */
+function channelsForTab(tab) {
+  const map = {
+    dashboard: ["overview", "executor", "tasks", "agents"],
+    tasks: ["tasks"],
+    agents: ["agents", "executor"],
+    infra: ["worktrees", "workspaces", "presence"],
+    control: ["executor", "overview"],
+    logs: ["*"],
+  };
+  return map[tab] || ["*"];
+}
+
+function scheduleRefresh(delayMs = 120) {
+  if (wsRefreshTimer) clearTimeout(wsRefreshTimer);
+  wsRefreshTimer = setTimeout(async () => {
+    wsRefreshTimer = null;
+    if (pendingMutation) return;
+    try { await refreshTab(); } catch { /* ignore */ }
+  }, delayMs);
+}
+
+function connectRealtime() {
+  const tg = getTg();
+  const proto = globalThis.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = new URL(`${proto}://${globalThis.location.host}/ws`);
+  if (tg?.initData) wsUrl.searchParams.set("initData", tg.initData);
+  const socket = new WebSocket(wsUrl.toString());
+  ws = socket;
+
+  socket.addEventListener("open", () => {
+    wsConnected.value = true;
+    connected.value = true;
+    wsRetryMs = 1000;
+    socket.send(JSON.stringify({ type: "subscribe", channels: channelsForTab(activeTab.value) }));
+  });
+
+  socket.addEventListener("message", (event) => {
+    let msg;
+    try { msg = JSON.parse(event.data || "{}"); } catch { return; }
+    if (msg?.type !== "invalidate") return;
+    const channels = Array.isArray(msg.channels) ? msg.channels : [];
+    const interested = channelsForTab(activeTab.value);
+    if (channels.includes("*") || channels.some((c) => interested.includes(c))) {
+      scheduleRefresh(120);
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    wsConnected.value = false;
+    connected.value = false;
+    if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = setTimeout(connectRealtime, wsRetryMs);
+    wsRetryMs = Math.min(10000, wsRetryMs * 2);
+  });
+
+  socket.addEventListener("error", () => { connected.value = false; });
+}
+
+function switchWsChannel(tab) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "subscribe", channels: channelsForTab(tab) }));
+  }
+}
+
+/* ─── Optimistic Mutations ─── */
+async function runOptimistic(apply, request, rollback) {
+  pendingMutation = true;
+  try {
+    apply();
+    const response = await request();
+    pendingMutation = false;
+    return response;
+  } catch (err) {
+    if (typeof rollback === "function") rollback();
+    pendingMutation = false;
+    throw err;
+  }
+}
+
+function cloneValue(value) {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+/* ─── Shared Components ─── */
+function ToastContainer() {
+  const items = toasts.value;
+  if (!items.length) return null;
+  return html`
+    <div class="toast-container">
+      ${items.map((t) => html`<div key=${t.id} class="toast toast-${t.type}">${t.message}</div>`)}
+    </div>
   `;
 }
 
-function renderTasks() {
-  const canManual = Boolean(state.executor?.data);
-  const totalPages = Math.max(1, Math.ceil((state.tasksTotal || 0) / state.tasksPageSize));
-  const search = state.tasksQuery.trim().toLowerCase();
-  const visibleTasks = search
-    ? state.tasks.filter((task) => {
-        const hay = `${task.title || ""} ${task.description || ""} ${task.id || ""}`.toLowerCase();
-        return hay.includes(search);
-      })
-    : state.tasks;
-  const tasksHtml = visibleTasks
-    .map(
-      (task) => `
-        <div class="task-card">
-          <header>
-            <div>
-              <div class="task-title">${task.title || "(untitled)"}</div>
-              <div class="badge">${task.id}</div>
-            </div>
-            <span class="badge">${task.status}</span>
-          </header>
-          <p>${task.description ? task.description.slice(0, 120) : "No description."}</p>
-          <div class="button-row">
-            ${
-              state.manualMode && task.status === "todo" && canManual
-                ? `<button class="action" data-action="task:start:${task.id}">Start</button>`
-                : ""
-            }
-            <button class="action secondary" data-action="task:update:${task.id}:inreview">Mark Review</button>
-            <button class="action muted" data-action="task:update:${task.id}:done">Mark Done</button>
-            <button class="action muted" data-action="task:detail:${task.id}">Details</button>
-          </div>
-        </div>
-      `,
-    )
-    .join("");
+function Card({ title, subtitle, children, className = "" }) {
+  return html`
+    <div class="card ${className}">
+      ${title && html`<div class="card-title">${title}</div>`}
+      ${subtitle && html`<div class="card-subtitle">${subtitle}</div>`}
+      ${children}
+    </div>
+  `;
+}
 
-  const projectOptions = state.projects
-    .map(
-      (project) =>
-        `<option value="${project.id}" ${project.id === state.tasksProject ? "selected" : ""}>${project.name || project.id}</option>`,
-    )
-    .join("");
+function Badge({ status, text }) {
+  const label = text || status || "";
+  const cls = `badge badge-${(status || "").toLowerCase().replace(/\s/g, "")}`;
+  return html`<span class=${cls}>${label}</span>`;
+}
 
-  return `
-    <section class="card">
-      <h2>Task Board</h2>
-      <div class="chips">
-        ${["todo", "inprogress", "inreview", "done"].map(
-          (status) =>
-            `<button class="chip ${state.tasksStatus === status ? "active" : ""}" data-action="tasks:filter:${status}">${status.toUpperCase()}</button>`,
-        ).join("")}
+function StatCard({ value, label, color }) {
+  const style = color ? `color: ${color}` : "";
+  return html`
+    <div class="stat-card">
+      <div class="stat-value" style=${style}>${value ?? "—"}</div>
+      <div class="stat-label">${label}</div>
+    </div>
+  `;
+}
+
+function SkeletonCard({ count = 3 }) {
+  return html`${Array.from({ length: count }, (_, i) =>  html`<div key=${i} class="skeleton skeleton-card"></div>`)}`;
+}
+
+function ProgressBar({ percent = 0 }) {
+  return html`
+    <div class="progress-bar">
+      <div class="progress-bar-fill" style="width: ${Math.min(100, Math.max(0, percent))}%"></div>
+    </div>
+  `;
+}
+
+function DonutChart({ segments = [] }) {
+  const total = segments.reduce((s, seg) => s + (seg.value || 0), 0);
+  if (!total) return html`<div class="text-center meta-text">No data</div>`;
+  const size = 100;
+  const cx = size / 2, cy = size / 2, r = 36, sw = 12;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = segments.map((seg) => {
+    const pct = seg.value / total;
+    const dash = pct * circumference;
+    const o = offset;
+    offset += dash;
+    return html`<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke=${seg.color} stroke-width=${sw}
+      stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset=${-o}
+      style="transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease" />`;
+  });
+  return html`
+    <div class="donut-wrap">
+      <svg width=${size} height=${size} viewBox="0 0 ${size} ${size}" style="transform: rotate(-90deg)">${arcs}</svg>
+    </div>
+    <div class="donut-legend">
+      ${segments.map((seg) => html`
+        <span class="donut-legend-item">
+          <span class="donut-legend-swatch" style="background: ${seg.color}"></span>
+          ${seg.label} (${seg.value})
+        </span>
+      `)}
+    </div>
+  `;
+}
+
+function SegmentedControl({ options, value, onChange }) {
+  return html`
+    <div class="segmented-control">
+      ${options.map((opt) => html`
+        <button key=${opt.value} class="segmented-btn ${value === opt.value ? "active" : ""}"
+          onClick=${() => { haptic(); onChange(opt.value); }}>${opt.label}</button>
+      `)}
+    </div>
+  `;
+}
+
+function Modal({ title, onClose, children }) {
+  useEffect(() => {
+    const tg = getTg();
+    if (tg?.BackButton) {
+      tg.BackButton.show();
+      const handler = () => { onClose(); tg.BackButton.hide(); tg.BackButton.offClick(handler); };
+      tg.BackButton.onClick(handler);
+      return () => { tg.BackButton.hide(); tg.BackButton.offClick(handler); };
+    }
+  }, [onClose]);
+
+  return html`
+    <div class="modal-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="modal-content" onClick=${(e) => e.stopPropagation()}>
+        <div class="modal-handle"></div>
+        ${title && html`<div class="modal-title">${title}</div>`}
+        ${children}
       </div>
-      <div class="input-row" style="margin-top:12px">
-        <select data-action="tasks:project">
-          ${projectOptions}
+    </div>
+  `;
+}
+
+function Collapsible({ title, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return html`
+    <div>
+      <button class="collapsible-header ${open ? "open" : ""}" onClick=${() => setOpen(!open)}>
+        <span>${title}</span>
+        ${ICONS.chevronDown}
+      </button>
+      <div class="collapsible-body ${open ? "open" : ""}">${children}</div>
+    </div>
+  `;
+}
+
+function PullToRefresh({ onRefresh, children }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const ref = useRef(null);
+  const startY = useRef(0);
+  const pulling = useRef(false);
+
+  const handleTouchStart = useCallback((e) => {
+    if (ref.current && ref.current.scrollTop === 0) {
+      startY.current = e.touches[0].clientY;
+      pulling.current = true;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback(() => {
+    // passive listener – visual feedback could go here
+  }, []);
+
+  const handleTouchEnd = useCallback(async (e) => {
+    if (!pulling.current) return;
+    pulling.current = false;
+    const diff = (e.changedTouches?.[0]?.clientY || 0) - startY.current;
+    if (diff > 60) {
+      setRefreshing(true);
+      haptic("medium");
+      try { await onRefresh(); } finally { setRefreshing(false); }
+    }
+  }, [onRefresh]);
+
+  return html`
+    <div ref=${ref} class="main-content"
+      onTouchStart=${handleTouchStart} onTouchMove=${handleTouchMove} onTouchEnd=${handleTouchEnd}>
+      ${refreshing && html`<div class="ptr-spinner"><div class="ptr-spinner-icon"></div></div>`}
+      ${children}
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════
+ *  TAB: Dashboard
+ * ═══════════════════════════════════════════════ */
+function DashboardTab() {
+  const status = statusData.value;
+  const executor = executorData.value;
+  const counts = status?.counts || {};
+  const summary = status?.success_metrics || {};
+  const execData = executor?.data;
+  const mode = executor?.mode || "vk";
+  const running = Number(counts.running || 0);
+  const review = Number(counts.review || 0);
+  const blocked = Number(counts.error || 0);
+  const backlog = Number(status?.backlog_remaining || 0);
+  const totalActive = running + review + blocked;
+  const progressPct = backlog + totalActive > 0 ? Math.round((totalActive / (backlog + totalActive)) * 100) : 0;
+
+  const segments = [
+    { label: "Running", value: running, color: "var(--color-inprogress)" },
+    { label: "Review", value: review, color: "var(--color-inreview)" },
+    { label: "Blocked", value: blocked, color: "var(--color-error)" },
+    { label: "Backlog", value: backlog, color: "var(--color-todo)" },
+  ];
+
+  const handlePause = async () => {
+    haptic("medium");
+    const prev = cloneValue(executor);
+    await runOptimistic(
+      () => { if (executorData.value) executorData.value = { ...executorData.value, paused: true }; },
+      () => apiFetch("/api/executor/pause", { method: "POST" }),
+      () => { executorData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  const handleResume = async () => {
+    haptic("medium");
+    const prev = cloneValue(executor);
+    await runOptimistic(
+      () => { if (executorData.value) executorData.value = { ...executorData.value, paused: false }; },
+      () => apiFetch("/api/executor/resume", { method: "POST" }),
+      () => { executorData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  if (loading.value && !status) return html`<${Card} title="Loading..."><${SkeletonCard} count=${4} /><//>`;
+
+  return html`
+    <${Card} title="Today at a Glance">
+      <div class="stats-grid">
+        <${StatCard} value=${running} label="Running" color="var(--color-inprogress)" />
+        <${StatCard} value=${review} label="In Review" color="var(--color-inreview)" />
+        <${StatCard} value=${blocked} label="Blocked" color="var(--color-error)" />
+        <${StatCard} value=${backlog} label="Backlog" color="var(--color-todo)" />
+      </div>
+    <//>
+    <${Card} title="Task Distribution">
+      <${DonutChart} segments=${segments} />
+      <div class="meta-text text-center mt-sm">Active progress · ${progressPct}% engaged</div>
+      <${ProgressBar} percent=${progressPct} />
+    <//>
+    <${Card} title="Executor">
+      <div class="meta-text mb-sm">Mode: ${mode} · Slots: ${execData?.activeSlots ?? 0}/${execData?.maxParallel ?? "—"} · Paused: ${executor?.paused ? "Yes" : "No"}</div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" onClick=${handlePause}>Pause</button>
+        <button class="btn btn-secondary btn-sm" onClick=${handleResume}>Resume</button>
+      </div>
+    <//>
+    <${Card} title="Quality">
+      <div class="meta-text">First-shot: ${summary.first_shot_rate ?? 0}% · Needed fix: ${summary.needed_fix ?? 0} · Failed: ${summary.failed ?? 0}</div>
+      <div class="btn-row mt-sm">
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/status")}>/status</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/health")}>/health</button>
+      </div>
+    <//>
+  `;
+}
+
+/* ═══════════════════════════════════════════════
+ *  TAB: Tasks
+ * ═══════════════════════════════════════════════ */
+function CreateTaskModal({ onClose }) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("todo");
+  const [priority, setPriority] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!title.trim()) { addToast("Title is required", "error"); return; }
+    setSubmitting(true);
+    haptic("medium");
+    try {
+      const project = tasksProject.value;
+      await apiFetch("/api/tasks/create", {
+        method: "POST",
+        body: JSON.stringify({ title: title.trim(), description: description.trim(), status, priority: priority || undefined, project }),
+      });
+      addToast("Task created", "success");
+      onClose();
+      await refreshTab();
+    } catch { /* toast shown by apiFetch */ }
+    setSubmitting(false);
+  };
+
+  // Use Telegram MainButton for submit
+  useEffect(() => {
+    const tg = getTg();
+    if (tg?.MainButton) {
+      tg.MainButton.setText("Create Task");
+      tg.MainButton.show();
+      tg.MainButton.onClick(handleSubmit);
+      return () => { tg.MainButton.hide(); tg.MainButton.offClick(handleSubmit); };
+    }
+  }, [title, description, status, priority]);
+
+  return html`
+    <${Modal} title="New Task" onClose=${onClose}>
+      <div class="flex-col gap-md">
+        <input class="input" placeholder="Task title" value=${title} onInput=${(e) => setTitle(e.target.value)} />
+        <textarea class="input" rows="4" placeholder="Description" value=${description} onInput=${(e) => setDescription(e.target.value)}></textarea>
+        <div class="input-row">
+          <select class="input" value=${status} onChange=${(e) => setStatus(e.target.value)}>
+            <option value="todo">Todo</option>
+            <option value="inprogress">In Progress</option>
+            <option value="inreview">In Review</option>
+          </select>
+          <select class="input" value=${priority} onChange=${(e) => setPriority(e.target.value)}>
+            <option value="">No priority</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onClick=${handleSubmit} disabled=${submitting}>
+          ${submitting ? "Creating..." : "Create Task"}
+        </button>
+      </div>
+    <//>
+  `;
+}
+
+function TaskDetailModal({ task, onClose }) {
+  const [title, setTitle] = useState(task?.title || "");
+  const [description, setDescription] = useState(task?.description || "");
+  const [status, setStatus] = useState(task?.status || "todo");
+  const [priority, setPriority] = useState(task?.priority || "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    haptic("medium");
+    const prev = cloneValue(tasksData.value);
+    try {
+      await runOptimistic(
+        () => { tasksData.value = tasksData.value.map((t) => t.id === task.id ? { ...t, title, description, status, priority: priority || null } : t); },
+        async () => {
+          const res = await apiFetch("/api/tasks/edit", {
+            method: "POST",
+            body: JSON.stringify({ taskId: task.id, title, description, status, priority }),
+          });
+          if (res?.data) tasksData.value = tasksData.value.map((t) => t.id === task.id ? { ...t, ...res.data } : t);
+          return res;
+        },
+        () => { tasksData.value = prev; },
+      );
+      addToast("Task saved", "success");
+      onClose();
+    } catch { /* toast via apiFetch */ }
+    setSaving(false);
+  };
+
+  const handleStatusUpdate = async (newStatus) => {
+    haptic("medium");
+    const prev = cloneValue(tasksData.value);
+    try {
+      await runOptimistic(
+        () => { tasksData.value = tasksData.value.map((t) => t.id === task.id ? { ...t, status: newStatus } : t); },
+        async () => {
+          const res = await apiFetch("/api/tasks/update", { method: "POST", body: JSON.stringify({ taskId: task.id, status: newStatus }) });
+          if (res?.data) tasksData.value = tasksData.value.map((t) => t.id === task.id ? { ...t, ...res.data } : t);
+          return res;
+        },
+        () => { tasksData.value = prev; },
+      );
+      if (newStatus === "done") onClose();
+      else setStatus(newStatus);
+    } catch { /* toast */ }
+  };
+
+  const handleStart = async () => {
+    haptic("medium");
+    const prev = cloneValue(tasksData.value);
+    try {
+      await runOptimistic(
+        () => { tasksData.value = tasksData.value.map((t) => t.id === task.id ? { ...t, status: "inprogress" } : t); },
+        () => apiFetch("/api/tasks/start", { method: "POST", body: JSON.stringify({ taskId: task.id }) }),
+        () => { tasksData.value = prev; },
+      );
+      onClose();
+    } catch { /* toast */ }
+    scheduleRefresh(150);
+  };
+
+  return html`
+    <${Modal} title=${task?.title || "Task"} onClose=${onClose}>
+      <div class="meta-text mb-md">ID: ${task?.id}</div>
+      <div class="flex-col gap-md">
+        <input class="input" placeholder="Title" value=${title} onInput=${(e) => setTitle(e.target.value)} />
+        <textarea class="input" rows="5" placeholder="Description" value=${description} onInput=${(e) => setDescription(e.target.value)}></textarea>
+        <div class="input-row">
+          <select class="input" value=${status} onChange=${(e) => setStatus(e.target.value)}>
+            ${["todo", "inprogress", "inreview", "done", "cancelled"].map((s) => html`<option value=${s}>${s}</option>`)}
+          </select>
+          <select class="input" value=${priority} onChange=${(e) => setPriority(e.target.value)}>
+            <option value="">No priority</option>
+            ${["low", "medium", "high", "critical"].map((p) => html`<option value=${p}>${p}</option>`)}
+          </select>
+        </div>
+        <div class="btn-row">
+          ${manualMode.value && task?.status === "todo" && html`<button class="btn btn-primary btn-sm" onClick=${handleStart}>Start</button>`}
+          <button class="btn btn-secondary btn-sm" onClick=${handleSave} disabled=${saving}>${saving ? "Saving..." : "Save"}</button>
+          <button class="btn btn-ghost btn-sm" onClick=${() => handleStatusUpdate("inreview")}>→ Review</button>
+          <button class="btn btn-ghost btn-sm" onClick=${() => handleStatusUpdate("done")}>→ Done</button>
+        </div>
+      </div>
+    <//>
+  `;
+}
+
+function TasksTab() {
+  const [showCreate, setShowCreate] = useState(false);
+  const [detailTask, setDetailTask] = useState(null);
+  const searchRef = useRef(null);
+
+  const statuses = ["todo", "inprogress", "inreview", "done"];
+  const search = tasksQuery.value.trim().toLowerCase();
+  const visible = search
+    ? tasksData.value.filter((t) => `${t.title || ""} ${t.description || ""} ${t.id || ""}`.toLowerCase().includes(search))
+    : tasksData.value;
+  const totalPages = Math.max(1, Math.ceil((tasksTotal.value || 0) / tasksPageSize.value));
+  const canManual = Boolean(executorData.value?.data);
+
+  const handleFilter = async (s) => { haptic(); tasksStatus.value = s; tasksPage.value = 0; await refreshTab(); };
+  const handlePrev = async () => { tasksPage.value = Math.max(0, tasksPage.value - 1); await refreshTab(); };
+  const handleNext = async () => { tasksPage.value += 1; await refreshTab(); };
+
+  const handleStatusUpdate = async (taskId, newStatus) => {
+    haptic("medium");
+    const prev = cloneValue(tasksData.value);
+    await runOptimistic(
+      () => { tasksData.value = tasksData.value.map((t) => t.id === taskId ? { ...t, status: newStatus } : t); },
+      async () => {
+        const res = await apiFetch("/api/tasks/update", { method: "POST", body: JSON.stringify({ taskId, status: newStatus }) });
+        if (res?.data) tasksData.value = tasksData.value.map((t) => t.id === taskId ? { ...t, ...res.data } : t);
+      },
+      () => { tasksData.value = prev; },
+    ).catch(() => {});
+  };
+
+  const handleStart = async (taskId) => {
+    haptic("medium");
+    const prev = cloneValue(tasksData.value);
+    await runOptimistic(
+      () => { tasksData.value = tasksData.value.map((t) => t.id === taskId ? { ...t, status: "inprogress" } : t); },
+      () => apiFetch("/api/tasks/start", { method: "POST", body: JSON.stringify({ taskId }) }),
+      () => { tasksData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(150);
+  };
+
+  const openDetail = async (taskId) => {
+    haptic();
+    const local = tasksData.value.find((t) => t.id === taskId);
+    const result = await apiFetch(`/api/tasks/detail?taskId=${encodeURIComponent(taskId)}`, { _silent: true }).catch(() => ({ data: local }));
+    setDetailTask(result.data || local);
+  };
+
+  const handleProjectChange = async (e) => {
+    tasksProject.value = e.target.value;
+    tasksPage.value = 0;
+    await refreshTab();
+  };
+
+  if (loading.value && !tasksData.value.length) return html`<${Card} title="Loading Tasks..."><${SkeletonCard} /><//>`;
+
+  return html`
+    <${Card} title="Task Board">
+      <div class="chip-group">
+        ${statuses.map((s) => html`<button key=${s} class="chip ${tasksStatus.value === s ? "active" : ""}" onClick=${() => handleFilter(s)}>${s.toUpperCase()}</button>`)}
+      </div>
+      <div class="input-row">
+        <select class="input" value=${tasksProject.value} onChange=${handleProjectChange}>
+          ${projectsData.value.map((p) => html`<option key=${p.id} value=${p.id}>${p.name || p.id}</option>`)}
         </select>
-        <label class="switch" data-action="manual:toggle">
-          <input type="checkbox" ${state.manualMode ? "checked" : ""} ${canManual ? "" : "disabled"} />
-          <span class="switch-track"><span class="switch-thumb"></span></span>
+      </div>
+      <div class="flex-between mb-sm">
+        <label class="meta-text" style="display:flex;align-items:center;gap:6px;cursor:pointer" onClick=${() => { if (canManual) { manualMode.value = !manualMode.value; haptic(); } }}>
+          <input type="checkbox" checked=${manualMode.value} disabled=${!canManual} style="accent-color:var(--accent)" />
           Manual Mode
         </label>
+        <span class="pill">${visible.length} shown</span>
       </div>
-      <div class="input-row" style="margin-top:12px">
-        <input type="text" data-action="tasks:search" placeholder="Search tasks..." value="${state.tasksQuery}" />
-        <span class="pill">${visibleTasks.length} shown</span>
+      <input ref=${searchRef} class="input mb-md" placeholder="Search tasks..." value=${tasksQuery.value}
+        onInput=${(e) => { tasksQuery.value = e.target.value; }} />
+    <//>
+
+    ${visible.map((task) => html`
+      <div key=${task.id} class="task-card" onClick=${() => openDetail(task.id)}>
+        <div class="task-card-header">
+          <div>
+            <div class="task-card-title">${task.title || "(untitled)"}</div>
+            <div class="task-card-meta">${task.id}${task.priority ? html` · <${Badge} status=${task.priority} text=${task.priority} />` : ""}</div>
+          </div>
+          <${Badge} status=${task.status} text=${task.status} />
+        </div>
+        <div class="meta-text">${task.description ? task.description.slice(0, 120) : "No description."}</div>
+        <div class="btn-row mt-sm" onClick=${(e) => e.stopPropagation()}>
+          ${manualMode.value && task.status === "todo" && canManual && html`<button class="btn btn-primary btn-sm" onClick=${() => handleStart(task.id)}>Start</button>`}
+          <button class="btn btn-secondary btn-sm" onClick=${() => handleStatusUpdate(task.id, "inreview")}>→ Review</button>
+          <button class="btn btn-ghost btn-sm" onClick=${() => handleStatusUpdate(task.id, "done")}>→ Done</button>
+        </div>
       </div>
-      <div class="list" style="margin-top:16px">
-        ${tasksHtml || "<p>No tasks found.</p>"}
-      </div>
-      <div class="pager" style="margin-top:16px">
-        <button class="action xs muted" data-action="tasks:prev">Prev</button>
-        <span>Page ${state.tasksPage + 1} / ${totalPages}</span>
-        <button class="action xs muted" data-action="tasks:next">Next</button>
-      </div>
-    </section>
+    `)}
+
+    ${!visible.length && html`<div class="card text-center meta-text" style="padding:24px">No tasks found.</div>`}
+
+    <div class="pager">
+      <button class="btn btn-secondary btn-sm" onClick=${handlePrev}>Prev</button>
+      <span class="pager-info">Page ${tasksPage.value + 1} / ${totalPages}</span>
+      <button class="btn btn-secondary btn-sm" onClick=${handleNext}>Next</button>
+    </div>
+
+    <button class="fab" onClick=${() => { haptic(); setShowCreate(true); }}>${ICONS.plus}</button>
+
+    ${showCreate && html`<${CreateTaskModal} onClose=${() => setShowCreate(false)} />`}
+    ${detailTask && html`<${TaskDetailModal} task=${detailTask} onClose=${() => setDetailTask(null)} />`}
   `;
 }
 
-function renderAgents() {
-  const executor = state.executor?.data;
-  const slots = executor?.slots || [];
-  const slotsHtml = slots
-    .map(
-      (slot) => `
-        <div class="task-card">
-          <header>
+/* ═══════════════════════════════════════════════
+ *  TAB: Agents
+ * ═══════════════════════════════════════════════ */
+function AgentsTab() {
+  const executor = executorData.value;
+  const slots = executor?.data?.slots || [];
+  const threads = threadsData.value;
+
+  const viewAgentLogs = (query) => {
+    haptic();
+    agentLogQuery.value = query;
+    agentLogFile.value = "";
+    activeTab.value = "logs";
+    switchWsChannel("logs");
+    refreshTab();
+  };
+
+  if (loading.value && !slots.length) return html`<${Card} title="Loading..."><${SkeletonCard} count=${3} /><//>`;
+
+  return html`
+    <${Card} title="Active Agents">
+      ${slots.length ? slots.map((slot, i) => html`
+        <div key=${i} class="task-card">
+          <div class="task-card-header">
             <div>
-              <div class="task-title">${slot.taskTitle}</div>
-              <div class="badge">${slot.taskId}</div>
+              <div class="task-card-title">${slot.taskTitle}</div>
+              <div class="task-card-meta">${slot.taskId} · Agent ${slot.agentInstanceId || "n/a"} · ${slot.sdk}</div>
             </div>
-            <span class="badge">${slot.status}</span>
-          </header>
-          <p>Agent ${slot.agentInstanceId || "n/a"} · ${slot.sdk} · Attempt ${slot.attempt}</p>
-          <div class="button-row">
-            <button class="action muted" data-action="command:/agentlogs ${slot.branch || slot.taskId}">View Logs</button>
-            <button class="action secondary" data-action="command:/steer focus on ${slot.taskTitle}">Steer</button>
-            <button class="action muted" data-action="agentlogs:search:${(slot.taskId || slot.branch || "").slice(0, 12)}">Log Files</button>
+            <${Badge} status=${slot.status} text=${slot.status} />
+          </div>
+          <div class="meta-text">Attempt ${slot.attempt}</div>
+          <div class="btn-row mt-sm">
+            <button class="btn btn-ghost btn-sm" onClick=${() => viewAgentLogs((slot.taskId || slot.branch || "").slice(0, 12))}>View Logs</button>
+            <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat(`/steer focus on ${slot.taskTitle}`)}>Steer</button>
           </div>
         </div>
-      `,
-    )
-    .join("");
-
-  const threadsHtml = state.threads
-    .map(
-      (thread) => `
-        <div class="stat">
-          <strong>${thread.taskKey}</strong>
-          <div>SDK: ${thread.sdk}</div>
-          <div>Turns: ${thread.turnCount}</div>
+      `) : html`<div class="meta-text">No active agents.</div>`}
+    <//>
+    <${Card} title="Threads">
+      ${threads.length ? html`
+        <div class="stats-grid">
+          ${threads.map((t, i) => html`
+            <${StatCard} key=${i} value=${t.turnCount} label="${t.taskKey} (${t.sdk})" />
+          `)}
         </div>
-      `,
-    )
-    .join("");
-
-  return `
-    <section class="card">
-      <h2>Active Agents</h2>
-      <div class="list">${slotsHtml || "<p>No active agents.</p>"}</div>
-    </section>
-    <section class="card">
-      <h3>Threads</h3>
-      <div class="grid columns-2">${threadsHtml || "<p>No threads.</p>"}</div>
-    </section>
+      ` : html`<div class="meta-text">No threads.</div>`}
+    <//>
   `;
 }
 
-function renderWorktrees() {
-  const stats = state.worktreeStats || {};
-  const worktrees = state.worktrees || [];
-  const listHtml = worktrees
-    .map((wt) => {
-      const ageMin = Math.round((wt.age || 0) / 60000);
-      const ageStr = ageMin >= 60 ? `${Math.round(ageMin / 60)}h` : `${ageMin}m`;
-      const taskKey = wt.taskKey ? ` · ${wt.taskKey}` : "";
-      return `
-        <div class="task-card">
-          <header>
-            <div>
-              <div class="task-title">${wt.branch || "(detached)"}</div>
-              <div class="meta">${wt.path}</div>
-            </div>
-            <span class="badge">${wt.status || "active"}</span>
-          </header>
-          <p>Age ${ageStr}${taskKey} ${wt.owner ? `· Owner ${wt.owner}` : ""}</p>
-          <div class="button-row">
-            ${wt.taskKey ? `<button class="action muted" data-action="worktrees:release:${wt.taskKey}">Release</button>` : ""}
-            ${wt.branch ? `<button class="action muted" data-action="worktrees:release-branch:${wt.branch}">Release Branch</button>` : ""}
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  return `
-    <section class="card">
-      <h2>Worktrees</h2>
-      <div class="data-grid">
-        <div class="stat"><strong>${stats.total ?? worktrees.length}</strong>Total</div>
-        <div class="stat"><strong>${stats.active ?? 0}</strong>Active</div>
-        <div class="stat"><strong>${stats.stale ?? 0}</strong>Stale</div>
-      </div>
-      <div class="input-row" style="margin-top:12px">
-        <input id="worktree-release-input" type="text" placeholder="Task key or branch" />
-        <button class="action muted" data-action="worktrees:release-input">Release</button>
-        <button class="action secondary" data-action="worktrees:prune">Prune stale</button>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Active Worktrees</h3>
-      <div class="list">${listHtml || "<p>No worktrees tracked.</p>"}</div>
-    </section>
-  `;
-}
-
-function renderWorkspaces() {
-  const registry = state.sharedWorkspaces;
+/* ═══════════════════════════════════════════════
+ *  TAB: Infra (Worktrees + Workspaces + Presence)
+ * ═══════════════════════════════════════════════ */
+function InfraTab() {
+  const wts = worktreesData.value;
+  const wStats = worktreeStats.value || {};
+  const registry = sharedWorkspacesData.value;
   const workspaces = registry?.workspaces || [];
-  const availability = state.sharedAvailability || {};
-  const availabilityHtml = Object.entries(availability)
-    .map(
-      ([key, value]) =>
-        `<span class="pill">${key}: ${value}</span>`,
-    )
-    .join("");
-  const workspaceHtml = workspaces
-    .map((ws) => {
-      const lease = ws.lease;
-      const leaseInfo = lease
-        ? `Leased to ${lease.owner} until ${new Date(lease.lease_expires_at).toLocaleString()}`
-        : "Available";
-      return `
-        <div class="task-card">
-          <header>
-            <div>
-              <div class="task-title">${ws.name || ws.id}</div>
-              <div class="meta">${ws.provider || "provider"} · ${ws.region || "region?"}</div>
+  const availability = sharedAvailability.value || {};
+  const presence = presenceData.value;
+  const instances = presence?.instances || [];
+  const coordinator = presence?.coordinator || null;
+
+  const [releaseInput, setReleaseInput] = useState("");
+  const [sharedOwner, setSharedOwner] = useState("");
+  const [sharedTtl, setSharedTtl] = useState("");
+  const [sharedNote, setSharedNote] = useState("");
+
+  const handlePrune = async () => {
+    haptic("medium");
+    await apiFetch("/api/worktrees/prune", { method: "POST" }).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  const handleRelease = async (key, branch) => {
+    haptic("medium");
+    const prev = cloneValue(wts);
+    await runOptimistic(
+      () => { worktreesData.value = worktreesData.value.filter((w) => w.taskKey !== key && w.branch !== branch); },
+      () => apiFetch("/api/worktrees/release", { method: "POST", body: JSON.stringify({ taskKey: key, branch }) }),
+      () => { worktreesData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  const handleReleaseInput = async () => {
+    if (!releaseInput.trim()) return;
+    haptic("medium");
+    await apiFetch("/api/worktrees/release", { method: "POST", body: JSON.stringify({ taskKey: releaseInput.trim(), branch: releaseInput.trim() }) }).catch(() => {});
+    setReleaseInput("");
+    scheduleRefresh(120);
+  };
+
+  const handleClaim = async (wsId) => {
+    haptic("medium");
+    const prev = cloneValue(sharedWorkspacesData.value);
+    await runOptimistic(
+      () => {
+        const w = sharedWorkspacesData.value?.workspaces?.find((x) => x.id === wsId);
+        if (w) {
+          w.availability = "leased";
+          w.lease = { owner: sharedOwner || "telegram-ui", lease_expires_at: new Date(Date.now() + (Number(sharedTtl) || 60) * 60000).toISOString(), note: sharedNote };
+        }
+      },
+      () => apiFetch("/api/shared-workspaces/claim", { method: "POST", body: JSON.stringify({ workspaceId: wsId, owner: sharedOwner, ttlMinutes: Number(sharedTtl) || undefined, note: sharedNote }) }),
+      () => { sharedWorkspacesData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  const handleRenew = async (wsId) => {
+    haptic("medium");
+    const prev = cloneValue(sharedWorkspacesData.value);
+    await runOptimistic(
+      () => {
+        const w = sharedWorkspacesData.value?.workspaces?.find((x) => x.id === wsId);
+        if (w?.lease) { w.lease.owner = sharedOwner || w.lease.owner; w.lease.lease_expires_at = new Date(Date.now() + (Number(sharedTtl) || 60) * 60000).toISOString(); }
+      },
+      () => apiFetch("/api/shared-workspaces/renew", { method: "POST", body: JSON.stringify({ workspaceId: wsId, owner: sharedOwner, ttlMinutes: Number(sharedTtl) || undefined }) }),
+      () => { sharedWorkspacesData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  const handleSharedRelease = async (wsId) => {
+    haptic("medium");
+    const prev = cloneValue(sharedWorkspacesData.value);
+    await runOptimistic(
+      () => {
+        const w = sharedWorkspacesData.value?.workspaces?.find((x) => x.id === wsId);
+        if (w) { w.availability = "available"; w.lease = null; }
+      },
+      () => apiFetch("/api/shared-workspaces/release", { method: "POST", body: JSON.stringify({ workspaceId: wsId, owner: sharedOwner }) }),
+      () => { sharedWorkspacesData.value = prev; },
+    ).catch(() => {});
+    scheduleRefresh(120);
+  };
+
+  return html`
+    <${Collapsible} title="Worktrees" defaultOpen=${true}>
+      <${Card}>
+        <div class="stats-grid mb-md">
+          <${StatCard} value=${wStats.total ?? wts.length} label="Total" />
+          <${StatCard} value=${wStats.active ?? 0} label="Active" color="var(--color-done)" />
+          <${StatCard} value=${wStats.stale ?? 0} label="Stale" color="var(--color-inreview)" />
+        </div>
+        <div class="input-row mb-md">
+          <input class="input" placeholder="Task key or branch" value=${releaseInput} onInput=${(e) => setReleaseInput(e.target.value)} />
+          <button class="btn btn-secondary btn-sm" onClick=${handleReleaseInput}>Release</button>
+          <button class="btn btn-danger btn-sm" onClick=${handlePrune}>Prune</button>
+        </div>
+        ${wts.map((wt) => {
+          const ageMin = Math.round((wt.age || 0) / 60000);
+          const ageStr = ageMin >= 60 ? `${Math.round(ageMin / 60)}h` : `${ageMin}m`;
+          return html`
+            <div key=${wt.branch || wt.path} class="task-card">
+              <div class="task-card-header">
+                <div>
+                  <div class="task-card-title">${wt.branch || "(detached)"}</div>
+                  <div class="task-card-meta">${wt.path}</div>
+                </div>
+                <${Badge} status=${wt.status || "active"} text=${wt.status || "active"} />
+              </div>
+              <div class="meta-text">Age ${ageStr}${wt.taskKey ? ` · ${wt.taskKey}` : ""}${wt.owner ? ` · Owner ${wt.owner}` : ""}</div>
+              <div class="btn-row mt-sm">
+                ${wt.taskKey && html`<button class="btn btn-ghost btn-sm" onClick=${() => handleRelease(wt.taskKey, "")}>Release Key</button>`}
+                ${wt.branch && html`<button class="btn btn-ghost btn-sm" onClick=${() => handleRelease("", wt.branch)}>Release Branch</button>`}
+              </div>
             </div>
-            <span class="badge">${ws.availability}</span>
-          </header>
-          <p>${leaseInfo}</p>
-          <div class="button-row">
-            <button class="action" data-action="shared:claim:${ws.id}">Claim</button>
-            <button class="action secondary" data-action="shared:renew:${ws.id}">Renew</button>
-            <button class="action muted" data-action="shared:release:${ws.id}">Release</button>
-          </div>
+          `;
+        })}
+        ${!wts.length && html`<div class="meta-text">No worktrees tracked.</div>`}
+      <//>
+    <//>
+
+    <${Collapsible} title="Shared Workspaces" defaultOpen=${true}>
+      <${Card}>
+        <div class="chip-group mb-sm">
+          ${Object.entries(availability).map(([k, v]) => html`<span key=${k} class="pill">${k}: ${v}</span>`)}
+          ${!Object.keys(availability).length && html`<span class="pill">No registry</span>`}
         </div>
-      `;
-    })
-    .join("");
-
-  return `
-    <section class="card">
-      <h2>Shared Workspaces</h2>
-      <div class="chips">${availabilityHtml || "<span class=\"pill\">No registry</span>"}</div>
-      <div class="input-row" style="margin-top:12px">
-        <input id="shared-owner" type="text" placeholder="Owner (e.g. you@team)" />
-        <input id="shared-ttl" type="number" min="30" step="15" placeholder="TTL (min)" />
-        <input id="shared-note" type="text" placeholder="Note (optional)" />
-      </div>
-    </section>
-    <section class="card">
-      <h3>Workspace Pool</h3>
-      <div class="list">${workspaceHtml || "<p>No shared workspaces configured.</p>"}</div>
-    </section>
-  `;
-}
-
-function renderPresence() {
-  const instances = state.presence?.instances || [];
-  const coordinator = state.presence?.coordinator || null;
-  const instanceHtml = instances
-    .map((inst) => {
-      const lastSeen = inst.last_seen_at
-        ? new Date(inst.last_seen_at).toLocaleString()
-        : "unknown";
-      return `
-        <div class="stat">
-          <strong>${inst.instance_label || inst.instance_id}</strong>
-          <div>${inst.workspace_role || "workspace"} · ${inst.host || "host"}</div>
-          <div class="meta">Last seen ${lastSeen}</div>
+        <div class="input-row mb-sm">
+          <input class="input" placeholder="Owner" value=${sharedOwner} onInput=${(e) => setSharedOwner(e.target.value)} />
+          <input class="input" type="number" min="30" step="15" placeholder="TTL (min)" value=${sharedTtl} onInput=${(e) => setSharedTtl(e.target.value)} />
         </div>
-      `;
-    })
-    .join("");
-
-  return `
-    <section class="card">
-      <h2>Presence</h2>
-      <p>Active codex-monitor instances discovered via presence beacons.</p>
-      <div class="stat">
-        <strong>${coordinator?.instance_label || coordinator?.instance_id || "none"}</strong>
-        <div>Coordinator</div>
-        <div class="meta">Priority ${coordinator?.coordinator_priority ?? "-"}</div>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Instances</h3>
-      <div class="data-grid">${instanceHtml || "<p>No active instances.</p>"}</div>
-    </section>
-  `;
-}
-
-function renderGit() {
-  const branchesHtml = state.gitBranches
-    .map((line) => `<div class="meta">${line}</div>`)
-    .join("");
-  return `
-    <section class="card">
-      <h2>Git Snapshot</h2>
-      <div class="button-row">
-        <button class="action muted" data-action="git:refresh">Refresh</button>
-        <button class="action muted" data-action="command:/diff">Send /diff</button>
-      </div>
-      <div style="margin-top:12px">
-        <h3>Working Tree Diff</h3>
-        <div class="log-box">${state.gitDiff || "Clean working tree."}</div>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Recent Branches</h3>
-      <div class="list-compact">${branchesHtml || "<p>No branches found.</p>"}</div>
-    </section>
-    <section class="card">
-      <h3>Run Git Command</h3>
-      <div class="input-row">
-        <input id="git-command" type="text" placeholder="log --oneline -5" />
-        <button class="action" data-action="command:git">Send</button>
-      </div>
-    </section>
-  `;
-}
-
-function renderAgentLogs() {
-  const logList = state.agentLogFiles
-    .map(
-      (file) => `
-        <div class="task-card">
-          <header>
-            <div>
-              <div class="task-title">${file.name}</div>
-              <div class="meta">${Math.round(file.size / 1024)}kb · ${new Date(file.mtime).toLocaleString()}</div>
+        <input class="input mb-md" placeholder="Note (optional)" value=${sharedNote} onInput=${(e) => setSharedNote(e.target.value)} />
+        ${workspaces.map((ws) => {
+          const lease = ws.lease;
+          const leaseInfo = lease ? `Leased to ${lease.owner} until ${new Date(lease.lease_expires_at).toLocaleString()}` : "Available";
+          return html`
+            <div key=${ws.id} class="task-card">
+              <div class="task-card-header">
+                <div>
+                  <div class="task-card-title">${ws.name || ws.id}</div>
+                  <div class="task-card-meta">${ws.provider || "provider"} · ${ws.region || "region?"}</div>
+                </div>
+                <${Badge} status=${ws.availability} text=${ws.availability} />
+              </div>
+              <div class="meta-text">${leaseInfo}</div>
+              <div class="btn-row mt-sm">
+                <button class="btn btn-primary btn-sm" onClick=${() => handleClaim(ws.id)}>Claim</button>
+                <button class="btn btn-secondary btn-sm" onClick=${() => handleRenew(ws.id)}>Renew</button>
+                <button class="btn btn-ghost btn-sm" onClick=${() => handleSharedRelease(ws.id)}>Release</button>
+              </div>
             </div>
-            <span class="badge">log</span>
-          </header>
-          <div class="button-row">
-            <button class="action muted" data-action="agentlogs:open:${file.name}">Open</button>
-          </div>
+          `;
+        })}
+        ${!workspaces.length && html`<div class="meta-text">No shared workspaces configured.</div>`}
+      <//>
+    <//>
+
+    <${Collapsible} title="Presence" defaultOpen=${true}>
+      <${Card}>
+        <div class="task-card mb-md">
+          <div class="task-card-title">Coordinator</div>
+          <div class="meta-text">${coordinator?.instance_label || coordinator?.instance_id || "none"} · Priority ${coordinator?.coordinator_priority ?? "—"}</div>
         </div>
-      `,
-    )
-    .join("");
-  const tailText = state.agentLogTail?.lines ? state.agentLogTail.lines.join("\n") : "Select a log file.";
-  const tailMeta = state.agentLogTail?.truncated ? `<span class="pill">Tail clipped</span>` : "";
-
-  return `
-    <section class="card">
-      <h2>Agent Log Library</h2>
-      <div class="input-row">
-        <input id="agentlog-search" type="text" placeholder="Search log files" value="${state.agentLogQuery}" />
-        <button class="action muted" data-action="agentlogs:search">Search</button>
-      </div>
-      <div class="range-row" style="margin-top:10px">
-        <input type="range" min="50" max="800" step="50" value="${state.agentLogLines}" data-action="agentlogs:lines" />
-        <span class="pill">${state.agentLogLines} lines</span>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Log Files</h3>
-      <div class="list">${logList || "<p>No log files found.</p>"}</div>
-    </section>
-    <section class="card">
-      <h3>${state.agentLogFile || "Log Tail"} ${tailMeta}</h3>
-      <div class="log-box">${tailText}</div>
-    </section>
-    <section class="card">
-      <h3>Worktree Context</h3>
-      <div class="input-row">
-        <input id="agentlog-context" type="text" placeholder="Worktree search (branch fragment)" />
-        <button class="action muted" data-action="agentlogs:context">Load</button>
-      </div>
-      <div class="log-box" style="margin-top:12px">${
-        state.agentContext
-          ? [
-              `Worktree: ${state.agentContext.name || "?"}`,
-              "",
-              state.agentContext.gitLog || "No git log.",
-              "",
-              state.agentContext.gitStatus || "Clean worktree.",
-              "",
-              state.agentContext.diffStat || "No diff stat.",
-            ].join("\n")
-          : "Load a worktree context to view git log/status."
-      }</div>
-    </section>
+        ${instances.length ? html`
+          <div class="stats-grid">
+            ${instances.map((inst, i) => html`
+              <div key=${i} class="stat-card" style="text-align:left;padding:10px">
+                <div style="font-weight:600;font-size:13px">${inst.instance_label || inst.instance_id}</div>
+                <div class="meta-text">${inst.workspace_role || "workspace"} · ${inst.host || "host"}</div>
+                <div class="meta-text">Last: ${inst.last_seen_at ? new Date(inst.last_seen_at).toLocaleString() : "unknown"}</div>
+              </div>
+            `)}
+          </div>
+        ` : html`<div class="meta-text">No active instances.</div>`}
+      <//>
+    <//>
   `;
 }
 
-function renderExecutor() {
-  const executor = state.executor?.data;
-  const mode = state.executor?.mode || "vk";
-  return `
-    <section class="card">
-      <h2>Executor Status</h2>
-      <p>Mode: ${mode}</p>
-      <p>Slots: ${executor?.activeSlots ?? 0}/${executor?.maxParallel ?? "-"}</p>
-      <p>Poll: ${executor?.pollIntervalMs ? executor.pollIntervalMs / 1000 : "-"}s · Timeout: ${executor?.taskTimeoutMs ? Math.round(executor.taskTimeoutMs / 60000) : "-"}m</p>
-      <div class="range-row" style="margin-top:12px">
-        <input type="range" min="0" max="20" step="1" value="${executor?.maxParallel ?? 0}" data-action="executor:maxparallel" />
-        <span class="pill">Max ${executor?.maxParallel ?? "-"}</span>
-      </div>
-      <div class="button-row">
-        <button class="action" data-action="executor:pause">Pause</button>
-        <button class="action secondary" data-action="executor:resume">Resume</button>
-        <button class="action muted" data-action="command:/executor">Send /executor</button>
-      </div>
-    </section>
-  `;
-}
+/* ═══════════════════════════════════════════════
+ *  TAB: Control (Executor + Commands + Routing)
+ * ═══════════════════════════════════════════════ */
+function ControlTab() {
+  const executor = executorData.value;
+  const execData = executor?.data;
+  const mode = executor?.mode || "vk";
 
-function renderLogs() {
-  const logText = state.logs?.lines ? state.logs.lines.join("\n") : "No logs yet.";
-  return `
-    <section class="card">
-      <h2>Logs</h2>
-      <div class="chips">
-        ${[50, 200, 500].map(
-          (lines) =>
-            `<button class="chip ${state.logsLines === lines ? "active" : ""}" data-action="logs:lines:${lines}">${lines} lines</button>`,
-        ).join("")}
-      </div>
-      <div class="range-row" style="margin-top:10px">
-        <input type="range" min="20" max="800" step="20" value="${state.logsLines}" data-action="logs:slider" />
-        <span class="pill">${state.logsLines} lines</span>
-      </div>
-      <div class="log-box" style="margin-top:14px">${logText}</div>
-      <div class="button-row" style="margin-top:12px">
-        <button class="action muted" data-action="command:/logs ${state.logsLines}">Send /logs to chat</button>
-      </div>
-    </section>
-  `;
-}
+  const [commandInput, setCommandInput] = useState("");
+  const [startTaskInput, setStartTaskInput] = useState("");
+  const [retryInput, setRetryInput] = useState("");
+  const [askInput, setAskInput] = useState("");
+  const [steerInput, setSteerInput] = useState("");
+  const [shellInput, setShellInput] = useState("");
+  const [gitInput, setGitInput] = useState("");
+  const [maxParallel, setMaxParallel] = useState(execData?.maxParallel ?? 0);
 
-function renderCommands() {
-  return `
-    <section class="card">
-      <h2>Command Console</h2>
-      <p>Send any slash command to the bot. Responses appear in chat.</p>
-      <div class="input-row">
-        <input type="text" id="command-input" placeholder="/status" />
-        <button class="action" data-action="command:send">Send</button>
-      </div>
-      <div class="button-row" style="margin-top:12px">
-        <button class="action muted" data-action="command:/menu">Open Chat Menu</button>
-        <button class="action secondary" data-action="command:/helpfull">All Commands</button>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Task Ops</h3>
-      <div class="input-row">
-        <input id="starttask-input" type="text" placeholder="Task ID" />
-        <button class="action muted" data-action="command:starttask">Start Task</button>
-      </div>
-      <div class="input-row" style="margin-top:10px">
-        <input id="retry-input" type="text" placeholder="Retry reason" />
-        <button class="action secondary" data-action="command:retry">Retry</button>
-        <button class="action muted" data-action="command:/plan">Plan</button>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Agent Control</h3>
-      <div class="input-row">
-        <textarea id="ask-input" rows="2" placeholder="Ask the agent..."></textarea>
-        <button class="action" data-action="command:ask">Ask</button>
-      </div>
-      <div class="input-row" style="margin-top:10px">
-        <input id="steer-input" type="text" placeholder="Steer prompt (focus on...)" />
-        <button class="action secondary" data-action="command:steer">Steer</button>
-      </div>
-    </section>
-    <section class="card">
-      <h3>Routing</h3>
-      <div class="segmented">
-        ${["codex", "copilot", "claude", "auto"].map(
-          (sdk) =>
-            `<button data-action="command:sdk:${sdk}">${sdk}</button>`,
-        ).join("")}
-      </div>
-      <div class="segmented" style="margin-top:10px">
-        ${["vk", "github", "jira"].map(
-          (backend) =>
-            `<button data-action="command:kanban:${backend}">${backend}</button>`,
-        ).join("")}
-      </div>
-      <div class="segmented" style="margin-top:10px">
-        ${["us", "sweden", "auto"].map(
-          (region) =>
-            `<button data-action="command:region:${region}">${region}</button>`,
-        ).join("")}
-      </div>
-    </section>
-    <section class="card">
-      <h3>Shell / Git</h3>
-      <div class="input-row">
-        <input id="shell-input" type="text" placeholder="ls -la" />
-        <button class="action muted" data-action="command:shell">Run /shell</button>
-      </div>
-      <div class="input-row" style="margin-top:10px">
-        <input id="git-input" type="text" placeholder="status --short" />
-        <button class="action muted" data-action="command:git">Run /git</button>
-      </div>
-    </section>
-  `;
-}
-
-function renderModal() {
-  if (!state.modal) return "";
-  if (state.modal.type === "task") {
-    const task = state.modal.task;
-    if (!task) return "";
-    const priority = task.priority || "";
-    const status = task.status || "todo";
-    return `
-      <div class="overlay" data-overlay="true">
-        <div class="modal">
-          <h2>${task.title || "(untitled task)"}</h2>
-          <p class="meta">ID: ${task.id}</p>
-          <div class="input-row" style="margin-top:10px">
-            <input id="task-edit-title" type="text" value="${task.title || ""}" placeholder="Task title" />
-          </div>
-          <div class="input-row" style="margin-top:10px">
-            <textarea id="task-edit-description" rows="5" placeholder="Task description">${task.description || ""}</textarea>
-          </div>
-          <div class="input-row" style="margin-top:10px">
-            <select id="task-edit-status">
-              ${["todo", "inprogress", "inreview", "done", "cancelled"]
-                .map((item) => `<option value="${item}" ${item === status ? "selected" : ""}>${item}</option>`)
-                .join("")}
-            </select>
-            <select id="task-edit-priority">
-              <option value="" ${priority ? "" : "selected"}>priority: none</option>
-              ${["low", "medium", "high", "critical"]
-                .map((item) => `<option value="${item}" ${item === priority ? "selected" : ""}>priority: ${item}</option>`)
-                .join("")}
-            </select>
-          </div>
-          <div class="button-row" style="margin-top:14px">
-            ${state.manualMode && task.status === "todo" ? `<button class="action" data-action="task:start:${task.id}">Start</button>` : ""}
-            <button class="action secondary" data-action="task:save:${task.id}">Save</button>
-            <button class="action muted" data-action="task:update:${task.id}:inreview">Mark Review</button>
-            <button class="action muted" data-action="modal:close">Close</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-  return "";
-}
-
-function render() {
-  tabs.forEach((tab) => {
-    const target = tab.dataset.action.replace("tab:", "");
-    tab.classList.toggle("active", target === state.tab);
-  });
-
-  if (state.tab === "overview") view.innerHTML = renderOverview();
-  if (state.tab === "tasks") view.innerHTML = renderTasks();
-  if (state.tab === "agents") view.innerHTML = renderAgents();
-  if (state.tab === "worktrees") view.innerHTML = renderWorktrees();
-  if (state.tab === "workspaces") view.innerHTML = renderWorkspaces();
-  if (state.tab === "presence") view.innerHTML = renderPresence();
-  if (state.tab === "executor") view.innerHTML = renderExecutor();
-  if (state.tab === "logs") view.innerHTML = renderLogs();
-  if (state.tab === "git") view.innerHTML = renderGit();
-  if (state.tab === "agentlogs") view.innerHTML = renderAgentLogs();
-  if (state.tab === "commands") view.innerHTML = renderCommands();
-  view.insertAdjacentHTML("beforeend", renderModal());
-}
-
-async function handleAction(action, element) {
-  if (action.startsWith("tab:")) {
-    state.tab = action.replace("tab:", "");
-    state.modal = null;
-    if (state.ws?.readyState === WebSocket.OPEN) {
-      state.ws.send(
-        JSON.stringify({ type: "subscribe", channels: channelsForTab(state.tab) }),
-      );
-    }
-    await refreshTab();
-    return;
-  }
-  if (action === "refresh") {
-    await refreshTab();
-    return;
-  }
-  if (action.startsWith("tasks:filter:")) {
-    state.tasksStatus = action.replace("tasks:filter:", "");
-    state.tasksPage = 0;
-    await refreshTab();
-    return;
-  }
-  if (action === "tasks:prev") {
-    state.tasksPage = Math.max(0, state.tasksPage - 1);
-    await refreshTab();
-    return;
-  }
-  if (action === "tasks:next") {
-    state.tasksPage += 1;
-    await refreshTab();
-    return;
-  }
-  if (action === "manual:toggle") {
-    const input = element?.querySelector?.("input");
-    if (input?.disabled) return;
-    const checked =
-      typeof element?.checked === "boolean" ? element.checked : input?.checked;
-    state.manualMode = typeof checked === "boolean" ? checked : !state.manualMode;
-    render();
-    return;
-  }
-  if (action === "modal:close") {
-    state.modal = null;
-    render();
-    return;
-  }
-  if (action.startsWith("task:start:")) {
-    const taskId = action.replace("task:start:", "");
-    const previousTasks = cloneStateValue(state.tasks);
-    const previousModal = cloneStateValue(state.modal);
-    await runOptimisticMutation(
-      () => {
-        state.tasks = state.tasks.map((task) =>
-          task.id === taskId ? { ...task, status: "inprogress" } : task,
-        );
-        if (state.modal?.task?.id === taskId) {
-          state.modal.task.status = "inprogress";
-        }
-      },
-      () =>
-        apiFetch("/api/tasks/start", {
-          method: "POST",
-          body: JSON.stringify({ taskId }),
-        }),
-      () => {
-        state.tasks = previousTasks;
-        state.modal = previousModal;
-      },
-    ).catch((err) => alert(err.message));
-    state.modal = null;
-    scheduleRefresh(150);
-    return;
-  }
-  if (action.startsWith("task:detail:")) {
-    const taskId = action.replace("task:detail:", "");
-    const localTask = state.tasks.find((t) => t.id === taskId) || null;
-    const result = await apiFetch(`/api/tasks/detail?taskId=${encodeURIComponent(taskId)}`).catch(
-      () => ({ data: localTask }),
-    );
-    const task = result.data || localTask;
-    state.modal = { type: "task", task };
-    render();
-    return;
-  }
-  if (action.startsWith("task:save:")) {
-    const taskId = action.replace("task:save:", "");
-    const title = document.getElementById("task-edit-title")?.value ?? "";
-    const description = document.getElementById("task-edit-description")?.value ?? "";
-    const status = document.getElementById("task-edit-status")?.value ?? "todo";
-    const priority = document.getElementById("task-edit-priority")?.value ?? "";
-    const previousTasks = cloneStateValue(state.tasks);
-    const previousModal = cloneStateValue(state.modal);
-    await runOptimisticMutation(
-      () => {
-        state.tasks = state.tasks.map((task) =>
-          task.id === taskId
-            ? {
-                ...task,
-                title,
-                description,
-                status,
-                priority: priority || null,
-              }
-            : task,
-        );
-        if (state.modal?.task?.id === taskId) {
-          state.modal.task = {
-            ...state.modal.task,
-            title,
-            description,
-            status,
-            priority: priority || null,
-          };
-        }
-      },
-      async () => {
-        const response = await apiFetch("/api/tasks/edit", {
-          method: "POST",
-          body: JSON.stringify({ taskId, title, description, status, priority }),
-        });
-        if (response?.data) {
-          state.tasks = state.tasks.map((task) =>
-            task.id === taskId ? { ...task, ...response.data } : task,
-          );
-          if (state.modal?.task?.id === taskId) {
-            state.modal.task = { ...state.modal.task, ...response.data };
-          }
-        }
-        return response;
-      },
-      () => {
-        state.tasks = previousTasks;
-        state.modal = previousModal;
-      },
-    ).catch((err) => alert(err.message));
-    render();
-    return;
-  }
-  if (action.startsWith("task:update:")) {
-    const [, taskId, status] = action.split(":");
-    const previousTasks = cloneStateValue(state.tasks);
-    const previousModal = cloneStateValue(state.modal);
-    await runOptimisticMutation(
-      () => {
-        state.tasks = state.tasks.map((task) =>
-          task.id === taskId ? { ...task, status } : task,
-        );
-        if (state.modal?.task?.id === taskId) {
-          state.modal.task.status = status;
-        }
-      },
-      async () => {
-        const response = await apiFetch("/api/tasks/update", {
-          method: "POST",
-          body: JSON.stringify({ taskId, status }),
-        });
-        if (response?.data) {
-          state.tasks = state.tasks.map((task) =>
-            task.id === taskId ? { ...task, ...response.data } : task,
-          );
-          if (state.modal?.task?.id === taskId) {
-            state.modal.task = { ...state.modal.task, ...response.data };
-          }
-        }
-        return response;
-      },
-      () => {
-        state.tasks = previousTasks;
-        state.modal = previousModal;
-      },
-    ).catch((err) => alert(err.message));
-    if (state.modal && status === "done") {
-      state.modal = null;
-    }
-    render();
-    return;
-  }
-  if (action === "tasks:search" && element) {
-    state.tasksQuery = element.value || "";
-    render();
-    return;
-  }
-  if (action === "executor:pause") {
-    const previous = cloneStateValue(state.executor);
-    await runOptimisticMutation(
-      () => {
-        if (state.executor) state.executor.paused = true;
-      },
+  const handlePause = async () => {
+    haptic("medium");
+    const prev = cloneValue(executor);
+    await runOptimistic(
+      () => { if (executorData.value) executorData.value = { ...executorData.value, paused: true }; },
       () => apiFetch("/api/executor/pause", { method: "POST" }),
-      () => {
-        state.executor = previous;
-      },
-    ).catch((err) => alert(err.message));
+      () => { executorData.value = prev; },
+    ).catch(() => {});
     scheduleRefresh(120);
-    return;
-  }
-  if (action === "executor:resume") {
-    const previous = cloneStateValue(state.executor);
-    await runOptimisticMutation(
-      () => {
-        if (state.executor) state.executor.paused = false;
-      },
+  };
+
+  const handleResume = async () => {
+    haptic("medium");
+    const prev = cloneValue(executor);
+    await runOptimistic(
+      () => { if (executorData.value) executorData.value = { ...executorData.value, paused: false }; },
       () => apiFetch("/api/executor/resume", { method: "POST" }),
-      () => {
-        state.executor = previous;
-      },
-    ).catch((err) => alert(err.message));
+      () => { executorData.value = prev; },
+    ).catch(() => {});
     scheduleRefresh(120);
-    return;
-  }
-  if (action === "executor:maxparallel" && element) {
-    const value = Number(element.value || "0");
-    const previous = cloneStateValue(state.executor);
-    await runOptimisticMutation(
-      () => {
-        if (state.executor?.data) {
-          state.executor.data.maxParallel = value;
-        }
-      },
-      () =>
-        apiFetch("/api/executor/maxparallel", {
-          method: "POST",
-          body: JSON.stringify({ value }),
-        }),
-      () => {
-        state.executor = previous;
-      },
-    ).catch((err) => alert(err.message));
+  };
+
+  const handleMaxParallel = async (value) => {
+    setMaxParallel(value);
+    haptic();
+    const prev = cloneValue(executor);
+    await runOptimistic(
+      () => { if (executorData.value?.data) executorData.value.data.maxParallel = value; },
+      () => apiFetch("/api/executor/maxparallel", { method: "POST", body: JSON.stringify({ value }) }),
+      () => { executorData.value = prev; },
+    ).catch(() => {});
     scheduleRefresh(120);
-    return;
-  }
-  if (action.startsWith("logs:lines:")) {
-    state.logsLines = Number(action.replace("logs:lines:", "")) || 200;
-    await refreshTab();
-    return;
-  }
-  if (action === "logs:slider" && element) {
-    state.logsLines = Number(element.value || "200");
-    await refreshTab();
-    return;
-  }
-  if (action === "git:refresh") {
-    await loadGit();
-    render();
-    return;
-  }
-  if (action === "agentlogs:search") {
-    const input = document.getElementById("agentlog-search");
-    state.agentLogQuery = input?.value?.trim() || "";
-    state.agentLogFile = "";
-    await loadAgentLogFiles();
-    await loadAgentLogTail();
-    render();
-    return;
-  }
-  if (action.startsWith("agentlogs:search:")) {
-    const query = action.replace("agentlogs:search:", "");
-    state.tab = "agentlogs";
-    state.agentLogQuery = query;
-    state.agentLogFile = "";
-    await refreshTab();
-    return;
-  }
-  if (action.startsWith("agentlogs:open:")) {
-    state.agentLogFile = action.replace("agentlogs:open:", "");
-    await loadAgentLogTail();
-    render();
-    return;
-  }
-  if (action === "agentlogs:lines" && element) {
-    state.agentLogLines = Number(element.value || "200");
-    await loadAgentLogTail();
-    render();
-    return;
-  }
-  if (action === "agentlogs:context") {
-    const input = document.getElementById("agentlog-context");
-    await loadAgentContext(input?.value?.trim() || "");
-    render();
-    return;
-  }
-  if (action === "worktrees:prune") {
-    await apiFetch("/api/worktrees/prune", { method: "POST" }).catch((err) =>
-      alert(err.message),
-    );
-    scheduleRefresh(120);
-    return;
-  }
-  if (action.startsWith("worktrees:release-branch:")) {
-    const branch = action.replace("worktrees:release-branch:", "");
-    const previous = cloneStateValue(state.worktrees);
-    await runOptimisticMutation(
-      () => {
-        state.worktrees = state.worktrees.filter((item) => item.branch !== branch);
-      },
-      () =>
-        apiFetch("/api/worktrees/release", {
-          method: "POST",
-          body: JSON.stringify({ branch }),
-        }),
-      () => {
-        state.worktrees = previous;
-      },
-    ).catch((err) => alert(err.message));
-    scheduleRefresh(120);
-    return;
-  }
-  if (action.startsWith("worktrees:release:")) {
-    const taskKey = action.replace("worktrees:release:", "");
-    const previous = cloneStateValue(state.worktrees);
-    await runOptimisticMutation(
-      () => {
-        state.worktrees = state.worktrees.filter((item) => item.taskKey !== taskKey);
-      },
-      () =>
-        apiFetch("/api/worktrees/release", {
-          method: "POST",
-          body: JSON.stringify({ taskKey }),
-        }),
-      () => {
-        state.worktrees = previous;
-      },
-    ).catch((err) => alert(err.message));
-    scheduleRefresh(120);
-    return;
-  }
-  if (action === "worktrees:release-input") {
-    const input = document.getElementById("worktree-release-input");
-    const value = input?.value?.trim();
-    if (!value) return;
-    await apiFetch("/api/worktrees/release", {
-      method: "POST",
-      body: JSON.stringify({ taskKey: value, branch: value }),
-    }).catch((err) => alert(err.message));
-    scheduleRefresh(120);
-    return;
-  }
-  if (action.startsWith("shared:claim:")) {
-    const workspaceId = action.replace("shared:claim:", "");
-    const owner = document.getElementById("shared-owner")?.value?.trim() || "";
-    const ttlMinutes = Number(document.getElementById("shared-ttl")?.value || "");
-    const note = document.getElementById("shared-note")?.value?.trim() || "";
-    const previous = cloneStateValue(state.sharedWorkspaces);
-    await runOptimisticMutation(
-      () => {
-        const now = Date.now();
-        const ws = state.sharedWorkspaces?.workspaces?.find((item) => item.id === workspaceId);
-        if (ws) {
-          ws.availability = "leased";
-          ws.lease = {
-            owner: owner || "telegram-ui",
-            lease_expires_at: new Date(now + (ttlMinutes || 60) * 60000).toISOString(),
-            note,
-          };
-        }
-      },
-      () =>
-        apiFetch("/api/shared-workspaces/claim", {
-          method: "POST",
-          body: JSON.stringify({ workspaceId, owner, ttlMinutes, note }),
-        }),
-      () => {
-        state.sharedWorkspaces = previous;
-      },
-    ).catch((err) => alert(err.message));
-    scheduleRefresh(120);
-    return;
-  }
-  if (action.startsWith("shared:renew:")) {
-    const workspaceId = action.replace("shared:renew:", "");
-    const owner = document.getElementById("shared-owner")?.value?.trim() || "";
-    const ttlMinutes = Number(document.getElementById("shared-ttl")?.value || "");
-    const previous = cloneStateValue(state.sharedWorkspaces);
-    await runOptimisticMutation(
-      () => {
-        const ws = state.sharedWorkspaces?.workspaces?.find((item) => item.id === workspaceId);
-        if (ws?.lease) {
-          ws.lease.owner = owner || ws.lease.owner;
-          ws.lease.lease_expires_at = new Date(
-            Date.now() + (ttlMinutes || 60) * 60000,
-          ).toISOString();
-        }
-      },
-      () =>
-        apiFetch("/api/shared-workspaces/renew", {
-          method: "POST",
-          body: JSON.stringify({ workspaceId, owner, ttlMinutes }),
-        }),
-      () => {
-        state.sharedWorkspaces = previous;
-      },
-    ).catch((err) => alert(err.message));
-    scheduleRefresh(120);
-    return;
-  }
-  if (action.startsWith("shared:release:")) {
-    const workspaceId = action.replace("shared:release:", "");
-    const owner = document.getElementById("shared-owner")?.value?.trim() || "";
-    const previous = cloneStateValue(state.sharedWorkspaces);
-    await runOptimisticMutation(
-      () => {
-        const ws = state.sharedWorkspaces?.workspaces?.find((item) => item.id === workspaceId);
-        if (ws) {
-          ws.availability = "available";
-          ws.lease = null;
-        }
-      },
-      () =>
-        apiFetch("/api/shared-workspaces/release", {
-          method: "POST",
-          body: JSON.stringify({ workspaceId, owner }),
-        }),
-      () => {
-        state.sharedWorkspaces = previous;
-      },
-    ).catch((err) => alert(err.message));
-    scheduleRefresh(120);
-    return;
-  }
-  if (action === "command:send") {
-    const input = document.getElementById("command-input");
-    if (input && input.value) {
-      sendCommandToChat(input.value.trim());
-      input.value = "";
-    }
-    return;
-  }
-  if (action === "command:starttask") {
-    const input = document.getElementById("starttask-input");
-    const taskId = input?.value?.trim();
-    if (taskId) sendCommandToChat(`/starttask ${taskId}`);
-    return;
-  }
-  if (action === "command:retry") {
-    const input = document.getElementById("retry-input");
-    const reason = input?.value?.trim();
-    sendCommandToChat(reason ? `/retry ${reason}` : "/retry");
-    return;
-  }
-  if (action === "command:ask") {
-    const input = document.getElementById("ask-input");
-    const prompt = input?.value?.trim();
-    if (prompt) {
-      sendCommandToChat(`/ask ${prompt}`);
-      input.value = "";
-    }
-    return;
-  }
-  if (action === "command:steer") {
-    const input = document.getElementById("steer-input");
-    const prompt = input?.value?.trim();
-    if (prompt) {
-      sendCommandToChat(`/steer ${prompt}`);
-      input.value = "";
-    }
-    return;
-  }
-  if (action === "command:git") {
-    const input = document.getElementById("git-input") || document.getElementById("git-command");
-    const args = input?.value?.trim() || "";
-    sendCommandToChat(`/git ${args}`.trim());
-    return;
-  }
-  if (action === "command:shell") {
-    const input = document.getElementById("shell-input");
-    const args = input?.value?.trim() || "";
-    sendCommandToChat(`/shell ${args}`.trim());
-    return;
-  }
-  if (action.startsWith("command:sdk:")) {
-    const sdk = action.replace("command:sdk:", "");
-    sendCommandToChat(`/sdk ${sdk}`);
-    return;
-  }
-  if (action.startsWith("command:kanban:")) {
-    const backend = action.replace("command:kanban:", "");
-    sendCommandToChat(`/kanban ${backend}`);
-    return;
-  }
-  if (action.startsWith("command:region:")) {
-    const region = action.replace("command:region:", "");
-    sendCommandToChat(`/region ${region}`);
-    return;
-  }
-  if (action.startsWith("command:")) {
-    const command = action.replace("command:", "");
-    sendCommandToChat(command);
-    return;
-  }
-  if (action === "tasks:project" && element?.value) {
-    state.tasksProject = element.value;
-    state.tasksPage = 0;
-    await refreshTab();
-  }
+  };
+
+  return html`
+    <${Card} title="Executor Controls">
+      <div class="meta-text mb-sm">Mode: ${mode} · Slots: ${execData?.activeSlots ?? 0}/${execData?.maxParallel ?? "—"} · Paused: ${executor?.paused ? "Yes" : "No"}</div>
+      <div class="meta-text mb-sm">Poll: ${execData?.pollIntervalMs ? execData.pollIntervalMs / 1000 : "—"}s · Timeout: ${execData?.taskTimeoutMs ? Math.round(execData.taskTimeoutMs / 60000) : "—"}m</div>
+      <div class="range-row mb-md">
+        <input type="range" min="0" max="20" step="1" value=${maxParallel}
+          onInput=${(e) => setMaxParallel(Number(e.target.value))}
+          onChange=${(e) => handleMaxParallel(Number(e.target.value))} />
+        <span class="pill">Max ${maxParallel}</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" onClick=${handlePause}>Pause</button>
+        <button class="btn btn-secondary btn-sm" onClick=${handleResume}>Resume</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/executor")}>/executor</button>
+      </div>
+    <//>
+
+    <${Card} title="Command Console">
+      <div class="input-row mb-sm">
+        <input class="input" placeholder="/status" value=${commandInput} onInput=${(e) => setCommandInput(e.target.value)}
+          onKeyDown=${(e) => { if (e.key === "Enter" && commandInput.trim()) { sendCommandToChat(commandInput.trim()); setCommandInput(""); } }} />
+        <button class="btn btn-primary btn-sm" onClick=${() => { if (commandInput.trim()) { sendCommandToChat(commandInput.trim()); setCommandInput(""); } }}>${ICONS.send}</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/status")}>/status</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/health")}>/health</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/menu")}>/menu</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/helpfull")}>/helpfull</button>
+      </div>
+    <//>
+
+    <${Card} title="Task Ops">
+      <div class="input-row mb-sm">
+        <input class="input" placeholder="Task ID" value=${startTaskInput} onInput=${(e) => setStartTaskInput(e.target.value)} />
+        <button class="btn btn-secondary btn-sm" onClick=${() => { if (startTaskInput.trim()) sendCommandToChat(`/starttask ${startTaskInput.trim()}`); }}>Start</button>
+      </div>
+      <div class="input-row">
+        <input class="input" placeholder="Retry reason" value=${retryInput} onInput=${(e) => setRetryInput(e.target.value)} />
+        <button class="btn btn-secondary btn-sm" onClick=${() => sendCommandToChat(retryInput.trim() ? `/retry ${retryInput.trim()}` : "/retry")}>Retry</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/plan")}>Plan</button>
+      </div>
+    <//>
+
+    <${Card} title="Agent Control">
+      <textarea class="input mb-sm" rows="2" placeholder="Ask the agent..." value=${askInput} onInput=${(e) => setAskInput(e.target.value)}></textarea>
+      <div class="btn-row mb-md">
+        <button class="btn btn-primary btn-sm" onClick=${() => { if (askInput.trim()) { sendCommandToChat(`/ask ${askInput.trim()}`); setAskInput(""); } }}>Ask</button>
+      </div>
+      <div class="input-row">
+        <input class="input" placeholder="Steer prompt (focus on...)" value=${steerInput} onInput=${(e) => setSteerInput(e.target.value)} />
+        <button class="btn btn-secondary btn-sm" onClick=${() => { if (steerInput.trim()) { sendCommandToChat(`/steer ${steerInput.trim()}`); setSteerInput(""); } }}>Steer</button>
+      </div>
+    <//>
+
+    <${Card} title="Routing">
+      <div class="card-subtitle">SDK</div>
+      <${SegmentedControl} options=${[
+        { value: "codex", label: "Codex" },
+        { value: "copilot", label: "Copilot" },
+        { value: "claude", label: "Claude" },
+        { value: "auto", label: "Auto" },
+      ]} value="" onChange=${(v) => sendCommandToChat(`/sdk ${v}`)} />
+      <div class="card-subtitle mt-sm">Kanban</div>
+      <${SegmentedControl} options=${[
+        { value: "vk", label: "VK" },
+        { value: "github", label: "GitHub" },
+        { value: "jira", label: "Jira" },
+      ]} value="" onChange=${(v) => sendCommandToChat(`/kanban ${v}`)} />
+      <div class="card-subtitle mt-sm">Region</div>
+      <${SegmentedControl} options=${[
+        { value: "us", label: "US" },
+        { value: "sweden", label: "Sweden" },
+        { value: "auto", label: "Auto" },
+      ]} value="" onChange=${(v) => sendCommandToChat(`/region ${v}`)} />
+    <//>
+
+    <${Card} title="Shell / Git">
+      <div class="input-row mb-sm">
+        <input class="input" placeholder="ls -la" value=${shellInput} onInput=${(e) => setShellInput(e.target.value)} />
+        <button class="btn btn-secondary btn-sm" onClick=${() => sendCommandToChat(`/shell ${shellInput.trim()}`.trim())}>Shell</button>
+      </div>
+      <div class="input-row">
+        <input class="input" placeholder="status --short" value=${gitInput} onInput=${(e) => setGitInput(e.target.value)} />
+        <button class="btn btn-secondary btn-sm" onClick=${() => sendCommandToChat(`/git ${gitInput.trim()}`.trim())}>Git</button>
+      </div>
+    <//>
+  `;
 }
 
-document.body.addEventListener("click", (event) => {
-  if (event.target?.dataset?.overlay === "true") {
-    state.modal = null;
-    render();
-    return;
-  }
-  const target = event.target.closest("[data-action]");
-  if (!target) return;
-  handleAction(target.dataset.action, target);
-});
+/* ═══════════════════════════════════════════════
+ *  TAB: Logs (System Logs + Agent Log Library)
+ * ═══════════════════════════════════════════════ */
+function LogsTab() {
+  const logRef = useRef(null);
+  const [localLogLines, setLocalLogLines] = useState(logsLines.value);
+  const [localAgentLines, setLocalAgentLines] = useState(agentLogLines.value);
+  const [contextQuery, setContextQuery] = useState("");
 
-document.body.addEventListener("change", (event) => {
-  const target = event.target.closest("[data-action]");
-  if (!target) return;
-  const action = target.dataset.action;
-  if (action === "tasks:project") {
-    handleAction("tasks:project", target);
-  }
-  if (action === "executor:maxparallel") {
-    handleAction("executor:maxparallel", target);
-  }
-});
+  const logText = logsData.value?.lines ? logsData.value.lines.join("\n") : "No logs yet.";
+  const tailText = agentLogTail.value?.lines ? agentLogTail.value.lines.join("\n") : "Select a log file.";
 
-document.body.addEventListener("input", (event) => {
-  const target = event.target.closest("[data-action]");
-  if (!target) return;
-  const action = target.dataset.action;
-  if (action === "tasks:search") {
-    handleAction("tasks:search", target);
-  }
-  if (action === "logs:slider") {
-    handleAction("logs:slider", target);
-  }
-  if (action === "agentlogs:lines") {
-    handleAction("agentlogs:lines", target);
-  }
-});
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logText]);
 
-async function boot() {
-  const tg = telegram();
-  if (tg) {
-    tg.expand();
-    tg.ready();
-    setConnection(true, "via Telegram");
-  } else {
-    setConnection(false, "(open in Telegram)" );
-  }
-  try {
+  const handleLogLinesChange = async (value) => {
+    setLocalLogLines(value);
+    logsLines.value = value;
+    await loadLogs();
+  };
+
+  const handleAgentSearch = async () => {
+    agentLogFile.value = "";
+    await loadAgentLogFileList();
+    await loadAgentLogTailData();
+  };
+
+  const handleAgentOpen = async (name) => {
+    agentLogFile.value = name;
+    await loadAgentLogTailData();
+  };
+
+  const handleAgentLinesChange = async (value) => {
+    setLocalAgentLines(value);
+    agentLogLines.value = value;
+    await loadAgentLogTailData();
+  };
+
+  const handleContextLoad = async () => {
+    await loadAgentContextData(contextQuery.trim());
+  };
+
+  return html`
+    <${Card} title="System Logs">
+      <div class="range-row mb-sm">
+        <input type="range" min="20" max="800" step="20" value=${localLogLines}
+          onInput=${(e) => setLocalLogLines(Number(e.target.value))}
+          onChange=${(e) => handleLogLinesChange(Number(e.target.value))} />
+        <span class="pill">${localLogLines} lines</span>
+      </div>
+      <div class="chip-group mb-sm">
+        ${[50, 200, 500].map((n) => html`
+          <button key=${n} class="chip ${logsLines.value === n ? "active" : ""}" onClick=${() => handleLogLinesChange(n)}>${n}</button>
+        `)}
+      </div>
+      <div ref=${logRef} class="log-box">${logText}</div>
+      <div class="btn-row mt-sm">
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat(`/logs ${logsLines.value}`)}>/logs to chat</button>
+      </div>
+    <//>
+
+    <${Card} title="Agent Log Library">
+      <div class="input-row mb-sm">
+        <input class="input" placeholder="Search log files" value=${agentLogQuery.value}
+          onInput=${(e) => { agentLogQuery.value = e.target.value; }} />
+        <button class="btn btn-secondary btn-sm" onClick=${handleAgentSearch}>Search</button>
+      </div>
+      <div class="range-row mb-md">
+        <input type="range" min="50" max="800" step="50" value=${localAgentLines}
+          onInput=${(e) => setLocalAgentLines(Number(e.target.value))}
+          onChange=${(e) => handleAgentLinesChange(Number(e.target.value))} />
+        <span class="pill">${localAgentLines} lines</span>
+      </div>
+    <//>
+
+    <${Card} title="Log Files">
+      ${agentLogFiles.value.length ? agentLogFiles.value.map((file) => html`
+        <div key=${file.name} class="task-card" onClick=${() => handleAgentOpen(file.name)}>
+          <div class="task-card-header">
+            <div>
+              <div class="task-card-title">${file.name}</div>
+              <div class="task-card-meta">${Math.round(file.size / 1024)}kb · ${new Date(file.mtime).toLocaleString()}</div>
+            </div>
+            <${Badge} status="log" text="log" />
+          </div>
+        </div>
+      `) : html`<div class="meta-text">No log files found.</div>`}
+    <//>
+
+    <${Card} title=${agentLogFile.value || "Log Tail"}>
+      ${agentLogTail.value?.truncated && html`<span class="pill mb-sm">Tail clipped</span>`}
+      <div class="log-box">${tailText}</div>
+    <//>
+
+    <${Card} title="Worktree Context">
+      <div class="input-row mb-sm">
+        <input class="input" placeholder="Branch fragment" value=${contextQuery} onInput=${(e) => setContextQuery(e.target.value)} />
+        <button class="btn btn-secondary btn-sm" onClick=${handleContextLoad}>Load</button>
+      </div>
+      <div class="log-box">${agentContext.value
+        ? [
+            `Worktree: ${agentContext.value.name || "?"}`,
+            "",
+            agentContext.value.gitLog || "No git log.",
+            "",
+            agentContext.value.gitStatus || "Clean worktree.",
+            "",
+            agentContext.value.diffStat || "No diff stat.",
+          ].join("\n")
+        : "Load a worktree context to view git log/status."
+      }</div>
+    <//>
+
+    <${Card} title="Git Snapshot">
+      <div class="btn-row mb-sm">
+        <button class="btn btn-secondary btn-sm" onClick=${async () => { await loadGit(); haptic(); }}>${ICONS.refresh} Refresh</button>
+        <button class="btn btn-ghost btn-sm" onClick=${() => sendCommandToChat("/diff")}>/diff</button>
+      </div>
+      <div class="log-box mb-md">${gitDiff.value || "Clean working tree."}</div>
+      <div class="card-subtitle">Recent Branches</div>
+      ${gitBranches.value.length
+        ? gitBranches.value.map((line, i) => html`<div key=${i} class="meta-text">${line}</div>`)
+        : html`<div class="meta-text">No branches found.</div>`
+      }
+    <//>
+  `;
+}
+
+/* ═══════════════════════════════════════════════
+ *  Header + BottomNav + App Root
+ * ═══════════════════════════════════════════════ */
+function Header() {
+  const isConn = connected.value;
+  return html`
+    <header class="app-header">
+      <div class="app-header-title">VirtEngine</div>
+      <div class="connection-pill ${isConn ? "connected" : "disconnected"}">
+        <span class="connection-dot"></span>
+        ${isConn ? "Live" : "Offline"}
+      </div>
+    </header>
+  `;
+}
+
+function BottomNav() {
+  const tabs = [
+    { id: "dashboard", label: "Home", icon: ICONS.grid },
+    { id: "tasks", label: "Tasks", icon: ICONS.check },
+    { id: "agents", label: "Agents", icon: ICONS.cpu },
+    { id: "infra", label: "Infra", icon: ICONS.server },
+    { id: "control", label: "Control", icon: ICONS.sliders },
+    { id: "logs", label: "Logs", icon: ICONS.terminal },
+  ];
+
+  const handleSwitch = async (tab) => {
+    if (activeTab.value === tab) return;
+    haptic();
+    activeTab.value = tab;
+    switchWsChannel(tab);
+    // Hide Telegram BackButton on main tabs
+    const tg = getTg();
+    if (tg?.BackButton) tg.BackButton.hide();
     await refreshTab();
+  };
+
+  return html`
+    <nav class="bottom-nav">
+      ${tabs.map((t) => html`
+        <button key=${t.id} class="nav-item ${activeTab.value === t.id ? "active" : ""}"
+          onClick=${() => handleSwitch(t.id)}>
+          ${t.icon}
+          <span class="nav-label">${t.label}</span>
+        </button>
+      `)}
+    </nav>
+  `;
+}
+
+function App() {
+  useEffect(() => {
+    const tg = getTg();
+    applyTgTheme();
+    if (tg) {
+      tg.expand();
+      tg.ready();
+      connected.value = true;
+    }
+    refreshTab();
     connectRealtime();
-  } catch (err) {
-    console.error(err);
-    setConnection(false, "(API unavailable)");
-    render();
-  }
+
+    return () => {
+      try { ws?.close(); } catch { /* noop */ }
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      if (wsRefreshTimer) clearTimeout(wsRefreshTimer);
+    };
+  }, []);
+
+  const tab = activeTab.value;
+
+  return html`
+    <${ToastContainer} />
+    <${Header} />
+    <${PullToRefresh} onRefresh=${refreshTab}>
+      ${tab === "dashboard" && html`<${DashboardTab} />`}
+      ${tab === "tasks" && html`<${TasksTab} />`}
+      ${tab === "agents" && html`<${AgentsTab} />`}
+      ${tab === "infra" && html`<${InfraTab} />`}
+      ${tab === "control" && html`<${ControlTab} />`}
+      ${tab === "logs" && html`<${LogsTab} />`}
+    <//>
+    <${BottomNav} />
+  `;
 }
 
-boot();
-
-window.addEventListener("beforeunload", () => {
-  try {
-    state.ws?.close();
-  } catch {
-    // no-op
-  }
-  if (state.wsReconnectTimer) clearTimeout(state.wsReconnectTimer);
-  if (state.wsRefreshTimer) clearTimeout(state.wsRefreshTimer);
-});
+/* ─── Mount ─── */
+preactRender(html`<${App} />`, document.getElementById("app"));

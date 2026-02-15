@@ -24,6 +24,8 @@ describe("github-shared-state", () => {
       await import("../kanban-adapter.mjs");
     setKanbanBackend("github");
     adapter = getKanbanAdapter();
+    // Disable rate limit retry delay for test speed
+    adapter._rateLimitRetryDelayMs = 0;
   });
 
   afterEach(() => {
@@ -411,6 +413,7 @@ Incomplete state`,
 
     it("handles gh CLI errors gracefully", async () => {
       mockGhError(new Error("API rate limit exceeded"));
+      mockGhError(new Error("API rate limit exceeded")); // retry attempt
 
       const result = await adapter.readSharedStateFromIssue(42);
 
@@ -596,6 +599,7 @@ Status comment`,
 
     it("handles API rate limiting", async () => {
       mockGhError(new Error("API rate limit exceeded. Please retry after..."));
+      mockGhError(new Error("API rate limit exceeded. Please retry after...")); // retry attempt
 
       const result = await adapter.readSharedStateFromIssue(42);
 

@@ -49,7 +49,55 @@
           "type": "string",
           "enum": ["vk", "github", "jira"]
         },
-        "projectId": { "type": "string" }
+        "projectId": { "type": "string" },
+        "github": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "project": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "GitHub Projects v2 integration settings",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": ["issues", "kanban"],
+                  "default": "issues",
+                  "description": "Task source mode: 'issues' for repo issues only, 'kanban' for project board sync"
+                },
+                "owner": {
+                  "type": "string",
+                  "description": "GitHub org/user that owns the project board"
+                },
+                "number": {
+                  "type": ["string", "number"],
+                  "description": "GitHub project number"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Project title for auto-detection"
+                },
+                "autoSync": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Auto-sync task status to project board Status field"
+                },
+                "statusMapping": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Map internal statuses to project board column names",
+                  "properties": {
+                    "todo": { "type": "string", "default": "Todo" },
+                    "inprogress": { "type": "string", "default": "In Progress" },
+                    "inreview": { "type": "string", "default": "In Review" },
+                    "done": { "type": "string", "default": "Done" },
+                    "cancelled": { "type": "string", "default": "Cancelled" }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "plannerMode": {

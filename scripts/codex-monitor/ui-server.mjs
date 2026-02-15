@@ -49,6 +49,7 @@ const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
@@ -543,6 +544,34 @@ async function handleApi(req, res, url) {
         reason: "task-edited",
         taskId,
         status: updated?.status || patch.status || null,
+      });
+    } catch (err) {
+      jsonResponse(res, 500, { ok: false, error: err.message });
+    }
+    return;
+  }
+
+  if (path === "/api/tasks/create") {
+    try {
+      const body = await readJsonBody(req);
+      const title = body?.title;
+      if (!title || !String(title).trim()) {
+        jsonResponse(res, 400, { ok: false, error: "title is required" });
+        return;
+      }
+      const projectId = body?.project || "";
+      const adapter = getKanbanAdapter();
+      const taskData = {
+        title: String(title).trim(),
+        description: body?.description || "",
+        status: body?.status || "todo",
+        priority: body?.priority || undefined,
+      };
+      const created = await adapter.createTask(projectId, taskData);
+      jsonResponse(res, 200, { ok: true, data: created });
+      broadcastUiEvent(["tasks", "overview"], "invalidate", {
+        reason: "task-created",
+        taskId: created?.id || null,
       });
     } catch (err) {
       jsonResponse(res, 500, { ok: false, error: err.message });

@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   addComment as addKanbanComment,
+  getKanbanAdapter,
   getKanbanBackendName,
   updateTaskStatus,
 } from "./kanban-adapter.mjs";
@@ -212,8 +213,35 @@ export class GitHubReconciler {
       inreview: 0,
       normalized: 0,
       skippedTracking: 0,
+      projectMismatches: 0,
       errors: 0,
     };
+
+    // Build a map of project board statuses for issues when in kanban mode
+    /** @type {Map<string, string>} issueNumber → project board status */
+    const projectStatusMap = new Map();
+    const projectMode = String(process.env.GITHUB_PROJECT_MODE || "issues").trim().toLowerCase();
+    if (projectMode === "kanban") {
+      try {
+        const adapter = getKanbanAdapter();
+        if (typeof adapter.listTasksFromProject === "function") {
+          const projectNumber =
+            process.env.GITHUB_PROJECT_NUMBER ||
+            process.env.GITHUB_PROJECT_ID ||
+            null;
+          if (projectNumber) {
+            const projectTasks = await adapter.listTasksFromProject(projectNumber);
+            for (const task of projectTasks) {
+              if (task?.id && task?.status) {
+                projectStatusMap.set(String(task.id), task.status);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`${TAG} failed to read project board for reconciliation: ${err?.message || err}`);
+      }
+    }
 
     const [issuesRaw, openPrsRaw, mergedPrsRaw] = await Promise.all([
       this._listOpenIssues(),
@@ -273,6 +301,26 @@ export class GitHubReconciler {
         if (isIssueInReview(issue)) {
           await this.updateTaskStatus(issueNumber, "todo");
           summary.normalized += 1;
+          continue;
+        }
+
+        // Project board mismatch detection (kanban mode only)
+        if (projectStatusMap.size > 0) {
+          const projectStatus = projectStatusMap.get(issueNumber);
+          if (projectStatus) {
+            const issueStatus = isIssueInReview(issue) ? "inreview" : "todo";
+            if (projectStatus !== issueStatus && projectStatus !== "todo") {
+              // Project board says a different status than issue labels — reconcile
+              try {
+                await this.updateTaskStatus(issueNumber, projectStatus);
+                summary.projectMismatches += 1;
+              } catch (syncErr) {
+                console.warn(
+                  `${TAG} failed to sync project status for #${issueNumber}: ${syncErr?.message || syncErr}`,
+                );
+              }
+            }
+          }
         }
       } catch (err) {
         summary.errors += 1;
@@ -283,7 +331,7 @@ export class GitHubReconciler {
     }
 
     console.log(
-      `${TAG} cycle complete: checked=${summary.checked} closed=${summary.closed} inreview=${summary.inreview} normalized=${summary.normalized} skippedTracking=${summary.skippedTracking} errors=${summary.errors}`,
+      `${TAG} cycle complete: checked=${summary.checked} closed=${summary.closed} inreview=${summary.inreview} normalized=${summary.normalized} skippedTracking=${summary.skippedTracking} projectMismatches=${summary.projectMismatches} errors=${summary.errors}`,
     );
     return summary;
   }

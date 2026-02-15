@@ -528,10 +528,20 @@ async function main() {
       const mode = args.includes("--sentinel")
         ? "requested by --sentinel"
         : "requested by CODEX_MONITOR_SENTINEL_AUTO_START";
-      console.error(
-        `  ✖ Failed to start telegram-sentinel (${mode}): ${sentinel.error}`,
+      const strictSentinel = parseBoolEnv(
+        process.env.CODEX_MONITOR_SENTINEL_STRICT,
+        false,
       );
-      process.exit(1);
+      const prefix = strictSentinel ? "✖" : "⚠";
+      const suffix = strictSentinel
+        ? ""
+        : " (continuing without sentinel companion)";
+      console.error(
+        `  ${prefix} Failed to start telegram-sentinel (${mode}): ${sentinel.error}${suffix}`,
+      );
+      if (strictSentinel) {
+        process.exit(1);
+      }
     }
   }
 
