@@ -64,6 +64,7 @@ The setup wizard now starts with two modes:
   - prompts only for important decisions (project identity, executor preset/model profile, AI provider, Telegram, board/execution mode)
   - keeps advanced knobs on proven defaults
   - writes a standardized `.env` based on `.env.example` so all options remain documented
+  - auto-generates repository `.vscode/settings.json` with Copilot agent/subagent/MCP/autonomous defaults
 
 - **Advanced**
   - full control over repository layout, failover/distribution, hook targets/overrides, orchestrator path, VK wiring details, and optional channels
@@ -132,6 +133,12 @@ Sync policy (`KANBAN_SYNC_POLICY`):
 
 - `internal-primary` - internal task-store remains source of truth (default)
 - `bidirectional` - external status changes may update internal tasks
+
+Autonomous runtime defaults:
+
+- Copilot shell runs with experimental mode + allow-all + no-ask-user by default
+- Codex config enforces critical feature flags (`child_agents_md`, `memory_tool`, collaboration)
+- Setup configures common MCP servers automatically (`context7`, `sequential-thinking`, `playwright`, `microsoft-docs`)
 
 Experimental autonomous backlog replenishment:
 

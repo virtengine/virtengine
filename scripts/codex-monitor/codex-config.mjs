@@ -104,6 +104,15 @@ const RECOMMENDED_FEATURES = {
   apps:                   { default: true, envVar: "CODEX_FEATURES_APPS",               comment: "ChatGPT Apps integration" },
 };
 
+const CRITICAL_ALWAYS_ON_FEATURES = new Set([
+  "child_agents_md",
+  "memory_tool",
+  "collab",
+  "collaboration_modes",
+  "shell_tool",
+  "unified_exec",
+]);
+
 /**
  * Check whether config has a [features] section.
  */
@@ -187,6 +196,17 @@ export function ensureFeatureFlags(toml, envOverrides = process.env) {
       }
       section = section.trimEnd() + `\n${key} = ${enabled}\n`;
       added.push(key);
+      continue;
+    }
+
+    if (CRITICAL_ALWAYS_ON_FEATURES.has(key)) {
+      const disabledRegex = new RegExp(
+        `^(${escapeRegex(key)}\\s*=\\s*)false\\b.*$`,
+        "m",
+      );
+      if (disabledRegex.test(section)) {
+        section = section.replace(disabledRegex, `$1true`);
+      }
     }
   }
 
@@ -251,10 +271,24 @@ export function buildCommonMcpBlocks() {
     'command = "npx"',
     'args = ["-y", "@upstash/context7-mcp"]',
     "",
+    "[mcp_servers.sequential-thinking]",
+    'command = "npx"',
+    'args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]',
+    "",
+    "[mcp_servers.playwright]",
+    'command = "npx"',
+    'args = ["-y", "@playwright/mcp@latest"]',
+    "",
     "[mcp_servers.microsoft-docs]",
     'url = "https://learn.microsoft.com/api/mcp"',
     "",
   ].join("\n");
+}
+
+function hasNamedMcpServer(toml, name) {
+  return new RegExp(`^\\[mcp_servers\\.${escapeRegex(name)}\\]`, "m").test(
+    toml,
+  );
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -678,30 +712,56 @@ export function ensureCodexConfig({
     result.shellEnvAdded = true;
   }
 
-  // ── 1f. Ensure common MCP servers (context7, MS docs) ─────
+  // ── 1f. Ensure common MCP servers ───────────────────────────
 
   {
-    const needsContext7 = !hasContext7Mcp(toml);
-    const needsMsDocs = !hasMicrosoftDocsMcp(toml);
-    if (needsContext7 || needsMsDocs) {
-      // Only add the full block if both are missing; otherwise add individually
-      if (needsContext7 && needsMsDocs) {
+    const missing = [];
+    if (!hasContext7Mcp(toml)) missing.push("context7");
+    if (!hasNamedMcpServer(toml, "sequential-thinking")) {
+      missing.push("sequential-thinking");
+    }
+    if (!hasNamedMcpServer(toml, "playwright")) missing.push("playwright");
+    if (!hasMicrosoftDocsMcp(toml)) missing.push("microsoft-docs");
+
+    if (missing.length > 0) {
+      if (missing.length >= 4) {
         toml += buildCommonMcpBlocks();
-      } else if (needsContext7) {
-        toml += [
-          "",
-          "[mcp_servers.context7]",
-          'command = "npx"',
-          'args = ["-y", "@upstash/context7-mcp"]',
-          "",
-        ].join("\n");
       } else {
-        toml += [
-          "",
-          "[mcp_servers.microsoft-docs]",
-          'url = "https://learn.microsoft.com/api/mcp"',
-          "",
-        ].join("\n");
+        if (missing.includes("context7")) {
+          toml += [
+            "",
+            "[mcp_servers.context7]",
+            'command = "npx"',
+            'args = ["-y", "@upstash/context7-mcp"]',
+            "",
+          ].join("\n");
+        }
+        if (missing.includes("sequential-thinking")) {
+          toml += [
+            "",
+            "[mcp_servers.sequential-thinking]",
+            'command = "npx"',
+            'args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]',
+            "",
+          ].join("\n");
+        }
+        if (missing.includes("playwright")) {
+          toml += [
+            "",
+            "[mcp_servers.playwright]",
+            'command = "npx"',
+            'args = ["-y", "@playwright/mcp@latest"]',
+            "",
+          ].join("\n");
+        }
+        if (missing.includes("microsoft-docs")) {
+          toml += [
+            "",
+            "[mcp_servers.microsoft-docs]",
+            'url = "https://learn.microsoft.com/api/mcp"',
+            "",
+          ].join("\n");
+        }
       }
       result.commonMcpAdded = true;
     }
@@ -796,7 +856,9 @@ export function printConfigSummary(result, log = console.log) {
   }
 
   if (result.commonMcpAdded) {
-    log("  ✅ Added common MCP servers (context7, microsoft-docs)");
+    log(
+      "  ✅ Added common MCP servers (context7, sequential-thinking, playwright, microsoft-docs)",
+    );
   }
 
   for (const t of result.timeoutsFixed) {

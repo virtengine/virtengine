@@ -23,7 +23,7 @@ tools:
     "read/readFile",
     "read/terminalSelection",
     "read/terminalLastCommand",
-    "agent/runSubagent",
+    "search/searchSubagent",
     "edit/createDirectory",
     "edit/createFile",
     "edit/createJupyterNotebook",
@@ -117,6 +117,10 @@ tools:
     "todo",
   ]
 ---
+
+> Copilot compatibility note:
+> `agent/runSubagent` is not exposed in current GitHub Copilot Chat sessions.
+> Use `search/searchSubagent` for repository exploration tasks.
 
 Use `scripts/codex-monitor/ve-kanban.ps1` to manage the backlog directly via the HTTP API. Do **NOT** use MCP vibe-kanban tools. Tasks should be detailed and thorough - all tasks should be tasks that involve lots of changes (minimum of 2-10k lines of code changes). Tasks should be prioritized into task execution order & parallel execution where possible. For e.g. 1A-1D would be 4 tasks that are triggered in parallel and before tasks 2A-2X which would be sequential tasks to be triggered after 1A-1D are complete.
 
@@ -233,7 +237,7 @@ Before creating a task, search existing backlog (todo + done + cancelled) for:
 
 ## Task Planner Orchestration Requirements
 
-- Assign analysis domains per agent (e.g., chain/x modules, app/cmd wiring, provider daemon, portal/SDK integrations, testing/ops/docs). Use agent/runSubagent to gather domain-specific gaps + candidate tasks.
+- Assign analysis domains per agent (e.g., chain/x modules, app/cmd wiring, provider daemon, portal/SDK integrations, testing/ops/docs). Use search/searchSubagent to gather domain-specific gaps + candidate tasks.
 - **Subagents MUST read actual source code** — not just list file names. Each subagent must:
   - Read at least 3-5 key files per module domain (keeper.go, msg_server.go, module.go, types/params.go, etc.)
   - Identify specific stub/placeholder/TODO patterns in the code

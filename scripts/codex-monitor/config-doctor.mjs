@@ -416,6 +416,41 @@ export function runConfigDoctor(options = {}) {
     });
   }
 
+  const vscodeSettingsPath = resolve(repoRoot, ".vscode", "settings.json");
+  if (!existsSync(vscodeSettingsPath)) {
+    issues.warnings.push({
+      code: "VSCODE_SETTINGS_MISSING",
+      message:
+        "No .vscode/settings.json found — Copilot autonomous/subagent defaults may be missing.",
+      fix: "Run codex-monitor --setup to generate recommended workspace settings.",
+    });
+  } else {
+    try {
+      const settings = JSON.parse(readFileSync(vscodeSettingsPath, "utf8"));
+      const requiredKeys = [
+        "github.copilot.chat.searchSubagent.enabled",
+        "github.copilot.chat.switchAgent.enabled",
+        "github.copilot.chat.cli.customAgents.enabled",
+        "github.copilot.chat.cli.mcp.enabled",
+      ];
+      const missing = requiredKeys.filter((key) => settings[key] !== true);
+      if (missing.length > 0) {
+        issues.warnings.push({
+          code: "VSCODE_SETTINGS_PARTIAL",
+          message:
+            "Workspace Copilot settings are missing recommended autonomous/subagent flags.",
+          fix: "Run codex-monitor --setup to merge the recommended .vscode/settings.json defaults.",
+        });
+      }
+    } catch {
+      issues.warnings.push({
+        code: "VSCODE_SETTINGS_INVALID",
+        message: ".vscode/settings.json is not valid JSON.",
+        fix: "Fix JSON syntax or rerun codex-monitor --setup to regenerate it.",
+      });
+    }
+  }
+
   // ── Codex config.toml feature flag / sub-agent checks ──────────────────────
   const codexConfigToml = join(homedir(), ".codex", "config.toml");
   if (existsSync(codexConfigToml)) {

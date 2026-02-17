@@ -24,7 +24,8 @@ tools:
     "read/readFile",
     "read/terminalSelection",
     "read/terminalLastCommand",
-    "agent/runSubagent",
+    "search/searchSubagent",
+    "search/runSubagent",
     "edit/createDirectory",
     "edit/createFile",
     "edit/createJupyterNotebook",
@@ -63,6 +64,11 @@ tools:
     "todo",
   ]
 ---
+
+> Copilot compatibility note:
+> `agent/runSubagent` is not exposed in current GitHub Copilot Chat sessions.
+> Use `search/searchSubagent` for codebase exploration and `codex-cli/codex` for implementation delegation.
+> In this file, read any `runSubagent` instruction as that compatibility mapping.
 
 <identity>
 

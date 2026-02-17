@@ -621,6 +621,74 @@ function ensureRepoGitIgnoreEntry(repoRoot, entry) {
   return true;
 }
 
+function buildRecommendedVsCodeSettings(env = {}) {
+  const maxRequests = Math.max(
+    50,
+    Number(env.COPILOT_AGENT_MAX_REQUESTS || process.env.COPILOT_AGENT_MAX_REQUESTS || 500),
+  );
+
+  return {
+    "github.copilot.chat.searchSubagent.enabled": true,
+    "github.copilot.chat.switchAgent.enabled": true,
+    "github.copilot.chat.cli.customAgents.enabled": true,
+    "github.copilot.chat.cli.mcp.enabled": true,
+    "github.copilot.chat.agent.enabled": true,
+    "github.copilot.chat.agent.maxRequests": maxRequests,
+    "github.copilot.chat.thinking.collapsedTools": "withThinking",
+    "github.copilot.chat.thinking.generateTitles": true,
+    "github.copilot.chat.confirmEditRequestRemoval": false,
+    "github.copilot.chat.confirmRetryRequestRemoval": false,
+    "github.copilot.chat.terminal.enableAutoApprove": true,
+    "github.copilot.chat.terminal.autoReplyToPrompts": true,
+    "github.copilot.chat.tools.autoApprove": true,
+    "github.copilot.chat.tools.runSubagent.enabled": true,
+    "github.copilot.chat.tools.searchSubagent.enabled": true,
+  };
+}
+
+function mergePlainObjects(base, updates) {
+  const out = { ...(base || {}) };
+  for (const [key, value] of Object.entries(updates || {})) {
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      out[key] &&
+      typeof out[key] === "object" &&
+      !Array.isArray(out[key])
+    ) {
+      out[key] = mergePlainObjects(out[key], value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function writeWorkspaceVsCodeSettings(repoRoot, env) {
+  try {
+    const vscodeDir = resolve(repoRoot, ".vscode");
+    const settingsPath = resolve(vscodeDir, "settings.json");
+    mkdirSync(vscodeDir, { recursive: true });
+
+    let existing = {};
+    if (existsSync(settingsPath)) {
+      try {
+        existing = JSON.parse(readFileSync(settingsPath, "utf8"));
+      } catch {
+        existing = {};
+      }
+    }
+
+    const recommended = buildRecommendedVsCodeSettings(env);
+    const merged = mergePlainObjects(existing, recommended);
+    writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + "\n", "utf8");
+    return { path: settingsPath, updated: true };
+  } catch (err) {
+    return { path: null, updated: false, error: err.message };
+  }
+}
+
 function parseHookCommandInput(rawValue) {
   const raw = String(rawValue || "").trim();
   if (!raw) return null;
@@ -889,6 +957,25 @@ function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
   env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS = String(
     toPositiveInt(env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS, 2),
   );
+  env.COPILOT_NO_EXPERIMENTAL = toBooleanEnvString(
+    env.COPILOT_NO_EXPERIMENTAL,
+    false,
+  );
+  env.COPILOT_NO_ALLOW_ALL = toBooleanEnvString(
+    env.COPILOT_NO_ALLOW_ALL,
+    false,
+  );
+  env.COPILOT_ENABLE_ASK_USER = toBooleanEnvString(
+    env.COPILOT_ENABLE_ASK_USER,
+    false,
+  );
+  env.COPILOT_ENABLE_ALL_GITHUB_MCP_TOOLS = toBooleanEnvString(
+    env.COPILOT_ENABLE_ALL_GITHUB_MCP_TOOLS,
+    true,
+  );
+  env.COPILOT_AGENT_MAX_REQUESTS = String(
+    toPositiveInt(env.COPILOT_AGENT_MAX_REQUESTS || 500, 500),
+  );
   env.EXECUTOR_MODE = normalizeEnum(
     env.EXECUTOR_MODE,
     ["internal", "vk", "hybrid"],
@@ -990,7 +1077,11 @@ function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
   }
 
   configJson.projectName = env.PROJECT_NAME;
-  configJson.kanban = { backend: env.KANBAN_BACKEND };
+  configJson.kanban = {
+    ...(configJson.kanban || {}),
+    backend: env.KANBAN_BACKEND,
+    syncPolicy: env.KANBAN_SYNC_POLICY,
+  };
   configJson.internalExecutor = {
     ...(configJson.internalExecutor || {}),
     mode: env.EXECUTOR_MODE,
@@ -2582,6 +2673,15 @@ async function runNonInteractive({
 
   // Copilot cloud: disabled by default — set to 0 to allow @copilot PR comments
   env.COPILOT_CLOUD_DISABLED = process.env.COPILOT_CLOUD_DISABLED || "true";
+  env.COPILOT_NO_EXPERIMENTAL =
+    process.env.COPILOT_NO_EXPERIMENTAL || "false";
+  env.COPILOT_NO_ALLOW_ALL = process.env.COPILOT_NO_ALLOW_ALL || "false";
+  env.COPILOT_ENABLE_ASK_USER =
+    process.env.COPILOT_ENABLE_ASK_USER || "false";
+  env.COPILOT_ENABLE_ALL_GITHUB_MCP_TOOLS =
+    process.env.COPILOT_ENABLE_ALL_GITHUB_MCP_TOOLS || "true";
+  env.COPILOT_AGENT_MAX_REQUESTS =
+    process.env.COPILOT_AGENT_MAX_REQUESTS || "500";
 
   // Parse EXECUTORS env if set, else use default preset
   if (process.env.EXECUTORS) {
@@ -2732,6 +2832,16 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
   writeFileSync(configPath, JSON.stringify(configOut, null, 2) + "\n", "utf8");
   success(`Config written to ${relative(repoRoot, configPath)}`);
 
+  // ── Workspace VS Code settings ─────────────────────────
+  const vscodeSettingsResult = writeWorkspaceVsCodeSettings(repoRoot, env);
+  if (vscodeSettingsResult.updated) {
+    success(
+      `Workspace settings updated: ${relative(repoRoot, vscodeSettingsResult.path)}`,
+    );
+  } else if (vscodeSettingsResult.error) {
+    warn(`Could not update workspace settings: ${vscodeSettingsResult.error}`);
+  }
+
   // ── Codex CLI config.toml ─────────────────────────────
   heading("Codex CLI Config");
 
@@ -2747,6 +2857,10 @@ async function writeConfigFiles({ env, configJson, repoRoot, configDir }) {
       vkBaseUrl,
       skipVk: !kanbanIsVk,
       dryRun: false,
+      env: {
+        ...process.env,
+        ...env,
+      },
     });
     printConfigSummary(tomlResult, (msg) => console.log(msg));
   }
@@ -2868,6 +2982,8 @@ export {
   resolveOrCreateGitHubProjectNumber,
   resolveOrCreateGitHubProject,
   runGhCommand,
+  buildRecommendedVsCodeSettings,
+  writeWorkspaceVsCodeSettings,
 };
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
