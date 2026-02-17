@@ -25,15 +25,17 @@ import { haptic } from "../modules/telegram.js";
  * Pill-shaped segmented control.
  * @param {{options: Array<{value: string, label: string}>, value: string, onChange: (v: string) => void}} props
  */
-export function SegmentedControl({ options = [], value, onChange }) {
+export function SegmentedControl({ options = [], value, onChange, disabled = false }) {
   return html`
-    <div class="segmented-control">
+    <div class="segmented-control ${disabled ? "disabled" : ""}">
       ${options.map(
         (opt) => html`
           <button
             key=${opt.value}
             class="segmented-btn ${value === opt.value ? "active" : ""}"
+            disabled=${disabled}
             onClick=${() => {
+              if (disabled) return;
               haptic("light");
               onChange(opt.value);
             }}
@@ -169,18 +171,22 @@ export function SearchInput({
   onInput,
   placeholder = "Search…",
   onClear,
+  disabled = false,
+  inputRef,
 }) {
   return html`
-    <div class="search-input-wrap">
+    <div class="search-input-wrap ${disabled ? "disabled" : ""}">
       <span class="search-input-icon">${ICONS.search}</span>
       <input
+        ref=${inputRef}
         class="search-input"
         type="text"
         placeholder=${placeholder}
         value=${value}
         onInput=${onInput}
+        disabled=${disabled}
       />
-      ${value
+      ${value && !disabled
         ? html`
             <button
               class="search-input-clear"
@@ -204,16 +210,17 @@ export function SearchInput({
  * iOS-style toggle switch.
  * @param {{checked: boolean, onChange: (checked: boolean) => void, label?: string}} props
  */
-export function Toggle({ checked = false, onChange, label }) {
+export function Toggle({ checked = false, onChange, label, disabled = false }) {
   const handleClick = () => {
+    if (disabled) return;
     haptic("light");
     onChange(!checked);
   };
 
   return html`
-    <div class="toggle-wrap" onClick=${handleClick}>
+    <div class="toggle-wrap ${disabled ? "disabled" : ""}" onClick=${handleClick}>
       ${label ? html`<span class="toggle-label">${label}</span>` : null}
-      <div class="toggle ${checked ? "toggle-on" : ""}">
+      <div class="toggle ${checked ? "toggle-on" : ""} ${disabled ? "disabled" : ""}">
         <div class="toggle-thumb"></div>
       </div>
     </div>
@@ -235,8 +242,10 @@ export function Stepper({
   step = 1,
   onChange,
   label,
+  disabled = false,
 }) {
   const decrement = () => {
+    if (disabled) return;
     const next = Math.max(min, value - step);
     if (next !== value) {
       haptic("light");
@@ -244,6 +253,7 @@ export function Stepper({
     }
   };
   const increment = () => {
+    if (disabled) return;
     const next = Math.min(max, value + step);
     if (next !== value) {
       haptic("light");
@@ -252,13 +262,13 @@ export function Stepper({
   };
 
   return html`
-    <div class="stepper-wrap">
+    <div class="stepper-wrap ${disabled ? "disabled" : ""}">
       ${label ? html`<span class="stepper-label">${label}</span>` : null}
-      <div class="stepper">
+      <div class="stepper ${disabled ? "disabled" : ""}">
         <button
           class="stepper-btn"
           onClick=${decrement}
-          disabled=${value <= min}
+          disabled=${disabled || value <= min}
         >
           −
         </button>
@@ -266,7 +276,7 @@ export function Stepper({
         <button
           class="stepper-btn"
           onClick=${increment}
-          disabled=${value >= max}
+          disabled=${disabled || value >= max}
         >
           +
         </button>

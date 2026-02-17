@@ -346,7 +346,16 @@ export function TasksTab() {
   const [manualMode, setManualMode] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef(null);
+
+  /* Detect desktop for keyboard shortcut hint */
+  const [showKbdHint] = useState(() => {
+    try { return globalThis.matchMedia?.("(hover: hover)")?.matches ?? false; }
+    catch { return false; }
+  });
+  const isMac = typeof navigator !== "undefined" &&
+    /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
 
   const tasks = tasksData.value || [];
   const filterVal = tasksFilter?.value ?? "todo";
@@ -391,12 +400,48 @@ export function TasksTab() {
     await refreshTab("tasks");
   };
 
-  const handleSearch = useCallback(
-    debounce((val) => {
-      if (tasksSearch) tasksSearch.value = val;
-    }, 250),
+  /* Server-side search: debounce 300ms then reload from server */
+  const triggerServerSearch = useCallback(
+    debounce(async () => {
+      if (tasksPage) tasksPage.value = 0;
+      setIsSearching(true);
+      try { await loadTasks(); } finally { setIsSearching(false); }
+    }, 300),
     [],
   );
+
+  const handleSearch = useCallback(
+    (val) => {
+      if (tasksSearch) tasksSearch.value = val;
+      triggerServerSearch();
+    },
+    [triggerServerSearch],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    if (tasksSearch) tasksSearch.value = "";
+    triggerServerSearch.cancel();
+    if (tasksPage) tasksPage.value = 0;
+    setIsSearching(false);
+    loadTasks();
+  }, [triggerServerSearch]);
+
+  /* Keyboard shortcuts (mount/unmount) */
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchRef.current?.focus?.();
+      }
+      if (e.key === "Escape" && searchRef.current &&
+          document.activeElement === searchRef.current) {
+        handleClearSearch();
+        searchRef.current.blur();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [handleClearSearch]);
 
   const handlePrev = async () => {
     if (tasksPage) tasksPage.value = Math.max(0, page - 1);
@@ -521,13 +566,17 @@ export function TasksTab() {
   return html`
     <!-- Sticky search bar + view toggle -->
     <div class="sticky-search" style="display:flex;gap:8px;align-items:center">
-      <div style="flex:1">
+      <div style="flex:1;position:relative;display:flex;align-items:center;gap:6px">
         <${SearchInput}
-          ref=${searchRef}
+          inputRef=${searchRef}
           placeholder="Search tasks…"
           value=${searchVal}
           onInput=${(e) => handleSearch(e.target.value)}
+          onClear=${handleClearSearch}
         />
+        ${showKbdHint && !searchVal && html`<span class="pill" style="font-size:10px;padding:2px 7px;opacity:0.55;white-space:nowrap;pointer-events:none">${isMac ? "⌘K" : "Ctrl+K"}</span>`}
+        ${isSearching && html`<span class="pill" style="font-size:10px;padding:2px 7px;color:var(--accent);white-space:nowrap">Searching…</span>`}
+        ${!isSearching && searchVal && html`<span class="pill" style="font-size:10px;padding:2px 7px;white-space:nowrap">${visible.length} result${visible.length !== 1 ? "s" : ""}</span>`}
       </div>
       <div class="view-toggle">
         <button class="view-toggle-btn ${!isKanban ? 'active' : ''}" onClick=${() => { viewMode.value = 'list'; haptic(); }}>☰ List</button>

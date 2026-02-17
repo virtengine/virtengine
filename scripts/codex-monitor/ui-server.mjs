@@ -1111,9 +1111,16 @@ async function handleApi(req, res, url) {
         activeProject,
         status ? { status } : {},
       );
-      const total = tasks.length;
+      const search = (url.searchParams.get("search") || "").trim().toLowerCase();
+      const filtered = search
+        ? tasks.filter((t) => {
+            const hay = `${t.title || ""} ${t.description || ""} ${t.id || ""}`.toLowerCase();
+            return hay.includes(search);
+          })
+        : tasks;
+      const total = filtered.length;
       const start = page * pageSize;
-      const slice = tasks.slice(start, start + pageSize);
+      const slice = filtered.slice(start, start + pageSize);
       jsonResponse(res, 200, {
         ok: true,
         data: slice,

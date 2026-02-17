@@ -1561,3 +1561,119 @@ select.input {
   padding: 6px 10px;
   font-size: 13px;
 }
+
+/* ─── Modal swipe-to-dismiss ─── */
+.modal-content {
+  transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s ease;
+  will-change: transform, opacity;
+  touch-action: pan-x;
+}
+
+.modal-content.modal-dragging {
+  transition: none;
+  overflow-y: hidden;
+}
+
+/* ─── ConfirmDialog ─── */
+.confirm-dialog {
+  background: var(--bg-elevated);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  width: calc(100% - 48px);
+  max-width: 340px;
+  padding: 24px;
+  animation: scaleIn 0.2s ease;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  margin: auto;
+}
+
+.confirm-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.confirm-dialog-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.confirm-dialog-actions .btn {
+  flex: 1;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+}
+
+.confirm-dialog-actions .btn-secondary {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+}
+
+.confirm-dialog-actions .btn-destructive {
+  background: var(--destructive);
+  color: #fff;
+}
+
+/* ─── Toggle disabled ─── */
+.toggle-wrap.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.toggle.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ─── SegmentedControl disabled ─── */
+.segmented-control.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.segmented-control.disabled .segmented-btn {
+  cursor: not-allowed;
+}
+
+/* ─── Stepper disabled ─── */
+.stepper.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.stepper.disabled .stepper-btn {
+  cursor: not-allowed;
+  color: var(--text-hint);
+}
+
+.stepper-wrap.disabled {
+  opacity: 0.4;
+}
+
+/* ─── SearchInput disabled ─── */
+.search-input-wrap.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.search-input-wrap.disabled .search-input {
+  cursor: not-allowed;
+}

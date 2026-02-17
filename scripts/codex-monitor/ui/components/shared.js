@@ -8,6 +8,7 @@ import {
   useState,
   useEffect,
   useRef,
+  useCallback,
 } from "preact/hooks";
 import htm from "htm";
 
@@ -123,14 +124,16 @@ export function SkeletonCard({ height = "80px", className = "" }) {
  * ═══════════════════════════════════════════════ */
 
 /**
- * Bottom-sheet modal with drag handle, title, and TG BackButton integration.
+ * Bottom-sheet modal with drag handle, title, swipe-to-dismiss, and TG BackButton integration.
  * @param {{title?: string, open?: boolean, onClose: () => void, children?: any}} props
  */
 export function Modal({ title, open = true, onClose, children }) {
   const [visible, setVisible] = useState(false);
+  const contentRef = useRef(null);
+  const dragState = useRef({ startY: 0, startRect: 0, dragging: false });
+  const [dragY, setDragY] = useState(0);
 
   useEffect(() => {
-    // Animate in after mount
     requestAnimationFrame(() => setVisible(open));
   }, [open]);
 
@@ -153,7 +156,64 @@ export function Modal({ title, open = true, onClose, children }) {
     };
   }, [onClose]);
 
+  // Prevent body scroll while dragging
+  useEffect(() => {
+    if (dragState.current.dragging) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  });
+
+  const handleTouchStart = useCallback((e) => {
+    const el = contentRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const touchY = e.touches[0].clientY;
+    // Only start drag if touch is within top 60px of the modal content
+    if (touchY - rect.top > 60) return;
+    dragState.current = { startY: touchY, startRect: rect.top, dragging: true };
+    // Disable transition during active drag
+    el.style.transition = "none";
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!dragState.current.dragging) return;
+    const deltaY = e.touches[0].clientY - dragState.current.startY;
+    if (deltaY < 0) {
+      setDragY(0);
+      return;
+    }
+    // Diminishing returns past 100px
+    const translated = deltaY <= 100 ? deltaY : 100 + (deltaY - 100) * 0.3;
+    setDragY(translated);
+    e.preventDefault();
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!dragState.current.dragging) return;
+    dragState.current.dragging = false;
+    const el = contentRef.current;
+    if (el) el.style.transition = "";
+    if (dragY > 150) {
+      getTg()?.HapticFeedback?.impactOccurred("light");
+      onClose();
+    }
+    setDragY(0);
+  }, [dragY, onClose]);
+
+  const handleTouchCancel = useCallback(() => {
+    if (!dragState.current.dragging) return;
+    dragState.current.dragging = false;
+    const el = contentRef.current;
+    if (el) el.style.transition = "";
+    setDragY(0);
+  }, []);
+
   if (!open) return null;
+
+  const dragStyle = dragY > 0
+    ? `transform: translateY(${dragY}px); opacity: ${Math.max(0.2, 1 - dragY / 400)}`
+    : "";
 
   return html`
     <div
@@ -163,8 +223,14 @@ export function Modal({ title, open = true, onClose, children }) {
       }}
     >
       <div
-        class="modal-content ${visible ? "modal-content-visible" : ""}"
+        ref=${contentRef}
+        class="modal-content ${visible ? "modal-content-visible" : ""} ${dragY > 0 ? "modal-dragging" : ""}"
+        style=${dragStyle}
         onClick=${(e) => e.stopPropagation()}
+        onTouchStart=${handleTouchStart}
+        onTouchMove=${handleTouchMove}
+        onTouchEnd=${handleTouchEnd}
+        onTouchCancel=${handleTouchCancel}
       >
         <div class="modal-handle"></div>
         ${title ? html`<div class="modal-title">${title}</div>` : null}
@@ -172,6 +238,87 @@ export function Modal({ title, open = true, onClose, children }) {
       </div>
     </div>
   `;
+}
+
+/* ═══════════════════════════════════════════════
+ *  ConfirmDialog
+ * ═══════════════════════════════════════════════ */
+
+/**
+ * Confirmation dialog — tries Telegram native showConfirm first, falls back to styled modal.
+ * @param {{title?: string, message: string, confirmText?: string, cancelText?: string, onConfirm: () => void, onCancel: () => void, destructive?: boolean}} props
+ */
+export function ConfirmDialog({
+  title = "Confirm",
+  message,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  onConfirm,
+  onCancel,
+  destructive = false,
+}) {
+  const [tried, setTried] = useState(false);
+
+  // Try Telegram native confirm first
+  useEffect(() => {
+    const tg = getTg();
+    if (tg?.showConfirm && !tried) {
+      setTried(true);
+      tg.showConfirm(message, (ok) => {
+        if (ok) onConfirm();
+        else onCancel();
+      });
+    }
+  }, [message, onConfirm, onCancel, tried]);
+
+  // If Telegram native is available, render nothing (native dialog handles it)
+  if (getTg()?.showConfirm) return null;
+
+  const confirmBtnStyle = destructive
+    ? "background: var(--destructive); color: #fff;"
+    : "";
+
+  return html`
+    <div class="modal-overlay modal-overlay-visible" onClick=${onCancel}>
+      <div
+        class="confirm-dialog"
+        onClick=${(e) => e.stopPropagation()}
+      >
+        <div class="confirm-dialog-title">${title}</div>
+        <div class="confirm-dialog-message">${message}</div>
+        <div class="confirm-dialog-actions">
+          <button class="btn btn-secondary" onClick=${onCancel}>
+            ${cancelText}
+          </button>
+          <button
+            class="btn btn-primary ${destructive ? "btn-destructive" : ""}"
+            style=${confirmBtnStyle}
+            onClick=${onConfirm}
+          >
+            ${confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════
+ *  confirmAction (Promise-based utility)
+ * ═══════════════════════════════════════════════ */
+
+/**
+ * Quick inline confirmation — returns a Promise<boolean>.
+ * Uses Telegram native confirm if available, otherwise browser confirm().
+ * @param {string} message
+ * @returns {Promise<boolean>}
+ */
+export function confirmAction(message) {
+  const tg = getTg();
+  if (tg?.showConfirm) {
+    return new Promise((resolve) => tg.showConfirm(message, resolve));
+  }
+  return Promise.resolve(window.confirm(message));
 }
 
 /* ═══════════════════════════════════════════════

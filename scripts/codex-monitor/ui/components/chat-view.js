@@ -16,6 +16,96 @@ import {
 
 const html = htm.bind(h);
 
+/* ─── Inline markdown formatting ─── */
+function applyInline(text) {
+  text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/(?<![a-zA-Z0-9])_(.+?)_(?![a-zA-Z0-9])/g, '<em>$1</em>');
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    if (/^(https?:|mailto:|\/|#)/.test(url)) {
+      return `<a href="${url}" target="_blank" rel="noopener" class="md-link">${label}</a>`;
+    }
+    return `${label} (${url})`;
+  });
+  return text;
+}
+
+/* ─── Convert markdown text to HTML ─── */
+function renderMarkdown(text) {
+  const codes = [];
+  let s = text.replace(/`([^`\n]+)`/g, (_, c) => {
+    codes.push(c);
+    return `%%ICODE${codes.length - 1}%%`;
+  });
+
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const lines = s.split('\n');
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    let m;
+
+    if ((m = line.match(/^(#{1,3}) (.+)$/))) {
+      const lvl = m[1].length;
+      out.push(`<div class="md-heading md-h${lvl}">${applyInline(m[2])}</div>`);
+      i++; continue;
+    }
+
+    if (/^-{3,}\s*$/.test(line.trim())) {
+      out.push('<hr class="md-hr"/>');
+      i++; continue;
+    }
+
+    if (/^&gt;\s?/.test(line)) {
+      const q = [];
+      while (i < lines.length && /^&gt;\s?/.test(lines[i])) {
+        q.push(applyInline(lines[i].replace(/^&gt;\s?/, '')));
+        i++;
+      }
+      out.push(`<div class="md-blockquote">${q.join('<br/>')}</div>`);
+      continue;
+    }
+
+    if (/^[-*] /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        items.push(`<li>${applyInline(lines[i].replace(/^[-*] /, ''))}</li>`);
+        i++;
+      }
+      out.push(`<ul class="md-list">${items.join('')}</ul>`);
+      continue;
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(`<li>${applyInline(lines[i].replace(/^\d+\.\s/, ''))}</li>`);
+        i++;
+      }
+      out.push(`<ol class="md-list md-ol">${items.join('')}</ol>`);
+      continue;
+    }
+
+    out.push(applyInline(line));
+    i++;
+  }
+
+  let result = out.join('\n').replace(/\n/g, '<br/>');
+
+  result = result.replace(/%%ICODE(\d+)%%/g, (_, idx) => {
+    const c = codes[parseInt(idx)]
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<span class="md-inline-code">${c}</span>`;
+  });
+
+  return result;
+}
+
 /* ─── Code block copy button ─── */
 function CodeBlock({ code }) {
   const [copied, setCopied] = useState(false);
@@ -37,7 +127,7 @@ function CodeBlock({ code }) {
   `;
 }
 
-/* ─── Render message content with code block support ─── */
+/* ─── Render message content with code block + markdown support ─── */
 function MessageContent({ text }) {
   if (!text) return null;
   const parts = text.split(/(```[\s\S]*?```)/g);
@@ -46,7 +136,7 @@ function MessageContent({ text }) {
       const code = part.slice(3, -3).replace(/^\w+\n/, "");
       return html`<${CodeBlock} key=${i} code=${code} />`;
     }
-    return html`<span key=${i}>${part}</span>`;
+    return html`<div key=${i} class="md-rendered" dangerouslySetInnerHTML=${{ __html: renderMarkdown(part) }} />`;
   })}`;
 }
 
@@ -137,6 +227,13 @@ export function ChatView({ sessionId }) {
     [handleSend],
   );
 
+  const handleInput = useCallback((e) => {
+    setInput(e.target.value);
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }, []);
+
   if (!sessionId) {
     return html`
       <div class="chat-view chat-empty-state">
@@ -209,7 +306,7 @@ export function ChatView({ sessionId }) {
             placeholder="Send a message…"
             rows="1"
             value=${input}
-            onInput=${(e) => setInput(e.target.value)}
+            onInput=${handleInput}
             onKeyDown=${handleKeyDown}
           />
           <button
