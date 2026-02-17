@@ -123,6 +123,109 @@ const projectSyncWebhookMetrics = {
   lastError: null,
 };
 
+// ── Settings API: Known env keys from settings schema ──
+const SETTINGS_KNOWN_KEYS = [
+  "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ALLOWED_CHAT_IDS",
+  "TELEGRAM_INTERVAL_MIN", "TELEGRAM_COMMAND_POLL_TIMEOUT_SEC", "TELEGRAM_AGENT_TIMEOUT_MIN",
+  "TELEGRAM_COMMAND_CONCURRENCY", "TELEGRAM_VERBOSITY", "TELEGRAM_BATCH_NOTIFICATIONS",
+  "TELEGRAM_BATCH_INTERVAL_SEC", "TELEGRAM_BATCH_MAX_SIZE", "TELEGRAM_IMMEDIATE_PRIORITY",
+  "TELEGRAM_API_BASE_URL", "TELEGRAM_HTTP_TIMEOUT_MS", "TELEGRAM_RETRY_ATTEMPTS",
+  "PROJECT_NAME", "TELEGRAM_MINIAPP_ENABLED", "TELEGRAM_UI_PORT", "TELEGRAM_UI_HOST",
+  "TELEGRAM_UI_PUBLIC_HOST", "TELEGRAM_UI_BASE_URL", "TELEGRAM_UI_ALLOW_UNSAFE",
+  "TELEGRAM_UI_AUTH_MAX_AGE_SEC", "TELEGRAM_UI_TUNNEL",
+  "EXECUTOR_MODE", "INTERNAL_EXECUTOR_PARALLEL", "INTERNAL_EXECUTOR_SDK",
+  "INTERNAL_EXECUTOR_TIMEOUT_MS", "INTERNAL_EXECUTOR_MAX_RETRIES", "INTERNAL_EXECUTOR_POLL_MS",
+  "INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED", "INTERNAL_EXECUTOR_REPLENISH_ENABLED",
+  "PRIMARY_AGENT", "EXECUTORS", "EXECUTOR_DISTRIBUTION", "FAILOVER_STRATEGY",
+  "COMPLEXITY_ROUTING_ENABLED", "PROJECT_REQUIREMENTS_PROFILE",
+  "OPENAI_API_KEY", "CODEX_MODEL", "ANTHROPIC_API_KEY", "CLAUDE_MODEL",
+  "COPILOT_MODEL", "COPILOT_CLI_TOKEN",
+  "KANBAN_BACKEND", "KANBAN_SYNC_POLICY", "CODEX_MONITOR_TASK_LABEL",
+  "CODEX_MONITOR_ENFORCE_TASK_LABEL", "STALE_TASK_AGE_HOURS",
+  "TASK_PLANNER_MODE", "TASK_PLANNER_DEDUP_HOURS",
+  "GITHUB_TOKEN", "GITHUB_REPOSITORY", "GITHUB_PROJECT_MODE",
+  "GITHUB_PROJECT_NUMBER", "GITHUB_DEFAULT_ASSIGNEE", "GITHUB_AUTO_ASSIGN_CREATOR",
+  "VK_TARGET_BRANCH", "CODEX_ANALYZE_MERGE_STRATEGY", "DEPENDABOT_AUTO_MERGE",
+  "GH_RECONCILE_ENABLED",
+  "CLOUDFLARE_TUNNEL_NAME", "CLOUDFLARE_TUNNEL_CREDENTIALS",
+  "TELEGRAM_PRESENCE_INTERVAL_SEC", "TELEGRAM_PRESENCE_DISABLED",
+  "VE_INSTANCE_LABEL", "VE_COORDINATOR_ELIGIBLE", "VE_COORDINATOR_PRIORITY",
+  "CODEX_SANDBOX", "CONTAINER_ENABLED", "CONTAINER_RUNTIME", "CONTAINER_IMAGE",
+  "CONTAINER_TIMEOUT_MS", "MAX_CONCURRENT_CONTAINERS", "CONTAINER_MEMORY_LIMIT", "CONTAINER_CPU_LIMIT",
+  "CODEX_MONITOR_SENTINEL_AUTO_START", "SENTINEL_AUTO_RESTART_MONITOR",
+  "SENTINEL_CRASH_LOOP_THRESHOLD", "SENTINEL_CRASH_LOOP_WINDOW_MIN",
+  "SENTINEL_REPAIR_AGENT_ENABLED", "SENTINEL_REPAIR_TIMEOUT_MIN",
+  "CODEX_MONITOR_HOOK_PROFILE", "CODEX_MONITOR_HOOK_TARGETS",
+  "CODEX_MONITOR_HOOKS_ENABLED", "CODEX_MONITOR_HOOKS_OVERWRITE",
+  "CODEX_MONITOR_HOOKS_BUILTINS_MODE",
+  "AGENT_WORK_LOGGING_ENABLED", "AGENT_WORK_ANALYZER_ENABLED",
+  "AGENT_SESSION_LOG_RETENTION", "AGENT_ERROR_LOOP_THRESHOLD",
+  "AGENT_STUCK_THRESHOLD_MS", "LOG_MAX_SIZE_MB",
+  "DEVMODE", "SELF_RESTART_WATCH_ENABLED", "MAX_PARALLEL",
+  "RESTART_DELAY_MS", "SHARED_STATE_ENABLED", "SHARED_STATE_STALE_THRESHOLD_MS",
+  "VE_CI_SWEEP_EVERY",
+];
+
+const SETTINGS_SENSITIVE_KEYS = new Set([
+  "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GITHUB_TOKEN",
+  "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "COPILOT_CLI_TOKEN",
+  "CLOUDFLARE_TUNNEL_CREDENTIALS",
+]);
+
+const SETTINGS_KNOWN_SET = new Set(SETTINGS_KNOWN_KEYS);
+let _settingsLastUpdateTime = 0;
+
+function updateEnvFile(changes) {
+  const envPath = resolve(__dirname, '.env');
+  let content = '';
+  try { content = readFileSync(envPath, 'utf8'); } catch { content = ''; }
+
+  const lines = content.split('\n');
+  const updated = new Set();
+
+  for (const [key, value] of Object.entries(changes)) {
+    const pattern = new RegExp(`^(#\\s*)?${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
+    let found = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (pattern.test(lines[i])) {
+        lines[i] = `${key}=${value}`;
+        found = true;
+        updated.add(key);
+        break;
+      }
+    }
+    if (!found) {
+      lines.push(`${key}=${value}`);
+      updated.add(key);
+    }
+  }
+
+  writeFileSync(envPath, lines.join('\n'), 'utf8');
+  return Array.from(updated);
+}
+
+// ── Simple rate limiter for mutation endpoints ──
+const _rateLimitMap = new Map();
+function checkRateLimit(req, maxPerMin = 30) {
+  const key = req.headers["x-telegram-initdata"] || req.socket?.remoteAddress || "unknown";
+  const now = Date.now();
+  let bucket = _rateLimitMap.get(key);
+  if (!bucket || now - bucket.windowStart > 60000) {
+    bucket = { windowStart: now, count: 0 };
+    _rateLimitMap.set(key, bucket);
+  }
+  bucket.count++;
+  if (bucket.count > maxPerMin) return false;
+  return true;
+}
+// Cleanup stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of _rateLimitMap) {
+    if (now - v.windowStart > 120000) _rateLimitMap.delete(k);
+  }
+}, 300000).unref();
+
 // ── Session token (auto-generated per startup for browser access) ────
 let sessionToken = "";
 
@@ -809,11 +912,20 @@ function checkSessionToken(req) {
   if (!sessionToken) return false;
   // Bearer header
   const authHeader = req.headers.authorization || "";
-  if (authHeader.startsWith("Bearer ") && authHeader.slice(7) === sessionToken) {
-    return true;
+  if (authHeader.startsWith("Bearer ")) {
+    const provided = Buffer.from(authHeader.slice(7));
+    const expected = Buffer.from(sessionToken);
+    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+      return true;
+    }
   }
   // Cookie
-  if (parseCookie(req, "ve_session") === sessionToken) return true;
+  const cookieVal = parseCookie(req, "ve_session");
+  if (cookieVal) {
+    const provided = Buffer.from(cookieVal);
+    const expected = Buffer.from(sessionToken);
+    if (provided.length === expected.length && timingSafeEqual(provided, expected)) return true;
+  }
   return false;
 }
 
@@ -838,7 +950,14 @@ function requireWsAuth(req, url) {
   if (isAllowUnsafe()) return true;
   // Session token (query param or cookie)
   if (checkSessionToken(req)) return true;
-  if (sessionToken && url.searchParams.get("token") === sessionToken) return true;
+  if (sessionToken) {
+    const qTokenVal = url.searchParams.get("token") || "";
+    if (qTokenVal) {
+      const provided = Buffer.from(qTokenVal);
+      const expected = Buffer.from(sessionToken);
+      if (provided.length === expected.length && timingSafeEqual(provided, expected)) return true;
+    }
+  }
   // Telegram initData HMAC
   const initData =
     req.headers["x-telegram-initdata"] ||
@@ -1436,6 +1555,11 @@ async function handleApi(req, res, url) {
       ok: false,
       error: "Unauthorized. Telegram init data missing or invalid.",
     });
+    return;
+  }
+
+  if (req.method === "POST" && !checkRateLimit(req, 30)) {
+    jsonResponse(res, 429, { ok: false, error: "Rate limit exceeded. Try again later." });
     return;
   }
 
@@ -2259,6 +2383,72 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (path === "/api/settings") {
+    try {
+      const data = {};
+      for (const key of SETTINGS_KNOWN_KEYS) {
+        const val = process.env[key];
+        if (SETTINGS_SENSITIVE_KEYS.has(key)) {
+          data[key] = val ? "••••••" : "";
+        } else {
+          data[key] = val || "";
+        }
+      }
+      jsonResponse(res, 200, { ok: true, data });
+    } catch (err) {
+      jsonResponse(res, 500, { ok: false, error: err.message });
+    }
+    return;
+  }
+
+  if (path === "/api/settings/update") {
+    try {
+      const body = await readJsonBody(req);
+      const changes = body?.changes;
+      if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
+        jsonResponse(res, 400, { ok: false, error: "changes object is required" });
+        return;
+      }
+      // Rate limit: 2 seconds between settings updates
+      const now = Date.now();
+      if (now - _settingsLastUpdateTime < 2000) {
+        jsonResponse(res, 429, { ok: false, error: "Settings update rate limited. Wait 2 seconds." });
+        return;
+      }
+      const unknownKeys = Object.keys(changes).filter(k => !SETTINGS_KNOWN_SET.has(k));
+      if (unknownKeys.length > 0) {
+        jsonResponse(res, 400, { ok: false, error: `Unknown keys: ${unknownKeys.join(", ")}` });
+        return;
+      }
+      for (const [key, value] of Object.entries(changes)) {
+        const strVal = String(value);
+        if (strVal.length > 2000) {
+          jsonResponse(res, 400, { ok: false, error: `Value for ${key} exceeds 2000 chars` });
+          return;
+        }
+        if (strVal.includes('\0') || strVal.includes('\n') || strVal.includes('\r')) {
+          jsonResponse(res, 400, { ok: false, error: `Value for ${key} contains illegal characters (null bytes or newlines)` });
+          return;
+        }
+      }
+      // Apply to process.env
+      const strChanges = {};
+      for (const [key, value] of Object.entries(changes)) {
+        const strVal = String(value);
+        process.env[key] = strVal;
+        strChanges[key] = strVal;
+      }
+      // Write to .env file
+      const updated = updateEnvFile(strChanges);
+      _settingsLastUpdateTime = now;
+      broadcastUiEvent(["settings", "overview"], "invalidate", { reason: "settings-updated", keys: updated });
+      jsonResponse(res, 200, { ok: true, updated });
+    } catch (err) {
+      jsonResponse(res, 500, { ok: false, error: err.message });
+    }
+    return;
+  }
+
   if (path === "/api/project-summary") {
     try {
       const adapter = getKanbanAdapter();
@@ -2310,6 +2500,12 @@ async function handleApi(req, res, url) {
       const command = (body?.command || "").trim();
       if (!command) {
         jsonResponse(res, 400, { ok: false, error: "command is required" });
+        return;
+      }
+      const ALLOWED_CMD_PREFIXES = ["/status", "/start", "/stop", "/pause", "/resume", "/sdk", "/kanban", "/region", "/deploy", "/help", "/starttask", "/stoptask", "/retrytask", "/parallelism", "/sentinel", "/hooks", "/version"];
+      const cmdBase = command.split(/\s/)[0].toLowerCase();
+      if (!ALLOWED_CMD_PREFIXES.some(p => cmdBase === p || cmdBase.startsWith(p + " "))) {
+        jsonResponse(res, 400, { ok: false, error: `Command not allowed: ${cmdBase}` });
         return;
       }
       const handler = uiDeps.handleUiCommand;
@@ -2685,14 +2881,18 @@ export async function startTelegramUiServer(options = {}) {
 
     // Token exchange: ?token=<hex> → set session cookie and redirect to clean URL
     const qToken = url.searchParams.get("token");
-    if (qToken && sessionToken && qToken === sessionToken) {
-      const secure = uiServerTls ? "; Secure" : "";
-      res.writeHead(302, {
-        "Set-Cookie": `ve_session=${sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`,
-        Location: url.pathname || "/",
-      });
-      res.end();
-      return;
+    if (qToken && sessionToken) {
+      const provided = Buffer.from(qToken);
+      const expected = Buffer.from(sessionToken);
+      if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+        const secure = uiServerTls ? "; Secure" : "";
+        res.writeHead(302, {
+          "Set-Cookie": `ve_session=${sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400${secure}`,
+          Location: url.pathname || "/",
+        });
+        res.end();
+        return;
+      }
     }
 
     if (url.pathname === webhookPath) {

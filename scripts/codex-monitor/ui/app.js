@@ -4,11 +4,17 @@
  * ────────────────────────────────────────────────────────────── */
 
 import { h, render as preactRender } from "preact";
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { signal } from "@preact/signals";
 import htm from "htm";
 
 const html = htm.bind(h);
+
+// Backend health tracking
+const backendDown = signal(false);
+const backendError = signal("");
+const backendLastSeen = signal(null);
+const backendRetryCount = signal(0);
 
 /* ── Module imports ── */
 import { ICONS } from "./modules/icons.js";
@@ -66,6 +72,106 @@ try {
   const stateMod = await import("./modules/state.js");
   if (stateMod.dataFreshness) dataFreshness = stateMod.dataFreshness;
 } catch { /* use placeholder signals */ }
+
+/* ── Backend health helpers ── */
+
+function formatTimeAgo(ts) {
+  const secs = Math.round((Date.now() - ts) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
+  return `${Math.round(secs / 3600)}h ago`;
+}
+
+// Inject offline-banner CSS once
+if (typeof document !== "undefined" && !document.getElementById("offline-banner-styles")) {
+  const style = document.createElement("style");
+  style.id = "offline-banner-styles";
+  style.textContent = `
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 8px 16px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  animation: slideDown 0.3s ease-out;
+}
+.offline-banner-icon { font-size: 24px; }
+.offline-banner-content { flex: 1; }
+.offline-banner-title { font-weight: 600; font-size: 14px; color: #ef4444; }
+.offline-banner-meta { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+`;
+  document.head.appendChild(style);
+}
+
+function useBackendHealth() {
+  const intervalRef = useRef(null);
+
+  const checkHealth = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch("/api/health", { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      backendDown.value = false;
+      backendError.value = "";
+      backendLastSeen.value = Date.now();
+      backendRetryCount.value = 0;
+    } catch (err) {
+      backendDown.value = true;
+      backendError.value = err?.message || "Connection lost";
+      backendRetryCount.value = backendRetryCount.value + 1;
+    }
+  }, []);
+
+  useEffect(() => {
+    checkHealth();
+    intervalRef.current = setInterval(checkHealth, 10000);
+    return () => clearInterval(intervalRef.current);
+  }, [checkHealth]);
+
+  // If WS reconnects, consider backend up
+  useEffect(() => {
+    if (wsConnected.value && backendDown.value) {
+      backendDown.value = false;
+      backendError.value = "";
+      backendLastSeen.value = Date.now();
+      backendRetryCount.value = 0;
+    }
+  }, [wsConnected.value]);
+
+  return {
+    isDown: backendDown.value,
+    error: backendError.value,
+    lastSeen: backendLastSeen.value,
+    retryCount: backendRetryCount.value,
+    retry: checkHealth,
+  };
+}
+
+function OfflineBanner() {
+  const { retry: manualRetry } = useBackendHealth();
+  return html`
+    <div class="offline-banner">
+      <div class="offline-banner-icon">⚠️</div>
+      <div class="offline-banner-content">
+        <div class="offline-banner-title">Backend Unreachable</div>
+        <div class="offline-banner-meta">${backendError.value || "Connection lost"}</div>
+        ${backendLastSeen.value
+          ? html`<div class="offline-banner-meta">Last connected: ${formatTimeAgo(backendLastSeen.value)}</div>`
+          : null}
+        <div class="offline-banner-meta">Retry attempt #${backendRetryCount.value}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onClick=${manualRetry}>
+        Retry Now
+      </button>
+    </div>
+  `;
+}
 
 /* ── Tab component map ── */
 const TAB_COMPONENTS = {
@@ -164,6 +270,7 @@ function BottomNav() {
  *  App Root
  * ═══════════════════════════════════════════════ */
 function App() {
+  useBackendHealth();
   const { open: paletteOpen, onClose: paletteClose } = useCommandPalette();
 
   useEffect(() => {
@@ -223,6 +330,7 @@ function App() {
 
   return html`
     <${Header} />
+    ${backendDown.value ? html`<${OfflineBanner} />` : null}
     <${ToastContainer} />
     <${CommandPalette} open=${paletteOpen} onClose=${paletteClose} />
     <${PullToRefresh} onRefresh=${() => refreshTab(activeTab.value)}>
