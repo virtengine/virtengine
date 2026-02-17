@@ -28,9 +28,29 @@
 </head>
 <body>
   <div id="app">
-    <div id="boot-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:Inter,system-ui,sans-serif;color:#aaa;background:#1a1a2e;">
-      <div style="font-size:24px;margin-bottom:12px;">⚡ VirtEngine</div>
-      <div style="font-size:14px;" id="boot-status">Loading Control Center…</div>
+    <div id="boot-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:Inter,system-ui,sans-serif;color:#94a3b8;background:#0a0e1a;background-image:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.1) 0%,transparent 70%);overflow:hidden">
+      <style>
+        .boot-logo{position:relative;width:80px;height:80px;margin-bottom:24px}
+        .boot-ring{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(99,102,241,.15);animation:boot-spin 3s linear infinite}
+        .boot-ring-inner{position:absolute;inset:8px;border-radius:50%;border:2px solid transparent;border-top-color:#6366f1;border-right-color:rgba(99,102,241,.4);animation:boot-spin 1.5s linear infinite reverse}
+        .boot-dot{position:absolute;top:50%;left:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a78bfa);box-shadow:0 0 20px rgba(99,102,241,.5),0 0 40px rgba(99,102,241,.2);animation:boot-pulse 2s ease-in-out infinite}
+        .boot-title{font-size:22px;font-weight:700;letter-spacing:-.02em;background:linear-gradient(135deg,#f1f5f9,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px;animation:boot-fadeUp .6s ease .2s both}
+        .boot-subtitle{font-size:13px;color:#64748b;animation:boot-fadeUp .6s ease .4s both}
+        .boot-progress{width:120px;height:2px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:20px;overflow:hidden;animation:boot-fadeUp .6s ease .6s both}
+        .boot-progress-bar{height:100%;width:0;background:linear-gradient(90deg,#6366f1,#a78bfa);border-radius:2px;animation:boot-load 2s ease-in-out .8s forwards}
+        @keyframes boot-spin{to{transform:rotate(360deg)}}
+        @keyframes boot-pulse{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.2);opacity:1}}
+        @keyframes boot-fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes boot-load{0%{width:0}60%{width:70%}100%{width:100%}}
+      </style>
+      <div class="boot-logo">
+        <div class="boot-ring"></div>
+        <div class="boot-ring-inner"></div>
+        <div class="boot-dot"></div>
+      </div>
+      <div class="boot-title">VirtEngine</div>
+      <div class="boot-subtitle" id="boot-status">Initializing Control Center…</div>
+      <div class="boot-progress"><div class="boot-progress-bar"></div></div>
     </div>
   </div>
   <script type="module" src="app.js"></script>

@@ -1018,6 +1018,28 @@ export function loadConfig(argv = process.argv, options = {}) {
         "",
     ).trim(),
   };
+  const replenishMin = Math.max(
+    1,
+    Math.min(
+      2,
+      Number(
+        process.env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS ||
+          internalExecutorConfig.backlogReplenishment?.minNewTasks ||
+          1,
+      ),
+    ),
+  );
+  const replenishMax = Math.max(
+    replenishMin,
+    Math.min(
+      3,
+      Number(
+        process.env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS ||
+          internalExecutorConfig.backlogReplenishment?.maxNewTasks ||
+          2,
+      ),
+    ),
+  );
   const executorMode = (
     process.env.EXECUTOR_MODE ||
     internalExecutorConfig.mode ||
@@ -1087,28 +1109,8 @@ export function loadConfig(argv = process.argv, options = {}) {
         process.env.INTERNAL_EXECUTOR_REPLENISH_ENABLED,
         internalExecutorConfig.backlogReplenishment?.enabled === true,
       ),
-      minNewTasks: Math.max(
-        1,
-        Math.min(
-          2,
-          Number(
-            process.env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS ||
-              internalExecutorConfig.backlogReplenishment?.minNewTasks ||
-              1,
-          ),
-        ),
-      ),
-      maxNewTasks: Math.max(
-        1,
-        Math.min(
-          3,
-          Number(
-            process.env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS ||
-              internalExecutorConfig.backlogReplenishment?.maxNewTasks ||
-              2,
-          ),
-        ),
-      ),
+      minNewTasks: replenishMin,
+      maxNewTasks: replenishMax,
       requirePriority: isEnvEnabled(
         process.env.INTERNAL_EXECUTOR_REPLENISH_REQUIRE_PRIORITY,
         internalExecutorConfig.backlogReplenishment?.requirePriority !== false,
@@ -1417,6 +1419,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     internalExecutor,
     executorMode: internalExecutor.mode,
     kanban,
+    projectRequirements,
 
     // Merge Strategy
     codexAnalyzeMergeStrategy:

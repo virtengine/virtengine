@@ -11162,6 +11162,7 @@ if (isExecutorDisabled()) {
         syncEngine = createSyncEngine({
           projectId,
           syncIntervalMs: 60_000, // 1 minute
+          syncPolicy: kanbanConfig?.syncPolicy || "internal-primary",
           sendTelegram:
             telegramToken && telegramChatId
               ? (msg) => void sendTelegramMessage(msg)
@@ -11169,7 +11170,7 @@ if (isExecutorDisabled()) {
         });
         syncEngine.start();
         console.log(
-          `[monitor] sync engine started (interval: 60s, backend=${activeKanbanBackend}, project=${projectId})`,
+          `[monitor] sync engine started (interval: 60s, backend=${activeKanbanBackend}, policy=${kanbanConfig?.syncPolicy || "internal-primary"}, project=${projectId})`,
         );
       } else {
         console.log(

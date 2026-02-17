@@ -1,31 +1,34 @@
 /* ─── VirtEngine Control Center — CSS Custom Properties ─── */
 /* Uses Telegram native CSS variables as PRIMARY with fallbacks */
+/* Design Language: "Mission Control" — glassmorphism, glow, depth */
 
 :root {
   /* Telegram provides these natively in WebApp context */
   /* We use them directly and provide fallbacks for browser testing */
 
-  /* Core colors - map to TG native vars with dark fallbacks */
-  --bg-primary: var(--tg-theme-bg-color, #1a1a2e);
-  --bg-secondary: var(--tg-theme-secondary-bg-color, #16213e);
-  --bg-card: var(--tg-theme-section-bg-color, #1e293b);
-  --bg-surface: var(--tg-theme-secondary-bg-color, #0f172a);
-  --bg-input: var(--tg-theme-secondary-bg-color, #1e293b);
-  --bg-card-hover: rgba(255, 255, 255, 0.03);
+  /* Core colors - map to TG native vars with premium dark fallbacks */
+  --bg-primary: var(--tg-theme-bg-color, #0a0e1a);
+  --bg-secondary: var(--tg-theme-secondary-bg-color, #0f1629);
+  --bg-card: var(--tg-theme-section-bg-color, rgba(15, 23, 42, 0.6));
+  --bg-surface: var(--tg-theme-secondary-bg-color, rgba(10, 15, 30, 0.8));
+  --bg-input: var(--tg-theme-secondary-bg-color, rgba(15, 23, 42, 0.7));
+  --bg-card-hover: rgba(255, 255, 255, 0.04);
+  --bg-elevated: rgba(20, 30, 55, 0.9);
 
-  --text-primary: var(--tg-theme-text-color, #e2e8f0);
+  --text-primary: var(--tg-theme-text-color, #f1f5f9);
   --text-secondary: var(
     --tg-theme-subtitle-text-color,
     var(--tg-theme-hint-color, #94a3b8)
   );
   --text-hint: var(--tg-theme-hint-color, #64748b);
+  --text-bright: #ffffff;
 
-  --accent: var(--tg-theme-button-color, var(--tg-theme-link-color, #3b82f6));
+  --accent: var(--tg-theme-button-color, var(--tg-theme-link-color, #6366f1));
   --accent-text: var(--tg-theme-button-text-color, #ffffff);
-  --accent-hover: var(--tg-theme-accent-text-color, #60a5fa);
+  --accent-hover: var(--tg-theme-accent-text-color, #818cf8);
 
-  --link-color: var(--tg-theme-link-color, #3b82f6);
-  --destructive: var(--tg-theme-destructive-text-color, #ef4444);
+  --link-color: var(--tg-theme-link-color, #6366f1);
+  --destructive: var(--tg-theme-destructive-text-color, #f87171);
 
   --border: var(--tg-theme-section-separator-color, rgba(255, 255, 255, 0.06));
   --border-strong: rgba(255, 255, 255, 0.12);
@@ -56,11 +59,13 @@
   --viewport-stable-height: var(--tg-viewport-stable-height, 100vh);
 
   /* Spacing scale */
+  --space-2xs: 2px;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
+  --space-2xl: 48px;
 
   /* Semantic accent aliases */
   --accent-primary: var(--accent);
@@ -70,72 +75,105 @@
   --accent-danger: var(--color-error);
 
   /* Layout */
-  --header-height: 52px;
-  --nav-height: 56px;
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --header-height: 56px;
+  --nav-height: 64px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.4);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* Glass System */
+  --glass-bg: rgba(15, 23, 42, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(24px);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+
+  /* Glow System */
+  --accent-glow: rgba(99, 102, 241, 0.35);
+  --accent-subtle: rgba(99, 102, 241, 0.12);
+  --glow-progress: rgba(99, 102, 241, 0.3);
+  --glow-success: rgba(16, 185, 129, 0.3);
+  --glow-warning: rgba(245, 158, 11, 0.3);
+  --glow-error: rgba(248, 113, 113, 0.3);
+  --shadow-glow: 0 0 20px var(--accent-glow);
+  --shadow-glow-sm: 0 0 10px var(--accent-glow);
+  --border-glow: rgba(99, 102, 241, 0.3);
 
   /* Status colors (keep custom - TG doesn't provide these) */
   --color-todo: #8b95a2;
-  --color-inprogress: #3b82f6;
+  --color-inprogress: #6366f1;
   --color-inreview: #f59e0b;
-  --color-done: #22c55e;
-  --color-error: #ef4444;
+  --color-done: #10b981;
+  --color-error: #f87171;
   --color-cancelled: #6b7280;
   --color-critical: #dc2626;
   --color-high: #f59e0b;
-  --color-medium: #3b82f6;
+  --color-medium: #6366f1;
   --color-low: #8b95a2;
 
   /* Gradients */
-  --gradient-accent: linear-gradient(
-    135deg,
-    var(--accent) 0%,
-    color-mix(in srgb, var(--accent), #8b5cf6 30%) 100%
-  );
-  --gradient-progress: linear-gradient(
-    90deg,
-    var(--accent) 0%,
-    var(--color-done) 100%
-  );
+  --gradient-accent: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+  --gradient-accent-hover: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  --gradient-progress: linear-gradient(90deg, #6366f1 0%, #10b981 100%);
+  --gradient-hero: linear-gradient(135deg, rgba(99,102,241,.15) 0%, rgba(139,92,246,.08) 50%, rgba(16,185,129,.1) 100%);
+  --gradient-surface: linear-gradient(180deg, rgba(255,255,255,.03) 0%, transparent 100%);
+  --gradient-radial-glow: radial-gradient(ellipse at 50% 0%, rgba(99,102,241,.12) 0%, transparent 70%);
+  --gradient-mesh: radial-gradient(at 20% 80%, rgba(99,102,241,.06) 0%, transparent 50%),
+    radial-gradient(at 80% 20%, rgba(139,92,246,.05) 0%, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(16,185,129,.03) 0%, transparent 50%);
 
   /* Backdrop */
-  --backdrop: rgba(0, 0, 0, 0.5);
-  --backdrop-blur: blur(8px);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --backdrop-blur: blur(16px);
 
   /* Transitions */
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
-  --transition-slow: 0.4s ease;
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-bounce: 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 /* Light theme - Telegram sets --tg-color-scheme */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg-primary: var(--tg-theme-bg-color, #ffffff);
-    --bg-secondary: var(--tg-theme-secondary-bg-color, #f0f2f5);
-    --bg-card: var(--tg-theme-section-bg-color, #ffffff);
-    --bg-surface: var(--tg-theme-secondary-bg-color, #f8fafc);
-    --bg-input: var(--tg-theme-secondary-bg-color, #f1f5f9);
+    --bg-primary: var(--tg-theme-bg-color, #f8faff);
+    --bg-secondary: var(--tg-theme-secondary-bg-color, #eef2f9);
+    --bg-card: var(--tg-theme-section-bg-color, rgba(255, 255, 255, 0.8));
+    --bg-surface: var(--tg-theme-secondary-bg-color, rgba(241, 245, 249, 0.8));
+    --bg-input: var(--tg-theme-secondary-bg-color, rgba(241, 245, 249, 0.9));
     --bg-card-hover: rgba(0, 0, 0, 0.02);
+    --bg-elevated: rgba(255, 255, 255, 0.95);
     --text-primary: var(--tg-theme-text-color, #0f172a);
     --text-secondary: var(
       --tg-theme-subtitle-text-color,
       var(--tg-theme-hint-color, #64748b)
     );
     --text-hint: var(--tg-theme-hint-color, #94a3b8);
+    --text-bright: #0f172a;
     --border: var(--tg-theme-section-separator-color, rgba(0, 0, 0, 0.08));
     --border-strong: rgba(0, 0, 0, 0.15);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
-    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.12);
+    --glass-bg: rgba(255, 255, 255, 0.6);
+    --glass-border: rgba(0, 0, 0, 0.06);
+    --glass-highlight: rgba(255, 255, 255, 0.8);
+    --accent-glow: rgba(99, 102, 241, 0.2);
+    --accent-subtle: rgba(99, 102, 241, 0.08);
+    --gradient-mesh: radial-gradient(at 20% 80%, rgba(99,102,241,.04) 0%, transparent 50%),
+      radial-gradient(at 80% 20%, rgba(139,92,246,.03) 0%, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(16,185,129,.02) 0%, transparent 50%);
+    --gradient-radial-glow: radial-gradient(ellipse at 50% 0%, rgba(99,102,241,.06) 0%, transparent 70%);
   }
 }

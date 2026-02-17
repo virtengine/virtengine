@@ -1,4 +1,4 @@
-/* ─── Layout: Header, Main Content, Bottom Nav, FAB ─── */
+/* ─── Layout: Header, Main Content, Bottom Nav, FAB — Mission Control ─── */
 
 /* ─── Header ─── */
 .app-header {
@@ -6,24 +6,61 @@
   align-items: center;
   justify-content: space-between;
   height: var(--header-height);
-  padding: 0 16px;
+  padding: 0 20px;
   padding-top: var(--content-safe-top);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: saturate(180%) var(--glass-blur);
+  -webkit-backdrop-filter: saturate(180%) var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
   z-index: 10;
+  position: relative;
+}
+
+.app-header::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .app-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.app-header-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--gradient-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-glow-sm);
+  flex-shrink: 0;
+}
+
+.app-header-logo svg {
+  width: 16px;
+  height: 16px;
+  color: white;
 }
 
 .app-header-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--text-bright) 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .app-header-user {
@@ -41,22 +78,25 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: var(--radius-full);
   font-size: 11px;
   font-weight: 600;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  transition: all 0.3s ease;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .connection-pill.connected {
-  border-color: var(--color-done);
+  border-color: rgba(16, 185, 129, 0.3);
   color: var(--color-done);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
 }
 
 .connection-pill.disconnected {
-  border-color: var(--color-error);
+  border-color: rgba(248, 113, 113, 0.3);
   color: var(--color-error);
 }
 
@@ -66,6 +106,22 @@
   border-radius: 50%;
   background: currentColor;
   animation: pulse-dot 2s infinite;
+  position: relative;
+}
+
+.connection-pill.connected .connection-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  animation: pulseRing 2s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2); opacity: 0; }
 }
 
 /* ─── Main Content ─── */
@@ -75,11 +131,13 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  padding: 12px 16px;
-  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
+  padding: 16px 16px;
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 20px);
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   touch-action: pan-y;
+  position: relative;
+  z-index: 1;
 }
 
 /* ─── Tab Panel ─── */
@@ -92,27 +150,47 @@
   display: block;
 }
 
-/* Smooth tab content opacity transition */
+/* Staggered card entrance */
 .main-content > * {
-  animation: fadeSlideUp 0.2s ease both;
+  animation: cardReveal 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.main-content > *:nth-child(1) { animation-delay: 0s; }
+.main-content > *:nth-child(2) { animation-delay: 0.05s; }
+.main-content > *:nth-child(3) { animation-delay: 0.1s; }
+.main-content > *:nth-child(4) { animation-delay: 0.15s; }
+.main-content > *:nth-child(5) { animation-delay: 0.2s; }
+.main-content > *:nth-child(6) { animation-delay: 0.25s; }
+.main-content > *:nth-child(7) { animation-delay: 0.3s; }
+.main-content > *:nth-child(8) { animation-delay: 0.35s; }
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ─── Bottom Navigation ─── */
+/* ─── Bottom Navigation — Floating Pill ─── */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: calc(var(--nav-height) + var(--safe-bottom));
-  padding-bottom: var(--safe-bottom);
-  background: var(--bottom-bar-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border);
+  bottom: calc(12px + var(--safe-bottom));
+  left: 16px;
+  right: 16px;
+  height: var(--nav-height);
+  background: var(--glass-bg);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: space-around;
   z-index: 100;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  animation: navSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+}
+
+@keyframes navSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .nav-item {
@@ -120,9 +198,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 6px 0;
-  min-width: 56px;
+  gap: 3px;
+  padding: 8px 0;
+  min-width: 48px;
   min-height: 44px;
   border: none;
   background: none;
@@ -130,11 +208,10 @@
   font-size: 10px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    color 0.2s ease,
-    transform 0.15s ease;
+  transition: color 0.2s ease, transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   position: relative;
+  border-radius: var(--radius-md);
 }
 
 .nav-item:active {
@@ -148,27 +225,22 @@
 .nav-item.active::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 24px;
-  height: 2px;
-  border-radius: 0 0 2px 2px;
-  background: var(--accent);
+  inset: 4px;
+  border-radius: var(--radius-md);
+  background: var(--accent-subtle);
+  z-index: -1;
+  animation: scaleIn 0.2s ease;
 }
 
-.nav-item.active::after {
-  content: "";
-  position: absolute;
-  inset: 4px 6px;
-  border-radius: var(--radius-md, 10px);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  z-index: -1;
+.nav-item.active svg {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 6px var(--accent-glow));
 }
 
 .nav-item svg {
   width: 22px;
   height: 22px;
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 
 .nav-label {
@@ -179,26 +251,28 @@
 .fab {
   position: fixed;
   right: 16px;
-  bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 28px);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
   background: var(--gradient-accent);
   color: white;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
   cursor: pointer;
   z-index: 50;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .fab:active {
   transform: scale(0.9);
+}
+
+.fab:hover {
+  box-shadow: var(--shadow-xl), 0 0 30px var(--accent-glow);
 }
 
 .fab svg {
@@ -224,16 +298,24 @@
   }
 
   .app-header {
-    height: 56px;
+    height: 60px;
   }
 
   .bottom-nav {
-    justify-content: center;
-    gap: 8px;
+    left: 50%;
+    right: auto;
+    width: 480px;
+    transform: translateX(-50%);
+    animation: navSlideUpDesktop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+  }
+
+  @keyframes navSlideUpDesktop {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
   .nav-item {
-    min-width: 80px;
+    min-width: 64px;
     gap: 4px;
   }
 

@@ -33,7 +33,8 @@
 .session-detail-tabs {
   display: flex;
   gap: 2px;
-  background: var(--bg-surface);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 3px;
   margin-bottom: var(--space-md);
@@ -55,12 +56,13 @@
 
 .session-detail-tab:hover {
   color: var(--text-primary);
-  background: var(--bg-card-hover);
+  background: var(--glass-highlight);
 }
 
 .session-detail-tab.active {
-  background: var(--accent);
+  background: var(--gradient-accent);
   color: var(--accent-text);
+  box-shadow: var(--shadow-glow-sm);
 }
 
 /* Back button (mobile) */
@@ -86,8 +88,10 @@
 
 /* ═══ Session List ═══ */
 .session-list {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
@@ -99,7 +103,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .session-list-title {
@@ -147,7 +151,7 @@
 }
 
 .session-item.active {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--accent-subtle);
   border-left: 3px solid var(--accent);
   padding-left: 11px;
 }
@@ -217,8 +221,10 @@
 .chat-view {
   display: flex;
   flex-direction: column;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   min-height: 400px;
   max-height: 600px;
@@ -232,7 +238,7 @@
 
 .chat-header {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
 }
 
@@ -276,16 +282,19 @@
 
 .chat-bubble.user {
   align-self: flex-end;
-  background: var(--accent);
+  background: var(--gradient-accent);
   color: var(--accent-text);
   border-bottom-right-radius: var(--radius-sm);
+  box-shadow: var(--shadow-glow-sm);
 }
 
 .chat-bubble.assistant {
   align-self: flex-start;
-  background: var(--bg-surface);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--text-primary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-bottom-left-radius: var(--radius-sm);
 }
 
@@ -424,8 +433,10 @@
 
 /* ═══ Diff Viewer ═══ */
 .diff-viewer {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 200px;
@@ -454,8 +465,8 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
 }
 
 .diff-stat-add {
@@ -540,7 +551,7 @@
 
 /* ─── Diff hunks ─── */
 .diff-hunk {
-  background: #0d1117;
+  background: rgba(6, 8, 16, 0.9);
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -553,12 +564,12 @@
 }
 
 .diff-line.addition {
-  background: rgba(34, 197, 94, 0.12);
+  background: rgba(16, 185, 129, 0.1);
   color: #6ee7b7;
 }
 
 .diff-line.deletion {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(248, 113, 113, 0.1);
   color: #fca5a5;
 }
 

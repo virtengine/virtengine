@@ -124,6 +124,11 @@ const ENV_KEYS = [
   "ANTHROPIC_MODEL",
   "VE_INSTANCE_ID",
   "CODEX_MONITOR_INSTANCE_ID",
+  "INTERNAL_EXECUTOR_REPLENISH_ENABLED",
+  "INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS",
+  "INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS",
+  "PROJECT_REQUIREMENTS_PROFILE",
+  "PROJECT_REQUIREMENTS_NOTES",
 ];
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -180,6 +185,25 @@ describe("task-executor", () => {
     it("sets _running to false initially", () => {
       const ex = new TaskExecutor();
       expect(ex._running).toBe(false);
+    });
+
+    it("initializes backlog replenishment config and project requirements", () => {
+      const ex = new TaskExecutor({
+        backlogReplenishment: {
+          enabled: true,
+          minNewTasks: 2,
+          maxNewTasks: 3,
+        },
+        projectRequirements: {
+          profile: "system",
+          notes: "cross-module coordination",
+        },
+      });
+      const cfg = ex.getBacklogReplenishmentConfig();
+      expect(cfg.enabled).toBe(true);
+      expect(cfg.minNewTasks).toBe(2);
+      expect(cfg.maxNewTasks).toBe(3);
+      expect(cfg.projectRequirements.profile).toBe("system");
     });
 
     it("adopts stable presence instance id when no explicit id is configured", async () => {
@@ -683,6 +707,38 @@ describe("task-executor", () => {
         "abcd1234-uuid",
         expect.any(Object),
       );
+    });
+  });
+
+  describe("prompt enrichment", () => {
+    it("injects backlog replenishment instructions when experimental mode is enabled", () => {
+      const ex = new TaskExecutor({
+        repoSlug: "virtengine/virtengine",
+        backlogReplenishment: {
+          enabled: true,
+          minNewTasks: 1,
+          maxNewTasks: 2,
+        },
+        projectRequirements: {
+          profile: "large-feature",
+          notes: "optimize adjacent modules",
+        },
+      });
+
+      spawnSync.mockReturnValueOnce({ stdout: "ve/test-branch\n" });
+      const prompt = ex._buildTaskPrompt(
+        {
+          id: "task-abc",
+          title: "Implement feature",
+          description: "Do the work",
+          status: "todo",
+        },
+        "/fake/worktree",
+      );
+
+      expect(prompt).toContain("Experimental Backlog Replenishment");
+      expect(prompt).toContain("codex-monitor-backlog");
+      expect(prompt).toContain("Project requirements profile: large-feature");
     });
   });
 

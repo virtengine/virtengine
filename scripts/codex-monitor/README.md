@@ -128,6 +128,18 @@ Task board backend (`KANBAN_BACKEND`):
 - `github` - GitHub Issues with shared state persistence
 - `jira` (scaffolded, not yet implemented)
 
+Sync policy (`KANBAN_SYNC_POLICY`):
+
+- `internal-primary` - internal task-store remains source of truth (default)
+- `bidirectional` - external status changes may update internal tasks
+
+Experimental autonomous backlog replenishment:
+
+- `INTERNAL_EXECUTOR_REPLENISH_ENABLED=true|false`
+- `INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS=1|2`
+- `INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS=1..3`
+- `PROJECT_REQUIREMENTS_PROFILE=simple-feature|feature|large-feature|system|multi-system`
+
 **GitHub adapter enhancements:**
 The GitHub Issues adapter now supports multi-agent coordination via structured state persistence:
 
@@ -340,7 +352,10 @@ EXECUTORS=COPILOT:CLAUDE_OPUS_4_6:50,CODEX:DEFAULT:50
 PROJECT_NAME=my-project
 GITHUB_REPO=myorg/myrepo
 KANBAN_BACKEND=internal
+KANBAN_SYNC_POLICY=internal-primary
 EXECUTOR_MODE=internal
+INTERNAL_EXECUTOR_REPLENISH_ENABLED=false
+PROJECT_REQUIREMENTS_PROFILE=feature
 VK_BASE_URL=http://127.0.0.1:54089
 VK_RECOVERY_PORT=54089
 MAX_PARALLEL=6

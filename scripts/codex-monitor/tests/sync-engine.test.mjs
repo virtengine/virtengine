@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const mockTaskStore = vi.hoisted(() => ({
   getTask: vi.fn(),
@@ -23,6 +23,20 @@ vi.mock("../task-store.mjs", () => mockTaskStore);
 vi.mock("../kanban-adapter.mjs", () => mockKanban);
 
 const { SyncEngine } = await import("../sync-engine.mjs");
+
+const ORIGINAL_SYNC_POLICY = process.env.KANBAN_SYNC_POLICY;
+
+beforeEach(() => {
+  process.env.KANBAN_SYNC_POLICY = "bidirectional";
+});
+
+afterEach(() => {
+  if (ORIGINAL_SYNC_POLICY === undefined) {
+    delete process.env.KANBAN_SYNC_POLICY;
+  } else {
+    process.env.KANBAN_SYNC_POLICY = ORIGINAL_SYNC_POLICY;
+  }
+});
 
 describe("sync-engine backward external status handling", () => {
   beforeEach(() => {
@@ -81,6 +95,65 @@ describe("sync-engine backward external status handling", () => {
       syncDirty: true,
     });
     expect(result.pulled).toBe(0);
+  });
+
+  it("preserves internal status under internal-primary sync policy", async () => {
+    mockTaskStore.getAllTasks.mockReturnValue([
+      {
+        id: "task-keep-internal",
+        projectId: "proj-1",
+        status: "inreview",
+        externalStatus: "inprogress",
+        syncDirty: false,
+        meta: {},
+      },
+    ]);
+    mockKanban.listTasks.mockResolvedValue([
+      { id: "task-keep-internal", status: "done", projectId: "proj-1" },
+    ]);
+
+    const engine = new SyncEngine({
+      projectId: "proj-1",
+      syncPolicy: "internal-primary",
+    });
+    const result = await engine.pullFromExternal();
+
+    expect(mockTaskStore.setTaskStatus).not.toHaveBeenCalled();
+    expect(mockTaskStore.updateTask).toHaveBeenCalledWith(
+      "task-keep-internal",
+      expect.objectContaining({
+        externalStatus: "done",
+      }),
+    );
+    expect(mockTaskStore.markSynced).toHaveBeenCalledWith(
+      "task-keep-internal",
+    );
+    expect(result.pulled).toBe(0);
+  });
+
+  it("does not cancel internal tasks deleted externally under internal-primary policy", async () => {
+    mockTaskStore.getAllTasks.mockReturnValue([
+      {
+        id: "task-survives",
+        projectId: "proj-1",
+        status: "todo",
+        externalStatus: "todo",
+        syncDirty: false,
+      },
+    ]);
+    mockKanban.listTasks.mockResolvedValue([]);
+
+    const engine = new SyncEngine({
+      projectId: "proj-1",
+      syncPolicy: "internal-primary",
+    });
+    await engine.pullFromExternal();
+
+    expect(mockTaskStore.setTaskStatus).not.toHaveBeenCalledWith(
+      "task-survives",
+      "cancelled",
+      "external",
+    );
   });
 });
 

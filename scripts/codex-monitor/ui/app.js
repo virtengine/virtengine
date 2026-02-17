@@ -68,10 +68,15 @@ function Header() {
   return html`
     <header class="app-header">
       <div class="app-header-left">
-        <div class="app-header-title">VirtEngine</div>
-        ${user
-          ? html`<div class="app-header-user">${user.first_name}</div>`
-          : null}
+        <div class="app-header-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div>
+          <div class="app-header-title">VirtEngine</div>
+          ${user
+            ? html`<div class="app-header-user">${user.first_name}</div>`
+            : null}
+        </div>
       </div>
       <div class="header-actions">
         <div class="connection-pill ${isConn ? "connected" : "disconnected"}">

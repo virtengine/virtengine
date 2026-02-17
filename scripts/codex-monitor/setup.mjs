@@ -863,6 +863,32 @@ function normalizeSetupConfiguration({ env, configJson, repoRoot, slug }) {
     ["internal", "vk", "github", "jira"],
     "internal",
   );
+  env.KANBAN_SYNC_POLICY = normalizeEnum(
+    env.KANBAN_SYNC_POLICY,
+    ["internal-primary", "bidirectional"],
+    "internal-primary",
+  );
+  env.PROJECT_REQUIREMENTS_PROFILE = normalizeEnum(
+    env.PROJECT_REQUIREMENTS_PROFILE,
+    [
+      "simple-feature",
+      "feature",
+      "large-feature",
+      "system",
+      "multi-system",
+    ],
+    "feature",
+  );
+  env.INTERNAL_EXECUTOR_REPLENISH_ENABLED = toBooleanEnvString(
+    env.INTERNAL_EXECUTOR_REPLENISH_ENABLED,
+    false,
+  );
+  env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS = String(
+    toPositiveInt(env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS, 1),
+  );
+  env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS = String(
+    toPositiveInt(env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS, 2),
+  );
   env.EXECUTOR_MODE = normalizeEnum(
     env.EXECUTOR_MODE,
     ["internal", "vk", "hybrid"],
@@ -1773,7 +1799,21 @@ async function main() {
     const selectedKanbanBackend =
       backendIdx === 1 ? "vk" : backendIdx === 2 ? "github" : "internal";
     env.KANBAN_BACKEND = selectedKanbanBackend;
-    configJson.kanban = { backend: selectedKanbanBackend };
+    const syncPolicyIdx = await prompt.choose(
+      "Select sync policy:",
+      [
+        "Internal primary (recommended) — external is secondary mirror",
+        "Bidirectional (legacy) — external can drive internal status",
+      ],
+      0,
+    );
+    const selectedSyncPolicy =
+      syncPolicyIdx === 1 ? "bidirectional" : "internal-primary";
+    env.KANBAN_SYNC_POLICY = selectedSyncPolicy;
+    configJson.kanban = {
+      backend: selectedKanbanBackend,
+      syncPolicy: selectedSyncPolicy,
+    };
 
     const modeDefault = String(
       process.env.EXECUTOR_MODE || configJson.internalExecutor?.mode || "internal",
@@ -1802,6 +1842,79 @@ async function main() {
     configJson.internalExecutor = {
       ...(configJson.internalExecutor || {}),
       mode: selectedExecutorMode,
+    };
+
+    const requirementsProfileDefault = String(
+      process.env.PROJECT_REQUIREMENTS_PROFILE ||
+        configJson.projectRequirements?.profile ||
+        "feature",
+    )
+      .trim()
+      .toLowerCase();
+    const profileOptions = [
+      "simple-feature",
+      "feature",
+      "large-feature",
+      "system",
+      "multi-system",
+    ];
+    const profileIdx = await prompt.choose(
+      "Project requirements profile:",
+      [
+        "Simple Feature",
+        "Feature",
+        "Large Feature",
+        "System",
+        "Multi-System",
+      ],
+      Math.max(0, profileOptions.indexOf(requirementsProfileDefault)),
+    );
+    env.PROJECT_REQUIREMENTS_PROFILE = profileOptions[profileIdx] || "feature";
+    const requirementsNotes = await prompt.ask(
+      "Requirements notes (optional)",
+      process.env.PROJECT_REQUIREMENTS_NOTES ||
+        configJson.projectRequirements?.notes ||
+        "",
+    );
+    env.PROJECT_REQUIREMENTS_NOTES = requirementsNotes;
+    configJson.projectRequirements = {
+      profile: env.PROJECT_REQUIREMENTS_PROFILE,
+      notes: env.PROJECT_REQUIREMENTS_NOTES,
+    };
+
+    const replenishEnabled = await prompt.confirm(
+      "Enable experimental autonomous backlog replenishment?",
+      false,
+    );
+    env.INTERNAL_EXECUTOR_REPLENISH_ENABLED = replenishEnabled
+      ? "true"
+      : "false";
+    const replenishMin = replenishEnabled
+      ? await prompt.ask(
+          "Minimum new tasks per completed task (1-2)",
+          process.env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS || "1",
+        )
+      : "1";
+    const replenishMax = replenishEnabled
+      ? await prompt.ask(
+          "Maximum new tasks per completed task (1-3)",
+          process.env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS || "2",
+        )
+      : "2";
+    env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS = replenishMin;
+    env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS = replenishMax;
+    configJson.internalExecutor = {
+      ...(configJson.internalExecutor || {}),
+      backlogReplenishment: {
+        enabled: replenishEnabled,
+        minNewTasks: toPositiveInt(replenishMin, 1),
+        maxNewTasks: toPositiveInt(replenishMax, 2),
+        requirePriority: true,
+      },
+      projectRequirements: {
+        profile: env.PROJECT_REQUIREMENTS_PROFILE,
+        notes: env.PROJECT_REQUIREMENTS_NOTES,
+      },
     };
 
     const vkNeeded =
@@ -1905,6 +2018,7 @@ async function main() {
 
       configJson.kanban = {
         backend: selectedKanbanBackend,
+        syncPolicy: selectedSyncPolicy,
         github: {
           mode: githubTaskMode,
           projectTitle: env.GITHUB_PROJECT_TITLE || "Codex-Monitor",
@@ -2431,7 +2545,18 @@ async function runNonInteractive({
   env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
   env.TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
   env.KANBAN_BACKEND = process.env.KANBAN_BACKEND || "internal";
+  env.KANBAN_SYNC_POLICY =
+    process.env.KANBAN_SYNC_POLICY || "internal-primary";
   env.EXECUTOR_MODE = process.env.EXECUTOR_MODE || "internal";
+  env.PROJECT_REQUIREMENTS_PROFILE =
+    process.env.PROJECT_REQUIREMENTS_PROFILE || "feature";
+  env.PROJECT_REQUIREMENTS_NOTES = process.env.PROJECT_REQUIREMENTS_NOTES || "";
+  env.INTERNAL_EXECUTOR_REPLENISH_ENABLED =
+    process.env.INTERNAL_EXECUTOR_REPLENISH_ENABLED || "false";
+  env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS =
+    process.env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS || "1";
+  env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS =
+    process.env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS || "2";
   env.VK_BASE_URL = process.env.VK_BASE_URL || "http://127.0.0.1:54089";
   env.VK_RECOVERY_PORT = process.env.VK_RECOVERY_PORT || "54089";
   env.GITHUB_REPO_OWNER =
@@ -2483,10 +2608,29 @@ async function runNonInteractive({
   }
 
   configJson.projectName = env.PROJECT_NAME;
-  configJson.kanban = { backend: env.KANBAN_BACKEND || "internal" };
+  configJson.kanban = {
+    backend: env.KANBAN_BACKEND || "internal",
+    syncPolicy: env.KANBAN_SYNC_POLICY || "internal-primary",
+  };
+  configJson.projectRequirements = {
+    profile: env.PROJECT_REQUIREMENTS_PROFILE || "feature",
+    notes: env.PROJECT_REQUIREMENTS_NOTES || "",
+  };
   configJson.internalExecutor = {
     ...(configJson.internalExecutor || {}),
     mode: env.EXECUTOR_MODE || "internal",
+    backlogReplenishment: {
+      enabled:
+        String(env.INTERNAL_EXECUTOR_REPLENISH_ENABLED || "false").toLowerCase() ===
+        "true",
+      minNewTasks: toPositiveInt(env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS, 1),
+      maxNewTasks: toPositiveInt(env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS, 2),
+      requirePriority: true,
+    },
+    projectRequirements: {
+      profile: env.PROJECT_REQUIREMENTS_PROFILE || "feature",
+      notes: env.PROJECT_REQUIREMENTS_NOTES || "",
+    },
   };
   configJson.failover = {
     strategy: process.env.FAILOVER_STRATEGY || "next-in-line",

@@ -9,6 +9,7 @@
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
+import { randomUUID } from "node:crypto";
 import {
   readFileSync,
   existsSync,
@@ -57,6 +58,8 @@ import {
   isTaskCoolingDown,
   updateTask as updateInternalTask,
   getTask as getInternalTask,
+  getAllTasks as getAllInternalTasks,
+  addTask as addInternalTask,
 } from "./task-store.mjs";
 import { createErrorDetector } from "./error-detector.mjs";
 import { getSessionTracker } from "./session-tracker.mjs";
@@ -135,6 +138,77 @@ const RUNTIME_STATE_FILE = resolve(
   ".cache",
   "task-executor-runtime.json",
 );
+
+const PRIORITY_RANK = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+const REQUIREMENTS_PROFILES = new Set([
+  "simple-feature",
+  "feature",
+  "large-feature",
+  "system",
+  "multi-system",
+]);
+
+function normalizePriority(value) {
+  const key = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (key === "critical" || key === "high" || key === "medium" || key === "low") {
+    return key;
+  }
+  return "medium";
+}
+
+function normalizeRequirementsProfile(value) {
+  const profile = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (REQUIREMENTS_PROFILES.has(profile)) {
+    return profile;
+  }
+  return "feature";
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+function extractBacklogCandidates(outputText) {
+  const text = String(outputText || "");
+  if (!text.trim()) return [];
+
+  const fencedMatch = text.match(
+    /```(?:codex-monitor-backlog|json)?\s*([\s\S]*?)```/i,
+  );
+  if (fencedMatch?.[1]) {
+    try {
+      const parsed = JSON.parse(fencedMatch[1].trim());
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.backlog_tasks)) return parsed.backlog_tasks;
+    } catch {
+      /* continue */
+    }
+  }
+
+  const objectMatch = text.match(/\{[\s\S]*"backlog_tasks"\s*:\s*\[[\s\S]*\][\s\S]*\}/i);
+  if (objectMatch?.[0]) {
+    try {
+      const parsed = JSON.parse(objectMatch[0]);
+      if (Array.isArray(parsed?.backlog_tasks)) return parsed.backlog_tasks;
+    } catch {
+      /* continue */
+    }
+  }
+
+  return [];
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -530,6 +604,47 @@ class TaskExecutor {
       merged.agentPrompts && typeof merged.agentPrompts === "object"
         ? merged.agentPrompts
         : {};
+    this._projectRequirements = {
+      profile: normalizeRequirementsProfile(
+        merged.projectRequirements?.profile ||
+          process.env.PROJECT_REQUIREMENTS_PROFILE ||
+          "feature",
+      ),
+      notes: String(
+        merged.projectRequirements?.notes ||
+          process.env.PROJECT_REQUIREMENTS_NOTES ||
+          "",
+      ).trim(),
+    };
+    const replenishment = merged.backlogReplenishment || {};
+    const replenishmentMin = clampInt(
+      replenishment.minNewTasks ||
+        process.env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS ||
+        1,
+      1,
+      2,
+      1,
+    );
+    const replenishmentMaxRaw = clampInt(
+      replenishment.maxNewTasks ||
+        process.env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS ||
+        2,
+      1,
+      3,
+      2,
+    );
+    this._backlogReplenishment = {
+      enabled:
+        replenishment.enabled === true ||
+        ["1", "true", "yes", "on"].includes(
+          String(process.env.INTERNAL_EXECUTOR_REPLENISH_ENABLED || "")
+            .trim()
+            .toLowerCase(),
+        ),
+      minNewTasks: replenishmentMin,
+      maxNewTasks: Math.max(replenishmentMin, replenishmentMaxRaw),
+      requirePriority: replenishment.requirePriority !== false,
+    };
 
     // Initialize executor scheduler for per-task SDK routing
     /** @type {ExecutorScheduler|null} */
@@ -1599,7 +1714,76 @@ class TaskExecutor {
       taskTimeoutMs: this.taskTimeoutMs,
       maxRetries: this.maxRetries,
       projectId: this._resolvedProjectId || this.projectId || null,
+      backlogReplenishment: { ...this._backlogReplenishment },
+      projectRequirements: { ...this._projectRequirements },
     };
+  }
+
+  getBacklogReplenishmentConfig() {
+    return {
+      ...this._backlogReplenishment,
+      projectRequirements: { ...this._projectRequirements },
+    };
+  }
+
+  setBacklogReplenishmentConfig(patch = {}) {
+    if (!patch || typeof patch !== "object") {
+      return this.getBacklogReplenishmentConfig();
+    }
+    if (patch.enabled !== undefined) {
+      this._backlogReplenishment.enabled = Boolean(patch.enabled);
+    }
+    if (patch.minNewTasks !== undefined) {
+      this._backlogReplenishment.minNewTasks = clampInt(
+        patch.minNewTasks,
+        1,
+        2,
+        this._backlogReplenishment.minNewTasks,
+      );
+    }
+    if (patch.maxNewTasks !== undefined) {
+      this._backlogReplenishment.maxNewTasks = clampInt(
+        patch.maxNewTasks,
+        1,
+        3,
+        this._backlogReplenishment.maxNewTasks,
+      );
+    }
+    if (
+      this._backlogReplenishment.maxNewTasks <
+      this._backlogReplenishment.minNewTasks
+    ) {
+      this._backlogReplenishment.maxNewTasks =
+        this._backlogReplenishment.minNewTasks;
+    }
+    if (patch.requirePriority !== undefined) {
+      this._backlogReplenishment.requirePriority = Boolean(
+        patch.requirePriority,
+      );
+    }
+    if (patch.projectRequirements && typeof patch.projectRequirements === "object") {
+      this.setProjectRequirements(patch.projectRequirements);
+    }
+    return this.getBacklogReplenishmentConfig();
+  }
+
+  getProjectRequirements() {
+    return { ...this._projectRequirements };
+  }
+
+  setProjectRequirements(patch = {}) {
+    if (!patch || typeof patch !== "object") {
+      return this.getProjectRequirements();
+    }
+    if (patch.profile !== undefined) {
+      this._projectRequirements.profile = normalizeRequirementsProfile(
+        patch.profile,
+      );
+    }
+    if (patch.notes !== undefined) {
+      this._projectRequirements.notes = String(patch.notes || "").trim();
+    }
+    return this.getProjectRequirements();
   }
 
   /**
@@ -2518,6 +2702,31 @@ class TaskExecutor {
       lines.push(`## Repository Context`, ``, context, ``);
     }
 
+    if (this._backlogReplenishment.enabled && !isPlannerTaskData(task)) {
+      const minTasks = this._backlogReplenishment.minNewTasks;
+      const maxTasks = Math.max(
+        minTasks,
+        this._backlogReplenishment.maxNewTasks,
+      );
+      const reqProfile = this._projectRequirements.profile;
+      const reqNotes = this._projectRequirements.notes;
+      lines.push(
+        `## Experimental Backlog Replenishment (Required)`,
+        `After completing this task, identify ${minTasks}-${maxTasks} high-value follow-up tasks in the same or adjacent modules.`,
+        `Each task must be substantial, improve project progress, and include a priority (low|medium|high|critical).`,
+        `Project requirements profile: ${reqProfile}`,
+        reqNotes ? `Project requirements notes: ${reqNotes}` : "",
+        `Return ONLY the backlog payload below in one fenced block after your completion summary:`,
+        "```codex-monitor-backlog",
+        "[",
+        '  {"title":"...","description":"...","priority":"high","module":"x/market","rationale":"..."}',
+        "]",
+        "```",
+        `Do not include trivial chores; focus on impactful implementation tasks that can be executed autonomously.`,
+        ``,
+      );
+    }
+
     const fallbackPrompt = lines.join("\n");
     return this._resolveAgentPrompt(
       "taskExecutor",
@@ -2803,6 +3012,8 @@ class TaskExecutor {
       console.log(
         `${tag} completed successfully (${result.attempts} attempt(s))`,
       );
+
+      await this._processBacklogReplenishment(task, result);
 
       // Use HEAD tracking to determine if agent made NEW commits (not old leftovers)
       const agentMadeNewCommits = execInfo.agentMadeNewCommits === true;
@@ -3148,6 +3359,107 @@ class TaskExecutor {
         `❌ Task failed: "${task.title}" — ${(result.error || "").slice(0, 200)}`,
       );
       this.onTaskFailed?.(task, result);
+    }
+  }
+
+  async _processBacklogReplenishment(task, result) {
+    if (!this._backlogReplenishment.enabled) return;
+    if (isPlannerTaskData(task)) return;
+
+    const candidatesRaw = extractBacklogCandidates(result?.output || "");
+    if (!Array.isArray(candidatesRaw) || candidatesRaw.length === 0) {
+      console.warn(
+        `${TAG} backlog replenishment: no structured candidates found for ${task.id}`,
+      );
+      return;
+    }
+
+    const minTasks = this._backlogReplenishment.minNewTasks;
+    const maxTasks = this._backlogReplenishment.maxNewTasks;
+    const existing = getAllInternalTasks();
+    const existingTitleSet = new Set(
+      existing
+        .map((item) => String(item?.title || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    const normalized = [];
+    for (const candidate of candidatesRaw) {
+      if (!candidate || typeof candidate !== "object") continue;
+      const title = String(candidate.title || "").trim();
+      if (title.length < 10) continue;
+      const lowerTitle = title.toLowerCase();
+      if (existingTitleSet.has(lowerTitle)) continue;
+
+      const priority = normalizePriority(candidate.priority);
+      if (this._backlogReplenishment.requirePriority && !candidate.priority) {
+        continue;
+      }
+      const description = String(candidate.description || "").trim();
+      const moduleHint = String(candidate.module || "").trim();
+      const rationale = String(candidate.rationale || "").trim();
+      normalized.push({
+        title,
+        description,
+        priority,
+        moduleHint,
+        rationale,
+      });
+      existingTitleSet.add(lowerTitle);
+    }
+
+    normalized.sort(
+      (a, b) => (PRIORITY_RANK[b.priority] || 0) - (PRIORITY_RANK[a.priority] || 0),
+    );
+
+    const selected = normalized.slice(0, maxTasks);
+    if (selected.length === 0) return;
+
+    const created = [];
+    for (const candidate of selected) {
+      const id = randomUUID();
+      const modulePrefix = candidate.moduleHint
+        ? `[${candidate.moduleHint}] `
+        : "";
+      const enrichedDescription = [
+        candidate.description,
+        candidate.rationale ? `Why this matters: ${candidate.rationale}` : "",
+        `Source task: ${task.id || task.task_id}`,
+        `Requirements profile: ${this._projectRequirements.profile}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const createdTask = addInternalTask({
+        id,
+        title: `${modulePrefix}${candidate.title}`,
+        description: enrichedDescription,
+        status: "todo",
+        priority: candidate.priority,
+        projectId: task.projectId || this._resolvedProjectId || this.projectId || "internal",
+        externalStatus: "todo",
+        meta: {
+          generatedByTaskId: task.id || task.task_id,
+          generatedByTitle: task.title || "",
+          generatedAt: new Date().toISOString(),
+          generatedByMode: "experimental-backlog-replenishment",
+          moduleHint: candidate.moduleHint || null,
+          rationale: candidate.rationale || null,
+        },
+      });
+      if (createdTask) {
+        created.push(createdTask);
+      }
+    }
+
+    if (created.length < minTasks) {
+      console.warn(
+        `${TAG} backlog replenishment created ${created.length}/${minTasks} minimum task(s) for ${task.id}`,
+      );
+    }
+    if (created.length > 0) {
+      this.sendTelegram?.(
+        `♻️ Backlog replenished from "${task.title}": created ${created.length} prioritized follow-up task(s).`,
+      );
     }
   }
 
@@ -3940,6 +4252,7 @@ export function loadExecutorOptionsFromConfig() {
 
   const envMode = (process.env.EXECUTOR_MODE || "").toLowerCase();
   const configExec = config.internalExecutor || config.taskExecutor || {};
+  const configReq = config.projectRequirements || configExec.projectRequirements || {};
   const reviewAgentRaw = process.env.INTERNAL_EXECUTOR_REVIEW_AGENT_ENABLED;
   const reviewAgentEnabled =
     reviewAgentRaw !== undefined && String(reviewAgentRaw).trim() !== ""
@@ -3991,6 +4304,38 @@ export function loadExecutorOptionsFromConfig() {
         configExec.taskClaimRenewIntervalMs ||
         5 * 60 * 1000,
     ),
+    backlogReplenishment: {
+      enabled:
+        ["1", "true", "yes", "on"].includes(
+          String(process.env.INTERNAL_EXECUTOR_REPLENISH_ENABLED || "")
+            .trim()
+            .toLowerCase(),
+        ) || configExec.backlogReplenishment?.enabled === true,
+      minNewTasks: Number(
+        process.env.INTERNAL_EXECUTOR_REPLENISH_MIN_NEW_TASKS ||
+          configExec.backlogReplenishment?.minNewTasks ||
+          1,
+      ),
+      maxNewTasks: Number(
+        process.env.INTERNAL_EXECUTOR_REPLENISH_MAX_NEW_TASKS ||
+          configExec.backlogReplenishment?.maxNewTasks ||
+          2,
+      ),
+      requirePriority:
+        process.env.INTERNAL_EXECUTOR_REPLENISH_REQUIRE_PRIORITY === undefined
+          ? configExec.backlogReplenishment?.requirePriority !== false
+          : !["0", "false", "no", "off"].includes(
+              String(process.env.INTERNAL_EXECUTOR_REPLENISH_REQUIRE_PRIORITY)
+                .trim()
+                .toLowerCase(),
+            ),
+    },
+    projectRequirements: {
+      profile:
+        process.env.PROJECT_REQUIREMENTS_PROFILE || configReq.profile || "feature",
+      notes:
+        process.env.PROJECT_REQUIREMENTS_NOTES || configReq.notes || "",
+    },
     repoRoot: config.repoRoot || process.cwd(),
     repoSlug: config.repoSlug || "",
     agentPrompts: config.agentPrompts || {},

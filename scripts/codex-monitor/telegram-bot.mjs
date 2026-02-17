@@ -2256,7 +2256,15 @@ const COMMANDS = {
   },
   "/kanban": {
     handler: cmdKanban,
-    desc: "View/switch kanban backend: /kanban [vk|github|jira]",
+    desc: "View/switch kanban backend: /kanban [internal|vk|github|jira]",
+  },
+  "/autobacklog": {
+    handler: cmdAutoBacklog,
+    desc: "Experimental backlog replenishment controls",
+  },
+  "/requirements": {
+    handler: cmdRequirements,
+    desc: "Set project requirements profile",
   },
   "/threads": {
     handler: cmdThreads,
@@ -2619,6 +2627,7 @@ async function handleUiCommand(text) {
   const ACTION_COMMANDS = new Set([
     "/restart", "/plan", "/retry", "/cleanup", "/prune",
     "/starttask", "/pause", "/resume", "/reconcile",
+    "/autobacklog", "/requirements",
   ]);
 
   if (ACTION_COMMANDS.has(cmd)) {
@@ -3258,6 +3267,10 @@ Object.assign(UI_SCREENS, {
         ],
         [
           uiButton("🌍 Region", uiGoAction("region")),
+          uiButton("♻️ Auto Backlog", uiGoAction("autobacklog")),
+          uiButton("📐 Requirements", uiGoAction("requirements")),
+        ],
+        [
           uiButton("🎯 Route Task", uiGoAction("route_task")),
           uiButton("🏥 Health", uiCmdAction("/health")),
         ],
@@ -3313,11 +3326,54 @@ Object.assign(UI_SCREENS, {
     keyboard: () =>
       buildKeyboard([
         [
+          uiButton("Internal", uiCmdAction("/kanban internal")),
           uiButton("VK", uiCmdAction("/kanban vk")),
           uiButton("GitHub", uiCmdAction("/kanban github")),
-          uiButton("Jira", uiCmdAction("/kanban jira")),
         ],
+        [uiButton("Jira", uiCmdAction("/kanban jira"))],
         [uiButton("Status", uiCmdAction("/kanban"))],
+        uiNavRow("routing"),
+      ]),
+  },
+  autobacklog: {
+    title: "Auto Backlog",
+    parent: "routing",
+    body: () => "Experimental autonomous backlog replenishment controls.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Enable", uiCmdAction("/autobacklog on")),
+          uiButton("Disable", uiCmdAction("/autobacklog off")),
+          uiButton("Status", uiCmdAction("/autobacklog")),
+        ],
+        [
+          uiButton("Min 1", uiCmdAction("/autobacklog min 1")),
+          uiButton("Min 2", uiCmdAction("/autobacklog min 2")),
+        ],
+        [
+          uiButton("Max 1", uiCmdAction("/autobacklog max 1")),
+          uiButton("Max 2", uiCmdAction("/autobacklog max 2")),
+          uiButton("Max 3", uiCmdAction("/autobacklog max 3")),
+        ],
+        uiNavRow("routing"),
+      ]),
+  },
+  requirements: {
+    title: "Requirements Profile",
+    parent: "routing",
+    body: () => "Tune project-scope requirements for planning and backlog quality.",
+    keyboard: () =>
+      buildKeyboard([
+        [
+          uiButton("Simple", uiCmdAction("/requirements simple-feature")),
+          uiButton("Feature", uiCmdAction("/requirements feature")),
+          uiButton("Large", uiCmdAction("/requirements large-feature")),
+        ],
+        [
+          uiButton("System", uiCmdAction("/requirements system")),
+          uiButton("Multi-System", uiCmdAction("/requirements multi-system")),
+        ],
+        [uiButton("Status", uiCmdAction("/requirements"))],
         uiNavRow("routing"),
       ]),
   },
@@ -5557,14 +5613,19 @@ async function cmdKanban(chatId, backendArg) {
   if (!backendArg || backendArg.trim() === "") {
     const current = getKanbanBackendName();
     const available = getAvailableBackends();
+    const syncPolicy = String(
+      process.env.KANBAN_SYNC_POLICY || "internal-primary",
+    ).toLowerCase();
     const lines = [
       "📋 Kanban Backend Status",
       "",
       `Active: ${current}`,
+      `Sync Policy: ${syncPolicy}`,
       `Available: ${available.join(", ")}`,
       "",
       "Switch backend:",
-      "  /kanban vk        Vibe-Kanban (default)",
+      "  /kanban internal  Internal task-store (primary)",
+      "  /kanban vk        Vibe-Kanban (secondary)",
       "  /kanban github     GitHub Issues",
       "  /kanban jira       Jira (stub)",
     ];
@@ -5592,6 +5653,120 @@ async function cmdKanban(chatId, backendArg) {
   } catch (err) {
     await sendReply(chatId, `❌ Error switching backend: ${err.message}`);
   }
+}
+
+async function cmdAutoBacklog(chatId, args) {
+  const executor = _getInternalExecutor?.();
+  if (!executor) {
+    await sendReply(chatId, "⚠️ Internal executor is not available.");
+    return;
+  }
+
+  const parts = String(args || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0 || parts[0] === "status") {
+    const cfg = executor.getBacklogReplenishmentConfig?.() || {};
+    await sendReply(
+      chatId,
+      [
+        "♻️ Experimental Auto-Backlog",
+        "",
+        `Enabled: ${cfg.enabled ? "yes" : "no"}`,
+        `Min new tasks: ${cfg.minNewTasks ?? 1}`,
+        `Max new tasks: ${cfg.maxNewTasks ?? 2}`,
+        `Require priority: ${cfg.requirePriority !== false ? "yes" : "no"}`,
+        `Requirements profile: ${cfg.projectRequirements?.profile || "feature"}`,
+        "",
+        "Usage:",
+        "  /autobacklog on|off",
+        "  /autobacklog min <1|2>",
+        "  /autobacklog max <1|2|3>",
+      ].join("\n"),
+    );
+    return;
+  }
+
+  const op = parts[0];
+  if (op === "on" || op === "off") {
+    const cfg = executor.setBacklogReplenishmentConfig?.({
+      enabled: op === "on",
+    });
+    await sendReply(
+      chatId,
+      `✅ Auto-backlog ${op === "on" ? "enabled" : "disabled"}. Min=${cfg?.minNewTasks ?? 1}, Max=${cfg?.maxNewTasks ?? 2}`,
+    );
+    return;
+  }
+
+  if ((op === "min" || op === "max") && parts[1]) {
+    const value = Number(parts[1]);
+    if (!Number.isFinite(value)) {
+      await sendReply(chatId, `❌ Invalid ${op} value: ${parts[1]}`);
+      return;
+    }
+    const patch = op === "min" ? { minNewTasks: value } : { maxNewTasks: value };
+    const cfg = executor.setBacklogReplenishmentConfig?.(patch);
+    await sendReply(
+      chatId,
+      `✅ Auto-backlog updated. Enabled=${cfg?.enabled ? "yes" : "no"}, Min=${cfg?.minNewTasks ?? 1}, Max=${cfg?.maxNewTasks ?? 2}`,
+    );
+    return;
+  }
+
+  await sendReply(chatId, "Usage: /autobacklog [status|on|off|min <n>|max <n>]");
+}
+
+async function cmdRequirements(chatId, args) {
+  const executor = _getInternalExecutor?.();
+  if (!executor) {
+    await sendReply(chatId, "⚠️ Internal executor is not available.");
+    return;
+  }
+  const profiles = [
+    "simple-feature",
+    "feature",
+    "large-feature",
+    "system",
+    "multi-system",
+  ];
+  const input = String(args || "").trim();
+  if (!input) {
+    const req = executor.getProjectRequirements?.() || {
+      profile: "feature",
+      notes: "",
+    };
+    await sendReply(
+      chatId,
+      [
+        "📐 Project Requirements",
+        "",
+        `Profile: ${req.profile || "feature"}`,
+        `Notes: ${req.notes || "(none)"}`,
+        "",
+        "Usage:",
+        "  /requirements <simple-feature|feature|large-feature|system|multi-system>",
+      ].join("\n"),
+    );
+    return;
+  }
+
+  const profile = input.toLowerCase();
+  if (!profiles.includes(profile)) {
+    await sendReply(
+      chatId,
+      `❌ Unknown requirements profile: ${input}\nValid: ${profiles.join(", ")}`,
+    );
+    return;
+  }
+
+  const req = executor.setProjectRequirements?.({ profile });
+  await sendReply(
+    chatId,
+    `✅ Project requirements profile set to ${req?.profile || profile}`,
+  );
 }
 
 async function cmdThreads(chatId, subArg) {
