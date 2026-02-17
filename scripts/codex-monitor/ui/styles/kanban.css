@@ -130,6 +130,17 @@
   opacity: 0.4;
 }
 
+/* ─── Touch drag clone ─── */
+.kanban-card.touch-drag-clone {
+  opacity: 0.85;
+  transform: rotate(2deg) scale(1.04);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-color: var(--accent, #6366f1);
+  pointer-events: none;
+  z-index: 9999;
+  transition: none;
+}
+
 .kanban-card-badge {
   display: inline-block;
   font-size: 10px;

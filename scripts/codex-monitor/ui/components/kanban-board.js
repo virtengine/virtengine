@@ -74,6 +74,100 @@ const columnData = computed(() => {
 const dragTaskId = signal(null);
 const dragOverCol = signal(null);
 
+/* ─── Touch drag state ─── */
+const touchDragId = signal(null);
+const touchOverCol = signal(null);
+let _touchClone = null;
+let _touchStartX = 0;
+let _touchStartY = 0;
+let _touchMoved = false;
+
+/* ─── Touch drag helpers ─── */
+
+function _createTouchClone(el) {
+  const rect = el.getBoundingClientRect();
+  const clone = el.cloneNode(true);
+  clone.className = "kanban-card touch-drag-clone";
+  clone.style.position = "fixed";
+  clone.style.width = rect.width + "px";
+  clone.style.left = rect.left + "px";
+  clone.style.top = rect.top + "px";
+  clone.style.zIndex = "9999";
+  clone.style.pointerEvents = "none";
+  document.body.appendChild(clone);
+  return clone;
+}
+
+function _moveTouchClone(clone, x, y) {
+  if (!clone) return;
+  const w = parseFloat(clone.style.width) || 0;
+  clone.style.left = (x - w / 2) + "px";
+  clone.style.top = (y - 40) + "px";
+}
+
+function _removeTouchClone() {
+  if (_touchClone && _touchClone.parentNode) {
+    _touchClone.parentNode.removeChild(_touchClone);
+  }
+  _touchClone = null;
+}
+
+function _columnFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  const colEl = el.closest(".kanban-column");
+  if (!colEl) return null;
+  for (const col of COLUMNS) {
+    if (colEl.getAttribute("data-col") === col.id) return col.id;
+  }
+  return null;
+}
+
+async function _handleTouchDrop(colId) {
+  const taskId = touchDragId.value;
+  touchDragId.value = null;
+  touchOverCol.value = null;
+  if (!taskId || !colId) return;
+
+  const currentTask = (tasksData.value || []).find((t) => t.id === taskId);
+  if (!currentTask) return;
+  const currentCol = getColumnForStatus(currentTask.status);
+  if (currentCol === colId) return;
+
+  const newStatus = COLUMN_TO_STATUS[colId] || "todo";
+  const col = COLUMNS.find((c) => c.id === colId);
+  haptic("medium");
+
+  const prev = cloneValue(tasksData.value);
+  try {
+    await runOptimistic(
+      () => {
+        tasksData.value = tasksData.value.map((t) =>
+          t.id === taskId ? { ...t, status: newStatus } : t,
+        );
+      },
+      async () => {
+        const res = await apiFetch("/api/tasks/update", {
+          method: "POST",
+          body: JSON.stringify({ taskId, status: newStatus }),
+        });
+        if (res?.data) {
+          tasksData.value = tasksData.value.map((t) =>
+            t.id === taskId ? { ...t, ...res.data } : t,
+          );
+        }
+        return res;
+      },
+      () => {
+        tasksData.value = prev;
+      },
+    );
+    showToast(`Moved to ${col ? col.title : colId}`, "success");
+  } catch {
+    /* toast via apiFetch */
+  }
+}
+
 /* ─── Inline create for a column ─── */
 async function createTaskInColumn(columnStatus, title) {
   haptic("medium");
@@ -103,15 +197,69 @@ function KanbanCard({ task, onOpen }) {
     e.currentTarget.classList.remove("dragging");
   }, []);
 
+  /* ─ Touch drag handlers ─ */
+  const onTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    _touchStartX = touch.clientX;
+    _touchStartY = touch.clientY;
+    _touchMoved = false;
+    touchDragId.value = task.id;
+  }, [task.id]);
+
+  const onTouchMove = useCallback((e) => {
+    const touch = e.touches[0];
+    const dx = touch.clientX - _touchStartX;
+    const dy = touch.clientY - _touchStartY;
+
+    // Only start drag after a small threshold to distinguish from scroll
+    if (!_touchMoved && Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+
+    if (!_touchMoved) {
+      _touchMoved = true;
+      _removeTouchClone();
+      _touchClone = _createTouchClone(e.currentTarget);
+      haptic("medium");
+    }
+
+    e.preventDefault(); // prevent scroll during drag
+    _moveTouchClone(_touchClone, touch.clientX, touch.clientY);
+
+    const colId = _columnFromPoint(touch.clientX, touch.clientY);
+    touchOverCol.value = colId;
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    const colId = touchOverCol.value;
+    _removeTouchClone();
+    if (_touchMoved && colId) {
+      _handleTouchDrop(colId);
+    } else {
+      touchDragId.value = null;
+      touchOverCol.value = null;
+    }
+    _touchMoved = false;
+  }, []);
+
+  const onTouchCancel = useCallback(() => {
+    _removeTouchClone();
+    touchDragId.value = null;
+    touchOverCol.value = null;
+    _touchMoved = false;
+  }, []);
+
   const priorityColor = PRIORITY_COLORS[task.priority] || null;
   const priorityLabel = PRIORITY_LABELS[task.priority] || null;
 
   return html`
     <div
-      class="kanban-card ${dragTaskId.value === task.id ? 'dragging' : ''}"
+      class="kanban-card ${dragTaskId.value === task.id ? 'dragging' : ''} ${touchDragId.value === task.id && _touchMoved ? 'dragging' : ''}"
       draggable="true"
       onDragStart=${onDragStart}
       onDragEnd=${onDragEnd}
+      onTouchStart=${onTouchStart}
+      onTouchMove=${onTouchMove}
+      onTouchEnd=${onTouchEnd}
+      onTouchCancel=${onTouchCancel}
       onClick=${() => onOpen(task.id)}
     >
       ${priorityLabel && html`
@@ -204,11 +352,12 @@ function KanbanColumn({ col, tasks, onOpen }) {
     }
   }, [col.id]);
 
-  const isOver = dragOverCol.value === col.id;
+  const isOver = dragOverCol.value === col.id || touchOverCol.value === col.id;
 
   return html`
     <div
       class="kanban-column ${isOver ? 'drag-over' : ''}"
+      data-col=${col.id}
       onDragOver=${onDragOver}
       onDragLeave=${onDragLeave}
       onDrop=${onDrop}
