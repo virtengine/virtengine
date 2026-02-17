@@ -121,9 +121,9 @@ export function computeRepoFingerprint(repoRoot) {
 /**
  * Normalize a git URL to strip protocol/auth/suffix variance.
  * Examples:
- *   https://github.com/virtengine/virtengine.git → github.com/virtengine/virtengine
- *   git@github.com:virtengine/virtengine.git     → github.com/virtengine/virtengine
- *   ssh://git@github.com/virtengine/virtengine   → github.com/virtengine/virtengine
+ *   https://github.com/acme/widgets.git → github.com/acme/widgets
+ *   git@github.com:acme/widgets.git     → github.com/acme/widgets
+ *   ssh://git@github.com/acme/widgets   → github.com/acme/widgets
  */
 export function normalizeGitUrl(url) {
   if (!url) return "";

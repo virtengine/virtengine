@@ -93,6 +93,42 @@
                     "done": { "type": "string", "default": "Done" },
                     "cancelled": { "type": "string", "default": "Cancelled" }
                   }
+                },
+                "webhook": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "GitHub project webhook settings for near-real-time sync triggers",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "HTTP path exposed by ui-server for GitHub webhook deliveries"
+                    },
+                    "secret": {
+                      "type": "string",
+                      "description": "Shared secret used to validate X-Hub-Signature-256"
+                    },
+                    "requireSignature": {
+                      "type": "boolean",
+                      "description": "Require a valid webhook signature before accepting payloads"
+                    }
+                  }
+                },
+                "syncMonitoring": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Monitoring and alert thresholds for project-sync failures and rate-limits",
+                  "properties": {
+                    "alertFailureThreshold": {
+                      "type": "number",
+                      "description": "Consecutive webhook/sync failures that trigger an alert",
+                      "default": 3
+                    },
+                    "rateLimitAlertThreshold": {
+                      "type": "number",
+                      "description": "Rate-limit events counted before triggering an alert",
+                      "default": 3
+                    }
+                  }
                 }
               }
             }

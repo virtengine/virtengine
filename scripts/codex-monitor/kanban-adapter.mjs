@@ -145,6 +145,15 @@ function parseBooleanEnv(value, fallback = false) {
   return fallback;
 }
 
+function parseRepoSlug(raw) {
+  const text = String(raw || "").trim().replace(/^https?:\/\/github\.com\//i, "");
+  if (!text) return null;
+  const cleaned = text.replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+  const [owner, repo] = cleaned.split("/", 2);
+  if (!owner || !repo) return null;
+  return { owner, repo };
+}
+
 class InternalAdapter {
   constructor() {
     this.name = "internal";
@@ -535,13 +544,16 @@ class GitHubIssuesAdapter {
   constructor() {
     this.name = "github";
     const config = loadConfig();
-    const slug =
-      process.env.GITHUB_REPOSITORY ||
-      config?.repoSlug ||
-      "virtengine/virtengine";
-    const [slugOwner, slugRepo] = String(slug).split("/", 2);
-    this._owner = process.env.GITHUB_REPO_OWNER || slugOwner || "virtengine";
-    this._repo = process.env.GITHUB_REPO_NAME || slugRepo || "virtengine";
+    const slugInfo =
+      parseRepoSlug(process.env.GITHUB_REPOSITORY) ||
+      parseRepoSlug(config?.repoSlug) ||
+      parseRepoSlug(
+        process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+          ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+          : "",
+      );
+    this._owner = process.env.GITHUB_REPO_OWNER || slugInfo?.owner || "unknown";
+    this._repo = process.env.GITHUB_REPO_NAME || slugInfo?.repo || "unknown";
 
     // Codex-monitor label scheme
     this._codexLabels = {
@@ -591,6 +603,7 @@ class GitHubIssuesAdapter {
     /** @type {Map<string, {fields: any, time: number}>} projectNumber → {fields, time} */
     this._projectFieldsCache = new Map();
     this._projectFieldsCacheTTL = 300_000; // 5 minutes
+    this._repositoryNodeId = null;
 
     // Auto-sync toggle: set GITHUB_PROJECT_AUTO_SYNC=false to disable project sync
     this._projectAutoSync = parseBooleanEnv(
@@ -647,22 +660,12 @@ class GitHubIssuesAdapter {
           (f.type === "SINGLE_SELECT" || f.data_type === "SINGLE_SELECT"),
       );
 
-      if (!statusField) {
-        console.warn(
-          `${TAG} no Status field found in project ${projectNumber}`,
-        );
-        return null;
-      }
-
-      // Extract options
-      const statusOptions = (statusField.options || []).map((opt) => ({
-        id: opt.id,
-        name: opt.name,
-      }));
-
       const result = {
-        statusFieldId: statusField.id,
-        statusOptions,
+        statusFieldId: statusField?.id || null,
+        statusOptions: (statusField?.options || []).map((opt) => ({
+          id: opt.id,
+          name: opt.name,
+        })),
       };
 
       // Cache the result (also cache the raw fields array for getProjectFields)
@@ -722,6 +725,7 @@ class GitHubIssuesAdapter {
           id: opt.id,
           name: opt.name,
         })),
+        raw: f,
       });
     }
     return fieldMap;
@@ -914,10 +918,146 @@ class GitHubIssuesAdapter {
         projectNumber: null, // set by caller
         projectItemId: projectItem.id || null,
         projectStatus: projectStatus || null,
+        projectFieldValues:
+          projectItem.fieldValues && typeof projectItem.fieldValues === "object"
+            ? { ...projectItem.fieldValues }
+            : {},
       },
       taskUrl: issueUrl,
       backend: "github",
     };
+  }
+
+  _escapeGraphQLString(value) {
+    return JSON.stringify(String(value == null ? "" : value));
+  }
+
+  _stringifyProjectFieldValue(field, value) {
+    const fieldType = String(field?.type || "TEXT").toUpperCase();
+    if (fieldType === "SINGLE_SELECT") {
+      const option = (field.options || []).find((opt) => {
+        const optionId = String(opt?.id || "").trim();
+        const optionName = String(opt?.name || "")
+          .trim()
+          .toLowerCase();
+        const input = String(value || "").trim().toLowerCase();
+        return optionId === String(value || "").trim() || optionName === input;
+      });
+      if (!option) return null;
+      return `{singleSelectOptionId: ${this._escapeGraphQLString(option.id)}}`;
+    }
+    if (fieldType === "ITERATION") {
+      const rawIterations = field?.raw?.configuration?.iterations;
+      const iterations = Array.isArray(rawIterations)
+        ? rawIterations
+        : Array.isArray(field?.options)
+          ? field.options
+          : [];
+      const iteration = iterations.find((entry) => {
+        const entryId = String(entry?.id || "").trim();
+        const name = String(entry?.title || entry?.name || "")
+          .trim()
+          .toLowerCase();
+        const input = String(value || "").trim().toLowerCase();
+        return entryId === String(value || "").trim() || name === input;
+      });
+      if (!iteration?.id) return null;
+      return `{iterationId: ${this._escapeGraphQLString(iteration.id)}}`;
+    }
+    if (fieldType === "NUMBER") {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return null;
+      return `{number: ${numeric}}`;
+    }
+    if (fieldType === "DATE") {
+      return `{date: ${this._escapeGraphQLString(value)}}`;
+    }
+    return `{text: ${this._escapeGraphQLString(value)}}`;
+  }
+
+  async _updateProjectItemFieldsBatch(projectId, itemId, updates = []) {
+    if (!projectId || !itemId || updates.length === 0) return false;
+    const operations = updates
+      .map((update, index) => {
+        const alias = `update_${index}`;
+        return `
+          ${alias}: updateProjectV2ItemFieldValue(
+            input: {
+              projectId: ${this._escapeGraphQLString(projectId)},
+              itemId: ${this._escapeGraphQLString(itemId)},
+              fieldId: ${this._escapeGraphQLString(update.fieldId)},
+              value: ${update.value}
+            }
+          ) {
+            projectV2Item {
+              id
+            }
+          }
+        `;
+      })
+      .join("\n");
+
+    const mutation = `mutation { ${operations} }`;
+    await this._gh(["api", "graphql", "-f", `query=${mutation}`]);
+    return true;
+  }
+
+  _matchesProjectFieldFilters(task, projectFieldFilter) {
+    if (!projectFieldFilter || typeof projectFieldFilter !== "object") {
+      return true;
+    }
+    const values = task?.meta?.projectFieldValues;
+    if (!values || typeof values !== "object") return false;
+    const entries = Object.entries(projectFieldFilter);
+    if (entries.length === 0) return true;
+
+    return entries.every(([fieldName, expected]) => {
+      const actualKey =
+        Object.keys(values).find(
+          (key) => key.toLowerCase() === String(fieldName).toLowerCase(),
+        ) || fieldName;
+      const actual = values[actualKey];
+      if (Array.isArray(expected)) {
+        const expectedSet = new Set(
+          expected.map((entry) =>
+            String(entry == null ? "" : entry)
+              .trim()
+              .toLowerCase(),
+          ),
+        );
+        return expectedSet.has(
+          String(actual == null ? "" : actual)
+            .trim()
+            .toLowerCase(),
+        );
+      }
+      return (
+        String(actual == null ? "" : actual)
+          .trim()
+          .toLowerCase() ===
+        String(expected == null ? "" : expected)
+          .trim()
+          .toLowerCase()
+      );
+    });
+  }
+
+  async getRepositoryNodeId() {
+    if (this._repositoryNodeId) return this._repositoryNodeId;
+    const query = `
+      query {
+        repository(
+          owner: ${this._escapeGraphQLString(this._owner)},
+          name: ${this._escapeGraphQLString(this._repo)}
+        ) {
+          id
+        }
+      }
+    `;
+    const data = await this._gh(["api", "graphql", "-f", `query=${query}`]);
+    const repoId = data?.data?.repository?.id || null;
+    if (repoId) this._repositoryNodeId = repoId;
+    return repoId;
   }
 
   /**
@@ -1003,10 +1143,7 @@ class GitHubIssuesAdapter {
         return false;
       }
 
-      const itemId = await this._getProjectItemIdForIssue(
-        projectNumber,
-        issueNumber,
-      );
+      const itemId = await this._getProjectItemIdForIssue(projectNumber, issueNumber);
       if (!itemId) {
         console.warn(
           `${TAG} syncFieldToProject: issue #${issueNumber} not found in project`,
@@ -1014,48 +1151,20 @@ class GitHubIssuesAdapter {
         return false;
       }
 
-      // Build value object based on field type
-      let valueJson;
-      const fieldType = String(field.type).toUpperCase();
-      if (fieldType === "SINGLE_SELECT") {
-        const option = field.options.find(
-          (opt) =>
-            String(opt.name).toLowerCase() === String(value).toLowerCase(),
+      const valueJson = this._stringifyProjectFieldValue(field, value);
+      if (!valueJson) {
+        console.warn(
+          `${TAG} syncFieldToProject: value "${value}" invalid for field "${fieldName}"`,
         );
-        if (!option) {
-          console.warn(
-            `${TAG} syncFieldToProject: option "${value}" not found for field "${fieldName}"`,
-          );
-          return false;
-        }
-        valueJson = `{singleSelectOptionId: "${option.id}"}`;
-      } else if (fieldType === "NUMBER") {
-        valueJson = `{number: ${Number(value)}}`;
-      } else if (fieldType === "DATE") {
-        valueJson = `{date: "${String(value)}"}`;
-      } else {
-        // TEXT and other types
-        valueJson = `{text: "${String(value).replace(/"/g, '\\"')}"}`;
+        return false;
       }
 
-      const mutation = `
-        mutation {
-          updateProjectV2ItemFieldValue(
-            input: {
-              projectId: "${projectId}",
-              itemId: "${itemId}",
-              fieldId: "${field.id}",
-              value: ${valueJson}
-            }
-          ) {
-            projectV2Item {
-              id
-            }
-          }
-        }
-      `;
-
-      await this._gh(["api", "graphql", "-f", `query=${mutation}`]);
+      await this._updateProjectItemFieldsBatch(projectId, itemId, [
+        {
+          fieldId: field.id,
+          value: valueJson,
+        },
+      ]);
       console.log(
         `${TAG} synced field "${fieldName}" = "${value}" for issue #${issueNumber}`,
       );
@@ -1068,6 +1177,16 @@ class GitHubIssuesAdapter {
     }
   }
 
+  async syncIterationToProject(issueNumber, projectNumber, iterationName) {
+    if (!issueNumber || !projectNumber || !iterationName) return false;
+    return this.syncFieldToProject(
+      issueNumber,
+      projectNumber,
+      "Iteration",
+      iterationName,
+    );
+  }
+
   /**
    * List tasks from a GitHub Project board.
    * Fetches project items and normalizes them directly (no N+1 issue fetches).
@@ -1075,7 +1194,7 @@ class GitHubIssuesAdapter {
    * @param {string} projectNumber - GitHub project number
    * @returns {Promise<KanbanTask[]>}
    */
-  async listTasksFromProject(projectNumber) {
+  async listTasksFromProject(projectNumber, filters = {}) {
     if (!projectNumber) return [];
 
     try {
@@ -1105,11 +1224,16 @@ class GitHubIssuesAdapter {
         const task = this._normaliseProjectItem(item);
         if (task) {
           task.meta.projectNumber = projectNumber;
+          if (!task.meta.projectFieldValues.Status && item.status) {
+            task.meta.projectFieldValues.Status = item.status;
+          }
           // Cache the project item ID for later lookups
           if (task.id && item.id) {
             this._projectItemCache.set(`${projectNumber}:${task.id}`, item.id);
           }
-          tasks.push(task);
+          if (this._matchesProjectFieldFilters(task, filters.projectField)) {
+            tasks.push(task);
+          }
         }
       }
 
@@ -1132,7 +1256,12 @@ class GitHubIssuesAdapter {
    * @param {string} status - Normalized status (todo/inprogress/inreview/done)
    * @returns {Promise<boolean>}
    */
-  async _syncStatusToProject(issueUrl, projectNumber, status) {
+  async _syncStatusToProject(
+    issueUrl,
+    projectNumber,
+    status,
+    projectFields = {},
+  ) {
     if (!issueUrl || !projectNumber || !status) return false;
 
     try {
@@ -1180,107 +1309,54 @@ class GitHubIssuesAdapter {
         // Item already in project, continue
       }
 
-      // Get project and item IDs via GraphQL
-      const projectIdQuery = `
-        query {
-          user(login: "${owner}") {
-            projectV2(number: ${projectNumber}) {
-              id
-            }
-          }
-          organization(login: "${owner}") {
-            projectV2(number: ${projectNumber}) {
-              id
-            }
-          }
-        }
-      `;
-
-      let projectId = null;
-      try {
-        const projectData = await this._gh([
-          "api",
-          "graphql",
-          "-f",
-          `query=${projectIdQuery}`,
-        ]);
-        projectId =
-          projectData?.data?.user?.projectV2?.id ||
-          projectData?.data?.organization?.projectV2?.id;
-      } catch (err) {
-        console.warn(`${TAG} failed to get project ID: ${err.message}`);
+      const issueNum = issueUrl.match(/\/issues\/(\d+)/)?.[1];
+      if (!issueNum) {
+        console.warn(`${TAG} could not parse issue number from URL: ${issueUrl}`);
         return false;
       }
 
+      const projectId = await this.getProjectNodeId(projectNumber);
       if (!projectId) {
         console.warn(
           `${TAG} could not resolve project ID for ${owner}/${projectNumber}`,
         );
         return false;
       }
-
-      // Get project item ID for this issue
-      const itemQuery = `
-        query {
-          resource(url: "${issueUrl}") {
-            ... on Issue {
-              projectItems(first: 10) {
-                nodes {
-                  id
-                  project {
-                    id
-                  }
-                }
-              }
-            }
-          }
-        }
-      `;
-
-      let itemId = null;
-      try {
-        const itemData = await this._gh([
-          "api",
-          "graphql",
-          "-f",
-          `query=${itemQuery}`,
-        ]);
-        const items = itemData?.data?.resource?.projectItems?.nodes || [];
-        const matchingItem = items.find(
-          (item) => item.project?.id === projectId,
-        );
-        itemId = matchingItem?.id;
-      } catch (err) {
-        console.warn(`${TAG} failed to get project item ID: ${err.message}`);
-        return false;
-      }
-
+      const itemId = await this._getProjectItemIdForIssue(projectNumber, issueNum);
       if (!itemId) {
         console.warn(
           `${TAG} issue not found in project ${owner}/${projectNumber}`,
         );
         return false;
       }
-
-      // Update project item field value
-      const mutation = `
-        mutation {
-          updateProjectV2ItemFieldValue(
-            input: {
-              projectId: "${projectId}",
-              itemId: "${itemId}",
-              fieldId: "${fields.statusFieldId}",
-              value: {singleSelectOptionId: "${statusOption.id}"}
-            }
-          ) {
-            projectV2Item {
-              id
-            }
-          }
+      const fieldMap = await this.getProjectFields(projectNumber);
+      const updates = [];
+      updates.push({
+        fieldId: fields.statusFieldId,
+        value: `{singleSelectOptionId: ${this._escapeGraphQLString(statusOption.id)}}`,
+      });
+      for (const [fieldName, fieldValue] of Object.entries(projectFields || {})) {
+        if (!fieldName || /^status$/i.test(fieldName)) continue;
+        const field = fieldMap.get(String(fieldName).toLowerCase().trim());
+        if (!field) {
+          console.warn(
+            `${TAG} skipping unknown project field during status sync: ${fieldName}`,
+          );
+          continue;
         }
-      `;
-
-      await this._gh(["api", "graphql", "-f", `query=${mutation}`]);
+        const value = this._stringifyProjectFieldValue(field, fieldValue);
+        if (!value) {
+          console.warn(
+            `${TAG} skipping invalid project field value during status sync: ${fieldName}`,
+          );
+          continue;
+        }
+        updates.push({
+          fieldId: field.id,
+          value,
+        });
+      }
+      await this._updateProjectItemFieldsBatch(projectId, itemId, updates);
 
       console.log(
         `${TAG} synced issue ${issueUrl} to project status: ${targetStatusName}`,
@@ -1358,7 +1434,7 @@ class GitHubIssuesAdapter {
       const projectNumber = await this._resolveProjectNumber();
       if (projectNumber) {
         try {
-          const tasks = await this.listTasksFromProject(projectNumber);
+          const tasks = await this.listTasksFromProject(projectNumber, filters);
 
           // Apply filters
           let filtered = tasks;
@@ -1572,6 +1648,7 @@ class GitHubIssuesAdapter {
               task.taskUrl,
               projectNumber,
               normalised,
+              options.projectFields,
             );
           } catch (err) {
             // Log but don't fail - issue update should still succeed
@@ -1618,14 +1695,141 @@ class GitHubIssuesAdapter {
     return this.getTask(num);
   }
 
+  async addProjectV2DraftIssue(projectNumber, title, body = "") {
+    const projectId = await this.getProjectNodeId(projectNumber);
+    if (!projectId) return null;
+    const mutation = `
+      mutation {
+        addProjectV2DraftIssue(
+          input: {
+            projectId: ${this._escapeGraphQLString(projectId)},
+            title: ${this._escapeGraphQLString(title || "New task")},
+            body: ${this._escapeGraphQLString(body)}
+          }
+        ) {
+          projectItem {
+            id
+          }
+        }
+      }
+    `;
+    const result = await this._gh(["api", "graphql", "-f", `query=${mutation}`]);
+    return result?.data?.addProjectV2DraftIssue?.projectItem?.id || null;
+  }
+
+  async convertProjectV2DraftIssueItemToIssue(_projectNumber, projectItemId) {
+    if (!projectItemId) return null;
+    const repositoryId = await this.getRepositoryNodeId();
+    if (!repositoryId) return null;
+    const mutation = `
+      mutation {
+        convertProjectV2DraftIssueItemToIssue(
+          input: {
+            itemId: ${this._escapeGraphQLString(projectItemId)},
+            repositoryId: ${this._escapeGraphQLString(repositoryId)}
+          }
+        ) {
+          item {
+            id
+          }
+          issue {
+            number
+            url
+            title
+          }
+        }
+      }
+    `;
+    const result = await this._gh(["api", "graphql", "-f", `query=${mutation}`]);
+    return result?.data?.convertProjectV2DraftIssueItemToIssue?.issue || null;
+  }
+
   async createTask(_projectId, taskData) {
+    const wantsDraftCreate = Boolean(taskData?.draft || taskData?.createDraft);
+    const shouldConvertDraft = Boolean(
+      taskData?.convertDraft || taskData?.convertToIssue,
+    );
+    const requestedStatus = normaliseStatus(taskData.status || "todo");
+
+    let projectNumber = null;
+    if (this._projectMode === "kanban") {
+      projectNumber = await this._resolveProjectNumber();
+    }
+    if (wantsDraftCreate && projectNumber) {
+      const draftItemId = await this.addProjectV2DraftIssue(
+        projectNumber,
+        taskData.title || "New task",
+        taskData.description || "",
+      );
+      if (!draftItemId) {
+        throw new Error("[kanban] failed to create draft issue in project");
+      }
+      if (!shouldConvertDraft) {
+        return {
+          id: `draft:${draftItemId}`,
+          title: taskData.title || "New task",
+          description: taskData.description || "",
+          status: requestedStatus,
+          assignee: null,
+          priority: null,
+          projectId: `${this._owner}/${this._repo}`,
+          branchName: null,
+          prNumber: null,
+          meta: {
+            projectNumber,
+            projectItemId: draftItemId,
+            isDraft: true,
+          },
+          backend: "github",
+        };
+      }
+      const converted = await this.convertProjectV2DraftIssueItemToIssue(
+        projectNumber,
+        draftItemId,
+      );
+      const convertedIssueNumber = String(converted?.number || "").trim();
+      if (!/^\d+$/.test(convertedIssueNumber)) {
+        throw new Error(
+          "[kanban] failed to convert draft issue to repository issue",
+        );
+      }
+      const requestedLabels = normalizeLabels(taskData.labels || []);
+      const labelsToApply = new Set(requestedLabels);
+      labelsToApply.add(
+        String(this._canonicalTaskLabel || "codex-monitor").toLowerCase(),
+      );
+      if (requestedStatus === "inprogress") labelsToApply.add("inprogress");
+      if (requestedStatus === "inreview") labelsToApply.add("inreview");
+      if (requestedStatus === "blocked") labelsToApply.add("blocked");
+      for (const label of labelsToApply) {
+        await this._ensureLabelExists(label);
+      }
+      const assignee =
+        taskData.assignee ||
+        (this._autoAssignCreator ? await this._resolveDefaultAssignee() : null);
+      const editArgs = [
+        "issue",
+        "edit",
+        convertedIssueNumber,
+        "--repo",
+        `${this._owner}/${this._repo}`,
+      ];
+      if (assignee) editArgs.push("--add-assignee", assignee);
+      for (const label of labelsToApply) {
+        editArgs.push("--add-label", label);
+      }
+      await this._gh(editArgs, { parseJson: false });
+      return this.updateTaskStatus(convertedIssueNumber, requestedStatus, {
+        projectFields: taskData.projectFields,
+      });
+    }
+
     const requestedLabels = normalizeLabels(taskData.labels || []);
     const labelsToApply = new Set(requestedLabels);
     labelsToApply.add(
       String(this._canonicalTaskLabel || "codex-monitor").toLowerCase(),
     );
 
-    const requestedStatus = normaliseStatus(taskData.status || "todo");
     if (requestedStatus === "inprogress") labelsToApply.add("inprogress");
     if (requestedStatus === "inreview") labelsToApply.add("inreview");
     if (requestedStatus === "blocked") labelsToApply.add("blocked");
@@ -1659,6 +1863,28 @@ class GitHubIssuesAdapter {
     const issueNum = issueUrl.match(/\/issues\/(\d+)/)?.[1] || null;
     if (issueUrl) {
       await this._ensureIssueLinkedToProject(issueUrl);
+    }
+    if (
+      issueUrl &&
+      projectNumber &&
+      this._projectAutoSync &&
+      (requestedStatus !== "todo" ||
+        (taskData.projectFields &&
+          typeof taskData.projectFields === "object" &&
+          Object.keys(taskData.projectFields).length > 0))
+    ) {
+      try {
+        await this._syncStatusToProject(
+          issueUrl,
+          projectNumber,
+          requestedStatus,
+          taskData.projectFields,
+        );
+      } catch (err) {
+        console.warn(
+          `${TAG} failed to sync project fields for created issue: ${err.message}`,
+        );
+      }
     }
     if (issueNum) {
       return this.getTask(issueNum);

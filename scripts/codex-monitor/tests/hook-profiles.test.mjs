@@ -108,7 +108,7 @@ describe("hook-profiles", () => {
     expect(copilotJoined).toContain("agent-hook-bridge.mjs");
     expect(Array.isArray(copilotCmd)).toBe(true);
     expect(copilotCmd[0]).toBe("node");
-    expect(copilotCmd[1]).toBe("scripts/codex-monitor/agent-hook-bridge.mjs");
+    expect(String(copilotCmd[1])).toContain("agent-hook-bridge.mjs");
   });
 
   it("auto-migrates non-portable copilot bridge commands", async () => {
@@ -153,9 +153,7 @@ describe("hook-profiles", () => {
     );
     const migratedCommand = migratedConfig.sessionStart?.[0]?.command || [];
     expect(migratedCommand[0]).toBe("node");
-    expect(migratedCommand[1]).toBe(
-      "scripts/codex-monitor/agent-hook-bridge.mjs",
-    );
+    expect(String(migratedCommand[1])).toContain("agent-hook-bridge.mjs");
   });
 
   it("merges with existing claude settings", async () => {

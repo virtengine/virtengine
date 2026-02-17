@@ -842,6 +842,57 @@ describe("GitHub Projects v2 integration", () => {
         false,
       );
     });
+
+    it("syncIterationToProject resolves iteration by name", async () => {
+      mockGh({
+        data: {
+          user: null,
+          organization: { projectV2: { id: "PVT_1" } },
+        },
+      });
+      mockGh([
+        {
+          id: "PVTF_iter",
+          name: "Iteration",
+          type: "ITERATION",
+          configuration: {
+            iterations: [
+              { id: "iter_1", title: "Sprint 23" },
+              { id: "iter_2", title: "Sprint 24" },
+            ],
+          },
+          options: [],
+        },
+      ]);
+      mockGh({
+        data: {
+          resource: {
+            projectItems: {
+              nodes: [{ id: "PVTI_1", project: { id: "PVT_1" } }],
+            },
+          },
+        },
+      });
+      mockGh({
+        data: {
+          update_0: {
+            projectV2Item: { id: "PVTI_1" },
+          },
+        },
+      });
+
+      const adapter = getKanbanAdapter();
+      const result = await adapter.syncIterationToProject("42", "7", "Sprint 24");
+      expect(result).toBe(true);
+
+      const mutationCall = execFileMock.mock.calls[3];
+      const mutationArg = mutationCall[1].find((a) =>
+        String(a).includes("updateProjectV2ItemFieldValue"),
+      );
+      expect(mutationArg).toContain("iterationId");
+      expect(mutationArg).toContain("iter_2");
+      expect(mutationArg).toContain("update_0:");
+    });
   });
 
   // ── Rate limit retry in _gh() ─────────────────────────────────────
@@ -1007,6 +1058,251 @@ describe("GitHub Projects v2 integration", () => {
 
       // The item ID should now be in the cache
       expect(adapter._projectItemCache.get("7:55")).toBe("PVTI_cached");
+    });
+
+    it("filters project items by filters.projectField", async () => {
+      mockGh([
+        {
+          id: "PVTI_1",
+          status: "Todo",
+          fieldValues: { Priority: "High" },
+          content: {
+            number: 10,
+            title: "Task A",
+            body: "",
+            url: "https://github.com/acme/widgets/issues/10",
+            state: "open",
+            labels: [{ name: "codex-monitor" }],
+            assignees: [],
+          },
+        },
+        {
+          id: "PVTI_2",
+          status: "Todo",
+          fieldValues: { Priority: "Low" },
+          content: {
+            number: 11,
+            title: "Task B",
+            body: "",
+            url: "https://github.com/acme/widgets/issues/11",
+            state: "open",
+            labels: [{ name: "codex-monitor" }],
+            assignees: [],
+          },
+        },
+      ]);
+
+      const adapter = getKanbanAdapter();
+      const tasks = await adapter.listTasksFromProject("7", {
+        projectField: { Priority: "High" },
+      });
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]?.id).toBe("10");
+    });
+  });
+
+  describe("status+field batch mutations and draft flow", () => {
+    it("batches status + project field updates with GraphQL aliases", async () => {
+      mockGh("Closed issue #42");
+      mockGh({
+        number: 42,
+        title: "test",
+        body: "",
+        state: "closed",
+        url: "https://github.com/acme/widgets/issues/42",
+        labels: [],
+        assignees: [],
+      });
+      mockGh("[]");
+      mockGh([
+        {
+          id: "PVTF_s",
+          name: "Status",
+          type: "SINGLE_SELECT",
+          options: [{ id: "opt_done", name: "Done" }],
+        },
+        {
+          id: "PVTF_p",
+          name: "Priority",
+          type: "SINGLE_SELECT",
+          options: [{ id: "opt_high", name: "High" }],
+        },
+      ]);
+      mockGh("added");
+      mockGh({
+        data: {
+          user: null,
+          organization: { projectV2: { id: "PVT_1" } },
+        },
+      });
+      mockGh({
+        data: {
+          resource: {
+            projectItems: {
+              nodes: [{ id: "PVTI_1", project: { id: "PVT_1" } }],
+            },
+          },
+        },
+      });
+      mockGh({ data: { update_0: {}, update_1: {} } });
+      mockGh({
+        number: 42,
+        title: "test",
+        body: "",
+        state: "closed",
+        url: "https://github.com/acme/widgets/issues/42",
+        labels: [],
+        assignees: [],
+      });
+      mockGh("[]");
+
+      const adapter = getKanbanAdapter();
+      await adapter.updateTaskStatus("42", "done", {
+        projectFields: { Priority: "High" },
+      });
+
+      const mutationCall = execFileMock.mock.calls[7];
+      const mutationArg = mutationCall[1].find((a) =>
+        String(a).includes("updateProjectV2ItemFieldValue"),
+      );
+      expect(mutationArg).toContain("update_0:");
+      expect(mutationArg).toContain("update_1:");
+      expect(mutationArg).toContain("PVTF_s");
+      expect(mutationArg).toContain("PVTF_p");
+      expect(mutationArg).toContain("opt_done");
+      expect(mutationArg).toContain("opt_high");
+    });
+
+    it("listTasks applies projectField filter in project mode", async () => {
+      mockGh([
+        {
+          id: "PVTI_1",
+          status: "Todo",
+          fieldValues: { Priority: "High" },
+          content: {
+            number: 10,
+            title: "Task A",
+            body: "",
+            url: "https://github.com/acme/widgets/issues/10",
+            state: "open",
+            labels: [{ name: "codex-monitor" }],
+            assignees: [],
+          },
+        },
+        {
+          id: "PVTI_2",
+          status: "Todo",
+          fieldValues: { Priority: "Low" },
+          content: {
+            number: 11,
+            title: "Task B",
+            body: "",
+            url: "https://github.com/acme/widgets/issues/11",
+            state: "open",
+            labels: [{ name: "codex-monitor" }],
+            assignees: [],
+          },
+        },
+      ]);
+      mockGh("[]");
+
+      const adapter = getKanbanAdapter();
+      const tasks = await adapter.listTasks("ignored", {
+        projectField: { Priority: "High" },
+      });
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]?.id).toBe("10");
+    });
+
+    it("createTask supports addProjectV2DraftIssue without conversion", async () => {
+      mockGh({
+        data: {
+          user: null,
+          organization: { projectV2: { id: "PVT_1" } },
+        },
+      });
+      mockGh({
+        data: {
+          addProjectV2DraftIssue: { projectItem: { id: "PVTI_draft_1" } },
+        },
+      });
+
+      const adapter = getKanbanAdapter();
+      const task = await adapter.createTask("ignored", {
+        title: "Draft task",
+        description: "Draft body",
+        draft: true,
+      });
+      expect(task.id).toBe("draft:PVTI_draft_1");
+      expect(task.meta?.isDraft).toBe(true);
+
+      const issueCreateCall = execFileMock.mock.calls.find(
+        (call) => Array.isArray(call[1]) && call[1].includes("issue"),
+      );
+      expect(issueCreateCall).toBeUndefined();
+    });
+
+    it("createTask can convert a project draft issue to repository issue", async () => {
+      process.env.GITHUB_PROJECT_AUTO_SYNC = "false";
+      setKanbanBackend("github");
+
+      mockGh({
+        data: {
+          user: null,
+          organization: { projectV2: { id: "PVT_1" } },
+        },
+      });
+      mockGh({
+        data: {
+          addProjectV2DraftIssue: { projectItem: { id: "PVTI_draft_2" } },
+        },
+      });
+      mockGh({
+        data: {
+          repository: { id: "REPO_1" },
+        },
+      });
+      mockGh({
+        data: {
+          convertProjectV2DraftIssueItemToIssue: {
+            issue: {
+              number: 88,
+              url: "https://github.com/acme/widgets/issues/88",
+            },
+          },
+        },
+      });
+      mockGh("created");
+      mockGh("updated");
+      mockGh("Closed issue #88");
+      mockGh({
+        number: 88,
+        title: "Draft task",
+        body: "Draft body",
+        state: "closed",
+        url: "https://github.com/acme/widgets/issues/88",
+        labels: [],
+        assignees: [],
+      });
+      mockGh("[]");
+
+      const adapter = getKanbanAdapter();
+      const task = await adapter.createTask("ignored", {
+        title: "Draft task",
+        description: "Draft body",
+        draft: true,
+        convertDraft: true,
+        assignee: "alice",
+        status: "done",
+      });
+      expect(task.id).toBe("88");
+
+      const mutationCall = execFileMock.mock.calls[3];
+      expect(mutationCall[1]).toContain("graphql");
+      const mutationArg = mutationCall[1].find((a) =>
+        String(a).includes("convertProjectV2DraftIssueItemToIssue"),
+      );
+      expect(mutationArg).toBeTruthy();
     });
   });
 });

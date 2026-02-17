@@ -29,14 +29,15 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { resolveRepoRoot } from "./repo-root.mjs";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** Repository root (two levels up from scripts/codex-monitor/) */
-const REPO_ROOT = resolve(__dirname, "..", "..");
+/** Repository root for the active workspace */
+const REPO_ROOT = resolveRepoRoot();
 
 /** Console log prefix */
 export const TAG = "[agent-hooks]";

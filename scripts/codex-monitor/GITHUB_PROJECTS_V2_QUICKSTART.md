@@ -2,10 +2,21 @@
 
 This is a companion document to [GITHUB_PROJECTS_V2_API.md](./GITHUB_PROJECTS_V2_API.md) providing the TL;DR version.
 
-## Current Gap
+## Current State
 
-**What works**: Issues get added to project boards when created  
-**What's missing**: Reading from projects, syncing status updates, custom fields
+**Implemented (Phase 1 + 2 + 3)**:
+
+- Read tasks from Projects v2 boards (`GITHUB_PROJECT_MODE=kanban`)
+- Sync status updates to project `Status` field (`GITHUB_PROJECT_AUTO_SYNC=true`)
+- Generic field sync helper for text/number/date/single-select
+
+**Implemented in Phase 3**:
+
+- Iteration sync helper (`syncIterationToProject`)
+- Batch project field/status updates (GraphQL aliases)
+- Webhook-driven sync trigger path (`/api/webhooks/github/project-sync`)
+- Project-field filtering (`filters.projectField`)
+- Draft issue creation/conversion support
 
 ## What You Need to Know
 
@@ -62,24 +73,24 @@ gh api graphql -f query='
 
 ### Phase 1: Read from Projects
 
-- [ ] `getProjectNodeId(projectNumber)` - Cache project ID
-- [ ] `getProjectFields(projectNumber)` - Cache field metadata
-- [ ] `listTasksFromProject(projectNumber)` - Read items via `gh project item-list`
-- [ ] `_getProjectItemIdForIssue(projectNumber, issueNumber)` - Lookup helper
-- [ ] Update `listTasks()` to use project board when `mode=kanban`
+- [x] `getProjectNodeId(projectNumber)` - Cache project ID
+- [x] `getProjectFields(projectNumber)` - Cache field metadata
+- [x] `listTasksFromProject(projectNumber)` - Read items via `gh project item-list`
+- [x] `_getProjectItemIdForIssue(projectNumber, issueNumber)` - Lookup helper
+- [x] Update `listTasks()` to use project board when `mode=kanban`
 
 ### Phase 2: Write to Projects
 
-- [ ] `syncStatusToProject(issueNumber, projectNumber, status)` - Update Status field
-- [ ] Update `updateTaskStatus()` to call `syncStatusToProject()`
-- [ ] Add status mapping config (env vars or config file)
+- [x] `syncStatusToProject(issueNumber, projectNumber, status)` - Update Status field
+- [x] Update `updateTaskStatus()` to call `syncStatusToProject()`
+- [x] Add status mapping config (env vars or config file)
 
 ### Phase 3: Advanced (Optional)
 
-- [ ] `syncFieldToProject()` - Generic field updates
-- [ ] `syncIterationToProject()` - Sprint field updates
-- [ ] Batch operations for performance
-- [ ] Webhook support for real-time sync
+- [x] `syncFieldToProject()` - Generic field updates
+- [x] `syncIterationToProject()` - Sprint field updates
+- [x] Batch operations for performance
+- [x] Webhook support for real-time sync
 
 ## Configuration
 
@@ -158,7 +169,7 @@ node -e "
 
 ## Migration
 
-**No breaking changes**. Existing behavior (reading from repo issues) is default.
+**No breaking changes**. Existing behavior (reading from repo issues) remains default.
 
 To enable project sync:
 
@@ -176,3 +187,7 @@ See [GITHUB_PROJECTS_V2_API.md](./GITHUB_PROJECTS_V2_API.md) for:
 - Error handling and edge cases
 - Testing strategy
 - Rate limiting considerations
+
+Monitoring and operations:
+
+- [GITHUB_PROJECTS_V2_MONITORING.md](./GITHUB_PROJECTS_V2_MONITORING.md)

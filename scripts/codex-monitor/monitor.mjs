@@ -7130,8 +7130,10 @@ function buildTaskUrl(task, projectId) {
     }
     // GitHub issue URL format
     const cfg = loadConfig();
-    const slug =
-      process.env.GITHUB_REPOSITORY || cfg?.repoSlug || "virtengine/virtengine";
+    const slug = process.env.GITHUB_REPOSITORY || cfg?.repoSlug || "";
+    if (!slug || slug === "unknown/unknown") {
+      return null;
+    }
     return `https://github.com/${slug}/issues/${String(taskId).replace(/^#/, "")}`;
   }
 
@@ -8226,7 +8228,7 @@ async function analyzeWithCodex(logPath, logText, reason) {
   // The new approach uses `codex exec` with --full-auto so the agent can
   // actually read files, inspect git status, and give a real diagnosis.
   const logTail = logText.slice(-12000);
-  const prompt = `You are diagnosing why the VirtEngine orchestrator exited.
+  const prompt = `You are diagnosing why the codex-monitor orchestrator exited.
 You have FULL READ ACCESS to the workspace. Use it.
 
 ## Context
@@ -10816,7 +10818,7 @@ function restartGitHubReconciler() {
       ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
       : "") ||
     repoSlug ||
-    "virtengine/virtengine";
+    "unknown/unknown";
 
   ghReconciler = startGitHubReconciler({
     repoSlug: repo,
@@ -11167,6 +11169,17 @@ if (isExecutorDisabled()) {
             telegramToken && telegramChatId
               ? (msg) => void sendTelegramMessage(msg)
               : null,
+          onAlert:
+            telegramToken && telegramChatId
+              ? (event) =>
+                  void sendTelegramMessage(
+                    `⚠️ Project sync alert: ${event?.message || "unknown"}`,
+                  )
+              : null,
+          failureAlertThreshold:
+            config?.githubProjectSync?.alertFailureThreshold || 3,
+          rateLimitAlertThreshold:
+            config?.githubProjectSync?.rateLimitAlertThreshold || 3,
         });
         syncEngine.start();
         console.log(

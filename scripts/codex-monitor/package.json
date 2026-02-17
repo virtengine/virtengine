@@ -157,6 +157,7 @@
     "ve-orchestrator.mjs",
     "ve-orchestrator.ps1",
     "ve-orchestrator.sh",
+    "rotate-agent-logs.sh",
     "vibe-kanban-wrapper.mjs",
     "vk-error-resolver.mjs",
     "vk-log-stream.mjs",

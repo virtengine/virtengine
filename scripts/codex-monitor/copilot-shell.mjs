@@ -1,5 +1,5 @@
 /**
- * copilot-shell.mjs — Persistent Copilot SDK agent for the VirtEngine monitor.
+ * copilot-shell.mjs — Persistent Copilot SDK agent for codex-monitor.
  *
  * Uses the GitHub Copilot SDK (@github/copilot-sdk) to maintain a persistent
  * session with multi-turn conversation, tool use (shell, file I/O, MCP), and
@@ -437,7 +437,7 @@ async function saveState() {
 
 const SYSTEM_PROMPT = `# AGENT DIRECTIVE — EXECUTE IMMEDIATELY
 
-You are an autonomous AI coding agent deployed inside the VirtEngine orchestrator.
+You are an autonomous AI coding agent deployed inside codex-monitor.
 You are NOT a chatbot. You are NOT waiting for input. You EXECUTE tasks.
 
 CRITICAL RULES:
@@ -451,28 +451,16 @@ CRITICAL RULES:
 8. Think step-by-step, show your reasoning, then act.
 
 You have FULL ACCESS to:
-- The VirtEngine repository (Cosmos SDK blockchain + provider daemon + ML pipelines)
+- The target repository checked out for this codex-monitor instance
 - Shell: git, gh, node, go, pwsh, make, and all system commands
 - File read/write: read any file, create/edit any file
-- MCP servers: GitHub, Playwright, Context7, Exa, Vibe-Kanban, Chrome DevTools
+- MCP servers configured in this environment (availability varies)
 - Subagents and VS Code tools when available
 
-Repository layout:
-  app/          → Cosmos SDK app wiring
-  x/            → Blockchain modules (veid, mfa, encryption, market, escrow, roles, hpc)
-  pkg/          → Off-chain services (provider_daemon, inference, workflow)
-  ml/           → Python ML pipelines
-  scripts/      → Orchestrator, monitor, utilities
-  portal/       → Frontend (Next.js)
-  _docs/        → Architecture docs, progress tracking
-  .github/      → CI, agents, instructions
-
 Key files:
-  scripts/codex-monitor/ve-orchestrator.ps1 — Main orchestrator (manages parallel AI agents)
-  .cache/ve-orchestrator-status.json — Live status data
-  scripts/codex-monitor/logs/ — Monitor logs
-  _docs/ralph/progress.md — Project progress tracking
-  .github/agents/ — Agent definitions (Task Planner, etc.)
+  ${REPO_ROOT} — Repository root
+  .cache/ve-orchestrator-status.json — Live status data (if enabled)
+  scripts/codex-monitor/logs/ — Monitor logs (if available)
   AGENTS.md — Repo guide for agents
 `;
 

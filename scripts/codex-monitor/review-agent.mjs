@@ -36,7 +36,7 @@ const DEFAULT_MAX_CONCURRENT = 2;
  * @returns {string}
  */
 function buildReviewPrompt(diff, taskDescription, template) {
-  const fallback = `You are a senior code reviewer for the VirtEngine blockchain project.
+  const fallback = `You are a senior code reviewer for this software project.
 
 Review the following PR diff for CRITICAL issues ONLY:
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * telegram-sentinel.mjs — Always-on Telegram command listener for VirtEngine.
+ * telegram-sentinel.mjs — Always-on Telegram command listener for codex-monitor.
  *
  * Runs independently of the main codex-monitor process, ensuring Telegram
  * commands are always handled even when codex-monitor is down.
@@ -50,12 +50,13 @@ import {
   getPrimaryAgentInfo,
   initPrimaryAgent,
 } from "./primary-agent.mjs";
+import { resolveRepoRoot } from "./repo-root.mjs";
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const repoRoot = resolve(__dirname, "..", "..");
+const repoRoot = resolveRepoRoot();
 const cacheDir = resolve(repoRoot, ".cache");
 
 const MONITOR_PID_FILE = resolve(__dirname, ".cache", "codex-monitor.pid");
@@ -208,7 +209,7 @@ function initEnv() {
   const fileVars = loadEnvCredentials();
   telegramToken = getEnvValue(fileVars, "TELEGRAM_BOT_TOKEN", "");
   telegramChatId = getEnvValue(fileVars, "TELEGRAM_CHAT_ID", "");
-  projectName = getEnvValue(fileVars, "PROJECT_NAME", "virtengine");
+  projectName = getEnvValue(fileVars, "PROJECT_NAME", "codex-monitor");
 
   sentinelConfig.autoRestartMonitor = parseBool(
     getEnvValue(fileVars, "SENTINEL_AUTO_RESTART_MONITOR", "1"),
@@ -1651,7 +1652,7 @@ export async function startSentinel(options = {}) {
       "cannot start sentinel: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured",
     );
     console.error(
-      `${TAG} Set these in scripts/codex-monitor/.env or as environment variables.`,
+      `${TAG} Set these in .env (project root) or as environment variables.`,
     );
     process.exit(1);
   }
@@ -1924,7 +1925,7 @@ if (isDirectExecution) {
 
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`
-  telegram-sentinel — Always-on Telegram command listener for VirtEngine
+  telegram-sentinel — Always-on Telegram command listener for codex-monitor
 
   USAGE
     node telegram-sentinel.mjs [options]

@@ -89,6 +89,15 @@ function parseExecutorProfiles(rawValue) {
   return parsed.length > 0 ? parsed : DEFAULT_EXECUTOR_PROFILES;
 }
 
+function parseRepoSlug(raw) {
+  const text = String(raw || "").trim().replace(/^https?:\/\/github\.com\//i, "");
+  if (!text) return null;
+  const cleaned = text.replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+  const [owner, repo] = cleaned.split("/", 2);
+  if (!owner || !repo) return null;
+  return { owner, repo };
+}
+
 function normalizeTaskStatus(raw) {
   const key = String(raw || "todo").toLowerCase().trim();
   const map = {
@@ -143,18 +152,36 @@ function toInt(value, fallback) {
 export class VeKanbanRuntime {
   constructor(options = {}) {
     const env = options.env || process.env;
+    const slugInfo =
+      parseRepoSlug(env.GITHUB_REPOSITORY) ||
+      parseRepoSlug(
+        env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME
+          ? `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`
+          : "",
+      );
     this.env = env;
     this.baseUrl =
       options.baseUrl ||
       env.VK_ENDPOINT_URL ||
       env.VK_BASE_URL ||
       "http://127.0.0.1:54089";
-    this.projectName = options.projectName || env.VK_PROJECT_NAME || "virtengine";
+    this.projectName =
+      options.projectName || env.VK_PROJECT_NAME || slugInfo?.repo || "default-project";
     this.projectId = options.projectId || env.VK_PROJECT_ID || "";
     this.repoId = options.repoId || env.VK_REPO_ID || "";
     this.targetBranch = options.targetBranch || env.VK_TARGET_BRANCH || "origin/main";
-    this.ghOwner = options.ghOwner || env.GH_OWNER || env.GITHUB_REPO_OWNER || "virtengine";
-    this.ghRepo = options.ghRepo || env.GH_REPO || env.GITHUB_REPO_NAME || "virtengine";
+    this.ghOwner =
+      options.ghOwner ||
+      env.GH_OWNER ||
+      env.GITHUB_REPO_OWNER ||
+      slugInfo?.owner ||
+      "unknown";
+    this.ghRepo =
+      options.ghRepo ||
+      env.GH_REPO ||
+      env.GITHUB_REPO_NAME ||
+      slugInfo?.repo ||
+      "unknown";
     this.executorProfiles = parseExecutorProfiles(env.VK_EXECUTOR_PROFILES);
     this.executorStatePath = options.executorStatePath || EXECUTOR_STATE_PATH;
     this.fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -579,7 +606,7 @@ export async function runKanbanCli(argv, runtime = new VeKanbanRuntime()) {
 
 export function printUsage() {
   console.log(`
-  VirtEngine Kanban CLI (ve-kanban)
+  Codex-Monitor Kanban CLI (ve-kanban)
   =================================
 
   Commands:

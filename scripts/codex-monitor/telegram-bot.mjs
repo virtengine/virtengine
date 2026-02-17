@@ -1,5 +1,5 @@
 /**
- * telegram-bot.mjs — Two-way Telegram ↔ primary agent for VirtEngine monitor.
+ * telegram-bot.mjs — Two-way Telegram ↔ primary agent for codex-monitor.
  *
  * Polls Telegram Bot API for incoming messages, routes slash commands to
  * built-in handlers, and forwards free-text to the persistent primary agent.
@@ -96,6 +96,7 @@ import {
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolveRepoRoot();
+const codexMonitorDir = __dirname;
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramPollLockPath = resolve(
   repoRoot,
@@ -105,6 +106,12 @@ const telegramPollLockPath = resolve(
 const liveDigestStatePath = resolve(repoRoot, ".cache", "ve-live-digest.json");
 const fwCooldownPath = resolve(repoRoot, ".cache", "ve-fw-cooldown.json");
 const FW_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function resolveVeKanbanPs1Path() {
+  const modulePath = resolve(codexMonitorDir, "ve-kanban.ps1");
+  if (existsSync(modulePath)) return modulePath;
+  return resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1");
+}
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -2919,7 +2926,7 @@ const UI_SCREENS = {};
 
 Object.assign(UI_SCREENS, {
   home: {
-    title: "VirtEngine Control Center",
+    title: "Codex-Monitor Control Center",
     parent: null,
     body: async () => {
       const statusLine = await buildHomeStatusLine();
@@ -4075,10 +4082,6 @@ function findRepoPath(basePath) {
   if (existsSync(resolve(resolved, "go.mod"))) {
     return resolved;
   }
-  const nested = resolve(resolved, "virtengine");
-  if (existsSync(resolve(nested, "go.mod"))) {
-    return nested;
-  }
   return null;
 }
 
@@ -4174,7 +4177,7 @@ async function cmdApp(chatId) {
 
   await sendDirect(
     chatId,
-    "🚀 *VirtEngine Control Center*\n\nOpen the Mini App or access via browser:",
+    "🚀 *Codex-Monitor Control Center*\n\nOpen the Mini App or access via browser:",
     {
       parseMode: "Markdown",
       reply_markup: keyboard,
@@ -4206,7 +4209,7 @@ async function cmdHelp(chatId) {
 }
 
 async function cmdHelpFull(chatId) {
-  const lines = ["🤖 VirtEngine Primary Agent — All Commands:\n"];
+  const lines = ["🤖 Codex-Monitor Primary Agent — All Commands:\n"];
   for (const [cmd, { desc }] of Object.entries(COMMANDS)) {
     lines.push(`${cmd} — ${desc}`);
   }
@@ -4268,7 +4271,7 @@ async function cmdStatus(chatId) {
       : [];
 
     const lines = [
-      "📊 VirtEngine Orchestrator Status",
+      "📊 Codex-Monitor Orchestrator Status",
       "",
       `Running: ${counts.running ?? 0}`,
       `Review: ${counts.review ?? 0}`,
@@ -5380,7 +5383,7 @@ async function cmdRegion(chatId, regionArg) {
     // Show current region status
     try {
       const result = runPwsh(
-        `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}'; Initialize-CodexRegionTracking; Get-RegionStatus | ConvertTo-Json -Depth 3`,
+        `. '${resolveVeKanbanPs1Path()}'; Initialize-CodexRegionTracking; Get-RegionStatus | ConvertTo-Json -Depth 3`,
       );
       const status = JSON.parse(result);
       const lines = [
@@ -5419,8 +5422,8 @@ async function cmdRegion(chatId, regionArg) {
   try {
     const psCmd =
       target === "auto"
-        ? `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}'; Set-RegionOverride -Region $null | ConvertTo-Json`
-        : `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}'; Set-RegionOverride -Region '${target}' | ConvertTo-Json`;
+        ? `. '${resolveVeKanbanPs1Path()}'; Set-RegionOverride -Region $null | ConvertTo-Json`
+        : `. '${resolveVeKanbanPs1Path()}'; Set-RegionOverride -Region '${target}' | ConvertTo-Json`;
     const result = runPwsh(psCmd);
     const info = JSON.parse(result);
     const icon = info.changed ? "✅" : "ℹ️";
@@ -5469,7 +5472,7 @@ async function cmdHealth(chatId) {
     // Add region info
     try {
       const regionScript = [
-        `. '${resolve(repoRoot, "scripts", "codex-monitor", "ve-kanban.ps1")}';`,
+        `. '${resolveVeKanbanPs1Path()}';`,
         "Initialize-CodexRegionTracking;",
         "Get-RegionStatus | ConvertTo-Json",
       ].join(" ");
@@ -7898,6 +7901,12 @@ export async function startTelegramBot() {
           getInternalExecutor: _getInternalExecutor,
           getExecutorMode: _getExecutorMode,
           handleUiCommand: handleUiCommand,
+          getSyncEngine: _getSyncEngine,
+          onProjectSyncAlert: async (alert) => {
+            if (!_sendTelegramMessage) return;
+            const text = String(alert?.message || "Project sync alert");
+            await _sendTelegramMessage(`⚠️ ${text}`);
+          },
         },
       });
       syncUiUrlsFromServer();
@@ -8021,7 +8030,7 @@ export async function startTelegramBot() {
   } else {
     await sendDirect(
       telegramChatId,
-      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /menu for the control center or send any message to chat with the agent.`,
+      `🤖 Codex-Monitor primary agent online (${getPrimaryAgentName()}).\n\nType /menu for the control center or send any message to chat with the agent.`,
     );
   }
 

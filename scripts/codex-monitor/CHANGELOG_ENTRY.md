@@ -1,76 +1,65 @@
-# Changelog Entry - GitHub Adapter Shared State Persistence
+# Changelog Entry - GitHub Projects v2 + GitHub Adapter Enhancements
 
 ## [Unreleased]
 
-### Added - GitHub Issues Adapter Enhancements
+### Added - GitHub Projects v2 Integration (Phase 1 + Phase 2)
 
-**Multi-agent coordination via GitHub Issues shared state persistence**
+#### Phase 1 (Read Support)
 
-#### New Label Scheme
+- Added project-board task listing in GitHub adapter via `GITHUB_PROJECT_MODE=kanban`
+- Added project item normalization to `KanbanTask` format (no per-item N+1 issue fetches)
+- Added project metadata caching:
+  - project node IDs
+  - project field metadata
+  - issue-to-project-item IDs
+- Added automatic fallback to issue listing when project reads fail
 
-- `codex:claimed` - Task claimed by an agent
-- `codex:working` - Agent actively working on task
-- `codex:stale` - Claim expired or abandoned
-- `codex:ignore` - Task excluded from codex-monitor automation
+#### Phase 2 (Write Support)
 
-#### New Methods
+- Added status sync from codex task updates to GitHub Projects v2 `Status` field
+- Added generic project field sync helper (`syncFieldToProject`) for:
+  - single select
+  - number
+  - date
+  - text
+- Added configurable status mapping through `GITHUB_PROJECT_STATUS_*` environment variables
+- Added `GITHUB_PROJECT_AUTO_SYNC` toggle for write synchronization control
+- Added rate-limit retry handling for `gh` GraphQL operations
 
-- `persistSharedStateToIssue(issueNumber, sharedState)` - Persist agent state to issue
-  - Creates/updates structured comment with JSON state
-  - Applies appropriate codex labels
-  - Retry logic with error handling
-- `readSharedStateFromIssue(issueNumber)` - Read agent state from issue
-  - Parses latest codex-monitor-state comment
-  - Returns SharedState object or null
-  - Validates required fields
-- `markTaskIgnored(issueNumber, reason)` - Mark task as ignored
-  - Adds codex:ignore label
-  - Posts explanatory comment
+#### Migration Guidance
 
-#### Enhanced Methods
+- Existing users can stay on default behavior (`GITHUB_PROJECT_MODE=issues`)
+- To enable Projects v2:
+  - set `KANBAN_BACKEND=github`
+  - set `GITHUB_PROJECT_MODE=kanban`
+  - configure `GITHUB_PROJECT_OWNER` + `GITHUB_PROJECT_NUMBER`
+  - optionally customize `GITHUB_PROJECT_STATUS_*` mappings
+- Full migration details are documented in:
+  - `GITHUB_PROJECTS_V2_API.md`
+  - `GITHUB_PROJECTS_V2_QUICKSTART.md`
 
-- `updateTaskStatus()` - New optional `options.sharedState` parameter
-- `listTasks()` - Enriches tasks with `meta.sharedState` and `meta.codex` flags
-- `getTask()` - Enriches task with `meta.sharedState` and `meta.codex` flags
+#### Monitoring Documentation
 
-#### Module Exports
+- Added `GITHUB_PROJECTS_V2_MONITORING.md` with:
+  - operational log signals
+  - failure/success log patterns
+  - rate-limit monitoring guidance
+  - alert recommendations
 
-- New convenience exports: `persistSharedStateToIssue()`, `readSharedStateFromIssue()`, `markTaskIgnored()`
-- Backward compatible - check adapter support before calling
+### Added - GitHub Issues Shared State Enhancements
 
-#### Documentation
+- `persistSharedStateToIssue(issueNumber, sharedState)`
+- `readSharedStateFromIssue(issueNumber)`
+- `markTaskIgnored(issueNumber, reason)`
+- `meta.codex` task flags for claim/ignore/stale visibility
 
-- Added KANBAN_GITHUB_ENHANCEMENT.md - Comprehensive feature documentation
-- Added example-multi-agent.mjs - Working multi-agent coordination example
-- Added test-kanban-enhancement.mjs - Validation test suite
-- Updated README.md with GitHub adapter feature summary
+### Backward Compatibility
 
-#### Use Cases
+- Breaking changes: none
+- Default issue-based behavior is unchanged
+- Projects v2 path is opt-in (`GITHUB_PROJECT_MODE=kanban`)
+- VK and Jira adapters are unaffected
 
-- Multi-agent task coordination without conflicts
-- Heartbeat mechanism for liveness detection
-- Stale claim detection and recovery
-- Task filtering by agent state
-- Explicit task exclusion from automation
+### Dependencies
 
-### Changed
-
-- GitHubAdapter now includes codex-monitor state tracking
-- Task objects include `meta.codex` flags (isIgnored, isClaimed, isWorking, isStale)
-- Enhanced error handling with retry logic
-
-### Technical Details
-
-- 100% backward compatible
-- Non-blocking error handling
-- Structured HTML comments with JSON state
-- Label-based state visualization in GitHub UI
-- VK and Jira adapters unaffected
-
----
-
-**Breaking Changes:** None
-
-**Migration Required:** No - all changes are additive and optional
-
-**Dependencies:** Requires GitHub CLI (`gh`) for GitHub backend
+- GitHub CLI (`gh`) with `project` scope for Projects v2 operations

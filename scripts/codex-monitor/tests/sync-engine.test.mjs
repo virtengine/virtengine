@@ -451,3 +451,65 @@ describe("sync-engine syncTask backend ID handling", () => {
     );
   });
 });
+
+describe("sync-engine monitoring counters and alerts", () => {
+  const originalRateLimitDelay = SyncEngine.RATE_LIMIT_DELAY_MS;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockKanban.getKanbanBackendName.mockReturnValue("github");
+    SyncEngine.RATE_LIMIT_DELAY_MS = 0;
+  });
+
+  afterEach(() => {
+    SyncEngine.RATE_LIMIT_DELAY_MS = originalRateLimitDelay;
+  });
+
+  it("increments success/failure metrics across full sync cycles", async () => {
+    mockTaskStore.getAllTasks.mockReturnValue([]);
+    mockKanban.listTasks.mockResolvedValue([]);
+    mockTaskStore.getDirtyTasks.mockReturnValue([]);
+
+    const engine = new SyncEngine({ projectId: "proj-1" });
+
+    await engine.fullSync();
+    let status = engine.getStatus();
+    expect(status.metrics.syncSuccesses).toBe(1);
+    expect(status.metrics.syncFailures).toBe(0);
+    expect(status.metrics.lastSuccessAt).toBeTruthy();
+
+    mockKanban.listTasks.mockRejectedValueOnce(new Error("list failed"));
+    await engine.fullSync();
+    status = engine.getStatus();
+    expect(status.metrics.syncFailures).toBe(1);
+    expect(status.metrics.lastFailureAt).toBeTruthy();
+    expect(status.metrics.lastError).toContain("list failed");
+  });
+
+  it("tracks rate-limit usage and emits alert hook", async () => {
+    const onAlert = vi.fn();
+    mockTaskStore.getDirtyTasks.mockReturnValue([
+      { id: "42", status: "inprogress", syncDirty: true },
+    ]);
+    mockKanban.updateTaskStatus
+      .mockRejectedValueOnce(new Error("429 rate limit exceeded"))
+      .mockResolvedValueOnce({});
+
+    const engine = new SyncEngine({
+      projectId: "proj-1",
+      onAlert,
+      rateLimitAlertThreshold: 1,
+    });
+
+    const result = await engine.pushToExternal();
+    const status = engine.getStatus();
+
+    expect(result.pushed).toBe(1);
+    expect(status.metrics.rateLimitEvents).toBe(1);
+    expect(status.metrics.rateLimitRetrySuccesses).toBe(1);
+    expect(status.metrics.alertsTriggered).toBeGreaterThanOrEqual(1);
+    expect(onAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "rate_limit" }),
+    );
+  });
+});

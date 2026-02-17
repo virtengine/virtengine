@@ -1,6 +1,6 @@
 # GitHub Projects v2 Integration - Implementation Checklist
 
-**Status**: ✅ Phase 1 & 2 Complete  
+**Status**: ✅ Phase 1, 2, and 3 implementation complete (manual GitHub validation pending token scope + code review)  
 **Started**: 2026-02-15  
 **Completed**: 2026-02-16
 
@@ -97,6 +97,7 @@
   - [ ] Verify all fields map correctly
   - [ ] Test with empty project
   - [ ] Test with invalid project number
+  - Blocked: `gh project` commands currently fail with `missing required scopes [read:project]` in this environment.
 
 ---
 
@@ -123,12 +124,12 @@
   - [x] Execute GraphQL mutation
   - [x] Unit test with all field types
 
-- [ ] **`syncIterationToProject(issueNumber, projectNumber, iterationName)`** (Optional)
-  - [ ] Get Iteration field metadata
-  - [ ] Find iteration by name or startDate
-  - [ ] Build mutation with iterationId
-  - [ ] Execute GraphQL mutation
-  - [ ] Unit test with sample iterations
+- [x] **`syncIterationToProject(issueNumber, projectNumber, iterationName)`** (Optional)
+  - [x] Get Iteration field metadata
+  - [x] Find iteration by name or startDate
+  - [x] Build mutation with iterationId
+  - [x] Execute GraphQL mutation
+  - [x] Unit test with sample iterations
 
 ### Integration with Existing Code
 
@@ -188,6 +189,7 @@
   - [ ] Check project board for updated Status column
   - [ ] Test all status transitions
   - [ ] Test with custom status mappings
+  - Blocked: `gh project` commands currently fail with `missing required scopes [read:project]` in this environment.
 
 ---
 
@@ -195,27 +197,27 @@
 
 ### Project View Filtering
 
-- [ ] Filter tasks by project field values
-- [ ] Support `filters.projectField` parameter
-- [ ] Query project items with field conditions
+- [x] Filter tasks by project field values
+- [x] Support `filters.projectField` parameter
+- [x] Query project items with field conditions
 
 ### Batch Operations
 
-- [ ] Batch status updates (reduce API calls)
-- [ ] Batch field updates
-- [ ] Use GraphQL aliases for parallel mutations
+- [x] Batch status updates (reduce API calls)
+- [x] Batch field updates
+- [x] Use GraphQL aliases for parallel mutations
 
 ### Webhook Integration
 
-- [ ] GitHub webhook for project item updates
-- [ ] Real-time sync without polling
-- [ ] Requires GitHub App or webhook setup
+- [x] GitHub webhook for project item updates
+- [x] Real-time sync without polling
+- [x] Requires GitHub App or webhook setup
 
 ### Draft Issues
 
-- [ ] Create draft issues in project
-- [ ] Convert drafts to real issues
-- [ ] Use `addProjectV2DraftIssue` mutation
+- [x] Create draft issues in project
+- [x] Convert drafts to real issues
+- [x] Use `addProjectV2DraftIssue` mutation
 
 ---
 
@@ -244,7 +246,7 @@
 - [x] **Update existing docs**
   - [x] `KANBAN_GITHUB_ENHANCEMENT.md` - Add Projects v2 note
   - [x] `GITHUB_ADAPTER_QUICK_REF.md` - Add Projects v2 links
-  - [ ] `README.md` - Add Projects v2 section (if applicable)
+  - [x] `README.md` - Add Projects v2 section (if applicable)
 
 ---
 
@@ -258,17 +260,17 @@
 
 ### Release Notes
 
-- [ ] Document Phase 1 features (read support)
-- [ ] Document Phase 2 features (sync support)
-- [ ] Provide migration guide for existing users
-- [ ] Highlight backward compatibility
+- [x] Document Phase 1 features (read support)
+- [x] Document Phase 2 features (sync support)
+- [x] Provide migration guide for existing users
+- [x] Highlight backward compatibility
 
 ### Monitoring
 
-- [ ] Add logging for project operations
-- [ ] Track sync success/failure rates
-- [ ] Monitor API rate limit usage
-- [ ] Alert on sync failures
+- [x] Add logging for project operations
+- [x] Track sync success/failure rates
+- [x] Monitor API rate limit usage
+- [x] Alert on sync failures
 
 ---
 
@@ -295,21 +297,21 @@
 
 ### Phase 3 Ready for Merge When:
 
-- [ ] Feature-specific criteria defined
-- [ ] All tests passing
-- [ ] Documentation complete
+- [x] Feature-specific criteria defined
+- [x] All tests passing
+- [x] Documentation complete
 - [ ] Code review approved
 
 ---
 
 ## Progress Tracking
 
-**Phase 1**: ✅ Complete (100%)  
-**Phase 2**: ✅ Complete (100%) — except optional `syncIterationToProject` and manual testing  
-**Phase 3**: ⬜️ Not Started (0%)
+**Phase 1**: ✅ Complete (100%) — manual testing blocked by missing `read:project` token scope  
+**Phase 2**: ✅ Complete (100%) — manual testing blocked by missing `read:project` token scope  
+**Phase 3**: ✅ Complete (100%) — implementation, tests, and docs complete
 
-**Last Updated**: 2026-02-16  
-**Next Review**: Phase 3 scoping
+**Last Updated**: 2026-02-17  
+**Next Review**: Manual GitHub project validation + code review
 
 ---
 

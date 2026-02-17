@@ -34,7 +34,10 @@ Requires:
 
 - Node.js 18+
 - git
-- PowerShell (`pwsh`) on Windows (optional on Linux/macOS unless using `.ps1` scripts)
+- Linux, macOS, and Windows are fully supported
+- Shell runtime for your selected orchestrator wrapper:
+  - Bash for `.sh` wrappers
+  - PowerShell (`pwsh`) for `.ps1` wrappers
 - GitHub CLI (`gh`) recommended
 
 ---
@@ -156,6 +159,42 @@ The GitHub Issues adapter now supports multi-agent coordination via structured s
 - Structured comments with JSON state for agent coordination
 
 See [KANBAN_GITHUB_ENHANCEMENT.md](./KANBAN_GITHUB_ENHANCEMENT.md) for details.
+
+### GitHub Projects v2 backend (Phase 1 + 2)
+
+`codex-monitor` now supports GitHub Projects v2 as a first-class kanban source and sync target:
+
+- Phase 1 (read): read tasks directly from a Projects v2 board (`GITHUB_PROJECT_MODE=kanban`)
+- Phase 2 (write): sync task status updates back to the board `Status` field
+- Bidirectional mapping between codex statuses and project status options
+- Safe fallback to issues mode when project metadata is missing or unavailable
+
+Enable with env config:
+
+```env
+KANBAN_BACKEND=github
+GITHUB_PROJECT_MODE=kanban
+GITHUB_PROJECT_OWNER=your-org-or-user
+GITHUB_PROJECT_NUMBER=3
+GITHUB_PROJECT_AUTO_SYNC=true
+```
+
+Status mapping overrides (optional):
+
+```env
+GITHUB_PROJECT_STATUS_TODO=Todo
+GITHUB_PROJECT_STATUS_INPROGRESS=In Progress
+GITHUB_PROJECT_STATUS_INREVIEW=In Review
+GITHUB_PROJECT_STATUS_DONE=Done
+GITHUB_PROJECT_STATUS_CANCELLED=Cancelled
+```
+
+Projects v2 docs:
+
+- [GITHUB_PROJECTS_V2_QUICKSTART.md](./GITHUB_PROJECTS_V2_QUICKSTART.md)
+- [GITHUB_PROJECTS_V2_API.md](./GITHUB_PROJECTS_V2_API.md)
+- [GITHUB_PROJECTS_V2_MONITORING.md](./GITHUB_PROJECTS_V2_MONITORING.md)
+- [GITHUB_PROJECTS_V2_IMPLEMENTATION_CHECKLIST.md](./GITHUB_PROJECTS_V2_IMPLEMENTATION_CHECKLIST.md)
 
 **Jira adapter (future):**
 The Jira adapter is scaffolded with detailed JSDoc and implementation guidance:
@@ -387,7 +426,7 @@ codex-monitor --no-telegram-bot
 codex-monitor --telegram-commands
 codex-monitor --no-vk-spawn
 codex-monitor --vk-ensure-interval 60000
-codex-monitor --script ./my-orchestrator.ps1
+codex-monitor --script ./my-orchestrator.sh
 codex-monitor --args "-MaxParallel 6"
 ```
 

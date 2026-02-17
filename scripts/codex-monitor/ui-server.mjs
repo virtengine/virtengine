@@ -1,5 +1,5 @@
 import { execSync, spawn } from "node:child_process";
-import { createHmac, randomBytes, X509Certificate } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual, X509Certificate } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, chmodSync, createWriteStream, writeFileSync } from "node:fs";
 import { open, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -57,9 +57,10 @@ import {
   getCompactDiffSummary,
   getRecentCommits,
 } from "./diff-stats.mjs";
+import { resolveRepoRoot } from "./repo-root.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
-const repoRoot = resolve(__dirname, "..", "..");
+const repoRoot = resolveRepoRoot();
 const uiRoot = resolve(__dirname, "ui");
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const logsDir = resolve(__dirname, "logs");
@@ -98,6 +99,23 @@ let uiServerTls = false;
 let wsServer = null;
 const wsClients = new Set();
 let uiDeps = {};
+const projectSyncWebhookMetrics = {
+  received: 0,
+  processed: 0,
+  ignored: 0,
+  failed: 0,
+  invalidSignature: 0,
+  syncTriggered: 0,
+  syncSuccess: 0,
+  syncFailure: 0,
+  rateLimitObserved: 0,
+  alertsTriggered: 0,
+  consecutiveFailures: 0,
+  lastEventAt: null,
+  lastSuccessAt: null,
+  lastFailureAt: null,
+  lastError: null,
+};
 
 // ── Session token (auto-generated per startup for browser access) ────
 let sessionToken = "";
@@ -853,6 +871,302 @@ function broadcastUiEvent(channels, type, payload = {}) {
     if (shouldSend) {
       sendWsMessage(socket, message);
     }
+  }
+}
+
+function parseBooleanEnv(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const raw = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+  return fallback;
+}
+
+function getGitHubWebhookPath() {
+  return (
+    process.env.GITHUB_PROJECT_WEBHOOK_PATH ||
+    "/api/webhooks/github/project-sync"
+  );
+}
+
+function getGitHubWebhookSecret() {
+  return (
+    process.env.GITHUB_PROJECT_WEBHOOK_SECRET ||
+    process.env.GITHUB_WEBHOOK_SECRET ||
+    ""
+  );
+}
+
+function shouldRequireGitHubWebhookSignature() {
+  const secret = getGitHubWebhookSecret();
+  return parseBooleanEnv(
+    process.env.GITHUB_PROJECT_WEBHOOK_REQUIRE_SIGNATURE,
+    Boolean(secret),
+  );
+}
+
+function getWebhookFailureAlertThreshold() {
+  return Math.max(
+    1,
+    Number(process.env.GITHUB_PROJECT_SYNC_ALERT_FAILURE_THRESHOLD || 3),
+  );
+}
+
+async function emitProjectSyncAlert(message, context = {}) {
+  projectSyncWebhookMetrics.alertsTriggered++;
+  console.warn(
+    `[project-sync-webhook] alert: ${message} ${JSON.stringify(context)}`,
+  );
+  if (typeof uiDeps.onProjectSyncAlert === "function") {
+    try {
+      await uiDeps.onProjectSyncAlert({
+        message,
+        context,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      // best effort
+    }
+  }
+}
+
+function verifyGitHubWebhookSignature(rawBody, signatureHeader, secret) {
+  if (!secret) return false;
+  const expectedDigest = createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+  const providedRaw = String(signatureHeader || "");
+  if (!providedRaw.startsWith("sha256=")) return false;
+  const providedDigest = providedRaw.slice("sha256=".length).trim();
+  if (!providedDigest || providedDigest.length !== expectedDigest.length) {
+    return false;
+  }
+  const expected = Buffer.from(expectedDigest, "utf8");
+  const provided = Buffer.from(providedDigest, "utf8");
+  return timingSafeEqual(expected, provided);
+}
+
+function extractIssueNumberFromWebhook(payload) {
+  const item = payload?.projects_v2_item || {};
+  const content = item.content || payload?.content || {};
+  const candidates = [
+    item.content_number,
+    item.issue_number,
+    content.number,
+    content.issue?.number,
+    payload?.issue?.number,
+  ];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isInteger(numeric) && numeric > 0) {
+      return String(numeric);
+    }
+  }
+  const urlCandidates = [
+    item.content_url,
+    item.url,
+    content.url,
+    payload?.issue?.html_url,
+    payload?.issue?.url,
+  ];
+  for (const value of urlCandidates) {
+    const match = String(value || "").match(/\/issues\/(\d+)(?:$|[/?#])/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+export function getProjectSyncWebhookMetrics() {
+  return { ...projectSyncWebhookMetrics };
+}
+
+export function resetProjectSyncWebhookMetrics() {
+  for (const key of Object.keys(projectSyncWebhookMetrics)) {
+    if (
+      key === "lastEventAt" ||
+      key === "lastSuccessAt" ||
+      key === "lastFailureAt" ||
+      key === "lastError"
+    ) {
+      projectSyncWebhookMetrics[key] = null;
+      continue;
+    }
+    projectSyncWebhookMetrics[key] = 0;
+  }
+}
+
+async function readRawBody(req) {
+  return new Promise((resolveBody, rejectBody) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      chunks.push(buf);
+      size += buf.length;
+      if (size > 1_000_000) {
+        rejectBody(new Error("payload too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      resolveBody(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", rejectBody);
+  });
+}
+
+async function handleGitHubProjectWebhook(req, res) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST,OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Content-Type,X-GitHub-Event,X-Hub-Signature-256,X-GitHub-Delivery",
+    });
+    res.end();
+    return;
+  }
+  if (req.method !== "POST") {
+    jsonResponse(res, 405, { ok: false, error: "Method not allowed" });
+    return;
+  }
+
+  projectSyncWebhookMetrics.received++;
+  projectSyncWebhookMetrics.lastEventAt = new Date().toISOString();
+
+  const deliveryId = String(req.headers["x-github-delivery"] || "");
+  const eventType = String(req.headers["x-github-event"] || "").toLowerCase();
+  const secret = getGitHubWebhookSecret();
+  const requireSignature = shouldRequireGitHubWebhookSignature();
+
+  try {
+    const rawBody = await readRawBody(req);
+    if (requireSignature) {
+      const signature = req.headers["x-hub-signature-256"];
+      if (
+        !verifyGitHubWebhookSignature(rawBody, signature, secret)
+      ) {
+        projectSyncWebhookMetrics.invalidSignature++;
+        projectSyncWebhookMetrics.failed++;
+        projectSyncWebhookMetrics.consecutiveFailures++;
+        projectSyncWebhookMetrics.lastFailureAt = new Date().toISOString();
+        projectSyncWebhookMetrics.lastError = "invalid webhook signature";
+        const threshold = getWebhookFailureAlertThreshold();
+        if (
+          projectSyncWebhookMetrics.consecutiveFailures % threshold ===
+          0
+        ) {
+          await emitProjectSyncAlert(
+            `GitHub project webhook signature failures: ${projectSyncWebhookMetrics.consecutiveFailures}`,
+            { deliveryId, eventType },
+          );
+        }
+        jsonResponse(res, 401, { ok: false, error: "Invalid webhook signature" });
+        return;
+      }
+    }
+
+    let payload = {};
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      projectSyncWebhookMetrics.failed++;
+      projectSyncWebhookMetrics.consecutiveFailures++;
+      projectSyncWebhookMetrics.lastFailureAt = new Date().toISOString();
+      projectSyncWebhookMetrics.lastError = "invalid JSON payload";
+      jsonResponse(res, 400, { ok: false, error: "Invalid JSON payload" });
+      return;
+    }
+
+    if (eventType !== "projects_v2_item") {
+      projectSyncWebhookMetrics.ignored++;
+      projectSyncWebhookMetrics.processed++;
+      jsonResponse(res, 202, {
+        ok: true,
+        ignored: true,
+        reason: `Unsupported event: ${eventType || "unknown"}`,
+      });
+      return;
+    }
+
+    const syncEngine = uiDeps.getSyncEngine?.() || null;
+    if (!syncEngine) {
+      projectSyncWebhookMetrics.failed++;
+      projectSyncWebhookMetrics.consecutiveFailures++;
+      projectSyncWebhookMetrics.lastFailureAt = new Date().toISOString();
+      projectSyncWebhookMetrics.lastError = "sync engine unavailable";
+      const threshold = getWebhookFailureAlertThreshold();
+      if (
+        projectSyncWebhookMetrics.consecutiveFailures % threshold ===
+        0
+      ) {
+        await emitProjectSyncAlert(
+          `GitHub project webhook sync failures: ${projectSyncWebhookMetrics.consecutiveFailures}`,
+          { deliveryId, reason: "sync engine unavailable" },
+        );
+      }
+      jsonResponse(res, 503, { ok: false, error: "Sync engine unavailable" });
+      return;
+    }
+
+    const beforeRateLimitEvents =
+      Number(syncEngine.getStatus?.()?.metrics?.rateLimitEvents || 0);
+    const issueNumber = extractIssueNumberFromWebhook(payload);
+    const action = String(payload?.action || "");
+
+    projectSyncWebhookMetrics.syncTriggered++;
+    if (issueNumber && typeof syncEngine.syncTask === "function") {
+      await syncEngine.syncTask(issueNumber);
+      console.log(
+        `[project-sync-webhook] delivery=${deliveryId} action=${action} task=${issueNumber} synced`,
+      );
+    } else if (typeof syncEngine.fullSync === "function") {
+      await syncEngine.fullSync();
+      console.log(
+        `[project-sync-webhook] delivery=${deliveryId} action=${action} full-sync triggered`,
+      );
+    } else {
+      throw new Error("sync engine does not expose syncTask/fullSync");
+    }
+
+    const afterRateLimitEvents =
+      Number(syncEngine.getStatus?.()?.metrics?.rateLimitEvents || 0);
+    if (afterRateLimitEvents > beforeRateLimitEvents) {
+      projectSyncWebhookMetrics.rateLimitObserved +=
+        afterRateLimitEvents - beforeRateLimitEvents;
+    }
+    projectSyncWebhookMetrics.processed++;
+    projectSyncWebhookMetrics.syncSuccess++;
+    projectSyncWebhookMetrics.consecutiveFailures = 0;
+    projectSyncWebhookMetrics.lastSuccessAt = new Date().toISOString();
+    projectSyncWebhookMetrics.lastError = null;
+    jsonResponse(res, 202, {
+      ok: true,
+      deliveryId,
+      eventType,
+      action,
+      issueNumber,
+      synced: true,
+    });
+  } catch (err) {
+    projectSyncWebhookMetrics.failed++;
+    projectSyncWebhookMetrics.syncFailure++;
+    projectSyncWebhookMetrics.consecutiveFailures++;
+    projectSyncWebhookMetrics.lastFailureAt = new Date().toISOString();
+    projectSyncWebhookMetrics.lastError = err.message;
+    const threshold = getWebhookFailureAlertThreshold();
+    if (
+      projectSyncWebhookMetrics.consecutiveFailures % threshold === 0
+    ) {
+      await emitProjectSyncAlert(
+        `GitHub project webhook sync failures: ${projectSyncWebhookMetrics.consecutiveFailures}`,
+        { deliveryId, eventType, error: err.message },
+      );
+    }
+    console.warn(
+      `[project-sync-webhook] delivery=${deliveryId} failed: ${err.message}`,
+    );
+    jsonResponse(res, 500, { ok: false, error: err.message });
   }
 }
 
@@ -1833,6 +2147,22 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (path === "/api/project-sync/metrics") {
+    try {
+      const syncEngine = uiDeps.getSyncEngine?.() || null;
+      jsonResponse(res, 200, {
+        ok: true,
+        data: {
+          webhook: getProjectSyncWebhookMetrics(),
+          syncEngine: syncEngine?.getStatus?.()?.metrics || null,
+        },
+      });
+    } catch (err) {
+      jsonResponse(res, 500, { ok: false, error: err.message });
+    }
+    return;
+  }
+
   if (path === "/api/command") {
     try {
       const body = await readJsonBody(req);
@@ -2210,6 +2540,7 @@ export async function startTelegramUiServer(options = {}) {
       req.url || "/",
       `http://${req.headers.host || "localhost"}`,
     );
+    const webhookPath = getGitHubWebhookPath();
 
     // Token exchange: ?token=<hex> → set session cookie and redirect to clean URL
     const qToken = url.searchParams.get("token");
@@ -2220,6 +2551,11 @@ export async function startTelegramUiServer(options = {}) {
         Location: url.pathname || "/",
       });
       res.end();
+      return;
+    }
+
+    if (url.pathname === webhookPath) {
+      await handleGitHubProjectWebhook(req, res);
       return;
     }
 
@@ -2390,6 +2726,7 @@ export function stopTelegramUiServer() {
   uiServer = null;
   uiServerTls = false;
   sessionToken = "";
+  resetProjectSyncWebhookMetrics();
 }
 
 export { getLocalLanIp };

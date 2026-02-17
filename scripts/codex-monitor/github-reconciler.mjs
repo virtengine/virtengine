@@ -18,6 +18,15 @@ function parseNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseRepoSlug(raw) {
+  const text = String(raw || "").trim().replace(/^https?:\/\/github\.com\//i, "");
+  if (!text) return "";
+  const cleaned = text.replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+  const [owner, repo] = cleaned.split("/", 2);
+  if (!owner || !repo) return "";
+  return `${owner}/${repo}`;
+}
+
 function parseIssueRefs(text) {
   const refs = new Set();
   const raw = String(text || "");
@@ -123,12 +132,14 @@ export class GitHubReconciler {
       ),
     );
     this.repoSlug =
-      options.repoSlug ||
-      process.env.GITHUB_REPOSITORY ||
-      (process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
-        ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
-        : "") ||
-      "virtengine/virtengine";
+      parseRepoSlug(options.repoSlug) ||
+      parseRepoSlug(process.env.GITHUB_REPOSITORY) ||
+      parseRepoSlug(
+        process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+          ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+          : "",
+      ) ||
+      "unknown/unknown";
     this.trackingLabels = new Set(
       (Array.isArray(options.trackingLabels)
         ? options.trackingLabels

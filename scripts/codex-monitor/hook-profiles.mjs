@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_HOOK_SCHEMA = "https://json-schema.org/draft/2020-12/schema";
 const LEGACY_BRIDGE_SNIPPET = "scripts/codex-monitor/agent-hook-bridge.mjs";
-const DEFAULT_BRIDGE_SCRIPT_PATH = "scripts/codex-monitor/agent-hook-bridge.mjs";
+const DEFAULT_BRIDGE_SCRIPT_PATH = resolve(__dirname, "agent-hook-bridge.mjs");
 
 function getHookNodeBinary() {
   const configured = String(process.env.CODEX_MONITOR_HOOK_NODE_BIN || "").trim();
@@ -153,7 +153,8 @@ function isPortableNodeCommandToken(token) {
 }
 
 function isPortableBridgeScriptToken(token) {
-  return String(token || "") === DEFAULT_BRIDGE_SCRIPT_PATH;
+  const raw = String(token || "");
+  return raw === DEFAULT_BRIDGE_SCRIPT_PATH || raw === LEGACY_BRIDGE_SNIPPET;
 }
 
 function isCopilotBridgeCommandPortable(commandTokens) {
@@ -322,7 +323,7 @@ export function buildCanonicalHookConfig(options = {}) {
   return {
     $schema: DEFAULT_HOOK_SCHEMA,
     description:
-      "Agent lifecycle hooks for VirtEngine codex-monitor. Compatible with Codex, Claude Code, and Copilot CLI.",
+      "Agent lifecycle hooks for codex-monitor. Compatible with Codex, Claude Code, and Copilot CLI.",
     hooks,
     meta: {
       profile,

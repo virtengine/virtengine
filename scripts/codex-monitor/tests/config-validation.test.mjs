@@ -11,6 +11,11 @@ const ENV_KEYS = [
   "TELEGRAM_BOT_TOKEN",
   "TELEGRAM_CHAT_ID",
   "INTERNAL_EXECUTOR_SDK",
+  "GITHUB_PROJECT_WEBHOOK_PATH",
+  "GITHUB_PROJECT_WEBHOOK_SECRET",
+  "GITHUB_PROJECT_WEBHOOK_REQUIRE_SIGNATURE",
+  "GITHUB_PROJECT_SYNC_ALERT_FAILURE_THRESHOLD",
+  "GITHUB_PROJECT_SYNC_RATE_LIMIT_ALERT_THRESHOLD",
 ];
 
 describe("loadConfig validation and edge cases", () => {
@@ -105,6 +110,11 @@ describe("loadConfig validation and edge cases", () => {
     expect(typeof config.dependabotMergeMethod).toBe("string");
     expect(typeof config.statusPath).toBe("string");
     expect(typeof config.telegramPollLockPath).toBe("string");
+    expect(typeof config.githubProjectSync).toBe("object");
+    expect(typeof config.githubProjectSync.webhookPath).toBe("string");
+    expect(typeof config.githubProjectSync.webhookRequireSignature).toBe(
+      "boolean",
+    );
   });
 
   it("treats empty telegram credentials as disabled", () => {
@@ -120,5 +130,28 @@ describe("loadConfig validation and edge cases", () => {
 
     expect(config.telegramToken).toBeFalsy();
     expect(config.telegramChatId).toBeFalsy();
+  });
+
+  it("loads github project webhook sync settings from env", () => {
+    process.env.GITHUB_PROJECT_WEBHOOK_PATH = "/hooks/github/project-sync";
+    process.env.GITHUB_PROJECT_WEBHOOK_SECRET = "secret-1";
+    process.env.GITHUB_PROJECT_WEBHOOK_REQUIRE_SIGNATURE = "true";
+    process.env.GITHUB_PROJECT_SYNC_ALERT_FAILURE_THRESHOLD = "4";
+    process.env.GITHUB_PROJECT_SYNC_RATE_LIMIT_ALERT_THRESHOLD = "5";
+
+    const config = loadConfig([
+      "node",
+      "codex-monitor",
+      "--config-dir",
+      tempConfigDir,
+    ]);
+
+    expect(config.githubProjectSync.webhookPath).toBe(
+      "/hooks/github/project-sync",
+    );
+    expect(config.githubProjectSync.webhookSecret).toBe("secret-1");
+    expect(config.githubProjectSync.webhookRequireSignature).toBe(true);
+    expect(config.githubProjectSync.alertFailureThreshold).toBe(4);
+    expect(config.githubProjectSync.rateLimitAlertThreshold).toBe(5);
   });
 });

@@ -1002,6 +1002,44 @@ export function loadConfig(argv = process.argv, options = {}) {
       process.env.KANBAN_PROJECT_ID || configData.kanban?.projectId || null,
     syncPolicy: kanbanSyncPolicy,
   });
+  const githubProjectSync = Object.freeze({
+    webhookPath:
+      process.env.GITHUB_PROJECT_WEBHOOK_PATH ||
+      configData.kanban?.github?.project?.webhook?.path ||
+      "/api/webhooks/github/project-sync",
+    webhookSecret:
+      process.env.GITHUB_PROJECT_WEBHOOK_SECRET ||
+      process.env.GITHUB_WEBHOOK_SECRET ||
+      configData.kanban?.github?.project?.webhook?.secret ||
+      "",
+    webhookRequireSignature: isEnvEnabled(
+      process.env.GITHUB_PROJECT_WEBHOOK_REQUIRE_SIGNATURE ??
+        configData.kanban?.github?.project?.webhook?.requireSignature,
+      Boolean(
+        process.env.GITHUB_PROJECT_WEBHOOK_SECRET ||
+          process.env.GITHUB_WEBHOOK_SECRET ||
+          configData.kanban?.github?.project?.webhook?.secret,
+      ),
+    ),
+    alertFailureThreshold: Math.max(
+      1,
+      Number(
+        process.env.GITHUB_PROJECT_SYNC_ALERT_FAILURE_THRESHOLD ||
+          configData.kanban?.github?.project?.syncMonitoring
+            ?.alertFailureThreshold ||
+          3,
+      ),
+    ),
+    rateLimitAlertThreshold: Math.max(
+      1,
+      Number(
+        process.env.GITHUB_PROJECT_SYNC_RATE_LIMIT_ALERT_THRESHOLD ||
+          configData.kanban?.github?.project?.syncMonitoring
+            ?.rateLimitAlertThreshold ||
+          3,
+      ),
+    ),
+  });
 
   const internalExecutorConfig = configData.internalExecutor || {};
   const projectRequirements = {
@@ -1419,6 +1457,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     internalExecutor,
     executorMode: internalExecutor.mode,
     kanban,
+    githubProjectSync,
     projectRequirements,
 
     // Merge Strategy

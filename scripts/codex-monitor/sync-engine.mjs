@@ -178,6 +178,8 @@ export class SyncEngine {
   #kanbanAdapter;
   /** @type {Function|null} */
   #sendTelegram;
+  /** @type {Function|null} */
+  #onAlert;
   /** @type {"internal-primary"|"bidirectional"} */
   #syncPolicy;
 
@@ -192,6 +194,20 @@ export class SyncEngine {
   #syncsCompleted = 0;
   #consecutiveFailures = 0;
   #errors = [];
+  #metrics = {
+    syncSuccesses: 0,
+    syncFailures: 0,
+    rateLimitEvents: 0,
+    rateLimitRetrySuccesses: 0,
+    rateLimitRetryFailures: 0,
+    alertsTriggered: 0,
+    lastSuccessAt: null,
+    lastFailureAt: null,
+    lastRateLimitAt: null,
+    lastError: null,
+  };
+  #failureAlertThreshold;
+  #rateLimitAlertThreshold;
 
   // Back-off
   #baseIntervalMs;
@@ -216,6 +232,23 @@ export class SyncEngine {
     this.#baseIntervalMs = this.#syncIntervalMs;
     this.#kanbanAdapter = options.kanbanAdapter ?? null;
     this.#sendTelegram = options.sendTelegram ?? null;
+    this.#onAlert = options.onAlert ?? null;
+    this.#failureAlertThreshold = Math.max(
+      1,
+      Number(
+        options.failureAlertThreshold ??
+          process.env.GITHUB_PROJECT_SYNC_ALERT_FAILURE_THRESHOLD ??
+          3,
+      ),
+    );
+    this.#rateLimitAlertThreshold = Math.max(
+      1,
+      Number(
+        options.rateLimitAlertThreshold ??
+          process.env.GITHUB_PROJECT_SYNC_RATE_LIMIT_ALERT_THRESHOLD ??
+          3,
+      ),
+    );
     const requestedPolicy = String(
       options.syncPolicy || process.env.KANBAN_SYNC_POLICY || "internal-primary",
     )
@@ -541,15 +574,25 @@ export class SyncEngine {
         console.log(TAG, `Pushed ${task.id} → ${task.status}`);
       } catch (err) {
         if (this.#isRateLimited(err)) {
+          this.#metrics.rateLimitEvents++;
+          this.#metrics.lastRateLimitAt = new Date().toISOString();
           const msg = `Rate limited — backing off for ${SyncEngine.RATE_LIMIT_DELAY_MS / 1000}s`;
           console.warn(TAG, msg);
           result.errors.push(msg);
+          if (this.#metrics.rateLimitEvents % this.#rateLimitAlertThreshold === 0) {
+            this.#emitAlert(
+              "rate_limit",
+              `Sync engine observed ${this.#metrics.rateLimitEvents} rate-limit event(s)`,
+              { taskId: task.id, backend: backendName },
+            );
+          }
           await this.#sleep(SyncEngine.RATE_LIMIT_DELAY_MS);
           // Retry once after back-off
           try {
             await this.#updateExternal(pushId, task.status);
             markSynced(task.id);
             result.pushed++;
+            this.#metrics.rateLimitRetrySuccesses++;
             console.log(
               TAG,
               `Pushed ${task.id} → ${task.status} (after rate-limit retry)`,
@@ -558,6 +601,7 @@ export class SyncEngine {
             const retryMsg = `Push retry failed for ${task.id}: ${retryErr.message}`;
             console.warn(TAG, retryMsg);
             result.errors.push(retryMsg);
+            this.#metrics.rateLimitRetryFailures++;
           }
         } else if (this.#isNotFound(err)) {
           // Task was deleted from the external kanban — stop retrying
@@ -620,6 +664,17 @@ export class SyncEngine {
     if (combined.errors.length > 0) {
       this.#consecutiveFailures++;
       this.#errors = combined.errors.slice(-20); // keep last 20
+      this.#metrics.syncFailures++;
+      this.#metrics.lastFailureAt = new Date().toISOString();
+      this.#metrics.lastError = combined.errors[combined.errors.length - 1] || null;
+
+      if (this.#consecutiveFailures % this.#failureAlertThreshold === 0) {
+        this.#emitAlert(
+          "sync_failure",
+          `Sync engine has ${this.#consecutiveFailures} consecutive failure(s)`,
+          { errors: combined.errors.slice(-3) },
+        );
+      }
 
       if (
         this.#consecutiveFailures >= SyncEngine.BACKOFF_THRESHOLD &&
@@ -646,6 +701,9 @@ export class SyncEngine {
         );
       }
       this.#consecutiveFailures = 0;
+      this.#metrics.syncSuccesses++;
+      this.#metrics.lastSuccessAt = new Date().toISOString();
+      this.#metrics.lastError = null;
       if (this.#backoffActive) {
         this.#backoffActive = false;
         this.#syncIntervalMs = this.#baseIntervalMs;
@@ -762,6 +820,7 @@ export class SyncEngine {
       currentIntervalMs: this.#syncIntervalMs,
       sharedStateEnabled: SHARED_STATE_ENABLED,
       syncPolicy: this.#syncPolicy,
+      metrics: { ...this.#metrics },
     };
   }
 
@@ -855,6 +914,27 @@ export class SyncEngine {
   /** Simple async sleep. */
   #sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  #emitAlert(kind, message, context = {}) {
+    this.#metrics.alertsTriggered++;
+    console.warn(TAG, `[alert:${kind}] ${message}`);
+    const payload = {
+      kind,
+      message,
+      context,
+      timestamp: new Date().toISOString(),
+    };
+    if (this.#sendTelegram) {
+      this.#sendTelegram(`⚠️ ${message}`).catch(() => {});
+    }
+    if (typeof this.#onAlert === "function") {
+      try {
+        this.#onAlert(payload);
+      } catch {
+        // best effort
+      }
+    }
   }
 }
 

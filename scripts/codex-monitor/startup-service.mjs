@@ -31,8 +31,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const SERVICE_LABEL = "com.virtengine.codex-monitor";
-const TASK_NAME = "VirtEngine-CodexMonitor";
+const SERVICE_LABEL = "com.codex-monitor.service";
+const TASK_NAME = "CodexMonitor";
 const SYSTEMD_UNIT = "codex-monitor.service";
 
 // ── Platform Detection ───────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ function generateTaskSchedulerXml({ daemon = true } = {}) {
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>Auto-start codex-monitor AI orchestrator on login</Description>
-    <Author>VirtEngine</Author>
+    <Author>Codex Monitor</Author>
     <URI>\\${TASK_NAME}</URI>
   </RegistrationInfo>
   <Triggers>
@@ -699,7 +699,7 @@ function generateSystemdUnit({ daemon = false } = {}) {
 
   return `[Unit]
 Description=codex-monitor — AI Orchestrator Supervisor
-Documentation=https://github.com/virtengine/virtengine/tree/main/scripts/codex-monitor
+Documentation=https://www.npmjs.com/package/@virtengine/codex-monitor
 After=network-online.target
 Wants=network-online.target
 

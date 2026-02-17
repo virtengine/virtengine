@@ -134,7 +134,7 @@ async function sendHeartbeat(issueNumber) {
 async function findAvailableTasks() {
   console.log("\nFetching tasks...");
 
-  const projectId = "virtengine/virtengine";
+  const projectId = "owner/repo";
   const tasks = await listTasks(projectId, { status: "todo" });
 
   console.log(`Found ${tasks.length} total tasks`);
@@ -218,7 +218,7 @@ async function exampleWorkflow() {
 async function exampleIgnoreManagement() {
   console.log("\n=== Ignore Management Example ===");
 
-  const projectId = "virtengine/virtengine";
+  const projectId = "owner/repo";
   const tasks = await listTasks(projectId);
 
   // Find tasks that should be ignored (example criteria)
@@ -251,7 +251,7 @@ async function exampleIgnoreManagement() {
 async function findStaleClaims() {
   console.log("\n=== Stale Claim Detection ===");
 
-  const projectId = "virtengine/virtengine";
+  const projectId = "owner/repo";
   const tasks = await listTasks(projectId);
 
   const staleTasks = tasks.filter((t) => {

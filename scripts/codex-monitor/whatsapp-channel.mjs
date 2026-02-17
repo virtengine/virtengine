@@ -19,9 +19,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { resolveRepoRoot } from "./repo-root.mjs";
 
 const __dirname = dirname(fileURLToPath(new URL(".", import.meta.url)));
-const repoRoot = resolve(__dirname, "..", "..");
+const repoRoot = resolveRepoRoot();
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ const whatsappChatId = process.env.WHATSAPP_CHAT_ID || "";
 const assistantName =
   process.env.WHATSAPP_ASSISTANT_NAME ||
   process.env.PROJECT_NAME ||
-  "VirtEngine";
+  "Codex Monitor";
 const storeDir = resolve(
   process.env.WHATSAPP_STORE_DIR ||
     resolve(repoRoot, ".cache", "whatsapp-store"),
@@ -228,7 +229,7 @@ async function connectInternal(onFirstOpen) {
     },
     printQRInTerminal: false,
     logger: silentLogger,
-    browser: b.Browsers?.macOS?.("Chrome") || ["VirtEngine", "Chrome", "1.0"],
+    browser: b.Browsers?.macOS?.("Chrome") || ["Codex Monitor", "Chrome", "1.0"],
   });
 
   sock.ev.on("connection.update", (update) => {
@@ -451,7 +452,7 @@ export async function runWhatsAppAuth(mode = "qr") {
     },
     printQRInTerminal: false,
     logger: silentLogger,
-    browser: b.Browsers?.macOS?.("Chrome") || ["VirtEngine", "Chrome", "1.0"],
+    browser: b.Browsers?.macOS?.("Chrome") || ["Codex Monitor", "Chrome", "1.0"],
   });
 
   let pairingRequested = false;

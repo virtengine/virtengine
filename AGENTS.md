@@ -41,7 +41,7 @@ If you notice unexpected modified/untracked files, assume another agent/subagent
 ## Architecture
 
 - AGENTS.md files live alongside modules and summarize key entry points, concepts, and testing steps.
-- System documentation lives in `docs/`:
+- System documentation lives in `docs/`: & development oriented documentation lives in `_docs/` 
   - Template: `docs/templates/AGENTS.template.md`
   - Standards: `docs/AGENTS_STANDARDS.md`
   - Index: `docs/AGENTS_INDEX.md`
