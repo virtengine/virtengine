@@ -9,6 +9,31 @@ import { cloneValue } from "./utils.js";
 import { generateId } from "./utils.js";
 
 /* ═══════════════════════════════════════════════════════════════
+ *  CLOUD STORAGE HELPER — mirrors settings.js pattern
+ * ═══════════════════════════════════════════════════════════════ */
+
+/** @param {string} key @returns {Promise<any>} */
+function _cloudGet(key) {
+  return new Promise((resolve) => {
+    const tg = globalThis.Telegram?.WebApp;
+    if (tg?.CloudStorage) {
+      tg.CloudStorage.getItem(key, (err, val) => {
+        if (err || val == null) resolve(null);
+        else {
+          try { resolve(JSON.parse(val)); }
+          catch { resolve(val); }
+        }
+      });
+    } else {
+      try {
+        const v = localStorage.getItem("ve_settings_" + key);
+        resolve(v != null ? JSON.parse(v) : null);
+      } catch { resolve(null); }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
  *  SIGNALS — Single source of truth for UI state
  * ═══════════════════════════════════════════════════════════════ */
 
@@ -59,6 +84,111 @@ export const configData = signal(null);
 // ── Toasts
 export const toasts = signal([]);
 
+// ── Notification Preferences (loaded from CloudStorage)
+export const notificationPrefs = signal({
+  notifyUpdates: true,
+  notifyErrors: true,
+  notifyCompletion: true,
+});
+
+/* ═══════════════════════════════════════════════════════════════
+ *  NOTIFICATION PREFERENCES
+ * ═══════════════════════════════════════════════════════════════ */
+
+/** Load notification preferences from CloudStorage into signal */
+export async function loadNotificationPrefs() {
+  const [nu, ne, nc] = await Promise.all([
+    _cloudGet("notifyUpdates"),
+    _cloudGet("notifyErrors"),
+    _cloudGet("notifyCompletion"),
+  ]);
+  notificationPrefs.value = {
+    notifyUpdates: nu != null ? nu : true,
+    notifyErrors: ne != null ? ne : true,
+    notifyCompletion: nc != null ? nc : true,
+  };
+}
+
+/** Critical message patterns that always show regardless of prefs */
+const CRITICAL_PATTERNS = /\b(connection\s*lost|auth\s*(fail|error)|authentication\s*(fail|error)|unauthorized)\b/i;
+
+/**
+ * Determine if a toast should be rendered based on notification prefs.
+ * Filtering happens at render time so toasts are still logged even if hidden.
+ * @param {{ id: string, message: string, type: string }} toast
+ * @returns {boolean}
+ */
+export function shouldShowToast(toast) {
+  if (CRITICAL_PATTERNS.test(toast.message)) return true;
+
+  const prefs = notificationPrefs.value;
+
+  if (!prefs.notifyUpdates && (toast.type === "info" || toast.type === "success")) {
+    return false;
+  }
+  if (!prefs.notifyErrors && toast.type === "error") {
+    return false;
+  }
+  if (!prefs.notifyCompletion && /\b(complete[ds]?|done)\b/i.test(toast.message)) {
+    return false;
+  }
+
+  return true;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ *  EXECUTOR DEFAULTS — apply stored settings on first load
+ * ═══════════════════════════════════════════════════════════════ */
+
+let _defaultsApplied = false;
+
+/**
+ * Read stored executor defaults from CloudStorage and POST them to
+ * the server if they differ from the current config.
+ * Only runs once per app lifecycle (not on tab switches).
+ */
+export async function applyStoredDefaults() {
+  if (_defaultsApplied) return;
+  _defaultsApplied = true;
+
+  const [maxP, sdk, region] = await Promise.all([
+    _cloudGet("defaultMaxParallel"),
+    _cloudGet("defaultSdk"),
+    _cloudGet("defaultRegion"),
+  ]);
+
+  const promises = [];
+
+  if (maxP != null) {
+    const current = executorData.value;
+    if (!current || current.maxParallel !== maxP) {
+      promises.push(
+        apiFetch("/api/executor/maxparallel", {
+          method: "POST",
+          body: JSON.stringify({ maxParallel: maxP }),
+          _silent: true,
+        }).catch(() => {}),
+      );
+    }
+  }
+
+  const configUpdates = {};
+  if (sdk && sdk !== "auto") configUpdates.sdk = sdk;
+  if (region && region !== "auto") configUpdates.region = region;
+
+  if (Object.keys(configUpdates).length) {
+    promises.push(
+      apiFetch("/api/config/update", {
+        method: "POST",
+        body: JSON.stringify(configUpdates),
+        _silent: true,
+      }).catch(() => {}),
+    );
+  }
+
+  if (promises.length) await Promise.all(promises);
+}
+
 /* ═══════════════════════════════════════════════════════════════
  *  TOAST SYSTEM
  * ═══════════════════════════════════════════════════════════════ */
@@ -91,6 +221,78 @@ if (typeof globalThis !== "undefined") {
  *  DATA LOADERS — each calls apiFetch and updates its signal(s)
  * ═══════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════
+ *  DASHBOARD HISTORY — localStorage-backed trend tracking
+ * ═══════════════════════════════════════════════════════════════ */
+
+const HISTORY_KEY = "ve-dashboard-history";
+const HISTORY_MAX = 50;
+const HISTORY_MIN_INTERVAL_MS = 30_000;
+
+/** Read stored history from localStorage. */
+export function getDashboardHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Compute trend delta between latest and previous snapshot for a metric.
+ * Returns 0 when insufficient history.
+ * @param {string} metric - one of: total, running, done, errors, successRate
+ * @returns {number}
+ */
+export function getTrend(metric) {
+  const hist = getDashboardHistory();
+  if (hist.length < 2) return 0;
+  const latest = hist[hist.length - 1];
+  const prev = hist[hist.length - 2];
+  return (latest[metric] ?? 0) - (prev[metric] ?? 0);
+}
+
+/** Save a dashboard snapshot after a successful status load. */
+function _saveDashboardSnapshot() {
+  try {
+    const s = statusData.value;
+    if (!s) return;
+    const counts = s.counts || {};
+    const running = Number(counts.running || counts.inprogress || 0);
+    const review = Number(counts.review || counts.inreview || 0);
+    const blocked = Number(counts.error || 0);
+    const done = Number(counts.done || 0);
+    const backlog = Number(s.backlog_remaining || counts.todo || 0);
+    const total = running + review + blocked + backlog + done;
+    const successRate = total > 0 ? +((done / total) * 100).toFixed(1) : 0;
+
+    const snap = { ts: Date.now(), total, running, done, errors: blocked, successRate };
+
+    const hist = getDashboardHistory();
+
+    // Deduplicate: skip if too recent and values unchanged
+    if (hist.length > 0) {
+      const last = hist[hist.length - 1];
+      const elapsed = snap.ts - (last.ts || 0);
+      const same =
+        last.total === snap.total &&
+        last.running === snap.running &&
+        last.done === snap.done &&
+        last.errors === snap.errors;
+      if (elapsed < HISTORY_MIN_INTERVAL_MS && same) return;
+    }
+
+    hist.push(snap);
+    // Trim to max length
+    while (hist.length > HISTORY_MAX) hist.shift();
+
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+  } catch {
+    /* localStorage may be unavailable */
+  }
+}
+
 /** Load system status → statusData */
 export async function loadStatus() {
   const res = await apiFetch("/api/status", { _silent: true }).catch(() => ({
@@ -98,6 +300,7 @@ export async function loadStatus() {
   }));
   statusData.value = res.data ?? res ?? null;
   connected.value = true;
+  _saveDashboardSnapshot();
 }
 
 /** Load executor state → executorData */

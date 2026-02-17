@@ -1693,17 +1693,20 @@ async function handleApi(req, res, url) {
       }
       const wtName = matches[0];
       const wtPath = resolve(worktreeDir, wtName);
-      let gitLog = "";
-      try {
-        gitLog = execSync("git log --oneline -10", {
-          cwd: wtPath,
-          encoding: "utf8",
-          timeout: 5000,
-        }).trim();
-      } catch { /* ignore */ }
+      const runWtGit = (args) => {
+        try {
+          return execSync(`git ${args}`, { cwd: wtPath, encoding: "utf8", timeout: 5000 }).trim();
+        } catch { return ""; }
+      };
+      const gitLog = runWtGit("log --oneline -10");
+      const gitLogDetailed = runWtGit("log --format=%h||%s||%cr -10");
+      const gitStatus = runWtGit("status --porcelain");
+      const gitBranch = runWtGit("rev-parse --abbrev-ref HEAD");
+      const gitDiffStat = runWtGit("diff --stat");
+      const gitAheadBehind = runWtGit("rev-list --left-right --count HEAD...@{upstream} 2>/dev/null");
       jsonResponse(res, 200, {
         ok: true,
-        data: { matches, context: { name: wtName, path: wtPath, gitLog } },
+        data: { matches, context: { name: wtName, path: wtPath, gitLog, gitLogDetailed, gitStatus, gitBranch, gitDiffStat, gitAheadBehind } },
       });
     } catch (err) {
       jsonResponse(res, 200, { ok: true, data: null });

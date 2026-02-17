@@ -157,6 +157,8 @@ export function ProgressBar({
  *   width?: number
  * }} props
  */
+let _sparkId = 0;
+
 export function MiniSparkline({
   data = [],
   color = "var(--accent, #5b6eae)",
@@ -164,6 +166,8 @@ export function MiniSparkline({
   width = 80,
 }) {
   if (!data.length) return null;
+
+  const gradId = `sparkGrad-${++_sparkId}`;
 
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -203,12 +207,12 @@ export function MiniSparkline({
       style="display:block"
     >
       <defs>
-        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id=${gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color=${color} stop-opacity="0.25" />
           <stop offset="100%" stop-color=${color} stop-opacity="0" />
         </linearGradient>
       </defs>
-      <path d=${areaPath} fill="url(#sparkGrad)" />
+      <path d=${areaPath} fill="url(#${gradId})" />
       <polyline
         points=${points}
         fill="none"

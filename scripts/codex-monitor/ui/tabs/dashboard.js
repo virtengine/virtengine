@@ -24,6 +24,8 @@ import {
   refreshTab,
   runOptimistic,
   scheduleRefresh,
+  getTrend,
+  getDashboardHistory,
 } from "../modules/state.js";
 import { ICONS } from "../modules/icons.js";
 import { cloneValue, formatRelative, truncate } from "../modules/utils.js";
@@ -35,7 +37,7 @@ import {
   Modal,
   EmptyState,
 } from "../components/shared.js";
-import { DonutChart, ProgressBar } from "../components/charts.js";
+import { DonutChart, ProgressBar, MiniSparkline } from "../components/charts.js";
 import {
   SegmentedControl,
   PullToRefresh,
@@ -177,13 +179,17 @@ export function DashboardTab() {
       ? Math.round((totalActive / (backlog + totalActive)) * 100)
       : 0;
 
-  /* Trend indicator helper (placeholder — compares with 0 for now) */
+  /* Trend indicator helper */
   const trend = (val) =>
     val > 0
       ? html`<span class="stat-trend up">▲</span>`
       : val < 0
         ? html`<span class="stat-trend down">▼</span>`
         : null;
+
+  /* Historical sparkline data */
+  const history = getDashboardHistory();
+  const sparkData = (metric) => history.map((h) => h[metric] ?? 0);
 
   const segments = [
     { label: "Running", value: running, color: "var(--color-inprogress)" },
@@ -266,24 +272,28 @@ export function DashboardTab() {
           label="Total Tasks"
           color="var(--text-primary)"
         >
-          ${trend(0)}
+          ${trend(getTrend('total'))}
+          <${MiniSparkline} data=${sparkData('total')} color="var(--text-primary)" />
         <//>
         <${StatCard}
           value=${running}
           label="In Progress"
           color="var(--color-inprogress)"
         >
-          ${trend(running)}
+          ${trend(getTrend('running'))}
+          <${MiniSparkline} data=${sparkData('running')} color="var(--color-inprogress)" />
         <//>
         <${StatCard} value=${done} label="Done" color="var(--color-done)">
-          ${trend(done)}
+          ${trend(getTrend('done'))}
+          <${MiniSparkline} data=${sparkData('done')} color="var(--color-done)" />
         <//>
         <${StatCard}
           value="${errorRate}%"
           label="Error Rate"
           color="var(--color-error)"
         >
-          ${trend(-blocked)}
+          ${trend(-getTrend('errors'))}
+          <${MiniSparkline} data=${sparkData('errors')} color="var(--color-error)" />
         <//>
       </div>
     <//>
