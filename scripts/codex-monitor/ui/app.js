@@ -30,6 +30,8 @@ import {
   refreshTab,
   toasts,
   initWsInvalidationListener,
+  loadNotificationPrefs,
+  applyStoredDefaults,
 } from "./modules/state.js";
 import { activeTab, navigateTo, TAB_CONFIG } from "./modules/router.js";
 
@@ -130,8 +132,11 @@ function App() {
     connectWebSocket();
     initWsInvalidationListener();
 
-    // Load initial data for the default tab
-    refreshTab("dashboard");
+    // Load notification preferences early (non-blocking)
+    loadNotificationPrefs();
+
+    // Load initial data for the default tab, then apply stored executor defaults
+    refreshTab("dashboard").then(() => applyStoredDefaults());
 
     return () => {
       unsub();

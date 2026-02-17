@@ -14,7 +14,7 @@ import htm from "htm";
 const html = htm.bind(h);
 
 import { ICONS } from "../modules/icons.js";
-import { toasts, showToast } from "../modules/state.js";
+import { toasts, showToast, shouldShowToast } from "../modules/state.js";
 import {
   haptic,
   showBackButton,
@@ -186,9 +186,12 @@ export function ToastContainer() {
   const items = toasts.value;
   if (!items.length) return null;
 
+  const visible = items.filter(shouldShowToast);
+  if (!visible.length) return null;
+
   return html`
     <div class="toast-container">
-      ${items.map(
+      ${visible.map(
         (t) => html`
           <div key=${t.id} class="toast toast-${t.type}">
             <span class="toast-message">${t.message}</span>
