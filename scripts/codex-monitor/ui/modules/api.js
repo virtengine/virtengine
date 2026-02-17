@@ -8,6 +8,12 @@ import { getInitData } from "./telegram.js";
 
 /** Reactive signal: whether the WebSocket is currently connected */
 export const wsConnected = signal(false);
+/** Reactive signal: WebSocket round-trip latency in ms (null if unknown) */
+export const wsLatency = signal(null);
+/** Reactive signal: countdown seconds until next reconnect attempt (null when connected) */
+export const wsReconnectIn = signal(null);
+/** Reactive signal: number of reconnections since last user-initiated action */
+export const wsReconnectCount = signal(0);
 
 /* ─── REST API Client ─── */
 
@@ -74,6 +80,10 @@ export async function sendCommandToChat(cmd) {
 let ws = null;
 /** @type {ReturnType<typeof setTimeout>|null} */
 let reconnectTimer = null;
+/** @type {ReturnType<typeof setInterval>|null} */
+let countdownTimer = null;
+/** @type {ReturnType<typeof setInterval>|null} */
+let pingTimer = null;
 let retryMs = 1000;
 
 /** Registered message handlers */
@@ -88,6 +98,46 @@ const wsHandlers = new Set();
 export function onWsMessage(handler) {
   wsHandlers.add(handler);
   return () => wsHandlers.delete(handler);
+}
+
+/** Clear the reconnect countdown timer and reset signal */
+function clearCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  wsReconnectIn.value = null;
+}
+
+/** Start a countdown timer that ticks wsReconnectIn every second */
+function startCountdown(ms) {
+  clearCountdown();
+  let remaining = Math.ceil(ms / 1000);
+  wsReconnectIn.value = remaining;
+  countdownTimer = setInterval(() => {
+    remaining -= 1;
+    wsReconnectIn.value = Math.max(0, remaining);
+    if (remaining <= 0) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }, 1000);
+}
+
+/** Start the client-side ping interval (every 30s) */
+function startPing() {
+  stopPing();
+  pingTimer = setInterval(() => {
+    wsSend({ type: "ping", ts: Date.now() });
+  }, 30_000);
+}
+
+/** Stop the client-side ping interval */
+function stopPing() {
+  if (pingTimer) {
+    clearInterval(pingTimer);
+    pingTimer = null;
+  }
 }
 
 /**
@@ -120,7 +170,10 @@ export function connectWebSocket() {
 
   socket.addEventListener("open", () => {
     wsConnected.value = true;
+    wsLatency.value = null;
     retryMs = 1000; // reset backoff on successful connect
+    clearCountdown();
+    startPing();
   });
 
   socket.addEventListener("message", (event) => {
@@ -130,6 +183,31 @@ export function connectWebSocket() {
     } catch {
       return;
     }
+
+    // Handle pong → calculate RTT
+    if (msg.type === "pong" && typeof msg.ts === "number") {
+      wsLatency.value = Date.now() - msg.ts;
+      return;
+    }
+
+    // Handle server-initiated ping → reply with pong
+    if (msg.type === "ping" && typeof msg.ts === "number") {
+      wsSend({ type: "pong", ts: msg.ts });
+      return;
+    }
+
+    // Handle log-lines streaming
+    if (msg.type === "log-lines" && Array.isArray(msg.lines)) {
+      try {
+        globalThis.dispatchEvent(
+          new CustomEvent("ve:log-lines", { detail: { lines: msg.lines } }),
+        );
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+
     // Dispatch to all registered handlers
     for (const handler of wsHandlers) {
       try {
@@ -142,9 +220,13 @@ export function connectWebSocket() {
 
   socket.addEventListener("close", () => {
     wsConnected.value = false;
+    wsLatency.value = null;
     ws = null;
+    stopPing();
+    wsReconnectCount.value += 1;
     // Auto-reconnect with exponential backoff (max 15 s)
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    startCountdown(retryMs);
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connectWebSocket();
@@ -165,6 +247,8 @@ export function disconnectWebSocket() {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  clearCountdown();
+  stopPing();
   if (ws) {
     try {
       ws.close();
@@ -174,6 +258,7 @@ export function disconnectWebSocket() {
     ws = null;
   }
   wsConnected.value = false;
+  wsLatency.value = null;
 }
 
 /**
@@ -184,4 +269,29 @@ export function wsSend(data) {
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(typeof data === "string" ? data : JSON.stringify(data));
   }
+}
+
+/* ─── Log Streaming ─── */
+
+/**
+ * Subscribe to real-time log streaming over the WebSocket.
+ * @param {"system"|"agent"} logType
+ * @param {string} [query] - optional filter query (e.g. agent name)
+ */
+export function subscribeToLogs(logType, query) {
+  wsSend({ type: "subscribe-logs", logType, ...(query ? { query } : {}) });
+}
+
+/**
+ * Unsubscribe from log streaming.
+ */
+export function unsubscribeFromLogs() {
+  wsSend({ type: "unsubscribe-logs" });
+}
+
+/**
+ * Reset the reconnect counter (call on user-initiated actions).
+ */
+export function resetReconnectCount() {
+  wsReconnectCount.value = 0;
 }

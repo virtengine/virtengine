@@ -4,7 +4,8 @@
  * ────────────────────────────────────────────────────────────── */
 
 import { h, render as preactRender } from "preact";
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useCallback } from "preact/hooks";
+import { signal } from "@preact/signals";
 import htm from "htm";
 
 const html = htm.bind(h);
@@ -38,6 +39,10 @@ import { activeTab, navigateTo, TAB_CONFIG } from "./modules/router.js";
 /* ── Component imports ── */
 import { ToastContainer } from "./components/shared.js";
 import { PullToRefresh } from "./components/forms.js";
+import {
+  CommandPalette,
+  useCommandPalette,
+} from "./components/command-palette.js";
 
 /* ── Tab imports ── */
 import { DashboardTab } from "./tabs/dashboard.js";
@@ -47,6 +52,20 @@ import { InfraTab } from "./tabs/infra.js";
 import { ControlTab } from "./tabs/control.js";
 import { LogsTab } from "./tabs/logs.js";
 import { SettingsTab } from "./tabs/settings.js";
+
+/* ── Placeholder signals for connection quality (may be provided by api.js) ── */
+let wsLatency = signal(null);
+let wsReconnectIn = signal(null);
+let dataFreshness = signal(null);
+try {
+  const apiMod = await import("./modules/api.js");
+  if (apiMod.wsLatency) wsLatency = apiMod.wsLatency;
+  if (apiMod.wsReconnectIn) wsReconnectIn = apiMod.wsReconnectIn;
+} catch { /* use placeholder signals */ }
+try {
+  const stateMod = await import("./modules/state.js");
+  if (stateMod.dataFreshness) dataFreshness = stateMod.dataFreshness;
+} catch { /* use placeholder signals */ }
 
 /* ── Tab component map ── */
 const TAB_COMPONENTS = {
@@ -66,6 +85,32 @@ function Header() {
   const isConn = connected.value;
   const wsConn = wsConnected.value;
   const user = getTelegramUser();
+  const latency = wsLatency.value;
+  const reconnect = wsReconnectIn.value;
+  const freshness = dataFreshness.value;
+
+  // Connection quality label
+  let connLabel = "Offline";
+  let connClass = "disconnected";
+  if (isConn && latency != null) {
+    connLabel = `${latency}ms`;
+    connClass = "connected";
+  } else if (isConn) {
+    connLabel = "Live";
+    connClass = "connected";
+  } else if (reconnect != null && reconnect > 0) {
+    connLabel = `Reconnecting in ${reconnect}s…`;
+    connClass = "reconnecting";
+  }
+
+  // Freshness label
+  let freshnessLabel = "";
+  if (freshness != null) {
+    const ago = Math.round((Date.now() - freshness) / 1000);
+    if (ago < 5) freshnessLabel = "Updated just now";
+    else if (ago < 60) freshnessLabel = `Updated ${ago}s ago`;
+    else freshnessLabel = `Updated ${Math.round(ago / 60)}m ago`;
+  }
 
   return html`
     <header class="app-header">
@@ -81,10 +126,13 @@ function Header() {
         </div>
       </div>
       <div class="header-actions">
-        <div class="connection-pill ${isConn ? "connected" : "disconnected"}">
+        <div class="connection-pill ${connClass}">
           <span class="connection-dot"></span>
-          ${isConn ? "Live" : "Offline"}
+          ${connLabel}
         </div>
+        ${freshnessLabel
+          ? html`<div class="header-freshness" style="font-size:11px;opacity:0.55;margin-top:2px">${freshnessLabel}</div>`
+          : null}
       </div>
     </header>
   `;
@@ -116,6 +164,8 @@ function BottomNav() {
  *  App Root
  * ═══════════════════════════════════════════════ */
 function App() {
+  const { open: paletteOpen, onClose: paletteClose } = useCommandPalette();
+
   useEffect(() => {
     // Initialize Telegram Mini App SDK
     initTelegramApp();
@@ -138,9 +188,34 @@ function App() {
     // Load initial data for the default tab, then apply stored executor defaults
     refreshTab("dashboard").then(() => applyStoredDefaults());
 
+    // Global keyboard shortcuts (1-7 for tabs, Escape for modals)
+    function handleGlobalKeys(e) {
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (document.activeElement?.isContentEditable) return;
+
+      // Number keys 1-7 to switch tabs
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 7 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tabCfg = TAB_CONFIG[num - 1];
+        if (tabCfg) {
+          e.preventDefault();
+          navigateTo(tabCfg.id);
+        }
+        return;
+      }
+
+      // Escape to close modals/palette
+      if (e.key === "Escape") {
+        globalThis.dispatchEvent(new CustomEvent("ve:close-modals"));
+      }
+    }
+    document.addEventListener("keydown", handleGlobalKeys);
+
     return () => {
       unsub();
       disconnectWebSocket();
+      document.removeEventListener("keydown", handleGlobalKeys);
     };
   }, []);
 
@@ -149,6 +224,7 @@ function App() {
   return html`
     <${Header} />
     <${ToastContainer} />
+    <${CommandPalette} open=${paletteOpen} onClose=${paletteClose} />
     <${PullToRefresh} onRefresh=${() => refreshTab(activeTab.value)}>
       <main class="main-content">
         <${CurrentTab} />

@@ -20,7 +20,7 @@ import {
   scheduleRefresh,
 } from "../modules/state.js";
 import { ICONS } from "../modules/icons.js";
-import { cloneValue, formatRelative, formatBytes } from "../modules/utils.js";
+import { cloneValue, formatRelative, formatBytes, downloadFile } from "../modules/utils.js";
 import {
   Card,
   Badge,
@@ -222,8 +222,58 @@ export function InfraTab() {
     scheduleRefresh(120);
   };
 
+  /* ── Export infrastructure report ── */
+  const handleExportReport = () => {
+    haptic("medium");
+    const now = new Date();
+    const activeCount = wStats.active ?? wts.filter((w) => w.status !== "stale" && w.status !== "error").length;
+    const staleCount = wStats.stale ?? wts.filter((w) => w.status === "stale").length;
+    const availCount = workspaces.filter((w) => w.availability === "available").length;
+    const leasedCount = workspaces.filter((w) => w.availability === "leased").length;
+
+    let report = "";
+    report += "VirtEngine Infrastructure Report\n";
+    report += `Generated: ${now.toISOString()}\n\n`;
+
+    report += "== Worktrees ==\n";
+    report += `Total: ${wts.length} | Active: ${activeCount} | Stale: ${staleCount}\n\n`;
+    for (const wt of wts) {
+      report += `- ${wt.branch || "(detached)"} (${wt.status || "active"}) — Age: ${ageString(wt.age)}, Path: ${wt.path || "—"}\n`;
+    }
+
+    report += "\n== Shared Workspaces ==\n";
+    report += `Total: ${workspaces.length} | Available: ${availCount} | Leased: ${leasedCount}\n\n`;
+    for (const ws of workspaces) {
+      const lease = ws.lease;
+      const owner = lease ? lease.owner || "—" : "—";
+      const expiry = lease ? new Date(lease.lease_expires_at).toISOString() : "—";
+      report += `- ${ws.name || ws.id}: ${ws.availability || "unknown"} — Owner: ${owner}, Expires: ${expiry}\n`;
+    }
+
+    report += "\n== Active Instances ==\n";
+    report += `Coordinator: ${coordinator?.instance_label || coordinator?.instance_id || "none"}\n`;
+    report += `Instances: ${instances.length}\n`;
+    for (const inst of instances) {
+      const since = inst.last_seen_at ? new Date(inst.last_seen_at).toISOString() : "unknown";
+      report += `- ${inst.instance_label || inst.instance_id} (${inst.workspace_role || "workspace"}) — Since: ${since}\n`;
+    }
+
+    const dateStr = now.toISOString().slice(0, 10);
+    downloadFile(report, `infra-report-${dateStr}.txt`, "text/plain");
+    showToast("Infrastructure report exported", "success");
+  };
+
   /* ── Render ── */
   return html`
+    <!-- ─── Infra header with export ─── -->
+    <div class="flex-between mb-md" style="padding:0 4px">
+      <span style="font-weight:600;font-size:15px">Infrastructure</span>
+      <button class="btn btn-secondary btn-sm" style="display:inline-flex;align-items:center;gap:4px" onClick=${handleExportReport}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Export Report
+      </button>
+    </div>
+
     <!-- ─── Worktrees ─── -->
     <${Collapsible} title="Worktrees" defaultOpen=${true}>
       <${Card}>

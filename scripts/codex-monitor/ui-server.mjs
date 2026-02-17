@@ -1,6 +1,6 @@
 import { execSync, spawn } from "node:child_process";
 import { createHmac, randomBytes, timingSafeEqual, X509Certificate } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, chmodSync, createWriteStream, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, chmodSync, createWriteStream, writeFileSync, watchFile, unwatchFile } from "node:fs";
 import { open, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { get as httpsGet } from "node:https";
@@ -98,6 +98,12 @@ let uiServerUrl = null;
 let uiServerTls = false;
 let wsServer = null;
 const wsClients = new Set();
+/** @type {ReturnType<typeof setInterval>|null} */
+let wsHeartbeatTimer = null;
+
+/* ─── Log Streaming State ─── */
+/** Map<string, { sockets: Set<WebSocket>, offset: number, pollTimer }> keyed by filePath */
+const logStreamers = new Map();
 let uiDeps = {};
 const projectSyncWebhookMetrics = {
   received: 0,
@@ -871,6 +877,141 @@ function broadcastUiEvent(channels, type, payload = {}) {
     if (shouldSend) {
       sendWsMessage(socket, message);
     }
+  }
+}
+
+/* ─── Log Streaming Helpers ─── */
+
+/**
+ * Resolve the log file path for a given logType and optional query.
+ * Returns null if no matching file found.
+ */
+async function resolveLogPath(logType, query) {
+  if (logType === "system") {
+    const files = await readdir(logsDir).catch(() => []);
+    const logFile = files.filter((f) => f.endsWith(".log")).sort().pop();
+    return logFile ? resolve(logsDir, logFile) : null;
+  }
+  if (logType === "agent") {
+    const files = await readdir(agentLogsDir).catch(() => []);
+    let candidates = files.filter((f) => f.endsWith(".log")).sort().reverse();
+    if (query) {
+      const q = query.toLowerCase();
+      const filtered = candidates.filter((f) => f.toLowerCase().includes(q));
+      if (filtered.length) candidates = filtered;
+    }
+    return candidates.length ? resolve(agentLogsDir, candidates[0]) : null;
+  }
+  return null;
+}
+
+/**
+ * Start streaming a log file to a socket. Uses polling (every 2s) to detect
+ * new content. Handles file rotation and missing files gracefully.
+ */
+function startLogStream(socket, logType, query) {
+  // Clean up any previous stream for this socket
+  stopLogStream(socket);
+
+  const streamState = { logType, query, filePath: null, offset: 0, pollTimer: null, active: true };
+  socket.__logStream = streamState;
+
+  async function poll() {
+    if (!streamState.active) return;
+    try {
+      const filePath = await resolveLogPath(logType, query);
+      if (!filePath || !existsSync(filePath)) return;
+
+      // Detect file rotation (path changed or file shrank)
+      const info = await stat(filePath).catch(() => null);
+      if (!info) return;
+      const size = info.size || 0;
+
+      if (filePath !== streamState.filePath) {
+        // New file or first poll — start from end to avoid dumping history
+        streamState.filePath = filePath;
+        streamState.offset = size;
+        return;
+      }
+
+      if (size < streamState.offset) {
+        // File was truncated/rotated — reset
+        streamState.offset = 0;
+      }
+
+      if (size <= streamState.offset) return;
+
+      // Read only new bytes
+      const readLen = Math.min(size - streamState.offset, 512_000);
+      const handle = await open(filePath, "r");
+      try {
+        const buffer = Buffer.alloc(readLen);
+        await handle.read(buffer, 0, readLen, streamState.offset);
+        streamState.offset += readLen;
+        const text = buffer.toString("utf8");
+        const lines = text.split("\n").filter(Boolean);
+        if (lines.length > 0) {
+          sendWsMessage(socket, { type: "log-lines", lines });
+        }
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      // Ignore transient errors — next poll will retry
+    }
+  }
+
+  // First poll immediately, then every 2 seconds
+  poll();
+  streamState.pollTimer = setInterval(poll, 2000);
+}
+
+/**
+ * Stop streaming logs for a given socket.
+ */
+function stopLogStream(socket) {
+  const stream = socket.__logStream;
+  if (stream) {
+    stream.active = false;
+    if (stream.pollTimer) clearInterval(stream.pollTimer);
+    socket.__logStream = null;
+  }
+}
+
+/* ─── Server-side Heartbeat ─── */
+
+function startWsHeartbeat() {
+  if (wsHeartbeatTimer) clearInterval(wsHeartbeatTimer);
+  wsHeartbeatTimer = setInterval(() => {
+    const now = Date.now();
+    for (const socket of wsClients) {
+      // Check for missed pongs (2 consecutive pings = 60s)
+      if (socket.__lastPing && !socket.__lastPong) {
+        socket.__missedPongs = (socket.__missedPongs || 0) + 1;
+      } else if (socket.__lastPing && socket.__lastPong && socket.__lastPong < socket.__lastPing) {
+        socket.__missedPongs = (socket.__missedPongs || 0) + 1;
+      } else {
+        socket.__missedPongs = 0;
+      }
+
+      if ((socket.__missedPongs || 0) >= 2) {
+        try { socket.close(); } catch { /* noop */ }
+        wsClients.delete(socket);
+        stopLogStream(socket);
+        continue;
+      }
+
+      // Send ping
+      socket.__lastPing = now;
+      sendWsMessage(socket, { type: "ping", ts: now });
+    }
+  }, 30_000);
+}
+
+function stopWsHeartbeat() {
+  if (wsHeartbeatTimer) {
+    clearInterval(wsHeartbeatTimer);
+    wsHeartbeatTimer = null;
   }
 }
 
@@ -2577,6 +2718,9 @@ export async function startTelegramUiServer(options = {}) {
   wsServer = new WebSocketServer({ noServer: true });
   wsServer.on("connection", (socket) => {
     socket.__channels = new Set(["*"]);
+    socket.__lastPong = Date.now();
+    socket.__lastPing = null;
+    socket.__missedPongs = 0;
     wsClients.add(socket);
     sendWsMessage(socket, {
       type: "hello",
@@ -2599,6 +2743,19 @@ export async function startTelegramUiServer(options = {}) {
             payload: { ok: true },
             ts: Date.now(),
           });
+        } else if (message?.type === "ping" && typeof message.ts === "number") {
+          // Client ping → echo back as pong
+          sendWsMessage(socket, { type: "pong", ts: message.ts });
+        } else if (message?.type === "pong" && typeof message.ts === "number") {
+          // Client pong in response to server ping
+          socket.__lastPong = Date.now();
+          socket.__missedPongs = 0;
+        } else if (message?.type === "subscribe-logs") {
+          const logType = message.logType === "agent" ? "agent" : "system";
+          const query = typeof message.query === "string" ? message.query : "";
+          startLogStream(socket, logType, query);
+        } else if (message?.type === "unsubscribe-logs") {
+          stopLogStream(socket);
         }
       } catch {
         // Ignore malformed websocket payloads
@@ -2606,13 +2763,17 @@ export async function startTelegramUiServer(options = {}) {
     });
 
     socket.on("close", () => {
+      stopLogStream(socket);
       wsClients.delete(socket);
     });
 
     socket.on("error", () => {
+      stopLogStream(socket);
       wsClients.delete(socket);
     });
   });
+
+  startWsHeartbeat();
 
   uiServer.on("upgrade", (req, socket, head) => {
     const url = new URL(
@@ -2702,14 +2863,21 @@ export async function startTelegramUiServer(options = {}) {
 export function stopTelegramUiServer() {
   if (!uiServer) return;
   stopTunnel();
+  stopWsHeartbeat();
   for (const socket of wsClients) {
     try {
+      stopLogStream(socket);
       socket.close();
     } catch {
       // best effort
     }
   }
   wsClients.clear();
+  // Clean up any remaining log stream poll timers
+  for (const [, streamer] of logStreamers) {
+    if (streamer.pollTimer) clearInterval(streamer.pollTimer);
+  }
+  logStreamers.clear();
   if (wsServer) {
     try {
       wsServer.close();

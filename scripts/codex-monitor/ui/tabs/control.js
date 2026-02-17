@@ -2,7 +2,7 @@
  *  Tab: Control — executor, commands, routing, quick commands
  * ────────────────────────────────────────────────────────────── */
 import { h } from "preact";
-import { useState, useCallback } from "preact/hooks";
+import { useState, useCallback, useEffect, useRef } from "preact/hooks";
 import htm from "htm";
 
 const html = htm.bind(h);
@@ -23,8 +23,36 @@ import { cloneValue } from "../modules/utils.js";
 import { Card, Badge, SkeletonCard } from "../components/shared.js";
 import { SegmentedControl, SliderControl } from "../components/forms.js";
 
-/* ─── Command history (up to 10 recent) ─── */
-const MAX_HISTORY = 10;
+/* ─── Command registry for autocomplete ─── */
+const CMD_REGISTRY = [
+  { cmd: '/status', desc: 'Show orchestrator status', cat: 'System' },
+  { cmd: '/health', desc: 'Health check', cat: 'System' },
+  { cmd: '/menu', desc: 'Show command menu', cat: 'System' },
+  { cmd: '/helpfull', desc: 'Full help text', cat: 'System' },
+  { cmd: '/plan', desc: 'Generate execution plan', cat: 'Tasks' },
+  { cmd: '/logs', desc: 'View recent logs', cat: 'Logs' },
+  { cmd: '/diff', desc: 'View git diff', cat: 'Git' },
+  { cmd: '/steer', desc: 'Steer active agent', cat: 'Agent' },
+  { cmd: '/ask', desc: 'Ask agent a question', cat: 'Agent' },
+  { cmd: '/start', desc: 'Start a task', cat: 'Tasks' },
+  { cmd: '/retry', desc: 'Retry failed task', cat: 'Tasks' },
+  { cmd: '/cancel', desc: 'Cancel running task', cat: 'Tasks' },
+  { cmd: '/shell', desc: 'Execute shell command', cat: 'Shell' },
+  { cmd: '/git', desc: 'Execute git command', cat: 'Git' },
+];
+
+/* ─── Category badge colors ─── */
+const CAT_COLORS = {
+  System: '#6366f1', Tasks: '#f59e0b', Logs: '#10b981',
+  Git: '#f97316', Agent: '#8b5cf6', Shell: '#64748b',
+};
+
+/* ─── Persistent history key & limits ─── */
+const HISTORY_KEY = 've-cmd-history';
+const MAX_HISTORY = 50;
+const MAX_OUTPUTS = 3;
+const POLL_INTERVAL = 2000;
+const MAX_POLLS = 7;
 
 /* ─── ControlTab ─── */
 export function ControlTab() {
@@ -46,15 +74,92 @@ export function ControlTab() {
   const [cmdHistory, setCmdHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  /* ── Command history helper ── */
+  /* ── Autocomplete state ── */
+  const [acItems, setAcItems] = useState([]);
+  const [acIndex, setAcIndex] = useState(-1);
+  const [showAc, setShowAc] = useState(false);
+
+  /* ── Persistent history state ── */
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const savedInputRef = useRef("");
+
+  /* ── Inline output state ── */
+  const [cmdOutputs, setCmdOutputs] = useState([]);
+  const [runningCmd, setRunningCmd] = useState(null);
+  const [expandedOutputs, setExpandedOutputs] = useState({});
+  const pollRef = useRef(null);
+
+  /* ── Load persistent history on mount ── */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(HISTORY_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setCmdHistory(parsed.slice(0, MAX_HISTORY));
+      }
+    } catch (_) { /* ignore corrupt data */ }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  /* ── Autocomplete filter ── */
+  useEffect(() => {
+    if (commandInput.startsWith('/') && commandInput.length > 0) {
+      const q = commandInput.toLowerCase();
+      const matches = CMD_REGISTRY.filter((r) => r.cmd.toLowerCase().includes(q));
+      setAcItems(matches);
+      setAcIndex(-1);
+      setShowAc(matches.length > 0);
+    } else {
+      setShowAc(false);
+      setAcItems([]);
+      setAcIndex(-1);
+    }
+  }, [commandInput]);
+
+  /* ── Command history helper (persistent) ── */
   const pushHistory = useCallback((cmd) => {
     setCmdHistory((prev) => {
-      const next = [cmd, ...prev.filter((c) => c !== cmd)].slice(
-        0,
-        MAX_HISTORY,
-      );
+      const next = [cmd, ...prev.filter((c) => c !== cmd)].slice(0, MAX_HISTORY);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch (_) {}
       return next;
     });
+  }, []);
+
+  /* ── Inline output polling ── */
+  const startOutputPolling = useCallback((cmd) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    const ts = new Date().toISOString();
+    setRunningCmd(cmd);
+    let pollCount = 0;
+    let lastContent = '';
+
+    pollRef.current = setInterval(async () => {
+      pollCount++;
+      try {
+        const res = await apiFetch('/api/logs?lines=15', { _silent: true });
+        const text = typeof res === 'string' ? res : (res?.logs || res?.data || JSON.stringify(res, null, 2));
+        if (text === lastContent || pollCount >= MAX_POLLS) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setRunningCmd(null);
+          setCmdOutputs((prev) => {
+            const entry = { cmd, ts, output: text || '(no output)' };
+            const next = [entry, ...prev].slice(0, MAX_OUTPUTS);
+            return next;
+          });
+          setExpandedOutputs((prev) => ({ ...prev, [0]: true }));
+        }
+        lastContent = text;
+      } catch (_) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+        setRunningCmd(null);
+        setCmdOutputs((prev) => {
+          const entry = { cmd, ts, output: '(failed to fetch output)' };
+          return [entry, ...prev].slice(0, MAX_OUTPUTS);
+        });
+      }
+    }, POLL_INTERVAL);
   }, []);
 
   const sendCmd = useCallback(
@@ -62,8 +167,10 @@ export function ControlTab() {
       if (!cmd.trim()) return;
       sendCommandToChat(cmd.trim());
       pushHistory(cmd.trim());
+      setHistoryIndex(-1);
+      startOutputPolling(cmd.trim());
     },
-    [pushHistory],
+    [pushHistory, startOutputPolling],
   );
 
   /* ── Config update helper ── */
@@ -160,6 +267,78 @@ export function ControlTab() {
     setTimeout(() => setQuickCmdFeedback(""), 4000);
   }, [quickCmdInput, quickCmdPrefix, sendCmd]);
 
+  /* ── Autocomplete select helper ── */
+  const selectAcItem = useCallback((item) => {
+    setCommandInput(item.cmd + ' ');
+    setShowAc(false);
+    setAcIndex(-1);
+  }, []);
+
+  /* ── Console input keydown handler ── */
+  const handleConsoleKeyDown = useCallback((e) => {
+    // Autocomplete navigation
+    if (showAc && acItems.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setAcIndex((prev) => (prev + 1) % acItems.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setAcIndex((prev) => (prev <= 0 ? acItems.length - 1 : prev - 1));
+        return;
+      }
+      if (e.key === 'Enter' && acIndex >= 0) {
+        e.preventDefault();
+        selectAcItem(acItems[acIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowAc(false);
+        return;
+      }
+    }
+
+    // History navigation (when input is empty or already in history mode)
+    if (!showAc && (commandInput === '' || historyIndex >= 0)) {
+      if (e.key === 'ArrowUp' && cmdHistory.length > 0) {
+        e.preventDefault();
+        const nextIdx = historyIndex + 1;
+        if (nextIdx < cmdHistory.length) {
+          if (historyIndex === -1) savedInputRef.current = commandInput;
+          setHistoryIndex(nextIdx);
+          setCommandInput(cmdHistory[nextIdx]);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown' && historyIndex >= 0) {
+        e.preventDefault();
+        const nextIdx = historyIndex - 1;
+        if (nextIdx < 0) {
+          setHistoryIndex(-1);
+          setCommandInput(savedInputRef.current);
+        } else {
+          setHistoryIndex(nextIdx);
+          setCommandInput(cmdHistory[nextIdx]);
+        }
+        return;
+      }
+    }
+
+    // Submit
+    if (e.key === 'Enter' && commandInput.trim()) {
+      sendCmd(commandInput.trim());
+      setCommandInput('');
+      setShowAc(false);
+    }
+  }, [showAc, acItems, acIndex, commandInput, historyIndex, cmdHistory, sendCmd, selectAcItem]);
+
+  /* ── Toggle output accordion ── */
+  const toggleOutput = useCallback((idx) => {
+    setExpandedOutputs((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  }, []);
+
   return html`
     <!-- Loading skeleton -->
     ${!executor && !config && html`<${Card} title="Loading…"><${SkeletonCard} /><//>`}
@@ -219,18 +398,39 @@ export function ControlTab() {
             class="input"
             placeholder="/status"
             value=${commandInput}
-            onInput=${(e) => setCommandInput(e.target.value)}
-            onFocus=${() => setShowHistory(true)}
-            onBlur=${() => setTimeout(() => setShowHistory(false), 200)}
-            onKeyDown=${(e) => {
-              if (e.key === "Enter" && commandInput.trim()) {
-                sendCmd(commandInput.trim());
-                setCommandInput("");
-              }
+            onInput=${(e) => {
+              setCommandInput(e.target.value);
+              setHistoryIndex(-1);
             }}
+            onFocus=${() => setShowHistory(true)}
+            onBlur=${() => setTimeout(() => { setShowHistory(false); setShowAc(false); }, 200)}
+            onKeyDown=${handleConsoleKeyDown}
           />
-          <!-- Command history dropdown -->
-          ${showHistory &&
+          <!-- Autocomplete dropdown (above input) -->
+          ${showAc && acItems.length > 0 && html`
+            <div class="cmd-dropdown">
+              ${acItems.map((item, i) => html`
+                <div
+                  key=${item.cmd}
+                  class="cmd-dropdown-item${i === acIndex ? ' selected' : ''}"
+                  onMouseDown=${(e) => { e.preventDefault(); selectAcItem(item); }}
+                  onMouseEnter=${() => setAcIndex(i)}
+                >
+                  <div>
+                    <span style="font-weight:600;color:#e2e8f0">${item.cmd}</span>
+                    <span style="margin-left:8px;color:#94a3b8;font-size:0.85em">${item.desc}</span>
+                  </div>
+                  <span style=${{
+                    fontSize: '0.7rem', padding: '2px 8px', borderRadius: '9999px',
+                    background: (CAT_COLORS[item.cat] || '#6366f1') + '33',
+                    color: CAT_COLORS[item.cat] || '#6366f1', fontWeight: 600,
+                  }}>${item.cat}</span>
+                </div>
+              `)}
+            </div>
+          `}
+          <!-- Command history dropdown (legacy, when no autocomplete) -->
+          ${!showAc && showHistory &&
           cmdHistory.length > 0 &&
           html`
             <div class="cmd-history-dropdown">
@@ -279,6 +479,34 @@ export function ControlTab() {
           `,
         )}
       </div>
+
+      <!-- Running indicator -->
+      ${runningCmd && html`
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;color:#94a3b8;font-size:0.85rem">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#facc15;animation:pulse 1s infinite"></span>
+          Running: <code style="color:#e2e8f0">${runningCmd}</code>
+        </div>
+      `}
+
+      <!-- Inline command outputs accordion -->
+      ${cmdOutputs.length > 0 && html`
+        <div style="margin-top:12px">
+          ${cmdOutputs.map((entry, idx) => html`
+            <div key=${idx} style="margin-bottom:6px;border:1px solid rgba(255,255,255,0.06);border-radius:8px;overflow:hidden">
+              <button
+                style="width:100%;text-align:left;padding:6px 12px;background:rgba(255,255,255,0.03);border:none;color:#cbd5e1;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:0.8rem"
+                onClick=${() => toggleOutput(idx)}
+              >
+                <span><code style="color:#818cf8">${entry.cmd}</code></span>
+                <span style="color:#64748b;font-size:0.75rem">${new Date(entry.ts).toLocaleTimeString()} ${expandedOutputs[idx] ? '▲' : '▼'}</span>
+              </button>
+              ${expandedOutputs[idx] && html`
+                <div class="cmd-output-panel">${entry.output}</div>
+              `}
+            </div>
+          `)}
+        </div>
+      `}
     <//>
 
     <!-- ── Task Ops ── -->
@@ -441,5 +669,15 @@ export function ControlTab() {
         >Open Logs tab →</a>
       </div>
     <//>
+
+    <!-- Inline styles for new elements -->
+    <style>
+      .cmd-dropdown { position: absolute; bottom: 100%; left: 0; right: 0; background: var(--glass-bg, rgba(15,23,42,0.9)); border: 1px solid var(--glass-border, rgba(255,255,255,0.08)); border-radius: 12px; max-height: 240px; overflow-y: auto; z-index: 50; backdrop-filter: blur(12px); }
+      .cmd-dropdown-item { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+      .cmd-dropdown-item.selected { background: rgba(99,102,241,0.2); }
+      .cmd-dropdown-item:hover { background: rgba(99,102,241,0.15); }
+      .cmd-output-panel { margin-top: 0; background: rgba(0,0,0,0.4); border-radius: 0 0 8px 8px; padding: 8px 12px; font-family: monospace; font-size: 0.8rem; color: #4ade80; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    </style>
   `;
 }

@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
 } from "preact/hooks";
 import htm from "htm";
 
@@ -69,10 +70,46 @@ function filterByLevel(text, level) {
     .join("\n");
 }
 
+/* ─── Helpers ─── */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightLine(text, search, isRegex) {
+  if (!search || !search.trim()) return text;
+  let regex;
+  try {
+    regex = isRegex
+      ? new RegExp(search, "gi")
+      : new RegExp(escapeRegex(search), "gi");
+  } catch {
+    return text;
+  }
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  regex.lastIndex = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push(html`<mark class="log-hl">${match[0]}</mark>`);
+    lastIndex = regex.lastIndex;
+    if (match[0].length === 0) {
+      regex.lastIndex++;
+      if (regex.lastIndex > text.length) break;
+    }
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length > 0 ? parts : text;
+}
+
+const LINE_HEIGHT = 20;
+const SCROLL_BUFFER = 20;
+
 /* ─── LogsTab ─── */
 export function LogsTab() {
   const logRef = useRef(null);
   const tailRef = useRef(null);
+  const isAtBottomRef = useRef(true);
 
   const [localLogLines, setLocalLogLines] = useState(logsLines?.value ?? 200);
   const [localAgentLines, setLocalAgentLines] = useState(
@@ -82,6 +119,9 @@ export function LogsTab() {
   const [logLevel, setLogLevel] = useState("all");
   const [logSearch, setLogSearch] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
+  const [regexMode, setRegexMode] = useState(false);
+  const [logScrollTop, setLogScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(400);
 
   /* Raw log text */
   const rawLogText = logsData?.value?.lines
@@ -92,25 +132,74 @@ export function LogsTab() {
     ? agentLogTail.value.lines.join("\n")
     : "Select a log file.";
 
-  /* Filtered log text */
-  const filteredLogText = (() => {
-    let text = filterByLevel(rawLogText, logLevel);
-    if (logSearch.trim()) {
-      const lines = text.split("\n");
-      const matches = lines.filter((l) =>
-        l.toLowerCase().includes(logSearch.toLowerCase()),
-      );
-      text = matches.join("\n") || "No matching lines.";
+  /* Filtered log lines (memoized) */
+  const { filteredLines, matchCount } = useMemo(() => {
+    const leveled = filterByLevel(rawLogText, logLevel);
+    const allLines = leveled.split("\n");
+    if (!logSearch.trim()) {
+      return { filteredLines: allLines, matchCount: 0 };
     }
-    return text;
-  })();
+    let testFn;
+    if (regexMode) {
+      try {
+        const re = new RegExp(logSearch, "i");
+        testFn = (line) => re.test(line);
+      } catch {
+        testFn = (line) =>
+          line.toLowerCase().includes(logSearch.toLowerCase());
+      }
+    } else {
+      const q = logSearch.toLowerCase();
+      testFn = (line) => line.toLowerCase().includes(q);
+    }
+    const matched = allLines.filter(testFn);
+    if (matched.length === 0) {
+      return { filteredLines: ["No matching lines."], matchCount: 0 };
+    }
+    return { filteredLines: matched, matchCount: matched.length };
+  }, [rawLogText, logLevel, logSearch, regexMode]);
+
+  const filteredLogText = filteredLines.join("\n");
+
+  /* Virtual scroll calculations */
+  const totalLines = filteredLines.length;
+  const firstVisible = Math.floor(logScrollTop / LINE_HEIGHT);
+  const startIdx = Math.max(0, firstVisible - SCROLL_BUFFER);
+  const visibleCount = Math.ceil(containerHeight / LINE_HEIGHT);
+  const endIdx = Math.min(totalLines, firstVisible + visibleCount + SCROLL_BUFFER);
+  const topSpacer = startIdx * LINE_HEIGHT;
+  const bottomSpacer = Math.max(0, (totalLines - endIdx) * LINE_HEIGHT);
+  const visibleLines = filteredLines.slice(startIdx, endIdx);
+
+  /* Scroll handler */
+  const handleLogScroll = useCallback((e) => {
+    const el = e.target;
+    setLogScrollTop(el.scrollTop);
+    isAtBottomRef.current =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+  }, []);
+
+  /* Container height measurement */
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el) return;
+    setContainerHeight(el.clientHeight);
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries)
+          setContainerHeight(entry.contentRect.height);
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, []);
 
   /* Auto-scroll */
   useEffect(() => {
     if (autoScroll && logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [filteredLogText, autoScroll]);
+  }, [filteredLines, autoScroll]);
 
   useEffect(() => {
     if (autoScroll && tailRef.current) {
@@ -185,7 +274,29 @@ export function LogsTab() {
     }
   };
 
+  /* ── Download logs ── */
+  const downloadLogs = useCallback(() => {
+    haptic();
+    const blob = new Blob([filteredLogText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const d = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    a.href = url;
+    a.download = `codex-monitor-logs-${d}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Log file downloaded", "success");
+  }, [filteredLogText]);
+
   return html`
+    <style>
+      .log-line { display: flex; }
+      .log-ln { min-width: 3.5em; text-align: right; padding-right: 8px; opacity: 0.35; user-select: none; font-size: 0.85em; }
+      .log-lt { flex: 1; white-space: pre-wrap; word-break: break-all; }
+      .log-hl { background: rgba(250,204,21,0.3); border-radius: 2px; padding: 0 1px; }
+    </style>
     <!-- Loading skeleton -->
     ${!logsData?.value && !agentLogFiles?.value && html`<${Card} title="Loading Logs…"><${SkeletonCard} /><//>`}
 
@@ -237,10 +348,17 @@ export function LogsTab() {
       <div class="input-row mb-sm">
         <input
           class="input"
-          placeholder="Search/grep logs…"
+          placeholder=${regexMode ? "Regex pattern…" : "Search/grep logs…"}
           value=${logSearch}
           onInput=${(e) => setLogSearch(e.target.value)}
         />
+        <button
+          class="btn btn-ghost btn-sm"
+          style="font-family:monospace;min-width:2.2em;padding:2px 6px;${regexMode ? "background:var(--accent);color:#fff;" : ""}"
+          onClick=${() => { setRegexMode(!regexMode); haptic(); }}
+          title="Toggle regex mode"
+        >.*</button>
+        ${logSearch.trim() && matchCount > 0 && html`<span class="pill">${matchCount} matches</span>`}
         <label
           class="meta-text toggle-label"
           style="white-space:nowrap"
@@ -257,7 +375,17 @@ export function LogsTab() {
           Auto-scroll
         </label>
       </div>
-      <div ref=${logRef} class="log-box">${filteredLogText}</div>
+      <div ref=${logRef} class="log-box" onScroll=${handleLogScroll} style="overflow-y:auto">
+        <div style="height:${topSpacer}px"></div>
+        ${visibleLines.map((line, i) => {
+          const lineNum = startIdx + i + 1;
+          return html`<div class="log-line" key=${lineNum} style="height:${LINE_HEIGHT}px">
+            <span class="log-ln">${lineNum}</span>
+            <span class="log-lt">${logSearch.trim() ? highlightLine(line, logSearch, regexMode) : line}</span>
+          </div>`;
+        })}
+        <div style="height:${bottomSpacer}px"></div>
+      </div>
       <div class="btn-row mt-sm">
         <button
           class="btn btn-ghost btn-sm"
@@ -271,6 +399,12 @@ export function LogsTab() {
           onClick=${() => copyToClipboard(filteredLogText, "Logs")}
         >
           📋 Copy
+        </button>
+        <button
+          class="btn btn-ghost btn-sm"
+          onClick=${downloadLogs}
+        >
+          💾 Download
         </button>
       </div>
     <//>

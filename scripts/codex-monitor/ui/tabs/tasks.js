@@ -38,6 +38,8 @@ import {
   formatRelative,
   truncate,
   debounce,
+  exportAsCSV,
+  exportAsJSON,
 } from "../modules/utils.js";
 import {
   Card,
@@ -53,6 +55,9 @@ import { KanbanBoard } from "../components/kanban-board.js";
 
 /* ─── View mode toggle ─── */
 const viewMode = signal("kanban");
+
+/* ─── Export dropdown icon (inline SVG) ─── */
+const DOWNLOAD_ICON = html`<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
 /* ─── Status chip definitions ─── */
 const STATUS_CHIPS = [
@@ -347,6 +352,8 @@ export function TasksTab() {
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isSearching, setIsSearching] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const searchRef = useRef(null);
 
   /* Detect desktop for keyboard shortcut hint */
@@ -544,6 +551,49 @@ export function TasksTab() {
     scheduleRefresh(150);
   };
 
+  /* ── Export handlers ── */
+  const handleExportCSV = async () => {
+    setExporting(true);
+    setExportOpen(false);
+    haptic("medium");
+    try {
+      const res = await apiFetch("/api/tasks?limit=1000", { _silent: true });
+      const allTasks = res?.data || res?.tasks || tasks;
+      const headers = ["ID", "Title", "Status", "Priority", "Created", "Updated", "Description"];
+      const rows = allTasks.map((t) => [
+        t.id || "",
+        t.title || "",
+        t.status || "",
+        t.priority || "",
+        t.created_at || "",
+        t.updated_at || "",
+        truncate(t.description || "", 200),
+      ]);
+      const date = new Date().toISOString().slice(0, 10);
+      exportAsCSV(headers, rows, `tasks-${date}.csv`);
+      showToast(`Exported ${allTasks.length} tasks`, "success");
+    } catch {
+      showToast("Export failed", "error");
+    }
+    setExporting(false);
+  };
+
+  const handleExportJSON = async () => {
+    setExporting(true);
+    setExportOpen(false);
+    haptic("medium");
+    try {
+      const res = await apiFetch("/api/tasks?limit=1000", { _silent: true });
+      const allTasks = res?.data || res?.tasks || tasks;
+      const date = new Date().toISOString().slice(0, 10);
+      exportAsJSON(allTasks, `tasks-${date}.json`);
+      showToast(`Exported ${allTasks.length} tasks`, "success");
+    } catch {
+      showToast("Export failed", "error");
+    }
+    setExporting(false);
+  };
+
   /* ── Render ── */
   const isKanban = viewMode.value === "kanban";
 
@@ -582,7 +632,38 @@ export function TasksTab() {
         <button class="view-toggle-btn ${!isKanban ? 'active' : ''}" onClick=${() => { viewMode.value = 'list'; haptic(); }}>☰ List</button>
         <button class="view-toggle-btn ${isKanban ? 'active' : ''}" onClick=${() => { viewMode.value = 'kanban'; haptic(); }}>▦ Board</button>
       </div>
+      <div style="position:relative">
+        <button
+          class="btn btn-secondary btn-sm export-btn"
+          disabled=${exporting}
+          onClick=${() => { setExportOpen(!exportOpen); haptic(); }}
+        >
+          ${DOWNLOAD_ICON} ${exporting ? "…" : "Export"}
+        </button>
+        ${exportOpen && html`
+          <div class="export-dropdown">
+            <button class="export-dropdown-item" onClick=${handleExportCSV}>📊 Export as CSV</button>
+            <button class="export-dropdown-item" onClick=${handleExportJSON}>📋 Export as JSON</button>
+          </div>
+        `}
+      </div>
     </div>
+
+    <style>
+      .export-btn { display:inline-flex; align-items:center; gap:4px; }
+      .export-dropdown {
+        position:absolute; right:0; top:100%; margin-top:4px; z-index:100;
+        background:var(--card-bg, #1e1e2e); border:1px solid var(--border, #333);
+        border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.3); overflow:hidden;
+        min-width:160px;
+      }
+      .export-dropdown-item {
+        display:block; width:100%; padding:10px 14px; border:none;
+        background:none; color:inherit; text-align:left; font-size:13px;
+        cursor:pointer;
+      }
+      .export-dropdown-item:hover { background:var(--hover-bg, rgba(255,255,255,.08)); }
+    </style>
 
     <!-- Kanban board view -->
     ${isKanban && html`<${KanbanBoard} onOpenTask=${openDetail} />`}

@@ -192,3 +192,62 @@ export function classNames(...args) {
   }
   return classes.join(" ");
 }
+
+/* ─── Data Export Utilities ─── */
+
+/**
+ * Trigger a file download from in-memory content.
+ * @param {string} content
+ * @param {string} filename
+ * @param {string} [mimeType='text/plain']
+ */
+export function downloadFile(content, filename, mimeType = "text/plain") {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Escape a value for CSV (RFC 4180).
+ * @param {*} val
+ * @returns {string}
+ */
+function csvEscape(val) {
+  const str = val == null ? "" : String(val);
+  if (/[",\n\r]/.test(str)) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+/**
+ * Export tabular data as a CSV file download.
+ * Adds a UTF-8 BOM for Excel compatibility.
+ * @param {string[]} headers
+ * @param {Array<Array<*>>} rows
+ * @param {string} filename
+ */
+export function exportAsCSV(headers, rows, filename) {
+  const lines = [headers.map(csvEscape).join(",")];
+  for (const row of rows) {
+    lines.push(row.map(csvEscape).join(","));
+  }
+  const csv = "\uFEFF" + lines.join("\r\n");
+  downloadFile(csv, filename, "text/csv");
+}
+
+/**
+ * Export data as a pretty-printed JSON file download.
+ * @param {*} data
+ * @param {string} filename
+ */
+export function exportAsJSON(data, filename) {
+  const json = JSON.stringify(data, null, 2);
+  downloadFile(json, filename, "application/json");
+}
