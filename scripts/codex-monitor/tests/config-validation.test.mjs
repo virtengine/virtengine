@@ -16,6 +16,14 @@ const ENV_KEYS = [
   "GITHUB_PROJECT_WEBHOOK_REQUIRE_SIGNATURE",
   "GITHUB_PROJECT_SYNC_ALERT_FAILURE_THRESHOLD",
   "GITHUB_PROJECT_SYNC_RATE_LIMIT_ALERT_THRESHOLD",
+  "JIRA_BASE_URL",
+  "JIRA_EMAIL",
+  "JIRA_API_TOKEN",
+  "JIRA_PROJECT_KEY",
+  "JIRA_ISSUE_TYPE",
+  "JIRA_STATUS_TODO",
+  "JIRA_LABEL_IGNORE",
+  "JIRA_CUSTOM_FIELD_OWNER_ID",
 ];
 
 describe("loadConfig validation and edge cases", () => {
@@ -115,6 +123,8 @@ describe("loadConfig validation and edge cases", () => {
     expect(typeof config.githubProjectSync.webhookRequireSignature).toBe(
       "boolean",
     );
+    expect(typeof config.jira).toBe("object");
+    expect(typeof config.jira.projectKey).toBe("string");
   });
 
   it("treats empty telegram credentials as disabled", () => {
@@ -153,5 +163,32 @@ describe("loadConfig validation and edge cases", () => {
     expect(config.githubProjectSync.webhookRequireSignature).toBe(true);
     expect(config.githubProjectSync.alertFailureThreshold).toBe(4);
     expect(config.githubProjectSync.rateLimitAlertThreshold).toBe(5);
+  });
+
+  it("loads jira mapping settings from env", () => {
+    process.env.JIRA_BASE_URL = "https://acme.atlassian.net";
+    process.env.JIRA_EMAIL = "bot@acme.dev";
+    process.env.JIRA_API_TOKEN = "token-1";
+    process.env.JIRA_PROJECT_KEY = "ENG";
+    process.env.JIRA_ISSUE_TYPE = "Bug";
+    process.env.JIRA_STATUS_TODO = "Backlog";
+    process.env.JIRA_LABEL_IGNORE = "codex-ignore";
+    process.env.JIRA_CUSTOM_FIELD_OWNER_ID = "customfield_10042";
+
+    const config = loadConfig([
+      "node",
+      "codex-monitor",
+      "--config-dir",
+      tempConfigDir,
+    ]);
+
+    expect(config.jira.baseUrl).toBe("https://acme.atlassian.net");
+    expect(config.jira.email).toBe("bot@acme.dev");
+    expect(config.jira.apiToken).toBe("token-1");
+    expect(config.jira.projectKey).toBe("ENG");
+    expect(config.jira.issueType).toBe("Bug");
+    expect(config.jira.statusMapping.todo).toBe("Backlog");
+    expect(config.jira.labels.ignore).toBe("codex-ignore");
+    expect(config.jira.sharedStateFields.ownerId).toBe("customfield_10042");
   });
 });

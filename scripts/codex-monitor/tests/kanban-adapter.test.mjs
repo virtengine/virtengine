@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const execFileMock = vi.hoisted(() => vi.fn());
 const loadConfigMock = vi.hoisted(() => vi.fn());
+const fetchWithFallbackMock = vi.hoisted(() => vi.fn());
 
 vi.mock("node:child_process", () => ({
   execFile: execFileMock,
@@ -11,8 +12,25 @@ vi.mock("../config.mjs", () => ({
   loadConfig: loadConfigMock,
 }));
 
-const { getKanbanAdapter, setKanbanBackend, getKanbanBackendName } =
-  await import("../kanban-adapter.mjs");
+vi.mock("../fetch-runtime.mjs", () => ({
+  fetchWithFallback: fetchWithFallbackMock,
+}));
+
+const {
+  getKanbanAdapter,
+  setKanbanBackend,
+  getKanbanBackendName,
+  listTasks: listKanbanTasks,
+  getTask: getKanbanTask,
+  updateTaskStatus: updateKanbanTaskStatus,
+  updateTask: patchKanbanTask,
+  createTask: createKanbanTask,
+  deleteTask: deleteKanbanTask,
+  addComment: addKanbanComment,
+  persistSharedStateToIssue,
+  readSharedStateFromIssue,
+  markTaskIgnored,
+} = await import("../kanban-adapter.mjs");
 const {
   configureTaskStore,
   loadStore,
@@ -29,6 +47,16 @@ function mockGh(stdout, stderr = "") {
     cb(null, { stdout, stderr });
   });
 }
+
+function mockGhError(error) {
+  execFileMock.mockImplementationOnce((_cmd, _args, _opts, cb) => {
+    cb(error);
+  });
+}
+
+beforeEach(() => {
+  fetchWithFallbackMock.mockImplementation((...args) => globalThis.fetch(...args));
+});
 
 describe("kanban-adapter github backend", () => {
   const originalRepo = process.env.GITHUB_REPOSITORY;
@@ -192,6 +220,146 @@ describe("kanban-adapter github backend", () => {
     expect(tasks[0]?.id).toBe("10");
   });
 
+  it("does not filter by codex labels when enforcement is disabled", async () => {
+    process.env.CODEX_MONITOR_ENFORCE_TASK_LABEL = "false";
+    setKanbanBackend("github");
+    mockGh(
+      JSON.stringify([
+        {
+          number: 10,
+          title: "scoped",
+          body: "",
+          state: "open",
+          url: "https://github.com/acme/widgets/issues/10",
+          labels: [{ name: "codex-monitor" }],
+          assignees: [],
+        },
+        {
+          number: 11,
+          title: "unscoped",
+          body: "",
+          state: "open",
+          url: "https://github.com/acme/widgets/issues/11",
+          labels: [{ name: "bug" }],
+          assignees: [],
+        },
+      ]),
+    );
+    mockGh("[]");
+    mockGh("[]");
+
+    const adapter = getKanbanAdapter();
+    const tasks = await adapter.listTasks("ignored-project-id", {
+      status: "todo",
+      limit: 25,
+    });
+
+    expect(tasks).toHaveLength(2);
+  });
+
+  it("reopens issue and syncs status labels for open-state transitions", async () => {
+    mockGh("✓ Reopened issue #42");
+    mockGh("✓ Edited labels");
+    mockGh(
+      JSON.stringify({
+        number: 42,
+        title: "example",
+        body: "",
+        state: "open",
+        url: "https://github.com/acme/widgets/issues/42",
+        labels: [{ name: "inprogress" }],
+        assignees: [],
+      }),
+    );
+    mockGh("[]");
+
+    const adapter = getKanbanAdapter();
+    const task = await adapter.updateTaskStatus("42", "inprogress");
+
+    expect(task?.id).toBe("42");
+    expect(task?.status).toBe("inprogress");
+    expect(execFileMock.mock.calls[0][1]).toContain("reopen");
+    expect(execFileMock.mock.calls[1][1]).toContain("--add-label");
+    expect(execFileMock.mock.calls[1][1]).toContain("inprogress");
+    expect(execFileMock.mock.calls[1][1]).toContain("--remove-label");
+  });
+
+  it("persists, reads, and ignores shared state through issue labels/comments", async () => {
+    mockGh(JSON.stringify({ labels: [{ name: "bug" }] }));
+    mockGh("✓ Labels updated");
+    mockGh(JSON.stringify([]));
+    mockGh("ok");
+
+    mockGh(
+      JSON.stringify([
+        {
+          id: 1001,
+          body: `<!-- codex-monitor-state
+{
+  "ownerId": "workstation-a/agent-a",
+  "attemptToken": "token-a",
+  "attemptStarted": "2026-02-17T00:00:00.000Z",
+  "heartbeat": "2026-02-17T00:01:00.000Z",
+  "status": "working",
+  "retryCount": 1
+}
+-->`,
+        },
+      ]),
+    );
+
+    mockGh("✓ Labels updated");
+    mockGh("ok");
+
+    const adapter = getKanbanAdapter();
+    const state = {
+      ownerId: "workstation-a/agent-a",
+      attemptToken: "token-a",
+      attemptStarted: "2026-02-17T00:00:00.000Z",
+      heartbeat: "2026-02-17T00:01:00.000Z",
+      status: "working",
+      retryCount: 1,
+    };
+
+    const persisted = await adapter.persistSharedStateToIssue("42", state);
+    expect(persisted).toBe(true);
+
+    const loaded = await adapter.readSharedStateFromIssue("42");
+    expect(loaded).toMatchObject(state);
+
+    const ignored = await adapter.markTaskIgnored("42", "manual-only");
+    expect(ignored).toBe(true);
+
+    const editCalls = execFileMock.mock.calls.filter(
+      (call) =>
+        Array.isArray(call[1]) &&
+        call[1].includes("issue") &&
+        call[1].includes("edit"),
+    );
+    expect(editCalls.some((call) => call[1].includes("codex:working"))).toBe(
+      true,
+    );
+    expect(editCalls.some((call) => call[1].includes("codex:ignore"))).toBe(
+      true,
+    );
+  });
+
+  it("returns false when shared state persistence exhausts retries", async () => {
+    mockGhError(new Error("api down"));
+    mockGhError(new Error("still down"));
+
+    const adapter = getKanbanAdapter();
+    const persisted = await adapter.persistSharedStateToIssue("42", {
+      ownerId: "ws/agent",
+      attemptToken: "token-b",
+      attemptStarted: "2026-02-17T00:00:00.000Z",
+      heartbeat: "2026-02-17T00:01:00.000Z",
+      status: "claimed",
+      retryCount: 0,
+    });
+    expect(persisted).toBe(false);
+  });
+
   it("addComment posts a comment on a github issue", async () => {
     mockGh("ok");
 
@@ -278,6 +446,313 @@ describe("kanban-adapter vk backend fallback fetch", () => {
       status: "todo",
       backend: "vk",
     });
+  });
+});
+
+describe("kanban-adapter jira backend", () => {
+  const originalKanbanBackend = process.env.KANBAN_BACKEND;
+  const originalJiraBaseUrl = process.env.JIRA_BASE_URL;
+  const originalJiraToken = process.env.JIRA_API_TOKEN;
+  const originalJiraEmail = process.env.JIRA_EMAIL;
+  const originalProjectKey = process.env.JIRA_PROJECT_KEY;
+  const originalIssueType = process.env.JIRA_ISSUE_TYPE;
+  const originalEnforce = process.env.JIRA_ENFORCE_TASK_LABEL;
+  const originalUseAdf = process.env.JIRA_USE_ADF_COMMENTS;
+
+  function jsonResponse(body, status = 200) {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 200 ? "OK" : "ERR",
+      headers: {
+        get: (name) =>
+          String(name || "").toLowerCase() === "content-type"
+            ? "application/json"
+            : null,
+      },
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.KANBAN_BACKEND = "jira";
+    process.env.JIRA_BASE_URL = "https://acme.atlassian.net";
+    process.env.JIRA_API_TOKEN = "token-1";
+    process.env.JIRA_EMAIL = "bot@acme.dev";
+    process.env.JIRA_PROJECT_KEY = "PROJ";
+    process.env.JIRA_ISSUE_TYPE = "Task";
+    process.env.JIRA_ENFORCE_TASK_LABEL = "true";
+    process.env.JIRA_USE_ADF_COMMENTS = "false";
+    delete process.env.JIRA_CUSTOM_FIELD_OWNER_ID;
+    delete process.env.JIRA_CUSTOM_FIELD_ATTEMPT_TOKEN;
+    delete process.env.JIRA_CUSTOM_FIELD_ATTEMPT_STARTED;
+    delete process.env.JIRA_CUSTOM_FIELD_HEARTBEAT;
+    delete process.env.JIRA_CUSTOM_FIELD_RETRY_COUNT;
+    delete process.env.JIRA_CUSTOM_FIELD_IGNORE_REASON;
+    delete process.env.JIRA_CUSTOM_FIELD_SHARED_STATE;
+    loadConfigMock.mockReturnValue({
+      kanban: { backend: "jira" },
+    });
+    setKanbanBackend("jira");
+  });
+
+  afterEach(() => {
+    if (originalKanbanBackend === undefined) {
+      delete process.env.KANBAN_BACKEND;
+    } else {
+      process.env.KANBAN_BACKEND = originalKanbanBackend;
+    }
+    if (originalJiraBaseUrl === undefined) {
+      delete process.env.JIRA_BASE_URL;
+    } else {
+      process.env.JIRA_BASE_URL = originalJiraBaseUrl;
+    }
+    if (originalJiraToken === undefined) {
+      delete process.env.JIRA_API_TOKEN;
+    } else {
+      process.env.JIRA_API_TOKEN = originalJiraToken;
+    }
+    if (originalJiraEmail === undefined) {
+      delete process.env.JIRA_EMAIL;
+    } else {
+      process.env.JIRA_EMAIL = originalJiraEmail;
+    }
+    if (originalProjectKey === undefined) {
+      delete process.env.JIRA_PROJECT_KEY;
+    } else {
+      process.env.JIRA_PROJECT_KEY = originalProjectKey;
+    }
+    if (originalIssueType === undefined) {
+      delete process.env.JIRA_ISSUE_TYPE;
+    } else {
+      process.env.JIRA_ISSUE_TYPE = originalIssueType;
+    }
+    if (originalEnforce === undefined) {
+      delete process.env.JIRA_ENFORCE_TASK_LABEL;
+    } else {
+      process.env.JIRA_ENFORCE_TASK_LABEL = originalEnforce;
+    }
+    if (originalUseAdf === undefined) {
+      delete process.env.JIRA_USE_ADF_COMMENTS;
+    } else {
+      process.env.JIRA_USE_ADF_COMMENTS = originalUseAdf;
+    }
+  });
+
+  it("initializes jira adapter and tracks configured Jira credentials", async () => {
+    fetchWithFallbackMock.mockResolvedValueOnce(jsonResponse({ values: [] }));
+    const adapter = getKanbanAdapter();
+    expect(getKanbanBackendName()).toBe("jira");
+    expect(adapter.name).toBe("jira");
+    expect(adapter._baseUrl).toBe("https://acme.atlassian.net");
+    expect(adapter._token).toBe("token-1");
+    expect(adapter._email).toBe("bot@acme.dev");
+    await adapter.listProjects();
+    expect(fetchWithFallbackMock).toHaveBeenCalled();
+  });
+
+  it("lists and filters tasks by jira status/labels/projectField", async () => {
+    fetchWithFallbackMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          issues: [
+            {
+              key: "PROJ-1",
+              fields: {
+                summary: "First",
+                description: "desc",
+                status: { name: "In Progress", statusCategory: { key: "indeterminate" } },
+                labels: ["codex-monitor"],
+                priority: { name: "High" },
+                project: { key: "PROJ" },
+                customfield_10042: "alpha",
+              },
+            },
+            {
+              key: "PROJ-2",
+              fields: {
+                summary: "Second",
+                description: "desc",
+                status: { name: "To Do", statusCategory: { key: "new" } },
+                labels: ["bug"],
+                project: { key: "PROJ" },
+                customfield_10042: "beta",
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ comments: [] }));
+
+    const adapter = getKanbanAdapter();
+    const tasks = await adapter.listTasks("PROJ", {
+      status: "inprogress",
+      projectField: { customfield_10042: "alpha" },
+      limit: 20,
+    });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]?.id).toBe("PROJ-1");
+    expect(tasks[0]?.status).toBe("inprogress");
+  });
+
+  it("updates jira task status via transitions and supports wrapper delegation", async () => {
+    let transitioned = false;
+    fetchWithFallbackMock.mockImplementation((url, options = {}) => {
+      const method = String(options.method || "GET").toUpperCase();
+      const text = String(url);
+      if (method === "GET" && text.includes("/issue/PROJ-9?fields=")) {
+        return Promise.resolve(
+          jsonResponse({
+            key: "PROJ-9",
+            fields: {
+              summary: "Task",
+              description: "body",
+              status: transitioned
+                ? { name: "In Progress", statusCategory: { key: "indeterminate" } }
+                : { name: "To Do", statusCategory: { key: "new" } },
+              labels: ["codex-monitor"],
+              project: { key: "PROJ" },
+            },
+          }),
+        );
+      }
+      if (method === "GET" && text.includes("/issue/PROJ-9/comment")) {
+        return Promise.resolve(jsonResponse({ comments: [] }));
+      }
+      if (method === "GET" && text.includes("/issue/PROJ-9/transitions")) {
+        return Promise.resolve(
+          jsonResponse({
+            transitions: [
+              {
+                id: "31",
+                to: { name: "In Progress", statusCategory: { key: "indeterminate" } },
+              },
+            ],
+          }),
+        );
+      }
+      if (method === "POST" && text.includes("/issue/PROJ-9/transitions")) {
+        transitioned = true;
+        return Promise.resolve(jsonResponse(null, 204));
+      }
+      return Promise.resolve(jsonResponse({ comments: [] }));
+    });
+
+    const updated = await updateKanbanTaskStatus("PROJ-9", "inprogress");
+    expect(updated.status).toBe("inprogress");
+    const transitionCall = fetchWithFallbackMock.mock.calls.find((call) =>
+      String(call[0]).includes("/transitions"),
+    );
+    expect(transitionCall).toBeTruthy();
+  });
+
+  it("creates, patches, comments, and marks ignored jira tasks", async () => {
+    fetchWithFallbackMock.mockImplementation((url, options = {}) => {
+      const method = String(options.method || "GET").toUpperCase();
+      const text = String(url);
+      if (method === "POST" && text.endsWith("/rest/api/3/issue")) {
+        return Promise.resolve(jsonResponse({ key: "PROJ-77" }));
+      }
+      if (method === "GET" && text.includes("/issue/PROJ-77?fields=")) {
+        return Promise.resolve(
+          jsonResponse({
+            key: "PROJ-77",
+            fields: {
+              summary: "Renamed",
+              description: "Updated",
+              status: { name: "To Do", statusCategory: { key: "new" } },
+              labels: ["codex-monitor"],
+              project: { key: "PROJ" },
+            },
+          }),
+        );
+      }
+      if (method === "GET" && text.includes("/issue/PROJ-77/comment")) {
+        return Promise.resolve(jsonResponse({ comments: [] }));
+      }
+      if (method === "PUT" && text.includes("/issue/PROJ-77")) {
+        return Promise.resolve(jsonResponse(null, 204));
+      }
+      if (method === "POST" && text.includes("/issue/PROJ-77/comment")) {
+        return Promise.resolve(jsonResponse({ id: "9001" }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const adapter = getKanbanAdapter();
+    const created = await createKanbanTask("PROJ", {
+      title: "New task",
+      description: "Body",
+    });
+    expect(created.id).toBe("PROJ-77");
+
+    const patched = await patchKanbanTask("PROJ-77", {
+      title: "Renamed",
+      description: "Updated",
+    });
+    expect(patched.title).toBe("Renamed");
+
+    const commented = await addKanbanComment("PROJ-77", "hello jira");
+    expect(commented).toBe(true);
+
+    const ignored = await markTaskIgnored("PROJ-77", "manual review");
+    expect(ignored).toBe(true);
+  });
+
+  it("persists and reads shared state from Jira comments", async () => {
+    fetchWithFallbackMock.mockImplementation((url, options = {}) => {
+      const method = String(options.method || "GET").toUpperCase();
+      const text = String(url);
+      if (method === "PUT" && text.includes("/issue/PROJ-201")) {
+        return Promise.resolve(jsonResponse(null, 204));
+      }
+      if (method === "GET" && text.includes("/issue/PROJ-201/comment")) {
+        return Promise.resolve(
+          jsonResponse({
+            comments: [
+              {
+                id: "c1",
+                body: `<!-- codex-monitor-state
+{
+  "ownerId": "ws-2/agent-2",
+  "attemptToken": "token-2",
+  "attemptStarted": "2026-02-17T00:00:00.000Z",
+  "heartbeat": "2026-02-17T00:01:00.000Z",
+  "status": "claimed",
+  "retryCount": 0
+}
+-->`,
+              },
+            ],
+            total: 1,
+          }),
+        );
+      }
+      if (method === "POST" && text.includes("/issue/PROJ-201/comment")) {
+        return Promise.resolve(jsonResponse({ id: "c1" }));
+      }
+      return Promise.resolve(jsonResponse({ comments: [] }));
+    });
+
+    const sharedState = {
+      ownerId: "ws-2/agent-2",
+      attemptToken: "token-2",
+      attemptStarted: "2026-02-17T00:00:00.000Z",
+      heartbeat: "2026-02-17T00:01:00.000Z",
+      status: "claimed",
+      retryCount: 0,
+    };
+    const persisted = await persistSharedStateToIssue("PROJ-201", sharedState);
+    expect(persisted).toBe(true);
+    const loaded = await readSharedStateFromIssue("PROJ-201");
+    expect(loaded).toMatchObject(sharedState);
+  });
+
+  it("throws on invalid jira issue keys", async () => {
+    await expect(getKanbanTask("not-a-key")).rejects.toThrow(/invalid issue key/);
+    await expect(deleteKanbanTask("123")).rejects.toThrow(/invalid issue key/);
   });
 });
 

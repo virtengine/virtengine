@@ -1,444 +1,163 @@
 # Jira Integration Guide for Codex-Monitor
 
-This document describes the planned Jira integration approach for codex-monitor's shared state management. The GitHub adapter serves as the reference implementation.
+This guide documents Jira configuration parity for codex-monitor, including status mapping and shared-state field mapping.
 
 ## Overview
 
-Codex-monitor tracks agent state (task claims, work progress, heartbeats) through a "shared state" system. This allows multiple agents across workstations to coordinate on task execution without conflicts.
+Jira integration uses the same codex-monitor shared-state contract used by other backends:
 
-**Current Status**: Jira adapter methods are **scaffolded but not implemented**. This guide provides the roadmap for implementation.
+- `ownerId`
+- `attemptToken`
+- `attemptStarted`
+- `heartbeat`
+- `status`
+- `retryCount`
 
-## Shared State Protocol
+Shared-state lifecycle labels are also consistent:
 
-All adapters implement three core methods for shared state management:
+- `codex:claimed`
+- `codex:working`
+- `codex:stale`
+- `codex:ignore`
 
-1. **`persistSharedStateToIssue(issueKey, sharedState)`** - Write agent state to issue
-2. **`readSharedStateFromIssue(issueKey)`** - Read agent state from issue
-3. **`markTaskIgnored(issueKey, reason)`** - Mark task as not suitable for automation
-
-### SharedState Object
-
-```typescript
-interface SharedState {
-  ownerId: string; // Format: "workstation-id/agent-id"
-  attemptToken: string; // Unique UUID for this attempt
-  attemptStarted: string; // ISO 8601 timestamp
-  heartbeat: string; // ISO 8601 timestamp (updated regularly)
-  status: string; // One of: "claimed", "working", "stale"
-  retryCount: number; // Number of retry attempts
-}
-```
-
-## Jira Implementation Approach
-
-### Option 1: Custom Fields (Recommended)
-
-Use Jira custom fields to store structured state. This is the cleanest approach but requires project configuration.
-
-**Advantages**:
-
-- Native Jira feature
-- Queryable via JQL
-- No comment pollution
-- Atomic updates
-
-**Setup**:
-
-1. Create custom fields in Jira project:
-   - `Codex Owner ID` (Text Field, Single Line)
-   - `Codex Attempt Token` (Text Field, Single Line)
-   - `Codex Attempt Started` (Date Time Picker)
-   - `Codex Heartbeat` (Date Time Picker)
-   - `Codex Retry Count` (Number Field)
-
-2. Note the custom field IDs (e.g., `customfield_10042`)
-
-3. Configure in `.env`:
-   ```bash
-   JIRA_CUSTOM_FIELD_OWNER_ID=customfield_10042
-   JIRA_CUSTOM_FIELD_ATTEMPT_TOKEN=customfield_10043
-   JIRA_CUSTOM_FIELD_ATTEMPT_STARTED=customfield_10044
-   JIRA_CUSTOM_FIELD_HEARTBEAT=customfield_10045
-   JIRA_CUSTOM_FIELD_RETRY_COUNT=customfield_10046
-   ```
-
-**API Calls**:
-
-```javascript
-// Write state (PUT /rest/api/3/issue/{issueKey})
-const response = await fetch(`${baseUrl}/rest/api/3/issue/${issueKey}`, {
-  method: "PUT",
-  headers: {
-    Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    fields: {
-      [customFieldOwnerId]: sharedState.ownerId,
-      [customFieldAttemptToken]: sharedState.attemptToken,
-      [customFieldAttemptStarted]: sharedState.attemptStarted,
-      [customFieldHeartbeat]: sharedState.heartbeat,
-      [customFieldRetryCount]: sharedState.retryCount,
-    },
-  }),
-});
-
-// Read state (GET /rest/api/3/issue/{issueKey})
-const response = await fetch(
-  `${baseUrl}/rest/api/3/issue/${issueKey}?fields=${customFieldIds.join(",")}`,
-  {
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
-    },
-  },
-);
-const issue = await response.json();
-const state = {
-  ownerId: issue.fields[customFieldOwnerId],
-  attemptToken: issue.fields[customFieldAttemptToken],
-  // ... etc
-};
-```
-
-### Option 2: Structured Comments (Fallback)
-
-Store state as JSON embedded in HTML comments. Same approach as GitHub adapter.
-
-**Advantages**:
-
-- No custom field setup required
-- Works on any Jira instance
-- Portable across projects
-
-**Disadvantages**:
-
-- Comment spam on issues
-- Requires parsing/regex
-- Not queryable via JQL
-
-**Format**:
-
-```html
-<!-- codex-monitor-state
-{
-  "ownerId": "workstation-123/agent-456",
-  "attemptToken": "uuid-here",
-  "attemptStarted": "2026-02-14T17:00:00Z",
-  "heartbeat": "2026-02-14T17:30:00Z",
-  "status": "working",
-  "retryCount": 1
-}
--->
-**Codex Monitor Status**: Agent `agent-456` on `workstation-123` is working on
-this task. *Last heartbeat: 2026-02-14T17:30:00Z*
-```
-
-**API Calls**:
-
-```javascript
-// Create comment (POST /rest/api/3/issue/{issueKey}/comment)
-await fetch(`${baseUrl}/rest/api/3/issue/${issueKey}/comment`, {
-  method: "POST",
-  headers: {
-    Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    body: commentBody, // Plain text or ADF format
-  }),
-});
-
-// Update comment (PUT /rest/api/3/issue/{issueKey}/comment/{commentId})
-await fetch(`${baseUrl}/rest/api/3/issue/${issueKey}/comment/${commentId}`, {
-  method: "PUT",
-  headers: {
-    Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    body: updatedCommentBody,
-  }),
-});
-
-// Read comments (GET /rest/api/3/issue/{issueKey}/comment)
-const response = await fetch(
-  `${baseUrl}/rest/api/3/issue/${issueKey}/comment`,
-  {
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
-    },
-  },
-);
-const data = await response.json();
-const stateComment = data.comments
-  .reverse()
-  .find((c) => c.body?.includes("<!-- codex-monitor-state"));
-```
-
-### Status Labels
-
-Use Jira labels to reflect agent status (both approaches should use labels):
-
-- `codex:claimed` - Agent has claimed the task
-- `codex:working` - Agent is actively working
-- `codex:stale` - Heartbeat expired, task abandoned
-- `codex:ignore` - Task excluded from automation
-
-**API Calls**:
-
-```javascript
-// Add label (PUT /rest/api/3/issue/{issueKey})
-await fetch(`${baseUrl}/rest/api/3/issue/${issueKey}`, {
-  method: "PUT",
-  headers: {
-    Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    update: {
-      labels: [{ add: "codex:working" }, { remove: "codex:claimed" }],
-    },
-  }),
-});
-```
-
-### Task Ignore Flow
-
-When `markTaskIgnored()` is called:
-
-1. Add `codex:ignore` label
-2. Post comment explaining reason
-3. (Optional) Transition issue to "Won't Do" status
-
-**Comment Format** (Atlassian Document Format):
-
-```json
-{
-  "body": {
-    "type": "doc",
-    "version": 1,
-    "content": [
-      {
-        "type": "paragraph",
-        "content": [
-          {
-            "type": "text",
-            "text": "Codex Monitor: This task has been marked as ignored.",
-            "marks": [{ "type": "strong" }]
-          }
-        ]
-      },
-      {
-        "type": "paragraph",
-        "content": [
-          {
-            "type": "text",
-            "text": "Reason: ",
-            "marks": [{ "type": "strong" }]
-          },
-          { "type": "text", "text": "Task requires manual security review" }
-        ]
-      },
-      {
-        "type": "paragraph",
-        "content": [
-          {
-            "type": "text",
-            "text": "To re-enable codex-monitor for this task, remove the "
-          },
-          {
-            "type": "text",
-            "text": "codex:ignore",
-            "marks": [{ "type": "code" }]
-          },
-          { "type": "text", "text": " label." }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Or use legacy plain text format:
-
-```json
-{
-  "body": "**Codex Monitor**: This task has been marked as ignored.\n\n**Reason**: Task requires manual security review\n\nTo re-enable codex-monitor for this task, remove the `codex:ignore` label."
-}
-```
-
-## Environment Configuration
-
-Required environment variables:
+## Required Jira Auth
 
 ```bash
-# Jira instance configuration
 JIRA_BASE_URL=https://your-domain.atlassian.net
-JIRA_EMAIL=your-email@example.com
-JIRA_API_TOKEN=your-api-token-here
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=your-api-token
+KANBAN_BACKEND=jira
+```
 
-# Optional: Custom field IDs (if using custom fields approach)
+## Status Mapping Env Vars
+
+Map internal codex-monitor statuses to Jira workflow status names:
+
+```bash
+JIRA_STATUS_TODO=To Do
+JIRA_STATUS_INPROGRESS=In Progress
+JIRA_STATUS_INREVIEW=In Review
+JIRA_STATUS_DONE=Done
+JIRA_STATUS_CANCELLED=Cancelled
+```
+
+These should match the exact status names configured in your Jira workflow.
+
+## Shared-State Field Mapping Env Vars
+
+Use Jira custom field IDs for shared-state persistence:
+
+```bash
 JIRA_CUSTOM_FIELD_OWNER_ID=customfield_10042
 JIRA_CUSTOM_FIELD_ATTEMPT_TOKEN=customfield_10043
 JIRA_CUSTOM_FIELD_ATTEMPT_STARTED=customfield_10044
 JIRA_CUSTOM_FIELD_HEARTBEAT=customfield_10045
 JIRA_CUSTOM_FIELD_RETRY_COUNT=customfield_10046
+JIRA_CUSTOM_FIELD_IGNORE_REASON=customfield_10047
+```
 
-# Enable Jira backend
+If custom fields are not configured, keep these unset and use structured-comment fallback.
+
+## Shared-State Labels
+
+```bash
+JIRA_LABEL_CLAIMED=codex:claimed
+JIRA_LABEL_WORKING=codex:working
+JIRA_LABEL_STALE=codex:stale
+JIRA_LABEL_IGNORE=codex:ignore
+```
+
+## Optional Jira Task Defaults
+
+```bash
+JIRA_PROJECT_KEY=ENG
+JIRA_ISSUE_TYPE=Task
+```
+
+## Example `.env` Block
+
+```bash
 KANBAN_BACKEND=jira
+
+JIRA_BASE_URL=https://acme.atlassian.net
+JIRA_EMAIL=codex-bot@acme.com
+JIRA_API_TOKEN=***
+
+JIRA_PROJECT_KEY=ENG
+JIRA_ISSUE_TYPE=Task
+
+JIRA_STATUS_TODO=To Do
+JIRA_STATUS_INPROGRESS=In Progress
+JIRA_STATUS_INREVIEW=In Review
+JIRA_STATUS_DONE=Done
+JIRA_STATUS_CANCELLED=Cancelled
+
+JIRA_LABEL_CLAIMED=codex:claimed
+JIRA_LABEL_WORKING=codex:working
+JIRA_LABEL_STALE=codex:stale
+JIRA_LABEL_IGNORE=codex:ignore
+
+JIRA_CUSTOM_FIELD_OWNER_ID=customfield_10042
+JIRA_CUSTOM_FIELD_ATTEMPT_TOKEN=customfield_10043
+JIRA_CUSTOM_FIELD_ATTEMPT_STARTED=customfield_10044
+JIRA_CUSTOM_FIELD_HEARTBEAT=customfield_10045
+JIRA_CUSTOM_FIELD_RETRY_COUNT=customfield_10046
+JIRA_CUSTOM_FIELD_IGNORE_REASON=customfield_10047
 ```
 
-### Getting Jira API Token
+## Example Shared-State Payload
 
-1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
-2. Click "Create API token"
-3. Give it a label (e.g., "codex-monitor")
-4. Copy the token and store in `.env`
-
-## Required Permissions
-
-The Jira account needs these permissions:
-
-- **Browse Projects** - View issues
-- **Edit Issues** - Update fields, labels
-- **Add Comments** - Post status comments
-- **Manage Custom Fields** - If using custom fields approach (admin)
-- **Transition Issues** - If changing issue status (optional)
-
-## Implementation Checklist
-
-When implementing Jira adapter shared state support:
-
-- [ ] Implement `persistSharedStateToIssue()` method
-  - [ ] Decide: custom fields or comments approach
-  - [ ] Update/create Jira labels based on status
-  - [ ] Handle Jira API authentication (Basic Auth)
-  - [ ] Add retry logic for transient failures
-  - [ ] Return boolean success status
-
-- [ ] Implement `readSharedStateFromIssue()` method
-  - [ ] Fetch state from custom fields or comments
-  - [ ] Parse and validate SharedState object
-  - [ ] Handle missing/corrupted state gracefully
-  - [ ] Return null if no state found
-
-- [ ] Implement `markTaskIgnored()` method
-  - [ ] Add `codex:ignore` label
-  - [ ] Post comment with reason (ADF or plain text)
-  - [ ] Optionally transition issue status
-  - [ ] Return boolean success status
-
-- [ ] Add helper methods
-  - [ ] `_jiraApiRequest(endpoint, options)` - Authenticated API calls
-  - [ ] `_getIssueLabels(issueKey)` - Fetch current labels
-  - [ ] `_getIssueComments(issueKey)` - Fetch comments (if using comments)
-  - [ ] `_updateIssueLabels(issueKey, add, remove)` - Label management
-
-- [ ] Write tests
-  - [ ] Test custom fields write/read (if implemented)
-  - [ ] Test structured comments write/read (if implemented)
-  - [ ] Test label management
-  - [ ] Test error handling (API failures, invalid keys)
-  - [ ] Test markTaskIgnored flow
-
-- [ ] Update documentation
-  - [ ] Add setup instructions to main README
-  - [ ] Document environment variables
-  - [ ] Add troubleshooting section
-
-## Testing Strategy
-
-### Manual Testing
-
-1. Set up test Jira project with issues
-2. Configure `.env` with Jira credentials
-3. Run codex-monitor with `KANBAN_BACKEND=jira`
-4. Verify state persistence:
-   ```bash
-   node scripts/codex-monitor/run-shared-state-tests.mjs
-   ```
-
-### Integration Tests
-
-The shared state test suite should cover:
-
-```javascript
-// Test persistence
-await adapter.persistSharedStateToIssue("TEST-123", mockState);
-const readState = await adapter.readSharedStateFromIssue("TEST-123");
-assert.deepEqual(readState, mockState);
-
-// Test label updates
-const issue = await adapter.getTask("TEST-123");
-assert(issue.meta.labels.includes("codex:working"));
-
-// Test ignore marking
-await adapter.markTaskIgnored("TEST-456", "Test reason");
-const ignored = await adapter.getTask("TEST-456");
-assert(ignored.meta.labels.includes("codex:ignore"));
+```json
+{
+  "ownerId": "workstation-12/codex-primary",
+  "attemptToken": "550e8400-e29b-41d4-a716-446655440000",
+  "attemptStarted": "2026-02-17T15:05:00.000Z",
+  "heartbeat": "2026-02-17T15:12:00.000Z",
+  "status": "working",
+  "retryCount": 1
+}
 ```
 
-## Migration from GitHub
+## Config File Equivalent (`codex-monitor.config.json`)
 
-If migrating from GitHub Issues to Jira:
+```json
+{
+  "kanban": {
+    "backend": "jira",
+    "jira": {
+      "baseUrl": "https://acme.atlassian.net",
+      "email": "codex-bot@acme.com",
+      "projectKey": "ENG",
+      "issueType": "Task",
+      "statusMapping": {
+        "todo": "To Do",
+        "inprogress": "In Progress",
+        "inreview": "In Review",
+        "done": "Done",
+        "cancelled": "Cancelled"
+      },
+      "labels": {
+        "claimed": "codex:claimed",
+        "working": "codex:working",
+        "stale": "codex:stale",
+        "ignore": "codex:ignore"
+      },
+      "sharedStateFields": {
+        "ownerId": "customfield_10042",
+        "attemptToken": "customfield_10043",
+        "attemptStarted": "customfield_10044",
+        "heartbeat": "customfield_10045",
+        "retryCount": "customfield_10046",
+        "ignoreReason": "customfield_10047"
+      }
+    }
+  }
+}
+```
 
-1. Export GitHub issue labels and state comments
-2. Map GitHub issue numbers to Jira keys
-3. Recreate `codex:*` labels in Jira project
-4. Optionally import historical state (if needed)
-5. Update `KANBAN_BACKEND=jira` in `.env`
+## Validation Checklist
 
-## Troubleshooting
-
-### "Jira API 401 Unauthorized"
-
-- Verify `JIRA_EMAIL` and `JIRA_API_TOKEN` are correct
-- Check token hasn't expired
-- Ensure token has required permissions
-
-### "Custom field not found"
-
-- Verify custom field IDs in `.env`
-- Check fields exist in project schema
-- Use `/rest/api/3/field` to list all fields
-
-### "Labels not updating"
-
-- Verify account has "Edit Issues" permission
-- Check label names are exact match (case-sensitive)
-- Use `/rest/api/3/issue/{key}?fields=labels` to inspect
-
-### "Comments not appearing"
-
-- Try plain text format instead of ADF
-- Check "Add Comments" permission
-- Verify comment body is valid JSON
-
-## Reference Implementation
-
-See `GitHubIssuesAdapter` in `kanban-adapter.mjs` for:
-
-- `persistSharedStateToIssue()` - Lines 716-830
-- `readSharedStateFromIssue()` - Lines 847-895
-- `markTaskIgnored()` - Lines 911-948
-
-The Jira implementation should follow the same pattern but use Jira REST API v3 instead of `gh` CLI.
-
-## API References
-
-- **Jira Cloud REST API v3**: https://developer.atlassian.com/cloud/jira/platform/rest/v3/
-- **Issues API**: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/
-- **Comments API**: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/
-- **Custom Fields**: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-custom-field-values/
-- **Atlassian Document Format (ADF)**: https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
-
-## Contributing
-
-When implementing Jira adapter methods:
-
-1. Follow the existing pattern from `GitHubIssuesAdapter`
-2. Maintain method signature compatibility
-3. Add comprehensive JSDoc comments
-4. Include error handling and retry logic
-5. Write integration tests
-6. Update this document with any deviations or learnings
+- `JIRA_STATUS_*` values exactly match workflow status names.
+- `JIRA_CUSTOM_FIELD_*` values are valid Jira custom field IDs.
+- Jira automation/bot user has permissions to browse, edit, and comment on issues.
+- `KANBAN_BACKEND=jira` is set in the active runtime profile.

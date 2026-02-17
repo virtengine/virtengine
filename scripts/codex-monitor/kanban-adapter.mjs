@@ -5,7 +5,7 @@
  *   - Internal Store          — default, source-of-truth local kanban
  *   - Vibe-Kanban (VK)       — optional external adapter
  *   - GitHub Issues           — native GitHub integration with shared state persistence
- *   - Jira                    — enterprise project management (scaffolded, see JIRA_INTEGRATION.md)
+ *   - Jira                    — enterprise project management via Jira REST v3
  *
  * This module handles TASK LIFECYCLE (tracking, status, metadata) only.
  * Code execution is handled separately by agent-pool.mjs.
@@ -44,11 +44,10 @@
  *   - readSharedStateFromIssue(num)          → SharedState|null
  *   - markTaskIgnored(num, reason)           → boolean
  *
- * Jira adapter has scaffolded shared state methods (throw "not implemented"):
- *   - persistSharedStateToIssue(key, state)  → boolean (throws)
- *   - readSharedStateFromIssue(key)          → SharedState|null (throws)
- *   - markTaskIgnored(key, reason)           → boolean (throws)
- *   See JIRA_INTEGRATION.md for implementation guide
+ * Jira adapter shared state methods:
+ *   - persistSharedStateToIssue(key, state)  → boolean
+ *   - readSharedStateFromIssue(key)          → SharedState|null
+ *   - markTaskIgnored(key, reason)           → boolean
  */
 
 import { loadConfig } from "./config.mjs";
@@ -2453,48 +2452,809 @@ To re-enable codex-monitor for this task, remove the \`${this._codexLabels.ignor
 }
 
 // ---------------------------------------------------------------------------
-// Jira Adapter (Stub — ready for future implementation)
+// Jira Adapter
 // ---------------------------------------------------------------------------
 
 class JiraAdapter {
   constructor() {
     this.name = "jira";
-    this._baseUrl = process.env.JIRA_BASE_URL || null;
+    this._baseUrl = String(process.env.JIRA_BASE_URL || "")
+      .trim()
+      .replace(/\/+$/, "");
     this._token = process.env.JIRA_API_TOKEN || null;
     this._email = process.env.JIRA_EMAIL || null;
+    this._defaultProjectKey = String(process.env.JIRA_PROJECT_KEY || "")
+      .trim()
+      .toUpperCase();
+    this._defaultIssueType = String(
+      process.env.JIRA_ISSUE_TYPE || process.env.JIRA_DEFAULT_ISSUE_TYPE || "Task",
+    ).trim();
+    this._taskListLimit =
+      Number(process.env.JIRA_ISSUES_LIST_LIMIT || 250) || 250;
+    this._useAdfComments = parseBooleanEnv(process.env.JIRA_USE_ADF_COMMENTS, true);
+    this._canonicalTaskLabel = String(
+      process.env.CODEX_MONITOR_TASK_LABEL || "codex-monitor",
+    )
+      .trim()
+      .toLowerCase();
+    this._taskScopeLabels = normalizeLabels(
+      process.env.JIRA_TASK_LABELS ||
+        process.env.CODEX_MONITOR_TASK_LABELS ||
+        `${this._canonicalTaskLabel},codex-monitor`,
+    ).map((label) => this._sanitizeJiraLabel(label));
+    this._enforceTaskLabel = parseBooleanEnv(
+      process.env.JIRA_ENFORCE_TASK_LABEL ?? process.env.CODEX_MONITOR_ENFORCE_TASK_LABEL,
+      true,
+    );
+    this._codexLabels = {
+      claimed: this._sanitizeJiraLabel(
+        process.env.JIRA_LABEL_CLAIMED ||
+          process.env.JIRA_CODEX_LABEL_CLAIMED ||
+          "codex-claimed",
+      ),
+      working: this._sanitizeJiraLabel(
+        process.env.JIRA_LABEL_WORKING ||
+          process.env.JIRA_CODEX_LABEL_WORKING ||
+          "codex-working",
+      ),
+      stale: this._sanitizeJiraLabel(
+        process.env.JIRA_LABEL_STALE ||
+          process.env.JIRA_CODEX_LABEL_STALE ||
+          "codex-stale",
+      ),
+      ignore: this._sanitizeJiraLabel(
+        process.env.JIRA_LABEL_IGNORE ||
+          process.env.JIRA_CODEX_LABEL_IGNORE ||
+          "codex-ignore",
+      ),
+    };
+    this._statusMap = {
+      todo: process.env.JIRA_STATUS_TODO || "To Do",
+      inprogress: process.env.JIRA_STATUS_INPROGRESS || "In Progress",
+      inreview: process.env.JIRA_STATUS_INREVIEW || "In Review",
+      done: process.env.JIRA_STATUS_DONE || "Done",
+      cancelled: process.env.JIRA_STATUS_CANCELLED || "Cancelled",
+    };
+    this._sharedStateFields = {
+      ownerId: process.env.JIRA_CUSTOM_FIELD_OWNER_ID || "",
+      attemptToken: process.env.JIRA_CUSTOM_FIELD_ATTEMPT_TOKEN || "",
+      attemptStarted: process.env.JIRA_CUSTOM_FIELD_ATTEMPT_STARTED || "",
+      heartbeat: process.env.JIRA_CUSTOM_FIELD_HEARTBEAT || "",
+      retryCount: process.env.JIRA_CUSTOM_FIELD_RETRY_COUNT || "",
+      ignoreReason: process.env.JIRA_CUSTOM_FIELD_IGNORE_REASON || "",
+      stateJson: process.env.JIRA_CUSTOM_FIELD_SHARED_STATE || "",
+    };
+    this._jiraFieldByNameCache = null;
   }
 
-  _notImplemented(method) {
-    throw new Error(
-      `${TAG} Jira adapter: ${method}() not yet implemented. ` +
-        `Set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL env vars when ready.`,
+  _requireConfigured() {
+    if (!this._baseUrl || !this._email || !this._token) {
+      throw new Error(
+        `${TAG} Jira adapter requires JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN`,
+      );
+    }
+  }
+
+  _validateIssueKey(issueKey) {
+    const key = String(issueKey || "")
+      .trim()
+      .toUpperCase();
+    if (!/^[A-Z][A-Z0-9]+-\d+$/.test(key)) {
+      throw new Error(
+        `Jira: invalid issue key "${issueKey}" — expected format PROJ-123`,
+      );
+    }
+    return key;
+  }
+
+  _normalizeProjectKey(projectKey) {
+    const key = String(projectKey || this._defaultProjectKey || "")
+      .trim()
+      .toUpperCase();
+    return /^[A-Z][A-Z0-9]+$/.test(key) ? key : "";
+  }
+
+  _sanitizeJiraLabel(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  _authHeaders() {
+    const credentials = Buffer.from(`${this._email}:${this._token}`).toString(
+      "base64",
+    );
+    return {
+      Authorization: `Basic ${credentials}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+  }
+
+  async _jira(path, options = {}) {
+    this._requireConfigured();
+    const method = options.method || "GET";
+    const headers = {
+      ...this._authHeaders(),
+      ...(options.headers || {}),
+    };
+    const response = await fetchWithFallback(
+      `${this._baseUrl}${path.startsWith("/") ? path : `/${path}`}`,
+      {
+        method,
+        headers,
+        body: options.body == null ? undefined : JSON.stringify(options.body),
+      },
+    );
+    if (!response || typeof response.status !== "number") {
+      throw new Error(`Jira API ${method} ${path} failed: no HTTP response`);
+    }
+
+    if (response.status === 204) return null;
+
+    const contentType = String(response.headers.get("content-type") || "");
+    let payload = null;
+    if (contentType.includes("application/json")) {
+      payload = await response.json().catch(() => null);
+    } else {
+      payload = await response.text().catch(() => "");
+    }
+
+    if (!response.ok) {
+      const errorText =
+        payload?.errorMessages?.join("; ") ||
+        (payload?.errors ? Object.values(payload.errors || {}).join("; ") : "");
+      throw new Error(
+        `Jira API ${method} ${path} failed (${response.status}): ${errorText || String(payload || response.statusText || "Unknown error")}`,
+      );
+    }
+    return payload;
+  }
+
+  _adfParagraph(text, marks = []) {
+    return {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: String(text || ""),
+          ...(Array.isArray(marks) && marks.length > 0 ? { marks } : {}),
+        },
+      ],
+    };
+  }
+
+  _textToAdf(text) {
+    const value = String(text || "");
+    if (!value.trim()) {
+      return { type: "doc", version: 1, content: [this._adfParagraph("")] };
+    }
+    const lines = value.split(/\r?\n/);
+    return {
+      type: "doc",
+      version: 1,
+      content: lines.map((line) => this._adfParagraph(line)),
+    };
+  }
+
+  _adfToText(node) {
+    if (!node) return "";
+    if (typeof node === "string") return node;
+    if (Array.isArray(node)) {
+      return node.map((entry) => this._adfToText(entry)).join("");
+    }
+    if (node.type === "text") return String(node.text || "");
+    const content = Array.isArray(node.content) ? node.content : [];
+    const inner = content.map((entry) => this._adfToText(entry)).join("");
+    if (node.type === "paragraph" || node.type === "heading") {
+      return `${inner}\n`;
+    }
+    if (node.type === "hardBreak") return "\n";
+    return inner;
+  }
+
+  _commentToText(commentBody) {
+    if (typeof commentBody === "string") return commentBody;
+    if (commentBody && typeof commentBody === "object") {
+      return this._adfToText(commentBody).trim();
+    }
+    return "";
+  }
+
+  _normalizePriority(priorityName) {
+    const value = String(priorityName || "")
+      .trim()
+      .toLowerCase();
+    if (!value) return null;
+    if (value.includes("highest") || value.includes("critical")) return "critical";
+    if (value.includes("high")) return "high";
+    if (value.includes("medium") || value.includes("normal")) return "medium";
+    if (value.includes("low") || value.includes("lowest")) return "low";
+    return null;
+  }
+
+  _normalizeJiraStatus(statusObj) {
+    if (!statusObj) return "todo";
+    const statusCategory = String(statusObj?.statusCategory?.key || "")
+      .trim()
+      .toLowerCase();
+    if (statusCategory === "done") return "done";
+    return normaliseStatus(statusObj.name || statusObj.statusCategory?.name || "");
+  }
+
+  _normaliseIssue(issue) {
+    const fields = issue?.fields || {};
+    const labels = normalizeLabels(fields.labels || []);
+    const labelSet = new Set(labels);
+    const codexMeta = {
+      isIgnored:
+        labelSet.has(this._codexLabels.ignore) || labelSet.has("codex:ignore"),
+      isClaimed:
+        labelSet.has(this._codexLabels.claimed) || labelSet.has("codex:claimed"),
+      isWorking:
+        labelSet.has(this._codexLabels.working) || labelSet.has("codex:working"),
+      isStale: labelSet.has(this._codexLabels.stale) || labelSet.has("codex:stale"),
+    };
+    const description = this._commentToText(fields.description);
+    const branchMatch = description.match(/branch:\s*`?([^\s`]+)`?/i);
+    const prMatch = description.match(/pr:\s*#?(\d+)/i);
+    const issueKey = String(issue?.key || "");
+    const normalizedFieldValues = {};
+    for (const [fieldKey, fieldValue] of Object.entries(fields || {})) {
+      if (fieldValue == null) continue;
+      const lcKey = String(fieldKey || "").toLowerCase();
+      if (typeof fieldValue === "object") {
+        if (typeof fieldValue.name === "string") {
+          normalizedFieldValues[fieldKey] = fieldValue.name;
+          normalizedFieldValues[lcKey] = fieldValue.name;
+        } else if (typeof fieldValue.value === "string") {
+          normalizedFieldValues[fieldKey] = fieldValue.value;
+          normalizedFieldValues[lcKey] = fieldValue.value;
+        } else {
+          normalizedFieldValues[fieldKey] = this._commentToText(fieldValue);
+          normalizedFieldValues[lcKey] = this._commentToText(fieldValue);
+        }
+      } else {
+        normalizedFieldValues[fieldKey] = fieldValue;
+        normalizedFieldValues[lcKey] = fieldValue;
+      }
+    }
+    return {
+      id: issueKey,
+      title: fields.summary || "",
+      description,
+      status: this._normalizeJiraStatus(fields.status),
+      assignee:
+        fields.assignee?.displayName ||
+        fields.assignee?.emailAddress ||
+        fields.assignee?.accountId ||
+        null,
+      priority: this._normalizePriority(fields.priority?.name),
+      projectId: fields.project?.key || null,
+      branchName: branchMatch?.[1] || null,
+      prNumber: prMatch?.[1] || null,
+      taskUrl: issueKey ? `${this._baseUrl}/browse/${issueKey}` : null,
+      createdAt: fields.created || null,
+      updatedAt: fields.updated || null,
+      meta: {
+        ...issue,
+        labels,
+        fields: normalizedFieldValues,
+        codex: codexMeta,
+      },
+      backend: "jira",
+    };
+  }
+
+  _isTaskScopedForCodex(task) {
+    const labels = normalizeLabels(task?.meta?.labels || []);
+    if (labels.length === 0) return false;
+    return this._taskScopeLabels.some((label) => labels.includes(label));
+  }
+
+  _statusCandidates(normalizedStatus) {
+    switch (normalizedStatus) {
+      case "todo":
+        return ["to do", "todo", "selected for development", "open", "backlog"];
+      case "inprogress":
+        return ["in progress", "in development", "doing", "active"];
+      case "inreview":
+        return ["in review", "review", "code review", "qa", "testing"];
+      case "done":
+        return ["done", "resolved", "closed", "complete", "completed"];
+      case "cancelled":
+        return ["cancelled", "canceled", "won't do", "wont do", "declined"];
+      default:
+        return [String(normalizedStatus || "").trim().toLowerCase()];
+    }
+  }
+
+  _normalizeIsoTimestamp(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString();
+  }
+
+  async _getJiraFieldMap() {
+    if (this._jiraFieldByNameCache) return this._jiraFieldByNameCache;
+    const fields = await this._jira("/rest/api/3/field");
+    const map = new Map();
+    for (const field of Array.isArray(fields) ? fields : []) {
+      const id = String(field?.id || "").trim();
+      const name = String(field?.name || "")
+        .trim()
+        .toLowerCase();
+      if (!id || !name) continue;
+      map.set(name, id);
+    }
+    this._jiraFieldByNameCache = map;
+    return map;
+  }
+
+  async _resolveJiraFieldId(fieldKeyOrName) {
+    const raw = String(fieldKeyOrName || "").trim();
+    if (!raw) return null;
+    if (/^customfield_\d+$/i.test(raw)) return raw;
+    const lc = raw.toLowerCase();
+    if (
+      [
+        "summary",
+        "description",
+        "status",
+        "assignee",
+        "priority",
+        "project",
+        "labels",
+      ].includes(lc)
+    ) {
+      return lc;
+    }
+    try {
+      const map = await this._getJiraFieldMap();
+      return map.get(lc) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async _mapProjectFieldsInput(projectFields = {}) {
+    const mapped = {};
+    for (const [fieldName, value] of Object.entries(projectFields || {})) {
+      const fieldId = await this._resolveJiraFieldId(fieldName);
+      if (!fieldId || fieldId === "status") continue;
+      mapped[fieldId] = value;
+    }
+    return mapped;
+  }
+
+  _matchesProjectFieldFilters(task, projectFieldFilter) {
+    if (!projectFieldFilter || typeof projectFieldFilter !== "object") {
+      return true;
+    }
+    const values = task?.meta?.fields;
+    if (!values || typeof values !== "object") return false;
+    const entries = Object.entries(projectFieldFilter);
+    if (entries.length === 0) return true;
+    return entries.every(([fieldName, expected]) => {
+      const direct = values[fieldName];
+      const custom = values[String(fieldName).toLowerCase()];
+      const actual = direct ?? custom ?? null;
+      if (Array.isArray(expected)) {
+        const expectedSet = new Set(
+          expected.map((entry) =>
+            String(entry == null ? "" : entry)
+              .trim()
+              .toLowerCase(),
+          ),
+        );
+        return expectedSet.has(
+          String(actual == null ? "" : actual)
+            .trim()
+            .toLowerCase(),
+        );
+      }
+      return (
+        String(actual == null ? "" : actual)
+          .trim()
+          .toLowerCase() ===
+        String(expected == null ? "" : expected)
+          .trim()
+          .toLowerCase()
+      );
+    });
+  }
+
+  async _getIssueTransitions(issueKey) {
+    const data = await this._jira(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`,
+    );
+    return Array.isArray(data?.transitions) ? data.transitions : [];
+  }
+
+  async _transitionIssue(issueKey, normalizedStatus) {
+    const transitions = await this._getIssueTransitions(issueKey);
+    const targetStatusName = String(this._statusMap[normalizedStatus] || "")
+      .trim()
+      .toLowerCase();
+    const candidates = new Set(this._statusCandidates(normalizedStatus));
+    const match = transitions.find((transition) => {
+      const toName = String(transition?.to?.name || "")
+        .trim()
+        .toLowerCase();
+      const toCategory = String(transition?.to?.statusCategory?.key || "")
+        .trim()
+        .toLowerCase();
+      if (targetStatusName && toName === targetStatusName) return true;
+      if (normalizedStatus === "done" && toCategory === "done") return true;
+      return candidates.has(toName);
+    });
+    if (!match?.id) return false;
+    await this._jira(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`, {
+      method: "POST",
+      body: { transition: { id: String(match.id) } },
+    });
+    return true;
+  }
+
+  async _fetchIssue(issueKey, fields = []) {
+    const fieldList =
+      fields.length > 0
+        ? fields.join(",")
+        : "summary,description,status,assignee,priority,project,labels,comment,created,updated";
+    return this._jira(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=${encodeURIComponent(fieldList)}`,
     );
   }
 
-  async listProjects() {
-    this._notImplemented("listProjects");
-  }
-  async listTasks(_projectId, _filters) {
-    this._notImplemented("listTasks");
-  }
-  async getTask(_taskId) {
-    this._notImplemented("getTask");
-  }
-  async updateTaskStatus(_taskId, _status) {
-    this._notImplemented("updateTaskStatus");
-  }
-  async updateTask(_taskId, _patch) {
-    this._notImplemented("updateTask");
-  }
-  async createTask(_projectId, _taskData) {
-    this._notImplemented("createTask");
-  }
-  async deleteTask(_taskId) {
-    this._notImplemented("deleteTask");
+  async _listIssueComments(issueKey) {
+    const comments = [];
+    let startAt = 0;
+    const maxResults = 100;
+    while (true) {
+      const page = await this._jira(
+        `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment?startAt=${startAt}&maxResults=${maxResults}`,
+      );
+      const values = Array.isArray(page?.comments) ? page.comments : [];
+      comments.push(...values);
+      if (comments.length >= Number(page?.total || values.length)) break;
+      if (values.length < maxResults) break;
+      startAt += values.length;
+    }
+    return comments;
   }
 
-  async addComment(_taskId, _body) {
-    return false; // Jira comments not yet implemented
+  _extractSharedStateFromText(text) {
+    const match = String(text || "").match(
+      /<!-- codex-monitor-state\s*\n([\s\S]*?)\n-->/,
+    );
+    if (!match) return null;
+    try {
+      const parsed = JSON.parse(String(match[1] || "").trim());
+      if (
+        !parsed?.ownerId ||
+        !parsed?.attemptToken ||
+        !parsed?.attemptStarted ||
+        !parsed?.heartbeat ||
+        !parsed?.status
+      ) {
+        return null;
+      }
+      if (!["claimed", "working", "stale"].includes(parsed.status)) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  async _setIssueLabels(issueKey, labelsToAdd = [], labelsToRemove = []) {
+    const operations = [];
+    for (const label of normalizeLabels(labelsToRemove).map((v) =>
+      this._sanitizeJiraLabel(v),
+    )) {
+      operations.push({ remove: label });
+    }
+    for (const label of normalizeLabels(labelsToAdd).map((v) =>
+      this._sanitizeJiraLabel(v),
+    )) {
+      operations.push({ add: label });
+    }
+    if (operations.length === 0) return true;
+    await this._jira(`/rest/api/3/issue/${encodeURIComponent(issueKey)}`, {
+      method: "PUT",
+      body: {
+        update: {
+          labels: operations,
+        },
+      },
+    });
+    return true;
+  }
+
+  _buildSharedStateComment(sharedState) {
+    const ownerParts = String(sharedState.ownerId || "").split("/");
+    const workstationId = ownerParts[0] || "unknown-workstation";
+    const agentId = ownerParts[1] || "unknown-agent";
+    const json = JSON.stringify(sharedState, null, 2);
+    return (
+      `<!-- codex-monitor-state\n${json}\n-->\n` +
+      `Codex Monitor Status: Agent ${agentId} on ${workstationId} is ${sharedState.status} this task.\n` +
+      `Last heartbeat: ${sharedState.heartbeat}`
+    );
+  }
+
+  async _createOrUpdateSharedStateComment(issueKey, sharedState) {
+    const commentBody = this._buildSharedStateComment(sharedState);
+    const comments = await this._listIssueComments(issueKey);
+    const existing = [...comments].reverse().find((comment) => {
+      const text = this._commentToText(comment?.body);
+      return text.includes("<!-- codex-monitor-state");
+    });
+    if (existing?.id) {
+      await this._jira(
+        `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(String(existing.id))}`,
+        {
+          method: "PUT",
+          body: this._useAdfComments
+            ? { body: this._textToAdf(commentBody) }
+            : { body: commentBody },
+        },
+      );
+      return true;
+    }
+    return this.addComment(issueKey, commentBody);
+  }
+
+  async listProjects() {
+    const data = await this._jira(
+      "/rest/api/3/project/search?maxResults=1000&orderBy=name",
+    );
+    return (Array.isArray(data?.values) ? data.values : []).map((project) => ({
+      id: String(project.key || project.id || ""),
+      name: project.name || project.key || "Unnamed Jira Project",
+      backend: "jira",
+      meta: project,
+    }));
+  }
+
+  async listTasks(projectId, filters = {}) {
+    const projectKey = this._normalizeProjectKey(projectId);
+    const clauses = [];
+    if (projectKey) clauses.push(`project = "${projectKey}"`);
+    else if (this._defaultProjectKey) clauses.push(`project = "${this._defaultProjectKey}"`);
+
+    if (filters.status) {
+      const normalized = normaliseStatus(filters.status);
+      const statusNames = this._statusCandidates(normalized)
+        .map((name) => `"${name.replace(/"/g, '\\"')}"`)
+        .join(", ");
+      if (statusNames) clauses.push(`status in (${statusNames})`);
+    }
+
+    if (this._enforceTaskLabel && this._taskScopeLabels.length > 0) {
+      const labelsExpr = this._taskScopeLabels
+        .map((label) => `"${label.replace(/"/g, '\\"')}"`)
+        .join(", ");
+      clauses.push(`labels in (${labelsExpr})`);
+    }
+
+    if (filters.assignee) {
+      clauses.push(`assignee = "${String(filters.assignee).replace(/"/g, '\\"')}"`);
+    }
+
+    const customJql = String(filters.jql || "").trim();
+    if (customJql) clauses.push(`(${customJql})`);
+    const jqlBase = clauses.length > 0 ? clauses.join(" AND ") : "updated IS NOT EMPTY";
+    const jql = `${jqlBase} ORDER BY updated DESC`;
+
+    const maxResults =
+      Number(filters.limit || 0) > 0
+        ? Number(filters.limit)
+        : this._taskListLimit;
+    const data = await this._jira(
+      `/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=${Math.min(maxResults, 1000)}&fields=${encodeURIComponent("summary,description,status,assignee,priority,project,labels,comment,created,updated")}`,
+    );
+    let tasks = (Array.isArray(data?.issues) ? data.issues : []).map((issue) =>
+      this._normaliseIssue(issue),
+    );
+
+    if (this._enforceTaskLabel) {
+      tasks = tasks.filter((task) => this._isTaskScopedForCodex(task));
+    }
+    if (filters?.projectField && typeof filters.projectField === "object") {
+      tasks = tasks.filter((task) =>
+        this._matchesProjectFieldFilters(task, filters.projectField),
+      );
+    }
+
+    for (const task of tasks) {
+      try {
+        const sharedState = await this.readSharedStateFromIssue(task.id);
+        if (sharedState) task.meta.sharedState = sharedState;
+      } catch (err) {
+        console.warn(
+          `${TAG} failed to read shared state for ${task.id}: ${err.message}`,
+        );
+      }
+    }
+    return tasks;
+  }
+
+  async getTask(taskId) {
+    const issueKey = this._validateIssueKey(taskId);
+    const issue = await this._fetchIssue(issueKey);
+    const task = this._normaliseIssue(issue);
+    try {
+      const sharedState = await this.readSharedStateFromIssue(issueKey);
+      if (sharedState) task.meta.sharedState = sharedState;
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to read shared state for ${issueKey}: ${err.message}`,
+      );
+    }
+    return task;
+  }
+
+  async updateTaskStatus(taskId, status, options = {}) {
+    const issueKey = this._validateIssueKey(taskId);
+    const normalized = normaliseStatus(status);
+    const current = await this.getTask(issueKey);
+    if (current.status !== normalized) {
+      const transitioned = await this._transitionIssue(issueKey, normalized);
+      if (!transitioned) {
+        throw new Error(
+          `Jira: no transition available from "${current.status}" to "${normalized}" for ${issueKey}`,
+        );
+      }
+    }
+    if (options.sharedState) {
+      await this.persistSharedStateToIssue(issueKey, options.sharedState);
+    }
+    if (
+      options.projectFields &&
+      typeof options.projectFields === "object" &&
+      Object.keys(options.projectFields).length > 0
+    ) {
+      await this.updateTask(issueKey, { projectFields: options.projectFields });
+    }
+    return this.getTask(issueKey);
+  }
+
+  async updateTask(taskId, patch = {}) {
+    const issueKey = this._validateIssueKey(taskId);
+    const fields = {};
+    if (typeof patch.title === "string") {
+      fields.summary = patch.title;
+    }
+    if (typeof patch.description === "string") {
+      fields.description = this._textToAdf(patch.description);
+    }
+    if (typeof patch.priority === "string" && patch.priority.trim()) {
+      fields.priority = { name: patch.priority.trim() };
+    }
+    if (Array.isArray(patch.labels)) {
+      fields.labels = normalizeLabels(patch.labels);
+    }
+    if (patch.assignee) {
+      fields.assignee = { accountId: String(patch.assignee) };
+    }
+    if (patch.projectFields && typeof patch.projectFields === "object") {
+      const mappedProjectFields = await this._mapProjectFieldsInput(
+        patch.projectFields,
+      );
+      Object.assign(fields, mappedProjectFields);
+    }
+    if (Object.keys(fields).length > 0) {
+      await this._jira(`/rest/api/3/issue/${encodeURIComponent(issueKey)}`, {
+        method: "PUT",
+        body: { fields },
+      });
+    }
+    if (typeof patch.status === "string" && patch.status.trim()) {
+      return this.updateTaskStatus(issueKey, patch.status.trim());
+    }
+    return this.getTask(issueKey);
+  }
+
+  async createTask(projectId, taskData = {}) {
+    const projectKey = this._normalizeProjectKey(projectId);
+    if (!projectKey) {
+      throw new Error(
+        "Jira: createTask requires a project key (argument or JIRA_PROJECT_KEY)",
+      );
+    }
+    const requestedStatus = normaliseStatus(taskData.status || "todo");
+    const labels = normalizeLabels(taskData.labels || []).map((label) =>
+      this._sanitizeJiraLabel(label),
+    );
+    if (!labels.includes(this._canonicalTaskLabel)) {
+      labels.push(this._sanitizeJiraLabel(this._canonicalTaskLabel));
+    }
+    const fields = {
+      project: { key: projectKey },
+      summary: taskData.title || "New task",
+      description: this._textToAdf(taskData.description || ""),
+      issuetype: {
+        name:
+          taskData.issueType ||
+          taskData.issue_type ||
+          this._defaultIssueType ||
+          "Task",
+      },
+      labels,
+    };
+    if (taskData.priority) {
+      fields.priority = { name: String(taskData.priority) };
+    }
+    if (taskData.assignee) {
+      fields.assignee = { accountId: String(taskData.assignee) };
+    }
+    const created = await this._jira("/rest/api/3/issue", {
+      method: "POST",
+      body: { fields },
+    });
+    const issueKey = this._validateIssueKey(created?.key || "");
+    if (requestedStatus !== "todo") {
+      return this.updateTaskStatus(issueKey, requestedStatus, {
+        sharedState: taskData.sharedState,
+      });
+    }
+    if (taskData.sharedState) {
+      await this.persistSharedStateToIssue(issueKey, taskData.sharedState);
+    }
+    return this.getTask(issueKey);
+  }
+
+  async deleteTask(taskId) {
+    const issueKey = this._validateIssueKey(taskId);
+    const issue = await this.getTask(issueKey);
+    if (issue.status === "done" || issue.status === "cancelled") {
+      return true;
+    }
+    const target = String(process.env.JIRA_DELETE_TRANSITION_STATUS || "done").trim();
+    await this.updateTaskStatus(issueKey, target);
+    return true;
+  }
+
+  async addComment(taskId, body) {
+    const issueKey = this._validateIssueKey(taskId);
+    const text = String(body || "").trim();
+    if (!text) return false;
+    try {
+      await this._jira(`/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment`, {
+        method: "POST",
+        body: this._useAdfComments
+          ? { body: this._textToAdf(text) }
+          : { body: text },
+      });
+      return true;
+    } catch (err) {
+      if (this._useAdfComments) {
+        // Fallback for Jira instances that accept only plain text payloads
+        try {
+          await this._jira(
+            `/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment`,
+            {
+              method: "POST",
+              body: { body: text },
+            },
+          );
+          return true;
+        } catch (fallbackErr) {
+          console.warn(
+            `${TAG} failed to add Jira comment on ${issueKey}: ${fallbackErr.message}`,
+          );
+          return false;
+        }
+      }
+      console.warn(`${TAG} failed to add Jira comment on ${issueKey}: ${err.message}`);
+      return false;
+    }
   }
 
   /**
@@ -2554,15 +3314,77 @@ class JiraAdapter {
    * @see {@link https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/}
    * @see GitHubIssuesAdapter.persistSharedStateToIssue for reference implementation
    */
-  async persistSharedStateToIssue(_issueKey, _sharedState) {
-    throw new Error(
-      `${TAG} Jira adapter: persistSharedStateToIssue() not yet implemented. ` +
-        `See JSDoc for Jira API v3 custom fields/labels/comments approach. ` +
-        `Reference: GitHubAdapter uses structured comments + labels. ` +
-        `Jira implementation should prefer custom fields if available, ` +
-        `fall back to structured comments for compatibility. ` +
-        `Set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL env vars when ready.`,
-    );
+  async persistSharedStateToIssue(issueKey, sharedState) {
+    const key = this._validateIssueKey(issueKey);
+    if (
+      !sharedState?.ownerId ||
+      !sharedState?.attemptToken ||
+      !sharedState?.attemptStarted ||
+      !sharedState?.heartbeat ||
+      !["claimed", "working", "stale"].includes(sharedState?.status)
+    ) {
+      throw new Error(
+        `Jira: invalid shared state payload for ${key} (missing required fields)`,
+      );
+    }
+
+    const allCodexLabels = [
+      this._codexLabels.claimed,
+      this._codexLabels.working,
+      this._codexLabels.stale,
+      "codex:claimed",
+      "codex:working",
+      "codex:stale",
+    ];
+    const targetLabel =
+      sharedState.status === "claimed"
+        ? this._codexLabels.claimed
+        : sharedState.status === "working"
+          ? this._codexLabels.working
+          : this._codexLabels.stale;
+    const labelsToRemove = allCodexLabels.filter((label) => label !== targetLabel);
+    try {
+      await this._setIssueLabels(key, [targetLabel], labelsToRemove);
+      const stateFieldPayload = {};
+      if (this._sharedStateFields.ownerId) {
+        stateFieldPayload[this._sharedStateFields.ownerId] = sharedState.ownerId;
+      }
+      if (this._sharedStateFields.attemptToken) {
+        stateFieldPayload[this._sharedStateFields.attemptToken] =
+          sharedState.attemptToken;
+      }
+      if (this._sharedStateFields.attemptStarted) {
+        const iso = this._normalizeIsoTimestamp(sharedState.attemptStarted);
+        if (iso) stateFieldPayload[this._sharedStateFields.attemptStarted] = iso;
+      }
+      if (this._sharedStateFields.heartbeat) {
+        const iso = this._normalizeIsoTimestamp(sharedState.heartbeat);
+        if (iso) stateFieldPayload[this._sharedStateFields.heartbeat] = iso;
+      }
+      if (this._sharedStateFields.retryCount) {
+        const retryCount = Number(sharedState.retryCount || 0);
+        if (Number.isFinite(retryCount)) {
+          stateFieldPayload[this._sharedStateFields.retryCount] = retryCount;
+        }
+      }
+      if (this._sharedStateFields.stateJson) {
+        stateFieldPayload[this._sharedStateFields.stateJson] = JSON.stringify(
+          sharedState,
+        );
+      }
+      if (Object.keys(stateFieldPayload).length > 0) {
+        await this._jira(`/rest/api/3/issue/${encodeURIComponent(key)}`, {
+          method: "PUT",
+          body: { fields: stateFieldPayload },
+        });
+      }
+      return this._createOrUpdateSharedStateComment(key, sharedState);
+    } catch (err) {
+      console.warn(
+        `${TAG} failed to persist shared state for ${key}: ${err.message}`,
+      );
+      return false;
+    }
   }
 
   /**
@@ -2615,15 +3437,81 @@ class JiraAdapter {
    * @see {@link https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/}
    * @see GitHubIssuesAdapter.readSharedStateFromIssue for reference implementation
    */
-  async readSharedStateFromIssue(_issueKey) {
-    throw new Error(
-      `${TAG} Jira adapter: readSharedStateFromIssue() not yet implemented. ` +
-        `See JSDoc for Jira API v3 custom fields/comments parsing approach. ` +
-        `Should return SharedState object with {ownerId, attemptToken, attemptStarted, ` +
-        `heartbeat, status, retryCount} or null if not found. ` +
-        `Reference: GitHubAdapter parses structured HTML comments. ` +
-        `Set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL env vars when ready.`,
-    );
+  async readSharedStateFromIssue(issueKey) {
+    const key = this._validateIssueKey(issueKey);
+    try {
+      const fieldIds = [
+        this._sharedStateFields.stateJson,
+        this._sharedStateFields.ownerId,
+        this._sharedStateFields.attemptToken,
+        this._sharedStateFields.attemptStarted,
+        this._sharedStateFields.heartbeat,
+        this._sharedStateFields.retryCount,
+      ].filter(Boolean);
+      if (fieldIds.length > 0) {
+        const issue = await this._fetchIssue(key, fieldIds);
+        const rawFields = issue?.fields || {};
+        if (this._sharedStateFields.stateJson) {
+          const raw = rawFields[this._sharedStateFields.stateJson];
+          if (typeof raw === "string" && raw.trim()) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (
+                parsed?.ownerId &&
+                parsed?.attemptToken &&
+                parsed?.attemptStarted &&
+                parsed?.heartbeat &&
+                ["claimed", "working", "stale"].includes(parsed?.status)
+              ) {
+                return parsed;
+              }
+            } catch {
+              // fall through to field-by-field and comment parsing
+            }
+          }
+        }
+        const fromFields = {
+          ownerId: rawFields[this._sharedStateFields.ownerId],
+          attemptToken: rawFields[this._sharedStateFields.attemptToken],
+          attemptStarted: rawFields[this._sharedStateFields.attemptStarted],
+          heartbeat: rawFields[this._sharedStateFields.heartbeat],
+          status: null,
+          retryCount: Number(rawFields[this._sharedStateFields.retryCount] || 0),
+        };
+        if (fromFields.ownerId) {
+          const labels = normalizeLabels(rawFields.labels || []);
+          if (labels.includes(this._codexLabels.working)) {
+            fromFields.status = "working";
+          } else if (labels.includes(this._codexLabels.claimed)) {
+            fromFields.status = "claimed";
+          } else if (labels.includes(this._codexLabels.stale)) {
+            fromFields.status = "stale";
+          }
+        }
+        if (
+          fromFields.ownerId &&
+          fromFields.attemptToken &&
+          fromFields.attemptStarted &&
+          fromFields.heartbeat &&
+          fromFields.status
+        ) {
+          return fromFields;
+        }
+      }
+      const comments = await this._listIssueComments(key);
+      const stateComment = [...comments].reverse().find((comment) => {
+        const text = this._commentToText(comment?.body);
+        return text.includes("<!-- codex-monitor-state");
+      });
+      if (!stateComment) return null;
+      const parsed = this._extractSharedStateFromText(
+        this._commentToText(stateComment.body),
+      );
+      return parsed || null;
+    } catch (err) {
+      console.warn(`${TAG} failed to read shared state for ${key}: ${err.message}`);
+      return null;
+    }
   }
 
   /**
@@ -2687,15 +3575,35 @@ class JiraAdapter {
    * @see {@link https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/}
    * @see GitHubIssuesAdapter.markTaskIgnored for reference implementation
    */
-  async markTaskIgnored(_issueKey, _reason) {
-    throw new Error(
-      `${TAG} Jira adapter: markTaskIgnored() not yet implemented. ` +
-        `See JSDoc for Jira API v3 labels/comments approach. ` +
-        `Should add 'codex:ignore' label and post comment with reason. ` +
-        `Consider using Atlassian Document Format (ADF) for rich comments. ` +
-        `Reference: GitHubAdapter uses gh CLI for labels + comments. ` +
-        `Set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL env vars when ready.`,
-    );
+  async markTaskIgnored(issueKey, reason) {
+    const key = this._validateIssueKey(issueKey);
+    const ignoreReason = String(reason || "").trim() || "No reason provided";
+    try {
+      await this._setIssueLabels(
+        key,
+        [this._codexLabels.ignore],
+        ["codex:ignore"],
+      );
+      if (this._sharedStateFields.ignoreReason) {
+        await this._jira(`/rest/api/3/issue/${encodeURIComponent(key)}`, {
+          method: "PUT",
+          body: {
+            fields: {
+              [this._sharedStateFields.ignoreReason]: ignoreReason,
+            },
+          },
+        });
+      }
+      const commentBody =
+        `Codex Monitor: This task has been marked as ignored.\n\n` +
+        `Reason: ${ignoreReason}\n\n` +
+        `To re-enable codex-monitor for this task, remove the ${this._codexLabels.ignore} label.`;
+      await this.addComment(key, commentBody);
+      return true;
+    } catch (err) {
+      console.error(`${TAG} failed to mark Jira issue ${key} as ignored: ${err.message}`);
+      return false;
+    }
   }
 }
 
@@ -2809,8 +3717,8 @@ export async function getTask(taskId) {
   return getKanbanAdapter().getTask(taskId);
 }
 
-export async function updateTaskStatus(taskId, status) {
-  return getKanbanAdapter().updateTaskStatus(taskId, status);
+export async function updateTaskStatus(taskId, status, options) {
+  return getKanbanAdapter().updateTaskStatus(taskId, status, options);
 }
 
 export async function updateTask(taskId, patch) {

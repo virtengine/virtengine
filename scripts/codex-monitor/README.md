@@ -130,7 +130,7 @@ Task board backend (`KANBAN_BACKEND`):
 - `internal` - local task-store source of truth (default)
 - `vk` - Vibe-Kanban adapter
 - `github` - GitHub Issues with shared state persistence
-- `jira` (scaffolded, not yet implemented)
+- `jira` - Jira Issues with status/shared-state parity
 
 Sync policy (`KANBAN_SYNC_POLICY`):
 
@@ -196,14 +196,31 @@ Projects v2 docs:
 - [GITHUB_PROJECTS_V2_MONITORING.md](./GITHUB_PROJECTS_V2_MONITORING.md)
 - [GITHUB_PROJECTS_V2_IMPLEMENTATION_CHECKLIST.md](./GITHUB_PROJECTS_V2_IMPLEMENTATION_CHECKLIST.md)
 
-**Jira adapter (future):**
-The Jira adapter is scaffolded with detailed JSDoc and implementation guidance:
+**Jira adapter parity config:**
+Jira supports the same codex-monitor status vocabulary and shared-state fields,
+with explicit mapping via env vars:
 
-- Method stubs: `persistSharedStateToIssue()`, `readSharedStateFromIssue()`, `markTaskIgnored()`
-- Planned approach using Jira custom fields, labels, or structured comments
-- Compatible API surface with GitHub adapter for drop-in replacement
+```env
+KANBAN_BACKEND=jira
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=***
 
-See [JIRA_INTEGRATION.md](./JIRA_INTEGRATION.md) for implementation guide.
+JIRA_STATUS_TODO=To Do
+JIRA_STATUS_INPROGRESS=In Progress
+JIRA_STATUS_INREVIEW=In Review
+JIRA_STATUS_DONE=Done
+JIRA_STATUS_CANCELLED=Cancelled
+
+JIRA_CUSTOM_FIELD_OWNER_ID=customfield_10042
+JIRA_CUSTOM_FIELD_ATTEMPT_TOKEN=customfield_10043
+JIRA_CUSTOM_FIELD_ATTEMPT_STARTED=customfield_10044
+JIRA_CUSTOM_FIELD_HEARTBEAT=customfield_10045
+JIRA_CUSTOM_FIELD_RETRY_COUNT=customfield_10046
+JIRA_CUSTOM_FIELD_IGNORE_REASON=customfield_10047
+```
+
+See [JIRA_INTEGRATION.md](./JIRA_INTEGRATION.md) for full configuration and examples.
 
 ---
 

@@ -53,6 +53,13 @@
 - `markTaskIgnored(issueNumber, reason)`
 - `meta.codex` task flags for claim/ignore/stale visibility
 
+### Updated - Jira Configuration and Docs Parity
+
+- Added concrete Jira env examples for status mapping (`JIRA_STATUS_*`)
+- Added concrete Jira env examples for shared-state custom fields (`JIRA_CUSTOM_FIELD_*`)
+- Added Jira shared-state label env examples (`JIRA_LABEL_*`)
+- Updated `.env.example`, `codex-monitor.schema.json`, `README.md`, and `JIRA_INTEGRATION.md` for consistent Jira parity documentation
+
 ### Backward Compatibility
 
 - Breaking changes: none

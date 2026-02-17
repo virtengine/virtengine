@@ -133,6 +133,87 @@
               }
             }
           }
+        },
+        "jira": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+              "description": "Jira Cloud base URL (e.g. https://your-domain.atlassian.net)"
+            },
+            "email": {
+              "type": "string",
+              "description": "Jira account email used for API authentication"
+            },
+            "apiToken": {
+              "type": "string",
+              "description": "Jira API token used for Basic authentication"
+            },
+            "projectKey": {
+              "type": "string",
+              "description": "Default Jira project key used for list/create operations"
+            },
+            "issueType": {
+              "type": "string",
+              "default": "Task",
+              "description": "Default Jira issue type for new tasks"
+            },
+            "statusMapping": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Map internal statuses to Jira workflow status names",
+              "properties": {
+                "todo": { "type": "string", "default": "To Do" },
+                "inprogress": { "type": "string", "default": "In Progress" },
+                "inreview": { "type": "string", "default": "In Review" },
+                "done": { "type": "string", "default": "Done" },
+                "cancelled": { "type": "string", "default": "Cancelled" }
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Jira labels used to mark codex shared-state lifecycle",
+              "properties": {
+                "claimed": { "type": "string", "default": "codex:claimed" },
+                "working": { "type": "string", "default": "codex:working" },
+                "stale": { "type": "string", "default": "codex:stale" },
+                "ignore": { "type": "string", "default": "codex:ignore" }
+              }
+            },
+            "sharedStateFields": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Custom field IDs used to persist shared-state payload",
+              "properties": {
+                "ownerId": {
+                  "type": "string",
+                  "description": "Custom field ID for sharedState.ownerId"
+                },
+                "attemptToken": {
+                  "type": "string",
+                  "description": "Custom field ID for sharedState.attemptToken"
+                },
+                "attemptStarted": {
+                  "type": "string",
+                  "description": "Custom field ID for sharedState.attemptStarted (ISO timestamp)"
+                },
+                "heartbeat": {
+                  "type": "string",
+                  "description": "Custom field ID for sharedState.heartbeat (ISO timestamp)"
+                },
+                "retryCount": {
+                  "type": "string",
+                  "description": "Custom field ID for sharedState.retryCount"
+                },
+                "ignoreReason": {
+                  "type": "string",
+                  "description": "Optional custom field ID for ignore reason"
+                }
+              }
+            }
+          }
         }
       }
     },
