@@ -220,6 +220,10 @@ JIRA_CUSTOM_FIELD_RETRY_COUNT=customfield_10046
 JIRA_CUSTOM_FIELD_IGNORE_REASON=customfield_10047
 ```
 
+Setup wizard note: running `codex-monitor --setup` and selecting Jira will
+open the Atlassian API token page (opt-in), list projects, and guide you
+through project/issue type selection interactively.
+
 See [JIRA_INTEGRATION.md](./JIRA_INTEGRATION.md) for full configuration and examples.
 
 ---

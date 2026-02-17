@@ -156,7 +156,7 @@ function showHelp() {
   EXAMPLES
     codex-monitor                                          # start with defaults
     codex-monitor --setup                                  # interactive setup
-    codex-monitor --script ./my-orchestrator.ps1            # custom script
+    codex-monitor --script ./my-orchestrator.sh             # custom script
     codex-monitor --args "-MaxParallel 4" --no-telegram-bot # custom args
     codex-monitor --no-codex --no-autofix                  # minimal mode
 

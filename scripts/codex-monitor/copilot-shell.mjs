@@ -452,7 +452,7 @@ CRITICAL RULES:
 
 You have FULL ACCESS to:
 - The target repository checked out for this codex-monitor instance
-- Shell: git, gh, node, go, pwsh, make, and all system commands
+- Shell: git, gh, node, go, make, and all system commands (pwsh optional)
 - File read/write: read any file, create/edit any file
 - MCP servers configured in this environment (availability varies)
 - Subagents and VS Code tools when available

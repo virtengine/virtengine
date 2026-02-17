@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import {
+  formatOrchestratorScriptForEnv,
   getDefaultOrchestratorScripts,
   getScriptRuntimePrerequisiteStatus,
+  resolveSetupOrchestratorDefaults,
 } from "../setup.mjs";
 
 async function createScriptPair(dir, ext) {
+  await mkdir(dir, { recursive: true });
   await writeFile(resolve(dir, `ve-orchestrator.${ext}`), "#!/usr/bin/env stub\n");
   await writeFile(resolve(dir, `ve-kanban.${ext}`), "#!/usr/bin/env stub\n");
 }
@@ -79,5 +82,39 @@ describe("setup platform defaults", () => {
     expect(result.required.ok).toBe(true);
     expect(result.optionalPwsh?.label).toBe("PowerShell (pwsh)");
     expect(result.optionalPwsh?.ok).toBe(false);
+  });
+
+  it("formats default orchestrator script as config-relative path", () => {
+    const scriptPath = "/tmp/project/scripts/codex-monitor/ve-orchestrator.sh";
+    const configDir = "/tmp/project/scripts/codex-monitor";
+    expect(formatOrchestratorScriptForEnv(scriptPath, configDir)).toBe(
+      "./ve-orchestrator.sh",
+    );
+  });
+
+  it("resolves setup defaults and emits relative .sh path on non-windows", async () => {
+    const repoRoot = await mkdtemp(resolve(tmpdir(), "codex-monitor-setup-repo-"));
+    const packageDir = await mkdtemp(resolve(tmpdir(), "codex-monitor-setup-pkg-"));
+    const configDir = resolve(repoRoot, "scripts", "codex-monitor");
+
+    try {
+      await createScriptPair(configDir, "sh");
+      await createScriptPair(configDir, "ps1");
+      await createScriptPair(packageDir, "sh");
+      await createScriptPair(packageDir, "ps1");
+
+      const result = resolveSetupOrchestratorDefaults({
+        platform: "linux",
+        repoRoot,
+        configDir,
+        packageDir,
+      });
+
+      expect(result.selectedDefault?.ext).toBe("sh");
+      expect(result.orchestratorScriptEnvValue).toBe("./ve-orchestrator.sh");
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true });
+      await rm(packageDir, { recursive: true, force: true });
+    }
   });
 });

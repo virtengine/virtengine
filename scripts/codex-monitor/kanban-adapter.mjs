@@ -2472,6 +2472,10 @@ class JiraAdapter {
     this._taskListLimit =
       Number(process.env.JIRA_ISSUES_LIST_LIMIT || 250) || 250;
     this._useAdfComments = parseBooleanEnv(process.env.JIRA_USE_ADF_COMMENTS, true);
+    this._defaultAssignee = String(process.env.JIRA_DEFAULT_ASSIGNEE || "").trim();
+    this._subtaskParentKey = String(
+      process.env.JIRA_SUBTASK_PARENT_KEY || "",
+    ).trim();
     this._canonicalTaskLabel = String(
       process.env.CODEX_MONITOR_TASK_LABEL || "codex-monitor",
     )
@@ -2552,6 +2556,11 @@ class JiraAdapter {
       .trim()
       .toUpperCase();
     return /^[A-Z][A-Z0-9]+$/.test(key) ? key : "";
+  }
+
+  _normalizeIssueKey(issueKey) {
+    const key = String(issueKey || "").trim().toUpperCase();
+    return /^[A-Z][A-Z0-9]+-\d+$/.test(key) ? key : "";
   }
 
   _sanitizeJiraLabel(value) {
@@ -3169,9 +3178,29 @@ class JiraAdapter {
       );
     }
     const requestedStatus = normaliseStatus(taskData.status || "todo");
-    const labels = normalizeLabels(taskData.labels || []).map((label) =>
-      this._sanitizeJiraLabel(label),
+    const issueTypeName =
+      taskData.issueType ||
+      taskData.issue_type ||
+      this._defaultIssueType ||
+      "Task";
+    const isSubtask = /sub[-\\s]?task/.test(
+      String(issueTypeName || "").toLowerCase(),
     );
+    const parentKey = this._normalizeIssueKey(
+      taskData.parentId ||
+        taskData.parentKey ||
+        this._subtaskParentKey ||
+        "",
+    );
+    if (isSubtask && !parentKey) {
+      throw new Error(
+        "Jira: sub-task issue type requires a parent issue key (set JIRA_SUBTASK_PARENT_KEY or pass parentId)",
+      );
+    }
+    const labels = normalizeLabels([
+      ...(Array.isArray(this._taskScopeLabels) ? this._taskScopeLabels : []),
+      ...normalizeLabels(taskData.labels || []),
+    ]).map((label) => this._sanitizeJiraLabel(label));
     if (!labels.includes(this._canonicalTaskLabel)) {
       labels.push(this._sanitizeJiraLabel(this._canonicalTaskLabel));
     }
@@ -3180,19 +3209,19 @@ class JiraAdapter {
       summary: taskData.title || "New task",
       description: this._textToAdf(taskData.description || ""),
       issuetype: {
-        name:
-          taskData.issueType ||
-          taskData.issue_type ||
-          this._defaultIssueType ||
-          "Task",
+        name: issueTypeName,
       },
       labels,
     };
+    if (isSubtask && parentKey) {
+      fields.parent = { key: parentKey };
+    }
     if (taskData.priority) {
       fields.priority = { name: String(taskData.priority) };
     }
-    if (taskData.assignee) {
-      fields.assignee = { accountId: String(taskData.assignee) };
+    const assigneeId = taskData.assignee || this._defaultAssignee;
+    if (assigneeId) {
+      fields.assignee = { accountId: String(assigneeId) };
     }
     const created = await this._jira("/rest/api/3/issue", {
       method: "POST",

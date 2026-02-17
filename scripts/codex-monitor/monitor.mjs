@@ -1792,8 +1792,8 @@ async function startVibeKanbanProcess() {
       if (pidMatch) {
         stalePid = pidMatch[1];
       }
-    } else {
-      // Linux/macOS: use lsof
+    } else if (commandExists("lsof")) {
+      // Linux/macOS: use lsof when available
       const portCheck = execSync(`lsof -ti :${vkRecoveryPort}`, {
         encoding: "utf8",
         timeout: 5000,
@@ -1803,6 +1803,10 @@ async function startVibeKanbanProcess() {
       if (pids.length > 0) {
         stalePid = pids[0]; // Take first PID if multiple
       }
+    } else {
+      console.warn(
+        `[monitor] lsof not found on PATH; skipping stale PID scan for port ${vkRecoveryPort}`,
+      );
     }
 
     if (stalePid) {
@@ -9597,7 +9601,35 @@ async function startProcess() {
   let orchestratorArgs = [...scriptArgs];
 
   if (scriptLower.endsWith(".ps1")) {
-    orchestratorCmd = process.env.PWSH_PATH || "pwsh";
+    const configuredPwsh = String(process.env.PWSH_PATH || "").trim();
+    const pwshCmd = configuredPwsh || "pwsh";
+    const pwshExists = configuredPwsh
+      ? configuredPwsh.includes("/") || configuredPwsh.includes("\\")
+        ? existsSync(configuredPwsh)
+        : commandExists(configuredPwsh)
+      : commandExists("pwsh");
+    if (!pwshExists) {
+      const pwshLabel = configuredPwsh
+        ? `PWSH_PATH (${configuredPwsh})`
+        : "pwsh on PATH";
+      const pauseMs = Math.max(orchestratorPauseMs, 60_000);
+      const pauseMin = Math.max(1, Math.round(pauseMs / 60_000));
+      monitorSafeModeUntil = Math.max(monitorSafeModeUntil, Date.now() + pauseMs);
+      console.error(
+        `[monitor] .ps1 orchestrator selected but PowerShell runtime is unavailable (${pwshLabel}). ` +
+          `Install PowerShell 7+ or set PWSH_PATH correctly. Pausing restarts for ${pauseMin}m.`,
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `❌ .ps1 orchestrator selected, but PowerShell runtime is unavailable (${pwshLabel}).\n` +
+            `Install PowerShell 7+ or set PWSH_PATH to a valid executable path. ` +
+            `Pausing restarts for ${pauseMin} minute(s).`,
+        );
+      }
+      setTimeout(startProcess, pauseMs);
+      return;
+    }
+    orchestratorCmd = pwshCmd;
     orchestratorArgs = ["-File", scriptPath, ...scriptArgs];
   } else if (scriptLower.endsWith(".sh")) {
     const shellCmd =
@@ -9609,7 +9641,9 @@ async function startProcess() {
             : ""
         : commandExists("bash")
           ? "bash"
-          : "sh";
+          : commandExists("sh")
+            ? "sh"
+            : "";
     if (!shellCmd) {
       console.error(
         "[monitor] shell-mode orchestrator selected (.sh) but no bash/sh runtime is available on PATH.",
@@ -11203,7 +11237,7 @@ if (isExecutorDisabled()) {
 if (isExecutorDisabled()) {
   // Already logged above
 } else if (executorMode === "vk" || executorMode === "hybrid") {
-  // Start VK orchestrator (ve-orchestrator.ps1)
+  // Start VK orchestrator (ve-orchestrator.sh/ps1)
   startProcess();
 } else {
   console.log("[monitor] VK orchestrator skipped (executor mode = internal)");
