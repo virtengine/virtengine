@@ -70,7 +70,8 @@ func (cv *CommandValidator) ValidateArgument(arg string) error {
 	return nil
 }
 
-// SafeCommand creates an exec.Cmd with validation and timeout
+// SafeCommand creates an exec.Cmd with validation using the provided context.
+// If ctx is nil, context.Background() is used and no timeout is applied.
 func (cv *CommandValidator) SafeCommand(ctx context.Context, name string, args ...string) (*exec.Cmd, error) {
 	// Validate command and arguments
 	if err := cv.ValidateCommand(name, args...); err != nil {
@@ -79,9 +80,7 @@ func (cv *CommandValidator) SafeCommand(ctx context.Context, name string, args .
 
 	// Create command with context
 	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), cv.DefaultTimeout)
-		_ = cancel // Will be called when command completes
+		ctx = context.Background()
 	}
 
 	//nolint:gosec // G204: Command and args validated above
@@ -91,6 +90,12 @@ func (cv *CommandValidator) SafeCommand(ctx context.Context, name string, args .
 
 // Run executes a validated command and returns the output
 func (cv *CommandValidator) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), cv.DefaultTimeout)
+		defer cancel()
+	}
+
 	cmd, err := cv.SafeCommand(ctx, name, args...)
 	if err != nil {
 		return nil, err
