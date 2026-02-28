@@ -8,37 +8,30 @@
 package e2e
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/tests/e2e/helpers"
+	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
 func TestIdentityOrderProvisionPayoutE2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping e2e flow in short mode")
-	}
-
-	client := helpers.NewOnboardingTestClient()
-	app := helpers.SetupOnboardingTestApp(t, client)
+	app := helpers.SetupOnboardingTestApp(t, helpers.NewOnboardingTestClient())
 	ctx := helpers.NewTestContext(app, 1, helpers.FixedTimestamp())
-	msgServer := helpers.GetVEIDMsgServer(app)
 
 	customer := helpers.CreateTestAccount(t)
 	provider := helpers.CreateTestAccount(t)
 
-	// ---------------------------------------------------------------------
-	// Identity + Web-Scope Verification (Domain)
-	// ---------------------------------------------------------------------
-	helpers.UploadScope(t, msgServer, ctx, customer, client, helpers.DefaultSelfieUploadParams("scope-e2e-selfie-001"))
-	require.NoError(t, app.Keepers.VirtEngine.VEID.SetScore(ctx, customer.String(), 82, helpers.TestModelVersion))
+	helpers.CreateIdentityRecordForAccount(t, app, ctx, customer)
+	helpers.UpdateAccountScore(t, app, ctx, customer, 82)
 
 	offering := helpers.CreateOfferingWithVEIDRequirement(
 		t,
@@ -53,22 +46,10 @@ func TestIdentityOrderProvisionPayoutE2E(t *testing.T) {
 
 	helpers.AttemptCreateOrder(t, app, ctx, customer, offering, true)
 
-	domainScopeID := "scope-e2e-domain-verify-001"
-	helpers.UploadScope(t, msgServer, ctx, customer, client, helpers.DefaultDomainVerifyUploadParams(domainScopeID))
-	require.NoError(t, app.Keepers.VirtEngine.VEID.UpdateVerificationStatus(
-		ctx,
-		customer,
-		domainScopeID,
-		veidtypes.VerificationStatusVerified,
-		"domain verified",
-		provider.String(),
-	))
+	helpers.SeedVerifiedScope(t, app, ctx, customer, helpers.DefaultDomainVerifyUploadParams("scope-e2e-domain-verify-001"), provider.String())
 
 	ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
-	// ---------------------------------------------------------------------
-	// Success Path: Order -> Provision -> Usage -> Payout
-	// ---------------------------------------------------------------------
 	order := helpers.AttemptCreateOrder(t, app, ctx, customer, offering, false)
 
 	bid := marketplace.MarketplaceBid{
@@ -137,9 +118,20 @@ func TestIdentityOrderProvisionPayoutE2E(t *testing.T) {
 	require.NoError(t, app.Keepers.VirtEngine.Marketplace.UpdateAllocation(ctx, updatedAllocation))
 
 	usageReporter := NewMockUsageReporterE2E()
-	settlement := NewMockSettlementE2E()
 	auditLogger := NewMockAuditLoggerE2E()
-	background := context.Background()
+
+	fundE2EAccount(t, app, ctx, customer, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(200000))))
+	settlementEscrowID := createActiveSettlementEscrowE2E(
+		t,
+		app,
+		ctx,
+		order.ID.String(),
+		allocation.ID.String(),
+		customer,
+		provider,
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000))),
+		72*time.Hour,
+	)
 
 	usageRecord := &UsageRecordE2E{
 		RecordID:        "usage-e2e-001",
@@ -168,32 +160,38 @@ func TestIdentityOrderProvisionPayoutE2E(t *testing.T) {
 		Success:   true,
 	})
 
-	invoice := &InvoiceE2E{
-		InvoiceID:    "invoice-e2e-001",
-		ProviderAddr: provider.String(),
-		CustomerAddr: customer.String(),
-		JobID:        usageRecord.JobID,
-		LineItems: []LineItemE2E{
-			{
-				ResourceType: "cpu",
-				Quantity:     sdkmath.LegacyNewDec(4),
-				UnitPrice:    "2.5",
-				TotalCost:    "10.0",
-			},
-		},
-		TotalAmount: "10.0",
-		PeriodStart: usageRecord.PeriodStart,
-		PeriodEnd:   usageRecord.PeriodEnd,
-		Status:      "pending",
-	}
-	require.NoError(t, settlement.CreateInvoice(background, invoice))
-	require.NoError(t, settlement.TriggerSettlement(background, invoice.InvoiceID))
-	require.NotNil(t, settlement.GetProviderPayout(provider.String(), invoice.InvoiceID))
-	require.GreaterOrEqual(t, len(settlement.GetAuditTrail(invoice.InvoiceID)), 2)
+	settlementUsage := recordSettlementUsageE2E(
+		t,
+		app,
+		ctx,
+		order.ID.String(),
+		allocation.ID.String(),
+		provider,
+		customer,
+		"cpu",
+		4,
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10000))),
+		usageRecord.PeriodStart,
+		usageRecord.PeriodEnd,
+	)
 
-	// ---------------------------------------------------------------------
-	// Failure Scenario: Provider Timeout
-	// ---------------------------------------------------------------------
+	settlementRecord, err := app.Keepers.VirtEngine.Settlement.SettleOrder(ctx, order.ID.String(), []string{settlementUsage.UsageID}, false)
+	require.NoError(t, err)
+	requireSettlementSplit(t, settlementRecord)
+
+	payout, found := app.Keepers.VirtEngine.Settlement.GetPayoutBySettlement(ctx, settlementRecord.SettlementID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.PayoutStateCompleted, payout.State)
+
+	invoiceKeeper := requireE2EInvoiceKeeper(t, app)
+	invoiceRecord, err := invoiceKeeper.GetInvoice(ctx, payout.InvoiceID)
+	require.NoError(t, err)
+	require.Equal(t, billing.InvoiceStatusPaid, invoiceRecord.Status)
+
+	chain, err := invoiceKeeper.GetInvoiceLedgerChain(ctx, payout.InvoiceID)
+	require.NoError(t, err)
+	require.NoError(t, chain.Validate())
+
 	ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 	orderTimeout := helpers.AttemptCreateOrder(t, app, ctx, customer, offering, false)
 
@@ -237,9 +235,6 @@ func TestIdentityOrderProvisionPayoutE2E(t *testing.T) {
 	})
 	require.True(t, hasAuditEvent(auditLogger.GetEvents(), "provision_timeout"))
 
-	// ---------------------------------------------------------------------
-	// Failure Scenario: Partial Usage (No Settlement)
-	// ---------------------------------------------------------------------
 	partialUsage := &UsageRecordE2E{
 		RecordID:        "usage-e2e-partial-001",
 		JobID:           "job-e2e-partial-001",
@@ -267,71 +262,92 @@ func TestIdentityOrderProvisionPayoutE2E(t *testing.T) {
 		Success:   true,
 	})
 
-	partialInvoice := &InvoiceE2E{
-		InvoiceID:    "invoice-e2e-partial-001",
-		ProviderAddr: provider.String(),
-		CustomerAddr: customer.String(),
-		JobID:        partialUsage.JobID,
-		LineItems: []LineItemE2E{
-			{
-				ResourceType: "cpu",
-				Quantity:     sdkmath.LegacyNewDecWithPrec(25, 1),
-				UnitPrice:    "1.0",
-				TotalCost:    "2.5",
-			},
-		},
-		TotalAmount: "2.5",
-		PeriodStart: partialUsage.PeriodStart,
-		PeriodEnd:   partialUsage.PeriodEnd,
-		Status:      "pending_partial",
-	}
-	require.NoError(t, settlement.CreateInvoice(background, partialInvoice))
-	require.Nil(t, settlement.GetProviderPayout(provider.String(), partialInvoice.InvoiceID))
-	require.Len(t, settlement.GetAuditTrail(partialInvoice.InvoiceID), 1)
+	partialOrderID := "identity-partial-order"
+	partialLeaseID := "identity-partial-lease"
+	createActiveSettlementEscrowE2E(
+		t,
+		app,
+		ctx,
+		partialOrderID,
+		partialLeaseID,
+		customer,
+		provider,
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(5000))),
+		24*time.Hour,
+	)
 
-	// ---------------------------------------------------------------------
-	// Failure Scenario: Dispute
-	// ---------------------------------------------------------------------
-	disputeInvoice := &InvoiceE2E{
-		InvoiceID:    "invoice-e2e-dispute-001",
-		ProviderAddr: provider.String(),
-		CustomerAddr: customer.String(),
-		JobID:        "job-e2e-dispute-001",
-		LineItems: []LineItemE2E{
-			{
-				ResourceType: "gpu",
-				Quantity:     sdkmath.LegacyNewDec(2),
-				UnitPrice:    "8.0",
-				TotalCost:    "16.0",
-			},
-		},
-		TotalAmount: "16.0",
-		PeriodStart: ctx.BlockTime().Add(-time.Hour),
-		PeriodEnd:   ctx.BlockTime(),
-		Status:      "pending",
-	}
-	require.NoError(t, settlement.CreateInvoice(background, disputeInvoice))
-	require.NoError(t, settlement.DisputeInvoice(background, disputeInvoice.InvoiceID, "usage mismatch"))
+	partialSettlementUsage := recordSettlementUsageE2E(
+		t,
+		app,
+		ctx,
+		partialOrderID,
+		partialLeaseID,
+		provider,
+		customer,
+		"cpu",
+		1,
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(2500))),
+		partialUsage.PeriodStart,
+		partialUsage.PeriodEnd,
+	)
 
-	disputed := settlement.GetInvoice(disputeInvoice.InvoiceID)
-	require.Equal(t, "disputed", disputed.Status)
-	require.Error(t, settlement.TriggerSettlement(background, disputeInvoice.InvoiceID))
-	require.Nil(t, settlement.GetProviderPayout(provider.String(), disputeInvoice.InvoiceID))
-	require.True(t, hasAuditAction(settlement.GetAuditTrail(disputeInvoice.InvoiceID), "disputed"))
+	storedPartialUsage, found := app.Keepers.VirtEngine.Settlement.GetUsageRecord(ctx, partialSettlementUsage.UsageID)
+	require.True(t, found)
+	require.False(t, storedPartialUsage.Settled)
+	require.Empty(t, app.Keepers.VirtEngine.Settlement.GetSettlementsByOrder(ctx, partialOrderID))
+
+	disputeOrderID := "identity-dispute-order"
+	disputeLeaseID := "identity-dispute-lease"
+	disputeEscrowID := createActiveSettlementEscrowE2E(
+		t,
+		app,
+		ctx,
+		disputeOrderID,
+		disputeLeaseID,
+		customer,
+		provider,
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(16000))),
+		24*time.Hour,
+	)
+
+	disputeSettlementUsage := recordSettlementUsageE2E(
+		t,
+		app,
+		ctx,
+		disputeOrderID,
+		disputeLeaseID,
+		provider,
+		customer,
+		"gpu",
+		2,
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(16000))),
+		ctx.BlockTime().Add(-time.Hour),
+		ctx.BlockTime(),
+	)
+
+	require.NoError(t, app.Keepers.VirtEngine.Settlement.DisputeEscrow(ctx, disputeEscrowID, "usage mismatch"))
+
+	disputedEscrow, found := app.Keepers.VirtEngine.Settlement.GetEscrow(ctx, disputeEscrowID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.EscrowStateDisputed, disputedEscrow.State)
+
+	_, err = app.Keepers.VirtEngine.Settlement.SettleOrder(ctx, disputeOrderID, []string{disputeSettlementUsage.UsageID}, false)
+	require.Error(t, err)
+	require.Empty(t, app.Keepers.VirtEngine.Settlement.GetSettlementsByOrder(ctx, disputeOrderID))
+
+	require.NoError(t, app.Keepers.VirtEngine.Settlement.RefundEscrow(ctx, disputeEscrowID, "customer dispute upheld"))
+	disputedEscrow, found = app.Keepers.VirtEngine.Settlement.GetEscrow(ctx, disputeEscrowID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.EscrowStateRefunded, disputedEscrow.State)
+
+	activeEscrow, found := app.Keepers.VirtEngine.Settlement.GetEscrow(ctx, settlementEscrowID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.EscrowStateActive, activeEscrow.State)
 }
 
 func hasAuditEvent(events []pd.HPCAuditEvent, eventType string) bool {
 	for _, event := range events {
 		if event.EventType == eventType {
-			return true
-		}
-	}
-	return false
-}
-
-func hasAuditAction(records []*AuditRecordE2E, action string) bool {
-	for _, record := range records {
-		if record.Action == action {
 			return true
 		}
 	}

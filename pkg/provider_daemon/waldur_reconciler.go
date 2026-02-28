@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,8 +118,10 @@ type WaldurReconciler struct {
 
 	cfg                WaldurReconcilerConfig
 	marketplace        *waldur.MarketplaceClient
+	usageClient        *waldur.UsageClient
 	usageStore         *UsageSnapshotStore
 	settlementPipeline *SettlementPipeline
+	stateStore         *WaldurBridgeStateStore
 
 	// results stores reconciliation results by allocation ID.
 	results map[string]*ReconciliationResult
@@ -149,12 +152,20 @@ func NewWaldurReconciler(
 	marketplace *waldur.MarketplaceClient,
 	usageStore *UsageSnapshotStore,
 	pipeline *SettlementPipeline,
+	stateStore *WaldurBridgeStateStore,
 ) *WaldurReconciler {
+	var usageClient *waldur.UsageClient
+	if marketplace != nil {
+		usageClient = waldur.NewUsageClient(marketplace)
+	}
+
 	return &WaldurReconciler{
 		cfg:                cfg,
 		marketplace:        marketplace,
+		usageClient:        usageClient,
 		usageStore:         usageStore,
 		settlementPipeline: pipeline,
+		stateStore:         stateStore,
 		results:            make(map[string]*ReconciliationResult),
 		discrepancies:      make([]MetricDiscrepancy, 0),
 		stopChan:           make(chan struct{}),
@@ -205,6 +216,9 @@ func (r *WaldurReconciler) Stop() {
 // ReconcileAllocation reconciles usage for a specific allocation.
 func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID string, resourceUUID string) (*ReconciliationResult, error) {
 	now := time.Now()
+	if r.usageStore == nil {
+		return nil, fmt.Errorf("usage store not configured")
+	}
 
 	// Get provider-reported usage
 	periodEnd := now
@@ -261,27 +275,74 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 
 // fetchWaldurUsage fetches usage statistics from Waldur.
 func (r *WaldurReconciler) fetchWaldurUsage(ctx context.Context, resourceUUID string, periodStart, periodEnd time.Time) (*WaldurUsageStats, error) {
-	if r.marketplace == nil {
-		return nil, fmt.Errorf("marketplace client not configured")
+	if r.usageClient == nil {
+		return nil, fmt.Errorf("waldur usage client not configured")
 	}
 
-	// Get resource from Waldur to retrieve usage data
-	resource, err := r.marketplace.GetResource(ctx, resourceUUID)
+	records, err := r.usageClient.GetResourceUsage(ctx, resourceUUID, &periodStart, &periodEnd)
 	if err != nil {
-		return nil, fmt.Errorf("fetch resource: %w", err)
+		return nil, fmt.Errorf("fetch usage: %w", err)
 	}
 
-	// Create stats from resource data
-	// In a real implementation, this would call a dedicated usage API endpoint
 	stats := &WaldurUsageStats{
-		ResourceUUID: resource.UUID,
+		ResourceUUID: resourceUUID,
 		PeriodStart:  periodStart,
 		PeriodEnd:    periodEnd,
-		// Note: Actual usage values would come from Waldur's usage reporting API
-		// This is a placeholder that would need real Waldur API integration
+		Components:   make([]WaldurUsageComponent, 0, len(records)),
+	}
+	for _, record := range records {
+		r.applyWaldurUsageRecord(stats, record)
 	}
 
 	return stats, nil
+}
+
+func (r *WaldurReconciler) applyWaldurUsageRecord(stats *WaldurUsageStats, record waldur.UsageRecord) {
+	if stats == nil {
+		return
+	}
+
+	componentType := strings.ToLower(strings.TrimSpace(record.ComponentType))
+	stats.Components = append(stats.Components, WaldurUsageComponent{
+		Type:   record.ComponentType,
+		Name:   record.ComponentType,
+		Amount: record.Usage,
+		Unit:   usageUnitForComponentType(componentType),
+	})
+
+	switch {
+	case strings.Contains(componentType, "cpu"):
+		stats.CPUHours += record.Usage
+	case strings.Contains(componentType, "mem"), strings.Contains(componentType, "ram"):
+		stats.RAMGBHours += record.Usage
+	case strings.Contains(componentType, "storage") && strings.Contains(componentType, "month"):
+		stats.StorageGBHours += record.Usage * 24 * 30
+	case strings.Contains(componentType, "storage"):
+		stats.StorageGBHours += record.Usage
+	case strings.Contains(componentType, "gpu"):
+		stats.GPUHours += record.Usage
+	case strings.Contains(componentType, "network"), strings.Contains(componentType, "bandwidth"):
+		stats.NetworkGB += record.Usage
+	}
+}
+
+func usageUnitForComponentType(componentType string) string {
+	switch {
+	case strings.Contains(componentType, "cpu"):
+		return "cpu-hour"
+	case strings.Contains(componentType, "mem"), strings.Contains(componentType, "ram"):
+		return "gb-hour"
+	case strings.Contains(componentType, "storage") && strings.Contains(componentType, "month"):
+		return "gb-month"
+	case strings.Contains(componentType, "storage"):
+		return "gb-hour"
+	case strings.Contains(componentType, "gpu"):
+		return "gpu-hour"
+	case strings.Contains(componentType, "network"), strings.Contains(componentType, "bandwidth"):
+		return "gb"
+	default:
+		return "unit"
+	}
 }
 
 // convertWaldurToMetrics converts Waldur stats to ResourceMetrics.
@@ -517,8 +578,15 @@ type ReconciliationSyncStatus struct {
 
 // runLoop runs the reconciliation loop.
 func (r *WaldurReconciler) runLoop(ctx context.Context) {
-	// Initial reconciliation after startup delay
-	time.Sleep(time.Minute)
+	startDelay := time.NewTimer(time.Minute)
+	defer startDelay.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-r.stopChan:
+		return
+	case <-startDelay.C:
+	}
 
 	ticker := time.NewTicker(r.cfg.ReconciliationInterval)
 	defer ticker.Stop()
@@ -536,15 +604,43 @@ func (r *WaldurReconciler) runLoop(ctx context.Context) {
 }
 
 // runReconciliation runs a reconciliation cycle.
-func (r *WaldurReconciler) runReconciliation(_ context.Context) {
+func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 	log.Printf("[waldur-reconciler] starting reconciliation cycle")
+	if r.stateStore == nil {
+		log.Printf("[waldur-reconciler] skipped: no Waldur bridge state store configured")
+		return
+	}
 
-	// In a real implementation, this would iterate over all active allocations
-	// and reconcile each one with Waldur
+	state, err := r.stateStore.Load()
+	if err != nil {
+		log.Printf("[waldur-reconciler] failed to load bridge state: %v", err)
+		return
+	}
+
+	processed := 0
+	skipped := 0
+	for allocationID, mapping := range state.Mappings {
+		if mapping == nil {
+			skipped++
+			continue
+		}
+		if mapping.AllocationID != "" {
+			allocationID = mapping.AllocationID
+		}
+		if allocationID == "" || mapping.ResourceUUID == "" {
+			skipped++
+			continue
+		}
+		if _, err := r.ReconcileAllocation(ctx, allocationID, mapping.ResourceUUID); err != nil {
+			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", allocationID, err)
+			continue
+		}
+		processed++
+	}
 
 	status := r.GetSyncStatus()
-	log.Printf("[waldur-reconciler] reconciliation complete: %d allocations, %d in-sync, %d out-of-sync, avg score %d",
-		status.TotalAllocations, status.InSyncCount, status.OutOfSyncCount, status.AverageScore)
+	log.Printf("[waldur-reconciler] reconciliation complete: %d processed, %d skipped, %d allocations, %d in-sync, %d out-of-sync, avg score %d",
+		processed, skipped, status.TotalAllocations, status.InSyncCount, status.OutOfSyncCount, status.AverageScore)
 }
 
 // ScheduledUsageCollector collects usage on a schedule and integrates with settlement.

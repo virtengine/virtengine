@@ -5,6 +5,7 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
 
 var (
@@ -18,6 +19,17 @@ var (
 	// Deprecated: ModuleCdc use is deprecated
 	ModuleCdc = codec.NewProtoCodec(cdctypes.NewInterfaceRegistry())
 )
+
+func init() {
+	sdkutil.RegisterCustomSignerField(&MsgCreateProvider{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgUpdateProvider{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgDeleteProvider{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgGenerateDomainVerificationToken{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgVerifyProviderDomain{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgRequestDomainVerification{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgConfirmDomainVerification{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgRevokeDomainVerification{}, "owner", "")
+}
 
 // RegisterLegacyAminoCodec register concrete types on codec
 //

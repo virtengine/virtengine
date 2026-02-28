@@ -5,16 +5,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/virtengine/virtengine/pkg/inference"
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
@@ -46,10 +40,7 @@ func TestSidecarIntegration(t *testing.T) {
 	}))
 	t.Cleanup(tfServer.Close)
 
-	modelDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(modelDir, "stub.bin"), []byte("model"), 0o600); err != nil {
-		t.Fatalf("write stub model: %v", err)
-	}
+	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
 
 	config := inference.InferenceConfig{
 		ModelPath:        modelDir,
@@ -57,7 +48,7 @@ func TestSidecarIntegration(t *testing.T) {
 		Timeout:          2 * time.Second,
 		MaxMemoryMB:      512,
 		UseSidecar:       false,
-		Deterministic:    false,
+		Deterministic:    true,
 		ForceCPU:         true,
 		RandomSeed:       42,
 		ExpectedInputDim: inference.TotalFeatureDim,
@@ -69,38 +60,29 @@ func TestSidecarIntegration(t *testing.T) {
 		Timeout:   2 * time.Second,
 	}
 
-	server, err := NewInferenceSidecarServer(config, servingConfig, testLogger{})
+	server, err := NewInferenceSidecarServer(config, servingConfig, manifestPath, testLogger{})
 	if err != nil {
 		t.Fatalf("create sidecar server: %v", err)
 	}
 	t.Cleanup(func() { _ = server.Close() })
-
-	grpcServer := grpc.NewServer()
-	inferencepb.RegisterInferenceServiceServer(grpcServer, server)
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
+	if readiness := server.Readiness(); readiness == nil || readiness.State != verificationStateVerified {
+		t.Fatalf("expected verified readiness, got %#v", readiness)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
 
-	go grpcServer.Serve(listener)
-	t.Cleanup(grpcServer.Stop)
-
-	conn, err := grpc.Dial(listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	healthResp, err := server.HealthCheck(context.Background(), &inferencepb.HealthCheckRequest{})
 	if err != nil {
-		t.Fatalf("dial: %v", err)
+		t.Fatalf("HealthCheck failed: %v", err)
 	}
-	t.Cleanup(func() { _ = conn.Close() })
-
-	client := inferencepb.NewInferenceServiceClient(conn)
+	if healthResp.Status != inferencepb.HealthStatus_HEALTH_STATUS_HEALTHY {
+		t.Fatalf("expected healthy status, got %s (%s)", healthResp.Status.String(), healthResp.ErrorMessage)
+	}
 	features := make([]float32, inference.TotalFeatureDim)
 	features[0] = 0.5
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	resp, err := client.ComputeScore(ctx, &inferencepb.ComputeScoreRequest{
+	resp, err := server.ComputeScore(ctx, &inferencepb.ComputeScoreRequest{
 		Features: features,
 		Metadata: &inferencepb.InferenceMetadata{
 			AccountAddress: "addr",

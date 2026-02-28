@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"cosmossdk.io/log"
 	"google.golang.org/grpc"
@@ -23,6 +25,17 @@ type SupportServiceConfig struct {
 	CometWS         string
 	GRPCEndpoint    string
 	SubscriberID    string
+	SignerKeyName   string
+
+	SignerKeyringBackend    string
+	SignerKeyringDir        string
+	SignerKeyringPassphrase string
+	GasSetting              GasSetting
+	GasPrices               string
+	Fees                    string
+	GasAdjustment           float64
+	BroadcastTimeout        time.Duration
+	RequestTimeout          time.Duration
 
 	ServiceDeskConfig *servicedesk.Config
 	EventListener     *servicedesk.EventListenerConfig
@@ -70,6 +83,7 @@ type SupportService struct {
 	bridge         *servicedesk.Bridge
 	listener       *servicedesk.ChainEventListener
 	inboundHandler *SupportInboundHandler
+	chainWriter    SupportChainWriter
 	grpcConn       *grpc.ClientConn
 }
 
@@ -127,9 +141,19 @@ func NewSupportService(cfg SupportServiceConfig, keyManager *KeyManager, logger 
 		return nil, err
 	}
 
-	chainWriter := NewSupportChainLogger(logger.With("component", "support_chain_logger"))
+	chainWriter, err := newSupportChainWriter(context.Background(), cfg, logger.With("component", "support_chain"))
+	if err != nil {
+		if grpcConn != nil {
+			_ = grpcConn.Close()
+		}
+		return nil, err
+	}
+	chainSender := cfg.ProviderAddress
+	if resolvedSender := strings.TrimSpace(chainWriter.SenderAddress()); resolvedSender != "" {
+		chainSender = resolvedSender
+	}
 	inboundHandler := NewSupportInboundHandler(SupportInboundHandlerConfig{
-		ProviderAddress: cfg.ProviderAddress,
+		ProviderAddress: chainSender,
 		Bridge:          bridge,
 		Encryptor:       encryptor,
 		ChainWriter:     chainWriter,
@@ -138,7 +162,7 @@ func NewSupportService(cfg SupportServiceConfig, keyManager *KeyManager, logger 
 	})
 	bridge.SetInboundHandler(inboundHandler)
 
-	externalRefHandler := NewSupportExternalRefHandler(chainWriter, cfg.ProviderAddress, logger.With("component", "support_external_ref"))
+	externalRefHandler := NewSupportExternalRefHandler(chainWriter, chainSender, logger.With("component", "support_external_ref"))
 	bridge.SetExternalRefHandler(externalRefHandler)
 
 	listener := servicedesk.NewChainEventListener(bridge, cfg.CometRPC, logger, cfg.EventListener)
@@ -149,6 +173,7 @@ func NewSupportService(cfg SupportServiceConfig, keyManager *KeyManager, logger 
 		bridge:         bridge,
 		listener:       listener,
 		inboundHandler: inboundHandler,
+		chainWriter:    chainWriter,
 		grpcConn:       grpcConn,
 	}, nil
 }
@@ -179,6 +204,9 @@ func (s *SupportService) Stop(ctx context.Context) error {
 	}
 	if s.bridge != nil {
 		_ = s.bridge.Stop(ctx)
+	}
+	if closer, ok := s.chainWriter.(interface{ Close() error }); ok {
+		_ = closer.Close()
 	}
 	if s.grpcConn != nil {
 		_ = s.grpcConn.Close()
@@ -266,6 +294,11 @@ func (w *SupportChainLogger) RegisterExternalTicket(_ context.Context, msg *Supp
 	return nil
 }
 
+// SenderAddress returns the sender address used by the writer when available.
+func (w *SupportChainLogger) SenderAddress() string {
+	return ""
+}
+
 // SupportUpdateRequest represents a support request update payload.
 type SupportUpdateRequest struct {
 	TicketID      string
@@ -299,6 +332,7 @@ type SupportChainWriter interface {
 	UpdateSupportRequest(ctx context.Context, msg *SupportUpdateRequest) error
 	AddSupportResponse(ctx context.Context, msg *SupportAddResponse) error
 	RegisterExternalTicket(ctx context.Context, msg *SupportRegisterExternal) error
+	SenderAddress() string
 }
 
 // SupportResponseEncryptor encrypts inbound support responses for on-chain storage.

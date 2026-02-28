@@ -112,6 +112,7 @@ func SetupOnboardingTestApp(t *testing.T, client OnboardingTestClient) *app.Virt
 
 	return app.Setup(
 		app.WithChainID(TestChainID),
+		app.WithSkipModuleServiceRegistration(true),
 		app.WithGenesis(func(cdc codec.Codec) app.GenesisState {
 			return genesisWithApprovedClient(t, cdc, client)
 		}),
@@ -285,6 +286,91 @@ func UploadScope(
 	return resp
 }
 
+// SeedVerifiedScope uploads a scope directly through the keeper and marks it verified.
+// This bypasses msg-server signature validation for lifecycle tests that only need
+// deterministic verified identity state.
+func SeedVerifiedScope(
+	t *testing.T,
+	a *app.VirtEngineApp,
+	ctx sdk.Context,
+	account sdk.AccAddress,
+	params ScopeUploadParams,
+	verifier string,
+) {
+	t.Helper()
+
+	record, found := a.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, account)
+	if !found {
+		created, err := a.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, account)
+		require.NoError(t, err)
+		record = *created
+	}
+
+	envelope := CreateEncryptedEnvelope(params.ScopeID)
+	payloadHash := ComputePayloadHash(envelope)
+
+	metadata := veidtypes.NewUploadMetadata(
+		params.Salt,
+		params.DeviceFingerprint,
+		TestClientID,
+		nil,
+		nil,
+		payloadHash,
+	)
+
+	verifiedAt := ctx.BlockTime().UTC()
+	scope := &veidtypes.IdentityScope{
+		ScopeID:          params.ScopeID,
+		ScopeType:        params.ScopeType,
+		Version:          veidtypes.ScopeSchemaVersion,
+		EncryptedPayload: envelope,
+		UploadMetadata:   *metadata,
+		Status:           veidtypes.VerificationStatusVerified,
+		UploadedAt:       verifiedAt,
+		VerifiedAt:       &verifiedAt,
+	}
+
+	record.AddScopeRef(veidtypes.NewScopeRef(scope))
+	record.UpdatedAt = verifiedAt
+	record.LastVerifiedAt = &verifiedAt
+	require.NoError(t, a.Keepers.VirtEngine.VEID.SetIdentityRecord(ctx, record))
+
+	encryptedPayloadBz, err := json.Marshal(scope.EncryptedPayload)
+	require.NoError(t, err)
+
+	verifiedAtUnix := verifiedAt.Unix()
+	scopeBz, err := json.Marshal(&struct {
+		ScopeID          string                       `json:"scope_id"`
+		ScopeType        veidtypes.ScopeType          `json:"scope_type"`
+		Version          uint32                       `json:"version"`
+		EncryptedPayload json.RawMessage              `json:"encrypted_payload"`
+		UploadMetadata   veidtypes.UploadMetadata     `json:"upload_metadata"`
+		Status           veidtypes.VerificationStatus `json:"status"`
+		UploadedAt       int64                        `json:"uploaded_at"`
+		VerifiedAt       *int64                       `json:"verified_at,omitempty"`
+		ExpiresAt        *int64                       `json:"expires_at,omitempty"`
+		Revoked          bool                         `json:"revoked"`
+		RevokedAt        *int64                       `json:"revoked_at,omitempty"`
+		RevokedReason    string                       `json:"revoked_reason,omitempty"`
+		Verifier         string                       `json:"verifier,omitempty"`
+	}{
+		ScopeID:          scope.ScopeID,
+		ScopeType:        scope.ScopeType,
+		Version:          scope.Version,
+		EncryptedPayload: encryptedPayloadBz,
+		UploadMetadata:   scope.UploadMetadata,
+		Status:           scope.Status,
+		UploadedAt:       scope.UploadedAt.Unix(),
+		VerifiedAt:       &verifiedAtUnix,
+		Revoked:          false,
+		Verifier:         verifier,
+	})
+	require.NoError(t, err)
+
+	store := ctx.KVStore(a.Keepers.VirtEngine.VEID.StoreKey())
+	store.Set(veidtypes.ScopeKey(account.Bytes(), params.ScopeID), scopeBz)
+}
+
 // CreateEncryptedEnvelope creates a deterministic encrypted envelope for testing
 func CreateEncryptedEnvelope(scopeID string) encryptiontypes.EncryptedPayloadEnvelope {
 	envelope := encryptiontypes.NewEncryptedPayloadEnvelope()
@@ -427,6 +513,9 @@ func AttemptCreateOrder(
 	}
 
 	order := marketplace.NewOrderAt(orderID, offering.ID, 5000, 1, ctx.BlockTime())
+	if !expectedError {
+		require.NoError(t, order.SetStateAt(marketplace.OrderStateOpen, "e2e order ready for bids", ctx.BlockTime()))
+	}
 
 	err := a.Keepers.VirtEngine.Marketplace.CreateOrder(ctx, order)
 
@@ -460,10 +549,11 @@ func FixedTimestampPlus(minutes int) time.Time {
 
 // CommitAndAdvanceBlock commits the current state and advances to the next block
 func CommitAndAdvanceBlock(a *app.VirtEngineApp, ctx sdk.Context) sdk.Context {
-	a.Commit()
-	return a.NewContext(false).
+	_ = a
+	return ctx.
 		WithBlockHeight(ctx.BlockHeight() + 1).
-		WithBlockTime(ctx.BlockTime().Add(time.Minute))
+		WithBlockTime(ctx.BlockTime().Add(time.Minute)).
+		WithEventManager(sdk.NewEventManager())
 }
 
 // ============================================================================

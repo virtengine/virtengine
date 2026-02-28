@@ -7,10 +7,14 @@ package waldur
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +65,10 @@ type Config struct {
 	// Token is the API authentication token
 	Token string
 
+	// AuthScheme controls the Authorization scheme when Token does not include one.
+	// Supported values are "auto", "token", and "bearer".
+	AuthScheme string
+
 	// Timeout is the HTTP request timeout
 	Timeout time.Duration
 
@@ -78,6 +86,10 @@ type Config struct {
 
 	// UserAgent is the User-Agent header value
 	UserAgent string
+
+	// VersionPaths controls API base path negotiation when BaseURL points at the site root.
+	// When empty, "/api/" and "/api/v1/" are attempted after the provided BaseURL.
+	VersionPaths []string
 }
 
 // DefaultConfig returns a Config with sensible defaults
@@ -89,6 +101,8 @@ func DefaultConfig() Config {
 		RetryWaitMax:       30 * time.Second,
 		RateLimitPerSecond: 10,
 		UserAgent:          "VirtEngine-Provider-Daemon/1.0",
+		AuthScheme:         "auto",
+		VersionPaths:       []string{"/api/", "/api/v1/"},
 	}
 }
 
@@ -97,8 +111,8 @@ type Client struct {
 	mu         sync.RWMutex
 	config     Config
 	httpClient *http.Client
-	auth       *client.TokenAuth
 	api        *client.ClientWithResponses
+	authHeader string
 
 	// Rate limiting
 	rateLimiter *rateLimiter
@@ -108,6 +122,9 @@ type Client struct {
 	errorCount     int64
 	lastRequestAt  time.Time
 	lastResponseAt time.Time
+
+	resolvedBaseURL string
+	negotiated      bool
 }
 
 // rateLimiter implements a simple token bucket rate limiter
@@ -190,37 +207,27 @@ func NewClient(cfg Config) (*Client, error) {
 		cfg.UserAgent = DefaultConfig().UserAgent
 	}
 
-	// Create token auth
-	auth, err := client.NewTokenAuth(cfg.Token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create auth: %w", err)
-	}
-
 	// Create HTTP client with timeout
 	httpClient := security.NewSecureHTTPClient(security.WithTimeout(cfg.Timeout))
 	httpClient.Transport = otelhttp.NewTransport(httpClient.Transport)
 
-	// Create Waldur API client
-	api, err := client.NewClientWithResponses(
-		cfg.BaseURL,
-		client.WithHTTPClient(httpClient),
-		client.WithRequestEditorFn(auth.Intercept),
-		client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
-			req.Header.Set("User-Agent", cfg.UserAgent)
-			return nil
-		}),
-	)
+	baseURL := normalizeBaseURL(cfg.BaseURL)
+	authHeader := formatAuthHeader(cfg.Token, cfg.AuthScheme)
+
+	c := &Client{
+		config:          cfg,
+		httpClient:      httpClient,
+		rateLimiter:     newRateLimiter(cfg.RateLimitPerSecond),
+		authHeader:      authHeader,
+		resolvedBaseURL: baseURL,
+	}
+
+	api, err := c.newAPIClient(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create waldur client: %w", err)
 	}
-
-	return &Client{
-		config:      cfg,
-		httpClient:  httpClient,
-		auth:        auth,
-		api:         api,
-		rateLimiter: newRateLimiter(cfg.RateLimitPerSecond),
-	}, nil
+	c.api = api
+	return c, nil
 }
 
 // API returns the underlying Waldur API client for direct access
@@ -257,6 +264,10 @@ type ClientMetrics struct {
 
 // doWithRetry executes a function with retry logic
 func (c *Client) doWithRetry(ctx context.Context, fn func() error) error {
+	if err := c.ensureNegotiated(ctx); err != nil {
+		return err
+	}
+
 	// Apply rate limiting
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return err
@@ -308,6 +319,14 @@ func (c *Client) doWithRetry(ctx context.Context, fn func() error) error {
 		if errors.Is(err, ErrRateLimited) || errors.Is(err, ErrServerError) {
 			continue
 		}
+		if errors.Is(err, ErrTimeout) {
+			continue
+		}
+
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			continue
+		}
 	}
 
 	c.mu.Lock()
@@ -352,20 +371,27 @@ func mapHTTPError(statusCode int, body []byte) error {
 // doRequest performs a raw HTTP request to the Waldur API.
 // VE-2D: Added for provider offerings API which may not be in the generated client.
 func (c *Client) doRequest(ctx context.Context, method, path string, body []byte) ([]byte, int, error) {
-	url := c.config.BaseURL + path
+	if err := c.ensureNegotiated(ctx); err != nil {
+		return nil, 0, err
+	}
+
+	targetURL := path
+	if !isAbsoluteURL(path) {
+		targetURL = joinBaseURL(c.resolvedBaseURL, path)
+	}
 
 	var req *http.Request
 	var err error
 	if body != nil {
-		req, err = http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, method, targetURL, bytes.NewReader(body))
 	} else {
-		req, err = http.NewRequestWithContext(ctx, method, url, nil)
+		req, err = http.NewRequestWithContext(ctx, method, targetURL, nil)
 	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Token "+c.config.Token)
+	req.Header.Set("Authorization", c.authHeader)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	if c.config.UserAgent != "" {
@@ -374,7 +400,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body []byte
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("do request: %w", err)
+		return nil, 0, classifyTransportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -388,27 +414,16 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body []byte
 
 // HealthCheck verifies the client can connect to Waldur
 func (c *Client) HealthCheck(ctx context.Context) error {
-	var healthErr error
-
-	err := c.doWithRetry(ctx, func() error {
-		resp, err := c.api.UsersMeRetrieveWithResponse(ctx, &client.UsersMeRetrieveParams{})
+	return c.doWithRetry(ctx, func() error {
+		respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, "/users/me/", nil)
 		if err != nil {
 			return fmt.Errorf("health check failed: %w", err)
 		}
-
-		if resp.StatusCode() != http.StatusOK {
-			healthErr = mapHTTPError(resp.StatusCode(), resp.Body)
-			return healthErr
+		if statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
 		}
-
 		return nil
 	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GetCurrentUser retrieves the current authenticated user
@@ -416,33 +431,40 @@ func (c *Client) GetCurrentUser(ctx context.Context) (*UserInfo, error) {
 	var user *UserInfo
 
 	err := c.doWithRetry(ctx, func() error {
-		resp, err := c.api.UsersMeRetrieveWithResponse(ctx, &client.UsersMeRetrieveParams{})
+		respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, "/users/me/", nil)
 		if err != nil {
 			return err
 		}
 
-		if resp.StatusCode() != http.StatusOK {
-			return mapHTTPError(resp.StatusCode(), resp.Body)
+		if statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
 		}
 
-		if resp.JSON200 == nil {
+		var resp struct {
+			Uuid      *string `json:"uuid"`
+			Username  *string `json:"username"`
+			Email     *string `json:"email"`
+			FirstName *string `json:"first_name"`
+			LastName  *string `json:"last_name"`
+		}
+		if err := json.Unmarshal(respBody, &resp); err != nil {
 			return ErrInvalidResponse
 		}
 
 		user = &UserInfo{
-			Username: safeString(resp.JSON200.Username),
+			Username: safeString(resp.Username),
 		}
-		if resp.JSON200.Uuid != nil {
-			user.UUID = resp.JSON200.Uuid.String()
+		if resp.Uuid != nil {
+			user.UUID = *resp.Uuid
 		}
-		if resp.JSON200.Email != nil {
-			user.Email = string(*resp.JSON200.Email)
+		if resp.Email != nil {
+			user.Email = string(*resp.Email)
 		}
-		if resp.JSON200.FirstName != nil {
-			user.FirstName = *resp.JSON200.FirstName
+		if resp.FirstName != nil {
+			user.FirstName = *resp.FirstName
 		}
-		if resp.JSON200.LastName != nil {
-			user.LastName = *resp.JSON200.LastName
+		if resp.LastName != nil {
+			user.LastName = *resp.LastName
 		}
 
 		return nil
@@ -479,4 +501,199 @@ func safeInt(i *int) int {
 // ptr returns a pointer to the value
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func (c *Client) ensureNegotiated(ctx context.Context) error {
+	c.mu.RLock()
+	if c.negotiated {
+		c.mu.RUnlock()
+		return nil
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.negotiated {
+		return nil
+	}
+
+	for _, candidate := range baseURLCandidates(c.config.BaseURL, c.config.VersionPaths) {
+		statusCode, err := c.probeUsersMe(ctx, candidate)
+		if err != nil {
+			continue
+		}
+		if statusCode == http.StatusOK || statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
+			api, buildErr := c.newAPIClient(candidate)
+			if buildErr != nil {
+				return buildErr
+			}
+			c.api = api
+			c.resolvedBaseURL = candidate
+			c.negotiated = true
+			return nil
+		}
+	}
+
+	c.negotiated = true
+	return nil
+}
+
+func (c *Client) newAPIClient(baseURL string) (*client.ClientWithResponses, error) {
+	return client.NewClientWithResponses(
+		baseURL,
+		client.WithHTTPClient(c.httpClient),
+		client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
+			rewriteRequestPath(req, baseURL)
+			req.Header.Set("Authorization", c.authHeader)
+			if c.config.UserAgent != "" {
+				req.Header.Set("User-Agent", c.config.UserAgent)
+			}
+			return nil
+		}),
+	)
+}
+
+func (c *Client) probeUsersMe(ctx context.Context, baseURL string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinBaseURL(baseURL, "/users/me/"), nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", c.authHeader)
+	req.Header.Set("Accept", "application/json")
+	if c.config.UserAgent != "" {
+		req.Header.Set("User-Agent", c.config.UserAgent)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+func formatAuthHeader(token string, scheme string) string {
+	trimmed := strings.TrimSpace(token)
+	lower := strings.ToLower(trimmed)
+	switch {
+	case strings.HasPrefix(lower, "token "):
+		return "Token " + strings.TrimSpace(trimmed[6:])
+	case strings.HasPrefix(lower, "bearer "):
+		return "Bearer " + strings.TrimSpace(trimmed[7:])
+	}
+
+	switch strings.ToLower(strings.TrimSpace(scheme)) {
+	case "", "auto", "token":
+		return "Token " + trimmed
+	case "bearer":
+		return "Bearer " + trimmed
+	default:
+		return strings.TrimSpace(scheme) + " " + trimmed
+	}
+}
+
+func normalizeBaseURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return strings.TrimSpace(raw)
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	} else if !strings.HasSuffix(parsed.Path, "/") {
+		parsed.Path += "/"
+	}
+	return parsed.String()
+}
+
+func joinBaseURL(baseURL string, path string) string {
+	if isAbsoluteURL(path) {
+		return path
+	}
+	base := strings.TrimRight(baseURL, "/")
+	relative := strings.TrimSpace(path)
+	if relative == "" {
+		return base
+	}
+	if !strings.HasPrefix(relative, "/") {
+		relative = "/" + relative
+	}
+	return base + relative
+}
+
+func baseURLCandidates(rawBaseURL string, versionPaths []string) []string {
+	base := normalizeBaseURL(rawBaseURL)
+	candidates := []string{base}
+
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return uniqueStrings(candidates)
+	}
+
+	paths := versionPaths
+	if len(paths) == 0 {
+		paths = DefaultConfig().VersionPaths
+	}
+	originalPath := strings.TrimRight(parsed.Path, "/")
+	for _, versionPath := range paths {
+		versionPath = "/" + strings.Trim(versionPath, "/")
+		switch {
+		case originalPath == "":
+			parsedCopy := *parsed
+			parsedCopy.Path = versionPath
+			candidates = append(candidates, normalizeBaseURL(parsedCopy.String()))
+		case originalPath != versionPath:
+			if !strings.HasSuffix(originalPath, versionPath) {
+				rootCopy := *parsed
+				rootCopy.Path = versionPath
+				candidates = append(candidates, normalizeBaseURL(rootCopy.String()))
+
+				joinedCopy := *parsed
+				joinedCopy.Path = strings.TrimRight(originalPath, "/") + versionPath
+				candidates = append(candidates, normalizeBaseURL(joinedCopy.String()))
+			}
+		}
+	}
+
+	return uniqueStrings(candidates)
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func isAbsoluteURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	return err == nil && parsed.Scheme != "" && parsed.Host != ""
+}
+
+func rewriteRequestPath(req *http.Request, baseURL string) {
+	basePath := strings.TrimSuffix((&url.URL{Path: strings.TrimSpace(mustParseURL(baseURL).Path)}).EscapedPath(), "/")
+	if basePath == "" || basePath == "/" {
+		return
+	}
+	if strings.HasPrefix(req.URL.Path, basePath+"/") || req.URL.Path == basePath {
+		return
+	}
+	req.URL.Path = basePath + "/" + strings.TrimPrefix(req.URL.Path, "/")
+	req.URL.RawPath = req.URL.EscapedPath()
+}
+
+func mustParseURL(raw string) *url.URL {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return &url.URL{}
+	}
+	return parsed
 }

@@ -2,12 +2,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: virtengine-staging
+namespace: virtengine
 
 resources:
   - ../../base
-
-namePrefix: staging-
 
 commonLabels:
   environment: staging
@@ -15,7 +13,7 @@ commonLabels:
 patches:
   # Staging replicas
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
@@ -30,7 +28,7 @@ patches:
         value: 2
   # Moderate resources
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
@@ -45,14 +43,46 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "6Gi"
-
-configMapGenerator:
-  - name: virtengine-config
-    behavior: merge
-    literals:
-      - CHAIN_ID=virtengine-staging-1
-      - LOG_LEVEL=info
-      - API_SWAGGER=false
+  - target:
+      kind: ExternalSecret
+      name: virtengine-node-secrets
+    patch: |
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: secret/virtengine/staging/virtengine-node
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: secret/virtengine/staging/virtengine-node
+  - target:
+      kind: ExternalSecret
+      name: provider-daemon-secrets
+    patch: |
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: secret/virtengine/staging/provider-daemon
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: secret/virtengine/staging/provider-daemon
+  - target:
+      kind: ExternalSecret
+      name: database-credentials
+    patch: |
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: secret/virtengine/staging/database
+  - target:
+      kind: ConfigMap
+      name: virtengine-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-staging-1
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: info
+      - op: replace
+        path: /data/API_SWAGGER
+        value: "false"
 
 images:
   - name: virtengine/virtengine-node

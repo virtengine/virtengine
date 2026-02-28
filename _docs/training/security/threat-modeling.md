@@ -3,7 +3,7 @@
 **Module Duration:** 4 hours  
 **Target Audience:** VirtEngine Operators, Security Engineers, Infrastructure Architects  
 **Prerequisites:** Completion of Security Best Practices module, basic understanding of blockchain consensus  
-**Last Updated:** 2024
+**Last Updated:** 2026-04-11
 
 ---
 
@@ -30,6 +30,19 @@ VirtEngine's unique security model presents specific threat considerations:
 - **Identity system threats** targeting VEID and biometric data
 - **Provider infrastructure threats** affecting compute resources
 - **Economic threats** targeting escrow and market mechanisms
+
+### Validated Scenario Anchors
+
+This training module is backed by the current repository evidence for the highest-risk scenarios:
+
+- consensus divergence and deterministic verifier behavior:
+  `go test -tags=security ./tests/security/blockchain -run 'TestBC001_ConsensusVerifierRejectsDivergentResults|TestBC002_ConsensusVerifierValidatesLocalModelState|TestBC002_ResultHashIsDeterministicAndFieldSensitive'`
+- identity key rebinding and MFA-gated recovery:
+  `go test -tags='security,integration' ./tests/security/... -run 'TestIdentitySecurity_RebindWalletFlowRequiresLinkedSignatures|TestIdentitySecurity_MFAGatingEnforcesSerializedRebindProof'`
+- attestation replay and stale-key rejection:
+  `go test -tags='security,e2e.integration' ./tests/security/... -run 'TestSecurityAttestationE2E_HeartbeatReplayIsRejected|TestSecurityAttestationE2E_StaleRotationKeyIsRejectedAfterOverlap'`
+
+Use `_docs/training/security/security-incident-response.md` for the operator procedure that matches each drill.
 
 ---
 
@@ -1075,6 +1088,6 @@ Upon successful completion:
 ---
 
 **Module Version:** 1.0  
-**Last Review:** 2024-01  
-**Next Review:** 2024-07  
+**Last Review:** 2026-04-11
+**Next Review:** 2026-07-11
 **Owner:** VirtEngine Security Team

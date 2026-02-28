@@ -5,8 +5,14 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/cometbft/cometbft/crypto/secp256k1"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
+
+const defaultCaptureProtocolAccountPrefix = "ve"
+
+const cometSecp256k1PubKeySize = 33
 
 // SignatureValidator validates client and user signatures for the capture protocol.
 type SignatureValidator struct {
@@ -127,6 +133,18 @@ func (sv *SignatureValidator) ValidateUserSignature(payload CapturePayload, expe
 		return ErrUserPublicKeyMissing
 	}
 
+	derivedAccount, err := DeriveAccountAddressFromPublicKey(sig.PublicKey, sig.Algorithm)
+	if err != nil {
+		return ErrUserSignatureInvalid.Wrap(err)
+	}
+
+	if sig.KeyID == "" || sig.KeyID != derivedAccount {
+		return ErrUserAddressMismatch.WithDetails(
+			"expected", derivedAccount,
+			"actual", sig.KeyID,
+		)
+	}
+
 	// Check key ID (account address) if expected
 	if expectedAccount != "" && sig.KeyID != expectedAccount {
 		return ErrUserAddressMismatch.WithDetails(
@@ -229,11 +247,11 @@ func verifySecp256k1(publicKey, message, signature []byte) error {
 	hash := sha256.Sum256(message)
 
 	// Create public key
-	var pubKey secp256k1.PubKey
-	if len(publicKey) != len(pubKey) {
+	if len(publicKey) != cometSecp256k1PubKeySize {
 		return fmt.Errorf("invalid secp256k1 public key size: expected %d, got %d",
-			len(pubKey), len(publicKey))
+			cometSecp256k1PubKeySize, len(publicKey))
 	}
+	var pubKey secp256k1.PubKey
 	copy(pubKey[:], publicKey)
 
 	// Verify signature
@@ -255,14 +273,32 @@ func CreateSignatureProof(publicKey, signature, signedData []byte, algorithm, ke
 	}
 }
 
-// DeriveAccountAddressFromPublicKey derives an account address from a public key
-// This is a placeholder - actual implementation depends on chain address format
 func DeriveAccountAddressFromPublicKey(publicKey []byte, algorithm string) (string, error) {
-	// In Cosmos SDK, addresses are typically derived from public keys
-	// This would use the appropriate address derivation for the chain
-	hash := sha256.Sum256(publicKey)
-	// Use first 20 bytes for address (similar to Cosmos)
-	return fmt.Sprintf("virtengine1%x", hash[:20]), nil
+	var address []byte
+
+	switch algorithm {
+	case AlgorithmEd25519:
+		if len(publicKey) != ed25519.PublicKeySize {
+			return "", fmt.Errorf("invalid Ed25519 public key size: expected %d, got %d",
+				ed25519.PublicKeySize, len(publicKey))
+		}
+		address = []byte(cmted25519.PubKey(publicKey).Address())
+	case AlgorithmSecp256k1:
+		if len(publicKey) != cometSecp256k1PubKeySize {
+			return "", fmt.Errorf("invalid secp256k1 public key size: expected %d, got %d",
+				cometSecp256k1PubKeySize, len(publicKey))
+		}
+		address = []byte(secp256k1.PubKey(publicKey).Address())
+	default:
+		return "", fmt.Errorf("unsupported algorithm: %s", algorithm)
+	}
+
+	prefix := sdk.GetConfig().GetBech32AccountAddrPrefix()
+	if prefix == "" {
+		prefix = defaultCaptureProtocolAccountPrefix
+	}
+
+	return sdk.Bech32ifyAddressBytes(prefix, address)
 }
 
 // mockApprovedClientRegistry is a simple in-memory implementation for testing

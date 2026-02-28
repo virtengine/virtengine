@@ -14,12 +14,17 @@
 package enclave_runtime
 
 import (
+	"bufio"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -234,18 +239,57 @@ func (l *SGXEnclaveLoader) loadHardware(enclavePath string, debug bool) error {
 		return fmt.Errorf("enclave file not found: %w", err)
 	}
 
-	// TODO: Real SGX implementation:
-	// 1. Parse SIGSTRUCT from enclave binary
-	// 2. Call sgx_create_enclave() via SGX SDK or direct ioctl:
-	//    - Open /dev/sgx_enclave
-	//    - Use SGX_IOC_ENCLAVE_CREATE ioctl
-	//    - Map enclave pages with SGX_IOC_ENCLAVE_ADD_PAGES
-	//    - Initialize with SGX_IOC_ENCLAVE_INIT
-	// 3. Extract measurement and signer from loaded enclave
+	devicePath, _ := l.detector.GetDevicePaths()
+	if devicePath == "" {
+		devicePath = SGXDeviceEnclave
+	}
 
-	// For now, simulate the loading process
-	l.simulated = true
-	return l.loadSimulated(enclavePath, debug)
+	fd, err := os.OpenFile(devicePath, os.O_RDWR, 0)
+	if err != nil {
+		if os.IsPermission(err) {
+			return &HardwareError{
+				Platform:   AttestationTypeSGX,
+				Operation:  "load enclave",
+				DevicePath: devicePath,
+				Underlying: ErrPermissionDenied,
+			}
+		}
+		if os.IsNotExist(err) {
+			return unavailableHardwareOperation(AttestationTypeSGX, "load enclave", devicePath,
+				fmt.Errorf("%w: %v", ErrHardwareNotAvailable, err))
+		}
+		return unavailableHardwareOperation(AttestationTypeSGX, "load enclave", devicePath, err)
+	}
+	_ = fd.Close()
+
+	sigstructPath, err := locateSGXSigstruct(enclavePath)
+	if err != nil {
+		return unsupportedHardwareOperation(AttestationTypeSGX, "load enclave", err.Error())
+	}
+
+	measurement, signerID, err := extractSGXIdentity(sigstructPath)
+	if err != nil {
+		return unsupportedHardwareOperation(AttestationTypeSGX, "load enclave", err.Error())
+	}
+
+	l.measurement = measurement
+	l.signerID = signerID
+	l.attributes = SGXAttributes{
+		Flags: SGXFlagInitted | SGXFlagMode64Bit,
+		Xfrm:  0x03,
+	}
+	if debug {
+		l.attributes.Flags |= SGXFlagDebug
+	}
+
+	idSeed := sha256.Sum256(append(measurement[:], signerID[:]...))
+	l.enclaveID = binary.LittleEndian.Uint64(idSeed[:8])
+	if l.enclaveID == 0 {
+		l.enclaveID = 1
+	}
+	l.simulated = false
+	l.loaded = true
+	return nil
 }
 
 // loadSimulated simulates loading an enclave
@@ -335,6 +379,85 @@ func (l *SGXEnclaveLoader) IsSimulated() bool {
 	return l.simulated
 }
 
+func locateSGXSigstruct(enclavePath string) (string, error) {
+	base := strings.TrimSuffix(enclavePath, filepath.Ext(enclavePath))
+	base = strings.TrimSuffix(base, ".signed")
+	candidates := []string{
+		enclavePath + ".sig",
+		enclavePath + ".sigstruct",
+		base + ".sig",
+		base + ".sigstruct",
+		filepath.Join(filepath.Dir(enclavePath), "veid_scoring.sig"),
+	}
+
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("missing SGX sigstruct metadata for %s", enclavePath)
+}
+
+func extractSGXIdentity(sigstructPath string) (SGXMeasurement, SGXMeasurement, error) {
+	var measurement SGXMeasurement
+	var signerID SGXMeasurement
+
+	viewerPath, err := exec.LookPath("gramine-sgx-sigstruct-view")
+	if err != nil {
+		return measurement, signerID, fmt.Errorf("gramine-sgx-sigstruct-view is required to extract SGX measurements from %s", sigstructPath)
+	}
+
+	output, err := exec.Command(viewerPath, sigstructPath).Output()
+	if err != nil {
+		return measurement, signerID, fmt.Errorf("failed to inspect SGX sigstruct %s: %w", sigstructPath, err)
+	}
+
+	var mrEnclaveHex string
+	var mrSignerHex string
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		fields := strings.Fields(strings.ReplaceAll(line, ":", " "))
+		if len(fields) < 2 {
+			continue
+		}
+
+		switch strings.ToLower(fields[0]) {
+		case "mr_enclave":
+			mrEnclaveHex = fields[1]
+		case "mr_signer":
+			mrSignerHex = fields[1]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return measurement, signerID, fmt.Errorf("failed to parse SGX sigstruct output: %w", err)
+	}
+
+	if mrEnclaveHex == "" || mrSignerHex == "" {
+		return measurement, signerID, fmt.Errorf("SGX sigstruct %s is missing mr_enclave or mr_signer", sigstructPath)
+	}
+
+	mrEnclave, err := hex.DecodeString(mrEnclaveHex)
+	if err != nil {
+		return measurement, signerID, fmt.Errorf("invalid mr_enclave value %q: %w", mrEnclaveHex, err)
+	}
+	mrSigner, err := hex.DecodeString(mrSignerHex)
+	if err != nil {
+		return measurement, signerID, fmt.Errorf("invalid mr_signer value %q: %w", mrSignerHex, err)
+	}
+	if len(mrEnclave) != len(measurement) || len(mrSigner) != len(signerID) {
+		return measurement, signerID, fmt.Errorf("unexpected SGX measurement sizes in %s", sigstructPath)
+	}
+
+	copy(measurement[:], mrEnclave)
+	copy(signerID[:], mrSigner)
+	return measurement, signerID, nil
+}
+
 // =============================================================================
 // SGX Report Generator
 // =============================================================================
@@ -371,8 +494,9 @@ func (g *SGXReportGenerator) generateHardwareReport(reportData [64]byte, targetI
 	//    - report_data (user-provided data to bind)
 	// 3. Return the generated report
 
-	// Fall back to simulation
-	return g.generateSimulatedReport(reportData, targetInfo)
+	_, _ = reportData, targetInfo
+	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "generate report",
+		"sgx_create_report is not wired for hardware-selected execution")
 }
 
 // generateSimulatedReport generates a simulated report
@@ -440,8 +564,9 @@ func (g *SGXQuoteGenerator) generateHardwareQuote(reportData [64]byte) (*SGXQuot
 	// 4. Get quote: sgx_qe_get_quote(&report, &quote_size, &quote)
 	// 5. Optionally get collateral: sgx_qe_get_quote_verification_collateral()
 
-	// For now, fall back to simulation
-	return g.generateSimulatedQuote(reportData)
+	_ = reportData
+	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "generate quote",
+		"SGX DCAP quote generation requires the sgx_hardware runtime path")
 }
 
 // generateSimulatedQuote generates a simulated quote
@@ -522,7 +647,9 @@ func (s *SGXSealingService) sealHardware(plaintext []byte) ([]byte, error) {
 	// 3. Inside enclave: Use seal_key to encrypt data with AES-GCM
 	// 4. Return sealed blob with key_request info for unsealing
 
-	return s.sealSimulated(plaintext)
+	_ = plaintext
+	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "seal",
+		"SGX sealing ECALL path is not wired for hardware-selected execution")
 }
 
 // sealSimulated seals data in simulation mode
@@ -588,7 +715,9 @@ func (s *SGXSealingService) unsealHardware(sealed []byte) ([]byte, error) {
 	// 4. Inside enclave: Use seal_key to decrypt data
 	// 5. Return plaintext
 
-	return s.unsealSimulated(sealed)
+	_ = sealed
+	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "unseal",
+		"SGX unseal ECALL path is not wired for hardware-selected execution")
 }
 
 // unsealSimulated unseals data in simulation mode
@@ -694,7 +823,9 @@ func (e *SGXECallInterface) callHardware(functionID int, input []byte) (*ECallRe
 	// 3. Handle OCALL callbacks if needed
 	// 4. Return output data
 
-	return e.callSimulated(functionID, input)
+	_, _ = functionID, input
+	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "ecall",
+		"SGX ECALL dispatch is not wired for hardware-selected execution")
 }
 
 // callSimulated simulates an ECALL
@@ -852,6 +983,11 @@ func (b *SGXHardwareBackend) DeriveKey(context []byte, keySize int) ([]byte, err
 
 	if !b.initialized {
 		return nil, ErrHardwareNotInitialized
+	}
+
+	if b.detector != nil && b.detector.IsAvailable() && !b.loader.IsSimulated() {
+		return nil, unsupportedHardwareOperation(AttestationTypeSGX, "derive key",
+			"hardware SGX sealing-key derivation requires the sgx_hardware runtime path")
 	}
 
 	// Use sealing key derivation

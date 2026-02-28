@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -42,9 +43,10 @@ var (
 var (
 	grpcAddr      = flag.String("grpc-addr", ":50051", "gRPC server address")
 	metricsAddr   = flag.String("metrics-addr", ":9090", "Prometheus metrics address")
-	modelPath     = flag.String("model-path", "models/trust_score", "Path to TensorFlow SavedModel")
-	modelVersion  = flag.String("model-version", "v1.0.0", "Expected model version")
-	expectedHash  = flag.String("expected-hash", "", "Expected SHA256 hash of model weights")
+	modelPath     = flag.String("model-path", "models/trust_score/current/model", "Path to TensorFlow SavedModel")
+	modelVersion  = flag.String("model-version", "", "Expected model version; defaults to release_manifest.json when unset")
+	expectedHash  = flag.String("expected-hash", "", "Expected SHA256 hash of model weights; defaults to release_manifest.json when unset")
+	manifestPath  = flag.String("manifest-path", "", "Path to release_manifest.json; defaults to a sibling of --model-path")
 	randomSeed    = flag.Int64("random-seed", 42, "Random seed for deterministic execution")
 	forceCPU      = flag.Bool("force-cpu", true, "Force CPU-only execution")
 	maxMemoryMB   = flag.Int("max-memory-mb", 512, "Maximum memory usage in MB")
@@ -102,15 +104,24 @@ func run() int {
 		HealthPath:    *servingHealth,
 	}
 
-	server, err := NewInferenceSidecarServer(config, servingConfig, log)
+	server, err := NewInferenceSidecarServer(config, servingConfig, *manifestPath, log)
 	if err != nil {
 		log.Error("Failed to create inference server", "error", err)
 		return 1
 	}
 	defer server.Close()
 
+	if readiness := server.Readiness(); readiness != nil && !readiness.Ready() {
+		log.Warn("Inference sidecar started not ready",
+			"verification_state", readiness.State,
+			"manifest_path", readiness.ManifestPath,
+			"path", readiness.FailurePath,
+			"error", readiness.FailureReason,
+		)
+	}
+
 	// Start metrics server
-	go startMetricsServer(*metricsAddr, log)
+	go startMetricsServer(*metricsAddr, server, log)
 
 	// Start gRPC server
 	grpcServer := grpc.NewServer(
@@ -125,7 +136,11 @@ func run() int {
 	// Register health service
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
-	healthServer.SetServingStatus(inferencepb.ServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
+	healthStatus := grpc_health_v1.HealthCheckResponse_SERVING
+	if readiness := server.Readiness(); readiness == nil || !readiness.Ready() {
+		healthStatus = grpc_health_v1.HealthCheckResponse_NOT_SERVING
+	}
+	healthServer.SetServingStatus(inferencepb.ServiceName, healthStatus)
 
 	// Enable reflection for debugging if requested
 	if *enableReflect {
@@ -168,24 +183,66 @@ func run() int {
 	return 0
 }
 
-func startMetricsServer(addr string, log Logger) {
+func startMetricsServer(addr string, server *InferenceSidecarServer, log Logger) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
+		statusCode, payload := readinessHTTPResponse(server.Readiness())
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		_, _ = w.Write(payload)
 	})
 
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	log.Info("Metrics server listening", "addr", addr)
-	if err := server.ListenAndServe(); err != nil {
+	if err := httpServer.ListenAndServe(); err != nil {
 		log.Error("Metrics server error", "error", err)
 	}
+}
+
+type readinessStatus struct {
+	Ready        bool   `json:"ready"`
+	State        string `json:"state"`
+	Message      string `json:"message,omitempty"`
+	ManifestPath string `json:"manifest_path,omitempty"`
+	Path         string `json:"path,omitempty"`
+	ModelVersion string `json:"model_version,omitempty"`
+	ModelHash    string `json:"model_hash,omitempty"`
+}
+
+func readinessHTTPResponse(readiness *verificationResult) (int, []byte) {
+	status := readinessStatus{
+		Ready: false,
+		State: "verification_unavailable",
+	}
+
+	if readiness == nil {
+		status.Message = "model verification status unavailable"
+	} else {
+		status.State = string(readiness.State)
+		status.ManifestPath = readiness.ManifestPath
+		status.Path = readiness.FailurePath
+		status.ModelVersion = readiness.Version
+		status.ModelHash = readiness.ModelHash
+		status.Message = readiness.StatusMessage()
+		status.Ready = readiness.Ready()
+	}
+
+	statusCode := http.StatusServiceUnavailable
+	if status.Ready {
+		statusCode = http.StatusOK
+	}
+
+	payload, err := json.Marshal(status)
+	if err != nil {
+		return http.StatusServiceUnavailable, []byte(`{"ready":false,"state":"bad_manifest","message":"failed to encode readiness payload"}`)
+	}
+	return statusCode, payload
 }
 
 // Logger is a simple logging interface

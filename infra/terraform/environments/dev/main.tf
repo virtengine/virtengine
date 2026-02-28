@@ -29,7 +29,7 @@ provider "aws" {
       Project     = "virtengine"
       Environment = "dev"
       ManagedBy   = "terraform"
-      Repository  = "virtengine-network/virtengine"
+      Repository  = "virtengine/virtengine"
     }
   }
 }

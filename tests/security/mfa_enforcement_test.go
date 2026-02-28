@@ -1,565 +1,302 @@
-// Package security contains security-focused tests for VirtEngine.
-// These tests verify MFA enforcement for sensitive transactions.
-//
-// Task Reference: VE-800 - Security audit readiness
 package security
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"io"
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
+	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	txsigning "github.com/cosmos/cosmos-sdk/types/tx/signing"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	gproto "google.golang.org/protobuf/proto"
+
+	"github.com/virtengine/virtengine/app"
+	mfapb "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
+	rolespb "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
+	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 )
 
-// MFAEnforcementTestSuite tests MFA security enforcement.
-type MFAEnforcementTestSuite struct {
-	suite.Suite
+type mfaTestVEIDKeeper struct{}
+
+func (mfaTestVEIDKeeper) GetVEIDScore(_ sdk.Context, _ sdk.AccAddress) (uint32, bool) {
+	return 90, true
 }
 
-func TestMFAEnforcement(t *testing.T) {
-	suite.Run(t, new(MFAEnforcementTestSuite))
-}
+type mfaTestRolesKeeper struct{}
 
-// =============================================================================
-// Sensitive Transaction Gating Tests
-// =============================================================================
-
-// TestSensitiveTransactionGating verifies MFA is required for sensitive ops.
-func (s *MFAEnforcementTestSuite) TestSensitiveTransactionGating() {
-	s.T().Log("=== Test: Sensitive Transaction Gating ===")
-
-	// Define sensitive transaction types
-	sensitiveTypes := []SensitiveTransactionType{
-		TxTypeAccountRecovery,
-		TxTypeKeyRotation,
-		TxTypeHighValueTransfer,
-		TxTypeProviderRegistration,
-		TxTypeIdentityScopeUpdate,
-		TxTypeMFAPolicyChange,
-		TxTypeDelegationChange,
-	}
-
-	// Test: All sensitive transactions require MFA
-	for _, txType := range sensitiveTypes {
-		s.Run("tx_"+string(txType)+"_requires_mfa", func() {
-			policy := &MFAPolicy{
-				SensitiveTxTypes: sensitiveTypes,
-				RequiredFactors:  1,
-			}
-
-			requiresMFA := policy.RequiresMFA(txType)
-			require.True(s.T(), requiresMFA,
-				"transaction type %s should require MFA", txType)
-		})
-	}
-
-	// Test: Non-sensitive transactions don't require MFA
-	s.Run("non_sensitive_tx_no_mfa", func() {
-		policy := &MFAPolicy{
-			SensitiveTxTypes: sensitiveTypes,
-			RequiredFactors:  1,
-		}
-
-		nonSensitive := []SensitiveTransactionType{
-			"normal_transfer",
-			"query_balance",
-			"view_offering",
-		}
-
-		for _, txType := range nonSensitive {
-			requiresMFA := policy.RequiresMFA(txType)
-			require.False(s.T(), requiresMFA,
-				"transaction type %s should not require MFA", txType)
-		}
-	})
-}
-
-// TestMFAChallengeVerification tests MFA challenge flow.
-func (s *MFAEnforcementTestSuite) TestMFAChallengeVerification() {
-	s.T().Log("=== Test: MFA Challenge Verification ===")
-
-	// Test: Valid TOTP response accepted
-	s.Run("valid_totp_response_accepted", func() {
-		challenge := &MFAChallenge{
-			ID:          generateChallengeID(s.T()),
-			FactorType:  FactorTypeTOTP,
-			AccountID:   "user123",
-			CreatedAt:   time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(5 * time.Minute),
-			ExpectedOTP: "123456", // In real impl, this is computed
-		}
-
-		response := &MFAResponse{
-			ChallengeID: challenge.ID,
-			OTP:         "123456",
-			Timestamp:   time.Now().UTC(),
-		}
-
-		result := verifyTOTPChallenge(challenge, response)
-		require.True(s.T(), result.Valid, "valid TOTP should be accepted")
-	})
-
-	// Test: Invalid TOTP response rejected
-	s.Run("invalid_totp_response_rejected", func() {
-		challenge := &MFAChallenge{
-			ID:          generateChallengeID(s.T()),
-			FactorType:  FactorTypeTOTP,
-			AccountID:   "user123",
-			CreatedAt:   time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(5 * time.Minute),
-			ExpectedOTP: "123456",
-		}
-
-		response := &MFAResponse{
-			ChallengeID: challenge.ID,
-			OTP:         "654321", // Wrong OTP
-			Timestamp:   time.Now().UTC(),
-		}
-
-		result := verifyTOTPChallenge(challenge, response)
-		require.False(s.T(), result.Valid, "invalid TOTP should be rejected")
-	})
-
-	// Test: Expired challenge rejected
-	s.Run("expired_challenge_rejected", func() {
-		challenge := &MFAChallenge{
-			ID:          generateChallengeID(s.T()),
-			FactorType:  FactorTypeTOTP,
-			AccountID:   "user123",
-			CreatedAt:   time.Now().UTC().Add(-10 * time.Minute),
-			ExpiresAt:   time.Now().UTC().Add(-5 * time.Minute), // Expired
-			ExpectedOTP: "123456",
-		}
-
-		response := &MFAResponse{
-			ChallengeID: challenge.ID,
-			OTP:         "123456",
-			Timestamp:   time.Now().UTC(),
-		}
-
-		result := verifyTOTPChallenge(challenge, response)
-		require.False(s.T(), result.Valid, "expired challenge should be rejected")
-		require.Equal(s.T(), "challenge_expired", result.Reason)
-	})
-
-	// Test: Challenge ID mismatch rejected
-	s.Run("challenge_id_mismatch_rejected", func() {
-		challenge := &MFAChallenge{
-			ID:          generateChallengeID(s.T()),
-			FactorType:  FactorTypeTOTP,
-			AccountID:   "user123",
-			CreatedAt:   time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(5 * time.Minute),
-			ExpectedOTP: "123456",
-		}
-
-		response := &MFAResponse{
-			ChallengeID: generateChallengeID(s.T()), // Different ID
-			OTP:         "123456",
-			Timestamp:   time.Now().UTC(),
-		}
-
-		result := verifyTOTPChallenge(challenge, response)
-		require.False(s.T(), result.Valid, "mismatched challenge ID should be rejected")
-		require.Equal(s.T(), "challenge_id_mismatch", result.Reason)
-	})
-}
-
-// TestMFASessionManagement tests authorization session handling.
-func (s *MFAEnforcementTestSuite) TestMFASessionManagement() {
-	s.T().Log("=== Test: MFA Session Management ===")
-
-	// Test: Valid session allows sensitive operation
-	s.Run("valid_session_allows_operation", func() {
-		session := &AuthorizationSession{
-			ID:          generateSessionID(s.T()),
-			AccountID:   "user123",
-			TxType:      TxTypeHighValueTransfer,
-			CreatedAt:   time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(15 * time.Minute),
-			Used:        false,
-			FactorTypes: []FactorType{FactorTypeTOTP},
-		}
-
-		canProceed := session.IsValidForOperation(TxTypeHighValueTransfer)
-		require.True(s.T(), canProceed, "valid session should allow operation")
-	})
-
-	// Test: Expired session rejected
-	s.Run("expired_session_rejected", func() {
-		session := &AuthorizationSession{
-			ID:          generateSessionID(s.T()),
-			AccountID:   "user123",
-			TxType:      TxTypeHighValueTransfer,
-			CreatedAt:   time.Now().UTC().Add(-20 * time.Minute),
-			ExpiresAt:   time.Now().UTC().Add(-5 * time.Minute), // Expired
-			Used:        false,
-			FactorTypes: []FactorType{FactorTypeTOTP},
-		}
-
-		canProceed := session.IsValidForOperation(TxTypeHighValueTransfer)
-		require.False(s.T(), canProceed, "expired session should not allow operation")
-	})
-
-	// Test: Already used session rejected (one-time use)
-	s.Run("used_session_rejected", func() {
-		session := &AuthorizationSession{
-			ID:          generateSessionID(s.T()),
-			AccountID:   "user123",
-			TxType:      TxTypeHighValueTransfer,
-			CreatedAt:   time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(15 * time.Minute),
-			Used:        true, // Already used
-			FactorTypes: []FactorType{FactorTypeTOTP},
-		}
-
-		canProceed := session.IsValidForOperation(TxTypeHighValueTransfer)
-		require.False(s.T(), canProceed, "used session should not allow operation")
-	})
-
-	// Test: Wrong transaction type rejected
-	s.Run("wrong_tx_type_rejected", func() {
-		session := &AuthorizationSession{
-			ID:          generateSessionID(s.T()),
-			AccountID:   "user123",
-			TxType:      TxTypeHighValueTransfer,
-			CreatedAt:   time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(15 * time.Minute),
-			Used:        false,
-			FactorTypes: []FactorType{FactorTypeTOTP},
-		}
-
-		// Try to use session for different tx type
-		canProceed := session.IsValidForOperation(TxTypeAccountRecovery)
-		require.False(s.T(), canProceed, "session should not allow different transaction type")
-	})
-}
-
-// TestDeviceTrustValidation tests trusted device handling.
-func (s *MFAEnforcementTestSuite) TestDeviceTrustValidation() {
-	s.T().Log("=== Test: Device Trust Validation ===")
-
-	// Test: Trusted device recognized
-	s.Run("trusted_device_recognized", func() {
-		trustStore := NewDeviceTrustStore()
-		fingerprint := generateDeviceFingerprint(s.T())
-
-		trustStore.AddDevice("user123", &TrustedDevice{
-			Fingerprint: fingerprint,
-			Name:        "iPhone 15",
-			AddedAt:     time.Now().UTC(),
-			LastUsed:    time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(30 * 24 * time.Hour),
-		})
-
-		isTrusted := trustStore.IsTrusted("user123", fingerprint)
-		require.True(s.T(), isTrusted, "registered device should be trusted")
-	})
-
-	// Test: Unknown device not trusted
-	s.Run("unknown_device_not_trusted", func() {
-		trustStore := NewDeviceTrustStore()
-		knownFingerprint := generateDeviceFingerprint(s.T())
-		unknownFingerprint := generateDeviceFingerprint(s.T())
-
-		trustStore.AddDevice("user123", &TrustedDevice{
-			Fingerprint: knownFingerprint,
-			Name:        "Known Device",
-			AddedAt:     time.Now().UTC(),
-			LastUsed:    time.Now().UTC(),
-			ExpiresAt:   time.Now().UTC().Add(30 * 24 * time.Hour),
-		})
-
-		isTrusted := trustStore.IsTrusted("user123", unknownFingerprint)
-		require.False(s.T(), isTrusted, "unknown device should not be trusted")
-	})
-
-	// Test: Expired device trust removed
-	s.Run("expired_device_trust_rejected", func() {
-		trustStore := NewDeviceTrustStore()
-		fingerprint := generateDeviceFingerprint(s.T())
-
-		trustStore.AddDevice("user123", &TrustedDevice{
-			Fingerprint: fingerprint,
-			Name:        "Old Device",
-			AddedAt:     time.Now().UTC().Add(-60 * 24 * time.Hour),
-			LastUsed:    time.Now().UTC().Add(-45 * 24 * time.Hour),
-			ExpiresAt:   time.Now().UTC().Add(-30 * 24 * time.Hour), // Expired
-		})
-
-		isTrusted := trustStore.IsTrusted("user123", fingerprint)
-		require.False(s.T(), isTrusted, "expired device trust should be rejected")
-	})
-}
-
-// TestRecoveryFlowEnforcement tests account recovery MFA requirements.
-func (s *MFAEnforcementTestSuite) TestRecoveryFlowEnforcement() {
-	s.T().Log("=== Test: Recovery Flow Enforcement ===")
-
-	// Test: Recovery requires multiple factors
-	s.Run("recovery_requires_multiple_factors", func() {
-		policy := &MFAPolicy{
-			SensitiveTxTypes:     []SensitiveTransactionType{TxTypeAccountRecovery},
-			RequiredFactors:      2, // Require 2 factors for recovery
-			AllowedFactorTypes:   []FactorType{FactorTypeTOTP, FactorTypeFIDO2, FactorTypeBackupCode},
-			RecoveryRequirements: 3, // Need 3 factors for recovery specifically
-		}
-
-		recoveryReqs := policy.GetRecoveryRequirements()
-		require.Equal(s.T(), 3, recoveryReqs.RequiredFactors,
-			"recovery should require 3 factors")
-	})
-
-	// Test: Recovery with backup codes
-	s.Run("recovery_with_backup_codes", func() {
-		backupCodes := generateBackupCodes(s.T(), 10)
-		store := NewBackupCodeStore("user123", backupCodes)
-
-		// First use should succeed
-		result := store.UseCode(backupCodes[0])
-		require.True(s.T(), result.Valid, "valid backup code should be accepted")
-		require.True(s.T(), result.CodeConsumed, "backup code should be marked as used")
-
-		// Second use of same code should fail
-		result = store.UseCode(backupCodes[0])
-		require.False(s.T(), result.Valid, "reused backup code should be rejected")
-		require.Equal(s.T(), "code_already_used", result.Reason)
-	})
-
-	// Test: Invalid backup code rejected
-	s.Run("invalid_backup_code_rejected", func() {
-		backupCodes := generateBackupCodes(s.T(), 10)
-		store := NewBackupCodeStore("user123", backupCodes)
-
-		invalidCode := "INVALID-CODE-1234"
-		result := store.UseCode(invalidCode)
-		require.False(s.T(), result.Valid, "invalid backup code should be rejected")
-		require.Equal(s.T(), "invalid_code", result.Reason)
-	})
-}
-
-// =============================================================================
-// Test Types
-// =============================================================================
-
-type SensitiveTransactionType string
-
-const (
-	TxTypeAccountRecovery      SensitiveTransactionType = "account_recovery"
-	TxTypeKeyRotation          SensitiveTransactionType = "key_rotation"
-	TxTypeHighValueTransfer    SensitiveTransactionType = "high_value_transfer"
-	TxTypeProviderRegistration SensitiveTransactionType = "provider_registration"
-	TxTypeIdentityScopeUpdate  SensitiveTransactionType = "identity_scope_update"
-	TxTypeMFAPolicyChange      SensitiveTransactionType = "mfa_policy_change"
-	TxTypeDelegationChange     SensitiveTransactionType = "delegation_change"
-)
-
-type FactorType string
-
-const (
-	FactorTypeTOTP       FactorType = "totp"
-	FactorTypeFIDO2      FactorType = "fido2"
-	FactorTypeSMS        FactorType = "sms"
-	FactorTypeEmail      FactorType = "email"
-	FactorTypeBackupCode FactorType = "backup_code"
-)
-
-type MFAPolicy struct {
-	SensitiveTxTypes     []SensitiveTransactionType
-	RequiredFactors      int
-	AllowedFactorTypes   []FactorType
-	RecoveryRequirements int
-}
-
-func (p *MFAPolicy) RequiresMFA(txType SensitiveTransactionType) bool {
-	for _, sensitive := range p.SensitiveTxTypes {
-		if sensitive == txType {
-			return true
-		}
-	}
-	return false
-}
-
-func (p *MFAPolicy) GetRecoveryRequirements() *RecoveryRequirements {
-	return &RecoveryRequirements{
-		RequiredFactors:    p.RecoveryRequirements,
-		AllowedFactorTypes: p.AllowedFactorTypes,
-	}
-}
-
-type RecoveryRequirements struct {
-	RequiredFactors    int
-	AllowedFactorTypes []FactorType
-}
-
-type MFAChallenge struct {
-	ID          string
-	FactorType  FactorType
-	AccountID   string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	ExpectedOTP string
-}
-
-type MFAResponse struct {
-	ChallengeID string
-	OTP         string
-	Timestamp   time.Time
-}
-
-type VerificationResult struct {
-	Valid  bool
-	Reason string
-}
-
-type AuthorizationSession struct {
-	ID          string
-	AccountID   string
-	TxType      SensitiveTransactionType
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	Used        bool
-	FactorTypes []FactorType
-}
-
-func (s *AuthorizationSession) IsValidForOperation(txType SensitiveTransactionType) bool {
-	if s.Used {
-		return false
-	}
-	if time.Now().UTC().After(s.ExpiresAt) {
-		return false
-	}
-	if s.TxType != txType {
-		return false
-	}
+func (mfaTestRolesKeeper) IsAccountOperational(_ sdk.Context, _ sdk.AccAddress) bool {
 	return true
 }
 
-type TrustedDevice struct {
-	Fingerprint string
-	Name        string
-	AddedAt     time.Time
-	LastUsed    time.Time
-	ExpiresAt   time.Time
+type mfaTestTx struct {
+	msgs    []sdk.Msg
+	signers []sdk.AccAddress
 }
 
-type DeviceTrustStore struct {
-	devices map[string][]*TrustedDevice
+func (tx mfaTestTx) GetMsgs() []sdk.Msg {
+	return tx.msgs
 }
 
-func NewDeviceTrustStore() *DeviceTrustStore {
-	return &DeviceTrustStore{
-		devices: make(map[string][]*TrustedDevice),
+func (mfaTestTx) GetMsgsV2() ([]gproto.Message, error) {
+	return nil, nil
+}
+
+func (tx mfaTestTx) GetSigners() ([][]byte, error) {
+	signers := make([][]byte, 0, len(tx.signers))
+	for _, signer := range tx.signers {
+		signers = append(signers, signer.Bytes())
+	}
+	return signers, nil
+}
+
+func (mfaTestTx) GetPubKeys() ([]cryptotypes.PubKey, error) {
+	return nil, nil
+}
+
+func (mfaTestTx) GetSignaturesV2() ([]txsigning.SignatureV2, error) {
+	return nil, nil
+}
+
+type mfaTestEnv struct {
+	ctx       sdk.Context
+	keeper    mfakeeper.Keeper
+	decorator app.MFAGatingDecorator
+}
+
+func newMFATestEnv(t *testing.T) mfaTestEnv {
+	t.Helper()
+
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	mfatypes.RegisterInterfaces(interfaceRegistry)
+	cdc := codec.NewProtoCodec(interfaceRegistry)
+
+	storeKey := storetypes.NewKVStoreKey(mfatypes.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	require.NoError(t, stateStore.LoadLatestVersion())
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Unix(1_700_000_000, 0).UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger()).WithEventManager(sdk.NewEventManager())
+
+	keeper := mfakeeper.NewKeeper(cdc, storeKey, "authority", mfaTestVEIDKeeper{}, mfaTestRolesKeeper{})
+	require.NoError(t, keeper.SetParams(ctx, mfatypes.DefaultParams()))
+
+	return mfaTestEnv{
+		ctx:       ctx,
+		keeper:    keeper,
+		decorator: app.NewMFAGatingDecorator(keeper),
 	}
 }
 
-func (s *DeviceTrustStore) AddDevice(accountID string, device *TrustedDevice) {
-	s.devices[accountID] = append(s.devices[accountID], device)
-}
+func enrollActiveFactor(t *testing.T, keeper mfakeeper.Keeper, ctx sdk.Context, address sdk.AccAddress, factorType mfatypes.FactorType, factorID string) {
+	t.Helper()
 
-func (s *DeviceTrustStore) IsTrusted(accountID, fingerprint string) bool {
-	devices, ok := s.devices[accountID]
-	if !ok {
-		return false
+	enrollment := &mfatypes.FactorEnrollment{
+		AccountAddress:   address.String(),
+		FactorType:       factorType,
+		FactorID:         factorID,
+		PublicIdentifier: []byte("factor-key"),
+		Status:           mfatypes.EnrollmentStatusActive,
+		EnrolledAt:       ctx.BlockTime().Unix(),
 	}
-	for _, d := range devices {
-		if d.Fingerprint == fingerprint {
-			if time.Now().UTC().After(d.ExpiresAt) {
-				return false // Expired
-			}
-			return true
+	if factorType == mfatypes.FactorTypeFIDO2 {
+		enrollment.Metadata = &mfatypes.FactorMetadata{
+			FIDO2Info: &mfatypes.FIDO2CredentialInfo{
+				CredentialID: []byte(factorID),
+				PublicKey:    []byte("public-key"),
+			},
 		}
 	}
-	return false
+
+	require.NoError(t, keeper.EnrollFactor(ctx, enrollment))
 }
 
-type BackupCodeStore struct {
-	accountID string
-	codes     map[string]bool // code -> used
-}
-
-func NewBackupCodeStore(accountID string, codes []string) *BackupCodeStore {
-	store := &BackupCodeStore{
-		accountID: accountID,
-		codes:     make(map[string]bool),
-	}
-	for _, code := range codes {
-		store.codes[code] = false // Not used
-	}
-	return store
-}
-
-type BackupCodeResult struct {
-	Valid        bool
-	CodeConsumed bool
-	Reason       string
-}
-
-func (s *BackupCodeStore) UseCode(code string) *BackupCodeResult {
-	used, exists := s.codes[code]
-	if !exists {
-		return &BackupCodeResult{Valid: false, Reason: "invalid_code"}
-	}
-	if used {
-		return &BackupCodeResult{Valid: false, Reason: "code_already_used"}
-	}
-	s.codes[code] = true // Mark as used
-	return &BackupCodeResult{Valid: true, CodeConsumed: true}
-}
-
-// =============================================================================
-// Test Helpers
-// =============================================================================
-
-func generateChallengeID(t *testing.T) string {
+func setMFAPolicy(t *testing.T, keeper mfakeeper.Keeper, ctx sdk.Context, address sdk.AccAddress, factors ...mfatypes.FactorType) {
 	t.Helper()
-	b := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, b)
-	require.NoError(t, err)
-	return "chal_" + hex.EncodeToString(b)
+
+	require.NoError(t, keeper.SetMFAPolicy(ctx, &mfatypes.MFAPolicy{
+		AccountAddress: address.String(),
+		Enabled:        true,
+		RequiredFactors: []mfatypes.FactorCombination{
+			{Factors: factors},
+		},
+		CreatedAt: ctx.BlockTime().Unix(),
+		UpdatedAt: ctx.BlockTime().Unix(),
+	}))
 }
 
-func generateSessionID(t *testing.T) string {
+func setSensitiveTxConfig(
+	t *testing.T,
+	keeper mfakeeper.Keeper,
+	ctx sdk.Context,
+	txType mfatypes.SensitiveTransactionType,
+	threshold string,
+	factors ...mfatypes.FactorType,
+) {
 	t.Helper()
-	b := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, b)
-	require.NoError(t, err)
-	return "sess_" + hex.EncodeToString(b)
+
+	require.NoError(t, keeper.SetSensitiveTxConfig(ctx, &mfatypes.SensitiveTxConfig{
+		TransactionType: txType,
+		Enabled:         true,
+		RequiredFactorCombinations: []mfatypes.FactorCombination{
+			{Factors: factors},
+		},
+		ValueThreshold: threshold,
+		Description:    txType.String() + " requires MFA",
+	}))
 }
 
-func generateDeviceFingerprint(t *testing.T) string {
+func createSession(
+	t *testing.T,
+	keeper mfakeeper.Keeper,
+	ctx sdk.Context,
+	address sdk.AccAddress,
+	txType mfatypes.SensitiveTransactionType,
+	sessionID string,
+	factors ...mfatypes.FactorType,
+) {
 	t.Helper()
-	b := make([]byte, 32)
-	_, err := io.ReadFull(rand.Reader, b)
-	require.NoError(t, err)
-	return "dev_" + hex.EncodeToString(b)
+
+	require.NoError(t, keeper.CreateAuthorizationSession(ctx, &mfatypes.AuthorizationSession{
+		SessionID:       sessionID,
+		AccountAddress:  address.String(),
+		TransactionType: txType,
+		CreatedAt:       ctx.BlockTime().Unix(),
+		ExpiresAt:       ctx.BlockTime().Add(time.Hour).Unix(),
+		VerifiedFactors: factors,
+	}))
 }
 
-func generateBackupCodes(t *testing.T, count int) []string {
+func runMFADecorator(t *testing.T, decorator app.MFAGatingDecorator, ctx sdk.Context, signers []sdk.AccAddress, msg sdk.Msg) error {
 	t.Helper()
-	codes := make([]string, count)
-	for i := 0; i < count; i++ {
-		b := make([]byte, 8)
-		_, err := io.ReadFull(rand.Reader, b)
-		require.NoError(t, err)
-		codes[i] = hex.EncodeToString(b)
+
+	nextCalled := false
+	_, err := decorator.AnteHandle(ctx, mfaTestTx{msgs: []sdk.Msg{msg}, signers: signers}, false, func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+		nextCalled = true
+		return ctx, nil
+	})
+	if err == nil {
+		require.True(t, nextCalled, "ante handler should reach next decorator on success")
 	}
-	return codes
+	return err
 }
 
-func verifyTOTPChallenge(challenge *MFAChallenge, response *MFAResponse) *VerificationResult {
-	if challenge.ID != response.ChallengeID {
-		return &VerificationResult{Valid: false, Reason: "challenge_id_mismatch"}
+func TestMFAGatingDecorator_BankSendThresholds(t *testing.T) {
+	env := newMFATestEnv(t)
+
+	sender := sdk.AccAddress([]byte("security-sender-addr"))
+	recipient := sdk.AccAddress([]byte("security-recipient-"))
+
+	enrollActiveFactor(t, env.keeper, env.ctx, sender, mfatypes.FactorTypeTOTP, "totp-send")
+	setMFAPolicy(t, env.keeper, env.ctx, sender, mfatypes.FactorTypeTOTP)
+	setSensitiveTxConfig(t, env.keeper, env.ctx, mfatypes.SensitiveTxMediumWithdrawal, "1000", mfatypes.FactorTypeTOTP)
+	setSensitiveTxConfig(t, env.keeper, env.ctx, mfatypes.SensitiveTxLargeWithdrawal, "10000", mfatypes.FactorTypeTOTP)
+
+	lowValue := &banktypes.MsgSend{
+		FromAddress: sender.String(),
+		ToAddress:   recipient.String(),
+		Amount:      sdk.NewCoins(sdk.NewInt64Coin("uve", 999)),
 	}
-	if time.Now().UTC().After(challenge.ExpiresAt) {
-		return &VerificationResult{Valid: false, Reason: "challenge_expired"}
+	require.NoError(t, runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, lowValue))
+
+	mediumValue := &banktypes.MsgSend{
+		FromAddress: sender.String(),
+		ToAddress:   recipient.String(),
+		Amount:      sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
 	}
-	if challenge.ExpectedOTP != response.OTP {
-		return &VerificationResult{Valid: false, Reason: "invalid_otp"}
+	err := runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, mediumValue)
+	require.Error(t, err)
+	require.ErrorContains(t, err, mfatypes.SensitiveTxMediumWithdrawal.String())
+
+	largeValue := &banktypes.MsgSend{
+		FromAddress: sender.String(),
+		ToAddress:   recipient.String(),
+		Amount:      sdk.NewCoins(sdk.NewInt64Coin("uve", 10000)),
 	}
-	return &VerificationResult{Valid: true}
+	err = runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, largeValue)
+	require.Error(t, err)
+	require.ErrorContains(t, err, mfatypes.SensitiveTxLargeWithdrawal.String())
+}
+
+func TestMFAGatingDecorator_AccountRecoveryRequiresValidProof(t *testing.T) {
+	env := newMFATestEnv(t)
+
+	sender := sdk.AccAddress([]byte("security-accountsend"))
+	target := sdk.AccAddress([]byte("security-accounttgt"))
+
+	enrollActiveFactor(t, env.keeper, env.ctx, sender, mfatypes.FactorTypeTOTP, "totp-recovery")
+	setMFAPolicy(t, env.keeper, env.ctx, sender, mfatypes.FactorTypeTOTP)
+	setSensitiveTxConfig(t, env.keeper, env.ctx, mfatypes.SensitiveTxAccountRecovery, "", mfatypes.FactorTypeTOTP)
+
+	msg := &rolespb.MsgSetAccountState{
+		Sender:  sender.String(),
+		Address: target.String(),
+		State:   "suspended",
+		Reason:  "security test without proof",
+	}
+
+	err := runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, msg)
+	require.Error(t, err)
+	require.ErrorContains(t, err, mfatypes.SensitiveTxAccountRecovery.String())
+
+	createSession(t, env.keeper, env.ctx, sender, mfatypes.SensitiveTxAccountRecovery, "acct-recovery-session", mfatypes.FactorTypeTOTP)
+
+	msg.MfaProof = &mfapb.MFAProof{
+		SessionId:       "acct-recovery-session",
+		VerifiedFactors: []mfapb.FactorType{mfapb.FactorTypeTOTP},
+		Timestamp:       env.ctx.BlockTime().Unix(),
+	}
+	msg.DeviceFingerprint = "security-account-device"
+
+	require.NoError(t, runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, msg))
+}
+
+func TestMFAGatingDecorator_RebindWalletAcceptsSerializedProof(t *testing.T) {
+	env := newMFATestEnv(t)
+
+	sender := sdk.AccAddress([]byte("security-walletsender"))
+
+	enrollActiveFactor(t, env.keeper, env.ctx, sender, mfatypes.FactorTypeTOTP, "totp-rebind")
+	setMFAPolicy(t, env.keeper, env.ctx, sender, mfatypes.FactorTypeTOTP)
+	setSensitiveTxConfig(t, env.keeper, env.ctx, mfatypes.SensitiveTxKeyRotation, "", mfatypes.FactorTypeTOTP)
+
+	msg := &veidv1.MsgRebindWallet{
+		Sender:              sender.String(),
+		NewBindingSignature: []byte("new-binding-signature"),
+		NewBindingPubKey:    []byte("new-binding-pubkey"),
+		OldSignature:        []byte("old-wallet-signature"),
+		DeviceFingerprint:   "security-wallet-device",
+	}
+
+	err := runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, msg)
+	require.Error(t, err)
+	require.ErrorContains(t, err, mfatypes.SensitiveTxKeyRotation.String())
+
+	createSession(t, env.keeper, env.ctx, sender, mfatypes.SensitiveTxKeyRotation, "wallet-rebind-session", mfatypes.FactorTypeTOTP)
+
+	rawProof, marshalErr := proto.Marshal(&mfapb.MFAProof{
+		SessionId:       "wallet-rebind-session",
+		VerifiedFactors: []mfapb.FactorType{mfapb.FactorTypeTOTP},
+		Timestamp:       env.ctx.BlockTime().Unix(),
+	})
+	require.NoError(t, marshalErr)
+
+	msg.MfaProof = rawProof
+
+	require.NoError(t, runMFADecorator(t, env.decorator, env.ctx, []sdk.AccAddress{sender}, msg))
 }

@@ -5,55 +5,56 @@ package scenarios
 
 import (
 	"context"
-	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/virtengine/virtengine/tests/load/framework"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-// VEIDSubmitScenario simulates VEID scope submission load
+// VEIDSubmitScenario executes deterministic VEID submission probes.
 type VEIDSubmitScenario struct {
-	grpcEndpoint string
-	conn         *grpc.ClientConn
-	accounts     []string
-	scopeSize    int
+	transport scenarioTransport
+	accounts  []string
+	scopeSize int
+	backend   scenarioBackend
+	sequence  atomic.Uint64
 }
 
-// NewVEIDSubmitScenario creates a new VEID submit scenario
+// NewVEIDSubmitScenario creates a new VEID submit scenario.
 func NewVEIDSubmitScenario(grpcEndpoint string, accounts []string) *VEIDSubmitScenario {
 	return &VEIDSubmitScenario{
-		grpcEndpoint: grpcEndpoint,
-		accounts:     accounts,
-		scopeSize:    32 * 1024, // 32KB default
+		transport: scenarioTransport{endpoint: grpcEndpoint},
+		accounts:  append([]string(nil), accounts...),
+		scopeSize: 32 * 1024,
+		backend:   newDeterministicBackend(),
 	}
 }
 
-// Name returns the scenario name
+// Name returns the scenario name.
 func (s *VEIDSubmitScenario) Name() string {
 	return "veid_submit"
 }
 
-// Setup initializes the gRPC connection
+// Setup initializes the scenario transport.
 func (s *VEIDSubmitScenario) Setup(ctx context.Context) error {
-	conn, err := grpc.NewClient(s.grpcEndpoint,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return fmt.Errorf("dial grpc: %w", err)
+	if len(s.accounts) == 0 {
+		return fmt.Errorf("veid_submit requires at least one account")
 	}
-	s.conn = conn
-	return nil
+	return s.transport.setup(ctx)
 }
 
-// Execute performs a single VEID submission
+// Execute performs a deterministic VEID submission.
 func (s *VEIDSubmitScenario) Execute(ctx context.Context) (*framework.ExecutionResult, error) {
 	start := time.Now()
+	sequence := s.sequence.Add(1)
+	account := s.accounts[(sequence-1)%uint64(len(s.accounts))]
+	payload := buildScopePayload(sequence, s.scopeSize)
 
-	scopeData := make([]byte, s.scopeSize)
-	if _, err := rand.Read(scopeData); err != nil {
+	receipt, err := s.backend.SubmitVEID(ctx, account, payload)
+	if err != nil {
 		return &framework.ExecutionResult{
 			Success:  false,
 			Duration: time.Since(start),
@@ -61,27 +62,47 @@ func (s *VEIDSubmitScenario) Execute(ctx context.Context) (*framework.ExecutionR
 		}, nil
 	}
 
-	accountIdx := int(time.Now().UnixNano()) % len(s.accounts)
-	account := s.accounts[accountIdx]
-
-	// TODO: Implement actual VEID submission via gRPC
-	// For now, simulate execution
-	time.Sleep(10 * time.Millisecond)
+	metadata := cloneMetadata(receipt.Metadata)
+	metadata["submission_id"] = receipt.ID
 
 	return &framework.ExecutionResult{
 		Success:  true,
 		Duration: time.Since(start),
-		Metadata: map[string]interface{}{
-			"account":   account,
-			"data_size": s.scopeSize,
-		},
+		Metadata: metadata,
 	}, nil
 }
 
-// Teardown closes the gRPC connection
+// Teardown closes the transport.
 func (s *VEIDSubmitScenario) Teardown(ctx context.Context) error {
-	if s.conn != nil {
-		return s.conn.Close()
+	_ = ctx
+	return s.transport.teardown()
+}
+
+func buildScopePayload(sequence uint64, size int) []byte {
+	if size <= 0 {
+		size = 1
 	}
-	return nil
+
+	payload := make([]byte, size)
+	var offset int
+
+	var seed [8]byte
+	binary.BigEndian.PutUint64(seed[:], sequence)
+	chunk := sha256.Sum256(seed[:])
+
+	for offset < len(payload) {
+		written := copy(payload[offset:], chunk[:])
+		offset += written
+		chunk = sha256.Sum256(chunk[:])
+	}
+
+	return payload
+}
+
+func cloneMetadata(metadata map[string]interface{}) map[string]interface{} {
+	cloned := make(map[string]interface{}, len(metadata))
+	for key, value := range metadata {
+		cloned[key] = value
+	}
+	return cloned
 }

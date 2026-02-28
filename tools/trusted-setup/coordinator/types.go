@@ -22,6 +22,8 @@ type ContributionMeta struct {
 	PublicKey     string
 	Signature     string
 	Attestation   string
+	InputHash     string `json:"input_hash,omitempty"`
+	OutputHash    string `json:"output_hash,omitempty"`
 }
 
 type Status struct {

@@ -1,18 +1,17 @@
-import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
-import { toPageRequest, withTxResult } from "./types.ts";
 import type { BidID } from "../generated/protos/virtengine/market/v1/bid.ts";
-import type { LeaseID } from "../generated/protos/virtengine/market/v1/lease.ts";
+import type { Lease, LeaseID } from "../generated/protos/virtengine/market/v1/lease.ts";
 import type { OrderID } from "../generated/protos/virtengine/market/v1/order.ts";
 import type { Bid } from "../generated/protos/virtengine/market/v1beta5/bid.ts";
-import type { Order } from "../generated/protos/virtengine/market/v1beta5/order.ts";
-import type { Lease } from "../generated/protos/virtengine/market/v1/lease.ts";
 import type {
   MsgCloseBid,
   MsgCreateBid,
 } from "../generated/protos/virtengine/market/v1beta5/bidmsg.ts";
 import type { MsgCloseLease } from "../generated/protos/virtengine/market/v1beta5/leasemsg.ts";
+import type { Order } from "../generated/protos/virtengine/market/v1beta5/order.ts";
 import type { TxCallOptions } from "../sdk/transport/types.ts";
+import { BaseClient, type ClientOptions } from "./BaseClient.ts";
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
 
 export interface MarketClientDeps {
   sdk: ChainNodeSDK;

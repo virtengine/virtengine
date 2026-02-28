@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"cosmossdk.io/log"
@@ -124,6 +125,12 @@ type Keeper struct {
 	// delegationKeeper is the delegation keeper reference for GDPR portability exports
 	delegationKeeper DelegationQueryKeeper
 
+	// verifierRegistryKeeper provides the canonical active verifier definition.
+	verifierRegistryKeeper VerifierRegistryKeeper
+
+	// issuancePolicyKeeper records deterministic issuance entitlements for successful proofs.
+	issuancePolicyKeeper IssuancePolicyKeeper
+
 	// zkSystem is the ZK proof system for privacy-preserving proofs
 	// Initialized during keeper setup with compiled circuits
 	zkSystem *ZKProofSystem
@@ -136,13 +143,12 @@ type Keeper struct {
 // NewKeeper creates and returns an instance for veid keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string) Keeper {
 	// Initialize ZK proof system
-	// Note: Circuit compilation and trusted setup happens here
-	// In production, this would load pre-compiled circuits and verification keys
+	// Note: Circuit compilation and trusted setup parameter verification happens here.
+	// The application must fail closed if the embedded or staged ceremony artifacts
+	// are placeholder, corrupted, or do not match the compiled circuits.
 	zkSystem, err := NewZKProofSystem()
 	if err != nil {
-		// Log warning but don't fail - fall back to hash-based proofs
-		// In production, this should be a hard requirement
-		log.NewNopLogger().Error("Failed to initialize ZK proof system", "error", err)
+		panic(fmt.Errorf("failed to initialize VEID ZK proof system: %w", err))
 	}
 
 	return Keeper{

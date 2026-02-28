@@ -5,6 +5,9 @@ package test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,10 +23,82 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func skipIfNoAwsCredentials(t *testing.T) {
-	if _, err := aws.GetAccountIdE(t); err != nil {
-		t.Skipf("Skipping infra tests without AWS credentials: %v", err)
+func repoRootInfra(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("unable to resolve caller path")
 	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+}
+
+func readInfraRepoFile(t *testing.T, parts ...string) string {
+	t.Helper()
+	path := filepath.Join(append([]string{repoRootInfra(t)}, parts...)...)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
+func verifyOfflineInfrastructureContracts(t *testing.T) {
+	t.Helper()
+
+	networkingMain := readInfraRepoFile(t, "infra", "terraform", "modules", "networking", "main.tf")
+	eksMain := readInfraRepoFile(t, "infra", "terraform", "modules", "eks", "main.tf")
+	rdsMain := readInfraRepoFile(t, "infra", "terraform", "modules", "rds", "main.tf")
+	devMain := readInfraRepoFile(t, "infra", "terraform", "environments", "dev", "main.tf")
+	devOutputs := readInfraRepoFile(t, "infra", "terraform", "environments", "dev", "outputs.tf")
+
+	for label, required := range map[string][]string{
+		"networking": {"resource \"aws_vpc\" \"main\"", "resource \"aws_nat_gateway\" \"main\"", "resource \"aws_db_subnet_group\" \"main\""},
+		"eks":        {"resource \"aws_eks_cluster\" \"main\"", "resource \"aws_eks_node_group\" \"main\"", "resource \"aws_iam_openid_connect_provider\" \"eks\""},
+		"rds":        {"resource \"aws_db_instance\" \"main\"", "resource \"aws_secretsmanager_secret\" \"db_credentials\"", "resource \"aws_kms_key\" \"rds\""},
+		"dev env":    {"module \"vpc\"", "module \"eks\"", "module \"iam\""},
+		"outputs":    {"output \"vpc_id\"", "output \"cluster_name\"", "output \"cluster_endpoint\""},
+	} {
+		var contents string
+		switch label {
+		case "networking":
+			contents = networkingMain
+		case "eks":
+			contents = eksMain
+		case "rds":
+			contents = rdsMain
+		case "dev env":
+			contents = devMain
+		case "outputs":
+			contents = devOutputs
+		}
+		for _, needle := range required {
+			if !strings.Contains(contents, needle) {
+				t.Fatalf("offline infra contract missing %q in %s", needle, label)
+			}
+		}
+	}
+}
+
+func requireAwsCredentialsOrOfflineContracts(t *testing.T) bool {
+	t.Helper()
+	if _, err := aws.GetAccountIdE(t); err == nil {
+		return true
+	}
+
+	t.Log("AWS credentials unavailable; validating offline Terraform contracts instead")
+	verifyOfflineInfrastructureContracts(t)
+	return false
+}
+
+func requireLongInfraRuntimeOrOfflineContracts(t *testing.T, name string) bool {
+	t.Helper()
+	if !testing.Short() {
+		return true
+	}
+
+	t.Logf("%s running in short mode; validating offline Terraform contracts instead", name)
+	verifyOfflineInfrastructureContracts(t)
+	return false
 }
 
 // Test configuration
@@ -36,7 +111,9 @@ const (
 // TestNetworkingModule tests the networking Terraform module
 func TestNetworkingModule(t *testing.T) {
 	t.Parallel()
-	skipIfNoAwsCredentials(t)
+	if !requireAwsCredentialsOrOfflineContracts(t) {
+		return
+	}
 
 	// Unique ID for test resources
 	uniqueID := random.UniqueId()
@@ -131,14 +208,16 @@ func TestNetworkingModule(t *testing.T) {
 // TestEKSModule tests the EKS Terraform module
 func TestEKSModule(t *testing.T) {
 	t.Parallel()
-	skipIfNoAwsCredentials(t)
+	if !requireAwsCredentialsOrOfflineContracts(t) {
+		return
+	}
 
 	// Use test-structure to skip long-running tests
 	workingDir := "../terraform/modules/eks"
 
 	// Skip if running in short mode
-	if testing.Short() {
-		t.Skip("Skipping EKS test in short mode")
+	if !requireLongInfraRuntimeOrOfflineContracts(t, "EKS test") {
+		return
 	}
 
 	uniqueID := random.UniqueId()
@@ -250,10 +329,12 @@ func TestEKSModule(t *testing.T) {
 // TestRDSModule tests the RDS Terraform module
 func TestRDSModule(t *testing.T) {
 	t.Parallel()
-	skipIfNoAwsCredentials(t)
+	if !requireAwsCredentialsOrOfflineContracts(t) {
+		return
+	}
 
-	if testing.Short() {
-		t.Skip("Skipping RDS test in short mode")
+	if !requireLongInfraRuntimeOrOfflineContracts(t, "RDS test") {
+		return
 	}
 
 	uniqueID := random.UniqueId()
@@ -356,10 +437,12 @@ func TestRDSModule(t *testing.T) {
 // TestFullStackIntegration tests the complete infrastructure stack
 func TestFullStackIntegration(t *testing.T) {
 	t.Parallel()
-	skipIfNoAwsCredentials(t)
+	if !requireAwsCredentialsOrOfflineContracts(t) {
+		return
+	}
 
-	if testing.Short() {
-		t.Skip("Skipping full stack test in short mode")
+	if !requireLongInfraRuntimeOrOfflineContracts(t, "full stack test") {
+		return
 	}
 
 	// This test deploys the complete environment

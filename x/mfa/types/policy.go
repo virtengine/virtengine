@@ -1,8 +1,13 @@
 package types
 
 import (
+	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
+
+const maxVEIDScore uint32 = 100
 
 // FactorCombination represents a set of factors that must ALL be satisfied (AND logic)
 type FactorCombination struct {
@@ -31,6 +36,21 @@ func (fc *FactorCombination) Validate() error {
 	}
 
 	return nil
+}
+
+func (fc *FactorCombination) signature() string {
+	factors := make([]int, 0, len(fc.Factors))
+	for _, ft := range fc.Factors {
+		factors = append(factors, int(ft))
+	}
+	sort.Ints(factors)
+
+	parts := make([]string, 0, len(factors))
+	for _, ft := range factors {
+		parts = append(parts, fmt.Sprintf("%d", ft))
+	}
+
+	return fmt.Sprintf("%d:%s", fc.MinSecurityLevel, strings.Join(parts, ","))
 }
 
 // HasFactor returns true if the combination includes the given factor type
@@ -144,32 +164,31 @@ func (p *MFAPolicy) Validate() error {
 		return ErrInvalidPolicy.Wrap("enabled policy must have at least one required factor combination")
 	}
 
-	for i, fc := range p.RequiredFactors {
-		if err := fc.Validate(); err != nil {
-			return ErrInvalidPolicy.Wrapf("invalid required_factors[%d]: %v", i, err)
-		}
+	if err := validateFactorCombinations(p.RequiredFactors, "required_factors", ErrInvalidPolicy); err != nil {
+		return err
 	}
-
-	for i, fc := range p.RecoveryFactors {
-		if err := fc.Validate(); err != nil {
-			return ErrInvalidPolicy.Wrapf("invalid recovery_factors[%d]: %v", i, err)
-		}
+	if err := validateFactorCombinations(p.RecoveryFactors, "recovery_factors", ErrInvalidPolicy); err != nil {
+		return err
 	}
-
-	for i, fc := range p.KeyRotationFactors {
-		if err := fc.Validate(); err != nil {
-			return ErrInvalidPolicy.Wrapf("invalid key_rotation_factors[%d]: %v", i, err)
-		}
+	if err := validateFactorCombinations(p.KeyRotationFactors, "key_rotation_factors", ErrInvalidPolicy); err != nil {
+		return err
 	}
 
 	if p.TrustedDeviceRule != nil {
 		if err := p.TrustedDeviceRule.Validate(); err != nil {
 			return err
 		}
+		if p.TrustedDeviceRule.ReducedFactors != nil && !combinationIsReductionOfAny(*p.TrustedDeviceRule.ReducedFactors, p.RequiredFactors) {
+			return ErrInvalidPolicy.Wrap("trusted device reduced_factors must be a subset of at least one required factor combination")
+		}
 	}
 
 	if p.SessionDuration < 0 {
 		return ErrInvalidPolicy.Wrap("session_duration cannot be negative")
+	}
+
+	if p.VEIDThreshold > maxVEIDScore {
+		return ErrInvalidPolicy.Wrapf("veid_threshold cannot exceed %d", maxVEIDScore)
 	}
 
 	return nil
@@ -250,6 +269,53 @@ func DefaultMFAPolicy(accountAddress string) *MFAPolicy {
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
+}
+
+func validateFactorCombinations(combinations []FactorCombination, field string, baseErr errorWrapper) error {
+	seen := make(map[string]struct{}, len(combinations))
+	for i, fc := range combinations {
+		if err := fc.Validate(); err != nil {
+			return baseErr.Wrapf("invalid %s[%d]: %v", field, i, err)
+		}
+		if fc.HasFactor(FactorTypeTrustedDevice) {
+			return baseErr.Wrapf("%s[%d] cannot require trusted_device directly", field, i)
+		}
+
+		signature := fc.signature()
+		if _, ok := seen[signature]; ok {
+			return baseErr.Wrapf("duplicate %s[%d]", field, i)
+		}
+		seen[signature] = struct{}{}
+	}
+
+	return nil
+}
+
+type errorWrapper interface {
+	Wrap(string) error
+	Wrapf(string, ...interface{}) error
+}
+
+func combinationIsReductionOfAny(candidate FactorCombination, combinations []FactorCombination) bool {
+	for _, combo := range combinations {
+		if isFactorSubset(candidate, combo) {
+			return true
+		}
+	}
+	return false
+}
+
+func isFactorSubset(candidate FactorCombination, base FactorCombination) bool {
+	baseSet := make(map[FactorType]struct{}, len(base.Factors))
+	for _, ft := range base.Factors {
+		baseSet[ft] = struct{}{}
+	}
+	for _, ft := range candidate.Factors {
+		if _, ok := baseSet[ft]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // PolicyMatch represents the result of checking if available factors match a policy

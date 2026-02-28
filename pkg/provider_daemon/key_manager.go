@@ -578,15 +578,22 @@ func (km *KeyManager) ImportKey(providerAddress string, privateKey []byte, algor
 		return nil, ErrKeyStorageLocked
 	}
 
+	if len(privateKey) == 0 {
+		return nil, fmt.Errorf("private key is required")
+	}
+
+	privateKeyCopy := make([]byte, len(privateKey))
+	copy(privateKeyCopy, privateKey)
+
 	var pubKey []byte
 
 	switch algorithm {
 	case string(HSMKeyTypeEd25519):
-		if len(privateKey) != ed25519.PrivateKeySize {
-			return nil, fmt.Errorf("invalid ed25519 private key size: %d", len(privateKey))
+		if len(privateKeyCopy) != ed25519.PrivateKeySize {
+			return nil, fmt.Errorf("invalid ed25519 private key size: %d", len(privateKeyCopy))
 		}
 		pubKey = make([]byte, ed25519.PublicKeySize)
-		copy(pubKey, privateKey[32:])
+		copy(pubKey, privateKeyCopy[32:])
 	default:
 		return nil, fmt.Errorf("unsupported algorithm: %s", algorithm)
 	}
@@ -601,7 +608,7 @@ func (km *KeyManager) ImportKey(providerAddress string, privateKey []byte, algor
 		CreatedAt:       now,
 		Status:          keyStatusActive,
 		ProviderAddress: providerAddress,
-		privateKey:      privateKey,
+		privateKey:      privateKeyCopy,
 	}
 
 	if km.config.KeyRotationDays > 0 {

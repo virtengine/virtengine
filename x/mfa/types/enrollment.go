@@ -135,6 +135,35 @@ type DeviceInfo struct {
 	TrustTokenHash string `json:"trust_token_hash,omitempty"`
 }
 
+func (d *DeviceInfo) ValidateForEnrollment() error {
+	if d == nil {
+		return ErrInvalidEnrollment.Wrap("device info cannot be nil")
+	}
+	if d.Fingerprint == "" {
+		return ErrInvalidEnrollment.Wrap("device fingerprint cannot be empty")
+	}
+	if d.FirstSeenAt < 0 || d.LastSeenAt < 0 || d.TrustExpiresAt < 0 {
+		return ErrInvalidEnrollment.Wrap("device timestamps cannot be negative")
+	}
+	if d.FirstSeenAt > 0 && d.LastSeenAt > 0 && d.LastSeenAt < d.FirstSeenAt {
+		return ErrInvalidEnrollment.Wrap("device last_seen_at cannot be before first_seen_at")
+	}
+	return nil
+}
+
+func (d *DeviceInfo) ValidateStored() error {
+	if err := d.ValidateForEnrollment(); err != nil {
+		return err
+	}
+	if d.TrustExpiresAt == 0 {
+		return ErrInvalidEnrollment.Wrap("device trust_expires_at cannot be zero")
+	}
+	if d.TrustTokenHash == "" {
+		return ErrInvalidEnrollment.Wrap("device trust_token_hash cannot be empty")
+	}
+	return nil
+}
+
 // FIDO2CredentialInfo contains FIDO2-specific credential information
 type FIDO2CredentialInfo struct {
 	// CredentialID is the FIDO2 credential identifier
@@ -191,6 +220,9 @@ func (e *FactorEnrollment) Validate() error {
 	case FactorTypeTrustedDevice:
 		if e.Metadata == nil || e.Metadata.DeviceInfo == nil {
 			return ErrInvalidEnrollment.Wrap("TrustedDevice enrollment requires DeviceInfo metadata")
+		}
+		if err := e.Metadata.DeviceInfo.ValidateForEnrollment(); err != nil {
+			return err
 		}
 	case FactorTypeHardwareKey:
 		if len(e.PublicIdentifier) == 0 {

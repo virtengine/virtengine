@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -359,24 +360,17 @@ func (s *SupportClient) GetIssueByBackendID(ctx context.Context, backendID strin
 	var issue *SupportIssue
 
 	err := s.client.doWithRetry(ctx, func() error {
-		path := fmt.Sprintf("/support-issues/?backend_id=%s", backendID)
-		respBody, statusCode, err := s.client.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
+		query := url.Values{}
+		query.Set("backend_id", backendID)
+		var issues []SupportIssue
+		if err := s.client.getPaginated(ctx, buildQueryPath("/support-issues/", query), &issues); err != nil {
 			return err
 		}
-
-		if statusCode != http.StatusOK {
-			return mapHTTPError(statusCode, respBody)
-		}
-
-		// Waldur returns an array
-		var issues []SupportIssue
-		if err := json.Unmarshal(respBody, &issues); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
-		}
-
 		if len(issues) == 0 {
 			return ErrNotFound
+		}
+		if len(issues) > 1 {
+			return fmt.Errorf("%w: multiple issues found for backend ID %s", ErrConflict, backendID)
 		}
 
 		issue = &issues[0]
@@ -391,50 +385,35 @@ func (s *SupportClient) ListIssues(ctx context.Context, params ListIssuesParams)
 	var issues []SupportIssue
 
 	err := s.client.doWithRetry(ctx, func() error {
-		path := "/support-issues/?"
-
+		query := url.Values{}
 		if params.CustomerUUID != "" {
-			path += fmt.Sprintf("customer_uuid=%s&", params.CustomerUUID)
+			query.Set("customer_uuid", params.CustomerUUID)
 		}
 		if params.ProjectUUID != "" {
-			path += fmt.Sprintf("project_uuid=%s&", params.ProjectUUID)
+			query.Set("project_uuid", params.ProjectUUID)
 		}
 		if params.State != "" {
-			path += fmt.Sprintf("status=%s&", string(params.State))
+			query.Set("status", string(params.State))
 		}
 		if params.Priority != "" {
-			path += fmt.Sprintf("priority=%s&", string(params.Priority))
+			query.Set("priority", string(params.Priority))
 		}
 		if params.Type != "" {
-			path += fmt.Sprintf("type=%s&", string(params.Type))
+			query.Set("type", string(params.Type))
 		}
 		if params.CallerUUID != "" {
-			path += fmt.Sprintf("caller_uuid=%s&", params.CallerUUID)
+			query.Set("caller_uuid", params.CallerUUID)
 		}
 		if params.BackendID != "" {
-			path += fmt.Sprintf("backend_id=%s&", params.BackendID)
+			query.Set("backend_id", params.BackendID)
 		}
 		if params.Page > 0 {
-			path += fmt.Sprintf("page=%d&", params.Page)
+			query.Set("page", fmt.Sprintf("%d", params.Page))
 		}
 		if params.PageSize > 0 {
-			path += fmt.Sprintf("page_size=%d&", params.PageSize)
+			query.Set("page_size", fmt.Sprintf("%d", params.PageSize))
 		}
-
-		respBody, statusCode, err := s.client.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
-			return err
-		}
-
-		if statusCode != http.StatusOK {
-			return mapHTTPError(statusCode, respBody)
-		}
-
-		if err := json.Unmarshal(respBody, &issues); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
-		}
-
-		return nil
+		return s.client.getPaginated(ctx, buildQueryPath("/support-issues/", query), &issues)
 	})
 
 	return issues, err
@@ -591,21 +570,9 @@ func (s *SupportClient) GetComments(ctx context.Context, issueUUID string) ([]Su
 	var comments []SupportComment
 
 	err := s.client.doWithRetry(ctx, func() error {
-		path := fmt.Sprintf("/support-comments/?issue_uuid=%s", issueUUID)
-		respBody, statusCode, err := s.client.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
-			return err
-		}
-
-		if statusCode != http.StatusOK {
-			return mapHTTPError(statusCode, respBody)
-		}
-
-		if err := json.Unmarshal(respBody, &comments); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
-		}
-
-		return nil
+		query := url.Values{}
+		query.Set("issue_uuid", issueUUID)
+		return s.client.getPaginated(ctx, buildQueryPath("/support-comments/", query), &comments)
 	})
 
 	return comments, err

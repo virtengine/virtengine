@@ -1,0 +1,255 @@
+syntax = "proto3";
+package virtengine.support.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "virtengine/support/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/support/v1";
+
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc CreateSupportRequest(MsgCreateSupportRequest) returns (MsgCreateSupportRequestResponse);
+  rpc UpdateSupportRequest(MsgUpdateSupportRequest) returns (MsgUpdateSupportRequestResponse);
+  rpc AddSupportResponse(MsgAddSupportResponse) returns (MsgAddSupportResponseResponse);
+  rpc ArchiveSupportRequest(MsgArchiveSupportRequest) returns (MsgArchiveSupportRequestResponse);
+  rpc RegisterExternalTicket(MsgRegisterExternalTicket) returns (MsgRegisterExternalTicketResponse);
+  rpc UpdateExternalTicket(MsgUpdateExternalTicket) returns (MsgUpdateExternalTicketResponse);
+  rpc RemoveExternalTicket(MsgRemoveExternalTicket) returns (MsgRemoveExternalTicketResponse);
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+message MsgCreateSupportRequest {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgCreateSupportRequest";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string category = 2 [
+    (gogoproto.jsontag) = "category",
+    (gogoproto.moretags) = "yaml:\"category\""
+  ];
+  string priority = 3 [
+    (gogoproto.jsontag) = "priority",
+    (gogoproto.moretags) = "yaml:\"priority\""
+  ];
+  EncryptedSupportPayload payload = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "payload",
+    (gogoproto.moretags) = "yaml:\"payload\""
+  ];
+  RelatedEntity related_entity = 5 [
+    (gogoproto.jsontag) = "related_entity,omitempty",
+    (gogoproto.moretags) = "yaml:\"related_entity\""
+  ];
+  map<string, string> public_metadata = 6 [
+    (gogoproto.jsontag) = "public_metadata,omitempty",
+    (gogoproto.moretags) = "yaml:\"public_metadata\""
+  ];
+}
+
+message MsgCreateSupportRequestResponse {
+  string ticket_id = 1 [
+    (gogoproto.jsontag) = "ticket_id",
+    (gogoproto.moretags) = "yaml:\"ticket_id\""
+  ];
+  string ticket_number = 2 [
+    (gogoproto.jsontag) = "ticket_number",
+    (gogoproto.moretags) = "yaml:\"ticket_number\""
+  ];
+}
+
+message MsgUpdateSupportRequest {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgUpdateSupportRequest";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string ticket_id = 2 [
+    (gogoproto.jsontag) = "ticket_id",
+    (gogoproto.moretags) = "yaml:\"ticket_id\""
+  ];
+  string category = 3 [
+    (gogoproto.jsontag) = "category,omitempty",
+    (gogoproto.moretags) = "yaml:\"category\""
+  ];
+  string priority = 4 [
+    (gogoproto.jsontag) = "priority,omitempty",
+    (gogoproto.moretags) = "yaml:\"priority\""
+  ];
+  string status = 5 [
+    (gogoproto.jsontag) = "status,omitempty",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+  string assigned_agent = 6 [
+    (gogoproto.jsontag) = "assigned_agent,omitempty",
+    (gogoproto.moretags) = "yaml:\"assigned_agent\""
+  ];
+  EncryptedSupportPayload payload = 7 [
+    (gogoproto.jsontag) = "payload,omitempty",
+    (gogoproto.moretags) = "yaml:\"payload\""
+  ];
+  map<string, string> public_metadata = 8 [
+    (gogoproto.jsontag) = "public_metadata,omitempty",
+    (gogoproto.moretags) = "yaml:\"public_metadata\""
+  ];
+}
+
+message MsgUpdateSupportRequestResponse {}
+
+message MsgAddSupportResponse {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgAddSupportResponse";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string ticket_id = 2 [
+    (gogoproto.jsontag) = "ticket_id",
+    (gogoproto.moretags) = "yaml:\"ticket_id\""
+  ];
+  EncryptedSupportPayload payload = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "payload",
+    (gogoproto.moretags) = "yaml:\"payload\""
+  ];
+}
+
+message MsgAddSupportResponseResponse {
+  string response_id = 1 [
+    (gogoproto.jsontag) = "response_id",
+    (gogoproto.moretags) = "yaml:\"response_id\""
+  ];
+}
+
+message MsgArchiveSupportRequest {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgArchiveSupportRequest";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string ticket_id = 2 [
+    (gogoproto.jsontag) = "ticket_id",
+    (gogoproto.moretags) = "yaml:\"ticket_id\""
+  ];
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason,omitempty",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+message MsgArchiveSupportRequestResponse {}
+
+message MsgRegisterExternalTicket {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgRegisterExternalTicket";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string resource_id = 2 [
+    (gogoproto.jsontag) = "resource_id",
+    (gogoproto.moretags) = "yaml:\"resource_id\""
+  ];
+  string resource_type = 3 [
+    (gogoproto.jsontag) = "resource_type",
+    (gogoproto.moretags) = "yaml:\"resource_type\""
+  ];
+  string external_system = 4 [
+    (gogoproto.jsontag) = "external_system",
+    (gogoproto.moretags) = "yaml:\"external_system\""
+  ];
+  string external_ticket_id = 5 [
+    (gogoproto.jsontag) = "external_ticket_id",
+    (gogoproto.moretags) = "yaml:\"external_ticket_id\""
+  ];
+  string external_url = 6 [
+    (gogoproto.jsontag) = "external_url,omitempty",
+    (gogoproto.moretags) = "yaml:\"external_url\""
+  ];
+}
+
+message MsgRegisterExternalTicketResponse {}
+
+message MsgUpdateExternalTicket {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgUpdateExternalTicket";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string resource_id = 2 [
+    (gogoproto.jsontag) = "resource_id",
+    (gogoproto.moretags) = "yaml:\"resource_id\""
+  ];
+  string resource_type = 3 [
+    (gogoproto.jsontag) = "resource_type",
+    (gogoproto.moretags) = "yaml:\"resource_type\""
+  ];
+  string external_ticket_id = 4 [
+    (gogoproto.jsontag) = "external_ticket_id",
+    (gogoproto.moretags) = "yaml:\"external_ticket_id\""
+  ];
+  string external_url = 5 [
+    (gogoproto.jsontag) = "external_url,omitempty",
+    (gogoproto.moretags) = "yaml:\"external_url\""
+  ];
+}
+
+message MsgUpdateExternalTicketResponse {}
+
+message MsgRemoveExternalTicket {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "support/MsgRemoveExternalTicket";
+
+  string sender = 1 [
+    (gogoproto.jsontag) = "sender",
+    (gogoproto.moretags) = "yaml:\"sender\""
+  ];
+  string resource_id = 2 [
+    (gogoproto.jsontag) = "resource_id",
+    (gogoproto.moretags) = "yaml:\"resource_id\""
+  ];
+  string resource_type = 3 [
+    (gogoproto.jsontag) = "resource_type",
+    (gogoproto.moretags) = "yaml:\"resource_type\""
+  ];
+}
+
+message MsgRemoveExternalTicketResponse {}
+
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "support/MsgUpdateParams";
+
+  string authority = 1 [
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+message MsgUpdateParamsResponse {}

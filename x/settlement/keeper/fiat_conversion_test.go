@@ -71,6 +71,10 @@ func (c *capturingOffRampBridge) GetStatus(ctx context.Context, payoutID string)
 	return c.result, nil
 }
 
+func (c *capturingOffRampBridge) FindPayoutByMetadata(ctx context.Context, provider string, metadata map[string]string) (offramp.PayoutResult, error) {
+	return offramp.PayoutResult{}, nil
+}
+
 func (c *capturingOffRampBridge) Cancel(ctx context.Context, payoutID string) error {
 	return nil
 }

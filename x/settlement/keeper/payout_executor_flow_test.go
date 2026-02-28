@@ -15,16 +15,20 @@ import (
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
+	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
 type pendingOffRampBridge struct {
 	quote       offramp.Quote
 	result      offramp.PayoutResult
 	status      offramp.PayoutResult
+	lookup      offramp.PayoutResult
 	getErr      error
 	initErr     error
+	lookupErr   error
 	initCalls   int
 	statusCalls int
+	lookupCalls int
 }
 
 func (p *pendingOffRampBridge) GetQuote(ctx context.Context, req offramp.QuoteRequest) (offramp.Quote, error) {
@@ -49,6 +53,14 @@ func (p *pendingOffRampBridge) GetStatus(ctx context.Context, payoutID string) (
 	return p.status, p.getErr
 }
 
+func (p *pendingOffRampBridge) FindPayoutByMetadata(ctx context.Context, provider string, metadata map[string]string) (offramp.PayoutResult, error) {
+	p.lookupCalls++
+	if p.lookupErr != nil {
+		return offramp.PayoutResult{}, p.lookupErr
+	}
+	return p.lookup, nil
+}
+
 func (p *pendingOffRampBridge) Cancel(ctx context.Context, payoutID string) error {
 	return nil
 }
@@ -58,8 +70,10 @@ type retryableOffRampBridge struct {
 	firstInitErr       error
 	pendingResult      offramp.PayoutResult
 	completedStatus    offramp.PayoutResult
+	lookupResult       offramp.PayoutResult
 	invokeCount        int
 	statusRequestCount int
+	lookupCount        int
 }
 
 func (b *retryableOffRampBridge) GetQuote(ctx context.Context, req offramp.QuoteRequest) (offramp.Quote, error) {
@@ -81,8 +95,138 @@ func (b *retryableOffRampBridge) GetStatus(ctx context.Context, payoutID string)
 	return b.completedStatus, nil
 }
 
+func (b *retryableOffRampBridge) FindPayoutByMetadata(ctx context.Context, provider string, metadata map[string]string) (offramp.PayoutResult, error) {
+	b.lookupCount++
+	if b.lookupResult.ID == "" {
+		return offramp.PayoutResult{}, errors.New("not found")
+	}
+	return b.lookupResult, nil
+}
+
 func (b *retryableOffRampBridge) Cancel(ctx context.Context, payoutID string) error {
 	return nil
+}
+
+func (s *KeeperTestSuite) TestExecuteFiatConversionRecoversAmbiguousOffRampSubmission() {
+	t := s.T()
+
+	params := s.keeper.GetParams(s.ctx)
+	params.FiatConversionEnabled = true
+	params.FiatConversionMinAmount = "1"
+	params.FiatConversionMaxAmount = "1000000000"
+	params.FiatConversionDailyLimit = "10000000000"
+	params.FiatConversionStableDenom = "uusdc"
+	params.FiatConversionStableSymbol = "USDC"
+	params.FiatConversionStableDecimals = 6
+	params.FiatConversionMaxSlippage = rate005
+	params.FiatConversionMinComplianceStatus = "CLEARED"
+	require.NoError(t, s.keeper.SetParams(s.ctx, params))
+
+	record := veidtypes.NewComplianceRecord(s.provider.String(), s.ctx.BlockTime())
+	record.Status = veidtypes.ComplianceStatusCleared
+	record.RiskScore = 5
+	record.ExpiresAt = s.ctx.BlockTime().Add(24 * time.Hour).Unix()
+	s.keeper.SetComplianceKeeper(mockComplianceKeeper{record: record})
+
+	swapExec := &mockSwapExecutor{
+		quote: dex.SwapQuote{
+			ID: "swap-quote-ambiguous",
+			Route: dex.SwapRoute{
+				Hops: []dex.SwapHop{{AmountOut: sdkmath.NewInt(900)}},
+			},
+			ExpiresAt: s.ctx.BlockTime().Add(5 * time.Minute),
+		},
+		result: dex.SwapResult{
+			QuoteID:      "swap-quote-ambiguous",
+			TxHash:       "swap-tx-ambiguous",
+			InputAmount:  sdkmath.NewInt(1000),
+			OutputAmount: sdkmath.NewInt(900),
+		},
+	}
+	s.keeper.SetDexSwapExecutor(swapExec)
+
+	bridge := &retryableOffRampBridge{
+		quote: offramp.Quote{
+			ID:           "off-quote-ambiguous",
+			Provider:     "mock",
+			FiatAmount:   sdkmath.LegacyNewDec(100),
+			ExchangeRate: sdkmath.LegacyOneDec(),
+			CreatedAt:    s.ctx.BlockTime(),
+			ExpiresAt:    s.ctx.BlockTime().Add(5 * time.Minute),
+		},
+		firstInitErr: errors.New("temporary partner timeout"),
+		lookupResult: offramp.PayoutResult{
+			ID:           "off-payout-ambiguous",
+			Status:       offramp.StatusProcessing,
+			Provider:     "mock",
+			FiatAmount:   sdkmath.LegacyNewDec(100),
+			CryptoAmount: sdkmath.NewInt(900),
+			Reference:    "ref-ambiguous",
+			InitiatedAt:  s.ctx.BlockTime(),
+		},
+		completedStatus: offramp.PayoutResult{
+			ID:           "off-payout-ambiguous",
+			Status:       offramp.StatusCompleted,
+			Provider:     "mock",
+			FiatAmount:   sdkmath.LegacyNewDec(100),
+			CryptoAmount: sdkmath.NewInt(900),
+			Reference:    "ref-ambiguous",
+		},
+	}
+	s.keeper.SetOffRampBridge(bridge)
+
+	settlement := s.buildSettlement(t, "ambiguous-offramp")
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, settlement))
+
+	request := types.FiatConversionRequest{
+		InvoiceID:         "inv-ambiguous-offramp",
+		SettlementID:      settlement.SettlementID,
+		Provider:          settlement.Provider,
+		Customer:          settlement.Customer,
+		RequestedBy:       settlement.Provider,
+		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+		FiatCurrency:      "USD",
+		PaymentMethod:     "bank_transfer",
+		DestinationHash:   types.HashDestination("acct-token"),
+		SlippageTolerance: 0.01,
+		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+	}
+	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.NoError(t, err)
+
+	payout, err := s.keeper.ExecutePayout(s.ctx, request.InvoiceID, settlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateProcessing, payout.State)
+	require.Equal(t, 1, bridge.invokeCount, "ambiguous submit must not immediately resubmit")
+	require.Equal(t, 1, bridge.lookupCount, "timeout must reconcile existing payout by idempotency")
+
+	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, request.InvoiceID)
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStatePayoutSubmitted, conversion.State)
+	require.Equal(t, "off-payout-ambiguous", conversion.OffRampID)
+	require.Equal(t, "ref-ambiguous", conversion.OffRampReference)
+
+	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	restarted.SetDexSwapExecutor(swapExec)
+	restarted.SetOffRampBridge(bridge)
+
+	require.NoError(t, restarted.ProcessInFlightFiatConversions(s.ctx))
+
+	recoveredConversion, found := restarted.GetFiatConversion(s.ctx, conversion.ConversionID)
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStatePayoutCompleted, recoveredConversion.State)
+
+	recoveredPayout, found := restarted.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateCompleted, recoveredPayout.State)
+	require.Equal(t, 1, bridge.invokeCount, "recovery must reconcile before any resubmission")
+	require.GreaterOrEqual(t, bridge.statusRequestCount, 1)
+
+	auditPayload, err := json.Marshal(recoveredConversion.AuditTrail)
+	require.NoError(t, err)
+	require.Contains(t, string(auditPayload), "offramp_payout_recovered")
 }
 
 func (s *KeeperTestSuite) TestExecutePayoutSingleSettlement() {
@@ -141,10 +285,6 @@ func (s *KeeperTestSuite) TestDisputePartialRefundReleasesPayout() {
 	require.NoError(t, s.keeper.SetPayout(s.ctx, *payout))
 	require.NoError(t, s.keeper.HoldPayout(s.ctx, payout.PayoutID, "dispute-partial-1", "partial refund test"))
 
-	treasuryBz, err := json.Marshal(holdback)
-	require.NoError(t, err)
-	s.ctx.KVStore(s.storeKey).Set(types.PrefixTreasuryBalance, treasuryBz)
-
 	customerBefore := s.bankKeeper.GetBalance(s.ctx, s.depositor, "uve").Amount
 	providerBefore := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount
 
@@ -153,12 +293,15 @@ func (s *KeeperTestSuite) TestDisputePartialRefundReleasesPayout() {
 	updated, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
 	require.True(t, found)
 	require.Equal(t, types.PayoutStateCompleted, updated.State)
+	require.True(t, updated.HoldbackAmount.IsZero())
 
 	customerAfter := s.bankKeeper.GetBalance(s.ctx, s.depositor, "uve").Amount
 	providerAfter := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount
+	treasuryAfter := s.keeper.GetTreasuryBalance(s.ctx)
 
 	require.Equal(t, customerBefore.Add(holdback.AmountOf("uve")), customerAfter)
 	require.Equal(t, providerBefore.Add(updated.NetAmount.AmountOf("uve")), providerAfter)
+	require.True(t, treasuryAfter.IsZero())
 }
 
 func (s *KeeperTestSuite) TestProcessPendingPayoutsBatch() {

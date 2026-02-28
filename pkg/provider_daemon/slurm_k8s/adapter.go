@@ -6,6 +6,7 @@ package slurm_k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -533,18 +534,20 @@ func (a *SLURMKubernetesAdapter) Scale(ctx context.Context, clusterID string, re
 
 	// Build updated values
 	values := a.buildHelmValues(cluster.Config)
-	if req.NodePool == "" {
-		values["compute"] = map[string]interface{}{
-			"replicas": req.TargetNodes,
-		}
-	} else {
-		return fmt.Errorf("node pool scaling not implemented")
-	}
-
 	// Get release name
 	releaseName := cluster.Config.HelmReleaseName
 	if releaseName == "" {
 		releaseName = fmt.Sprintf("slurm-%s", clusterID)
+	}
+	targetStatefulSet := defaultComputeStatefulSetName(releaseName)
+	if req.NodePool == "" {
+		setComputeReplicas(values, req.TargetNodes)
+	} else {
+		if err := setNodePoolReplicas(values, req.NodePool, req.TargetNodes); err != nil {
+			a.updateClusterState(clusterID, ClusterStateDegraded, fmt.Sprintf("Scale failed: %v", err))
+			return err
+		}
+		targetStatefulSet = nodePoolStatefulSetName(releaseName, req.NodePool)
 	}
 	chartPath := cluster.Config.HelmChartPath
 	if chartPath == "" {
@@ -562,11 +565,7 @@ func (a *SLURMKubernetesAdapter) Scale(ctx context.Context, clusterID string, re
 	if timeout == 0 {
 		timeout = 10 * time.Minute
 	}
-	minCompute := req.TargetNodes
-	if minCompute < 1 {
-		minCompute = 1
-	}
-	if err := a.waitForReady(ctx, clusterID, timeout, minCompute); err != nil {
+	if err := a.waitForScaledStatefulSet(ctx, cluster.Config.Namespace, releaseName, targetStatefulSet, req.TargetNodes, timeout); err != nil {
 		a.updateClusterState(clusterID, ClusterStateDegraded, fmt.Sprintf("Scale not ready: %v", err))
 		return nil
 	}
@@ -674,15 +673,17 @@ func (a *SLURMKubernetesAdapter) GetClusterHealth(ctx context.Context, clusterID
 		}
 	}
 
-	// Check compute nodes
-	computeStatus, err := a.k8s.GetStatefulSetStatus(ctx, cluster.Config.Namespace, fullname+"-compute")
-	if err != nil {
-		health.Errors = append(health.Errors, fmt.Sprintf("compute check failed: %v", err))
-	} else {
-		health.ComputeNodesReady = computeStatus.ReadyReplicas
-		health.ComputeNodesTotal = computeStatus.Replicas
+	// Check compute nodes across the default pool and any named node pools.
+	for _, statefulSetName := range computeStatefulSetNames(fullname, a.buildHelmValues(cluster.Config)) {
+		computeStatus, err := a.k8s.GetStatefulSetStatus(ctx, cluster.Config.Namespace, statefulSetName)
+		if err != nil {
+			health.Errors = append(health.Errors, fmt.Sprintf("%s check failed: %v", statefulSetName, err))
+			continue
+		}
+		health.ComputeNodesReady += computeStatus.ReadyReplicas
+		health.ComputeNodesTotal += computeStatus.Replicas
 		if computeStatus.Replicas > 0 && computeStatus.ReadyReplicas < computeStatus.Replicas {
-			health.Errors = append(health.Errors, fmt.Sprintf("compute ready %d/%d", computeStatus.ReadyReplicas, computeStatus.Replicas))
+			health.Errors = append(health.Errors, fmt.Sprintf("%s ready %d/%d", statefulSetName, computeStatus.ReadyReplicas, computeStatus.Replicas))
 		}
 	}
 
@@ -834,6 +835,100 @@ func (a *SLURMKubernetesAdapter) buildHelmValues(config DeploymentConfig) map[st
 	}
 
 	return values
+}
+
+func defaultComputeStatefulSetName(releaseName string) string {
+	return releaseName + "-compute"
+}
+
+func nodePoolStatefulSetName(releaseName, nodePool string) string {
+	return fmt.Sprintf("%s-%s", releaseName, strings.TrimSpace(nodePool))
+}
+
+func computeStatefulSetNames(releaseName string, values map[string]interface{}) []string {
+	names := []string{defaultComputeStatefulSetName(releaseName)}
+	for _, pool := range nodePoolsFromValues(values) {
+		name, _ := pool["name"].(string)
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		names = append(names, nodePoolStatefulSetName(releaseName, name))
+	}
+	return names
+}
+
+func setComputeReplicas(values map[string]interface{}, replicas int32) {
+	compute := ensureStringMap(values, "compute")
+	compute["replicas"] = replicas
+}
+
+func setNodePoolReplicas(values map[string]interface{}, nodePool string, replicas int32) error {
+	poolName := strings.TrimSpace(nodePool)
+	if poolName == "" {
+		return fmt.Errorf("node pool name is required")
+	}
+
+	pools := nodePoolsFromValues(values)
+	for _, pool := range pools {
+		name, _ := pool["name"].(string)
+		if strings.TrimSpace(name) != poolName {
+			continue
+		}
+		pool["replicas"] = replicas
+		values["nodePools"] = pools
+		return nil
+	}
+
+	return fmt.Errorf("node pool %q not found", poolName)
+}
+
+func ensureStringMap(values map[string]interface{}, key string) map[string]interface{} {
+	if existing, ok := values[key].(map[string]interface{}); ok && existing != nil {
+		return existing
+	}
+	created := make(map[string]interface{})
+	values[key] = created
+	return created
+}
+
+func nodePoolsFromValues(values map[string]interface{}) []map[string]interface{} {
+	raw, ok := values["nodePools"]
+	if !ok || raw == nil {
+		return nil
+	}
+
+	switch typed := raw.(type) {
+	case []map[string]interface{}:
+		pools := make([]map[string]interface{}, 0, len(typed))
+		for _, pool := range typed {
+			pools = append(pools, cloneStringMap(pool))
+		}
+		return pools
+	case []interface{}:
+		pools := make([]map[string]interface{}, 0, len(typed))
+		for _, item := range typed {
+			pool, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			pools = append(pools, cloneStringMap(pool))
+		}
+		return pools
+	default:
+		return nil
+	}
+}
+
+func cloneStringMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return nil
+	}
+	cloned := make(map[string]interface{}, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 // convertPartitions converts HPC partitions to Helm values
@@ -1135,6 +1230,86 @@ func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID str
 			}
 		}
 	}
+}
+
+func (a *SLURMKubernetesAdapter) waitForScaledStatefulSet(
+	ctx context.Context,
+	namespace string,
+	releaseName string,
+	statefulSetName string,
+	targetReplicas int32,
+	timeout time.Duration,
+) error {
+	deadline := time.Now().Add(timeout)
+	interval := 10 * time.Second
+	if timeout > 0 && timeout < interval {
+		interval = timeout / 3
+		if interval < 200*time.Millisecond {
+			interval = 200 * time.Millisecond
+		}
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var lastController *StatefulSetStatus
+	var lastDatabase *StatefulSetStatus
+	var lastCompute *StatefulSetStatus
+
+	controllerName := releaseName + "-controller"
+	databaseName := releaseName + "-slurmdbd"
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return fmt.Errorf(
+					"timeout waiting for %s to scale to %d replicas (controller=%s db=%s compute=%s)",
+					statefulSetName,
+					targetReplicas,
+					formatStatefulSetStatus(lastController),
+					formatStatefulSetStatus(lastDatabase),
+					formatStatefulSetStatus(lastCompute),
+				)
+			}
+
+			controllerStatus, err := a.k8s.GetStatefulSetStatus(ctx, namespace, controllerName)
+			if err != nil {
+				continue
+			}
+			databaseStatus, err := a.k8s.GetStatefulSetStatus(ctx, namespace, databaseName)
+			if err != nil {
+				continue
+			}
+			computeStatus, err := a.k8s.GetStatefulSetStatus(ctx, namespace, statefulSetName)
+			if err != nil {
+				continue
+			}
+
+			lastController = controllerStatus
+			lastDatabase = databaseStatus
+			lastCompute = computeStatus
+
+			if controllerStatus.ReadyReplicas < 1 || databaseStatus.ReadyReplicas < 1 {
+				continue
+			}
+			if computeStatus.Replicas != targetReplicas {
+				continue
+			}
+			if computeStatus.ReadyReplicas < targetReplicas {
+				continue
+			}
+			return nil
+		}
+	}
+}
+
+func formatStatefulSetStatus(status *StatefulSetStatus) string {
+	if status == nil {
+		return "unknown"
+	}
+	return fmt.Sprintf("%d/%d ready", status.ReadyReplicas, status.Replicas)
 }
 
 // healthCheckLoop periodically checks cluster health

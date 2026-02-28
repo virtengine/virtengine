@@ -50,6 +50,18 @@ const (
 	// FlagProviderKeyDir is the directory containing provider keys
 	FlagProviderKeyDir = "key-dir"
 
+	// FlagKeyBackupFile is the path to the encrypted provider key backup file
+	FlagKeyBackupFile = "key-backup-file"
+
+	// FlagKeyBackupRestore restores provider keys from the backup file before startup
+	FlagKeyBackupRestore = "key-backup-restore"
+
+	// FlagKeyBackupExport writes an encrypted provider key backup after key initialization
+	FlagKeyBackupExport = "key-backup-export"
+
+	// FlagKeyBackupPassphrase is the passphrase used for provider key backups
+	FlagKeyBackupPassphrase = "key-backup-passphrase" //nolint:gosec // #nosec G101: CLI flag name, not a credential
+
 	// FlagKubeconfig is the path to kubeconfig
 	FlagKubeconfig = "kubeconfig"
 
@@ -297,6 +309,9 @@ const (
 	FlagSupportSyncInbound         = "support-sync-inbound"
 	FlagSupportSyncOutbound        = "support-sync-outbound"
 	FlagSupportSyncInterval        = "support-sync-interval"
+
+	// FlagDomainVerificationEnabled enables automated provider domain verification checks.
+	FlagDomainVerificationEnabled = "domain-verification-enabled"
 )
 
 var (
@@ -332,6 +347,10 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagNode, "tcp://localhost:26657", "Blockchain node RPC endpoint")
 	rootCmd.PersistentFlags().String(FlagProviderKey, "provider", "Provider key name")
 	rootCmd.PersistentFlags().String(FlagProviderKeyDir, "", "Directory containing provider keys")
+	rootCmd.PersistentFlags().String(FlagKeyBackupFile, "", "Path to encrypted provider key backup")
+	rootCmd.PersistentFlags().Bool(FlagKeyBackupRestore, false, "Restore provider keys from --key-backup-file before startup")
+	rootCmd.PersistentFlags().Bool(FlagKeyBackupExport, false, "Write an encrypted provider key backup to --key-backup-file after key initialization")
+	rootCmd.PersistentFlags().String(FlagKeyBackupPassphrase, "", "Passphrase for provider key backup encryption")
 	rootCmd.PersistentFlags().String(FlagListenAddr, ":8080", "API listen address")
 	rootCmd.PersistentFlags().String(FlagMetricsAddr, ":9090", "Metrics listen address")
 	rootCmd.PersistentFlags().Bool(FlagTracingEnabled, false, "Enable distributed tracing")
@@ -367,7 +386,7 @@ func init() {
 	rootCmd.PersistentFlags().Duration(FlagProvisioningRetryBackoff, 10*time.Second, "Provisioning retry backoff")
 	rootCmd.PersistentFlags().Duration(FlagProvisioningMaxBackoff, 5*time.Minute, "Provisioning max backoff")
 	rootCmd.PersistentFlags().Duration(FlagProvisioningPollInterval, 15*time.Second, "Provisioning poll interval")
-	rootCmd.PersistentFlags().Bool(FlagProvisioningDryRun, true, "Enable dry-run container provisioning (no Kubernetes API calls)")
+	rootCmd.PersistentFlags().Bool(FlagProvisioningDryRun, false, "Enable dry-run container provisioning (no Kubernetes API calls)")
 	rootCmd.PersistentFlags().Bool(FlagWaldurChainSubmit, false, "Submit Waldur callbacks on-chain via MsgWaldurCallback")
 	rootCmd.PersistentFlags().String(FlagWaldurChainKey, "", "Key name for on-chain Waldur callback submissions")
 	rootCmd.PersistentFlags().String(FlagWaldurChainKeyringBackend, "test", "Keyring backend for on-chain callback submissions")
@@ -434,12 +453,17 @@ func init() {
 	rootCmd.PersistentFlags().Bool(FlagSupportSyncInbound, true, "Enable inbound support sync from service desk")
 	rootCmd.PersistentFlags().Bool(FlagSupportSyncOutbound, true, "Enable outbound support sync to service desk")
 	rootCmd.PersistentFlags().Duration(FlagSupportSyncInterval, 30*time.Second, "Support sync interval")
+	rootCmd.PersistentFlags().Bool(FlagDomainVerificationEnabled, false, "Enable automated provider domain verification checks")
 
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
 	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
 	_ = viper.BindPFlag(FlagProviderKey, rootCmd.PersistentFlags().Lookup(FlagProviderKey))
 	_ = viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
+	_ = viper.BindPFlag(FlagKeyBackupFile, rootCmd.PersistentFlags().Lookup(FlagKeyBackupFile))
+	_ = viper.BindPFlag(FlagKeyBackupRestore, rootCmd.PersistentFlags().Lookup(FlagKeyBackupRestore))
+	_ = viper.BindPFlag(FlagKeyBackupExport, rootCmd.PersistentFlags().Lookup(FlagKeyBackupExport))
+	_ = viper.BindPFlag(FlagKeyBackupPassphrase, rootCmd.PersistentFlags().Lookup(FlagKeyBackupPassphrase))
 	_ = viper.BindPFlag(FlagListenAddr, rootCmd.PersistentFlags().Lookup(FlagListenAddr))
 	_ = viper.BindPFlag(FlagMetricsAddr, rootCmd.PersistentFlags().Lookup(FlagMetricsAddr))
 	_ = viper.BindPFlag(FlagTracingEnabled, rootCmd.PersistentFlags().Lookup(FlagTracingEnabled))
@@ -540,6 +564,7 @@ func init() {
 	_ = viper.BindPFlag(FlagSupportSyncInbound, rootCmd.PersistentFlags().Lookup(FlagSupportSyncInbound))
 	_ = viper.BindPFlag(FlagSupportSyncOutbound, rootCmd.PersistentFlags().Lookup(FlagSupportSyncOutbound))
 	_ = viper.BindPFlag(FlagSupportSyncInterval, rootCmd.PersistentFlags().Lookup(FlagSupportSyncInterval))
+	_ = viper.BindPFlag(FlagDomainVerificationEnabled, rootCmd.PersistentFlags().Lookup(FlagDomainVerificationEnabled))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -571,6 +596,76 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+func buildDomainVerificationCheckerConfig(
+	providerAddress string,
+	defaultSignerKey string,
+) (provider_daemon.DomainVerificationCheckerConfig, error) {
+	cfg := provider_daemon.DefaultDomainVerificationCheckerConfig()
+
+	if viper.IsSet("domain_verification") {
+		if err := viper.UnmarshalKey("domain_verification", &cfg); err != nil {
+			return cfg, fmt.Errorf("failed to load domain_verification config: %w", err)
+		}
+	}
+
+	if viper.GetBool(FlagDomainVerificationEnabled) {
+		cfg.Enabled = true
+	}
+
+	if !cfg.Enabled {
+		return cfg, nil
+	}
+
+	if cfg.ProviderAddress == "" {
+		cfg.ProviderAddress = providerAddress
+	}
+	if cfg.ChainID == "" {
+		cfg.ChainID = viper.GetString(FlagChainID)
+	}
+	if cfg.CometRPC == "" {
+		cfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+	}
+	if cfg.GRPCEndpoint == "" {
+		cfg.GRPCEndpoint = viper.GetString(FlagWaldurChainGRPC)
+	}
+	if cfg.SignerKeyName == "" {
+		cfg.SignerKeyName = viper.GetString(FlagWaldurChainKey)
+		if cfg.SignerKeyName == "" {
+			cfg.SignerKeyName = defaultSignerKey
+		}
+	}
+	if cfg.SignerKeyringBackend == "" {
+		cfg.SignerKeyringBackend = viper.GetString(FlagWaldurChainKeyringBackend)
+	}
+	if cfg.SignerKeyringDir == "" {
+		cfg.SignerKeyringDir = viper.GetString(FlagWaldurChainKeyringDir)
+	}
+	if cfg.SignerKeyringPassphrase == "" {
+		cfg.SignerKeyringPassphrase = viper.GetString(FlagWaldurChainKeyringPassphrase)
+	}
+	if cfg.GasSetting.Gas == 0 && !cfg.GasSetting.Simulate {
+		gasSetting, err := parseGasSetting(viper.GetString(FlagWaldurChainGas))
+		if err != nil {
+			return cfg, fmt.Errorf("invalid domain verification gas setting: %w", err)
+		}
+		cfg.GasSetting = gasSetting
+	}
+	if cfg.GasPrices == "" {
+		cfg.GasPrices = viper.GetString(FlagWaldurChainGasPrices)
+	}
+	if cfg.Fees == "" {
+		cfg.Fees = viper.GetString(FlagWaldurChainFees)
+	}
+	if cfg.GasAdjustment == 0 {
+		cfg.GasAdjustment = viper.GetFloat64(FlagWaldurChainGasAdjustment)
+	}
+	if cfg.BroadcastTimeout == 0 {
+		cfg.BroadcastTimeout = viper.GetDuration(FlagWaldurChainBroadcastTimeout)
+	}
+
+	return cfg, nil
 }
 
 func startCmd() *cobra.Command {
@@ -645,19 +740,52 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("  Key Manager: initialized")
 
-	// Generate provider key
+	keyBackupFile := viper.GetString(FlagKeyBackupFile)
+	keyBackupPassphrase := viper.GetString(FlagKeyBackupPassphrase)
+	if viper.GetBool(FlagKeyBackupRestore) {
+		restoreResult, err := restoreProviderKeysFromBackup(keyManager, keyBackupFile, keyBackupPassphrase)
+		if err != nil {
+			return fmt.Errorf("failed to restore provider key backup: %w", err)
+		}
+		fmt.Printf("  Key Backup: restored %d key(s), skipped %d\n", len(restoreResult.RestoredKeys), len(restoreResult.SkippedKeys))
+	}
+
+	// Initialize provider key material
 	providerKeyName := viper.GetString(FlagProviderKey)
-	providerAddress := providerKeyName
-	key, err := keyManager.GenerateKey(providerKeyName)
+	key, generatedKey, err := ensureProviderKey(keyManager, providerKeyName)
 	if err != nil {
-		return fmt.Errorf("failed to generate provider key: %w", err)
+		return fmt.Errorf("failed to initialize provider key: %w", err)
+	}
+	providerAddress := key.ProviderAddress
+	if providerAddress == "" {
+		providerAddress = providerKeyName
 	}
 	providerID := key.PublicKey
+	if generatedKey {
+		fmt.Printf("  Provider Key: generated (%s)\n", key.KeyID)
+	} else {
+		fmt.Printf("  Provider Key: loaded (%s)\n", key.KeyID)
+	}
 	fmt.Printf("  Provider ID: %s...\n", providerID[:16])
+
+	if viper.GetBool(FlagKeyBackupExport) {
+		backup, err := writeProviderKeyBackup(keyManager, keyBackupFile, keyBackupPassphrase)
+		if err != nil {
+			return fmt.Errorf("failed to write provider key backup: %w", err)
+		}
+		keyCount := 0
+		if backup.Metadata != nil {
+			keyCount = backup.Metadata.KeyCount
+		}
+		fmt.Printf("  Key Backup: wrote %d key(s) to %s\n", keyCount, keyBackupFile)
+	}
 
 	var callbackSink provider_daemon.CallbackSink
 	var usageReporter provider_daemon.UsageReporter
 	var supportService *provider_daemon.SupportService
+	var domainVerificationChecker *provider_daemon.DomainVerificationChecker
+	var waldurMarketplaceClient *waldur.MarketplaceClient
+	var waldurReconciler *provider_daemon.WaldurReconciler
 
 	if viper.GetBool(FlagWaldurEnabled) && viper.GetBool(FlagWaldurChainSubmit) {
 		chainKeyName := viper.GetString(FlagWaldurChainKey)
@@ -760,7 +888,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to create hpc chain client: %w", err)
 		}
 
-		hpcProvider, err = provider_daemon.NewHPCProvider(hpcProviderConfig, hpcChainClient, nil)
+		hpcProvider, err = provider_daemon.NewHPCProviderWithDeps(
+			hpcProviderConfig,
+			hpcChainClient,
+			nil,
+			&provider_daemon.HPCProviderDeps{
+				Signer: newHPCKeyManagerSigner(keyManager, hpcProviderConfig.HPC.ProviderAddress),
+			},
+		)
 		if err != nil {
 			return fmt.Errorf("failed to create hpc provider: %w", err)
 		}
@@ -822,7 +957,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 				resourceCfg.Region = providerConfig.Regions[0]
 			}
 
-			snapshot := provider_daemon.NewStaticResourceSnapshotProvider(providerConfig.Capacity, "", resourceCfg.TotalNetworkMbps, resourceCfg.ReservedNetwork)
+			snapshotCapacity := providerConfig.Capacity
+			snapshotCapacity.ReservedCPUCores = 0
+			snapshotCapacity.ReservedMemoryGB = 0
+			snapshotCapacity.ReservedStorageGB = 0
+			snapshotCapacity.ReservedGPUs = 0
+
+			snapshot := provider_daemon.NewStaticResourceSnapshotProvider(
+				snapshotCapacity,
+				providerConfig.Attributes["gpu_type"],
+				resourceCfg.TotalNetworkMbps,
+				resourceCfg.ReservedNetwork,
+			)
 			resourceSync, err := provider_daemon.NewResourceAvailabilitySync(resourceCfg, resourceChainClient, snapshot)
 			if err != nil {
 				fmt.Printf("Warning: failed to initialize resource sync: %v\n", err)
@@ -834,12 +980,57 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	domainVerificationCfg, err := buildDomainVerificationCheckerConfig(providerAddress, providerKeyName)
+	if err != nil {
+		return err
+	}
+	if domainVerificationCfg.Enabled {
+		if _, err := sdk.AccAddressFromBech32(domainVerificationCfg.ProviderAddress); err != nil {
+			return fmt.Errorf(
+				"domain verification provider address must be bech32; set domain_verification.provider_address to the on-chain owner address: %w",
+				err,
+			)
+		}
+
+		checker, err := provider_daemon.NewDomainVerificationChecker(domainVerificationCfg, keyManager, nil)
+		if err != nil {
+			return fmt.Errorf("failed to initialize domain verification checker: %w", err)
+		}
+		if err := checker.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start domain verification checker: %w", err)
+		}
+		domainVerificationChecker = checker
+		fmt.Println("  Domain Verification Checker: started")
+	}
+
 	// Initialize Kubernetes adapter (VE-403)
 	statusUpdateChan := make(chan provider_daemon.WorkloadStatusUpdate, 100)
+	portalLogStore := provider_daemon.NewDeploymentLogStore()
+	provisioningEnabled := viper.GetBool(FlagProvisioningEnabled)
+	provisioningDryRun := viper.GetBool(FlagProvisioningDryRun)
 
-	// Note: In production, this would use a real Kubernetes client
-	// For now, we'll use a placeholder that demonstrates the integration
-	fmt.Println("  Kubernetes Adapter: initialized (placeholder)")
+	var workloadRuntime *kubernetesWorkloadRuntime
+	if provisioningEnabled {
+		workloadRuntime, err = newKubernetesWorkloadRuntime(kubernetesRuntimeConfig{
+			ProviderID:        providerID,
+			ResourcePrefix:    viper.GetString(FlagResourcePrefix),
+			Kubeconfig:        viper.GetString(FlagKubeconfig),
+			DryRun:            provisioningDryRun,
+			ReconcileInterval: viper.GetDuration(FlagProvisioningPollInterval),
+			StatusUpdateChan:  statusUpdateChan,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialize kubernetes runtime: %w", err)
+		}
+		workloadRuntime.Start(ctx)
+		if provisioningDryRun {
+			fmt.Println("  Kubernetes Adapter: initialized (dry-run)")
+		} else {
+			fmt.Println("  Kubernetes Adapter: initialized")
+		}
+	} else {
+		fmt.Println("  Kubernetes Adapter: disabled")
+	}
 
 	// Initialize usage meter (VE-404)
 	recordChan := make(chan *provider_daemon.UsageRecord, 100)
@@ -879,6 +1070,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to create Waldur client: %w", err)
 		}
 		marketplaceClient := waldur.NewMarketplaceClient(waldurClient)
+		waldurMarketplaceClient = marketplaceClient
 
 		lifecycleControllerCfg := provider_daemon.DefaultLifecycleControllerConfig()
 		lifecycleControllerCfg.ProviderAddress = providerAddress
@@ -990,6 +1182,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	portalCfg.ShellSessionTTL = viper.GetDuration(FlagPortalShellSessionTTL)
 	portalCfg.TokenTTL = viper.GetDuration(FlagPortalTokenTTL)
 	portalCfg.AuditLogger = portalAuditLogger
+	portalCfg.LogStore = portalLogStore
 	portalCfg.WalletAuthChainID = viper.GetString(FlagChainID)
 	portalCfg.ChainQuery = chainQuery
 	portalCfg.VaultService = vaultService
@@ -997,6 +1190,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 	portalCfg.LifecycleRequireConsent = viper.GetBool(FlagWaldurLifecycleRequireConsent)
 	portalCfg.LifecycleConsentScope = viper.GetString(FlagWaldurLifecycleConsentScope)
 	portalCfg.LifecycleAllowedRoles = parseCSVList(viper.GetString(FlagWaldurLifecycleAllowedRoles))
+	if workloadRuntime != nil && workloadRuntime.client != nil {
+		portalCfg.WorkloadLogSource = workloadRuntime
+		portalCfg.WorkloadShellExecutor = workloadRuntime
+	}
 
 	portalAPI, err := provider_daemon.NewPortalAPIServer(portalCfg)
 	if err != nil {
@@ -1122,6 +1319,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 			}
 		}()
 		fmt.Println("  Waldur Bridge: started")
+
+		if waldurMarketplaceClient != nil {
+			reconcilerCfg := provider_daemon.DefaultWaldurReconcilerConfig()
+			waldurReconciler = provider_daemon.NewWaldurReconciler(
+				reconcilerCfg,
+				waldurMarketplaceClient,
+				usageStore,
+				nil,
+				provider_daemon.NewWaldurBridgeStateStore(viper.GetString(FlagWaldurStateFile)),
+			)
+			if err := waldurReconciler.Start(ctx); err != nil {
+				return fmt.Errorf("failed to start waldur reconciler: %w", err)
+			}
+			fmt.Println("  Waldur Reconciler: started")
+		}
 	}
 
 	// Initialize provisioning worker (VE-36F)
@@ -1164,15 +1376,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 			provisioners = append(provisioners, provider_daemon.NewWaldurProvisioner(lifecycleClient, resolver))
 		}
 
-		// Container provisioning via Kubernetes adapter (dry-run by default)
+		// Container provisioning via the shared Kubernetes runtime.
 		dryRun := viper.GetBool(FlagProvisioningDryRun)
-		k8sClient := provider_daemon.NewNoopKubernetesClient()
-		k8sAdapter := provider_daemon.NewKubernetesAdapter(provider_daemon.KubernetesAdapterConfig{
-			Client:         k8sClient,
-			ProviderID:     providerID,
-			ResourcePrefix: viper.GetString(FlagResourcePrefix),
-		})
-		provisioners = append(provisioners, provider_daemon.NewContainerProvisioner(k8sAdapter, 5*time.Minute, dryRun))
+		if workloadRuntime == nil || workloadRuntime.adapter == nil {
+			return fmt.Errorf("kubernetes runtime not initialized")
+		}
+		provisioners = append(provisioners, provider_daemon.NewContainerProvisioner(workloadRuntime.adapter, 5*time.Minute, dryRun))
 
 		provisioningWorker, err := provider_daemon.NewProvisioningWorker(provCfg, keyManager, callbackSink, provisioners...)
 		if err != nil {
@@ -1188,6 +1397,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize support service desk bridge (VE-25C)
 	if viper.GetBool(FlagSupportEnabled) {
+		chainKeyName := viper.GetString(FlagWaldurChainKey)
+		if chainKeyName == "" {
+			chainKeyName = providerKeyName
+		}
+		gasSetting, err := parseGasSetting(viper.GetString(FlagWaldurChainGas))
+		if err != nil {
+			return fmt.Errorf("invalid support chain gas: %w", err)
+		}
+
 		supportCfg := provider_daemon.DefaultSupportServiceConfig()
 		supportCfg.Enabled = true
 		supportCfg.ProviderAddress = providerAddress
@@ -1195,6 +1413,16 @@ func runStart(cmd *cobra.Command, args []string) error {
 		supportCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
 		supportCfg.CometWS = viper.GetString(FlagCometWS)
 		supportCfg.GRPCEndpoint = viper.GetString(FlagWaldurChainGRPC)
+		supportCfg.SignerKeyName = chainKeyName
+		supportCfg.SignerKeyringBackend = viper.GetString(FlagWaldurChainKeyringBackend)
+		supportCfg.SignerKeyringDir = viper.GetString(FlagWaldurChainKeyringDir)
+		supportCfg.SignerKeyringPassphrase = viper.GetString(FlagWaldurChainKeyringPassphrase)
+		supportCfg.GasSetting = gasSetting
+		supportCfg.GasPrices = viper.GetString(FlagWaldurChainGasPrices)
+		supportCfg.Fees = viper.GetString(FlagWaldurChainFees)
+		supportCfg.GasAdjustment = viper.GetFloat64(FlagWaldurChainGasAdjustment)
+		supportCfg.BroadcastTimeout = viper.GetDuration(FlagWaldurChainBroadcastTimeout)
+		supportCfg.RequestTimeout = 30 * time.Second
 		supportCfg.Encryption.SenderPrivateKeyPath = viper.GetString(FlagSupportEncryptionKeyPath)
 		supportCfg.Encryption.SenderPrivateKeyBase64 = viper.GetString(FlagSupportEncryptionKeyBase64)
 
@@ -1236,7 +1464,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Start background workers
 	bidResultChan := bidEngine.GetBidResults()
 	go handleBidResults(ctx, bidResultChan)
-	go handleStatusUpdates(ctx, statusUpdateChan)
+	go handleStatusUpdates(ctx, statusUpdateChan, portalLogStore)
 	go handleUsageRecords(ctx, recordChan, usageStore)
 
 	fmt.Println("\nProvider daemon is running. Press Ctrl+C to stop.")
@@ -1271,6 +1499,19 @@ func runStart(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Support Service: stopped")
 	}
 
+	if waldurReconciler != nil {
+		waldurReconciler.Stop()
+		fmt.Println("  Waldur Reconciler: stopped")
+	}
+
+	if domainVerificationChecker != nil {
+		if err := domainVerificationChecker.Stop(); err != nil {
+			fmt.Printf("  Domain Verification Checker: failed to stop cleanly: %v\n", err)
+		} else {
+			fmt.Println("  Domain Verification Checker: stopped")
+		}
+	}
+
 	keyManager.Lock()
 	fmt.Println("  Key Manager: locked")
 
@@ -1293,12 +1534,26 @@ func handleBidResults(ctx context.Context, ch <-chan provider_daemon.BidResult) 
 	}
 }
 
-func handleStatusUpdates(ctx context.Context, ch <-chan provider_daemon.WorkloadStatusUpdate) {
+func handleStatusUpdates(ctx context.Context, ch <-chan provider_daemon.WorkloadStatusUpdate, logStore *provider_daemon.DeploymentLogStore) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case update := <-ch:
+		case update, ok := <-ch:
+			if !ok {
+				return
+			}
+			if logStore != nil {
+				deploymentKey := update.DeploymentID
+				if deploymentKey == "" {
+					deploymentKey = update.WorkloadID
+				}
+				logStore.Append(deploymentKey, provider_daemon.LogEntry{
+					Timestamp: update.Timestamp,
+					Level:     "info",
+					Message:   fmt.Sprintf("state=%s %s", update.State, update.Message),
+				})
+			}
 			fmt.Printf("[WORKLOAD] %s: %s - %s\n", update.WorkloadID, update.State, update.Message)
 		}
 	}

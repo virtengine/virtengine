@@ -8,6 +8,9 @@ on:
     branches: [main, mainnet/main]
     paths:
       - "portal/**"
+      - "sdk/portal/**"
+      - "tests/smoke/portal/**"
+      - "scripts/ci/run-portal-smoke.sh"
       - "lib/portal/**"
       - "lib/capture/**"
       - "pnpm-workspace.yaml"
@@ -15,6 +18,9 @@ on:
   pull_request:
     paths:
       - "portal/**"
+      - "sdk/portal/**"
+      - "tests/smoke/portal/**"
+      - "scripts/ci/run-portal-smoke.sh"
       - "lib/portal/**"
       - "lib/capture/**"
       - "pnpm-workspace.yaml"
@@ -29,6 +35,37 @@ env:
   PNPM_VERSION: "10.28.2"
 
 jobs:
+  sdk-portal:
+    name: SDK Portal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+          cache-dependency-path: sdk/portal/pnpm-lock.yaml
+
+      - name: Install sdk/portal dependencies
+        run: pnpm --ignore-workspace -C sdk/portal install --frozen-lockfile
+
+      - name: Type check sdk/portal
+        run: pnpm -C sdk/portal type-check
+
+      - name: Test sdk/portal
+        run: pnpm -C sdk/portal test
+
+      - name: Build sdk/portal
+        run: pnpm -C sdk/portal build
+
   lint:
     name: Lint & Type Check
     runs-on: ubuntu-latest
@@ -95,7 +132,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, sdk-portal]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

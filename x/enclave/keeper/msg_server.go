@@ -113,6 +113,10 @@ func (m msgServer) RotateEnclaveIdentity(goCtx context.Context, msg *types.MsgRo
 		return nil, err
 	}
 
+	if err := m.keeper.StoreRotationSigningKeys(ctx, validatorAddr, rotation.Epoch, existingIdentity.SigningPubKey, updatedIdentity.SigningPubKey); err != nil {
+		return nil, err
+	}
+
 	// Update identity
 	if err := m.keeper.UpdateEnclaveIdentity(ctx, updatedIdentity); err != nil {
 		return nil, err

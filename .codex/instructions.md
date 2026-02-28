@@ -1,6 +1,6 @@
 # Codex Agent Instructions — VirtEngine
 
-> These instructions are specific to Codex CLI agents running tasks via vibe-kanban.
+> These instructions are specific to Codex CLI agents running tasks via the Bosun task queue.
 > For shared repo context (build, test, structure), see `AGENTS.md` in the repo root.
 
 ## Your Role
@@ -11,12 +11,12 @@ Your task title is in the `VE_TASK_TITLE` environment variable. Focus **only** o
 ## Task Context Recovery (When Env Vars Are Missing)
 
 Primary task metadata is passed via `VE_TASK_TITLE` and `VE_TASK_DESCRIPTION`.
-Aliases: `VE_TITLE` / `VE_DESCRIPTION` (and legacy `VK_TITLE` / `VK_DESCRIPTION`).
+Aliases: `VE_TITLE` / `VE_DESCRIPTION`.
 
 If those are missing, you are still running an orchestrated task when any of the following is true:
 
 - `VE_TASK_ID` or `VE_BRANCH_NAME` is set.
-- The worktree path includes `.git/worktrees/` or a task-runner path (e.g., `vibe-kanban`).
+- The worktree path includes `.git/worktrees/` or a task-runner path.
 
 In that case:
 

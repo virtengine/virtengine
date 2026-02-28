@@ -1,6 +1,7 @@
 package provider_daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	clientv1beta3 "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
+	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
@@ -21,6 +25,8 @@ const (
 	testDomain       = "example.com"
 	testToken        = "abc123def456"
 )
+
+var testProviderBech32Addr = sdk.AccAddress(bytes.Repeat([]byte{0x01}, 20)).String()
 
 // mockDNSResolver implements DNSResolver for testing.
 type mockDNSResolver struct {
@@ -53,6 +59,12 @@ func (m *mockDNSResolver) LookupCNAME(ctx context.Context, host string) (string,
 type mockChainClient struct {
 	providerConfig *ProviderConfig
 	err            error
+	domainRecord   *keeper.DomainVerificationRecord
+	domainQueryErr error
+	confirmErr     error
+	confirmCalls   int
+	confirmOwner   string
+	confirmProof   string
 }
 
 func (m *mockChainClient) GetProviderConfig(ctx context.Context, address string) (*ProviderConfig, error) {
@@ -74,22 +86,47 @@ func (m *mockChainClient) GetProviderBids(ctx context.Context, address string) (
 	return nil, m.err
 }
 
+func (m *mockChainClient) QueryDomainVerificationRecord(_ context.Context, providerAddr sdk.AccAddress) (*keeper.DomainVerificationRecord, error) {
+	if m.domainQueryErr != nil {
+		return nil, m.domainQueryErr
+	}
+	if m.domainRecord == nil {
+		return nil, nil
+	}
+
+	record := *m.domainRecord
+	if record.ProviderAddress == "" {
+		record.ProviderAddress = providerAddr.String()
+	}
+	return &record, nil
+}
+
+func (m *mockChainClient) ConfirmDomainVerification(_ context.Context, providerAddr sdk.AccAddress, proof string) error {
+	m.confirmCalls++
+	m.confirmOwner = providerAddr.String()
+	m.confirmProof = proof
+	return m.confirmErr
+}
+
 func TestNewDomainVerificationChecker(t *testing.T) {
 	tests := []struct {
 		name        string
 		config      DomainVerificationCheckerConfig
+		withClient  bool
 		expectError bool
 		errorMsg    string
 	}{
 		{
-			name: "valid config",
+			name: "missing signer key name without injected backend",
 			config: DomainVerificationCheckerConfig{
 				Enabled:         true,
 				ProviderAddress: testProviderAddr,
+				ChainID:         "virtengine-1",
 				CometRPC:        "http://localhost:26657",
 				GRPCEndpoint:    "localhost:9090",
 			},
-			expectError: false,
+			expectError: true,
+			errorMsg:    "signer key name is required",
 		},
 		{
 			name: "disabled",
@@ -123,6 +160,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 				Enabled:         true,
 				ProviderAddress: testProviderAddr,
 			},
+			withClient:  true,
 			expectError: false,
 		},
 	}
@@ -130,7 +168,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var chainClient ChainClient
-			if tt.name == "with chain client" {
+			if tt.withClient {
 				chainClient = &mockChainClient{}
 			}
 
@@ -667,4 +705,161 @@ func TestDomainVerificationRecordJSON(t *testing.T) {
 	assert.Equal(t, record.Token, decoded.Token)
 	assert.Equal(t, record.Method, decoded.Method)
 	assert.Equal(t, record.Status, decoded.Status)
+}
+
+type fakeDomainVerificationTxClient struct {
+	response interface{}
+	err      error
+	msgs     []sdk.Msg
+	calls    int
+}
+
+func (f *fakeDomainVerificationTxClient) BroadcastMsgs(
+	_ context.Context,
+	msgs []sdk.Msg,
+	_ ...clientv1beta3.BroadcastOption,
+) (interface{}, error) {
+	f.calls++
+	f.msgs = append([]sdk.Msg(nil), msgs...)
+	return f.response, f.err
+}
+
+func TestRPCDomainVerificationBackendQueryDomainVerificationRecord(t *testing.T) {
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{0x02}, 20))
+	record := &keeper.DomainVerificationRecord{
+		ProviderAddress: providerAddr.String(),
+		Domain:          testDomain,
+		Token:           testToken,
+		Method:          keeper.VerificationMethodDNSTXT,
+		Status:          keeper.DomainVerificationPending,
+	}
+
+	recordJSON, err := json.Marshal(record)
+	require.NoError(t, err)
+
+	backend := &rpcDomainVerificationBackend{
+		storeQuery: &fakeProviderStoreQueryClient{
+			responses: map[string][]byte{
+				string(keeper.DomainVerificationKey(providerAddr)): recordJSON,
+			},
+		},
+		timeout: time.Second,
+	}
+
+	got, err := backend.QueryDomainVerificationRecord(context.Background(), providerAddr)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, record.ProviderAddress, got.ProviderAddress)
+	assert.Equal(t, record.Domain, got.Domain)
+	assert.Equal(t, record.Token, got.Token)
+}
+
+func TestRPCDomainVerificationBackendConfirmDomainVerification(t *testing.T) {
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{0x03}, 20))
+	txClient := &fakeDomainVerificationTxClient{
+		response: &sdk.TxResponse{Code: 0},
+	}
+
+	backend := &rpcDomainVerificationBackend{
+		txClient: txClient,
+	}
+
+	err := backend.ConfirmDomainVerification(context.Background(), providerAddr, "dns_txt:proof")
+	require.NoError(t, err)
+	require.Equal(t, 1, txClient.calls)
+	require.Len(t, txClient.msgs, 1)
+
+	msg, ok := txClient.msgs[0].(*providertypes.MsgConfirmDomainVerification)
+	require.True(t, ok)
+	assert.Equal(t, providerAddr.String(), msg.Owner)
+	assert.Equal(t, "dns_txt:proof", msg.Proof)
+}
+
+func TestQueryDomainVerificationRecordUsesInjectedBackend(t *testing.T) {
+	cfg := DefaultDomainVerificationCheckerConfig()
+	cfg.Enabled = true
+	cfg.ProviderAddress = testProviderBech32Addr
+
+	record := &keeper.DomainVerificationRecord{
+		ProviderAddress: testProviderBech32Addr,
+		Domain:          testDomain,
+		Token:           testToken,
+		Method:          keeper.VerificationMethodDNSTXT,
+		Status:          keeper.DomainVerificationPending,
+	}
+
+	mockClient := &mockChainClient{domainRecord: record}
+	checker, err := NewDomainVerificationChecker(cfg, nil, mockClient)
+	require.NoError(t, err)
+
+	providerAddr, err := sdk.AccAddressFromBech32(testProviderBech32Addr)
+	require.NoError(t, err)
+
+	got, err := checker.queryDomainVerificationRecord(context.Background(), providerAddr)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, record.Domain, got.Domain)
+	assert.Equal(t, record.Token, got.Token)
+}
+
+func TestSubmitConfirmationUsesInjectedBackend(t *testing.T) {
+	cfg := DefaultDomainVerificationCheckerConfig()
+	cfg.Enabled = true
+	cfg.ProviderAddress = testProviderBech32Addr
+	cfg.InitialBackoff = time.Second
+
+	mockClient := &mockChainClient{}
+	checker, err := NewDomainVerificationChecker(cfg, nil, mockClient)
+	require.NoError(t, err)
+
+	record := &keeper.DomainVerificationRecord{
+		ProviderAddress: testProviderBech32Addr,
+		Domain:          testDomain,
+		Token:           testToken,
+		Method:          keeper.VerificationMethodDNSTXT,
+		Status:          keeper.DomainVerificationPending,
+	}
+
+	checker.retryState[record.Domain] = &verificationRetryState{
+		Attempts: 1,
+		Backoff:  2 * time.Second,
+	}
+
+	checker.submitConfirmation(context.Background(), record, "dns_txt:proof")
+
+	assert.Equal(t, 1, mockClient.confirmCalls)
+	assert.Equal(t, testProviderBech32Addr, mockClient.confirmOwner)
+	assert.Equal(t, "dns_txt:proof", mockClient.confirmProof)
+	_, exists := checker.retryState[record.Domain]
+	assert.False(t, exists)
+}
+
+func TestSubmitConfirmationFailureUsesRetryBackoff(t *testing.T) {
+	cfg := DefaultDomainVerificationCheckerConfig()
+	cfg.Enabled = true
+	cfg.ProviderAddress = testProviderBech32Addr
+	cfg.InitialBackoff = time.Second
+	cfg.MaxBackoff = 8 * time.Second
+	cfg.MaxRetries = 3
+
+	mockClient := &mockChainClient{confirmErr: fmt.Errorf("broadcast failed")}
+	checker, err := NewDomainVerificationChecker(cfg, nil, mockClient)
+	require.NoError(t, err)
+
+	record := &keeper.DomainVerificationRecord{
+		ProviderAddress: testProviderBech32Addr,
+		Domain:          testDomain,
+		Token:           testToken,
+		Method:          keeper.VerificationMethodDNSTXT,
+		Status:          keeper.DomainVerificationPending,
+	}
+
+	checker.submitConfirmation(context.Background(), record, "dns_txt:proof")
+
+	assert.Equal(t, 1, mockClient.confirmCalls)
+	state := checker.retryState[record.Domain]
+	require.NotNil(t, state)
+	assert.Equal(t, 1, state.Attempts)
+	assert.Equal(t, 2*time.Second, state.Backoff)
+	assert.True(t, state.NextAttempt.After(time.Now().Add(-time.Second)))
 }

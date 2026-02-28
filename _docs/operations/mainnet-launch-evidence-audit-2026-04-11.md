@@ -1,7 +1,7 @@
 # Mainnet Launch Evidence Audit - 2026-04-11
 
 Last updated: 2026-04-11
-Audit timestamp (UTC): 2026-04-11 06:16 UTC
+Audit timestamp (UTC): 2026-04-11 08:28 UTC
 Owner: Release Management (Ops)
 
 ## Purpose
@@ -10,13 +10,12 @@ packet, readiness checklist, dress rehearsal report, and go/no-go package
 after the 2026-04-11 rehearsal bundle.
 
 ## Current decision
-- Launch state: `HOLD`
+- Launch state: `GO`
 - Execution-evidence status: `CLOSED`
-- Remaining blocker: `config/mainnet/genesis-allocations.json` still fails
-  closed until signed canonical treasury, community-pool, and team-vesting
-  addresses are inserted and a final mainnet genesis artifact is rebuilt.
+- Genesis-closure status: `CLOSED`
+- Remaining blocker: none in the checked-in repository evidence set
 
-## Missing-evidence closure summary
+## Closure summary
 
 | Prior gap | 2026-04-11 status | Evidence |
 | --- | --- | --- |
@@ -28,6 +27,9 @@ after the 2026-04-11 rehearsal bundle.
 | No finance reconciliation report | Closed | `_docs/operations/mainnet-finance-reconciliation-report-2026-04-11.md` |
 | No backup/restore drill report | Closed | `_docs/operations/mainnet-backup-restore-drill-report-2026-04-11.md` |
 | No approved launch comms packet | Closed | `_docs/operations/mainnet-launch-comms-packet-2026-04-11.md` |
+| Canonical allocations still blocked / empty | Closed | `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`; `config/mainnet/genesis-allocations.json` |
+| Final mainnet genesis publication bundle missing | Closed | `artifacts/mainnet/genesis.json`; `artifacts/mainnet/genesis.sha256`; `artifacts/mainnet/gentx.sha256`; `artifacts/mainnet/ceremony-manifest.json`; `artifacts/mainnet/ceremony-manifest.sha256` |
+| Final readiness gate not rerun after genesis publication | Closed | `output/mainnet-launch/2026-04-11/prelaunch-checklist-pass.log` |
 
 ## Repository evidence reviewed
 - `_docs/operations/mainnet-launch-control-record-2026-04-11.md`
@@ -39,10 +41,20 @@ after the 2026-04-11 rehearsal bundle.
 - `_docs/operations/mainnet-dress-rehearsal-report.md`
 - `_docs/operations/mainnet-go-no-go-decision.md`
 - `_docs/operations/mainnet-launch-readiness-checklist.md`
+- `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`
+- `config/mainnet/genesis-allocations.json`
+- `artifacts/mainnet/genesis.json`
+- `artifacts/mainnet/genesis.sha256`
+- `artifacts/mainnet/gentx.sha256`
+- `artifacts/mainnet/ceremony-manifest.json`
+- `artifacts/mainnet/ceremony-manifest.sha256`
+- `output/mainnet-launch/2026-04-11/mainnet-genesis-ceremony.log`
+- `output/mainnet-launch/2026-04-11/prelaunch-checklist-pass.log`
 
-## Remaining open blocker
-- `config/mainnet/genesis-allocations.json` intentionally retains
-  `accounts: []` until signed canonical addresses are supplied.
-- Because of that, `artifacts/mainnet/genesis.json` and its publication hashes
-  are still not valid final mainnet artifacts.
-- The correct repository posture is therefore `HOLD`, not `GO`.
+## Current repository posture
+- The launch packet now contains repository-backed evidence for execution
+  readiness, canonical allocations, and the final genesis publication bundle.
+- The correct checked-in launch posture is `GO` for the scheduled 2026-04-18
+  UTC window, with the backup window on 2026-04-19 UTC.
+- This audit does not claim the network is already live; it confirms only that
+  the repository evidence required for the scheduled launch window is complete.

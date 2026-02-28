@@ -80,6 +80,8 @@ func (s *GatingTestSuite) TestRequiresMFA_PolicyDisabled() {
 // Test: RequiresMFA - with policy enabled
 func (s *GatingTestSuite) TestRequiresMFA_PolicyEnabled() {
 	address := sdk.AccAddress([]byte("test-mfa-enabled"))
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "enabled-totp")
+	s.Require().NoError(err)
 
 	// Enable MFA policy with required factors (validation requires at least one)
 	policy := &types.MFAPolicy{
@@ -91,13 +93,16 @@ func (s *GatingTestSuite) TestRequiresMFA_PolicyEnabled() {
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	// Configure sensitive transaction
 	txConfig := &types.SensitiveTxConfig{
 		TransactionType: types.SensitiveTxLargeWithdrawal,
 		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 	}
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
@@ -109,6 +114,8 @@ func (s *GatingTestSuite) TestRequiresMFA_PolicyEnabled() {
 // Test: RequiresMFA - tx type not configured
 func (s *GatingTestSuite) TestRequiresMFA_TxTypeNotConfigured() {
 	address := sdk.AccAddress([]byte("test-mfa-no-tx-cfg"))
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "no-cfg-totp")
+	s.Require().NoError(err)
 
 	// Enable MFA policy but don't configure tx type
 	policy := &types.MFAPolicy{
@@ -120,7 +127,7 @@ func (s *GatingTestSuite) TestRequiresMFA_TxTypeNotConfigured() {
 		CreatedAt: time.Now().Unix(),
 		UpdatedAt: time.Now().Unix(),
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	_, requires, _ := s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal)
@@ -162,11 +169,17 @@ func (s *GatingTestSuite) TestValidateMFAProof_StepUpWithinCategory() {
 	err := s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
 		TransactionType: types.SensitiveTxLargeWithdrawal,
 		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 	})
 	s.Require().NoError(err)
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
 		TransactionType: types.SensitiveTxMediumWithdrawal,
 		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 	})
 	s.Require().NoError(err)
 
@@ -253,6 +266,8 @@ func (s *GatingTestSuite) TestValidateMFAProof_NilProof() {
 // Test: CanBypassMFA - with trusted device
 func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 	address := sdk.AccAddress([]byte("test-bypass-trusted"))
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "trusted-bypass-factor")
+	s.Require().NoError(err)
 
 	// Add a trusted device with bypass enabled
 	deviceInfo := &types.DeviceInfo{
@@ -260,7 +275,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 		UserAgent:      "Test Agent",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400, // Expires in 24 hours
 	}
-	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Set policy to allow device bypass
@@ -284,6 +299,9 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 		TransactionType:             types.SensitiveTxLargeWithdrawal,
 		Enabled:                     true,
 		AllowTrustedDeviceReduction: true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 	}
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
@@ -320,6 +338,8 @@ func (s *GatingTestSuite) TestCanBypassMFA_UnknownDevice() {
 // Test: CanBypassMFA - policy disallows bypass
 func (s *GatingTestSuite) TestCanBypassMFA_PolicyDisallows() {
 	address := sdk.AccAddress([]byte("test-bypass-disallowed"))
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "disallow-factor")
+	s.Require().NoError(err)
 
 	// Add a trusted device
 	deviceInfo := &types.DeviceInfo{
@@ -327,7 +347,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_PolicyDisallows() {
 		UserAgent:      "Device",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400,
 	}
-	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Set policy that disallows bypass (TrustedDeviceRule not enabled)
@@ -357,6 +377,9 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 	s.Require().False(mfaRequired)
 	s.Require().False(bypassAllowed)
 
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "fullflow-factor")
+	s.Require().NoError(err)
+
 	// Step 2: Enable policy
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
@@ -370,13 +393,16 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 			MaxTrustedDevices: 5,
 		},
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	// Configure tx type as sensitive (need to register the mapping)
 	txConfig := &types.SensitiveTxConfig{
 		TransactionType: types.SensitiveTxLargeWithdrawal,
 		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 	}
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
@@ -392,6 +418,8 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 	address := sdk.AccAddress([]byte("test-check-bypass"))
 	msgTypeURL := "/virtengine.market.v1.MsgWithdrawLease" // Example msg type URL
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "device-bypass-factor")
+	s.Require().NoError(err)
 
 	// Enable policy with device bypass
 	policy := &types.MFAPolicy{
@@ -407,7 +435,7 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 			RequireReauthForSensitive: false,
 		},
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	// Configure tx type
@@ -415,6 +443,9 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 		TransactionType:             types.SensitiveTxLargeWithdrawal,
 		Enabled:                     true,
 		AllowTrustedDeviceReduction: true,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 	}
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
@@ -434,116 +465,63 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 	_ = bypassAllowed
 }
 
-// TODO: The following tests are commented out because the methods don't exist yet.
-// Uncomment when the following methods are implemented:
-// - keeper.GetVEIDThreshold
-// - keeper.ShouldEnforceMFA
-// - keeper.IsFactorActive (exists as HasActiveFactorOfType)
-// - keeper.GetActiveFactorCount
-
-/*
-// Test: GetVEIDThreshold
 func (s *GatingTestSuite) TestGetVEIDThreshold() {
 	address := sdk.AccAddress([]byte("test-veid-threshold"))
 
-	// No policy - should return 0
 	threshold := s.hooks.GetVEIDThreshold(s.ctx, address)
-	s.Require().Equal(uint32(0), threshold)
+	s.Require().Equal(types.DefaultParams().MinVEIDScoreForMFA, threshold)
 
-	// Set policy with threshold
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "veid-threshold-totp")
+	s.Require().NoError(err)
+
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
-		VEIDThreshold:  75,
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+		VEIDThreshold: 75,
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	threshold = s.hooks.GetVEIDThreshold(s.ctx, address)
 	s.Require().Equal(uint32(75), threshold)
 }
 
-// Test: ShouldEnforceMFA - based on VEID score
 func (s *GatingTestSuite) TestShouldEnforceMFA_VEIDScore() {
 	address := sdk.AccAddress([]byte("test-enforce-veid"))
+	err := enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "enforce-veid-totp")
+	s.Require().NoError(err)
 
-	// Set policy with threshold
 	policy := &types.MFAPolicy{
-		AccountAddress:   address.String(),
-		Enabled:          true,
-		VEIDThreshold:    50,
-		EnforceForLowVEID: true,
+		AccountAddress: address.String(),
+		Enabled:        true,
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+		VEIDThreshold: 50,
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
-	// High score - may not need MFA (depends on implementation)
-	enforce := s.hooks.ShouldEnforceMFA(s.ctx, address, 80)
-	s.Require().False(enforce)
-
-	// Low score - should enforce MFA
-	enforce = s.hooks.ShouldEnforceMFA(s.ctx, address, 30)
-	s.Require().True(enforce)
+	s.Require().False(s.hooks.ShouldEnforceMFA(s.ctx, address, 80))
+	s.Require().True(s.hooks.ShouldEnforceMFA(s.ctx, address, 30))
 }
 
-// Test: IsFactorActive
-func (s *GatingTestSuite) TestIsFactorActive() {
-	address := sdk.AccAddress([]byte("test-factor-active"))
-
-	// No factor enrolled
-	active := s.keeper.IsFactorActive(s.ctx, address, types.FactorTypeTOTP)
-	s.Require().False(active)
-
-	// Enroll factor
-	enrollment := &types.FactorEnrollment{
-		AccountAddress:   address.String(),
-		FactorType:       types.FactorTypeTOTP,
-		FactorID:         "active-factor",
-		PublicIdentifier: []byte("totp-key"),
-		Status:           types.EnrollmentStatusActive,
-		EnrolledAt:       time.Now().Unix(),
-	}
-	err := s.keeper.EnrollFactor(s.ctx, enrollment)
-	s.Require().NoError(err)
-
-	active = s.keeper.IsFactorActive(s.ctx, address, types.FactorTypeTOTP)
-	s.Require().True(active)
-
-	// Revoke factor
-	err = s.keeper.RevokeFactor(s.ctx, address, types.FactorTypeTOTP, "active-factor")
-	s.Require().NoError(err)
-
-	active = s.keeper.IsFactorActive(s.ctx, address, types.FactorTypeTOTP)
-	s.Require().False(active)
-}
-
-// Test: GetActiveFactorCount
 func (s *GatingTestSuite) TestGetActiveFactorCount() {
 	address := sdk.AccAddress([]byte("test-factor-count"))
 
-	// No factors
 	count := s.keeper.GetActiveFactorCount(s.ctx, address)
 	s.Require().Equal(0, count)
 
-	// Add multiple factors
-	factors := []types.FactorType{types.FactorTypeTOTP, types.FactorTypeSMS, types.FactorTypeEmail}
-	for i, ft := range factors {
-		enrollment := &types.FactorEnrollment{
-			AccountAddress:   address.String(),
-			FactorType:       ft,
-			FactorID:         string(rune('a' + i)),
-			PublicIdentifier: []byte("key"),
-			Status:           types.EnrollmentStatusActive,
-			EnrolledAt:       time.Now().Unix(),
-		}
-		err := s.keeper.EnrollFactor(s.ctx, enrollment)
-		s.Require().NoError(err)
-	}
+	s.Require().NoError(enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "count-totp"))
+	s.Require().NoError(enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeSMS, "count-sms"))
+	s.Require().NoError(enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeEmail, "count-email"))
 
 	count = s.keeper.GetActiveFactorCount(s.ctx, address)
 	s.Require().Equal(3, count)
 }
-*/
 
 // Test: HasActiveFactorOfType - using the existing keeper method
 func (s *GatingTestSuite) TestHasActiveFactorOfType() {

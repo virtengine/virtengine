@@ -205,23 +205,15 @@ def compute_model_hash(model_path: str) -> str:
     if not model_dir.exists():
         raise ValueError(f"Model path does not exist: {model_path}")
     
-    # Get all files in sorted order for determinism
-    files = sorted(model_dir.rglob("*"))
-    
-    for filepath in files:
-        if filepath.is_file():
-            # Skip metadata files we generate
-            if filepath.name in ["export_metadata.json", "MODEL_HASH.txt", "manifest.json"]:
-                continue
-            
-            # Hash file path (relative) for consistency
-            rel_path = filepath.relative_to(model_dir)
-            hasher.update(str(rel_path).encode())
-            
-            # Hash file content
-            with open(filepath, 'rb') as f:
-                for chunk in iter(lambda: f.read(8192), b''):
-                    hasher.update(chunk)
+    for filepath in sorted(model_dir.rglob("*")):
+        if not filepath.is_file():
+            continue
+        if filepath.name in ["export_metadata.json", "MODEL_HASH.txt", "manifest.json"]:
+            continue
+
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                hasher.update(chunk)
     
     return hasher.hexdigest()
 
@@ -238,22 +230,17 @@ def save_model_hash(model_path: str, model_hash: str, version: str) -> str:
     Returns:
         Path to MODEL_HASH.txt
     """
-    hash_content = f"""# VirtEngine Trust Score Model Hash
-# Generated: {datetime.utcnow().isoformat()}Z
-# Version: {version}
-#
-# This hash is used for:
-# - On-chain model version verification
-# - Validator hash consensus checking
-# - Governance proposal model identification
-#
-# Algorithm: SHA-256
-# Scope: All model files (saved_model.pb, variables/*)
-
-SHA256={model_hash}
-VERSION={version}
-TIMESTAMP={datetime.utcnow().isoformat()}Z
-"""
+    hash_content = "\n".join(
+        [
+            "# VirtEngine Trust Score Model Hash",
+            "# Deterministic release artifact for the SavedModel runtime bundle.",
+            "# Algorithm: SHA-256",
+            "# Scope: model directory files excluding generated manifest metadata",
+            f"SHA256={model_hash}",
+            f"VERSION={version}",
+            "",
+        ]
+    )
     
     # Save in model directory
     model_dir = Path(model_path).parent
@@ -263,15 +250,6 @@ TIMESTAMP={datetime.utcnow().isoformat()}Z
         f.write(hash_content)
     
     logger.info(f"Model hash saved to: {hash_path}")
-    
-    # Also save to models/trust_score root
-    root_hash_path = Path("models/trust_score/MODEL_HASH.txt")
-    root_hash_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(root_hash_path, 'w') as f:
-        f.write(hash_content)
-    
-    logger.info(f"Model hash copied to: {root_hash_path}")
     
     return str(hash_path)
 
@@ -507,10 +485,6 @@ def train_and_export(
         manifest_generator.save(manifest, str(manifest_path))
         logger.info(f"Manifest saved to: {manifest_path}")
         
-        # Copy manifest to models/trust_score
-        root_manifest_path = Path("models/trust_score/manifest.json")
-        manifest_generator.save(manifest, str(root_manifest_path))
-        
         # Step 7: Generate governance proposal
         logger.info("")
         logger.info("STEP 7: Generate Governance Proposal")
@@ -519,7 +493,7 @@ def train_and_export(
         gov_generator = GovernanceProposalGenerator()
         proposal = gov_generator.generate(
             manifest=manifest,
-            model_url=f"ipfs://placeholder/{model_hash}",  # Placeholder
+            model_url=manifest_path.resolve().as_uri(),
         )
         
         proposal_path = output_path / "governance_proposal.json"

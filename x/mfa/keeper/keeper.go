@@ -158,6 +158,9 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	if err := params.Validate(); err != nil {
 		return err
 	}
+	if err := k.validateExistingStateAgainstParams(ctx, params); err != nil {
+		return err
+	}
 
 	store := ctx.KVStore(k.skey)
 	bz, err := json.Marshal(&paramsStore{
@@ -423,6 +426,10 @@ func (k Keeper) HasActiveFactorOfType(ctx sdk.Context, address sdk.AccAddress, f
 	return len(k.GetActiveFactorsByType(ctx, address, factorType)) > 0
 }
 
+func (k Keeper) GetActiveFactorCount(ctx sdk.Context, address sdk.AccAddress) int {
+	return len(k.getActiveFactorTypeSet(ctx, address))
+}
+
 // IsMFAEnabled checks if MFA is enabled for an account.
 // MFA is considered enabled if the account has an active MFA policy with at least one enrolled factor.
 func (k Keeper) IsMFAEnabled(ctx sdk.Context, address sdk.AccAddress) (bool, error) {
@@ -475,6 +482,10 @@ func (k Keeper) SetMFAPolicy(ctx sdk.Context, policy *types.MFAPolicy) error {
 	address, err := sdk.AccAddressFromBech32(policy.AccountAddress)
 	if err != nil {
 		return types.ErrInvalidAddress.Wrapf("invalid account address: %v", err)
+	}
+
+	if err := k.validatePolicyState(ctx, address, policy); err != nil {
+		return err
 	}
 
 	store := ctx.KVStore(k.skey)
@@ -967,6 +978,10 @@ type sessionStore struct {
 
 // CreateAuthorizationSession creates a new authorization session
 func (k Keeper) CreateAuthorizationSession(ctx sdk.Context, session *types.AuthorizationSession) error {
+	if err := session.Validate(); err != nil {
+		return err
+	}
+
 	address, err := sdk.AccAddressFromBech32(session.AccountAddress)
 	if err != nil {
 		return types.ErrInvalidAddress.Wrapf("invalid account address: %v", err)
@@ -1142,6 +1157,18 @@ type trustedDeviceStore struct {
 // Returns the plaintext trust token that should be sent to the client
 func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) (string, error) {
 	params := k.GetParams(ctx)
+	if !params.IsFactorTypeAllowed(types.FactorTypeTrustedDevice) {
+		return "", types.ErrInvalidFactorType.Wrap("trusted_device factor type is disabled by params")
+	}
+	if device == nil {
+		return "", types.ErrInvalidEnrollment.Wrap("device info cannot be nil")
+	}
+	if device.Fingerprint == "" {
+		return "", types.ErrInvalidEnrollment.Wrap("device fingerprint cannot be empty")
+	}
+	if _, found := k.GetTrustedDevice(ctx, address, device.Fingerprint); found {
+		return "", types.ErrEnrollmentAlreadyExists.Wrapf("trusted device %s already exists", device.Fingerprint)
+	}
 
 	// Check max trusted devices
 	existing := k.GetTrustedDevices(ctx, address)
@@ -1168,27 +1195,15 @@ func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device
 	}
 	device.TrustTokenHash = string(hashedToken)
 
-	store := ctx.KVStore(k.skey)
-	key := types.TrustedDeviceKey(address, device.Fingerprint)
-
 	td := types.TrustedDevice{
 		AccountAddress: address.String(),
 		DeviceInfo:     *device,
 		AddedAt:        now,
 		LastUsedAt:     now,
 	}
-
-	bz, err := json.Marshal(&trustedDeviceStore{
-		AccountAddress: td.AccountAddress,
-		DeviceInfo:     td.DeviceInfo,
-		AddedAt:        td.AddedAt,
-		LastUsedAt:     td.LastUsedAt,
-	})
-	if err != nil {
+	if err := k.storeTrustedDevice(ctx, address, &td); err != nil {
 		return "", err
 	}
-
-	store.Set(key, bz)
 
 	// Emit event
 	ctx.EventManager().EmitEvent(
@@ -1323,6 +1338,9 @@ func (k Keeper) SetSensitiveTxConfig(ctx sdk.Context, config *types.SensitiveTxC
 	if err := config.Validate(); err != nil {
 		return err
 	}
+	if err := k.validateSensitiveTxConfigState(ctx, config); err != nil {
+		return err
+	}
 
 	store := ctx.KVStore(k.skey)
 	key := types.SensitiveTxConfigKey(config.TransactionType)
@@ -1393,23 +1411,27 @@ func (k Keeper) GetAllSensitiveTxConfigs(ctx sdk.Context) []types.SensitiveTxCon
 
 // InitGenesis initializes the mfa module's state from a genesis state
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
-	// Set params
-	if err := k.SetParams(ctx, gs.Params); err != nil {
+	if err := gs.Validate(); err != nil {
 		panic(err)
 	}
 
-	// Set MFA policies
-	for _, policy := range gs.MFAPolicies {
-		p := policy
-		if err := k.SetMFAPolicy(ctx, &p); err != nil {
-			panic(err)
-		}
+	// Set params
+	if err := k.SetParams(ctx, gs.Params); err != nil {
+		panic(err)
 	}
 
 	// Set factor enrollments
 	for _, enrollment := range gs.FactorEnrollments {
 		e := enrollment
 		if err := k.EnrollFactor(ctx, &e); err != nil {
+			panic(err)
+		}
+	}
+
+	// Set MFA policies after enrollments so runtime invariants can be enforced.
+	for _, policy := range gs.MFAPolicies {
+		p := policy
+		if err := k.SetMFAPolicy(ctx, &p); err != nil {
 			panic(err)
 		}
 	}
@@ -1424,9 +1446,12 @@ func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 
 	// Set trusted devices
 	for _, device := range gs.TrustedDevices {
-		address, _ := sdk.AccAddressFromBech32(device.AccountAddress)
-		info := device.DeviceInfo
-		if _, err := k.AddTrustedDevice(ctx, address, &info); err != nil {
+		address, err := sdk.AccAddressFromBech32(device.AccountAddress)
+		if err != nil {
+			panic(err)
+		}
+		td := device
+		if err := k.storeTrustedDevice(ctx, address, &td); err != nil {
 			panic(err)
 		}
 	}
@@ -1516,4 +1541,132 @@ func safeUint32FromInt(value int) uint32 {
 	}
 	//nolint:gosec // range checked above
 	return uint32(value)
+}
+
+func (k Keeper) getActiveFactorTypeSet(ctx sdk.Context, address sdk.AccAddress) map[types.FactorType]struct{} {
+	enrollments := k.GetFactorEnrollments(ctx, address)
+	now := ctx.BlockTime()
+	active := make(map[types.FactorType]struct{})
+	for _, enrollment := range enrollments {
+		if enrollment.CanVerify(now) {
+			active[enrollment.FactorType] = struct{}{}
+		}
+	}
+	return active
+}
+
+func (k Keeper) validatePolicyState(ctx sdk.Context, address sdk.AccAddress, policy *types.MFAPolicy) error {
+	params := k.GetParams(ctx)
+	if err := types.ValidatePolicyAllowedFactors(params, policy); err != nil {
+		return err
+	}
+	if !policy.Enabled || !params.RequireAtLeastOneFactor {
+		return nil
+	}
+
+	activeFactors := k.getActiveFactorTypeSet(ctx, address)
+	if len(activeFactors) == 0 {
+		return types.ErrNoActiveFactors.Wrap("must enroll at least one active factor before enabling MFA")
+	}
+	if !types.AnyCombinationSatisfied(policy.RequiredFactors, activeFactors) {
+		return types.ErrInvalidPolicy.Wrap("enabled policy must have at least one satisfiable required factor combination")
+	}
+
+	return nil
+}
+
+func (k Keeper) validateSensitiveTxConfigState(ctx sdk.Context, config *types.SensitiveTxConfig) error {
+	return types.ValidateConfigAllowedFactors(k.GetParams(ctx), config)
+}
+
+func (k Keeper) validateExistingStateAgainstParams(ctx sdk.Context, params types.Params) error {
+	store := ctx.KVStore(k.skey)
+
+	policyIterator := storetypes.KVStorePrefixIterator(store, types.PrefixMFAPolicy)
+	defer policyIterator.Close()
+	for ; policyIterator.Valid(); policyIterator.Next() {
+		var ps mfaPolicyStore
+		if err := json.Unmarshal(policyIterator.Value(), &ps); err != nil {
+			return err
+		}
+		policy := types.MFAPolicy{
+			AccountAddress:     ps.AccountAddress,
+			RequiredFactors:    ps.RequiredFactors,
+			TrustedDeviceRule:  ps.TrustedDeviceRule,
+			RecoveryFactors:    ps.RecoveryFactors,
+			KeyRotationFactors: ps.KeyRotationFactors,
+			SessionDuration:    ps.SessionDuration,
+			VEIDThreshold:      ps.VEIDThreshold,
+			Enabled:            ps.Enabled,
+			CreatedAt:          ps.CreatedAt,
+			UpdatedAt:          ps.UpdatedAt,
+		}
+		if err := types.ValidatePolicyAllowedFactors(params, &policy); err != nil {
+			return err
+		}
+	}
+
+	configIterator := storetypes.KVStorePrefixIterator(store, types.PrefixSensitiveTxConfig)
+	defer configIterator.Close()
+	for ; configIterator.Valid(); configIterator.Next() {
+		var cs sensitiveTxConfigStore
+		if err := json.Unmarshal(configIterator.Value(), &cs); err != nil {
+			return err
+		}
+		config := types.SensitiveTxConfig{
+			TransactionType:             cs.TransactionType,
+			Enabled:                     cs.Enabled,
+			MinVEIDScore:                cs.MinVEIDScore,
+			RequiredFactorCombinations:  cs.RequiredFactorCombinations,
+			SessionDuration:             cs.SessionDuration,
+			IsSingleUse:                 cs.IsSingleUse,
+			AllowTrustedDeviceReduction: cs.AllowTrustedDeviceReduction,
+			ValueThreshold:              cs.ValueThreshold,
+			CooldownPeriod:              cs.CooldownPeriod,
+			Description:                 cs.Description,
+		}
+		if err := types.ValidateConfigAllowedFactors(params, &config); err != nil {
+			return err
+		}
+	}
+
+	enrollmentIterator := storetypes.KVStorePrefixIterator(store, types.PrefixFactorEnrollment)
+	defer enrollmentIterator.Close()
+	for ; enrollmentIterator.Valid(); enrollmentIterator.Next() {
+		var es factorEnrollmentStore
+		if err := json.Unmarshal(enrollmentIterator.Value(), &es); err != nil {
+			return err
+		}
+		if !params.IsFactorTypeAllowed(es.FactorType) {
+			return types.ErrInvalidFactorType.Wrapf("existing enrollment uses disallowed factor type %s", es.FactorType.String())
+		}
+	}
+
+	return nil
+}
+
+func (k Keeper) storeTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.TrustedDevice) error {
+	if device == nil {
+		return types.ErrInvalidEnrollment.Wrap("trusted device cannot be nil")
+	}
+	if err := device.Validate(); err != nil {
+		return err
+	}
+	if device.AccountAddress != address.String() {
+		return types.ErrInvalidAddress.Wrap("trusted device account address does not match key address")
+	}
+
+	store := ctx.KVStore(k.skey)
+	key := types.TrustedDeviceKey(address, device.DeviceInfo.Fingerprint)
+	bz, err := json.Marshal(&trustedDeviceStore{
+		AccountAddress: device.AccountAddress,
+		DeviceInfo:     device.DeviceInfo,
+		AddedAt:        device.AddedAt,
+		LastUsedAt:     device.LastUsedAt,
+	})
+	if err != nil {
+		return err
+	}
+	store.Set(key, bz)
+	return nil
 }

@@ -297,14 +297,10 @@ func generateRecommendations(analyses []ScalingAnalysis) []Recommendation {
 
 // TestValidatorScaleDegradation analyzes validator operations scaling
 func TestValidatorScaleDegradation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping degradation analysis in short mode")
-	}
-
 	t.Logf("=== Validator Scale Degradation Analysis ===")
 
 	analyzer := NewPerformanceAnalyzer()
-	scales := []int{1000, 5000, 10000, 50000}
+	scales := shortScaleSlice([]int{500, 1000, 2500}, []int{1000, 5000, 10000, 50000})
 
 	for _, scale := range scales {
 		t.Run(fmt.Sprintf("scale_%d", scale), func(t *testing.T) {
@@ -389,14 +385,10 @@ func TestValidatorScaleDegradation(t *testing.T) {
 
 // TestMarketplaceScaleDegradation analyzes marketplace operations scaling
 func TestMarketplaceScaleDegradation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping marketplace degradation analysis in short mode")
-	}
-
 	t.Logf("=== Marketplace Scale Degradation Analysis ===")
 
 	analyzer := NewPerformanceAnalyzer()
-	scales := []int{1000, 5000, 10000}
+	scales := shortScaleSlice([]int{500, 1000, 2500}, []int{1000, 5000, 10000})
 
 	for _, scale := range scales {
 		t.Run(fmt.Sprintf("scale_%d", scale), func(t *testing.T) {
@@ -467,14 +459,10 @@ func TestMarketplaceScaleDegradation(t *testing.T) {
 
 // TestProviderScaleDegradation analyzes provider operations scaling
 func TestProviderScaleDegradation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping provider degradation analysis in short mode")
-	}
-
 	t.Logf("=== Provider Scale Degradation Analysis ===")
 
 	analyzer := NewPerformanceAnalyzer()
-	scales := []int{50, 100, 200, 500}
+	scales := shortScaleSlice([]int{10, 25, 50}, []int{50, 100, 200, 500})
 
 	for _, scale := range scales {
 		t.Run(fmt.Sprintf("providers_%d", scale), func(t *testing.T) {
@@ -540,17 +528,13 @@ func TestProviderScaleDegradation(t *testing.T) {
 
 // TestComprehensiveDegradationReport generates a full degradation report
 func TestComprehensiveDegradationReport(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping comprehensive report in short mode")
-	}
-
 	t.Logf("=== Comprehensive Degradation Report ===")
 
 	analyzer := NewPerformanceAnalyzer()
 
 	// Run validator tests
 	t.Log("Analyzing validator operations...")
-	for _, scale := range []int{1000, 5000, 10000} {
+	for _, scale := range shortScaleSlice([]int{500, 1000, 2500}, []int{1000, 5000, 10000}) {
 		start := time.Now()
 		store := populateValidatorStore(scale)
 		populateTime := time.Since(start)
@@ -576,7 +560,7 @@ func TestComprehensiveDegradationReport(t *testing.T) {
 
 	// Run marketplace tests
 	t.Log("Analyzing marketplace operations...")
-	for _, scale := range []int{1000, 5000, 10000} {
+	for _, scale := range shortScaleSlice([]int{500, 1000, 2500}, []int{1000, 5000, 10000}) {
 		start := time.Now()
 		store := populateMarketplace(scale, 5, 50)
 		populateTime := time.Since(start)
@@ -593,7 +577,7 @@ func TestComprehensiveDegradationReport(t *testing.T) {
 
 	// Run state sync tests
 	t.Log("Analyzing state sync operations...")
-	for _, scale := range []int{1000, 5000, 10000} {
+	for _, scale := range shortScaleSlice([]int{500, 1000, 2500}, []int{1000, 5000, 10000}) {
 		start := time.Now()
 		store := populateStateStore(scale, 256)
 		populateTime := time.Since(start)
@@ -675,14 +659,10 @@ func TestComprehensiveDegradationReport(t *testing.T) {
 
 // TestConcurrentLoadDegradation tests degradation under concurrent load
 func TestConcurrentLoadDegradation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrent load test in short mode")
-	}
-
 	t.Logf("=== Concurrent Load Degradation Analysis ===")
 
-	concurrencyLevels := []int{1, 2, 4, 8, 16}
-	duration := 5 * time.Second
+	concurrencyLevels := shortScaleSlice([]int{1, 2, 4, 8}, []int{1, 2, 4, 8, 16})
+	duration := shortScaleDuration(2*time.Second, 5*time.Second)
 
 	var results []struct {
 		concurrency int
@@ -692,7 +672,7 @@ func TestConcurrentLoadDegradation(t *testing.T) {
 
 	for _, concurrency := range concurrencyLevels {
 		t.Run(fmt.Sprintf("concurrency_%d", concurrency), func(t *testing.T) {
-			store := populateValidatorStore(10000)
+			store := populateValidatorStore(shortScaleInt(2500, 10000))
 
 			ctx, cancel := context.WithTimeout(context.Background(), duration)
 			defer cancel()
@@ -758,13 +738,9 @@ func TestConcurrentLoadDegradation(t *testing.T) {
 
 // TestMemoryDegradation tests memory usage at various scales
 func TestMemoryDegradation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping memory degradation test in short mode")
-	}
-
 	t.Logf("=== Memory Degradation Analysis ===")
 
-	scales := []int{1000, 5000, 10000, 50000}
+	scales := shortScaleSlice([]int{500, 1000, 2500}, []int{1000, 5000, 10000, 50000})
 
 	type memResult struct {
 		scale     int

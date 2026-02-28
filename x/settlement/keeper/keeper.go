@@ -15,6 +15,7 @@ import (
 
 	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -136,17 +137,18 @@ type VerificationResult struct {
 
 // Keeper of the settlement store
 type Keeper struct {
-	skey             storetypes.StoreKey
-	cdc              codec.BinaryCodec
-	bankKeeper       BankKeeper
-	escrowKeeper     EscrowKeeper
-	billingKeeper    BillingKeeper
-	dexSwap          DexSwapExecutor
-	offRampBridge    OffRampBridge
-	complianceKeeper ComplianceKeeper
-	oracleKeeper     OracleKeeper
-	priceFeeds       map[types.OracleSourceType]PriceFeed
-	encryptionKeeper EncryptionKeeper
+	skey               storetypes.StoreKey
+	cdc                codec.BinaryCodec
+	bankKeeper         BankKeeper
+	escrowKeeper       EscrowKeeper
+	billingKeeper      BillingKeeper
+	dexSwap            DexSwapExecutor
+	offRampBridge      OffRampBridge
+	complianceKeeper   ComplianceKeeper
+	oracleKeeper       OracleKeeper
+	stakeRoutingKeeper StakeRoutingKeeper
+	priceFeeds         map[types.OracleSourceType]PriceFeed
+	encryptionKeeper   EncryptionKeeper
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
@@ -177,21 +179,32 @@ type EncryptionKeeper interface {
 	ValidateEnvelopeRecipients(ctx sdk.Context, envelope *encryptiontypes.EncryptedPayloadEnvelope) ([]string, error)
 }
 
+// StakeRoutingKeeper provides validator and delegator stake snapshots for settlement rewards.
+type StakeRoutingKeeper interface {
+	GetAllValidators(ctx sdk.Context) []sdk.AccAddress
+	GetValidatorStake(ctx sdk.Context, validatorAddr sdk.AccAddress) int64
+	GetTotalStake(ctx sdk.Context) int64
+	GetValidatorShares(ctx sdk.Context, validatorAddr string) (delegationtypes.ValidatorShares, bool)
+	GetValidatorDelegations(ctx sdk.Context, validatorAddr string) []delegationtypes.Delegation
+	GetParams(ctx sdk.Context) delegationtypes.Params
+}
+
 // NewKeeper creates and returns an instance for settlement keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, escrowKeeper EscrowKeeper, authority string, encryptionKeeper EncryptionKeeper) Keeper {
 	keeper := Keeper{
-		cdc:              cdc,
-		skey:             skey,
-		bankKeeper:       bankKeeper,
-		escrowKeeper:     escrowKeeper,
-		billingKeeper:    nil,
-		dexSwap:          nil,
-		offRampBridge:    nil,
-		complianceKeeper: nil,
-		oracleKeeper:     nil,
-		priceFeeds:       make(map[types.OracleSourceType]PriceFeed),
-		encryptionKeeper: encryptionKeeper,
-		authority:        authority,
+		cdc:                cdc,
+		skey:               skey,
+		bankKeeper:         bankKeeper,
+		escrowKeeper:       escrowKeeper,
+		billingKeeper:      nil,
+		dexSwap:            nil,
+		offRampBridge:      nil,
+		complianceKeeper:   nil,
+		oracleKeeper:       nil,
+		stakeRoutingKeeper: nil,
+		priceFeeds:         make(map[types.OracleSourceType]PriceFeed),
+		encryptionKeeper:   encryptionKeeper,
+		authority:          authority,
 	}
 	return keeper
 }
@@ -214,6 +227,11 @@ func (k *Keeper) SetOffRampBridge(bridge OffRampBridge) {
 // SetComplianceKeeper configures compliance checks.
 func (k *Keeper) SetComplianceKeeper(keeper ComplianceKeeper) {
 	k.complianceKeeper = keeper
+}
+
+// SetStakeRoutingKeeper configures the validator/delegator stake routing source.
+func (k *Keeper) SetStakeRoutingKeeper(stakeRoutingKeeper StakeRoutingKeeper) {
+	k.stakeRoutingKeeper = stakeRoutingKeeper
 }
 
 // SetOracleKeeper configures the oracle keeper and Cosmos oracle price feed.

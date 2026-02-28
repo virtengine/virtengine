@@ -1,47 +1,36 @@
 # VirtEngine Mainnet Genesis Guide
 
-**Version:** 1.1.0  
-**Date:** 2026-02-06  
-**Task Reference:** 22B
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Inputs and Artifacts](#inputs-and-artifacts)
-3. [Prerequisites](#prerequisites)
-4. [Mainnet Parameter Configuration](#mainnet-parameter-configuration)
-5. [Genesis Ceremony (Production)](#genesis-ceremony-production)
-6. [Genesis Validation Checks](#genesis-validation-checks)
-7. [Validator Onboarding (Summary)](#validator-onboarding-summary)
-8. [Genesis Distribution + Hash Verification](#genesis-distribution--hash-verification)
-9. [Pre-Launch Checklist Automation](#pre-launch-checklist-automation)
-
----
+**Version:** 2.1.0
+**Date:** 2026-04-11
+**Task Reference:** B1
 
 ## Overview
+This guide describes the reproducible process for producing the VirtEngine
+mainnet `genesis.json` from the canonical repository inputs in `config/mainnet`
+using the automation in `scripts/mainnet`.
 
-This guide defines the deterministic process for producing the VirtEngine
-mainnet `genesis.json` using audited configuration inputs and ceremony
-tooling. Production parameters live in `config/mainnet/*` and are applied via
-`scripts/mainnet/*` so the final genesis is reproducible across all
-participants.
+The process is considered valid only when:
+- the assembled genesis passes deterministic checks,
+- `virtengine genesis validate` succeeds,
+- the emitted SHA-256 files match the published artifacts,
+- the launch packet evidence is updated with the final publication bundle.
 
-## Inputs and Artifacts
+## Canonical Inputs
+- `config/mainnet/genesis-params.json`
+- `config/mainnet/genesis-allocations.json`
+- `config/mainnet/genesis-checks.json`
+- `config/mainnet/gentx-constraints.json`
+- `gentx/` directory containing the accepted validator submissions
 
-### Canonical Inputs
-- `config/mainnet/genesis-params.json` — chain + module parameters
-- `config/mainnet/genesis-allocations.json` — initial account allocations
-- `config/mainnet/gentx-constraints.json` — gentx validation rules
-- `config/mainnet/genesis-checks.json` — deterministic validation assertions
-
-### Ceremony Inputs
-- `gentx/` — directory containing validator gentx JSON files
-
-### Outputs
+## Publication Artifacts
 - `artifacts/mainnet/genesis.json`
 - `artifacts/mainnet/genesis.sha256`
+- `artifacts/mainnet/gentx.sha256`
+- `artifacts/mainnet/ceremony-manifest.json`
+- `artifacts/mainnet/ceremony-manifest.sha256`
+
+As of `2026-04-11`, the final checked-in genesis bundle is published with
+SHA-256 `a8d8a4a4f19882503265482c9433a6646d8dbbfe62f81c5945e81c32da9e6032`.
 
 ## Prerequisites
 
@@ -49,91 +38,96 @@ participants.
 virtengine version
 jq --version
 sha256sum --version
+python --version
 ```
 
+The scripts will fail fast if `jq`, `sha256sum`, or a working Python 3 launcher
+are unavailable.
+
 ## Mainnet Parameter Configuration
+`config/mainnet/genesis-params.json` contains the approved chain and module
+overrides. The parameter applicator merges those overrides onto the chain's
+required default params so partial module overrides do not erase mandatory
+fields from the genesis template.
 
-All mainnet parameters are captured in `config/mainnet/genesis-params.json`.
-This file is treated as the canonical source of production values.
+Areas currently enforced by deterministic checks include:
+- staking, slashing, gov, mint, and crisis settings,
+- VEID and MFA defaults,
+- encryption module settings,
+- HPC, marketplace, and settlement parameters,
+- chain ID and genesis time.
 
-### Chain Parameters (Core)
-- **Staking**: 2-week unbonding, 100 validators, 5% minimum commission
-- **Mint**: inflation bounds 7–20%, goal bonded 67%
-- **Gov**: 2-week max deposit, 3-day voting, 20% quorum
-- **Slashing**: 30,000 block window, 5% min signed, 5% double-sign slash
+## Ceremony Flow
+The coordinator runbook is in `_docs/runbooks/mainnet-genesis-ceremony.md`.
+At a high level the ceremony is:
 
-### VEID / MFA / Encryption / HPC
-- **VEID**: deterministic score tiers, signatures required
-- **MFA**: 15-minute session, 5-minute challenge TTL
-- **Encryption**: X25519-XSalsa20-Poly1305 only, signatures required
-- **HPC**: fee distribution and routing enforcement enabled
+1. Validate every gentx against `config/mainnet/gentx-constraints.json`.
+2. Build genesis from the frozen mainnet inputs with
+   `scripts/mainnet/genesis-ceremony.sh`.
+3. Confirm the emitted hashes with `sha256sum -c`.
+4. Update launch evidence and run `scripts/mainnet/prelaunch-checklist.sh`.
+5. Publish the full artifact bundle and collect validator ACKs.
 
-### Marketplace Module (mktplace)
-Marketplace params use chain defaults unless explicitly overridden. The module
-name in genesis is `mktplace` (not `market`). If overrides are required, add
-explicit checks to `config/mainnet/genesis-checks.json` and document in the
-launch packet.
+### Example Ceremony Invocation
 
-## Genesis Ceremony (Production)
-
-All ceremony steps are automated using `scripts/mainnet/genesis-ceremony.sh`.
-This script performs:
-1. `virtengine init` with the target chain ID
-2. Applies `genesis-params.json`
-3. Adds all allocation accounts
-4. Validates gentxs against constraints
-5. Collects gentxs and builds the final genesis
-6. Runs deterministic validation checks
-7. Outputs genesis + hash to `artifacts/mainnet/`
-
-### Example
 ```bash
 scripts/mainnet/genesis-ceremony.sh \
   --gentx-dir ./gentx \
+  --home ./.cache/mainnet-genesis \
   --output ./artifacts/mainnet \
-  --chain-id virtengine-1 \
-  --genesis-time 2026-06-01T00:00:00Z
+  --params ./config/mainnet/genesis-params.json \
+  --allocations ./config/mainnet/genesis-allocations.json \
+  --checks ./config/mainnet/genesis-checks.json \
+  --constraints ./config/mainnet/gentx-constraints.json
 ```
 
-## Genesis Validation Checks
+## Failure Conditions Enforced by the Tooling
+The mainnet scripts are intentionally fail-closed. The ceremony will stop if it
+detects any of the following:
+- blocked or evidence-incomplete allocations,
+- placeholder or duplicate allocation addresses,
+- invalid vesting timestamps or malformed allocation totals,
+- gentxs with placeholder metadata, missing `security_contact`, or private P2P
+  endpoints,
+- gentxs whose self-delegation is not funded by the approved allocations,
+- placeholder strings inside the assembled genesis payload,
+- bank supply totals that do not equal the approved allocations,
+- launch packet evidence rows with placeholder paths, missing files, or
+  mismatched hashes,
+- native `virtengine genesis validate` failures.
 
-Deterministic checks live in `config/mainnet/genesis-checks.json` and are
-executed via:
+## Deterministic Hash Verification
+The ceremony canonicalizes JSON artifacts before publication. Verify the
+published bundle with:
 
 ```bash
-scripts/mainnet/genesis-validate.sh \
-  --genesis artifacts/mainnet/genesis.json \
-  --checks config/mainnet/genesis-checks.json
+sha256sum -c ./artifacts/mainnet/genesis.sha256
+sha256sum -c ./artifacts/mainnet/ceremony-manifest.sha256
+scripts/mainnet/genesis-hash.sh --genesis ./artifacts/mainnet/genesis.json
 ```
 
-This verifies core parameter values, VEID/MFA/Encryption/HPC defaults, and
-ensures the chain ID + genesis time match the approved values.
+The output of `genesis-hash.sh` must match the hash recorded in
+`artifacts/mainnet/genesis.sha256`.
 
-## Validator Onboarding (Summary)
+The approved allocation set is archived in
+`_docs/operations/mainnet-allocation-control-record-2026-04-11.md`.
 
-Validator onboarding is documented end-to-end in:
-`_docs/runbooks/validator-onboarding.md`
+## Validator Onboarding Summary
+Validator-specific instructions live in `_docs/runbooks/validator-onboarding.md`.
+Every validator must:
+- generate a gentx with a real public P2P endpoint,
+- provide non-placeholder website and security contact metadata,
+- confirm their self-delegation account is funded in the approved allocations,
+- verify the published `genesis.json`, `gentx.sha256`, and
+  `ceremony-manifest.json` before starting.
 
-Key onboarding dependencies:
-- Hardware profile: `_docs/validators/hardware-requirements.md`
-- Gentx requirements: `config/mainnet/gentx-constraints.json`
-
-## Genesis Distribution + Hash Verification
-
-Distribute the finalized `genesis.json` and hash to all validators:
-
-```bash
-sha256sum artifacts/mainnet/genesis.json
-```
-
-All validators MUST confirm the hash matches before starting nodes.
-
-## Pre-Launch Checklist Automation
-
-The pre-launch automation checks readiness checklists + evidence hashes:
+## Launch Packet and Checklist Gate
+Before publication, update the launch evidence entries in
+`_docs/operations/mainnet-launch-packet.md` and run:
 
 ```bash
 scripts/mainnet/prelaunch-checklist.sh
 ```
 
-Use `--allow-pending` or `--allow-unchecked` only during dry runs.
+Use `--allow-pending` or `--allow-unchecked` only for rehearsal or draft review
+runs. Final publication must pass without either flag.

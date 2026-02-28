@@ -1,35 +1,29 @@
 //go:build upgrade_test
 
-// Package v1_1_0_test is an external test package to avoid import cycles.
-// The testutil/state package imports app, which imports upgrades, which would
-// create a cycle if we used the internal v1_1_0 package for tests.
-//
-// These tests require the full app setup to test upgrade migrations. They are
-// gated behind the "upgrade_test" build tag and should only be run in isolation
-// with a special test harness that doesn't trigger the import cycle.
 package v1_1_0_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	v110 "github.com/virtengine/virtengine/upgrades/software/v1.1.0"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
-// TestCloseOverdrawnEscrowAccounts_Overdraft tests that escrow accounts
-// with insufficient balance are marked as overdrawn during the upgrade.
-//
-// This test is currently skipped because it requires testutil/state which
-// imports app, creating an import cycle:
-//
-//	upgrade_test.go -> testutil/state -> app -> upgrades -> v1.1.0
-//
-// To run these tests, use the dedicated upgrade test harness in tests/upgrade/.
-func TestCloseOverdrawnEscrowAccounts_Overdraft(t *testing.T) {
-	t.Skip("Skipped: requires testutil/state which creates import cycle. Run via tests/upgrade/ harness.")
-}
+func TestUpgradeHarnessCoverageRegistered(t *testing.T) {
+	data, err := os.ReadFile(filepath.Clean("../../../tests/upgrade/test-cases.json"))
+	require.NoError(t, err)
 
-// TestCloseOverdrawnEscrowAccounts_Closed tests that escrow accounts
-// with sufficient balance are properly closed during the upgrade.
-//
-// See TestCloseOverdrawnEscrowAccounts_Overdraft for skip rationale.
-func TestCloseOverdrawnEscrowAccounts_Closed(t *testing.T) {
-	t.Skip("Skipped: requires testutil/state which creates import cycle. Run via tests/upgrade/ harness.")
+	var cases map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &cases))
+
+	_, hasCase := cases[v110.UpgradeName]
+	require.True(t, hasCase, "upgrade %s should have an e2e harness test case", v110.UpgradeName)
+
+	_, isRegistered := utypes.GetUpgradesList()[v110.UpgradeName]
+	require.True(t, isRegistered, "upgrade %s should be registered", v110.UpgradeName)
 }

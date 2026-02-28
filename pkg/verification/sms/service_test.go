@@ -5,13 +5,188 @@ package sms
 
 import (
 	"context"
+	"encoding/base64"
+	"regexp"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/virtengine/virtengine/pkg/cache"
+	signerpkg "github.com/virtengine/virtengine/pkg/verification/signer"
+	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
+
+func newServiceTestConfig() Config {
+	config := DefaultConfig()
+	config.PrimaryProvider = "mock"
+	config.ProviderConfigs = map[string]ProviderConfig{
+		"mock": {
+			Type: "mock",
+		},
+	}
+	config.EnableCarrierLookup = false
+	config.EnableVelocityChecks = false
+	config.EnableVoIPBlocking = false
+	config.RateLimitEnabled = false
+	config.AuditLogEnabled = false
+	config.MetricsEnabled = false
+	config.FailoverEnabled = false
+	return config
+}
+
+func newServiceTestCache() cache.Cache[string, *SMSChallenge] {
+	return cache.NewMemoryCache[string, *SMSChallenge]()
+}
+
+type stubChainIntegrator struct {
+	lastReq     *RecordVerificationRequest
+	recordCalls int
+	closed      bool
+}
+
+func (s *stubChainIntegrator) RecordVerification(ctx context.Context, req RecordVerificationRequest) (*RecordVerificationResponse, error) {
+	copied := req
+	copied.AccountSignature = append([]byte(nil), req.AccountSignature...)
+	copied.EvidenceMetadata = cloneSMSStringMap(req.EvidenceMetadata)
+	s.lastReq = &copied
+	s.recordCalls++
+	return &RecordVerificationResponse{
+		VerificationID: req.VerificationID,
+		Timestamp:      req.VerifiedAt,
+	}, nil
+}
+
+func (s *stubChainIntegrator) UpdateVerificationStatus(ctx context.Context, req UpdateStatusRequest) error {
+	return nil
+}
+
+func (s *stubChainIntegrator) GetVerificationRecord(ctx context.Context, accountAddress string, verificationID string) (*OnChainVerificationRecord, error) {
+	return nil, nil
+}
+
+func (s *stubChainIntegrator) ListVerifications(ctx context.Context, accountAddress string) ([]*OnChainVerificationRecord, error) {
+	return nil, nil
+}
+
+func (s *stubChainIntegrator) RevokeVerification(ctx context.Context, req RevokeVerificationRequest) error {
+	return nil
+}
+
+func (s *stubChainIntegrator) SubmitAttestation(ctx context.Context, attestation *veidtypes.VerificationAttestation) error {
+	return nil
+}
+
+func (s *stubChainIntegrator) Close() error {
+	s.closed = true
+	return nil
+}
+
+type stubSMSSigner struct {
+	activeKey  *veidtypes.SignerKeyInfo
+	signerInfo *veidtypes.SignerRegistryEntry
+	signed     bool
+}
+
+func newStubSMSSigner() *stubSMSSigner {
+	now := time.Now().UTC()
+	activatedAt := now
+	return &stubSMSSigner{
+		activeKey: &veidtypes.SignerKeyInfo{
+			KeyID:          "sms-signer:1",
+			Fingerprint:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			PublicKey:      []byte("stub-public-key"),
+			Algorithm:      veidtypes.ProofTypeEd25519,
+			State:          veidtypes.SignerKeyStateActive,
+			SignerID:       "sms-signer",
+			SequenceNumber: 1,
+			CreatedAt:      now,
+			ActivatedAt:    &activatedAt,
+		},
+		signerInfo: &veidtypes.SignerRegistryEntry{
+			SignerID:         "sms-signer",
+			Name:             "SMS Signer",
+			ValidatorAddress: "virtenginevaloper1smsvalidator",
+			ActiveKeyID:      "sms-signer:1",
+			KeyHistory:       []string{"sms-signer:1"},
+			RegisteredAt:     now,
+			Active:           true,
+			Metadata:         map[string]string{},
+		},
+	}
+}
+
+func (s *stubSMSSigner) SignAttestation(ctx context.Context, attestation *veidtypes.VerificationAttestation) error {
+	s.signed = true
+	attestation.Issuer = veidtypes.NewAttestationIssuer(s.activeKey.Fingerprint, s.signerInfo.ValidatorAddress)
+	attestation.Issuer.KeyID = s.activeKey.KeyID
+	attestation.SetProof(veidtypes.AttestationProof{
+		Type:               veidtypes.ProofTypeEd25519,
+		Created:            time.Now().UTC(),
+		VerificationMethod: "did:virtengine:validator:virtenginevaloper1smsvalidator#sms-signer:1",
+		ProofPurpose:       "assertionMethod",
+		ProofValue:         base64.StdEncoding.EncodeToString([]byte("signed-proof")),
+	})
+	return nil
+}
+
+func (s *stubSMSSigner) VerifyAttestation(ctx context.Context, attestation *veidtypes.VerificationAttestation) (bool, error) {
+	return true, nil
+}
+
+func (s *stubSMSSigner) GetActiveKey(ctx context.Context) (*veidtypes.SignerKeyInfo, error) {
+	return s.activeKey, nil
+}
+
+func (s *stubSMSSigner) GetKeyByID(ctx context.Context, keyID string) (*veidtypes.SignerKeyInfo, error) {
+	return s.activeKey, nil
+}
+
+func (s *stubSMSSigner) GetKeyByFingerprint(ctx context.Context, fingerprint string) (*veidtypes.SignerKeyInfo, error) {
+	return s.activeKey, nil
+}
+
+func (s *stubSMSSigner) ListKeys(ctx context.Context) ([]*veidtypes.SignerKeyInfo, error) {
+	return []*veidtypes.SignerKeyInfo{s.activeKey}, nil
+}
+
+func (s *stubSMSSigner) RotateKey(ctx context.Context, req *signerpkg.KeyRotationRequest) (*veidtypes.KeyRotationRecord, error) {
+	return nil, nil
+}
+
+func (s *stubSMSSigner) CompleteRotation(ctx context.Context, rotationID string) error {
+	return nil
+}
+
+func (s *stubSMSSigner) RevokeKey(ctx context.Context, keyID string, reason veidtypes.KeyRevocationReason) error {
+	return nil
+}
+
+func (s *stubSMSSigner) GetRotationStatus(ctx context.Context, rotationID string) (*veidtypes.KeyRotationRecord, error) {
+	return nil, nil
+}
+
+func (s *stubSMSSigner) GetSignerInfo(ctx context.Context) (*veidtypes.SignerRegistryEntry, error) {
+	return s.signerInfo, nil
+}
+
+func (s *stubSMSSigner) HealthCheck(ctx context.Context) (*signerpkg.HealthStatus, error) {
+	return &signerpkg.HealthStatus{Healthy: true, Status: "healthy"}, nil
+}
+
+func (s *stubSMSSigner) Close() error {
+	return nil
+}
+
+func extractOTPFromBody(t *testing.T, body string) string {
+	t.Helper()
+	re := regexp.MustCompile(`\b(\d{6})\b`)
+	match := re.FindStringSubmatch(body)
+	require.Len(t, match, 2)
+	return match[1]
+}
 
 // ============================================================================
 // OTP Generation Tests
@@ -604,6 +779,125 @@ func TestFailoverProvider_AllFailed(t *testing.T) {
 	assert.Equal(t, int64(1), metrics["total_failures"])
 }
 
+func TestVerifyChallenge_SubmitsOnChainProofWhenConfigured(t *testing.T) {
+	logger := zerolog.Nop()
+	ctx := context.Background()
+	config := newServiceTestConfig()
+	provider := NewMockProvider(logger)
+	cache := newServiceTestCache()
+	signer := newStubSMSSigner()
+	chainIntegrator := &stubChainIntegrator{}
+
+	service, err := NewService(
+		ctx,
+		config,
+		logger,
+		WithProvider(provider),
+		WithCache(cache),
+		WithSigner(signer),
+		WithChainIntegrator(chainIntegrator),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, service.Close())
+	})
+
+	initiateResp, err := service.InitiateVerification(ctx, &InitiateRequest{
+		AccountAddress: "virtengine1smsacct",
+		PhoneNumber:    "+14155551234",
+		Locale:         "en",
+	})
+	require.NoError(t, err)
+
+	sentMessages := provider.GetSentMessages()
+	require.Len(t, sentMessages, 1)
+	otp := extractOTPFromBody(t, sentMessages[0].Body)
+
+	verifyResp, err := service.VerifyChallenge(ctx, &VerifyRequest{
+		ChallengeID:            initiateResp.ChallengeID,
+		OTP:                    otp,
+		AccountAddress:         "virtengine1smsacct",
+		AccountSignature:       []byte("account-signature"),
+		EvidenceStorageRef:     "vault://sms/evidence/1",
+		EvidenceStorageBackend: "s3",
+		EvidenceMetadata: map[string]string{
+			"trace_id": "trace-123",
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, verifyResp)
+	assert.True(t, verifyResp.Success)
+	assert.True(t, verifyResp.Verified)
+	assert.NotEmpty(t, verifyResp.AttestationID)
+	assert.True(t, signer.signed)
+
+	require.NotNil(t, chainIntegrator.lastReq)
+	assert.Equal(t, "virtengine1smsacct", chainIntegrator.lastReq.AccountAddress)
+	assert.Equal(t, initiateResp.ChallengeID, chainIntegrator.lastReq.ChallengeID)
+	assert.Equal(t, initiateResp.ChallengeID, chainIntegrator.lastReq.VerificationID)
+	assert.NotEmpty(t, chainIntegrator.lastReq.PhoneHashSalt)
+	assert.NotEmpty(t, chainIntegrator.lastReq.CountryCodeHash)
+	assert.Equal(t, []byte("account-signature"), chainIntegrator.lastReq.AccountSignature)
+	assert.Equal(t, "vault://sms/evidence/1", chainIntegrator.lastReq.EvidenceStorageRef)
+	assert.Equal(t, "trace-123", chainIntegrator.lastReq.EvidenceMetadata["trace_id"])
+	require.NotNil(t, chainIntegrator.lastReq.Attestation)
+	assert.Equal(t, veidtypes.AttestationTypeSMSVerification, chainIntegrator.lastReq.Attestation.Type)
+
+	challenge, err := service.GetChallenge(ctx, initiateResp.ChallengeID)
+	require.NoError(t, err)
+	assert.True(t, challenge.IsConsumed)
+	require.NotNil(t, challenge.VerifiedAt)
+}
+
+func TestVerifyChallenge_RequiresProofBindingWhenChainEnabled(t *testing.T) {
+	logger := zerolog.Nop()
+	ctx := context.Background()
+	config := newServiceTestConfig()
+	provider := NewMockProvider(logger)
+	cache := newServiceTestCache()
+	signer := newStubSMSSigner()
+	chainIntegrator := &stubChainIntegrator{}
+
+	service, err := NewService(
+		ctx,
+		config,
+		logger,
+		WithProvider(provider),
+		WithCache(cache),
+		WithSigner(signer),
+		WithChainIntegrator(chainIntegrator),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, service.Close())
+	})
+
+	initiateResp, err := service.InitiateVerification(ctx, &InitiateRequest{
+		AccountAddress: "virtengine1smsacct",
+		PhoneNumber:    "+14155551234",
+		Locale:         "en",
+	})
+	require.NoError(t, err)
+
+	sentMessages := provider.GetSentMessages()
+	require.Len(t, sentMessages, 1)
+	otp := extractOTPFromBody(t, sentMessages[0].Body)
+
+	_, err = service.VerifyChallenge(ctx, &VerifyRequest{
+		ChallengeID:    initiateResp.ChallengeID,
+		OTP:            otp,
+		AccountAddress: "virtengine1smsacct",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "account_signature is required")
+	assert.Nil(t, chainIntegrator.lastReq)
+
+	challenge, err := service.GetChallenge(ctx, initiateResp.ChallengeID)
+	require.NoError(t, err)
+	assert.False(t, challenge.IsConsumed)
+	assert.Nil(t, challenge.VerifiedAt)
+}
+
 // ============================================================================
 // Config Tests
 // ============================================================================
@@ -648,6 +942,31 @@ func TestConfig_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "missing primary provider config",
+			config: Config{
+				PrimaryProvider: "twilio",
+				OTPLength:       6,
+				OTPTTLSeconds:   300,
+				MaxAttempts:     3,
+			},
+			wantErr: true,
+		},
+		{
+			name: "explicit mock provider config is valid",
+			config: Config{
+				PrimaryProvider: "mock",
+				ProviderConfigs: map[string]ProviderConfig{
+					"mock": {
+						Type: "mock",
+					},
+				},
+				OTPLength:     6,
+				OTPTTLSeconds: 300,
+				MaxAttempts:   3,
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -660,6 +979,24 @@ func TestConfig_Validate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewService_MissingPrimaryProviderConfigFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	config := DefaultConfig()
+	config.ProviderConfigs = nil
+	config.EnableCarrierLookup = false
+	config.EnableVelocityChecks = false
+	config.EnableVoIPBlocking = false
+	config.RateLimitEnabled = false
+	config.AuditLogEnabled = false
+	config.MetricsEnabled = false
+	config.FailoverEnabled = false
+
+	_, err := NewService(context.Background(), config, zerolog.Nop())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `primary_provider "twilio" requires a matching provider_configs entry`)
 }
 
 func TestConfig_IsCountryAllowed(t *testing.T) {

@@ -1,185 +1,150 @@
-#!/bin/bash
-# VirtEngine ArgoCD Rollback Script
-# Usage: ./argocd-rollback.sh <app-name> [revision]
-# Example: ./argocd-rollback.sh virtengine-prod 5
+#!/usr/bin/env bash
+# VirtEngine ArgoCD rollback helper with evidence capture.
 
 set -euo pipefail
 
-APP_NAME="${1:-}"
-REVISION="${2:-}"
-ARGOCD_SERVER="${ARGOCD_SERVER:-argocd.virtengine.internal}"
+APP_NAME=""
+REVISION=""
+ARGOCD_SERVER="${ARGOCD_SERVER:-argocd.virtengine.com}"
 TIMEOUT="${TIMEOUT:-600}"
+DRY_RUN="false"
+AUTO_APPROVE="false"
+ARTIFACT_DIR=""
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+log_info() { echo -e "${GREEN}[INFO]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 usage() {
-    cat << EOF
+  cat <<'EOF'
 VirtEngine ArgoCD Rollback Script
 
-Usage: $0 <app-name> [revision]
-
-Arguments:
-  app-name    Name of the ArgoCD application to rollback
-  revision    (Optional) Specific revision to rollback to. If not provided,
-              will rollback to the previous revision.
-
-Environment Variables:
-  ARGOCD_SERVER   ArgoCD server address (default: argocd.virtengine.internal)
-  TIMEOUT         Sync timeout in seconds (default: 600)
-
-Examples:
-  $0 virtengine-prod           # Rollback to previous revision
-  $0 virtengine-prod 5         # Rollback to revision 5
-  $0 provider-daemon-prod      # Rollback provider daemon
+Usage:
+  argocd-rollback.sh <app-name> [revision] [--artifact-dir DIR] [--dry-run] [--yes]
 EOF
-    exit 1
+}
+
+fail() {
+  log_error "$*"
+  exit 1
 }
 
 check_prerequisites() {
-    if ! command -v argocd &> /dev/null; then
-        log_error "argocd CLI not found. Please install it first."
-        exit 1
-    fi
-
-    if ! command -v kubectl &> /dev/null; then
-        log_error "kubectl not found. Please install it first."
-        exit 1
-    fi
+  local commands=(argocd kubectl jq)
+  for cmd in "${commands[@]}"; do
+    command -v "$cmd" >/dev/null 2>&1 || fail "$cmd not found in PATH"
+  done
 }
 
-get_current_revision() {
-    local app="$1"
-    argocd app get "$app" -o json | jq -r '.status.history[-1].id'
+previous_revision() {
+  argocd app get "$APP_NAME" -o json | jq -r 'if (.status.history | length) > 1 then .status.history[-2].id else empty end'
 }
 
-get_previous_revision() {
-    local app="$1"
-    local history
-    history=$(argocd app get "$app" -o json | jq -r '.status.history')
-    local count
-    count=$(echo "$history" | jq 'length')
-    
-    if [ "$count" -lt 2 ]; then
-        log_error "No previous revision available for rollback"
-        exit 1
-    fi
-    
-    echo "$history" | jq -r '.[-2].id'
+capture_artifacts() {
+  mkdir -p "$ARTIFACT_DIR"
+  argocd app get "$APP_NAME" -o json > "$ARTIFACT_DIR/app.json"
+  argocd app history "$APP_NAME" -o json > "$ARTIFACT_DIR/history.json"
+  argocd app manifests "$APP_NAME" > "$ARTIFACT_DIR/manifests.yaml"
+
+  local destination_namespace
+  destination_namespace="$(jq -r '.spec.destination.namespace // "virtengine"' "$ARTIFACT_DIR/app.json")"
+  kubectl get all -n "$destination_namespace" -l "app.kubernetes.io/part-of=virtengine-platform" -o yaml \
+    > "$ARTIFACT_DIR/pre-rollback-cluster-snapshot.yaml" 2>/dev/null || true
 }
 
-list_revisions() {
-    local app="$1"
-    log_info "Available revisions for $app:"
-    argocd app history "$app" --output wide
-}
+write_summary() {
+  local status="$1"
+  cat > "$ARTIFACT_DIR/summary.md" <<EOF
+# ArgoCD Rollback Summary
 
-perform_rollback() {
-    local app="$1"
-    local revision="$2"
-    
-    log_info "Starting rollback of $app to revision $revision"
-    
-    # Get current state for comparison
-    local current_revision
-    current_revision=$(get_current_revision "$app")
-    log_info "Current revision: $current_revision"
-    
-    # Create a snapshot before rollback
-    local snapshot_time
-    snapshot_time=$(date +%Y%m%d-%H%M%S)
-    log_info "Creating pre-rollback snapshot: $snapshot_time"
-    kubectl get all -n "virtengine-${app##*-}" -o yaml > "/tmp/pre-rollback-${app}-${snapshot_time}.yaml" 2>/dev/null || true
-    
-    # Perform the rollback
-    log_info "Executing rollback..."
-    argocd app rollback "$app" "$revision" --prune
-    
-    # Wait for sync
-    log_info "Waiting for sync to complete (timeout: ${TIMEOUT}s)..."
-    if argocd app wait "$app" --timeout "$TIMEOUT" --health --sync; then
-        log_info "Rollback completed successfully!"
-        
-        # Verify health
-        local health
-        health=$(argocd app get "$app" -o json | jq -r '.status.health.status')
-        if [ "$health" = "Healthy" ]; then
-            log_info "Application is healthy"
-        else
-            log_warn "Application health status: $health"
-        fi
-        
-        return 0
-    else
-        log_error "Rollback failed or timed out"
-        return 1
-    fi
+- Application: $APP_NAME
+- Target Revision: $REVISION
+- Dry Run: $DRY_RUN
+- Status: $status
+- ArgoCD Server: $ARGOCD_SERVER
+- Timeout Seconds: $TIMEOUT
+EOF
 }
 
 confirm_rollback() {
-    local app="$1"
-    local revision="$2"
-    
-    echo ""
-    log_warn "You are about to rollback:"
-    echo "  Application: $app"
-    echo "  Target Revision: $revision"
-    echo ""
-    
-    read -p "Are you sure you want to proceed? (yes/no): " confirm
-    if [ "$confirm" != "yes" ]; then
-        log_info "Rollback cancelled"
-        exit 0
-    fi
+  if [[ "$AUTO_APPROVE" == "true" || "$DRY_RUN" == "true" ]]; then
+    return 0
+  fi
+
+  echo
+  log_warn "About to roll back ArgoCD application"
+  echo "  Application: $APP_NAME"
+  echo "  Target revision: $REVISION"
+  echo
+  read -r -p "Type 'yes' to continue: " confirm
+  [[ "$confirm" == "yes" ]] || fail "rollback cancelled"
 }
 
-main() {
-    if [ -z "$APP_NAME" ]; then
-        usage
-    fi
-    
-    check_prerequisites
-    
-    # Login check
-    if ! argocd app list &> /dev/null; then
-        log_error "Not logged into ArgoCD. Please run: argocd login $ARGOCD_SERVER"
-        exit 1
-    fi
-    
-    # Verify app exists
-    if ! argocd app get "$APP_NAME" &> /dev/null; then
-        log_error "Application '$APP_NAME' not found"
-        exit 1
-    fi
-    
-    # List available revisions
-    list_revisions "$APP_NAME"
-    echo ""
-    
-    # Determine target revision
-    if [ -z "$REVISION" ]; then
-        REVISION=$(get_previous_revision "$APP_NAME")
-        log_info "No revision specified, using previous revision: $REVISION"
-    fi
-    
-    # Confirm and perform rollback
-    confirm_rollback "$APP_NAME" "$REVISION"
-    perform_rollback "$APP_NAME" "$REVISION"
-}
+if [[ $# -lt 1 ]]; then
+  usage >&2
+  exit 1
+fi
 
-main "$@"
+APP_NAME="$1"
+shift
+
+if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+  REVISION="$1"
+  shift
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --artifact-dir)
+      ARTIFACT_DIR="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN="true"
+      shift
+      ;;
+    --yes)
+      AUTO_APPROVE="true"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown option: $1"
+      ;;
+  esac
+done
+
+check_prerequisites
+argocd app list >/dev/null 2>&1 || fail "not logged into ArgoCD. Run: argocd login $ARGOCD_SERVER"
+argocd app get "$APP_NAME" >/dev/null 2>&1 || fail "application '$APP_NAME' not found"
+
+if [[ -z "$REVISION" ]]; then
+  REVISION="$(previous_revision)"
+  [[ -n "$REVISION" ]] || fail "no previous revision available for rollback"
+fi
+
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+ARTIFACT_DIR="${ARTIFACT_DIR:-$(pwd)/output/rollback/argocd/$APP_NAME/$TIMESTAMP}"
+capture_artifacts
+confirm_rollback
+
+if [[ "$DRY_RUN" == "true" ]]; then
+  write_summary "resolved"
+  log_info "Dry run complete. Artifacts written to $ARTIFACT_DIR"
+  exit 0
+fi
+
+argocd app rollback "$APP_NAME" "$REVISION" --prune
+argocd app wait "$APP_NAME" --timeout "$TIMEOUT" --health --sync
+argocd app get "$APP_NAME" -o json > "$ARTIFACT_DIR/post-rollback-app.json"
+write_summary "completed"
+
+log_info "Rollback completed. Artifacts written to $ARTIFACT_DIR"

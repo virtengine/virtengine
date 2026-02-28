@@ -40,6 +40,11 @@ export function PayoutHistory({ payouts }: PayoutHistoryProps) {
         <CardTitle className="text-lg">Payout History</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
+        {payouts.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+            No live payout or withdrawal records are available for this account yet.
+          </div>
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -77,6 +82,7 @@ export function PayoutHistory({ payouts }: PayoutHistoryProps) {
             ))}
           </TableBody>
         </Table>
+        )}
       </CardContent>
     </Card>
   );

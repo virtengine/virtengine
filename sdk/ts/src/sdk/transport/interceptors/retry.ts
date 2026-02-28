@@ -25,6 +25,10 @@ export function createRetryInterceptor(options: RetryOptions): Interceptor {
   return (next) => async (req) => retryPolicy.execute(() => next(req));
 }
 
+export function getRetryInterceptors(options: RetryOptions | undefined): Interceptor[] | undefined {
+  return isRetryEnabled(options) ? [createRetryInterceptor(options)] : undefined;
+}
+
 export function isRetryEnabled(options: RetryOptions | undefined): options is RetryOptions {
   return !!options?.maxAttempts && !Number.isNaN(options.maxAttempts) && options.maxAttempts > 0;
 }

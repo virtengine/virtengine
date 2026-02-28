@@ -24,7 +24,7 @@ groups:
           description: |
             HPA {{ $labels.horizontalpodautoscaler }} has been at maximum replicas 
             ({{ $value }}) for 15 minutes. Consider increasing max replicas.
-          runbook_url: "https://docs.virtengine.network/runbooks/hpa-maxed-out"
+          runbook_url: "https://docs.virtengine.com/runbooks/hpa-maxed-out"
 
       - alert: ProviderDaemonScalingFailure
         expr: |
@@ -44,7 +44,7 @@ groups:
           description: |
             HPA {{ $labels.horizontalpodautoscaler }} is unable to scale.
             Check for resource constraints or configuration issues.
-          runbook_url: "https://docs.virtengine.network/runbooks/scaling-failure"
+          runbook_url: "https://docs.virtengine.com/runbooks/scaling-failure"
 
       - alert: ProviderDaemonHighPendingOrders
         expr: |
@@ -59,7 +59,7 @@ groups:
           description: |
             {{ $value }} orders are pending across all provider daemon instances.
             Scaling may be needed or there could be processing issues.
-          runbook_url: "https://docs.virtengine.network/runbooks/high-pending-orders"
+          runbook_url: "https://docs.virtengine.com/runbooks/high-pending-orders"
 
       - alert: ProviderDaemonClaimConflictsHigh
         expr: |
@@ -74,7 +74,7 @@ groups:
           description: |
             Bid deduplication is experiencing {{ printf "%.2f" $value }} conflicts/sec.
             This may indicate instances are competing for the same orders.
-          runbook_url: "https://docs.virtengine.network/runbooks/claim-conflicts"
+          runbook_url: "https://docs.virtengine.com/runbooks/claim-conflicts"
 
       - alert: ProviderDaemonBidLatencyHigh
         expr: |
@@ -91,7 +91,7 @@ groups:
           description: |
             P99 bid processing latency is {{ printf "%.2f" $value }}s.
             This may impact order fulfillment rates.
-          runbook_url: "https://docs.virtengine.network/runbooks/bid-latency"
+          runbook_url: "https://docs.virtengine.com/runbooks/bid-latency"
 
       # Full Node Scaling Alerts
       - alert: FullNodeHPAMaxedOut
@@ -113,7 +113,7 @@ groups:
           description: |
             HPA {{ $labels.horizontalpodautoscaler }} has been at maximum replicas 
             for 15 minutes. RPC capacity may be constrained.
-          runbook_url: "https://docs.virtengine.network/runbooks/hpa-maxed-out"
+          runbook_url: "https://docs.virtengine.com/runbooks/hpa-maxed-out"
 
       - alert: FullNodeRPCLatencyHigh
         expr: |
@@ -130,7 +130,7 @@ groups:
           description: |
             P99 RPC latency is {{ printf "%.2f" $value }}s.
             Consider scaling up full nodes.
-          runbook_url: "https://docs.virtengine.network/runbooks/rpc-latency"
+          runbook_url: "https://docs.virtengine.com/runbooks/rpc-latency"
 
       - alert: FullNodeConnectionsHigh
         expr: |
@@ -145,7 +145,7 @@ groups:
           description: |
             {{ $value }} active WebSocket connections.
             May need to scale up full nodes or adjust connection limits.
-          runbook_url: "https://docs.virtengine.network/runbooks/high-connections"
+          runbook_url: "https://docs.virtengine.com/runbooks/high-connections"
 
       # Cluster Capacity Alerts
       - alert: ClusterCapacityInsufficient
@@ -164,7 +164,7 @@ groups:
           description: |
             {{ $value }} pods are in Pending state in virtengine namespace.
             Cluster may need more nodes or resource constraints need adjustment.
-          runbook_url: "https://docs.virtengine.network/runbooks/cluster-capacity"
+          runbook_url: "https://docs.virtengine.com/runbooks/cluster-capacity"
 
       - alert: ClusterNodePressure
         expr: |
@@ -182,7 +182,7 @@ groups:
           description: |
             {{ $value }} nodes are experiencing resource pressure.
             Consider scaling cluster or investigating resource usage.
-          runbook_url: "https://docs.virtengine.network/runbooks/node-pressure"
+          runbook_url: "https://docs.virtengine.com/runbooks/node-pressure"
 
       # State Sync Alerts
       - alert: StateSyncProviderDown
@@ -198,7 +198,7 @@ groups:
           description: |
             State sync provider {{ $labels.instance }} is not responding.
             New validators cannot sync using state sync.
-          runbook_url: "https://docs.virtengine.network/runbooks/statesync-down"
+          runbook_url: "https://docs.virtengine.com/runbooks/statesync-down"
 
       - alert: StateSyncSnapshotStale
         expr: |
@@ -213,7 +213,7 @@ groups:
           description: |
             No new state sync snapshot created in the last 2 hours on {{ $labels.instance }}.
             New validators may sync to outdated state.
-          runbook_url: "https://docs.virtengine.network/runbooks/statesync-stale"
+          runbook_url: "https://docs.virtengine.com/runbooks/statesync-stale"
 
       # Multi-Region Alerts
       - alert: RegionUnhealthy
@@ -233,7 +233,7 @@ groups:
           description: |
             Less than 50% of VirtEngine services are up in region {{ $labels.region }}.
             Consider traffic failover to healthy regions.
-          runbook_url: "https://docs.virtengine.network/runbooks/region-unhealthy"
+          runbook_url: "https://docs.virtengine.com/runbooks/region-unhealthy"
 
       - alert: CrossRegionLatencyHigh
         expr: |
@@ -250,7 +250,7 @@ groups:
           description: |
             Cross-region RPC latency from {{ $labels.source_region }} to 
             {{ $labels.target_region }} is {{ printf "%.2f" $value }}s.
-          runbook_url: "https://docs.virtengine.network/runbooks/cross-region-latency"
+          runbook_url: "https://docs.virtengine.com/runbooks/cross-region-latency"
 
   - name: scaling.recording.rules
     interval: 30s

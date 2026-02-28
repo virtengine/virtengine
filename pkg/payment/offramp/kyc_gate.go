@@ -4,9 +4,16 @@
 package offramp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // statusFailed is the VEID verification status for failed/rejected verifications
@@ -188,6 +195,9 @@ type DefaultAMLScreener struct {
 type AMLClient interface {
 	// Screen performs AML screening
 	Screen(ctx context.Context, req *AMLClientRequest) (*AMLClientResponse, error)
+
+	// GetScreeningStatus retrieves the status of a screening
+	GetScreeningStatus(ctx context.Context, screeningID string) (*AMLClientResponse, error)
 }
 
 // AMLClientRequest is a request to the AML client.
@@ -240,6 +250,33 @@ func (s *DefaultAMLScreener) Screen(ctx context.Context, req AMLScreenRequest) (
 		return nil, fmt.Errorf("AML screening failed: %w", err)
 	}
 
+	return s.mapScreeningResponse(clientResp), nil
+}
+
+// GetScreeningStatus retrieves the status of a screening.
+func (s *DefaultAMLScreener) GetScreeningStatus(ctx context.Context, screeningID string) (*AMLScreenResult, error) {
+	if !s.config.Enabled {
+		return &AMLScreenResult{
+			ScreeningID: screeningID,
+			Status:      AMLStatusCleared,
+			RiskScore:   0,
+			ScreenedAt:  time.Now().Format(time.RFC3339),
+			ExpiresAt:   time.Now().AddDate(0, 0, 30).Format(time.RFC3339),
+		}, nil
+	}
+	if strings.TrimSpace(screeningID) == "" {
+		return nil, fmt.Errorf("screening ID is required")
+	}
+
+	clientResp, err := s.client.GetScreeningStatus(ctx, screeningID)
+	if err != nil {
+		return nil, fmt.Errorf("AML screening status lookup failed: %w", err)
+	}
+
+	return s.mapScreeningResponse(clientResp), nil
+}
+
+func (s *DefaultAMLScreener) mapScreeningResponse(clientResp *AMLClientResponse) *AMLScreenResult {
 	result := &AMLScreenResult{
 		ScreeningID: clientResp.ScreeningID,
 		RiskScore:   clientResp.RiskScore,
@@ -247,28 +284,161 @@ func (s *DefaultAMLScreener) Screen(ctx context.Context, req AMLScreenRequest) (
 		ScreenedAt:  clientResp.ScreenedAt.Format(time.RFC3339),
 	}
 
-	// Determine status based on risk score and matches
-	if clientResp.RiskScore < s.config.AutoApproveBelow && len(clientResp.Matches) == 0 {
-		result.Status = AMLStatusCleared
-	} else if clientResp.RiskScore >= s.config.RiskThreshold || len(clientResp.Matches) > 0 {
-		result.Status = AMLStatusFlagged
-		result.ReviewRequired = true
-	} else {
-		result.Status = AMLStatusCleared
+	screenedAt := clientResp.ScreenedAt
+	if screenedAt.IsZero() {
+		screenedAt = time.Now()
+		result.ScreenedAt = screenedAt.Format(time.RFC3339)
 	}
 
-	// Set expiry (typically 30-90 days)
-	expiresAt := time.Now().AddDate(0, 0, 30)
-	result.ExpiresAt = expiresAt.Format(time.RFC3339)
+	status := normalizeAMLProviderStatus(clientResp.Status)
+	switch status {
+	case AMLStatusPending, AMLStatusScreening:
+		result.Status = status
+	case AMLStatusRejected:
+		result.Status = AMLStatusRejected
+		result.ReviewRequired = true
+	case AMLStatusFlagged:
+		result.Status = AMLStatusFlagged
+		result.ReviewRequired = true
+	default:
+		if clientResp.RiskScore < s.config.AutoApproveBelow && len(clientResp.Matches) == 0 {
+			result.Status = AMLStatusCleared
+		} else if clientResp.RiskScore >= s.config.RiskThreshold || len(clientResp.Matches) > 0 {
+			result.Status = AMLStatusFlagged
+			result.ReviewRequired = true
+		} else {
+			result.Status = AMLStatusCleared
+		}
+	}
 
-	return result, nil
+	expiresAt := screenedAt.AddDate(0, 0, 30)
+	result.ExpiresAt = expiresAt.Format(time.RFC3339)
+	return result
 }
 
-// GetScreeningStatus retrieves the status of a screening.
-func (s *DefaultAMLScreener) GetScreeningStatus(ctx context.Context, screeningID string) (*AMLScreenResult, error) {
-	// In a full implementation, this would query the AML provider
-	// For now, return a placeholder
-	return nil, fmt.Errorf("screening status lookup not implemented")
+func normalizeAMLProviderStatus(status string) AMLStatus {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "", "cleared", "approved", "complete", "completed":
+		return AMLStatusCleared
+	case "pending", "queued":
+		return AMLStatusPending
+	case "screening", "in_progress", "processing", "reviewing":
+		return AMLStatusScreening
+	case "flagged", "review_required", "manual_review":
+		return AMLStatusFlagged
+	case "rejected", "denied", "blocked", "failed":
+		return AMLStatusRejected
+	default:
+		return AMLStatusPending
+	}
+}
+
+// HTTPAMLClient implements AML provider calls over HTTP.
+type HTTPAMLClient struct {
+	baseURL    string
+	apiKey     string
+	httpClient *http.Client
+}
+
+// NewHTTPAMLClient creates a new HTTP AML client from config.
+func NewHTTPAMLClient(config AMLConfig) (*HTTPAMLClient, error) {
+	if strings.TrimSpace(config.APIURL) == "" || strings.TrimSpace(config.APIKey) == "" {
+		return nil, ErrProviderNotConfigured
+	}
+
+	return &HTTPAMLClient{
+		baseURL:    strings.TrimRight(config.APIURL, "/"),
+		apiKey:     config.APIKey,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
+	}, nil
+}
+
+// Screen performs AML screening via the configured HTTP provider.
+func (c *HTTPAMLClient) Screen(ctx context.Context, req *AMLClientRequest) (*AMLClientResponse, error) {
+	resp, err := c.doJSON(ctx, http.MethodPost, "/screenings", req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// GetScreeningStatus retrieves the status of a screening via the configured HTTP provider.
+func (c *HTTPAMLClient) GetScreeningStatus(ctx context.Context, screeningID string) (*AMLClientResponse, error) {
+	if strings.TrimSpace(screeningID) == "" {
+		return nil, fmt.Errorf("screening ID is required")
+	}
+	return c.doJSON(ctx, http.MethodGet, "/screenings/"+screeningID, nil)
+}
+
+func (c *HTTPAMLClient) doJSON(ctx context.Context, method string, path string, payload any) (*AMLClientResponse, error) {
+	var body io.Reader
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal AML request: %w", err)
+		}
+		body = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AML request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("AML provider request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read AML response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("AML provider returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var raw struct {
+		ID          string     `json:"id"`
+		ScreeningID string     `json:"screening_id"`
+		RiskScore   int        `json:"risk_score"`
+		Status      string     `json:"status"`
+		Matches     []AMLMatch `json:"matches"`
+		ScreenedAt  string     `json:"screened_at"`
+		CreatedAt   string     `json:"created_at"`
+	}
+	if err := json.Unmarshal(respBody, &raw); err != nil {
+		return nil, fmt.Errorf("failed to decode AML response: %w", err)
+	}
+
+	screenedAt := time.Now()
+	for _, candidate := range []string{raw.ScreenedAt, raw.CreatedAt} {
+		if strings.TrimSpace(candidate) == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, candidate)
+		if err == nil {
+			screenedAt = parsed
+			break
+		}
+	}
+
+	screeningID := strings.TrimSpace(raw.ScreeningID)
+	if screeningID == "" {
+		screeningID = strings.TrimSpace(raw.ID)
+	}
+
+	return &AMLClientResponse{
+		ScreeningID: screeningID,
+		RiskScore:   raw.RiskScore,
+		Status:      raw.Status,
+		Matches:     raw.Matches,
+		ScreenedAt:  screenedAt,
+	}, nil
 }
 
 // ============================================================================
@@ -324,6 +494,7 @@ func (m *MockVEIDChecker) SetVerified(accountAddress string, level KYCVerificati
 type MockAMLClient struct {
 	DefaultScore int
 	Matches      []AMLMatch
+	Statuses     map[string]*AMLClientResponse
 }
 
 // NewMockAMLClient creates a new mock AML client.
@@ -331,18 +502,29 @@ func NewMockAMLClient() *MockAMLClient {
 	return &MockAMLClient{
 		DefaultScore: 0,
 		Matches:      nil,
+		Statuses:     make(map[string]*AMLClientResponse),
 	}
 }
 
 // Screen performs mock AML screening.
 func (m *MockAMLClient) Screen(ctx context.Context, req *AMLClientRequest) (*AMLClientResponse, error) {
-	return &AMLClientResponse{
+	resp := &AMLClientResponse{
 		ScreeningID: fmt.Sprintf("scr_%d", time.Now().UnixNano()),
 		RiskScore:   m.DefaultScore,
 		Status:      "completed",
 		Matches:     m.Matches,
 		ScreenedAt:  time.Now(),
-	}, nil
+	}
+	m.Statuses[resp.ScreeningID] = resp
+	return resp, nil
+}
+
+// GetScreeningStatus returns mock AML status by screening ID.
+func (m *MockAMLClient) GetScreeningStatus(ctx context.Context, screeningID string) (*AMLClientResponse, error) {
+	if resp, ok := m.Statuses[screeningID]; ok {
+		return resp, nil
+	}
+	return nil, fmt.Errorf("screening %s not found", screeningID)
 }
 
 // Ensure implementations satisfy interfaces

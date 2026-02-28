@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	nitroatt "github.com/virtengine/virtengine/pkg/enclave_runtime/nitro"
 )
 
 // =============================================================================
@@ -461,8 +462,11 @@ func TestNitroEnclaveServiceImpl_GenerateAttestation(t *testing.T) {
 	// Attestation should contain proper structure
 	assert.Greater(t, len(attestation), 100)
 
-	// Should start with magic
-	assert.Equal(t, "NITRO_ATTEST_V1", string(attestation[:15]))
+	parsed, err := nitroatt.ParseDocument(attestation)
+	require.NoError(t, err)
+	assert.Equal(t, "SHA384", parsed.Payload.Digest)
+	assert.Equal(t, userData, parsed.Payload.UserData)
+	assert.NotEmpty(t, parsed.Payload.PCRs)
 
 	// User data too large should fail
 	largeData := make([]byte, NitroMaxUserData+1)
@@ -734,24 +738,22 @@ func TestNitroEnclaveState_String(t *testing.T) {
 }
 
 func TestVerifyNitroAttestation(t *testing.T) {
-	config := NitroEnclaveConfig{
-		EnclaveImagePath: "/opt/enclaves/veid.eif",
+	pcr0 := make([]byte, NitroPCRDigestSize)
+	for i := range pcr0 {
+		pcr0[i] = byte(i)
 	}
+	attestation := CreateTestNitroDocument(pcr0, []byte("test"))
 
-	svc, err := NewNitroEnclaveServiceImpl(config)
-	require.NoError(t, err)
-	require.NoError(t, svc.Initialize(DefaultRuntimeConfig()))
-
-	// Generate attestation
-	attestation, err := svc.GenerateAttestation([]byte("test"))
-	require.NoError(t, err)
-
-	// Verify without expected PCR0 (should pass)
-	err = VerifyNitroAttestation(attestation, nil)
-	assert.NoError(t, err)
+	// Simulated documents must now fail closed when used as validator evidence.
+	err := VerifyNitroAttestation(attestation, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "simulated attestation not allowed")
 
 	// Verify with wrong PCR0 (should fail)
 	wrongPCR0 := make([]byte, NitroPCRDigestSize)
+	for i := range wrongPCR0 {
+		wrongPCR0[i] = byte(i + 1)
+	}
 	err = VerifyNitroAttestation(attestation, wrongPCR0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "PCR0 mismatch")

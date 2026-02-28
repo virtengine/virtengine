@@ -1,6 +1,7 @@
 package inference
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -72,14 +73,16 @@ type InferenceConfig struct {
 	FallbackConfidence float32
 
 	// Opt-in/Opt-out Configuration
-	// Enabled controls whether real inference is enabled (opt-in)
-	// When false, uses stub/simulated inference
+	// Enabled controls whether consensus-safe inference is enabled (opt-in)
+	// When false, callers should treat inference as unavailable unless a
+	// non-production stub path is explicitly allowed.
 	Enabled bool
 
 	// RequireHashVerification requires output hash verification (consensus mode)
 	RequireHashVerification bool
 
-	// AllowFallbackToStub allows fallback to stub scorer if real inference fails
+	// AllowFallbackToStub allows deterministic stub/simulated inference paths
+	// for local development and tests. This must remain disabled in production.
 	AllowFallbackToStub bool
 
 	// StrictDeterminism fails if determinism cannot be guaranteed
@@ -131,7 +134,7 @@ func DefaultInferenceConfig() InferenceConfig {
 		// Opt-in/Opt-out defaults
 		Enabled:                 false, // Disabled by default, opt-in
 		RequireHashVerification: true,
-		AllowFallbackToStub:     true,
+		AllowFallbackToStub:     false,
 		StrictDeterminism:       false,
 
 		// Logging defaults
@@ -139,6 +142,16 @@ func DefaultInferenceConfig() InferenceConfig {
 		LogInputHashes:      false,
 		LogOutputHashes:     false,
 	}
+}
+
+var ErrSimulatedInferenceDisabled = errors.New("simulated inference is disabled")
+
+func simulatedInferenceDisabledError(component string) error {
+	return fmt.Errorf(
+		"%w for %s; enable AllowFallbackToStub only for explicit non-production development or test flows",
+		ErrSimulatedInferenceDisabled,
+		component,
+	)
 }
 
 // Validate validates the inference configuration
@@ -240,7 +253,7 @@ func (c InferenceConfig) WithFallback(enabled bool, score uint32) InferenceConfi
 
 // IsRealInferenceEnabled returns true if real inference is enabled
 func (c InferenceConfig) IsRealInferenceEnabled() bool {
-	return c.Enabled && (c.UseSidecar || c.ModelPath != "")
+	return c.Enabled && c.UseSidecar
 }
 
 // IsConsensusSafe returns true if the configuration is safe for consensus

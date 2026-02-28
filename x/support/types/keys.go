@@ -1,6 +1,9 @@
 package types
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 const (
 	// ModuleName is the module name constant used in many places
@@ -70,13 +73,23 @@ var (
 	PrefixSupportEventCheckpoint = []byte{0x19}
 
 	// PrefixSupportArchiveQueue is the prefix for archive queue items
-	// Key: PrefixSupportArchiveQueue | archive_unix | "/" | request_id -> bool
+	// Key: PrefixSupportArchiveQueue | archive_unix_be | "/" | request_id -> RetentionQueueEntry
 	PrefixSupportArchiveQueue = []byte{0x1A}
 
 	// PrefixSupportPurgeQueue is the prefix for purge queue items
-	// Key: PrefixSupportPurgeQueue | purge_unix | "/" | request_id -> bool
+	// Key: PrefixSupportPurgeQueue | purge_unix_be | "/" | request_id -> RetentionQueueEntry
 	PrefixSupportPurgeQueue = []byte{0x1B}
+
+	// PrefixSupportArchiveQueueByRequest is the prefix for archive queue request index
+	// Key: PrefixSupportArchiveQueueByRequest | request_id -> archive_unix_be
+	PrefixSupportArchiveQueueByRequest = []byte{0x1C}
+
+	// PrefixSupportPurgeQueueByRequest is the prefix for purge queue request index
+	// Key: PrefixSupportPurgeQueueByRequest | request_id -> purge_unix_be
+	PrefixSupportPurgeQueueByRequest = []byte{0x1D}
 )
+
+const supportQueueTimeLength = 8
 
 // ExternalRefKey returns the store key for an external ticket reference
 func ExternalRefKey(resourceType ResourceType, resourceID string) []byte {
@@ -236,7 +249,7 @@ func SupportEventCheckpointKey(subscriberID string) []byte {
 
 // SupportArchiveQueueKey returns the archive queue key
 func SupportArchiveQueueKey(archiveAt int64, requestID string) []byte {
-	archive := []byte(fmt.Sprintf("%d", archiveAt))
+	archive := EncodeSupportQueueTime(archiveAt)
 	key := make([]byte, 0, len(PrefixSupportArchiveQueue)+len(archive)+len(requestID)+1)
 	key = append(key, PrefixSupportArchiveQueue...)
 	key = append(key, archive...)
@@ -247,7 +260,7 @@ func SupportArchiveQueueKey(archiveAt int64, requestID string) []byte {
 
 // SupportArchiveQueuePrefixKey returns the prefix for archive queue items
 func SupportArchiveQueuePrefixKey(archiveAt int64) []byte {
-	archive := []byte(fmt.Sprintf("%d", archiveAt))
+	archive := EncodeSupportQueueTime(archiveAt)
 	key := make([]byte, 0, len(PrefixSupportArchiveQueue)+len(archive)+1)
 	key = append(key, PrefixSupportArchiveQueue...)
 	key = append(key, archive...)
@@ -257,7 +270,7 @@ func SupportArchiveQueuePrefixKey(archiveAt int64) []byte {
 
 // SupportPurgeQueueKey returns the purge queue key
 func SupportPurgeQueueKey(purgeAt int64, requestID string) []byte {
-	purge := []byte(fmt.Sprintf("%d", purgeAt))
+	purge := EncodeSupportQueueTime(purgeAt)
 	key := make([]byte, 0, len(PrefixSupportPurgeQueue)+len(purge)+len(requestID)+1)
 	key = append(key, PrefixSupportPurgeQueue...)
 	key = append(key, purge...)
@@ -268,10 +281,75 @@ func SupportPurgeQueueKey(purgeAt int64, requestID string) []byte {
 
 // SupportPurgeQueuePrefixKey returns the prefix for purge queue items
 func SupportPurgeQueuePrefixKey(purgeAt int64) []byte {
-	purge := []byte(fmt.Sprintf("%d", purgeAt))
+	purge := EncodeSupportQueueTime(purgeAt)
 	key := make([]byte, 0, len(PrefixSupportPurgeQueue)+len(purge)+1)
 	key = append(key, PrefixSupportPurgeQueue...)
 	key = append(key, purge...)
 	key = append(key, '/')
 	return key
+}
+
+// SupportArchiveQueueByRequestKey returns the archive queue request index key.
+func SupportArchiveQueueByRequestKey(requestID string) []byte {
+	key := make([]byte, 0, len(PrefixSupportArchiveQueueByRequest)+len(requestID))
+	key = append(key, PrefixSupportArchiveQueueByRequest...)
+	key = append(key, []byte(requestID)...)
+	return key
+}
+
+// SupportPurgeQueueByRequestKey returns the purge queue request index key.
+func SupportPurgeQueueByRequestKey(requestID string) []byte {
+	key := make([]byte, 0, len(PrefixSupportPurgeQueueByRequest)+len(requestID))
+	key = append(key, PrefixSupportPurgeQueueByRequest...)
+	key = append(key, []byte(requestID)...)
+	return key
+}
+
+// EncodeSupportQueueTime encodes a unix timestamp into sortable bytes.
+func EncodeSupportQueueTime(unix int64) []byte {
+	bz := make([]byte, supportQueueTimeLength)
+	binary.BigEndian.PutUint64(bz, uint64(unix)^(uint64(1)<<63))
+	return bz
+}
+
+// DecodeSupportQueueTime decodes sortable queue time bytes.
+func DecodeSupportQueueTime(bz []byte) (int64, error) {
+	if len(bz) != supportQueueTimeLength {
+		return 0, fmt.Errorf("invalid queue time length: %d", len(bz))
+	}
+	return int64(binary.BigEndian.Uint64(bz) ^ (uint64(1) << 63)), nil
+}
+
+func parseSupportQueueKey(key []byte, prefix []byte) (int64, string, error) {
+	expectedMin := len(prefix) + supportQueueTimeLength + 2
+	if len(key) < expectedMin {
+		return 0, "", fmt.Errorf("invalid queue key length: %d", len(key))
+	}
+	if string(key[:len(prefix)]) != string(prefix) {
+		return 0, "", fmt.Errorf("invalid queue key prefix")
+	}
+	timeOffset := len(prefix)
+	requestOffset := timeOffset + supportQueueTimeLength
+	if key[requestOffset] != '/' {
+		return 0, "", fmt.Errorf("invalid queue key separator")
+	}
+	unix, err := DecodeSupportQueueTime(key[timeOffset:requestOffset])
+	if err != nil {
+		return 0, "", err
+	}
+	requestID := string(key[requestOffset+1:])
+	if requestID == "" {
+		return 0, "", fmt.Errorf("queue key missing request id")
+	}
+	return unix, requestID, nil
+}
+
+// ParseSupportArchiveQueueKey parses an archive queue key.
+func ParseSupportArchiveQueueKey(key []byte) (int64, string, error) {
+	return parseSupportQueueKey(key, PrefixSupportArchiveQueue)
+}
+
+// ParseSupportPurgeQueueKey parses a purge queue key.
+func ParseSupportPurgeQueueKey(key []byte) (int64, string, error) {
+	return parseSupportQueueKey(key, PrefixSupportPurgeQueue)
 }

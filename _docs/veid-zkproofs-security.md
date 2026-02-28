@@ -1,557 +1,176 @@
-# VirtEngine VEID Zero-Knowledge Proof System
+# VirtEngine VEID ZK Parameter Security
 
-## Overview
+This document defines the production contract for the VEID Groth16 verification parameters under `x/veid/zk/params/`. It replaces the old single-party `dev` assumptions with ceremony-backed artifacts, checksum verification, and fail-closed startup behavior.
 
-The VirtEngine VEID module implements privacy-preserving identity proofs using zero-knowledge cryptography. This document details the cryptographic assumptions, security properties, and implementation choices for the ZK proof system.
+## Scope
 
-## Table of Contents
+The VEID module verifies three Groth16 circuits on BN254:
 
-1. [Cryptographic Scheme](#cryptographic-scheme)
-2. [Proof Types](#proof-types)
-3. [Security Assumptions](#security-assumptions)
-4. [Performance Characteristics](#performance-characteristics)
-5. [Determinism and Consensus Safety](#determinism-and-consensus-safety)
-6. [Trusted Setup Requirements](#trusted-setup-requirements)
-7. [Known Limitations](#known-limitations)
-8. [Production Deployment](#production-deployment)
-9. [References](#references)
+- `age` -> `age-range`
+- `residency` -> `residency`
+- `score` -> `score-range`
 
-## Cryptographic Scheme
+The application embeds only verification material:
 
-### Groth16 ZK-SNARKs
+- `age_vk.bin`
+- `residency_vk.bin`
+- `score_vk.bin`
+- `params_metadata.json`
+- `*.sha256` sidecars for every file above
 
-The VirtEngine VEID module uses **Groth16** zero-knowledge Succinct Non-interactive Arguments of Knowledge (zk-SNARKs) for privacy-preserving identity proofs.
+Proving keys remain off-chain. Optional proving-key loading via `VEID_ZK_PK_DIR` is unchanged and is not used for validator startup.
 
-**Implementation:** [gnark library](https://github.com/consensys/gnark) v0.14.0
+## Current Embedded Parameter Set
 
-**Curve:** BN254 (also known as BN128 or alt_bn128)
+The current embedded parameter set is `veid-zkparams-mpc-20260410`, generated on `2026-04-10T15:00:00Z` from deterministic two-participant trusted-setup exports. The embedded metadata schema is `virtengine.veid.zkparams/v1`, and each circuit record is bound to a verified trusted-setup artifact manifest.
 
-**Security Level:** ~100-bit security (based on the hardness of the computational Diffie-Hellman problem over BN254)
+| Circuit | Ceremony ID | VK SHA-256 | Artifact Manifest SHA-256 | Transcript SHA-256 |
+| ------- | ----------- | ---------- | ------------------------- | ------------------ |
+| `age` | `veid-1775822400` | `e428dc43068a3a4a8d1f3dc9f980e5f8ed0b83e255835852af28fdac810b9350` | `d3b215a136bb43137d98b361ee4add7ea0463ddafe2565242591c0bb819aefb3` | `30e24d82d75687c88478de93e110ccc53b87b5ec3e75955b60bf68a35d5d1fd4` |
+| `residency` | `veid-1775826000` | `a3ac0c8d730df659d1d490c936ec56dc75c06bc27eeb3985bc0b08aef3f07b1e` | `c9a5fa60f6c72f69bc9447f8f29aefb78d78608678baf3e077ec09321cf1a360` | `8c413e01ce04ed5cf9773705da4c2f5fd9c12be9526ae00c0eb9e09ec93d59b0` |
+| `score` | `veid-1775829600` | `bfa56bc83902d9cefb82207dca93578638f78adc98c80e8b3063254b299cf34f` | `5a892d181bf2b76bc42867734182095ab954f4e5a006a741204535027ca995ff` | `34407c910530dcf1925f2dfbef4add1876441fbf03d54541b0fbea83c1e7299d` |
 
-**Proof Structure:**
+All three circuit records are signed by coordinator ID `veid-coordinator` in the source trusted-setup export bundle, and the embedded metadata records the contributor IDs, transcript hash, circuit hash, and verification report hash for each circuit.
 
-- Proof size: ~200 bytes (3 group elements: 2 G1 points + 1 G2 point)
-- Public inputs: Variable (embedded in verification)
-- Private inputs (witness): Never revealed
+## Startup Verification Contract
 
-### Why Groth16?
+Startup now fails closed in two places:
 
-1. **Smallest proof size** - Critical for blockchain storage and verification costs
-2. **Fast verification** - ~2-5ms per proof, suitable for consensus validation
-3. **Mature implementation** - Well-tested gnark library with formal security analysis
-4. **EVM compatibility** - BN254 curve is natively supported in Ethereum precompiles
-5. **Deterministic verification** - All validators compute identical results
+1. `x/veid/zk/params` validates the parameter bundle before returning a verifying key.
+2. `x/veid/keeper.NewKeeper` panics if `NewZKProofSystem` cannot load verified parameters.
 
-## Proof Types
+The loader rejects startup if any of the following is true:
 
-### 1. Age Range Proofs
+- `params_metadata.json` or any `*.sha256` sidecar is missing.
+- A sidecar hash does not match the file bytes it is supposed to protect.
+- Metadata contains non-production marker content such as `dev`, `single-party`, or `dev-setup`.
+- The metadata schema or artifact format does not match the expected production values.
+- A circuit record is missing required fields, contributor counts, or artifact hashes.
+- A verification key hash or size differs from the metadata record.
+- The verification key bytes cannot be parsed as a BN254 Groth16 verifying key.
+- The compiled circuit hash from the running code does not match the `circuit_hash` recorded in metadata.
 
-**Purpose:** Prove age >= threshold without revealing date of birth
+There is no fallback path. If verification fails, the application does not continue with a nil ZK system.
 
-**Circuit:** `AgeRangeCircuit`
+## Staged Override Directory
 
-**Public Inputs:**
+For controlled rotation and recovery, the loader supports `VEID_ZK_PARAMS_DIR`.
 
-- `ageThreshold` (uint32) - Minimum age to prove
-- `currentTimestamp` (int64) - Current block time
-- `commitmentHash` (bytes32) - Binding commitment to DOB
+If `VEID_ZK_PARAMS_DIR` is set, startup reads the parameter bundle from that directory instead of the embedded files. The directory must contain exactly the same runtime files:
 
-**Private Inputs (Witness):**
+- `age_vk.bin`
+- `age_vk.bin.sha256`
+- `residency_vk.bin`
+- `residency_vk.bin.sha256`
+- `score_vk.bin`
+- `score_vk.bin.sha256`
+- `params_metadata.json`
+- `params_metadata.json.sha256`
 
-- `dateOfBirth` (int64) - Unix timestamp of birth date
-- `salt` (bytes32) - Random salt for commitment binding
+This override exists to let operators stage a new verified ceremony bundle, prove startup behavior in staging, and roll back quickly without rebuilding binaries.
 
-**Constraints:** ~500 R1CS (Rank-1 Constraint System) constraints
+## Rotation Procedure
 
-**Verification Logic:**
+Use this sequence for every VEID parameter rotation.
 
-```
-ageSeconds = currentTimestamp - dateOfBirth
-ageYears = ageSeconds / 31557600  // seconds per year
-ASSERT ageYears >= ageThreshold
-ASSERT commitmentHash == hash(dateOfBirth, salt)
-```
+1. Run or receive a completed trusted-setup export bundle for each VEID circuit.
+   Required artifact: a verified `ceremony export-artifacts` output for `age-range`, `residency`, and `score-range`.
 
-**Security Properties:**
+2. Verify each export bundle before touching runtime params.
 
-- **Zero-knowledge:** Verifier learns only that age >= threshold, not actual DOB
-- **Soundness:** Computationally infeasible to prove false age under CDH assumption
-- **Commitment binding:** Cannot reuse proof for different DOB without knowledge of salt
-- **Non-malleability:** Proof cannot be modified to prove different threshold
-
-### 2. Residency Proofs
-
-**Purpose:** Prove residency in country without revealing full address
-
-**Circuit:** `ResidencyCircuit`
-
-**Public Inputs:**
-
-- `countryCodeHash` (bytes32) - Hash of ISO 3166-1 alpha-2 country code
-- `commitmentHash` (bytes32) - Binding commitment to full address
-
-**Private Inputs (Witness):**
-
-- `fullAddressHash` (bytes32) - Hash of complete address
-- `addressCountry` (bytes32) - Country code extracted from address
-- `salt` (bytes32) - Random salt for commitment binding
-
-**Constraints:** ~400 R1CS constraints
-
-**Verification Logic:**
-
-```
-ASSERT countryCodeHash == addressCountry
-ASSERT commitmentHash == hash(fullAddressHash, salt)
+```bash
+go run ./tools/trusted-setup/cmd/ceremony verify-export --dir /path/to/age-export
+go run ./tools/trusted-setup/cmd/ceremony verify-export --dir /path/to/residency-export
+go run ./tools/trusted-setup/cmd/ceremony verify-export --dir /path/to/score-export
 ```
 
-**Security Properties:**
+3. Build a staged runtime directory.
 
-- **Zero-knowledge:** Full address remains private, only country revealed
-- **Soundness:** Cannot prove false residency without valid address witness
-- **Commitment binding:** Links proof to specific address cryptographically
-- **Privacy:** Verifier learns only country, not city/state/street
+   Copy `phase2/verifying_key.bin` from each verified export as:
 
-### 3. Score Range Proofs
+- `age_vk.bin`
+- `residency_vk.bin`
+- `score_vk.bin`
 
-**Purpose:** Prove trust score >= threshold without revealing exact score
+4. Generate SHA-256 sidecars for every staged file.
 
-**Circuit:** `ScoreRangeCircuit`
+   Each sidecar must use the canonical format:
 
-**Public Inputs:**
-
-- `scoreThreshold` (uint32) - Minimum score to prove
-- `commitmentHash` (bytes32) - Binding commitment to actual score
-
-**Private Inputs (Witness):**
-
-- `actualScore` (uint32) - Real trust score value
-- `salt` (bytes32) - Random salt for commitment binding
-
-**Constraints:** ~300 R1CS constraints
-
-**Verification Logic:**
-
-```
-ASSERT actualScore >= scoreThreshold
-ASSERT commitmentHash == hash(actualScore, salt)
+```text
+<sha256>  <filename>
 ```
 
-**Security Properties:**
+5. Update `params_metadata.json`.
 
-- **Zero-knowledge:** Exact score hidden, only threshold satisfaction revealed
-- **Soundness:** Cannot prove higher score without valid score witness
-- **Commitment binding:** Prevents score reuse attacks
-- **Non-interactive:** No challenge-response protocol needed
+   Every circuit record must be copied from the verified ceremony outputs:
 
-### 4. Selective Disclosure Proofs
+- `ceremony_id`
+- `artifact_manifest_hash`
+- `verification_report_hash`
+- `transcript_hash`
+- `circuit_hash`
+- `verification_key_hash`
+- `verification_key_size_bytes`
+- `contributor_count`
+- `contributors`
+- `coordinator_id`
+- `coordinator_public_key`
+- `beacon`
+- `parameters_version`
 
-**Purpose:** Prove arbitrary claims about identity without revealing underlying data
+6. Generate `params_metadata.json.sha256`.
 
-**Implementation:** Composition of specialized circuits based on claim types
+7. Stage the directory in a startup environment.
 
-**Claim Types Supported:**
+```bash
+export VEID_ZK_PARAMS_DIR=/srv/virtengine/veid-zkparams-next
+```
 
-- `ClaimTypeAgeOver18/21/25` - Age threshold proofs
-- `ClaimTypeCountryResident` - Residency proofs
-- `ClaimTypeTrustScoreAbove` - Score range proofs
-- `ClaimTypeEmailVerified` - Email ownership proofs
-- `ClaimTypeSMSVerified` - Phone number proofs
-- `ClaimTypeBiometricVerified` - Biometric verification proofs
+8. Restart the application. Startup must succeed with the staged directory and must use the new metadata values.
 
-**Security Properties:**
+9. Re-run the scoped validation gate:
 
-- **Composability:** Multiple claims can be proven in single proof
-- **Selective disclosure:** Only requested claims revealed, rest hidden
-- **Request binding:** Proof tied to specific disclosure request via nonce
-- **Expiration:** Time-bounded validity prevents replay attacks
+```bash
+go test ./x/veid/zk/... -count=1
+go test ./x/veid/keeper/... -count=1
+go test -tags=integration ./x/veid/zk/... -count=1
+go test -tags "e2e.integration" ./x/veid/zk/... ./x/veid/keeper/... -count=1
+```
 
-## Security Assumptions
+10. After staging is accepted, either:
 
-### Cryptographic Assumptions
+- keep the verified directory and corresponding deployment configuration as the active source of truth, or
+- replace the embedded files under `x/veid/zk/params/` with the same verified bundle for the next released binary.
 
-1. **Computational Diffie-Hellman (CDH) Assumption:**
-   - Given g, g^a, g^b, it is hard to compute g^(ab)
-   - Required for soundness of Groth16 proofs
-   - BN254 curve provides ~100-bit security under this assumption
+## Recovery And Rollback
 
-2. **Knowledge of Exponent (KEA) Assumption:**
-   - Required for argument of knowledge property
-   - Ensures prover actually knows witness values
+If a rotation attempt fails, do not bypass the loader and do not remove checksums.
 
-3. **Random Oracle Model:**
-   - Hash functions (SHA-256) modeled as random oracles
-   - Used for commitment schemes and proof binding
+1. Restore the previous known-good parameter directory.
+2. Repoint `VEID_ZK_PARAMS_DIR` to that directory, or restore the previous embedded bundle in the release artifact.
+3. Restart the application.
+4. Confirm that startup succeeds and the VEID keeper initializes normally.
+5. Investigate the failed bundle using the exact loader error:
 
-4. **Trusted Setup Assumption:**
-   - Common Reference String (CRS) generated honestly
-   - Toxic waste (setup randomness) properly destroyed
-   - Multi-party computation mitigates this assumption
+- checksum mismatch
+- placeholder metadata
+- verification key hash drift
+- compiled circuit hash mismatch
+- invalid verifying key parse failure
 
-### Threat Model
+Rollback is complete only after the application starts with a fully verified bundle. A node that cannot verify VEID parameters must stay down rather than run with degraded proof verification.
 
-**Adversary Capabilities:**
+## Operational Notes
 
-- Full control over prover's inputs (can lie about age, address, score)
-- Full access to all public blockchain data
-- Cannot break underlying cryptographic assumptions
-- Cannot access private witness values without key material
+- `params_metadata.json` is a signed-off publication record, not a scratch file.
+- Contributor IDs and coordinator public keys are part of the runtime trust chain and must not be replaced with editorial summaries.
+- Circuit updates require a new ceremony and a new `circuit_hash`; reusing old metadata against a new compiled circuit is rejected at startup.
+- Recomputing only the `*.sha256` files is not enough. The metadata hashes must still match the verified ceremony artifacts.
 
-**Security Guarantees:**
+## Test Coverage
 
-1. **Soundness:** Adversary cannot prove false statement (probability ≤ 2^-100)
-2. **Zero-knowledge:** Adversary learns nothing beyond claim truth value
-3. **Non-malleability:** Cannot modify proof to prove different claim
-4. **Replay resistance:** Nonces and expiration prevent proof reuse
+This track ships three layers of coverage:
 
-**Out of Scope:**
-
-- Side-channel attacks on client devices (implementation responsibility)
-- Compromise of client private keys (user responsibility)
-- Physical attacks on hardware (deployment environment responsibility)
-- Social engineering attacks (user education responsibility)
-
-## Performance Characteristics
-
-### Proof Generation (Off-Chain)
-
-| Proof Type           | Generation Time | Memory Usage | Deterministic    |
-| -------------------- | --------------- | ------------ | ---------------- |
-| Age Range            | 100-300ms       | ~50 MB       | ❌ (client-side) |
-| Residency            | 80-250ms        | ~40 MB       | ❌ (client-side) |
-| Score Range          | 50-150ms        | ~30 MB       | ❌ (client-side) |
-| Selective Disclosure | 100-500ms       | ~60 MB       | ❌ (client-side) |
-
-**Note:** Proof generation happens off-chain on user's client device. Uses randomness and is non-deterministic by design.
-
-### Proof Verification (On-Chain)
-| Selective Disclosure | 2-6ms             | ~220
-| Proof Type           | Verification Time | Gas Cost (Est.) | Deterministic       |
-| -------------------- | ----------------- | --------------- | ------------------- |
-| Age Range            | 2-5ms             | ~200k gas       | ✅ (consensus-safe) |
-| Residency            | 2-5ms             | ~180k gas       | ✅ (consensus-safe) |
-| Score Range          | 2-4ms             | ~150k gas       | ✅ (consensus-safe) |
-k gas       | ✅ (consensus-safe) |
-
-**Note:** Verification happens on-chain during consensus. Fully deterministic - all validators compute identical results.
-
-### Circuit Compilation (One-Time Setup)
-
-| Circuit     | Compilation Time | Setup Time | Proving Key Size | Verification Key Size |
-| ----------- | ---------------- | ---------- | ---------------- | --------------------- |
-| Age Range   | 1-3s             | 5-10s      | ~50 MB           | ~2 KB                 |
-| Residency   | 1-2s             | 4-8s       | ~40 MB           | ~2 KB                 |
-| Score Range | 0.5-1.5s         | 3-6s       | ~30 MB           | ~2 KB                 |
-
-**Note:** Compilation and trusted setup happen once during deployment, not per-proof.
-
-### Blockchain Storage Costs
-
-| Data Type           | Size           | Storage Location                  |
-| ------------------- | -------------- | --------------------------------- |
-| Proof bytes         | ~200 bytes     | On-chain (transaction data)       |
-| Commitment hash     | 32 bytes       | On-chain (proof metadata)         |
-| Nonce               | 32 bytes       | On-chain (proof metadata)         |
-| Verification key    | ~2 KB          | On-chain (module state, one-time) |
-| **Total per proof** | **~264 bytes** | **Per transaction**               |
-
-## Determinism and Consensus Safety
-
-### Why Determinism Matters
-
-In blockchain consensus, all validators must compute identical state transitions. Non-deterministic operations cause chain halts.
-
-### Deterministic Operations
-
-✅ **Safe for consensus:**
-
-- Proof verification (pure function)
-- Commitment verification (hash-based, deterministic, claim keys sorted)
-- Public input validation (pure computation)
-- Nonces and salts:
-  - Client-provided via `RandomnessInputs` (stored verbatim)
-  - Or derived from tx context via `DeterministicRandomSource` (chain-id, block height/time, tx bytes, purpose labels)
-  - Enforced as fixed 32-byte values via `resolveRandomBytes` for consistent proof IDs and commitments
-
-### Non-Deterministic Operations
-
-⚠️ **Unsafe for consensus (kept off-chain):**
-
-- Full proof generation using secret witnesses
-- Trusted setup (one-time, off-chain ceremony)
-- Witness computation (private, client-side only)
-
-### Implementation Strategy
-
-1. **Client-side proof generation:**
-   - User generates proof on their device
-   - Uses randomness for zero-knowledge property
-   - Submits proof bytes to blockchain
-
-2. **On-chain deterministic verification:**
-   - Validators verify proof using public inputs
-   - No randomness in verification path
-   - All validators compute same accept/reject result
-
-3. **Fallback for testing:**
-   - Hash-based commitments for test environments
-   - Deterministic proof structure validation
-   - Maintains same API and security properties
-4. **Deterministic randomness pipeline:**
-   - Clients MAY pass 32-byte nonces/salts through `RandomnessInputs`
-   - If omitted, validators derive deterministic bytes from transaction context with domain separation
-   - Prevents divergent randomness across validators while keeping proofs reproducible
-
-## Trusted Setup Requirements
-
-### What is a Trusted Setup?
-
-Groth16 requires a **circuit-specific trusted setup** to generate proving and verification keys. The setup process generates toxic waste (random values) that must be destroyed.
-
-### Setup Phases
-
-1. **Powers of Tau Ceremony (Universal):**
-   - Multi-party computation (MPC) with N participants
-   - Only 1 honest participant needed for security
-   - Can be reused across multiple circuits
-   - Public ceremony with verifiable transcript
-
-2. **Circuit-Specific Setup:**
-   - Performed per circuit (age, residency, score)
-   - Generates proving key (PK) and verification key (VK)
-   - VK published on-chain for verification
-   - PK distributed to clients for proving
-
-### Security Properties
-
-**Assumption:** At least one participant in MPC was honest and destroyed their secret.
-
-**If assumption holds:**
-
-- Proofs are sound (cannot prove false statements)
-- Zero-knowledge property maintained
-- System is secure
-
-**If assumption fails:**
-
-- Adversary can generate fake proofs
-- Zero-knowledge property lost
-- System security compromised
-
-### Mitigation Strategies
-
-1. **Large MPC with diverse participants** (100+ recommended)
-2. **Verifiable setup transcript** (public audit trail)
-3. **Hardware-based randomness** (HSMs, air-gapped devices)
-4. **Geographically distributed participants** (reduces collusion risk)
-5. **Gradual transition to transparent SNARKs** (PLONK, STARKs - no trusted setup)
-
-### Ceremony Tooling
-
-The repository includes a ceremony toolkit under `tools/trusted-setup/`:
-
-- Coordinator service and CLI for managing phase1/phase2 contributions
-- Participant CLI for online and air-gapped contributions
-- Transcript verification command
-- Documentation in `tools/trusted-setup/docs/`
-
-Production deployments must replace the placeholder parameters in `x/veid/zk/params/` with ceremony outputs.
-
-## Known Limitations
-
-### 1. Trusted Setup Dependency
-
-**Issue:** Groth16 requires trusted setup ceremony
-
-**Impact:** Security depends on at least one honest participant
-
-**Mitigation:**
-
-- Multi-party ceremony with 100+ participants
-- Public verifiable transcript
-- Future migration to PLONK or STARKs (no trusted setup)
-
-### 2. Circuit-Specific Keys
-
-**Issue:** Each circuit requires separate trusted setup
-
-**Impact:** New claim types require new ceremonies
-
-**Mitigation:**
-
-- Careful circuit design to minimize future changes
-- Universal circuits for flexible claim types
-- Upgrade path to universal SNARKs
-
-### 3. Client-Side Computation
-
-**Issue:** Proof generation happens on user devices
-
-**Impact:** Mobile devices may experience slow proof generation
-
-**Mitigation:**
-
-- Optimize circuits for constraint count
-- Offer server-side proving as optional service (privacy tradeoff)
-- Progressive Web Apps for better mobile performance
-
-### 4. BN254 Security Level
-
-**Issue:** BN254 provides ~100-bit security, not 128-bit
-
-**Impact:** May be insufficient for long-term secrets (50+ years)
-
-**Mitigation:**
-
-- Acceptable for identity claims with limited validity periods
-- Future migration to BLS12-381 for 128-bit security
-- Regular security reassessment
-
-### 5. Quantum Vulnerability
-
-**Issue:** Groth16 and BN254 are not post-quantum secure
-
-**Impact:** Vulnerable to Shor's algorithm on quantum computers
-
-**Mitigation:**
-
-- Monitor quantum computing developments
-- Plan migration to post-quantum ZK schemes (e.g., Ligero, Aurora)
-- Identity claims have short validity periods (minimize exposure)
-
-### 6. Proof Size vs Transparency Tradeoff
-
-**Issue:** Groth16 has small proofs but requires trusted setup
-
-**Impact:** Security depends on setup ceremony integrity
-
-**Alternatives:**
-
-- **PLONK:** Universal setup, larger proofs (~768 bytes)
-- **STARKs:** Transparent (no setup), very large proofs (~100 KB)
-- **Bulletproofs:** Transparent, larger proofs (~1.3 KB)
-
-**Decision:** Groth16 chosen for smallest proof size and fastest verification
-
-## Production Deployment
-
-### Pre-Deployment Checklist
-
-- [ ] Complete multi-party trusted setup ceremony (100+ participants)
-- [ ] Publish and verify setup transcript
-- [ ] Formal verification of circuit implementations
-- [ ] Security audit by reputable cryptography firm
-- [ ] Comprehensive testing on testnet (>1000 proofs)
-- [ ] Performance benchmarking under load
-- [ ] Documentation for client integration
-- [ ] Key rotation and upgrade procedures
-- [ ] Incident response plan for setup compromise
-- [ ] Monitoring and alerting for proof verification failures
-
-### Trusted Setup Ceremony Procedure
-
-1. **Phase 1: Powers of Tau**
-   - Coordinate with 100+ participants from diverse backgrounds
-   - Each participant generates random contribution
-   - Contributions combined using MPC protocol
-   - Public transcript published for verification
-
-2. **Phase 2: Circuit-Specific Setup**
-   - For each circuit (age, residency, score):
-     - Run circuit-specific ceremony
-     - Generate proving and verification keys
-     - Destroy toxic waste securely
-   - Publish verification keys on-chain
-   - Distribute proving keys to clients
-
-3. **Verification and Auditing**
-   - Independent verification of transcript
-   - Reproduce setup from transcript
-   - Compare generated keys with published keys
-   - Security audit of setup procedure
-
-4. **Ongoing Monitoring**
-   - Monitor for anomalous proof patterns
-   - Regular security audits
-   - Plan for key rotation and circuit upgrades
-
-### Client Integration
-
-**Required Client Capabilities:**
-
-1. Generate cryptographic nonces (32 bytes random)
-2. Compute Pedersen commitments to witness values
-3. Construct circuit witnesses from identity data
-4. Generate Groth16 proofs using proving keys
-5. Serialize proofs for blockchain submission
-
-**Client Libraries:**
-
-- JavaScript: `gnark-crypto-js` (WebAssembly)
-- Go: `github.com/consensys/gnark`
-- Rust: `ark-groth16` (alternative implementation)
-- Python: `py-ecc` (for testing)
-
-### Monitoring and Alerting
-
-**Metrics to Track:**
-
-- Proof verification success/failure rate
-- Average proof verification time
-- Distribution of proof types (age, residency, score)
-- Anomalous proof patterns (potential attacks)
-- Client-side proof generation errors
-
-**Alert Thresholds:**
-
-- Verification failure rate > 5% (investigate immediately)
-- Verification time > 10ms (potential DoS)
-- Unusual spike in specific proof type (potential exploit)
-
-## References
-
-### Academic Papers
-
-1. **Groth16 Original Paper:**
-   Jens Groth. "On the Size of Pairing-based Non-interactive Arguments." EUROCRYPT 2016.
-   [https://eprint.iacr.org/2016/260](https://eprint.iacr.org/2016/260)
-
-2. **BN Curves:**
-   Paulo S. L. M. Barreto and Michael Naehrig. "Pairing-Friendly Elliptic Curves of Prime Order." SAC 2005.
-
-3. **zk-SNARKs Overview:**
-   Eli Ben-Sasson et al. "Succinct Non-Interactive Zero Knowledge for a von Neumann Architecture." USENIX Security 2014.
-
-4. **Trusted Setup Security:**
-   Sean Bowe et al. "Scalable Multi-party Computation for zk-SNARK Parameters in the Random Beacon Model." IACR Cryptology ePrint 2017/1050.
-
-### Implementation References
-
-1. **gnark Library:**
-   [https://github.com/consensys/gnark](https://github.com/consensys/gnark)
-2. **gnark Documentation:**
-   [https://docs.gnark.consensys.io/](https://docs.gnark.consensys.io/)
-
-3. **BN254 Curve Specification:**
-   [https://github.com/ethereum/EIPs/blob/master/EIPS/eip-196.md](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-196.md)
-
-4. **Groth16 Verification in Ethereum:**
-   [https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md)
-
-### Standards and Best Practices
-
-1. **ZKProof Standards:**
-   [https://zkproof.org/](https://zkproof.org/)
-
-2. **Trusted Setup Ceremonies:**
-   Zcash Powers of Tau: [https://zfnd.org/conclusion-of-the-powers-of-tau-ceremony/](https://zfnd.org/conclusion-of-the-powers-of-tau-ceremony/)
-
-3. **Cryptographic Best Practices:**
-   NIST SP 800-90A: Recommendation for Random Number Generation
-
----
-
-**Document Version:** 1.0.0  
-**Last Updated:** 2026-01-29  
-**Maintained By:** VirtEngine Core Team  
-**Security Review:** Pending (Required before mainnet)
+- Unit: `x/veid/zk/params` rejects placeholder metadata, checksum mismatches, and circuit drift.
+- Integration: staged parameter directories load successfully only when hashes and compiled circuit bindings match.
+- E2E: keeper startup accepts verified staged params and panics on placeholder or corrupted bundles.

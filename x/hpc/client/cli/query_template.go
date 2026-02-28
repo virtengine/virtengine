@@ -27,6 +27,8 @@ func GetQueryCmdWorkloadTemplates() *cobra.Command {
 		GetCmdQueryWorkloadTemplatesByType(),
 		GetCmdQueryWorkloadTemplatesByPublisher(),
 		GetCmdQueryApprovedWorkloadTemplates(),
+		GetCmdQueryWorkloadTemplateUsage(),
+		GetCmdSearchWorkloadTemplates(),
 	)
 
 	return cmd

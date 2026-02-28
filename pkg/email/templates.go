@@ -8,13 +8,15 @@ package email
 import (
 	"bytes"
 	"fmt"
-	"html/template"
+	htmltemplate "html/template"
+	"strings"
+	texttemplate "text/template"
 )
 
 type templateBundle struct {
-	subject *template.Template
-	html    *template.Template
-	text    *template.Template
+	subject *texttemplate.Template
+	html    *htmltemplate.Template
+	text    *texttemplate.Template
 }
 
 // Renderer renders email templates.
@@ -32,15 +34,15 @@ func NewDefaultRenderer() (*DefaultRenderer, error) {
 	templates := map[TemplateName]templateBundle{}
 
 	for name, tpl := range templateSources() {
-		subject, err := template.New(string(name) + "_subject").Parse(tpl.subject)
+		subject, err := texttemplate.New(string(name) + "_subject").Option("missingkey=zero").Parse(tpl.subject)
 		if err != nil {
 			return nil, fmt.Errorf("subject template %s: %w", name, err)
 		}
-		htmlTpl, err := template.New(string(name) + "_html").Parse(tpl.html)
+		htmlTpl, err := htmltemplate.New(string(name) + "_html").Option("missingkey=zero").Parse(tpl.html)
 		if err != nil {
 			return nil, fmt.Errorf("html template %s: %w", name, err)
 		}
-		textTpl, err := template.New(string(name) + "_text").Parse(tpl.text)
+		textTpl, err := texttemplate.New(string(name) + "_text").Option("missingkey=zero").Parse(tpl.text)
 		if err != nil {
 			return nil, fmt.Errorf("text template %s: %w", name, err)
 		}
@@ -76,11 +78,18 @@ func (r *DefaultRenderer) Render(name TemplateName, data any) (RenderedEmail, er
 		return RenderedEmail{}, err
 	}
 
-	return RenderedEmail{
-		Subject: subject.String(),
+	rendered := RenderedEmail{
+		Subject: sanitizeHeaderValue(subject.String()),
 		HTML:    html.String(),
 		Text:    text.String(),
-	}, nil
+	}
+	if rendered.Subject == "" {
+		return RenderedEmail{}, fmt.Errorf("template %s rendered empty subject", name)
+	}
+	if strings.TrimSpace(rendered.HTML) == "" && strings.TrimSpace(rendered.Text) == "" {
+		return RenderedEmail{}, fmt.Errorf("template %s rendered empty body", name)
+	}
+	return rendered, nil
 }
 
 type templateSource struct {

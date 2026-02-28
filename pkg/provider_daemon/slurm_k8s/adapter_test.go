@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -232,6 +234,127 @@ func TestBuildHelmValues(t *testing.T) {
 	if nodeAgent["enabled"] != true {
 		t.Error("expected nodeAgent to be enabled")
 	}
+}
+
+func TestScalePreservesComputeOverrides(t *testing.T) {
+	var upgradedValues map[string]interface{}
+	helmClient := &MockHelmClient{
+		UpgradeFunc: func(ctx context.Context, releaseName, chartPath, namespace string, values map[string]interface{}) error {
+			upgradedValues = values
+			return nil
+		},
+	}
+
+	adapter := NewSLURMKubernetesAdapter(AdapterConfig{
+		Helm: helmClient,
+		K8s: &MockK8sChecker{
+			StatefulSetStatus: map[string]*StatefulSetStatus{
+				"slurm-ns/slurm-test-cluster-controller": {ReadyReplicas: 1, Replicas: 1},
+				"slurm-ns/slurm-test-cluster-slurmdbd":   {ReadyReplicas: 1, Replicas: 1},
+				"slurm-ns/slurm-test-cluster-compute":    {ReadyReplicas: 4, Replicas: 4},
+			},
+		},
+		ChartPath: "/charts/slurm",
+	})
+
+	adapter.clusters["test-cluster"] = &DeployedCluster{
+		Config: DeploymentConfig{
+			ClusterID: "test-cluster",
+			Namespace: "slurm-ns",
+			ValuesOverrides: map[string]interface{}{
+				"compute": map[string]interface{}{
+					"replicas": 2,
+					"nodeSelector": map[string]interface{}{
+						"node-type": "cpu",
+					},
+					"resources": map[string]interface{}{
+						"requests": map[string]interface{}{"cpu": "4"},
+					},
+				},
+			},
+		},
+		State: ClusterStateRunning,
+	}
+
+	err := adapter.Scale(context.Background(), "test-cluster", ScaleRequest{
+		TargetNodes: 4,
+		Timeout:     500 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, upgradedValues)
+
+	compute, ok := upgradedValues["compute"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, int32(4), compute["replicas"])
+
+	nodeSelector, ok := compute["nodeSelector"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "cpu", nodeSelector["node-type"])
+
+	resources, ok := compute["resources"].(map[string]interface{})
+	require.True(t, ok)
+	assert.NotNil(t, resources["requests"])
+}
+
+func TestScaleNamedNodePoolUpdatesSpecificPool(t *testing.T) {
+	var upgradedValues map[string]interface{}
+	helmClient := &MockHelmClient{
+		UpgradeFunc: func(ctx context.Context, releaseName, chartPath, namespace string, values map[string]interface{}) error {
+			upgradedValues = values
+			return nil
+		},
+	}
+
+	adapter := NewSLURMKubernetesAdapter(AdapterConfig{
+		Helm: helmClient,
+		K8s: &MockK8sChecker{
+			StatefulSetStatus: map[string]*StatefulSetStatus{
+				"slurm-ns/slurm-test-cluster-controller": {ReadyReplicas: 1, Replicas: 1},
+				"slurm-ns/slurm-test-cluster-slurmdbd":   {ReadyReplicas: 1, Replicas: 1},
+				"slurm-ns/slurm-test-cluster-compute":    {ReadyReplicas: 2, Replicas: 2},
+				"slurm-ns/slurm-test-cluster-gpu-nodes":  {ReadyReplicas: 5, Replicas: 5},
+			},
+		},
+		ChartPath: "/charts/slurm",
+	})
+
+	adapter.clusters["test-cluster"] = &DeployedCluster{
+		Config: DeploymentConfig{
+			ClusterID: "test-cluster",
+			Namespace: "slurm-ns",
+			ValuesOverrides: map[string]interface{}{
+				"compute": map[string]interface{}{
+					"replicas": 2,
+				},
+				"nodePools": []interface{}{
+					map[string]interface{}{
+						"name":         "gpu-nodes",
+						"replicas":     2,
+						"cpus":         64,
+						"nodeSelector": map[string]interface{}{"node-type": "gpu"},
+					},
+				},
+			},
+		},
+		State: ClusterStateRunning,
+	}
+
+	err := adapter.Scale(context.Background(), "test-cluster", ScaleRequest{
+		TargetNodes: 5,
+		NodePool:    "gpu-nodes",
+		Timeout:     500 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, upgradedValues)
+
+	pools := nodePoolsFromValues(upgradedValues)
+	require.Len(t, pools, 1)
+	assert.Equal(t, int32(5), pools[0]["replicas"])
+	assert.Equal(t, "gpu", pools[0]["nodeSelector"].(map[string]interface{})["node-type"])
+
+	compute, ok := upgradedValues["compute"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, 2, compute["replicas"])
 }
 
 func TestBootstrapRollbackOnPartialDeploy(t *testing.T) {

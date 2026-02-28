@@ -1,257 +1,280 @@
-#!/bin/bash
-# VirtEngine Blue/Green Traffic Switch Script
-# Usage: ./blue-green-switch.sh <app> <target-version>
-# Example: ./blue-green-switch.sh virtengine-node green
+#!/usr/bin/env bash
+# VirtEngine blue/green traffic switch helper with Prometheus-backed health gates.
 
 set -euo pipefail
 
-APP="${1:-}"
-TARGET="${2:-}"
-NAMESPACE="${NAMESPACE:-virtengine-prod}"
+APP=""
+TARGET=""
+MODE="gradual"
+AUTO_APPROVE="false"
+DRY_RUN="false"
+NAMESPACE="${NAMESPACE:-virtengine}"
 WEIGHT_STEP="${WEIGHT_STEP:-10}"
 WAIT_SECONDS="${WAIT_SECONDS:-30}"
+ERROR_RATE_THRESHOLD="${ERROR_RATE_THRESHOLD:-0.02}"
+PROMETHEUS_URL="${PROMETHEUS_URL:-}"
+PROMETHEUS_QUERY_TEMPLATE="${PROMETHEUS_QUERY_TEMPLATE:-}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_info() { echo -e "${GREEN}[INFO]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 usage() {
-    cat << EOF
+  cat <<'EOF'
 VirtEngine Blue/Green Traffic Switch Script
 
-Usage: $0 <app> <target-version>
+Usage:
+  blue-green-switch.sh <app> <target-version> [--mode gradual|instant] [--dry-run] [--yes]
 
 Arguments:
   app              Application name (virtengine-node, provider-daemon)
   target-version   Target version to switch to (blue, green)
 
-Environment Variables:
-  NAMESPACE        Kubernetes namespace (default: virtengine-prod)
-  WEIGHT_STEP      Traffic weight increment (default: 10)
-  WAIT_SECONDS     Wait between increments (default: 30)
+Options:
+  --mode MODE      gradual (default) or instant
+  --dry-run        Print the operations without patching the VirtualService
+  --yes            Skip the interactive confirmation prompt
 
-Examples:
-  $0 virtengine-node green     # Switch to green deployment
-  $0 provider-daemon blue      # Switch back to blue
+Environment Variables:
+  NAMESPACE                  Kubernetes namespace (default: virtengine)
+  WEIGHT_STEP                Traffic weight increment for gradual switches (default: 10)
+  WAIT_SECONDS               Wait time between gradual switch steps (default: 30)
+  PROMETHEUS_URL             Prometheus base URL, required for gradual switches
+  ERROR_RATE_THRESHOLD       Maximum tolerated 5xx ratio during gradual switches (default: 0.02)
+  PROMETHEUS_QUERY_TEMPLATE  Optional query template using {app}, {target}, and {namespace}
 EOF
-    exit 1
 }
 
-check_prerequisites() {
-    if ! command -v kubectl &> /dev/null; then
-        log_error "kubectl not found"
-        exit 1
-    fi
-    
-    if ! command -v istioctl &> /dev/null; then
-        log_warn "istioctl not found - some checks will be skipped"
-    fi
+fail() {
+  log_error "$*"
+  exit 1
+}
+
+require_commands() {
+  local commands=(kubectl jq)
+  for cmd in "${commands[@]}"; do
+    command -v "$cmd" >/dev/null 2>&1 || fail "$cmd not found in PATH"
+  done
+  if [[ "$MODE" == "gradual" ]]; then
+    command -v curl >/dev/null 2>&1 || fail "curl not found in PATH"
+  fi
+}
+
+replace_query_tokens() {
+  local template="$1"
+  template="${template//\{app\}/$APP}"
+  template="${template//\{target\}/$TARGET}"
+  template="${template//\{namespace\}/$NAMESPACE}"
+  echo "$template"
+}
+
+url_encode() {
+  local raw="$1"
+  if command -v python >/dev/null 2>&1; then
+    python - <<'PY' "$raw"
+import sys
+from urllib.parse import quote_plus
+print(quote_plus(sys.argv[1]))
+PY
+  else
+    pwsh -NoProfile -Command "[uri]::EscapeDataString($args[0])" -- "$raw"
+  fi
+}
+
+prometheus_query() {
+  local query="$1"
+  local encoded
+  encoded="$(url_encode "$query")"
+  curl -fsSL "${PROMETHEUS_URL%/}/api/v1/query?query=${encoded}"
+}
+
+default_error_rate_query() {
+  local service_fqdn="${APP}-${TARGET}.${NAMESPACE}.svc.cluster.local"
+  cat <<EOF
+(
+  sum(rate(istio_requests_total{reporter="destination",destination_service_name="${service_fqdn}",response_code=~"5.."}[5m]))
+)
+/
+clamp_min(
+  sum(rate(istio_requests_total{reporter="destination",destination_service_name="${service_fqdn}"}[5m])),
+  1
+)
+EOF
 }
 
 get_current_weights() {
-    local app="$1"
-    kubectl get virtualservice "$app" -n "$NAMESPACE" -o json | \
-        jq -r '.spec.http[-1].route[] | "\(.destination.host): \(.weight)"'
+  kubectl get virtualservice "$APP" -n "$NAMESPACE" -o json | \
+    jq -r '.spec.http[-1].route[] | "\(.destination.host): \(.weight)"'
 }
 
 check_target_health() {
-    local app="$1"
-    local target="$2"
-    
-    log_info "Checking health of $app-$target..."
-    
-    local ready
-    ready=$(kubectl get pods -n "$NAMESPACE" \
-        -l "app.kubernetes.io/name=$app,version=$target" \
-        -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
-    
-    if [[ "$ready" == *"False"* ]] || [ -z "$ready" ]; then
-        log_error "Target pods are not healthy"
-        return 1
-    fi
-    
-    log_info "Target pods are healthy"
-    return 0
+  local ready
+  ready="$(kubectl get pods -n "$NAMESPACE" \
+    -l "app.kubernetes.io/name=$APP,app.kubernetes.io/version=$TARGET" \
+    -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')"
+
+  [[ -n "$ready" ]] || fail "no candidate pods found for $APP/$TARGET"
+  [[ "$ready" == *"False"* ]] && fail "target pods are not ready"
 }
 
 update_weights() {
-    local app="$1"
-    local blue_weight="$2"
-    local green_weight="$3"
-    
-    log_info "Setting weights: blue=$blue_weight, green=$green_weight"
-    
-    kubectl patch virtualservice "$app" -n "$NAMESPACE" --type='json' -p="[
-        {\"op\": \"replace\", \"path\": \"/spec/http/-1/route/0/weight\", \"value\": $blue_weight},
-        {\"op\": \"replace\", \"path\": \"/spec/http/-1/route/1/weight\", \"value\": $green_weight}
-    ]"
-}
+  local blue_weight="$1"
+  local green_weight="$2"
+  local patch
+  patch="[
+    {\"op\": \"replace\", \"path\": \"/spec/http/-1/route/0/weight\", \"value\": ${blue_weight}},
+    {\"op\": \"replace\", \"path\": \"/spec/http/-1/route/1/weight\", \"value\": ${green_weight}}
+  ]"
 
-gradual_switch() {
-    local app="$1"
-    local target="$2"
-    
-    local current_blue=100
-    local current_green=0
-    
-    if [ "$target" = "blue" ]; then
-        current_blue=0
-        current_green=100
-    fi
-    
-    log_info "Starting gradual traffic switch to $target"
-    
-    while true; do
-        if [ "$target" = "green" ]; then
-            current_blue=$((current_blue - WEIGHT_STEP))
-            current_green=$((current_green + WEIGHT_STEP))
-            
-            if [ "$current_green" -gt 100 ]; then
-                current_green=100
-                current_blue=0
-            fi
-        else
-            current_green=$((current_green - WEIGHT_STEP))
-            current_blue=$((current_blue + WEIGHT_STEP))
-            
-            if [ "$current_blue" -gt 100 ]; then
-                current_blue=100
-                current_green=0
-            fi
-        fi
-        
-        update_weights "$app" "$current_blue" "$current_green"
-        
-        log_info "Current weights: blue=$current_blue%, green=$current_green%"
-        
-        if [ "$target" = "green" ] && [ "$current_green" -eq 100 ]; then
-            break
-        fi
-        if [ "$target" = "blue" ] && [ "$current_blue" -eq 100 ]; then
-            break
-        fi
-        
-        log_info "Waiting ${WAIT_SECONDS}s before next increment..."
-        sleep "$WAIT_SECONDS"
-        
-        # Check for errors
-        if ! check_error_rate "$app" "$target"; then
-            log_error "Error rate too high, aborting switch"
-            instant_rollback "$app" "$target"
-            exit 1
-        fi
-    done
-    
-    log_info "Traffic switch complete!"
-}
+  log_info "Setting weights: blue=${blue_weight}, green=${green_weight}"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "$patch"
+    return 0
+  fi
 
-instant_switch() {
-    local app="$1"
-    local target="$2"
-    
-    log_info "Performing instant switch to $target"
-    
-    if [ "$target" = "green" ]; then
-        update_weights "$app" 0 100
-    else
-        update_weights "$app" 100 0
-    fi
-    
-    log_info "Traffic switched to $target"
-}
-
-instant_rollback() {
-    local app="$1"
-    local failed_target="$2"
-    
-    log_warn "Rolling back from $failed_target"
-    
-    if [ "$failed_target" = "green" ]; then
-        update_weights "$app" 100 0
-    else
-        update_weights "$app" 0 100
-    fi
-    
-    log_info "Rollback complete"
+  kubectl patch virtualservice "$APP" -n "$NAMESPACE" --type=json -p="$patch" >/dev/null
 }
 
 check_error_rate() {
-    local app="$1"
-    local target="$2"
-    
-    # This is a simplified check - in production, query Prometheus
-    # Example: error_rate=$(prometheus_query "rate(http_requests_total{status=~'5..'}[1m])")
-    
-    log_info "Checking error rates..."
-    # Placeholder - implement actual metric check
-    return 0
+  [[ -n "$PROMETHEUS_URL" ]] || fail "PROMETHEUS_URL is required for gradual switches"
+
+  local query
+  if [[ -n "$PROMETHEUS_QUERY_TEMPLATE" ]]; then
+    query="$(replace_query_tokens "$PROMETHEUS_QUERY_TEMPLATE")"
+  else
+    query="$(default_error_rate_query)"
+  fi
+
+  local result
+  result="$(prometheus_query "$query")"
+  local status
+  status="$(echo "$result" | jq -r '.status')"
+  [[ "$status" == "success" ]] || fail "Prometheus query failed"
+
+  local value
+  value="$(echo "$result" | jq -r '.data.result[0].value[1] // "0"')"
+  awk -v value="$value" -v threshold="$ERROR_RATE_THRESHOLD" 'BEGIN { exit (value <= threshold ? 0 : 1) }'
+}
+
+instant_rollback() {
+  if [[ "$TARGET" == "green" ]]; then
+    update_weights 100 0
+  else
+    update_weights 0 100
+  fi
+}
+
+gradual_switch() {
+  local blue_weight=100
+  local green_weight=0
+
+  if [[ "$TARGET" == "blue" ]]; then
+    blue_weight=0
+    green_weight=100
+  fi
+
+  while true; do
+    if [[ "$TARGET" == "green" ]]; then
+      blue_weight=$(( blue_weight - WEIGHT_STEP ))
+      green_weight=$(( green_weight + WEIGHT_STEP ))
+      (( green_weight > 100 )) && green_weight=100
+      (( blue_weight < 0 )) && blue_weight=0
+    else
+      green_weight=$(( green_weight - WEIGHT_STEP ))
+      blue_weight=$(( blue_weight + WEIGHT_STEP ))
+      (( blue_weight > 100 )) && blue_weight=100
+      (( green_weight < 0 )) && green_weight=0
+    fi
+
+    update_weights "$blue_weight" "$green_weight"
+
+    if [[ "$TARGET" == "green" && "$green_weight" -eq 100 ]] || [[ "$TARGET" == "blue" && "$blue_weight" -eq 100 ]]; then
+      break
+    fi
+
+    log_info "Waiting ${WAIT_SECONDS}s before the next increment"
+    [[ "$DRY_RUN" == "true" ]] || sleep "$WAIT_SECONDS"
+
+    if ! check_error_rate; then
+      log_error "Error rate exceeded threshold during gradual switch"
+      instant_rollback
+      exit 1
+    fi
+  done
 }
 
 confirm_switch() {
-    local app="$1"
-    local target="$2"
-    
-    echo ""
-    log_warn "You are about to switch traffic:"
-    echo "  Application: $app"
-    echo "  Namespace: $NAMESPACE"
-    echo "  Target version: $target"
-    echo ""
-    echo "Current weights:"
-    get_current_weights "$app"
-    echo ""
-    
-    read -p "Switch type (gradual/instant/cancel): " switch_type
-    
-    case "$switch_type" in
-        gradual)
-            gradual_switch "$app" "$target"
-            ;;
-        instant)
-            instant_switch "$app" "$target"
-            ;;
-        cancel)
-            log_info "Switch cancelled"
-            exit 0
-            ;;
-        *)
-            log_error "Invalid option"
-            exit 1
-            ;;
-    esac
+  if [[ "$AUTO_APPROVE" == "true" || "$DRY_RUN" == "true" ]]; then
+    return 0
+  fi
+
+  echo
+  log_warn "About to switch traffic"
+  echo "  Application: $APP"
+  echo "  Namespace: $NAMESPACE"
+  echo "  Target: $TARGET"
+  echo "  Mode: $MODE"
+  echo
+  get_current_weights
+  echo
+  read -r -p "Type 'yes' to continue: " confirm
+  [[ "$confirm" == "yes" ]] || fail "switch cancelled"
 }
 
-main() {
-    if [ -z "$APP" ] || [ -z "$TARGET" ]; then
-        usage
-    fi
-    
-    if [[ ! "$TARGET" =~ ^(blue|green)$ ]]; then
-        log_error "Target must be 'blue' or 'green'"
-        usage
-    fi
-    
-    check_prerequisites
-    
-    # Verify VirtualService exists
-    if ! kubectl get virtualservice "$APP" -n "$NAMESPACE" &> /dev/null; then
-        log_error "VirtualService '$APP' not found in namespace '$NAMESPACE'"
-        exit 1
-    fi
-    
-    # Check target health
-    if ! check_target_health "$APP" "$TARGET"; then
-        log_error "Target deployment is not healthy. Fix issues before switching."
-        exit 1
-    fi
-    
-    # Confirm and perform switch
-    confirm_switch "$APP" "$TARGET"
-}
+if [[ $# -lt 2 ]]; then
+  usage >&2
+  exit 1
+fi
 
-main "$@"
+APP="$1"
+TARGET="$2"
+shift 2
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mode)
+      MODE="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN="true"
+      shift
+      ;;
+    --yes)
+      AUTO_APPROVE="true"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown option: $1"
+      ;;
+  esac
+done
+
+[[ "$TARGET" =~ ^(blue|green)$ ]] || fail "target must be blue or green"
+[[ "$MODE" =~ ^(gradual|instant)$ ]] || fail "--mode must be gradual or instant"
+
+require_commands
+kubectl get virtualservice "$APP" -n "$NAMESPACE" >/dev/null 2>&1 || fail "VirtualService '$APP' not found in namespace '$NAMESPACE'"
+check_target_health
+confirm_switch
+
+if [[ "$MODE" == "instant" ]]; then
+  if [[ "$TARGET" == "green" ]]; then
+    update_weights 0 100
+  else
+    update_weights 100 0
+  fi
+else
+  gradual_switch
+fi
+
+log_info "Traffic switch completed"

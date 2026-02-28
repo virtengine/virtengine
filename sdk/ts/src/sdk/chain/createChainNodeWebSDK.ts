@@ -5,8 +5,7 @@ import { patches as nodePatches } from "../../generated/patches/nodeCustomTypePa
 import { getMessageType } from "../getMessageType.ts";
 import { createNoopTransport } from "../transport/createNoopTransport.ts";
 import { createGrpcGatewayTransport } from "../transport/grpc-gateway/createGrpcGatewayTransport.ts";
-import type { RetryOptions } from "../transport/interceptors/retry.ts";
-import { createRetryInterceptor, isRetryEnabled } from "../transport/interceptors/retry.ts";
+import { getRetryInterceptors, type RetryOptions } from "../transport/interceptors/retry.ts";
 import { createTxTransport } from "../transport/tx/createTxTransport.ts";
 import type { TxClient } from "../transport/tx/TxClient.ts";
 
@@ -17,7 +16,7 @@ export function createChainNodeWebSDK(options: ChainNodeWebSDKOptions) {
   const queryTransport = createGrpcGatewayTransport({
     ...transportOptions,
     baseUrl: options.query.baseUrl,
-    interceptors: isRetryEnabled(retryOptions) ? [createRetryInterceptor(retryOptions)] : [],
+    interceptors: getRetryInterceptors(retryOptions),
   });
   const txTransport = options.tx
     ? createTxTransport({

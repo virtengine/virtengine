@@ -278,22 +278,23 @@ func (k Keeper) buildSettlementUsageRecords(
 	usageComponents = scaleComponentsToTarget(targetCoin, usageComponents)
 
 	baseMetadata := map[string]string{
-		"hpc_job_id":            job.JobID,
-		"hpc_cluster_id":        record.ClusterID,
-		"hpc_offering_id":       record.OfferingID,
-		"hpc_accounting_id":     record.RecordID,
-		"hpc_scheduler_type":    record.SchedulerType,
-		"hpc_formula_version":   record.FormulaVersion,
-		"hpc_job_state":         string(job.State),
-		"hpc_job_escrow_id":     job.EscrowID,
-		"hpc_cpu_core_seconds":  strconv.FormatInt(metrics.CPUCoreSeconds, 10),
-		"hpc_memory_gb_seconds": strconv.FormatInt(metrics.MemoryGBSeconds, 10),
-		"hpc_storage_gb_hours":  strconv.FormatInt(metrics.StorageGBHours, 10),
-		"hpc_network_bytes_in":  strconv.FormatInt(metrics.NetworkBytesIn, 10),
-		"hpc_network_bytes_out": strconv.FormatInt(metrics.NetworkBytesOut, 10),
-		"hpc_node_hours":        metrics.NodeHours.String(),
-		"hpc_gpu_seconds":       strconv.FormatInt(metrics.GPUSeconds, 10),
-		"hpc_gpu_type":          metrics.GPUType,
+		"hpc_job_id":             job.JobID,
+		"hpc_cluster_id":         record.ClusterID,
+		"hpc_offering_id":        record.OfferingID,
+		"hpc_accounting_id":      record.RecordID,
+		"hpc_scheduler_type":     record.SchedulerType,
+		"hpc_formula_version":    record.FormulaVersion,
+		"hpc_job_state":          string(job.State),
+		"hpc_job_escrow_id":      job.EscrowID,
+		"hpc_queue_time_seconds": strconv.FormatInt(metrics.QueueTimeSeconds, 10),
+		"hpc_cpu_core_seconds":   strconv.FormatInt(metrics.CPUCoreSeconds, 10),
+		"hpc_memory_gb_seconds":  strconv.FormatInt(metrics.MemoryGBSeconds, 10),
+		"hpc_storage_gb_hours":   strconv.FormatInt(metrics.StorageGBHours, 10),
+		"hpc_network_bytes_in":   strconv.FormatInt(metrics.NetworkBytesIn, 10),
+		"hpc_network_bytes_out":  strconv.FormatInt(metrics.NetworkBytesOut, 10),
+		"hpc_node_hours":         metrics.NodeHours.String(),
+		"hpc_gpu_seconds":        strconv.FormatInt(metrics.GPUSeconds, 10),
+		"hpc_gpu_type":           metrics.GPUType,
 	}
 
 	if escrow.EscrowID != "" {
@@ -305,6 +306,9 @@ func (k Keeper) buildSettlementUsageRecords(
 
 	if record.CalculationHash != "" {
 		baseMetadata["hpc_calculation_hash"] = record.CalculationHash
+	}
+	if record.BillableBreakdown.QueuePenalty.IsPositive() {
+		baseMetadata["hpc_queue_penalty_amount"] = record.BillableBreakdown.QueuePenalty.String()
 	}
 
 	periodStart := record.PeriodStart
@@ -401,10 +405,6 @@ func buildUsageComponents(metrics types.HPCDetailedMetrics, breakdown types.Bill
 
 	networkBytes := metrics.NetworkBytesIn + metrics.NetworkBytesOut
 	components = appendUsageComponent(components, "network_gb", usageUnitsFromBytes(networkBytes), breakdown.NetworkCost)
-
-	if breakdown.QueuePenalty.IsPositive() {
-		components = appendUsageComponent(components, "queue_penalty", 1, breakdown.QueuePenalty)
-	}
 
 	return components
 }

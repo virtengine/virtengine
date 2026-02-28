@@ -546,6 +546,7 @@ func (c *ProductionConfig) ToVerificationPolicy() VerificationPolicy {
 	policy.AllowDebugMode = c.AllowDebug
 	policy.RequireLatestTCB = c.Mode == TEEModeProduction
 	policy.MaxAttestationAge = c.AttestationCacheDuration
+	policy.AllowIncompleteVerification = c.Mode != TEEModeProduction
 
 	// Set allowed platforms based on mode
 	if c.Mode == TEEModeProduction {

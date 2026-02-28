@@ -20,13 +20,6 @@ resources:
   - tee-enclave-deployment.yaml
   - tee-enclave-service.yaml
 
-configMapGenerator:
-  - name: virtengine-config
-    behavior: merge
-    literals:
-      - CHAIN_ID=virtengine-1
-      - LOG_LEVEL=info
-
 images:
   - name: virtengine/virtengine-node
     newTag: latest

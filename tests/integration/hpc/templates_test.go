@@ -8,41 +8,31 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/virtengine/virtengine/app"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 	hpckeeper "github.com/virtengine/virtengine/x/hpc/keeper"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
+func setupTemplateIntegrationHarness(t *testing.T, baseTime time.Time) (sdk.Context, hpckeeper.Keeper, string) {
+	t.Helper()
+
+	ctx, keeper, _ := setupIntegrationKeeper(t)
+	ctx = ctx.WithBlockTime(baseTime).WithBlockHeight(1)
+
+	return ctx, keeper, keeper.GetAuthority()
+}
+
 // TestWorkloadTemplateLifecycle validates template creation, approval, and usage.
 func TestWorkloadTemplateLifecycle(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	app := app.Setup(
-		app.WithChainID("virtengine-hpc-integration-1"),
-		app.WithGenesis(func(cdc codec.Codec) app.GenesisState {
-			return app.GenesisStateWithValSet(cdc)
-		}),
-	)
-
 	baseTime := time.Unix(1_700_000_000, 0).UTC()
-	ctx := app.NewUncachedContext(false, cmtproto.Header{
-		Height: 1,
-		Time:   baseTime,
-	})
-
-	msgServer := hpckeeper.NewMsgServerImpl(app.Keepers.VirtEngine.HPC)
-	queryServer := hpckeeper.NewQueryServerImpl(app.Keepers.VirtEngine.HPC)
+	ctx, keeper, authority := setupTemplateIntegrationHarness(t, baseTime)
+	msgServer := hpckeeper.NewMsgServerImpl(keeper)
+	queryServer := hpckeeper.NewQueryServerImpl(keeper)
 
 	creator := sdktestutil.AccAddress(t)
-	authority := app.Keepers.VirtEngine.HPC.GetAuthority() // x/gov module account
 
 	// Step 1: Create a workload template
 	template := &hpctypes.WorkloadTemplate{
@@ -269,25 +259,10 @@ func registerTemplateOffering(
 
 // TestWorkloadTemplateVersioning validates template versioning and updates.
 func TestWorkloadTemplateVersioning(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	app := app.Setup(
-		app.WithChainID("virtengine-hpc-integration-1"),
-		app.WithGenesis(func(cdc codec.Codec) app.GenesisState {
-			return app.GenesisStateWithValSet(cdc)
-		}),
-	)
-
 	baseTime := time.Unix(1_700_000_000, 0).UTC()
-	ctx := app.NewUncachedContext(false, cmtproto.Header{
-		Height: 1,
-		Time:   baseTime,
-	})
-
-	msgServer := hpckeeper.NewMsgServerImpl(app.Keepers.VirtEngine.HPC)
-	queryServer := hpckeeper.NewQueryServerImpl(app.Keepers.VirtEngine.HPC)
+	ctx, keeper, _ := setupTemplateIntegrationHarness(t, baseTime)
+	msgServer := hpckeeper.NewMsgServerImpl(keeper)
+	queryServer := hpckeeper.NewQueryServerImpl(keeper)
 
 	creator := sdktestutil.AccAddress(t)
 
@@ -374,28 +349,12 @@ func TestWorkloadTemplateVersioning(t *testing.T) {
 
 // TestWorkloadTemplateGovernance validates governance actions on templates.
 func TestWorkloadTemplateGovernance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	app := app.Setup(
-		app.WithChainID("virtengine-hpc-integration-1"),
-		app.WithGenesis(func(cdc codec.Codec) app.GenesisState {
-			return app.GenesisStateWithValSet(cdc)
-		}),
-	)
-
 	baseTime := time.Unix(1_700_000_000, 0).UTC()
-	ctx := app.NewUncachedContext(false, cmtproto.Header{
-		Height: 1,
-		Time:   baseTime,
-	})
-
-	msgServer := hpckeeper.NewMsgServerImpl(app.Keepers.VirtEngine.HPC)
-	queryServer := hpckeeper.NewQueryServerImpl(app.Keepers.VirtEngine.HPC)
+	ctx, keeper, authority := setupTemplateIntegrationHarness(t, baseTime)
+	msgServer := hpckeeper.NewMsgServerImpl(keeper)
+	queryServer := hpckeeper.NewQueryServerImpl(keeper)
 
 	creator := sdktestutil.AccAddress(t)
-	authority := app.Keepers.VirtEngine.HPC.GetAuthority()
 
 	// Create a template
 	template := &hpctypes.WorkloadTemplate{
@@ -488,25 +447,10 @@ func TestWorkloadTemplateGovernance(t *testing.T) {
 
 // TestWorkloadTemplateSearch validates template search functionality.
 func TestWorkloadTemplateSearch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	app := app.Setup(
-		app.WithChainID("virtengine-hpc-integration-1"),
-		app.WithGenesis(func(cdc codec.Codec) app.GenesisState {
-			return app.GenesisStateWithValSet(cdc)
-		}),
-	)
-
 	baseTime := time.Unix(1_700_000_000, 0).UTC()
-	ctx := app.NewUncachedContext(false, cmtproto.Header{
-		Height: 1,
-		Time:   baseTime,
-	})
-
-	msgServer := hpckeeper.NewMsgServerImpl(app.Keepers.VirtEngine.HPC)
-	queryServer := hpckeeper.NewQueryServerImpl(app.Keepers.VirtEngine.HPC)
+	ctx, keeper, _ := setupTemplateIntegrationHarness(t, baseTime)
+	msgServer := hpckeeper.NewMsgServerImpl(keeper)
+	queryServer := hpckeeper.NewQueryServerImpl(keeper)
 
 	creator := sdktestutil.AccAddress(t)
 

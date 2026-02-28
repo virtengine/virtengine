@@ -14,6 +14,8 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
@@ -473,6 +475,43 @@ func TestValidateModelVersion_UnhealthyScorer(t *testing.T) {
 	err := cv.ValidateModelVersion(ctx, "v1.0.0")
 	require.Error(t, err, "should fail when scorer is not healthy")
 	require.Contains(t, err.Error(), "not healthy")
+}
+
+func TestValidateModelVersion_RejectsInactivePipelineState(t *testing.T) {
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	require.NoError(t, stateStore.LoadLatestVersion())
+
+	registry := codectypes.NewInterfaceRegistry()
+	types.RegisterInterfaces(registry)
+	cdc := codec.NewProtoCodec(registry)
+
+	k := NewKeeper(cdc, storeKey, "authority")
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+
+	manifest := createIntegrationTestManifest(t)
+	pv, err := k.RegisterPipelineVersion(
+		ctx,
+		testModelVersion,
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
+		manifest,
+	)
+	require.NoError(t, err)
+	require.NoError(t, k.SetActivePipelineVersion(ctx, testModelVersion))
+	pv.Status = string(types.PipelineVersionStatusRetired)
+	require.NoError(t, k.SetPipelineVersion(ctx, pv))
+
+	cv := NewConsensusVerifier(&k, newMockMLScorer(true, 85), newMockKeyProvider(), DefaultConsensusParams(), log.NewNopLogger())
+	err = cv.ValidateModelVersion(ctx, testModelVersion)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not active")
 }
 
 // ============================================================================

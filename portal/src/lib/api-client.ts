@@ -91,6 +91,14 @@ export class ApiClient {
       body: body ? JSON.stringify(body) : options.body,
     });
   }
+
+  patch<T>(path: string, body?: unknown, options: ApiRequestOptions = {}) {
+    return this.request<T>(path, {
+      ...options,
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : options.body,
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

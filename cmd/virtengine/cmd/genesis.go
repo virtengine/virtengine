@@ -112,6 +112,9 @@ func PrepareGenesis(clientCtx client.Context, appState map[string]json.RawMessag
 	// chain params genesis
 	genDoc.ChainID = chainID
 	genDoc.GenesisTime = genesisParams.GenesisTime
+	if genDoc.Consensus == nil {
+		genDoc.Consensus = &genutiltypes.ConsensusGenesis{}
+	}
 	genDoc.Consensus.Params = genesisParams.ConsensusParams
 
 	// ---
@@ -136,8 +139,7 @@ func PrepareGenesis(clientCtx client.Context, appState map[string]json.RawMessag
 	// distribution module genesis
 	distributionGenState := distributiontypes.DefaultGenesisState()
 	distributionGenState.Params = genesisParams.DistributionParams
-	// TODO Set initial community pool
-	distributionGenState.FeePool.CommunityPool = sdk.NewDecCoins()
+	distributionGenState.FeePool.CommunityPool = genesisParams.InitialCommunityPool
 	distributionGenStateBz, err := cdc.MarshalJSON(distributionGenState)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal distribution genesis state: %w", err)
@@ -158,8 +160,6 @@ func PrepareGenesis(clientCtx client.Context, appState map[string]json.RawMessag
 	// crisis module genesis
 	crisisGenState := crisistypes.DefaultGenesisState()
 	crisisGenState.ConstantFee = genesisParams.CrisisConstantFee
-	// TODO Set initial community pool
-	// distributionGenState.FeePool.CommunityPool = sdk.NewDecCoins()
 	crisisGenStateBz, err := cdc.MarshalJSON(crisisGenState)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal crisis genesis state: %w", err)
@@ -184,8 +184,9 @@ type GenesisParams struct {
 
 	ConsensusParams *tmtypes.ConsensusParams
 
-	GenesisTime         time.Time
-	NativeCoinMetadatas []banktypes.Metadata
+	GenesisTime          time.Time
+	NativeCoinMetadatas  []banktypes.Metadata
+	InitialCommunityPool sdk.DecCoins
 
 	StakingParams      stakingtypes.Params
 	MintParams         minttypes.Params
@@ -200,7 +201,7 @@ type GenesisParams struct {
 func MainnetGenesisParams() GenesisParams {
 	genParams := GenesisParams{}
 
-	genParams.GenesisTime = time.Date(2021, 6, 18, 17, 0, 0, 0, time.UTC) // Jun 18, 2021 - 17:00 UTC
+	genParams.GenesisTime = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
 	genParams.NativeCoinMetadatas = []banktypes.Metadata{
 		{
@@ -231,6 +232,12 @@ func MainnetGenesisParams() GenesisParams {
 	genParams.DistributionParams = distributiontypes.DefaultParams()
 	genParams.DistributionParams.CommunityTax = sdkmath.LegacyMustNewDecFromStr("0")
 	genParams.DistributionParams.WithdrawAddrEnabled = true
+	genParams.InitialCommunityPool = sdk.NewDecCoins(
+		sdk.NewDecCoinFromCoin(sdk.NewCoin(
+			genParams.NativeCoinMetadatas[0].Base,
+			sdkmath.NewInt(200_000_000_000),
+		)),
+	)
 
 	genParams.GovParams = govtypesv1.DefaultParams()
 	genParams.GovParams.DepositParams.MaxDepositPeriod = time.Hour * 24 * 14 // 2 weeks
@@ -260,6 +267,7 @@ func TestnetGenesisParams() GenesisParams {
 	genParams := MainnetGenesisParams()
 
 	genParams.GenesisTime = time.Now()
+	genParams.InitialCommunityPool = sdk.NewDecCoins()
 
 	genParams.StakingParams.UnbondingTime = time.Hour * 24 * 7 * 2 // 2 weeks
 

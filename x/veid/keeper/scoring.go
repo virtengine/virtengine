@@ -3,7 +3,9 @@ package keeper
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -104,14 +106,26 @@ func isTensorFlowEnabled() bool {
 }
 
 // isRealInferenceReady checks if real inference runtime is available and healthy
-func isRealInferenceReady() bool {
-	// Check if model path exists
-	modelPath := getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score")
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		return false
+func isRealInferenceReady(config *TensorFlowScoringConfig) error {
+	if config == nil {
+		return fmt.Errorf("tensorflow config is required")
 	}
-	// Additional checks can be added here for model hash verification, etc.
-	return true
+	if strings.TrimSpace(config.ModelPath) == "" {
+		return fmt.Errorf("model path is required")
+	}
+	if strings.Contains(strings.ToLower(config.ModelPath), "placeholder") {
+		return fmt.Errorf("model path %q contains a placeholder marker", config.ModelPath)
+	}
+	if strings.TrimSpace(config.ExpectedHash) == "" {
+		return fmt.Errorf("expected model hash is required")
+	}
+	if strings.Contains(strings.ToLower(config.ExpectedHash), "placeholder") {
+		return fmt.Errorf("expected model hash %q contains a placeholder marker", config.ExpectedHash)
+	}
+	if _, err := os.Stat(config.ModelPath); err != nil {
+		return fmt.Errorf("model path %q is not readable: %w", config.ModelPath, err)
+	}
+	return nil
 }
 
 // getEnvOrDefault returns the environment variable value or a default
@@ -243,6 +257,11 @@ type MLScorer interface {
 // This will be replaced by TensorFlow integration in VE-205
 type StubMLScorer struct {
 	config MLScoringConfig
+}
+
+type failClosedMLScorer struct {
+	version string
+	err     error
 }
 
 // NewStubMLScorer creates a new stub ML scorer
@@ -430,6 +449,22 @@ func (s *StubMLScorer) Close() error {
 	return nil // Nothing to close
 }
 
+func (s *failClosedMLScorer) Score(_ *ScoringInput) (*ScoringOutput, error) {
+	return nil, s.err
+}
+
+func (s *failClosedMLScorer) GetModelVersion() string {
+	return s.version
+}
+
+func (s *failClosedMLScorer) IsHealthy() bool {
+	return false
+}
+
+func (s *failClosedMLScorer) Close() error {
+	return nil
+}
+
 // ============================================================================
 // Keeper Scoring Methods
 // ============================================================================
@@ -499,19 +534,19 @@ func (k Keeper) getMLScorer() MLScorer {
 	// Sidecar mode is preferred for production as it provides better isolation
 	// and determinism guarantees across validators
 	if config.UseTensorFlow && config.TensorFlowConfig != nil {
-		// Verify model is available before attempting to create scorer
-		if !isRealInferenceReady() {
-			// Model not available, fall back to stub
-			// This allows validators to operate during model deployment
-			return NewStubMLScorer(config)
+		if err := isRealInferenceReady(config.TensorFlowConfig); err != nil {
+			return &failClosedMLScorer{
+				version: config.ModelVersion,
+				err:     types.ErrMLInferenceFailed.Wrapf("production inference bundle is not ready: %v", err),
+			}
 		}
 
 		scorer, err := k.createTensorFlowScorer(config)
 		if err != nil {
-			// Fall back to stub on TensorFlow initialization error
-			// This ensures consensus continues even if inference setup fails
-			// Log the error for observability
-			return NewStubMLScorer(config)
+			return &failClosedMLScorer{
+				version: config.ModelVersion,
+				err:     types.ErrMLInferenceFailed.Wrapf("failed to initialize production inference scorer: %v", err),
+			}
 		}
 		return scorer
 	}
@@ -538,7 +573,7 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 		ForceCPU:           tfConfig.ForceCPU,
 		RandomSeed:         42,
 		ExpectedInputDim:   inference.TotalFeatureDim,
-		UseFallbackOnError: true,
+		UseFallbackOnError: false,
 		FallbackScore:      config.FallbackScore,
 	}
 

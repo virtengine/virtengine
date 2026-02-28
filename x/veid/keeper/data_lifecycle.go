@@ -1,11 +1,44 @@
 package keeper
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
+	"unicode/utf8"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/veid/types"
+)
+
+const maxDerivedFeaturePayloadSize = 1024
+
+var (
+	rawBiometricMagicPrefixes = [][]byte{
+		{0xFF, 0xD8, 0xFF},
+		{0x89, 'P', 'N', 'G', 0x0D, 0x0A},
+		{'G', 'I', 'F', '8'},
+		{'B', 'M'},
+		{'I', 'I', '*', 0x00},
+		{'M', 'M', 0x00, '*'},
+		{'R', 'I', 'F', 'F'},
+		{'%', 'P', 'D', 'F'},
+		{0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'},
+	}
+	rawBiometricJSONFields = map[string]struct{}{
+		"image":              {},
+		"image_data":         {},
+		"selfie":             {},
+		"document_image":     {},
+		"document_scan":      {},
+		"face_embedding":     {},
+		"embedding":          {},
+		"face_template":      {},
+		"biometric":          {},
+		"biometric_template": {},
+		"raw_capture":        {},
+		"video_frame":        {},
+	}
 )
 
 // ============================================================================
@@ -261,19 +294,137 @@ func (k Keeper) CleanupExpiredArtifacts(ctx sdk.Context) (cleaned int) {
 // ValidateNoRawBiometricsOnChain validates that no raw biometrics are being stored on-chain
 // This is a critical security check
 func (k Keeper) ValidateNoRawBiometricsOnChain(ctx sdk.Context, payload []byte) error {
-	// This is a placeholder for additional security checks
-	// In production, this would use heuristics or ML to detect biometric data
-	// For now, we rely on the type system and lifecycle rules
+	if len(payload) == 0 {
+		return nil
+	}
 
-	// Check payload size - raw images would be much larger than hashes
-	maxHashedPayloadSize := 1024 // 1KB is plenty for hashes and metadata
-	if len(payload) > maxHashedPayloadSize {
-		// Log warning but don't fail - encrypted payloads may be larger
-		k.Logger(ctx).Warn("large payload detected - verify no raw biometrics",
-			"size", len(payload))
+	trimmed := bytes.TrimSpace(payload)
+	if looksLikeCompactHashArtifact(trimmed) {
+		return nil
+	}
+
+	for _, prefix := range rawBiometricMagicPrefixes {
+		if bytes.HasPrefix(trimmed, prefix) {
+			return types.ErrInvalidPayload.Wrap("raw biometric media payloads are not permitted on-chain")
+		}
+	}
+
+	if len(trimmed) > maxDerivedFeaturePayloadSize {
+		return types.ErrInvalidPayload.Wrapf(
+			"derived feature payload exceeds %d bytes; raw biometric artifacts must remain off-chain",
+			maxDerivedFeaturePayloadSize,
+		)
+	}
+
+	if json.Valid(trimmed) {
+		var decoded interface{}
+		if err := json.Unmarshal(trimmed, &decoded); err != nil {
+			return types.ErrInvalidPayload.Wrapf("invalid JSON payload: %v", err)
+		}
+		if containsRawBiometricJSON(decoded) {
+			return types.ErrInvalidPayload.Wrap("raw biometric fields detected in on-chain payload")
+		}
+		return nil
+	}
+
+	if utf8.Valid(trimmed) {
+		lower := strings.ToLower(string(trimmed))
+		if strings.Contains(lower, "data:image/") || strings.Contains(lower, "data:application/pdf") {
+			return types.ErrInvalidPayload.Wrap("raw biometric or document data URIs are not permitted on-chain")
+		}
+		if len(trimmed) <= maxDerivedFeaturePayloadSize {
+			return nil
+		}
+	}
+
+	if printableRatio(trimmed) < 0.85 {
+		return types.ErrInvalidPayload.Wrap("opaque binary biometric payloads are not permitted on-chain")
 	}
 
 	return nil
+}
+
+func looksLikeCompactHashArtifact(payload []byte) bool {
+	if len(payload) == 32 {
+		return true
+	}
+
+	lower := bytes.ToLower(payload)
+	if len(lower) == 64 && isHexBytes(lower) {
+		return true
+	}
+
+	return len(payload) == 44 && isBase64Alphabet(payload)
+}
+
+func isHexBytes(payload []byte) bool {
+	for _, b := range payload {
+		if (b < '0' || b > '9') && (b < 'a' || b > 'f') {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isBase64Alphabet(payload []byte) bool {
+	for _, b := range payload {
+		switch {
+		case b >= 'A' && b <= 'Z':
+		case b >= 'a' && b <= 'z':
+		case b >= '0' && b <= '9':
+		case b == '+' || b == '/' || b == '=' || b == '-' || b == '_':
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+func containsRawBiometricJSON(value interface{}) bool {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, nested := range typed {
+			if _, blocked := rawBiometricJSONFields[strings.ToLower(strings.TrimSpace(key))]; blocked {
+				return true
+			}
+			if containsRawBiometricJSON(nested) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, nested := range typed {
+			if containsRawBiometricJSON(nested) {
+				return true
+			}
+		}
+	case string:
+		lower := strings.ToLower(strings.TrimSpace(typed))
+		if strings.HasPrefix(lower, "data:image/") || strings.HasPrefix(lower, "data:application/pdf") {
+			return true
+		}
+		if len(lower) > 256 && isBase64Alphabet([]byte(lower)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func printableRatio(payload []byte) float64 {
+	if len(payload) == 0 {
+		return 1
+	}
+
+	printable := 0
+	for _, b := range payload {
+		if b == '\n' || b == '\r' || b == '\t' || (b >= 0x20 && b <= 0x7E) {
+			printable++
+		}
+	}
+
+	return float64(printable) / float64(len(payload))
 }
 
 // ValidateDerivedFeaturesOnly validates that only derived features (hashes) are stored

@@ -55,7 +55,7 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 
 // DefaultGenesis returns default genesis state as raw bytes for the roles module.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	// Use standard JSON encoding for stub types since they don't have proper proto marshaling
+	// Keep JSON genesis encoding aligned with the local module state structs.
 	defaultGenesis := types.DefaultGenesisState()
 	bz, err := json.Marshal(defaultGenesis)
 	if err != nil {
@@ -69,7 +69,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	if bz == nil {
 		return nil
 	}
-	// Use standard JSON decoding for stub types since they don't have proper proto unmarshaling
+	// Keep JSON genesis decoding aligned with the local module state structs.
 	var data types.GenesisState
 	if err := json.Unmarshal(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %v", types.ModuleName, err)
@@ -80,13 +80,14 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the roles module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Register gRPC gateway routes when query client is available
-	// This would be implemented with protobuf-generated code in a full implementation
+	if err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Sprintf("couldn't register roles grpc routes: %s", err.Error()))
+	}
 }
 
 // RegisterGRPCRoutes registers the gRPC Gateway routes for the roles module.
 func (AppModuleBasic) RegisterGRPCRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Register gRPC routes when query client is available
+	AppModuleBasic{}.RegisterGRPCGatewayRoutes(clientCtx, mux)
 }
 
 // GetQueryCmd returns the root query command of this module
@@ -135,14 +136,16 @@ func (am AppModule) QuerierRoute() string {
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
+	queryServer := keeper.GRPCQuerier{Keeper: am.keeper}
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
+	types.RegisterQueryServer(cfg.QueryServer(), queryServer)
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the
 // module-specific GRPC queries.
 func (am AppModule) RegisterQueryService(server grpc.Server) {
-	types.RegisterQueryServer(server, keeper.GRPCQuerier{Keeper: am.keeper})
+	queryServer := keeper.GRPCQuerier{Keeper: am.keeper}
+	types.RegisterQueryServer(server, queryServer)
 }
 
 // BeginBlock performs no-op
@@ -157,7 +160,7 @@ func (am AppModule) EndBlock(_ context.Context) error {
 
 // InitGenesis performs genesis initialization for the roles module.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	// Use standard JSON decoding for stub types since they don't have proper proto unmarshaling
+	// Keep JSON genesis decoding aligned with the local module state structs.
 	var genesisState types.GenesisState
 	if err := json.Unmarshal(data, &genesisState); err != nil {
 		panic(fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err))
@@ -168,7 +171,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 // ExportGenesis returns the exported genesis state as raw bytes for the roles module.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := ExportGenesis(ctx, am.keeper)
-	// Use standard JSON encoding for stub types since they don't have proper proto marshaling
+	// Keep JSON genesis encoding aligned with the local module state structs.
 	bz, err := json.Marshal(gs)
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal %s genesis state: %w", types.ModuleName, err))

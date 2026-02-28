@@ -1,7 +1,8 @@
-# VirtEngine Quality Gate - Fast PR checks
+# VirtEngine Quality Gate
 #
-# Minimal, required checks for PRs (lint/build/test-go) to keep feedback fast.
-# Full CI runs on push to main/develop via ci.yaml.
+# Branch-safe checks for PRs and protected branches. Release-grade VEID and ML
+# workflows are orchestrated here when relevant and are re-used again by tag CI
+# and manual release publishing.
 
 name: Quality Gate
 
@@ -24,23 +25,24 @@ concurrency:
 
 env:
   GO_VERSION: "1.25.5"
-  GOWORK: "off" # Disable workspace mode for vendor operations
+  GOSEC_VERSION: "v2.25.0"
+  GOWORK: "off"
   GO_TEST_TIMEOUT_UNIT: "30m"
+  NODE_VERSION: "20"
+  PNPM_VERSION: "10.28.2"
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  # ===========================================================================
-  # Analyze Changed Files
-  # ===========================================================================
   analyze-changes:
     name: Analyze Changes
     runs-on: ubuntu-latest
     outputs:
       go_changed: ${{ steps.changes.outputs.go }}
       ml_changed: ${{ steps.changes.outputs.ml }}
+      veid_changed: ${{ steps.changes.outputs.veid }}
       portal_changed: ${{ steps.changes.outputs.portal }}
       economics_changed: ${{ steps.changes.outputs.economics }}
     steps:
@@ -59,6 +61,14 @@ jobs:
             ml:
               - 'pkg/inference/**'
               - 'ml/**'
+              - '.github/workflows/ml-determinism.yaml'
+            veid:
+              - 'x/veid/**'
+              - 'pkg/inference/**'
+              - 'tests/e2e/veid_*.go'
+              - 'tests/e2e/veid_*.go'
+              - '.github/workflows/veid-e2e.yaml'
+              - '.github/workflows/veid-conformance.yaml'
             portal:
               - 'portal/**'
               - 'lib/portal/**'
@@ -79,8 +89,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fetch base ref for lint diff
-        run: |
-          git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
+        run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -138,8 +147,7 @@ jobs:
         run: go mod download
 
       - name: Build binaries
-        run: |
-          go build -mod=readonly -v ./cmd/...
+        run: go build -mod=readonly -v ./cmd/...
 
   test-go:
     name: test-go
@@ -160,7 +168,7 @@ jobs:
 
       - name: Run core tests
         run: |
-          go test -mod=readonly -v -short -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
+          go test -mod=readonly -v -short -race -timeout "${GO_TEST_TIMEOUT_UNIT}" \
             ./pkg/benchmark/... \
             ./pkg/cache/... \
             ./pkg/compatibility/... \
@@ -212,9 +220,6 @@ jobs:
           chmod +x scripts/economics/run-sim-suite.sh
           RUNS=40 scripts/economics/run-sim-suite.sh ./sim-output
 
-  # ===========================================================================
-  # Security Checks (from pr-security-check.yaml)
-  # ===========================================================================
   gosec-scan:
     name: gosec-scan
     runs-on: ubuntu-latest
@@ -231,7 +236,9 @@ jobs:
           cache: true
 
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
+          echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
 
       - name: Sync dependencies
         run: |
@@ -239,29 +246,44 @@ jobs:
           go mod vendor
 
       - name: Run gosec
-        id: gosec
         run: |
-          # Get changed Go files
-          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref || 'main' }}...HEAD -- '*.go' | grep -v '_test.go' | grep -v 'vendor/' | grep -v '\.pb\.go$' || true)
-          
-          if [ -n "$CHANGED_FILES" ]; then
-            gosec -fmt json -out gosec-results.json -exclude-generated $CHANGED_FILES || true
-            
-            if [ -f .gosec-baseline.json ]; then
-              HIGH_CRITICAL=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
-              MEDIUM=$(cat gosec-results.json | jq '[.Issues[] | select(.severity == "MEDIUM")] | length')
-              
-              echo "high_critical=$HIGH_CRITICAL" >> $GITHUB_OUTPUT
-              echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
-              
-              if [ "$HIGH_CRITICAL" -gt 0 ]; then
-                echo "::error::Found $HIGH_CRITICAL new high/critical severity issues"
-                exit 1
-              elif [ "$MEDIUM" -gt 0 ]; then
-                echo "::warning::Found $MEDIUM medium severity issues"
-              fi
-            fi
+          base_ref="${{ github.base_ref || 'main' }}"
+          git fetch origin "${base_ref}" --depth=1
+          mapfile -t changed_files < <(
+            git diff --name-only "origin/${base_ref}...HEAD" -- '*.go' \
+              | grep -v '_test.go' \
+              | grep -v 'vendor/' \
+              | grep -v '\.pb\.go$' \
+              || true
+          )
+
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No non-generated Go files changed"
+            exit 0
+          fi
+
+          gosec_exit=0
+          gosec -fmt json -out gosec-results.json -exclude-generated "${changed_files[@]}" || gosec_exit=$?
+
+          if [ ! -f gosec-results.json ]; then
+            echo "::error::gosec did not produce gosec-results.json"
+            exit "${gosec_exit}"
+          fi
+
+          high_critical=$(jq '[.Issues[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' gosec-results.json)
+          medium=$(jq '[.Issues[] | select(.severity == "MEDIUM")] | length' gosec-results.json)
+
+          if [ "${high_critical}" -gt 0 ]; then
+            echo "::error::Found ${high_critical} high/critical severity issues"
+            exit 1
+          fi
+
+          if [ "${medium}" -gt 0 ]; then
+            echo "::warning::Found ${medium} medium severity issues"
+          fi
+
+          if [ "${gosec_exit}" -ne 0 ] && [ "${high_critical}" -eq 0 ]; then
+            echo "gosec reported non-blocking issues already captured in the JSON report"
           fi
 
   gitleaks-scan:
@@ -280,90 +302,60 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
 
       - name: Fetch base ref for diff scanning
-        run: |
-          git fetch origin ${{ github.base_ref || 'main' }} --depth=1
+        run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
 
       - name: Run gitleaks on PR diff
         run: |
-          BASE_SHA=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
-          
+          base_sha=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
           if [ -f .gitleaks.toml ]; then
-            gitleaks detect --source . --config .gitleaks.toml --log-opts "${BASE_SHA}..HEAD" --verbose --redact
+            gitleaks detect --source . --config .gitleaks.toml --log-opts "${base_sha}..HEAD" --verbose --redact
           else
-            gitleaks detect --source . --log-opts "${BASE_SHA}..HEAD" --verbose --redact
+            gitleaks detect --source . --log-opts "${base_sha}..HEAD" --verbose --redact
           fi
 
-  # ===========================================================================
-  # ML Determinism Check (when ML code changed)
-  # ===========================================================================
   ml-determinism-check:
     name: ml-determinism-check
-    runs-on: ubuntu-latest
     needs: analyze-changes
     if: needs.analyze-changes.outputs.ml_changed == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    uses: ./.github/workflows/ml-determinism.yaml
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+  veid-e2e-check:
+    name: veid-e2e-check
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.veid_changed == 'true'
+    uses: ./.github/workflows/veid-e2e.yaml
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+  veid-conformance-check:
+    name: veid-conformance-check
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.veid_changed == 'true'
+    uses: ./.github/workflows/veid-conformance.yaml
 
-      - name: Install dependencies
-        run: |
-          go mod download
-          if [ -f ml/requirements.txt ]; then
-            pip install -r ml/requirements.txt
-          fi
-
-      - name: Verify Go inference determinism
-        run: |
-          go test -v -timeout 10m ./pkg/inference/... -run TestDeterminism
-
-      - name: Verify config has determinism enabled
-        run: |
-          # Check that inference config has deterministic settings
-          if grep -r "ForceCPU.*true" pkg/inference/ && grep -r "DeterministicOps.*true" pkg/inference/; then
-            echo "✓ Determinism config verified"
-          else
-            echo "::error::Missing determinism configuration in pkg/inference"
-            exit 1
-          fi
-
-  # ===========================================================================
-  # Portal CI Check (when portal code changed)
-  # ===========================================================================
   portal-lint:
     name: portal-lint
     runs-on: ubuntu-latest
     needs: analyze-changes
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: "10.28.2"
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint & Type Check
+      - name: Run portal lint and type-check
         run: |
           pnpm --filter @virtengine/portal lint
           pnpm --filter @virtengine/portal type-check
@@ -374,24 +366,25 @@ jobs:
     needs: analyze-changes
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: "10.28.2"
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run unit tests
+      - name: Run portal tests
         run: pnpm --filter @virtengine/portal test
 
   portal-build:
@@ -400,19 +393,20 @@ jobs:
     needs: analyze-changes
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: "10.28.2"
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -420,9 +414,6 @@ jobs:
       - name: Build portal
         run: pnpm --filter @virtengine/portal build
 
-  # ===========================================================================
-  # Aggregate Quality Gate Summary
-  # ===========================================================================
   quality-summary:
     name: Quality Gate Summary
     runs-on: ubuntu-latest
@@ -437,259 +428,133 @@ jobs:
       - gosec-scan
       - gitleaks-scan
       - ml-determinism-check
+      - veid-e2e-check
+      - veid-conformance-check
       - portal-lint
       - portal-test
       - portal-build
     if: always()
     steps:
       - name: Check required jobs passed
-        id: check
         run: |
-          echo "=== Quality Gate Summary ==="
-          echo ""
-          echo "Lint: ${{ needs.lint.result }}"
-          echo "Vet: ${{ needs.vet.result }}"
-          echo "Build: ${{ needs.build.result }}"
-          echo "Test: ${{ needs.test-go.result }}"
-          echo "AGENTS Docs: ${{ needs.agents-docs.result }}"
-          echo "gosec: ${{ needs.gosec-scan.result }}"
-          echo "gitleaks: ${{ needs.gitleaks-scan.result }}"
-          echo "ML Determinism: ${{ needs.ml-determinism-check.result }}"
-          echo "Portal Lint: ${{ needs.portal-lint.result }}"
-          echo "Portal Test: ${{ needs.portal-test.result }}"
-          echo "Portal Build: ${{ needs.portal-build.result }}"
-          echo "Economics Sim: ${{ needs.economics-sim.result }}"
-          echo ""
-          
-          FAILED=0
-          
+          failed=0
+
           if [ "${{ needs.lint.result }}" != "success" ]; then
-            echo "::error::Lint check failed"
-            FAILED=1
+            echo "::error::lint failed"
+            failed=1
           fi
-          
+
           if [ "${{ needs.vet.result }}" != "success" ]; then
-            echo "::error::Vet check failed"
-            FAILED=1
+            echo "::error::vet failed"
+            failed=1
           fi
-          
+
           if [ "${{ needs.build.result }}" != "success" ]; then
-            echo "::error::Build failed"
-            FAILED=1
+            echo "::error::build failed"
+            failed=1
           fi
-          
+
           if [ "${{ needs.test-go.result }}" != "success" ]; then
-            echo "::error::Tests failed"
-            FAILED=1
+            echo "::error::test-go failed"
+            failed=1
           fi
-          
-          if [ "${{ needs.agents-docs.result }}" != "success" ]; then
-            echo "::warning::AGENTS docs validation had issues"
+
+          if [ "${{ needs.gitleaks-scan.result }}" != "success" ]; then
+            echo "::error::gitleaks-scan failed"
+            failed=1
           fi
-          
-          # Security checks - only fail if Go changed and check ran
-          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ] && [ "${{ needs.gosec-scan.result }}" == "failure" ]; then
+
+          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ] && [ "${{ needs.gosec-scan.result }}" != "success" ]; then
             echo "::error::gosec security scan failed"
-            FAILED=1
+            failed=1
           fi
-          
-          if [ "${{ needs.gitleaks-scan.result }}" == "failure" ]; then
-            echo "::error::gitleaks secret scan failed"
-            FAILED=1
-          fi
-          
-          # ML determinism - only fail if ML changed and check ran
-          if [ "${{ needs.analyze-changes.outputs.ml_changed }}" == "true" ] && [ "${{ needs.ml-determinism-check.result }}" == "failure" ]; then
+
+          if [ "${{ needs.analyze-changes.outputs.ml_changed }}" == "true" ] && [ "${{ needs.ml-determinism-check.result }}" != "success" ]; then
             echo "::error::ML determinism check failed"
-            FAILED=1
+            failed=1
           fi
-          
-          # Portal checks - only fail if portal changed and checks ran
-          if [ "${{ needs.analyze-changes.outputs.portal_changed }}" == "true" ]; then
-            if [ "${{ needs.portal-lint.result }}" == "failure" ]; then
-              echo "::error::Portal lint failed"
-              FAILED=1
+
+          if [ "${{ needs.analyze-changes.outputs.veid_changed }}" == "true" ]; then
+            if [ "${{ needs.veid-e2e-check.result }}" != "success" ]; then
+              echo "::error::VEID E2E check failed"
+              failed=1
             fi
-            if [ "${{ needs.portal-test.result }}" == "failure" ]; then
-              echo "::error::Portal tests failed"
-              FAILED=1
-            fi
-            if [ "${{ needs.portal-build.result }}" == "failure" ]; then
-              echo "::error::Portal build failed"
-              FAILED=1
+            if [ "${{ needs.veid-conformance-check.result }}" != "success" ]; then
+              echo "::error::VEID conformance check failed"
+              failed=1
             fi
           fi
 
-          if [ "${{ needs.analyze-changes.outputs.economics_changed }}" == "true" ] && [ "${{ needs.economics-sim.result }}" == "failure" ]; then
-            echo "::error::Economics simulation suite failed"
-            FAILED=1
+          if [ "${{ needs.analyze-changes.outputs.portal_changed }}" == "true" ]; then
+            if [ "${{ needs.portal-lint.result }}" != "success" ]; then
+              echo "::error::portal-lint failed"
+              failed=1
+            fi
+            if [ "${{ needs.portal-test.result }}" != "success" ]; then
+              echo "::error::portal-test failed"
+              failed=1
+            fi
+            if [ "${{ needs.portal-build.result }}" != "success" ]; then
+              echo "::error::portal-build failed"
+              failed=1
+            fi
           fi
-          
-          if [ "$FAILED" -eq 1 ]; then
-            echo "status=failure" >> $GITHUB_OUTPUT
+
+          if [ "${{ needs.analyze-changes.outputs.economics_changed }}" == "true" ] && [ "${{ needs.economics-sim.result }}" != "success" ]; then
+            echo "::error::Economics simulation suite failed"
+            failed=1
+          fi
+
+          if [ "${failed}" -ne 0 ]; then
             exit 1
-          else
-            echo "status=success" >> $GITHUB_OUTPUT
           fi
 
       - name: Post summary
         if: always()
         run: |
-          echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status | Required |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Lint | ${{ needs.lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Vet | ${{ needs.vet.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests | ${{ needs.test-go.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| AGENTS Docs | ${{ needs.agents-docs.result }} | ⚠️ Warning |" >> $GITHUB_STEP_SUMMARY
-          
-          # Add conditional checks
-          if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ]; then
-            echo "| gosec Scan | ${{ needs.gosec-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| gosec Scan | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "| gitleaks Scan | ${{ needs.gitleaks-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ needs.analyze-changes.outputs.ml_changed }}" == "true" ]; then
-            echo "| ML Determinism | ${{ needs.ml-determinism-check.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| ML Determinism | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ "${{ needs.analyze-changes.outputs.portal_changed }}" == "true" ]; then
-            echo "| Portal Lint | ${{ needs.portal-lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-            echo "| Portal Test | ${{ needs.portal-test.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-            echo "| Portal Build | ${{ needs.portal-build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Portal Checks | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## Quality Gate Summary"
+            echo ""
+            echo "| Check | Status | Required |"
+            echo "|-------|--------|----------|"
+            echo "| Lint | ${{ needs.lint.result }} | Yes |"
+            echo "| Vet | ${{ needs.vet.result }} | Yes |"
+            echo "| Build | ${{ needs.build.result }} | Yes |"
+            echo "| Tests | ${{ needs.test-go.result }} | Yes |"
+            echo "| AGENTS Docs | ${{ needs.agents-docs.result }} | Warning only |"
+            echo "| gitleaks | ${{ needs.gitleaks-scan.result }} | Yes |"
 
-          if [ "${{ needs.analyze-changes.outputs.economics_changed }}" == "true" ]; then
-            echo "| Economics Sim | ${{ needs.economics-sim.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Economics Sim | skipped | N/A |" >> $GITHUB_STEP_SUMMARY
-          fi
+            if [ "${{ needs.analyze-changes.outputs.go_changed }}" == "true" ]; then
+              echo "| gosec | ${{ needs.gosec-scan.result }} | Yes |"
+            else
+              echo "| gosec | skipped | N/A |"
+            fi
 
-      - name: Comment PR report card
-        if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const statusEmoji = {
-              success: '✅',
-              failure: '❌',
-              cancelled: '🚫',
-              skipped: '⏭️'
-            };
-            
-            const lint = '${{ needs.lint.result }}';
-            const vet = '${{ needs.vet.result }}';
-            const build = '${{ needs.build.result }}';
-            const test = '${{ needs.test-go.result }}';
-            const docs = '${{ needs.agents-docs.result }}';
-            const gosec = '${{ needs.gosec-scan.result }}';
-            const gitleaks = '${{ needs.gitleaks-scan.result }}';
-            const mlDet = '${{ needs.ml-determinism-check.result }}';
-            const portalLint = '${{ needs.portal-lint.result }}';
-            const portalTest = '${{ needs.portal-test.result }}';
-            const portalBuild = '${{ needs.portal-build.result }}';
-            const economicsSim = '${{ needs.economics-sim.result }}';
-            
-            const goChanged = '${{ needs.analyze-changes.outputs.go_changed }}' === 'true';
-            const mlChanged = '${{ needs.analyze-changes.outputs.ml_changed }}' === 'true';
-            const portalChanged = '${{ needs.analyze-changes.outputs.portal_changed }}' === 'true';
-            const economicsChanged = '${{ needs.analyze-changes.outputs.economics_changed }}' === 'true';
-            
-            let overallStatus = '✅ Passed';
-            if (lint !== 'success' || vet !== 'success' || build !== 'success' || test !== 'success' || 
-                gitleaks === 'failure' ||
-                (goChanged && gosec === 'failure') ||
-                (mlChanged && mlDet === 'failure') ||
-                (portalChanged && (portalLint === 'failure' || portalTest === 'failure' || portalBuild === 'failure')) ||
-                (economicsChanged && economicsSim === 'failure')) {
-              overallStatus = '❌ Failed';
-            }
-            
-            let comment = `## 📊 Quality Gate Report Card
-            
-**Overall Status:** ${overallStatus}
+            if [ "${{ needs.analyze-changes.outputs.ml_changed }}" == "true" ]; then
+              echo "| ML Determinism | ${{ needs.ml-determinism-check.result }} | Yes |"
+            else
+              echo "| ML Determinism | skipped | N/A |"
+            fi
 
-| Check | Status | Required |
-|-------|--------|----------|
-| Lint | ${statusEmoji[lint] || '❓'} ${lint} | Yes |
-| Vet | ${statusEmoji[vet] || '❓'} ${vet} | Yes |
-| Build | ${statusEmoji[build] || '❓'} ${build} | Yes |
-| Tests | ${statusEmoji[test] || '❓'} ${test} | Yes |
-| AGENTS Docs | ${statusEmoji[docs] || '❓'} ${docs} | Warning Only |`;
-            
-            if (goChanged) {
-              comment += `\n| gosec Scan | ${statusEmoji[gosec] || '❓'} ${gosec} | Yes |`;
-            }
-            comment += `\n| gitleaks Scan | ${statusEmoji[gitleaks] || '❓'} ${gitleaks} | Yes |`;
-            
-            if (mlChanged) {
-              comment += `\n| ML Determinism | ${statusEmoji[mlDet] || '❓'} ${mlDet} | Yes |`;
-            }
-            
-            if (portalChanged) {
-              comment += `\n| Portal Lint | ${statusEmoji[portalLint] || '❓'} ${portalLint} | Yes |`;
-              comment += `\n| Portal Test | ${statusEmoji[portalTest] || '❓'} ${portalTest} | Yes |`;
-              comment += `\n| Portal Build | ${statusEmoji[portalBuild] || '❓'} ${portalBuild} | Yes |`;
-            }
+            if [ "${{ needs.analyze-changes.outputs.veid_changed }}" == "true" ]; then
+              echo "| VEID E2E | ${{ needs.veid-e2e-check.result }} | Yes |"
+              echo "| VEID Conformance | ${{ needs.veid-conformance-check.result }} | Yes |"
+            else
+              echo "| VEID E2E | skipped | N/A |"
+              echo "| VEID Conformance | skipped | N/A |"
+            fi
 
-            if (economicsChanged) {
-              comment += `\n| Economics Sim | ${statusEmoji[economicsSim] || '❓'} ${economicsSim} | Yes |`;
-            }
-            
-            comment += `
+            if [ "${{ needs.analyze-changes.outputs.portal_changed }}" == "true" ]; then
+              echo "| Portal Lint | ${{ needs.portal-lint.result }} | Yes |"
+              echo "| Portal Test | ${{ needs.portal-test.result }} | Yes |"
+              echo "| Portal Build | ${{ needs.portal-build.result }} | Yes |"
+            else
+              echo "| Portal Checks | skipped | N/A |"
+            fi
 
----
-
-**Required Checks for Merge:**
-- ✅ All linting must pass
-- ✅ Go vet must pass
-- ✅ Build must succeed
-- ✅ Core tests must pass
-- ✅ gitleaks secret scanning must pass
-- ${goChanged ? '✅ gosec security scan must pass (Go files changed)' : '⏭️ gosec scan skipped (no Go changes)'}
-- ${mlChanged ? '✅ ML determinism must pass (ML code changed)' : '⏭️ ML determinism skipped (no ML changes)'}
-- ${portalChanged ? '✅ Portal CI must pass (portal code changed)' : '⏭️ Portal CI skipped (no portal changes)'}
-- ${economicsChanged ? '✅ Economics simulation suite must pass (economics changes)' : '⏭️ Economics sim skipped (no economics changes)'}
-- ⚠️ AGENTS docs should be valid (warning only)
-
-_This report card is automatically updated on each push._
-`;
-            
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            
-            const botComment = comments.find(comment => 
-              comment.user.type === 'Bot' && 
-              comment.body.includes('Quality Gate Report Card')
-            );
-            
-            if (botComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                comment_id: botComment.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
+            if [ "${{ needs.analyze-changes.outputs.economics_changed }}" == "true" ]; then
+              echo "| Economics Sim | ${{ needs.economics-sim.result }} | Yes |"
+            else
+              echo "| Economics Sim | skipped | N/A |"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

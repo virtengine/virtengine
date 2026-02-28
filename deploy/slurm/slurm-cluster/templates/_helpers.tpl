@@ -184,6 +184,15 @@ Compute headless service name
 {{- end }}
 
 {{/*
+Node pool headless service name
+*/}}
+{{- define "slurm-cluster.nodePool.serviceName" -}}
+{{- $root := index . 0 -}}
+{{- $pool := index . 1 -}}
+{{- printf "%s-%s" (include "slurm-cluster.fullname" $root) $pool.name | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{/*
 Generate node list for SLURM configuration
 */}}
 {{- define "slurm-cluster.nodeList" -}}

@@ -132,22 +132,18 @@ func genesisWithVEIDApprovedClient(t testing.TB, cdc codec.Codec, client veidTes
 // Test Skip Helpers
 // =============================================================================
 
-// skipIfNoBinary skips the test if the binary is not available.
+// skipIfNoBinary fails fast if the binary is not available.
 func skipIfNoBinary(t *testing.T, binaryPath string) {
 	t.Helper()
 
 	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-		t.Skipf("Binary not found at %s - run 'make' first", binaryPath)
+		t.Fatalf("Binary not found at %s - run 'make' first", binaryPath)
 	}
 }
 
 // skipIfShort skips the test in short mode.
 func skipIfShort(t *testing.T) {
 	t.Helper()
-
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
 }
 
 // =============================================================================

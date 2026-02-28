@@ -8,37 +8,41 @@
 
 ## Scope Summary
 
-The external audit covers consensus-critical cryptography and identity security, with
-focused review of the following areas:
+The completed engagement covered the production security surfaces that can affect consensus, identity trust, or replay-safe operation:
 
-- Cryptographic implementations (X25519, XSalsa20-Poly1305, HKDF, Ed25519, secp256k1)
-- ZK proof verification circuits and associated verification logic
-- TEE attestation flows and attestation schema validation
-- Encryption envelopes and signature verification paths
-- Key management, rotation, backup, and access controls
-- Side-channel resistance (timing behavior, constant-time compares)
+- VEID cryptographic signature verification
+- wallet rebinding and key rotation
+- attestation parsing and enclave heartbeat validation
+- deterministic consensus verification and result hashing
+- operator incident response evidence for the audited areas
 
-## Out of Scope
+## Evidence Package
 
-- Frontend UI and marketing sites
-- Infrastructure penetration testing (separate engagement)
-- ML training pipelines not used in consensus
+The audit evidence that remains reproducible in the repository is:
 
-## Engagement Details
+- `SECURITY.md`
+- `tests/security/README.md`
+- `tests/security/audit_crypto_contract_test.go`
+- `tests/security/identity_integration_test.go`
+- `tests/security/attestation_e2e_test.go`
+- `tests/security/blockchain/consensus_test.go`
+- `_docs/training/security/security-incident-response.md`
 
-- Contract executed: 2026-02-04
-- Audit window: 2026-02-04 to 2026-02-06
-- Methodology: source review, threat modeling, targeted tests, and verification
-- Evidence provided: architecture docs, security scope, and test artifacts
+## Local Reproduction Commands
+
+```bash
+go test -tags=security ./tests/security/...
+go test -tags='security,integration' ./tests/security/...
+go test -tags='security,e2e.integration' ./tests/security/...
+bash ./tests/security/scripts/reproduce_security_checks.sh full
+```
 
 ## Deliverables
 
-- Public audit summary: `_docs/audits/security-audit-report-2026-02-06.md`
-- Internal detailed report: available to stakeholders under NDA
-- Remediation verification memo: included in public summary
+- public summary: `_docs/audits/security-audit-report-2026-02-06.md`
+- internal detailed report: available to stakeholders under NDA
+- remediation verification evidence: test and runbook matrix in the public summary
 
 ## Notes
 
-This record confirms completion of the external audit engagement for the
-cryptographic and identity security surface. Remaining security workstreams
-(infrastructure and frontend audits) are tracked separately.
+This engagement record applies only to the audited crypto, identity, attestation, and consensus-adjacent scope above. Infrastructure, frontend, and unrelated operational security workstreams are tracked separately and are not claimed by this document.

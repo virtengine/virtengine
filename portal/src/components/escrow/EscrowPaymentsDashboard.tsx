@@ -5,25 +5,179 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { env } from '@/config';
+import { useWallet } from '@/lib/portal-adapter';
+import { usePriceConversion } from '@/hooks/usePriceConversion';
+import { useCustomerDashboardStore } from '@/stores/customerDashboardStore';
 import { EscrowBalance } from './EscrowBalance';
 import { DepositModal } from './DepositModal';
 import { PayoutHistory } from './PayoutHistory';
 import { SettlementLog } from './SettlementLog';
 import { TransactionHistory } from './TransactionHistory';
 import { WithdrawForm } from './WithdrawForm';
-import {
-  escrowAccount,
-  escrowTransactions,
-  fiatRates,
-  payoutHistory,
-  settlementEvents,
+import type {
+  EscrowAccount,
+  EscrowTransaction,
+  FiatRates,
+  PayoutRecord,
+  SettlementEvent,
 } from './data';
 
 export function EscrowPaymentsDashboard() {
   const [depositOpen, setDepositOpen] = useState(false);
+  const wallet = useWallet();
+  const account = wallet.accounts[wallet.activeAccountIndex];
+  const fetchDashboard = useCustomerDashboardStore((s) => s.fetchDashboard);
+  const allocations = useCustomerDashboardStore((s) => s.allocations);
+  const billing = useCustomerDashboardStore((s) => s.billing);
+  const escrowAccounts = useCustomerDashboardStore((s) => s.escrowAccounts);
+  const escrowPayments = useCustomerDashboardStore((s) => s.escrowPayments);
+  const isLoading = useCustomerDashboardStore((s) => s.isLoading);
+  const error = useCustomerDashboardStore((s) => s.error);
+  const { rate, stale, isLoading: rateLoading } = usePriceConversion();
+
+  useEffect(() => {
+    if (!account?.address) return;
+    void fetchDashboard(account.address);
+  }, [account?.address, fetchDashboard]);
+
+  const fiatRates = useMemo<FiatRates>(
+    () => ({
+      usd: typeof rate === 'number' && Number.isFinite(rate) ? rate : undefined,
+    }),
+    [rate]
+  );
+
+  const escrowAccount = useMemo<EscrowAccount>(() => {
+    const pendingSettlement = escrowPayments.reduce((sum, payment) => sum + payment.balanceAmount, 0);
+    const latestUpdate = escrowAccounts
+      .map((entry) => entry.settledAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+
+    return {
+      accountId: account?.address ?? 'wallet-not-connected',
+      currency: 'UVE',
+      lockedBalance: billing.outstandingBalance,
+      availableBalance: Math.max(billing.outstandingBalance - pendingSettlement, 0),
+      pendingSettlement,
+      walletBalance: 0,
+      lastUpdated: latestUpdate ?? new Date().toISOString(),
+    };
+  }, [account?.address, billing.outstandingBalance, escrowAccounts, escrowPayments]);
+
+  const transactions = useMemo<EscrowTransaction[]>(() => {
+    const deposits = escrowAccounts
+      .filter((entry) => entry.transferred > 0)
+      .map((entry) => ({
+        id: `deposit-${entry.scope}-${entry.xid}`,
+        type: 'Deposit' as const,
+        direction: 'credit' as const,
+        status: entry.state === 'closed' ? ('completed' as const) : ('processing' as const),
+        amount: entry.transferred,
+        currency: 'UVE',
+        reference: `${entry.scope} escrow account`,
+        allocation: entry.xid || undefined,
+        occurredAt: entry.settledAt ?? new Date().toISOString(),
+      }));
+
+    const spendEntries = allocations
+      .filter((allocation) => allocation.totalSpent > 0)
+      .map((allocation) => ({
+        id: `settlement-${allocation.id}`,
+        type: 'Settlement' as const,
+        direction: 'debit' as const,
+        status:
+          allocation.status === 'failed'
+            ? ('failed' as const)
+            : allocation.status === 'terminated'
+              ? ('completed' as const)
+              : ('processing' as const),
+        amount: allocation.totalSpent,
+        currency: allocation.currency || 'UVE',
+        reference: `Order ${allocation.orderId}`,
+        allocation: allocation.id,
+        occurredAt: allocation.updatedAt,
+      }));
+
+    return [...deposits, ...spendEntries].sort(
+      (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
+    );
+  }, [allocations, escrowAccounts]);
+
+  const settlements = useMemo<SettlementEvent[]>(
+    () =>
+      allocations
+        .filter((allocation) => allocation.totalSpent > 0)
+        .map((allocation) => ({
+          id: `settlement-${allocation.id}`,
+          allocation: allocation.id,
+          provider: allocation.providerName,
+          period: `Last updated ${new Date(allocation.updatedAt).toLocaleString()}`,
+          status:
+            allocation.status === 'failed'
+              ? ('disputed' as const)
+              : allocation.status === 'terminated'
+                ? ('posted' as const)
+                : ('pending' as const),
+          usageSummary: `${allocation.resources.cpu} CPU · ${allocation.resources.memory} GB RAM${allocation.resources.gpu ? ` · ${allocation.resources.gpu} GPU` : ''}`,
+          amount: allocation.totalSpent,
+          currency: allocation.currency || 'UVE',
+          postedAt: allocation.updatedAt,
+          breakdown: [
+            {
+              label: allocation.offeringName,
+              units: `${allocation.resources.cpu} CPU / ${allocation.resources.memory} GB`,
+              rate: `${allocation.costPerHour.toFixed(2)} ${(allocation.currency || 'UVE').toUpperCase()}/hr`,
+              amount: allocation.totalSpent,
+            },
+          ],
+        }))
+        .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()),
+    [allocations]
+  );
+
+  const payoutHistory = useMemo<PayoutRecord[]>(
+    () =>
+      escrowPayments
+        .filter((payment) => payment.withdrawnAmount > 0)
+        .map((payment) => ({
+          id: payment.paymentId,
+          provider:
+            allocations.find((allocation) => allocation.id === payment.xid)?.providerName ??
+            payment.xid,
+          status:
+            payment.state === 'closed'
+              ? ('completed' as const)
+              : payment.state === 'overdrawn'
+                ? ('failed' as const)
+                : ('processing' as const),
+          method: 'On-chain',
+          amount: payment.withdrawnAmount,
+          currency: 'UVE',
+          txHash: undefined,
+          requestedAt:
+            allocations.find((allocation) => allocation.id === payment.xid)?.updatedAt ??
+            new Date().toISOString(),
+          completedAt:
+            payment.state === 'closed'
+              ? allocations.find((allocation) => allocation.id === payment.xid)?.updatedAt
+              : undefined,
+        }))
+        .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()),
+    [allocations, escrowPayments]
+  );
+
+  const pricingFeedLabel = rateLoading
+    ? 'Loading live fiat conversion…'
+    : rate
+      ? stale
+        ? 'Using cached UVE/USD conversion'
+        : 'Using live UVE/USD conversion'
+      : 'Fiat conversion unavailable';
 
   return (
     <div className="space-y-6">
@@ -31,13 +185,24 @@ export function EscrowPaymentsDashboard() {
         <div>
           <h1 className="text-2xl font-bold">Escrow &amp; Payments</h1>
           <p className="text-sm text-muted-foreground">
-            Track escrow deposits, settlements, and provider payouts in one place.
+            Track live escrow balances, derived usage settlements, and withdrawal state in one place.
           </p>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Fiat estimates powered by internal pricing feed
-        </div>
+        <div className="text-xs text-muted-foreground">{pricingFeedLabel}</div>
       </div>
+
+      {!account?.address && (
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          Connect your wallet to load live escrow balances and billing state.
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+          <p className="font-medium text-destructive">Failed to load escrow data</p>
+          <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+        </div>
+      )}
 
       <EscrowBalance
         account={escrowAccount}
@@ -57,18 +222,20 @@ export function EscrowPaymentsDashboard() {
         <div className="rounded-lg border border-border/60 bg-muted/30 p-6">
           <h2 className="text-lg font-semibold">Deposit Guidance</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Escrow deposits cover projected usage for new allocations. Keep at least 7 days of
-            runway to avoid interruptions.
+            Escrow deposits cover projected usage for new allocations. On-chain account balances are
+            authoritative and wallet confirmations are required for every top-up.
           </p>
           <div className="mt-4 space-y-3 text-sm">
             <div className="rounded-lg bg-background p-3">
               <p className="text-xs uppercase text-muted-foreground">Recommended buffer</p>
-              <p className="mt-1 text-base font-semibold">+10,000 VIRT</p>
+              <p className="mt-1 text-base font-semibold">
+                {(billing.currentPeriodCost * 0.25).toFixed(2)} UVE
+              </p>
             </div>
             <div className="rounded-lg bg-background p-3">
-              <p className="text-xs uppercase text-muted-foreground">Auto-top up</p>
+              <p className="text-xs uppercase text-muted-foreground">Top-up mode</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Coming soon · Enable recurring wallet transfers.
+                Recurring deposits are not exposed by the live portal APIs. Use signed wallet deposits for each escrow refill.
               </p>
             </div>
           </div>
@@ -82,10 +249,10 @@ export function EscrowPaymentsDashboard() {
           <TabsTrigger value="payouts">Payouts</TabsTrigger>
         </TabsList>
         <TabsContent value="transactions">
-          <TransactionHistory transactions={escrowTransactions} />
+          <TransactionHistory transactions={transactions} />
         </TabsContent>
         <TabsContent value="settlements">
-          <SettlementLog settlements={settlementEvents} />
+          <SettlementLog settlements={settlements} />
         </TabsContent>
         <TabsContent value="payouts">
           <PayoutHistory payouts={payoutHistory} />
@@ -98,6 +265,10 @@ export function EscrowPaymentsDashboard() {
         account={escrowAccount}
         fiatRates={fiatRates}
       />
+
+      {isLoading && !error && (
+        <div className="text-sm text-muted-foreground">Refreshing live escrow and billing state…</div>
+      )}
     </div>
   );
 }

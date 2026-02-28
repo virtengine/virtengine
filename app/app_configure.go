@@ -44,6 +44,8 @@ import (
 	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
 	"github.com/virtengine/virtengine/x/hpc"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	"github.com/virtengine/virtengine/x/issuancepolicy"
+	issuancepolicytypes "github.com/virtengine/virtengine/x/issuancepolicy/types"
 	"github.com/virtengine/virtengine/x/market"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	"github.com/virtengine/virtengine/x/marketplace"
@@ -67,6 +69,8 @@ import (
 	"github.com/virtengine/virtengine/x/take"
 	"github.com/virtengine/virtengine/x/veid"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+	"github.com/virtengine/virtengine/x/veidregistry"
+	veidregistrytypes "github.com/virtengine/virtengine/x/veidregistry/types"
 )
 
 func virtengineModuleBasics() []module.AppModuleBasic {
@@ -83,6 +87,8 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		encryption.AppModuleBasic{},
 		roles.AppModuleBasic{},
 		support.AppModuleBasic{},
+		veidregistry.AppModuleBasic{},
+		issuancepolicy.AppModuleBasic{},
 		veid.AppModuleBasic{},
 		mfa.AppModuleBasic{},
 		config.AppModuleBasic{},
@@ -137,6 +143,8 @@ func OrderInitGenesis(_ []string) []string {
 		encryptiontypes.ModuleName,
 		rolestypes.ModuleName,
 		supporttypes.ModuleName,
+		veidregistrytypes.ModuleName,
+		issuancepolicytypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		configtypes.ModuleName,

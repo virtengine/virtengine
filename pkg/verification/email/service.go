@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +33,7 @@ type DefaultService struct {
 	auditor         audit.AuditLogger
 	rateLimiter     ratelimit.VerificationLimiter
 	cache           cache.Cache[string, *EmailChallenge]
+	destination     *destinationCipher
 	templateManager *TemplateManager
 	metrics         *Metrics
 	logger          zerolog.Logger
@@ -117,6 +119,12 @@ func NewService(
 		s.provider = provider
 	}
 
+	destinationCipher, err := newDestinationCipher(config.DestinationEncryptionKey)
+	if err != nil {
+		return nil, errors.Wrap(ErrInvalidConfig, err.Error())
+	}
+	s.destination = destinationCipher
+
 	// Create template manager
 	s.templateManager = NewTemplateManager(TemplateDefaults{
 		ProductName:  config.FromName,
@@ -174,11 +182,17 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 	// Generate challenge ID
 	challengeID := uuid.New().String()
 
+	encryptedEmail, err := s.destination.Encrypt(req.Email)
+	if err != nil {
+		return nil, errors.Wrap(ErrInvalidConfig, err.Error())
+	}
+
 	// Create challenge
 	challenge, secret, err := NewEmailChallenge(ChallengeConfig{
 		ChallengeID:    challengeID,
 		AccountAddress: req.AccountAddress,
 		Email:          req.Email,
+		EncryptedEmail: encryptedEmail,
 		Method:         req.Method,
 		CreatedAt:      time.Now(),
 		TTLSeconds:     s.config.OTPTTLSeconds,
@@ -419,13 +433,21 @@ func (s *DefaultService) ResendVerification(ctx context.Context, req *ResendRequ
 		return nil, errors.Wrapf(ErrResendCooldown, "try again at %s", nextResend.Format(time.RFC3339))
 	}
 
+	destinationEmail, err := s.destination.Decrypt(challenge.EncryptedEmail)
+	if err != nil {
+		return nil, errors.Wrap(ErrInvalidConfig, err.Error())
+	}
+
+	updatedChallenge := *challenge
+
 	// Generate new secret
+	var secret string
 	var secretHash string
 	switch challenge.Method {
 	case MethodOTP:
-		_, secretHash, err = GenerateOTP(s.config.OTPLength)
+		secret, secretHash, err = GenerateOTP(s.config.OTPLength)
 	case MethodMagicLink:
-		_, secretHash, err = GenerateMagicLinkToken()
+		secret, secretHash, err = GenerateMagicLinkToken()
 	}
 	if err != nil {
 		return nil, err
@@ -439,17 +461,16 @@ func (s *DefaultService) ResendVerification(ctx context.Context, req *ResendRequ
 	newExpiresAt := now.Add(time.Duration(ttl) * time.Second)
 
 	// Update challenge
-	if err := challenge.RecordResend(now, secretHash, newExpiresAt); err != nil {
+	if err := updatedChallenge.RecordResend(now, secretHash, newExpiresAt); err != nil {
 		return nil, err
 	}
 
-	// We need to get the email to resend - but we only have the hash
-	// In production, you'd need to store this securely or ask the user to provide it again
-	// For now, we'll return an error indicating the limitation
-	// TODO: Implement secure email retrieval for resends
+	if err := s.sendVerificationEmail(ctx, destinationEmail, &updatedChallenge, secret); err != nil {
+		return nil, err
+	}
 
 	// Update cache
-	if err := s.updateChallenge(ctx, challenge); err != nil {
+	if err := s.updateChallenge(ctx, &updatedChallenge); err != nil {
 		s.logger.Error().Err(err).Msg("failed to update challenge")
 	}
 
@@ -468,25 +489,18 @@ func (s *DefaultService) ResendVerification(ctx context.Context, req *ResendRequ
 			Action:    "resend_verification",
 			Details: map[string]interface{}{
 				"method":       challenge.Method,
-				"resend_count": challenge.ResendCount,
-				"max_resends":  challenge.MaxResends,
+				"resend_count": updatedChallenge.ResendCount,
+				"max_resends":  updatedChallenge.MaxResends,
 			},
 		})
 	}
-
-	// Note: In production, resend would need the email address to be provided again
-	// or stored securely (encrypted) in the challenge
-	s.logger.Info().
-		Str("challenge_id", req.ChallengeID).
-		Str("secret_hash", secretHash[:16]+"...").
-		Msg("resend prepared (email send not implemented in resend)")
 
 	nextResendAt := now.Add(time.Duration(s.config.ResendCooldownSeconds) * time.Second)
 
 	return &ResendResponse{
 		Success:          true,
 		ExpiresAt:        newExpiresAt,
-		ResendsRemaining: challenge.MaxResends - challenge.ResendCount,
+		ResendsRemaining: updatedChallenge.MaxResends - updatedChallenge.ResendCount,
 		NextResendAt:     nextResendAt,
 	}, nil
 }
@@ -532,7 +546,11 @@ func (s *DefaultService) CancelChallenge(ctx context.Context, challengeID string
 
 // ProcessWebhook processes a delivery status webhook
 func (s *DefaultService) ProcessWebhook(ctx context.Context, providerName string, payload []byte) error {
-	events, err := s.provider.ParseWebhook(ctx, payload, "")
+	if providerName != "" && !strings.EqualFold(providerName, s.provider.Name()) {
+		return errors.Wrapf(ErrWebhookInvalid, "provider mismatch: got %s, expected %s", providerName, s.provider.Name())
+	}
+
+	events, err := s.provider.ParseWebhook(ctx, payload, s.config.WebhookSecret)
 	if err != nil {
 		return errors.Wrap(ErrWebhookInvalid, err.Error())
 	}
@@ -765,9 +783,28 @@ func (s *DefaultService) createAttestation(ctx context.Context, challenge *Email
 	subject := veidtypes.NewAttestationSubject(challenge.AccountAddress)
 	subject.RequestID = challenge.ChallengeID
 
+	activeKey, err := s.signer.GetActiveKey(ctx)
+	if err != nil {
+		return nil, errors.Wrap(ErrSigningFailed, fmt.Sprintf("failed to get active signer key: %v", err))
+	}
+	if activeKey == nil || len(activeKey.Fingerprint) < 16 {
+		return nil, errors.Wrap(ErrSigningFailed, "active signer key fingerprint is unavailable")
+	}
+
+	validatorAddress := ""
+	signerInfo, err := s.signer.GetSignerInfo(ctx)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to get signer info, continuing with key-only issuer")
+	} else if signerInfo != nil {
+		validatorAddress = signerInfo.ValidatorAddress
+	}
+
+	issuer := veidtypes.NewAttestationIssuer(activeKey.Fingerprint, validatorAddress)
+	issuer.KeyID = activeKey.KeyID
+
 	// Create attestation
 	attestation := veidtypes.NewVerificationAttestation(
-		veidtypes.AttestationIssuer{}, // Will be set by signer
+		issuer,
 		subject,
 		veidtypes.AttestationTypeEmailVerification,
 		nonceBytes,

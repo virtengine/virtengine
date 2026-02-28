@@ -13,11 +13,10 @@ import (
 
 // Test constants
 const (
-	testClientID    = "test-client-001"
-	testClientName  = "Test Mobile App"
-	testDeviceID    = "device-fingerprint-abc123"
-	testSessionID   = "session-uuid-xyz789"
-	testUserAddress = "virtengine1abc123def456"
+	testClientID   = "test-client-001"
+	testClientName = "Test Mobile App"
+	testDeviceID   = "device-fingerprint-abc123"
+	testSessionID  = "session-uuid-xyz789"
 )
 
 // TestSaltValidation tests salt validation logic
@@ -189,6 +188,7 @@ func TestSignatureValidation(t *testing.T) {
 	// Generate test keys
 	clientPub, clientPriv := generateEd25519KeyPair(t)
 	userPub, userPriv := generateEd25519KeyPair(t)
+	userAddress := mustDeriveTestUserAddress(t, userPub)
 
 	// Create mock registry
 	registry := NewMockApprovedClientRegistry()
@@ -208,7 +208,7 @@ func TestSignatureValidation(t *testing.T) {
 		err := sv.ValidateClientSignature(payload)
 		assert.NoError(t, err)
 
-		err = sv.ValidateUserSignature(payload, testUserAddress)
+		err = sv.ValidateUserSignature(payload, userAddress)
 		assert.NoError(t, err)
 	})
 
@@ -270,9 +270,19 @@ func TestSignatureValidation(t *testing.T) {
 		// Corrupt signature
 		payload.UserSignature.Signature[0] ^= 0xFF
 
-		err := sv.ValidateUserSignature(payload, testUserAddress)
+		err := sv.ValidateUserSignature(payload, userAddress)
 		assert.Error(t, err)
 		assert.Equal(t, ErrCodeUserSignatureInvalid, GetErrorCode(err))
+	})
+
+	t.Run("user key id must match derived account address", func(t *testing.T) {
+		sv := NewSignatureValidator(registry)
+		payload := createValidPayload(t, clientPub, clientPriv, userPub, userPriv)
+		payload.UserSignature.KeyID = "ve1notderivedaddress"
+
+		err := sv.ValidateUserSignature(payload, "")
+		assert.Error(t, err)
+		assert.Equal(t, ErrCodeUserAddressMismatch, GetErrorCode(err))
 	})
 
 	t.Run("signature chain verification", func(t *testing.T) {
@@ -351,6 +361,7 @@ func TestKeyRotation(t *testing.T) {
 func TestFullProtocolValidation(t *testing.T) {
 	clientPub, clientPriv := generateEd25519KeyPair(t)
 	userPub, userPriv := generateEd25519KeyPair(t)
+	userAddress := mustDeriveTestUserAddress(t, userPub)
 
 	registry := NewMockApprovedClientRegistry()
 	registry.AddClient(&ApprovedClient{
@@ -366,11 +377,11 @@ func TestFullProtocolValidation(t *testing.T) {
 		pv := NewProtocolValidator(registry)
 		payload := createValidPayload(t, clientPub, clientPriv, userPub, userPriv)
 
-		result := pv.ValidatePayload(payload, testUserAddress)
+		result := pv.ValidatePayload(payload, userAddress)
 		assert.True(t, result.Valid)
 		assert.Empty(t, result.Errors)
 		assert.Equal(t, testClientID, result.ClientID)
-		assert.Equal(t, testUserAddress, result.UserAddress)
+		assert.Equal(t, userAddress, result.UserAddress)
 	})
 
 	t.Run("replay attack is prevented", func(t *testing.T) {
@@ -378,11 +389,11 @@ func TestFullProtocolValidation(t *testing.T) {
 		payload := createValidPayload(t, clientPub, clientPriv, userPub, userPriv)
 
 		// First submission should succeed
-		result := pv.ValidatePayload(payload, testUserAddress)
+		result := pv.ValidatePayload(payload, userAddress)
 		require.True(t, result.Valid)
 
 		// Second submission (replay) should fail
-		result = pv.ValidatePayload(payload, testUserAddress)
+		result = pv.ValidatePayload(payload, userAddress)
 		assert.False(t, result.Valid)
 		assert.NotEmpty(t, result.Errors)
 	})
@@ -396,7 +407,7 @@ func TestFullProtocolValidation(t *testing.T) {
 		// Recompute binding hash
 		payload.SaltBinding.BindingHash = payload.SaltBinding.ComputeBindingHash()
 
-		result := pv.ValidatePayload(payload, testUserAddress)
+		result := pv.ValidatePayload(payload, userAddress)
 		assert.False(t, result.Valid)
 	})
 
@@ -405,7 +416,7 @@ func TestFullProtocolValidation(t *testing.T) {
 		payload := createValidPayload(t, clientPub, clientPriv, userPub, userPriv)
 		payload.Version = 0
 
-		result := pv.ValidatePayload(payload, testUserAddress)
+		result := pv.ValidatePayload(payload, userAddress)
 		assert.False(t, result.Valid)
 	})
 
@@ -414,7 +425,7 @@ func TestFullProtocolValidation(t *testing.T) {
 		payload := createValidPayload(t, clientPub, clientPriv, userPub, userPriv)
 		payload.Version = 99
 
-		result := pv.ValidatePayload(payload, testUserAddress)
+		result := pv.ValidatePayload(payload, userAddress)
 		assert.False(t, result.Valid)
 	})
 }
@@ -523,6 +534,7 @@ func createValidPayload(
 
 	userSignedData := ComputeUserSigningData(salt, payloadHash[:], clientSig)
 	userSig := ed25519.Sign(userPriv, userSignedData)
+	userAddress := mustDeriveTestUserAddress(t, userPub)
 
 	// Create metadata
 	metadata := CaptureMetadata{
@@ -551,10 +563,19 @@ func createValidPayload(
 			PublicKey:  userPub,
 			Signature:  userSig,
 			Algorithm:  AlgorithmEd25519,
-			KeyID:      testUserAddress,
+			KeyID:      userAddress,
 			SignedData: userSignedData,
 		},
 		CaptureMetadata: metadata,
 		Timestamp:       now,
 	}
+}
+
+func mustDeriveTestUserAddress(t *testing.T, publicKey ed25519.PublicKey) string {
+	t.Helper()
+
+	address, err := DeriveAccountAddressFromPublicKey(publicKey, AlgorithmEd25519)
+	require.NoError(t, err)
+
+	return address
 }

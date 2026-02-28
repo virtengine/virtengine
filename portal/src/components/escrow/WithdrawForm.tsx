@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/Select';
 import type { EscrowAccount, FiatRates } from './data';
-import { formatFiat, formatToken } from './utils';
+import { formatFiatEstimates, formatToken } from './utils';
 
 interface WithdrawFormProps {
   account: EscrowAccount;
@@ -34,6 +34,7 @@ export function WithdrawForm({ account, fiatRates, fiatOffRampUrl }: WithdrawFor
   const [submitted, setSubmitted] = useState(false);
 
   const numericAmount = useMemo(() => Number(amount), [amount]);
+  const fiatEstimates = formatFiatEstimates(numericAmount, fiatRates);
   const amountError =
     !amount || Number.isNaN(numericAmount) || numericAmount <= 0
       ? 'Enter a valid amount'
@@ -78,8 +79,9 @@ export function WithdrawForm({ account, fiatRates, fiatOffRampUrl }: WithdrawFor
               <p className="text-xs text-destructive">{amountError}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {formatFiat(numericAmount * fiatRates.usd, 'USD')} USD ·{' '}
-                {formatFiat(numericAmount * fiatRates.eur, 'EUR')} EUR
+                {fiatEstimates.length > 0
+                  ? fiatEstimates.join(' · ')
+                  : 'Live fiat conversion unavailable'}
               </p>
             )}
           </div>

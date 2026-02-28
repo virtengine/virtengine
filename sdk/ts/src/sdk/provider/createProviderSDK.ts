@@ -1,13 +1,11 @@
 import { createSDK } from "../../generated/createProviderSDK.ts";
-import type { PickByPath } from "../../utils/types.ts";
 import type { GrpcTransportOptions } from "../transport/grpc/createGrpcTransport.ts";
 import { createGrpcTransport } from "../transport/grpc/createGrpcTransport.ts";
-import type { RetryOptions } from "../transport/interceptors/retry.ts";
-import { createRetryInterceptor, isRetryEnabled } from "../transport/interceptors/retry.ts";
+import { getRetryInterceptors, type RetryOptions } from "../transport/interceptors/retry.ts";
 
 export type { PayloadOf, ResponseOf } from "../types.ts";
 
-type ProviderSDK = PickByPath<ReturnType<typeof createSDK>, "virtengine.provider.v1">;
+export type ProviderSDK = ReturnType<typeof createSDK>;
 
 export function createProviderSDK(options: ProviderSDKOptions): ProviderSDK {
   const { retry: retryOptions, ...transportOptions } = options.transportOptions ?? {};
@@ -21,7 +19,7 @@ export function createProviderSDK(options: ProviderSDKOptions): ProviderSDK {
   return createSDK(
     createGrpcTransport({
       ...transportOptions,
-      interceptors: isRetryEnabled(retryOptions) ? [createRetryInterceptor(retryOptions)] : [],
+      interceptors: getRetryInterceptors(retryOptions),
       baseUrl: options.baseUrl,
       nodeOptions: {
         ...certificateOptions,

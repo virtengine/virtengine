@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	client "github.com/waldur/go-client"
 )
 
@@ -73,15 +72,24 @@ func (a *AWSClient) ListAWSInstances(ctx context.Context, params ListAWSInstance
 		apiParams := &client.AwsInstancesListParams{}
 
 		if params.ServiceSettingsUUID != "" {
-			u := uuid.MustParse(params.ServiceSettingsUUID)
+			u, err := parseUUIDParam("service settings UUID", params.ServiceSettingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ServiceSettingsUuid = &u
 		}
 		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
+			u, err := parseUUIDParam("project UUID", params.ProjectUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ProjectUuid = &u
 		}
 		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
+			u, err := parseUUIDParam("customer UUID", params.CustomerUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.CustomerUuid = &u
 		}
 		if params.Name != "" {
@@ -126,7 +134,10 @@ func (a *AWSClient) GetAWSInstance(ctx context.Context, instanceUUID string) (*A
 	var instance *AWSInstance
 
 	err := a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsInstancesRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -151,7 +162,10 @@ func (a *AWSClient) GetAWSInstance(ctx context.Context, instanceUUID string) (*A
 // DeleteAWSInstance deletes an AWS instance
 func (a *AWSClient) DeleteAWSInstance(ctx context.Context, instanceUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsInstancesDestroyWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -168,7 +182,10 @@ func (a *AWSClient) DeleteAWSInstance(ctx context.Context, instanceUUID string) 
 // StartAWSInstance starts a stopped AWS instance
 func (a *AWSClient) StartAWSInstance(ctx context.Context, instanceUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsInstancesStartWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -185,7 +202,10 @@ func (a *AWSClient) StartAWSInstance(ctx context.Context, instanceUUID string) e
 // StopAWSInstance stops a running AWS instance
 func (a *AWSClient) StopAWSInstance(ctx context.Context, instanceUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsInstancesStopWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -202,7 +222,10 @@ func (a *AWSClient) StopAWSInstance(ctx context.Context, instanceUUID string) er
 // RestartAWSInstance restarts an AWS instance
 func (a *AWSClient) RestartAWSInstance(ctx context.Context, instanceUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsInstancesRestartWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -268,7 +291,10 @@ func (a *AWSClient) GetAWSVolume(ctx context.Context, volumeUUID string) (*AWSVo
 	var volume *AWSVolume
 
 	err := a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(volumeUUID)
+		uuidType, err := parseUUIDParam("volume UUID", volumeUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsVolumesRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -293,7 +319,10 @@ func (a *AWSClient) GetAWSVolume(ctx context.Context, volumeUUID string) (*AWSVo
 // DeleteAWSVolume deletes an AWS volume
 func (a *AWSClient) DeleteAWSVolume(ctx context.Context, volumeUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(volumeUUID)
+		uuidType, err := parseUUIDParam("volume UUID", volumeUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AwsVolumesDestroyWithResponse(ctx, uuidType)
 		if err != nil {
 			return err

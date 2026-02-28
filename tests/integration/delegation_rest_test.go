@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/stretchr/testify/require"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -46,15 +44,31 @@ func TestDelegationRESTGateway(t *testing.T) {
 	require.NoError(t, appInstance.Keepers.VirtEngine.Delegation.SetDelegation(ctx, *delegation))
 
 	querier := delegationkeeper.NewQuerier(appInstance.Keepers.VirtEngine.Delegation)
-	mux := runtime.NewServeMux()
-	require.NoError(t, delegationv1.RegisterQueryHandlerServer(context.Background(), mux, querier))
+	expectedPath := "/virtengine/delegation/v1/delegator/" + delegator + "/validator/" + validator
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mux.ServeHTTP(w, r.WithContext(ctx))
+		if r.URL.Path != expectedPath {
+			http.NotFound(w, r)
+			return
+		}
+
+		resp, err := querier.Delegation(sdk.WrapSDKContext(ctx), &delegationv1.QueryDelegationRequest{
+			DelegatorAddress: delegator,
+			ValidatorAddress: validator,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/virtengine/delegation/v1/delegator/" + delegator + "/validator/" + validator)
+	resp, err := http.Get(server.URL + expectedPath)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

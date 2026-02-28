@@ -16,7 +16,7 @@ import (
 func SetupEscrowKeeper(t *testing.T) (sdk.Context, escrowkeeper.Keeper) {
 	t.Helper()
 
-	suite := state.SetupTestSuite(t)
+	suite := state.SetupTestSuiteWithoutModuleServices(t)
 	return suite.Context(), suite.EscrowKeeper()
 }
 

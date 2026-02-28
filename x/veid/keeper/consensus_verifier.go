@@ -269,9 +269,26 @@ func (cv *ConsensusVerifier) ValidateModelVersion(
 	ctx sdk.Context,
 	requiredVersion string,
 ) error {
+	if cv.keeper != nil {
+		activePV, err := cv.keeper.GetActivePipelineVersion(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := cv.keeper.ensurePipelineVersionUsable(ctx, activePV); err != nil {
+			return err
+		}
+		if !versionsMatch(activePV.Version, requiredVersion) {
+			return types.ErrPipelineVersionMismatch.Wrapf(
+				"active pipeline version mismatch: required %s, active %s",
+				requiredVersion,
+				activePV.Version,
+			)
+		}
+	}
+
 	localVersion := cv.mlScorer.GetModelVersion()
 
-	if localVersion != requiredVersion {
+	if !versionsMatch(localVersion, requiredVersion) {
 		return types.ErrMLInferenceFailed.Wrapf(
 			"model version mismatch: required %s, local %s", requiredVersion, localVersion,
 		)

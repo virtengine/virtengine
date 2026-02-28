@@ -3,6 +3,12 @@
 Last updated: 2026-04-11
 Owner: Product Lead
 
+## Current control state
+- Launch decision: `GO`
+- Scope: approved for the scheduled UTC launch windows below
+- Public posture: scheduled / approved, not already live before the launch
+  window begins
+
 ## Approved control windows
 - Primary launch window (UTC): 2026-04-18 05:00 to 2026-04-18 07:00
 - Backup launch window (UTC): 2026-04-19 05:00 to 2026-04-19 07:00
@@ -23,10 +29,9 @@ Owner: Product Lead
 > back.
 
 ## Draft hold notice
-> Launch control remains in `HOLD` following the 2026-04-11 rehearsal bundle.
-> The execution-evidence gate is complete, but final mainnet activation is
-> still waiting on signed canonical treasury, community-pool, and team-vesting
-> addresses so the final genesis artifact can be rebuilt and published.
+> VirtEngine mainnet launch has been placed on temporary hold before chain
+> activation. The team is investigating a pre-launch control issue. Production
+> chain processes must remain stopped until a new `GO` notice is issued.
 
 ## Draft go-live notice
 > VirtEngine mainnet launch has started at the approved UTC launch window. Core
@@ -40,8 +45,7 @@ Owner: Product Lead
 > update will be posted in 15 minutes.
 
 ## Draft partner notice
-> Validators and providers: the 2026-04-11 rehearsal bundle is complete and
-> the launch evidence packet is current. The launch window remains on hold
-> pending signed mainnet allocation addresses and final genesis publication.
-> Do not start production chain processes until `LAUNCH-DEC-001` is moved from
-> `HOLD` to `GO`.
+> Validators and providers: the final genesis bundle and launch evidence packet
+> are published in the repository, and `LAUNCH-DEC-001` is `GO` for the
+> approved UTC launch window on 2026-04-18. Do not start production chain
+> processes before the coordinator green-light call inside that window.

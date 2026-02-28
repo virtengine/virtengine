@@ -393,23 +393,9 @@ func TestGetAllHealthStatuses(t *testing.T) {
 	}
 }
 
-// setupTestEnvironment creates a test context and keeper for testing
-//
-//nolint:unparam // placeholder test helper until keeper test utilities are wired
+// setupTestEnvironment creates a test context and keeper for testing.
 func setupTestEnvironment(t *testing.T) (sdk.Context, Keeper) {
-	// This is a placeholder - in a real test environment, you would:
-	// 1. Create a test store
-	// 2. Initialize a keeper with test dependencies
-	// 3. Create a test context
-	//
-	// For now, we're demonstrating the test structure
-
-	// NOTE: This would need to be implemented based on your test setup utilities
-	// Example structure:
-	// store := ... // Create test store
-	// keeper := NewKeeper(codec, store, ...)
-	// ctx := sdk.NewContext(store, ...)
-
-	t.Skip("Test environment setup not implemented - requires test utilities")
-	return sdk.Context{}, Keeper{}
+	t.Helper()
+	env := setupHeartbeatTestEnvironment(t)
+	return env.ctx, env.keeper
 }

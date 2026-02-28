@@ -68,6 +68,8 @@ Complete OpenAPI specification for VirtEngine blockchain modules:
 - Deprecation warnings (`x-deprecation`)
 - Complete schema definitions
 - Request/response examples
+- `x-grpc-services` metadata for booting gRPC-only services that do not have
+  generated HTTP gateway handlers in this build
 
 ### Provider Portal API (`portal_api.yaml`)
 
@@ -86,7 +88,7 @@ Off-chain provider portal REST API specification:
 
 ### From Proto Files
 
-The main OpenAPI specification can be auto-generated from proto files using `buf generate`:
+The main OpenAPI specification can be partially generated from proto files using `buf generate`:
 
 ```bash
 # Generate swagger from proto files
@@ -101,7 +103,7 @@ cat .cache/tmp/swagger-gen/*.swagger.json | \
 npx js-yaml swagger-merged.json > docs/api/openapi/generated.yaml
 ```
 
-The generated specification is available at:
+The generated gateway-backed specification is available at:
 - **Swagger UI**: `http://localhost:8000/portal` (via Kong gateway)
 - **Static File**: `sdk/docs/swagger-ui/swagger.yaml`
 
@@ -117,6 +119,17 @@ The provider portal OpenAPI spec generates TypeScript and Go types:
 # - TypeScript: lib/portal/src/provider-api/generated/types.ts
 # - Go: pkg/provider_daemon/api/generated/types.go
 ```
+
+### gRPC-Only Query Services
+
+The chain currently boots two query services without generated HTTP gateway handlers:
+
+- `virtengine.marketplace.v1.Query`
+- `virtengine.hpc.v1.WorkloadTemplateQuery`
+
+Those services are intentionally documented in `api/openapi/virtengine-api.yaml`
+under `x-grpc-services` rather than `paths`, so the OpenAPI file does not claim
+REST endpoints that the current binary does not actually serve.
 
 ## 🔧 API Versioning in OpenAPI
 
@@ -182,6 +195,19 @@ paths:
         deprecated: true
         sunset: "2026-12-31"
         replacement: /virtengine/market/v2beta1/orders/list
+```
+
+### x-grpc-services
+
+Documents booting gRPC services that are intentionally absent from `paths`
+because the current build does not emit matching gateway handlers.
+
+```yaml
+x-grpc-services:
+  marketplaceQuery:
+    service: virtengine.marketplace.v1.Query
+    transport: grpc
+    restGateway: not-generated-in-this-build
 ```
 
 ## 🌐 Interactive Documentation
@@ -270,7 +296,7 @@ Validate the OpenAPI specification:
 
 ```bash
 # Using Redocly CLI (recommended)
-npx @redocly/openapi-cli lint api/openapi/virtengine-api.yaml
+npx @redocly/cli@latest lint api/openapi/virtengine-api.yaml
 
 # Using Swagger CLI
 npx swagger-cli validate api/openapi/virtengine-api.yaml
@@ -423,4 +449,4 @@ npx @redocly/openapi-cli lint api/openapi/virtengine-api.yaml
 
 ---
 
-**Last updated**: February 2026
+**Last updated**: April 2026

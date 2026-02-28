@@ -332,7 +332,9 @@ func (c *HPCBillingCalculator) CalculateBillableAmount(
 	}
 
 	denom := c.Rules.ResourceRates.CPUCoreHourRate.Denom
-	breakdown := BillableBreakdown{}
+	breakdown := BillableBreakdown{
+		QueuePenalty: sdk.NewCoin(denom, sdkmath.ZeroInt()),
+	}
 
 	// Calculate CPU cost (core-seconds -> core-hours)
 	cpuCoreHours := sdkmath.LegacyNewDec(metrics.CPUCoreSeconds).Quo(sdkmath.LegacyNewDec(3600))
@@ -373,22 +375,6 @@ func (c *HPCBillingCalculator) CalculateBillableAmount(
 	networkCost := networkGB.Mul(c.Rules.ResourceRates.NetworkGBRate.Amount)
 	breakdown.NetworkCost = sdk.NewCoin(denom, networkCost.TruncateInt())
 
-	// Calculate queue time penalty if enabled
-	if c.Rules.QueueTimePenaltyEnabled && metrics.QueueTimeSeconds > c.Rules.QueueTimePenaltyThresholdSeconds {
-		excessMinutes := (metrics.QueueTimeSeconds - c.Rules.QueueTimePenaltyThresholdSeconds) / 60
-		// Penalty is applied as credit (negative cost) to customer
-		penaltyBps := int64(c.Rules.QueueTimePenaltyRateBps) * excessMinutes
-		// Cap at 50%
-		const maxPenaltyBps = 5000
-		if penaltyBps > maxPenaltyBps {
-			penaltyBps = maxPenaltyBps
-		}
-		// Queue penalty is a credit, so it's tracked but applied differently
-		// TODO: Apply penaltyBps to breakdown calculation
-		_ = penaltyBps
-		breakdown.QueuePenalty = sdk.NewCoin(denom, sdkmath.NewInt(0))
-	}
-
 	// Calculate subtotal
 	subtotal := sdk.NewCoins(
 		breakdown.CPUCost,
@@ -408,6 +394,26 @@ func (c *HPCBillingCalculator) CalculateBillableAmount(
 	}
 	breakdown.Subtotal = consolidatedSubtotal
 
+	// Calculate queue time penalty as a customer credit against the subtotal.
+	if c.Rules.QueueTimePenaltyEnabled && metrics.QueueTimeSeconds > c.Rules.QueueTimePenaltyThresholdSeconds {
+		excessMinutes := (metrics.QueueTimeSeconds - c.Rules.QueueTimePenaltyThresholdSeconds) / 60
+		penaltyBps := int64(c.Rules.QueueTimePenaltyRateBps) * excessMinutes
+		const maxPenaltyBps = 5000 // Cap at 50% of subtotal.
+		if penaltyBps > maxPenaltyBps {
+			penaltyBps = maxPenaltyBps
+		}
+		if penaltyBps > 0 {
+			subtotalAmount := consolidatedSubtotal.AmountOf(denom)
+			penaltyAmount := sdkmath.LegacyNewDecFromInt(subtotalAmount).
+				Mul(sdkmath.LegacyNewDec(penaltyBps)).
+				Quo(sdkmath.LegacyNewDec(10000)).
+				TruncateInt()
+			if penaltyAmount.IsPositive() {
+				breakdown.QueuePenalty = sdk.NewCoin(denom, penaltyAmount)
+			}
+		}
+	}
+
 	// Apply discounts
 	totalDiscount := sdk.NewCoins()
 	for _, discount := range appliedDiscounts {
@@ -422,6 +428,9 @@ func (c *HPCBillingCalculator) CalculateBillableAmount(
 
 	// Calculate final amount: subtotal - discounts - caps
 	finalAmount := consolidatedSubtotal
+	if breakdown.QueuePenalty.IsPositive() {
+		finalAmount = finalAmount.Sub(breakdown.QueuePenalty)
+	}
 	if !totalDiscount.IsZero() {
 		finalAmount = finalAmount.Sub(totalDiscount...)
 	}

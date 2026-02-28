@@ -4,8 +4,8 @@
  */
 
 export type FiatRates = {
-  usd: number;
-  eur: number;
+  usd?: number;
+  eur?: number;
 };
 
 export type EscrowAccount = {

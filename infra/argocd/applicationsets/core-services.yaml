@@ -52,7 +52,7 @@ spec:
     spec:
       project: virtengine
       source:
-        repoURL: https://github.com/virtengine-network/virtengine.git
+        repoURL: https://github.com/virtengine/virtengine.git
         targetRevision: '{{env}}'  # Branch matches environment
         path: 'infra/kubernetes/overlays/{{env}}/{{service}}'
       destination:
@@ -152,7 +152,7 @@ spec:
             releaseName: '{{service}}'
             valueFiles:
               - $values/infra/kubernetes/overlays/{{env}}/helm-values/{{service}}.yaml
-        - repoURL: https://github.com/virtengine-network/virtengine.git
+        - repoURL: https://github.com/virtengine/virtengine.git
           targetRevision: HEAD
           ref: values
       destination:
@@ -193,7 +193,7 @@ spec:
     spec:
       project: virtengine
       source:
-        repoURL: https://github.com/virtengine-network/virtengine.git
+        repoURL: https://github.com/virtengine/virtengine.git
         targetRevision: HEAD
         path: 'infra/kubernetes/overlays/{{env}}/monitoring'
       destination:

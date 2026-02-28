@@ -255,6 +255,22 @@ func (h MFAGatingHooks) CheckMFARequired(
 	return true, false, requiredCombinations
 }
 
+func (h MFAGatingHooks) GetVEIDThreshold(ctx sdk.Context, account sdk.AccAddress) uint32 {
+	policy, found := h.keeper.GetMFAPolicy(ctx, account)
+	if found && policy.Enabled && policy.VEIDThreshold > 0 {
+		return policy.VEIDThreshold
+	}
+	return h.keeper.GetParams(ctx).MinVEIDScoreForMFA
+}
+
+func (h MFAGatingHooks) ShouldEnforceMFA(ctx sdk.Context, account sdk.AccAddress, veidScore uint32) bool {
+	policy, found := h.keeper.GetMFAPolicy(ctx, account)
+	if !found || !policy.Enabled {
+		return false
+	}
+	return veidScore < h.GetVEIDThreshold(ctx, account)
+}
+
 // GetAccountMFAStatus returns a summary of MFA status for an account
 func (h MFAGatingHooks) GetAccountMFAStatus(ctx sdk.Context, account sdk.AccAddress) AccountMFAStatus {
 	status := AccountMFAStatus{

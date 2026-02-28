@@ -44,6 +44,7 @@ import (
 	"github.com/virtengine/virtengine/x/escrow"
 	"github.com/virtengine/virtengine/x/fraud"
 	"github.com/virtengine/virtengine/x/hpc"
+	"github.com/virtengine/virtengine/x/issuancepolicy"
 	"github.com/virtengine/virtengine/x/market"
 	"github.com/virtengine/virtengine/x/marketplace"
 	"github.com/virtengine/virtengine/x/mfa"
@@ -57,6 +58,7 @@ import (
 	"github.com/virtengine/virtengine/x/support"
 	"github.com/virtengine/virtengine/x/take"
 	"github.com/virtengine/virtengine/x/veid"
+	"github.com/virtengine/virtengine/x/veidregistry"
 )
 
 func appModules(
@@ -226,6 +228,14 @@ func appModules(
 		support.NewAppModule(
 			app.cdc,
 			app.Keepers.VirtEngine.Support,
+		),
+		veidregistry.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.VEIDRegistry,
+		),
+		issuancepolicy.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.IssuancePolicy,
 		),
 		veid.NewAppModule(
 			app.cdc,
@@ -419,6 +429,14 @@ func appSimModules(
 		cert.NewAppModule(
 			app.cdc,
 			app.Keepers.VirtEngine.Cert,
+		),
+		veidregistry.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.VEIDRegistry,
+		),
+		issuancepolicy.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.IssuancePolicy,
 		),
 	}
 }

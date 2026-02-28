@@ -800,7 +800,8 @@ func TestNitroCLIRunner(t *testing.T) {
 
 	t.Run("run simulated enclave", func(t *testing.T) {
 		if !runner.IsSimulated() {
-			t.Skip("skipping on real hardware")
+			t.Log("real Nitro hardware detected; simulated enclave launch is not exercised against a fake EIF path")
+			return
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1140,6 +1141,49 @@ func TestHardwareCapabilities(t *testing.T) {
 			t.Errorf("invalid preferred backend: %s", caps.PreferredBackend)
 		}
 	})
+
+	t.Run("preferred backend prioritizes fully wired hardware paths", func(t *testing.T) {
+		cases := []struct {
+			name string
+			caps HardwareCapabilities
+			want AttestationType
+		}{
+			{
+				name: "sev preferred over sgx",
+				caps: HardwareCapabilities{
+					SGXAvailable:    true,
+					SGXFLCSupported: true,
+					SEVSNPAvailable: true,
+				},
+				want: AttestationTypeSEVSNP,
+			},
+			{
+				name: "nitro preferred over sgx",
+				caps: HardwareCapabilities{
+					SGXAvailable:    true,
+					SGXFLCSupported: true,
+					NitroAvailable:  true,
+				},
+				want: AttestationTypeNitro,
+			},
+			{
+				name: "sgx still used when it is the only hardware",
+				caps: HardwareCapabilities{
+					SGXAvailable:    true,
+					SGXFLCSupported: true,
+				},
+				want: AttestationTypeSGX,
+			},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := determinePreferredBackend(&tt.caps); got != tt.want {
+					t.Fatalf("determinePreferredBackend() = %s, want %s", got, tt.want)
+				}
+			})
+		}
+	})
 }
 
 func TestSimulationFallback(t *testing.T) {
@@ -1257,13 +1301,15 @@ func TestHardwareState(t *testing.T) {
 
 	t.Run("require mode fails without hardware", func(t *testing.T) {
 		caps := DetectHardware()
-		if caps.HasAnyHardware() {
-			t.Skip("skipping - real hardware detected")
-		}
-
 		state := NewHardwareState(HardwareModeRequire)
-
 		err := state.Initialize()
+		if caps.HasAnyHardware() {
+			if err != nil {
+				t.Fatalf("require mode should initialize when hardware is present: %v", err)
+			}
+			_ = state.Shutdown()
+			return
+		}
 		if err == nil {
 			t.Error("require mode should fail without hardware")
 			_ = state.Shutdown()

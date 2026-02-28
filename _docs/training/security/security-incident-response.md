@@ -3,7 +3,7 @@
 **Module Duration:** 4 hours  
 **Target Audience:** VirtEngine Operators, Security Engineers, On-Call Personnel  
 **Prerequisites:** Completion of Security Best Practices module  
-**Last Updated:** 2024
+**Last Updated:** 2026-04-11
 
 ---
 
@@ -31,6 +31,19 @@ VirtEngine's security architecture requires specialized incident response proced
 - **VEID incidents** involving biometric data and encryption
 - **Provider incidents** affecting tenant workloads and infrastructure
 - **Economic incidents** affecting escrow and market operations
+
+### Validated Drill Commands
+
+When an incident section below references a validated control, use the matching drill command first:
+
+```bash
+go test -tags=security ./tests/security/... -run 'TestAuditCrypto_EmbeddingEnvelopeValidation|TestAuditCrypto_SaltBindingRequiresFreshTimestampAndValidSignatures'
+go test -tags='security,integration' ./tests/security/... -run 'TestIdentitySecurity_RebindWalletFlowRequiresLinkedSignatures|TestIdentitySecurity_MFAGatingEnforcesSerializedRebindProof'
+go test -tags='security,e2e.integration' ./tests/security/... -run 'TestSecurityAttestationE2E_HeartbeatReplayIsRejected|TestSecurityAttestationE2E_StaleRotationKeyIsRejectedAfterOverlap'
+go test -tags=security ./tests/security/blockchain -run 'TestBC001_ConsensusVerifierRejectsDivergentResults|TestBC002_ConsensusVerifierValidatesLocalModelState|TestBC002_ResultHashIsDeterministicAndFieldSensitive'
+```
+
+Use `SECURITY.md` and `_docs/audits/security-audit-report-2026-02-06.md` as the evidence index for those drills.
 
 ---
 
@@ -322,10 +335,17 @@ echo "Exposure window: ${FIRST_USE} to ${LAST_USE}"
 # Phase 3: Key rotation
 echo "[PHASE 3] Rotating encryption key..."
 
-# Generate new X25519 key pair (in HSM if available)
-# This is a placeholder - actual implementation depends on key management system
-echo "Generate new key using HSM or secure key generation process"
-echo "Update key fingerprint in configuration"
+# Generate the replacement key on an approved secure device
+echo "Generate new X25519 key using the production HSM/KMS or approved offline host"
+echo "Record the new fingerprint in the incident ticket and operator log"
+
+# Validate the identity rotation controls before cutover
+echo "Run: go test -tags='security,integration' ./tests/security/... -run TestIdentitySecurity_RebindWalletFlowRequiresLinkedSignatures -count=1"
+echo "Run: go test -tags='security,integration' ./tests/security/... -run TestIdentitySecurity_MFAGatingEnforcesSerializedRebindProof -count=1"
+
+# Update the active key reference and restart only after verification passes
+echo "Update the key fingerprint in configuration and restart the affected VEID service"
+echo "Preserve the old key material under incident hold until post-incident review closes"
 echo "Notify affected users if required by policy"
 
 # Phase 4: Notification
@@ -1581,6 +1601,6 @@ Upon successful completion:
 ---
 
 **Module Version:** 1.0  
-**Last Review:** 2024-01  
-**Next Review:** 2024-07  
+**Last Review:** 2026-04-11
+**Next Review:** 2026-07-11
 **Owner:** VirtEngine Security Team

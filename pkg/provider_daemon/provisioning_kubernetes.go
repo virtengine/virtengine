@@ -44,18 +44,23 @@ func (p *ContainerProvisioner) Provision(ctx context.Context, req ProvisioningRe
 		return nil, err
 	}
 
-	if workload, err := p.adapter.GetWorkloadByLease(req.AllocationID); err == nil && workload != nil {
-		status, err := p.adapter.GetStatus(ctx, workload.ID)
-		if err != nil {
-			return nil, err
-		}
-		return resultFromWorkload(workload, status), nil
-	}
-
 	manifest := manifestFromContainerSpec(req.AllocationID, spec)
 	opts := DeploymentOptions{
 		DryRun:  p.dryRun,
 		Timeout: p.timeout,
+	}
+
+	if workload, err := p.adapter.GetWorkloadByLease(req.AllocationID); err == nil && workload != nil {
+		switch workload.State {
+		case WorkloadStateFailed, WorkloadStateStopped, WorkloadStateTerminated:
+			// Re-apply resources to recover from restart-safe or transient failures.
+		default:
+			status, err := p.adapter.GetStatus(ctx, workload.ID)
+			if err != nil {
+				return nil, err
+			}
+			return resultFromWorkload(workload, status), nil
+		}
 	}
 
 	workload, err := p.adapter.Deploy(ctx, manifest, req.AllocationID, req.AllocationID, opts)

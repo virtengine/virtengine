@@ -63,6 +63,11 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        {transactions.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+            No live escrow movements are available for this account yet.
+          </div>
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -106,6 +111,7 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
             ))}
           </TableBody>
         </Table>
+        )}
       </CardContent>
     </Card>
   );

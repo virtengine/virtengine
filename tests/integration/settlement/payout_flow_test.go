@@ -11,13 +11,14 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/virtengine/virtengine/pkg/payments/offramp"
 	"github.com/virtengine/virtengine/testutil/state"
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 func TestSettlementPayoutOffRampFlow(t *testing.T) {
-	suite := state.SetupTestSuite(t)
+	suite := state.SetupTestSuiteWithoutModuleServices(t)
 	ctx := suite.Context()
 	app := suite.App()
 	keeper := &app.Keepers.VirtEngine.Settlement
@@ -30,18 +31,7 @@ func TestSettlementPayoutOffRampFlow(t *testing.T) {
 	seedComplianceRecord(t, suite, provider)
 	fundAccount(t, suite, depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000))))
 
-	pref := types.FiatPayoutPreference{
-		Provider:          provider.String(),
-		Enabled:           true,
-		FiatCurrency:      "USD",
-		PaymentMethod:     "bank_transfer",
-		DestinationRef:    "acct-token",
-		SlippageTolerance: 0.01,
-		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
-		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
-		CreatedAt:         ctx.BlockTime(),
-		UpdatedAt:         ctx.BlockTime(),
-	}
+	pref := makeFiatPayoutPreference(t, suite, ctx.BlockTime(), provider, "uve", "acct-token")
 	require.NoError(t, keeper.SetFiatPayoutPreference(ctx, pref))
 
 	escrowID, err := keeper.CreateEscrow(ctx, "order-flow-1", depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))), 24*time.Hour, nil)
@@ -80,17 +70,29 @@ func TestSettlementPayoutOffRampFlow(t *testing.T) {
 }
 
 func TestDisputeArbitrationRefundFlow(t *testing.T) {
-	suite := state.SetupTestSuite(t)
+	suite := state.SetupTestSuiteWithoutModuleServices(t)
 	ctx := suite.Context()
 	app := suite.App()
 	keeper := &app.Keepers.VirtEngine.Settlement
 	bank := app.Keepers.Cosmos.Bank
 
+	swapExec := setupConversionDeps(t, suite)
+	bridge := offramp.NewBridge()
+	pending := &pendingOffRamp{}
+	require.NoError(t, bridge.RegisterAdapter(pending))
+	keeper.SetOffRampBridge(bridge)
+	keeper.SetDexSwapExecutor(swapExec)
+	keeper.SetComplianceKeeper(app.Keepers.VirtEngine.VEID)
+
 	depositor := sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 	provider := sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 
+	seedComplianceRecord(t, suite, provider)
 	fundAccount(t, suite, depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000))))
 	balanceBefore := bank.GetBalance(ctx, depositor, "uve")
+
+	pref := makeFiatPayoutPreference(t, suite, ctx.BlockTime(), provider, "uve", "acct-dispute-refund")
+	require.NoError(t, keeper.SetFiatPayoutPreference(ctx, pref))
 
 	escrowID, err := keeper.CreateEscrow(ctx, "order-dispute-1", depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))), 24*time.Hour, nil)
 	require.NoError(t, err)
@@ -99,40 +101,52 @@ func TestDisputeArbitrationRefundFlow(t *testing.T) {
 	balanceAfterEscrow := bank.GetBalance(ctx, depositor, "uve")
 	require.True(t, balanceAfterEscrow.Amount.LT(balanceBefore.Amount))
 
-	payout := types.NewPayoutRecord(
-		"payout-dispute-1",
-		"inv-dispute-1",
-		"settle-dispute-1",
-		escrowID,
-		"order-dispute-1",
-		"lease-dispute-1",
-		provider.String(),
-		depositor.String(),
-		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-		sdk.NewCoins(),
-		sdk.NewCoins(),
-		sdk.NewCoins(),
-		ctx.BlockTime(),
-		ctx.BlockHeight(),
-	)
-	require.NoError(t, keeper.SetPayout(ctx, *payout))
+	usage := &types.UsageRecord{
+		OrderID:           "order-dispute-1",
+		LeaseID:           "lease-dispute-1",
+		Provider:          provider.String(),
+		Customer:          depositor.String(),
+		UsageUnits:        1,
+		UsageType:         "compute",
+		TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+		PeriodStart:       ctx.BlockTime().Add(-time.Hour),
+		PeriodEnd:         ctx.BlockTime(),
+		SubmittedAt:       ctx.BlockTime(),
+		ProviderSignature: []byte("sig"),
+	}
+	require.NoError(t, keeper.RecordUsage(ctx, usage))
 
-	require.NoError(t, keeper.OnDisputeOpened(ctx, "inv-dispute-1", "dispute-1", "customer complaint"))
+	settlement, err := keeper.SettleOrder(ctx, "order-dispute-1", []string{usage.UsageID}, false)
+	require.NoError(t, err)
+
+	payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateProcessing, payout.State)
+
+	require.NoError(t, keeper.OnDisputeOpened(ctx, payout.InvoiceID, "dispute-1", "customer complaint"))
 	held, found := keeper.GetPayout(ctx, payout.PayoutID)
 	require.True(t, found)
 	require.Equal(t, types.PayoutStateHeld, held.State)
 
-	require.NoError(t, keeper.OnDisputeResolved(ctx, "inv-dispute-1", billing.DisputeResolutionCustomerWin))
+	require.NoError(t, keeper.OnDisputeResolved(ctx, payout.InvoiceID, billing.DisputeResolutionCustomerWin))
 	refunded, found := keeper.GetPayout(ctx, payout.PayoutID)
 	require.True(t, found)
 	require.Equal(t, types.PayoutStateRefunded, refunded.State)
 
 	balanceAfterRefund := bank.GetBalance(ctx, depositor, "uve")
 	require.Equal(t, balanceBefore.Amount, balanceAfterRefund.Amount)
+	require.True(t, keeper.GetTreasuryBalance(ctx).IsZero())
+
+	conversion, found := keeper.GetFiatConversionBySettlement(ctx, settlement.SettlementID)
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStateCancelled, conversion.State)
+
+	ledger := keeper.GetPayoutLedgerEntries(ctx, payout.PayoutID)
+	require.NotEmpty(t, ledger)
 }
 
 func TestAutoSettleEdgeCases(t *testing.T) {
-	suite := state.SetupTestSuite(t)
+	suite := state.SetupTestSuiteWithoutModuleServices(t)
 	ctx := suite.Context()
 	app := suite.App()
 	keeper := &app.Keepers.VirtEngine.Settlement

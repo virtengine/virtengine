@@ -228,11 +228,12 @@ Error codes are organized by module:
 | market | 1400-1499 | Marketplace |
 | escrow | 1500-1599 | Payment escrow |
 | roles | 1600-1699 | Access control |
-| hpc | 1700-1799 | HPC computing |
+| hpc | 2100-2154 | HPC clusters, jobs, routing, and workload templates |
 | provider | 1800-1899 | Provider management |
 | deployment | 1900-1999 | Deployments |
 | cert | 2000-2099 | Certificates |
 | audit | 2100-2199 | Audit logs |
+| marketplace | 2200-2244 | Marketplace pricing, allocations, identity gating, MFA gating, and Waldur bridge |
 | settlement | 2200-2299 | Payment settlement |
 | benchmark | 2300-2399 | Benchmarking |
 | staking | 2400-2499 | Staking |
@@ -344,6 +345,33 @@ async function handleRateLimit(fn) {
 | 1410 | Order not found | Verify order ID |
 | 1420 | Order already exists | Use existing order |
 | 1430 | Unauthorized | Check permissions |
+
+### Marketplace Query Service (marketplace)
+
+| Code | Message | Action |
+|------|---------|--------|
+| 2200 | Offering not found | Verify `offering_id` before retrying |
+| 2239 | Pricing validation failed | Correct `resource_units` or quantity inputs |
+
+The `virtengine.marketplace.v1.Query` service also returns raw gRPC
+`INVALID_ARGUMENT` statuses for empty requests, missing required fields, and
+malformed offering IDs.
+
+### HPC Workload Template Query Service (hpc)
+
+| Code | Message | Action |
+|------|---------|--------|
+| 2139 | Invalid workload template | Fix template structure or schema violations |
+| 2140 | Workload template not found | Verify `template_id` and `version` |
+| 2141 | Workload template not approved | Use an approved template version |
+| 2152 | Workload governance action failed | Retry after governance state is corrected |
+
+The `virtengine.hpc.v1.WorkloadTemplateQuery` service also returns raw gRPC
+statuses:
+
+- `INVALID_ARGUMENT` for empty requests or missing required fields
+- `NOT_FOUND` for missing template versions
+- `INTERNAL` for pagination or decode failures while walking the template store
 
 ### Provider Daemon
 

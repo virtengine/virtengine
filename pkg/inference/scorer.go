@@ -61,6 +61,9 @@ func NewTensorFlowScorer(config InferenceConfig) (*TensorFlowScorer, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid inference config: %w", err)
 	}
+	if !config.AllowFallbackToStub {
+		return nil, simulatedInferenceDisabledError("embedded TensorFlow scorer")
+	}
 
 	scorer := &TensorFlowScorer{
 		config:          config,

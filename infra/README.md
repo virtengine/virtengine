@@ -45,26 +45,25 @@ infra/
 - kubectl configured for cluster access
 - Helm >= 3.12.0
 
-### Deploy Infrastructure
+### Validate Parity and Plan Infrastructure
 
 ```bash
-# Initialize and plan for development
-cd infra/terraform/environments/dev
-terraform init
-terraform plan -out=tfplan
-
-# Apply changes
-terraform apply tfplan
+./infra/scripts/check-environment-parity.sh
+./infra/scripts/terraform-run.sh plan infra/terraform/environments/dev output/infra/dev-plan
+./infra/scripts/terraform-run.sh apply infra/terraform/environments/dev output/infra/dev-plan
 ```
 
 ### Deploy Applications via GitOps
 
 ```bash
-# Bootstrap ArgoCD
-kubectl apply -k infra/argocd/
+kubectl apply -k deploy/argocd/base
+kubectl apply -f deploy/argocd/apps/applicationsets.yaml
+```
 
-# Deploy app-of-apps
-kubectl apply -f infra/argocd/apps/app-of-apps.yaml
+### Deploy Runtime Manifests Directly
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/dev
 ```
 
 ### Run Infrastructure Tests
@@ -76,11 +75,20 @@ go test -v -timeout 30m
 
 ## Multi-Environment Strategy
 
-| Environment | Purpose | Auto-deploy | Approval Required |
-|-------------|---------|-------------|-------------------|
-| dev | Development/testing | Yes (on PR merge) | No |
-| staging | Pre-production validation | Yes (on release tag) | No |
-| prod | Production workloads | No | Yes (manual) |
+| Environment | Purpose | Plan Path | Approval Required |
+|-------------|---------|-----------|-------------------|
+| dev | Development/testing | Reviewed plan via `Infrastructure` workflow | Environment gate on apply |
+| staging | Pre-production validation | Reviewed plan via `Infrastructure` workflow | Environment gate on apply |
+| prod | Production workloads | Reviewed plan via `Infrastructure` workflow | Environment gate on apply |
+
+## Automation Contracts
+
+- `infra/scripts/check-environment-parity.sh` is the fail-closed parity gate for Terraform versions, region and environment layout, and invalid trust or alias values.
+- `infra/scripts/terraform-run.sh` is the canonical plan, apply, and drift wrapper used by CI so applies always consume a reviewed plan artifact plus checksum.
+- `infra/dr/run-failover-drill.sh` is the canonical DR drill runner and emits log, summary, and JSON evidence artifacts for rehearsal and live validation workflows.
+- `deploy/kubernetes/overlays/{env}` is the canonical runtime manifest surface for `dev`, `staging`, and `prod`.
+- `deploy/argocd/base` plus `deploy/argocd/apps/applicationsets.yaml` is the canonical ArgoCD bootstrap surface.
+- `scripts/rollback/*.sh` and `scripts/dr/*.sh` are the repo-owned recovery entry points and are documented in [`docs/operations/DEPLOYMENT_GUIDE.md`](../docs/operations/DEPLOYMENT_GUIDE.md).
 
 ## Blue/Green Deployments
 

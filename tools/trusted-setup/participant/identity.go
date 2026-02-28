@@ -3,6 +3,7 @@ package participant
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -44,14 +45,29 @@ func LoadOrCreateIdentity(path string, id string) (*Identity, error) {
 		PublicKey:  base64.StdEncoding.EncodeToString(publicKey),
 		PrivateKey: base64.StdEncoding.EncodeToString(privateKey),
 	}
-	data, err := json.MarshalIndent(identity, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := identity.Save(path); err != nil {
 		return nil, err
 	}
 	return identity, nil
+}
+
+func NewDeterministicIdentity(id, seedMaterial string) *Identity {
+	seed := sha256.Sum256([]byte(seedMaterial))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	publicKey := privateKey.Public().(ed25519.PublicKey)
+	return &Identity{
+		ID:         id,
+		PublicKey:  base64.StdEncoding.EncodeToString(publicKey),
+		PrivateKey: base64.StdEncoding.EncodeToString(privateKey),
+	}
+}
+
+func (i *Identity) Save(path string) error {
+	data, err := json.MarshalIndent(i, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
 }
 
 func (i *Identity) Sign(data []byte) (string, error) {
@@ -61,4 +77,19 @@ func (i *Identity) Sign(data []byte) (string, error) {
 	}
 	signature := ed25519.Sign(privateKeyBytes, data)
 	return base64.StdEncoding.EncodeToString(signature), nil
+}
+
+func VerifySignature(publicKey string, data []byte, signature string) error {
+	publicKeyBytes, err := base64.StdEncoding.DecodeString(publicKey)
+	if err != nil {
+		return fmt.Errorf("decode public key: %w", err)
+	}
+	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("decode signature: %w", err)
+	}
+	if !ed25519.Verify(publicKeyBytes, data, signatureBytes) {
+		return fmt.Errorf("signature verification failed")
+	}
+	return nil
 }

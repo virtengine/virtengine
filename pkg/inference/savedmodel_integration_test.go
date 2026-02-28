@@ -47,11 +47,17 @@ func TestSavedModelIntegration(t *testing.T) {
 
 	// Create config
 	config := InferenceConfig{
-		ModelPath:     modelPath,
-		ForceCPU:      true,
-		RandomSeed:    42,
-		Deterministic: true,
+		ModelPath:           modelPath,
+		ForceCPU:            true,
+		RandomSeed:          42,
+		Deterministic:       true,
+		AllowFallbackToStub: true,
 	}
+	expectedHash, err := computeModelHash(modelPath)
+	if err != nil {
+		t.Fatalf("Failed to compute model hash: %v", err)
+	}
+	config.ExpectedHash = expectedHash
 
 	// Create loader
 	loader := NewModelLoader(config)

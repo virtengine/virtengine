@@ -45,6 +45,14 @@ var (
 
 	// PrefixHealthCheckParams is the prefix for health check parameters
 	PrefixHealthCheckParams = []byte{0x08}
+
+	// PrefixHeartbeatLastNonce stores the highest accepted heartbeat nonce per validator
+	// Key: PrefixHeartbeatLastNonce | validator_address -> uint64 big-endian
+	PrefixHeartbeatLastNonce = []byte{0x09}
+
+	// PrefixHeartbeatNonce stores accepted heartbeat nonces with expiry metadata
+	// Key: PrefixHeartbeatNonce | validator_address | nonce -> expiry timestamp
+	PrefixHeartbeatNonce = []byte{0x0A}
 )
 
 // EnclaveIdentityKey returns the store key for a validator's enclave identity
@@ -114,4 +122,29 @@ func EnclaveHealthKey(validatorAddr []byte) []byte {
 // HealthCheckParamsKey returns the store key for health check parameters
 func HealthCheckParamsKey() []byte {
 	return PrefixHealthCheckParams
+}
+
+// HeartbeatLastNonceKey returns the store key for the last accepted heartbeat nonce
+func HeartbeatLastNonceKey(validatorAddr []byte) []byte {
+	key := make([]byte, 0, len(PrefixHeartbeatLastNonce)+len(validatorAddr))
+	key = append(key, PrefixHeartbeatLastNonce...)
+	key = append(key, validatorAddr...)
+	return key
+}
+
+// HeartbeatNoncePrefixKey returns the prefix for stored heartbeat nonces
+func HeartbeatNoncePrefixKey() []byte {
+	return PrefixHeartbeatNonce
+}
+
+// HeartbeatNonceKey returns the store key for a specific heartbeat nonce
+func HeartbeatNonceKey(validatorAddr []byte, nonce uint64) []byte {
+	key := make([]byte, 0, len(PrefixHeartbeatNonce)+len(validatorAddr)+8)
+	key = append(key, PrefixHeartbeatNonce...)
+	key = append(key, validatorAddr...)
+	key = append(key,
+		byte(nonce>>56), byte(nonce>>48), byte(nonce>>40), byte(nonce>>32),
+		byte(nonce>>24), byte(nonce>>16), byte(nonce>>8), byte(nonce),
+	)
+	return key
 }

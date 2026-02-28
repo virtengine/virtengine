@@ -1,99 +1,67 @@
-# Gitleaks configuration for VirtEngine
-# Documentation: https://github.com/gitleaks/gitleaks
-
 title = "VirtEngine Gitleaks Configuration"
 
 [extend]
-# useDefault = true will include default gitleaks rules
 useDefault = true
 
-# Allowlist for known false positives
 [[rules]]
 id = "generic-api-key"
-description = "Generic API key detection"
-regex = '''(?i)(api[_-]?key|apikey|api[_-]?token)['\"]?\s*[:=]\s*['\"]([\w\-\.]+)['\"]'''
-# Exclude test fixtures and mock data
+description = "Generic API key assignments outside controlled fixtures"
+regex = '''(?i)(api[_-]?key|apikey|api[_-]?token)\s*[:=]\s*['"]([A-Za-z0-9._-]{16,})['"]'''
 [rules.allowlist]
 paths = [
-  '''tests?/.*fixtures?/.*''',
-  '''testutil/.*''',
-  '''.*_test\.go''',
-  '''.*\.golden''',
-  '''testdata/.*''',
+  '''(^|/)(testdata|fixtures|__snapshots__)/''',
+  '''(^|/).*_test\.go$''',
+  '''(^|/).*\.(spec|test)\.(ts|js)$''',
+  '''(^|/).+\.golden$''',
+  '''(^|/).+\.snap$''',
 ]
-description = "Test fixtures and mock data"
+description = "Fixture and test-only API key samples"
 
 [[rules]]
-id = "test-private-key"
-description = "Test private keys in fixtures"
-regex = '''-----BEGIN.*PRIVATE KEY-----'''
+id = "fixture-private-key"
+description = "Private keys allowed only in dedicated fixtures"
+regex = '''-----BEGIN(?: [A-Z]+)? PRIVATE KEY-----'''
 [rules.allowlist]
 paths = [
-  '''tests?/.*fixtures?/.*''',
-  '''testutil/.*''',
-  '''.*_test\.go''',
-  '''testdata/.*''',
+  '''(^|/)(testdata|fixtures)/''',
+  '''(^|/).*_test\.go$''',
 ]
-description = "Test fixtures containing private keys for testing"
+description = "Controlled fixture material"
 
-# Global allowlist for specific patterns
 [allowlist]
-# Exclude generated files and documentation
 paths = [
-  '''.*\.pb\.go''',
-  '''.*\.pb\.gw\.go''',
-  '''vendor/.*''',
-  '''node_modules/.*''',
-  '''\.git/.*''',
-  '''\.cache/.*''',
-  '''_build/.*''',
-  '''_docs/.*''',
-  '''docs/.*''',
-  # Markdown and documentation files — contain example API keys, not real secrets
-  '''.*\.md$''',
-  '''.*examples/.*''',
-  # Test files — exclude from all secret scanning rules (including defaults)
-  '''.*_test\.go''',
-  '''.*_test\.ts''',
-  '''.*\.test\.ts''',
-  '''.*\.test\.js''',
-  '''.*\.spec\.ts''',
-  '''.*\.spec\.js''',
-  '''.*__tests__/.*''',
-  '''tests?/.*''',
-  '''testutil/.*''',
-  '''testdata/.*''',
-  '''.*\.golden''',
-  '''.*fixtures?.*''',
-  # Mock and sample data
-  '''.*mock.*''',
-  '''.*sample.*''',
-  '''.*\.example\..*''',
-  '''.*\.example$''',
-  '''.*\.env\..*''',
-  '''.*\.env$''',
-  # Portal source code — contains API endpoint constants, not real secrets
-  '''portal/src/.*''',
-  '''lib/portal/.*''',
-  '''lib/admin/.*''',
-  '''lib/capture/.*''',
+  '''(^|/)\.bosun/worktrees/''',
+  '''(^|/)vendor/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.cache/''',
+  '''(^|/)\.pytest_cache/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)output/''',
+  '''(^|/)(testdata|fixtures|__snapshots__)/''',
+  '''(^|/).+\.golden$''',
+  '''(^|/).+\.snap$''',
+  '''(^|/).*_test\.go$''',
+  '''(^|/).*\.(spec|test)\.(ts|js)$''',
+  '''(^|/).+\.env\.example$''',
+  '''(^|/)_docs/api-gateway\.md$''',
+  '''(^|/)docs/api/guides/authentication\.md$''',
+  '''(^|/)docs/api/guides/getting-started\.md$''',
+  '''(^|/)docs/RATELIMIT_CLIENT_GUIDE\.md$''',
+  '''(^|/)_docs/training/labs/security-assessment-lab\.md$''',
 ]
-
-# Exclude specific commits (if needed)
-# commits = ["commit-hash-here"]
-
-# Exclude specific regexes that match content
 regexes = [
-  '''dev-portal-key''',  # Example API key in documentation
-  '''cafebabe:deadbeef''',  # Example credentials in docs/README
+  '''\bexample([_-]?(api|secret|token|key))\b''',
+  '''\b(sample|placeholder|dummy|fake|test)[-_ ]?(secret|token|key)\b''',
+  '''\b(sk|pk)_test_[A-Za-z0-9]+\b''',
 ]
-
-# Stop words that indicate false positives
 stopwords = [
   "example",
   "sample",
   "placeholder",
+  "dummy",
+  "fake",
+  "redacted",
+  "test",
   "your-key-here",
-  "sk_test_",
-  "pk_test_",
 ]

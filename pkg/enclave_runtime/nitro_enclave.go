@@ -5,13 +5,6 @@
 // with cryptographic attestation via the AWS Nitro Attestation process.
 //
 // Task Reference: VE-2025 - AWS Nitro Enclave Implementation
-//
-// IMPORTANT: This is a POC implementation. Real AWS Nitro Enclave calls are stubbed
-// and marked with TODO comments. Full implementation requires:
-// - Instance types: c5.xlarge, c5a.xlarge, m5.xlarge, r5.xlarge or larger
-// - Enclave-enabled AMI
-// - nitro-cli installed and /dev/nitro_enclaves device available
-// - vsock kernel module for enclave communication
 package enclave_runtime
 
 import (
@@ -19,13 +12,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
-	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"sync"
 	"time"
 
+	nitroatt "github.com/virtengine/virtengine/pkg/enclave_runtime/nitro"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -337,12 +331,9 @@ type NitroEnclaveServiceImpl struct {
 // Compile-time interface check
 var _ EnclaveService = (*NitroEnclaveServiceImpl)(nil)
 
-// NewNitroEnclaveServiceImpl creates a new Nitro enclave service implementation
-//
-// This is a POC implementation that simulates Nitro Enclave operations.
-// For production use, this must be replaced with actual nitro-cli and NSM calls.
+// NewNitroEnclaveServiceImpl creates a new Nitro enclave service implementation.
 func NewNitroEnclaveServiceImpl(config NitroEnclaveConfig) (*NitroEnclaveServiceImpl, error) {
-	return NewNitroEnclaveServiceImplWithMode(config, HardwareModeAuto)
+	return NewNitroEnclaveServiceImplWithMode(config, HardwareModeSimulate)
 }
 
 // NewNitroEnclaveServiceImplWithMode creates a new Nitro enclave service with explicit hardware mode
@@ -405,18 +396,42 @@ func (n *NitroEnclaveServiceImpl) Initialize(config RuntimeConfig) error {
 	n.startTime = time.Now()
 	n.enclaveState = NitroEnclaveStateStarting
 
-	// TODO: Real Nitro implementation would:
-	// 1. Check for /dev/nitro_enclaves device
-	// 2. Run: nitro-cli run-enclave --eif-path <path> --cpu-count <n> --memory <mb>
-	// 3. Parse enclave ID from output
-	// 4. Establish vsock connection to enclave
-	// 5. Initialize enclave application via vsock
+	if n.hardwareBackend != nil {
+		if n.hardwareBackend.cliRunner == nil {
+			err := unsupportedHardwareOperation(AttestationTypeNitro, "initialize runtime",
+				"Nitro hardware backend is not fully initialized")
+			n.enclaveState = NitroEnclaveStateFailed
+			n.lastError = err.Error()
+			return err
+		}
 
-	// Simulate enclave start
-	if err := n.simulateEnclaveStart(); err != nil {
-		n.enclaveState = NitroEnclaveStateFailed
-		n.lastError = err.Error()
-		return fmt.Errorf("failed to start enclave: %w", err)
+		launchCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		config := NitroHWEnclaveConfig{
+			EIFPath:   n.config.EnclaveImagePath,
+			CPUCount:  n.config.CPUCount,
+			MemoryMB:  int64(n.config.MemoryMB),
+			DebugMode: n.config.DebugMode,
+			VsockPort: n.config.VsockPort,
+		}
+		if _, err := n.hardwareBackend.RunAndConnect(launchCtx, config); err != nil {
+			n.enclaveState = NitroEnclaveStateFailed
+			n.lastError = err.Error()
+			return fmt.Errorf("failed to start hardware Nitro enclave: %w", err)
+		}
+
+		if err := n.populateHardwareNitroStateLocked(); err != nil {
+			n.enclaveState = NitroEnclaveStateFailed
+			n.lastError = err.Error()
+			return err
+		}
+	} else {
+		if err := n.simulateEnclaveStart(); err != nil {
+			n.enclaveState = NitroEnclaveStateFailed
+			n.lastError = err.Error()
+			return fmt.Errorf("failed to start enclave: %w", err)
+		}
 	}
 
 	// Derive enclave keys
@@ -458,6 +473,15 @@ func (n *NitroEnclaveServiceImpl) Score(ctx context.Context, request *ScoringReq
 	}
 
 	startTime := time.Now()
+
+	if n.hardwareBackend != nil {
+		err := unsupportedHardwareOperation(AttestationTypeNitro, "score",
+			"Nitro enclave scoring over vsock is not wired for hardware-selected execution")
+		n.mu.Lock()
+		n.lastError = err.Error()
+		n.mu.Unlock()
+		return nil, err
+	}
 
 	// TODO: Real Nitro implementation would:
 	// 1. Connect to enclave via vsock (CID, port)
@@ -517,8 +541,8 @@ func (n *NitroEnclaveServiceImpl) GetSigningPubKey() ([]byte, error) {
 
 // GenerateAttestation generates a Nitro attestation document
 func (n *NitroEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte, error) {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	if !n.initialized {
 		return nil, ErrEnclaveNotInitialized
@@ -533,10 +557,9 @@ func (n *NitroEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte
 		attestation, err := n.hardwareBackend.GetAttestation(reportData)
 		if err != nil {
 			n.lastError = fmt.Sprintf("hardware attestation failed: %v", err)
-			// Fall back to simulation
-		} else {
-			return attestation, nil
+			return nil, err
 		}
+		return attestation, nil
 	}
 
 	// TODO: Real Nitro implementation would:
@@ -615,13 +638,14 @@ func (n *NitroEnclaveServiceImpl) Shutdown() error {
 
 	n.enclaveState = NitroEnclaveStateStopping
 
-	// TODO: Real Nitro implementation would:
-	// 1. Send shutdown command to enclave via vsock
-	// 2. Wait for enclave to acknowledge
-	// 3. Run: nitro-cli terminate-enclave --enclave-id <id>
-	// 4. Verify enclave has stopped
+	if n.hardwareBackend != nil {
+		if err := n.hardwareBackend.Shutdown(); err != nil {
+			n.lastError = fmt.Sprintf("hardware shutdown failed: %v", err)
+			return err
+		}
+	}
 
-	// Securely clear keys from memory
+	// Securely clear keys from memory.
 	n.scrubKeys()
 
 	n.enclaveState = NitroEnclaveStateStopped
@@ -1031,48 +1055,28 @@ func (n *NitroEnclaveServiceImpl) simulateAttestationDocument(userData []byte) (
 // serializeAttestationDocument serializes the attestation document
 // In real implementation, this would be CBOR-encoded with COSE Sign1 signature
 func (n *NitroEnclaveServiceImpl) serializeAttestationDocument(doc *NitroAttestationDocument) []byte {
-	// TODO: Real implementation would use:
-	// - github.com/fxamacker/cbor/v2 for CBOR encoding
-	// - COSE Sign1 structure for signature
-
-	// Simplified serialization for POC
-	buf := make([]byte, 0, 2048)
-
-	// Magic and version
-	buf = append(buf, []byte("NITRO_ATTEST_V1")...)
-
-	// Module ID (length-prefixed)
-	buf = append(buf, byte(len(doc.ModuleID)))
-	buf = append(buf, []byte(doc.ModuleID)...)
-
-	// Timestamp
-	buf = binary.BigEndian.AppendUint64(buf, doc.Timestamp)
-
-	// PCRs (all 16)
-	for i := 0; i < NitroPCRCount; i++ {
-		buf = append(buf, doc.PCRs.PCRs[i][:]...)
+	attestation := &nitroatt.AttestationDocument{
+		Protected: []byte{0xA1, 0x01, 0x38, 0x22}, // {1: -35} => ES384
+		Payload: &nitroatt.DocumentPayload{
+			ModuleID:    doc.ModuleID,
+			Digest:      doc.Digest,
+			Timestamp:   doc.Timestamp,
+			PCRs:        nitroPCRPayload(doc.PCRs),
+			Certificate: append([]byte(nil), doc.Certificate...),
+			CABundle:    cloneByteSlices(doc.CABundle),
+			PublicKey:   append([]byte(nil), doc.PublicKey...),
+			UserData:    append([]byte(nil), doc.UserData...),
+			Nonce:       append([]byte(nil), doc.Nonce...),
+		},
+		Signature: make([]byte, nitroatt.ES384SignatureSize),
 	}
 
-	// Certificate
-	//nolint:gosec // G115: Certificate length fits in uint16
-	buf = binary.BigEndian.AppendUint16(buf, uint16(len(doc.Certificate)))
-	buf = append(buf, doc.Certificate...)
+	serialized, err := nitroatt.SerializeDocument(attestation)
+	if err != nil {
+		panic(fmt.Sprintf("failed to serialize Nitro attestation: %v", err))
+	}
 
-	// User data
-	//nolint:gosec // G115: UserData length fits in uint16
-	buf = binary.BigEndian.AppendUint16(buf, uint16(len(doc.UserData)))
-	buf = append(buf, doc.UserData...)
-
-	// Public key
-	//nolint:gosec // G115: PublicKey length fits in uint16
-	buf = binary.BigEndian.AppendUint16(buf, uint16(len(doc.PublicKey)))
-	buf = append(buf, doc.PublicKey...)
-
-	// Signature (simulated)
-	signature := n.signInsideEnclave(buf)
-	buf = append(buf, signature...)
-
-	return buf
+	return serialized
 }
 
 // scrubKeys securely clears keys from memory
@@ -1108,37 +1112,23 @@ func bytesEqual(a, b []byte) bool {
 
 // VerifyNitroAttestation verifies a Nitro attestation document
 func VerifyNitroAttestation(attestation []byte, expectedPCR0 []byte) error {
-	// TODO: Real implementation would:
-	// 1. Parse CBOR-encoded COSE Sign1 structure
-	// 2. Extract and verify the certificate chain
-	// 3. Verify the signature using the enclave certificate
-	// 4. Check PCR values against expected measurements
-	// 5. Verify timestamp is recent
-
-	// POC: Basic format validation
-	if len(attestation) < 50 {
-		return errors.New("attestation too short")
+	doc, err := nitroatt.ParseDocument(attestation)
+	if err != nil {
+		return fmt.Errorf("nitro attestation parsing failed: %w", err)
 	}
 
-	// Check magic
-	if string(attestation[:15]) != "NITRO_ATTEST_V1" {
-		return errors.New("invalid attestation format")
+	pcr0, ok := doc.Payload.PCRs[nitroatt.PCRIndexEIF]
+	if !ok {
+		return errors.New("nitro attestation missing PCR0")
 	}
 
-	// Extract and verify PCR0 if expected value provided
-	if len(expectedPCR0) > 0 {
-		// PCRs start at offset: 15 (magic) + 1 (module_id_len) + module_id + 8 (timestamp)
-		moduleIDLen := int(attestation[15])
-		pcrStart := 15 + 1 + moduleIDLen + 8
+	if len(expectedPCR0) > 0 && !bytesEqual(pcr0, expectedPCR0) {
+		return errors.New("PCR0 mismatch: enclave not trusted")
+	}
 
-		if len(attestation) < pcrStart+NitroPCRDigestSize {
-			return errors.New("attestation too short for PCR extraction")
-		}
-
-		pcr0 := attestation[pcrStart : pcrStart+NitroPCRDigestSize]
-		if !bytesEqual(pcr0, expectedPCR0) {
-			return errors.New("PCR0 mismatch: enclave not trusted")
-		}
+	verifier := nitroatt.NewVerifierWithConfig(nitroatt.DefaultVerifierConfig())
+	if _, err := verifier.VerifyDocument(doc); err != nil {
+		return fmt.Errorf("nitro attestation verification failed: %w", err)
 	}
 
 	return nil
@@ -1146,6 +1136,17 @@ func VerifyNitroAttestation(attestation []byte, expectedPCR0 []byte) error {
 
 // ExtractPCRsFromAttestation extracts PCR values from an attestation document
 func ExtractPCRsFromAttestation(attestation []byte) (*NitroPCRSet, error) {
+	if parsed, err := nitroatt.ParseDocument(attestation); err == nil {
+		pcrSet := &NitroPCRSet{}
+		for index, value := range parsed.Payload.PCRs {
+			if index < 0 || index >= NitroPCRCount {
+				continue
+			}
+			copy(pcrSet.PCRs[index][:], value)
+		}
+		return pcrSet, nil
+	}
+
 	if len(attestation) < 50 {
 		return nil, errors.New("attestation too short")
 	}
@@ -1154,7 +1155,6 @@ func ExtractPCRsFromAttestation(attestation []byte) (*NitroPCRSet, error) {
 		return nil, errors.New("invalid attestation format")
 	}
 
-	// Calculate PCR offset
 	moduleIDLen := int(attestation[15])
 	pcrStart := 15 + 1 + moduleIDLen + 8
 
@@ -1169,6 +1169,105 @@ func ExtractPCRsFromAttestation(attestation []byte) (*NitroPCRSet, error) {
 	}
 
 	return pcrSet, nil
+}
+
+func (n *NitroEnclaveServiceImpl) populateHardwareNitroStateLocked() error {
+	enclaveID, _ := n.hardwareBackend.GetEnclaveInfo()
+	if enclaveID == "" {
+		return unsupportedHardwareOperation(AttestationTypeNitro, "initialize runtime",
+			"Nitro enclave launch completed without an enclave identifier")
+	}
+
+	n.enclaveID = enclaveID
+	n.moduleID = enclaveID
+
+	if err := n.applyHardwareMeasurementsLocked(n.hardwareBackend.GetMeasurements()); err != nil {
+		if fallbackErr := n.applyConfiguredPCRsLocked(); fallbackErr != nil {
+			return err
+		}
+	}
+
+	if attestation, err := n.hardwareBackend.GetAttestation(nil); err == nil {
+		if parsed, parseErr := nitroatt.ParseDocument(attestation); parseErr == nil {
+			n.moduleID = parsed.Payload.ModuleID
+			n.certificate = append([]byte(nil), parsed.Payload.Certificate...)
+			n.caBundle = cloneByteSlices(parsed.Payload.CABundle)
+			n.encryptPubKey = append([]byte(nil), parsed.Payload.PublicKey...)
+		}
+	}
+
+	return nil
+}
+
+func (n *NitroEnclaveServiceImpl) applyHardwareMeasurementsLocked(measurements NitroMeasurements) error {
+	if !nitroMeasurementsReady(measurements) {
+		return unsupportedHardwareOperation(AttestationTypeNitro, "load launch measurements",
+			"Nitro launch measurements are unavailable from nitro-cli describe-enclaves")
+	}
+
+	pcr0, err := decodeNitroPCR(measurements.PCR0)
+	if err != nil {
+		return err
+	}
+	pcr1, err := decodeNitroPCR(measurements.PCR1)
+	if err != nil {
+		return err
+	}
+	pcr2, err := decodeNitroPCR(measurements.PCR2)
+	if err != nil {
+		return err
+	}
+
+	n.pcrSet.Set(NitroPCR0EIF, pcr0)
+	n.pcrSet.Set(NitroPCR1Kernel, pcr1)
+	n.pcrSet.Set(NitroPCR2App, pcr2)
+	return nil
+}
+
+func (n *NitroEnclaveServiceImpl) applyConfiguredPCRsLocked() error {
+	if len(n.config.AllowedPCR0) == 0 {
+		return unsupportedHardwareOperation(AttestationTypeNitro, "load launch measurements",
+			"Nitro hardware mode requires nitro-cli measurements or configured allowed PCRs")
+	}
+
+	var pcr NitroPCR
+	copy(pcr[:], n.config.AllowedPCR0)
+	n.pcrSet.Set(NitroPCR0EIF, pcr)
+
+	if len(n.config.AllowedPCR1) > 0 {
+		var pcr1 NitroPCR
+		copy(pcr1[:], n.config.AllowedPCR1)
+		n.pcrSet.Set(NitroPCR1Kernel, pcr1)
+	}
+	if len(n.config.AllowedPCR2) > 0 {
+		var pcr2 NitroPCR
+		copy(pcr2[:], n.config.AllowedPCR2)
+		n.pcrSet.Set(NitroPCR2App, pcr2)
+	}
+
+	return nil
+}
+
+func nitroPCRPayload(set NitroPCRSet) map[int][]byte {
+	payload := make(map[int][]byte, NitroPCRCount)
+	for i := 0; i < NitroPCRCount; i++ {
+		payload[i] = append([]byte(nil), set.PCRs[i][:]...)
+	}
+	return payload
+}
+
+func decodeNitroPCR(encoded string) (NitroPCR, error) {
+	var pcr NitroPCR
+
+	decoded, err := hex.DecodeString(encoded)
+	if err != nil {
+		return pcr, fmt.Errorf("invalid Nitro PCR value %q: %w", encoded, err)
+	}
+	if len(decoded) != NitroPCRDigestSize {
+		return pcr, fmt.Errorf("invalid Nitro PCR length %d", len(decoded))
+	}
+	copy(pcr[:], decoded)
+	return pcr, nil
 }
 
 // BindNitroResultToReport creates user data that binds a scoring result to attestation

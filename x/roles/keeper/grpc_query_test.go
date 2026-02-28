@@ -137,6 +137,7 @@ func TestQueryAccountState(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
+	require.True(t, resp.Found)
 	require.Equal(t, types.AccountStateActive, resp.AccountState.State)
 }
 
@@ -151,8 +152,29 @@ func TestQueryAccountStateDefault(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
+	require.False(t, resp.Found)
 	// Default should be active
 	require.Equal(t, types.AccountStateActive, resp.AccountState.State)
+}
+
+func TestQueryHasRole(t *testing.T) {
+	ctx, k, querier := setupQuerier(t)
+
+	addr := sdk.AccAddress([]byte("test_address_1234567"))
+	assignedBy := sdk.AccAddress([]byte("assigner_address1234"))
+
+	err := k.AssignRole(ctx.(sdk.Context), addr, types.RoleCustomer, assignedBy)
+	require.NoError(t, err)
+
+	resp, err := querier.HasRole(ctx, &types.QueryHasRoleRequest{
+		Address: addr.String(),
+		Role:    types.RoleCustomer.String(),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.True(t, resp.HasRole)
+	require.NotNil(t, resp.Assignment)
+	require.Equal(t, addr.String(), resp.Assignment.Address)
 }
 
 func TestQueryGenesisAccounts(t *testing.T) {
@@ -210,5 +232,8 @@ func TestQueryNilRequest(t *testing.T) {
 	require.Error(t, err)
 
 	_, err = querier.Params(ctx, nil)
+	require.Error(t, err)
+
+	_, err = querier.HasRole(ctx, nil)
 	require.Error(t, err)
 }

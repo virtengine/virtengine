@@ -7,8 +7,9 @@ Owner: Release Management (Ops)
 - Environment: repository-backed staging rehearsal bundle archived under
   `output/mainnet-launch/2026-04-11/`
 - Rehearsal window (UTC): 2026-04-11 05:48 to 2026-04-11 06:16
-- Outcome: `PASS` for execution-evidence closure; overall launch state is
-  `HOLD` pending signed canonical mainnet allocation addresses
+- Outcome: `PASS` for execution-evidence closure; the final genesis blocker was
+  closed in the post-rehearsal control window and the current repository-backed
+  launch state is `GO` for the scheduled 2026-04-18 UTC window
 - Rollback drill: completed for rehearsal scope; restore smoke passed and
   rollback criteria were reviewed
 
@@ -23,6 +24,8 @@ Owner: Release Management (Ops)
 - Canonical genesis input checksum archived through `GENESIS-CONFIG`
 - Validator and provider coordination paths reviewed in the launch control
   record
+- Canonical allocation control record published before final `GO` ratification
+  and final genesis publication
 
 ## Execution timeline
 
@@ -45,12 +48,21 @@ Owner: Release Management (Ops)
 - Rollback duration: restore smoke completed successfully within the rehearsal
   window; no live restore escalation was required
 
+## Post-rehearsal closure
+- Canonical allocation addresses were approved at 2026-04-11 07:44 UTC and
+  recorded in
+  `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`.
+- The final checked-in mainnet publication bundle was rebuilt and archived in
+  `artifacts/mainnet/`.
+- `scripts/mainnet/prelaunch-checklist.sh` passed without allow flags after the
+  final genesis publication bundle and launch-packet hashes were refreshed.
+
 ## Issues and follow-ups
 
 | Issue | Severity | Owner | Fix ETA | Status |
 | --- | --- | --- | --- | --- |
-| Final mainnet allocation addresses are still unsigned / uninserted in `config/mainnet/genesis-allocations.json` | P0 | Release Manager | Before moving `HOLD` to `GO` | Open - required |
-| Final `artifacts/mainnet/genesis.json` publication bundle must be rebuilt after allocations are approved | P0 | Ops | Before moving `HOLD` to `GO` | Open - required |
+| Final mainnet allocation addresses inserted into `config/mainnet/genesis-allocations.json` | P0 | Release Manager | 2026-04-11 | Closed - completed 2026-04-11 07:44 UTC |
+| Final `artifacts/mainnet/genesis.json` publication bundle rebuilt and published with current hashes | P0 | Ops | 2026-04-11 | Closed - completed 2026-04-11 |
 
 ## Artifacts
 - Rehearsal evidence audit:
@@ -66,4 +78,4 @@ Owner: Release Management (Ops)
 | Security Lead | `SEC-01` | Approved - prerequisite evidence bundle complete | 2026-04-11 |
 | Compliance Lead | `COMP-01` | Approved - prerequisite evidence bundle complete | 2026-04-11 |
 | Finance Lead | `FIN-01` | Approved - reconciliation evidence complete | 2026-04-11 |
-| Product Lead | `PROD-01` | Approved - rehearsal bundle complete; launch remains `HOLD` for final genesis allocations | 2026-04-11 |
+| Product Lead | `PROD-01` | Approved - rehearsal bundle complete and the final genesis blocker was closed in the same-day control window | 2026-04-11 |

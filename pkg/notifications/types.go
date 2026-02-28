@@ -87,13 +87,18 @@ const (
 
 // DeviceToken is a registered device for push notifications.
 type DeviceToken struct {
-	ID          string
-	UserAddress string
-	Platform    DevicePlatform
-	Token       string
-	AppID       string
-	Topic       string
-	CreatedAt   time.Time
-	LastSeenAt  time.Time
-	Enabled     bool
+	ID                  string
+	UserAddress         string
+	Platform            DevicePlatform
+	Token               string
+	AppID               string
+	Topic               string
+	CreatedAt           time.Time
+	LastSeenAt          time.Time
+	Enabled             bool
+	DisabledAt          *time.Time
+	LastDeliveredAt     *time.Time
+	LastFailureAt       *time.Time
+	LastFailureReason   string
+	ConsecutiveFailures int
 }

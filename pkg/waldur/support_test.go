@@ -1,6 +1,11 @@
 package waldur
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -182,5 +187,96 @@ func TestSupportIssue_Fields(t *testing.T) {
 	}
 	if issue.BackendID != "TKT-12345" {
 		t.Error("BackendID field not set correctly")
+	}
+}
+
+func TestSupportClient_ListIssues_Paginates(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/me/":
+			http.NotFound(w, r)
+		case "/api/users/me/":
+			w.Header().Set("Content-Type", "application/json")
+			username := "support"
+			uuid := "550e8400-e29b-41d4-a716-446655440094"
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"uuid":     &uuid,
+				"username": &username,
+			})
+		case "/api/support-issues/":
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Query().Get("page") == "2" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"count": 2,
+					"results": []map[string]any{
+						{"uuid": "issue-2", "summary": "second"},
+					},
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"count": 2,
+				"next":  server.URL + "/api/support-issues/?page=2",
+				"results": []map[string]any{
+					{"uuid": "issue-1", "summary": "first"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{BaseURL: server.URL, Token: "test-token"})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	issues, err := NewSupportClient(client).ListIssues(context.Background(), ListIssuesParams{})
+	if err != nil {
+		t.Fatalf("ListIssues() unexpected error: %v", err)
+	}
+	if len(issues) != 2 {
+		t.Fatalf("ListIssues() returned %d issues, want 2", len(issues))
+	}
+}
+
+func TestSupportClient_GetIssueByBackendID_DuplicateConflict(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/me/":
+			http.NotFound(w, r)
+		case "/api/users/me/":
+			w.Header().Set("Content-Type", "application/json")
+			username := "support"
+			uuid := "550e8400-e29b-41d4-a716-446655440095"
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"uuid":     &uuid,
+				"username": &username,
+			})
+		case "/api/support-issues/":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"count": 2,
+				"results": []map[string]any{
+					{"uuid": "issue-1", "backend_id": "dup"},
+					{"uuid": "issue-2", "backend_id": "dup"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{BaseURL: server.URL, Token: "test-token"})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	_, err = NewSupportClient(client).GetIssueByBackendID(context.Background(), "dup")
+	if err == nil || !strings.Contains(err.Error(), ErrConflict.Error()) {
+		t.Fatalf("GetIssueByBackendID() error = %v, want conflict", err)
 	}
 }

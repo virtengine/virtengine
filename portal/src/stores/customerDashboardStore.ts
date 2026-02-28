@@ -27,6 +27,24 @@ import { MultiProviderClient } from '@/lib/portal-adapter';
 export interface CustomerDashboardState {
   stats: CustomerDashboardStats;
   allocations: CustomerAllocation[];
+  escrowAccounts: Array<{
+    scope: string;
+    xid: string;
+    state: string;
+    balance: number;
+    transferred: number;
+    settledAt?: string;
+  }>;
+  escrowPayments: Array<{
+    paymentId: string;
+    scope: string;
+    xid: string;
+    owner: string;
+    state: string;
+    rateAmount: number;
+    balanceAmount: number;
+    withdrawnAmount: number;
+  }>;
   usage: UsageSummaryData;
   billing: BillingSummaryData;
   notifications: DashboardNotification[];
@@ -48,7 +66,16 @@ export type CustomerDashboardStore = CustomerDashboardState & CustomerDashboardA
 
 const LEASE_ENDPOINTS = ['/virtengine/market/v1/leases', '/virtengine/market/v1beta5/leases'];
 const ORDER_ENDPOINTS = ['/virtengine/market/v1beta5/orders', '/virtengine/market/v1/orders'];
-const ESCROW_ENDPOINTS = ['/virtengine/escrow/v1/accounts', '/virtengine/escrow/v1beta1/accounts'];
+const ESCROW_ACCOUNT_ENDPOINTS = [
+  '/virtengine/escrow/v1/accounts/list',
+  '/virtengine/escrow/v1/accounts',
+  '/virtengine/escrow/v1beta1/accounts',
+];
+const ESCROW_PAYMENT_ENDPOINTS = [
+  '/virtengine/escrow/v1/payments/list',
+  '/virtengine/escrow/v1/types/payments',
+  '/virtengine/escrow/v1beta3/types/payments/list',
+];
 const PROVIDER_ENDPOINTS = (address: string) => [
   `/virtengine/provider/v1/providers/${address}`,
   `/virtengine/provider/v1beta4/providers/${address}`,
@@ -63,6 +90,8 @@ const initialState: CustomerDashboardState = {
     spendChange: 0,
   },
   allocations: [],
+  escrowAccounts: [],
+  escrowPayments: [],
   usage: {
     resources: [],
     overallUtilization: 0,
@@ -180,16 +209,19 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
         throw new Error('Wallet address is required to load dashboard data.');
       }
 
-      const [leaseResult, orderResult, escrowResult] = await Promise.all([
+      const [leaseResult, orderResult, escrowResult, paymentResult] = await Promise.all([
         fetchPaginated<Record<string, unknown>>(LEASE_ENDPOINTS, 'leases', {
           params: { owner: ownerAddress },
         }),
         fetchPaginated<Record<string, unknown>>(ORDER_ENDPOINTS, 'orders', {
           params: { owner: ownerAddress },
         }),
-        fetchPaginated<Record<string, unknown>>(ESCROW_ENDPOINTS, 'accounts', {
+        fetchPaginated<Record<string, unknown>>(ESCROW_ACCOUNT_ENDPOINTS, 'accounts', {
           params: { owner: ownerAddress },
         }),
+        fetchPaginated<Record<string, unknown>>(ESCROW_PAYMENT_ENDPOINTS, 'payments', {
+          params: { owner: ownerAddress },
+        }).catch(() => ({ items: [], nextKey: null, total: 0 })),
       ]);
 
       const providerMap = new Map<string, string>();
@@ -256,40 +288,130 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
 
       const totalOrders = orderResult.items.length;
 
-      const escrowAccounts = escrowResult.items;
-      const escrowTotals = escrowAccounts.reduce<{
-        total: number;
-        byProvider: Map<string, number>;
-      }>(
-        (acc, record) => {
-          const balance =
-            record.balance && typeof record.balance === 'object'
-              ? (record.balance as Record<string, unknown>)
-              : undefined;
-          const amount = coerceNumber(balance?.amount ?? record.amount, 0);
-          acc.total += amount;
-          const provider = coerceString(record.provider ?? record.provider_address, '');
-          if (provider) {
-            acc.byProvider.set(provider, (acc.byProvider.get(provider) ?? 0) + amount);
-          }
-          return acc;
-        },
-        { total: 0, byProvider: new Map<string, number>() }
+      const escrowAccounts = escrowResult.items.map((record) => {
+        const idRecord =
+          record.id && typeof record.id === 'object'
+            ? (record.id as Record<string, unknown>)
+            : undefined;
+        const balance =
+          record.balance && typeof record.balance === 'object'
+            ? (record.balance as Record<string, unknown>)
+            : undefined;
+        const transferred =
+          record.transferred && typeof record.transferred === 'object'
+            ? (record.transferred as Record<string, unknown>)
+            : undefined;
+        return {
+          scope: coerceString(idRecord?.scope ?? record.scope, ''),
+          xid: coerceString(idRecord?.xid ?? record.xid, ''),
+          state: coerceString(record.state, 'open'),
+          balance: coerceNumber(balance?.amount ?? record.amount, 0),
+          transferred: coerceNumber(transferred?.amount ?? record.transferred_amount, 0),
+          settledAt:
+            record.settled_at || record.settledAt
+              ? toDate(record.settled_at ?? record.settledAt).toISOString()
+              : undefined,
+        };
+      });
+      const escrowPayments = paymentResult.items.map((record) => {
+        const accountId =
+          record.account_id && typeof record.account_id === 'object'
+            ? (record.account_id as Record<string, unknown>)
+            : undefined;
+        const rate =
+          record.rate && typeof record.rate === 'object'
+            ? (record.rate as Record<string, unknown>)
+            : undefined;
+        const balance =
+          record.balance && typeof record.balance === 'object'
+            ? (record.balance as Record<string, unknown>)
+            : undefined;
+        const withdrawn =
+          record.withdrawn && typeof record.withdrawn === 'object'
+            ? (record.withdrawn as Record<string, unknown>)
+            : undefined;
+        return {
+          paymentId: coerceString(record.payment_id ?? record.paymentId ?? record.id, ''),
+          scope: coerceString(accountId?.scope ?? record.scope, ''),
+          xid: coerceString(accountId?.xid ?? record.xid, ''),
+          owner: coerceString(record.owner, ownerAddress),
+          state: coerceString(record.state, 'open'),
+          rateAmount: coerceNumber(rate?.amount ?? record.rate_amount, 0),
+          balanceAmount: coerceNumber(balance?.amount ?? record.balance_amount, 0),
+          withdrawnAmount: coerceNumber(withdrawn?.amount ?? record.withdrawn_amount, 0),
+        };
+      });
+      const escrowTotals = escrowAccounts.reduce(
+        (sum, record) => sum + record.balance,
+        0
       );
 
-      const byProvider = Array.from(escrowTotals.byProvider.entries()).map(([provider, amount]) => {
-        const name = providerMap.get(provider) ?? provider;
-        return { providerName: name, amount, percentage: 0 };
-      });
+      const providerSpend = allocations.reduce((acc, allocation) => {
+        acc.set(
+          allocation.providerAddress,
+          (acc.get(allocation.providerAddress) ?? 0) + allocation.totalSpent
+        );
+        return acc;
+      }, new Map<string, number>());
+      const lifetimeSpend = allocations.reduce((sum, allocation) => sum + allocation.totalSpent, 0);
+      const byProvider = Array.from(providerSpend.entries()).map(([provider, amount]) => ({
+        providerName: providerMap.get(provider) ?? provider,
+        amount,
+        percentage: lifetimeSpend > 0 ? Number(((amount / lifetimeSpend) * 100).toFixed(1)) : 0,
+      }));
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      const previousMonthDate = new Date(currentYear, currentMonth - 1, 1);
+      const previousMonth = previousMonthDate.getMonth();
+      const previousYear = previousMonthDate.getFullYear();
+      const currentPeriodCost = allocations.reduce((sum, allocation) => {
+        const updatedAt = new Date(allocation.updatedAt);
+        return updatedAt.getMonth() === currentMonth && updatedAt.getFullYear() === currentYear
+          ? sum + allocation.totalSpent
+          : sum;
+      }, 0);
+      const previousPeriodCost = allocations.reduce((sum, allocation) => {
+        const updatedAt = new Date(allocation.updatedAt);
+        return updatedAt.getMonth() === previousMonth && updatedAt.getFullYear() === previousYear
+          ? sum + allocation.totalSpent
+          : sum;
+      }, 0);
+      const historyMap = allocations.reduce((acc, allocation) => {
+        const updatedAt = new Date(allocation.updatedAt);
+        const period = updatedAt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        const existing = acc.get(period) ?? {
+          period,
+          amount: 0,
+          orders: 0,
+          stamp: updatedAt.getTime(),
+        };
+        existing.amount += allocation.totalSpent;
+        existing.orders += 1;
+        existing.stamp = Math.max(existing.stamp, updatedAt.getTime());
+        acc.set(period, existing);
+        return acc;
+      }, new Map<string, { period: string; amount: number; orders: number; stamp: number }>());
+      const history = Array.from(historyMap.values())
+        .sort((a, b) => a.stamp - b.stamp)
+        .slice(-6)
+        .map(({ period, amount, orders }) => ({ period, amount, orders }));
 
       const billing: BillingSummaryData = {
-        currentPeriodCost: escrowTotals.total,
-        previousPeriodCost: 0,
-        changePercent: 0,
-        totalLifetimeSpend: escrowTotals.total,
-        outstandingBalance: escrowTotals.total,
+        currentPeriodCost,
+        previousPeriodCost,
+        changePercent:
+          previousPeriodCost > 0
+            ? Number(
+                (((currentPeriodCost - previousPeriodCost) / previousPeriodCost) * 100).toFixed(1)
+              )
+            : currentPeriodCost > 0
+              ? 100
+              : 0,
+        totalLifetimeSpend: lifetimeSpend,
+        outstandingBalance: escrowTotals,
         byProvider,
-        history: [],
+        history,
       };
 
       const stats: CustomerDashboardStats = {
@@ -415,6 +537,8 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
       set({
         stats,
         allocations,
+        escrowAccounts,
+        escrowPayments,
         usage,
         billing,
         notifications,

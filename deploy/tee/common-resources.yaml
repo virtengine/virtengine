@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: virtengine
+  labels:
+    app.kubernetes.io/part-of: virtengine
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tee-enclave
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tee-enclave-pdb
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tee-enclave
+      app.kubernetes.io/component: enclave
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tee-enclave
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+  ports:
+    - name: grpc
+      port: 8443
+      targetPort: grpc
+      protocol: TCP
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tee-enclave-headless
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+  ports:
+    - name: attestation
+      port: 8444
+      targetPort: attestation
+      protocol: TCP

@@ -499,7 +499,9 @@ export default function OrderCreateClient() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Order ID</p>
-                  <p className="mt-1 font-mono text-sm">{orderId ?? 'Pending'}</p>
+                  <p className="mt-1 font-mono text-sm">
+                    {orderId ?? 'Awaiting chain API confirmation'}
+                  </p>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Transaction hash</p>

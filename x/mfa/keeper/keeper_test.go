@@ -139,7 +139,10 @@ func (s *KeeperTestSuite) TestMFAPolicy() {
 		UpdatedAt: s.ctx.BlockTime().Unix(),
 	}
 
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err := enrollActiveFactor(s.keeper, s.ctx, addr, types.FactorTypeTOTP, "policy-factor")
+	s.Require().NoError(err)
+
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	// Retrieve and verify
@@ -320,7 +323,9 @@ func (s *KeeperTestSuite) TestParams() {
 func (s *KeeperTestSuite) TestGenesis() {
 	addr := sdk.AccAddress([]byte("genesis_test_addr__"))
 
-	// Set up some state
+	err := enrollActiveFactor(s.keeper, s.ctx, addr, types.FactorTypeTOTP, "genesis-active")
+	s.Require().NoError(err)
+
 	policy := &types.MFAPolicy{
 		AccountAddress: addr.String(),
 		Enabled:        true,
@@ -330,7 +335,7 @@ func (s *KeeperTestSuite) TestGenesis() {
 		CreatedAt: s.ctx.BlockTime().Unix(),
 		UpdatedAt: s.ctx.BlockTime().Unix(),
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	enrollment := &types.FactorEnrollment{
@@ -348,7 +353,7 @@ func (s *KeeperTestSuite) TestGenesis() {
 	gs := s.keeper.ExportGenesis(s.ctx)
 	s.Require().NotNil(gs)
 	s.Require().Len(gs.MFAPolicies, 1)
-	s.Require().Len(gs.FactorEnrollments, 1)
+	s.Require().Len(gs.FactorEnrollments, 2)
 
 	// Create new keeper with fresh store
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -368,7 +373,7 @@ func (s *KeeperTestSuite) TestGenesis() {
 	s.Require().True(restoredPolicy.Enabled)
 
 	enrollments := newKeeper.GetFactorEnrollments(newCtx, addr)
-	s.Require().Len(enrollments, 1)
+	s.Require().Len(enrollments, 2)
 }
 
 // TestIsMFAEnabled tests the MFA enabled check logic
@@ -421,10 +426,10 @@ func TestIsMFAEnabled(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, enabled)
 
-	// Enable the policy
+	// Enabling before factors exist should fail closed
 	policy.Enabled = true
 	err = k.SetMFAPolicy(ctx, policy)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	// Still not enabled because no active factors
 	enabled, err = k.IsMFAEnabled(ctx, addr)
@@ -441,6 +446,9 @@ func TestIsMFAEnabled(t *testing.T) {
 		EnrolledAt:       ctx.BlockTime().Unix(),
 	}
 	err = k.EnrollFactor(ctx, enrollment)
+	require.NoError(t, err)
+
+	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
 	// Now MFA should be enabled
@@ -513,6 +521,9 @@ func TestFactorCombinationValidation(t *testing.T) {
 		CreatedAt: ctx.BlockTime().Unix(),
 		UpdatedAt: ctx.BlockTime().Unix(),
 	}
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeTOTP, "combo-totp"))
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeFIDO2, "combo-fido2"))
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeVEID, "combo-veid"))
 	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
@@ -575,6 +586,8 @@ func TestTrustedDeviceReduction(t *testing.T) {
 		CreatedAt: ctx.BlockTime().Unix(),
 		UpdatedAt: ctx.BlockTime().Unix(),
 	}
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeTOTP, "trusted-totp"))
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeFIDO2, "trusted-fido2"))
 	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 

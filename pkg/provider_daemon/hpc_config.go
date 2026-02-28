@@ -248,6 +248,10 @@ func (c *HPCConfig) Validate() error {
 		return errors.New("cluster_id is required when HPC is enabled")
 	}
 
+	if c.ProviderAddress == "" {
+		return errors.New("provider_address is required when HPC is enabled")
+	}
+
 	if c.JobService.JobPollInterval < time.Second {
 		return errors.New("job_poll_interval must be at least 1 second")
 	}

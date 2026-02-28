@@ -2,12 +2,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: virtengine-dev
+namespace: virtengine
 
 resources:
   - ../../base
-
-namePrefix: dev-
 
 commonLabels:
   environment: dev
@@ -16,7 +14,7 @@ commonLabels:
 patches:
   # Reduce replicas for dev
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
@@ -31,7 +29,7 @@ patches:
         value: 1
   # Reduce resources for dev
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
@@ -48,13 +46,19 @@ patches:
         value: "4Gi"
   # Remove node selectors for dev
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: remove
         path: /spec/template/spec/nodeSelector
       - op: remove
         path: /spec/template/spec/tolerations
+  - target:
+      kind: Deployment
+      name: provider-daemon
+    patch: |
+      - op: remove
+        path: /spec/template/spec/nodeSelector
   # Update PDB for single instance
   - target:
       kind: PodDisruptionBudget
@@ -63,14 +67,46 @@ patches:
       - op: replace
         path: /spec/minAvailable
         value: 0
-
-configMapGenerator:
-  - name: virtengine-config
-    behavior: merge
-    literals:
-      - CHAIN_ID=virtengine-dev-1
-      - LOG_LEVEL=debug
-      - API_SWAGGER=true
+  - target:
+      kind: ExternalSecret
+      name: virtengine-node-secrets
+    patch: |
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: secret/virtengine/dev/virtengine-node
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: secret/virtengine/dev/virtengine-node
+  - target:
+      kind: ExternalSecret
+      name: provider-daemon-secrets
+    patch: |
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: secret/virtengine/dev/provider-daemon
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: secret/virtengine/dev/provider-daemon
+  - target:
+      kind: ExternalSecret
+      name: database-credentials
+    patch: |
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: secret/virtengine/dev/database
+  - target:
+      kind: ConfigMap
+      name: virtengine-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-dev-1
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: debug
+      - op: replace
+        path: /data/API_SWAGGER
+        value: "true"
 
 images:
   - name: virtengine/virtengine-node

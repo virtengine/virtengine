@@ -40,17 +40,13 @@ func BenchmarkNLIBurst(b *testing.B) {
 
 // TestNLIBurstLoad validates NLI throughput under burst load.
 func TestNLIBurstLoad(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping load test in short mode")
-	}
-
 	t.Log("=== Load Test: NLI Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:    25,
-		Duration:       20 * time.Second,
-		RampUpDuration: 5 * time.Second,
-		TargetTPS:      75,
+		Concurrency:    shortLoadInt(8, 25),
+		Duration:       shortLoadDuration(4*time.Second, 20*time.Second),
+		RampUpDuration: shortLoadDuration(1*time.Second, 5*time.Second),
+		TargetTPS:      shortLoadInt(20, 75),
 	}
 
 	nliConfig := nli.DefaultConfig()
@@ -70,7 +66,7 @@ func TestNLIBurstLoad(t *testing.T) {
 	t.Logf("Throughput: %.2f req/sec", results.Throughput)
 
 	require.Less(t, results.P95Latency, 2*time.Second, "P95 latency should be under 2 seconds")
-	require.Greater(t, results.Throughput, float64(30), "Throughput should be at least 30 TPS")
+	require.Greater(t, results.Throughput, float64(shortLoadInt(10, 30)), "Throughput should be at least 30 TPS")
 }
 
 func runNLIBurstTest(t *testing.T, svc nli.Service, config LoadTestConfig) *LoadTestResults {

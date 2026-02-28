@@ -77,7 +77,12 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the HPC module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// gRPC gateway routes will be registered here when proto definitions are added
+	if err := hpcv1.RegisterQueryHandlerClient(context.Background(), mux, hpcv1.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Errorf("couldn't register hpc grpc routes: %s", err.Error()))
+	}
+	if err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Errorf("couldn't register hpc workload template grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the HPC module.
@@ -118,6 +123,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	hpcv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewQuerier(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
 }
 
 // InitGenesis performs genesis initialization for the HPC module.

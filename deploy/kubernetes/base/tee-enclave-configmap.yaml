@@ -19,6 +19,9 @@ data:
   # Require hardware TEE (true in production)
   VIRTENGINE_TEE_REQUIRE_HARDWARE: "true"
 
+  # Platform selection: auto, sgx, sev-snp, nitro, simulated
+  VIRTENGINE_TEE_PLATFORM: "auto"
+
   # Never allow debug enclaves in production
   VIRTENGINE_TEE_ALLOW_DEBUG: "false"
 

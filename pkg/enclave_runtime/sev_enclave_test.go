@@ -338,9 +338,10 @@ func TestSEVSNPEnclaveServiceImpl_VerifyReport(t *testing.T) {
 	report, err := svc.GenerateAttestation([]byte("test"))
 	require.NoError(t, err)
 
-	// Verify the report
+	// Simulated reports must be rejected by the validator path.
 	err = svc.VerifyReport(report)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "hardware-backed SEV-SNP attestation is required")
 
 	// Invalid report should fail
 	err = svc.VerifyReport([]byte("too short"))

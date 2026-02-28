@@ -1,62 +1,67 @@
 # Version Control and Branching
 
-This document covers version control practices specific to VirtEngine development.
+This document covers the version-control practices that match the current VirtEngine repository state. For release automation and publication rules, see [RELEASE.md](../RELEASE.md).
 
-For comprehensive release management, see [RELEASE.md](../RELEASE.md).
+## Current Branch Reality
 
-## Branch Strategy
+The repository currently uses `main` as the active integration branch for code, docs, and release preparation.
 
-| Branch | Purpose | Version Pattern |
-|--------|---------|-----------------|
-| `main` | Active development | Odd minor versions (v0.9.x, v0.11.x) |
-| `mainnet/main` | Stable production releases | Even minor versions (v0.8.x, v0.10.x) |
+Important notes:
 
-## Version Numbering
+- public documentation should treat `main` as the current source branch;
+- some workflows and helper scripts still contain legacy references to `mainnet/main`;
+- those legacy references should not be presented as proof that there is an active stable-branch release model in use today.
 
-VirtEngine uses semantic versioning with network-specific conventions:
+## Tags and Release Utilities
 
-- **Odd minor versions** (1, 3, 5, 7, 9): Testnet releases
-- **Even minor versions** (0, 2, 4, 6, 8): Mainnet releases
-
-Examples:
-- `v0.9.0` → Testnet
-- `v0.10.0` → Mainnet
-
-## Merging into `mainnet/main`
-
-When a new mainnet release is needed, `mainnet/main` is often far behind `main`.
-This procedure performs the merge without conflicts while preserving history:
-
-```shell
-git checkout main
-git merge -s ours mainnet/main
-git checkout mainnet/main
-git merge main
-git push origin mainnet/main
-```
-
-## Semver Utilities
-
-The repository includes utilities for version handling:
+VirtEngine uses semantic-versioned tags and includes helper scripts for working with them:
 
 ```bash
-# Validate version format
 ./script/semver.sh validate v0.10.0
-
-# Check if mainnet version (even minor)
 ./script/mainnet-from-tag.sh v0.10.0
-
-# Check if pre-release
 ./script/is_prerelease.sh v0.10.0-rc.1
-
-# Bump version components
-./script/semver.sh bump patch v0.10.0  # → v0.10.1
-./script/semver.sh bump minor v0.10.0  # → v0.11.0
-./script/semver.sh bump major v0.10.0  # → v1.0.0
+./script/semver.sh bump patch v0.10.0
+./script/semver.sh bump minor v0.10.0
+./script/semver.sh bump major v0.10.0
 ```
+
+These utilities help classify and manipulate tags. They do not replace the actual release and launch approval process.
+
+## Working Model
+
+Contributors should assume this workflow unless a release manager documents an exception:
+
+1. branch from `main`;
+2. merge back through normal review and CI on `main`;
+3. cut release tags from the approved target commit;
+4. run the manual release workflow;
+5. describe production status only according to the checked-in verification and go/no-go evidence.
+
+## Legacy Stable-Branch References
+
+If you encounter references to `mainnet/main` in automation or historical documentation, treat them as compatibility or migration remnants unless a current release document explicitly reactivates that branch model.
+
+Do not:
+
+- instruct contributors to merge into `mainnet/main` as a standard step;
+- describe `mainnet/main` as the current stable release branch;
+- assume even or odd minor numbering alone defines the real support state of a release.
+
+## Documentation Sync Rule
+
+When branch or release policy changes, update these files together:
+
+- [README.md](../README.md)
+- [RELEASE.md](../RELEASE.md)
+- [docs/COMPATIBILITY.md](../docs/COMPATIBILITY.md)
+- [VERIFICATION.md](../VERIFICATION.md)
+- this document
+
+That keeps the public branch, release, compatibility, and verification story aligned.
 
 ## Related Documentation
 
-- [RELEASE.md](../RELEASE.md) - Complete release management process
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
-- [ADR-001: Network Upgrades](./adr/adr-001-network-upgrades.md) - Network upgrade implementation
+- [RELEASE.md](../RELEASE.md)
+- [README.md](../README.md)
+- [docs/COMPATIBILITY.md](../docs/COMPATIBILITY.md)
+- [VERIFICATION.md](../VERIFICATION.md)

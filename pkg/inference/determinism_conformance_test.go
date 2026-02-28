@@ -27,6 +27,7 @@ func TestDeterministicInferenceOutputPinned(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)

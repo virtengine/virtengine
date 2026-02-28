@@ -150,6 +150,15 @@ servicedesk:
 2. **Access control** - Only resource owners can register ticket references
 3. **External URLs validated** - URLs must match configured Waldur/Jira domains
 
+## Retention and Audit
+
+Support request records that include encrypted payload envelopes are now processed by a deterministic retention queue instead of a best-effort full-store scan.
+
+- **Scheduled archive/purge**: Archive and payload-purge actions are enqueued from the request retention policy and processed in due-time order.
+- **Backpressure**: The module processes a bounded number of retention actions per block so large backlogs do not turn end blockers into unbounded scans.
+- **Retry semantics**: Failed retention actions are re-enqueued with deterministic backoff and keep their attempt and last-error metadata in state.
+- **Auditability**: Successful archive and purge actions continue to emit support events, and queue processing emits retention summary and retry events for operators.
+
 ## Migration Notes
 
 This module replaces the previous full on-chain ticketing system. The rationale:

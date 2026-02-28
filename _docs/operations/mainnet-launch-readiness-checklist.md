@@ -16,9 +16,9 @@ launch approval.
 - `6D test(veid)`: complete - see `_docs/security-review-8d-ml-verification.md`
 - `6E feat(escrow)`: complete - see
   `_docs/operations/mainnet-finance-reconciliation-report-2026-04-11.md`
-- `22B docs(mainnet)`: rehearsal-ready - launch control, ceremony tooling, and
-  validator onboarding are complete; final `GO` still depends on signed
-  canonical allocation addresses and regenerated mainnet genesis artifacts
+- `22B docs(mainnet)`: complete - launch control, ceremony tooling, validator
+  onboarding, canonical allocation approval, and final mainnet genesis
+  publication are complete
 
 ## A. Required sign-offs
 
@@ -28,7 +28,7 @@ launch approval.
 | Compliance/Privacy | Compliance Lead | PASS - `COMP-01` approved the checked-in privacy/compliance pack on 2026-04-11 | `GDPR_COMPLIANCE.md`; `DATA_PROCESSING_AGREEMENT.md`; `DATA_INVENTORY.md`; `PRIVACY_POLICY.md`; `BIOMETRIC_DATA_ADDENDUM.md`; `_docs/operations/mainnet-launch-control-record-2026-04-11.md` |
 | Operations/SRE | Ops Lead | PASS - `OPS-01` approved launch/freeze windows, dress rehearsal bundle, and restore drill evidence on 2026-04-11 | `_docs/runbooks/mainnet-launch-runbook.md`; `_docs/disaster-recovery.md`; `_docs/slos-and-playbooks.md`; `_docs/operations/mainnet-dress-rehearsal-report.md`; `_docs/operations/mainnet-backup-restore-drill-report-2026-04-11.md`; `_docs/operations/mainnet-launch-control-record-2026-04-11.md` |
 | Finance/Billing | Finance Lead | PASS - `FIN-01` approved reconciliation, payout, and dispute-flow evidence on 2026-04-11 | `_docs/runbooks/finance-reconciliation-runbook.md`; `_docs/hpc-billing-rules.md`; `_docs/billing-policy.md`; `_docs/operations/mainnet-finance-reconciliation-report-2026-04-11.md`; `_docs/operations/mainnet-launch-control-record-2026-04-11.md` |
-| Product/Release | Product Lead | PASS - `PROD-01` approved the launch comms packet and quorum review package on 2026-04-11; overall state remains `HOLD` only for the final genesis-allocation blocker | `_docs/operations/mainnet-launch-packet.md`; `_docs/operations/mainnet-go-no-go-decision.md`; `_docs/operations/mainnet-launch-comms-packet-2026-04-11.md`; `_docs/operations/mainnet-launch-control-record-2026-04-11.md` |
+| Product/Release | Product Lead | PASS - `PROD-01` approved the launch comms packet, final genesis publication package, and scheduled `GO` state on 2026-04-11 | `_docs/operations/mainnet-launch-packet.md`; `_docs/operations/mainnet-go-no-go-decision.md`; `_docs/operations/mainnet-launch-comms-packet-2026-04-11.md`; `_docs/operations/mainnet-launch-control-record-2026-04-11.md`; `_docs/operations/mainnet-allocation-control-record-2026-04-11.md` |
 
 ## B. Sign-off to artifacts/tests mapping
 
@@ -67,10 +67,12 @@ launch approval.
 Checklist:
 - [x] Upgrade runbook reviewed and rehearsal window timeboxed
 - [x] Canonical genesis input checksum verified and stored
+- [x] Canonical allocation addresses approved and archived
 - [x] Validator upgrade registry and matrix validation passed
 - [x] Backup/restore drill completed for rehearsal scope
 - [x] DR runbook validated with restore smoke and control review
 - [x] Key management and HSM procedures reviewed
+- [x] Final genesis publication bundle rebuilt and hashed
 
 Reference runbooks and evidence:
 - `_docs/disaster-recovery.md`
@@ -81,8 +83,16 @@ Reference runbooks and evidence:
 - `_docs/runbooks/mainnet-genesis-ceremony.md`
 - `docs/operations/runbooks/UPGRADE_PROCEDURES.md`
 - `_docs/operations/mainnet-backup-restore-drill-report-2026-04-11.md`
+- `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`
 - `_docs/operations/mainnet-launch-control-record-2026-04-11.md`
+- `artifacts/mainnet/genesis.json`
+- `artifacts/mainnet/genesis.sha256`
+- `artifacts/mainnet/gentx.sha256`
+- `artifacts/mainnet/ceremony-manifest.json`
+- `artifacts/mainnet/ceremony-manifest.sha256`
 - `output/mainnet-launch/2026-04-11/upgrade-readiness.log`
+- `output/mainnet-launch/2026-04-11/mainnet-genesis-ceremony.log`
+- `output/mainnet-launch/2026-04-11/prelaunch-checklist-pass.log`
 
 ## E. Dress rehearsal (staging) summary
 
@@ -146,5 +156,8 @@ Reference runbooks and evidence:
 - [x] Runbook updated with final links
 - [x] Decision record published and indexed
 
-Current launch state: `HOLD` pending signed canonical allocation addresses and
-final mainnet genesis publication.
+Current launch state: `GO` for the scheduled primary launch window on
+2026-04-18 05:00 to 07:00 UTC, with backup on 2026-04-19 05:00 to 07:00 UTC.
+Repository evidence shows the final canonical allocations and genesis
+publication bundle are complete; public mainnet availability should still be
+described as scheduled rather than already live until the window begins.

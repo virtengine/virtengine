@@ -26,7 +26,7 @@ go build -o loadtest ./tests/load/cmd/loadtest
   --scenario veid_submit \
   --duration 5m \
   --target-rps 1000 \
-  --endpoint localhost:9090 \
+  --endpoint mock://local \
   --workers 100 \
   --output results.json
 ```
@@ -34,9 +34,9 @@ go build -o loadtest ./tests/load/cmd/loadtest
 ### Available Scenarios
 
 - `veid_submit`: VEID scope submission
-- `order_create`: Marketplace order creation (TODO)
-- `bid_submit`: Provider bid submission (TODO)
-- `settlement`: Settlement flow execution (TODO)
+- `order_create`: Marketplace order creation lifecycle
+- `bid_submit`: Provider bid submission against seeded orders
+- `settlement`: Order-to-payout settlement lifecycle
 
 ### Load Profile Options
 
@@ -49,6 +49,17 @@ go build -o loadtest ./tests/load/cmd/loadtest
 - `results.json`: JSON format
 - `results.csv`: CSV format
 - Console: Human-readable summary (always shown)
+
+### Regression Analysis
+
+```bash
+./loadtest analyze \
+  --baseline baseline.json \
+  --current current.json \
+  --threshold 10
+```
+
+The analyzer fails closed when requests per second fall below the threshold, latency regresses beyond the threshold, or error rate rises more than the threshold percentage points.
 
 ## Architecture
 

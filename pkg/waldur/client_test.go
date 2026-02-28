@@ -4,10 +4,12 @@
 package waldur
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -537,8 +539,8 @@ func TestClient_RetryLogic(t *testing.T) {
 		t.Errorf("HealthCheck() with retries unexpected error: %v", err)
 	}
 
-	if attempts != 3 {
-		t.Errorf("Expected 3 attempts, got %d", attempts)
+	if attempts != 4 {
+		t.Errorf("Expected 4 attempts including negotiation probe, got %d", attempts)
 	}
 }
 
@@ -596,5 +598,211 @@ func TestClient_ContextCancellation(t *testing.T) {
 	err := client.HealthCheck(ctx)
 	if err == nil {
 		t.Error("HealthCheck() with cancelled context should return error")
+	}
+}
+
+func TestClient_HealthCheck_NegotiatesAPIBaseAndBearerAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.Path, "/")
+		if path == "/users/me" {
+			http.NotFound(w, r)
+			return
+		}
+		if path != "/api/users/me" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		username := "negotiated-user"
+		uuid := "550e8400-e29b-41d4-a716-446655440090"
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"uuid":     &uuid,
+			"username": &username,
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		BaseURL:    server.URL,
+		Token:      "test-token",
+		AuthScheme: "bearer",
+	})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	if err := client.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("HealthCheck() unexpected error: %v", err)
+	}
+	if got := client.resolvedBaseURL; got != server.URL+"/api/" {
+		t.Fatalf("resolvedBaseURL = %q, want %q", got, server.URL+"/api/")
+	}
+}
+
+func TestMarketplaceClient_ListCategories_Paginates(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/users/me/" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path == "/api/users/me/" {
+			w.Header().Set("Content-Type", "application/json")
+			username := "pager"
+			uuid := "550e8400-e29b-41d4-a716-446655440091"
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"uuid":     &uuid,
+				"username": &username,
+			})
+			return
+		}
+		if r.URL.Path != "/api/marketplace-categories/" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		page := r.URL.Query().Get("page")
+		if page == "2" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"count":    2,
+				"next":     nil,
+				"previous": server.URL + "/api/marketplace-categories/?page=1",
+				"results": []map[string]any{
+					{"uuid": "cat-2", "title": "GPU", "description": "GPU category"},
+				},
+			})
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"count":    2,
+			"next":     server.URL + "/api/marketplace-categories/?page=2",
+			"previous": nil,
+			"results": []map[string]any{
+				{"uuid": "cat-1", "title": "Compute", "description": "Compute category"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{BaseURL: server.URL, Token: "test-token"})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	marketplace := NewMarketplaceClient(client)
+	categories, err := marketplace.ListCategories(context.Background(), ListCategoriesParams{})
+	if err != nil {
+		t.Fatalf("ListCategories() unexpected error: %v", err)
+	}
+	if len(categories) != 2 {
+		t.Fatalf("ListCategories() returned %d categories, want 2", len(categories))
+	}
+	if categories[0].Title != "Compute" || categories[1].Title != "GPU" {
+		t.Fatalf("ListCategories() returned %+v", categories)
+	}
+}
+
+func TestMarketplaceClient_GetOfferingByBackendID_DuplicateConflict(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/me/":
+			http.NotFound(w, r)
+		case "/api/users/me/":
+			w.Header().Set("Content-Type", "application/json")
+			username := "dupe"
+			uuid := "550e8400-e29b-41d4-a716-446655440092"
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"uuid":     &uuid,
+				"username": &username,
+			})
+		case "/api/marketplace-public-offerings/":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"count": 2,
+				"results": []map[string]any{
+					{"uuid": "off-1", "name": "A", "backend_id": "dup"},
+					{"uuid": "off-2", "name": "B", "backend_id": "dup"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{BaseURL: server.URL, Token: "test-token"})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	_, err = NewMarketplaceClient(client).GetOfferingByBackendID(context.Background(), "dup")
+	if err == nil || !strings.Contains(err.Error(), ErrConflict.Error()) {
+		t.Fatalf("GetOfferingByBackendID() error = %v, want conflict", err)
+	}
+}
+
+func TestUsageClient_SubmitBulkUsage_ReturnsPartialError(t *testing.T) {
+	var seen bytes.Buffer
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/me/":
+			http.NotFound(w, r)
+		case "/api/users/me/":
+			w.Header().Set("Content-Type", "application/json")
+			username := "usage"
+			uuid := "550e8400-e29b-41d4-a716-446655440093"
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"uuid":     &uuid,
+				"username": &username,
+			})
+		default:
+			seen.WriteString(r.URL.Path)
+			if strings.Contains(r.URL.Path, "resource-bad") {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"state": "submitted"})
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{BaseURL: server.URL, Token: "test-token", MaxRetries: 0})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	usageClient := NewUsageClient(NewMarketplaceClient(client))
+	reports := []*ResourceUsageReport{
+		{
+			ResourceUUID: "resource-ok",
+			PeriodStart:  time.Now().Add(-time.Hour),
+			PeriodEnd:    time.Now(),
+			Components:   []ComponentUsage{{Type: "cpu_hours", Amount: 1}},
+		},
+		{
+			ResourceUUID: "resource-bad",
+			PeriodStart:  time.Now().Add(-time.Hour),
+			PeriodEnd:    time.Now(),
+			Components:   []ComponentUsage{{Type: "cpu_hours", Amount: 1}},
+		},
+	}
+
+	responses, err := usageClient.SubmitBulkUsage(context.Background(), reports)
+	if err == nil || !strings.Contains(err.Error(), "resource-bad") {
+		t.Fatalf("SubmitBulkUsage() error = %v, want partial failure mentioning resource-bad", err)
+	}
+	if len(responses) != 2 {
+		t.Fatalf("SubmitBulkUsage() returned %d responses, want 2", len(responses))
+	}
+	if responses[1].State != "failed" {
+		t.Fatalf("SubmitBulkUsage() second response = %+v, want failed", responses[1])
 	}
 }

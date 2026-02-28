@@ -248,6 +248,15 @@ type SMSChallenge struct {
 	// PhoneHash is a SHA256 hash of the E.164 phone number
 	PhoneHash string `json:"phone_hash"`
 
+	// OnChainPhoneHash is the salted phone hash used for VEID proof submission.
+	OnChainPhoneHash string `json:"on_chain_phone_hash,omitempty"`
+
+	// OnChainPhoneHashSalt is the salt used to derive OnChainPhoneHash.
+	OnChainPhoneHashSalt string `json:"on_chain_phone_hash_salt,omitempty"`
+
+	// CountryCodeHash is the hashed country code stored on-chain for analytics.
+	CountryCodeHash string `json:"country_code_hash,omitempty"`
+
 	// CountryCode is the ISO country code
 	CountryCode string `json:"country_code"`
 
@@ -362,6 +371,10 @@ func NewSMSChallenge(cfg ChallengeConfig) (*SMSChallenge, string, error) {
 
 	// Hash phone number
 	phoneHash := HashPhoneNumber(cfg.PhoneNumber)
+	onChainHash, err := veidtypes.NewPhoneNumberHash(cfg.PhoneNumber, cfg.CountryCode)
+	if err != nil {
+		return nil, "", errors.Wrapf(ErrChallengeCreation, "failed to derive on-chain phone hash: %v", err)
+	}
 
 	// Generate nonce
 	nonceBytes := make([]byte, 16)
@@ -400,25 +413,32 @@ func NewSMSChallenge(cfg ChallengeConfig) (*SMSChallenge, string, error) {
 	}
 
 	challenge := &SMSChallenge{
-		ChallengeID:       cfg.ChallengeID,
-		VerificationID:    cfg.VerificationID,
-		AccountAddress:    cfg.AccountAddress,
-		PhoneHash:         phoneHash,
-		CountryCode:       cfg.CountryCode,
-		OTPHash:           otpHash,
-		Nonce:             nonce,
-		Status:            StatusPending,
-		CreatedAt:         cfg.CreatedAt,
-		ExpiresAt:         expiresAt,
-		MaxAttempts:       maxAttempts,
-		MaxResends:        maxResends,
-		DeliveryStatus:    DeliveryPending,
-		MaskedPhone:       MaskPhoneNumber(cfg.PhoneNumber),
-		IPAddress:         cfg.IPAddress,
-		IPHash:            ipHash,
-		DeviceFingerprint: cfg.DeviceFingerprint,
-		UserAgent:         cfg.UserAgent,
-		Locale:            cfg.Locale,
+		ChallengeID:          cfg.ChallengeID,
+		VerificationID:       cfg.VerificationID,
+		AccountAddress:       cfg.AccountAddress,
+		PhoneHash:            phoneHash,
+		OnChainPhoneHash:     onChainHash.Hash,
+		OnChainPhoneHashSalt: onChainHash.Salt,
+		CountryCodeHash:      onChainHash.CountryCodeHash,
+		CountryCode:          cfg.CountryCode,
+		OTPHash:              otpHash,
+		Nonce:                nonce,
+		Status:               StatusPending,
+		CreatedAt:            cfg.CreatedAt,
+		ExpiresAt:            expiresAt,
+		MaxAttempts:          maxAttempts,
+		MaxResends:           maxResends,
+		DeliveryStatus:       DeliveryPending,
+		MaskedPhone:          MaskPhoneNumber(cfg.PhoneNumber),
+		IPAddress:            cfg.IPAddress,
+		IPHash:               ipHash,
+		DeviceFingerprint:    cfg.DeviceFingerprint,
+		UserAgent:            cfg.UserAgent,
+		Locale:               cfg.Locale,
+	}
+
+	if challenge.VerificationID == "" {
+		challenge.VerificationID = cfg.ChallengeID
 	}
 
 	// Apply phone info if available
@@ -448,6 +468,12 @@ func (c *SMSChallenge) Validate() error {
 	}
 	if c.OTPHash == "" {
 		return errors.Wrap(ErrInvalidRequest, "otp_hash cannot be empty")
+	}
+	if c.OnChainPhoneHash != "" && len(c.OnChainPhoneHash) != 64 {
+		return errors.Wrap(ErrInvalidPhoneNumber, "on_chain_phone_hash must be a valid SHA256 hex string")
+	}
+	if c.OnChainPhoneHashSalt != "" && len(c.OnChainPhoneHashSalt) != veidtypes.DefaultPhoneHashSaltLength*2 {
+		return errors.Wrap(ErrInvalidPhoneNumber, "on_chain_phone_hash_salt has invalid length")
 	}
 	if c.Nonce == "" {
 		return errors.Wrap(ErrInvalidRequest, "nonce cannot be empty")
@@ -678,6 +704,18 @@ type VerifyRequest struct {
 
 	// DeviceFingerprint is a hash of device identifiers
 	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
+
+	// AccountSignature binds the SMS proof to the requesting account for on-chain submission.
+	AccountSignature []byte `json:"account_signature,omitempty"`
+
+	// EvidenceStorageRef points to the encrypted evidence bundle for on-chain proof submission.
+	EvidenceStorageRef string `json:"evidence_storage_ref,omitempty"`
+
+	// EvidenceStorageBackend identifies the storage backend for the evidence reference.
+	EvidenceStorageBackend string `json:"evidence_storage_backend,omitempty"`
+
+	// EvidenceMetadata carries optional non-sensitive evidence metadata for on-chain storage.
+	EvidenceMetadata map[string]string `json:"evidence_metadata,omitempty"`
 }
 
 // Validate validates the verify request
@@ -901,6 +939,9 @@ type Config struct {
 
 	// WebhookSecret is the secret for validating webhooks
 	WebhookSecret string `json:"webhook_secret,omitempty"`
+
+	// ChainIntegration enables optional on-chain proof submission for verified challenges.
+	ChainIntegration *ChainIntegrationConfig `json:"chain_integration,omitempty"`
 }
 
 // ProviderConfig contains configuration for a specific SMS provider
@@ -951,7 +992,12 @@ type ProviderConfig struct {
 // DefaultConfig returns the default SMS verification configuration
 func DefaultConfig() Config {
 	return Config{
-		PrimaryProvider:             "twilio",
+		PrimaryProvider: "twilio",
+		ProviderConfigs: map[string]ProviderConfig{
+			"twilio": {
+				Type: providerTwilio,
+			},
+		},
 		OTPLength:                   DefaultOTPLength,
 		OTPTTLSeconds:               DefaultOTPTTLSeconds,
 		MaxAttempts:                 DefaultMaxOTPAttempts,
@@ -986,6 +1032,51 @@ func (c *Config) Validate() error {
 	if c.MaxAttempts < 1 || c.MaxAttempts > 10 {
 		return errors.Wrap(ErrInvalidConfig, "max_attempts must be between 1 and 10")
 	}
+	if err := c.validateSelectedProviders(); err != nil {
+		return err
+	}
+	if c.ChainIntegration != nil {
+		if err := validateChainConfig(*c.ChainIntegration); err != nil {
+			return errors.Wrap(ErrInvalidConfig, err.Error())
+		}
+	}
+	return nil
+}
+
+func (c *Config) validateSelectedProviders() error {
+	if err := validateProviderSelection(c.PrimaryProvider, c.ProviderConfigs, "primary_provider"); err != nil {
+		return err
+	}
+
+	if c.FailoverEnabled && strings.TrimSpace(c.SecondaryProvider) != "" {
+		if err := validateProviderSelection(c.SecondaryProvider, c.ProviderConfigs, "secondary_provider"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateProviderSelection(providerName string, providerConfigs map[string]ProviderConfig, fieldName string) error {
+	name := strings.TrimSpace(providerName)
+	if name == "" {
+		return nil
+	}
+
+	if len(providerConfigs) == 0 {
+		return errors.Wrapf(ErrInvalidConfig, "%s %q requires a matching provider_configs entry", fieldName, name)
+	}
+
+	providerConfig, ok := providerConfigs[name]
+	if !ok {
+		return errors.Wrapf(ErrInvalidConfig, "%s %q requires a matching provider_configs entry", fieldName, name)
+	}
+
+	resolvedProviderType := firstNonEmptySMSString(providerConfig.Type, name)
+	if strings.EqualFold(resolvedProviderType, "mock") {
+		return nil
+	}
+
 	return nil
 }
 

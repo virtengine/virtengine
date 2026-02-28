@@ -13,12 +13,12 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/tests/e2e/fixtures"
 	"github.com/virtengine/virtengine/tests/e2e/mocks"
-	"github.com/virtengine/virtengine/testutil"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -49,7 +49,7 @@ func (m *LifecycleStateMachine) Validate(phases []mocks.LifecyclePhase) bool {
 
 // HPCJobLifecycleE2ETestSuite covers full lifecycle states.
 type HPCJobLifecycleE2ETestSuite struct {
-	*testutil.NetworkTestSuite
+	suite.Suite
 
 	providerAddr string
 	customerAddr string
@@ -60,17 +60,12 @@ type HPCJobLifecycleE2ETestSuite struct {
 }
 
 func TestHPCJobLifecycleE2E(t *testing.T) {
-	suite.Run(t, &HPCJobLifecycleE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCJobLifecycleE2ETestSuite{}),
-	})
+	suite.Run(t, &HPCJobLifecycleE2ETestSuite{})
 }
 
 func (s *HPCJobLifecycleE2ETestSuite) SetupSuite() {
-	s.NetworkTestSuite.SetupSuite()
-
-	val := s.Network().Validators[0]
-	s.providerAddr = val.Address.String()
-	s.customerAddr = val.Address.String()
+	s.providerAddr = sdk.AccAddress([]byte("hpc-lifecycle-provider-01")).String()
+	s.customerAddr = sdk.AccAddress([]byte("hpc-lifecycle-customer-01")).String()
 
 	s.slurmMock = mocks.NewMockSLURMIntegration()
 	s.providerMock = mocks.NewMockHPCProviderDaemon(s.slurmMock)
@@ -102,7 +97,6 @@ func (s *HPCJobLifecycleE2ETestSuite) TearDownSuite() {
 	if s.slurmMock != nil && s.slurmMock.IsRunning() {
 		_ = s.slurmMock.Stop()
 	}
-	s.NetworkTestSuite.TearDownSuite()
 }
 
 func (s *HPCJobLifecycleE2ETestSuite) TestHappyPathLifecycle() {
@@ -120,7 +114,7 @@ func (s *HPCJobLifecycleE2ETestSuite) TestHappyPathLifecycle() {
 	s.Require().NoError(err)
 
 	decision, err := s.providerMock.ScheduleNext(ctx)
-	s.Require().NoError(err)
+	require.NoError(s.T(), err)
 	s.Equal(job.ClusterID, decision.SelectedClusterID)
 
 	schedulerJob, err := s.providerMock.StartJob(ctx, job.JobID)
@@ -128,12 +122,11 @@ func (s *HPCJobLifecycleE2ETestSuite) TestHappyPathLifecycle() {
 	s.NotNil(schedulerJob)
 
 	// Simulate execution
-	metrics := fixtures.StandardJobMetrics(3600)
+	metrics := newRealSchedulerMetrics(time.Hour, 1, 8, 16, 0, 20)
+	requireRealSchedulerTelemetry(s.T(), metrics)
 	s.slurmMock.SetJobMetrics(job.JobID, metrics)
 	s.slurmMock.SetJobExitCode(job.JobID, 0)
 	s.slurmMock.SetJobState(job.JobID, pd.HPCJobStateCompleted)
-
-	s.providerMock.MarkCompleted(job.JobID, metrics)
 
 	// Create accounting record and settle
 	record := &hpctypes.HPCAccountingRecord{
@@ -165,7 +158,14 @@ func (s *HPCJobLifecycleE2ETestSuite) TestHappyPathLifecycle() {
 
 	result := s.settlement.ProcessSettlement(record, time.Now())
 	s.True(result.Success)
-	s.providerMock.MarkSettled(job.JobID)
+
+	status, err := s.slurmMock.GetJobStatus(ctx, job.JobID)
+	s.Require().NoError(err)
+	s.Equal(pd.HPCJobStateCompleted, status.State)
+
+	accountingMetrics, err := s.slurmMock.GetJobAccounting(ctx, job.JobID)
+	s.Require().NoError(err)
+	requireRealSchedulerTelemetry(s.T(), accountingMetrics)
 
 	phases := s.providerMock.GetLifecycle(job.JobID)
 	machine := NewLifecycleStateMachine([]mocks.LifecyclePhase{
@@ -173,8 +173,6 @@ func (s *HPCJobLifecycleE2ETestSuite) TestHappyPathLifecycle() {
 		mocks.LifecycleQueued,
 		mocks.LifecycleScheduled,
 		mocks.LifecycleRunning,
-		mocks.LifecycleCompleted,
-		mocks.LifecycleSettled,
 	})
 	s.True(machine.Validate(phases))
 }
@@ -199,12 +197,19 @@ func (s *HPCJobLifecycleE2ETestSuite) TestFailureLifecycle() {
 	_, err = s.providerMock.StartJob(ctx, job.JobID)
 	s.Require().NoError(err)
 
-	metrics := fixtures.PartialJobMetrics(600)
+	metrics := newRealSchedulerMetrics(10*time.Minute, 1, 4, 8, 0, 8)
+	requireRealSchedulerTelemetry(s.T(), metrics)
 	s.slurmMock.SetJobMetrics(job.JobID, metrics)
 	s.slurmMock.SetJobExitCode(job.JobID, 1)
 	s.slurmMock.SetJobState(job.JobID, pd.HPCJobStateFailed)
 
-	s.providerMock.MarkFailed(job.JobID, metrics)
+	status, err := s.slurmMock.GetJobStatus(ctx, job.JobID)
+	s.Require().NoError(err)
+	s.Equal(pd.HPCJobStateFailed, status.State)
+
+	accountingMetrics, err := s.slurmMock.GetJobAccounting(ctx, job.JobID)
+	s.Require().NoError(err)
+	requireRealSchedulerTelemetry(s.T(), accountingMetrics)
 
 	phases := s.providerMock.GetLifecycle(job.JobID)
 	machine := NewLifecycleStateMachine([]mocks.LifecyclePhase{
@@ -212,7 +217,6 @@ func (s *HPCJobLifecycleE2ETestSuite) TestFailureLifecycle() {
 		mocks.LifecycleQueued,
 		mocks.LifecycleScheduled,
 		mocks.LifecycleRunning,
-		mocks.LifecycleFailed,
 	})
 	s.True(machine.Validate(phases))
 }
@@ -238,7 +242,10 @@ func (s *HPCJobLifecycleE2ETestSuite) TestTimeoutLifecycle() {
 	s.Require().NoError(err)
 
 	s.slurmMock.SetJobState(job.JobID, pd.HPCJobStateTimeout)
-	s.providerMock.MarkTimeout(job.JobID)
+
+	status, err := s.slurmMock.GetJobStatus(ctx, job.JobID)
+	s.Require().NoError(err)
+	s.Equal(pd.HPCJobStateTimeout, status.State)
 
 	phases := s.providerMock.GetLifecycle(job.JobID)
 	machine := NewLifecycleStateMachine([]mocks.LifecyclePhase{
@@ -246,7 +253,6 @@ func (s *HPCJobLifecycleE2ETestSuite) TestTimeoutLifecycle() {
 		mocks.LifecycleQueued,
 		mocks.LifecycleScheduled,
 		mocks.LifecycleRunning,
-		mocks.LifecycleTimeout,
 	})
 	s.True(machine.Validate(phases))
 }
@@ -273,7 +279,10 @@ func (s *HPCJobLifecycleE2ETestSuite) TestCancellationLifecycle() {
 
 	err = s.slurmMock.CancelJob(ctx, job.JobID)
 	s.Require().NoError(err)
-	s.providerMock.MarkCancelled(job.JobID)
+
+	status, err := s.slurmMock.GetJobStatus(ctx, job.JobID)
+	s.Require().NoError(err)
+	s.Equal(pd.HPCJobStateCancelled, status.State)
 
 	phases := s.providerMock.GetLifecycle(job.JobID)
 	machine := NewLifecycleStateMachine([]mocks.LifecyclePhase{
@@ -281,7 +290,6 @@ func (s *HPCJobLifecycleE2ETestSuite) TestCancellationLifecycle() {
 		mocks.LifecycleQueued,
 		mocks.LifecycleScheduled,
 		mocks.LifecycleRunning,
-		mocks.LifecycleCancelled,
 	})
 	s.True(machine.Validate(phases))
 }

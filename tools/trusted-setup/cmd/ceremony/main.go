@@ -14,12 +14,20 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/tools/trusted-setup/coordinator"
+	"github.com/virtengine/virtengine/tools/trusted-setup/exporter"
 	"github.com/virtengine/virtengine/tools/trusted-setup/participant"
 	"github.com/virtengine/virtengine/tools/trusted-setup/transcript"
 	"github.com/virtengine/virtengine/tools/trusted-setup/verify"
 )
 
 func main() {
+	if err := newRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "ceremony",
 		Short: "VirtEngine ZK trusted setup ceremony tooling",
@@ -29,18 +37,20 @@ func main() {
 	rootCmd.AddCommand(startPhase2Cmd())
 	rootCmd.AddCommand(contributePhase1Cmd())
 	rootCmd.AddCommand(contributePhase2Cmd())
+	rootCmd.AddCommand(contributeBundleCmd())
 	rootCmd.AddCommand(acceptPhase1Cmd())
 	rootCmd.AddCommand(acceptPhase2Cmd())
+	rootCmd.AddCommand(acceptBundleCmd())
+	rootCmd.AddCommand(exportPhaseBundleCmd())
 	rootCmd.AddCommand(finalizeCmd())
+	rootCmd.AddCommand(exportArtifactsCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(serverCmd())
 	rootCmd.AddCommand(participateCmd())
 	rootCmd.AddCommand(verifyTranscriptCmd())
+	rootCmd.AddCommand(verifyExportCmd())
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return rootCmd
 }
 
 func initCmd() *cobra.Command {
@@ -120,6 +130,8 @@ func contributePhase1Cmd() *cobra.Command {
 				PublicKey:     id.PublicKey,
 				Signature:     signature,
 				Attestation:   attestation,
+				InputHash:     transcript.HashBytes(payload),
+				OutputHash:    transcript.HashBytes(output),
 			}
 			if err := writeMeta(metaPath, meta); err != nil {
 				return err
@@ -178,6 +190,8 @@ func contributePhase2Cmd() *cobra.Command {
 				PublicKey:     id.PublicKey,
 				Signature:     signature,
 				Attestation:   attestation,
+				InputHash:     transcript.HashBytes(payload),
+				OutputHash:    transcript.HashBytes(output),
 			}
 			if err := writeMeta(metaPath, meta); err != nil {
 				return err
@@ -278,6 +292,107 @@ func finalizeCmd() *cobra.Command {
 	return cmd
 }
 
+func exportPhaseBundleCmd() *cobra.Command {
+	var (
+		dir   string
+		phase string
+		out   string
+	)
+	cmd := &cobra.Command{
+		Use:   "export-phase-bundle",
+		Short: "Export the current coordinator phase state for an air-gapped participant",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			state := coordinator.State{BaseDir: dir}
+			_, err := coordinator.ExportPhaseBundle(state, phase, out)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "ceremony-data", "ceremony working directory")
+	cmd.Flags().StringVar(&phase, "phase", transcript.Phase1, "phase1 or phase2")
+	cmd.Flags().StringVar(&out, "out", "", "output bundle directory")
+	_ = cmd.MarkFlagRequired("out")
+	return cmd
+}
+
+func contributeBundleCmd() *cobra.Command {
+	var (
+		bundleDir     string
+		outDir        string
+		identity      string
+		participantID string
+		attestation   string
+	)
+	cmd := &cobra.Command{
+		Use:   "contribute-bundle",
+		Short: "Respond to an exported air-gapped coordinator bundle",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			id, err := participant.LoadOrCreateIdentity(identity, participantID)
+			if err != nil {
+				return err
+			}
+			_, err = participant.RespondToPhaseBundle(bundleDir, outDir, participant.NewClient(id, attestation))
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&bundleDir, "bundle", "", "input request bundle directory")
+	cmd.Flags().StringVar(&outDir, "out", "", "output response bundle directory")
+	cmd.Flags().StringVar(&identity, "identity", "participant_identity.json", "identity file path")
+	cmd.Flags().StringVar(&participantID, "participant", "participant", "participant identifier")
+	cmd.Flags().StringVar(&attestation, "attestation", "", "participant attestation")
+	_ = cmd.MarkFlagRequired("bundle")
+	_ = cmd.MarkFlagRequired("out")
+	return cmd
+}
+
+func acceptBundleCmd() *cobra.Command {
+	var (
+		dir       string
+		phase     string
+		bundleDir string
+	)
+	cmd := &cobra.Command{
+		Use:   "accept-bundle",
+		Short: "Import a signed air-gapped participant response bundle",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			state := coordinator.State{BaseDir: dir}
+			return coordinator.AcceptPhaseBundle(state, phase, bundleDir)
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "ceremony-data", "ceremony working directory")
+	cmd.Flags().StringVar(&phase, "phase", transcript.Phase1, "phase1 or phase2")
+	cmd.Flags().StringVar(&bundleDir, "bundle", "", "input response bundle directory")
+	_ = cmd.MarkFlagRequired("bundle")
+	return cmd
+}
+
+func exportArtifactsCmd() *cobra.Command {
+	var (
+		dir      string
+		out      string
+		identity string
+		signerID string
+	)
+	cmd := &cobra.Command{
+		Use:   "export-artifacts",
+		Short: "Export a signed final ceremony artifact bundle",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			signer, err := participant.LoadOrCreateIdentity(identity, signerID)
+			if err != nil {
+				return err
+			}
+			state := coordinator.State{BaseDir: dir}
+			_, err = exporter.ExportArtifacts(state, out, signer)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "ceremony-data", "ceremony working directory")
+	cmd.Flags().StringVar(&out, "out", "", "output artifact directory")
+	cmd.Flags().StringVar(&identity, "identity", "coordinator_identity.json", "signing identity file path")
+	cmd.Flags().StringVar(&signerID, "signer", "coordinator", "coordinator signing identifier")
+	_ = cmd.MarkFlagRequired("out")
+	return cmd
+}
+
 func statusCmd() *cobra.Command {
 	var dir string
 	cmd := &cobra.Command{
@@ -360,6 +475,8 @@ func participateCmd() *cobra.Command {
 				PublicKey:     id.PublicKey,
 				Signature:     signature,
 				Attestation:   attestation,
+				InputHash:     transcript.HashBytes(payload),
+				OutputHash:    transcript.HashBytes(contrib),
 			}
 			return submitContribution(ctx, baseURL, phase, contrib, meta)
 		},
@@ -391,6 +508,29 @@ func verifyTranscriptCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", "ceremony-data", "ceremony working directory")
+	return cmd
+}
+
+func verifyExportCmd() *cobra.Command {
+	var dir string
+	cmd := &cobra.Command{
+		Use:   "verify-export",
+		Short: "Verify a signed final artifact bundle",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			result, err := verify.VerifyExport(dir)
+			if err != nil {
+				return err
+			}
+			data, err := json.MarshalIndent(result, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(data))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "", "artifact bundle directory")
+	_ = cmd.MarkFlagRequired("dir")
 	return cmd
 }
 
@@ -453,6 +593,8 @@ func submitContribution(ctx context.Context, baseURL, phase string, payload []by
 	req.Header.Set("X-Public-Key", meta.PublicKey)
 	req.Header.Set("X-Signature", meta.Signature)
 	req.Header.Set("X-Attestation", meta.Attestation)
+	req.Header.Set("X-Input-Hash", meta.InputHash)
+	req.Header.Set("X-Output-Hash", meta.OutputHash)
 	client := security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second))
 	resp, err := client.Do(req)
 	if err != nil {

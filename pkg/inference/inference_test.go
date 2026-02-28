@@ -40,6 +40,10 @@ func TestDefaultInferenceConfig(t *testing.T) {
 	if config.ExpectedInputDim != TotalFeatureDim {
 		t.Errorf("expected input dim %d, got %d", TotalFeatureDim, config.ExpectedInputDim)
 	}
+
+	if config.AllowFallbackToStub {
+		t.Error("expected simulated inference fallback to be disabled by default")
+	}
 }
 
 func TestConfigValidation(t *testing.T) {
@@ -448,6 +452,7 @@ func TestModelLoaderWithTempModel(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -491,6 +496,7 @@ func TestModelHashComputation(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -547,6 +553,7 @@ func TestModelLoaderRejectsNonDeterministicOps(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -583,6 +590,7 @@ func TestModelLoaderAcceptsDeterministicOps(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -614,6 +622,7 @@ func TestScorerWithValidInputs(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -673,6 +682,7 @@ func TestScorerWithInvalidInputs(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -713,6 +723,7 @@ func TestScorerTimeout(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
 	config.Timeout = 1 * time.Nanosecond // Very short timeout
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -767,6 +778,7 @@ func TestScorerDeterministicOutputs(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
 	config.Deterministic = true
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -821,6 +833,7 @@ func TestScorerStats(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -927,6 +940,7 @@ func TestNewScorer(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewScorer(config)
@@ -1063,6 +1077,7 @@ func BenchmarkInference(b *testing.B) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(b, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)

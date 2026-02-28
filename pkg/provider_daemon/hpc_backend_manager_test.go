@@ -12,6 +12,9 @@ import (
 	// Initialize SDK config (bech32 prefixes) for tests
 	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
 
+	"github.com/virtengine/virtengine/pkg/moab_adapter"
+	"github.com/virtengine/virtengine/pkg/ood_adapter"
+	"github.com/virtengine/virtengine/pkg/slurm_adapter"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -35,6 +38,35 @@ func createTestHPCConfig(schedulerType HPCSchedulerType) HPCConfig {
 	return config
 }
 
+func newTestHPCBackendFactory(
+	t *testing.T,
+	config HPCConfig,
+	credManager *HPCCredentialManager,
+	signer HPCSchedulerSigner,
+) *HPCBackendFactory {
+	t.Helper()
+
+	clients := &HPCBackendClients{}
+	switch config.SchedulerType {
+	case HPCSchedulerTypeSLURM:
+		clients.SLURMClient = slurm_adapter.NewMockSLURMClient()
+	case HPCSchedulerTypeMOAB:
+		clients.MOABClient = moab_adapter.NewMockMOABClient()
+	case HPCSchedulerTypeOOD:
+		clients.OODClient = ood_adapter.NewMockOODClient()
+		clients.OODAuthProvider = ood_adapter.NewMockVEIDAuthProvider()
+	default:
+		t.Fatalf("unsupported scheduler type for test factory: %s", config.SchedulerType)
+	}
+
+	manager, err := newHPCBackendFactory(config, credManager, signer, clients)
+	if err != nil {
+		t.Fatalf("newHPCBackendFactory() error = %v", err)
+	}
+
+	return manager
+}
+
 // =============================================================================
 // HPCBackendFactory Tests
 // =============================================================================
@@ -43,10 +75,7 @@ func TestNewHPCBackendFactory_SLURM(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	if manager == nil {
 		t.Fatal("Expected manager to be non-nil")
@@ -70,10 +99,7 @@ func TestNewHPCBackendFactory_MOAB(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeMOAB)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	if manager == nil {
 		t.Fatal("Expected manager to be non-nil")
@@ -97,10 +123,7 @@ func TestNewHPCBackendFactory_OOD(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeOOD)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	if manager == nil {
 		t.Fatal("Expected manager to be non-nil")
@@ -155,10 +178,7 @@ func TestHPCBackendFactory_StartStop(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	ctx := context.Background()
 
@@ -202,10 +222,7 @@ func TestHPCBackendFactory_GetHealth(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	ctx := context.Background()
 
@@ -244,10 +261,7 @@ func TestHPCBackendFactory_RegisterLifecycleCallback(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	var events []HPCJobLifecycleEvent
 	var mu sync.Mutex
@@ -283,10 +297,7 @@ func TestHPCBackendFactory_GetConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	retrievedConfig := manager.GetConfig()
 
@@ -321,10 +332,7 @@ func TestHPCBackendFactory_WithCredentialManager(t *testing.T) {
 		t.Fatalf("Unlock() error = %v", err)
 	}
 
-	manager, err := NewHPCBackendFactory(config, credManager, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, credManager, signer)
 
 	if manager == nil {
 		t.Fatal("Expected manager to be non-nil")
@@ -349,10 +357,7 @@ func TestCreateHPCBackendFactory(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	manager, err := CreateHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("CreateHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	if manager == nil {
 		t.Fatal("Expected manager to be non-nil")
@@ -363,10 +368,7 @@ func TestCreateSchedulerFromConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner(backendManagerTestProviderAddress)
 
-	scheduler, err := CreateSchedulerFromConfig(config, signer)
-	if err != nil {
-		t.Fatalf("CreateSchedulerFromConfig() error = %v", err)
-	}
+	scheduler := newTestHPCBackendFactory(t, config, nil, signer).GetScheduler()
 
 	if scheduler == nil {
 		t.Fatal("Expected scheduler to be non-nil")
@@ -381,9 +383,9 @@ func TestCreateSLURMSchedulerFromConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
 
-	scheduler, err := CreateSLURMSchedulerFromConfig(config, signer)
-	if err != nil {
-		t.Fatalf("CreateSLURMSchedulerFromConfig() error = %v", err)
+	scheduler, ok := newTestHPCBackendFactory(t, config, nil, signer).GetScheduler().(*SLURMSchedulerWrapper)
+	if !ok {
+		t.Fatal("Expected scheduler to be a SLURMSchedulerWrapper")
 	}
 
 	if scheduler == nil {
@@ -409,9 +411,9 @@ func TestCreateMOABSchedulerFromConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeMOAB)
 	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
 
-	scheduler, err := CreateMOABSchedulerFromConfig(config, signer)
-	if err != nil {
-		t.Fatalf("CreateMOABSchedulerFromConfig() error = %v", err)
+	scheduler, ok := newTestHPCBackendFactory(t, config, nil, signer).GetScheduler().(*MOABSchedulerWrapper)
+	if !ok {
+		t.Fatal("Expected scheduler to be a MOABSchedulerWrapper")
 	}
 
 	if scheduler == nil {
@@ -437,9 +439,9 @@ func TestCreateOODSchedulerFromConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeOOD)
 	signer := NewMockSigner(testProviderAddress)
 
-	scheduler, err := CreateOODSchedulerFromConfig(config, signer)
-	if err != nil {
-		t.Fatalf("CreateOODSchedulerFromConfig() error = %v", err)
+	scheduler, ok := newTestHPCBackendFactory(t, config, nil, signer).GetScheduler().(*OODSchedulerWrapper)
+	if !ok {
+		t.Fatal("Expected scheduler to be an OODSchedulerWrapper")
 	}
 
 	if scheduler == nil {
@@ -597,10 +599,7 @@ func TestHPCBackendFactory_FullLifecycle(t *testing.T) {
 	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
 
 	// Create manager
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	// Register callback
 	var callbackInvoked bool
@@ -687,10 +686,7 @@ func TestHPCBackendFactory_ConcurrentAccess(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
 	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
 
-	manager, err := NewHPCBackendFactory(config, nil, signer)
-	if err != nil {
-		t.Fatalf("NewHPCBackendFactory() error = %v", err)
-	}
+	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
 	ctx := context.Background()
 

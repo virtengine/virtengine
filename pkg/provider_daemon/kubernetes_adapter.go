@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -466,26 +467,41 @@ func (ka *KubernetesAdapter) Deploy(ctx context.Context, manifest *Manifest, dep
 	// Generate namespace
 	namespace := ka.generateNamespace(workloadID)
 
-	// Create workload record
-	workload := &DeployedWorkload{
-		ID:           workloadID,
-		DeploymentID: deploymentID,
-		LeaseID:      leaseID,
-		Namespace:    namespace,
-		State:        WorkloadStatePending,
-		Manifest:     manifest,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		Resources:    make([]DeployedResource, 0),
-		Endpoints:    make([]WorkloadEndpoint, 0),
-	}
-
+	now := time.Now()
 	ka.mu.Lock()
-	ka.workloads[workloadID] = workload
+	workload, exists := ka.workloads[workloadID]
+	if !exists {
+		workload = &DeployedWorkload{
+			ID:           workloadID,
+			DeploymentID: deploymentID,
+			LeaseID:      leaseID,
+			Namespace:    namespace,
+			State:        WorkloadStatePending,
+			Manifest:     manifest,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+			Resources:    make([]DeployedResource, 0),
+			Endpoints:    make([]WorkloadEndpoint, 0),
+		}
+		ka.workloads[workloadID] = workload
+	} else {
+		workload.DeploymentID = deploymentID
+		workload.LeaseID = leaseID
+		workload.Namespace = namespace
+		workload.Manifest = manifest
+		workload.UpdatedAt = now
+	}
+	currentState := workload.State
 	ka.mu.Unlock()
 
 	// Dry run mode
 	if opts.DryRun {
+		ka.updateWorkloadState(workloadID, WorkloadStatePending, "Dry-run validation successful")
+		return workload, nil
+	}
+
+	if exists && currentState != WorkloadStateFailed && currentState != WorkloadStateStopped && currentState != WorkloadStateTerminated {
+		_, _ = ka.GetStatus(ctx, workloadID)
 		return workload, nil
 	}
 
@@ -504,12 +520,15 @@ func (ka *KubernetesAdapter) Deploy(ctx context.Context, manifest *Manifest, dep
 		return workload, err
 	}
 
-	ka.updateWorkloadState(workloadID, WorkloadStateRunning, "Deployment successful")
+	ka.updateWorkloadState(workloadID, WorkloadStateDeploying, "Resources applied; awaiting pod readiness")
+	_, _ = ka.GetStatus(ctx, workloadID)
 	return workload, nil
 }
 
 func (ka *KubernetesAdapter) performDeployment(ctx context.Context, workload *DeployedWorkload, opts DeploymentOptions) error {
 	ka.updateWorkloadState(workload.ID, WorkloadStateDeploying, "Creating namespace")
+	workload.Resources = workload.Resources[:0]
+	workload.Endpoints = workload.Endpoints[:0]
 
 	// Merge labels
 	labels := ka.mergeLabels(opts.Labels, map[string]string{
@@ -616,6 +635,19 @@ func (ka *KubernetesAdapter) GetWorkloadByLease(leaseID string) (*DeployedWorklo
 	return nil, ErrWorkloadNotFound
 }
 
+// GetWorkloadByDeployment retrieves a workload by deployment ID.
+func (ka *KubernetesAdapter) GetWorkloadByDeployment(deploymentID string) (*DeployedWorkload, error) {
+	ka.mu.RLock()
+	defer ka.mu.RUnlock()
+
+	for _, w := range ka.workloads {
+		if w.DeploymentID == deploymentID {
+			return w, nil
+		}
+	}
+	return nil, ErrWorkloadNotFound
+}
+
 // ListWorkloads lists all workloads
 func (ka *KubernetesAdapter) ListWorkloads() []*DeployedWorkload {
 	ka.mu.RLock()
@@ -713,7 +745,8 @@ func (ka *KubernetesAdapter) Resume(ctx context.Context, workloadID string) erro
 		}
 	}
 
-	ka.updateWorkloadState(workloadID, WorkloadStateRunning, "Workload resumed")
+	ka.updateWorkloadState(workloadID, WorkloadStateDeploying, "Workload resumed; awaiting pod readiness")
+	_, _ = ka.GetStatus(ctx, workloadID)
 	return nil
 }
 
@@ -726,16 +759,32 @@ func (ka *KubernetesAdapter) GetStatus(ctx context.Context, workloadID string) (
 
 	// Get pod statuses
 	allReady := true
+	anyFailed := false
+	observedPods := false
 	var messages []string
+	var endpoints []WorkloadEndpoint
 
 	for _, svc := range workload.Manifest.Services {
+		if len(svc.Ports) > 0 {
+			svcEndpoints, err := ka.client.GetServiceEndpoints(ctx, workload.Namespace, ka.resourceName(svc.Name))
+			if err == nil {
+				endpoints = append(endpoints, svcEndpoints...)
+			}
+		}
+
 		pods, err := ka.client.GetPodStatus(ctx, workload.Namespace, ka.resourceName(svc.Name))
 		if err != nil {
 			messages = append(messages, fmt.Sprintf("%s: error getting status", svc.Name))
 			allReady = false
 			continue
 		}
+		if len(pods) == 0 {
+			allReady = false
+			messages = append(messages, fmt.Sprintf("%s: no pods scheduled", svc.Name))
+			continue
+		}
 
+		observedPods = true
 		for _, pod := range pods {
 			if !pod.Ready {
 				allReady = false
@@ -743,56 +792,123 @@ func (ka *KubernetesAdapter) GetStatus(ctx context.Context, workloadID string) (
 					messages = append(messages, fmt.Sprintf("%s: %s", pod.Name, pod.Message))
 				}
 			}
+			if pod.Phase == "Failed" {
+				anyFailed = true
+				if pod.Message != "" {
+					messages = append(messages, fmt.Sprintf("%s failed: %s", pod.Name, pod.Message))
+				} else {
+					messages = append(messages, fmt.Sprintf("%s failed", pod.Name))
+				}
+			}
+			for _, container := range pod.Containers {
+				if strings.EqualFold(container.State, "terminated") || strings.EqualFold(container.State, "failed") {
+					anyFailed = true
+					if container.Message != "" {
+						messages = append(messages, fmt.Sprintf("%s/%s: %s", pod.Name, container.Name, container.Message))
+					}
+				}
+			}
 		}
+	}
+	if !observedPods {
+		allReady = false
 	}
 
 	message := workload.StatusMessage
 	if len(messages) > 0 {
 		message = strings.Join(messages, "; ")
+	} else {
+		switch {
+		case anyFailed:
+			message = "One or more workload pods failed"
+		case allReady:
+			message = "Workload ready"
+		case workload.State == WorkloadStatePaused:
+			message = "Workload paused"
+		case workload.State == WorkloadStateStopped:
+			message = "Workload stopped"
+		case workload.State == WorkloadStateTerminated:
+			message = "Workload terminated"
+		default:
+			message = "Awaiting pod readiness"
+		}
 	}
 
-	// Update state based on pod status
-	if workload.State == WorkloadStateRunning && !allReady {
-		// Pods are not ready, might be deploying or failing
-		// Don't change state automatically, just report via message
-		_ = allReady // intentionally empty - state tracking only
+	desiredState := workload.State
+	switch workload.State {
+	case WorkloadStatePaused, WorkloadStateStopping, WorkloadStateStopped, WorkloadStateTerminated:
+		desiredState = workload.State
+	default:
+		switch {
+		case anyFailed:
+			desiredState = WorkloadStateFailed
+		case allReady:
+			desiredState = WorkloadStateRunning
+		case workload.State == WorkloadStateRunning:
+			desiredState = WorkloadStateRunning
+		default:
+			desiredState = WorkloadStateDeploying
+		}
 	}
+
+	workload, _ = ka.applyWorkloadSnapshot(workloadID, desiredState, message, endpoints, true)
 
 	return &WorkloadStatusUpdate{
 		WorkloadID:   workloadID,
 		DeploymentID: workload.DeploymentID,
 		LeaseID:      workload.LeaseID,
 		State:        workload.State,
-		Message:      message,
+		Message:      workload.StatusMessage,
 		Timestamp:    time.Now(),
 	}, nil
 }
 
 func (ka *KubernetesAdapter) updateWorkloadState(workloadID string, state WorkloadState, message string) {
+	workload, changed := ka.applyWorkloadSnapshot(workloadID, state, message, nil, false)
+	if !changed || workload == nil || ka.statusUpdateChan == nil {
+		return
+	}
+
+	select {
+	case ka.statusUpdateChan <- WorkloadStatusUpdate{
+		WorkloadID:   workloadID,
+		DeploymentID: workload.DeploymentID,
+		LeaseID:      workload.LeaseID,
+		State:        workload.State,
+		Message:      workload.StatusMessage,
+		Timestamp:    time.Now(),
+	}:
+	default:
+		// Channel full, drop update
+	}
+}
+
+func (ka *KubernetesAdapter) applyWorkloadSnapshot(
+	workloadID string,
+	state WorkloadState,
+	message string,
+	endpoints []WorkloadEndpoint,
+	replaceEndpoints bool,
+) (*DeployedWorkload, bool) {
 	ka.mu.Lock()
 	workload, ok := ka.workloads[workloadID]
-	if ok {
-		workload.State = state
-		workload.StatusMessage = message
+	if !ok {
+		ka.mu.Unlock()
+		return nil, false
+	}
+	prevState := workload.State
+	prevMessage := workload.StatusMessage
+	prevEndpoints := workload.Endpoints
+	workload.State = state
+	workload.StatusMessage = message
+	if replaceEndpoints {
+		workload.Endpoints = append([]WorkloadEndpoint(nil), endpoints...)
+	}
+	if prevState != state || prevMessage != message || (replaceEndpoints && !reflect.DeepEqual(prevEndpoints, workload.Endpoints)) {
 		workload.UpdatedAt = time.Now()
 	}
 	ka.mu.Unlock()
-
-	// Send status update
-	if ka.statusUpdateChan != nil && ok {
-		select {
-		case ka.statusUpdateChan <- WorkloadStatusUpdate{
-			WorkloadID:   workloadID,
-			DeploymentID: workload.DeploymentID,
-			LeaseID:      workload.LeaseID,
-			State:        state,
-			Message:      message,
-			Timestamp:    time.Now(),
-		}:
-		default:
-			// Channel full, drop update
-		}
-	}
+	return workload, prevState != state || prevMessage != message
 }
 
 func (ka *KubernetesAdapter) generateWorkloadID(deploymentID, leaseID string) string {

@@ -6,43 +6,157 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/stretchr/testify/require"
 
+	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
-func (s *KeeperTestSuite) TestDistributeStakingRewards() {
-	// Set up params with staking reward epoch length
-	params := types.DefaultParams()
-	params.StakingRewardEpochLength = 100
-	err := s.keeper.SetParams(s.ctx, params)
-	s.Require().NoError(err)
+func (s *KeeperTestSuite) seedStakeRewardRoutes(t *testing.T) {
+	t.Helper()
 
-	// Distribute staking rewards
-	epoch := uint64(1)
-	dist, err := s.keeper.DistributeStakingRewards(s.ctx, epoch)
-	s.Require().NoError(err)
-	s.Require().NotNil(dist)
-	s.Require().Equal(types.RewardSourceStaking, dist.Source)
-	s.Require().Equal(epoch, dist.EpochNumber)
-	s.Require().Len(dist.Recipients, 1)
-	s.Require().Equal(authtypes.NewModuleAddress(authtypes.FeeCollectorName).String(), dist.Recipients[0].Address)
+	params := s.delegationKeeper.GetParams(s.ctx)
+	params.ValidatorCommissionRate = 1000
+	require.NoError(t, s.delegationKeeper.SetParams(s.ctx, params))
+
+	validatorOneShares := delegationtypes.NewValidatorShares(s.validator.String(), s.ctx.BlockTime())
+	validatorOneShares.TotalStake = "700"
+	validatorOneShares.TotalShares = "700"
+	require.NoError(t, s.delegationKeeper.SetValidatorShares(s.ctx, *validatorOneShares))
+
+	validatorTwoShares := delegationtypes.NewValidatorShares(s.validatorTwo.String(), s.ctx.BlockTime())
+	validatorTwoShares.TotalStake = "300"
+	validatorTwoShares.TotalShares = "300"
+	require.NoError(t, s.delegationKeeper.SetValidatorShares(s.ctx, *validatorTwoShares))
+
+	require.NoError(t, s.delegationKeeper.SetDelegation(s.ctx, *delegationtypes.NewDelegation(
+		s.validator.String(),
+		s.validator.String(),
+		"400",
+		"400",
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)))
+	require.NoError(t, s.delegationKeeper.SetDelegation(s.ctx, *delegationtypes.NewDelegation(
+		s.delegatorOne.String(),
+		s.validator.String(),
+		"300",
+		"300",
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)))
+	require.NoError(t, s.delegationKeeper.SetDelegation(s.ctx, *delegationtypes.NewDelegation(
+		s.delegatorTwo.String(),
+		s.validatorTwo.String(),
+		"300",
+		"300",
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)))
 }
 
-func (s *KeeperTestSuite) TestDistributeStakingRewardsUsesRewardPoolAddress() {
-	params := types.DefaultParams()
-	params.StakingRewardEpochLength = 100
-	params.RewardPoolAddress = s.depositor.String()
-	err := s.keeper.SetParams(s.ctx, params)
-	s.Require().NoError(err)
+func rewardTotalsByAddress(recipients []types.RewardRecipient, denom string) map[string]sdkmath.Int {
+	totals := make(map[string]sdkmath.Int, len(recipients))
+	for _, recipient := range recipients {
+		total, found := totals[recipient.Address]
+		if !found {
+			total = sdkmath.ZeroInt()
+		}
+		totals[recipient.Address] = total.Add(recipient.Amount.AmountOf(denom))
+	}
+	return totals
+}
 
-	dist, err := s.keeper.DistributeStakingRewards(s.ctx, 1)
-	s.Require().NoError(err)
-	s.Require().NotNil(dist)
-	s.Require().Len(dist.Recipients, 1)
-	s.Require().Equal(s.depositor.String(), dist.Recipients[0].Address)
+func (s *KeeperTestSuite) TestDistributeStakingRewards() {
+	t := s.T()
+
+	s.seedStakeRewardRoutes(t)
+
+	params := s.keeper.GetParams(s.ctx)
+	params.StakingRewardEpochLength = 100
+	params.PayoutHoldbackRate = "0.10"
+	require.NoError(t, s.keeper.SetParams(s.ctx, params))
+
+	firstSettlement := s.buildSettlement(t, "staking-epoch-one")
+	firstSettlement.TotalAmount = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000)))
+	firstSettlement.PlatformFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(50)))
+	firstSettlement.ValidatorFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100)))
+	firstSettlement.ProviderShare = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(850)))
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, firstSettlement))
+
+	firstPayout, err := s.keeper.ExecutePayout(s.ctx, "inv-staking-epoch-one", firstSettlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateCompleted, firstPayout.State)
+
+	firstDist, err := s.keeper.DistributeStakingRewards(s.ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, types.RewardSourceStaking, firstDist.Source)
+	require.Equal(t, sdkmath.NewInt(100), firstDist.TotalRewards.AmountOf("uve"))
+
+	replayed, err := s.keeper.DistributeStakingRewards(s.ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, firstDist.DistributionID, replayed.DistributionID)
+
+	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	restarted.SetStakeRoutingKeeper(s.delegationKeeper)
+
+	secondSettlement := s.buildSettlement(t, "staking-epoch-two")
+	secondSettlement.TotalAmount = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(400)))
+	secondSettlement.PlatformFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(20)))
+	secondSettlement.ValidatorFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(40)))
+	secondSettlement.ProviderShare = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(340)))
+	require.NoError(t, restarted.SetSettlement(s.ctx, secondSettlement))
+
+	secondPayout, err := restarted.ExecutePayout(s.ctx, "inv-staking-epoch-two", secondSettlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateCompleted, secondPayout.State)
+
+	secondDist, err := restarted.DistributeStakingRewards(s.ctx, 2)
+	require.NoError(t, err)
+	require.Equal(t, sdkmath.NewInt(40), secondDist.TotalRewards.AmountOf("uve"))
+
+	validatorRewards, found := restarted.GetClaimableRewards(s.ctx, s.validator)
+	require.True(t, found)
+	require.Equal(t, sdkmath.NewInt(60), validatorRewards.TotalClaimable.AmountOf("uve"))
+
+	delegatorOneRewards, found := restarted.GetClaimableRewards(s.ctx, s.delegatorOne)
+	require.True(t, found)
+	require.Equal(t, sdkmath.NewInt(38), delegatorOneRewards.TotalClaimable.AmountOf("uve"))
+
+	validatorTwoRewards, found := restarted.GetClaimableRewards(s.ctx, s.validatorTwo)
+	require.True(t, found)
+	require.Equal(t, sdkmath.NewInt(4), validatorTwoRewards.TotalClaimable.AmountOf("uve"))
+
+	delegatorTwoRewards, found := restarted.GetClaimableRewards(s.ctx, s.delegatorTwo)
+	require.True(t, found)
+	require.Equal(t, sdkmath.NewInt(38), delegatorTwoRewards.TotalClaimable.AmountOf("uve"))
+}
+
+func (s *KeeperTestSuite) TestDistributeStakingRewardsRequiresStakeRoutingKeeper() {
+	t := s.T()
+
+	params := s.keeper.GetParams(s.ctx)
+	params.StakingRewardEpochLength = 100
+	require.NoError(t, s.keeper.SetParams(s.ctx, params))
+
+	standalone := keeper.NewKeeper(s.cdc, s.storeKey, s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	require.NoError(t, standalone.SetParams(s.ctx, params))
+
+	settlement := s.buildSettlement(t, "staking-missing-router")
+	settlement.TotalAmount = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(500)))
+	settlement.PlatformFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(25)))
+	settlement.ValidatorFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(50)))
+	settlement.ProviderShare = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(425)))
+	require.NoError(t, standalone.SetSettlement(s.ctx, settlement))
+
+	payout, err := standalone.ExecutePayout(s.ctx, "inv-staking-missing-router", settlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateCompleted, payout.State)
+
+	dist, err := standalone.DistributeStakingRewards(s.ctx, 1)
+	require.Nil(t, dist)
+	require.ErrorContains(t, err, "stake routing keeper not configured")
 }
 
 func (s *KeeperTestSuite) TestDistributeProviderRewards() {
@@ -175,16 +289,35 @@ func (s *KeeperTestSuite) TestClaimRewardsBySource() {
 }
 
 func (s *KeeperTestSuite) TestGetRewardsByEpoch() {
-	// Distribute rewards for multiple epochs
-	params := types.DefaultParams()
+	t := s.T()
+
+	s.seedStakeRewardRoutes(t)
+
+	params := s.keeper.GetParams(s.ctx)
 	params.StakingRewardEpochLength = 100
-	err := s.keeper.SetParams(s.ctx, params)
-	s.Require().NoError(err)
+	require.NoError(t, s.keeper.SetParams(s.ctx, params))
+
+	firstSettlement := s.buildSettlement(t, "rewards-epoch-one")
+	firstSettlement.TotalAmount = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100)))
+	firstSettlement.ValidatorFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))
+	firstSettlement.ProviderShare = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(90)))
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, firstSettlement))
+	_, err := s.keeper.ExecutePayout(s.ctx, "inv-rewards-epoch-one", firstSettlement.SettlementID)
+	require.NoError(t, err)
 
 	_, err = s.keeper.DistributeStakingRewards(s.ctx, 1)
-	s.Require().NoError(err)
+	require.NoError(t, err)
+
+	secondSettlement := s.buildSettlement(t, "rewards-epoch-two")
+	secondSettlement.TotalAmount = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(200)))
+	secondSettlement.ValidatorFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(20)))
+	secondSettlement.ProviderShare = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(180)))
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, secondSettlement))
+	_, err = s.keeper.ExecutePayout(s.ctx, "inv-rewards-epoch-two", secondSettlement.SettlementID)
+	require.NoError(t, err)
+
 	_, err = s.keeper.DistributeStakingRewards(s.ctx, 2)
-	s.Require().NoError(err)
+	require.NoError(t, err)
 
 	// Get rewards by epoch
 	epoch1Rewards := s.keeper.GetRewardsByEpoch(s.ctx, 1)

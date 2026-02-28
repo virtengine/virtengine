@@ -342,10 +342,10 @@ func TestGetValidSessionsForAccount(t *testing.T) {
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxAccountRecovery,
 		VerifiedFactors: []types.FactorType{types.FactorTypeVEID, types.FactorTypeFIDO2},
-		CreatedAt:       now,
+		CreatedAt:       now - 120,
 		ExpiresAt:       now + 5*60,
 		IsSingleUse:     true,
-		UsedAt:          now - 60, // Used 1 minute ago
+		UsedAt:          now - 60,
 	}
 	_ = keeper.CreateAuthorizationSession(ctx, usedSingleUseSession)
 
@@ -366,6 +366,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 		SessionID:       "valid-session",
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxProviderRegistration,
+		VerifiedFactors: []types.FactorType{types.FactorTypeFIDO2},
 		CreatedAt:       now,
 		ExpiresAt:       now + 15*60,
 	})
@@ -374,6 +375,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 		SessionID:       "expired-session-1",
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxHighValueOrder,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
 		CreatedAt:       now - 60*60,
 		ExpiresAt:       now - 30*60,
 	})
@@ -382,6 +384,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 		SessionID:       "expired-session-2",
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxMediumWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
 		CreatedAt:       now - 120*60,
 		ExpiresAt:       now - 60*60,
 	})
@@ -531,6 +534,9 @@ func TestCustomSensitiveTxConfig(t *testing.T) {
 		TransactionType: types.SensitiveTxHighValueOrder,
 		Enabled:         true,
 		MinVEIDScore:    80,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeFIDO2}},
+		},
 		SessionDuration: 10 * 60, // 10 minutes instead of default 30
 		IsSingleUse:     true,    // Override to single-use
 		Description:     "Custom high-value order config",

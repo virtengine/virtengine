@@ -14,8 +14,6 @@ Status: **83A workspace isolation DONE; 83B/83C partially implemented; 83D not s
 - Proto definition inventory (sdk/proto/node — all modules have .proto files)
 - Bosun scripts deep audit (2026-02-22): config.mjs, repo-root.mjs, monitor.mjs, agent-pool.mjs, task-executor.mjs, worktree-manager.mjs, codex-config.mjs, workspace-manager.mjs, setup.mjs — 9 files, 30k+ LOC
 - 83A-83D implementation verification audit (2026-02-22): line-by-line acceptance criteria check
-- vibe-kanban backlog snapshot (11 draft Bosun UI tasks, 12 todo chain/workspace tasks)
-- \_docs/KANBAN\_SPLIT\_TRACKER.md (34 secondary kanban tasks — no overlap)
 - Remote branch analysis (13 stale ve/ branches, none merged since Feb 11)
 
 ---

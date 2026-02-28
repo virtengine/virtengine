@@ -4,6 +4,8 @@
 package offramp
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/payment"
@@ -111,6 +113,9 @@ func (c PayPalConfig) GetBaseURL() string {
 type ACHConfig struct {
 	// Provider is the ACH provider (e.g., "stripe", "plaid")
 	Provider string `json:"provider"`
+
+	// BaseURL overrides the provider API base URL (primarily for direct ACH or testing)
+	BaseURL string `json:"base_url,omitempty"`
 
 	// SecretKey is the provider secret key
 	SecretKey string `json:"secret_key"`
@@ -454,8 +459,17 @@ func (c Config) Validate() error {
 			return ErrProviderNotConfigured
 		}
 	case ProviderACH:
-		if c.ACHConfig.SecretKey == "" {
+		if strings.TrimSpace(c.ACHConfig.SecretKey) == "" {
 			return ErrProviderNotConfigured
+		}
+		if isDirectACHProvider(c.ACHConfig.Provider) && strings.TrimSpace(c.ACHConfig.BaseURL) == "" {
+			return fmt.Errorf("direct ACH base_url is required: %w", ErrProviderNotConfigured)
+		}
+	}
+
+	if c.AMLConfig.Enabled && wantsExternalAMLProvider(c.AMLConfig) {
+		if strings.TrimSpace(c.AMLConfig.APIURL) == "" || strings.TrimSpace(c.AMLConfig.APIKey) == "" {
+			return fmt.Errorf("AML api_url and api_key are required when an external AML provider is configured: %w", ErrProviderNotConfigured)
 		}
 	}
 
@@ -474,6 +488,28 @@ func (c Config) IsCurrencySupported(currency payment.Currency) bool {
 		}
 	}
 	return false
+}
+
+func normalizedACHProvider(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
+}
+
+func isDirectACHProvider(provider string) bool {
+	switch normalizedACHProvider(provider) {
+	case "", "stripe", "stripe_treasury", "stripe-treasury":
+		return false
+	default:
+		return true
+	}
+}
+
+func wantsExternalAMLProvider(cfg AMLConfig) bool {
+	if strings.TrimSpace(cfg.APIURL) != "" || strings.TrimSpace(cfg.APIKey) != "" {
+		return true
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+	return provider != "" && provider != "mock"
 }
 
 // GetLimitsForTier returns limits for a verification tier

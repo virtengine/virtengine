@@ -108,33 +108,44 @@ spec:
             - |
               echo "Detecting TEE hardware..."
               
-              # Detect platform
-              PLATFORM="simulated"
+              REQUESTED_PLATFORM="${VIRTENGINE_TEE_PLATFORM:-auto}"
+              DETECTED_PLATFORM=""
               
-              # Check for Nitro
-              if [ -e /dev/nsm ]; then
-                echo "Nitro NSM device detected"
-                PLATFORM="nitro"
-              fi
-              
-              # Check for SEV-SNP
+              # Prefer the most production-complete backends first.
               if [ -e /dev/sev-guest ]; then
                 echo "SEV-SNP device detected"
-                PLATFORM="sev-snp"
+                DETECTED_PLATFORM="sev-snp"
               fi
               
-              # Check for SGX
-              if [ -e /dev/sgx/enclave ] || [ -e /dev/sgx_enclave ]; then
+              if [ -z "$DETECTED_PLATFORM" ] && { [ -e /dev/nsm ] || [ -e /dev/nitro_enclaves ]; }; then
+                echo "Nitro device detected"
+                DETECTED_PLATFORM="nitro"
+              fi
+              
+              if [ -z "$DETECTED_PLATFORM" ] && { [ -e /dev/sgx/enclave ] || [ -e /dev/sgx_enclave ]; }; then
                 echo "SGX device detected"
-                PLATFORM="sgx"
+                DETECTED_PLATFORM="sgx"
+              fi
+
+              PLATFORM="$REQUESTED_PLATFORM"
+              if [ "$REQUESTED_PLATFORM" = "auto" ]; then
+                PLATFORM="$DETECTED_PLATFORM"
+              fi
+              if [ -z "$PLATFORM" ]; then
+                PLATFORM="none"
               fi
               
               echo "Detected platform: $PLATFORM"
               echo "$PLATFORM" > /shared/platform
               
               # Verify hardware for production
-              if [ "$VIRTENGINE_TEE_REQUIRE_HARDWARE" = "true" ] && [ "$PLATFORM" = "simulated" ]; then
+              if [ "$VIRTENGINE_TEE_REQUIRE_HARDWARE" = "true" ] && [ -z "$DETECTED_PLATFORM" ]; then
                 echo "ERROR: Production mode requires TEE hardware, but none detected"
+                exit 1
+              fi
+
+              if [ "$REQUESTED_PLATFORM" != "auto" ] && [ "$DETECTED_PLATFORM" != "$REQUESTED_PLATFORM" ]; then
+                echo "ERROR: Requested TEE platform $REQUESTED_PLATFORM not detected"
                 exit 1
               fi
               
@@ -145,6 +156,11 @@ spec:
                 configMapKeyRef:
                   name: tee-enclave-config
                   key: VIRTENGINE_TEE_REQUIRE_HARDWARE
+            - name: VIRTENGINE_TEE_PLATFORM
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_PLATFORM
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
@@ -198,6 +214,11 @@ spec:
                 configMapKeyRef:
                   name: tee-enclave-config
                   key: VIRTENGINE_TEE_REQUIRE_HARDWARE
+            - name: VIRTENGINE_TEE_PLATFORM
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_PLATFORM
             - name: VIRTENGINE_TEE_ALLOW_DEBUG
               valueFrom:
                 configMapKeyRef:
@@ -318,8 +339,8 @@ metadata:
     app.kubernetes.io/component: enclave
     app.kubernetes.io/part-of: virtengine
   annotations:
-    # For AWS: eks.amazonaws.com/role-arn annotation for IRSA
-    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/virtengine-tee-enclave
+    # Add the environment-specific IRSA annotation in the cluster overlay when
+    # the TEE workload needs direct AWS API access.
 
 ---
 # PodDisruptionBudget for high availability

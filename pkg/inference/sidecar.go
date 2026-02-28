@@ -137,7 +137,11 @@ func (sc *SidecarClient) connect() error {
 // refreshModelInfo fetches model version and hash from sidecar
 func (sc *SidecarClient) refreshModelInfo() error {
 	if sc.grpcClient == nil {
-		// Fallback for testing when no real connection
+		if !sc.config.AllowFallbackToStub {
+			return simulatedInferenceDisabledError("sidecar model info fallback")
+		}
+
+		// Explicit non-production fallback for tests without a live sidecar.
 		sc.modelVersion = sc.config.ModelVersion
 		sc.modelHash = sc.config.ExpectedHash
 		return nil
@@ -269,8 +273,10 @@ func (sc *SidecarClient) ComputeScoreWithContext(ctx context.Context, inputs *Sc
 
 // callSidecar makes the actual gRPC call to the inference sidecar
 func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, inputs *ScoreInputs) (*ScoreResult, error) {
-	// If no real gRPC client, fall back to simulated response
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar inference fallback")
+		}
 		return sc.simulateSidecarResponse(features, inputs)
 	}
 
@@ -316,7 +322,8 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 	return result, nil
 }
 
-// simulateSidecarResponse simulates sidecar response for testing
+// simulateSidecarResponse simulates sidecar response for explicitly enabled
+// non-production test flows.
 func (sc *SidecarClient) simulateSidecarResponse(features []float32, _ *ScoreInputs) (*ScoreResult, error) {
 	// Compute a deterministic score based on features
 	var sum float32
@@ -402,6 +409,9 @@ func (sc *SidecarClient) Close() error {
 // PerformHealthCheck performs a health check against the sidecar
 func (sc *SidecarClient) PerformHealthCheck(ctx context.Context) (*SidecarHealthStatus, error) {
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar health fallback")
+		}
 		return &SidecarHealthStatus{
 			Healthy:      sc.isConnected,
 			ModelLoaded:  true,
@@ -442,6 +452,9 @@ type SidecarHealthStatus struct {
 // GetMetrics fetches metrics from the sidecar
 func (sc *SidecarClient) GetMetrics(ctx context.Context) (*SidecarMetrics, error) {
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar metrics fallback")
+		}
 		return &SidecarMetrics{
 			TotalInferences:      sc.inferenceCount,
 			SuccessfulInferences: sc.inferenceCount - sc.errorCount,
@@ -487,6 +500,9 @@ type SidecarMetrics struct {
 // VerifyDeterminism runs a determinism verification check
 func (sc *SidecarClient) VerifyDeterminism(ctx context.Context, testVectorID string) (*DeterminismResult, error) {
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar determinism fallback")
+		}
 		return &DeterminismResult{
 			Passed:       true,
 			TestVectorID: testVectorID,

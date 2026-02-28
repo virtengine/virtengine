@@ -31,28 +31,32 @@ import type {
 import { formatCurrency, formatDate, truncateAddress } from '@/lib/utils';
 import { accountLink, txLink } from '@/lib/explorer';
 import { useOrderStore } from '@/stores/orderStore';
+import { useSupportStore } from '@/stores/supportStore';
 import { useWallet } from '@/lib/portal-adapter';
 
 export default function OrderDetailClient() {
   const params = useParams();
   const id = params.id as string;
+  const wallet = useWallet();
+  const account = wallet.accounts[wallet.activeAccountIndex];
 
   const { order, connectionStatus, isLoading, error, refresh } = useOrderTracking({
     orderId: id,
+    ownerAddress: account?.address,
     enabled: true,
     pollingInterval: 30000,
   });
-  const wallet = useWallet();
   const closeOrder = useOrderStore((s) => s.closeOrder);
+  const createTicket = useSupportStore((s) => s.createTicket);
 
-  const handleExtend = useCallback(async (req: ExtendOrderRequest): Promise<OrderActionResult> => {
-    // In production: apiClient.post('/orders/extend', req)
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    return {
-      success: true,
-      message: `Order extended by ${req.additionalDuration} ${req.durationUnit}`,
-    };
-  }, []);
+  const handleExtend = useCallback(
+    (req: ExtendOrderRequest): Promise<OrderActionResult> =>
+      Promise.resolve({
+        success: false,
+        message: `Live order duration extension is not exposed by the current chain or provider APIs for order ${req.orderId}.`,
+      }),
+    []
+  );
 
   const handleCancel = useCallback(
     async (req: CancelOrderRequest): Promise<OrderActionResult> => {
@@ -81,11 +85,52 @@ export default function OrderDetailClient() {
   );
 
   const handleSupport = useCallback(
-    async (_req: SupportTicketRequest): Promise<OrderActionResult> => {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      return { success: true, message: 'Support ticket created', ticketId: 'TKT-1234' };
+    async (req: SupportTicketRequest): Promise<OrderActionResult> => {
+      if (!account?.address) {
+        return { success: false, message: 'Connect your wallet to create a support ticket.' };
+      }
+      if (!order?.providerId) {
+        return {
+          success: false,
+          message: 'Provider details are unavailable for this order, so support cannot be submitted.',
+        };
+      }
+
+      try {
+        const ticket = await createTicket({
+          subject: req.subject,
+          description: req.description,
+          category:
+            req.category === 'billing'
+              ? 'billing'
+              : req.category === 'other'
+                ? 'other'
+                : 'technical',
+          priority:
+            req.priority === 'critical'
+              ? 'urgent'
+              : req.priority === 'medium'
+                ? 'normal'
+                : req.priority,
+          providerId: order.providerId,
+          relatedEntity: { type: 'deployment', id: req.orderId },
+        });
+        return {
+          success: true,
+          message: 'Support ticket created.',
+          ticketId: ticket.ticketNumber,
+        };
+      } catch (supportError) {
+        return {
+          success: false,
+          message:
+            supportError instanceof Error
+              ? supportError.message
+              : 'Failed to create support ticket.',
+        };
+      }
     },
-    []
+    [account?.address, createTicket, order?.providerId]
   );
 
   if (isLoading && !order) {
@@ -183,7 +228,10 @@ export default function OrderDetailClient() {
                       <InfoItem label="Resource Type" value={order.resourceType} />
                       <InfoItem label="Provider" value={order.providerName} />
                       <InfoItem label="Region" value={order.region} />
-                      <InfoItem label="Duration" value={formatDuration(order.createdAt)} />
+                      <InfoItem
+                        label="Duration"
+                        value={formatDuration(order.createdAt, order.updatedAt)}
+                      />
                       <InfoItem
                         label="Provider Address"
                         value={

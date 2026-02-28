@@ -6,7 +6,7 @@ Owner: Release Management (Ops)
 ## Purpose
 Archive the named approver set, approved launch window, approved freeze
 window, and quorum-backed release-control outcome for the 2026-04-11
-repository-backed mainnet rehearsal.
+repository-backed mainnet rehearsal and final genesis publication review.
 
 ## Identity model for this record
 - Repository evidence uses named operational handles instead of personal names.
@@ -60,7 +60,34 @@ repository-backed mainnet rehearsal.
 | Compliance/Privacy | `COMP-01` | Approved | 2026-04-11 06:09 | Privacy/compliance references accepted for launch hold state |
 | Operations/SRE | `OPS-01` | Approved | 2026-04-11 06:10 | Launch/freeze windows, rehearsal bundle, and DR drill evidence accepted |
 | Finance/Billing | `FIN-01` | Approved | 2026-04-11 06:11 | Reconciliation, payout, and dispute-flow evidence accepted |
-| Product/Release | `PROD-01` | Approved | 2026-04-11 06:12 | Comms packet accepted; final public launch remains on hold pending genesis allocations |
+| Product/Release | `PROD-01` | Approved | 2026-04-11 06:12 | Comms packet accepted during the execution-evidence review stage; final launch state awaited allocation closure at that time |
+
+## Final genesis publication review
+- Review date (UTC): 2026-04-11
+- Review window (UTC): 08:18 to 08:28
+- Chair: `RM-01`
+- Attendees: `RM-01`, `SEC-01`, `COMP-01`, `OPS-01`, `FIN-01`, `PROD-01`,
+  `VREL-01`, `PLAT-01`, `SCRIBE-01`
+- Review inputs:
+  - `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`
+  - `config/mainnet/genesis-allocations.json`
+  - `artifacts/mainnet/genesis.json`
+  - `artifacts/mainnet/genesis.sha256`
+  - `artifacts/mainnet/gentx.sha256`
+  - `artifacts/mainnet/ceremony-manifest.json`
+  - `artifacts/mainnet/ceremony-manifest.sha256`
+  - `output/mainnet-launch/2026-04-11/mainnet-genesis-ceremony.log`
+  - `output/mainnet-launch/2026-04-11/prelaunch-checklist-pass.log`
+
+## Final approval amendment
+
+| Area | Approver | Decision | Timestamp (UTC) | Notes |
+| --- | --- | --- | --- | --- |
+| Security | `SEC-01` | Re-affirmed | 2026-04-11 08:21 | Final genesis bundle and allocation control record do not introduce a new security-domain blocker |
+| Compliance/Privacy | `COMP-01` | Re-affirmed | 2026-04-11 08:22 | Final canonical allocations do not change the approved compliance posture |
+| Operations/SRE | `OPS-01` | Approved | 2026-04-11 08:23 | Final genesis bundle published, deterministic hashes verified, prelaunch automation passed |
+| Finance/Billing | `FIN-01` | Approved | 2026-04-11 08:24 | Treasury, community pool, and vesting allocations match the approved control record |
+| Product/Release | `PROD-01` | Approved | 2026-04-11 08:25 | Launch package is approved for the scheduled primary and backup UTC windows |
 
 ## Reviewed controls tied to readiness checklist section D
 - Upgrade runbook reviewed and a 45-minute validator upgrade drill window was
@@ -76,12 +103,16 @@ repository-backed mainnet rehearsal.
   - `_docs/training/modules/security-fundamentals.md`
   - `_docs/training/security/security-incident-response.md`
 
-## Current hold basis
+## Current launch basis
 - Execution-evidence gaps are closed.
 - Named launch approvers, launch windows, freeze windows, dress rehearsal,
-  finance evidence, backup/restore evidence, and the comms packet are now
-  archived in git.
-- Final `GO` is withheld because `config/mainnet/genesis-allocations.json`
-  still intentionally fails closed until signed canonical treasury,
-  community-pool, and team-vesting addresses are inserted and the final
-  `artifacts/mainnet/genesis.json` bundle is rebuilt.
+  finance evidence, backup/restore evidence, the comms packet, and the final
+  genesis publication bundle are archived in git.
+- `config/mainnet/genesis-allocations.json` is now `READY` with approved
+  canonical treasury, community-pool, team-vesting, and validator
+  self-delegation addresses.
+- The current repository-backed launch posture is `GO` for the scheduled
+  primary launch window on 2026-04-18 UTC and the backup window on
+  2026-04-19 UTC.
+- Public mainnet availability should still be described as scheduled rather
+  than already live until the approved launch window begins.

@@ -84,20 +84,33 @@ func (c *ProductionMOABClient) setupAuth() (ssh.AuthMethod, error) {
 		return ssh.Password(c.config.Password), nil
 
 	case "key":
-		keyPath := os.Getenv("MOAB_SSH_KEY")
+		keyPath := c.config.SSHPrivateKeyPath
+		if keyPath == "" {
+			keyPath = os.Getenv("MOAB_SSH_KEY")
+		}
 		if keyPath == "" {
 			keyPath = os.ExpandEnv("$HOME/.ssh/id_rsa")
 		}
-		keyPath = filepath.Clean(keyPath)
-		// #nosec G304,G703 -- key path is configured via environment and cleaned.
-		key, err := os.ReadFile(keyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read SSH key: %w", err)
+
+		var key []byte
+		var err error
+		if c.config.SSHPrivateKey != "" {
+			key = []byte(c.config.SSHPrivateKey)
+		} else {
+			keyPath = filepath.Clean(keyPath)
+			// #nosec G304,G703 -- key path is configured via environment/config and cleaned.
+			key, err = os.ReadFile(keyPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read SSH key: %w", err)
+			}
 		}
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
 			// Try with passphrase
-			passphrase := os.Getenv("MOAB_SSH_PASSPHRASE")
+			passphrase := c.config.SSHPassphrase
+			if passphrase == "" {
+				passphrase = os.Getenv("MOAB_SSH_PASSPHRASE")
+			}
 			if passphrase != "" {
 				signer, err = ssh.ParsePrivateKeyWithPassphrase(key, []byte(passphrase))
 				if err != nil {

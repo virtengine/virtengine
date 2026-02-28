@@ -4,75 +4,45 @@
 **Audit Window:** 2026-02-04 to 2026-02-06  
 **Auditor:** Third-Party Security Firm (name withheld under NDA)  
 **Engagement ID:** VE-AUDIT-EXT-2026-02  
-**Scope:** Cryptography, ZK proofs, TEE attestation, encryption envelopes, signature verification
+**Scope:** cryptography, identity verification, replay protection, attestation, and consensus-critical verification logic
 
 ## Executive Summary
 
-An independent third-party security firm completed an audit of VirtEngine
-cryptographic implementations and identity security controls. The audit focused
-on consensus-critical and privacy-sensitive components. No Critical or High
-severity findings were reported. Medium and Low findings were remediated or
-placed into tracked follow-up items with mitigation in place.
+The external engagement focused on consensus-critical and privacy-sensitive logic:
 
-## In-Scope Components
+- VEID cryptographic signature verification
+- wallet rebinding and key-rotation controls
+- attestation parsing and replay protection
+- deterministic consensus verification and result hashing
 
-- `pkg/veid/crypto` and related envelope handling
-- `x/veid` verification flows, signature validation, and audit logging
-- ZK proof verification circuits and validation logic
-- TEE attestation schemas and verification pipelines
-- Key management and rotation procedures
-
-## Methodology
-
-- Threat modeling and architecture review
-- Manual source code analysis for cryptographic correctness
-- Targeted test execution for edge cases and misuse scenarios
-- Verification of constant-time comparisons and timing behavior
+No Critical or High findings were reported in the audited scope. Medium and Low findings were closed and are now tied to reproducible repository evidence.
 
 ## Findings Summary
 
 | Severity | Count | Status |
-|----------|-------|--------|
-| Critical | 0     | N/A    |
-| High     | 0     | N/A    |
-| Medium   | 2     | Remediated |
-| Low      | 3     | Remediated |
-| Info     | 4     | Noted |
+| --- | --- | --- |
+| Critical | 0 | N/A |
+| High | 0 | N/A |
+| Medium | 2 | Remediated and regression-covered |
+| Low | 3 | Remediated and regression-covered |
+| Info | 4 | Recorded in engagement notes |
 
-## Remediation Summary
+## Remediation Verification Matrix
 
-| ID | Area | Severity | Resolution |
-|----|------|----------|------------|
-| VE-AUD-2026-001 | Envelope input validation | Medium | Fixed and verified |
-| VE-AUD-2026-002 | ZK proof bounds checks | Medium | Fixed and verified |
-| VE-AUD-2026-003 | Signature error handling | Low | Fixed and verified |
-| VE-AUD-2026-004 | Key rotation logging | Low | Fixed and verified |
-| VE-AUD-2026-005 | Attestation nonce reuse note | Low | Fixed and verified |
+| ID | Area | Evidence | Local Reproduction | Incident / Runbook Anchor |
+| --- | --- | --- | --- | --- |
+| `VE-AUD-2026-001` | Envelope input validation | `tests/security/audit_crypto_contract_test.go` | `go test -tags=security ./tests/security/... -run TestAuditCrypto_EmbeddingEnvelopeValidation` | `_docs/training/security/security-incident-response.md` (VEID key compromise section) |
+| `VE-AUD-2026-002` | ZK proof / verifier bounds and artifact validation | `x/veid/zk/params/bundle_test.go`, `x/veid/keeper/zk_params_e2e_test.go` | `go test -tags='e2e.integration' ./x/veid/zk/... ./x/veid/keeper/...` | `_docs/veid-zkproofs-security.md` |
+| `VE-AUD-2026-003` | Signature error handling and replay-safe salt binding | `tests/security/audit_crypto_contract_test.go` | `go test -tags=security ./tests/security/... -run TestAuditCrypto_SaltBindingRequiresFreshTimestampAndValidSignatures` | `_docs/training/security/security-best-practices.md` |
+| `VE-AUD-2026-004` | Key rotation and identity rebinding | `tests/security/identity_integration_test.go` | `go test -tags='security,integration' ./tests/security/... -run TestIdentitySecurity_RebindWalletFlowRequiresLinkedSignatures` | `_docs/training/security/security-incident-response.md` |
+| `VE-AUD-2026-005` | Attestation replay / stale-key rejection | `tests/security/attestation_e2e_test.go` | `go test -tags='security,e2e.integration' ./tests/security/... -run 'TestSecurityAttestationE2E_HeartbeatReplayIsRejected|TestSecurityAttestationE2E_StaleRotationKeyIsRejectedAfterOverlap'` | `_docs/training/security/threat-modeling.md` |
 
-## Key Management Review
+## Re-Test Notes
 
-- Key rotation and backup procedures validated
-- Access control to signing keys confirmed
-- No hardcoded keys discovered in scope
-
-## Side-Channel Resistance Review
-
-- Constant-time comparisons validated for secret-bearing paths
-- No data-dependent branching in signature verification identified
-- TEE attestation validation includes replay protection
-
-## Verification
-
-The auditor performed a re-test of all remediations and confirmed closure.
-Internal regression tests were run to validate the fixes and ensure no
-behavioral regressions.
-
-## Conclusion
-
-The audited components meet security expectations for the defined scope. The
-project should continue routine security reviews and dependency monitoring.
+The repository evidence above is the current closure bar for the audited scope. When any audited control changes, the corresponding test or runbook must be updated in the same change set.
 
 ## Artifacts
 
-- Engagement record: `_docs/audits/external-security-audit-engagement.md`
-- Security changelog: `SECURITY_CHANGELOG.md`
+- engagement record: `_docs/audits/external-security-audit-engagement.md`
+- public security policy: `SECURITY.md`
+- repository security suite: `tests/security/README.md`

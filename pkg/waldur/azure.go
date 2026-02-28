@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	client "github.com/waldur/go-client"
 )
 
@@ -77,15 +76,24 @@ func (a *AzureClient) ListAzureVMs(ctx context.Context, params ListAzureVMsParam
 		apiParams := &client.AzureVirtualmachinesListParams{}
 
 		if params.ServiceSettingsUUID != "" {
-			u := uuid.MustParse(params.ServiceSettingsUUID)
+			u, err := parseUUIDParam("service settings UUID", params.ServiceSettingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ServiceSettingsUuid = &u
 		}
 		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
+			u, err := parseUUIDParam("project UUID", params.ProjectUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ProjectUuid = &u
 		}
 		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
+			u, err := parseUUIDParam("customer UUID", params.CustomerUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.CustomerUuid = &u
 		}
 		if params.Name != "" {
@@ -130,7 +138,10 @@ func (a *AzureClient) GetAzureVM(ctx context.Context, vmUUID string) (*AzureVirt
 	var vm *AzureVirtualMachine
 
 	err := a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(vmUUID)
+		uuidType, err := parseUUIDParam("vm UUID", vmUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AzureVirtualmachinesRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -155,7 +166,10 @@ func (a *AzureClient) GetAzureVM(ctx context.Context, vmUUID string) (*AzureVirt
 // DeleteAzureVM deletes an Azure VM
 func (a *AzureClient) DeleteAzureVM(ctx context.Context, vmUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(vmUUID)
+		uuidType, err := parseUUIDParam("vm UUID", vmUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AzureVirtualmachinesDestroyWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -172,7 +186,10 @@ func (a *AzureClient) DeleteAzureVM(ctx context.Context, vmUUID string) error {
 // StartAzureVM starts a stopped Azure VM
 func (a *AzureClient) StartAzureVM(ctx context.Context, vmUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(vmUUID)
+		uuidType, err := parseUUIDParam("vm UUID", vmUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AzureVirtualmachinesStartWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -189,7 +206,10 @@ func (a *AzureClient) StartAzureVM(ctx context.Context, vmUUID string) error {
 // StopAzureVM stops a running Azure VM
 func (a *AzureClient) StopAzureVM(ctx context.Context, vmUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(vmUUID)
+		uuidType, err := parseUUIDParam("vm UUID", vmUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AzureVirtualmachinesStopWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -206,7 +226,10 @@ func (a *AzureClient) StopAzureVM(ctx context.Context, vmUUID string) error {
 // RestartAzureVM restarts an Azure VM
 func (a *AzureClient) RestartAzureVM(ctx context.Context, vmUUID string) error {
 	return a.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(vmUUID)
+		uuidType, err := parseUUIDParam("vm UUID", vmUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := a.client.api.AzureVirtualmachinesRestartWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -228,7 +251,10 @@ func (a *AzureClient) ListAzureLocations(ctx context.Context, settingsUUID strin
 		apiParams := &client.AzureLocationsListParams{}
 
 		if settingsUUID != "" {
-			u := uuid.MustParse(settingsUUID)
+			u, err := parseUUIDParam("settings UUID", settingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.SettingsUuid = &u
 		}
 
@@ -270,7 +296,10 @@ func (a *AzureClient) ListAzureSizes(ctx context.Context, settingsUUID string) (
 		apiParams := &client.AzureSizesListParams{}
 
 		if settingsUUID != "" {
-			u := uuid.MustParse(settingsUUID)
+			u, err := parseUUIDParam("settings UUID", settingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.SettingsUuid = &u
 		}
 

@@ -24,7 +24,7 @@ This document defines the billing schema, pricing rules, tax handling, and settl
 ### Invoice Lifecycle
 
 ```
-Draft → Pending → [Paid | Partially Paid | Overdue | Disputed] → [Paid | Cancelled | Refunded]
+draft → pending → [paid | partially paid | overdue | disputed] → [paid | cancelled | refunded]
 ```
 
 ### Invoice Fields
@@ -513,7 +513,7 @@ Providers submit usage reports via the `UsagePipelineKeeper.SubmitUsageReport` i
 1. Each `ResourceUsage` entry becomes a `LineItem`
 2. Line item amounts are calculated as `quantity × unit_price`
 3. All line items are summed into the invoice subtotal
-4. The invoice is created in `Pending` status with a 30-day due date
+4. The invoice is created in `pending` status with a 30-day due date
 5. A resource breakdown is stored on-chain for audit
 
 **Resource types supported:**
@@ -570,6 +570,25 @@ Reconciliation reports include:
 - Total payouts verified
 - Discrepancy count by type and severity
 - Summary totals (usage amount, invoiced amount, paid out amount)
+
+### Treasury Payout Evidence and Finance Sign-Off
+
+Provider payout completion is not considered final for finance until the off-ramp bridge evidence has been captured and archived. The approval packet is generated from:
+
+- `go test ./pkg/payments/offramp -count=1`
+- `go test -tags "e2e.integration" ./pkg/payments/offramp -count=1`
+- `go test -tags "e2e.integration" ./tests/integration/settlement -run 'TestFiatConversionPipelineSuccess|TestFiatConversionReconciliation' -count=1 -v`
+
+The settlement integration suite emits a `finance-evidence=` JSON line that finance must archive exactly as produced. At minimum, the packet must prove:
+
+- invoice, settlement, payout, and conversion IDs are linked
+- payout and conversion idempotency keys are present
+- the selected off-ramp provider, quote, payout ID, and reference are stable
+- the bridge status and provider status both end in `completed`
+- the payout ledger contains the terminal `completed` entry
+- treasury balance matches the expected platform plus validator fee balance
+
+The operating procedure is defined in [Finance Reconciliation Runbook](runbooks/finance-reconciliation-runbook.md). Billing policy sign-off is invalid if finance relies on a manual spreadsheet or provider portal export without the corresponding `finance-evidence` packet.
 
 ### Export Formats
 

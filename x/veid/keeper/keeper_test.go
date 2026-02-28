@@ -396,6 +396,39 @@ func (s *KeeperTestSuite) TestScoreUpdateAndTier() {
 	s.Require().Equal(trustedTier, record.Tier)
 }
 
+func (s *KeeperTestSuite) TestVerificationHistoryIsPersistedNewestFirst() {
+	address := sdk.AccAddress([]byte(testAddress1))
+
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	err := s.keeper.SetParams(s.ctx, params)
+	s.Require().NoError(err)
+
+	scope := types.NewIdentityScope(
+		"scope-history",
+		types.ScopeTypeFaceVideo,
+		s.createTestPayload(),
+		s.createTestUploadMetadata(),
+		time.Now(),
+	)
+	err = s.keeper.UploadScope(s.ctx, address, scope)
+	s.Require().NoError(err)
+
+	err = s.keeper.UpdateVerificationStatus(s.ctx, address, "scope-history",
+		types.VerificationStatusInProgress, "verification started", "validator-1")
+	s.Require().NoError(err)
+
+	err = s.keeper.UpdateVerificationStatus(s.ctx, address, "scope-history",
+		types.VerificationStatusRejected, "verification failed", "validator-1")
+	s.Require().NoError(err)
+
+	history := s.keeper.GetVerificationHistory(s.ctx, address, 10)
+	s.Require().Len(history, 2)
+	s.Require().Equal(types.VerificationStatusRejected, history[0].NewStatus)
+	s.Require().Equal(types.VerificationStatusInProgress, history[1].NewStatus)
+}
+
 // Test: Salt binding - prevent salt reuse
 func (s *KeeperTestSuite) TestSaltBindingPreventReuse() {
 	address := sdk.AccAddress([]byte(testAddress1))

@@ -1,7 +1,36 @@
 name: Staging E2E
 
+defaults:
+  run:
+    shell: bash
+
 on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: false
+        default: "staging"
+        type: string
+      test_pattern:
+        description: "Go test -run pattern"
+        required: false
+        default: "TestFullLifecycleE2E|TestFullLifecycleWithFailures|TestIdentityOrderProvisionPayoutE2E"
+        type: string
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+      test_pattern:
+        description: "Go test -run pattern"
+        required: true
+        default: "TestFullLifecycleE2E|TestFullLifecycleWithFailures|TestIdentityOrderProvisionPayoutE2E"
+        type: string
   workflow_run:
     workflows: ["infrastructure"]
     types: [completed]
@@ -14,13 +43,15 @@ jobs:
   staging-e2e:
     name: Staging E2E Tests
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    environment: staging
+    timeout-minutes: 60
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.workflow_run.conclusion == 'success' }}
+    environment: ${{ inputs.environment || github.event.inputs.environment || 'staging' }}
     permissions:
       contents: read
     env:
       GO_VERSION: "1.25.5"
       GO_TEST_TIMEOUT_E2E: "45m"
+      STAGING_E2E_TEST_PATTERN: ${{ inputs.test_pattern || github.event.inputs.test_pattern || 'TestFullLifecycleE2E|TestFullLifecycleWithFailures|TestIdentityOrderProvisionPayoutE2E' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,12 +62,17 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Run staging E2E flow tests
         run: |
+          echo "Running staging E2E pattern: ${STAGING_E2E_TEST_PATTERN}"
           go test -v -tags="e2e.integration" \
-            -timeout ${{ env.GO_TEST_TIMEOUT_E2E }} \
+            -count=1 \
+            -timeout "${GO_TEST_TIMEOUT_E2E}" \
             ./tests/e2e/... \
-            -run "TestIdentityOrderProvisionPayoutE2E" \
+            -run "${STAGING_E2E_TEST_PATTERN}" \
             2>&1 | tee staging-e2e-output.txt
 
       - name: Upload staging E2E logs
@@ -45,4 +81,4 @@ jobs:
         with:
           name: staging-e2e-logs
           path: staging-e2e-output.txt
-          retention-days: 7
+          retention-days: 14

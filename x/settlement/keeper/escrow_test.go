@@ -22,6 +22,7 @@ import (
 	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	escrowmodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	delegationkeeper "github.com/virtengine/virtengine/x/delegation/keeper"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -215,17 +216,21 @@ func (m *MockEscrowKeeper) SaveAccount(_ sdk.Context, account etypes.Account) er
 type KeeperTestSuite struct {
 	suite.Suite
 
-	ctx        sdk.Context
-	keeper     keeper.Keeper
-	bankKeeper *MockBankKeeper
-	escrow     *MockEscrowKeeper
-	cdc        codec.Codec
-	storeKey   storetypes.StoreKey
+	ctx              sdk.Context
+	keeper           keeper.Keeper
+	delegationKeeper delegationkeeper.Keeper
+	bankKeeper       *MockBankKeeper
+	escrow           *MockEscrowKeeper
+	cdc              codec.Codec
+	storeKey         storetypes.StoreKey
 
 	// Test addresses
-	depositor sdk.AccAddress
-	provider  sdk.AccAddress
-	validator sdk.AccAddress
+	depositor    sdk.AccAddress
+	provider     sdk.AccAddress
+	validator    sdk.AccAddress
+	validatorTwo sdk.AccAddress
+	delegatorOne sdk.AccAddress
+	delegatorTwo sdk.AccAddress
 }
 
 func TestKeeperTestSuite(t *testing.T) {
@@ -236,6 +241,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	// Create store key
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 	s.storeKey = storeKey
+	delegationStoreKey := storetypes.NewKVStoreKey("delegation")
 
 	// Create codec
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -245,6 +251,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	stateStore.MountStoreWithDB(delegationStoreKey, storetypes.StoreTypeIAVL, db)
 	require.NoError(s.T(), stateStore.LoadLatestVersion())
 
 	// Create proper context with multi-store
@@ -259,11 +266,16 @@ func (s *KeeperTestSuite) SetupTest() {
 
 	// Create keeper
 	s.keeper = keeper.NewKeeper(s.cdc, storeKey, s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	s.delegationKeeper = delegationkeeper.NewKeeper(s.cdc, delegationStoreKey, s.bankKeeper, nil, "authority")
+	s.keeper.SetStakeRoutingKeeper(s.delegationKeeper)
 
 	// Create test addresses
 	s.depositor = sdk.AccAddress([]byte("depositor___________"))
 	s.provider = sdk.AccAddress([]byte("provider____________"))
 	s.validator = sdk.AccAddress([]byte("validator___________"))
+	s.validatorTwo = sdk.AccAddress([]byte("validator2__________"))
+	s.delegatorOne = sdk.AccAddress([]byte("delegator1__________"))
+	s.delegatorTwo = sdk.AccAddress([]byte("delegator2__________"))
 
 	// Fund depositor
 	s.bankKeeper.SetBalance(s.depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000000))))

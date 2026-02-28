@@ -1,8 +1,11 @@
 # VirtEngine Infrastructure CI/CD
 
 name: Infrastructure
+
 permissions:
   contents: read
+  id-token: write
+  pull-requests: write
 
 on:
   push:
@@ -12,7 +15,6 @@ on:
     paths:
       - 'infra/**'
       - 'deploy/**'
-      - '.github/workflows/infrastructure.yml'
       - '.github/workflows/infrastructure.yaml'
   pull_request:
     branches:
@@ -21,10 +23,12 @@ on:
       - 'infra/**'
       - 'deploy/**'
       - '.github/workflows/infrastructure.yaml'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy'
+        description: 'Environment to target'
         required: true
         type: choice
         options:
@@ -32,24 +36,25 @@ on:
           - staging
           - prod
       action:
-        description: 'Action to perform'
+        description: 'Infra action'
         required: true
         type: choice
         options:
           - plan
           - apply
-          - destroy
+          - drift
 
 env:
   TF_VERSION: '1.6.6'
   TERRAGRUNT_VERSION: '0.54.8'
   AWS_REGION: 'us-east-1'
-  GOWORK: 'off'  # Disable workspace mode for infra tests
+  GOWORK: 'off'
+
+concurrency:
+  group: infra-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # ============================================================================
-  # Validation
-  # ============================================================================
   validate:
     name: Validate
     runs-on: ubuntu-latest
@@ -62,78 +67,75 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Terraform Format Check
+      - name: Verify environment parity
         run: |
-          cd infra/terraform
-          # Run terraform fmt and show diffs
-          terraform fmt -recursive -diff
-          # Check if any files changed
-          if ! git diff --quiet; then
-            echo "::error::Terraform files need formatting. Run 'terraform fmt -recursive' and commit."
-            git diff --stat
-            exit 1
-          fi
-          echo "✅ Terraform files are properly formatted"
+          chmod +x infra/scripts/check-environment-parity.sh
+          infra/scripts/check-environment-parity.sh
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infra/terraform
 
       - name: Validate Terraform Modules
+        shell: bash
         run: |
+          set -euo pipefail
           for module in infra/terraform/modules/*/; do
             echo "Validating $module"
             cd "$module"
-            cat > .ci-providers.tf <<'EOF'
-provider "aws" {
-  region = "us-east-1"
-  skip_credentials_validation = true
-  skip_metadata_api_check = true
-  skip_requesting_account_id = true
-}
-
-provider "aws" {
-  alias  = "primary"
-  region = "us-east-1"
-  skip_credentials_validation = true
-  skip_metadata_api_check = true
-  skip_requesting_account_id = true
-}
-
-provider "aws" {
-  alias  = "secondary"
-  region = "us-west-2"
-  skip_credentials_validation = true
-  skip_metadata_api_check = true
-  skip_requesting_account_id = true
-}
-
-provider "aws" {
-  alias  = "tertiary"
-  region = "us-west-1"
-  skip_credentials_validation = true
-  skip_metadata_api_check = true
-  skip_requesting_account_id = true
-}
-
-provider "kubernetes" {
-  host     = "https://127.0.0.1"
-  token    = "ci"
-  insecure = true
-}
-
-provider "helm" {
-  kubernetes {
-    host     = "https://127.0.0.1"
-    token    = "ci"
-    insecure = true
-  }
-}
-EOF
+            printf '%s\n' \
+              'provider "aws" {' \
+              '  region                      = "us-east-1"' \
+              '  skip_credentials_validation = true' \
+              '  skip_metadata_api_check     = true' \
+              '  skip_requesting_account_id  = true' \
+              '}' \
+              '' \
+              'provider "aws" {' \
+              '  alias                       = "primary"' \
+              '  region                      = "us-east-1"' \
+              '  skip_credentials_validation = true' \
+              '  skip_metadata_api_check     = true' \
+              '  skip_requesting_account_id  = true' \
+              '}' \
+              '' \
+              'provider "aws" {' \
+              '  alias                       = "secondary"' \
+              '  region                      = "us-west-2"' \
+              '  skip_credentials_validation = true' \
+              '  skip_metadata_api_check     = true' \
+              '  skip_requesting_account_id  = true' \
+              '}' \
+              '' \
+              'provider "aws" {' \
+              '  alias                       = "tertiary"' \
+              '  region                      = "us-west-1"' \
+              '  skip_credentials_validation = true' \
+              '  skip_metadata_api_check     = true' \
+              '  skip_requesting_account_id  = true' \
+              '}' \
+              '' \
+              'provider "kubernetes" {' \
+              '  host     = "https://127.0.0.1"' \
+              '  token    = "ci"' \
+              '  insecure = true' \
+              '}' \
+              '' \
+              'provider "helm" {' \
+              '  kubernetes {' \
+              '    host     = "https://127.0.0.1"' \
+              '    token    = "ci"' \
+              '    insecure = true' \
+              '  }' \
+              '}' > .ci-providers.tf
             terraform init -backend=false -input=false
             terraform validate
             rm -f .ci-providers.tf
-            cd -
+            cd - >/dev/null
           done
 
       - name: Collect Kubernetes manifests
         id: k8s-manifests
+        shell: bash
         run: |
           {
             echo "files<<EOF"
@@ -156,8 +158,10 @@ EOF
           tar -xzf kubeval.tar.gz
           sudo mv kubeval /usr/local/bin/kubeval
 
-      - name: Lint Kubernetes Manifests
+      - name: Lint Kubernetes manifests
+        shell: bash
         run: |
+          set -euo pipefail
           files="${{ steps.k8s-manifests.outputs.files }}"
           if [ -z "$files" ]; then
             echo "No Kubernetes manifests found to lint."
@@ -168,10 +172,6 @@ EOF
             --schema-location https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master \
             --ignore-missing-schemas
 
-  # ============================================================================
-  # Security Scanning
-  # NOTE: This job always runs for static analysis (no credentials needed)
-  # ============================================================================
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -187,67 +187,33 @@ EOF
           framework: terraform
           output_format: sarif
           output_file_path: checkov-results.sarif
-          soft_fail: true
+          soft_fail: false
 
-      - name: Upload Checkov Results
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Checkov results
         if: always()
-        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: checkov-results.sarif
 
-      - name: Run Trivy on Kubernetes Manifests
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy on Kubernetes manifests
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          scan-type: 'config'
-          scan-ref: 'deploy/kubernetes'
-          format: 'sarif'
-          output: 'trivy-k8s-results.sarif'
+          scan-type: config
+          scan-ref: deploy/kubernetes
+          format: sarif
+          output: trivy-k8s-results.sarif
 
-      - name: Upload Trivy Results
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy results
         if: always()
-        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-k8s-results.sarif
 
-  # ============================================================================
-  # Check AWS Credentials Availability
-  # ============================================================================
-  check-credentials:
-    name: Check AWS Credentials
-    runs-on: ubuntu-latest
-    outputs:
-      aws-available: ${{ steps.check.outputs.available }}
-    steps:
-      - name: Check if AWS credentials are configured
-        id: check
-        run: |
-          # Check if required secrets are available (they won't be visible, but we can check if they exist)
-          # For now, we'll assume credentials are only available for workflow_dispatch events
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Running in workflow_dispatch mode - AWS credentials expected"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "⏭️  Skipping AWS operations - use workflow_dispatch to deploy infrastructure"
-          fi
-
-  # ============================================================================
-  # Terraform Plan (Requires AWS Credentials)
-  # ============================================================================
   plan:
-    name: Plan (${{ matrix.environment }})
+    name: Plan (${{ github.event.inputs.environment }})
     runs-on: ubuntu-latest
-    needs: [validate, security, check-credentials]
-    if: |
-      needs.check-credentials.outputs.aws-available == 'true' &&
-      (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan'))
-    strategy:
-      matrix:
-        environment: [dev, staging, prod]
-    environment:
-      name: ${{ matrix.environment }}
+    needs: [validate, security]
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -263,47 +229,37 @@ EOF
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
 
-      - name: Terragrunt Plan
-        run: |
-          cd infra/terraform/environments/${{ matrix.environment }}
-          terragrunt plan -out=tfplan -no-color 2>&1 | tee plan.txt
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
+          role-session-name: infra-plan-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
 
-      - name: Upload Plan
+      - name: Generate reviewed plan
+        run: |
+          chmod +x infra/scripts/terraform-run.sh
+          infra/scripts/terraform-run.sh plan "infra/terraform/environments/${{ github.event.inputs.environment }}" "$RUNNER_TEMP/infra-plan"
+
+      - name: Upload plan artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ matrix.environment }}
-          path: infra/terraform/environments/${{ matrix.environment }}/tfplan
+          name: infra-plan-${{ github.event.inputs.environment }}
+          path: ${{ runner.temp }}/infra-plan
+          retention-days: 7
 
-      - name: Comment PR with Plan
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('infra/terraform/environments/${{ matrix.environment }}/plan.txt', 'utf8');
-            const truncatedPlan = plan.length > 65000 ? plan.substring(0, 65000) + '\n...(truncated)' : plan;
-            
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## Terraform Plan - ${{ matrix.environment }}\n\n\`\`\`hcl\n${truncatedPlan}\n\`\`\``
-            });
-
-  # ============================================================================
-  # Terraform Apply - Dev (Requires AWS Credentials via workflow_dispatch)
-  # ============================================================================
-  apply-dev:
-    name: Apply (dev)
+  apply:
+    name: Apply (${{ github.event.inputs.environment }})
     runs-on: ubuntu-latest
-    needs: [validate, security, check-credentials]
-    if: |
-      needs.check-credentials.outputs.aws-available == 'true' &&
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'workflow_dispatch'
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' && github.ref == 'refs/heads/main'
     environment:
-      name: dev
-      url: https://dev.virtengine.com
+      name: infra-${{ github.event.inputs.environment }}
+    concurrency:
+      group: infra-apply-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -319,25 +275,31 @@ EOF
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
 
-      - name: Terragrunt Apply
-        run: |
-          cd infra/terraform/environments/dev
-          terragrunt apply -auto-approve
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
+          role-session-name: infra-apply-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
 
-  # ============================================================================
-  # Terraform Apply - Staging (Manual via workflow_dispatch)
-  # ============================================================================
-  apply-staging:
-    name: Apply (staging)
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v4
+        with:
+          name: infra-plan-${{ github.event.inputs.environment }}
+          path: ${{ runner.temp }}/infra-plan
+
+      - name: Apply reviewed plan
+        run: |
+          chmod +x infra/scripts/terraform-run.sh
+          infra/scripts/terraform-run.sh apply "infra/terraform/environments/${{ github.event.inputs.environment }}" "$RUNNER_TEMP/infra-plan"
+
+  drift-manual:
+    name: Drift (${{ github.event.inputs.environment }})
     runs-on: ubuntu-latest
-    needs: [apply-dev, check-credentials]
-    if: |
-      needs.check-credentials.outputs.aws-available == 'true' &&
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.environment == 'staging'
-    environment:
-      name: staging
-      url: https://staging.virtengine.com
+    needs: [validate, security]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'drift' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -353,109 +315,88 @@ EOF
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
 
-      - name: Terragrunt Apply
-        run: |
-          cd infra/terraform/environments/staging
-          terragrunt apply -auto-approve
-
-  # ============================================================================
-  # Terraform Apply - Production (Manual)
-  # ============================================================================
-  apply-prod:
-    name: Apply (prod)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod' && github.event.inputs.action == 'apply'
-    environment:
-      name: prod
-      url: https://virtengine.com
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
+          role-session-name: infra-drift-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
 
-      - name: Setup Terragrunt
+      - name: Detect drift
+        shell: bash
         run: |
-          curl -Lo terragrunt https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
-          chmod +x terragrunt
-          sudo mv terragrunt /usr/local/bin/
-
-      - name: Terragrunt Plan
-        run: |
-          cd infra/terraform/environments/prod
-          terragrunt plan -out=tfplan
-
-      - name: Terragrunt Apply
-        run: |
-          cd infra/terraform/environments/prod
-          terragrunt apply tfplan
-
-  # ============================================================================
-  # ArgoCD Sync
-  # ============================================================================
-  argocd-sync:
-    name: ArgoCD Sync
-    runs-on: ubuntu-latest
-    needs: [apply-dev, apply-staging]
-    if: always() && (needs.apply-dev.result == 'success' || needs.apply-staging.result == 'success')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install ArgoCD CLI
-        run: |
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/v2.10.0/argocd-linux-amd64
-          chmod +x argocd
-          sudo mv argocd /usr/local/bin/
-
-      - name: Login to ArgoCD
-        run: |
-          argocd login ${{ secrets.ARGOCD_SERVER }} \
-            --username admin \
-            --password ${{ secrets.ARGOCD_PASSWORD }} \
-            --insecure
-
-      - name: Sync Applications
-        run: |
-          # Determine environment from trigger
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            ENV="dev"
-          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
-            ENV="staging"
+          chmod +x infra/scripts/terraform-run.sh
+          set +e
+          infra/scripts/terraform-run.sh drift "infra/terraform/environments/${{ github.event.inputs.environment }}" "$RUNNER_TEMP/infra-drift"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 2 ]; then
+            echo "::error::Terraform drift detected for ${{ github.event.inputs.environment }}."
+            exit 1
           fi
-          
-          # Sync all applications for the environment
-          for app in virtengine provider-daemon monitoring; do
-            argocd app sync ${app}-${ENV} --prune || true
-          done
+          exit "$rc"
 
-  # ============================================================================
-  # Infrastructure Tests (Skipped if AWS credentials not available)
-  # ============================================================================
-  test:
-    name: Infrastructure Tests
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-drift-${{ github.event.inputs.environment }}
+          path: ${{ runner.temp }}/infra-drift
+          retention-days: 7
+
+  drift-scheduled:
+    name: Drift (${{ matrix.environment }})
     runs-on: ubuntu-latest
-    needs: check-credentials
-    if: |
-      github.event_name == 'pull_request' &&
-      needs.check-credentials.outputs.aws-available == 'true'
+    needs: [validate, security]
+    if: github.event_name == 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, prod]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          go-version: '1.25.5'
+          terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Run Terratest
+      - name: Setup Terragrunt
         run: |
-          cd infra/tests
-          go test -v -timeout 30m -short
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          curl -Lo terragrunt https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
+          chmod +x terragrunt
+          sudo mv terragrunt /usr/local/bin/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
+          role-session-name: infra-drift-${{ matrix.environment }}-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
+
+      - name: Detect drift
+        shell: bash
+        run: |
+          chmod +x infra/scripts/terraform-run.sh
+          set +e
+          infra/scripts/terraform-run.sh drift "infra/terraform/environments/${{ matrix.environment }}" "$RUNNER_TEMP/infra-drift-${{ matrix.environment }}"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 2 ]; then
+            echo "::error::Terraform drift detected for ${{ matrix.environment }}."
+            exit 1
+          fi
+          exit "$rc"
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-drift-${{ matrix.environment }}
+          path: ${{ runner.temp }}/infra-drift-${{ matrix.environment }}
+          retention-days: 7

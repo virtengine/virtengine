@@ -5,9 +5,16 @@
 package provider_daemon
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -104,6 +111,9 @@ type CompromiseDetectorConfig struct {
 	// AlertWebhookURL is a webhook for compromise alerts
 	AlertWebhookURL string `json:"alert_webhook_url,omitempty"`
 
+	// AlertWebhookTimeout is the HTTP timeout for outbound compromise alerts
+	AlertWebhookTimeout time.Duration `json:"alert_webhook_timeout,omitempty"`
+
 	// RetentionDays is how long to keep compromise events
 	RetentionDays int `json:"retention_days"`
 }
@@ -118,6 +128,7 @@ func DefaultCompromiseDetectorConfig() *CompromiseDetectorConfig {
 		AnomalousTimeWindowEnd:      22, // 10 PM
 		EnableLocationTracking:      true,
 		AutoRevokeOnCritical:        true,
+		AlertWebhookTimeout:         10 * time.Second,
 		RetentionDays:               90,
 	}
 }
@@ -210,6 +221,7 @@ type ResponseAction struct {
 type CompromiseDetector struct {
 	config       *CompromiseDetectorConfig
 	keyManager   *KeyManager
+	alertClient  *http.Client
 	events       map[string]*CompromiseEvent
 	usageHistory map[string][]time.Time // key ID -> usage timestamps
 	mu           sync.RWMutex
@@ -220,9 +232,14 @@ func NewCompromiseDetector(config *CompromiseDetectorConfig, keyManager *KeyMana
 	if config == nil {
 		config = DefaultCompromiseDetectorConfig()
 	}
+	alertTimeout := config.AlertWebhookTimeout
+	if alertTimeout <= 0 {
+		alertTimeout = 10 * time.Second
+	}
 	return &CompromiseDetector{
 		config:       config,
 		keyManager:   keyManager,
+		alertClient:  &http.Client{Timeout: alertTimeout},
 		events:       make(map[string]*CompromiseEvent),
 		usageHistory: make(map[string][]time.Time),
 	}
@@ -262,7 +279,7 @@ func (d *CompromiseDetector) RecordKeyUsage(keyID string, sourceIP string, times
 
 	if usageInLastMinute > d.config.UsageThresholdPerMinute {
 		indicators = append(indicators, IndicatorRapidUsage)
-		d.createEvent(keyID, IndicatorRapidUsage, SeverityMedium,
+		event := d.createEvent(keyID, IndicatorRapidUsage, SeverityMedium,
 			fmt.Sprintf("Rapid key usage detected: %d uses in last minute (threshold: %d)",
 				usageInLastMinute, d.config.UsageThresholdPerMinute),
 			&CompromiseEvidence{
@@ -270,6 +287,7 @@ func (d *CompromiseDetector) RecordKeyUsage(keyID string, sourceIP string, times
 				Timestamp:  timestamp,
 				UsageCount: usageInLastMinute,
 			})
+		d.dispatchAlertAsync(event)
 	}
 
 	// Check for hourly threshold
@@ -281,7 +299,7 @@ func (d *CompromiseDetector) RecordKeyUsage(keyID string, sourceIP string, times
 	hour := timestamp.Hour()
 	if hour < d.config.AnomalousTimeWindowStart || hour > d.config.AnomalousTimeWindowEnd {
 		indicators = append(indicators, IndicatorAnomalousTime)
-		d.createEvent(keyID, IndicatorAnomalousTime, SeverityLow,
+		event := d.createEvent(keyID, IndicatorAnomalousTime, SeverityLow,
 			fmt.Sprintf("Key used outside normal hours: %02d:00 (expected: %02d:00-%02d:00)",
 				hour, d.config.AnomalousTimeWindowStart, d.config.AnomalousTimeWindowEnd),
 			&CompromiseEvidence{
@@ -290,6 +308,7 @@ func (d *CompromiseDetector) RecordKeyUsage(keyID string, sourceIP string, times
 				ExpectedBehavior: fmt.Sprintf("Usage between %02d:00 and %02d:00", d.config.AnomalousTimeWindowStart, d.config.AnomalousTimeWindowEnd),
 				ObservedBehavior: fmt.Sprintf("Usage at %02d:00", hour),
 			})
+		d.dispatchAlertAsync(event)
 	}
 
 	// Check for location anomaly (if enabled)
@@ -303,12 +322,13 @@ func (d *CompromiseDetector) RecordKeyUsage(keyID string, sourceIP string, times
 		}
 		if !allowed {
 			indicators = append(indicators, IndicatorAnomalousLocation)
-			d.createEvent(keyID, IndicatorAnomalousLocation, SeverityMedium,
+			event := d.createEvent(keyID, IndicatorAnomalousLocation, SeverityMedium,
 				fmt.Sprintf("Key used from unauthorized location: %s", sourceIP),
 				&CompromiseEvidence{
 					SourceIP:  sourceIP,
 					Timestamp: timestamp,
 				})
+			d.dispatchAlertAsync(event)
 		}
 	}
 
@@ -333,13 +353,14 @@ func (d *CompromiseDetector) RecordVerificationFailure(keyID string, message []b
 	}
 
 	if failureCount >= d.config.FailedVerificationThreshold {
-		d.createEvent(keyID, IndicatorFailedVerification, SeverityHigh,
+		event := d.createEvent(keyID, IndicatorFailedVerification, SeverityHigh,
 			fmt.Sprintf("Multiple signature verification failures: %d in last hour",
 				failureCount+1),
 			&CompromiseEvidence{
 				Timestamp:  now,
 				UsageCount: failureCount + 1,
 			})
+		d.dispatchAlertAsync(event)
 
 		// Auto-revoke if configured
 		if d.config.AutoRevokeOnCritical && failureCount >= d.config.FailedVerificationThreshold*2 {
@@ -357,6 +378,7 @@ func (d *CompromiseDetector) ReportCompromise(keyID string, indicator Compromise
 		Timestamp: time.Now().UTC(),
 	})
 	event.ReportedBy = reportedBy
+	d.dispatchAlertAsync(event)
 
 	// Handle critical severity
 	if severity == SeverityCritical && d.config.AutoRevokeOnCritical {
@@ -383,13 +405,6 @@ func (d *CompromiseDetector) createEvent(keyID string, indicator CompromiseIndic
 	}
 
 	d.events[eventID] = event
-
-	// Send alert if webhook configured with panic recovery
-	if d.config.AlertWebhookURL != "" {
-		verrors.SafeGo("provider-daemon:compromise-alert", func() {
-			d.sendAlert(event)
-		})
-	}
 
 	return event
 }
@@ -423,10 +438,140 @@ func (d *CompromiseDetector) handleCriticalCompromise(keyID string) {
 	}
 }
 
-// sendAlert sends an alert webhook (placeholder)
-func (d *CompromiseDetector) sendAlert(event *CompromiseEvent) {
-	// In production, would send HTTP POST to webhook URL
-	_ = event
+// dispatchAlertAsync sends a compromise alert without blocking the caller.
+func (d *CompromiseDetector) dispatchAlertAsync(event *CompromiseEvent) {
+	if d == nil || event == nil || d.config == nil || d.config.AlertWebhookURL == "" {
+		return
+	}
+
+	alert := CompromiseAlert{
+		EventID:        event.ID,
+		KeyID:          event.KeyID,
+		KeyFingerprint: event.KeyFingerprint,
+		Indicator:      event.Indicator,
+		Severity:       event.Severity,
+		Description:    event.Description,
+		ReportedBy:     event.ReportedBy,
+		Evidence:       cloneCompromiseEvidence(event.Evidence),
+		DetectedAt:     event.DetectedAt,
+		AlertSentAt:    time.Now().UTC(),
+	}
+
+	verrors.SafeGo("provider-daemon:compromise-alert", func() {
+		if err := d.sendAlert(alert); err != nil {
+			log.Printf("[provider-daemon] compromise alert dispatch failed for event %s: %v", alert.EventID, err)
+		}
+	})
+}
+
+// sendAlert sends an alert webhook for a compromise event.
+func (d *CompromiseDetector) sendAlert(alert CompromiseAlert) error {
+	if d == nil || d.config == nil || d.config.AlertWebhookURL == "" {
+		return nil
+	}
+
+	payload, err := json.Marshal(alert)
+	if err != nil {
+		d.recordAlertDispatch(alert.EventID, false, fmt.Sprintf("marshal compromise alert: %v", err))
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, d.config.AlertWebhookURL, bytes.NewReader(payload))
+	if err != nil {
+		d.recordAlertDispatch(alert.EventID, false, fmt.Sprintf("create webhook request: %v", err))
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "virtengine-provider-daemon/compromise-detector")
+
+	client := d.alertClient
+	if client == nil {
+		client = &http.Client{Timeout: effectiveAlertWebhookTimeout(d.config)}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		d.recordAlertDispatch(alert.EventID, false, fmt.Sprintf("deliver webhook alert: %v", err))
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if readErr != nil {
+		d.recordAlertDispatch(alert.EventID, false, fmt.Sprintf("read webhook response: %v", readErr))
+		return readErr
+	}
+
+	details := fmt.Sprintf("webhook returned %s", resp.Status)
+	if responseBody := compactWebhookResponseBody(body); responseBody != "" {
+		details = fmt.Sprintf("%s: %s", details, responseBody)
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		err = fmt.Errorf("compromise alert webhook failed: %s", details)
+		d.recordAlertDispatch(alert.EventID, false, details)
+		return err
+	}
+
+	d.recordAlertDispatch(alert.EventID, true, details)
+	return nil
+}
+
+func (d *CompromiseDetector) recordAlertDispatch(eventID string, success bool, details string) {
+	if eventID == "" {
+		return
+	}
+
+	action := ResponseAction{
+		Action:      "webhook_alert",
+		PerformedAt: time.Now().UTC(),
+		PerformedBy: "compromise_detector",
+		Success:     success,
+		Details:     details,
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	event, exists := d.events[eventID]
+	if !exists {
+		return
+	}
+
+	event.ResponseActions = append(event.ResponseActions, action)
+}
+
+func effectiveAlertWebhookTimeout(config *CompromiseDetectorConfig) time.Duration {
+	if config == nil || config.AlertWebhookTimeout <= 0 {
+		return 10 * time.Second
+	}
+	return config.AlertWebhookTimeout
+}
+
+func compactWebhookResponseBody(body []byte) string {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) > 256 {
+		return trimmed[:256] + "..."
+	}
+	return trimmed
+}
+
+func cloneCompromiseEvidence(evidence *CompromiseEvidence) *CompromiseEvidence {
+	if evidence == nil {
+		return nil
+	}
+
+	cloned := *evidence
+	if evidence.RawData != nil {
+		cloned.RawData = make(map[string]interface{}, len(evidence.RawData))
+		for key, value := range evidence.RawData {
+			cloned.RawData[key] = value
+		}
+	}
+	return &cloned
 }
 
 // GetEvents retrieves all compromise events
@@ -555,13 +700,16 @@ func matchesLocation(sourceIP, allowedLocation string) bool {
 
 // CompromiseAlert represents an alert sent for a compromise
 type CompromiseAlert struct {
-	EventID     string              `json:"event_id"`
-	KeyID       string              `json:"key_id"`
-	Indicator   CompromiseIndicator `json:"indicator"`
-	Severity    CompromiseSeverity  `json:"severity"`
-	Description string              `json:"description"`
-	DetectedAt  time.Time           `json:"detected_at"`
-	AlertSentAt time.Time           `json:"alert_sent_at"`
+	EventID        string              `json:"event_id"`
+	KeyID          string              `json:"key_id"`
+	KeyFingerprint string              `json:"key_fingerprint,omitempty"`
+	Indicator      CompromiseIndicator `json:"indicator"`
+	Severity       CompromiseSeverity  `json:"severity"`
+	Description    string              `json:"description"`
+	ReportedBy     string              `json:"reported_by,omitempty"`
+	Evidence       *CompromiseEvidence `json:"evidence,omitempty"`
+	DetectedAt     time.Time           `json:"detected_at"`
+	AlertSentAt    time.Time           `json:"alert_sent_at"`
 }
 
 // CompromiseReport generates a report of compromise events

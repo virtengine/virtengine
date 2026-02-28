@@ -25,7 +25,9 @@ export const WalletConnect = () => {
             <p className="text-xs text-slate-400">{username ?? address}</p>
           </div>
         ) : (
-          <p className="text-xs text-slate-400">Not connected</p>
+          <p className="text-xs text-slate-400">
+            Connect with a supported browser wallet against the configured VirtEngine network.
+          </p>
         )}
       </div>
 

@@ -22,10 +22,6 @@ import (
 
 // TestNodeAgentHeartbeatFlow tests the end-to-end node agent heartbeat flow.
 func TestNodeAgentHeartbeatFlow(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -175,10 +171,6 @@ func TestNodeAggregatorHeartbeatValidation(t *testing.T) {
 
 // TestSimulatedNodeAgents tests multiple simulated node agents.
 func TestSimulatedNodeAgents(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -205,15 +197,17 @@ func TestSimulatedNodeAgents(t *testing.T) {
 	}
 
 	// Wait a bit
-	time.Sleep(500 * time.Millisecond)
-
-	// Check metrics
-	metrics := monitor.GetMetrics()
-	if metrics["total_nodes"].(int) != numNodes {
-		t.Errorf("expected %d nodes, got %d", numNodes, metrics["total_nodes"])
-	}
-	if metrics["healthy_nodes"].(int) != numNodes {
-		t.Errorf("expected %d healthy nodes, got %d", numNodes, metrics["healthy_nodes"])
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		metrics := monitor.GetMetrics()
+		if metrics["total_nodes"].(int) == numNodes && metrics["healthy_nodes"].(int) == numNodes {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Errorf("expected %d nodes and %d healthy nodes, got metrics=%v", numNodes, numNodes, metrics)
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Simulate some nodes going offline

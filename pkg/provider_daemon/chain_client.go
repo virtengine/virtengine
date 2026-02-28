@@ -38,9 +38,12 @@ type RPCChainClientConfig struct {
 
 // rpcChainClient implements ChainClient using gRPC
 type rpcChainClient struct {
-	config    RPCChainClientConfig
-	grpcConn  *grpc.ClientConn
-	rpcClient *rpchttp.HTTP
+	config         RPCChainClientConfig
+	grpcConn       *grpc.ClientConn
+	rpcClient      *rpchttp.HTTP
+	hpcQuery       providerHPCQueryClient
+	resourcesQuery providerResourcesQueryClient
+	storeQuery     providerStoreQueryClient
 }
 
 // newRPCChainClient creates a new RPC-based chain client
@@ -64,6 +67,8 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 			return nil, fmt.Errorf("failed to connect to gRPC endpoint: %w", err)
 		}
 		client.grpcConn = conn
+		client.hpcQuery = hpcv1.NewQueryClient(conn)
+		client.resourcesQuery = resourcesv1.NewQueryClient(conn)
 	}
 
 	if config.NodeURI != "" {
@@ -72,6 +77,7 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 			return nil, fmt.Errorf("failed to create comet rpc client: %w", err)
 		}
 		client.rpcClient = rpcClient
+		client.storeQuery = rpcClient
 	}
 
 	return client, nil
@@ -89,25 +95,51 @@ func NewHPCChainClient(config RPCChainClientConfig) (HPCChainClient, error) {
 
 // GetProviderConfig retrieves the provider's on-chain configuration
 func (c *rpcChainClient) GetProviderConfig(ctx context.Context, address string) (*ProviderConfig, error) {
-	// TODO: Implement actual gRPC query to market module
-	// For now return a default config to allow startup
-	return &ProviderConfig{
-		ProviderAddress: address,
-		Pricing: PricingConfig{
-			CPUPricePerCore:   "0.01",
-			MemoryPricePerGB:  "0.005",
-			StoragePricePerGB: "0.001",
-			NetworkPricePerGB: "0.001",
-			GPUPricePerHour:   "0.50",
-		},
-		Capacity:           CapacityConfig{},
-		SupportedOfferings: []string{"compute", "storage", "gpu"},
-		Regions:            []string{"us-west-1", "us-east-1", "eu-west-1"},
-		Attributes:         map[string]string{},
-		Active:             true,
-		LastUpdated:        time.Now(),
-		Version:            1,
-	}, nil
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return nil, fmt.Errorf("provider address is required")
+	}
+
+	hpcClient, err := c.providerHPCQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	clusters, err := c.queryProviderClusters(ctx, hpcClient, address)
+	if err != nil {
+		return nil, fmt.Errorf("query provider clusters: %w", err)
+	}
+	offerings, err := c.queryProviderOfferings(ctx, hpcClient, address, clusters)
+	if err != nil {
+		return nil, fmt.Errorf("query provider offerings: %w", err)
+	}
+
+	resourcesClient, err := c.providerResourcesQuery()
+	if err != nil {
+		return nil, err
+	}
+	allocations, err := c.queryProviderAllocations(ctx, resourcesClient, address)
+	if err != nil {
+		return nil, fmt.Errorf("query provider allocations: %w", err)
+	}
+
+	var params *hpctypes.Params
+	storeClient, err := c.providerStoreQuery()
+	if err == nil {
+		params, err = c.queryHPCParams(ctx, storeClient)
+		if err != nil {
+			return nil, fmt.Errorf("query hpc params: %w", err)
+		}
+	} else if c.rpcClient != nil {
+		return nil, err
+	}
+
+	config, err := buildProviderConfigFromChainState(address, params, clusters, offerings, allocations)
+	if err != nil {
+		return nil, fmt.Errorf("build provider config: %w", err)
+	}
+
+	return config, nil
 }
 
 // GetOpenOrders retrieves open orders that match provider capabilities
@@ -196,7 +228,7 @@ func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Sign
 		Deposit: depositv1.Deposit{
 			Amount: sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit required for bids
 		},
-		ResourcesOffer: marketv1beta5.ResourcesOffer{}, // TODO: Extract from bid
+		ResourcesOffer: bid.ResourcesOffer.Dup(),
 	}
 
 	// Send via Msg client
@@ -348,15 +380,15 @@ func (c *rpcChainClient) GetProviderAllocations(ctx context.Context, provider st
 	if provider == "" {
 		return nil, nil
 	}
-	if c.grpcConn == nil {
-		return nil, fmt.Errorf("grpc endpoint not configured")
-	}
-	client := resourcesv1.NewQueryClient(c.grpcConn)
-	resp, err := client.AllocationsByProvider(ctx, &resourcesv1.QueryAllocationsByProviderRequest{ProviderAddress: provider, Pagination: &query.PageRequest{Limit: defaultHPCPollPageLimit}})
+	client, err := c.providerResourcesQuery()
 	if err != nil {
 		return nil, err
 	}
-	return resp.Allocations, nil
+	allocations, err := c.queryProviderAllocations(ctx, client, provider)
+	if err != nil {
+		return nil, fmt.Errorf("query provider allocations: %w", err)
+	}
+	return allocations, nil
 }
 
 // SubmitNodeMetadata submits node metadata updates to chain (best-effort).
@@ -481,12 +513,38 @@ func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpct
 	return err
 }
 
-// GetBillingRules returns billing rules from on-chain params
-func (c *rpcChainClient) GetBillingRules(ctx context.Context, clusterID string) (*hpctypes.HPCBillingRules, error) {
-	// For now, just return default billing rules
-	// TODO: Query on-chain params when billing rules query is implemented
-	rules := hpctypes.DefaultHPCBillingRules("uvirt")
-	return &rules, nil
+// GetBillingRules returns billing rules from on-chain state.
+func (c *rpcChainClient) GetBillingRules(ctx context.Context, providerAddr string) (*hpctypes.HPCBillingRules, error) {
+	providerAddr = strings.TrimSpace(providerAddr)
+	if providerAddr == "" {
+		return nil, fmt.Errorf("provider address is required")
+	}
+
+	storeClient, err := c.providerStoreQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	rules, exists, err := c.queryProviderBillingRules(ctx, storeClient, providerAddr)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return rules, nil
+	}
+
+	params, err := c.queryHPCParams(ctx, storeClient)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultDenom := "uvirt"
+	if params != nil && strings.TrimSpace(params.DefaultDenom) != "" {
+		defaultDenom = strings.TrimSpace(params.DefaultDenom)
+	}
+
+	fallback := hpctypes.DefaultHPCBillingRules(defaultDenom)
+	return &fallback, nil
 }
 
 // GetCurrentBlockHeight returns the current block height if possible.
@@ -724,19 +782,18 @@ func dataReferencesFromProto(references []hpcv1.DataReference) []hpctypes.DataRe
 
 // orderFromProto converts a proto Order to daemon Order struct
 func orderFromProto(protoOrder marketv1beta5.Order) Order {
+	requirements, region := orderRequirementsFromSpec(protoOrder.Spec)
+	price := protoOrder.Price()
 	return Order{
 		OrderID:         protoOrder.ID.String(),
 		CustomerAddress: protoOrder.ID.Owner,
-		OfferingType:    "compute", // Default, could be enhanced based on order spec
-		Requirements: ResourceRequirements{
-			CPUCores:  0, // TODO: Extract from order spec
-			MemoryGB:  0,
-			StorageGB: 0,
-		},
-		Region:    "",  // TODO: Extract from order spec attributes
-		MaxPrice:  "0", // TODO: Extract from order spec
-		Currency:  "uvirt",
-		CreatedAt: time.Unix(protoOrder.CreatedAt, 0),
+		OfferingType:    inferOrderOfferingType(requirements),
+		Requirements:    requirements,
+		ResourcesOffer:  marketv1beta5.ResourceOfferFromRU(protoOrder.Spec.Resources),
+		Region:          region,
+		MaxPrice:        price.Amount.String(),
+		Currency:        price.Denom,
+		CreatedAt:       time.Unix(protoOrder.CreatedAt, 0),
 	}
 }
 
@@ -748,6 +805,7 @@ func bidFromProto(protoBid *marketv1beta5.Bid) Bid {
 		ProviderAddress: protoBid.ID.Provider,
 		Price:           protoBid.Price.Amount.String(),
 		Currency:        protoBid.Price.Denom,
+		ResourcesOffer:  protoBid.ResourcesOffer.Dup(),
 		CreatedAt:       time.Unix(protoBid.CreatedAt, 0),
 		State:           protoBid.State.String(),
 	}

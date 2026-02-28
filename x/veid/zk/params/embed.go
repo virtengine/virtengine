@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	_ "embed"
 
@@ -14,86 +15,96 @@ import (
 //go:embed age_vk.bin
 var ageVKBytes []byte
 
+//go:embed age_vk.bin.sha256
+var ageVKChecksum []byte
+
 //go:embed residency_vk.bin
 var residencyVKBytes []byte
+
+//go:embed residency_vk.bin.sha256
+var residencyVKChecksum []byte
 
 //go:embed score_vk.bin
 var scoreVKBytes []byte
 
+//go:embed score_vk.bin.sha256
+var scoreVKChecksum []byte
+
 //go:embed params_metadata.json
 var metadataBytes []byte
 
-// Metadata describes the ceremony output embedded with the binary.
+//go:embed params_metadata.json.sha256
+var metadataChecksum []byte
+
+// Metadata describes the trusted setup outputs embedded with the binary.
 type Metadata struct {
-	Version          string            `json:"version"`
-	CeremonyHash     string            `json:"ceremony_hash"`
-	ContributorCount int               `json:"contributor_count"`
-	Contributors     []string          `json:"contributors"`
-	CircuitHashes    map[string]string `json:"circuit_hashes"`
-	GeneratedAt      string            `json:"generated_at"`
-	BeaconHash       string            `json:"beacon_hash"`
-	Notes            string            `json:"notes"`
+	SchemaVersion  string                     `json:"schema_version"`
+	ParameterSetID string                     `json:"parameter_set_id"`
+	GeneratedAt    string                     `json:"generated_at"`
+	ArtifactFormat string                     `json:"artifact_format"`
+	Notes          []string                   `json:"notes,omitempty"`
+	Circuits       map[string]CircuitMetadata `json:"circuits"`
 }
 
-var (
-	cachedAgeVK       groth16.VerifyingKey
-	cachedResidencyVK groth16.VerifyingKey
-	cachedScoreVK     groth16.VerifyingKey
-	cachedMetadata    *Metadata
-)
+// CircuitMetadata describes the ceremony outputs bound to a single circuit.
+type CircuitMetadata struct {
+	CircuitName              string   `json:"circuit_name"`
+	ParametersVersion        string   `json:"parameters_version"`
+	CeremonyID               string   `json:"ceremony_id"`
+	ArtifactManifestHash     string   `json:"artifact_manifest_hash"`
+	VerificationReportHash   string   `json:"verification_report_hash"`
+	TranscriptHash           string   `json:"transcript_hash"`
+	CircuitHash              string   `json:"circuit_hash"`
+	VerificationKeyFile      string   `json:"verification_key_file"`
+	VerificationKeyHash      string   `json:"verification_key_hash"`
+	VerificationKeySizeBytes int64    `json:"verification_key_size_bytes"`
+	ContributorCount         int      `json:"contributor_count"`
+	Contributors             []string `json:"contributors"`
+	CoordinatorID            string   `json:"coordinator_id"`
+	CoordinatorPublicKey     string   `json:"coordinator_public_key"`
+	Beacon                   string   `json:"beacon"`
+}
 
-// GetVerifyingKey returns the embedded verifying key for the named circuit.
+// GetVerifyingKey returns the checksum-verified verifying key for the named circuit.
 // Valid circuit names: age, residency, score.
 func GetVerifyingKey(name string) (groth16.VerifyingKey, error) {
-	switch name {
-	case "age":
-		if cachedAgeVK != nil {
-			return cachedAgeVK, nil
-		}
-		vk, err := decodeVerifyingKey(ageVKBytes)
-		if err != nil {
-			return nil, err
-		}
-		cachedAgeVK = vk
-		return cachedAgeVK, nil
-	case "residency":
-		if cachedResidencyVK != nil {
-			return cachedResidencyVK, nil
-		}
-		vk, err := decodeVerifyingKey(residencyVKBytes)
-		if err != nil {
-			return nil, err
-		}
-		cachedResidencyVK = vk
-		return cachedResidencyVK, nil
-	case "score":
-		if cachedScoreVK != nil {
-			return cachedScoreVK, nil
-		}
-		vk, err := decodeVerifyingKey(scoreVKBytes)
-		if err != nil {
-			return nil, err
-		}
-		cachedScoreVK = vk
-		return cachedScoreVK, nil
-	default:
-		return nil, fmt.Errorf("unknown circuit name: %s", name)
+	artifact, err := loadArtifact(name)
+	if err != nil {
+		return nil, err
 	}
+	return decodeVerifyingKey(artifact.keyBytes)
 }
 
-// GetMetadata returns metadata describing the embedded ceremony output.
+// GetVerifiedVerifyingKey returns a checksum-verified verifying key that is also
+// bound to the provided compiled circuit hash.
+func GetVerifiedVerifyingKey(name string, compiled interface {
+	WriteTo(io.Writer) (int64, error)
+}) (groth16.VerifyingKey, error) {
+	artifact, err := loadArtifact(name)
+	if err != nil {
+		return nil, err
+	}
+	if err := verifyCompiledCircuitHash(artifact.metadata, compiled); err != nil {
+		return nil, err
+	}
+	return decodeVerifyingKey(artifact.keyBytes)
+}
+
+// GetMetadata returns validated metadata describing the embedded or overridden ceremony output.
 func GetMetadata() (*Metadata, error) {
-	if cachedMetadata != nil {
-		return cachedMetadata, nil
+	artifactSet, err := loadArtifactSet(resolveArtifactSource())
+	if err != nil {
+		return nil, err
 	}
-
-	var meta Metadata
-	if err := json.Unmarshal(metadataBytes, &meta); err != nil {
-		return nil, fmt.Errorf("parse ceremony metadata: %w", err)
+	data, err := json.Marshal(artifactSet.metadata)
+	if err != nil {
+		return nil, err
 	}
-
-	cachedMetadata = &meta
-	return cachedMetadata, nil
+	var copied Metadata
+	if err := json.Unmarshal(data, &copied); err != nil {
+		return nil, err
+	}
+	return &copied, nil
 }
 
 func decodeVerifyingKey(data []byte) (groth16.VerifyingKey, error) {

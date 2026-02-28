@@ -2,15 +2,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: virtengine-prod
+namespace: virtengine
 
 resources:
   - ../../base
   - blue-green-service.yaml
   - hpa-enhanced.yaml
   - keda-scaledobject.yaml
-
-namePrefix: prod-
 
 commonLabels:
   environment: prod
@@ -22,7 +20,7 @@ commonAnnotations:
 patches:
   # Production replicas
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
@@ -37,7 +35,7 @@ patches:
         value: 3
   # Production resources
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
@@ -70,12 +68,39 @@ patches:
         value: "8Gi"
   # Storage for production
   - target:
-      kind: Deployment
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
         path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
         value: 1Ti
+  - target:
+      kind: ExternalSecret
+      name: virtengine-node-secrets
+    patch: |
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: secret/virtengine/prod/virtengine-node
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: secret/virtengine/prod/virtengine-node
+  - target:
+      kind: ExternalSecret
+      name: provider-daemon-secrets
+    patch: |
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: secret/virtengine/prod/provider-daemon
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: secret/virtengine/prod/provider-daemon
+  - target:
+      kind: ExternalSecret
+      name: database-credentials
+    patch: |
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: secret/virtengine/prod/database
   # PDB for production
   - target:
       kind: PodDisruptionBudget
@@ -102,17 +127,47 @@ patches:
       - op: replace
         path: /spec/maxReplicas
         value: 20
-
-configMapGenerator:
-  - name: virtengine-config
-    behavior: merge
-    literals:
-      - CHAIN_ID=virtengine-1
-      - LOG_LEVEL=info
-      - API_SWAGGER=false
-      - PRUNING=custom
-      - PRUNING_KEEP_RECENT=1000
-      - PRUNING_INTERVAL=100
+  - target:
+      kind: ConfigMap
+      name: virtengine-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-1
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: info
+      - op: replace
+        path: /data/API_SWAGGER
+        value: "false"
+      - op: replace
+        path: /data/PRUNING
+        value: custom
+      - op: replace
+        path: /data/PRUNING_KEEP_RECENT
+        value: "1000"
+      - op: replace
+        path: /data/PRUNING_INTERVAL
+        value: "100"
+  - target:
+      kind: Deployment
+      name: tee-enclave
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "1000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
 
 images:
   - name: virtengine/virtengine-node
@@ -121,24 +176,3 @@ images:
     newTag: v1.0.0
   - name: virtengine/tee-enclave
     newTag: v1.0.0  # TEE-HW-001: Production TEE enclave
-
-# TEE Enclave production patches (TEE-HW-001)
-patchesStrategicMerge:
-  - |-
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: tee-enclave
-    spec:
-      replicas: 3
-      template:
-        spec:
-          containers:
-            - name: enclave
-              resources:
-                requests:
-                  cpu: "1000m"
-                  memory: "2Gi"
-                limits:
-                  cpu: "4000m"
-                  memory: "8Gi"

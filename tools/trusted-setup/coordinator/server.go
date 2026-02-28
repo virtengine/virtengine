@@ -26,17 +26,9 @@ func (s *Server) Listen(addr string) error {
 
 // Run starts the HTTP server and blocks until it exits or the context is canceled.
 func (s *Server) Run(ctx context.Context, addr string) error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/status", s.handleStatus)
-	mux.HandleFunc("/api/v1/transcript", s.handleTranscript)
-	mux.HandleFunc("/api/v1/phase1/current", s.handlePhase1Current)
-	mux.HandleFunc("/api/v1/phase1/contribute", s.handlePhase1Contribute)
-	mux.HandleFunc("/api/v1/phase2/current", s.handlePhase2Current)
-	mux.HandleFunc("/api/v1/phase2/contribute", s.handlePhase2Contribute)
-
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -54,6 +46,17 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/status", s.handleStatus)
+	mux.HandleFunc("/api/v1/transcript", s.handleTranscript)
+	mux.HandleFunc("/api/v1/phase1/current", s.handlePhase1Current)
+	mux.HandleFunc("/api/v1/phase1/contribute", s.handlePhase1Contribute)
+	mux.HandleFunc("/api/v1/phase2/current", s.handlePhase2Current)
+	mux.HandleFunc("/api/v1/phase2/contribute", s.handlePhase2Contribute)
+	return mux
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +156,8 @@ func extractMeta(r *http.Request) ContributionMeta {
 		PublicKey:     r.Header.Get("X-Public-Key"),
 		Signature:     r.Header.Get("X-Signature"),
 		Attestation:   r.Header.Get("X-Attestation"),
+		InputHash:     r.Header.Get("X-Input-Hash"),
+		OutputHash:    r.Header.Get("X-Output-Hash"),
 	}
 }
 

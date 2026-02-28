@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -56,6 +57,18 @@ func NewNetworkTestSuite(cfg *network.Config, container interface{}) *NetworkTes
 	return nts
 }
 
+func (nts *NetworkTestSuite) syncTestingContext() {
+	if nts.container == nil {
+		return
+	}
+
+	if outer, ok := nts.container.(interface{ T() *testing.T }); ok {
+		if t := outer.T(); t != nil {
+			nts.SetT(t)
+		}
+	}
+}
+
 func (nts *NetworkTestSuite) countTests() int {
 	vof := reflect.TypeOf(nts.container)
 
@@ -76,6 +89,7 @@ func (nts *NetworkTestSuite) TearDownSuite() {
 }
 
 func (nts *NetworkTestSuite) SetupSuite() {
+	nts.syncTestingContext()
 	nts.kr = sdktestutil.NewTestKeyring(nts.cfg.Codec)
 	nts.network = network.New(nts.T(), nts.cfg)
 
@@ -235,6 +249,7 @@ func (nts *NetworkTestSuite) Config() network.Config {
 }
 
 func (nts *NetworkTestSuite) SetupTest() {
+	nts.syncTestingContext()
 	nts.testIdx++
 	nts.testCtx, nts.cancelTestCtx = context.WithTimeout(context.Background(), 30*time.Second)
 }

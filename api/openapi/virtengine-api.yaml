@@ -23,6 +23,16 @@ info:
     | Anonymous | 10 | 10,000 |
     | API Key | 50 | 100,000 |
     | Premium | 200 | 1,000,000 |
+
+    ## Transport Coverage
+
+    `paths` in this document describe HTTP routes that are actually exposed by the
+    gRPC-Gateway in the current build. Two query services boot on the gRPC server
+    without generated HTTP gateway handlers and are therefore documented under
+    `x-grpc-services` instead of `paths`:
+
+    - `virtengine.marketplace.v1.Query`
+    - `virtengine.hpc.v1.WorkloadTemplateQuery`
     
   contact:
     name: VirtEngine
@@ -52,7 +62,7 @@ tags:
   - name: Encryption
     description: Public-key encryption services
   - name: Market
-    description: Marketplace orders, bids, and leases
+    description: Market REST endpoints plus marketplace gRPC query compatibility notes
   - name: Deployment
     description: Deployment management
   - name: Provider
@@ -68,7 +78,7 @@ tags:
   - name: Staking
     description: Staking and delegation
   - name: HPC
-    description: High-performance computing
+    description: High-performance computing REST endpoints plus workload template gRPC queries
   - name: Enclave
     description: TEE/Enclave management
   - name: Take
@@ -81,6 +91,114 @@ tags:
     description: Fraud detection and reporting
   - name: BME
     description: Benchmark and metrics engine
+
+x-grpc-services:
+  marketplaceQuery:
+    service: virtengine.marketplace.v1.Query
+    transport: grpc
+    restGateway: not-generated-in-this-build
+    methods:
+      - name: OfferingPrice
+        requestSchema:
+          $ref: '#/components/schemas/MarketplaceOfferingPriceRequest'
+        responseSchema:
+          $ref: '#/components/schemas/MarketplaceOfferingPriceResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty, offering_id is missing, offering_id cannot be parsed, or pricing inputs are invalid.
+          - grpcStatus: NOT_FOUND
+            code: marketplace:2200
+            when: The requested offering does not exist.
+      - name: AllocationsByCustomer
+        requestSchema:
+          $ref: '#/components/schemas/MarketplaceAllocationsByCustomerRequest'
+        responseSchema:
+          $ref: '#/components/schemas/MarketplaceAllocationsResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty or customer_address is missing.
+      - name: AllocationsByProvider
+        requestSchema:
+          $ref: '#/components/schemas/MarketplaceAllocationsByProviderRequest'
+        responseSchema:
+          $ref: '#/components/schemas/MarketplaceAllocationsResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty or provider_address is missing.
+  hpcWorkloadTemplateQuery:
+    service: virtengine.hpc.v1.WorkloadTemplateQuery
+    transport: grpc
+    restGateway: not-generated-in-this-build
+    methods:
+      - name: WorkloadTemplate
+        requestSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplateRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplateResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty or template_id/version is missing.
+          - grpcStatus: NOT_FOUND
+            code: hpc:2140
+            when: The requested workload template version does not exist.
+      - name: WorkloadTemplates
+        requestSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplatesRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplatesResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty.
+          - grpcStatus: INTERNAL
+            when: Template pagination or decoding fails.
+      - name: WorkloadTemplatesByType
+        requestSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplatesByTypeRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplatesByTypeResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty.
+          - grpcStatus: INTERNAL
+            when: Template pagination or decoding fails.
+      - name: WorkloadTemplatesByPublisher
+        requestSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplatesByPublisherRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplatesByPublisherResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty.
+          - grpcStatus: INTERNAL
+            when: Template pagination or decoding fails.
+      - name: ApprovedWorkloadTemplates
+        requestSchema:
+          $ref: '#/components/schemas/HpcApprovedWorkloadTemplatesRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcApprovedWorkloadTemplatesResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty.
+          - grpcStatus: INTERNAL
+            when: Template pagination or decoding fails.
+      - name: WorkloadTemplateUsage
+        requestSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplateUsageRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcWorkloadTemplateUsageResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty or template_id/version is missing.
+      - name: SearchWorkloadTemplates
+        requestSchema:
+          $ref: '#/components/schemas/HpcSearchWorkloadTemplatesRequest'
+        responseSchema:
+          $ref: '#/components/schemas/HpcSearchWorkloadTemplatesResponse'
+        errors:
+          - grpcStatus: INVALID_ARGUMENT
+            when: Request is empty.
+          - grpcStatus: INTERNAL
+            when: Template pagination or decoding fails.
 
 paths:
   # VEID Module
@@ -505,6 +623,522 @@ components:
             category:
               type: string
               enum: [validation, not_found, unauthorized, internal]
+
+    Coin:
+      type: object
+      required: [denom, amount]
+      properties:
+        denom:
+          type: string
+        amount:
+          type: string
+
+    PageRequest:
+      type: object
+      properties:
+        key:
+          type: string
+          format: byte
+        offset:
+          type: integer
+          format: int64
+          minimum: 0
+        limit:
+          type: integer
+          format: int64
+          minimum: 0
+        count_total:
+          type: boolean
+
+    MarketplaceOfferingPriceRequest:
+      type: object
+      required: [offering_id]
+      properties:
+        offering_id:
+          type: string
+          description: On-chain offering identifier in provider/sequence form.
+        resource_units:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+          description: Resource unit overrides keyed by resource type.
+        quantity:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Defaults to 1 when omitted or set to 0.
+
+    MarketplaceOfferingPriceResponse:
+      type: object
+      properties:
+        total:
+          $ref: '#/components/schemas/Coin'
+
+    MarketplaceAllocation:
+      type: object
+      properties:
+        allocation_id:
+          type: string
+        order_id:
+          type: string
+        offering_id:
+          type: string
+        provider_address:
+          type: string
+        customer_address:
+          type: string
+        state:
+          type: integer
+          format: int32
+          description: gRPC enum value from virtengine.marketplace.v1.AllocationState.
+        accepted_price:
+          type: integer
+          format: int64
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        terminated_at:
+          type: string
+          format: date-time
+          nullable: true
+        state_reason:
+          type: string
+
+    MarketplaceAllocationsByCustomerRequest:
+      type: object
+      required: [customer_address]
+      properties:
+        customer_address:
+          type: string
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+
+    MarketplaceAllocationsByProviderRequest:
+      type: object
+      required: [provider_address]
+      properties:
+        provider_address:
+          type: string
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+
+    MarketplaceAllocationsResponse:
+      type: object
+      properties:
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketplaceAllocation'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    HpcWorkloadRuntime:
+      type: object
+      properties:
+        container_image:
+          type: string
+        container_registry:
+          type: string
+        image_digest:
+          type: string
+        runtime_type:
+          type: string
+          enum: [singularity, apptainer, native]
+        required_modules:
+          type: array
+          items:
+            type: string
+        mpi_implementation:
+          type: string
+        cuda_version:
+          type: string
+        python_version:
+          type: string
+
+    HpcWorkloadResourceSpec:
+      type: object
+      properties:
+        min_nodes:
+          type: integer
+          format: int32
+        max_nodes:
+          type: integer
+          format: int32
+        default_nodes:
+          type: integer
+          format: int32
+        min_cpus_per_node:
+          type: integer
+          format: int32
+        max_cpus_per_node:
+          type: integer
+          format: int32
+        default_cpus_per_node:
+          type: integer
+          format: int32
+        min_memory_mb_per_node:
+          type: integer
+          format: int64
+        max_memory_mb_per_node:
+          type: integer
+          format: int64
+        default_memory_mb_per_node:
+          type: integer
+          format: int64
+        min_gpus_per_node:
+          type: integer
+          format: int32
+        max_gpus_per_node:
+          type: integer
+          format: int32
+        default_gpus_per_node:
+          type: integer
+          format: int32
+        gpu_types:
+          type: array
+          items:
+            type: string
+        min_runtime_minutes:
+          type: integer
+          format: int64
+        max_runtime_minutes:
+          type: integer
+          format: int64
+        default_runtime_minutes:
+          type: integer
+          format: int64
+        storage_gb_required:
+          type: integer
+          format: int32
+        network_required:
+          type: boolean
+        exclusive_nodes:
+          type: boolean
+
+    HpcWorkloadSecuritySpec:
+      type: object
+      properties:
+        allowed_images:
+          type: array
+          items:
+            type: string
+        blocked_images:
+          type: array
+          items:
+            type: string
+        allowed_registries:
+          type: array
+          items:
+            type: string
+        require_image_digest:
+          type: boolean
+        allow_network_access:
+          type: boolean
+        allow_host_mounts:
+          type: boolean
+        allowed_host_paths:
+          type: array
+          items:
+            type: string
+        sandbox_level:
+          type: string
+          enum: [none, basic, strict]
+        max_open_files:
+          type: integer
+          format: int64
+        max_processes:
+          type: integer
+          format: int64
+        max_file_size:
+          type: integer
+          format: int64
+        require_signed_image:
+          type: boolean
+        trusted_signers:
+          type: array
+          items:
+            type: string
+
+    HpcWorkloadEntrypoint:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+        default_args:
+          type: array
+          items:
+            type: string
+        arg_template:
+          type: string
+        working_directory:
+          type: string
+        pre_run_script:
+          type: string
+        post_run_script:
+          type: string
+        use_mpirun:
+          type: boolean
+        mpirun_args:
+          type: array
+          items:
+            type: string
+
+    HpcEnvironmentVariable:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        value_template:
+          type: string
+        required:
+          type: boolean
+        secret:
+          type: boolean
+        description:
+          type: string
+
+    HpcDataBinding:
+      type: object
+      properties:
+        name:
+          type: string
+        mount_path:
+          type: string
+        host_path:
+          type: string
+        data_type:
+          type: string
+          enum: [input, output, scratch]
+        required:
+          type: boolean
+        read_only:
+          type: boolean
+
+    HpcParameterDefinition:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [string, int, float, bool, enum]
+        description:
+          type: string
+        default:
+          type: string
+        required:
+          type: boolean
+        enum_values:
+          type: array
+          items:
+            type: string
+        min_value:
+          type: string
+        max_value:
+          type: string
+        pattern:
+          type: string
+
+    HpcWorkloadSignature:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        publisher_pub_key:
+          type: string
+        signature:
+          type: string
+        signed_at:
+          type: string
+          format: date-time
+        content_hash:
+          type: string
+
+    HpcWorkloadTemplate:
+      type: object
+      required: [template_id, name, version, type, runtime, resources, security, entrypoint, approval_status, publisher, created_at, updated_at, block_height]
+      properties:
+        template_id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [mpi, gpu, batch, data_processing, interactive, custom]
+        runtime:
+          $ref: '#/components/schemas/HpcWorkloadRuntime'
+        resources:
+          $ref: '#/components/schemas/HpcWorkloadResourceSpec'
+        security:
+          $ref: '#/components/schemas/HpcWorkloadSecuritySpec'
+        entrypoint:
+          $ref: '#/components/schemas/HpcWorkloadEntrypoint'
+        environment:
+          type: array
+          items:
+            $ref: '#/components/schemas/HpcEnvironmentVariable'
+        modules:
+          type: array
+          items:
+            type: string
+        data_bindings:
+          type: array
+          items:
+            $ref: '#/components/schemas/HpcDataBinding'
+        parameter_schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/HpcParameterDefinition'
+        approval_status:
+          type: string
+          enum: [pending, approved, rejected, deprecated, revoked]
+        publisher:
+          type: string
+        artifact_cid:
+          type: string
+        signature:
+          $ref: '#/components/schemas/HpcWorkloadSignature'
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        block_height:
+          type: integer
+          format: int64
+
+    HpcWorkloadTemplateRequest:
+      type: object
+      required: [template_id, version]
+      properties:
+        template_id:
+          type: string
+        version:
+          type: string
+
+    HpcWorkloadTemplateResponse:
+      type: object
+      properties:
+        template:
+          $ref: '#/components/schemas/HpcWorkloadTemplate'
+
+    HpcWorkloadTemplatesRequest:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+        template_id:
+          type: string
+
+    HpcWorkloadTemplatesResponse:
+      type: object
+      properties:
+        templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/HpcWorkloadTemplate'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    HpcWorkloadTemplatesByTypeRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [mpi, gpu, batch, data_processing, interactive, custom]
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+
+    HpcWorkloadTemplatesByTypeResponse:
+      allOf:
+        - $ref: '#/components/schemas/HpcWorkloadTemplatesResponse'
+
+    HpcWorkloadTemplatesByPublisherRequest:
+      type: object
+      required: [publisher]
+      properties:
+        publisher:
+          type: string
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+
+    HpcWorkloadTemplatesByPublisherResponse:
+      allOf:
+        - $ref: '#/components/schemas/HpcWorkloadTemplatesResponse'
+
+    HpcApprovedWorkloadTemplatesRequest:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+
+    HpcApprovedWorkloadTemplatesResponse:
+      allOf:
+        - $ref: '#/components/schemas/HpcWorkloadTemplatesResponse'
+
+    HpcWorkloadTemplateUsageRequest:
+      type: object
+      required: [template_id, version]
+      properties:
+        template_id:
+          type: string
+        version:
+          type: string
+
+    HpcWorkloadTemplateUsageResponse:
+      type: object
+      properties:
+        template_id:
+          type: string
+        version:
+          type: string
+        total_uses:
+          type: integer
+          format: int64
+        active_jobs:
+          type: integer
+          format: int64
+        completed_jobs:
+          type: integer
+          format: int64
+        failed_jobs:
+          type: integer
+          format: int64
+
+    HpcSearchWorkloadTemplatesRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        pagination:
+          $ref: '#/components/schemas/PageRequest'
+
+    HpcSearchWorkloadTemplatesResponse:
+      allOf:
+        - $ref: '#/components/schemas/HpcWorkloadTemplatesResponse'
 
     IdentityResponse:
       type: object

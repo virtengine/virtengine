@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -394,7 +396,9 @@ func (k Keeper) ProcessVerificationRequest(
 	}
 
 	// Step 6: Update on-chain state
-	k.applyVerificationResult(ctx, addr, result)
+	if err := k.applyVerificationResult(ctx, addr, request, result); err != nil {
+		k.rejectVerificationResult(result, err)
+	}
 
 	// Finalize request
 	k.finalizeRequest(ctx, request, result)
@@ -414,11 +418,15 @@ func (k Keeper) ProcessVerificationRequest(
 func (k Keeper) applyVerificationResult(
 	ctx sdk.Context,
 	addr sdk.AccAddress,
+	request *types.VerificationRequest,
 	result *types.VerificationResult,
-) {
+) error {
 	// Update identity score
 	if result.Status == types.VerificationResultStatusSuccess ||
 		result.Status == types.VerificationResultStatusPartial {
+		if err := k.enforceVerificationArtifactState(ctx, request, result); err != nil {
+			return err
+		}
 
 		// Determine account status based on score
 		var accountStatus types.AccountStatus
@@ -450,7 +458,130 @@ func (k Keeper) applyVerificationResult(
 				)
 			}
 		}
+
+		if k.issuancePolicyKeeper != nil {
+			verifierID := result.ModelVersion
+			activeVerifier, hasActiveVerifier := k.getActiveVerifierInfo(ctx)
+			if hasActiveVerifier && activeVerifier.VerifierID != "" {
+				verifierID = activeVerifier.VerifierID
+			}
+
+			recordedUnits, err := k.issuancePolicyKeeper.RecordVerifiedProof(
+				ctx,
+				request.RequestID,
+				addr.String(),
+				verifierID,
+				result.ModelVersion,
+				result.Score,
+			)
+			if err != nil {
+				k.Logger(ctx).Error("failed to record issuance proof", "request_id", request.RequestID, "error", err)
+			} else {
+				result.Metadata["issuance_recorded_units"] = fmt.Sprintf("%d", recordedUnits)
+			}
+		}
 	}
+
+	return nil
+}
+
+func (k Keeper) enforceVerificationArtifactState(
+	ctx sdk.Context,
+	request *types.VerificationRequest,
+	result *types.VerificationResult,
+) error {
+	activeVerifier, hasActiveVerifier := k.getActiveVerifierInfo(ctx)
+	if hasActiveVerifier {
+		result.Metadata["active_verifier_id"] = activeVerifier.VerifierID
+		result.Metadata["active_verifier_spec_version"] = activeVerifier.SpecVersion
+		if activeVerifier.ActivationHeight > 0 && request.RequestedBlock < activeVerifier.ActivationHeight {
+			return types.ErrPipelineVersionMismatch.Wrapf(
+				"active verifier %s is not authorized until height %d",
+				activeVerifier.VerifierID,
+				activeVerifier.ActivationHeight,
+			)
+		}
+		if !versionsMatch(activeVerifier.SpecVersion, result.ModelVersion) {
+			return types.ErrPipelineVersionMismatch.Wrapf(
+				"active verifier %s expects %s, got %s",
+				activeVerifier.VerifierID,
+				activeVerifier.SpecVersion,
+				result.ModelVersion,
+			)
+		}
+	}
+
+	activePV, err := k.GetActivePipelineVersion(ctx)
+	if err != nil {
+		if hasActiveVerifier {
+			return types.ErrUnauthorized.Wrap("missing active pipeline artifact state for verifier enforcement")
+		}
+		return err
+	}
+
+	manifest, err := k.ensurePipelineVersionUsable(ctx, activePV)
+	if err != nil {
+		return err
+	}
+
+	result.Metadata["pipeline_version"] = activePV.Version
+	result.Metadata["pipeline_image_hash"] = activePV.ImageHash
+	result.Metadata["pipeline_manifest_hash"] = manifest.ManifestHash
+
+	if !versionsMatch(activePV.Version, result.ModelVersion) {
+		return types.ErrPipelineVersionMismatch.Wrapf(
+			"active pipeline expects %s, got %s",
+			activePV.Version,
+			result.ModelVersion,
+		)
+	}
+
+	if hasActiveVerifier && activeVerifier.WeightsSHA256 != "" &&
+		!hashesMatch(activeVerifier.WeightsSHA256, manifest.ManifestHash) &&
+		!hashesMatch(activeVerifier.WeightsSHA256, activePV.ImageHash) {
+		return types.ErrUnauthorized.Wrapf(
+			"active verifier %s expects artifact %s but pipeline publishes manifest %s and image %s",
+			activeVerifier.VerifierID,
+			activeVerifier.WeightsSHA256,
+			manifest.ManifestHash,
+			activePV.ImageHash,
+		)
+	}
+
+	return nil
+}
+
+func (k Keeper) rejectVerificationResult(result *types.VerificationResult, err error) {
+	result.Metadata["verification_rejection"] = err.Error()
+
+	switch {
+	case errorsmod.IsOf(err, types.ErrUnauthorized):
+		result.SetFailed(types.ReasonCodeUnauthorizedArtifactState)
+	case errorsmod.IsOf(err, types.ErrPipelineVersionMismatch),
+		errorsmod.IsOf(err, types.ErrNoPipelineVersionActive),
+		errorsmod.IsOf(err, types.ErrModelManifestMismatch):
+		result.SetFailed(types.ReasonCodeStaleArtifactState)
+	default:
+		result.SetError(types.ReasonCodeMLInferenceError, err.Error())
+	}
+}
+
+func hashesMatch(expected, actual string) bool {
+	return normalizeHashString(expected) == normalizeHashString(actual)
+}
+
+func normalizeHashString(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	return strings.TrimPrefix(normalized, "sha256:")
+}
+
+func resultHasReasonCode(result *types.VerificationResult, code types.ReasonCode) bool {
+	for _, reasonCode := range result.ReasonCodes {
+		if reasonCode == code {
+			return true
+		}
+	}
+	return false
 }
 
 // finalizeRequest completes the verification request lifecycle
@@ -464,7 +595,12 @@ func (k Keeper) finalizeRequest(
 	case types.VerificationResultStatusSuccess, types.VerificationResultStatusPartial:
 		request.SetCompleted()
 	case types.VerificationResultStatusFailed:
-		request.SetFailed(fmt.Sprintf("%v", result.ReasonCodes))
+		if resultHasReasonCode(result, types.ReasonCodeStaleArtifactState) ||
+			resultHasReasonCode(result, types.ReasonCodeUnauthorizedArtifactState) {
+			request.SetRejected(fmt.Sprintf("%v", result.ReasonCodes))
+		} else {
+			request.SetFailed(fmt.Sprintf("%v", result.ReasonCodes))
+		}
 	case types.VerificationResultStatusError:
 		// Check if we should retry
 		config := DefaultVerificationPipelineConfig()

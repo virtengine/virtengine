@@ -77,6 +77,7 @@ import (
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	issuancepolicytypes "github.com/virtengine/virtengine/x/issuancepolicy/types"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
@@ -87,6 +88,7 @@ import (
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
 	supporttypes "github.com/virtengine/virtengine/x/support/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+	veidregistrytypes "github.com/virtengine/virtengine/x/veidregistry/types"
 
 	"github.com/virtengine/virtengine/app/gaspricing"
 	apptypes "github.com/virtengine/virtengine/app/types"
@@ -191,11 +193,8 @@ func NewApp(
 	gasParams := gaspricing.DefaultParams(minGasPrices)
 	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.GetKey(apptypes.GasPricingStoreKey), logger, gasParams)
 
-	// TODO: There is a bug here, where we register the govRouter routes in InitNormalKeepers and then
-	// call setupHooks afterwards. Therefore, if a gov proposal needs to call a method and that method calls a
-	// hook, we will get a nil pointer dereference error due to the hooks in the keeper not being
-	// setup yet. I will refrain from creating an issue in the sdk for now until after we unfork to 0.47,
-	// because I believe the concept of Routes is going away.
+	// Rebind legacy governance proposal handlers after hook setup so any handlers
+	// that capture keepers by value see the final hooked keeper state.
 	app.SetupHooks()
 
 	// NOTE: All module / keeper changes should happen prior to this module.NewManager line being called.
@@ -233,9 +232,11 @@ func NewApp(
 	app.MM.SetOrderInitGenesis(OrderInitGenesis(app.MM.ModuleNames())...)
 
 	app.Configurator = module.NewConfigurator(app.AppCodec(), app.MsgServiceRouter(), app.GRPCQueryRouter())
-	err = app.MM.RegisterServices(app.Configurator)
-	if err != nil {
-		panic(err)
+	if !cast.ToBool(appOpts.Get("skip_module_service_registration")) {
+		err = app.MM.RegisterServices(app.Configurator)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// register the upgrade handler
@@ -246,10 +247,12 @@ func NewApp(
 	app.sm = module.NewSimulationManager(appSimModules(app, encodingConfig)...)
 	app.sm.RegisterStoreDecoders()
 
-	autocliv1.RegisterQueryServer(app.GRPCQueryRouter(), runtimeservices.NewAutoCLIQueryService(app.MM.Modules))
+	if !cast.ToBool(appOpts.Get("skip_module_service_registration")) {
+		autocliv1.RegisterQueryServer(app.GRPCQueryRouter(), runtimeservices.NewAutoCLIQueryService(app.MM.Modules))
 
-	reflectionSvc := getReflectionService()
-	reflectionv1.RegisterReflectionServiceServer(app.GRPCQueryRouter(), reflectionSvc)
+		reflectionSvc := getReflectionService()
+		reflectionv1.RegisterReflectionServiceServer(app.GRPCQueryRouter(), reflectionSvc)
+	}
 
 	// initialize stores
 	app.MountKVStores(app.GetKVStoreKey())
@@ -331,6 +334,8 @@ func orderBeginBlockers(_ []string) []string {
 		ibchost.ModuleName,
 		feegrant.ModuleName,
 		// VirtEngine patent modules (AU2024203136A1)
+		veidregistrytypes.ModuleName,
+		issuancepolicytypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		encryptiontypes.ModuleName,
@@ -381,6 +386,8 @@ func OrderEndBlockers(_ []string) []string {
 		consensusparamtypes.ModuleName,
 		ibctm.ModuleName,
 		// VirtEngine patent modules (AU2024203136A1)
+		veidregistrytypes.ModuleName,
+		issuancepolicytypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		encryptiontypes.ModuleName,

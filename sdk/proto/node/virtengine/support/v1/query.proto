@@ -1,0 +1,153 @@
+syntax = "proto3";
+package virtengine.support.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "virtengine/support/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/support/v1";
+
+service Query {
+  rpc SupportRequest(QuerySupportRequestRequest) returns (QuerySupportRequestResponse) {
+    option (google.api.http).get = "/virtengine/support/v1/requests/{ticket_id=**}";
+  }
+
+  rpc SupportRequestsBySubmitter(QuerySupportRequestsBySubmitterRequest) returns (QuerySupportRequestsBySubmitterResponse) {
+    option (google.api.http).get = "/virtengine/support/v1/submitters/{submitter_address}/requests";
+  }
+
+  rpc SupportResponsesByRequest(QuerySupportResponsesByRequestRequest) returns (QuerySupportResponsesByRequestResponse) {
+    option (google.api.http).get = "/virtengine/support/v1/requests/{ticket_id=**}/responses";
+  }
+
+  rpc ExternalRef(QueryExternalRefRequest) returns (QueryExternalRefResponse) {
+    option (google.api.http).get = "/virtengine/support/v1/external_refs/{resource_type}/{resource_id=**}";
+  }
+
+  rpc ExternalRefsByOwner(QueryExternalRefsByOwnerRequest) returns (QueryExternalRefsByOwnerResponse) {
+    option (google.api.http).get = "/virtengine/support/v1/owners/{owner_address}/external_refs";
+  }
+
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/support/v1/params";
+  }
+}
+
+message QuerySupportRequestRequest {
+  string ticket_id = 1 [
+    (gogoproto.jsontag) = "ticket_id",
+    (gogoproto.moretags) = "yaml:\"ticket_id\""
+  ];
+  string viewer_address = 2 [
+    (gogoproto.jsontag) = "viewer_address,omitempty",
+    (gogoproto.moretags) = "yaml:\"viewer_address\""
+  ];
+  string viewer_key_id = 3 [
+    (gogoproto.jsontag) = "viewer_key_id,omitempty",
+    (gogoproto.moretags) = "yaml:\"viewer_key_id\""
+  ];
+}
+
+message QuerySupportRequestResponse {
+  SupportRequest request = 1 [
+    (gogoproto.jsontag) = "request",
+    (gogoproto.moretags) = "yaml:\"request\""
+  ];
+}
+
+message QuerySupportRequestsBySubmitterRequest {
+  string submitter_address = 1 [
+    (gogoproto.jsontag) = "submitter_address",
+    (gogoproto.moretags) = "yaml:\"submitter_address\""
+  ];
+  string status = 2 [
+    (gogoproto.jsontag) = "status,omitempty",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+  string viewer_address = 3 [
+    (gogoproto.jsontag) = "viewer_address,omitempty",
+    (gogoproto.moretags) = "yaml:\"viewer_address\""
+  ];
+  string viewer_key_id = 4 [
+    (gogoproto.jsontag) = "viewer_key_id,omitempty",
+    (gogoproto.moretags) = "yaml:\"viewer_key_id\""
+  ];
+}
+
+message QuerySupportRequestsBySubmitterResponse {
+  repeated SupportRequest requests = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "requests",
+    (gogoproto.moretags) = "yaml:\"requests\""
+  ];
+}
+
+message QuerySupportResponsesByRequestRequest {
+  string ticket_id = 1 [
+    (gogoproto.jsontag) = "ticket_id",
+    (gogoproto.moretags) = "yaml:\"ticket_id\""
+  ];
+  string viewer_address = 2 [
+    (gogoproto.jsontag) = "viewer_address,omitempty",
+    (gogoproto.moretags) = "yaml:\"viewer_address\""
+  ];
+  string viewer_key_id = 3 [
+    (gogoproto.jsontag) = "viewer_key_id,omitempty",
+    (gogoproto.moretags) = "yaml:\"viewer_key_id\""
+  ];
+}
+
+message QuerySupportResponsesByRequestResponse {
+  repeated SupportResponse responses = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "responses",
+    (gogoproto.moretags) = "yaml:\"responses\""
+  ];
+}
+
+message QueryExternalRefRequest {
+  string resource_type = 1 [
+    (gogoproto.jsontag) = "resource_type",
+    (gogoproto.moretags) = "yaml:\"resource_type\""
+  ];
+  string resource_id = 2 [
+    (gogoproto.jsontag) = "resource_id",
+    (gogoproto.moretags) = "yaml:\"resource_id\""
+  ];
+}
+
+message QueryExternalRefResponse {
+  ExternalTicketRef ref = 1 [
+    (gogoproto.jsontag) = "ref",
+    (gogoproto.moretags) = "yaml:\"ref\""
+  ];
+}
+
+message QueryExternalRefsByOwnerRequest {
+  string owner_address = 1 [
+    (gogoproto.jsontag) = "owner_address",
+    (gogoproto.moretags) = "yaml:\"owner_address\""
+  ];
+  string resource_type = 2 [
+    (gogoproto.jsontag) = "resource_type,omitempty",
+    (gogoproto.moretags) = "yaml:\"resource_type\""
+  ];
+}
+
+message QueryExternalRefsByOwnerResponse {
+  repeated ExternalTicketRef refs = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "refs",
+    (gogoproto.moretags) = "yaml:\"refs\""
+  ];
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}

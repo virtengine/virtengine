@@ -116,11 +116,33 @@ func (s *KeeperTestSuite) TestUsageRewardsMultiDenomAndEvents() {
 func (s *KeeperTestSuite) TestStakingRewardAllocation() {
 	t := s.T()
 
+	s.seedStakeRewardRoutes(t)
+
+	params := s.keeper.GetParams(s.ctx)
+	params.PayoutHoldbackRate = "0.10"
+	require.NoError(t, s.keeper.SetParams(s.ctx, params))
+
+	settlement := s.buildSettlement(t, "staking-allocation")
+	settlement.TotalAmount = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000)))
+	settlement.PlatformFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(50)))
+	settlement.ValidatorFee = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100)))
+	settlement.ProviderShare = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(850)))
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, settlement))
+
+	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-staking-allocation", settlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateCompleted, payout.State)
+
 	epoch := uint64(5)
 	dist, err := s.keeper.DistributeStakingRewards(s.ctx, epoch)
 	require.NoError(t, err)
 	require.Equal(t, types.RewardSourceStaking, dist.Source)
 	require.Equal(t, epoch, dist.EpochNumber)
-	require.Len(t, dist.Recipients, 1)
-	require.NotEmpty(t, dist.Recipients[0].Address)
+	require.Equal(t, sdkmath.NewInt(100), dist.TotalRewards.AmountOf("uve"))
+
+	totals := rewardTotalsByAddress(dist.Recipients, "uve")
+	require.Equal(t, sdkmath.NewInt(43), totals[s.validator.String()])
+	require.Equal(t, sdkmath.NewInt(27), totals[s.delegatorOne.String()])
+	require.Equal(t, sdkmath.NewInt(3), totals[s.validatorTwo.String()])
+	require.Equal(t, sdkmath.NewInt(27), totals[s.delegatorTwo.String()])
 }

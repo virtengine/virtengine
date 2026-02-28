@@ -61,10 +61,6 @@ type VEIDE2ETestSuite struct {
 
 // TestVEIDE2E runs the VEID E2E test suite.
 func TestVEIDE2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
-
 	suite.Run(t, new(VEIDE2ETestSuite))
 }
 

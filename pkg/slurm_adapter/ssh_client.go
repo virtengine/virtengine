@@ -64,6 +64,9 @@ type SSHConfig struct {
 	// Password is the SSH password (if not using key auth)
 	Password string `json:"-"` // Never log
 
+	// Passphrase is the passphrase used to decrypt a private key, if needed.
+	Passphrase string `json:"-"` // Never log
+
 	// HostKeyCallback controls host key verification
 	// "ignore" to skip verification (not recommended for production)
 	// "known_hosts" to use known_hosts file verification
@@ -136,7 +139,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 
 	// Configure authentication
 	if sshConfig.PrivateKey != "" {
-		signer, err := ssh.ParsePrivateKey([]byte(sshConfig.PrivateKey))
+		signer, err := parseSSHPrivateKey([]byte(sshConfig.PrivateKey), sshConfig.Passphrase)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
@@ -146,7 +149,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key file: %w", err)
 		}
-		signer, err := ssh.ParsePrivateKey(key)
+		signer, err := parseSSHPrivateKey(key, sshConfig.Passphrase)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
@@ -230,6 +233,24 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 	client.poolCond = sync.NewCond(&client.poolMu)
 
 	return client, nil
+}
+
+func parseSSHPrivateKey(key []byte, passphrase string) (ssh.Signer, error) {
+	signer, err := ssh.ParsePrivateKey(key)
+	if err == nil {
+		return signer, nil
+	}
+
+	if passphrase == "" {
+		return nil, err
+	}
+
+	signer, passErr := ssh.ParsePrivateKeyWithPassphrase(key, []byte(passphrase))
+	if passErr != nil {
+		return nil, passErr
+	}
+
+	return signer, nil
 }
 
 // Connect establishes SSH connection pool to the SLURM login node

@@ -6,7 +6,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: virtengine-node-blue
-  namespace: virtengine-prod
+  namespace: virtengine
   labels:
     app.kubernetes.io/name: virtengine-node
     app.kubernetes.io/version: blue
@@ -31,7 +31,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: virtengine-node-green
-  namespace: virtengine-prod
+  namespace: virtengine
   labels:
     app.kubernetes.io/name: virtengine-node
     app.kubernetes.io/version: green
@@ -56,13 +56,13 @@ apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: virtengine-node
-  namespace: virtengine-prod
+  namespace: virtengine
   labels:
     app.kubernetes.io/name: virtengine-node
 spec:
   hosts:
     - virtengine-node
-    - virtengine-node.virtengine-prod.svc.cluster.local
+    - virtengine-node.virtengine.svc.cluster.local
   http:
     - match:
         - headers:
@@ -90,7 +90,7 @@ apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
   name: virtengine-node
-  namespace: virtengine-prod
+  namespace: virtengine
 spec:
   host: virtengine-node
   trafficPolicy:
@@ -119,7 +119,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: provider-daemon-blue
-  namespace: virtengine-prod
+  namespace: virtengine
   labels:
     app.kubernetes.io/name: provider-daemon
     app.kubernetes.io/version: blue
@@ -141,7 +141,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: provider-daemon-green
-  namespace: virtengine-prod
+  namespace: virtengine
   labels:
     app.kubernetes.io/name: provider-daemon
     app.kubernetes.io/version: green
@@ -163,11 +163,11 @@ apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: provider-daemon
-  namespace: virtengine-prod
+  namespace: virtengine
 spec:
   hosts:
     - provider-daemon
-    - provider-daemon.virtengine-prod.svc.cluster.local
+    - provider-daemon.virtengine.svc.cluster.local
   http:
     - match:
         - headers:

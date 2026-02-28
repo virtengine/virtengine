@@ -85,42 +85,20 @@ func (f *EnclaveFactory) CreateService() (EnclaveService, error) {
 		return f.createSimulatedService()
 	}
 
-	// Try to create a service based on available hardware
-	if caps.SGXAvailable {
-		svc, err := f.createSGXService()
+	var lastErr error
+	for _, platform := range hardwarePlatformOrder(*caps) {
+		svc, err := f.CreateServiceForPlatform(platform)
 		if err == nil {
 			return svc, nil
 		}
-		if mode == HardwareModeRequire {
-			return nil, fmt.Errorf("SGX hardware required but failed to initialize: %w", err)
-		}
-		// Fall through to try other platforms
-	}
-
-	if caps.SEVSNPAvailable {
-		svc, err := f.createSEVService()
-		if err == nil {
-			return svc, nil
-		}
-		if mode == HardwareModeRequire {
-			return nil, fmt.Errorf("SEV-SNP hardware required but failed to initialize: %w", err)
-		}
-		// Fall through to try other platforms
-	}
-
-	if caps.NitroAvailable {
-		svc, err := f.createNitroService()
-		if err == nil {
-			return svc, nil
-		}
-		if mode == HardwareModeRequire {
-			return nil, fmt.Errorf("nitro hardware required but failed to initialize: %w", err)
-		}
-		// Fall through to simulation
+		lastErr = err
 	}
 
 	// If require mode and no hardware worked
 	if mode == HardwareModeRequire {
+		if lastErr != nil {
+			return nil, fmt.Errorf("hardware required but no TEE platform initialized: %w", lastErr)
+		}
 		return nil, fmt.Errorf("%w: no TEE hardware available", ErrHardwareNotAvailable)
 	}
 
@@ -170,25 +148,8 @@ func (f *EnclaveFactory) CreateHardwareAwareService() (HardwareAwareEnclaveServi
 		}, nil
 	}
 
-	// Try SGX
-	if caps.SGXAvailable {
-		svc, err := f.createSGXServiceWithMode(mode)
-		if err == nil {
-			return svc, nil
-		}
-	}
-
-	// Try SEV-SNP
-	if caps.SEVSNPAvailable {
-		svc, err := f.createSEVServiceWithMode(mode)
-		if err == nil {
-			return svc, nil
-		}
-	}
-
-	// Try Nitro
-	if caps.NitroAvailable {
-		svc, err := f.createNitroServiceWithMode(mode)
+	for _, platform := range hardwarePlatformOrder(*caps) {
+		svc, err := f.createHardwareAwareServiceForPlatform(platform, mode)
 		if err == nil {
 			return svc, nil
 		}
@@ -207,6 +168,40 @@ func (f *EnclaveFactory) CreateHardwareAwareService() (HardwareAwareEnclaveServi
 	}
 
 	return nil, ErrHardwareNotAvailable
+}
+
+func hardwarePlatformOrder(caps HardwareCapabilities) []AttestationType {
+	order := make([]AttestationType, 0, 3)
+	add := func(platform AttestationType, available bool) {
+		if !available || platform == AttestationTypeSimulated {
+			return
+		}
+		for _, existing := range order {
+			if existing == platform {
+				return
+			}
+		}
+		order = append(order, platform)
+	}
+
+	add(caps.PreferredBackend, caps.PreferredBackend != AttestationTypeSimulated)
+	add(AttestationTypeSEVSNP, caps.SEVSNPAvailable)
+	add(AttestationTypeNitro, caps.NitroAvailable)
+	add(AttestationTypeSGX, caps.SGXAvailable)
+	return order
+}
+
+func (f *EnclaveFactory) createHardwareAwareServiceForPlatform(platform AttestationType, mode HardwareMode) (HardwareAwareEnclaveService, error) {
+	switch platform {
+	case AttestationTypeSGX:
+		return f.createSGXServiceWithMode(mode)
+	case AttestationTypeSEVSNP:
+		return f.createSEVServiceWithMode(mode)
+	case AttestationTypeNitro:
+		return f.createNitroServiceWithMode(mode)
+	default:
+		return nil, fmt.Errorf("unknown hardware-aware platform: %s", platform)
+	}
 }
 
 // createSimulatedService creates a simulated enclave service

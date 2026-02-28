@@ -7,10 +7,13 @@ package slo
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -18,6 +21,11 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/chaos"
 	"github.com/virtengine/virtengine/pkg/security"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 )
 
 // Verifier implements the chaos.SLOVerifier interface for verifying
@@ -317,10 +325,173 @@ func (v *Verifier) checkCommandProbe(ctx context.Context, probe chaos.Probe) (fl
 }
 
 // checkGRPCProbe executes a gRPC health check probe.
-func (v *Verifier) checkGRPCProbe(_ context.Context, probe chaos.Probe) (float64, error) {
-	// Simplified gRPC check - in production, use grpc-health-probe or similar
-	// For now, return error indicating not implemented
-	return 0, fmt.Errorf("gRPC probe not implemented: %s", probe.URL)
+func (v *Verifier) checkGRPCProbe(ctx context.Context, probe chaos.Probe) (float64, error) {
+	target, service, dialOpts, grpcMetadata, err := prepareGRPCProbeRequest(probe)
+	if err != nil {
+		return 0, err
+	}
+
+	conn, err := grpc.NewClient(target, dialOpts...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create gRPC probe client for %q: %w", target, err)
+	}
+	defer conn.Close()
+
+	if len(grpcMetadata) > 0 {
+		ctx = metadata.NewOutgoingContext(ctx, grpcMetadata)
+	}
+
+	start := time.Now()
+	resp, err := grpc_health_v1.NewHealthClient(conn).Check(ctx, &grpc_health_v1.HealthCheckRequest{
+		Service: service,
+	})
+	latency := time.Since(start).Seconds()
+	if err != nil {
+		return 0, fmt.Errorf("gRPC health check failed for %q: %w", target, err)
+	}
+	if resp == nil {
+		return 0, fmt.Errorf("gRPC health check returned empty response for %q", target)
+	}
+	if resp.Status != grpc_health_v1.HealthCheckResponse_SERVING {
+		return 0, fmt.Errorf("gRPC service not serving for %q: %s", target, resp.Status.String())
+	}
+
+	if strings.Contains(strings.ToLower(probe.SuccessCriteria), "latency") {
+		return latency, nil
+	}
+
+	return float64(resp.Status), nil
+}
+
+func prepareGRPCProbeRequest(probe chaos.Probe) (string, string, []grpc.DialOption, metadata.MD, error) {
+	rawURL := strings.TrimSpace(probe.URL)
+	if rawURL == "" {
+		return "", "", nil, nil, fmt.Errorf("gRPC probe URL is required")
+	}
+
+	target := rawURL
+	service := strings.TrimSpace(probe.Query)
+	authority := lookupProbeHeader(probe.Headers, "grpc-authority")
+	useTLS := false
+
+	if strings.Contains(rawURL, "://") {
+		parsedURL, err := url.Parse(rawURL)
+		if err != nil {
+			return "", "", nil, nil, fmt.Errorf("failed to parse gRPC probe URL %q: %w", rawURL, err)
+		}
+
+		switch strings.ToLower(parsedURL.Scheme) {
+		case "grpc":
+			useTLS = false
+		case "grpcs":
+			useTLS = true
+		default:
+			return "", "", nil, nil, fmt.Errorf("unsupported gRPC probe URL scheme %q", parsedURL.Scheme)
+		}
+
+		if parsedURL.Host == "" {
+			return "", "", nil, nil, fmt.Errorf("gRPC probe URL %q is missing host", rawURL)
+		}
+
+		target = parsedURL.Host
+		if service == "" {
+			service = strings.TrimSpace(parsedURL.Query().Get("service"))
+		}
+		if service == "" {
+			service = decodeGRPCProbeServicePath(parsedURL.Path)
+		}
+		if authority == "" {
+			authority = strings.TrimSpace(parsedURL.Query().Get("authority"))
+		}
+	} else if service == "" {
+		splitTarget, splitService := splitTargetAndService(rawURL)
+		target = splitTarget
+		service = splitService
+	}
+
+	if service == "" {
+		service = lookupProbeHeader(probe.Headers, "grpc-service")
+	}
+
+	grpcMetadata := metadata.MD{}
+	for key, value := range probe.Headers {
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		normalizedValue := strings.TrimSpace(value)
+		if normalizedKey == "" || normalizedValue == "" {
+			continue
+		}
+
+		switch normalizedKey {
+		case "grpc-service", "grpc-authority":
+			continue
+		default:
+			grpcMetadata.Append(normalizedKey, normalizedValue)
+		}
+	}
+
+	dialOpts := []grpc.DialOption{}
+	if authority != "" {
+		dialOpts = append(dialOpts, grpc.WithAuthority(authority))
+	}
+
+	if useTLS {
+		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+		serverName := authority
+		if serverName == "" {
+			serverName = grpcServerName(target)
+		}
+		if serverName != "" {
+			tlsConfig.ServerName = serverName
+		}
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+
+	return target, service, dialOpts, grpcMetadata, nil
+}
+
+func splitTargetAndService(rawTarget string) (string, string) {
+	slash := strings.Index(rawTarget, "/")
+	if slash < 0 {
+		return rawTarget, ""
+	}
+
+	target := strings.TrimSpace(rawTarget[:slash])
+	service := decodeGRPCProbeServicePath(rawTarget[slash:])
+	return target, service
+}
+
+func decodeGRPCProbeServicePath(path string) string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return ""
+	}
+
+	decoded, err := url.PathUnescape(trimmed)
+	if err != nil {
+		return trimmed
+	}
+	return strings.TrimSpace(decoded)
+}
+
+func grpcServerName(target string) string {
+	host, _, err := net.SplitHostPort(target)
+	if err == nil {
+		return host
+	}
+
+	return strings.TrimSpace(target)
+}
+
+func lookupProbeHeader(headers map[string]string, wantedKey string) string {
+	for key, value := range headers {
+		if strings.EqualFold(key, wantedKey) {
+			return strings.TrimSpace(value)
+		}
+	}
+
+	return ""
 }
 
 // checkKubernetesProbe checks Kubernetes resource status.

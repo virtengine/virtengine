@@ -44,11 +44,9 @@ type MarketplaceIntegrationTestSuite struct {
 
 // TestMarketplaceIntegration runs the marketplace integration test suite.
 func TestMarketplaceIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration tests in short mode")
-	}
-
-	suite.Run(t, new(MarketplaceIntegrationTestSuite))
+	s := &MarketplaceIntegrationTestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 // SetupSuite runs once before all tests in the suite.

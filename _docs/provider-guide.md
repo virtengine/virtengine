@@ -192,6 +192,15 @@ virtengine tx encryption register-recipient-key \
 
 ## Orchestration Adapters
 
+### Verified launch paths
+
+The launch-critical provider-daemon automation currently treats these as the verified operational adapter paths:
+
+- Kubernetes container workloads managed through the provider daemon's namespace-per-workload runtime
+- SLURM-on-Kubernetes bootstrap and reconcile through the `slurm_k8s` manager
+
+Other infrastructure-specific adapter packages may still exist in the repo, but they are not the provider-daemon launch path and are not represented by the cluster-backed provider daemon suites in `tests/integration/provider/**` and `tests/e2e/provider_daemon/**`.
+
 ### Kubernetes Adapter
 
 The Kubernetes adapter provisions workloads as Kubernetes Deployments.
@@ -239,6 +248,14 @@ rules:
     resources: ["networkpolicies", "ingresses"]
     verbs: ["get", "list", "watch", "create", "update", "delete"]
 ```
+
+#### Runtime behavior
+
+- The provider daemon creates one namespace per workload and tracks deployment state from real pod and container readiness.
+- Repeated provision requests reconcile the existing workload instead of blindly duplicating it.
+- Failed, stopped, or terminated workloads are re-applied on the next provisioner pass.
+- Cleanup deletes the workload namespace after the workload returns to a valid termination path.
+- A workload in `failed` must be repaired and redeployed before termination cleanup is retried.
 
 ### SLURM Adapter
 
@@ -343,7 +360,9 @@ hpc:
 - The node aggregator persists checkpoints so restarts do not lose heartbeat sequences or pending chain updates.
 - If `discovery_enabled` is true and a SLURM scheduler is configured, the provider daemon discovers nodes via SLURM
   and auto-registers them on-chain before heartbeats begin.
+- Reconcile only resumes `down` nodes when the controller is healthy and compute StatefulSets already report ready pods.
 - If bootstrap readiness fails and `rollback_on_failure` is enabled, the Helm release is uninstalled.
+- Operators should rerun bootstrap only after controller, database, and compute readiness have all been restored.
 
 ## Key Management
 

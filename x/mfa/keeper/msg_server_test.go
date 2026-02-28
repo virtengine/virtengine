@@ -233,6 +233,8 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_Success() {
 	}
 	err = s.keeper.EnrollFactor(s.ctx, enrollment)
 	s.Require().NoError(err)
+	err = enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeVEID, "veid-for-policy")
+	s.Require().NoError(err)
 
 	msg := &types.MsgSetMFAPolicy{
 		Sender: address.String(),
@@ -240,7 +242,7 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_Success() {
 			AccountAddress: address.String(),
 			Enabled:        true,
 			RequiredFactors: []types.FactorCombination{
-				{Factors: []types.FactorType{types.FactorTypeTOTP}},
+				{Factors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeVEID}},
 			},
 			VEIDThreshold: 50,
 		},
@@ -367,10 +369,12 @@ func (s *MsgServerTestSuite) TestAddTrustedDevice_Success() {
 
 	// Create a valid session first
 	session := &types.AuthorizationSession{
-		SessionID:      "session-for-device",
-		AccountAddress: address.String(),
-		CreatedAt:      s.ctx.BlockTime().Unix(),
-		ExpiresAt:      s.ctx.BlockTime().Unix() + 3600,
+		SessionID:       "session-for-device",
+		AccountAddress:  address.String(),
+		TransactionType: types.SensitiveTxHighValueOrder,
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 3600,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
 	}
 	err := s.keeper.CreateAuthorizationSession(s.ctx, session)
 	s.Require().NoError(err)
@@ -561,6 +565,7 @@ func (s *MsgServerTestSuite) TestRevokeSession_Success() {
 		TransactionType: types.SensitiveTxHighValueOrder,
 		CreatedAt:       s.ctx.BlockTime().Unix(),
 		ExpiresAt:       s.ctx.BlockTime().Unix() + 3600,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
 	}
 	err := s.keeper.CreateAuthorizationSession(s.ctx, session)
 	s.Require().NoError(err)

@@ -64,7 +64,17 @@ func SetupTestSuite(t testing.TB) *TestSuite {
 	return SetupTestSuiteWithKeepers(t, Keepers{})
 }
 
+func SetupTestSuiteWithoutModuleServices(t testing.TB) *TestSuite {
+	suite := SetupTestSuiteWithKeepersAndOptions(t, Keepers{}, app.WithSkipModuleServiceRegistration(true))
+	suite.ctx = suite.ctx.WithBlockHeight(1).WithBlockTime(time.Unix(1700000000, 0).UTC())
+	return suite
+}
+
 func SetupTestSuiteWithKeepers(t testing.TB, keepers Keepers) *TestSuite {
+	return SetupTestSuiteWithKeepersAndOptions(t, keepers)
+}
+
+func SetupTestSuiteWithKeepersAndOptions(t testing.TB, keepers Keepers, opts ...app.SetupAppOption) *TestSuite {
 	dir, err := os.MkdirTemp("", "virtengined-test-home")
 	if err != nil {
 		panic(fmt.Sprintf("failed creating temporary directory: %v", err))
@@ -91,11 +101,14 @@ func SetupTestSuiteWithKeepers(t testing.TB, keepers Keepers) *TestSuite {
 		keepers.Authz = keeper
 	}
 
-	app := app.Setup(
+	setupOpts := []app.SetupAppOption{
 		app.WithCheckTx(false),
 		app.WithHome(dir),
 		app.WithGenesis(app.GenesisStateWithValSet),
-	)
+	}
+	setupOpts = append(setupOpts, opts...)
+
+	app := app.Setup(setupOpts...)
 
 	ctx := app.NewContext(false)
 

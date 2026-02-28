@@ -18,6 +18,16 @@ const (
 	StatusCancelled  Status = "cancelled"
 )
 
+// IsTerminal returns true when the payout no longer changes.
+func (s Status) IsTerminal() bool {
+	switch s {
+	case StatusCompleted, StatusFailed, StatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 // QuoteRequest requests a fiat payout quote.
 type QuoteRequest struct {
 	CryptoSymbol  string      `json:"crypto_symbol"`
@@ -39,6 +49,7 @@ type Quote struct {
 	Provider     string            `json:"provider"`
 	ExpiresAt    time.Time         `json:"expires_at"`
 	CreatedAt    time.Time         `json:"created_at"`
+	AuditFields  map[string]string `json:"audit_fields,omitempty"`
 }
 
 // IsExpired returns true when the quote is no longer valid.
@@ -56,17 +67,32 @@ type PayoutRequest struct {
 
 // PayoutResult is the result of an off-ramp payout.
 type PayoutResult struct {
-	ID            string            `json:"id"`
-	QuoteID       string            `json:"quote_id"`
-	Status        Status            `json:"status"`
-	Provider      string            `json:"provider"`
-	FiatAmount    sdkmath.LegacyDec `json:"fiat_amount"`
-	CryptoAmount  sdkmath.Int       `json:"crypto_amount"`
-	Fee           sdkmath.Int       `json:"fee"`
-	Reference     string            `json:"reference"`
-	InitiatedAt   time.Time         `json:"initiated_at"`
-	CompletedAt   *time.Time        `json:"completed_at,omitempty"`
-	FailureReason string            `json:"failure_reason,omitempty"`
+	ID              string            `json:"id"`
+	QuoteID         string            `json:"quote_id"`
+	Status          Status            `json:"status"`
+	Provider        string            `json:"provider"`
+	FiatAmount      sdkmath.LegacyDec `json:"fiat_amount"`
+	CryptoAmount    sdkmath.Int       `json:"crypto_amount"`
+	Fee             sdkmath.Int       `json:"fee"`
+	Reference       string            `json:"reference"`
+	Metadata        map[string]string `json:"metadata,omitempty"`
+	InitiatedAt     time.Time         `json:"initiated_at"`
+	CompletedAt     *time.Time        `json:"completed_at,omitempty"`
+	StatusUpdatedAt time.Time         `json:"status_updated_at"`
+	FailureReason   string            `json:"failure_reason,omitempty"`
+	FailureCode     string            `json:"failure_code,omitempty"`
+	Retryable       bool              `json:"retryable,omitempty"`
+	AuditFields     map[string]string `json:"audit_fields,omitempty"`
+}
+
+// IsTerminal returns true when the payout is in a final state.
+func (r PayoutResult) IsTerminal() bool {
+	return r.Status.IsTerminal()
+}
+
+// MetadataLookupAdapter optionally supports idempotent payout lookup by metadata.
+type MetadataLookupAdapter interface {
+	FindPayoutByMetadata(ctx context.Context, metadata map[string]string) (PayoutResult, error)
 }
 
 // Adapter defines the off-ramp provider interface.
@@ -87,6 +113,7 @@ type Bridge interface {
 	GetQuote(ctx context.Context, req QuoteRequest) (Quote, error)
 	InitiatePayout(ctx context.Context, quote Quote, cryptoTxRef string, destination string, metadata map[string]string) (PayoutResult, error)
 	GetStatus(ctx context.Context, payoutID string) (PayoutResult, error)
+	FindPayoutByMetadata(ctx context.Context, provider string, metadata map[string]string) (PayoutResult, error)
 	Cancel(ctx context.Context, payoutID string) error
 	ListProviders() []string
 }

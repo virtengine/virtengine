@@ -43,6 +43,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/operations/lifecycle-control.md`
 - `_docs/operations/mainnet-dress-rehearsal-report.md`
 - `_docs/operations/mainnet-backup-restore-drill-report-2026-04-11.md`
+- `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`
 - `_docs/operations/mainnet-finance-reconciliation-report-2026-04-11.md`
 - `_docs/operations/mainnet-go-no-go-decision.md`
 - `_docs/operations/mainnet-launch-evidence-audit-2026-04-10.md`

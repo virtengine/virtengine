@@ -16,6 +16,8 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/sdk/go/testutil"
@@ -201,7 +203,8 @@ func setupIntegrationKeeper(t testing.TB) (sdk.Context, keeper.Keeper, *integrat
 	ctx := sdk.NewContext(ms, tmproto.Header{Time: time.Unix(0, 0)}, false, testutil.Logger(t))
 	bank := &integrationBankKeeper{}
 
-	k := keeper.NewKeeper(cdc, key, bank, "authority")
+	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
+	k := keeper.NewKeeper(cdc, key, bank, authority)
 	return ctx, k, bank
 }
 
@@ -291,6 +294,12 @@ func TestJobLifecycleSubmitScheduleRunCompleteSettle(t *testing.T) {
 	require.NoError(t, k.UpdateJobStatus(ctx, job.JobID, types.JobStateRunning, "running", 0, nil))
 	ctx = ctx.WithBlockTime(time.Unix(1_700_000_800, 0))
 	require.NoError(t, k.UpdateJobStatus(ctx, job.JobID, types.JobStateCompleted, "completed", 0, nil))
+
+	usageMetrics := realSchedulerMetricsFixture(10*time.Minute, 2, 4, 16, 0, 40)
+	require.Greater(t, usageMetrics.StorageGBHours, int64(0))
+	require.Greater(t, usageMetrics.NetworkBytesIn, int64(0))
+	require.Greater(t, usageMetrics.EnergyJoules, int64(0))
+	require.Equal(t, "mixed", usageMetrics.SchedulerSpecific["slurm_state"])
 
 	result, err := k.ProcessJobSettlement(ctx, job.JobID)
 	require.NoError(t, err)

@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	ledgercosmos "github.com/cosmos/ledger-cosmos-go"
+	"github.com/zondax/hid"
 )
 
 // ============================================================================
@@ -87,6 +90,27 @@ const (
 
 	// LedgerRetryDelay is the delay between connection retries
 	LedgerRetryDelay = 500 * time.Millisecond
+
+	ledgerVendorID         = 0x2c97
+	bip32HardenedOffset    = 0x80000000
+	ledgerSignModeLegacyAM = byte(0)
+)
+
+type ledgerAppClient interface {
+	Close() error
+	GetVersion() (*ledgercosmos.VersionInfo, error)
+	GetPublicKeySECP256K1(path []uint32) ([]byte, error)
+	GetAddressPubKeySECP256K1(path []uint32, hrp string) ([]byte, string, error)
+	SignSECP256K1(path []uint32, transaction []byte, p2 byte) ([]byte, error)
+}
+
+var (
+	findLedgerCosmosUserApp = func() (ledgerAppClient, error) {
+		return ledgercosmos.FindLedgerCosmosUserApp()
+	}
+	enumerateLedgerHIDDevices = func(vendorID, productID uint16) []hid.DeviceInfo {
+		return hid.Enumerate(vendorID, productID)
+	}
 )
 
 // LedgerDeviceType represents the type of Ledger device
@@ -528,11 +552,16 @@ type RealLedgerDevice struct {
 	config     *LedgerWalletConfig
 	connected  bool
 	deviceInfo *LedgerDeviceInfo
+	app        ledgerAppClient
 	mu         sync.RWMutex
 }
 
 // NewRealLedgerDevice creates a new real Ledger device instance
 func NewRealLedgerDevice(config *LedgerWalletConfig) *RealLedgerDevice {
+	if config == nil {
+		config = DefaultLedgerWalletConfig()
+	}
+
 	return &RealLedgerDevice{
 		config:    config,
 		connected: false,
@@ -544,17 +573,13 @@ func (d *RealLedgerDevice) Connect(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// In production, this would use the Ledger HID library
-	// For now, we check for the cosmos/ledger-go library
-	// The actual implementation would:
-	// 1. Enumerate HID devices
-	// 2. Find Ledger device by vendor/product ID
-	// 3. Open HID connection
-	// 4. Verify Cosmos app is open
+	attempts := d.config.RetryCount
+	if attempts <= 0 {
+		attempts = 1
+	}
 
-	// Attempt connection with retries
 	var lastErr error
-	for i := 0; i < d.config.RetryCount; i++ {
+	for i := 0; i < attempts; i++ {
 		if err := d.tryConnect(ctx); err != nil {
 			lastErr = err
 			select {
@@ -573,22 +598,44 @@ func (d *RealLedgerDevice) Connect(ctx context.Context) error {
 
 // tryConnect attempts a single connection to the device
 func (d *RealLedgerDevice) tryConnect(ctx context.Context) error {
-	// This is a stub for the actual HID connection logic
-	// In production, this would use github.com/zondax/ledger-go or similar
-
-	// Check if context is cancelled
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
 
-	// For production implementation:
-	// device, err := ledger.FindLedgerCosmosUserApp()
-	// if err != nil {
-	//     return ErrLedgerNotConnected
-	// }
-	// d.device = device
+	app, err := findLedgerCosmosUserApp()
+	if err != nil {
+		return mapLedgerError(err)
+	}
+
+	version, err := app.GetVersion()
+	if err != nil {
+		_ = app.Close()
+		return mapLedgerError(err)
+	}
+
+	deviceInfo, err := discoverPrimaryLedgerInfo()
+	if err != nil {
+		_ = app.Close()
+		return err
+	}
+
+	if deviceInfo == nil {
+		deviceInfo = &LedgerDeviceInfo{
+			DeviceType:     LedgerUnknown,
+			ConnectionType: d.config.ConnectionType,
+			IsConnected:    true,
+		}
+	}
+
+	deviceInfo.AppName = LedgerCosmosAppName
+	deviceInfo.AppVersion = version.String()
+	deviceInfo.IsConnected = true
+	deviceInfo.IsLocked = false
+
+	d.app = app
+	d.deviceInfo = deviceInfo
 
 	return nil
 }
@@ -598,9 +645,18 @@ func (d *RealLedgerDevice) Disconnect() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// In production, this would close the HID connection
+	var err error
+	if d.app != nil {
+		err = d.app.Close()
+	}
+
+	d.app = nil
 	d.connected = false
 	d.deviceInfo = nil
+
+	if err != nil {
+		return mapLedgerError(err)
+	}
 
 	return nil
 }
@@ -621,10 +677,8 @@ func (d *RealLedgerDevice) GetDeviceInfo(ctx context.Context) (*LedgerDeviceInfo
 		return nil, ErrLedgerNotConnected
 	}
 
-	// In production, this would query the device for version info
-	// For now, return cached info or create stub
 	if d.deviceInfo != nil {
-		return d.deviceInfo, nil
+		return cloneLedgerDeviceInfo(d.deviceInfo), nil
 	}
 
 	return &LedgerDeviceInfo{
@@ -641,34 +695,39 @@ func (d *RealLedgerDevice) GetAddress(ctx context.Context, hdPath string, displa
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !d.connected {
+	if !d.connected || d.app == nil {
 		return nil, ErrLedgerNotConnected
 	}
 
-	// Validate the path
-	params, err := hd.NewParamsFromPath(hdPath)
+	path, err := ledgerBIP44Path(hdPath)
 	if err != nil {
-		return nil, fmt.Errorf(errFmtWrapped, ErrLedgerInvalidPath, err)
+		return nil, err
 	}
 
-	// In production, this would:
-	// 1. Send APDU command to Ledger with path
-	// 2. Device derives key and returns public key
-	// 3. If display=true, device shows address on screen for verification
+	var (
+		pubKey  []byte
+		address string
+	)
 
-	// For production implementation:
-	// pubKey, addr, err := d.device.GetAddressPubKeySECP256K1(pathBytes, d.config.HRPPrefix)
-	// if err != nil {
-	//     return nil, handleLedgerError(err)
-	// }
-
-	// Stub implementation for compilation - actual pubkey would come from device
-	// This simulates what the Ledger would return
-	_ = params // Use params in production
+	if display {
+		pubKey, address, err = d.app.GetAddressPubKeySECP256K1(path, d.config.HRPPrefix)
+		if err != nil {
+			return nil, mapLedgerError(err)
+		}
+	} else {
+		pubKey, err = d.app.GetPublicKeySECP256K1(path)
+		if err != nil {
+			return nil, mapLedgerError(err)
+		}
+		address, err = PublicKeyToAddress(pubKey, d.config.HRPPrefix)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &LedgerAddress{
-		Address:        "", // Would be derived from device pubkey
-		PublicKey:      nil,
+		Address:        address,
+		PublicKey:      append([]byte(nil), pubKey...),
 		HDPath:         hdPath,
 		DeviceVerified: display,
 	}, nil
@@ -679,7 +738,7 @@ func (d *RealLedgerDevice) SignTransaction(ctx context.Context, req *LedgerSignR
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !d.connected {
+	if !d.connected || d.app == nil {
 		return nil, ErrLedgerNotConnected
 	}
 
@@ -698,29 +757,30 @@ func (d *RealLedgerDevice) SignTransaction(ctx context.Context, req *LedgerSignR
 	signCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// In production, this would:
-	// 1. Parse the transaction for display on device
-	// 2. Send APDU command with transaction chunks
-	// 3. Device displays transaction details for user verification
-	// 4. User confirms on device
-	// 5. Device returns signature
+	path, err := ledgerBIP44Path(req.HDPath)
+	if err != nil {
+		return nil, err
+	}
 
-	// For production implementation:
-	// signature, err := d.device.SignSECP256K1(pathBytes, req.Message)
-	// if err != nil {
-	//     return nil, handleLedgerError(err)
-	// }
-
-	// Check for context cancellation
 	select {
 	case <-signCtx.Done():
 		return nil, ErrLedgerTimeout
 	default:
 	}
 
+	signature, err := d.app.SignSECP256K1(path, req.Message, ledgerSignModeLegacyAM)
+	if err != nil {
+		return nil, mapLedgerError(err)
+	}
+
+	publicKey, err := d.app.GetPublicKeySECP256K1(path)
+	if err != nil {
+		return nil, mapLedgerError(err)
+	}
+
 	return &LedgerSignature{
-		Signature: nil, // Would be actual signature from device
-		PublicKey: nil,
+		Signature: append([]byte(nil), signature...),
+		PublicKey: append([]byte(nil), publicKey...),
 		HDPath:    req.HDPath,
 	}, nil
 }
@@ -730,23 +790,27 @@ func (d *RealLedgerDevice) GetPublicKey(ctx context.Context, hdPath string) ([]b
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !d.connected {
+	if !d.connected || d.app == nil {
 		return nil, ErrLedgerNotConnected
 	}
 
-	// Validate the path
-	if _, err := hd.NewParamsFromPath(hdPath); err != nil {
-		return nil, fmt.Errorf(errFmtWrapped, ErrLedgerInvalidPath, err)
+	path, err := ledgerBIP44Path(hdPath)
+	if err != nil {
+		return nil, err
 	}
 
-	// In production, this would query the device for the public key
-	// For production implementation:
-	// pubKey, err := d.device.GetPublicKeySECP256K1(pathBytes)
-	// if err != nil {
-	//     return nil, handleLedgerError(err)
-	// }
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
-	return nil, nil
+	pubKey, err := d.app.GetPublicKeySECP256K1(path)
+	if err != nil {
+		return nil, mapLedgerError(err)
+	}
+
+	return append([]byte(nil), pubKey...), nil
 }
 
 // ============================================================================
@@ -1070,16 +1134,21 @@ func (m *MockLedgerDevice) GetPublicKey(ctx context.Context, hdPath string) ([]b
 
 // DiscoverLedgerDevices searches for connected Ledger devices
 func DiscoverLedgerDevices() ([]*LedgerDeviceInfo, error) {
-	// In production, this would enumerate HID devices and find Ledgers
-	// For now, return empty list indicating no devices found
+	hidDevices := enumerateLedgerHIDDevices(ledgerVendorID, 0)
+	devices := make([]*LedgerDeviceInfo, 0, len(hidDevices))
 
-	// Production implementation would:
-	// 1. Enumerate all HID devices
-	// 2. Filter by Ledger vendor ID (0x2c97)
-	// 3. Attempt to connect and query each device
-	// 4. Return list of available devices
+	for _, info := range hidDevices {
+		devices = append(devices, &LedgerDeviceInfo{
+			DeviceType:      ledgerDeviceTypeFromProduct(info.Product),
+			ConnectionType:  ledgerConnectionTypeFromHID(info),
+			SerialNumber:    info.Serial,
+			FirmwareVersion: formatLedgerRelease(info.Release),
+			IsConnected:     true,
+			IsLocked:        false,
+		})
+	}
 
-	return []*LedgerDeviceInfo{}, nil
+	return devices, nil
 }
 
 // WaitForDevice waits for a Ledger device to be connected
@@ -1105,4 +1174,109 @@ func WaitForDevice(ctx context.Context, timeout time.Duration) (*LedgerDeviceInf
 	}
 
 	return nil, ErrLedgerNotConnected
+}
+
+func ledgerBIP44Path(hdPath string) ([]uint32, error) {
+	params, err := hd.NewParamsFromPath(hdPath)
+	if err != nil {
+		return nil, fmt.Errorf(errFmtWrapped, ErrLedgerInvalidPath, err)
+	}
+
+	change := uint32(0)
+	if params.Change {
+		change = 1
+	}
+
+	return []uint32{
+		params.Purpose + bip32HardenedOffset,
+		params.CoinType + bip32HardenedOffset,
+		params.Account + bip32HardenedOffset,
+		change,
+		params.AddressIndex,
+	}, nil
+}
+
+func mapLedgerError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return ErrLedgerTimeout
+	}
+
+	lower := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(lower, "couldn't find ledger device"),
+		strings.Contains(lower, "device not connected"),
+		strings.Contains(lower, "hid error"),
+		strings.Contains(lower, "no device"):
+		return fmt.Errorf(errFmtWrapped, ErrLedgerNotConnected, err)
+	case strings.Contains(lower, "cla not supported"),
+		strings.Contains(lower, "class not supported"),
+		strings.Contains(lower, "app is not open"),
+		strings.Contains(lower, "cosmos app"):
+		return fmt.Errorf(errFmtWrapped, ErrLedgerAppNotOpen, err)
+	case strings.Contains(lower, "rejected"),
+		strings.Contains(lower, "denied"),
+		strings.Contains(lower, "refused"):
+		return fmt.Errorf(errFmtWrapped, ErrLedgerUserRejected, err)
+	case strings.Contains(lower, "locked"):
+		return fmt.Errorf(errFmtWrapped, ErrLedgerDeviceLocked, err)
+	case strings.Contains(lower, "timeout"):
+		return fmt.Errorf(errFmtWrapped, ErrLedgerTimeout, err)
+	default:
+		return fmt.Errorf(errFmtWrapped, ErrLedgerCommunicationFailed, err)
+	}
+}
+
+func cloneLedgerDeviceInfo(info *LedgerDeviceInfo) *LedgerDeviceInfo {
+	if info == nil {
+		return nil
+	}
+
+	cloned := *info
+	return &cloned
+}
+
+func discoverPrimaryLedgerInfo() (*LedgerDeviceInfo, error) {
+	devices, err := DiscoverLedgerDevices()
+	if err != nil {
+		return nil, err
+	}
+	if len(devices) == 0 {
+		return nil, nil
+	}
+	return cloneLedgerDeviceInfo(devices[0]), nil
+}
+
+func ledgerDeviceTypeFromProduct(product string) LedgerDeviceType {
+	lower := strings.ToLower(product)
+	switch {
+	case strings.Contains(lower, "nano x"):
+		return LedgerNanoX
+	case strings.Contains(lower, "nano s plus"):
+		return LedgerNanoSPlus
+	case strings.Contains(lower, "nano s"):
+		return LedgerNanoS
+	default:
+		return LedgerUnknown
+	}
+}
+
+func ledgerConnectionTypeFromHID(info hid.DeviceInfo) LedgerConnectionType {
+	switch strings.ToLower(info.BusType.String()) {
+	case string(LedgerConnectionBluetooth):
+		return LedgerConnectionBluetooth
+	default:
+		return LedgerConnectionUSB
+	}
+}
+
+func formatLedgerRelease(release uint16) string {
+	if release == 0 {
+		return ""
+	}
+	major := release >> 8
+	minor := release & 0x00ff
+	return fmt.Sprintf("%d.%d", major, minor)
 }

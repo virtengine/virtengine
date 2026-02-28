@@ -579,8 +579,12 @@ func (n *Network) Cleanup() {
 	n.T.Log("cleaning up test network...")
 
 	for _, v := range n.Validators {
-		if v.tmNode != nil && v.tmNode.IsRunning() {
+		if v.tmNode != nil {
 			_ = v.tmNode.Stop()
+		}
+
+		if v.cancelFn != nil {
+			v.cancelFn()
 		}
 
 		if v.api != nil {
@@ -593,13 +597,42 @@ func (n *Network) Cleanup() {
 				_ = v.grpcWeb.Close()
 			}
 		}
+
+		if v.tmNode != nil {
+			v.tmNode.Wait()
+		}
+
+		if v.errGroup != nil {
+			_ = v.errGroup.Wait()
+		}
+
+		if closer, ok := v.app.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
 	}
 
 	if n.Config.CleanupDir {
-		_ = os.RemoveAll(n.BaseDir)
+		if err := removeAllWithRetry(n.BaseDir, 20, 100*time.Millisecond); err != nil {
+			n.T.Logf("failed to remove network temp dir %s: %v", n.BaseDir, err)
+		}
 	}
 
 	n.T.Log("finished cleaning up test network")
+}
+
+func removeAllWithRetry(path string, attempts int, delay time.Duration) error {
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err := os.RemoveAll(path); err == nil || errors.Is(err, os.ErrNotExist) {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		time.Sleep(delay)
+	}
+
+	return lastErr
 }
 
 // DefaultConfig returns a default configuration suitable for nearly all

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
@@ -151,6 +152,9 @@ type CapacityConfig struct {
 
 	// ReservedStorageGB is the reserved storage (not for sale)
 	ReservedStorageGB int64 `json:"reserved_storage_gb"`
+
+	// ReservedGPUs is the reserved GPU capacity (not for sale)
+	ReservedGPUs int64 `json:"reserved_gpus,omitempty"`
 }
 
 // AvailableCPU returns available CPU cores
@@ -168,6 +172,11 @@ func (c CapacityConfig) AvailableStorage() int64 {
 	return c.TotalStorageGB - c.ReservedStorageGB
 }
 
+// AvailableGPUs returns available GPUs.
+func (c CapacityConfig) AvailableGPUs() int64 {
+	return c.TotalGPUs - c.ReservedGPUs
+}
+
 // Order represents an order that can be bid on
 type Order struct {
 	// OrderID is the unique order identifier
@@ -181,6 +190,9 @@ type Order struct {
 
 	// Requirements contains resource requirements
 	Requirements ResourceRequirements `json:"requirements"`
+
+	// ResourcesOffer preserves the exact market resource-unit offer shape for bidding.
+	ResourcesOffer marketv1beta5.ResourcesOffer `json:"resources_offer,omitempty"`
 
 	// Region is the requested region (optional)
 	Region string `json:"region,omitempty"`
@@ -235,6 +247,9 @@ type Bid struct {
 
 	// Currency is the price currency
 	Currency string `json:"currency"`
+
+	// ResourcesOffer is the exact resource shape submitted on-chain with the bid.
+	ResourcesOffer marketv1beta5.ResourcesOffer `json:"resources_offer,omitempty"`
 
 	// CreatedAt is when the bid was placed
 	CreatedAt time.Time `json:"created_at"`
@@ -597,7 +612,7 @@ func (be *BidEngine) matchOrder(order Order, config *ProviderConfig) bool {
 	if order.Requirements.StorageGB > capacity.AvailableStorage() {
 		return false
 	}
-	if order.Requirements.GPUs > capacity.TotalGPUs {
+	if order.Requirements.GPUs > capacity.AvailableGPUs() {
 		return false
 	}
 
@@ -818,6 +833,7 @@ func (be *BidEngine) processBid(order Order) BidResult {
 		ProviderAddress: be.config.ProviderAddress,
 		Price:           price,
 		Currency:        config.Pricing.Currency,
+		ResourcesOffer:  resourceOfferForOrder(order),
 		CreatedAt:       time.Now().UTC(),
 		State:           "open",
 	}
@@ -986,6 +1002,7 @@ func (be *BidEngine) ManualBid(ctx context.Context, order Order) (*Bid, error) {
 		ProviderAddress: be.config.ProviderAddress,
 		Price:           price,
 		Currency:        config.Pricing.Currency,
+		ResourcesOffer:  resourceOfferForOrder(order),
 		CreatedAt:       time.Now().UTC(),
 		State:           "open",
 	}

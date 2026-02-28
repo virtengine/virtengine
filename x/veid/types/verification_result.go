@@ -108,6 +108,12 @@ const (
 
 	// ReasonCodeLowOCRConfidence indicates OCR extraction confidence is low
 	ReasonCodeLowOCRConfidence ReasonCode = "LOW_OCR_CONFIDENCE"
+
+	// ReasonCodeStaleArtifactState indicates the active verifier or pipeline state is stale.
+	ReasonCodeStaleArtifactState ReasonCode = "STALE_ARTIFACT_STATE"
+
+	// ReasonCodeUnauthorizedArtifactState indicates the model or artifact state is not authorized.
+	ReasonCodeUnauthorizedArtifactState ReasonCode = "UNAUTHORIZED_ARTIFACT_STATE"
 )
 
 // ============================================================================

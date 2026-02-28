@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -348,13 +349,20 @@ func statusCmd() *cobra.Command {
 				return fmt.Errorf("failed to collect health: %w", err)
 			}
 
+			jobs := collector.CollectJobs()
+			services := collector.CollectServices()
+
 			fmt.Println("Node Status")
 			fmt.Println("===========")
 			fmt.Println("\nCapacity:")
-			fmt.Printf("  CPU Cores: %d total, %d available\n", capacity.CPUCoresTotal, capacity.CPUCoresAvailable)
-			fmt.Printf("  Memory: %d GB total, %d GB available\n", capacity.MemoryGBTotal, capacity.MemoryGBAvailable)
-			fmt.Printf("  GPUs: %d total, %d available\n", capacity.GPUsTotal, capacity.GPUsAvailable)
-			fmt.Printf("  Storage: %d GB total, %d GB available\n", capacity.StorageGBTotal, capacity.StorageGBAvailable)
+			fmt.Printf("  CPU Cores: %d total, %d available, %d allocated\n",
+				capacity.CPUCoresTotal, capacity.CPUCoresAvailable, capacity.CPUCoresAllocated)
+			fmt.Printf("  Memory: %d GB total, %d GB available, %d allocated\n",
+				capacity.MemoryGBTotal, capacity.MemoryGBAvailable, capacity.MemoryGBAllocated)
+			fmt.Printf("  GPUs: %d total, %d available, %d allocated (%s)\n",
+				capacity.GPUsTotal, capacity.GPUsAvailable, capacity.GPUsAllocated, capacity.GPUType)
+			fmt.Printf("  Storage: %d GB total, %d GB available, %d allocated\n",
+				capacity.StorageGBTotal, capacity.StorageGBAvailable, capacity.StorageGBAllocated)
 
 			fmt.Println("\nHealth:")
 			fmt.Printf("  Status: %s\n", health.Status)
@@ -362,6 +370,26 @@ func statusCmd() *cobra.Command {
 			fmt.Printf("  Load Average: %s, %s, %s\n", health.LoadAverage1m, health.LoadAverage5m, health.LoadAverage15m)
 			fmt.Printf("  CPU Utilization: %d%%\n", health.CPUUtilizationPercent)
 			fmt.Printf("  Memory Utilization: %d%%\n", health.MemoryUtilizationPercent)
+			fmt.Printf("  GPU Utilization: %d%% (memory %d%%, temp %dC)\n",
+				health.GPUUtilizationPercent, health.GPUMemoryUtilizationPercent, health.GPUTemperatureCelsius)
+			fmt.Printf("  Disk I/O Utilization: %d%%\n", health.DiskIOUtilizationPercent)
+			fmt.Printf("  Network Utilization: %d%%\n", health.NetworkUtilizationPercent)
+			fmt.Printf("  SLURM State: %s\n", health.SLURMState)
+
+			fmt.Println("\nScheduler:")
+			fmt.Printf("  Running Jobs: %d\n", jobs.RunningCount)
+			fmt.Printf("  Pending Jobs: %d\n", jobs.PendingCount)
+			if len(jobs.ActiveJobIDs) > 0 {
+				fmt.Printf("  Active Job IDs: %s\n", strings.Join(jobs.ActiveJobIDs, ", "))
+			}
+
+			fmt.Println("\nServices:")
+			fmt.Printf("  slurmd: %t (%s)\n", services.SLURMDRunning, services.SLURMDVersion)
+			fmt.Printf("  munged: %t\n", services.MungeRunning)
+			if services.ContainerRuntime != "" {
+				fmt.Printf("  Container Runtime: %s (%s)\n",
+					services.ContainerRuntime, services.ContainerRuntimeVersion)
+			}
 
 			return nil
 		},

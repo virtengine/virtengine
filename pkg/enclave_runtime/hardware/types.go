@@ -225,15 +225,15 @@ func (c *HardwareCapabilities) HasAnyHardware() bool {
 
 // GetRecommendedPlatform returns the recommended platform based on capabilities.
 func (c *HardwareCapabilities) GetRecommendedPlatform() Platform {
-	// Priority: SGX with FLC > SEV-SNP > Nitro > SGX without FLC > Simulated
-	if c.SGX.Available && c.SGX.FLCSupported && c.SGX.DCAPAvailable {
-		return PlatformSGX
-	}
+	// Priority: SEV-SNP > Nitro > SGX with FLC/DCAP > SGX without FLC > Simulated
 	if c.SEVSNP.Available {
 		return PlatformSEVSNP
 	}
 	if c.Nitro.Available {
 		return PlatformNitro
+	}
+	if c.SGX.Available && c.SGX.FLCSupported && c.SGX.DCAPAvailable {
+		return PlatformSGX
 	}
 	if c.SGX.Available {
 		return PlatformSGX

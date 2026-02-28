@@ -232,21 +232,24 @@ func populateValidatorStore(count int) *ValidatorStore {
 	// Use parallel generation for large counts
 	if count > 10000 {
 		workers := runtime.NumCPU()
-		perWorker := count / workers
 
 		var wg sync.WaitGroup
 		results := make(chan []*MockValidator, workers)
 
 		for w := 0; w < workers; w++ {
+			start, end := workerRange(count, workers, w)
+			if start >= end {
+				continue
+			}
 			wg.Add(1)
-			go func(_ int, start, end int) {
+			go func(start, end int) {
 				defer wg.Done()
 				validators := make([]*MockValidator, 0, end-start)
 				for i := start; i < end; i++ {
 					validators = append(validators, generateMockValidator(i))
 				}
 				results <- validators
-			}(w, w*perWorker, (w+1)*perWorker)
+			}(start, end)
 		}
 
 		go func() {
@@ -387,12 +390,8 @@ func BenchmarkParallelValidatorLookup(b *testing.B) {
 
 // TestValidatorScaleBaseline tests validator operations at 1M scale against baseline
 func TestValidatorScaleBaseline(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping 1M validator test in short mode")
-	}
-
 	// Use smaller scale for CI, full scale for manual testing
-	scale := 100000 // 100k for CI
+	scale := shortScaleInt(5000, 100000) // 100k for CI
 	if v := lookupEnvScale(); v > 0 {
 		scale = v
 	}
@@ -482,17 +481,13 @@ func TestValidatorScaleBaseline(t *testing.T) {
 
 // TestConsensusSimulation simulates consensus rounds with large validator set
 func TestConsensusSimulation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping consensus simulation in short mode")
-	}
-
-	scale := 10000 // 10k validators for consensus simulation
+	scale := shortScaleInt(1000, 10000) // 10k validators for consensus simulation
 	t.Logf("=== Consensus Simulation Test (scale=%d) ===", scale)
 
 	store := populateValidatorStore(scale)
 
 	// Simulate consensus rounds
-	const numRounds = 10
+	numRounds := shortScaleInt(4, 10)
 	roundTimes := make([]time.Duration, numRounds)
 
 	for round := 0; round < numRounds; round++ {
@@ -537,11 +532,7 @@ func TestConsensusSimulation(t *testing.T) {
 
 // TestValidatorSetTransitions tests large-scale validator set changes
 func TestValidatorSetTransitions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping validator transitions in short mode")
-	}
-
-	scale := 10000
+	scale := shortScaleInt(2000, 10000)
 	t.Logf("=== Validator Set Transitions Test (scale=%d) ===", scale)
 
 	store := populateValidatorStore(scale)
@@ -618,11 +609,7 @@ func TestValidatorSetTransitions(t *testing.T) {
 
 // TestMemoryPressureAtScale tests memory behavior with large validator sets
 func TestMemoryPressureAtScale(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping memory pressure test in short mode")
-	}
-
-	scales := []int{10000, 50000, 100000}
+	scales := shortScaleSlice([]int{1000, 5000, 10000}, []int{10000, 50000, 100000})
 
 	for _, scale := range scales {
 		t.Run(fmt.Sprintf("scale_%d", scale), func(t *testing.T) {

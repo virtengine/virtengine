@@ -1,175 +1,59 @@
-# VirtEngine Security Test Suite
+# VirtEngine Security Evidence Suite
 
-**Version:** 2.0.0  
-**Date:** 2026-01-30  
-**Task Reference:** SECURITY-005
+**Scope:** audited crypto, identity, attestation, consensus, and operator-reproducible security checks
+**Last Updated:** 2026-04-11
 
----
+## Purpose
 
-## Overview
+`tests/security/` is the repository-level security evidence suite. It is not a generic penetration-test wish list. The files in this directory either:
 
-This directory contains the comprehensive security testing suite for the VirtEngine blockchain platform, implementing the penetration testing program defined in `PENETRATION_TESTING_PROGRAM.md`.
+- exercise real production code paths for audited controls, or
+- provide deterministic regression coverage for shared security boundaries, or
+- reproduce the local security bar documented in [SECURITY.md](/C:/Users/jON/Documents/source/repos/virtengine-gh/virtengine/SECURITY.md).
 
-## Directory Structure
+## Evidence Map
 
-```
-tests/security/
-├── README.md                    # This file
-├── VULNERABILITY_TEMPLATE.md    # Vulnerability tracking template
-├── blockchain/                  # Blockchain-specific security tests
-│   ├── consensus_test.go        # BC-001, BC-002: Consensus attacks
-│   ├── replay_test.go           # BC-003, BC-004: Replay/malleability
-│   ├── state_machine_test.go    # BC-005, BC-006: State/authority
-│   └── crypto_test.go           # BC-007, BC-008: Cryptographic tests
-├── api/                         # API security tests
-│   ├── auth_test.go             # API-AUTH-*: Authentication tests
-│   ├── authz_test.go            # API-AUTHZ-*: Authorization tests
-│   └── injection_test.go        # WIN-*: Injection tests
-├── fuzz/                        # Fuzzing harnesses
-│   └── fuzz_test.go             # Envelope, signature, message fuzzers
-├── configs/                     # Security tool configurations
-│   └── nuclei/                  # Nuclei scanning templates
-│       ├── virtengine-auth-bypass.yaml
-│       ├── virtengine-security-headers.yaml
-│       ├── virtengine-info-disclosure.yaml
-│       ├── virtengine-grpc-reflection.yaml
-│       └── virtengine-rate-limit.yaml
-└── scripts/                     # Security testing scripts
-    ├── scan_dependencies.sh     # Dependency vulnerability scan
-    ├── static_analysis.sh       # Static security analysis
-    └── secret_scan.sh           # Secret detection
-```
+| Area | Primary Coverage | What It Proves |
+| --- | --- | --- |
+| Crypto envelopes and salt binding | `audit_crypto_contract_test.go` | malformed envelopes are rejected, salt binding requires valid signatures and fresh timestamps, attestation parsers reject malformed artifacts |
+| Identity + MFA | `identity_integration_test.go`, `mfa_enforcement_test.go` | wallet rebinding requires linked signatures, serialized MFA proofs gate sensitive key-rotation flows |
+| Consensus verification | `blockchain/consensus_test.go` | score/model/input-hash divergence is rejected, result hashing is deterministic, unhealthy or mismatched verifier state fails closed |
+| Attestation lifecycle | `attestation_e2e_test.go` | heartbeat replay is rejected, stale rotation keys are rejected after overlap closes |
+| API and generic state guards | `api/*.go`, `blockchain/state_machine_test.go` | authentication, rate-limit, authority, and authz regression expectations stay deterministic in the repo suite |
 
-## Test Categories
-
-### 1. Blockchain Security Tests (`blockchain/`)
-
-| Test File | Attack IDs | Description |
-|-----------|------------|-------------|
-| `consensus_test.go` | BC-001, BC-002 | Byzantine fault tolerance, consensus stall |
-| `replay_test.go` | BC-003, BC-004 | Transaction replay, malleability |
-| `state_machine_test.go` | BC-005, BC-006 | State transitions, authority bypass |
-| `crypto_test.go` | BC-007, BC-008 | Encryption, signature security |
-
-### 2. API Security Tests (`api/`)
-
-| Test File | Attack IDs | Description |
-|-----------|------------|-------------|
-| `auth_test.go` | API-AUTH-*, API-RATE-* | Authentication, rate limiting |
-| `authz_test.go` | API-AUTHZ-* | Authorization, IDOR, parameter tampering |
-| `injection_test.go` | WIN-*, XSS | SQL, NoSQL, command, template injection |
-
-### 3. Fuzzing (`fuzz/`)
-
-| Fuzzer | Target | Description |
-|--------|--------|-------------|
-| `FuzzEnvelopeEncryption` | Envelope parsing | Encryption envelope validation |
-| `FuzzSignatureVerification` | Signature logic | Signature verification bypass |
-| `FuzzMessageValidation` | Message handling | Message validation logic |
-| `FuzzProtoDecoding` | Protobuf | Proto wire format parsing |
-| `FuzzAddressParsing` | Address validation | Bech32 address parsing |
-| `FuzzSaltValidation` | Salt binding | Capture protocol salt validation |
-
-## Running Tests
-
-### Security Unit Tests
+## Commands
 
 ```bash
-# Run all security tests (requires 'security' build tag)
-go test -v -tags="security" ./tests/security/...
+# Unit / contract coverage
+go test -tags=security ./tests/security/...
 
-# Run specific category
-go test -v -tags="security" ./tests/security/blockchain/...
-go test -v -tags="security" ./tests/security/api/...
+# Integration coverage
+go test -tags='security,integration' ./tests/security/...
 
-# Run with race detection
-go test -race -v -tags="security" ./tests/security/...
+# E2E coverage
+go test -tags='security,e2e.integration' ./tests/security/...
+
+# Full local reproduction path
+bash ./tests/security/scripts/reproduce_security_checks.sh full
 ```
 
-### Fuzzing
+## Fail-Closed Scripts
 
-```bash
-# Run envelope fuzzer for 60 seconds
-go test -fuzz=FuzzEnvelopeEncryption -fuzztime=60s ./tests/security/fuzz/
+`tests/security/scripts/` contains the shell entry points used by the docs:
 
-# Run signature fuzzer for 60 seconds
-go test -fuzz=FuzzSignatureVerification -fuzztime=60s ./tests/security/fuzz/
+- `static_analysis.sh` runs `gosec` and `go vet` against `./tests/security/...`
+- `scan_dependencies.sh` runs `govulncheck` against `./tests/security/...` and then the repository dependency risk assessor
+- `secret_scan.sh` runs a pinned `gitleaks dir` current-tree scan with the repository config
+- `reproduce_security_checks.sh` runs the test matrix plus the scripts above
 
-# Run all fuzzers for extended period (CI)
-go test -fuzz=Fuzz -fuzztime=10m ./tests/security/fuzz/
-```
+All four scripts are intended to fail closed.
 
-### Automated Scanning
+The Go-based scripts pin `GOTOOLCHAIN=go1.25.9+auto` unless the caller overrides it, so Git Bash and PowerShell reproduce the same toolchain behavior.
 
-```bash
-# Dependency vulnerability scan
-./tests/security/scripts/scan_dependencies.sh
+## Audit Follow-Up References
 
-# Static security analysis
-./tests/security/scripts/static_analysis.sh
+The current audit/runbook mapping lives in:
 
-# Secret detection
-./tests/security/scripts/secret_scan.sh
-
-# Nuclei scanning (external targets)
-nuclei -t ./tests/security/configs/nuclei/ -u https://api.virtengine.com
-```
-
-## Test Coverage by Attack Scenario
-
-| Attack ID | Test Location | Status |
-|-----------|---------------|--------|
-| BC-001 | blockchain/consensus_test.go | ✅ Implemented |
-| BC-002 | blockchain/consensus_test.go | ✅ Implemented |
-| BC-003 | blockchain/replay_test.go | ✅ Implemented |
-| BC-004 | blockchain/replay_test.go | ✅ Implemented |
-| BC-005 | blockchain/state_machine_test.go | ✅ Implemented |
-| BC-006 | blockchain/state_machine_test.go | ✅ Implemented |
-| BC-007 | blockchain/crypto_test.go | ✅ Implemented |
-| BC-008 | blockchain/crypto_test.go | ✅ Implemented |
-| API-AUTH-* | api/auth_test.go | ✅ Implemented |
-| API-AUTHZ-* | api/authz_test.go | ✅ Implemented |
-| API-RATE-* | api/auth_test.go | ✅ Implemented |
-| WIN-* | api/injection_test.go | ✅ Implemented |
-
-## Security Warnings
-
-> ⚠️ **NEVER** include actual private keys, secrets, or credentials in tests  
-> ⚠️ All test keys must be generated fresh for each test run  
-> ⚠️ Do not commit any files containing real cryptographic material  
-> ⚠️ Use deterministic seeds only for reproducible test vectors, never for production
-
-## CI/CD Integration
-
-Security tests are integrated into the CI/CD pipeline:
-
-1. **PR Checks** (runs on every PR):
-   - Static analysis (gosec, staticcheck)
-   - Dependency scanning (govulncheck)
-   - Fast security unit tests
-   - Secret scanning (gitleaks)
-
-2. **Nightly** (runs daily):
-   - Full security test suite
-   - Extended fuzzing (10+ minutes)
-   - Nuclei scanning on staging
-
-3. **Release** (before each release):
-   - Complete penetration test
-   - Manual security review
-   - Third-party audit coordination
-
-## Vulnerability Tracking
-
-Use `VULNERABILITY_TEMPLATE.md` for tracking discovered vulnerabilities. Key fields:
-- Finding ID: VE-YYYY-XXXX
-- Severity: CRITICAL/HIGH/MEDIUM/LOW
-- CVSS Score and Vector
-- Status tracking through remediation lifecycle
-
-## Related Documentation
-
-- `PENETRATION_TESTING_PROGRAM.md` - Full penetration testing program
-- `SECURITY_SCOPE.md` - Security audit scope definition
-- `SECURITY_AUDIT_GAP_ANALYSIS.md` - Module security analysis
-- `_docs/threat-model.md` - Threat modeling documentation
+- `SECURITY.md`
+- `_docs/audits/security-audit-report-2026-02-06.md`
+- `_docs/training/security/security-incident-response.md`

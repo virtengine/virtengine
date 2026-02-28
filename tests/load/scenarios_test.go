@@ -41,17 +41,13 @@ func BenchmarkIdentityUploadBurst(b *testing.B) {
 
 // TestIdentityBurstLoad tests identity upload throughput under burst load.
 func TestIdentityBurstLoad(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping load test in short mode")
-	}
-
 	t.Log("=== Load Test: Identity Scope Upload Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:    50,
-		Duration:       30 * time.Second,
-		RampUpDuration: 5 * time.Second,
-		TargetTPS:      100,
+		Concurrency:    shortLoadInt(10, 50),
+		Duration:       shortLoadDuration(4*time.Second, 30*time.Second),
+		RampUpDuration: shortLoadDuration(1*time.Second, 5*time.Second),
+		TargetTPS:      shortLoadInt(20, 100),
 	}
 
 	client := NewMockChainClient()
@@ -69,7 +65,7 @@ func TestIdentityBurstLoad(t *testing.T) {
 	// Check baseline targets
 	require.Less(t, results.P95Latency, 5*time.Second,
 		"P95 latency should be under 5 seconds")
-	require.Greater(t, results.Throughput, float64(50),
+	require.Greater(t, results.Throughput, float64(shortLoadInt(10, 50)),
 		"Throughput should be at least 50 TPS")
 	require.Less(t, float64(results.FailedRequests)/float64(results.TotalRequests), 0.01,
 		"Error rate should be under 1%")
@@ -90,11 +86,18 @@ func runIdentityBurstTest(t *testing.T, client *MockChainClient, config LoadTest
 	var wg sync.WaitGroup
 
 	// Ramp up workers
-	workersPerStep := config.Concurrency / 5
-	rampInterval := config.RampUpDuration / 5
+	steps := 5
+	workersPerStep := config.Concurrency / steps
+	if workersPerStep == 0 {
+		workersPerStep = 1
+	}
+	rampInterval := config.RampUpDuration / time.Duration(steps)
+	if rampInterval <= 0 {
+		rampInterval = time.Millisecond
+	}
 
-	for step := 0; step < 5; step++ {
-		for i := 0; i < workersPerStep; i++ {
+	for step := 0; step < steps; step++ {
+		for i := 0; i < workersPerStep && step*workersPerStep+i < config.Concurrency; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -125,8 +128,10 @@ func runIdentityBurstTest(t *testing.T, client *MockChainClient, config LoadTest
 						if config.TargetTPS > 0 {
 							workers := atomic.LoadInt32(&activeWorkers)
 							if workers > 0 {
-								delay := time.Second / time.Duration(config.TargetTPS/int(workers))
-								time.Sleep(delay)
+								perWorker := config.TargetTPS / int(workers)
+								if perWorker > 0 {
+									time.Sleep(time.Second / time.Duration(perWorker))
+								}
 							}
 						}
 					}
@@ -167,17 +172,13 @@ func BenchmarkMarketplaceOrderBurst(b *testing.B) {
 
 // TestMarketplaceBurstLoad tests marketplace throughput under burst load.
 func TestMarketplaceBurstLoad(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping load test in short mode")
-	}
-
 	t.Log("=== Load Test: Marketplace Order Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:    30,
-		Duration:       30 * time.Second,
-		RampUpDuration: 5 * time.Second,
-		TargetTPS:      50,
+		Concurrency:    shortLoadInt(8, 30),
+		Duration:       shortLoadDuration(4*time.Second, 30*time.Second),
+		RampUpDuration: shortLoadDuration(1*time.Second, 5*time.Second),
+		TargetTPS:      shortLoadInt(15, 50),
 	}
 
 	client := NewMockChainClient()
@@ -278,17 +279,13 @@ func BenchmarkHPCJobSubmission(b *testing.B) {
 
 // TestHPCBurstLoad tests HPC scheduling throughput under burst load.
 func TestHPCBurstLoad(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping load test in short mode")
-	}
-
 	t.Log("=== Load Test: HPC Job Submission Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:    20,
-		Duration:       30 * time.Second,
-		RampUpDuration: 5 * time.Second,
-		TargetTPS:      30,
+		Concurrency:    shortLoadInt(6, 20),
+		Duration:       shortLoadDuration(4*time.Second, 30*time.Second),
+		RampUpDuration: shortLoadDuration(1*time.Second, 5*time.Second),
+		TargetTPS:      shortLoadInt(10, 30),
 	}
 
 	client := NewMockChainClient()
@@ -367,20 +364,16 @@ func runHPCBurstTest(t *testing.T, client *MockChainClient, config LoadTestConfi
 
 // TestDaemonBackpressure tests provider daemon backpressure handling.
 func TestDaemonBackpressure(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping load test in short mode")
-	}
-
 	t.Log("=== Load Test: Daemon Backpressure ===")
 
 	daemon := NewMockProviderDaemon(DaemonConfig{
 		MaxConcurrentJobs: 10,
-		EventBufferSize:   100,
+		EventBufferSize:   shortLoadInt(40, 100),
 		ProcessingTimeout: 5 * time.Second,
 	})
 
 	// Generate events faster than daemon can process
-	eventCount := 1000
+	eventCount := shortLoadInt(200, 1000)
 	events := make([]*ChainEvent, eventCount)
 	for i := 0; i < eventCount; i++ {
 		events[i] = &ChainEvent{
@@ -402,7 +395,7 @@ func TestDaemonBackpressure(t *testing.T) {
 	submitDuration := time.Since(start)
 
 	// Wait for processing
-	time.Sleep(2 * time.Second)
+	time.Sleep(shortLoadDuration(1*time.Second, 2*time.Second))
 
 	stats := daemon.GetStats()
 	t.Logf("Submit duration: %v", submitDuration)

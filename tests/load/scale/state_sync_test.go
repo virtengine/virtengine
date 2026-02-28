@@ -336,21 +336,24 @@ func populateStateStore(entryCount, valueSize int) *MockStateStore {
 	store := NewMockStateStore()
 
 	workers := runtime.NumCPU()
-	entriesPerWorker := entryCount / workers
 
 	var wg sync.WaitGroup
 
 	for w := 0; w < workers; w++ {
+		start, end := workerRange(entryCount, workers, w)
+		if start >= end {
+			continue
+		}
 		wg.Add(1)
-		go func(_ int, start, count int) {
+		go func(start, end int) {
 			defer wg.Done()
 
-			for i := 0; i < count; i++ {
-				key := generateStateKey(start + i)
+			for i := start; i < end; i++ {
+				key := generateStateKey(i)
 				value := generateStateValue(valueSize)
-				store.Set(key, value, int64(start+i))
+				store.Set(key, value, int64(i))
 			}
-		}(w, w*entriesPerWorker, entriesPerWorker)
+		}(start, end)
 	}
 
 	wg.Wait()
@@ -462,12 +465,8 @@ func BenchmarkParallelStateAccess(b *testing.B) {
 
 // TestStateSyncBaseline tests state sync at scale
 func TestStateSyncBaseline(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping state sync scale test in short mode")
-	}
-
-	entryCount := 100000 // 100k for CI
-	valueSize := 256     // 256 bytes per value
+	entryCount := shortScaleInt(5000, 100000) // 100k for CI
+	valueSize := 256                          // 256 bytes per value
 
 	t.Logf("=== State Sync Baseline Test ===")
 	t.Logf("Entries: %d, Value size: %d bytes", entryCount, valueSize)
@@ -559,13 +558,10 @@ func TestStateSyncBaseline(t *testing.T) {
 
 // TestIncrementalSync tests incremental state synchronization
 func TestIncrementalSync(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping incremental sync test in short mode")
-	}
-
 	t.Logf("=== Incremental Sync Test ===")
 
-	baseStore := populateStateStore(10000, 256)
+	baseEntries := shortScaleInt(2000, 10000)
+	baseStore := populateStateStore(baseEntries, 256)
 	baseStore.SetHeight(100)
 
 	// Create base snapshot
@@ -575,9 +571,9 @@ func TestIncrementalSync(t *testing.T) {
 	t.Logf("Base snapshot: %d entries, %d bytes", baseStore.Count(), baseSnapshot.TotalSize)
 
 	// Make incremental changes
-	changesCount := 1000
+	changesCount := shortScaleInt(200, 1000)
 	for i := 0; i < changesCount; i++ {
-		key := generateStateKey(i + 10000)
+		key := generateStateKey(i + baseEntries)
 		value := generateStateValue(256)
 		baseStore.Set(key, value, 101)
 	}
@@ -593,17 +589,14 @@ func TestIncrementalSync(t *testing.T) {
 	t.Logf("Size increase: %d bytes", sizeIncrease)
 
 	require.Greater(t, newSnapshot.TotalSize, baseSnapshot.TotalSize)
-	require.Equal(t, 10000+changesCount, baseStore.Count())
+	require.Equal(t, baseEntries+changesCount, baseStore.Count())
 }
 
 // TestConcurrentStateAccess tests concurrent read/write access
 func TestConcurrentStateAccess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrent access test in short mode")
-	}
-
-	store := populateStateStore(10000, 256)
-	duration := 5 * time.Second
+	entryCount := shortScaleInt(2000, 10000)
+	store := populateStateStore(entryCount, 256)
+	duration := shortScaleDuration(2*time.Second, 5*time.Second)
 
 	t.Logf("=== Concurrent State Access Test ===")
 	t.Logf("Duration: %v", duration)
@@ -615,7 +608,7 @@ func TestConcurrentStateAccess(t *testing.T) {
 	var readOps, writeOps atomic.Int64
 
 	// Readers
-	for i := 0; i < 10; i++ {
+	for i := 0; i < shortScaleInt(4, 10); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -624,7 +617,7 @@ func TestConcurrentStateAccess(t *testing.T) {
 				case <-ctx.Done():
 					return
 				default:
-					key := generateStateKey(randomInt(10000))
+					key := generateStateKey(randomInt(entryCount))
 					store.Get(key)
 					readOps.Add(1)
 				}
@@ -633,7 +626,7 @@ func TestConcurrentStateAccess(t *testing.T) {
 	}
 
 	// Writers
-	for i := 0; i < 5; i++ {
+	for i := 0; i < shortScaleInt(2, 5); i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -668,11 +661,7 @@ func TestConcurrentStateAccess(t *testing.T) {
 
 // TestLargeStateIteration tests iterating over large state
 func TestLargeStateIteration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping large iteration test in short mode")
-	}
-
-	scales := []int{10000, 50000, 100000}
+	scales := shortScaleSlice([]int{2000, 5000, 10000}, []int{10000, 50000, 100000})
 
 	for _, scale := range scales {
 		t.Run(fmt.Sprintf("entries_%d", scale), func(t *testing.T) {
@@ -696,14 +685,11 @@ func TestLargeStateIteration(t *testing.T) {
 
 // TestStateRecoveryAfterCrash simulates state recovery after crash
 func TestStateRecoveryAfterCrash(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping crash recovery test in short mode")
-	}
-
 	t.Logf("=== State Recovery After Crash Test ===")
 
 	// Create and populate initial state
-	store := populateStateStore(10000, 256)
+	baseEntries := shortScaleInt(2000, 10000)
+	store := populateStateStore(baseEntries, 256)
 	store.SetHeight(50)
 
 	// Create snapshot at height 50
@@ -713,8 +699,9 @@ func TestStateRecoveryAfterCrash(t *testing.T) {
 	t.Logf("Snapshot at height %d: %d entries", snapshot.Height, store.Count())
 
 	// Continue making changes (simulating operations after snapshot)
-	for i := 0; i < 5000; i++ {
-		key := generateStateKey(i + 10000)
+	changeCount := shortScaleInt(500, 5000)
+	for i := 0; i < changeCount; i++ {
+		key := generateStateKey(i + baseEntries)
 		value := generateStateValue(256)
 		store.Set(key, value, 51+int64(i/1000))
 	}

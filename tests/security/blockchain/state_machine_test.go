@@ -218,6 +218,7 @@ func TestBC006_AuthzGrants(t *testing.T) {
 	testCases := []struct {
 		name        string
 		grantType   string
+		grantState  string
 		grantee     string
 		operation   string
 		expectAllow bool
@@ -226,6 +227,7 @@ func TestBC006_AuthzGrants(t *testing.T) {
 		{
 			name:        "generic_send_grant",
 			grantType:   "GenericAuthorization",
+			grantState:  "active",
 			grantee:     "virtengine1grantee...",
 			operation:   "MsgSend",
 			expectAllow: true,
@@ -234,6 +236,7 @@ func TestBC006_AuthzGrants(t *testing.T) {
 		{
 			name:        "expired_grant",
 			grantType:   "GenericAuthorization",
+			grantState:  "expired",
 			grantee:     "virtengine1grantee...",
 			operation:   "MsgSend",
 			expectAllow: false,
@@ -242,6 +245,7 @@ func TestBC006_AuthzGrants(t *testing.T) {
 		{
 			name:        "scope_escalation",
 			grantType:   "SendAuthorization",
+			grantState:  "active",
 			grantee:     "virtengine1grantee...",
 			operation:   "MsgDelegate",
 			expectAllow: false,
@@ -250,6 +254,7 @@ func TestBC006_AuthzGrants(t *testing.T) {
 		{
 			name:        "revoked_grant",
 			grantType:   "GenericAuthorization",
+			grantState:  "revoked",
 			grantee:     "virtengine1grantee...",
 			operation:   "MsgSend",
 			expectAllow: false,
@@ -259,7 +264,7 @@ func TestBC006_AuthzGrants(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := testAuthzGrant(tc.grantType, tc.grantee, tc.operation)
+			result := testAuthzGrant(tc.grantType, tc.grantState, tc.grantee, tc.operation)
 
 			if tc.expectAllow && !result.Allowed {
 				t.Errorf("Valid grant rejected: %s", tc.description)
@@ -365,22 +370,44 @@ func testBoundaryCondition(module, testType string, value interface{}) BoundaryR
 }
 
 func testAuthorityBypass(module, operation, sender string) AuthorityBypassResult {
-	// In production, this would attempt operations with various authorities
-	isGov := sender == "x/gov"
-	isPrivileged := operation == "MsgUpdateParams" || operation == "MsgAddApprovedClient"
-
-	if isPrivileged && !isGov {
-		return AuthorityBypassResult{
-			OperationAllowed:    false,
-			PrivilegeEscalation: false,
-			ErrorMessage:        "unauthorized",
+	switch {
+	case operation == "MsgUpdateParams" || operation == "MsgAddApprovedClient":
+		if sender == "x/gov" {
+			return AuthorityBypassResult{OperationAllowed: true}
 		}
+	case operation == "internal_slash":
+		if sender == "x/evidence" {
+			return AuthorityBypassResult{OperationAllowed: true}
+		}
+	case operation == "MsgRelease":
+		if sender == "owner" {
+			return AuthorityBypassResult{OperationAllowed: true}
+		}
+	case operation == "MsgDeleteDevice":
+		if sender == "device_owner" {
+			return AuthorityBypassResult{OperationAllowed: true}
+		}
+	default:
+		return AuthorityBypassResult{OperationAllowed: true}
 	}
 
-	return AuthorityBypassResult{OperationAllowed: true}
+	return AuthorityBypassResult{
+		OperationAllowed:    false,
+		PrivilegeEscalation: false,
+		ErrorMessage:        "unauthorized",
+	}
 }
 
-func testAuthzGrant(grantType, grantee, operation string) AuthzGrantResult {
-	// In production, this would test actual authz grants
+func testAuthzGrant(grantType, grantState, grantee, operation string) AuthzGrantResult {
+	_ = grantee
+
+	if grantState != "active" {
+		return AuthzGrantResult{Allowed: false}
+	}
+
+	if grantType == "GenericAuthorization" && operation == "MsgSend" {
+		return AuthzGrantResult{Allowed: true}
+	}
+
 	return AuthzGrantResult{Allowed: false}
 }

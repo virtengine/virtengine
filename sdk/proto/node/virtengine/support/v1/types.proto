@@ -1,0 +1,270 @@
+syntax = "proto3";
+package virtengine.support.v1;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+import "virtengine/encryption/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/support/v1";
+
+message EncryptedSupportPayload {
+  virtengine.encryption.v1.EncryptedPayloadEnvelope envelope = 1 [
+    (gogoproto.jsontag) = "envelope,omitempty",
+    (gogoproto.moretags) = "yaml:\"envelope\""
+  ];
+  string envelope_ref = 2 [
+    (gogoproto.jsontag) = "envelope_ref,omitempty",
+    (gogoproto.moretags) = "yaml:\"envelope_ref\""
+  ];
+  bytes envelope_hash = 3 [
+    (gogoproto.jsontag) = "envelope_hash,omitempty",
+    (gogoproto.moretags) = "yaml:\"envelope_hash\""
+  ];
+  uint32 payload_size = 4 [
+    (gogoproto.jsontag) = "payload_size,omitempty",
+    (gogoproto.moretags) = "yaml:\"payload_size\""
+  ];
+}
+
+message RelatedEntity {
+  string type = 1 [
+    (gogoproto.jsontag) = "type",
+    (gogoproto.moretags) = "yaml:\"type\""
+  ];
+  string id = 2 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+}
+
+message RetentionPolicy {
+  uint32 version = 1 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+  int64 archive_after_seconds = 2 [
+    (gogoproto.jsontag) = "archive_after_seconds,omitempty",
+    (gogoproto.moretags) = "yaml:\"archive_after_seconds\""
+  ];
+  int64 purge_after_seconds = 3 [
+    (gogoproto.jsontag) = "purge_after_seconds,omitempty",
+    (gogoproto.moretags) = "yaml:\"purge_after_seconds\""
+  ];
+  google.protobuf.Timestamp created_at = 4 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+  int64 created_at_block = 5 [
+    (gogoproto.jsontag) = "created_at_block",
+    (gogoproto.moretags) = "yaml:\"created_at_block\""
+  ];
+}
+
+message ExternalTicketRef {
+  string resource_id = 1 [
+    (gogoproto.jsontag) = "resource_id",
+    (gogoproto.moretags) = "yaml:\"resource_id\""
+  ];
+  string resource_type = 2 [
+    (gogoproto.jsontag) = "resource_type",
+    (gogoproto.moretags) = "yaml:\"resource_type\""
+  ];
+  string external_system = 3 [
+    (gogoproto.jsontag) = "external_system",
+    (gogoproto.moretags) = "yaml:\"external_system\""
+  ];
+  string external_ticket_id = 4 [
+    (gogoproto.jsontag) = "external_ticket_id",
+    (gogoproto.moretags) = "yaml:\"external_ticket_id\""
+  ];
+  string external_url = 5 [
+    (gogoproto.jsontag) = "external_url,omitempty",
+    (gogoproto.moretags) = "yaml:\"external_url\""
+  ];
+  google.protobuf.Timestamp created_at = 6 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+  string created_by = 7 [
+    (gogoproto.jsontag) = "created_by",
+    (gogoproto.moretags) = "yaml:\"created_by\""
+  ];
+  google.protobuf.Timestamp updated_at = 8 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+}
+
+message SupportRequest {
+  string id = 1 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+  string ticket_number = 2 [
+    (gogoproto.jsontag) = "ticket_number",
+    (gogoproto.moretags) = "yaml:\"ticket_number\""
+  ];
+  string submitter_address = 3 [
+    (gogoproto.jsontag) = "submitter_address",
+    (gogoproto.moretags) = "yaml:\"submitter_address\""
+  ];
+  string category = 4 [
+    (gogoproto.jsontag) = "category",
+    (gogoproto.moretags) = "yaml:\"category\""
+  ];
+  string priority = 5 [
+    (gogoproto.jsontag) = "priority",
+    (gogoproto.moretags) = "yaml:\"priority\""
+  ];
+  string status = 6 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+  EncryptedSupportPayload payload = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "payload",
+    (gogoproto.moretags) = "yaml:\"payload\""
+  ];
+  map<string, string> public_metadata = 8 [
+    (gogoproto.jsontag) = "public_metadata,omitempty",
+    (gogoproto.moretags) = "yaml:\"public_metadata\""
+  ];
+  RelatedEntity related_entity = 9 [
+    (gogoproto.jsontag) = "related_entity,omitempty",
+    (gogoproto.moretags) = "yaml:\"related_entity\""
+  ];
+  repeated string recipients = 10 [
+    (gogoproto.jsontag) = "recipients,omitempty",
+    (gogoproto.moretags) = "yaml:\"recipients\""
+  ];
+  string assigned_agent = 11 [
+    (gogoproto.jsontag) = "assigned_agent,omitempty",
+    (gogoproto.moretags) = "yaml:\"assigned_agent\""
+  ];
+  google.protobuf.Timestamp assigned_at = 12 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "assigned_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"assigned_at\""
+  ];
+  google.protobuf.Timestamp created_at = 13 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+  google.protobuf.Timestamp updated_at = 14 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+  google.protobuf.Timestamp last_response_at = 15 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "last_response_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"last_response_at\""
+  ];
+  google.protobuf.Timestamp resolved_at = 16 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "resolved_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"resolved_at\""
+  ];
+  google.protobuf.Timestamp closed_at = 17 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "closed_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"closed_at\""
+  ];
+  RetentionPolicy retention_policy = 18 [
+    (gogoproto.jsontag) = "retention_policy,omitempty",
+    (gogoproto.moretags) = "yaml:\"retention_policy\""
+  ];
+  bool archived = 19 [
+    (gogoproto.jsontag) = "archived",
+    (gogoproto.moretags) = "yaml:\"archived\""
+  ];
+  google.protobuf.Timestamp archived_at = 20 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "archived_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"archived_at\""
+  ];
+  string archive_reason = 21 [
+    (gogoproto.jsontag) = "archive_reason,omitempty",
+    (gogoproto.moretags) = "yaml:\"archive_reason\""
+  ];
+  bool purged = 22 [
+    (gogoproto.jsontag) = "purged",
+    (gogoproto.moretags) = "yaml:\"purged\""
+  ];
+  google.protobuf.Timestamp purged_at = 23 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.jsontag) = "purged_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"purged_at\""
+  ];
+  string purge_reason = 24 [
+    (gogoproto.jsontag) = "purge_reason,omitempty",
+    (gogoproto.moretags) = "yaml:\"purge_reason\""
+  ];
+}
+
+message SupportResponse {
+  string id = 1 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+  string request_id = 2 [
+    (gogoproto.jsontag) = "request_id",
+    (gogoproto.moretags) = "yaml:\"request_id\""
+  ];
+  string author_address = 3 [
+    (gogoproto.jsontag) = "author_address",
+    (gogoproto.moretags) = "yaml:\"author_address\""
+  ];
+  bool is_agent = 4 [
+    (gogoproto.jsontag) = "is_agent",
+    (gogoproto.moretags) = "yaml:\"is_agent\""
+  ];
+  EncryptedSupportPayload payload = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "payload",
+    (gogoproto.moretags) = "yaml:\"payload\""
+  ];
+  google.protobuf.Timestamp created_at = 6 [
+    (gogoproto.stdtime) = true,
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+}
+
+message Params {
+  repeated string allowed_external_systems = 1 [
+    (gogoproto.jsontag) = "allowed_external_systems",
+    (gogoproto.moretags) = "yaml:\"allowed_external_systems\""
+  ];
+  repeated string allowed_external_domains = 2 [
+    (gogoproto.jsontag) = "allowed_external_domains",
+    (gogoproto.moretags) = "yaml:\"allowed_external_domains\""
+  ];
+  repeated string support_recipient_key_ids = 3 [
+    (gogoproto.jsontag) = "support_recipient_key_ids,omitempty",
+    (gogoproto.moretags) = "yaml:\"support_recipient_key_ids\""
+  ];
+  bool require_support_recipients = 4 [
+    (gogoproto.jsontag) = "require_support_recipients",
+    (gogoproto.moretags) = "yaml:\"require_support_recipients\""
+  ];
+  uint32 max_responses_per_request = 5 [
+    (gogoproto.jsontag) = "max_responses_per_request",
+    (gogoproto.moretags) = "yaml:\"max_responses_per_request\""
+  ];
+  RetentionPolicy default_retention_policy = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "default_retention_policy",
+    (gogoproto.moretags) = "yaml:\"default_retention_policy\""
+  ];
+}

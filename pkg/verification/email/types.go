@@ -186,6 +186,9 @@ type EmailChallenge struct {
 	// MaskedEmail is the masked email for display (e.g., t***@example.com)
 	MaskedEmail string `json:"masked_email"`
 
+	// EncryptedEmail stores the destination email encrypted for resend flows.
+	EncryptedEmail string `json:"encrypted_email,omitempty"`
+
 	// IsOrganizational indicates if this is an organizational email domain
 	IsOrganizational bool `json:"is_organizational"`
 
@@ -207,6 +210,7 @@ type ChallengeConfig struct {
 	ChallengeID    string
 	AccountAddress string
 	Email          string // Will be hashed, not stored
+	EncryptedEmail string
 	Method         VerificationMethod
 	CreatedAt      time.Time
 	TTLSeconds     int64
@@ -286,6 +290,7 @@ func NewEmailChallenge(cfg ChallengeConfig) (*EmailChallenge, string, error) {
 		MaxResends:       maxResends,
 		DeliveryStatus:   DeliveryPending,
 		MaskedEmail:      MaskEmail(cfg.Email),
+		EncryptedEmail:   cfg.EncryptedEmail,
 		IsOrganizational: IsOrganizationalDomain(cfg.Email),
 		IPAddress:        cfg.IPAddress,
 		UserAgent:        cfg.UserAgent,
@@ -794,6 +799,9 @@ type Config struct {
 	// FromName is the sender display name
 	FromName string `json:"from_name"`
 
+	// DestinationEncryptionKey encrypts destination emails for resend flows.
+	DestinationEncryptionKey string `json:"destination_encryption_key"`
+
 	// BaseURL is the base URL for magic links
 	BaseURL string `json:"base_url"`
 
@@ -838,6 +846,9 @@ func (c *Config) Validate() error {
 	}
 	if c.FromAddress == "" {
 		return errors.Wrap(ErrInvalidConfig, "from_address is required")
+	}
+	if c.DestinationEncryptionKey == "" {
+		return errors.Wrap(ErrInvalidConfig, "destination_encryption_key is required")
 	}
 	if c.OTPLength < 4 || c.OTPLength > 10 {
 		return errors.Wrap(ErrInvalidConfig, "otp_length must be between 4 and 10")

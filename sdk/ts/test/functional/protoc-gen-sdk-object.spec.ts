@@ -1,11 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import { exec } from "child_process";
 import { access, constants as fsConst, readFile, rmdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join as joinPath } from "path";
-import { promisify } from "util";
 
-const execAsync = promisify(exec);
+import { runBufGenerate } from "../helpers/runBufGenerate.ts";
 
 describe("protoc-sdk-objec plugin", () => {
   const config = {
@@ -13,12 +11,17 @@ describe("protoc-sdk-objec plugin", () => {
     clean: true,
     plugins: [
       {
-        local: "ts/script/protoc-gen-sdk-object.ts",
+        local: [
+          "node",
+          "--experimental-strip-types",
+          "--no-warnings",
+          "ts/script/protoc-gen-sdk-object.ts",
+        ],
         strategy: "all",
         out: ".",
         opt: [
           "target=ts",
-          "import_extension=ts"
+          "import_extension=ts",
         ],
       },
     ],
@@ -27,25 +30,21 @@ describe("protoc-sdk-objec plugin", () => {
   it("generates SDK object from proto files", async () => {
     const outputDir = joinPath(tmpdir(), `ts-bufplugin-${process.pid.toString()}`);
     const protoDir = "./ts/test/functional/proto";
-    const command = [
-      `buf generate`,
-      `--config '${JSON.stringify({
-        version: "v2",
-        modules: [
-          { path: "go/vendor/github.com/cosmos/cosmos-sdk/proto" },
-          { path: "./ts/test/functional/proto" },
-        ],
-      })}'`,
-      `--template '${JSON.stringify(config)}'`,
-      `-o '${outputDir}'`,
-      `--path ${protoDir}/msg.proto`,
-      `--path ${protoDir}/query.proto`,
-      protoDir,
-    ].join(" ");
 
     try {
-      await execAsync(command, {
+      await runBufGenerate({
+        config: {
+          version: "v2",
+          modules: [
+            { path: "go/vendor/github.com/cosmos/cosmos-sdk/proto" },
+            { path: protoDir },
+          ],
+        },
+        template: config,
         cwd: joinPath(__dirname, "..", "..", ".."),
+        outputDir,
+        paths: [`${protoDir}/msg.proto`, `${protoDir}/query.proto`],
+        inputs: [protoDir],
         env: {
           ...process.env,
           BUF_PLUGIN_SDK_OBJECT_OUTPUT_FILE: "sdk.ts",

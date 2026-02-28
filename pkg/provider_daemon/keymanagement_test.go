@@ -1,6 +1,9 @@
 package provider_daemon
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -90,6 +93,67 @@ func TestSoftHSMProvider_SignAndVerify(t *testing.T) {
 	require.NotEmpty(t, signature)
 
 	valid, err := provider.Verify(handle, message, signature)
+	require.NoError(t, err)
+	assert.True(t, valid)
+
+	invalid, err := provider.Verify(handle, []byte("tampered"), signature)
+	require.NoError(t, err)
+	assert.False(t, invalid)
+}
+
+func TestSoftHSMProvider_P256SignAndVerify(t *testing.T) {
+	provider := NewSoftHSMProvider()
+	err := provider.Initialize(nil)
+	require.NoError(t, err)
+	defer provider.Close()
+
+	handle, err := provider.GenerateKey("p256-signing-key", HSMKeyTypeP256)
+	require.NoError(t, err)
+
+	message := []byte("test message for p256 signing")
+
+	signature, err := provider.Sign(handle, message)
+	require.NoError(t, err)
+	require.NotEmpty(t, signature)
+
+	valid, err := provider.Verify(handle, message, signature)
+	require.NoError(t, err)
+	assert.True(t, valid)
+}
+
+func TestSoftHSMProvider_BackupAndRestore(t *testing.T) {
+	provider := NewSoftHSMProvider()
+	err := provider.Initialize(nil)
+	require.NoError(t, err)
+	defer provider.Close()
+
+	handle, err := provider.GenerateKey("restore-me", HSMKeyTypeEd25519)
+	require.NoError(t, err)
+
+	publicKeyBefore, err := provider.GetPublicKey(handle)
+	require.NoError(t, err)
+
+	backup, err := provider.Backup()
+	require.NoError(t, err)
+	require.NotEmpty(t, backup)
+
+	err = provider.DeleteKey("restore-me")
+	require.NoError(t, err)
+
+	err = provider.Restore(backup)
+	require.NoError(t, err)
+
+	restoredHandle, err := provider.GetKey("restore-me")
+	require.NoError(t, err)
+	assert.Equal(t, handle.PublicKeyFingerprint, restoredHandle.PublicKeyFingerprint)
+
+	publicKeyAfter, err := provider.GetPublicKey(restoredHandle)
+	require.NoError(t, err)
+	assert.Equal(t, publicKeyBefore, publicKeyAfter)
+
+	signature, err := provider.Sign(restoredHandle, []byte("restore-check"))
+	require.NoError(t, err)
+	valid, err := provider.Verify(restoredHandle, []byte("restore-check"), signature)
 	require.NoError(t, err)
 	assert.True(t, valid)
 }
@@ -424,6 +488,94 @@ func TestCompromiseDetector_IsKeyCompromised(t *testing.T) {
 
 	// No longer considered compromised after acknowledgement
 	assert.False(t, detector.IsKeyCompromised("test-key"))
+}
+
+func TestCompromiseDetector_SendAlertWebhookSuccess(t *testing.T) {
+	alerts := make(chan CompromiseAlert, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "virtengine-provider-daemon/compromise-detector", r.Header.Get("User-Agent"))
+
+		defer r.Body.Close()
+		var alert CompromiseAlert
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&alert))
+		alerts <- alert
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	config := DefaultCompromiseDetectorConfig()
+	config.AlertWebhookURL = server.URL
+	config.AlertWebhookTimeout = time.Second
+	detector := NewCompromiseDetector(config, nil)
+
+	err := detector.ReportCompromise(
+		"key-alert-success",
+		IndicatorExternalReport,
+		SeverityCritical,
+		"Potential compromise reported by operator",
+		"security-team",
+	)
+	require.NoError(t, err)
+
+	select {
+	case alert := <-alerts:
+		assert.Equal(t, "key-alert-success", alert.KeyID)
+		assert.Equal(t, IndicatorExternalReport, alert.Indicator)
+		assert.Equal(t, SeverityCritical, alert.Severity)
+		assert.Equal(t, "security-team", alert.ReportedBy)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for compromise alert webhook")
+	}
+
+	require.Eventually(t, func() bool {
+		events := detector.GetEventsByKey("key-alert-success")
+		if len(events) != 1 {
+			return false
+		}
+		for _, action := range events[0].ResponseActions {
+			if action.Action == "webhook_alert" && action.Success {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 20*time.Millisecond)
+}
+
+func TestCompromiseDetector_SendAlertWebhookFailureRecorded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream incident channel unavailable", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	config := DefaultCompromiseDetectorConfig()
+	config.AlertWebhookURL = server.URL
+	config.AlertWebhookTimeout = time.Second
+	detector := NewCompromiseDetector(config, nil)
+
+	err := detector.ReportCompromise(
+		"key-alert-failure",
+		IndicatorExternalReport,
+		SeverityHigh,
+		"Provider key exposed in suspicious upload",
+		"security-team",
+	)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		events := detector.GetEventsByKey("key-alert-failure")
+		if len(events) != 1 {
+			return false
+		}
+		for _, action := range events[0].ResponseActions {
+			if action.Action == "webhook_alert" && !action.Success {
+				assert.Contains(t, action.Details, "502 Bad Gateway")
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 20*time.Millisecond)
 }
 
 // =============================================================================

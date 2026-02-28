@@ -63,7 +63,7 @@ func (s *StaticResourceSnapshotProvider) Snapshot(_ context.Context) (*resources
 		MemoryGb:    s.capacity.AvailableMemory(),
 		StorageGb:   s.capacity.AvailableStorage(),
 		NetworkMbps: s.network,
-		Gpus:        s.capacity.TotalGPUs,
+		Gpus:        s.capacity.AvailableGPUs(),
 		GpuType:     s.gpuType,
 	}
 	available := total

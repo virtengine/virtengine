@@ -11,6 +11,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -268,4 +269,116 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	})
 	s.Require().NoError(err)
 	s.Require().Equal(rolesquery.AccountStateSuspended, accountState.AccountState.State)
+}
+
+func (s *mfaGatingE2ETestSuite) TestMFAGatingBankSendThresholds() {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	val := s.Network().Validators[0]
+	cctx := s.ClientContextForTest()
+
+	cl, err := aclient.DiscoverClient(
+		ctx,
+		cctx,
+		cltypes.WithGas(cltypes.GasSetting{Simulate: true}),
+		cltypes.WithGasAdjustment(1.5),
+		cltypes.WithGasPrices("0.0025uve"),
+	)
+	s.Require().NoError(err)
+
+	conn, err := grpc.DialContext(ctx, val.AppConfig.GRPC.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	s.Require().NoError(err)
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	bankClient := banktypes.NewQueryClient(conn)
+
+	sender := s.WalletForTest().String()
+	recipient := val.Address.String()
+
+	// Enroll a single factor and enable the deterministic single-factor policy for this wallet.
+	_, err = cl.Tx().BroadcastMsgs(
+		ctx,
+		[]sdk.Msg{
+			&mfatx.MsgEnrollFactor{
+				Sender:     sender,
+				FactorType: mfaquery.FactorTypeTOTP,
+				Label:      "e2e-send-totp",
+			},
+		},
+		cclient.WithBroadcastMode("block"),
+	)
+	s.Require().NoError(err)
+	s.Require().NoError(s.Network().WaitForNextBlock())
+
+	_, err = cl.Tx().BroadcastMsgs(
+		ctx,
+		[]sdk.Msg{
+			&mfatx.MsgSetMFAPolicy{
+				Sender: sender,
+				Policy: mfaquery.MFAPolicy{
+					AccountAddress: sender,
+					RequiredFactors: []mfaquery.FactorCombination{
+						{Factors: []mfaquery.FactorType{mfaquery.FactorTypeTOTP}},
+					},
+					SessionDuration: 15 * 60,
+					Enabled:         true,
+				},
+			},
+		},
+		cclient.WithBroadcastMode("block"),
+	)
+	s.Require().NoError(err)
+	s.Require().NoError(s.Network().WaitForNextBlock())
+
+	balanceBefore, err := bankClient.Balance(ctx, &banktypes.QueryBalanceRequest{
+		Address: recipient,
+		Denom:   "uve",
+	})
+	s.Require().NoError(err)
+
+	// Below the medium threshold should continue to work without MFA evidence.
+	_, err = cl.Tx().BroadcastMsgs(
+		ctx,
+		[]sdk.Msg{
+			&banktypes.MsgSend{
+				FromAddress: sender,
+				ToAddress:   recipient,
+				Amount:      sdk.NewCoins(sdk.NewInt64Coin("uve", 999)),
+			},
+		},
+		cclient.WithBroadcastMode("block"),
+	)
+	s.Require().NoError(err)
+	s.Require().NoError(s.Network().WaitForNextBlock())
+
+	balanceAfterLow, err := bankClient.Balance(ctx, &banktypes.QueryBalanceRequest{
+		Address: recipient,
+		Denom:   "uve",
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(balanceBefore.Balance.Amount.AddRaw(999).String(), balanceAfterLow.Balance.Amount.String())
+
+	// At the medium threshold, bank MsgSend has no proof surface, so the ante handler must fail closed.
+	_, err = cl.Tx().BroadcastMsgs(
+		ctx,
+		[]sdk.Msg{
+			&banktypes.MsgSend{
+				FromAddress: sender,
+				ToAddress:   recipient,
+				Amount:      sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+			},
+		},
+		cclient.WithBroadcastMode("block"),
+	)
+	s.Require().Error(err)
+
+	balanceAfterRejected, err := bankClient.Balance(ctx, &banktypes.QueryBalanceRequest{
+		Address: recipient,
+		Denom:   "uve",
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(balanceAfterLow.Balance.Amount.String(), balanceAfterRejected.Balance.Amount.String())
 }

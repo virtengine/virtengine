@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/pkg/pricefeed"
@@ -70,6 +71,23 @@ func TestExternalOraclePriceFeedFallsBackToSourceType(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, string(types.OracleSourceTypeChainlinkIBC), price.Source)
 	require.False(t, price.Timestamp.IsZero())
+}
+
+func TestExternalOraclePriceFeedUsesSDKBlockTimeWhenTimestampMissing(t *testing.T) {
+	blockTime := time.Date(2026, 3, 16, 10, 30, 0, 0, time.UTC)
+	provider := &mockExternalPriceProvider{
+		price: pricefeed.AggregatedPrice{
+			PriceData: pricefeed.PriceData{
+				Price: sdkmath.LegacyMustNewDecFromStr("1.01"),
+			},
+		},
+	}
+	feed := NewExternalOraclePriceFeed(provider, types.OracleSourceTypeBandIBC)
+
+	sdkCtx := sdk.Context{}.WithBlockTime(blockTime)
+	price, err := feed.GetPrice(sdk.WrapSDKContext(sdkCtx), "VRT", "USD")
+	require.NoError(t, err)
+	require.Equal(t, blockTime, price.Timestamp)
 }
 
 func TestExternalOraclePriceFeedPropagatesProviderErrors(t *testing.T) {

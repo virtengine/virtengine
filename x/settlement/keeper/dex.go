@@ -28,6 +28,7 @@ type OffRampBridge interface {
 	GetQuote(ctx context.Context, req offramp.QuoteRequest) (offramp.Quote, error)
 	InitiatePayout(ctx context.Context, quote offramp.Quote, cryptoTxRef string, destination string, metadata map[string]string) (offramp.PayoutResult, error)
 	GetStatus(ctx context.Context, payoutID string) (offramp.PayoutResult, error)
+	FindPayoutByMetadata(ctx context.Context, provider string, metadata map[string]string) (offramp.PayoutResult, error)
 	Cancel(ctx context.Context, payoutID string) error
 }
 
@@ -846,71 +847,73 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 	}
 
 	createdOffRampThisCall := false
+	offRampMetadata := fiatConversionOffRampMetadata(*conversion)
 	if conversion.OffRampID == "" {
-		if conversion.State == types.FiatConversionStateSwapSettled {
-			if err := conversion.MarkOffRampPending(ctx.BlockTime()); err != nil {
+		if conversion.SwapTxHash != "" && conversion.State == types.FiatConversionStateFailed {
+			recovered, err := k.recoverFiatConversionOffRamp(ctx, conversion, offRampMetadata)
+			if err != nil {
 				return err
+			}
+			if recovered {
+				createdOffRampThisCall = true
+			}
+		}
+
+		if conversion.OffRampID == "" {
+			if conversion.State == types.FiatConversionStateSwapSettled {
+				if err := conversion.MarkOffRampPending(ctx.BlockTime()); err != nil {
+					return err
+				}
+				if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+					return err
+				}
+			}
+			if conversion.State == types.FiatConversionStateOffRampPending || conversion.State == types.FiatConversionStateFailed {
+				if err := conversion.MarkPayoutPending(ctx.BlockTime()); err != nil {
+					return err
+				}
+				if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+					return err
+				}
+			}
+
+			offQuote, err := k.offRampBridge.GetQuote(ctx, offramp.QuoteRequest{
+				CryptoSymbol:  conversion.StableToken.Symbol,
+				CryptoDenom:   conversion.StableToken.Denom,
+				CryptoAmount:  conversion.StableAmount.Amount,
+				FiatCurrency:  conversion.FiatCurrency,
+				PaymentMethod: conversion.PaymentMethod,
+				Sender:        payout.Provider,
+				Destination:   conversion.DestinationRef,
+			})
+			if err != nil {
+				_ = conversion.MarkFailed(fmt.Sprintf("off-ramp quote failed: %v", err), ctx.BlockTime())
+				_ = k.SetFiatConversion(ctx, *conversion)
+				return types.ErrFiatConversionFailed.Wrapf("off-ramp quote failed: %s", err)
+			}
+
+			offResult, err := k.offRampBridge.InitiatePayout(ctx, offQuote, conversion.SwapTxHash, conversion.DestinationRef, offRampMetadata)
+			if err != nil {
+				recovered, recoverErr := k.recoverFiatConversionOffRamp(ctx, conversion, offRampMetadata)
+				if recoverErr != nil {
+					return recoverErr
+				}
+				if recovered {
+					createdOffRampThisCall = true
+				} else {
+					_ = conversion.MarkFailed(fmt.Sprintf("off-ramp initiation failed: %v", err), ctx.BlockTime())
+					_ = k.SetFiatConversion(ctx, *conversion)
+					return types.ErrFiatConversionFailed.Wrapf("off-ramp initiation failed: %s", err)
+				}
+			} else {
+				if err := k.applyOffRampPayoutResult(ctx, conversion, offResult, "offramp_payout_submitted"); err != nil {
+					return err
+				}
+				createdOffRampThisCall = true
 			}
 			if err := k.SetFiatConversion(ctx, *conversion); err != nil {
 				return err
 			}
-		}
-		if conversion.State == types.FiatConversionStateOffRampPending || conversion.State == types.FiatConversionStateFailed {
-			if err := conversion.MarkPayoutPending(ctx.BlockTime()); err != nil {
-				return err
-			}
-			if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-				return err
-			}
-		}
-
-		offQuote, err := k.offRampBridge.GetQuote(ctx, offramp.QuoteRequest{
-			CryptoSymbol:  conversion.StableToken.Symbol,
-			CryptoDenom:   conversion.StableToken.Denom,
-			CryptoAmount:  conversion.StableAmount.Amount,
-			FiatCurrency:  conversion.FiatCurrency,
-			PaymentMethod: conversion.PaymentMethod,
-			Sender:        payout.Provider,
-			Destination:   conversion.DestinationRef,
-		})
-		if err != nil {
-			_ = conversion.MarkFailed(fmt.Sprintf("off-ramp quote failed: %v", err), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrapf("off-ramp quote failed: %s", err)
-		}
-
-		offResult, err := k.offRampBridge.InitiatePayout(ctx, offQuote, conversion.SwapTxHash, conversion.DestinationRef, map[string]string{
-			"conversion_id": conversion.ConversionID,
-		})
-		if err != nil {
-			_ = conversion.MarkFailed(fmt.Sprintf("off-ramp initiation failed: %v", err), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrapf("off-ramp initiation failed: %s", err)
-		}
-
-		conversion.OffRampProvider = offResult.Provider
-		conversion.OffRampQuoteID = offResult.QuoteID
-		conversion.FiatAmount = offResult.FiatAmount.String()
-		if err := conversion.MarkPayoutSubmitted(offResult.ID, string(offResult.Status), offResult.Reference, ctx.BlockTime()); err != nil {
-			return err
-		}
-		createdOffRampThisCall = true
-		switch offResult.Status {
-		case offramp.StatusCompleted:
-			if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
-				return err
-			}
-		case offramp.StatusFailed:
-			if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
-				return err
-			}
-		}
-		conversion.AddAuditEntry("offramp_payout_submitted", "system", "", map[string]string{
-			"offramp_id": offResult.ID,
-			"status":     string(offResult.Status),
-		}, ctx.BlockTime())
-		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-			return err
 		}
 	}
 
@@ -961,6 +964,94 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 		})
 	}
 
+	return nil
+}
+
+func fiatConversionOffRampMetadata(conversion types.FiatConversionRecord) map[string]string {
+	metadata := map[string]string{
+		"conversion_id": conversion.ConversionID,
+	}
+	if conversion.IdempotencyKey != "" {
+		metadata["idempotency_key"] = conversion.IdempotencyKey
+	}
+	if conversion.InvoiceID != "" {
+		metadata["invoice_id"] = conversion.InvoiceID
+	}
+	if conversion.PayoutID != "" {
+		metadata["payout_id"] = conversion.PayoutID
+	}
+	if conversion.SettlementID != "" {
+		metadata["settlement_id"] = conversion.SettlementID
+	}
+	return metadata
+}
+
+func (k Keeper) recoverFiatConversionOffRamp(ctx sdk.Context, conversion *types.FiatConversionRecord, metadata map[string]string) (bool, error) {
+	if k.offRampBridge == nil || len(metadata) == 0 {
+		return false, nil
+	}
+
+	provider := conversion.OffRampProvider
+	result, err := k.offRampBridge.FindPayoutByMetadata(ctx, provider, metadata)
+	if err != nil {
+		return false, nil
+	}
+
+	if err := k.applyOffRampPayoutResult(ctx, conversion, result, "offramp_payout_recovered"); err != nil {
+		return false, err
+	}
+	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (k Keeper) applyOffRampPayoutResult(ctx sdk.Context, conversion *types.FiatConversionRecord, result offramp.PayoutResult, auditAction string) error {
+	if result.Provider != "" {
+		conversion.OffRampProvider = result.Provider
+	}
+	if result.QuoteID != "" {
+		conversion.OffRampQuoteID = result.QuoteID
+	}
+	if !result.FiatAmount.IsNil() && result.FiatAmount.IsPositive() {
+		conversion.FiatAmount = result.FiatAmount.String()
+	}
+
+	if conversion.State == types.FiatConversionStateSwapSettled {
+		if err := conversion.MarkOffRampPending(ctx.BlockTime()); err != nil {
+			return err
+		}
+	}
+	if conversion.State == types.FiatConversionStateOffRampPending || conversion.State == types.FiatConversionStateFailed {
+		if err := conversion.MarkPayoutPending(ctx.BlockTime()); err != nil {
+			return err
+		}
+	}
+	if conversion.State == types.FiatConversionStatePayoutPending {
+		if err := conversion.MarkPayoutSubmitted(result.ID, string(result.Status), result.Reference, ctx.BlockTime()); err != nil {
+			return err
+		}
+	}
+
+	switch result.Status {
+	case offramp.StatusCompleted:
+		if conversion.State != types.FiatConversionStatePayoutCompleted {
+			if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
+				return err
+			}
+		}
+	case offramp.StatusFailed:
+		if conversion.State != types.FiatConversionStateFailed {
+			if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+				return err
+			}
+		}
+	}
+
+	conversion.AddAuditEntry(auditAction, "system", "", map[string]string{
+		"offramp_id": result.ID,
+		"status":     string(result.Status),
+	}, ctx.BlockTime())
 	return nil
 }
 

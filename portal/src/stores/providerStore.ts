@@ -291,21 +291,50 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
         } as Payout;
       });
 
-      const revenueTotal = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+      const revenueByOffering = allocations.reduce((acc, allocation) => {
+        acc.set(
+          allocation.offeringName,
+          (acc.get(allocation.offeringName) ?? 0) + allocation.monthlyRevenue
+        );
+        return acc;
+      }, new Map<string, number>());
+      const revenueTotal = allocations.reduce((sum, allocation) => sum + allocation.monthlyRevenue, 0);
+      const payoutTotal = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+      const payoutHistory = payouts.reduce(
+        (acc, payout) => {
+          const createdAt = new Date(payout.createdAt);
+          const period = createdAt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+          const existing = acc.get(period) ?? {
+            period,
+            revenue: 0,
+            orders: 0,
+            stamp: createdAt.getTime(),
+          };
+          existing.revenue += payout.amount;
+          existing.orders += 1;
+          existing.stamp = Math.max(existing.stamp, createdAt.getTime());
+          acc.set(period, existing);
+          return acc;
+        },
+        new Map<string, { period: string; revenue: number; orders: number; stamp: number }>()
+      );
       const revenue: RevenueSummaryData = {
         currentMonth: revenueTotal,
         previousMonth: 0,
         changePercent: 0,
-        totalLifetime: revenueTotal,
+        totalLifetime: Math.max(revenueTotal, payoutTotal),
         pendingPayouts: payouts
           .filter((payout) => payout.status === 'pending')
           .reduce((sum, payout) => sum + payout.amount, 0),
-        byOffering: offerings.map((offering) => ({
-          offeringName: offering.name,
-          revenue: offering.totalOrders,
-          percentage: 0,
+        byOffering: Array.from(revenueByOffering.entries()).map(([offeringName, amount]) => ({
+          offeringName,
+          revenue: amount,
+          percentage: revenueTotal > 0 ? Number(((amount / revenueTotal) * 100).toFixed(1)) : 0,
         })),
-        history: [],
+        history: Array.from(payoutHistory.values())
+          .sort((a, b) => a.stamp - b.stamp)
+          .slice(-6)
+          .map(({ period, revenue, orders }) => ({ period, revenue, orders })),
       };
 
       const stats: ProviderDashboardStats = {
@@ -371,17 +400,19 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
         }
 
         syncStatus = {
-          isRunning: true,
+          isRunning: Boolean(daemonClient),
           lastSyncAt: new Date().toISOString(),
           nextSyncAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
           errorCount: 0,
-          pendingOfferings: 0,
-          pendingAllocations: 0,
+          pendingOfferings: offerings.filter((offering) => offering.status === 'pending').length,
+          pendingAllocations: allocations.filter((allocation) => allocation.status === 'pending').length,
           waldur: {
             name: 'Waldur',
-            status: 'synced',
-            lastSuccessAt: new Date().toISOString(),
+            status: settlementsResult.items.length > 0 ? 'degraded' : 'offline',
+            lastSuccessAt: '',
             lagSeconds: 0,
+            message:
+              'Waldur reconciliation state is not exposed directly by the current provider dashboard APIs.',
           },
           chain: {
             name: 'VirtEngine Chain',
@@ -410,7 +441,14 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
         revenue,
         capacity,
         payouts,
-        queue: [],
+        queue: pendingBids.map((bid) => ({
+          id: bid.id,
+          offeringName: bid.offeringName,
+          customerAddress: bid.customerAddress,
+          requestedAt: bid.createdAt,
+          resources: bid.resources,
+          estimatedProvisionTime: bid.duration || 'Awaiting acceptance',
+        })),
         isLoading: false,
       });
     } catch (error) {

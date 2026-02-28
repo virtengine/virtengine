@@ -6,8 +6,7 @@ import { getMessageType } from "../getMessageType.ts";
 import { createNoopTransport } from "../transport/createNoopTransport.ts";
 import type { GrpcTransportOptions } from "../transport/grpc/createGrpcTransport.ts";
 import { createGrpcTransport } from "../transport/grpc/createGrpcTransport.ts";
-import type { RetryOptions } from "../transport/interceptors/retry.ts";
-import { createRetryInterceptor, isRetryEnabled } from "../transport/interceptors/retry.ts";
+import { getRetryInterceptors, type RetryOptions } from "../transport/interceptors/retry.ts";
 import { createTxTransport } from "../transport/tx/createTxTransport.ts";
 import type { TxClient } from "../transport/tx/TxClient.ts";
 import type { Transport, TxCallOptions } from "../transport/types.ts";
@@ -19,7 +18,7 @@ export function createChainNodeSDK(options: ChainNodeSDKOptions) {
   const queryTransport = createGrpcTransport({
     ...transportOptions,
     baseUrl: options.query.baseUrl,
-    interceptors: isRetryEnabled(retryOptions) ? [createRetryInterceptor(retryOptions)] : [],
+    interceptors: getRetryInterceptors(retryOptions),
   });
   let txTransport: Transport<TxCallOptions>;
 

@@ -233,14 +233,19 @@ func TestSGXEnclaveServiceImpl_VerifyMeasurement(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, svc.Initialize(DefaultRuntimeConfig()))
 
-	// Valid measurement
-	validMeasurement := make([]byte, SGXMREnclaveSize)
-	validMeasurement[0] = 0x01
+	// The service should trust its own measured MRENCLAVE only.
+	validMeasurement, err := svc.GetMeasurement()
+	require.NoError(t, err)
 	assert.True(t, svc.VerifyMeasurement(validMeasurement))
 
 	// All zeros is invalid
 	zeroMeasurement := make([]byte, SGXMREnclaveSize)
 	assert.False(t, svc.VerifyMeasurement(zeroMeasurement))
+
+	// Different measurement is invalid without a governed allowlist.
+	wrongMeasurement := append([]byte(nil), validMeasurement...)
+	wrongMeasurement[0] ^= 0xFF
+	assert.False(t, svc.VerifyMeasurement(wrongMeasurement))
 
 	// Wrong size is invalid
 	wrongSize := make([]byte, 16)

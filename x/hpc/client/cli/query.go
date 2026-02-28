@@ -55,6 +55,7 @@ func GetQueryCmd() *cobra.Command {
 		NewCmdQueryNode(),
 		NewCmdQueryNodes(),
 		NewCmdQueryRewards(),
+		GetQueryCmdWorkloadTemplates(),
 	)
 
 	return cmd

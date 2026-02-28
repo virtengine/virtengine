@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,7 @@ import {
   type SupportStatus,
   type SupportSyncStatus,
 } from '@/stores/supportStore';
+import { useWallet } from '@/lib/portal-adapter';
 
 const statusStyles: Record<SupportStatus, string> = {
   open: 'bg-blue-100 text-blue-900',
@@ -58,8 +59,16 @@ const formatSyncLabel = (status: SupportSyncStatus) => {
 export default function SupportTicketDetailClient() {
   const params = useParams<{ id: string }>();
   const ticketId = decodeURIComponent(params.id);
-  const { tickets, addResponse, updateStatus } = useSupportStore();
+  const { tickets, addResponse, updateStatus, fetchSupportData, isLoading, error } = useSupportStore();
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const wallet = useWallet();
+  const account = wallet.accounts[wallet.activeAccountIndex];
+
+  useEffect(() => {
+    if (!account?.address) return;
+    void fetchSupportData(account.address);
+  }, [account?.address, fetchSupportData]);
 
   const ticket = useMemo(() => tickets.find((t) => t.id === ticketId), [tickets, ticketId]);
 
@@ -78,9 +87,11 @@ export default function SupportTicketDetailClient() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              We could not locate this support ticket. Return to the support center to browse
-              available tickets.
+              {isLoading
+                ? 'Loading support ticket details from the live portal API.'
+                : 'We could not locate this support ticket from the live support API. Return to the support center to browse available tickets.'}
             </p>
+            {error && <p className="text-sm text-rose-600">{error}</p>}
             <Button asChild>
               <Link href="/support">Back to support</Link>
             </Button>
@@ -90,11 +101,16 @@ export default function SupportTicketDetailClient() {
     );
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!message.trim()) return;
-    addResponse(ticket.id, { message, isAgent: false, author: ticket.submitter });
-    updateStatus(ticket.id, 'waiting_support');
-    setMessage('');
+    setIsSubmitting(true);
+    try {
+      await addResponse(ticket.id, { message, isAgent: false, author: ticket.submitter });
+      await updateStatus(ticket.id, 'waiting_support');
+      setMessage('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -172,10 +188,14 @@ export default function SupportTicketDetailClient() {
                 />
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs text-muted-foreground">
-                    Responses are encrypted on-chain and synced to the provider service desk.
+                    Replies are sent through the live support bridge. Missing chain metadata is
+                    shown explicitly instead of backfilled locally.
                   </span>
-                  <Button onClick={handleSend} disabled={!message.trim()}>
-                    Send response
+                  <Button
+                    onClick={() => void handleSend()}
+                    disabled={!account?.address || !message.trim() || isSubmitting}
+                  >
+                    {isSubmitting ? 'Sending…' : 'Send response'}
                   </Button>
                 </div>
               </div>
@@ -251,7 +271,7 @@ export default function SupportTicketDetailClient() {
                       {ticket.chain.txHash}
                     </a>
                   ) : (
-                    <span>pending</span>
+                    <span>unavailable</span>
                   )}
                 </p>
                 {typeof ticket.chain.blockHeight === 'number' && (
@@ -270,7 +290,10 @@ export default function SupportTicketDetailClient() {
                     ) : null}
                   </p>
                 )}
-                <p>Content ref {ticket.chain.contentRef}</p>
+                <p>
+                  Content ref{' '}
+                  {ticket.chain.contentRef ? ticket.chain.contentRef : 'unavailable from support API'}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -355,7 +378,7 @@ export default function SupportTicketDetailClient() {
                 <span className="font-medium">{slaDueAt ? formatDate(slaDueAt) : '--'}</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                SLA timers are calculated locally and reconciled with Waldur status updates.
+                SLA timers use the live ticket timestamps returned by the portal API.
               </p>
             </CardContent>
           </Card>

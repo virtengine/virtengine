@@ -14,7 +14,6 @@
 package enclave_runtime
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -25,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	sevabi "github.com/virtengine/virtengine/pkg/enclave_runtime/sev"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -41,9 +41,9 @@ const (
 
 	// SEV-SNP ioctl commands
 	// These are the actual Linux kernel ioctl numbers for SEV-SNP guest operations
-	SNP_GET_REPORT      = 0xC0185300 // Get attestation report
-	SNP_GET_DERIVED_KEY = 0xC0405301 // Get derived key
-	SNP_GET_EXT_REPORT  = 0xC0285302 // Get extended report with certificates
+	SNP_GET_REPORT      = 0xC0205300 // Get attestation report
+	SNP_GET_DERIVED_KEY = 0xC0205301 // Get derived key
+	SNP_GET_EXT_REPORT  = 0xC0205302 // Get extended report with certificates
 
 	// SNP message types
 	SNP_MSG_REPORT_REQ = 5  // Request attestation report
@@ -234,10 +234,7 @@ func (d *SEVGuestDevice) Open() error {
 				Underlying: ErrPermissionDenied,
 			}
 		}
-		// Fall back to simulation
-		d.simulated = true
-		d.opened = true
-		return nil
+		return unavailableHardwareOperation(AttestationTypeSEVSNP, "open", d.devicePath, err)
 	}
 
 	d.fd = fd
@@ -347,26 +344,22 @@ func (r *SNPReportRequester) RequestReport(userData [64]byte, vmpl uint32) (*SNP
 
 // requestHardwareReport requests a report via ioctl
 func (r *SNPReportRequester) requestHardwareReport(userData [64]byte, vmpl uint32) (*SNPAttestationReport, error) {
-	// Build request
-	req := SNPReportRequest{
-		UserData: userData,
-		VMPL:     vmpl,
+	if r.device.fd == nil {
+		return nil, unsupportedHardwareOperation(AttestationTypeSEVSNP, "request report",
+			"SEV guest device is not opened for hardware execution")
 	}
 
-	// TODO: Real implementation would:
-	// 1. Serialize request to bytes
-	// 2. Call ioctl(fd, SNP_GET_REPORT, &request)
-	// 3. Parse response into SNPAttestationReport
-	//
-	// Example ioctl call (requires cgo or syscall):
-	// _, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-	//     r.device.fd.Fd(),
-	//     uintptr(SNP_GET_REPORT),
-	//     uintptr(unsafe.Pointer(&req)))
+	raw, err := requestSEVHardwareReport(r.device.fd, userData, vmpl)
+	if err != nil {
+		return nil, unavailableHardwareOperation(AttestationTypeSEVSNP, "request report", r.device.devicePath, err)
+	}
 
-	// For now, fall back to simulation
-	_ = req
-	return r.requestSimulatedReport(userData, vmpl)
+	report, err := sevabi.ParseReport(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SNP attestation report: %w", err)
+	}
+
+	return convertSEVReportToRuntime(report), nil
 }
 
 // requestSimulatedReport generates a simulated report
@@ -447,27 +440,17 @@ func (r *SNPDerivedKeyRequester) RequestKey(rootKey int, guestFieldSelect uint64
 
 // requestHardwareKey requests a key via ioctl
 func (r *SNPDerivedKeyRequester) requestHardwareKey(rootKey int, guestFieldSelect uint64, vmpl uint32) ([]byte, error) {
-	// Build request
-	req := SNPKeyRequest{
-		//nolint:gosec // G115: rootKey is 0 or 1 enum value
-		RootKeySelect:    uint32(rootKey),
-		GuestFieldSelect: guestFieldSelect,
-		VMPL:             vmpl,
+	if r.device.fd == nil {
+		return nil, unsupportedHardwareOperation(AttestationTypeSEVSNP, "request derived key",
+			"SEV guest device is not opened for hardware execution")
 	}
 
-	// TODO: Real implementation would:
-	// 1. Serialize request to bytes
-	// 2. Call ioctl(fd, SNP_GET_DERIVED_KEY, &request)
-	// 3. Parse response to get 32-byte key
-	//
-	// Example ioctl call (requires cgo or syscall):
-	// _, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-	//     r.device.fd.Fd(),
-	//     uintptr(SNP_GET_DERIVED_KEY),
-	//     uintptr(unsafe.Pointer(&req)))
+	key, err := requestSEVDerivedKey(r.device.fd, rootKey, guestFieldSelect, vmpl)
+	if err != nil {
+		return nil, unavailableHardwareOperation(AttestationTypeSEVSNP, "request derived key", r.device.devicePath, err)
+	}
 
-	_ = req
-	return r.requestSimulatedKey(rootKey, guestFieldSelect, vmpl)
+	return key, nil
 }
 
 // requestSimulatedKey generates a simulated derived key
@@ -523,13 +506,24 @@ func (r *SNPExtendedReportRequester) RequestExtendedReport(userData [64]byte, vm
 
 // requestHardwareExtendedReport requests an extended report via ioctl
 func (r *SNPExtendedReportRequester) requestHardwareExtendedReport(userData [64]byte, vmpl uint32) (*ExtendedReport, error) {
-	// TODO: Real implementation would:
-	// 1. Allocate a buffer for certificates (usually 4KB is enough)
-	// 2. Build SNPExtReportRequest with certificate buffer address
-	// 3. Call ioctl(fd, SNP_GET_EXT_REPORT, &request)
-	// 4. Parse response including certificate chain
+	reportReq := NewSNPReportRequester(r.device)
+	report, err := reportReq.requestHardwareReport(userData, vmpl)
+	if err != nil {
+		return nil, err
+	}
 
-	return r.requestSimulatedExtendedReport(userData, vmpl)
+	kdsClient := sevabi.NewKDSClient(nil)
+	chain, err := kdsClient.GetCertificateChain(report.ChipID[:], convertRuntimeTCBToSEV(report.CurrentTCB))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch AMD certificate chain: %w", err)
+	}
+
+	return &ExtendedReport{
+		Report:   report,
+		VCEKCert: append([]byte(nil), chain.VCEKRaw...),
+		ASKCert:  append([]byte(nil), chain.ASKRaw...),
+		ARKCert:  append([]byte(nil), chain.ARKRaw...),
+	}, nil
 }
 
 // requestSimulatedExtendedReport generates a simulated extended report
@@ -674,15 +668,12 @@ func (b *SEVHardwareBackend) GetAttestation(nonce []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to request SNP report: %w", err)
 	}
 
-	// Serialize report
-	var buf bytes.Buffer
-	_ = binary.Write(&buf, binary.LittleEndian, report.Version)
-	_ = binary.Write(&buf, binary.LittleEndian, report.GuestSVN)
-	buf.Write(report.LaunchDigest[:])
-	buf.Write(report.ReportData[:])
-	buf.Write(report.Signature[:])
+	serialized, err := sevabi.SerializeReport(convertRuntimeReportToSEV(report))
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize SNP report: %w", err)
+	}
 
-	return buf.Bytes(), nil
+	return serialized, nil
 }
 
 // DeriveKey derives a key from the SEV-SNP root of trust
@@ -708,6 +699,103 @@ func (b *SEVHardwareBackend) DeriveKey(context []byte, keySize int) ([]byte, err
 	}
 
 	return derived, nil
+}
+
+func convertSEVGuestPolicyToRuntime(policy sevabi.GuestPolicy) SNPGuestPolicy {
+	return SNPGuestPolicy{
+		ABIMinor:       policy.ABIMinor,
+		ABIMajor:       policy.ABIMajor,
+		SMT:            policy.SMT,
+		MigrationAgent: policy.Migration,
+		Debug:          policy.Debug,
+		SingleSocket:   policy.SingleSocket,
+	}
+}
+
+func convertRuntimeGuestPolicyToSEV(policy SNPGuestPolicy) sevabi.GuestPolicy {
+	return sevabi.GuestPolicy{
+		ABIMinor:     policy.ABIMinor,
+		ABIMajor:     policy.ABIMajor,
+		SMT:          policy.SMT,
+		Migration:    policy.MigrationAgent,
+		Debug:        policy.Debug,
+		SingleSocket: policy.SingleSocket,
+	}
+}
+
+func convertSEVTCBToRuntime(tcb sevabi.TCBVersion) SNPTCBVersion {
+	return SNPTCBVersion{
+		BootLoader: tcb.BootLoader,
+		TEE:        tcb.TEE,
+		Reserved:   tcb.Reserved,
+		SNP:        tcb.SNP,
+		Microcode:  tcb.Microcode,
+	}
+}
+
+func convertRuntimeTCBToSEV(tcb SNPTCBVersion) sevabi.TCBVersion {
+	return sevabi.TCBVersion{
+		BootLoader: tcb.BootLoader,
+		TEE:        tcb.TEE,
+		Reserved:   tcb.Reserved,
+		SNP:        tcb.SNP,
+		Microcode:  tcb.Microcode,
+	}
+}
+
+func convertSEVReportToRuntime(report *sevabi.AttestationReport) *SNPAttestationReport {
+	if report == nil {
+		return nil
+	}
+
+	return &SNPAttestationReport{
+		Version:          report.Version,
+		GuestSVN:         report.GuestSVN,
+		Policy:           convertSEVGuestPolicyToRuntime(report.Policy),
+		FamilyID:         report.FamilyID,
+		ImageID:          report.ImageID,
+		CurrentTCB:       convertSEVTCBToRuntime(report.CurrentTCB),
+		PlatformInfo:     report.PlatformInfo,
+		AuthorKeyEnabled: report.AuthorKeyEnabled,
+		LaunchDigest:     SNPLaunchDigest(report.LaunchDigest),
+		ReportData:       report.ReportData,
+		HostData:         report.HostData,
+		IDKeyDigest:      report.IDKeyDigest,
+		AuthorKeyDigest:  report.AuthorKeyDigest,
+		ReportID:         report.ReportID,
+		ReportIDMA:       report.ReportIDMA,
+		ReportedTCB:      convertSEVTCBToRuntime(report.ReportedTCB),
+		ChipID:           SNPChipID(report.ChipID),
+		Signature:        report.Signature,
+	}
+}
+
+func convertRuntimeReportToSEV(report *SNPAttestationReport) *sevabi.AttestationReport {
+	if report == nil {
+		return nil
+	}
+
+	return &sevabi.AttestationReport{
+		Version:          report.Version,
+		GuestSVN:         report.GuestSVN,
+		Policy:           convertRuntimeGuestPolicyToSEV(report.Policy),
+		FamilyID:         report.FamilyID,
+		ImageID:          report.ImageID,
+		SignatureAlgo:    sevabi.SigAlgoECDSAP384SHA384,
+		CurrentTCB:       convertRuntimeTCBToSEV(report.CurrentTCB),
+		PlatformInfo:     report.PlatformInfo,
+		AuthorKeyEnabled: report.AuthorKeyEnabled,
+		ReportData:       report.ReportData,
+		LaunchDigest:     [48]byte(report.LaunchDigest),
+		HostData:         report.HostData,
+		IDKeyDigest:      report.IDKeyDigest,
+		AuthorKeyDigest:  report.AuthorKeyDigest,
+		ReportID:         report.ReportID,
+		ReportIDMA:       report.ReportIDMA,
+		ReportedTCB:      convertRuntimeTCBToSEV(report.ReportedTCB),
+		ChipID:           [64]byte(report.ChipID),
+		Signature:        report.Signature,
+	}
 }
 
 // Seal encrypts data using SEV-SNP sealing

@@ -7,6 +7,7 @@ metadata:
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}
     app.kubernetes.io/component: compute
+    virtengine.com/node-pool: default
 spec:
   serviceName: {{ include "slurm-cluster.compute.serviceName" . }}
   replicas: {{ .Values.compute.replicas }}
@@ -15,11 +16,13 @@ spec:
     matchLabels:
       {{- include "slurm-cluster.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: compute
+      virtengine.com/node-pool: default
   template:
     metadata:
       labels:
         {{- include "slurm-cluster.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: compute
+        virtengine.com/node-pool: default
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -279,6 +282,7 @@ metadata:
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}
     app.kubernetes.io/component: compute
+    virtengine.com/node-pool: default
 spec:
   type: ClusterIP
   clusterIP: None
@@ -294,6 +298,7 @@ spec:
   selector:
     {{- include "slurm-cluster.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: compute
+    virtengine.com/node-pool: default
 ---
 {{- if .Values.nodeAgent.enabled }}
 apiVersion: v1

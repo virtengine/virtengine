@@ -8,15 +8,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
-	"github.com/google/uuid"
 	client "github.com/waldur/go-client"
 )
 
 // MarketplaceClient provides marketplace operations through Waldur
 type MarketplaceClient struct {
 	client *Client
+}
+
+type offeringResponse struct {
+	UUID        string    `json:"uuid"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Type        string    `json:"type"`
+	State       string    `json:"state"`
+	Category    string    `json:"category"`
+	Shared      bool      `json:"shared"`
+	Billable    bool      `json:"billable"`
+	CreatedAt   time.Time `json:"created"`
+	BackendID   string    `json:"backend_id"`
 }
 
 // NewMarketplaceClient creates a new marketplace client
@@ -86,76 +99,54 @@ type ListOfferingsParams struct {
 
 // ListOfferings lists marketplace offerings via Waldur
 func (m *MarketplaceClient) ListOfferings(ctx context.Context, params ListOfferingsParams) ([]Offering, error) {
-	var offerings []Offering
+	query := url.Values{}
+	if params.CustomerUUID != "" {
+		query.Set("customer_uuid", params.CustomerUUID)
+	}
+	if params.CategoryUUID != "" {
+		query.Set("category_uuid", params.CategoryUUID)
+	}
+	if params.Type != "" {
+		query.Set("type", params.Type)
+	}
+	if params.State != "" {
+		query.Set("state", params.State)
+	}
+	if params.Name != "" {
+		query.Set("name", params.Name)
+	}
+	if params.Shared != nil {
+		query.Set("shared", fmt.Sprintf("%t", *params.Shared))
+	}
+	if params.Page > 0 {
+		query.Set("page", fmt.Sprintf("%d", params.Page))
+	}
+	if params.PageSize > 0 {
+		query.Set("page_size", fmt.Sprintf("%d", params.PageSize))
+	}
 
-	err := m.client.doWithRetry(ctx, func() error {
-		apiParams := &client.MarketplacePublicOfferingsListParams{}
+	var raw []offeringResponse
+	if err := m.client.doWithRetry(ctx, func() error {
+		return m.client.getPaginated(ctx, buildQueryPath("/marketplace-public-offerings/", query), &raw)
+	}); err != nil {
+		return nil, err
+	}
 
-		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
-			apiParams.CustomerUuid = &u
-		}
-		if params.CategoryUUID != "" {
-			u := uuid.MustParse(params.CategoryUUID)
-			apiParams.CategoryUuid = &u
-		}
-		if params.Name != "" {
-			apiParams.Name = &params.Name
-		}
-		if params.Shared != nil {
-			apiParams.Shared = params.Shared
-		}
-		if params.Page > 0 {
-			page := client.Page(params.Page)
-			apiParams.Page = &page
-		}
-		if params.PageSize > 0 {
-			pageSize := client.PageSize(params.PageSize)
-			apiParams.PageSize = &pageSize
-		}
-
-		resp, err := m.client.api.MarketplacePublicOfferingsListWithResponse(ctx, apiParams)
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode() != http.StatusOK {
-			return mapHTTPError(resp.StatusCode(), resp.Body)
-		}
-
-		if resp.JSON200 == nil {
-			return ErrInvalidResponse
-		}
-
-		offerings = make([]Offering, 0, len(*resp.JSON200))
-		for _, o := range *resp.JSON200 {
-			offering := Offering{
-				Name:        safeString(o.Name),
-				Description: safeString(o.Description),
-				Type:        safeString(o.Type),
-			}
-			if o.Uuid != nil {
-				offering.UUID = o.Uuid.String()
-			}
-			if o.State != nil {
-				offering.State = string(*o.State)
-			}
-			if o.Shared != nil {
-				offering.Shared = *o.Shared
-			}
-			if o.Billable != nil {
-				offering.Billable = *o.Billable
-			}
-			if o.Created != nil {
-				offering.CreatedAt = *o.Created
-			}
-			offerings = append(offerings, offering)
-		}
-
-		return nil
-	})
-
-	return offerings, err
+	offerings := make([]Offering, 0, len(raw))
+	for _, item := range raw {
+		offerings = append(offerings, Offering{
+			UUID:        item.UUID,
+			Name:        item.Name,
+			Description: item.Description,
+			Type:        item.Type,
+			State:       item.State,
+			Category:    item.Category,
+			Shared:      item.Shared,
+			Billable:    item.Billable,
+			CreatedAt:   item.CreatedAt,
+		})
+	}
+	return offerings, nil
 }
 
 // GetOffering retrieves a specific marketplace offering
@@ -163,7 +154,10 @@ func (m *MarketplaceClient) GetOffering(ctx context.Context, offeringUUID string
 	var offering *Offering
 
 	err := m.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(offeringUUID)
+		uuidType, err := parseUUIDParam("offering UUID", offeringUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := m.client.api.MarketplacePublicOfferingsRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -217,72 +211,33 @@ type ListOrdersParams struct {
 
 // ListOrders lists marketplace orders via Waldur
 func (m *MarketplaceClient) ListOrders(ctx context.Context, params ListOrdersParams) ([]Order, error) {
+	query := url.Values{}
+	if params.ProjectUUID != "" {
+		query.Set("project_uuid", params.ProjectUUID)
+	}
+	if params.CustomerUUID != "" {
+		query.Set("customer_uuid", params.CustomerUUID)
+	}
+	if params.OfferingUUID != "" {
+		query.Set("offering_uuid", params.OfferingUUID)
+	}
+	if params.State != "" {
+		query.Set("state", params.State)
+	}
+	if params.Page > 0 {
+		query.Set("page", fmt.Sprintf("%d", params.Page))
+	}
+	if params.PageSize > 0 {
+		query.Set("page_size", fmt.Sprintf("%d", params.PageSize))
+	}
+
 	var orders []Order
-
-	err := m.client.doWithRetry(ctx, func() error {
-		apiParams := &client.MarketplaceOrdersListParams{}
-
-		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
-			apiParams.ProjectUuid = &u
-		}
-		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
-			apiParams.CustomerUuid = &u
-		}
-		if params.OfferingUUID != "" {
-			u := uuid.MustParse(params.OfferingUUID)
-			apiParams.OfferingUuid = &u
-		}
-		if params.Page > 0 {
-			page := client.Page(params.Page)
-			apiParams.Page = &page
-		}
-		if params.PageSize > 0 {
-			pageSize := client.PageSize(params.PageSize)
-			apiParams.PageSize = &pageSize
-		}
-
-		resp, err := m.client.api.MarketplaceOrdersListWithResponse(ctx, apiParams)
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode() != http.StatusOK {
-			return mapHTTPError(resp.StatusCode(), resp.Body)
-		}
-
-		if resp.JSON200 == nil {
-			return ErrInvalidResponse
-		}
-
-		orders = make([]Order, 0, len(*resp.JSON200))
-		for _, o := range *resp.JSON200 {
-			order := Order{
-				ErrorMessage: safeString(o.ErrorMessage),
-			}
-			if o.Uuid != nil {
-				order.UUID = o.Uuid.String()
-			}
-			if o.State != nil {
-				order.State = string(*o.State)
-			}
-			if o.Type != nil {
-				order.Type = string(*o.Type)
-			}
-			if o.ProjectUuid != nil {
-				order.ProjectUUID = o.ProjectUuid.String()
-			}
-			if o.Created != nil {
-				order.CreatedAt = *o.Created
-			}
-			orders = append(orders, order)
-		}
-
-		return nil
-	})
-
-	return orders, err
+	if err := m.client.doWithRetry(ctx, func() error {
+		return m.client.getPaginated(ctx, buildQueryPath("/marketplace-orders/", query), &orders)
+	}); err != nil {
+		return nil, err
+	}
+	return orders, nil
 }
 
 // GetOrder retrieves a specific marketplace order
@@ -290,7 +245,10 @@ func (m *MarketplaceClient) GetOrder(ctx context.Context, orderUUID string) (*Or
 	var order *Order
 
 	err := m.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(orderUUID)
+		uuidType, err := parseUUIDParam("order UUID", orderUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := m.client.api.MarketplaceOrdersRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -405,7 +363,10 @@ func (m *MarketplaceClient) ApproveOrderByProvider(ctx context.Context, orderUUI
 	}
 
 	return m.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(orderUUID)
+		uuidType, err := parseUUIDParam("order UUID", orderUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := m.client.api.MarketplaceOrdersApproveByProviderWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -424,7 +385,10 @@ func (m *MarketplaceClient) SetOrderBackendID(ctx context.Context, orderUUID str
 	}
 
 	return m.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(orderUUID)
+		uuidType, err := parseUUIDParam("order UUID", orderUUID)
+		if err != nil {
+			return err
+		}
 		body := client.MarketplaceOrdersSetBackendIdJSONRequestBody{
 			BackendId: &backendID,
 		}
@@ -446,7 +410,10 @@ func (m *MarketplaceClient) TerminateResource(ctx context.Context, resourceUUID 
 	}
 
 	return m.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(resourceUUID)
+		uuidType, err := parseUUIDParam("resource UUID", resourceUUID)
+		if err != nil {
+			return err
+		}
 		body := client.MarketplaceResourcesTerminateJSONRequestBody{}
 		if len(attributes) > 0 {
 			body.Attributes = attributes
@@ -507,73 +474,33 @@ type ListResourcesParams struct {
 
 // ListResources lists marketplace resources via Waldur
 func (m *MarketplaceClient) ListResources(ctx context.Context, params ListResourcesParams) ([]Resource, error) {
+	query := url.Values{}
+	if params.ProjectUUID != "" {
+		query.Set("project_uuid", params.ProjectUUID)
+	}
+	if params.CustomerUUID != "" {
+		query.Set("customer_uuid", params.CustomerUUID)
+	}
+	if params.OfferingUUID != "" {
+		query.Set("offering_uuid", params.OfferingUUID)
+	}
+	if params.State != "" {
+		query.Set("state", params.State)
+	}
+	if params.Page > 0 {
+		query.Set("page", fmt.Sprintf("%d", params.Page))
+	}
+	if params.PageSize > 0 {
+		query.Set("page_size", fmt.Sprintf("%d", params.PageSize))
+	}
+
 	var resources []Resource
-
-	err := m.client.doWithRetry(ctx, func() error {
-		apiParams := &client.MarketplaceResourcesListParams{}
-
-		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
-			apiParams.ProjectUuid = &u
-		}
-		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
-			apiParams.CustomerUuid = &u
-		}
-		if params.OfferingUUID != "" {
-			u := uuid.MustParse(params.OfferingUUID)
-			apiParams.OfferingUuid = &[]uuid.UUID{u}
-		}
-		if params.Page > 0 {
-			page := client.Page(params.Page)
-			apiParams.Page = &page
-		}
-		if params.PageSize > 0 {
-			pageSize := client.PageSize(params.PageSize)
-			apiParams.PageSize = &pageSize
-		}
-
-		resp, err := m.client.api.MarketplaceResourcesListWithResponse(ctx, apiParams)
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode() != http.StatusOK {
-			return mapHTTPError(resp.StatusCode(), resp.Body)
-		}
-
-		if resp.JSON200 == nil {
-			return ErrInvalidResponse
-		}
-
-		resources = make([]Resource, 0, len(*resp.JSON200))
-		for _, r := range *resp.JSON200 {
-			resource := Resource{
-				Name:         safeString(r.Name),
-				ResourceType: safeString(r.ResourceType),
-			}
-			if r.Uuid != nil {
-				resource.UUID = r.Uuid.String()
-			}
-			if r.State != nil {
-				resource.State = string(*r.State)
-			}
-			if r.OfferingUuid != nil {
-				resource.OfferingUUID = r.OfferingUuid.String()
-			}
-			if r.ProjectUuid != nil {
-				resource.ProjectUUID = r.ProjectUuid.String()
-			}
-			if r.Created != nil {
-				resource.CreatedAt = *r.Created
-			}
-			resources = append(resources, resource)
-		}
-
-		return nil
-	})
-
-	return resources, err
+	if err := m.client.doWithRetry(ctx, func() error {
+		return m.client.getPaginated(ctx, buildQueryPath("/marketplace-resources/", query), &resources)
+	}); err != nil {
+		return nil, err
+	}
+	return resources, nil
 }
 
 // GetResource retrieves a specific marketplace resource
@@ -581,7 +508,10 @@ func (m *MarketplaceClient) GetResource(ctx context.Context, resourceUUID string
 	var resource *Resource
 
 	err := m.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(resourceUUID)
+		uuidType, err := parseUUIDParam("resource UUID", resourceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := m.client.api.MarketplaceResourcesRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -924,37 +854,20 @@ func (m *MarketplaceClient) GetOfferingByBackendID(ctx context.Context, backendI
 	var offering *Offering
 
 	err := m.client.doWithRetry(ctx, func() error {
-		// Use raw HTTP request with backend_id query parameter
-		path := fmt.Sprintf("/marketplace-public-offerings/?backend_id=%s", backendID)
-		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
+		query := url.Values{}
+		query.Set("backend_id", backendID)
+		var offerings []offeringResponse
+		if err := m.client.getPaginated(ctx, buildQueryPath("/marketplace-public-offerings/", query), &offerings); err != nil {
 			return err
-		}
-
-		if statusCode != http.StatusOK {
-			return mapHTTPError(statusCode, respBody)
-		}
-
-		// Parse response - Waldur returns an array
-		var offerings []struct {
-			UUID        string    `json:"uuid"`
-			Name        string    `json:"name"`
-			Description string    `json:"description"`
-			Type        string    `json:"type"`
-			State       string    `json:"state"`
-			Shared      bool      `json:"shared"`
-			Billable    bool      `json:"billable"`
-			Created     time.Time `json:"created"`
-		}
-		if err := json.Unmarshal(respBody, &offerings); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
 		}
 
 		if len(offerings) == 0 {
 			return ErrNotFound
 		}
+		if len(offerings) > 1 {
+			return fmt.Errorf("%w: multiple offerings found for backend ID %s", ErrConflict, backendID)
+		}
 
-		// Return the first matching offering
 		o := offerings[0]
 		offering = &Offering{
 			UUID:        o.UUID,
@@ -962,9 +875,10 @@ func (m *MarketplaceClient) GetOfferingByBackendID(ctx context.Context, backendI
 			Description: o.Description,
 			Type:        o.Type,
 			State:       o.State,
+			Category:    o.Category,
 			Shared:      o.Shared,
 			Billable:    o.Billable,
-			CreatedAt:   o.Created,
+			CreatedAt:   o.CreatedAt,
 		}
 
 		return nil
@@ -997,42 +911,17 @@ func (m *MarketplaceClient) ListCategories(ctx context.Context, params ListCateg
 	var categories []Category
 
 	err := m.client.doWithRetry(ctx, func() error {
-		// Build query string
-		path := "/marketplace-categories/"
-		queryParams := []string{}
-
+		query := url.Values{}
 		if params.Title != "" {
-			queryParams = append(queryParams, fmt.Sprintf("title=%s", params.Title))
+			query.Set("title", params.Title)
 		}
 		if params.Page > 0 {
-			queryParams = append(queryParams, fmt.Sprintf("page=%d", params.Page))
+			query.Set("page", fmt.Sprintf("%d", params.Page))
 		}
 		if params.PageSize > 0 {
-			queryParams = append(queryParams, fmt.Sprintf("page_size=%d", params.PageSize))
+			query.Set("page_size", fmt.Sprintf("%d", params.PageSize))
 		}
-
-		if len(queryParams) > 0 {
-			path += "?" + joinQueryParams(queryParams)
-		}
-
-		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
-			return err
-		}
-
-		if statusCode != http.StatusOK {
-			return mapHTTPError(statusCode, respBody)
-		}
-
-		var resp struct {
-			Results []Category `json:"results"`
-		}
-		if err := json.Unmarshal(respBody, &resp); err != nil {
-			return fmt.Errorf("unmarshal categories: %w", err)
-		}
-		categories = resp.Results
-
-		return nil
+		return m.client.getPaginated(ctx, buildQueryPath("/marketplace-categories/", query), &categories)
 	})
 
 	return categories, err
@@ -1109,15 +998,4 @@ func (m *MarketplaceClient) EnsureCategory(ctx context.Context, req CreateCatego
 
 	// Create new category
 	return m.CreateCategory(ctx, req)
-}
-
-func joinQueryParams(params []string) string {
-	result := ""
-	for i, p := range params {
-		if i > 0 {
-			result += "&"
-		}
-		result += p
-	}
-	return result
 }

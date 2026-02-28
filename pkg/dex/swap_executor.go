@@ -214,14 +214,260 @@ func (e *swapExecutorImpl) findAllRoutes(ctx context.Context, request SwapReques
 		}
 	}
 
-	// TODO: Implement multi-hop route discovery across DEXes
-	// This would involve:
-	// 1. Finding all pools containing fromToken
-	// 2. Finding all pools containing toToken
-	// 3. Finding intermediate tokens that connect them
-	// 4. Building routes up to maxHops
+	if e.cfg.MaxHops <= 1 {
+		return dedupeRoutes(routes), nil
+	}
 
-	return routes, nil
+	pools, err := e.service.ListPools(ctx, PoolQuery{})
+	if err != nil {
+		return dedupeRoutes(routes), nil
+	}
+
+	switch request.Type {
+	case SwapTypeExactOut:
+		reverseVisited := map[string]struct{}{request.ToToken.Symbol: {}}
+		routes = append(routes, e.discoverExactOutRoutes(ctx, request, request.ToToken, request.FromToken, request.Amount, pools, reverseVisited, e.cfg.MaxHops)...)
+	default:
+		forwardVisited := map[string]struct{}{request.FromToken.Symbol: {}}
+		routes = append(routes, e.discoverExactInRoutes(ctx, request, request.FromToken, request.ToToken, request.Amount, pools, forwardVisited, e.cfg.MaxHops)...)
+	}
+
+	return dedupeRoutes(routes), nil
+}
+
+func (e *swapExecutorImpl) discoverExactInRoutes(
+	ctx context.Context,
+	baseRequest SwapRequest,
+	current Token,
+	target Token,
+	amountIn sdkmath.Int,
+	pools []LiquidityPool,
+	visited map[string]struct{},
+	remainingHops int,
+) []SwapRoute {
+	if remainingHops <= 0 {
+		return nil
+	}
+
+	var routes []SwapRoute
+	for _, edge := range findPoolEdges(pools, current.Symbol, visited) {
+		hopRequest := baseRequest
+		hopRequest.FromToken = current
+		hopRequest.ToToken = edge.ToToken
+		hopRequest.Amount = amountIn
+		hopRequest.Type = SwapTypeExactIn
+
+		segment, ok := e.quoteRouteSegment(ctx, hopRequest, remainingHops)
+		if !ok {
+			continue
+		}
+
+		if edge.ToToken.Symbol == target.Symbol {
+			routes = append(routes, segment)
+			continue
+		}
+
+		nextVisited := cloneVisitedTokens(visited)
+		nextVisited[edge.ToToken.Symbol] = struct{}{}
+		nextAmount := e.calculateRouteOutput(segment)
+		if !nextAmount.IsPositive() {
+			continue
+		}
+
+		childRoutes := e.discoverExactInRoutes(
+			ctx,
+			baseRequest,
+			edge.ToToken,
+			target,
+			nextAmount,
+			pools,
+			nextVisited,
+			remainingHops-len(segment.Hops),
+		)
+		for _, child := range childRoutes {
+			routes = append(routes, combineRoutes(segment, child))
+		}
+	}
+
+	return routes
+}
+
+func (e *swapExecutorImpl) discoverExactOutRoutes(
+	ctx context.Context,
+	baseRequest SwapRequest,
+	currentTarget Token,
+	source Token,
+	requiredOutput sdkmath.Int,
+	pools []LiquidityPool,
+	visited map[string]struct{},
+	remainingHops int,
+) []SwapRoute {
+	if remainingHops <= 0 {
+		return nil
+	}
+
+	var routes []SwapRoute
+	for _, edge := range findPoolEdges(pools, currentTarget.Symbol, visited) {
+		hopRequest := baseRequest
+		hopRequest.FromToken = edge.ToToken
+		hopRequest.ToToken = currentTarget
+		hopRequest.Amount = requiredOutput
+		hopRequest.Type = SwapTypeExactOut
+
+		segment, ok := e.quoteRouteSegment(ctx, hopRequest, remainingHops)
+		if !ok {
+			continue
+		}
+
+		requiredInput := e.calculateRouteInput(segment)
+		if !requiredInput.IsPositive() {
+			continue
+		}
+
+		if edge.ToToken.Symbol == source.Symbol {
+			routes = append(routes, segment)
+			continue
+		}
+
+		nextVisited := cloneVisitedTokens(visited)
+		nextVisited[edge.ToToken.Symbol] = struct{}{}
+
+		childRoutes := e.discoverExactOutRoutes(
+			ctx,
+			baseRequest,
+			edge.ToToken,
+			source,
+			requiredInput,
+			pools,
+			nextVisited,
+			remainingHops-len(segment.Hops),
+		)
+		for _, child := range childRoutes {
+			routes = append(routes, combineRoutes(child, segment))
+		}
+	}
+
+	return routes
+}
+
+func (e *swapExecutorImpl) quoteRouteSegment(ctx context.Context, request SwapRequest, remainingHops int) (SwapRoute, bool) {
+	adapter, err := e.service.GetAdapter(request.PreferredDEX)
+	if request.PreferredDEX != "" && err == nil && adapter != nil && !adapter.IsHealthy(ctx) {
+		return SwapRoute{}, false
+	}
+
+	if request.PreferredDEX != "" && err == nil && adapter != nil {
+		quote, quoteErr := adapter.GetSwapQuote(ctx, request)
+		if quoteErr != nil || len(quote.Route.Hops) == 0 || len(quote.Route.Hops) > remainingHops {
+			return SwapRoute{}, false
+		}
+		return quote.Route, true
+	}
+
+	adapters := e.service.getHealthyAdapters(ctx)
+	for _, adapter := range adapters {
+		quote, quoteErr := adapter.GetSwapQuote(ctx, request)
+		if quoteErr != nil || len(quote.Route.Hops) == 0 || len(quote.Route.Hops) > remainingHops {
+			continue
+		}
+		return quote.Route, true
+	}
+
+	return SwapRoute{}, false
+}
+
+type poolEdge struct {
+	ToToken Token
+}
+
+func findPoolEdges(pools []LiquidityPool, currentSymbol string, visited map[string]struct{}) []poolEdge {
+	var edges []poolEdge
+	seen := make(map[string]struct{})
+
+	for _, pool := range pools {
+		if !poolContainsToken(pool, currentSymbol) {
+			continue
+		}
+
+		for _, token := range pool.Tokens {
+			if token.Symbol == currentSymbol {
+				continue
+			}
+			if _, alreadyVisited := visited[token.Symbol]; alreadyVisited {
+				continue
+			}
+			key := currentSymbol + "->" + token.Symbol
+			if _, duplicate := seen[key]; duplicate {
+				continue
+			}
+			seen[key] = struct{}{}
+			edges = append(edges, poolEdge{ToToken: token})
+		}
+	}
+
+	return edges
+}
+
+func poolContainsToken(pool LiquidityPool, symbol string) bool {
+	for _, token := range pool.Tokens {
+		if token.Symbol == symbol {
+			return true
+		}
+	}
+
+	return false
+}
+
+func cloneVisitedTokens(visited map[string]struct{}) map[string]struct{} {
+	next := make(map[string]struct{}, len(visited)+1)
+	for key := range visited {
+		next[key] = struct{}{}
+	}
+	return next
+}
+
+func combineRoutes(left, right SwapRoute) SwapRoute {
+	hops := make([]SwapHop, 0, len(left.Hops)+len(right.Hops))
+	hops = append(hops, left.Hops...)
+	hops = append(hops, right.Hops...)
+
+	return SwapRoute{
+		Hops:        hops,
+		TotalGas:    left.TotalGas + right.TotalGas,
+		PriceImpact: left.PriceImpact + right.PriceImpact,
+	}
+}
+
+func dedupeRoutes(routes []SwapRoute) []SwapRoute {
+	seen := make(map[string]struct{}, len(routes))
+	deduped := make([]SwapRoute, 0, len(routes))
+
+	for _, route := range routes {
+		key := routeSignature(route)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, route)
+	}
+
+	return deduped
+}
+
+func routeSignature(route SwapRoute) string {
+	signature := fmt.Sprintf("gas:%d:impact:%0.6f", route.TotalGas, route.PriceImpact)
+	for _, hop := range route.Hops {
+		signature += fmt.Sprintf("|%s:%s:%s>%s:%s:%s",
+			hop.DEX,
+			hop.PoolID,
+			hop.FromToken.Symbol,
+			hop.ToToken.Symbol,
+			hop.AmountIn.String(),
+			hop.AmountOut.String(),
+		)
+	}
+
+	return signature
 }
 
 // calculateRouteOutput calculates the total output amount from a route

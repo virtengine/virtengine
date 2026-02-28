@@ -356,6 +356,7 @@ func createTestConfig() HPCConfig {
 	config := DefaultHPCConfig()
 	config.Enabled = true
 	config.ClusterID = "cluster-test"
+	config.ProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
 	config.JobService.JobPollInterval = 100 * time.Millisecond
 	config.UsageReporting.ReportInterval = 100 * time.Millisecond
 	config.Retry.MaxRetries = 2
@@ -387,6 +388,7 @@ func TestHPCConfig_Validate(t *testing.T) {
 				c := DefaultHPCConfig()
 				c.Enabled = true
 				c.ClusterID = testClusterID
+				c.ProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
 				return c
 			}(),
 			wantErr: false,
@@ -407,6 +409,7 @@ func TestHPCConfig_Validate(t *testing.T) {
 				c := DefaultHPCConfig()
 				c.Enabled = true
 				c.ClusterID = "test"
+				c.ProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
 				c.SchedulerType = "invalid"
 				return c
 			}(),

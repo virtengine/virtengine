@@ -2,8 +2,6 @@ package participant
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/consensys/gnark/backend/groth16/bn254/mpcsetup"
@@ -32,7 +30,7 @@ func (c *Client) ContributePhase1(payload []byte) ([]byte, string, error) {
 	if _, err := phase.WriteTo(&buf); err != nil {
 		return nil, "", fmt.Errorf("serialize phase1: %w", err)
 	}
-	signature, err := c.signPayload("phase1", buf.Bytes())
+	signature, err := c.SignContribution("phase1", payload, buf.Bytes())
 	if err != nil {
 		return nil, "", err
 	}
@@ -50,15 +48,9 @@ func (c *Client) ContributePhase2(payload []byte) ([]byte, string, error) {
 	if _, err := phase.WriteTo(&buf); err != nil {
 		return nil, "", fmt.Errorf("serialize phase2: %w", err)
 	}
-	signature, err := c.signPayload("phase2", buf.Bytes())
+	signature, err := c.SignContribution("phase2", payload, buf.Bytes())
 	if err != nil {
 		return nil, "", err
 	}
 	return buf.Bytes(), signature, nil
-}
-
-func (c *Client) signPayload(phase string, payload []byte) (string, error) {
-	hash := sha256.Sum256(payload)
-	message := []byte(phase + ":" + hex.EncodeToString(hash[:]))
-	return c.Identity.Sign(message)
 }

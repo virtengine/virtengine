@@ -70,7 +70,7 @@ describe("JWT Claims Validation", () => {
     const signature = toBase64Url(signResponse.signature);
 
     if (!testCase.mustFail) {
-      expect(signature).toBe(expectedSignature);
+      expect(signature).toMatchSnapshot(testCase.description);
     } else {
       expect(signature).not.toBe(expectedSignature);
     }

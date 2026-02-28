@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/Select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import type { EscrowAccount, FiatRates } from './data';
-import { formatFiat, formatToken } from './utils';
+import { formatFiatEstimates, formatToken } from './utils';
 
 interface DepositModalProps {
   open: boolean;
@@ -43,10 +43,11 @@ export function DepositModal({ open, onOpenChange, account, fiatRates }: Deposit
   const [submitted, setSubmitted] = useState(false);
 
   const numericAmount = useMemo(() => Number(amount), [amount]);
+  const fiatEstimates = formatFiatEstimates(numericAmount, fiatRates);
   const amountError =
     !amount || Number.isNaN(numericAmount) || numericAmount < MIN_DEPOSIT
       ? `Minimum deposit is ${MIN_DEPOSIT} ${account.currency}`
-      : numericAmount > account.walletBalance
+      : source === 'wallet' && account.walletBalance > 0 && numericAmount > account.walletBalance
         ? 'Amount exceeds available wallet balance'
         : '';
 
@@ -90,8 +91,9 @@ export function DepositModal({ open, onOpenChange, account, fiatRates }: Deposit
               <p className="text-xs text-destructive">{amountError}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {formatFiat(numericAmount * fiatRates.usd, 'USD')} USD ·{' '}
-                {formatFiat(numericAmount * fiatRates.eur, 'EUR')} EUR
+                {fiatEstimates.length > 0
+                  ? fiatEstimates.join(' · ')
+                  : 'Live fiat conversion unavailable'}
               </p>
             )}
           </div>
@@ -104,7 +106,10 @@ export function DepositModal({ open, onOpenChange, account, fiatRates }: Deposit
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="wallet">
-                  Wallet balance ({formatToken(account.walletBalance, account.currency)})
+                  Connected wallet
+                  {account.walletBalance > 0
+                    ? ` (${formatToken(account.walletBalance, account.currency)})`
+                    : ' (balance confirmed during signing)'}
                 </SelectItem>
                 <SelectItem value="wire">Wire transfer (1-2 days)</SelectItem>
                 <SelectItem value="card">Card top-up (instant)</SelectItem>

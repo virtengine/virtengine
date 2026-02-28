@@ -5,7 +5,10 @@
 
 package notifications
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Service defines the notification service contract.
 type Service interface {
@@ -38,6 +41,12 @@ type DeviceTokenStore interface {
 	Register(ctx context.Context, device DeviceToken) error
 	Unregister(ctx context.Context, userAddr, token string) error
 	List(ctx context.Context, userAddr string) ([]DeviceToken, error)
+}
+
+// DeviceDeliveryRecorder tracks delivery state for registered device tokens.
+type DeviceDeliveryRecorder interface {
+	RecordDeliverySuccess(ctx context.Context, userAddr, token string, deliveredAt time.Time) error
+	RecordDeliveryFailure(ctx context.Context, userAddr, token, reason string, failedAt time.Time, disable bool) error
 }
 
 // PushClient delivers push notifications.

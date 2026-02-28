@@ -217,6 +217,35 @@ func TestNewBenchmarkDaemon(t *testing.T) {
 	}
 }
 
+func TestRunLocalBenchmark(t *testing.T) {
+	config := BenchmarkDaemonConfig{
+		ProviderAddress:  "cosmos1test",
+		ClusterID:        "cluster-1",
+		ScheduleInterval: time.Hour,
+		ChainEndpoint:    "http://localhost:26657",
+	}
+
+	result, err := RunLocalBenchmark(context.Background(), config, newMockBenchmarkRunner())
+	if err != nil {
+		t.Fatalf("RunLocalBenchmark() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("RunLocalBenchmark() returned nil result")
+	}
+	if !result.Success {
+		t.Fatalf("RunLocalBenchmark() success = false, error = %s", result.Error)
+	}
+	if result.Submitted {
+		t.Fatal("RunLocalBenchmark() should not mark local-only results as submitted")
+	}
+	if result.Metrics == nil {
+		t.Fatal("RunLocalBenchmark() returned nil metrics")
+	}
+	if result.SummaryScore == 0 {
+		t.Fatal("RunLocalBenchmark() summary score should be populated")
+	}
+}
+
 func TestBenchmarkDaemon_StartStop(t *testing.T) {
 	config := BenchmarkDaemonConfig{
 		ProviderAddress:        "cosmos1test",

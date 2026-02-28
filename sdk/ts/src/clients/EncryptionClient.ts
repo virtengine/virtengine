@@ -1,9 +1,9 @@
+import type { QueryValidateEnvelopeResponse } from "../generated/protos/virtengine/encryption/v1/query.ts";
+import type { EncryptedPayloadEnvelope, RecipientKeyRecord } from "../generated/protos/virtengine/encryption/v1/types.ts";
+import type { TxCallOptions } from "../sdk/transport/types.ts";
 import { BaseClient, type ClientOptions } from "./BaseClient.ts";
 import type { ChainNodeSDK, ClientTxResult } from "./types.ts";
 import { withTxResult } from "./types.ts";
-import type { EncryptedPayloadEnvelope, RecipientKeyRecord } from "../generated/protos/virtengine/encryption/v1/types.ts";
-import type { QueryValidateEnvelopeResponse } from "../generated/protos/virtengine/encryption/v1/query.ts";
-import type { TxCallOptions } from "../sdk/transport/types.ts";
 
 export interface EncryptionClientDeps {
   sdk: ChainNodeSDK;

@@ -5,10 +5,12 @@
 
 'use client';
 
+import { useEffect } from 'react';
 import { useSupportStore, type SupportTicket, type SupportSyncStatus } from '@/stores/supportStore';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { formatRelativeTime } from '@/lib/utils';
+import { useWallet } from '@/lib/portal-adapter';
 
 function getPriorityVariant(priority: SupportTicket['priority']) {
   switch (priority) {
@@ -114,10 +116,22 @@ function TicketRow({ ticket }: { ticket: SupportTicket }) {
 }
 
 export default function ProviderTickets() {
-  const tickets = useSupportStore((s) => s.tickets);
+  const { tickets, fetchSupportData, isLoading, error } = useSupportStore();
+  const wallet = useWallet();
+  const account = wallet.accounts[wallet.activeAccountIndex];
+
+  useEffect(() => {
+    if (!account?.address) return;
+    void fetchSupportData(account.address);
+  }, [account?.address, fetchSupportData]);
 
   const providerTickets = tickets.filter(
-    (t) => t.category === 'provider' || t.category === 'technical' || t.category === 'billing'
+    (t) =>
+      (t.provider.address === account?.address ||
+        t.category === 'provider' ||
+        t.category === 'technical' ||
+        t.category === 'billing') &&
+      t.provider.address !== ''
   );
 
   const openCount = providerTickets.filter(
@@ -135,8 +149,11 @@ export default function ProviderTickets() {
         </div>
       </CardHeader>
       <CardContent>
+        {error && <div className="pb-3 text-sm text-rose-600">{error}</div>}
         {providerTickets.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">No support tickets</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {isLoading ? 'Loading support tickets…' : 'No support tickets'}
+          </div>
         ) : (
           <div className="space-y-3">
             {providerTickets.map((ticket) => (

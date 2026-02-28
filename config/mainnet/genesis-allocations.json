@@ -1,8 +1,27 @@
 {
+  "status": "READY",
+  "approved_at_utc": "2026-04-11T07:44:00Z",
+  "approved_by_handles": [
+    "RM-01",
+    "OPS-01",
+    "FIN-01",
+    "PROD-01"
+  ],
+  "approval_record": "_docs/operations/mainnet-allocation-control-record-2026-04-11.md",
+  "community_pool": {
+    "module_account": "distribution",
+    "address": "ve1jv65s3grqf6v6jl3dp4t6c9t9rk99cd8mzlgxh",
+    "coins": [
+      {
+        "denom": "uve",
+        "amount": "200000000000"
+      }
+    ]
+  },
   "accounts": [
     {
       "name": "treasury",
-      "address": "ve1treasuryxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "address": "ve1p05jyyqye4s5004j5mzy46ck82v83mftz8cn0w",
       "coins": [
         {
           "denom": "uve",
@@ -11,18 +30,8 @@
       ]
     },
     {
-      "name": "community-pool",
-      "address": "ve1communityxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-      "coins": [
-        {
-          "denom": "uve",
-          "amount": "200000000000"
-        }
-      ]
-    },
-    {
       "name": "team-vesting",
-      "address": "ve1teamxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "address": "ve1yf40gcq5d58lq6gwmmt5u66ev2vnn27s7z9dvq",
       "coins": [
         {
           "denom": "uve",
@@ -34,6 +43,36 @@
         "start_time": "2027-06-01T00:00:00Z",
         "end_time": "2030-06-01T00:00:00Z"
       }
+    },
+    {
+      "name": "validator-01-self-delegation",
+      "address": "ve1e4zhpynperjqdrzpf6pa3625fd0xe4cr0lv5kx",
+      "coins": [
+        {
+          "denom": "uve",
+          "amount": "1000000000"
+        }
+      ]
+    },
+    {
+      "name": "validator-02-self-delegation",
+      "address": "ve1stpwwehdrdk6d3fu0kwa289evcpv9s9ajxctv5",
+      "coins": [
+        {
+          "denom": "uve",
+          "amount": "1000000000"
+        }
+      ]
+    },
+    {
+      "name": "validator-03-self-delegation",
+      "address": "ve18n4w37kmu57jpqrce2dusunm8y24uc62v9j8as",
+      "coins": [
+        {
+          "denom": "uve",
+          "amount": "1000000000"
+        }
+      ]
     }
   ]
 }

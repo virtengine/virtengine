@@ -9,64 +9,84 @@ defaults:
     shell: bash
 
 on:
-  # Only run on main/tags, not every PR (too heavy)
+  workflow_call:
+  workflow_dispatch:
   push:
     branches:
       - main
       - mainnet/main
     tags:
       - v*
-  # For PRs, only run if proto files change
   pull_request:
     paths:
-      - "**.proto"
+      - "**/*.proto"
+      - "api/**"
+      - "pkg/compatibility/**"
+      - "docs/COMPATIBILITY.md"
+      - "**/types/*.go"
+      - "**/keeper/*.go"
+      - ".github/workflows/compatibility.yaml"
+
+concurrency:
+  group: compatibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  GOWORK: "off" # Disable workspace mode for vendor operations
+  GOWORK: "off"
   GO_TEST_TIMEOUT_UNIT: "30m"
+  BUF_VERSION: "v1.50.0"
 
 jobs:
-  # Run proto breaking change detection
   proto-breaking:
+    name: Proto Breaking Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+
+      - name: Install buf
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@${{ env.BUF_VERSION }}
+          echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
+
       - name: Sync dependencies
         run: |
           go mod tidy
           go mod vendor
+
       - name: Check proto breaking changes
         run: |
-          # Get the base branch for comparison
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_REF="${{ github.base_ref }}"
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            base_ref="origin/${{ github.base_ref }}"
           else
-            BASE_REF="HEAD~1"
-          fi
-          echo "Checking for breaking changes against $BASE_REF"
-
-          # Run buf breaking change detection if available
-          if command -v buf &> /dev/null; then
-            buf breaking --against ".git#ref=$BASE_REF" || true
+            base_ref="HEAD~1"
           fi
 
-  # Run compatibility tests
+          echo "Checking for breaking changes against ${base_ref}"
+          buf breaking --against ".git#ref=${base_ref}"
+
   compatibility-tests:
+    name: Compatibility Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+
       - name: Sync dependencies
         run: |
           go mod tidy
           go mod vendor
+
       - name: Run compatibility tests
         run: make test-compatibility
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,104 +95,112 @@ jobs:
           path: |
             test-results/
             coverage-compatibility.txt
-          retention-days: 7
+          retention-days: 14
 
-  # Verify API version compatibility
   api-version-check:
+    name: API Version Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+
       - name: Sync dependencies
         run: |
           go mod tidy
           go mod vendor
+
       - name: Check API version changes
         run: |
-          # Check for new/changed API versions
-          echo "Checking API version declarations..."
-
-          # Find all types.go files that might define API versions
-          changed_files=$(git diff --name-only ${{ github.event.before || 'HEAD~1' }} HEAD -- '*/types/*.go' '*/keeper/*.go' || true)
-
-          if [ -n "$changed_files" ]; then
-            echo "Changed API files:"
-            echo "$changed_files"
-            
-            # Check for removed methods (potential breaking changes)
-            for file in $changed_files; do
-              if [ -f "$file" ]; then
-                echo "Checking $file for potential breaking changes..."
-                # Look for function/method removals in the diff
-                git diff ${{ github.event.before || 'HEAD~1' }} HEAD -- "$file" | grep -E "^-func" || true
-              fi
-            done
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            diff_base="origin/${{ github.base_ref }}"
           else
-            echo "No API files changed"
+            diff_base="${{ github.event.before || 'HEAD~1' }}"
           fi
 
-  # Check deprecation compliance
+          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' || true)
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No API surface files changed"
+            exit 0
+          fi
+
+          echo "Changed API files:"
+          printf '%s\n' "${changed_files[@]}"
+
+          removed_symbols="$(git diff "${diff_base}" HEAD -- "${changed_files[@]}" | grep -E '^-func ' || true)"
+          if [ -n "${removed_symbols}" ]; then
+            echo "::error::Potential API removals detected:"
+            printf '%s\n' "${removed_symbols}"
+            exit 1
+          fi
+
+          echo "No removed public functions detected in changed API files"
+
   deprecation-compliance:
+    name: Deprecation Compliance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+
       - name: Sync dependencies
         run: |
           go mod tidy
           go mod vendor
+
       - name: Check deprecation annotations
         run: |
-          # Check that deprecated code has proper annotations
-          echo "Checking for deprecated code with proper annotations..."
+          deprecated_count=$(grep -R "Deprecated:" --include="*.go" --exclude-dir=vendor --exclude-dir=.bosun . | wc -l || echo "0")
+          echo "Found ${deprecated_count} deprecated items outside vendor and worktree mirrors"
 
-          # Find deprecated markers and ensure they have successor info
-          deprecated_count=$(grep -r "Deprecated:" --include="*.go" . | wc -l || echo "0")
-          echo "Found $deprecated_count deprecated items"
-
-          # Check for deprecated without version
-          missing_version=$(grep -r "Deprecated:" --include="*.go" . | grep -v "v[0-9]" | head -5 || true)
-          if [ -n "$missing_version" ]; then
-            echo "Warning: Some deprecated items may be missing version information:"
-            echo "$missing_version"
+          missing_version=$(grep -R "Deprecated:" --include="*.go" --exclude-dir=vendor --exclude-dir=.bosun . | grep -v "v[0-9]" | head -5 || true)
+          if [ -n "${missing_version}" ]; then
+            echo "::warning::Some deprecated items may be missing explicit version information:"
+            printf '%s\n' "${missing_version}"
           fi
 
-  # Validate version support matrix
   version-matrix-validation:
+    name: Version Matrix Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+
       - name: Sync dependencies
         run: |
           go mod tidy
           go mod vendor
+
       - name: Validate compatibility matrix
         run: |
-          # Run the compatibility matrix validation
-          go test -v -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
-            ./pkg/compatibility/... -run TestCompatibilityMatrix || true
+          go test -v -timeout "${GO_TEST_TIMEOUT_UNIT}" \
+            ./tests/compatibility/... -run TestCompatibilityMatrixLookup
 
-          # Check that COMPATIBILITY.md is up to date
-          if [ -f "docs/COMPATIBILITY.md" ]; then
-            echo "COMPATIBILITY.md found"
-            # Check that it contains version information
-            if grep -q "Version Support" docs/COMPATIBILITY.md; then
-              echo "Version support information present"
-            else
-              echo "Warning: COMPATIBILITY.md may be missing version support information"
-            fi
-          else
-            echo "Warning: docs/COMPATIBILITY.md not found"
+          if [ ! -f "docs/COMPATIBILITY.md" ]; then
+            echo "::error::docs/COMPATIBILITY.md not found"
+            exit 1
           fi
 
-  # Integration: Only run full compatibility suite on releases
+          grep -q "## Repository API Surface" docs/COMPATIBILITY.md || {
+            echo "::error::docs/COMPATIBILITY.md is missing the Repository API Surface section"
+            exit 1
+          }
+
+          grep -q "## Compatibility Commitment" docs/COMPATIBILITY.md || {
+            echo "::error::docs/COMPATIBILITY.md is missing the Compatibility Commitment section"
+            exit 1
+          }
+
   full-compatibility-suite:
+    name: Full Compatibility Suite
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
@@ -183,28 +211,39 @@ jobs:
       - version-matrix-validation
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+
       - name: Sync dependencies
         run: |
           go mod tidy
           go mod vendor
+
       - name: Run full compatibility suite
         run: |
-          echo "Running full compatibility test suite for release..."
+          echo "Running full compatibility suite for ${GITHUB_REF_NAME}"
           make test-compatibility-full
+
       - name: Generate compatibility report
         run: |
-          echo "# Compatibility Report" > compatibility-report.md
-          echo "" >> compatibility-report.md
-          echo "## Release: ${{ github.ref_name }}" >> compatibility-report.md
-          echo "" >> compatibility-report.md
-          echo "### Test Results" >> compatibility-report.md
-          echo "- Proto breaking: ✅ Passed" >> compatibility-report.md
-          echo "- Compatibility tests: ✅ Passed" >> compatibility-report.md
-          echo "- API version check: ✅ Passed" >> compatibility-report.md
-          echo "- Deprecation compliance: ✅ Passed" >> compatibility-report.md
-          echo "- Version matrix: ✅ Passed" >> compatibility-report.md
+          cat > compatibility-report.md <<EOF
+          # Compatibility Report
+
+          ## Release
+
+          ${GITHUB_REF_NAME}
+
+          ## Required Gates
+
+          - Proto breaking: passed
+          - Compatibility tests: passed
+          - API version check: passed
+          - Deprecation compliance: completed
+          - Version matrix validation: passed
+          - Full compatibility suite: passed
+          EOF
+
       - name: Upload compatibility report
         uses: actions/upload-artifact@v4
         with:

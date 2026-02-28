@@ -186,7 +186,7 @@ func (uk *usagePipelineKeeper) SubmitUsageReport(ctx sdk.Context, report *UsageR
 	var primaryUnitPrice sdk.DecCoin
 	for _, res := range report.Resources {
 		aggregateQuantity = aggregateQuantity.Add(res.Quantity)
-		if primaryUnitPrice.IsZero() {
+		if primaryUnitPrice.Denom == "" {
 			primaryUnitPrice = res.UnitPrice
 		}
 	}

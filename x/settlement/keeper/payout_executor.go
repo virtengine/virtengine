@@ -630,6 +630,32 @@ func (k Keeper) ReleasePayoutHold(ctx sdk.Context, payoutID string) error {
 	return k.ExecutePayoutByID(ctx, payoutID)
 }
 
+func (k Keeper) cancelPayoutFiatConversion(ctx sdk.Context, payout types.PayoutRecord, reason string) error {
+	if payout.FiatConversionID == "" {
+		return nil
+	}
+
+	conversion, found := k.GetFiatConversion(ctx, payout.FiatConversionID)
+	if !found || conversion.State.IsTerminal() {
+		return nil
+	}
+
+	if conversion.OffRampID != "" && k.offRampBridge != nil {
+		if err := k.offRampBridge.Cancel(ctx, conversion.OffRampID); err != nil {
+			return err
+		}
+	}
+
+	if err := conversion.MarkCancelled(reason, ctx.BlockTime()); err != nil {
+		return err
+	}
+	conversion.AddAuditEntry("payout_cancelled", "system", reason, map[string]string{
+		"payout_id": payout.PayoutID,
+	}, ctx.BlockTime())
+
+	return k.SetFiatConversion(ctx, conversion)
+}
+
 // RefundPayout refunds a held payout to the customer
 func (k Keeper) RefundPayout(ctx sdk.Context, payoutID string, reason string) error {
 	payout, found := k.GetPayout(ctx, payoutID)
@@ -642,6 +668,10 @@ func (k Keeper) RefundPayout(ctx sdk.Context, payoutID string, reason string) er
 	}
 
 	oldState := payout.State
+
+	if err := k.cancelPayoutFiatConversion(ctx, payout, reason); err != nil {
+		return types.ErrPayoutExecutionFailed.Wrap(err.Error())
+	}
 
 	// Get customer address
 	customer, err := sdk.AccAddressFromBech32(payout.Customer)
@@ -674,9 +704,6 @@ func (k Keeper) RefundPayout(ctx sdk.Context, payoutID string, reason string) er
 	k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryRefunded,
 		oldState, types.PayoutStateRefunded,
 		payout.GrossAmount, fmt.Sprintf("payout refunded: %s", reason), "dispute_resolution")
-
-	// Record treasury refund
-	k.recordTreasuryEntry(ctx, &payout, types.TreasuryRecordRefund, payout.GrossAmount)
 
 	// Emit event
 	if err := ctx.EventManager().EmitTypedEvent(&types.EventPayoutRefunded{
@@ -1001,11 +1028,14 @@ func (k Keeper) OnDisputeResolved(ctx sdk.Context, invoiceID string, resolution 
 			return types.ErrPayoutExecutionFailed.Wrap(err.Error())
 		}
 
+		payout.HoldbackAmount = sdk.NewCoins()
+		if err := k.SetPayout(ctx, payout); err != nil {
+			return err
+		}
+
 		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryRefunded,
 			payout.State, payout.State,
 			refundAmount, "partial refund issued", "dispute_resolution")
-
-		k.recordTreasuryEntry(ctx, &payout, types.TreasuryRecordRefund, refundAmount)
 
 		if err := ctx.EventManager().EmitTypedEvent(&types.EventPayoutRefunded{
 			PayoutID:   payout.PayoutID,

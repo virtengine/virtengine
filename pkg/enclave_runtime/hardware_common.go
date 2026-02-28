@@ -170,7 +170,7 @@ func detectHardwareInternal() *HardwareCapabilities {
 	// Detect Nitro
 	detectNitroCapabilities(caps)
 
-	// Determine preferred backend (priority: SGX > SEV-SNP > Nitro > Simulated)
+	// Determine preferred backend (priority: SEV-SNP > Nitro > SGX > Simulated)
 	caps.PreferredBackend = determinePreferredBackend(caps)
 
 	return caps
@@ -178,15 +178,14 @@ func detectHardwareInternal() *HardwareCapabilities {
 
 // determinePreferredBackend selects the best available TEE platform
 func determinePreferredBackend(caps *HardwareCapabilities) AttestationType {
-	// Priority order based on security properties and maturity
-	if caps.SGXAvailable && caps.SGXFLCSupported {
-		return AttestationTypeSGX
-	}
 	if caps.SEVSNPAvailable {
 		return AttestationTypeSEVSNP
 	}
 	if caps.NitroAvailable {
 		return AttestationTypeNitro
+	}
+	if caps.SGXAvailable && caps.SGXFLCSupported {
+		return AttestationTypeSGX
 	}
 	if caps.SGXAvailable {
 		// SGX without FLC (legacy EPID attestation)
@@ -207,6 +206,10 @@ var ErrHardwareNotInitialized = errors.New("TEE hardware not initialized")
 
 // ErrHardwareOperationFailed is returned when a hardware operation fails
 var ErrHardwareOperationFailed = errors.New("TEE hardware operation failed")
+
+// ErrHardwareOperationUnsupported is returned when a hardware-selected runtime
+// reaches an operation that has not yet been wired to the platform backend.
+var ErrHardwareOperationUnsupported = errors.New("TEE hardware operation unsupported")
 
 // ErrDeviceNotFound is returned when a required device file is not found
 var ErrDeviceNotFound = errors.New("TEE device not found")
@@ -235,6 +238,31 @@ func (e *HardwareError) Error() string {
 // Unwrap returns the underlying error
 func (e *HardwareError) Unwrap() error {
 	return e.Underlying
+}
+
+func unsupportedHardwareOperation(platform AttestationType, operation, detail string) error {
+	underlying := ErrHardwareOperationUnsupported
+	if detail != "" {
+		underlying = fmt.Errorf("%w: %s", ErrHardwareOperationUnsupported, detail)
+	}
+	return &HardwareError{
+		Platform:   platform,
+		Operation:  operation,
+		Underlying: underlying,
+	}
+}
+
+func unavailableHardwareOperation(platform AttestationType, operation, devicePath string, err error) error {
+	underlying := err
+	if underlying == nil {
+		underlying = ErrHardwareNotAvailable
+	}
+	return &HardwareError{
+		Platform:   platform,
+		Operation:  operation,
+		Underlying: underlying,
+		DevicePath: devicePath,
+	}
 }
 
 // =============================================================================

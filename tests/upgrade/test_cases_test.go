@@ -8,11 +8,12 @@ import (
 	"cosmossdk.io/log"
 	"github.com/stretchr/testify/require"
 
-	"github.com/virtengine/virtengine/testutil/state"
+	apptypes "github.com/virtengine/virtengine/app/types"
+	_ "github.com/virtengine/virtengine/upgrades"
 	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
-type testCase struct {
+type upgradeMatrixCase struct {
 	Modules struct {
 		Added   []string `json:"added"`
 		Removed []string `json:"removed"`
@@ -31,9 +32,6 @@ func TestUpgradeTestCasesMatchStoreUpgrades(t *testing.T) {
 	cases := loadUpgradeTestCases(t)
 	require.NotEmpty(t, cases)
 
-	suite := state.SetupTestSuite(t)
-	app := suite.App()
-
 	upgrades := utypes.GetUpgradesList()
 	require.NotEmpty(t, upgrades)
 
@@ -41,7 +39,7 @@ func TestUpgradeTestCasesMatchStoreUpgrades(t *testing.T) {
 		tc, ok := cases[name]
 		require.True(t, ok, "missing test case for upgrade %s", name)
 
-		up, err := initFn(log.NewNopLogger(), app.App)
+		up, err := initFn(log.NewNopLogger(), &apptypes.App{})
 		require.NoError(t, err)
 
 		var added []string
@@ -62,13 +60,13 @@ func TestUpgradeTestCasesMatchStoreUpgrades(t *testing.T) {
 	}
 }
 
-func loadUpgradeTestCases(t *testing.T) map[string]testCase {
+func loadUpgradeTestCases(t *testing.T) map[string]upgradeMatrixCase {
 	t.Helper()
 
 	data, err := os.ReadFile("test-cases.json")
 	require.NoError(t, err)
 
-	cases := make(map[string]testCase)
+	cases := make(map[string]upgradeMatrixCase)
 	require.NoError(t, json.Unmarshal(data, &cases))
 	return cases
 }

@@ -237,106 +237,10 @@ jobs:
 
           # Calculate total coverage
           COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "coverage=$COVERAGE" >> "${GITHUB_OUTPUT}"
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            python3 - <<'PY'
-import os
-import re
-import subprocess
-import sys
-from collections import defaultdict
-
-base_ref = os.environ.get("BASE_REF", "").strip()
-if not base_ref:
-    print("Missing BASE_REF for PR coverage check", file=sys.stderr)
-    sys.exit(1)
-
-diff = subprocess.check_output(
-    ["git", "diff", "--unified=0", "--no-color", f"origin/{base_ref}...HEAD", "--", "*.go"],
-    text=True,
-)
-
-changed_lines = defaultdict(set)
-current_file = None
-new_line = None
-for raw_line in diff.splitlines():
-    if raw_line.startswith("+++ b/"):
-        current_file = raw_line[6:]
-        continue
-    if raw_line.startswith("@@"):
-        match = re.search(r"\+(\d+)(?:,(\d+))?", raw_line)
-        if not match:
-            continue
-        new_line = int(match.group(1))
-        continue
-    if current_file is None or new_line is None:
-        continue
-    if raw_line.startswith("+") and not raw_line.startswith("+++"):
-        changed_lines[current_file].add(new_line)
-        new_line += 1
-        continue
-    if raw_line.startswith("-") and not raw_line.startswith("---"):
-        continue
-    if raw_line.startswith("\\"):
-        continue
-    new_line += 1
-
-if not changed_lines:
-    print("No changed Go lines detected; skipping PR diff coverage gate.")
-    sys.exit(0)
-
-coverage_ranges = defaultdict(list)
-with open("coverage.out", "r", encoding="utf-8") as fh:
-    next(fh, None)
-    for line in fh:
-        line = line.strip()
-        if not line:
-            continue
-        location, _num_statements, count = line.rsplit(" ", 2)
-        filename, span = location.split(":", 1)
-        start, end = span.split(",", 1)
-        start_line = int(start.split(".", 1)[0])
-        end_line = int(end.split(".", 1)[0])
-        coverage_ranges[filename].append((start_line, end_line, int(count)))
-
-def matching_ranges(path: str):
-    suffix = f"/{path.replace(os.sep, '/')}"
-    for filename, ranges in coverage_ranges.items():
-        normalized = filename.replace('\\', '/')
-        if normalized == path or normalized.endswith(suffix):
-            return ranges
-    return []
-
-executable = 0
-covered = 0
-uncovered = []
-for path, lines in changed_lines.items():
-    ranges = matching_ranges(path)
-    for line_no in sorted(lines):
-        line_ranges = [entry for entry in ranges if entry[0] <= line_no <= entry[1]]
-        if not line_ranges:
-            continue
-        executable += 1
-        if any(count > 0 for _, _, count in line_ranges):
-            covered += 1
-        else:
-            uncovered.append(f"{path}:{line_no}")
-
-if executable == 0:
-    print("No executable changed Go lines detected; skipping PR diff coverage gate.")
-    sys.exit(0)
-
-coverage_pct = (covered * 100.0) / executable
-print(f"Changed Go line coverage: {covered}/{executable} = {coverage_pct:.1f}%")
-min_coverage = 80.0
-if coverage_pct < min_coverage:
-    preview = ", ".join(uncovered[:20])
-    print(f"::error::Changed Go line coverage is {coverage_pct:.1f}%, below minimum {min_coverage:.0f}%")
-    if preview:
-        print(f"Uncovered changed lines: {preview}")
-    sys.exit(1)
-PY
+            python3 scripts/ci/check_pr_diff_coverage.py coverage.out
             exit 0
           fi
 
@@ -391,12 +295,11 @@ PY
           RUNS=60 scripts/economics/run-sim-suite.sh ./sim-output
 
   # ===========================================================================
-  # Python Test Job - ML/Waldur Tests (Optional)
+  # Python Test Job - ML/Waldur Tests
   # ===========================================================================
   test-python:
     name: Python Tests
     runs-on: ubuntu-latest
-    continue-on-error: true # Don't fail CI if Python tests fail
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -432,7 +335,7 @@ PY
         if: steps.detect.outputs.run == 'true'
         run: |
           if [ -d tests/python ] && [ "$(ls -A tests/python/*.py 2>/dev/null)" ]; then
-            pytest tests/python --tb=short || echo "Python tests completed with issues"
+            python -m pytest tests/python --tb=short
           else
             echo "No Python tests found, skipping"
           fi
@@ -442,12 +345,11 @@ PY
         run: echo "No Python tests found, skipping job steps"
 
   # ===========================================================================
-  # Portal Test Job - TypeScript/React Tests (Optional)
+  # Portal Test Job - TypeScript/React Tests
   # ===========================================================================
   test-portal:
     name: Portal Tests
     runs-on: ubuntu-latest
-    continue-on-error: true # Don't fail CI if Portal tests fail
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -489,7 +391,7 @@ PY
         run: |
           if [ -d lib/portal ] && [ -f lib/portal/package.json ]; then
             pnpm -C lib/portal test
-            pnpm -C portal test --coverage || echo "Portal tests completed"
+            pnpm -C portal test --coverage
           else
             echo "Portal package not found, skipping"
           fi
@@ -533,8 +435,10 @@ PY
       - name: Get version info
         id: version
         run: |
-          echo "version=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
-          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          {
+            echo "version=$(git describe --tags --always --dirty)"
+            echo "commit=$(git rev-parse --short HEAD)"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Sync dependencies
         run: |
@@ -637,23 +541,27 @@ PY
         id: integration-tests
         run: |
           # INFRA-003: Integration tests are required gates
-          go test -v -tags="e2e.integration" -timeout ${{ env.GO_TEST_TIMEOUT_INTEGRATION }} \
+          go test -v -tags="e2e.integration" -timeout "${{ env.GO_TEST_TIMEOUT_INTEGRATION }}" \
             ./tests/integration/... 2>&1 | tee integration-output.txt
           TEST_EXIT_CODE=${PIPESTATUS[0]}
 
           # Parse test results
-          PASSED=$(grep -c "^--- PASS" integration-output.txt || echo "0")
-          FAILED=$(grep -c "^--- FAIL" integration-output.txt || echo "0")
-          SKIPPED=$(grep -c "^--- SKIP" integration-output.txt || echo "0")
+          PASSED="$(grep -c "^--- PASS" integration-output.txt || true)"
+          FAILED="$(grep -c "^--- FAIL" integration-output.txt || true)"
+          SKIPPED="$(grep -c "^--- SKIP" integration-output.txt || true)"
 
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+          {
+            echo "passed=$PASSED"
+            echo "failed=$FAILED"
+            echo "skipped=$SKIPPED"
+          } >> "${GITHUB_OUTPUT}"
 
-          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Passed: $PASSED" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
-          echo "- ⏭️ Skipped: $SKIPPED" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Integration Test Results"
+            echo "- Passed: $PASSED"
+            echo "- Failed: $FAILED"
+            echo "- Skipped: $SKIPPED"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           # INFRA-003: Fail if any integration tests fail
           if [ "$TEST_EXIT_CODE" -ne 0 ] && [ "$FAILED" -gt 0 ]; then
@@ -733,30 +641,34 @@ PY
         run: |
           # VE-8C: HPC marketplace provider flow E2E tests
           go test -v -tags="e2e.integration" \
-            -timeout ${{ env.GO_TEST_TIMEOUT_E2E }} \
+            -timeout "${{ env.GO_TEST_TIMEOUT_E2E }}" \
             ./tests/e2e/... \
             -run "TestHPCMarketplaceE2E" \
             2>&1 | tee hpc-e2e-output.txt
           TEST_EXIT_CODE=${PIPESTATUS[0]}
 
           # Parse test results
-          PASSED=$(grep -c "^--- PASS" hpc-e2e-output.txt || echo "0")
-          FAILED=$(grep -c "^--- FAIL" hpc-e2e-output.txt || echo "0")
-          SKIPPED=$(grep -c "^--- SKIP" hpc-e2e-output.txt || echo "0")
+          PASSED="$(grep -c "^--- PASS" hpc-e2e-output.txt || true)"
+          FAILED="$(grep -c "^--- FAIL" hpc-e2e-output.txt || true)"
+          SKIPPED="$(grep -c "^--- SKIP" hpc-e2e-output.txt || true)"
 
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+          {
+            echo "passed=$PASSED"
+            echo "failed=$FAILED"
+            echo "skipped=$SKIPPED"
+          } >> "${GITHUB_OUTPUT}"
 
-          echo "## HPC Provider E2E Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-          echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tests cover: Provider registration → Offering listing → Job execution → Usage reporting → Settlement" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## HPC Provider E2E Test Results"
+            echo ""
+            echo "| Status | Count |"
+            echo "|--------|-------|"
+            echo "| Passed | $PASSED |"
+            echo "| Failed | $FAILED |"
+            echo "| Skipped | $SKIPPED |"
+            echo ""
+            echo "Tests cover: Provider registration -> Offering listing -> Job execution -> Usage reporting -> Settlement"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           if [ "$TEST_EXIT_CODE" -ne 0 ]; then
             echo "::error::HPC Provider E2E tests failed ($FAILED failures)"
@@ -926,7 +838,6 @@ PY
     # Only run on main branch or tags - sims are slow
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mainnet/main' || startsWith(github.ref, 'refs/tags/v')
     needs: test-go
-    continue-on-error: true # Don't block release on sim failures
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -941,13 +852,12 @@ PY
 
       - name: Run simulation tests
         run: |
-          # Run nondeterminism test (fastest)
-          make test-sim-nondeterminism || echo "Sim nondeterminism test completed"
+          make test-sim-nondeterminism
 
       - name: Run import/export simulation
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          make test-sim-import-export || echo "Sim import/export test completed"
+          make test-sim-import-export
 
   # ===========================================================================
   # Network Upgrade Tests (tags only)
@@ -958,7 +868,6 @@ PY
     # Only run on version tags
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, test-go]
-    continue-on-error: true # Don't block release on upgrade test failures
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -973,20 +882,19 @@ PY
 
       - name: Validate upgrade directory structure
         run: |
-          dir=./upgrades/software
-          if [ -d "$dir" ]; then
+          dir="./upgrades/software"
+          if [ -d "${dir}" ]; then
             # Ensure only directories exist in upgrades dir
-            if [[ $(find "$dir" ! -path "$dir" -maxdepth 1 -type f | wc -c) -ne 0 ]]; then
-              echo "$dir must contain only directories"
+            if find "${dir}" -mindepth 1 -maxdepth 1 -type f | grep -q .; then
+              echo "${dir} must contain only directories"
               exit 1
             fi
-            
+
             # Ensure names of upgrade dirs are semver compliant
-            while read upgrade; do
-              if [ -n "$upgrade" ]; then
-                ./script/semver.sh validate "$upgrade" || echo "Warning: $upgrade is not semver compliant"
-              fi
-            done <<< $(find "$dir" ! -path "$dir" -maxdepth 1 -type d -exec basename {} \; 2>/dev/null)
+            while IFS= read -r upgrade; do
+              [ -n "${upgrade}" ] || continue
+              ./script/semver.sh validate "${upgrade}"
+            done < <(find "${dir}" -mindepth 1 -maxdepth 1 -type d -exec basename '{}' ';' 2>/dev/null)
           else
             echo "No upgrades directory found, skipping validation"
           fi
@@ -995,25 +903,71 @@ PY
         id: check
         run: |
           if [ -f "./script/upgrades.sh" ]; then
-            test_required=$(./script/upgrades.sh test-required ${{ github.ref }} 2>/dev/null || echo "")
-            echo "test_required=$test_required" >> $GITHUB_OUTPUT
+            test_required="$(./script/upgrades.sh test-required "${{ github.ref }}" 2>/dev/null || true)"
+            echo "test_required=$test_required" >> "${GITHUB_OUTPUT}"
           else
-            echo "test_required=" >> $GITHUB_OUTPUT
+            echo "test_required=" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Run upgrade test
         if: steps.check.outputs.test_required != ''
         run: |
           cd tests/upgrade
-          make test || echo "Upgrade test completed with issues"
+          make test
+
+  compatibility-gate:
+    name: Compatibility Gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/compatibility.yaml
+
+  post-deploy-smoke:
+    name: Post-Deploy Smoke Gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/smoke-test.yaml
+    with:
+      environment: staging
+    secrets: inherit
+
+  staging-e2e-gate:
+    name: Staging E2E Gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/staging-e2e.yaml
+    with:
+      environment: staging
+
+  veid-e2e-gate:
+    name: VEID E2E Gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/veid-e2e.yaml
+
+  ml-determinism-gate:
+    name: ML Determinism Gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/ml-determinism.yaml
+
+  veid-conformance-gate:
+    name: VEID Conformance Gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/veid-conformance.yaml
 
   # ===========================================================================
-  # Release Job - Create Release on Tag
+  # Release Job - Prepare Draft Release Candidate on Tag
   # ===========================================================================
   release:
-    name: Release
+    name: Release Candidate Bundle
     runs-on: ubuntu-latest
-    needs: [build, integration, container-security]
+    needs:
+      - ci-summary
+      - test-python
+      - test-portal
+      - sims
+      - network-upgrade
+      - compatibility-gate
+      - post-deploy-smoke
+      - staging-e2e-gate
+      - veid-e2e-gate
+      - ml-determinism-gate
+      - veid-conformance-gate
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
@@ -1031,17 +985,21 @@ PY
       - name: Create checksums
         run: |
           cd artifacts
-          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} . \;
-          sha256sum *.tar.gz *.zip > checksums.txt
+          mapfile -t archives < <(find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) | sort)
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "::error::No release archives were downloaded"
+            exit 1
+          fi
+          sha256sum -- "${archives[@]}" > checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/*.tar.gz
-            artifacts/*.zip
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip
             artifacts/checksums.txt
-          draft: false
+          draft: true
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           generate_release_notes: true
         env:
@@ -1063,38 +1021,66 @@ PY
       - integration
       - container-security
       - backup-restore-smoke
+      - test-python
+      - test-portal
+      - sims
+      - network-upgrade
+      - compatibility-gate
+      - post-deploy-smoke
+      - staging-e2e-gate
+      - veid-e2e-gate
+      - ml-determinism-gate
+      - veid-conformance-gate
     if: always()
     steps:
       - name: Generate CI Summary
         run: |
-          echo "# CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Required Quality Gates" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Gate | Status | Required |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Go Linting | ${{ needs.lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Go Vet | ${{ needs.vet.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Shell Linting | ${{ needs.lint-shell.result }} | ⚠️ Warning only |" >> $GITHUB_STEP_SUMMARY
-          echo "| Go Tests | ${{ needs.test-go.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Economics Sim | ${{ needs.economics-sim.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Integration Tests | ${{ needs.integration.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Container Security | ${{ needs.container-security.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| DR Backup/Restore Smoke | ${{ needs.backup-restore-smoke.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Pre-push Parity" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| golangci-lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| go vet | ${{ needs.vet.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| go test (unit) | ${{ needs.test-go.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## INFRA-003 Compliance" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Static code analysis (golangci-lint with gosec)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Code coverage enforcement (80% minimum)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Container image scanning (Trivy)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Integration test gates" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "# CI Pipeline Summary"
+            echo ""
+            echo "## Required Quality Gates"
+            echo ""
+            echo "| Gate | Status | Required |"
+            echo "|------|--------|----------|"
+            echo "| Go Linting | ${{ needs.lint.result }} | Yes |"
+            echo "| Go Vet | ${{ needs.vet.result }} | Yes |"
+            echo "| Shell Linting | ${{ needs.lint-shell.result }} | Warning only |"
+            echo "| Go Tests | ${{ needs.test-go.result }} | Yes |"
+            echo "| Economics Sim | ${{ needs.economics-sim.result }} | Yes |"
+            echo "| Build | ${{ needs.build.result }} | Yes |"
+            echo "| Integration Tests | ${{ needs.integration.result }} | Yes |"
+            echo "| Container Security | ${{ needs.container-security.result }} | Yes |"
+            echo "| DR Backup/Restore Smoke | ${{ needs.backup-restore-smoke.result }} | Yes |"
+            echo "| Python Tests | ${{ needs.test-python.result }} | Yes |"
+            echo "| Portal Tests | ${{ needs.test-portal.result }} | Yes |"
+            echo ""
+            if [ "${GITHUB_REF}" != "${GITHUB_REF#refs/tags/v}" ]; then
+              echo "## Release-Grade Tag Gates"
+              echo "| Gate | Status | Required |"
+              echo "|------|--------|----------|"
+              echo "| Simulation Tests | ${{ needs.sims.result }} | Yes |"
+              echo "| Network Upgrade | ${{ needs.network-upgrade.result }} | Yes |"
+              echo "| Compatibility | ${{ needs.compatibility-gate.result }} | Yes |"
+              echo "| Post-Deploy Smoke | ${{ needs.post-deploy-smoke.result }} | Yes |"
+              echo "| Staging E2E | ${{ needs.staging-e2e-gate.result }} | Yes |"
+              echo "| VEID E2E | ${{ needs.veid-e2e-gate.result }} | Yes |"
+              echo "| ML Determinism | ${{ needs.ml-determinism-gate.result }} | Yes |"
+              echo "| VEID Conformance | ${{ needs.veid-conformance-gate.result }} | Yes |"
+              echo ""
+            fi
+            echo "## Pre-push Parity"
+            echo "| Check | Status |"
+            echo "|-------|--------|"
+            echo "| golangci-lint | ${{ needs.lint.result }} |"
+            echo "| go vet | ${{ needs.vet.result }} |"
+            echo "| go test (unit) | ${{ needs.test-go.result }} |"
+            echo ""
+            echo "## INFRA-003 Compliance"
+            echo "- Static code analysis (golangci-lint with gosec)"
+            echo "- Code coverage enforcement (80% minimum)"
+            echo "- Container image scanning (Trivy)"
+            echo "- Integration test gates"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Check required gates
         run: |
@@ -1138,6 +1124,35 @@ PY
           if [ "${{ needs.backup-restore-smoke.result }}" == "failure" ]; then
             echo "::error::DR backup/restore smoke test failed"
             FAILED=1
+          fi
+
+          if [ "${{ needs.test-python.result }}" == "failure" ]; then
+            echo "::error::Python tests failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.test-portal.result }}" == "failure" ]; then
+            echo "::error::Portal tests failed"
+            FAILED=1
+          fi
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            for release_gate in sims network-upgrade compatibility-gate post-deploy-smoke staging-e2e-gate veid-e2e-gate ml-determinism-gate veid-conformance-gate; do
+              case "${release_gate}" in
+                sims) result="${{ needs.sims.result }}" ;;
+                network-upgrade) result="${{ needs.network-upgrade.result }}" ;;
+                compatibility-gate) result="${{ needs.compatibility-gate.result }}" ;;
+                post-deploy-smoke) result="${{ needs.post-deploy-smoke.result }}" ;;
+                staging-e2e-gate) result="${{ needs.staging-e2e-gate.result }}" ;;
+                veid-e2e-gate) result="${{ needs.veid-e2e-gate.result }}" ;;
+                ml-determinism-gate) result="${{ needs.ml-determinism-gate.result }}" ;;
+                veid-conformance-gate) result="${{ needs.veid-conformance-gate.result }}" ;;
+              esac
+              if [ "${result}" != "success" ]; then
+                echo "::error::${release_gate} failed"
+                FAILED=1
+              fi
+            done
           fi
 
           if [ "$FAILED" -eq 1 ]; then

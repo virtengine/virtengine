@@ -6,7 +6,7 @@ import { BillingSummary } from '@/components/dashboard/BillingSummary';
 import { NotificationsFeed } from '@/components/dashboard/NotificationsFeed';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { TerminateAllocationDialog } from '@/components/dashboard/TerminateAllocationDialog';
-import { formatCurrency } from '@/lib/utils';
+import { formatToken } from '@/components/escrow/utils';
 import type {
   CustomerAllocation,
   UsageSummaryData,
@@ -24,7 +24,7 @@ const mockAllocation: CustomerAllocation = {
   resources: { cpu: 32, memory: 128, storage: 1000, gpu: 4 },
   costPerHour: 3.6,
   totalSpent: 2592,
-  currency: 'USD',
+  currency: 'UVE',
   createdAt: '2025-01-05T10:00:00Z',
   updatedAt: '2025-02-06T08:00:00Z',
 };
@@ -54,11 +54,11 @@ const mockBilling: BillingSummaryData = {
   ],
 };
 
-const normalizeCurrency = (value: string) => value.replace(/\u00a0/g, ' ').trim();
+const normalizeAmount = (value: string) => value.replace(/\u00a0/g, ' ').trim();
 
-const currencyMatcher = (amount: number) => {
-  const expected = normalizeCurrency(formatCurrency(amount));
-  return (content: string) => normalizeCurrency(content) === expected;
+const tokenMatcher = (amount: number) => {
+  const expected = normalizeAmount(formatToken(amount, 'UVE'));
+  return (content: string) => normalizeAmount(content) === expected;
 };
 
 const mockNotifications: DashboardNotification[] = [
@@ -140,7 +140,7 @@ describe('UsageSummary', () => {
 describe('BillingSummary', () => {
   it('renders current period cost', () => {
     render(<BillingSummary billing={mockBilling} />);
-    const matches = screen.getAllByText(currencyMatcher(mockBilling.currentPeriodCost));
+    const matches = screen.getAllByText(tokenMatcher(mockBilling.currentPeriodCost));
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -152,7 +152,7 @@ describe('BillingSummary', () => {
   it('renders outstanding balance when present', () => {
     render(<BillingSummary billing={mockBilling} />);
     expect(screen.getByText('Outstanding')).toBeInTheDocument();
-    expect(screen.getByText(currencyMatcher(mockBilling.outstandingBalance))).toBeInTheDocument();
+    expect(screen.getByText(tokenMatcher(mockBilling.outstandingBalance))).toBeInTheDocument();
   });
 
   it('renders provider breakdown', () => {

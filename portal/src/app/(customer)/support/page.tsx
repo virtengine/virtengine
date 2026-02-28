@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -25,6 +25,7 @@ import {
   type SupportStatus,
   type SupportSyncStatus,
 } from '@/stores/supportStore';
+import { useWallet } from '@/lib/portal-adapter';
 
 const statusStyles: Record<SupportStatus, string> = {
   open: 'bg-blue-100 text-blue-900',
@@ -126,7 +127,7 @@ const categoryFilterOptions: { value: SupportCategory | 'all'; label: string }[]
 ];
 
 export default function SupportPage() {
-  const { tickets, createTicket, providers } = useSupportStore();
+  const { tickets, createTicket, providers, fetchSupportData, isLoading, error } = useSupportStore();
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '');
@@ -135,6 +136,20 @@ export default function SupportPage() {
   const [relatedEntity, setRelatedEntity] = useState('');
   const [filterStatus, setFilterStatus] = useState<SupportStatus | 'all'>('all');
   const [filterCategory, setFilterCategory] = useState<SupportCategory | 'all'>('all');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const wallet = useWallet();
+  const account = wallet.accounts[wallet.activeAccountIndex];
+
+  useEffect(() => {
+    if (!account?.address) return;
+    void fetchSupportData(account.address);
+  }, [account?.address, fetchSupportData]);
+
+  useEffect(() => {
+    if (!providerId && providers[0]?.id) {
+      setProviderId(providers[0].id);
+    }
+  }, [providerId, providers]);
 
   const slaTarget = useMemo(() => getSlaTargetHours(priority), [priority]);
   const selectedProvider = useMemo(
@@ -170,24 +185,29 @@ export default function SupportPage() {
     [tickets]
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!subject || !description || !providerId) return;
-    createTicket({
-      subject,
-      description,
-      category,
-      priority,
-      providerId,
-      relatedEntity: relatedEntity
-        ? {
-            type: 'deployment',
-            id: relatedEntity,
-          }
-        : undefined,
-    });
-    setSubject('');
-    setDescription('');
-    setRelatedEntity('');
+    setIsSubmitting(true);
+    try {
+      await createTicket({
+        subject,
+        description,
+        category,
+        priority,
+        providerId,
+        relatedEntity: relatedEntity
+          ? {
+              type: 'deployment',
+              id: relatedEntity,
+            }
+          : undefined,
+      });
+      setSubject('');
+      setDescription('');
+      setRelatedEntity('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -214,6 +234,11 @@ export default function SupportPage() {
             <CardTitle>Create a ticket</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {error && (
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {error}
+              </div>
+            )}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="subject">Subject</Label>
@@ -245,7 +270,7 @@ export default function SupportPage() {
                 <Label htmlFor="related">Related deployment (optional)</Label>
                 <Input
                   id="related"
-                  placeholder="ord-001"
+                  placeholder="Existing order or lease ID"
                   value={relatedEntity}
                   onChange={(event) => setRelatedEntity(event.target.value)}
                 />
@@ -342,11 +367,16 @@ export default function SupportPage() {
             </div>
             <Button
               className="w-full"
-              onClick={handleSubmit}
-              disabled={!subject || !description || !providerId}
+              onClick={() => void handleSubmit()}
+              disabled={!account?.address || !subject || !description || !providerId || isSubmitting}
             >
-              Submit ticket
+              {isSubmitting ? 'Submitting ticket…' : 'Submit ticket'}
             </Button>
+            {!account?.address && (
+              <p className="text-xs text-muted-foreground">
+                Connect your wallet to load providers and submit support requests.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -385,8 +415,8 @@ export default function SupportPage() {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Chain metadata is authoritative. Provider service desks reconcile ticket status back
-                to the chain.
+                The portal only shows support state confirmed by the live API. Missing chain or
+                service-desk metadata is reported as unavailable instead of being inferred.
               </p>
             </CardContent>
           </Card>
@@ -430,9 +460,10 @@ export default function SupportPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isLoading && <p className="text-sm text-muted-foreground">Loading support data…</p>}
               {filteredTickets.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No tickets match the current filters.
+                  {isLoading ? 'Waiting for support data…' : 'No tickets match the current filters.'}
                 </p>
               )}
               {filteredTickets.map((ticket) => {

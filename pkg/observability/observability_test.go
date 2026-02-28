@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // Test constants
@@ -358,6 +360,51 @@ func TestTracer(t *testing.T) {
 		extractedSpan := SpanFromContext(newCtx)
 		if extractedSpan == nil {
 			t.Error("span should be extracted from context")
+		}
+	})
+}
+
+func TestTraceIdentifiersFromContext(t *testing.T) {
+	t.Run("returns ids for default tracer spans", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.TracingEnabled = true
+		tracer := newDefaultTracer(cfg)
+
+		ctx, span := tracer.Start(context.Background(), "test-span")
+		defer span.End()
+
+		sc := span.SpanContext()
+		if got := TraceIDFromContext(ctx); got != sc.TraceID {
+			t.Fatalf("TraceIDFromContext() = %q, want %q", got, sc.TraceID)
+		}
+		if got := SpanIDFromContext(ctx); got != sc.SpanID {
+			t.Fatalf("SpanIDFromContext() = %q, want %q", got, sc.SpanID)
+		}
+	})
+
+	t.Run("returns ids for raw otel span contexts", func(t *testing.T) {
+		sc := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
+			TraceID:    oteltrace.TraceID{0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xa0, 0xb0, 0xc0, 0xd0, 0xe0, 0xf0, 0x01},
+			SpanID:     oteltrace.SpanID{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x10, 0x20},
+			TraceFlags: oteltrace.FlagsSampled,
+			Remote:     true,
+		})
+		ctx := oteltrace.ContextWithSpanContext(context.Background(), sc)
+
+		if got := TraceIDFromContext(ctx); got != sc.TraceID().String() {
+			t.Fatalf("TraceIDFromContext() = %q, want %q", got, sc.TraceID().String())
+		}
+		if got := SpanIDFromContext(ctx); got != sc.SpanID().String() {
+			t.Fatalf("SpanIDFromContext() = %q, want %q", got, sc.SpanID().String())
+		}
+	})
+
+	t.Run("returns empty ids when context has no span", func(t *testing.T) {
+		if got := TraceIDFromContext(context.Background()); got != "" {
+			t.Fatalf("TraceIDFromContext() = %q, want empty", got)
+		}
+		if got := SpanIDFromContext(context.Background()); got != "" {
+			t.Fatalf("SpanIDFromContext() = %q, want empty", got)
 		}
 	})
 }

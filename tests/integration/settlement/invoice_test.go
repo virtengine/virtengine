@@ -38,7 +38,7 @@ func TestInvoiceIntegrationTestSuite(t *testing.T) {
 func (suite *InvoiceIntegrationTestSuite) SetupTest() {
 	// Setup test environment using testutil helpers
 	suite.ctx, suite.escrowKeeper = testutil.SetupEscrowKeeper(suite.T())
-	suite.invoiceKeeper = suite.escrowKeeper.NewInvoiceKeeper()
+	suite.invoiceKeeper = requireInvoiceKeeper(suite.T(), suite.escrowKeeper)
 
 	suite.provider = testutil.AccAddress(suite.T())
 	suite.customer = testutil.AccAddress(suite.T())
@@ -82,7 +82,7 @@ func (suite *InvoiceIntegrationTestSuite) TestInvoiceCreation() {
 			DurationSeconds: 86400,
 			PeriodType:      billing.BillingPeriodTypeMonthly,
 		},
-		IssuedAt:  &now,
+		IssuedAt:  now,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -99,7 +99,7 @@ func (suite *InvoiceIntegrationTestSuite) TestInvoiceCreation() {
 	require.Equal(t, invoice.Provider, record.Provider)
 	require.Equal(t, invoice.Customer, record.Customer)
 	require.Equal(t, billing.InvoiceStatusPending, record.Status)
-	require.True(t, record.Total.IsEqual(invoice.Total))
+	require.True(t, record.Total.Equal(invoice.Total))
 	require.NotEmpty(t, record.ContentHash)
 	require.Equal(t, artifactCID, record.ArtifactCID)
 
@@ -131,7 +131,7 @@ func (suite *InvoiceIntegrationTestSuite) TestInvoiceStatusTransitions() {
 	require.NoError(t, err)
 	require.NotNil(t, entry)
 	require.Equal(t, billing.InvoiceStatusPaid, entry.NewStatus)
-	require.Equal(t, billing.InvoiceStatusPending, entry.OldStatus)
+	require.Equal(t, billing.InvoiceStatusPending, entry.PreviousStatus)
 
 	// Verify record updated
 	updated, err := suite.invoiceKeeper.GetInvoice(ctx, invoice.InvoiceID)
@@ -171,13 +171,13 @@ func (suite *InvoiceIntegrationTestSuite) TestInvoicePaymentRecording() {
 	require.NoError(t, err)
 	require.NotNil(t, entry)
 	require.Equal(t, billing.LedgerEntryTypePayment, entry.EntryType)
-	require.True(t, entry.Amount.IsEqual(partialAmount))
+	require.True(t, entry.Amount.Equal(partialAmount))
 
 	// Verify partial payment status
 	updated, err := suite.invoiceKeeper.GetInvoice(ctx, invoice.InvoiceID)
 	require.NoError(t, err)
 	require.Equal(t, billing.InvoiceStatusPartiallyPaid, updated.Status)
-	require.True(t, updated.AmountPaid.IsEqual(partialAmount))
+	require.True(t, updated.AmountPaid.Equal(partialAmount))
 	require.False(t, updated.AmountDue.IsZero())
 
 	// Record remaining payment (50%)
@@ -209,7 +209,7 @@ func (suite *InvoiceIntegrationTestSuite) TestLedgerChainIntegrity() {
 	require.NoError(t, err)
 
 	// Perform multiple state transitions
-	_, err = suite.invoiceKeeper.UpdateInvoiceStatus(ctx, invoice.InvoiceID, billing.InvoiceStatusPaid, "sys")
+	_, err = suite.invoiceKeeper.UpdateInvoiceStatus(ctx, invoice.InvoiceID, billing.InvoiceStatusOverdue, "sys")
 	require.NoError(t, err)
 
 	payment := sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(500)))
@@ -267,7 +267,7 @@ func (suite *InvoiceIntegrationTestSuite) createTestInvoice(idSuffix string, tot
 			DurationSeconds: 86400,
 			PeriodType:      billing.BillingPeriodTypeMonthly,
 		},
-		IssuedAt:  &now,
+		IssuedAt:  now,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

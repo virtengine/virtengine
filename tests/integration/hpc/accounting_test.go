@@ -73,17 +73,21 @@ func TestBillingCalculator(t *testing.T) {
 	rules := types.DefaultHPCBillingRules("uvirt")
 	calculator := types.NewHPCBillingCalculator(rules)
 
+	schedulerMetrics := realSchedulerMetricsFixture(time.Hour, 1, 4, 8, 1, 20)
 	metrics := &types.HPCDetailedMetrics{
-		WallClockSeconds: 3600,  // 1 hour
-		CPUCoreSeconds:   14400, // 4 cores * 1 hour
-		MemoryGBSeconds:  28800, // 8 GB * 1 hour
-		GPUSeconds:       3600,  // 1 GPU * 1 hour
+		WallClockSeconds: schedulerMetrics.WallClockSeconds,
+		CPUTimeSeconds:   schedulerMetrics.CPUTimeSeconds,
+		CPUCoreSeconds:   schedulerMetrics.CPUCoreSeconds,
+		MemoryBytesMax:   schedulerMetrics.MemoryBytesMax,
+		MemoryGBSeconds:  schedulerMetrics.MemoryGBSeconds,
+		GPUSeconds:       schedulerMetrics.GPUSeconds,
 		GPUType:          "nvidia-a100",
 		NodeHours:        sdkmath.LegacyNewDec(1),
-		NodesUsed:        1,
-		StorageGBHours:   10,
-		NetworkBytesIn:   1073741824, // 1 GB
-		NetworkBytesOut:  1073741824, // 1 GB
+		NodesUsed:        schedulerMetrics.NodesUsed,
+		StorageGBHours:   schedulerMetrics.StorageGBHours,
+		NetworkBytesIn:   schedulerMetrics.NetworkBytesIn,
+		NetworkBytesOut:  schedulerMetrics.NetworkBytesOut,
+		EnergyJoules:     schedulerMetrics.EnergyJoules,
 	}
 
 	breakdown, billable, err := calculator.CalculateBillableAmount(metrics, nil, nil)
@@ -102,6 +106,7 @@ func TestBillingCalculator(t *testing.T) {
 	// Verify reward + fee == billable
 	totalDistributed := reward.Add(fee...)
 	require.True(t, totalDistributed.IsAllLTE(billable))
+	require.Greater(t, metrics.EnergyJoules, int64(0))
 }
 
 // TestVolumeDiscounts tests volume-based discounts
@@ -164,6 +169,7 @@ func TestBillingCaps(t *testing.T) {
 func TestUsageSnapshotValidation(t *testing.T) {
 	provider := sdk.AccAddress([]byte("provider1234567890123"))
 	customer := sdk.AccAddress([]byte("customer1234567890123"))
+	schedulerMetrics := realSchedulerMetricsFixture(30*time.Minute, 1, 4, 8, 0, 10)
 
 	snapshot := &types.HPCUsageSnapshot{
 		SnapshotID:      "snap-1",
@@ -175,12 +181,26 @@ func TestUsageSnapshotValidation(t *testing.T) {
 		ProviderAddress: provider.String(),
 		CustomerAddress: customer.String(),
 		Metrics: types.HPCDetailedMetrics{
-			WallClockSeconds: 1800,
-			CPUCoreSeconds:   7200,
+			WallClockSeconds: schedulerMetrics.WallClockSeconds,
+			CPUTimeSeconds:   schedulerMetrics.CPUTimeSeconds,
+			CPUCoreSeconds:   schedulerMetrics.CPUCoreSeconds,
+			MemoryBytesMax:   schedulerMetrics.MemoryBytesMax,
+			MemoryGBSeconds:  schedulerMetrics.MemoryGBSeconds,
+			StorageGBHours:   schedulerMetrics.StorageGBHours,
+			NetworkBytesIn:   schedulerMetrics.NetworkBytesIn,
+			NetworkBytesOut:  schedulerMetrics.NetworkBytesOut,
+			EnergyJoules:     schedulerMetrics.EnergyJoules,
 		},
 		CumulativeMetrics: types.HPCDetailedMetrics{
-			WallClockSeconds: 1800,
-			CPUCoreSeconds:   7200,
+			WallClockSeconds: schedulerMetrics.WallClockSeconds,
+			CPUTimeSeconds:   schedulerMetrics.CPUTimeSeconds,
+			CPUCoreSeconds:   schedulerMetrics.CPUCoreSeconds,
+			MemoryBytesMax:   schedulerMetrics.MemoryBytesMax,
+			MemoryGBSeconds:  schedulerMetrics.MemoryGBSeconds,
+			StorageGBHours:   schedulerMetrics.StorageGBHours,
+			NetworkBytesIn:   schedulerMetrics.NetworkBytesIn,
+			NetworkBytesOut:  schedulerMetrics.NetworkBytesOut,
+			EnergyJoules:     schedulerMetrics.EnergyJoules,
 		},
 		JobState:          types.JobStateRunning,
 		SnapshotTime:      time.Now(),

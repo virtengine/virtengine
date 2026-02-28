@@ -26,6 +26,33 @@ func NewQueryServerImpl(k Keeper) *WorkloadTemplateQueryServer {
 	return &WorkloadTemplateQueryServer{Keeper: k}
 }
 
+var _ types.QueryServer = (*WorkloadTemplateQueryServer)(nil)
+
+// WorkloadTemplate returns a specific workload template by ID/version.
+func (q *WorkloadTemplateQueryServer) WorkloadTemplate(ctx context.Context, req *types.QueryWorkloadTemplateRequest) (*types.QueryWorkloadTemplateResponse, error) {
+	return q.GetWorkloadTemplate(ctx, req)
+}
+
+// WorkloadTemplates lists workload templates.
+func (q *WorkloadTemplateQueryServer) WorkloadTemplates(ctx context.Context, req *types.QueryWorkloadTemplatesRequest) (*types.QueryWorkloadTemplatesResponse, error) {
+	return q.ListWorkloadTemplates(ctx, req)
+}
+
+// WorkloadTemplatesByType lists workload templates by type.
+func (q *WorkloadTemplateQueryServer) WorkloadTemplatesByType(ctx context.Context, req *types.QueryWorkloadTemplatesByTypeRequest) (*types.QueryWorkloadTemplatesByTypeResponse, error) {
+	return q.ListWorkloadTemplatesByType(ctx, req)
+}
+
+// WorkloadTemplatesByPublisher lists workload templates by publisher.
+func (q *WorkloadTemplateQueryServer) WorkloadTemplatesByPublisher(ctx context.Context, req *types.QueryWorkloadTemplatesByPublisherRequest) (*types.QueryWorkloadTemplatesByPublisherResponse, error) {
+	return q.ListWorkloadTemplatesByPublisher(ctx, req)
+}
+
+// ApprovedWorkloadTemplates lists approved workload templates.
+func (q *WorkloadTemplateQueryServer) ApprovedWorkloadTemplates(ctx context.Context, req *types.QueryApprovedWorkloadTemplatesRequest) (*types.QueryApprovedWorkloadTemplatesResponse, error) {
+	return q.ListApprovedWorkloadTemplates(ctx, req)
+}
+
 // GetWorkloadTemplate returns a specific workload template by ID/version.
 func (q *WorkloadTemplateQueryServer) GetWorkloadTemplate(ctx context.Context, req *types.QueryGetWorkloadTemplateRequest) (*types.QueryGetWorkloadTemplateResponse, error) {
 	if req == nil {

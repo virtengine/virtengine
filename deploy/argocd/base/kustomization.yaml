@@ -7,19 +7,12 @@ kind: Kustomization
 namespace: argocd
 
 resources:
-  - namespace.yaml
   - install.yaml
+  - ingress.yaml
+  - projects/virtengine.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/ha/install.yaml
+
+patchesStrategicMerge:
   - argocd-cm.yaml
   - argocd-rbac-cm.yaml
   - argocd-cmd-params-cm.yaml
-  - ingress.yaml
-  - projects/virtengine.yaml
-
-configMapGenerator:
-  - name: argocd-ssh-known-hosts-cm
-    namespace: argocd
-    files:
-      - ssh_known_hosts
-
-generatorOptions:
-  disableNameSuffixHash: true

@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 
   backend "s3" {
@@ -30,6 +34,10 @@ provider "aws" {
       ManagedBy   = "terraform"
     }
   }
+}
+
+data "tls_certificate" "github_actions" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 # -----------------------------------------------------------------------------
@@ -161,7 +169,7 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   url = "https://token.actions.githubusercontent.com"
 
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["ffffffffffffffffffffffffffffffffffffffff"]
+  thumbprint_list = [data.tls_certificate.github_actions.certificates[length(data.tls_certificate.github_actions.certificates) - 1].sha1_fingerprint]
 
   tags = {
     Name = "github-actions-oidc"
@@ -181,7 +189,7 @@ resource "aws_iam_role" "github_actions_deploy" {
       }
       Condition = {
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
+          "token.actions.githubusercontent.com:sub" = var.github_allowed_subjects
         }
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"

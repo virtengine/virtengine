@@ -75,7 +75,7 @@ func (k Keeper) InitializeHealthStatus(ctx sdk.Context, validatorAddr sdk.AccAdd
 		return nil // Already initialized
 	}
 
-	health := types.NewEnclaveHealthStatus(validatorAddr.String())
+	health := types.NewEnclaveHealthStatusAt(validatorAddr.String(), ctx.BlockTime())
 	return k.SetEnclaveHealthStatus(ctx, health)
 }
 
@@ -92,7 +92,7 @@ func (k Keeper) UpdateHealthStatus(ctx sdk.Context, validatorAddr sdk.AccAddress
 	newStatus := healthParams.EvaluateHealth(&health, ctx.BlockTime(), ctx.BlockHeight())
 
 	if newStatus != previousStatus {
-		health.UpdateStatus(newStatus)
+		health.UpdateStatusAt(newStatus, ctx.BlockTime())
 
 		// Emit specific events based on status change
 		switch newStatus {

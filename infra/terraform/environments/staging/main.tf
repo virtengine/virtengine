@@ -28,7 +28,7 @@ provider "aws" {
       Project     = "virtengine"
       Environment = "staging"
       ManagedBy   = "terraform"
-      Repository  = "virtengine-network/virtengine"
+      Repository  = "virtengine/virtengine"
     }
   }
 }
@@ -157,7 +157,7 @@ module "iam" {
   backup_bucket_arn          = module.s3.chain_backups_bucket_arn
   manifests_bucket_arn       = module.s3.manifests_bucket_arn
   enable_github_actions_role = true
-  github_org                 = "virtengine-network"
+  github_org                 = "virtengine"
   github_repo                = "virtengine"
 
   tags = local.common_tags

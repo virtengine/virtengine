@@ -14,6 +14,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // TracingConfig holds tracing configuration
@@ -416,20 +418,36 @@ func ExtractTraceContext(ctx context.Context, headers map[string]string) context
 	return tracer.Extract(ctx, carrier)
 }
 
-// TraceIDFromContext returns the trace ID from context
-// This is a placeholder - full implementation requires real tracing provider
-func TraceIDFromContext(ctx context.Context) string {
-	if span := SpanFromContext(ctx); span != nil {
-		return span.SpanContext().TraceID
+func spanContextFromContext(ctx context.Context) SpanContext {
+	if ctx == nil {
+		return SpanContext{}
 	}
-	return ""
+
+	if span, ok := ctx.Value(spanContextKey{}).(Span); ok && span != nil {
+		sc := span.SpanContext()
+		if sc.TraceID != "" || sc.SpanID != "" {
+			return sc
+		}
+	}
+
+	otelSpanContext := oteltrace.SpanContextFromContext(ctx)
+	if otelSpanContext.IsValid() {
+		return SpanContext{
+			TraceID:    otelSpanContext.TraceID().String(),
+			SpanID:     otelSpanContext.SpanID().String(),
+			TraceFlags: byte(otelSpanContext.TraceFlags()),
+		}
+	}
+
+	return SpanContext{}
 }
 
-// SpanIDFromContext returns the span ID from context
-// This is a placeholder - full implementation requires real tracing provider
+// TraceIDFromContext returns the trace ID from context.
+func TraceIDFromContext(ctx context.Context) string {
+	return spanContextFromContext(ctx).TraceID
+}
+
+// SpanIDFromContext returns the span ID from context.
 func SpanIDFromContext(ctx context.Context) string {
-	if span := SpanFromContext(ctx); span != nil {
-		return span.SpanContext().SpanID
-	}
-	return ""
+	return spanContextFromContext(ctx).SpanID
 }
