@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -102,6 +103,7 @@ type BankKeeper interface {
 	SendCoins(ctx context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error
 	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
 	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
+	SendCoinsFromModuleToModule(ctx context.Context, senderModule, recipientModule string, amt sdk.Coins) error
 	SpendableCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
 	MintCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 }
@@ -112,11 +114,13 @@ type VEIDKeeper interface {
 	GetValidatorAverageVerificationScore(ctx sdk.Context, validatorAddr string, startHeight, endHeight int64) int64
 }
 
-// StakingKeeper defines the expected staking keeper interface (cosmos-sdk)
+// StakingKeeper defines the expected stake and delegation economics interface.
 type StakingKeeper interface {
 	GetAllValidators(ctx sdk.Context) []sdk.AccAddress
 	GetValidatorStake(ctx sdk.Context, validatorAddr sdk.AccAddress) int64
 	GetTotalStake(ctx sdk.Context) int64
+	SlashDelegations(ctx sdk.Context, validatorAddr string, fraction sdkmath.LegacyDec, infractionHeight int64) error
+	DistributeValidatorRewardsToDelegators(ctx sdk.Context, validatorAddr string, epoch uint64, validatorReward sdk.Coins) (sdk.Coins, sdk.Coins, error)
 }
 
 // Keeper of the staking store

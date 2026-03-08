@@ -6,6 +6,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -144,16 +145,24 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 		}
 	}
 
-	// Calculate slash amount (placeholder - would use actual stake in production)
-	var slashAmount sdk.Coins
-	if k.stakingKeeper != nil {
-		validatorAccAddr, _ := sdk.AccAddressFromBech32(validatorAddr)
-		stake := k.stakingKeeper.GetValidatorStake(ctx, validatorAccAddr)
-		slashTokens := (stake * escalatedSlashPercent) / types.FixedPointScale
-		slashAmount = sdk.NewCoins(sdk.NewInt64Coin(k.GetParams(ctx).RewardDenom, slashTokens))
-	} else {
-		// Placeholder amount
-		slashAmount = sdk.NewCoins(sdk.NewInt64Coin(k.GetParams(ctx).RewardDenom, escalatedSlashPercent))
+	if k.stakingKeeper == nil {
+		return nil, types.ErrInsufficientStake.Wrap("stake keeper not configured")
+	}
+
+	validatorAccAddr, err := sdk.AccAddressFromBech32(validatorAddr)
+	if err != nil {
+		return nil, types.ErrInvalidValidator.Wrapf("invalid validator address: %v", err)
+	}
+
+	stake := k.stakingKeeper.GetValidatorStake(ctx, validatorAccAddr)
+	slashTokens := big.NewInt(stake)
+	slashTokens.Mul(slashTokens, big.NewInt(escalatedSlashPercent))
+	slashTokens.Div(slashTokens, big.NewInt(types.FixedPointScale))
+	slashAmount := sdk.NewCoins(sdk.NewCoin(k.GetParams(ctx).RewardDenom, sdkmath.NewIntFromBigInt(slashTokens)))
+
+	slashFraction := sdkmath.LegacyNewDecWithPrec(escalatedSlashPercent, 6)
+	if err := k.stakingKeeper.SlashDelegations(ctx, validatorAddr, slashFraction, infractionHeight); err != nil {
+		return nil, err
 	}
 
 	// Create slash record
@@ -214,7 +223,7 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 			sdk.NewAttribute(types.AttributeKeyValidatorAddress, validatorAddr),
 			sdk.NewAttribute(types.AttributeKeySlashReason, string(reason)),
 			sdk.NewAttribute(types.AttributeKeySlashAmount, slashAmount.String()),
-			sdk.NewAttribute(types.AttributeKeySlashPercent, sdkmath.LegacyNewDecWithPrec(escalatedSlashPercent, 6).String()),
+			sdk.NewAttribute(types.AttributeKeySlashPercent, slashFraction.String()),
 		),
 	)
 

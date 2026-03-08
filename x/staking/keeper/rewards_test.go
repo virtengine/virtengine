@@ -4,6 +4,7 @@
 package keeper
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,10 +26,11 @@ import (
 // RewardsTestSuite is the test suite for reward calculations
 type RewardsTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper Keeper
-	cdc    codec.BinaryCodec
-	skey   *storetypes.KVStoreKey
+	ctx         sdk.Context
+	keeper      Keeper
+	cdc         codec.BinaryCodec
+	skey        *storetypes.KVStoreKey
+	stakeKeeper *mockStakeKeeper
 }
 
 // SetupTest sets up the test suite
@@ -43,12 +45,13 @@ func (s *RewardsTestSuite) SetupTest() {
 	registry := codectypes.NewInterfaceRegistry()
 	s.cdc = codec.NewProtoCodec(registry)
 
+	s.stakeKeeper = newMockStakeKeeper()
 	s.keeper = NewKeeper(
 		s.cdc,
 		s.skey,
 		nil, // bankKeeper
 		nil, // veidKeeper
-		nil, // stakingKeeper
+		s.stakeKeeper,
 		"authority",
 	)
 
@@ -269,7 +272,8 @@ func (s *RewardsTestSuite) TestCalculateEpochRewards() {
 
 	// Create validator performances
 	for i := 1; i <= 3; i++ {
-		validatorAddr := "validator" + string(rune('0'+i))
+		validatorAddr := sdk.AccAddress([]byte(fmt.Sprintf("validator-%d-address", i))).String()
+		s.stakeKeeper.SetStake(validatorAddr, int64(i)*1_000_000)
 		perf := types.NewValidatorPerformance(validatorAddr, epoch)
 		perf.BlocksProposed = int64(i * 10)
 		perf.BlocksExpected = 30
@@ -291,6 +295,58 @@ func (s *RewardsTestSuite) TestCalculateEpochRewards() {
 	for _, reward := range rewards {
 		s.Require().False(reward.TotalReward.IsZero())
 	}
+
+	totalDistributed := int64(0)
+	for _, reward := range rewards {
+		totalDistributed += reward.TotalReward.AmountOf("uve").Int64()
+	}
+	s.Require().Equal(int64(99_000_000), totalDistributed)
+}
+
+func (s *RewardsTestSuite) TestDistributeRewardsRoutesDelegatorShare() {
+	epoch := uint64(1)
+	validatorAddr := sdk.AccAddress([]byte("validator-route")).String()
+
+	bankKeeper := &mockBankKeeper{}
+	stakeKeeper := newMockStakeKeeper()
+	stakeKeeper.SetStake(validatorAddr, 1_000_000)
+	stakeKeeper.SetValidatorPayoutBPS(validatorAddr, 8000)
+
+	s.keeper = NewKeeper(
+		s.cdc,
+		s.skey,
+		bankKeeper,
+		nil,
+		stakeKeeper,
+		"authority",
+	)
+	require.NoError(s.T(), s.keeper.SetParams(s.ctx, types.DefaultParams()))
+
+	epochInfo := types.NewRewardEpoch(epoch, 1, s.ctx.BlockTime())
+	epochInfo.EndHeight = 100
+	require.NoError(s.T(), s.keeper.SetRewardEpoch(s.ctx, *epochInfo))
+
+	perf := types.NewValidatorPerformance(validatorAddr, epoch)
+	perf.BlocksProposed = 10
+	perf.BlocksExpected = 10
+	perf.UptimeSeconds = 3600
+	perf.VEIDVerificationsCompleted = 2
+	perf.VEIDVerificationsExpected = 2
+	perf.VEIDVerificationScore = 9000
+	types.ComputeOverallScore(perf)
+	require.NoError(s.T(), s.keeper.SetValidatorPerformance(s.ctx, *perf))
+
+	require.NoError(s.T(), s.keeper.DistributeRewards(s.ctx, epoch))
+	require.Len(s.T(), bankKeeper.minted, 1)
+	require.Len(s.T(), bankKeeper.moduleTransfers, 1)
+	require.Len(s.T(), bankKeeper.accountTransfers, 1)
+
+	totalMinted := bankKeeper.minted[0].AmountOf("uve")
+	delegatorAmount := bankKeeper.moduleTransfers[0].Amount.AmountOf("uve")
+	validatorAmount := bankKeeper.accountTransfers[0].Amount.AmountOf("uve")
+	require.True(s.T(), totalMinted.Equal(delegatorAmount.Add(validatorAmount)))
+	require.Equal(s.T(), "virt_delegation", bankKeeper.moduleTransfers[0].RecipientModule)
+	require.Len(s.T(), stakeKeeper.rewardDistCalls, 1)
 }
 
 // TestCalculateVEIDRewards tests VEID reward calculation

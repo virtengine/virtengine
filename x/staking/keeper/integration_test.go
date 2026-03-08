@@ -30,7 +30,8 @@ func TestStakingRewardLifecycleIntegration(t *testing.T) {
 	cdc := codec.NewProtoCodec(registry)
 
 	authority := sdk.AccAddress([]byte("staking-authority")).String()
-	keeper := NewKeeper(cdc, skey, nil, nil, nil, authority)
+	stakeKeeper := newMockStakeKeeper()
+	keeper := NewKeeper(cdc, skey, nil, nil, stakeKeeper, authority)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Height: 100,
@@ -42,6 +43,7 @@ func TestStakingRewardLifecycleIntegration(t *testing.T) {
 	querier := Querier{Keeper: keeper}
 
 	validatorAddr := sdk.AccAddress([]byte("validator-lifecycle")).String()
+	stakeKeeper.SetStake(validatorAddr, 1_000_000)
 	epoch := keeper.GetCurrentEpoch(ctx)
 
 	epochInfo := types.NewRewardEpoch(epoch, ctx.BlockHeight(), ctx.BlockTime())
