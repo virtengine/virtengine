@@ -472,3 +472,32 @@ func (s *StakingKeeperTestSuite) TestIterators() {
 	})
 	s.Require().Equal(3, count)
 }
+
+func (s *StakingKeeperTestSuite) TestSlashValidatorCapsRepeatPenaltyAtFullStake() {
+	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
+
+	params := s.keeper.GetParams(s.ctx)
+	params.SlashFractionDowntime = 600000
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	firstSlash, err := s.keeper.SlashValidator(s.ctx, validatorAddr, types.SlashReasonDowntime, 90, "first downtime")
+	s.Require().NoError(err)
+	s.Require().Equal(int64(600000), firstSlash.SlashPercent)
+	s.Require().Equal(int64(600000), firstSlash.Amount.AmountOf("uve").Int64())
+	s.Require().Equal(int64(400000), s.stakeKeeper.stakes[validatorAddr])
+
+	signingInfo, found := s.keeper.GetValidatorSigningInfo(s.ctx, validatorAddr)
+	s.Require().True(found)
+	zeroTime := time.Time{}
+	signingInfo.JailedUntil = &zeroTime
+	s.Require().NoError(s.keeper.SetValidatorSigningInfo(s.ctx, signingInfo))
+
+	secondSlash, err := s.keeper.SlashValidator(s.ctx, validatorAddr, types.SlashReasonDowntime, 95, "second downtime")
+	s.Require().NoError(err)
+	s.Require().Equal(int64(types.FixedPointScale), secondSlash.SlashPercent)
+	s.Require().Equal(int64(400000), secondSlash.Amount.AmountOf("uve").Int64())
+	s.Require().Equal(int64(0), s.stakeKeeper.stakes[validatorAddr])
+	s.Require().Len(s.stakeKeeper.slashCalls, 2)
+	s.Require().Equal("1.000000000000000000", s.stakeKeeper.slashCalls[1].Fraction)
+}

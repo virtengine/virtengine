@@ -299,7 +299,10 @@ func (s *RewardsTestSuite) TestCalculateEpochRewards() {
 	for _, reward := range rewards {
 		totalDistributed += reward.TotalReward.AmountOf("uve").Int64()
 	}
-	s.Require().Equal(int64(99_000_000), totalDistributed)
+
+	epochRewardPool := s.keeper.GetParams(s.ctx).BaseRewardPerBlock * types.EpochDuration(epochInfo)
+	s.Require().Greater(totalDistributed, int64(0))
+	s.Require().Less(totalDistributed, epochRewardPool)
 }
 
 func (s *RewardsTestSuite) TestDistributeRewardsRoutesDelegatorShare() {
@@ -504,4 +507,50 @@ func (s *RewardsTestSuite) TestVEIDBonusForHighScore() {
 	veidMed := rewardMed.VEIDReward.AmountOf("uve").Int64()
 
 	s.Require().Greater(veidHigh, veidMed)
+}
+
+func (s *RewardsTestSuite) TestCalculateEpochRewardsMatchesDeterministicAbsoluteEconomics() {
+	epoch := uint64(1)
+	validatorAddr := sdk.AccAddress([]byte("reward-keeper-validator-01")).String()
+	otherValidatorAddr := sdk.AccAddress([]byte("reward-keeper-validator-02")).String()
+
+	epochInfo := types.NewRewardEpoch(epoch, 1, s.ctx.BlockTime())
+	epochInfo.EndHeight = 101
+	s.Require().NoError(s.keeper.SetRewardEpoch(s.ctx, *epochInfo))
+
+	s.stakeKeeper.SetStake(validatorAddr, 700_000)
+	s.stakeKeeper.SetStake(otherValidatorAddr, 300_000)
+
+	perf := types.NewValidatorPerformance(validatorAddr, epoch)
+	perf.BlocksProposed = 20
+	perf.BlocksExpected = 100
+	perf.VEIDVerificationsCompleted = 1
+	perf.VEIDVerificationsExpected = 10
+	perf.VEIDVerificationScore = 5_000
+	perf.UptimeSeconds = 1_800
+	perf.DowntimeSeconds = 1_800
+	types.ComputeOverallScore(perf)
+	s.Require().NoError(s.keeper.SetValidatorPerformance(s.ctx, *perf))
+
+	params := s.keeper.GetParams(s.ctx)
+	epochRewardPool := params.BaseRewardPerBlock * types.EpochDuration(epochInfo)
+	expected := types.CalculateRewards(types.RewardCalculationInput{
+		ValidatorAddress: validatorAddr,
+		Performance:      perf,
+		StakeAmount:      700_000,
+		TotalStake:       1_000_000,
+		EpochRewardPool:  epochRewardPool,
+		BlocksInEpoch:    types.EpochDuration(epochInfo),
+	}, params.RewardDenom)
+
+	rewards, err := s.keeper.CalculateEpochRewards(s.ctx, epoch)
+	s.Require().NoError(err)
+	s.Require().Len(rewards, 1)
+
+	actual := rewards[0]
+	s.Require().True(expected.TotalReward.Equal(actual.TotalReward))
+	s.Require().True(expected.BlockProposalReward.Equal(actual.BlockProposalReward))
+	s.Require().True(expected.VEIDReward.Equal(actual.VEIDReward))
+	s.Require().True(expected.UptimeReward.Equal(actual.UptimeReward))
+	s.Require().Less(actual.TotalReward.AmountOf(params.RewardDenom).Int64(), epochRewardPool)
 }

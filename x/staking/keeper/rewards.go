@@ -592,12 +592,6 @@ func scaledRewardWeight(stake, score, componentWeight int64) *big.Int {
 
 func allocateEpochRewards(allocations []rewardAllocation, totalStake, epochRewardPool int64, denom string) []types.ValidatorReward {
 	rewards := make([]types.ValidatorReward, len(allocations))
-	totalWeight := big.NewInt(0)
-	for _, allocation := range allocations {
-		totalWeight.Add(totalWeight, allocation.blockWeight)
-		totalWeight.Add(totalWeight, allocation.veidWeight)
-		totalWeight.Add(totalWeight, allocation.uptimeWeight)
-	}
 
 	for idx, allocation := range allocations {
 		reward := types.NewValidatorReward(allocation.performance.ValidatorAddress, 0)
@@ -606,21 +600,30 @@ func allocateEpochRewards(allocations []rewardAllocation, totalStake, epochRewar
 		rewards[idx] = *reward
 	}
 
-	if epochRewardPool <= 0 || totalWeight.Sign() == 0 {
+	if totalStake <= 0 || epochRewardPool <= 0 {
+		return rewards
+	}
+
+	denominator := big.NewInt(totalStake)
+	denominator.Mul(denominator, big.NewInt(types.TotalWeight))
+	denominator.Mul(denominator, big.NewInt(types.MaxPerformanceScore))
+	if denominator.Sign() == 0 {
 		return rewards
 	}
 
 	pool := big.NewInt(epochRewardPool)
 	remainders := make([]rewardRemainder, 0, len(allocations)*3)
 	allocated := int64(0)
+	totalNumerator := big.NewInt(0)
 
 	for idx, allocation := range allocations {
-		allocated += setComponentAllocation(&rewards[idx], denom, pool, totalWeight, allocation.blockWeight, rewardComponentBlock, idx, &remainders)
-		allocated += setComponentAllocation(&rewards[idx], denom, pool, totalWeight, allocation.veidWeight, rewardComponentVEID, idx, &remainders)
-		allocated += setComponentAllocation(&rewards[idx], denom, pool, totalWeight, allocation.uptimeWeight, rewardComponentUptime, idx, &remainders)
+		allocated += setComponentAllocation(&rewards[idx], denom, pool, denominator, allocation.blockWeight, rewardComponentBlock, idx, &remainders, totalNumerator)
+		allocated += setComponentAllocation(&rewards[idx], denom, pool, denominator, allocation.veidWeight, rewardComponentVEID, idx, &remainders, totalNumerator)
+		allocated += setComponentAllocation(&rewards[idx], denom, pool, denominator, allocation.uptimeWeight, rewardComponentUptime, idx, &remainders, totalNumerator)
 	}
 
-	leftover := epochRewardPool - allocated
+	totalEarned := new(big.Int).Quo(totalNumerator, denominator).Int64()
+	leftover := totalEarned - allocated
 	if leftover > 0 {
 		sort.SliceStable(remainders, func(i, j int) bool {
 			cmp := remainders[i].remainder.Cmp(remainders[j].remainder)
@@ -655,6 +658,7 @@ func setComponentAllocation(
 	component rewardComponent,
 	validatorIndex int,
 	remainders *[]rewardRemainder,
+	totalNumerator *big.Int,
 ) int64 {
 	if weight == nil || weight.Sign() == 0 {
 		*remainders = append(*remainders, rewardRemainder{
@@ -667,6 +671,7 @@ func setComponentAllocation(
 	}
 
 	product := new(big.Int).Mul(pool, weight)
+	totalNumerator.Add(totalNumerator, product)
 	quotient := new(big.Int)
 	remainder := new(big.Int)
 	quotient.QuoRem(product, totalWeight, remainder)
