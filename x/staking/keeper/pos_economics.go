@@ -32,10 +32,7 @@ func (k Keeper) buildStakeDistribution(ctx sdk.Context, performances []types.Val
 		return stakes, total
 	}
 
-	totalStake := k.stakingKeeper.GetTotalStake(ctx)
-	if totalStake <= 0 {
-		totalStake = saturatingMulInt64(minVirtualStakeUnits, int64(len(performances)))
-	}
+	var totalStake int64
 
 	for _, perf := range performances {
 		stake := int64(0)
@@ -47,6 +44,16 @@ func (k Keeper) buildStakeDistribution(ctx sdk.Context, performances []types.Val
 			stake = k.virtualStakeFromPerformance(perf)
 		}
 		stakes[perf.ValidatorAddress] = stake
+		totalStake = saturatingAddPositiveInt64(totalStake, stake)
+	}
+
+	// If we could not resolve a per-validator total snapshot, fall back to
+	// deterministic network totals to avoid division-by-zero paths.
+	if totalStake <= 0 {
+		totalStake = k.stakingKeeper.GetTotalStake(ctx)
+	}
+	if totalStake <= 0 {
+		totalStake = saturatingMulInt64(minVirtualStakeUnits, int64(len(performances)))
 	}
 
 	return stakes, totalStake
