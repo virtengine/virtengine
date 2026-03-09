@@ -241,8 +241,7 @@ func (s *RewardsTestSuite) TestCalculateIdentityNetworkReward() {
 
 	// 10% of verifications should yield ~10% of pool (plus quality bonus)
 	amount := reward.AmountOf("uve").Int64()
-	s.Require().Greater(amount, int64(9000000)) // More than 9% (includes quality bonus)
-	s.Require().Less(amount, int64(15000000))   // Less than 15%
+	s.Require().Equal(int64(9000000), amount) // 10% share discounted by 90% quality
 }
 
 // TestCalculateIdentityNetworkRewardZero tests zero verification case
@@ -413,7 +412,57 @@ func (s *RewardsTestSuite) TestRewardDeterminism() {
 	s.Require().Equal(reward2.PerformanceScore, reward3.PerformanceScore)
 }
 
-// TestVEIDBonusForHighScore tests VEID bonus for excellent verification
+func (s *RewardsTestSuite) TestCalculateRewardsCapsSingleValidatorToEpochPool() {
+	perf := types.NewValidatorPerformance("validator1", 1)
+	perf.BlocksProposed = 100
+	perf.BlocksExpected = 100
+	perf.VEIDVerificationsCompleted = 10
+	perf.VEIDVerificationsExpected = 10
+	perf.VEIDVerificationScore = types.MaxPerformanceScore
+	perf.UptimeSeconds = 3600
+	types.ComputeOverallScore(perf)
+
+	input := types.RewardCalculationInput{
+		ValidatorAddress: "validator1",
+		Performance:      perf,
+		StakeAmount:      1_000_000,
+		TotalStake:       1_000_000,
+		EpochRewardPool:  100_000_000,
+	}
+
+	reward := types.CalculateRewards(input, "uve")
+	s.Require().Equal(int64(30_000_000), reward.BlockProposalReward.AmountOf("uve").Int64())
+	s.Require().Equal(int64(40_000_000), reward.VEIDReward.AmountOf("uve").Int64())
+	s.Require().Equal(int64(30_000_000), reward.UptimeReward.AmountOf("uve").Int64())
+	s.Require().Equal(int64(100_000_000), reward.TotalReward.AmountOf("uve").Int64())
+}
+
+func (s *RewardsTestSuite) TestCalculateRewardsPenalizesLowPerformanceWithoutOverpaying() {
+	perf := types.NewValidatorPerformance("validator1", 1)
+	perf.BlocksProposed = 20
+	perf.BlocksExpected = 100
+	perf.VEIDVerificationsCompleted = 1
+	perf.VEIDVerificationsExpected = 10
+	perf.VEIDVerificationScore = 5000
+	perf.UptimeSeconds = 1800
+	perf.DowntimeSeconds = 1800
+	types.ComputeOverallScore(perf)
+
+	input := types.RewardCalculationInput{
+		ValidatorAddress: "validator1",
+		Performance:      perf,
+		StakeAmount:      1_000_000,
+		TotalStake:       1_000_000,
+		EpochRewardPool:  100_000_000,
+	}
+
+	reward := types.CalculateRewards(input, "uve")
+	total := reward.TotalReward.AmountOf("uve").Int64()
+	s.Require().Greater(total, int64(0))
+	s.Require().Less(total, int64(100_000_000))
+}
+
+// TestVEIDBonusForHighScore tests score-sensitive VEID rewards.
 func (s *RewardsTestSuite) TestVEIDBonusForHighScore() {
 	// High VEID score (>= 9000)
 	perfHigh := types.NewValidatorPerformance("validator1", 1)

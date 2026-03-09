@@ -427,6 +427,33 @@ func (s *StakingKeeperTestSuite) TestSlashForInvalidAttestation() {
 	s.Require().Equal(types.SlashReasonInvalidVEIDAttestation, slashRecord.Reason)
 }
 
+func (s *StakingKeeperTestSuite) TestSlashValidatorUsesOnChainParams() {
+	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
+
+	params := s.keeper.GetParams(s.ctx)
+	params.SlashFractionDowntime = 2500
+	params.JailDurationDowntime = 900
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	slashRecord, err := s.keeper.SlashValidator(s.ctx, validatorAddr, types.SlashReasonDowntime, 90, "downtime evidence")
+	s.Require().NoError(err)
+	s.Require().NotNil(slashRecord)
+	s.Require().Equal(int64(2500), slashRecord.Amount.AmountOf("uve").Int64())
+	s.Require().Equal(int64(2500), slashRecord.SlashPercent)
+	s.Require().True(slashRecord.Jailed)
+	s.Require().Equal(int64(900), slashRecord.JailDuration)
+	s.Require().NotNil(slashRecord.JailedUntil)
+	s.Require().Equal(s.ctx.BlockTime().Add(15*time.Minute), *slashRecord.JailedUntil)
+
+	info, found := s.keeper.GetValidatorSigningInfo(s.ctx, validatorAddr)
+	s.Require().True(found)
+	s.Require().NotNil(info.JailedUntil)
+	s.Require().Equal(*slashRecord.JailedUntil, *info.JailedUntil)
+	s.Require().Len(s.stakeKeeper.slashCalls, 1)
+	s.Require().Equal("0.002500000000000000", s.stakeKeeper.slashCalls[0].Fraction)
+}
+
 // TestIterators tests iteration functions
 func (s *StakingKeeperTestSuite) TestIterators() {
 	// Create multiple performances

@@ -6,6 +6,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -127,8 +128,10 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 		return nil, types.ErrValidatorJailed.Wrap("validator is tombstoned")
 	}
 
+	params := k.GetParams(ctx)
+
 	// Get slash configuration
-	slashConfig := types.GetSlashConfig(reason)
+	slashConfig := types.GetSlashConfigForParams(reason, params)
 
 	// Calculate escalation based on previous infractions
 	escalatedSlashPercent := slashConfig.SlashPercent
@@ -137,11 +140,8 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	if found {
 		// Apply escalation for repeat offenders
 		for i := int64(0); i < signingInfo.InfractionCount; i++ {
-			escalatedSlashPercent *= slashConfig.EscalationMultiplier
-			if escalatedSlashPercent > types.FixedPointScale {
-				escalatedSlashPercent = types.FixedPointScale // Cap at 100%
-			}
-			escalatedJailDuration *= slashConfig.EscalationMultiplier
+			escalatedSlashPercent = saturatingScaledPenalty(escalatedSlashPercent, slashConfig.EscalationMultiplier, types.FixedPointScale)
+			escalatedJailDuration = saturatingScaledPenalty(escalatedJailDuration, slashConfig.EscalationMultiplier, math.MaxInt64)
 		}
 	}
 
@@ -158,7 +158,7 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	slashTokens := big.NewInt(stake)
 	slashTokens.Mul(slashTokens, big.NewInt(escalatedSlashPercent))
 	slashTokens.Div(slashTokens, big.NewInt(types.FixedPointScale))
-	slashAmount := sdk.NewCoins(sdk.NewCoin(k.GetParams(ctx).RewardDenom, sdkmath.NewIntFromBigInt(slashTokens)))
+	slashAmount := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, sdkmath.NewIntFromBigInt(slashTokens)))
 
 	slashFraction := sdkmath.LegacyNewDecWithPrec(escalatedSlashPercent, 6)
 	if err := k.stakingKeeper.SlashDelegations(ctx, validatorAddr, slashFraction, infractionHeight); err != nil {
@@ -237,6 +237,31 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	)
 
 	return slashRecord, nil
+}
+
+func saturatingScaledPenalty(value, multiplier, cap int64) int64 {
+	if value <= 0 || multiplier <= 1 {
+		if value < 0 {
+			return 0
+		}
+		if value > cap {
+			return cap
+		}
+		return value
+	}
+
+	current := value
+	if current > cap {
+		return cap
+	}
+	if current > cap/multiplier {
+		return cap
+	}
+	current *= multiplier
+	if current > cap {
+		return cap
+	}
+	return current
 }
 
 // SlashForDoubleSigning slashes a validator for double signing
