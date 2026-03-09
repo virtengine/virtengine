@@ -54,7 +54,6 @@ func (k Keeper) buildStakeDistribution(ctx sdk.Context, performances []types.Val
 	if networkTotalStake > totalStake {
 		totalStake = networkTotalStake
 	}
-
 	if totalStake <= 0 {
 		totalStake = saturatingMulInt64(minVirtualStakeUnits, int64(len(performances)))
 	}

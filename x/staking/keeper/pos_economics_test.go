@@ -94,9 +94,9 @@ func TestBuildStakeDistributionUsesResolvedStakeSnapshotTotal(t *testing.T) {
 
 	stakes, totalStake := k.buildStakeDistribution(ctx, performances)
 	require.Len(t, stakes, 2)
-	require.Greater(t, stakes[addrFallback], int64(0))
-	require.Equal(t, stakes[addrWithStake]+stakes[addrFallback], totalStake)
-	require.Greater(t, totalStake, int64(100))
+require.Greater(t, stakes[addrFallback], int64(0))
+require.Equal(t, stakes[addrWithStake]+stakes[addrFallback], totalStake)
+require.Greater(t, totalStake, int64(100))
 }
 
 func TestBuildStakeDistributionUsesNetworkTotalWhenHigher(t *testing.T) {
