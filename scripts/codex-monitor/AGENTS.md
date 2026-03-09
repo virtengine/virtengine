@@ -1,9 +1,9 @@
-# Bosun Shim — AGENTS Guide
+# Codex Monitor — AGENTS Guide
 
 ## Module Overview
-- Purpose: Provide a legacy npm shim that forwards `bosun` CLI commands to `bosun`.
-- Use when: Updating the deprecation redirect behavior or adding legacy command aliases.
-- Key entry points: `scripts/bosun/cli.mjs:1`, `scripts/bosun/package.json:1`.
+- Purpose: Package and document the `codex-monitor` CLI wrapper for monitoring Codex sessions and hooks.
+- Use when: Updating the monitor launcher, package metadata, or usage documentation.
+- Key entry points: `scripts/codex-monitor/bin/codex-monitor.mjs:1`, `scripts/codex-monitor/package.json:1`.
 
 ## Architecture
 - Single entrypoint script resolves the installed `bosun` package
@@ -22,25 +22,25 @@ flowchart TD
 ## Core Concepts
 - Legacy compatibility: keep the old command names working while funneling users
   to the new `bosun` binaries.
-- Forwarding: the shim delegates execution to bosun and preserves CLI args.
+- Forwarding: the wrapper preserves CLI args and exits with the monitor process result.
 
 ## Usage Examples
 
-### Install the legacy shim
+### Install the monitor
 ```bash
-npm install -g bosun
+npm install && npm link
 ```
 
-### Run the shim (forwards to bosun)
+### Run the monitor
 ```bash
-bosun --help
+codex-monitor --help
 ```
 
 ## Implementation Patterns
 - Add new legacy aliases by updating `bin` entries in
   `scripts/bosun/package.json:1` and mapping in
   `scripts/bosun/cli.mjs:1`.
-- Keep the shim minimal and avoid embedding bosun logic here.
+- Keep the wrapper minimal and avoid duplicating monitor internals here.
 - Anti-patterns:
   - Duplicating bosun implementation in the shim.
   - Removing legacy aliases without a documented migration path.
@@ -49,11 +49,12 @@ bosun --help
 - No runtime configuration beyond standard Node.js environment.
 
 ## Testing
-- No automated tests for the shim.
+- No automated tests for the wrapper.
 - Manual smoke check (requires published or local bosun install):
   - `node scripts/bosun/cli.mjs --help`
 
 ## Troubleshooting
 - Shim cannot find bosun:
   - Cause: `bosun` dependency not installed.
-  - Fix: `npm install -g bosun` or reinstall `bosun`.
+  - Fix: `npm install && npm link` or reinstall `bosun`.
+

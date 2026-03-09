@@ -181,7 +181,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 | x/fraud | 4,793 | 3,090 | Complete | Needs escrow/settlement integration |
 | x/support | 4,488 | 1,526 | Complete | Retention queue is placeholder scan loop |
 | x/benchmark | 4,235 | 1,261 | Complete | Hand-rolled proto stubs |
-| x/staking | 3,827 | 1,699 | Complete | **Slash/reward calculations are placeholders** |
+| x/staking | 3,827 | 1,699 | Complete | Deterministic stake-weighted rewards/slashing and delegator routing implemented |
 | x/provider | 3,487 | 2,584 | Complete | None critical |
 
 ### Tier 3: Moderate Implementation (1-3k LOC)
@@ -239,7 +239,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 | 4 | DEX services (crypto→fiat) | **40%** | Settlement offramp logic exists; no DEX integration |
 | 5 | Multiple auth options (ledger, MFA, SSO) | **90%** | MFA module comprehensive |
 | 6 | Encryption via third-party keys | **95%** | X25519-XSalsa20-Poly1305 envelope fully implemented |
-| 7 | Proof-of-Stake consensus | **60%** | **Staking rewards/slashing are placeholders** |
+| 7 | Proof-of-Stake consensus | **80%** | Deterministic rewards/slashing landed; resource-capacity integration remains |
 | 8 | Cloud marketplace for computing | **75%** | Modules exist; provider can't submit txns (BroadcastTx no-op) |
 | 9 | HPC pre-configured workloads | **80%** | HPC job templates exist; SLURM cluster automation incomplete |
 | 10 | System combining 2+ of: ID, Cloud, HPC | **80%** | All three exist but integration untested |
@@ -259,7 +259,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 ### Chain Blockers (P0 — Must fix before any demo/audit)
 
 1. **Chain Submitter BroadcastTx is a no-op** (pkg/provider\_daemon/chain\_submitter.go:461) — The entire marketplace cannot function if providers can't submit transactions
-2. **Staking rewards/slashing are placeholders** (x/staking/keeper/slashing.go:147, rewards.go:140) — Patent Claim 7 requires real PoS economics
+2. **Resources capacity integration remains incomplete** — staking economics are implemented, but downstream resource-capacity coupling is still pending for Claim 7 completeness
 3. **Proto generation pipeline not automated** — 10 modules use hand-rolled stubs instead of generated code from existing .proto defs in sdk/proto/node/
 
 ### High Priority (P1 — Required for completeness)
@@ -286,7 +286,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 | Order | Bosun ID | Title | Priority | Dependencies | Status |
 | --- | --- | --- | --- | --- | --- |
 | 80A | `3ef33106` | feat(provider): chain submitter BroadcastTx + TxBuilder + chain client completion | P0 | 83A, 83C | **todo** |
-| 80B | `84d2482e` | feat(staking): real stake-weighted rewards/slashing + delegation economics + resources capacity | P0 | 83A, 83C | **todo** |
+| 80B | `84d2482e` | feat(staking): real stake-weighted rewards/slashing + delegation economics + resources capacity | P0 | 83A, 83C | **🔶 in progress** (staking economics complete; resource-capacity follow-up remains) |
 | 80C | `1d5c01be` | feat(market): proto generation pipeline + query stack + end-to-end marketplace flow | P0 | 83A, 83C | **todo** |
 
 #### Phase 2: Module Completion (P1 — parallel after Phase 1)
@@ -335,3 +335,4 @@ Phase 2 (P1 parallel): 81A, 81B, 81C — HPC rewards, oracle/BME, fraud/enclave
 Phase 3 (P1 parallel): 82A, 82B — IBC bridging, roles/audit/governance
 
 **83A is complete.** Agents now resolve to workspace repos via `resolveAgentRepoRoot()`. Chain tasks 80A-82B can proceed. The 83B/83C remaining gaps (per-repo branch config, periodic sync, ensureGitAncestor, temp writable roots) are hardening items that can be addressed in parallel with chain work.
+

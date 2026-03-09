@@ -465,6 +465,32 @@ func (s *RewardsTestSuite) TestCalculateRewardsPenalizesLowPerformanceWithoutOve
 	s.Require().Less(total, int64(100_000_000))
 }
 
+func (s *RewardsTestSuite) TestCalculateRewardsAllocatesRemainderDeterministically() {
+	perf := types.NewValidatorPerformance("validator-remainder", 1)
+	perf.BlocksProposed = 10
+	perf.BlocksExpected = 10
+	perf.VEIDVerificationsCompleted = 10
+	perf.VEIDVerificationsExpected = 10
+	perf.VEIDVerificationScore = types.MaxPerformanceScore
+	perf.UptimeSeconds = 3600
+	perf.DowntimeSeconds = 0
+	types.ComputeOverallScore(perf)
+
+	reward := types.CalculateRewards(types.RewardCalculationInput{
+		ValidatorAddress: "validator-remainder",
+		Performance:      perf,
+		StakeAmount:      1,
+		TotalStake:       2,
+		EpochRewardPool:  3,
+		BlocksInEpoch:    3,
+	}, "uve")
+
+	s.Require().Equal(int64(1), reward.TotalReward.AmountOf("uve").Int64())
+	s.Require().True(reward.BlockProposalReward.IsZero())
+	s.Require().Equal(int64(1), reward.VEIDReward.AmountOf("uve").Int64())
+	s.Require().True(reward.UptimeReward.IsZero())
+}
+
 // TestVEIDBonusForHighScore tests score-sensitive VEID rewards.
 func (s *RewardsTestSuite) TestVEIDBonusForHighScore() {
 	// High VEID score (>= 9000)
