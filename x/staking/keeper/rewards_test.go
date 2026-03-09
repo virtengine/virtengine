@@ -572,7 +572,6 @@ func (s *RewardsTestSuite) TestCalculateRewardsAllocatesRemainderDeterministical
 	s.Require().Equal(int64(1), reward.VEIDReward.AmountOf("uve").Int64())
 	s.Require().True(reward.UptimeReward.IsZero())
 }
-
 // TestVEIDBonusForHighScore tests score-sensitive VEID rewards.
 func (s *RewardsTestSuite) TestVEIDBonusForHighScore() {
 	// High VEID score (>= 9000)
