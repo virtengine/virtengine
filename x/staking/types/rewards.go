@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	stakingv1 "github.com/virtengine/virtengine/sdk/go/node/staking/v1"
@@ -121,7 +122,7 @@ func CalculateRewards(input RewardCalculationInput, denom string) *stakingv1.Val
 		return reward
 	}
 
-	stakeWeight := (input.StakeAmount * FixedPointScale) / input.TotalStake
+	stakeWeight := formatFixedPointRatio(input.StakeAmount, input.TotalStake)
 	blockScore, veidScore, uptimeScore, overallScore := rewardComponentScores(input.Performance)
 
 	type rewardComponent int
@@ -153,7 +154,7 @@ func CalculateRewards(input RewardCalculationInput, denom string) *stakingv1.Val
 	denominator.Mul(denominator, big.NewInt(MaxPerformanceScore))
 
 	remainders := make([]rewardRemainder, 0, len(allocations))
-	totalAllocated := int64(0)
+	totalAllocated := big.NewInt(0)
 	totalNumerator := big.NewInt(0)
 
 	for _, allocation := range allocations {
@@ -166,23 +167,22 @@ func CalculateRewards(input RewardCalculationInput, denom string) *stakingv1.Val
 		quotient := new(big.Int)
 		remainder := new(big.Int)
 		quotient.QuoRem(numerator, denominator, remainder)
-		amount := quotient.Int64()
-		totalAllocated += amount
+		totalAllocated.Add(totalAllocated, quotient)
 		remainders = append(remainders, rewardRemainder{component: allocation.component, remainder: remainder})
 
 		switch allocation.component {
 		case rewardComponentBlock:
-			reward.BlockProposalReward = coinSetFromAmount(denom, amount)
+			reward.BlockProposalReward = coinSetFromBigInt(denom, quotient)
 		case rewardComponentVEID:
-			reward.VEIDReward = coinSetFromAmount(denom, amount)
+			reward.VEIDReward = coinSetFromBigInt(denom, quotient)
 		case rewardComponentUptime:
-			reward.UptimeReward = coinSetFromAmount(denom, amount)
+			reward.UptimeReward = coinSetFromBigInt(denom, quotient)
 		}
 	}
 
-	totalEarned := new(big.Int).Quo(totalNumerator, denominator).Int64()
-	leftover := totalEarned - totalAllocated
-	if leftover > 0 {
+	totalEarned := new(big.Int).Quo(totalNumerator, denominator)
+	leftover := new(big.Int).Sub(totalEarned, totalAllocated)
+	if leftover.Sign() > 0 {
 		sort.SliceStable(remainders, func(i, j int) bool {
 			cmp := remainders[i].remainder.Cmp(remainders[j].remainder)
 			if cmp != 0 {
@@ -191,7 +191,8 @@ func CalculateRewards(input RewardCalculationInput, denom string) *stakingv1.Val
 			return remainders[i].component < remainders[j].component
 		})
 
-		for idx := int64(0); idx < leftover && idx < int64(len(remainders)); idx++ {
+		one := big.NewInt(1)
+		for idx := 0; idx < len(remainders) && leftover.Sign() > 0; idx++ {
 			switch remainders[idx].component {
 			case rewardComponentBlock:
 				reward.BlockProposalReward = incrementCoinSet(reward.BlockProposalReward, denom)
@@ -200,11 +201,12 @@ func CalculateRewards(input RewardCalculationInput, denom string) *stakingv1.Val
 			case rewardComponentUptime:
 				reward.UptimeReward = incrementCoinSet(reward.UptimeReward, denom)
 			}
+			leftover.Sub(leftover, one)
 		}
 	}
 
 	reward.PerformanceScore = overallScore
-	reward.StakeWeight = fmt.Sprintf("%d", stakeWeight)
+	reward.StakeWeight = stakeWeight
 
 	reward.TotalReward = ComputeTotalReward(reward)
 
@@ -302,7 +304,28 @@ func coinSetFromAmount(denom string, amount int64) sdk.Coins {
 	return sdk.NewCoins(sdk.NewInt64Coin(denom, amount))
 }
 
+func coinSetFromBigInt(denom string, amount *big.Int) sdk.Coins {
+	if amount == nil || amount.Sign() <= 0 {
+		return sdk.NewCoins()
+	}
+	return sdk.NewCoins(sdk.NewCoin(denom, sdkmath.NewIntFromBigInt(amount)))
+}
+
 func incrementCoinSet(coins sdk.Coins, denom string) sdk.Coins {
-	amount := coins.AmountOf(denom).Int64()
-	return coinSetFromAmount(denom, amount+1)
+	amount := coins.AmountOf(denom)
+	if amount.IsNil() {
+		amount = sdkmath.ZeroInt()
+	}
+	return sdk.NewCoins(sdk.NewCoin(denom, amount.AddRaw(1)))
+}
+
+func formatFixedPointRatio(numerator, denominator int64) string {
+	if numerator <= 0 || denominator <= 0 {
+		return "0"
+	}
+
+	ratio := big.NewInt(numerator)
+	ratio.Mul(ratio, big.NewInt(FixedPointScale))
+	ratio.Div(ratio, big.NewInt(denominator))
+	return ratio.String()
 }
