@@ -69,10 +69,9 @@ func TestCalculateIdentityNetworkRewardIsDeterministic(t *testing.T) {
 	first := CalculateIdentityNetworkReward(input, "uve")
 	second := CalculateIdentityNetworkReward(input, "uve")
 
-	require.True(t, first.Equal(second))
-	require.Equal(t, int64(9_000_000), first.AmountOf("uve").Int64())
+require.True(t, first.Equal(second))
+require.Equal(t, int64(9_000_000), first.AmountOf("uve").Int64())
 }
-
 func TestCalculateIdentityNetworkRewardHandlesLargePoolWithoutOverflow(t *testing.T) {
 	input := IdentityNetworkRewardInput{
 		ValidatorAddress:         "validator-overflow",
@@ -85,7 +84,6 @@ func TestCalculateIdentityNetworkRewardHandlesLargePoolWithoutOverflow(t *testin
 	reward := CalculateIdentityNetworkReward(input, "uve")
 	require.Equal(t, int64(math.MaxInt64), reward.AmountOf("uve").Int64())
 }
-
 func TestCalculateRewardsHandlesLargeStakeWithoutOverflow(t *testing.T) {
 	perf := NewValidatorPerformance("validator-large", 1)
 	perf.BlocksProposed = 100
@@ -106,9 +104,8 @@ func TestCalculateRewardsHandlesLargeStakeWithoutOverflow(t *testing.T) {
 	}, "uve")
 
 	require.Equal(t, rewardPool, reward.TotalReward.AmountOf("uve").Int64())
-	require.Equal(t, int64(FixedPointScale), mustParseInt64(t, reward.StakeWeight))
+require.Equal(t, int64(FixedPointScale), mustParseInt64(t, reward.StakeWeight))
 }
-
 func TestCalculateRewardsClampsOutOfRangeVEIDScoreBeforeWeighting(t *testing.T) {
 	perf := NewValidatorPerformance("validator-clamp", 1)
 	perf.BlocksProposed = 100

@@ -305,7 +305,6 @@ func coinSetFromBigInt(denom string, amount *big.Int) sdk.Coins {
 	}
 	return sdk.NewCoins(sdk.NewCoin(denom, sdkmath.NewIntFromBigInt(amount)))
 }
-
 func incrementCoinSet(coins sdk.Coins, denom string) sdk.Coins {
 	amount := coins.AmountOf(denom)
 	if amount.IsNil() {
