@@ -281,7 +281,6 @@ func (k Keeper) CalculateVEIDRewards(ctx sdk.Context, epoch uint64) ([]types.Val
 
 		reward := types.NewValidatorReward(perf.ValidatorAddress, epoch)
 		reward.VEIDReward = veidReward
-		reward.IdentityNetworkReward = veidReward
 		calculatedAt := ctx.BlockTime()
 		reward.CalculatedAt = &calculatedAt
 		reward.BlockHeight = ctx.BlockHeight()

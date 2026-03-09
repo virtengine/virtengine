@@ -381,6 +381,48 @@ func (s *RewardsTestSuite) TestCalculateVEIDRewards() {
 		rewards[1].VEIDReward.AmountOf("uve").Int64(),
 		rewards[0].VEIDReward.AmountOf("uve").Int64(),
 	)
+	s.Require().True(rewards[0].IdentityNetworkReward.IsZero())
+	s.Require().True(rewards[1].IdentityNetworkReward.IsZero())
+	s.Require().True(rewards[0].TotalReward.Equal(rewards[0].VEIDReward))
+	s.Require().True(rewards[1].TotalReward.Equal(rewards[1].VEIDReward))
+}
+
+func (s *RewardsTestSuite) TestDistributeRewardsDoesNotDoubleCountVEIDPool() {
+	epoch := uint64(1)
+	validatorAddr := sdk.AccAddress([]byte("veid-reward-validator-0001")).String()
+
+	epochInfo := types.NewRewardEpoch(epoch, 1, s.ctx.BlockTime())
+	epochInfo.EndHeight = 101
+	s.Require().NoError(s.keeper.SetRewardEpoch(s.ctx, *epochInfo))
+
+	params := s.keeper.GetParams(s.ctx)
+	params.BaseRewardPerBlock = 0
+	params.VEIDRewardPool = 100
+	params.IdentityNetworkRewardPool = 50
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
+
+	perf := types.NewValidatorPerformance(validatorAddr, epoch)
+	perf.VEIDVerificationsCompleted = 10
+	perf.VEIDVerificationsExpected = 10
+	perf.VEIDVerificationScore = types.MaxPerformanceScore
+	perf.UptimeSeconds = 3600
+	types.ComputeOverallScore(perf)
+	s.Require().NoError(s.keeper.SetValidatorPerformance(s.ctx, *perf))
+
+	bankKeeper := &mockBankKeeper{}
+	s.keeper.bankKeeper = bankKeeper
+
+	s.Require().NoError(s.keeper.DistributeRewards(s.ctx, epoch))
+
+	reward, found := s.keeper.GetValidatorReward(s.ctx, validatorAddr, epoch)
+	s.Require().True(found)
+	s.Require().Equal(int64(100), reward.VEIDReward.AmountOf("uve").Int64())
+	s.Require().True(reward.IdentityNetworkReward.IsZero())
+	s.Require().Equal(int64(100), reward.TotalReward.AmountOf("uve").Int64())
+	s.Require().Len(bankKeeper.minted, 1)
+	s.Require().Equal(int64(100), bankKeeper.minted[0].AmountOf("uve").Int64())
 }
 
 // TestRewardDeterminism tests that reward calculations are deterministic
