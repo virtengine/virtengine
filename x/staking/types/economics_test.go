@@ -133,7 +133,6 @@ func TestCalculateRewardsClampsOutOfRangeVEIDScoreBeforeWeighting(t *testing.T) 
 	require.Equal(t, int64(30_000_000), reward.UptimeReward.AmountOf("uve").Int64())
 	require.Equal(t, int64(80_000_000), reward.TotalReward.AmountOf("uve").Int64())
 }
-
 func TestGetSlashConfigForParamsUsesOnChainEconomics(t *testing.T) {
 	params := DefaultParams()
 	params.SlashFractionDoubleSign = 55_000
