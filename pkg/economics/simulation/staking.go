@@ -8,6 +8,15 @@ import (
 	"github.com/virtengine/virtengine/pkg/economics"
 )
 
+const (
+	blockRewardShareBPS  int64 = 8000
+	uptimeRewardShareBPS int64 = 2000
+	warningUptimeBPS     int64 = 9900
+	minorSlashUptimeBPS  int64 = 9800
+	minorSlashPenaltyBPS int64 = 50
+	majorSlashPenaltyBPS int64 = 100
+)
+
 // StakingSimulator simulates staking reward dynamics.
 type StakingSimulator struct {
 	params economics.TokenomicsParams
@@ -24,22 +33,49 @@ func (s *StakingSimulator) SimulateRewardDistribution(
 	epochBlocks int64,
 ) []ValidatorRewardResult {
 	results := make([]ValidatorRewardResult, len(validators))
+	for i := range results {
+		results[i] = newValidatorRewardResult(validators[i].Address)
+	}
+
+	if epochBlocks <= 0 {
+		return results
+	}
 
 	// Calculate total stake
 	totalStake := big.NewInt(0)
 	for _, v := range validators {
-		totalStake.Add(totalStake, v.TotalStake)
+		totalStake.Add(totalStake, safeBigInt(v.TotalStake))
 	}
 
 	if totalStake.Sign() == 0 {
 		return results
 	}
 
-	// Calculate epoch reward pool
-	epochRewardPool := s.params.BaseRewardPerBlock * epochBlocks
+	consensusPool := new(big.Int).Mul(big.NewInt(s.params.BaseRewardPerBlock), big.NewInt(epochBlocks))
+	blockRewardPool := bpsMul(consensusPool, blockRewardShareBPS)
+	uptimeRewardPool := bpsMul(consensusPool, uptimeRewardShareBPS)
+	veidRewardPool := s.scaleAnnualPoolToEpoch(s.params.VEIDRewardPool, epochBlocks)
+
+	blockRewards := distributePool(validators, blockRewardPool, func(v economics.ValidatorState) *big.Int {
+		return new(big.Int).Set(safeBigInt(v.TotalStake))
+	})
+	uptimeRewards := distributePool(validators, uptimeRewardPool, func(v economics.ValidatorState) *big.Int {
+		weight := new(big.Int).Set(safeBigInt(v.TotalStake))
+		if weight.Sign() == 0 {
+			return weight
+		}
+		weight.Mul(weight, big.NewInt(clampBPS(v.UptimeScore)))
+		return weight
+	})
+	veidRewards := distributePool(validators, veidRewardPool, func(v economics.ValidatorState) *big.Int {
+		if v.VEIDVerifications <= 0 {
+			return big.NewInt(0)
+		}
+		return big.NewInt(v.VEIDVerifications)
+	})
 
 	for i, validator := range validators {
-		results[i] = s.calculateValidatorReward(validator, totalStake, epochRewardPool)
+		results[i] = s.calculateValidatorReward(validator, epochBlocks, blockRewards[i], uptimeRewards[i], veidRewards[i])
 	}
 
 	return results
@@ -48,9 +84,11 @@ func (s *StakingSimulator) SimulateRewardDistribution(
 // ValidatorRewardResult contains calculated rewards for a validator.
 type ValidatorRewardResult struct {
 	Address             string   `json:"address"`
+	GrossReward         *big.Int `json:"gross_reward"`
 	BlockProposalReward *big.Int `json:"block_proposal_reward"`
 	VEIDReward          *big.Int `json:"veid_reward"`
 	UptimeReward        *big.Int `json:"uptime_reward"`
+	SlashPenalty        *big.Int `json:"slash_penalty"`
 	TotalReward         *big.Int `json:"total_reward"`
 	CommissionEarned    *big.Int `json:"commission_earned"`
 	DelegatorRewards    *big.Int `json:"delegator_rewards"`
@@ -60,78 +98,41 @@ type ValidatorRewardResult struct {
 // calculateValidatorReward calculates rewards for a single validator.
 func (s *StakingSimulator) calculateValidatorReward(
 	validator economics.ValidatorState,
-	totalStake *big.Int,
-	epochRewardPool int64,
+	epochBlocks int64,
+	blockReward *big.Int,
+	uptimeReward *big.Int,
+	veidReward *big.Int,
 ) ValidatorRewardResult {
-	result := ValidatorRewardResult{
-		Address:             validator.Address,
-		BlockProposalReward: big.NewInt(0),
-		VEIDReward:          big.NewInt(0),
-		UptimeReward:        big.NewInt(0),
-		TotalReward:         big.NewInt(0),
-		CommissionEarned:    big.NewInt(0),
-		DelegatorRewards:    big.NewInt(0),
-	}
+	result := newValidatorRewardResult(validator.Address)
+	validatorStake := safeBigInt(validator.TotalStake)
 
-	if totalStake.Sign() == 0 || validator.TotalStake.Sign() == 0 {
+	if validatorStake.Sign() == 0 || epochBlocks <= 0 {
 		return result
 	}
 
-	// Stake weight (scaled by 1e6 for precision)
-	stakeWeight := new(big.Int).Mul(validator.TotalStake, big.NewInt(1000000))
-	stakeWeight.Div(stakeWeight, totalStake)
+	result.BlockProposalReward = new(big.Int).Set(blockReward)
+	result.UptimeReward = new(big.Int).Set(uptimeReward)
+	result.VEIDReward = new(big.Int).Set(veidReward)
+	result.GrossReward = sumBigInts(result.BlockProposalReward, result.UptimeReward, result.VEIDReward)
+	result.SlashPenalty = s.calculateEpochSlashPenalty(validatorStake, slashPenaltyBPS(clampBPS(validator.UptimeScore)), epochBlocks)
 
-	// Base reward proportional to stake
-	baseReward := new(big.Int).Mul(big.NewInt(epochRewardPool), stakeWeight)
-	baseReward.Div(baseReward, big.NewInt(1000000))
-
-	// Performance multiplier (0.5 to 1.5x based on uptime score 0-10000)
-	// Score 0 = 50% multiplier, Score 10000 = 150% multiplier
-	performanceMultiplier := 5000 + validator.UptimeScore
-	adjustedReward := new(big.Int).Mul(baseReward, big.NewInt(performanceMultiplier))
-	adjustedReward.Div(adjustedReward, big.NewInt(10000))
-
-	// Reward weights (must sum to 10000)
-	const (
-		weightBlockProposal = 5000 // 50%
-		weightVEID          = 2000 // 20%
-		weightUptime        = 3000 // 30%
-	)
-
-	// Block proposal reward
-	result.BlockProposalReward = new(big.Int).Mul(adjustedReward, big.NewInt(weightBlockProposal))
-	result.BlockProposalReward.Div(result.BlockProposalReward, big.NewInt(10000))
-
-	// VEID verification reward
-	result.VEIDReward = new(big.Int).Mul(adjustedReward, big.NewInt(weightVEID))
-	result.VEIDReward.Div(result.VEIDReward, big.NewInt(10000))
-
-	// Bonus for high VEID verification count
-	if validator.VEIDVerifications > 100 {
-		bonus := new(big.Int).Mul(result.VEIDReward, big.NewInt(1000)) // 10% bonus
-		bonus.Div(bonus, big.NewInt(10000))
-		result.VEIDReward.Add(result.VEIDReward, bonus)
+	result.TotalReward = new(big.Int).Sub(new(big.Int).Set(result.GrossReward), result.SlashPenalty)
+	if result.TotalReward.Sign() < 0 {
+		result.TotalReward = big.NewInt(0)
 	}
 
-	// Uptime reward
-	result.UptimeReward = new(big.Int).Mul(adjustedReward, big.NewInt(weightUptime))
-	result.UptimeReward.Div(result.UptimeReward, big.NewInt(10000))
-
-	// Total reward
-	result.TotalReward = new(big.Int).Add(result.BlockProposalReward, result.VEIDReward)
-	result.TotalReward.Add(result.TotalReward, result.UptimeReward)
-
 	// Commission split
-	result.CommissionEarned = new(big.Int).Mul(result.TotalReward, big.NewInt(validator.Commission))
+	result.CommissionEarned = new(big.Int).Mul(result.TotalReward, big.NewInt(clampBPS(validator.Commission)))
 	result.CommissionEarned.Div(result.CommissionEarned, big.NewInt(10000))
 
 	result.DelegatorRewards = new(big.Int).Sub(result.TotalReward, result.CommissionEarned)
 
-	// Effective APR (annualized, assuming 1 epoch = 1 day for simplicity)
-	if validator.TotalStake.Sign() > 0 {
-		annualizedReward := new(big.Int).Mul(result.TotalReward, big.NewInt(365))
+	// Effective APR annualized to chain blocks-per-year.
+	if s.params.BlocksPerYear > 0 {
+		annualizedReward := new(big.Int).Mul(result.TotalReward, big.NewInt(s.params.BlocksPerYear))
+		annualizedReward.Div(annualizedReward, big.NewInt(epochBlocks))
 		apr := new(big.Int).Mul(annualizedReward, big.NewInt(10000))
-		apr.Div(apr, validator.TotalStake)
+		apr.Div(apr, validatorStake)
 		result.EffectiveAPR = apr.Int64()
 	}
 
@@ -241,18 +242,21 @@ func (s *StakingSimulator) estimateNetworkAPR(validators []economics.ValidatorSt
 
 	totalStake := big.NewInt(0)
 	for _, v := range validators {
-		totalStake.Add(totalStake, v.TotalStake)
+		totalStake.Add(totalStake, safeBigInt(v.TotalStake))
 	}
 
 	if totalStake.Sign() == 0 {
 		return 0
 	}
 
-	// Annual rewards
-	annualRewards := s.params.BaseRewardPerBlock * s.params.BlocksPerYear
+	annualRewards := big.NewInt(0)
+	annualRewards.Add(annualRewards, new(big.Int).Mul(big.NewInt(s.params.BaseRewardPerBlock), big.NewInt(s.params.BlocksPerYear)))
+	if s.params.VEIDRewardPool > 0 {
+		annualRewards.Add(annualRewards, big.NewInt(s.params.VEIDRewardPool))
+	}
 
 	// APR = (Annual Rewards / Total Staked) * 10000
-	apr := new(big.Int).Mul(big.NewInt(annualRewards), big.NewInt(10000))
+	apr := new(big.Int).Mul(annualRewards, big.NewInt(10000))
 	apr.Div(apr, totalStake)
 	return apr.Int64()
 }
@@ -518,4 +522,128 @@ func (s *StakingSimulator) calculateEpochInflation(supply, minted *big.Int) int6
 	inflation := new(big.Int).Mul(minted, big.NewInt(10000))
 	inflation.Div(inflation, supply)
 	return inflation.Int64()
+}
+
+func newValidatorRewardResult(address string) ValidatorRewardResult {
+	return ValidatorRewardResult{
+		Address:             address,
+		GrossReward:         big.NewInt(0),
+		BlockProposalReward: big.NewInt(0),
+		VEIDReward:          big.NewInt(0),
+		UptimeReward:        big.NewInt(0),
+		SlashPenalty:        big.NewInt(0),
+		TotalReward:         big.NewInt(0),
+		CommissionEarned:    big.NewInt(0),
+		DelegatorRewards:    big.NewInt(0),
+	}
+}
+
+func distributePool(
+	validators []economics.ValidatorState,
+	pool *big.Int,
+	weightFn func(economics.ValidatorState) *big.Int,
+) []*big.Int {
+	shares := make([]*big.Int, len(validators))
+	weights := make([]*big.Int, len(validators))
+	totalWeight := big.NewInt(0)
+	lastEligible := -1
+
+	for i, validator := range validators {
+		shares[i] = big.NewInt(0)
+		weight := weightFn(validator)
+		if weight == nil || weight.Sign() <= 0 {
+			weights[i] = big.NewInt(0)
+			continue
+		}
+		weights[i] = new(big.Int).Set(weight)
+		totalWeight.Add(totalWeight, weight)
+		lastEligible = i
+	}
+
+	if pool == nil || pool.Sign() <= 0 || totalWeight.Sign() == 0 || lastEligible == -1 {
+		return shares
+	}
+
+	distributed := big.NewInt(0)
+	for i, weight := range weights {
+		if weight.Sign() == 0 {
+			continue
+		}
+
+		if i == lastEligible {
+			shares[i] = new(big.Int).Sub(pool, distributed)
+			continue
+		}
+
+		share := new(big.Int).Mul(pool, weight)
+		share.Div(share, totalWeight)
+		shares[i] = share
+		distributed.Add(distributed, share)
+	}
+
+	return shares
+}
+
+func (s *StakingSimulator) scaleAnnualPoolToEpoch(pool, epochBlocks int64) *big.Int {
+	if pool <= 0 || epochBlocks <= 0 || s.params.BlocksPerYear <= 0 {
+		return big.NewInt(0)
+	}
+	scaled := new(big.Int).Mul(big.NewInt(pool), big.NewInt(epochBlocks))
+	scaled.Div(scaled, big.NewInt(s.params.BlocksPerYear))
+	return scaled
+}
+
+func safeBigInt(value *big.Int) *big.Int {
+	if value == nil {
+		return big.NewInt(0)
+	}
+	return value
+}
+
+func clampBPS(value int64) int64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 10000 {
+		return 10000
+	}
+	return value
+}
+
+func slashPenaltyBPS(uptimeBPS int64) int64 {
+	if uptimeBPS >= warningUptimeBPS {
+		return 0
+	}
+	if uptimeBPS >= minorSlashUptimeBPS {
+		return minorSlashPenaltyBPS
+	}
+	return majorSlashPenaltyBPS
+}
+
+func (s *StakingSimulator) calculateEpochSlashPenalty(stake *big.Int, slashBPS, epochBlocks int64) *big.Int {
+	if stake == nil || stake.Sign() == 0 || slashBPS <= 0 || epochBlocks <= 0 || s.params.BlocksPerYear <= 0 {
+		return big.NewInt(0)
+	}
+	penalty := new(big.Int).Mul(stake, big.NewInt(slashBPS))
+	penalty.Mul(penalty, big.NewInt(epochBlocks))
+	penalty.Div(penalty, big.NewInt(10000))
+	penalty.Div(penalty, big.NewInt(s.params.BlocksPerYear))
+	return penalty
+}
+
+func bpsMul(value *big.Int, bps int64) *big.Int {
+	if value == nil || value.Sign() == 0 || bps <= 0 {
+		return big.NewInt(0)
+	}
+	result := new(big.Int).Mul(value, big.NewInt(bps))
+	result.Div(result, big.NewInt(10000))
+	return result
+}
+
+func sumBigInts(values ...*big.Int) *big.Int {
+	total := big.NewInt(0)
+	for _, value := range values {
+		total.Add(total, safeBigInt(value))
+	}
+	return total
 }

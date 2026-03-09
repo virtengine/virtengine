@@ -208,6 +208,109 @@ func TestStakingSimulator_SimulateRewardDistribution(t *testing.T) {
 	}
 }
 
+func TestStakingSimulator_SimulateRewardDistribution_DeterministicEconomics(t *testing.T) {
+	params := economics.DefaultTokenomicsParams()
+	params.VEIDRewardPool = params.BlocksPerYear
+	sim := NewStakingSimulator(params)
+
+	validators := []economics.ValidatorState{
+		{
+			Address:           "validator1",
+			TotalStake:        big.NewInt(1_000_000_000),
+			Commission:        1000,
+			UptimeScore:       9950,
+			VEIDVerifications: 60,
+		},
+		{
+			Address:           "validator2",
+			TotalStake:        big.NewInt(500_000_000),
+			Commission:        500,
+			UptimeScore:       9850,
+			VEIDVerifications: 40,
+		},
+		{
+			Address:           "validator3",
+			TotalStake:        big.NewInt(250_000_000),
+			Commission:        0,
+			UptimeScore:       9700,
+			VEIDVerifications: 0,
+		},
+	}
+
+	epochBlocks := int64(100)
+	results := sim.SimulateRewardDistribution(validators, epochBlocks)
+
+	consensusPool := big.NewInt(params.BaseRewardPerBlock * epochBlocks)
+	expectedBlockPool := bpsMul(consensusPool, blockRewardShareBPS)
+	expectedUptimePool := bpsMul(consensusPool, uptimeRewardShareBPS)
+	expectedVEIDPool := big.NewInt(epochBlocks)
+
+	totalBlock := big.NewInt(0)
+	totalUptime := big.NewInt(0)
+	totalVEID := big.NewInt(0)
+	totalGross := big.NewInt(0)
+	for _, result := range results {
+		totalBlock.Add(totalBlock, result.BlockProposalReward)
+		totalUptime.Add(totalUptime, result.UptimeReward)
+		totalVEID.Add(totalVEID, result.VEIDReward)
+		totalGross.Add(totalGross, result.GrossReward)
+	}
+
+	if totalBlock.Cmp(expectedBlockPool) != 0 {
+		t.Fatalf("expected block pool %s, got %s", expectedBlockPool, totalBlock)
+	}
+	if totalUptime.Cmp(expectedUptimePool) != 0 {
+		t.Fatalf("expected uptime pool %s, got %s", expectedUptimePool, totalUptime)
+	}
+	if totalVEID.Cmp(expectedVEIDPool) != 0 {
+		t.Fatalf("expected VEID pool %s, got %s", expectedVEIDPool, totalVEID)
+	}
+
+	expectedGross := new(big.Int).Add(consensusPool, expectedVEIDPool)
+	if totalGross.Cmp(expectedGross) != 0 {
+		t.Fatalf("expected gross distribution %s, got %s", expectedGross, totalGross)
+	}
+
+	expectedMinorSlash := big.NewInt((500_000_000 * 50 * epochBlocks) / 10000 / params.BlocksPerYear)
+	if results[1].SlashPenalty.Cmp(expectedMinorSlash) != 0 {
+		t.Fatalf("expected minor slash %s, got %s", expectedMinorSlash, results[1].SlashPenalty)
+	}
+
+	expectedMajorSlash := big.NewInt((250_000_000 * 100 * epochBlocks) / 10000 / params.BlocksPerYear)
+	if results[2].SlashPenalty.Cmp(expectedMajorSlash) != 0 {
+		t.Fatalf("expected major slash %s, got %s", expectedMajorSlash, results[2].SlashPenalty)
+	}
+
+	expectedNet := new(big.Int).Sub(new(big.Int).Set(results[1].GrossReward), results[1].SlashPenalty)
+	if expectedNet.Sign() < 0 {
+		expectedNet = big.NewInt(0)
+	}
+	if results[1].TotalReward.Cmp(expectedNet) != 0 {
+		t.Fatalf("expected net reward %s, got %s", expectedNet, results[1].TotalReward)
+	}
+}
+
+func TestStakingSimulator_SimulateRewardDistribution_AnnualizesAPRByBlocks(t *testing.T) {
+	params := economics.DefaultTokenomicsParams()
+	params.VEIDRewardPool = 0
+	sim := NewStakingSimulator(params)
+
+	validators := []economics.ValidatorState{{
+		Address:           "validator1",
+		TotalStake:        big.NewInt(1_000_000_000),
+		Commission:        0,
+		UptimeScore:       10000,
+		VEIDVerifications: 0,
+	}}
+
+	shortEpoch := sim.SimulateRewardDistribution(validators, 100)
+	longEpoch := sim.SimulateRewardDistribution(validators, 250)
+
+	if shortEpoch[0].EffectiveAPR != longEpoch[0].EffectiveAPR {
+		t.Fatalf("expected APR to be epoch-invariant, got %d and %d", shortEpoch[0].EffectiveAPR, longEpoch[0].EffectiveAPR)
+	}
+}
+
 func TestStakingSimulator_AnalyzeStakingDynamics(t *testing.T) {
 	params := economics.DefaultTokenomicsParams()
 	sim := NewStakingSimulator(params)
