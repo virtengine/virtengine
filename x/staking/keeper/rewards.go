@@ -162,6 +162,8 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 	if epochInfo.Finalized {
 		return nil, types.ErrRewardsAlreadyDistributed.Wrapf("epoch %d already finalized", epoch)
 	}
+
+	// Calculate epoch reward pool
 	blocksInEpoch := types.EpochDuration(&epochInfo)
 	if blocksInEpoch == 0 {
 		blocksInEpoch = safeInt64FromUint64Rewards(params.EpochLength)
