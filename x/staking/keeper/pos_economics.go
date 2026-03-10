@@ -47,11 +47,14 @@ func (k Keeper) buildStakeDistribution(ctx sdk.Context, performances []types.Val
 		totalStake = saturatingAddPositiveInt64(totalStake, stake)
 	}
 
-	// If we could not resolve a per-validator total snapshot, fall back to
-	// deterministic network totals to avoid division-by-zero paths.
-	if totalStake <= 0 {
-		totalStake = k.stakingKeeper.GetTotalStake(ctx)
+	// Blend resolved per-validator stake with network-wide totals. Using the
+	// larger value prevents over-distribution when some validators have stake
+	// but no recorded performance entry in the current epoch.
+	networkTotalStake := k.stakingKeeper.GetTotalStake(ctx)
+	if networkTotalStake > totalStake {
+		totalStake = networkTotalStake
 	}
+
 	if totalStake <= 0 {
 		totalStake = saturatingMulInt64(minVirtualStakeUnits, int64(len(performances)))
 	}
