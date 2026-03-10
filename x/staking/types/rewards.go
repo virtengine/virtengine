@@ -299,13 +299,6 @@ func clampRewardScore(score int64) int64 {
 	return score
 }
 
-func coinSetFromAmount(denom string, amount int64) sdk.Coins {
-	if amount <= 0 {
-		return sdk.NewCoins()
-	}
-	return sdk.NewCoins(sdk.NewInt64Coin(denom, amount))
-}
-
 func coinSetFromBigInt(denom string, amount *big.Int) sdk.Coins {
 	if amount == nil || amount.Sign() <= 0 {
 		return sdk.NewCoins()
