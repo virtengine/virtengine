@@ -146,3 +146,51 @@ func TestBuildStakeDistributionUsesNetworkTotalWhenHigher(t *testing.T) {
 	require.Equal(t, int64(700), stakes[addrWithStake])
 	require.Equal(t, int64(1000), totalStake)
 }
+
+func TestBuildStakeDistributionUsesNetworkTotalWhenHigher(t *testing.T) {
+	skey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(skey, storetypes.StoreTypeIAVL, db)
+	require.NoError(t, stateStore.LoadLatestVersion())
+
+	registry := codectypes.NewInterfaceRegistry()
+	cdc := codec.NewProtoCodec(registry)
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Height: 1,
+		Time:   time.Now().UTC(),
+	}, false, log.NewNopLogger())
+
+	addrWithStake := sdk.AccAddress(bytes.Repeat([]byte{0x3}, 20)).String()
+	addrMissingPerf := sdk.AccAddress(bytes.Repeat([]byte{0x4}, 20)).String()
+
+	k := NewKeeper(
+		cdc,
+		skey,
+		nil,
+		nil,
+		mockStakingKeeper{
+			stakeByValidator: map[string]int64{
+				addrWithStake: 700,
+				// addrMissingPerf has stake but no performance sample this epoch.
+				addrMissingPerf: 300,
+			},
+			totalStake: 1000,
+		},
+		"authority",
+	)
+
+	performances := []types.ValidatorPerformance{
+		{
+			ValidatorAddress:          addrWithStake,
+			BlocksExpected:            10,
+			VEIDVerificationsExpected: 2,
+			OverallScore:              8000,
+		},
+	}
+
+	stakes, totalStake := k.buildStakeDistribution(ctx, performances)
+	require.Len(t, stakes, 1)
+	require.Equal(t, int64(700), stakes[addrWithStake])
+	require.Equal(t, int64(1000), totalStake)
+}
