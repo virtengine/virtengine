@@ -38,8 +38,8 @@ codex-monitor --help
 
 ## Implementation Patterns
 - Add new legacy aliases by updating `bin` entries in
-  `scripts/bosun/package.json:1` and mapping in
-  `scripts/bosun/cli.mjs:1`.
+  `scripts/codex-monitor/package.json:1` and mapping in
+  `scripts/codex-monitor/bin/codex-monitor.mjs:1`.
 - Keep the wrapper minimal and avoid duplicating monitor internals here.
 - Anti-patterns:
   - Duplicating bosun implementation in the shim.
@@ -51,10 +51,9 @@ codex-monitor --help
 ## Testing
 - No automated tests for the wrapper.
 - Manual smoke check (requires published or local bosun install):
-  - `node scripts/bosun/cli.mjs --help`
+  - `node scripts/codex-monitor/bin/codex-monitor.mjs --help`
 
 ## Troubleshooting
 - Shim cannot find bosun:
   - Cause: `bosun` dependency not installed.
   - Fix: `npm install && npm link` or reinstall `bosun`.
-
