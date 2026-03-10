@@ -245,8 +245,8 @@ func CalculateIdentityNetworkReward(input IdentityNetworkRewardInput, denom stri
 	denominator := big.NewInt(input.TotalVerifications)
 	denominator.Mul(denominator, big.NewInt(MaxPerformanceScore))
 
-	amount := new(big.Int).Quo(numerator, denominator).Int64()
-	return coinSetFromAmount(denom, amount)
+	amount := new(big.Int).Quo(numerator, denominator)
+	return coinSetFromBigInt(denom, amount)
 }
 
 func rewardComponentScores(perf *stakingv1.ValidatorPerformance) (int64, int64, int64, int64) {
@@ -270,7 +270,9 @@ func rewardComponentScores(perf *stakingv1.ValidatorPerformance) (int64, int64, 
 		if completionRate > MaxPerformanceScore {
 			completionRate = MaxPerformanceScore
 		}
-		veidScore = (completionRate + veidScore) / 2
+		// Clamp quality score before combining so out-of-range inputs do not
+		// inflate rewards and to keep keeper/type math consistent.
+		veidScore = (completionRate + clampRewardScore(veidScore)) / 2
 	}
 
 	uptimeScore := MaxPerformanceScore
