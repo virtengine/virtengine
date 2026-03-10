@@ -351,6 +351,46 @@ func (s *RewardsTestSuite) TestDistributeRewardsRoutesDelegatorShare() {
 	require.Len(s.T(), stakeKeeper.rewardDistCalls, 1)
 }
 
+// TestCalculateEpochRewardsVirtualStakeWeighting verifies deterministic virtual
+// stake fallback when staking keeper data is unavailable.
+func (s *RewardsTestSuite) TestCalculateEpochRewardsVirtualStakeWeighting() {
+	epoch := uint64(1)
+
+	epochInfo := types.NewRewardEpoch(epoch, 1, s.ctx.BlockTime())
+	epochInfo.EndHeight = 100
+	err := s.keeper.SetRewardEpoch(s.ctx, *epochInfo)
+	s.Require().NoError(err)
+
+	highWork := types.NewValidatorPerformance("validator1", epoch)
+	highWork.BlocksExpected = 80
+	highWork.BlocksProposed = 80
+	highWork.VEIDVerificationsExpected = 20
+	highWork.VEIDVerificationsCompleted = 20
+	highWork.OverallScore = 8000
+	s.Require().NoError(s.keeper.SetValidatorPerformance(s.ctx, *highWork))
+
+	lowWork := types.NewValidatorPerformance("validator2", epoch)
+	lowWork.BlocksExpected = 20
+	lowWork.BlocksProposed = 20
+	lowWork.VEIDVerificationsExpected = 5
+	lowWork.VEIDVerificationsCompleted = 5
+	lowWork.OverallScore = 8000
+	s.Require().NoError(s.keeper.SetValidatorPerformance(s.ctx, *lowWork))
+
+	rewards, err := s.keeper.CalculateEpochRewards(s.ctx, epoch)
+	s.Require().NoError(err)
+	s.Require().Len(rewards, 2)
+
+	rewardsByValidator := make(map[string]types.ValidatorReward, len(rewards))
+	for _, reward := range rewards {
+		rewardsByValidator[reward.ValidatorAddress] = reward
+	}
+
+	high := rewardsByValidator["validator1"].TotalReward.AmountOf("uve").Int64()
+	low := rewardsByValidator["validator2"].TotalReward.AmountOf("uve").Int64()
+	s.Require().Greater(high, low)
+}
+
 // TestCalculateVEIDRewards tests VEID reward calculation
 func (s *RewardsTestSuite) TestCalculateVEIDRewards() {
 	epoch := uint64(1)

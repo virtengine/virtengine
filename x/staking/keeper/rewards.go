@@ -163,15 +163,7 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 		return nil, types.ErrRewardsAlreadyDistributed.Wrapf("epoch %d already finalized", epoch)
 	}
 
-	if k.stakingKeeper == nil {
-		return nil, types.ErrInsufficientStake.Wrap("stake keeper not configured")
-	}
-
-	totalStake := k.stakingKeeper.GetTotalStake(ctx)
-	if totalStake <= 0 {
-		return nil, types.ErrInsufficientStake.Wrap("total stake must be positive")
-	}
-
+	// Calculate epoch reward pool
 	blocksInEpoch := types.EpochDuration(&epochInfo)
 	if blocksInEpoch == 0 {
 		blocksInEpoch = safeInt64FromUint64Rewards(params.EpochLength)
@@ -188,6 +180,11 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 		}
 		return false
 	})
+	if len(performances) == 0 {
+		return []types.ValidatorReward{}, nil
+	}
+
+	stakesByValidator, totalStake := k.buildStakeDistribution(ctx, performances)
 
 	sort.Slice(performances, func(i, j int) bool {
 		return performances[i].ValidatorAddress < performances[j].ValidatorAddress
@@ -195,24 +192,18 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 
 	allocations := make([]rewardAllocation, 0, len(performances))
 	for _, perf := range performances {
-		validatorAddr, err := sdk.AccAddressFromBech32(perf.ValidatorAddress)
-		if err != nil {
-			k.Logger(ctx).Error("invalid validator address during reward calculation", "validator", perf.ValidatorAddress, "error", err)
-			continue
-		}
-
-		stake := k.stakingKeeper.GetValidatorStake(ctx, validatorAddr)
-		if stake <= 0 {
-			continue
+		validatorStake, ok := stakesByValidator[perf.ValidatorAddress]
+		if !ok || validatorStake <= 0 {
+			validatorStake = minVirtualStakeUnits
 		}
 
 		blockScore, veidScore, uptimeScore := rewardComponentScores(perf)
 		allocations = append(allocations, rewardAllocation{
 			performance:  perf,
-			stake:        stake,
-			blockWeight:  scaledRewardWeight(stake, blockScore, types.WeightBlockProposal),
-			veidWeight:   scaledRewardWeight(stake, veidScore, types.WeightVEIDVerification),
-			uptimeWeight: scaledRewardWeight(stake, uptimeScore, types.WeightUptime),
+			stake:        validatorStake,
+			blockWeight:  scaledRewardWeight(validatorStake, blockScore, types.WeightBlockProposal),
+			veidWeight:   scaledRewardWeight(validatorStake, veidScore, types.WeightVEIDVerification),
+			uptimeWeight: scaledRewardWeight(validatorStake, uptimeScore, types.WeightUptime),
 		})
 	}
 

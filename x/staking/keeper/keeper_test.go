@@ -381,6 +381,36 @@ func (s *StakingKeeperTestSuite) TestSlashEscalation() {
 	s.Require().Greater(secondSlashPercent, firstSlashPercent)
 }
 
+func (s *StakingKeeperTestSuite) TestSlashValidatorUsesDeterministicFallbackStake() {
+	validatorAddr := testValidatorAddr
+	epoch := s.keeper.GetCurrentEpoch(s.ctx)
+
+	perf := types.NewValidatorPerformance(validatorAddr, epoch)
+	perf.BlocksExpected = 120
+	perf.BlocksProposed = 100
+	perf.VEIDVerificationsExpected = 30
+	perf.VEIDVerificationsCompleted = 25
+	perf.OverallScore = 9000
+	s.Require().NoError(s.keeper.SetValidatorPerformance(s.ctx, *perf))
+
+	slashRecord, err := s.keeper.SlashValidator(
+		s.ctx,
+		validatorAddr,
+		types.SlashReasonDowntime,
+		95,
+		"deterministic-fallback",
+	)
+	s.Require().NoError(err)
+
+	slashableStake := s.keeper.slashableStakeForValidator(s.ctx, validatorAddr)
+	expectedSlash := (saturatingMulInt64(slashableStake, slashRecord.SlashPercent)) / types.FixedPointScale
+	if slashRecord.SlashPercent > 0 && expectedSlash == 0 {
+		expectedSlash = 1
+	}
+
+	s.Require().Equal(expectedSlash, slashRecord.Amount.AmountOf("uve").Int64())
+}
+
 // TestSlashForDoubleSigning tests double signing slash
 func (s *StakingKeeperTestSuite) TestSlashForDoubleSigning() {
 	validatorAddr := testValidatorAddr

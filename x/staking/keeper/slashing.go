@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/big"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -145,24 +144,18 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 		}
 	}
 
-	if k.stakingKeeper == nil {
-		return nil, types.ErrInsufficientStake.Wrap("stake keeper not configured")
+	// Calculate slash amount using deterministic slashable stake economics.
+	slashableStake := k.slashableStakeForValidator(ctx, validatorAddr)
+	slashTokens := (saturatingMulInt64(slashableStake, escalatedSlashPercent)) / types.FixedPointScale
+	if escalatedSlashPercent > 0 && slashTokens == 0 {
+		slashTokens = 1
 	}
-
-	validatorAccAddr, err := sdk.AccAddressFromBech32(validatorAddr)
-	if err != nil {
-		return nil, types.ErrInvalidValidator.Wrapf("invalid validator address: %v", err)
-	}
-
-	stake := k.stakingKeeper.GetValidatorStake(ctx, validatorAccAddr)
-	slashTokens := big.NewInt(stake)
-	slashTokens.Mul(slashTokens, big.NewInt(escalatedSlashPercent))
-	slashTokens.Div(slashTokens, big.NewInt(types.FixedPointScale))
-	slashAmount := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, sdkmath.NewIntFromBigInt(slashTokens)))
-
+	slashAmount := sdk.NewCoins(sdk.NewInt64Coin(params.RewardDenom, slashTokens))
 	slashFraction := sdkmath.LegacyNewDecWithPrec(escalatedSlashPercent, 6)
-	if err := k.stakingKeeper.SlashDelegations(ctx, validatorAddr, slashFraction, infractionHeight); err != nil {
-		return nil, err
+	if k.stakingKeeper != nil {
+		if err := k.stakingKeeper.SlashDelegations(ctx, validatorAddr, slashFraction, infractionHeight); err != nil {
+			return nil, err
+		}
 	}
 
 	// Create slash record
