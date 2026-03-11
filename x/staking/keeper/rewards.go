@@ -210,7 +210,6 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 	if len(allocations) == 0 {
 		return []types.ValidatorReward{}, nil
 	}
-
 	rewards := allocateEpochRewards(allocations, totalStake, epochRewardPool, params.RewardDenom)
 	calculatedAt := ctx.BlockTime()
 	for idx := range rewards {
