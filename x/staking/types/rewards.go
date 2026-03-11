@@ -6,8 +6,11 @@ package types
 
 import (
 	"fmt"
+	"math/big"
+	"sort"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	stakingv1 "github.com/virtengine/virtengine/sdk/go/node/staking/v1"
@@ -115,45 +118,95 @@ type RewardCalculationInput struct {
 func CalculateRewards(input RewardCalculationInput, denom string) *stakingv1.ValidatorReward {
 	reward := NewValidatorReward(input.ValidatorAddress, 0)
 
-	if input.TotalStake == 0 || input.EpochRewardPool == 0 {
+	if input.StakeAmount <= 0 || input.TotalStake <= 0 || input.EpochRewardPool <= 0 {
 		return reward
 	}
 
-	// Calculate stake weight (fixed-point, 1e6 scale)
-	stakeWeight := (input.StakeAmount * FixedPointScale) / input.TotalStake
+	stakeWeight := formatFixedPointRatio(input.StakeAmount, input.TotalStake)
+	blockScore, veidScore, uptimeScore, overallScore := rewardComponentScores(input.Performance)
 
-	// Base stake reward (proportional to stake)
-	baseReward := (input.EpochRewardPool * stakeWeight) / FixedPointScale
+	type rewardComponent int
+	const (
+		rewardComponentBlock rewardComponent = iota
+		rewardComponentVEID
+		rewardComponentUptime
+	)
 
-	// Performance multiplier (0.5 to 1.5x based on score)
-	// Score 0 = 50% multiplier, Score 10000 = 150% multiplier
-	performanceScore := int64(0)
-	if input.Performance != nil {
-		performanceScore = input.Performance.OverallScore
-	}
-	// Convert to multiplier: (5000 + score) / 10000 gives 0.5 to 1.5
-	performanceMultiplier := 5000 + performanceScore
-
-	// Apply performance multiplier
-	adjustedReward := (baseReward * performanceMultiplier) / MaxPerformanceScore
-
-	// Split reward into components based on weights
-	blockReward := (adjustedReward * WeightBlockProposal) / TotalWeight
-	veidReward := (adjustedReward * WeightVEIDVerification) / TotalWeight
-	uptimeReward := (adjustedReward * WeightUptime) / TotalWeight
-
-	// Additional VEID bonus for high-quality verifications
-	var veidBonus int64
-	if input.Performance != nil && input.Performance.VEIDVerificationScore >= 9000 {
-		// 10% bonus for excellent VEID verification
-		veidBonus = (veidReward * 1000) / MaxPerformanceScore
+	type rewardAllocation struct {
+		component rewardComponent
+		weight    int64
+		score     int64
 	}
 
-	reward.BlockProposalReward = sdk.NewCoins(sdk.NewInt64Coin(denom, blockReward))
-	reward.VEIDReward = sdk.NewCoins(sdk.NewInt64Coin(denom, veidReward+veidBonus))
-	reward.UptimeReward = sdk.NewCoins(sdk.NewInt64Coin(denom, uptimeReward))
-	reward.PerformanceScore = performanceScore
-	reward.StakeWeight = fmt.Sprintf("%d", stakeWeight)
+	type rewardRemainder struct {
+		component rewardComponent
+		remainder *big.Int
+	}
+
+	allocations := []rewardAllocation{
+		{component: rewardComponentBlock, weight: WeightBlockProposal, score: blockScore},
+		{component: rewardComponentVEID, weight: WeightVEIDVerification, score: veidScore},
+		{component: rewardComponentUptime, weight: WeightUptime, score: uptimeScore},
+	}
+
+	denominator := big.NewInt(input.TotalStake)
+	denominator.Mul(denominator, big.NewInt(TotalWeight))
+	denominator.Mul(denominator, big.NewInt(MaxPerformanceScore))
+
+	remainders := make([]rewardRemainder, 0, len(allocations))
+	totalAllocated := big.NewInt(0)
+	totalNumerator := big.NewInt(0)
+
+	for _, allocation := range allocations {
+		numerator := big.NewInt(input.EpochRewardPool)
+		numerator.Mul(numerator, big.NewInt(input.StakeAmount))
+		numerator.Mul(numerator, big.NewInt(allocation.weight))
+		numerator.Mul(numerator, big.NewInt(allocation.score))
+		totalNumerator.Add(totalNumerator, numerator)
+
+		quotient := new(big.Int)
+		remainder := new(big.Int)
+		quotient.QuoRem(numerator, denominator, remainder)
+		totalAllocated.Add(totalAllocated, quotient)
+		remainders = append(remainders, rewardRemainder{component: allocation.component, remainder: remainder})
+
+		switch allocation.component {
+		case rewardComponentBlock:
+			reward.BlockProposalReward = coinSetFromBigInt(denom, quotient)
+		case rewardComponentVEID:
+			reward.VEIDReward = coinSetFromBigInt(denom, quotient)
+		case rewardComponentUptime:
+			reward.UptimeReward = coinSetFromBigInt(denom, quotient)
+		}
+	}
+
+	totalEarned := new(big.Int).Quo(totalNumerator, denominator)
+	leftover := new(big.Int).Sub(totalEarned, totalAllocated)
+	if leftover.Sign() > 0 {
+		sort.SliceStable(remainders, func(i, j int) bool {
+			cmp := remainders[i].remainder.Cmp(remainders[j].remainder)
+			if cmp != 0 {
+				return cmp > 0
+			}
+			return remainders[i].component < remainders[j].component
+		})
+
+		one := big.NewInt(1)
+		for idx := 0; idx < len(remainders) && leftover.Sign() > 0; idx++ {
+			switch remainders[idx].component {
+			case rewardComponentBlock:
+				reward.BlockProposalReward = incrementCoinSet(reward.BlockProposalReward, denom)
+			case rewardComponentVEID:
+				reward.VEIDReward = incrementCoinSet(reward.VEIDReward, denom)
+			case rewardComponentUptime:
+				reward.UptimeReward = incrementCoinSet(reward.UptimeReward, denom)
+			}
+			leftover.Sub(leftover, one)
+		}
+	}
+
+	reward.PerformanceScore = overallScore
+	reward.StakeWeight = stakeWeight
 
 	reward.TotalReward = ComputeTotalReward(reward)
 
@@ -180,17 +233,94 @@ type IdentityNetworkRewardInput struct {
 
 // CalculateIdentityNetworkReward calculates identity network rewards
 func CalculateIdentityNetworkReward(input IdentityNetworkRewardInput, denom string) sdk.Coins {
-	if input.TotalVerifications == 0 || input.RewardPool == 0 {
+	if input.VerificationsCompleted <= 0 || input.TotalVerifications <= 0 || input.RewardPool <= 0 {
 		return sdk.NewCoins()
 	}
 
-	// Base share proportional to verifications completed
-	baseShare := (input.RewardPool * input.VerificationsCompleted) / input.TotalVerifications
+	score := clampRewardScore(input.AverageVerificationScore)
+	numerator := big.NewInt(input.RewardPool)
+	numerator.Mul(numerator, big.NewInt(input.VerificationsCompleted))
+	numerator.Mul(numerator, big.NewInt(score))
 
-	// Quality multiplier (1.0 to 1.2x based on average score)
-	// Score 0 = 1.0x, Score 10000 = 1.2x
-	qualityMultiplier := MaxPerformanceScore + (input.AverageVerificationScore * 2000 / MaxPerformanceScore)
-	adjustedReward := (baseShare * qualityMultiplier) / MaxPerformanceScore
+	denominator := big.NewInt(input.TotalVerifications)
+	denominator.Mul(denominator, big.NewInt(MaxPerformanceScore))
 
-	return sdk.NewCoins(sdk.NewInt64Coin(denom, adjustedReward))
+	amount := new(big.Int).Quo(numerator, denominator)
+	return coinSetFromBigInt(denom, amount)
+}
+
+func rewardComponentScores(perf *stakingv1.ValidatorPerformance) (int64, int64, int64, int64) {
+	if perf == nil {
+		return 0, 0, MaxPerformanceScore, 0
+	}
+
+	blockScore := int64(0)
+	if perf.BlocksExpected > 0 {
+		blockScore = (perf.BlocksProposed * MaxPerformanceScore) / perf.BlocksExpected
+		if blockScore > MaxPerformanceScore {
+			blockScore = MaxPerformanceScore
+		}
+	} else if perf.BlocksProposed > 0 {
+		blockScore = MaxPerformanceScore
+	}
+
+	veidScore := clampRewardScore(perf.VEIDVerificationScore)
+	if perf.VEIDVerificationsExpected > 0 {
+		completionRate := (perf.VEIDVerificationsCompleted * MaxPerformanceScore) / perf.VEIDVerificationsExpected
+		if completionRate > MaxPerformanceScore {
+			completionRate = MaxPerformanceScore
+		}
+		// Clamp quality score before combining so out-of-range inputs do not
+		// inflate rewards and to keep keeper/type math consistent.
+		veidScore = (completionRate + clampRewardScore(veidScore)) / 2
+	}
+
+	uptimeScore := MaxPerformanceScore
+	totalTime := perf.UptimeSeconds + perf.DowntimeSeconds
+	if totalTime > 0 {
+		uptimeScore = (perf.UptimeSeconds * MaxPerformanceScore) / totalTime
+	}
+
+	overallScore := perf.OverallScore
+	if overallScore <= 0 {
+		overallScore = (blockScore*WeightBlockProposal + veidScore*WeightVEIDVerification + uptimeScore*WeightUptime) / TotalWeight
+	}
+
+	return clampRewardScore(blockScore), clampRewardScore(veidScore), clampRewardScore(uptimeScore), clampRewardScore(overallScore)
+}
+
+func clampRewardScore(score int64) int64 {
+	if score < 0 {
+		return 0
+	}
+	if score > MaxPerformanceScore {
+		return MaxPerformanceScore
+	}
+	return score
+}
+
+func coinSetFromBigInt(denom string, amount *big.Int) sdk.Coins {
+	if amount == nil || amount.Sign() <= 0 {
+		return sdk.NewCoins()
+	}
+	return sdk.NewCoins(sdk.NewCoin(denom, sdkmath.NewIntFromBigInt(amount)))
+}
+
+func incrementCoinSet(coins sdk.Coins, denom string) sdk.Coins {
+	amount := coins.AmountOf(denom)
+	if amount.IsNil() {
+		amount = sdkmath.ZeroInt()
+	}
+	return sdk.NewCoins(sdk.NewCoin(denom, amount.AddRaw(1)))
+}
+
+func formatFixedPointRatio(numerator, denominator int64) string {
+	if numerator <= 0 || denominator <= 0 {
+		return "0"
+	}
+
+	ratio := big.NewInt(numerator)
+	ratio.Mul(ratio, big.NewInt(FixedPointScale))
+	ratio.Div(ratio, big.NewInt(denominator))
+	return ratio.String()
 }

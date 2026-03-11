@@ -240,3 +240,23 @@ func GetSlashConfig(reason SlashReason) SlashConfig {
 		EscalationMultiplier: 1,
 	}
 }
+
+// GetSlashConfigForParams returns slash economics derived from on-chain params.
+func GetSlashConfigForParams(reason SlashReason, params Params) SlashConfig {
+	config := GetSlashConfig(reason)
+
+	switch reason {
+	case SlashReasonDoubleSigning:
+		config.SlashPercent = params.SlashFractionDoubleSign
+		config.JailDuration = params.JailDurationDoubleSign
+		config.IsTombstone = true
+	case SlashReasonDowntime:
+		config.SlashPercent = params.SlashFractionDowntime
+		config.JailDuration = params.JailDurationDowntime
+	case SlashReasonInvalidVEIDAttestation:
+		config.SlashPercent = params.SlashFractionInvalidAttestation
+		config.JailDuration = params.JailDurationInvalidAttestation
+	}
+
+	return config
+}

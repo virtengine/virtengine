@@ -6,6 +6,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -126,8 +127,10 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 		return nil, types.ErrValidatorJailed.Wrap("validator is tombstoned")
 	}
 
+	params := k.GetParams(ctx)
+
 	// Get slash configuration
-	slashConfig := types.GetSlashConfig(reason)
+	slashConfig := types.GetSlashConfigForParams(reason, params)
 
 	// Calculate escalation based on previous infractions
 	escalatedSlashPercent := slashConfig.SlashPercent
@@ -136,24 +139,23 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	if found {
 		// Apply escalation for repeat offenders
 		for i := int64(0); i < signingInfo.InfractionCount; i++ {
-			escalatedSlashPercent *= slashConfig.EscalationMultiplier
-			if escalatedSlashPercent > types.FixedPointScale {
-				escalatedSlashPercent = types.FixedPointScale // Cap at 100%
-			}
-			escalatedJailDuration *= slashConfig.EscalationMultiplier
+			escalatedSlashPercent = saturatingScaledPenalty(escalatedSlashPercent, slashConfig.EscalationMultiplier, types.FixedPointScale)
+			escalatedJailDuration = saturatingScaledPenalty(escalatedJailDuration, slashConfig.EscalationMultiplier, math.MaxInt64)
 		}
 	}
 
-	// Calculate slash amount (placeholder - would use actual stake in production)
-	var slashAmount sdk.Coins
+	// Calculate slash amount using deterministic slashable stake economics.
+	slashableStake := k.slashableStakeForValidator(ctx, validatorAddr)
+	slashTokens := (saturatingMulInt64(slashableStake, escalatedSlashPercent)) / types.FixedPointScale
+	if escalatedSlashPercent > 0 && slashTokens == 0 {
+		slashTokens = 1
+	}
+	slashAmount := sdk.NewCoins(sdk.NewInt64Coin(params.RewardDenom, slashTokens))
+	slashFraction := sdkmath.LegacyNewDecWithPrec(escalatedSlashPercent, 6)
 	if k.stakingKeeper != nil {
-		validatorAccAddr, _ := sdk.AccAddressFromBech32(validatorAddr)
-		stake := k.stakingKeeper.GetValidatorStake(ctx, validatorAccAddr)
-		slashTokens := (stake * escalatedSlashPercent) / types.FixedPointScale
-		slashAmount = sdk.NewCoins(sdk.NewInt64Coin(k.GetParams(ctx).RewardDenom, slashTokens))
-	} else {
-		// Placeholder amount
-		slashAmount = sdk.NewCoins(sdk.NewInt64Coin(k.GetParams(ctx).RewardDenom, escalatedSlashPercent))
+		if err := k.stakingKeeper.SlashDelegations(ctx, validatorAddr, slashFraction, infractionHeight); err != nil {
+			return nil, err
+		}
 	}
 
 	// Create slash record
@@ -214,7 +216,7 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 			sdk.NewAttribute(types.AttributeKeyValidatorAddress, validatorAddr),
 			sdk.NewAttribute(types.AttributeKeySlashReason, string(reason)),
 			sdk.NewAttribute(types.AttributeKeySlashAmount, slashAmount.String()),
-			sdk.NewAttribute(types.AttributeKeySlashPercent, sdkmath.LegacyNewDecWithPrec(escalatedSlashPercent, 6).String()),
+			sdk.NewAttribute(types.AttributeKeySlashPercent, slashFraction.String()),
 		),
 	)
 
@@ -228,6 +230,31 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	)
 
 	return slashRecord, nil
+}
+
+func saturatingScaledPenalty(value, multiplier, cap int64) int64 {
+	if value <= 0 || multiplier <= 1 {
+		if value < 0 {
+			return 0
+		}
+		if value > cap {
+			return cap
+		}
+		return value
+	}
+
+	current := value
+	if current > cap {
+		return cap
+	}
+	if current > cap/multiplier {
+		return cap
+	}
+	current *= multiplier
+	if current > cap {
+		return cap
+	}
+	return current
 }
 
 // SlashForDoubleSigning slashes a validator for double signing

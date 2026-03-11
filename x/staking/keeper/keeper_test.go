@@ -22,16 +22,17 @@ import (
 	"github.com/virtengine/virtengine/x/staking/types"
 )
 
-// testValidatorAddr is a test validator address constant
-const testValidatorAddr = "validator1qperwt9wrnkg39mvs5g6ys"
+// testValidatorAddr is a test validator address constant.
+var testValidatorAddr = sdk.AccAddress([]byte("validator-address-0001")).String()
 
 // StakingKeeperTestSuite is the test suite for the staking keeper
 type StakingKeeperTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper Keeper
-	cdc    codec.BinaryCodec
-	skey   *storetypes.KVStoreKey
+	ctx         sdk.Context
+	keeper      Keeper
+	cdc         codec.BinaryCodec
+	skey        *storetypes.KVStoreKey
+	stakeKeeper *mockStakeKeeper
 }
 
 // SetupTest sets up the test suite
@@ -46,12 +47,13 @@ func (s *StakingKeeperTestSuite) SetupTest() {
 	registry := codectypes.NewInterfaceRegistry()
 	s.cdc = codec.NewProtoCodec(registry)
 
+	s.stakeKeeper = newMockStakeKeeper()
 	s.keeper = NewKeeper(
 		s.cdc,
 		s.skey,
 		nil, // bankKeeper
 		nil, // veidKeeper
-		nil, // stakingKeeper
+		s.stakeKeeper,
 		"authority",
 	)
 
@@ -319,6 +321,7 @@ func (s *StakingKeeperTestSuite) TestHandleValidatorSignature() {
 // TestSlashValidator tests slashing
 func (s *StakingKeeperTestSuite) TestSlashValidator() {
 	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
 
 	slashRecord, err := s.keeper.SlashValidator(
 		s.ctx,
@@ -331,6 +334,9 @@ func (s *StakingKeeperTestSuite) TestSlashValidator() {
 	s.Require().NotNil(slashRecord)
 	s.Require().Equal(types.SlashReasonDowntime, slashRecord.Reason)
 	s.Require().True(slashRecord.Jailed)
+	s.Require().Equal(int64(1000), slashRecord.Amount.AmountOf("uve").Int64())
+	s.Require().Len(s.stakeKeeper.slashCalls, 1)
+	s.Require().Equal("0.001000000000000000", s.stakeKeeper.slashCalls[0].Fraction)
 
 	// Check signing info updated
 	signingInfo, found := s.keeper.GetValidatorSigningInfo(s.ctx, validatorAddr)
@@ -341,6 +347,7 @@ func (s *StakingKeeperTestSuite) TestSlashValidator() {
 // TestSlashEscalation tests slash escalation for repeat offenders
 func (s *StakingKeeperTestSuite) TestSlashEscalation() {
 	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 2_000_000)
 
 	// First slash
 	slashRecord1, err := s.keeper.SlashValidator(
@@ -374,9 +381,40 @@ func (s *StakingKeeperTestSuite) TestSlashEscalation() {
 	s.Require().Greater(secondSlashPercent, firstSlashPercent)
 }
 
+func (s *StakingKeeperTestSuite) TestSlashValidatorUsesDeterministicFallbackStake() {
+	validatorAddr := testValidatorAddr
+	epoch := s.keeper.GetCurrentEpoch(s.ctx)
+
+	perf := types.NewValidatorPerformance(validatorAddr, epoch)
+	perf.BlocksExpected = 120
+	perf.BlocksProposed = 100
+	perf.VEIDVerificationsExpected = 30
+	perf.VEIDVerificationsCompleted = 25
+	perf.OverallScore = 9000
+	s.Require().NoError(s.keeper.SetValidatorPerformance(s.ctx, *perf))
+
+	slashRecord, err := s.keeper.SlashValidator(
+		s.ctx,
+		validatorAddr,
+		types.SlashReasonDowntime,
+		95,
+		"deterministic-fallback",
+	)
+	s.Require().NoError(err)
+
+	slashableStake := s.keeper.slashableStakeForValidator(s.ctx, validatorAddr)
+	expectedSlash := (saturatingMulInt64(slashableStake, slashRecord.SlashPercent)) / types.FixedPointScale
+	if slashRecord.SlashPercent > 0 && expectedSlash == 0 {
+		expectedSlash = 1
+	}
+
+	s.Require().Equal(expectedSlash, slashRecord.Amount.AmountOf("uve").Int64())
+}
+
 // TestSlashForDoubleSigning tests double signing slash
 func (s *StakingKeeperTestSuite) TestSlashForDoubleSigning() {
 	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
 
 	evidence := types.DoubleSignEvidence{
 		EvidenceID:       "ds-001",
@@ -399,6 +437,7 @@ func (s *StakingKeeperTestSuite) TestSlashForDoubleSigning() {
 // TestSlashForInvalidAttestation tests invalid attestation slash
 func (s *StakingKeeperTestSuite) TestSlashForInvalidAttestation() {
 	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
 
 	attestation := types.InvalidVEIDAttestation{
 		RecordID:         "ia-001",
@@ -418,6 +457,33 @@ func (s *StakingKeeperTestSuite) TestSlashForInvalidAttestation() {
 	s.Require().Equal(types.SlashReasonInvalidVEIDAttestation, slashRecord.Reason)
 }
 
+func (s *StakingKeeperTestSuite) TestSlashValidatorUsesOnChainParams() {
+	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
+
+	params := s.keeper.GetParams(s.ctx)
+	params.SlashFractionDowntime = 2500
+	params.JailDurationDowntime = 900
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	slashRecord, err := s.keeper.SlashValidator(s.ctx, validatorAddr, types.SlashReasonDowntime, 90, "downtime evidence")
+	s.Require().NoError(err)
+	s.Require().NotNil(slashRecord)
+	s.Require().Equal(int64(2500), slashRecord.Amount.AmountOf("uve").Int64())
+	s.Require().Equal(int64(2500), slashRecord.SlashPercent)
+	s.Require().True(slashRecord.Jailed)
+	s.Require().Equal(int64(900), slashRecord.JailDuration)
+	s.Require().NotNil(slashRecord.JailedUntil)
+	s.Require().Equal(s.ctx.BlockTime().Add(15*time.Minute), *slashRecord.JailedUntil)
+
+	info, found := s.keeper.GetValidatorSigningInfo(s.ctx, validatorAddr)
+	s.Require().True(found)
+	s.Require().NotNil(info.JailedUntil)
+	s.Require().Equal(*slashRecord.JailedUntil, *info.JailedUntil)
+	s.Require().Len(s.stakeKeeper.slashCalls, 1)
+	s.Require().Equal("0.002500000000000000", s.stakeKeeper.slashCalls[0].Fraction)
+}
+
 // TestIterators tests iteration functions
 func (s *StakingKeeperTestSuite) TestIterators() {
 	// Create multiple performances
@@ -435,4 +501,33 @@ func (s *StakingKeeperTestSuite) TestIterators() {
 		return false
 	})
 	s.Require().Equal(3, count)
+}
+
+func (s *StakingKeeperTestSuite) TestSlashValidatorCapsRepeatPenaltyAtFullStake() {
+	validatorAddr := testValidatorAddr
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
+
+	params := s.keeper.GetParams(s.ctx)
+	params.SlashFractionDowntime = 600000
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	firstSlash, err := s.keeper.SlashValidator(s.ctx, validatorAddr, types.SlashReasonDowntime, 90, "first downtime")
+	s.Require().NoError(err)
+	s.Require().Equal(int64(600000), firstSlash.SlashPercent)
+	s.Require().Equal(int64(600000), firstSlash.Amount.AmountOf("uve").Int64())
+	s.Require().Equal(int64(400000), s.stakeKeeper.stakes[validatorAddr])
+
+	signingInfo, found := s.keeper.GetValidatorSigningInfo(s.ctx, validatorAddr)
+	s.Require().True(found)
+	zeroTime := time.Time{}
+	signingInfo.JailedUntil = &zeroTime
+	s.Require().NoError(s.keeper.SetValidatorSigningInfo(s.ctx, signingInfo))
+
+	secondSlash, err := s.keeper.SlashValidator(s.ctx, validatorAddr, types.SlashReasonDowntime, 95, "second downtime")
+	s.Require().NoError(err)
+	s.Require().Equal(int64(types.FixedPointScale), secondSlash.SlashPercent)
+	s.Require().Equal(int64(400000), secondSlash.Amount.AmountOf("uve").Int64())
+	s.Require().Equal(int64(0), s.stakeKeeper.stakes[validatorAddr])
+	s.Require().Len(s.stakeKeeper.slashCalls, 2)
+	s.Require().Equal("1.000000000000000000", s.stakeKeeper.slashCalls[1].Fraction)
 }

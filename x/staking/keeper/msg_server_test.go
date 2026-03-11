@@ -23,12 +23,13 @@ import (
 
 type MsgServerTestSuite struct {
 	suite.Suite
-	ctx       sdk.Context
-	keeper    Keeper
-	msgServer stakingv1.MsgServer
-	cdc       codec.BinaryCodec
-	skey      *storetypes.KVStoreKey
-	authority string
+	ctx         sdk.Context
+	keeper      Keeper
+	msgServer   stakingv1.MsgServer
+	cdc         codec.BinaryCodec
+	skey        *storetypes.KVStoreKey
+	authority   string
+	stakeKeeper *mockStakeKeeper
 }
 
 func (s *MsgServerTestSuite) SetupTest() {
@@ -42,13 +43,14 @@ func (s *MsgServerTestSuite) SetupTest() {
 	registry := codectypes.NewInterfaceRegistry()
 	s.cdc = codec.NewProtoCodec(registry)
 
+	s.stakeKeeper = newMockStakeKeeper()
 	s.authority = sdk.AccAddress([]byte("staking-authority")).String()
 	s.keeper = NewKeeper(
 		s.cdc,
 		s.skey,
 		nil,
 		nil,
-		nil,
+		s.stakeKeeper,
 		s.authority,
 	)
 
@@ -89,6 +91,7 @@ func (s *MsgServerTestSuite) TestUpdateParamsUnauthorized() {
 
 func (s *MsgServerTestSuite) TestSlashValidator() {
 	validatorAddr := sdk.AccAddress([]byte("validator-slash")).String()
+	s.stakeKeeper.SetStake(validatorAddr, 1_000_000)
 
 	_, err := s.msgServer.SlashValidator(s.ctx, &stakingv1.MsgSlashValidator{
 		Authority:        s.authority,
