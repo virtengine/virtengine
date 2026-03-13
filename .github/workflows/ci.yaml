@@ -229,6 +229,15 @@ jobs:
       - name: Check coverage threshold
         id: coverage
         run: |
+          if [[ "${{ github.event_name }}" == "pull_request" && -n "${{ github.base_ref }}" ]]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            changed_go_files="$(git diff --name-only FETCH_HEAD...HEAD -- '*.go' 'go.mod' 'go.sum' 'go.work' 'go.work.sum' | grep -v '^vendor/' || true)"
+            if [[ -z "$changed_go_files" ]]; then
+              echo "No Go-related files changed; skipping Go coverage threshold"
+              exit 0
+            fi
+          fi
+
           if [ ! -f coverage.out ]; then
             echo "No coverage file generated"
             exit 1
