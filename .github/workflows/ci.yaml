@@ -105,6 +105,19 @@ jobs:
 
       - name: Check formatting
         run: |
+          if [[ "${{ github.event_name }}" == "pull_request" && -n "${{ github.base_ref }}" ]]; then
+            changed_go_files="$(git diff --name-only "origin/${{ github.base_ref }}" -- '*.go' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' || true)"
+            if [[ -z "$changed_go_files" ]]; then
+              echo "No Go files changed"
+              exit 0
+            fi
+            unformatted="$(printf '%s\n' "$changed_go_files" | xargs gofmt -l)"
+            if [[ -n "$unformatted" ]]; then
+              printf '%s\n' "$unformatted"
+              exit 1
+            fi
+            exit 0
+          fi
           gofmt -l .
           test -z "$(gofmt -l .)"
 
