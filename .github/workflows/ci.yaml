@@ -283,19 +283,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect economics-relevant changes
+        id: detect
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^(.*\.go|go\.mod|go\.sum|go\.work|go\.work\.sum|app/|cmd/|x/|scripts/economics/|tests/integration/|tests/simulation/|simulation/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Go
+        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
+        if: steps.detect.outputs.run == 'true'
         run: go mod download
 
       - name: Run economics simulation suite
+        if: steps.detect.outputs.run == 'true'
         run: |
           chmod +x scripts/economics/run-sim-suite.sh
           RUNS=60 scripts/economics/run-sim-suite.sh ./sim-output
+
+      - name: Skip notice
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No economics-relevant files changed, skipping job steps"
 
   # ===========================================================================
   # Python Test Job - ML/Waldur Tests (Optional)
@@ -698,14 +722,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect container-relevant changes
+        id: detect
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^(.*\.go|go\.mod|go\.sum|go\.work|go\.work\.sum|_build/|Dockerfile|Dockerfile\.|cmd/|app/|x/|scripts/docker/|scripts/ci/|scripts/release/|deploy/|infra/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Docker Buildx
+        if: steps.detect.outputs.run == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build virtengine image (local)
+        if: steps.detect.outputs.run == 'true'
         run: |
           docker buildx build --load -f _build/Dockerfile.virtengine -t virtengine:ci .
 
       - name: Scan virtengine image
+        if: steps.detect.outputs.run == 'true'
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: virtengine:ci
@@ -714,6 +758,7 @@ jobs:
           exit-code: 1
 
       - name: Enforce virtengine image size
+        if: steps.detect.outputs.run == 'true'
         run: |
           IMAGE_SIZE_BYTES=$(docker image inspect -f '{{.Size}}' virtengine:ci)
           MAX_BYTES=$((100 * 1024 * 1024))
@@ -724,10 +769,12 @@ jobs:
           fi
 
       - name: Build test-runner image (local)
+        if: steps.detect.outputs.run == 'true'
         run: |
           docker buildx build --load -f _build/Dockerfile.test -t virtengine-test:ci .
 
       - name: Scan test-runner image
+        if: steps.detect.outputs.run == 'true'
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: virtengine-test:ci
@@ -736,12 +783,12 @@ jobs:
           exit-code: 1
 
       - name: Build veid-pipeline image (local)
-        if: ${{ hashFiles('ml/models/**') != '' }}
+        if: ${{ steps.detect.outputs.run == 'true' && hashFiles('ml/models/**') != '' }}
         run: |
           docker buildx build --load -f _build/Dockerfile.veid-pipeline -t veid-pipeline:ci .
 
       - name: Scan veid-pipeline image
-        if: ${{ hashFiles('ml/models/**') != '' }}
+        if: ${{ steps.detect.outputs.run == 'true' && hashFiles('ml/models/**') != '' }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: veid-pipeline:ci
@@ -750,7 +797,7 @@ jobs:
           exit-code: 1
 
       - name: Log in to GHCR
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -758,7 +805,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push virtengine image
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         run: |
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
@@ -768,18 +815,18 @@ jobs:
             .
 
       - name: Install cosign
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         uses: sigstore/cosign-installer@v3
 
       - name: Sign virtengine image
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
           cosign sign --yes ghcr.io/${{ github.repository }}/virtengine:${{ github.sha }}
 
       - name: Verify virtengine image signature
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
@@ -787,6 +834,10 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/ci.yaml@.*" \
             ghcr.io/${{ github.repository }}/virtengine:${{ github.sha }}
+
+      - name: Skip notice
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No container-relevant files changed, skipping job steps"
 
   # ===========================================================================
   # macOS Build - Native Build Verification (main/tags only)
