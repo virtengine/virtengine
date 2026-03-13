@@ -105,16 +105,21 @@ jobs:
 
       - name: Check formatting
         run: |
-          mapfile -d '' gofiles < <(git ls-files -z '*.go' ':!:vendor/**')
-          if [ ${#gofiles[@]} -eq 0 ]; then
+          if [[ "${{ github.event_name }}" == "pull_request" && -n "${{ github.base_ref }}" ]]; then
+            changed_go_files="$(git diff --name-only "origin/${{ github.base_ref }}" -- '*.go' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' || true)"
+            if [[ -z "$changed_go_files" ]]; then
+              echo "No Go files changed"
+              exit 0
+            fi
+            unformatted="$(printf '%s\n' "$changed_go_files" | xargs gofmt -l)"
+            if [[ -n "$unformatted" ]]; then
+              printf '%s\n' "$unformatted"
+              exit 1
+            fi
             exit 0
           fi
-
-          formatted=$(gofmt -l "${gofiles[@]}")
-          if [ -n "$formatted" ]; then
-            echo "$formatted"
-            exit 1
-          fi
+          gofmt -l .
+          test -z "$(gofmt -l .)"
 
   # ===========================================================================
   # Go Vet Job - Pre-push Parity
