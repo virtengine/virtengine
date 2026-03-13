@@ -277,7 +277,7 @@ jobs:
           files: ./coverage.out
           flags: unittests
           name: go-coverage
-          fail_ci_if_error: true # INFRA-003: Fail if coverage upload fails
+          fail_ci_if_error: false # Keep unit-test signal green when Codecov upload flakes
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
