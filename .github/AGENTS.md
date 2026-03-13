@@ -164,7 +164,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Coverage Gates
 
-- **Go**: 80% coverage threshold (`ci.yaml`) via `go test -coverprofile`; PRs that do not touch Go-related files short-circuit the `Go Tests` job with a skip notice so non-Go changes do not fail on unrelated repo-wide Go test or coverage baselines.
+- **Go**: 80% coverage threshold (`ci.yaml`) via `go test -coverprofile`; PRs that do not touch Go-related files skip only the threshold check so non-Go changes still run unit tests without failing on the repo-wide baseline.
 - Coverage reports uploaded to Codecov with `codecov/codecov-action@v4`, with PR security advisory summaries in `pr-security-check.yaml`
 
 ### Test Timeouts
