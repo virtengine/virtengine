@@ -206,21 +206,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect Go-relevant changes
+        id: detect
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed_go_files="$(git diff --name-only FETCH_HEAD...HEAD -- '*.go' 'go.mod' 'go.sum' 'go.work' 'go.work.sum' | grep -v '^vendor/' || true)"
+
+          if [[ -n "$changed_go_files" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Go
+        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
+        if: steps.detect.outputs.run == 'true'
         run: go mod download
 
       - name: Sync dependencies
+        if: steps.detect.outputs.run == 'true'
         run: |
           go mod tidy
           go mod vendor
 
       - name: Run unit tests
+        if: steps.detect.outputs.run == 'true'
         run: |
           go test -v -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
             -coverprofile=coverage.out -covermode=atomic ./...
@@ -228,16 +249,8 @@ jobs:
       # INFRA-003: Coverage enforcement gate (80% minimum)
       - name: Check coverage threshold
         id: coverage
+        if: steps.detect.outputs.run == 'true'
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" && -n "${{ github.base_ref }}" ]]; then
-            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-            changed_go_files="$(git diff --name-only FETCH_HEAD...HEAD -- '*.go' 'go.mod' 'go.sum' 'go.work' 'go.work.sum' | grep -v '^vendor/' || true)"
-            if [[ -z "$changed_go_files" ]]; then
-              echo "No Go-related files changed; skipping Go coverage threshold"
-              exit 0
-            fi
-          fi
-
           if [ ! -f coverage.out ]; then
             echo "No coverage file generated"
             exit 1
@@ -261,6 +274,7 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
+        if: steps.detect.outputs.run == 'true'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.out
@@ -269,11 +283,16 @@ jobs:
           fail_ci_if_error: false # Keep unit-test signal green when Codecov upload flakes
 
       - name: Upload coverage artifact
+        if: steps.detect.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage
           path: coverage.out
           retention-days: 7
+
+      - name: Skip notice
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No Go-related files changed, skipping Go test job"
 
   economics-sim:
     name: Economics Simulation Suite
