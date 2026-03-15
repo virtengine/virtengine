@@ -105,8 +105,16 @@ jobs:
 
       - name: Check formatting
         run: |
-          gofmt -l .
-          test -z "$(gofmt -l .)"
+          mapfile -d '' gofiles < <(git ls-files -z '*.go' ':!:vendor/**')
+          if [ ${#gofiles[@]} -eq 0 ]; then
+            exit 0
+          fi
+
+          formatted=$(gofmt -l "${gofiles[@]}")
+          if [ -n "$formatted" ]; then
+            echo "$formatted"
+            exit 1
+          fi
 
   # ===========================================================================
   # Go Vet Job - Pre-push Parity
@@ -199,6 +207,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Fetch base ref for PR coverage
+        if: github.event_name == 'pull_request'
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
+
       - name: Download dependencies
         run: go mod download
 
@@ -215,6 +227,8 @@ jobs:
       # INFRA-003: Coverage enforcement gate (80% minimum)
       - name: Check coverage threshold
         id: coverage
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           if [ ! -f coverage.out ]; then
             echo "No coverage file generated"
@@ -224,6 +238,107 @@ jobs:
           # Calculate total coverage
           COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 - <<'PY'
+import os
+import re
+import subprocess
+import sys
+from collections import defaultdict
+
+base_ref = os.environ.get("BASE_REF", "").strip()
+if not base_ref:
+    print("Missing BASE_REF for PR coverage check", file=sys.stderr)
+    sys.exit(1)
+
+diff = subprocess.check_output(
+    ["git", "diff", "--unified=0", "--no-color", f"origin/{base_ref}...HEAD", "--", "*.go"],
+    text=True,
+)
+
+changed_lines = defaultdict(set)
+current_file = None
+new_line = None
+for raw_line in diff.splitlines():
+    if raw_line.startswith("+++ b/"):
+        current_file = raw_line[6:]
+        continue
+    if raw_line.startswith("@@"):
+        match = re.search(r"\+(\d+)(?:,(\d+))?", raw_line)
+        if not match:
+            continue
+        new_line = int(match.group(1))
+        continue
+    if current_file is None or new_line is None:
+        continue
+    if raw_line.startswith("+") and not raw_line.startswith("+++"):
+        changed_lines[current_file].add(new_line)
+        new_line += 1
+        continue
+    if raw_line.startswith("-") and not raw_line.startswith("---"):
+        continue
+    if raw_line.startswith("\\"):
+        continue
+    new_line += 1
+
+if not changed_lines:
+    print("No changed Go lines detected; skipping PR diff coverage gate.")
+    sys.exit(0)
+
+coverage_ranges = defaultdict(list)
+with open("coverage.out", "r", encoding="utf-8") as fh:
+    next(fh, None)
+    for line in fh:
+        line = line.strip()
+        if not line:
+            continue
+        location, _num_statements, count = line.rsplit(" ", 2)
+        filename, span = location.split(":", 1)
+        start, end = span.split(",", 1)
+        start_line = int(start.split(".", 1)[0])
+        end_line = int(end.split(".", 1)[0])
+        coverage_ranges[filename].append((start_line, end_line, int(count)))
+
+def matching_ranges(path: str):
+    suffix = f"/{path.replace(os.sep, '/')}"
+    for filename, ranges in coverage_ranges.items():
+        normalized = filename.replace('\\', '/')
+        if normalized == path or normalized.endswith(suffix):
+            return ranges
+    return []
+
+executable = 0
+covered = 0
+uncovered = []
+for path, lines in changed_lines.items():
+    ranges = matching_ranges(path)
+    for line_no in sorted(lines):
+        line_ranges = [entry for entry in ranges if entry[0] <= line_no <= entry[1]]
+        if not line_ranges:
+            continue
+        executable += 1
+        if any(count > 0 for _, _, count in line_ranges):
+            covered += 1
+        else:
+            uncovered.append(f"{path}:{line_no}")
+
+if executable == 0:
+    print("No executable changed Go lines detected; skipping PR diff coverage gate.")
+    sys.exit(0)
+
+coverage_pct = (covered * 100.0) / executable
+print(f"Changed Go line coverage: {covered}/{executable} = {coverage_pct:.1f}%")
+min_coverage = 80.0
+if coverage_pct < min_coverage:
+    preview = ", ".join(uncovered[:20])
+    print(f"::error::Changed Go line coverage is {coverage_pct:.1f}%, below minimum {min_coverage:.0f}%")
+    if preview:
+        print(f"Uncovered changed lines: {preview}")
+    sys.exit(1)
+PY
+            exit 0
+          fi
 
           # Minimum required coverage (INFRA-003)
           MIN_COVERAGE=80
