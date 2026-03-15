@@ -156,6 +156,9 @@ func (k Keeper) SetFiatConversion(ctx sdk.Context, conversion types.FiatConversi
 	if conversion.EncryptedPayload != nil && conversion.EncryptedPayload.EnvelopeRef != "" {
 		conversion.DestinationRef = conversion.EncryptedPayload.EnvelopeRef
 	}
+	if conversion.IdempotencyKey == "" {
+		conversion.IdempotencyKey = conversion.DefaultIdempotencyKey()
+	}
 	if err := conversion.Validate(); err != nil {
 		return err
 	}
@@ -381,9 +384,24 @@ func (k Keeper) ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*
 
 	switch status.Status {
 	case offramp.StatusCompleted:
-		_ = conversion.MarkCompleted(ctx.BlockTime())
+		if conversion.State != types.FiatConversionStatePayoutCompleted {
+			if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
+				return nil, err
+			}
+		}
 	case offramp.StatusFailed:
-		_ = conversion.MarkFailed("off-ramp failed", ctx.BlockTime())
+		if conversion.State != types.FiatConversionStateFailed {
+			if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		// Provider may emit duplicate or intermediate callbacks. Preserve monotonic state.
+		if conversion.State == types.FiatConversionStatePayoutPending {
+			if err := conversion.MarkPayoutSubmitted(conversion.OffRampID, conversion.OffRampStatus, conversion.OffRampReference, ctx.BlockTime()); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if err := k.SetFiatConversion(ctx, conversion); err != nil {
@@ -393,16 +411,19 @@ func (k Keeper) ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*
 	if conversion.PayoutID != "" {
 		payout, found := k.GetPayout(ctx, conversion.PayoutID)
 		if found {
-			if conversion.State == types.FiatConversionStateCompleted && payout.State != types.PayoutStateCompleted {
-				oldState := payout.State
-				_ = payout.MarkCompleted(fmt.Sprintf("fiat-%s", conversion.ConversionID), ctx.BlockTime())
-				k.updatePayoutState(ctx, payout, oldState)
-				_ = k.SetPayout(ctx, payout)
+			if conversion.State == types.FiatConversionStatePayoutCompleted && payout.State != types.PayoutStateCompleted {
+				if err := k.finalizeFiatPayoutCompletion(ctx, &payout, &conversion); err != nil {
+					return nil, err
+				}
 			} else if conversion.State == types.FiatConversionStateFailed && payout.State != types.PayoutStateFailed {
 				oldState := payout.State
-				_ = payout.MarkFailed("fiat conversion failed", ctx.BlockTime())
+				if err := payout.MarkFailed("fiat conversion failed", ctx.BlockTime()); err != nil {
+					return nil, err
+				}
 				k.updatePayoutState(ctx, payout, oldState)
-				_ = k.SetPayout(ctx, payout)
+				if err := k.SetPayout(ctx, payout); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -596,24 +617,21 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 	if err := k.ensureFiatConversionDependencies(); err != nil {
 		return err
 	}
+	if conversion.IdempotencyKey == "" {
+		conversion.IdempotencyKey = conversion.DefaultIdempotencyKey()
+	}
 
-	oldState := payout.State
-	if err := payout.MarkProcessing(ctx.BlockTime()); err != nil {
-		return err
-	}
-	k.updatePayoutState(ctx, *payout, oldState)
-	if err := k.SetPayout(ctx, *payout); err != nil {
-		return err
-	}
-	k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryProcessing,
-		oldState, types.PayoutStateProcessing, sdk.NewCoins(), "fiat conversion processing", "system")
-
-	if err := conversion.MarkSwapping(ctx.BlockTime()); err != nil {
-		return err
-	}
-	conversion.AddAuditEntry("swap_requested", "system", "", nil, ctx.BlockTime())
-	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-		return err
+	if payout.State != types.PayoutStateProcessing {
+		oldState := payout.State
+		if err := payout.MarkProcessing(ctx.BlockTime()); err != nil {
+			return err
+		}
+		k.updatePayoutState(ctx, *payout, oldState)
+		if err := k.SetPayout(ctx, *payout); err != nil {
+			return err
+		}
+		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryProcessing,
+			oldState, types.PayoutStateProcessing, sdk.NewCoins(), "fiat conversion processing", "system")
 	}
 
 	params := k.GetParams(ctx)
@@ -631,132 +649,251 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 		}
 	}
 
-	swapReq := dex.SwapRequest{
-		FromToken:         tokenSpecToDexToken(conversion.CryptoToken),
-		ToToken:           tokenSpecToDexToken(conversion.StableToken),
-		Amount:            conversion.CryptoAmount.Amount,
-		Type:              dex.SwapTypeExactIn,
-		SlippageTolerance: slippage,
-		Deadline:          ctx.BlockTime().Add(2 * time.Minute),
-		Sender:            payout.Provider,
-		PreferredDEX:      conversion.DexAdapter,
+	// Execute swap only once. If swap tx hash already exists, retries resume from post-swap.
+	if conversion.SwapTxHash == "" {
+		if err := conversion.MarkSwapPending(ctx.BlockTime()); err != nil {
+			return err
+		}
+		conversion.AddAuditEntry("swap_pending", "system", "", nil, ctx.BlockTime())
+		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+			return err
+		}
+
+		swapReq := dex.SwapRequest{
+			FromToken:         tokenSpecToDexToken(conversion.CryptoToken),
+			ToToken:           tokenSpecToDexToken(conversion.StableToken),
+			Amount:            conversion.CryptoAmount.Amount,
+			Type:              dex.SwapTypeExactIn,
+			SlippageTolerance: slippage,
+			Deadline:          ctx.BlockTime().Add(2 * time.Minute),
+			Sender:            payout.Provider,
+			PreferredDEX:      conversion.DexAdapter,
+		}
+
+		swapQuote, err := k.dexSwap.GetQuote(ctx, swapReq)
+		if err != nil {
+			if markErr := conversion.MarkFailed(fmt.Sprintf("swap quote failed: %v", err), ctx.BlockTime()); markErr == nil {
+				_ = k.SetFiatConversion(ctx, *conversion)
+			}
+			return types.ErrFiatConversionFailed.Wrapf("swap quote failed: %s", err)
+		}
+		if !swapQuote.ExpiresAt.IsZero() && ctx.BlockTime().After(swapQuote.ExpiresAt) {
+			_ = conversion.MarkFailed("swap quote expired", ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return types.ErrFiatConversionFailed.Wrap("swap quote expired")
+		}
+		expectedOut, err := swapQuoteOutputAmount(swapQuote)
+		if err != nil {
+			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return types.ErrFiatConversionFailed.Wrap(err.Error())
+		}
+		if !expectedOut.IsPositive() {
+			_ = conversion.MarkFailed("swap quote output must be positive", ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return types.ErrFiatConversionFailed.Wrap("swap quote output must be positive")
+		}
+		if err := k.validateConversionLimits(ctx, conversion.Provider, expectedOut); err != nil {
+			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return err
+		}
+
+		if err := conversion.MarkSwapSubmitted(swapQuote.ID, ctx.BlockTime()); err != nil {
+			return err
+		}
+		conversion.AddAuditEntry("swap_submitted", "system", "", map[string]string{
+			"quote_id": swapQuote.ID,
+		}, ctx.BlockTime())
+		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+			return err
+		}
+
+		swapResult, err := k.dexSwap.ExecuteSwap(ctx, swapQuote, []byte("settlement"))
+		if err != nil {
+			_ = conversion.MarkFailed(fmt.Sprintf("swap execution failed: %v", err), ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return types.ErrFiatConversionFailed.Wrapf("swap execution failed: %s", err)
+		}
+
+		if err := conversion.MarkSwapSettled(
+			swapResult.TxHash,
+			sdk.NewCoin(conversion.StableToken.Denom, swapResult.OutputAmount),
+			ctx.BlockTime(),
+		); err != nil {
+			return err
+		}
+		conversion.SwapStatus = "settled"
+		conversion.AddAuditEntry("swap_settled", "system", "", map[string]string{
+			"tx_hash": swapResult.TxHash,
+		}, ctx.BlockTime())
+		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+			return err
+		}
+	} else if conversion.State.CanTransitionTo(types.FiatConversionStateSwapSettled) {
+		if err := conversion.MarkSwapSettled(conversion.SwapTxHash, conversion.StableAmount, ctx.BlockTime()); err != nil {
+			return err
+		}
+		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+			return err
+		}
 	}
 
-	swapQuote, err := k.dexSwap.GetQuote(ctx, swapReq)
-	if err != nil {
-		return types.ErrFiatConversionFailed.Wrapf("swap quote failed: %s", err)
-	}
-	if !swapQuote.ExpiresAt.IsZero() && ctx.BlockTime().After(swapQuote.ExpiresAt) {
-		return types.ErrFiatConversionFailed.Wrap("swap quote expired")
-	}
-	expectedOut, err := swapQuoteOutputAmount(swapQuote)
-	if err != nil {
-		return types.ErrFiatConversionFailed.Wrap(err.Error())
-	}
-	if !expectedOut.IsPositive() {
-		return types.ErrFiatConversionFailed.Wrap("swap quote output must be positive")
-	}
-	if err := k.validateConversionLimits(ctx, conversion.Provider, expectedOut); err != nil {
-		return err
+	createdOffRampThisCall := false
+	if conversion.OffRampID == "" {
+		if conversion.State == types.FiatConversionStateSwapSettled {
+			if err := conversion.MarkOffRampPending(ctx.BlockTime()); err != nil {
+				return err
+			}
+			if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+				return err
+			}
+		}
+		if conversion.State == types.FiatConversionStateOffRampPending || conversion.State == types.FiatConversionStateFailed {
+			if err := conversion.MarkPayoutPending(ctx.BlockTime()); err != nil {
+				return err
+			}
+			if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+				return err
+			}
+		}
+
+		offQuote, err := k.offRampBridge.GetQuote(ctx, offramp.QuoteRequest{
+			CryptoSymbol:  conversion.StableToken.Symbol,
+			CryptoDenom:   conversion.StableToken.Denom,
+			CryptoAmount:  conversion.StableAmount.Amount,
+			FiatCurrency:  conversion.FiatCurrency,
+			PaymentMethod: conversion.PaymentMethod,
+			Sender:        payout.Provider,
+			Destination:   conversion.DestinationRef,
+		})
+		if err != nil {
+			_ = conversion.MarkFailed(fmt.Sprintf("off-ramp quote failed: %v", err), ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return types.ErrFiatConversionFailed.Wrapf("off-ramp quote failed: %s", err)
+		}
+
+		offResult, err := k.offRampBridge.InitiatePayout(ctx, offQuote, conversion.SwapTxHash, conversion.DestinationRef, map[string]string{
+			"conversion_id": conversion.ConversionID,
+		})
+		if err != nil {
+			_ = conversion.MarkFailed(fmt.Sprintf("off-ramp initiation failed: %v", err), ctx.BlockTime())
+			_ = k.SetFiatConversion(ctx, *conversion)
+			return types.ErrFiatConversionFailed.Wrapf("off-ramp initiation failed: %s", err)
+		}
+
+		conversion.OffRampProvider = offResult.Provider
+		conversion.OffRampQuoteID = offResult.QuoteID
+		conversion.FiatAmount = offResult.FiatAmount.String()
+		if err := conversion.MarkPayoutSubmitted(offResult.ID, string(offResult.Status), offResult.Reference, ctx.BlockTime()); err != nil {
+			return err
+		}
+		createdOffRampThisCall = true
+		switch offResult.Status {
+		case offramp.StatusCompleted:
+			if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
+				return err
+			}
+		case offramp.StatusFailed:
+			if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+				return err
+			}
+		}
+		conversion.AddAuditEntry("offramp_payout_submitted", "system", "", map[string]string{
+			"offramp_id": offResult.ID,
+			"status":     string(offResult.Status),
+		}, ctx.BlockTime())
+		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
+			return err
+		}
 	}
 
-	swapResult, err := k.dexSwap.ExecuteSwap(ctx, swapQuote, []byte("settlement"))
-	if err != nil {
-		return types.ErrFiatConversionFailed.Wrapf("swap execution failed: %s", err)
+	if conversion.OffRampID != "" && !createdOffRampThisCall {
+		status, err := k.offRampBridge.GetStatus(ctx, conversion.OffRampID)
+		if err == nil {
+			conversion.OffRampStatus = string(status.Status)
+			if status.Reference != "" {
+				conversion.OffRampReference = status.Reference
+			}
+			if !status.FiatAmount.IsNil() && status.FiatAmount.IsPositive() {
+				conversion.FiatAmount = status.FiatAmount.String()
+			}
+			if status.Status == offramp.StatusCompleted {
+				if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
+					return err
+				}
+			} else if status.Status == offramp.StatusFailed {
+				if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
-	conversion.SwapQuoteID = swapResult.QuoteID
-	conversion.SwapTxHash = swapResult.TxHash
-	conversion.SwapStatus = "executed"
-	conversion.StableAmount = sdk.NewCoin(conversion.StableToken.Denom, swapResult.OutputAmount)
-	conversion.AddAuditEntry("swap_executed", "system", "", map[string]string{
-		"tx_hash": swapResult.TxHash,
-	}, ctx.BlockTime())
-
-	if err := conversion.MarkOffRampPending(ctx.BlockTime()); err != nil {
-		return err
-	}
 	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
 		return err
 	}
 
-	offQuote, err := k.offRampBridge.GetQuote(ctx, offramp.QuoteRequest{
-		CryptoSymbol:  conversion.StableToken.Symbol,
-		CryptoDenom:   conversion.StableToken.Denom,
-		CryptoAmount:  conversion.StableAmount.Amount,
-		FiatCurrency:  conversion.FiatCurrency,
-		PaymentMethod: conversion.PaymentMethod,
-		Sender:        payout.Provider,
-		Destination:   conversion.DestinationRef,
-	})
-	if err != nil {
-		return types.ErrFiatConversionFailed.Wrapf("off-ramp quote failed: %s", err)
-	}
-
-	offResult, err := k.offRampBridge.InitiatePayout(ctx, offQuote, swapResult.TxHash, conversion.DestinationRef, map[string]string{
-		"conversion_id": conversion.ConversionID,
-	})
-	if err != nil {
-		return types.ErrFiatConversionFailed.Wrapf("off-ramp initiation failed: %s", err)
-	}
-
-	conversion.OffRampProvider = offResult.Provider
-	conversion.OffRampQuoteID = offResult.QuoteID
-	conversion.OffRampID = offResult.ID
-	conversion.OffRampStatus = string(offResult.Status)
-	conversion.OffRampReference = offResult.Reference
-	conversion.FiatAmount = offResult.FiatAmount.String()
-	conversion.AddAuditEntry("offramp_initiated", "system", "", map[string]string{
-		"offramp_id": offResult.ID,
-	}, ctx.BlockTime())
-
-	switch offResult.Status {
-	case offramp.StatusCompleted:
-		_ = conversion.MarkCompleted(ctx.BlockTime())
-		_ = payout.MarkCompleted(fmt.Sprintf("fiat-%s", conversion.ConversionID), ctx.BlockTime())
-		k.updatePayoutState(ctx, *payout, types.PayoutStateProcessing)
-		if err := k.SetPayout(ctx, *payout); err != nil {
+	if conversion.State == types.FiatConversionStatePayoutCompleted {
+		if err := k.finalizeFiatPayoutCompletion(ctx, payout, conversion); err != nil {
 			return err
 		}
-		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryCompleted,
-			types.PayoutStateProcessing, types.PayoutStateCompleted, payout.NetAmount, "fiat conversion completed", "system")
-
-		k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordPlatformFee, payout.PlatformFee)
-		k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordValidatorFee, payout.ValidatorFee)
-		if !payout.HoldbackAmount.IsZero() {
-			k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordHoldback, payout.HoldbackAmount)
-		}
-
-		day := ctx.BlockTime().UTC().Format("20060102")
-		total := k.getFiatDailyTotal(ctx, conversion.Provider, day)
-		k.setFiatDailyTotal(ctx, conversion.Provider, day, total.Add(offResult.CryptoAmount))
-		_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionCompleted{
-			ConversionID: conversion.ConversionID,
-			Provider:     conversion.Provider,
-			FiatCurrency: conversion.FiatCurrency,
-			FiatAmount:   conversion.FiatAmount,
-			CompletedAt:  ctx.BlockTime().Unix(),
-		})
-	case offramp.StatusFailed:
-		_ = conversion.MarkFailed("off-ramp failed", ctx.BlockTime())
+	} else if conversion.State == types.FiatConversionStateFailed && payout.State != types.PayoutStateFailed {
+		oldState := payout.State
 		_ = payout.MarkFailed("fiat conversion failed", ctx.BlockTime())
-		k.updatePayoutState(ctx, *payout, types.PayoutStateProcessing)
+		k.updatePayoutState(ctx, *payout, oldState)
 		if err := k.SetPayout(ctx, *payout); err != nil {
 			return err
 		}
 		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
-			types.PayoutStateProcessing, types.PayoutStateFailed, sdk.NewCoins(), "fiat conversion failed", "system")
+			oldState, types.PayoutStateFailed, sdk.NewCoins(), "fiat conversion failed", "system")
 		_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionFailed{
 			ConversionID: conversion.ConversionID,
 			Provider:     conversion.Provider,
-			Reason:       "off-ramp failed",
+			Reason:       conversion.FailureReason,
 			FailedAt:     ctx.BlockTime().Unix(),
 		})
 	}
 
-	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-		return err
+	return nil
+}
+
+func (k Keeper) finalizeFiatPayoutCompletion(ctx sdk.Context, payout *types.PayoutRecord, conversion *types.FiatConversionRecord) error {
+	if payout.State == types.PayoutStateCompleted {
+		return nil
 	}
 
+	oldState := payout.State
+	if err := payout.MarkCompleted(fmt.Sprintf("fiat-%s", conversion.ConversionID), ctx.BlockTime()); err != nil {
+		return err
+	}
+	k.updatePayoutState(ctx, *payout, oldState)
+	if err := k.SetPayout(ctx, *payout); err != nil {
+		return err
+	}
+	k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryCompleted,
+		oldState, types.PayoutStateCompleted, payout.NetAmount, "fiat conversion completed", "system")
+
+	k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordPlatformFee, payout.PlatformFee)
+	k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordValidatorFee, payout.ValidatorFee)
+	if !payout.HoldbackAmount.IsZero() {
+		k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordHoldback, payout.HoldbackAmount)
+	}
+
+	day := ctx.BlockTime().UTC().Format("20060102")
+	total := k.getFiatDailyTotal(ctx, conversion.Provider, day)
+	totalToAdd := conversion.StableAmount.Amount
+	if totalToAdd.IsNil() || totalToAdd.IsNegative() {
+		totalToAdd = sdkmath.ZeroInt()
+	}
+	k.setFiatDailyTotal(ctx, conversion.Provider, day, total.Add(totalToAdd))
+
+	_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionCompleted{
+		ConversionID: conversion.ConversionID,
+		Provider:     conversion.Provider,
+		FiatCurrency: conversion.FiatCurrency,
+		FiatAmount:   conversion.FiatAmount,
+		CompletedAt:  ctx.BlockTime().Unix(),
+	})
 	return nil
 }

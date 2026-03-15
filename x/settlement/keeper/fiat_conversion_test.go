@@ -180,9 +180,10 @@ func (s *KeeperTestSuite) TestFiatConversionMultiHopAndAuditTrail() {
 		actions[entry.Action] = true
 	}
 	require.True(t, actions["conversion_requested"])
-	require.True(t, actions["swap_requested"])
-	require.True(t, actions["swap_executed"])
-	require.True(t, actions["offramp_initiated"])
+	require.True(t, actions["swap_pending"])
+	require.True(t, actions["swap_submitted"])
+	require.True(t, actions["swap_settled"])
+	require.True(t, actions["offramp_payout_submitted"])
 }
 
 func (s *KeeperTestSuite) TestFiatConversionLimitExceeded() {

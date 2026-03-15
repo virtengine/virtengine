@@ -483,6 +483,14 @@ func (k Keeper) ExecutePayoutByID(ctx sdk.Context, payoutID string) error {
 		return types.ErrPayoutHeld.Wrap("payout is on hold")
 	}
 
+	if payout.FiatConversionID != "" {
+		conversion, found := k.GetFiatConversion(ctx, payout.FiatConversionID)
+		if !found {
+			return types.ErrFiatConversionNotFound.Wrapf("conversion %s not found for payout %s", payout.FiatConversionID, payout.PayoutID)
+		}
+		return k.executeFiatConversion(ctx, &payout, &conversion)
+	}
+
 	return k.executePayoutTransfer(ctx, &payout)
 }
 
@@ -707,13 +715,12 @@ func (k Keeper) RetryFailedPayouts(ctx sdk.Context) error {
 			continue // Max retries exceeded
 		}
 
-		// Reset to pending for retry
+		// Reset to pending for retry and keep state index monotonic.
 		payout.State = types.PayoutStatePending
+		k.updatePayoutState(ctx, payout, types.PayoutStateFailed)
 		if err := k.SetPayout(ctx, payout); err != nil {
 			continue
 		}
-
-		k.updatePayoutState(ctx, payout, types.PayoutStateFailed)
 
 		if err := k.ExecutePayoutByID(ctx, payout.PayoutID); err != nil {
 			k.Logger(ctx).Error("failed to retry payout",
