@@ -58,6 +58,7 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
 	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 
+	"github.com/virtengine/virtengine/pkg/pricefeed"
 	atypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
@@ -680,6 +681,7 @@ func (app *App) InitNormalKeepers(
 	)
 
 	app.Keepers.VirtEngine.Settlement.SetOracleKeeper(app.Keepers.VirtEngine.Oracle)
+	configureSettlementExternalPriceFeeds(&app.Keepers.VirtEngine.Settlement)
 
 	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(settlementkeeper.BillingKeeper); ok {
 		app.Keepers.VirtEngine.Settlement.SetBillingKeeper(billingKeeper)
@@ -690,6 +692,25 @@ func (app *App) InitNormalKeepers(
 	}
 
 	app.Keepers.VirtEngine.HPC.SetSettlementKeeper(app.Keepers.VirtEngine.Settlement)
+}
+
+func configureSettlementExternalPriceFeeds(keeper *settlementkeeper.Keeper) {
+	cfg := pricefeed.DefaultConfig()
+	cfg.HealthCheckInterval = 0
+
+	aggregator, err := pricefeed.NewAggregator(cfg)
+	if err != nil {
+		return
+	}
+
+	keeper.SetPriceFeed(
+		settlementtypes.OracleSourceTypeBandIBC,
+		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeBandIBC),
+	)
+	keeper.SetPriceFeed(
+		settlementtypes.OracleSourceTypeChainlinkIBC,
+		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeChainlinkIBC),
+	)
 }
 
 func (app *App) SetupHooks() {
