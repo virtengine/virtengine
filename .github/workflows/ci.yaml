@@ -105,21 +105,16 @@ jobs:
 
       - name: Check formatting
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" && -n "${{ github.base_ref }}" ]]; then
-            changed_go_files="$(git diff --name-only "origin/${{ github.base_ref }}" -- '*.go' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' || true)"
-            if [[ -z "$changed_go_files" ]]; then
-              echo "No Go files changed"
-              exit 0
-            fi
-            unformatted="$(printf '%s\n' "$changed_go_files" | xargs gofmt -l)"
-            if [[ -n "$unformatted" ]]; then
-              printf '%s\n' "$unformatted"
-              exit 1
-            fi
+          mapfile -d '' gofiles < <(git ls-files -z '*.go' ':!:vendor/**')
+          if [ ${#gofiles[@]} -eq 0 ]; then
             exit 0
           fi
-          gofmt -l .
-          test -z "$(gofmt -l .)"
+
+          formatted=$(gofmt -l "${gofiles[@]}")
+          if [ -n "$formatted" ]; then
+            echo "$formatted"
+            exit 1
+          fi
 
   # ===========================================================================
   # Go Vet Job - Pre-push Parity
@@ -206,42 +201,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Detect Go-relevant changes
-        id: detect
-        run: |
-          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed_go_files="$(git diff --name-only FETCH_HEAD...HEAD -- '*.go' 'go.mod' 'go.sum' 'go.work' 'go.work.sum' | grep -v '^vendor/' || true)"
-
-          if [[ -n "$changed_go_files" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up Go
-        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Fetch base ref for PR coverage
+        if: github.event_name == 'pull_request'
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
+
       - name: Download dependencies
-        if: steps.detect.outputs.run == 'true'
         run: go mod download
 
       - name: Sync dependencies
-        if: steps.detect.outputs.run == 'true'
         run: |
           go mod tidy
           go mod vendor
 
       - name: Run unit tests
-        if: steps.detect.outputs.run == 'true'
         run: |
           go test -v -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
             -coverprofile=coverage.out -covermode=atomic ./...
@@ -249,7 +227,8 @@ jobs:
       # INFRA-003: Coverage enforcement gate (80% minimum)
       - name: Check coverage threshold
         id: coverage
-        if: steps.detect.outputs.run == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           if [ ! -f coverage.out ]; then
             echo "No coverage file generated"
@@ -259,6 +238,107 @@ jobs:
           # Calculate total coverage
           COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 - <<'PY'
+import os
+import re
+import subprocess
+import sys
+from collections import defaultdict
+
+base_ref = os.environ.get("BASE_REF", "").strip()
+if not base_ref:
+    print("Missing BASE_REF for PR coverage check", file=sys.stderr)
+    sys.exit(1)
+
+diff = subprocess.check_output(
+    ["git", "diff", "--unified=0", "--no-color", f"origin/{base_ref}...HEAD", "--", "*.go"],
+    text=True,
+)
+
+changed_lines = defaultdict(set)
+current_file = None
+new_line = None
+for raw_line in diff.splitlines():
+    if raw_line.startswith("+++ b/"):
+        current_file = raw_line[6:]
+        continue
+    if raw_line.startswith("@@"):
+        match = re.search(r"\+(\d+)(?:,(\d+))?", raw_line)
+        if not match:
+            continue
+        new_line = int(match.group(1))
+        continue
+    if current_file is None or new_line is None:
+        continue
+    if raw_line.startswith("+") and not raw_line.startswith("+++"):
+        changed_lines[current_file].add(new_line)
+        new_line += 1
+        continue
+    if raw_line.startswith("-") and not raw_line.startswith("---"):
+        continue
+    if raw_line.startswith("\\"):
+        continue
+    new_line += 1
+
+if not changed_lines:
+    print("No changed Go lines detected; skipping PR diff coverage gate.")
+    sys.exit(0)
+
+coverage_ranges = defaultdict(list)
+with open("coverage.out", "r", encoding="utf-8") as fh:
+    next(fh, None)
+    for line in fh:
+        line = line.strip()
+        if not line:
+            continue
+        location, _num_statements, count = line.rsplit(" ", 2)
+        filename, span = location.split(":", 1)
+        start, end = span.split(",", 1)
+        start_line = int(start.split(".", 1)[0])
+        end_line = int(end.split(".", 1)[0])
+        coverage_ranges[filename].append((start_line, end_line, int(count)))
+
+def matching_ranges(path: str):
+    suffix = f"/{path.replace(os.sep, '/')}"
+    for filename, ranges in coverage_ranges.items():
+        normalized = filename.replace('\\', '/')
+        if normalized == path or normalized.endswith(suffix):
+            return ranges
+    return []
+
+executable = 0
+covered = 0
+uncovered = []
+for path, lines in changed_lines.items():
+    ranges = matching_ranges(path)
+    for line_no in sorted(lines):
+        line_ranges = [entry for entry in ranges if entry[0] <= line_no <= entry[1]]
+        if not line_ranges:
+            continue
+        executable += 1
+        if any(count > 0 for _, _, count in line_ranges):
+            covered += 1
+        else:
+            uncovered.append(f"{path}:{line_no}")
+
+if executable == 0:
+    print("No executable changed Go lines detected; skipping PR diff coverage gate.")
+    sys.exit(0)
+
+coverage_pct = (covered * 100.0) / executable
+print(f"Changed Go line coverage: {covered}/{executable} = {coverage_pct:.1f}%")
+min_coverage = 80.0
+if coverage_pct < min_coverage:
+    preview = ", ".join(uncovered[:20])
+    print(f"::error::Changed Go line coverage is {coverage_pct:.1f}%, below minimum {min_coverage:.0f}%")
+    if preview:
+        print(f"Uncovered changed lines: {preview}")
+    sys.exit(1)
+PY
+            exit 0
+          fi
 
           # Minimum required coverage (INFRA-003)
           MIN_COVERAGE=80
@@ -274,25 +354,19 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
-        if: steps.detect.outputs.run == 'true'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.out
           flags: unittests
           name: go-coverage
-          fail_ci_if_error: false # Keep unit-test signal green when Codecov upload flakes
+          fail_ci_if_error: true # INFRA-003: Fail if coverage upload fails
 
       - name: Upload coverage artifact
-        if: steps.detect.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage
           path: coverage.out
           retention-days: 7
-
-      - name: Skip notice
-        if: steps.detect.outputs.run != 'true'
-        run: echo "No Go-related files changed, skipping Go test job"
 
   economics-sim:
     name: Economics Simulation Suite
@@ -302,43 +376,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Detect economics-relevant changes
-        id: detect
-        run: |
-          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
-
-          if printf '%s\n' "$changed_files" | grep -Eq '^(.*\.go|go\.mod|go\.sum|go\.work|go\.work\.sum|app/|cmd/|x/|scripts/economics/|tests/integration/|tests/simulation/|simulation/)'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up Go
-        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
-        if: steps.detect.outputs.run == 'true'
         run: go mod download
 
       - name: Run economics simulation suite
-        if: steps.detect.outputs.run == 'true'
         run: |
           chmod +x scripts/economics/run-sim-suite.sh
           RUNS=60 scripts/economics/run-sim-suite.sh ./sim-output
-
-      - name: Skip notice
-        if: steps.detect.outputs.run != 'true'
-        run: echo "No economics-relevant files changed, skipping job steps"
 
   # ===========================================================================
   # Python Test Job - ML/Waldur Tests (Optional)
@@ -741,34 +791,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Detect container-relevant changes
-        id: detect
-        run: |
-          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
-
-          if printf '%s\n' "$changed_files" | grep -Eq '^(.*\.go|go\.mod|go\.sum|go\.work|go\.work\.sum|_build/|Dockerfile|Dockerfile\.|cmd/|app/|x/|scripts/docker/|scripts/ci/|scripts/release/|deploy/|infra/)'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up Docker Buildx
-        if: steps.detect.outputs.run == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build virtengine image (local)
-        if: steps.detect.outputs.run == 'true'
         run: |
           docker buildx build --load -f _build/Dockerfile.virtengine -t virtengine:ci .
 
       - name: Scan virtengine image
-        if: steps.detect.outputs.run == 'true'
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: virtengine:ci
@@ -777,7 +807,6 @@ jobs:
           exit-code: 1
 
       - name: Enforce virtengine image size
-        if: steps.detect.outputs.run == 'true'
         run: |
           IMAGE_SIZE_BYTES=$(docker image inspect -f '{{.Size}}' virtengine:ci)
           MAX_BYTES=$((100 * 1024 * 1024))
@@ -788,12 +817,10 @@ jobs:
           fi
 
       - name: Build test-runner image (local)
-        if: steps.detect.outputs.run == 'true'
         run: |
           docker buildx build --load -f _build/Dockerfile.test -t virtengine-test:ci .
 
       - name: Scan test-runner image
-        if: steps.detect.outputs.run == 'true'
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: virtengine-test:ci
@@ -802,12 +829,12 @@ jobs:
           exit-code: 1
 
       - name: Build veid-pipeline image (local)
-        if: ${{ steps.detect.outputs.run == 'true' && hashFiles('ml/models/**') != '' }}
+        if: ${{ hashFiles('ml/models/**') != '' }}
         run: |
           docker buildx build --load -f _build/Dockerfile.veid-pipeline -t veid-pipeline:ci .
 
       - name: Scan veid-pipeline image
-        if: ${{ steps.detect.outputs.run == 'true' && hashFiles('ml/models/**') != '' }}
+        if: ${{ hashFiles('ml/models/**') != '' }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: veid-pipeline:ci
@@ -816,7 +843,7 @@ jobs:
           exit-code: 1
 
       - name: Log in to GHCR
-        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -824,7 +851,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push virtengine image
-        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         run: |
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
@@ -834,18 +861,18 @@ jobs:
             .
 
       - name: Install cosign
-        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         uses: sigstore/cosign-installer@v3
 
       - name: Sign virtengine image
-        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
           cosign sign --yes ghcr.io/${{ github.repository }}/virtengine:${{ github.sha }}
 
       - name: Verify virtengine image signature
-        if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
@@ -853,10 +880,6 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/ci.yaml@.*" \
             ghcr.io/${{ github.repository }}/virtengine:${{ github.sha }}
-
-      - name: Skip notice
-        if: steps.detect.outputs.run != 'true'
-        run: echo "No container-relevant files changed, skipping job steps"
 
   # ===========================================================================
   # macOS Build - Native Build Verification (main/tags only)
