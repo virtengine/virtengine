@@ -80,6 +80,13 @@ func TestExternalOraclePriceFeedPropagatesProviderErrors(t *testing.T) {
 	require.ErrorContains(t, err, "provider unavailable")
 }
 
+func TestExternalOraclePriceFeedRejectsNilProvider(t *testing.T) {
+	feed := NewExternalOraclePriceFeed(nil, types.OracleSourceTypeBandIBC)
+
+	_, err := feed.GetPrice(context.Background(), "VRT", "USD")
+	require.ErrorContains(t, err, "external price provider not configured")
+}
+
 func TestExternalOraclePriceFeedGetPrices(t *testing.T) {
 	provider := &mockExternalPriceProvider{
 		price: pricefeed.AggregatedPrice{
@@ -99,4 +106,22 @@ func TestExternalOraclePriceFeedGetPrices(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, prices, 2)
 	require.Equal(t, 2, provider.requestCount)
+}
+
+func TestExternalOraclePriceFeedGetPricesStopsOnProviderError(t *testing.T) {
+	provider := &mockExternalPriceProvider{err: errors.New("provider unavailable")}
+	feed := NewExternalOraclePriceFeed(provider, types.OracleSourceTypeBandIBC)
+
+	_, err := feed.GetPrices(context.Background(), []types.CurrencyPair{{Base: "VRT", Quote: "USD"}})
+	require.ErrorContains(t, err, "provider unavailable")
+	require.Equal(t, 1, provider.requestCount)
+}
+
+func TestExternalOraclePriceFeedSubscribePricesUnsupported(t *testing.T) {
+	provider := &mockExternalPriceProvider{}
+	feed := NewExternalOraclePriceFeed(provider, types.OracleSourceTypeBandIBC)
+
+	updates, err := feed.SubscribePrices(context.Background(), []types.CurrencyPair{{Base: "VRT", Quote: "USD"}})
+	require.Nil(t, updates)
+	require.ErrorContains(t, err, "does not support subscriptions")
 }
