@@ -293,7 +293,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 
 | Order | Bosun ID | Title | Priority | Dependencies | Status |
 | --- | --- | --- | --- | --- | --- |
-| 81A | `d163672e` | feat(hpc): node rewards + SLURM integration + placement engine + SLA enforcement | P1 | 80B | **todo** |
+| 81A | `d163672e` | feat(hpc): SLURM integration + placement engine + SLA enforcement hardening | P1 | 80B | **todo** |
 | 81B | `fefabac4` | feat(oracle): price feed ingestion + BME token ops + settlement FX offramp | P1 | 80C | **todo** |
 | 81C | `f81211ee` | feat(fraud): dispute lifecycle + escrow integration + enclave attestation + review wiring | P1 | 80A | **todo** |
 
@@ -331,7 +331,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 
 Phase 0 (✅ RESOLVED): **83A done** → 83B, 83C have remaining gaps (hardening, not blocking)
 Phase 1 (P0 parallel — **NOW UNBLOCKED**): 80A, 80B, 80C — Chain integration, staking economics, proto pipeline
-Phase 2 (P1 parallel): 81A, 81B, 81C — HPC rewards, oracle/BME, fraud/enclave
+Phase 2 (P1 parallel): 81A, 81B, 81C — HPC SLURM/placement hardening, oracle/BME, fraud/enclave
 Phase 3 (P1 parallel): 82A, 82B — IBC bridging, roles/audit/governance
 
 **83A is complete.** Agents now resolve to workspace repos via `resolveAgentRepoRoot()`. Chain tasks 80A-82B can proceed. The 83B/83C remaining gaps (per-repo branch config, periodic sync, ensureGitAncestor, temp writable roots) are hardening items that can be addressed in parallel with chain work.
