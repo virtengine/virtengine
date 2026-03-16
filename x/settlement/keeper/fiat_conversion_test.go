@@ -180,9 +180,10 @@ func (s *KeeperTestSuite) TestFiatConversionMultiHopAndAuditTrail() {
 		actions[entry.Action] = true
 	}
 	require.True(t, actions["conversion_requested"])
-	require.True(t, actions["swap_requested"])
-	require.True(t, actions["swap_executed"])
-	require.True(t, actions["offramp_initiated"])
+	require.True(t, actions["swap_pending"])
+	require.True(t, actions["swap_submitted"])
+	require.True(t, actions["swap_settled"])
+	require.True(t, actions["offramp_payout_submitted"])
 }
 
 func (s *KeeperTestSuite) TestFiatConversionLimitExceeded() {
@@ -365,4 +366,111 @@ func (s *KeeperTestSuite) TestFiatConversionFailureRecovery() {
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-failure")
 	require.True(t, found)
 	require.Equal(t, types.FiatConversionStateFailed, conversion.State)
+}
+
+func (s *KeeperTestSuite) TestRequestFiatConversionIdempotentWithoutInvoiceLinkage() {
+	t := s.T()
+
+	swapExec := &capturingSwapExecutor{}
+	bridge := &capturingOffRampBridge{}
+	s.configureFiatConversionDeps(t, swapExec, bridge)
+
+	request := types.FiatConversionRequest{
+		Provider:          s.provider.String(),
+		Customer:          s.depositor.String(),
+		RequestedBy:       s.provider.String(),
+		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+		FiatCurrency:      "USD",
+		PaymentMethod:     "bank_transfer",
+		DestinationHash:   types.HashDestination("acct-token"),
+		SlippageTolerance: 0.01,
+		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+	}
+
+	first, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.NoError(t, err)
+
+	second, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.NoError(t, err)
+
+	require.Equal(t, first.ConversionID, second.ConversionID)
+	require.Equal(t, first.IdempotencyKey, second.IdempotencyKey)
+
+	stored, found := s.keeper.GetFiatConversion(s.ctx, first.ConversionID)
+	require.True(t, found)
+	require.Equal(t, first.ConversionID, stored.ConversionID)
+	require.Equal(t, first.IdempotencyKey, stored.IdempotencyKey)
+
+	idLookup := s.ctx.KVStore(s.storeKey).Get(types.FiatConversionIdempotencyKey(first.IdempotencyKey))
+	require.Equal(t, first.ConversionID, string(idLookup))
+}
+
+func (s *KeeperTestSuite) TestSetFiatConversionReindexesUpdatedReferences() {
+	t := s.T()
+
+	request := types.FiatConversionRequest{
+		InvoiceID:         "inv-old",
+		SettlementID:      "set-old",
+		PayoutID:          "pay-old",
+		Provider:          s.provider.String(),
+		Customer:          s.depositor.String(),
+		RequestedBy:       s.provider.String(),
+		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+		FiatCurrency:      "USD",
+		PaymentMethod:     "bank_transfer",
+		DestinationHash:   types.HashDestination("acct-token"),
+		SlippageTolerance: 0.01,
+		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+	}
+
+	conversion := types.NewFiatConversionRecord("conv-reindex", request, request.CryptoAmount, s.ctx.BlockTime())
+	require.NoError(t, s.keeper.SetFiatConversion(s.ctx, *conversion))
+
+	oldIdempotencyKey := conversion.IdempotencyKey
+
+	conversion.InvoiceID = "inv-new"
+	conversion.SettlementID = "set-new"
+	conversion.PayoutID = "pay-new"
+	conversion.Provider = s.depositor.String()
+	conversion.IdempotencyKey = "fiatconv:custom:new"
+	require.NoError(t, conversion.MarkSwapPending(s.ctx.BlockTime().Add(time.Minute)))
+
+	require.NoError(t, s.keeper.SetFiatConversion(s.ctx, *conversion))
+
+	_, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-old")
+	require.False(t, found)
+	_, found = s.keeper.GetFiatConversionBySettlement(s.ctx, "set-old")
+	require.False(t, found)
+	_, found = s.keeper.GetFiatConversionByPayout(s.ctx, "pay-old")
+	require.False(t, found)
+
+	byInvoice, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-new")
+	require.True(t, found)
+	require.Equal(t, conversion.ConversionID, byInvoice.ConversionID)
+
+	store := s.ctx.KVStore(s.storeKey)
+	require.Nil(t, store.Get(types.FiatConversionByProviderKey(s.provider.String(), conversion.ConversionID)))
+	require.NotNil(t, store.Get(types.FiatConversionByProviderKey(s.depositor.String(), conversion.ConversionID)))
+	require.Nil(t, store.Get(types.FiatConversionIdempotencyKey(oldIdempotencyKey)))
+	require.Equal(t, conversion.ConversionID, string(store.Get(types.FiatConversionIdempotencyKey(conversion.IdempotencyKey))))
+
+	var byOldState []types.FiatConversionRecord
+	s.keeper.WithFiatConversionsByState(s.ctx, types.FiatConversionStateCreated, func(record types.FiatConversionRecord) bool {
+		byOldState = append(byOldState, record)
+		return false
+	})
+	require.Empty(t, byOldState)
+
+	var byNewState []types.FiatConversionRecord
+	s.keeper.WithFiatConversionsByState(s.ctx, types.FiatConversionStateSwapPending, func(record types.FiatConversionRecord) bool {
+		if record.ConversionID == conversion.ConversionID {
+			byNewState = append(byNewState, record)
+		}
+		return false
+	})
+	require.Len(t, byNewState, 1)
 }

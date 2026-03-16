@@ -37,29 +37,29 @@ func (m *mockUsageChainClient) EstimateGas(_ context.Context, _ []byte) (uint64,
 	return m.gasLimit, nil
 }
 
-func (m *mockUsageChainClient) BroadcastTx(_ context.Context, tx []byte) error {
+func (m *mockUsageChainClient) BroadcastTx(_ context.Context, tx []byte) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.broadcasts++
 
 	var env txEnvelope
 	if err := json.Unmarshal(tx, &env); err != nil {
-		return err
+		return "", err
 	}
 
 	if m.tryHandleBatch(env.Msg) {
-		return nil
+		return "mock-batch-hash", nil
 	}
 
 	if m.tryHandleUsage(env.Msg) {
-		return nil
+		return "mock-usage-hash", nil
 	}
 
 	if m.tryHandleSettlement(env.Msg) {
-		return nil
+		return "mock-settlement-hash", nil
 	}
 
-	return nil
+	return "mock-generic-hash", nil
 }
 
 func (m *mockUsageChainClient) tryHandleBatch(msg json.RawMessage) bool {

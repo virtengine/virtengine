@@ -195,5 +195,16 @@ func EndBlocker(ctx sdk.Context, k keeper.IKeeper) error {
 		return err
 	}
 
+	// Resume asynchronous payout work queues.
+	if err := k.ProcessPendingPayouts(ctx); err != nil {
+		return err
+	}
+	if err := k.RetryFailedPayouts(ctx); err != nil {
+		return err
+	}
+	if err := k.ProcessInFlightFiatConversions(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
