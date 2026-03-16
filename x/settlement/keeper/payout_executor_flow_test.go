@@ -290,6 +290,36 @@ func (s *KeeperTestSuite) TestExecutePayoutIdempotentRequests() {
 	require.Equal(t, first.PayoutID, loaded.PayoutID)
 }
 
+func (s *KeeperTestSuite) TestSetPayoutReindexesStateOnUpdate() {
+	t := s.T()
+
+	payout := types.NewPayoutRecord(
+		"payout-reindex-1",
+		"inv-reindex-1",
+		"settle-reindex-1",
+		"escrow-reindex-1",
+		"order-reindex-1",
+		"lease-reindex-1",
+		s.provider.String(),
+		s.depositor.String(),
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)
+
+	require.NoError(t, s.keeper.SetPayout(s.ctx, *payout))
+	require.Len(t, s.keeper.GetPayoutsByState(s.ctx, types.PayoutStatePending), 1)
+
+	require.NoError(t, payout.MarkProcessing(s.ctx.BlockTime().Add(time.Minute)))
+	require.NoError(t, s.keeper.SetPayout(s.ctx, *payout))
+
+	require.Empty(t, s.keeper.GetPayoutsByState(s.ctx, types.PayoutStatePending))
+	require.Len(t, s.keeper.GetPayoutsByState(s.ctx, types.PayoutStateProcessing), 1)
+}
+
 func (s *KeeperTestSuite) TestReconcilePayoutAfterRestart() {
 	t := s.T()
 

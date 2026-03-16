@@ -88,6 +88,24 @@ func (k Keeper) SetPayout(ctx sdk.Context, payout types.PayoutRecord) error {
 	}
 
 	store := ctx.KVStore(k.skey)
+	existing, found := k.GetPayout(ctx, payout.PayoutID)
+	if found {
+		if existing.State != payout.State {
+			k.updatePayoutState(ctx, payout, existing.State)
+		}
+		if existing.InvoiceID != "" && existing.InvoiceID != payout.InvoiceID {
+			store.Delete(types.PayoutByInvoiceKey(existing.InvoiceID))
+		}
+		if existing.SettlementID != "" && existing.SettlementID != payout.SettlementID {
+			store.Delete(types.PayoutBySettlementKey(existing.SettlementID))
+		}
+		if existing.Provider != "" && existing.Provider != payout.Provider {
+			store.Delete(types.PayoutByProviderKey(existing.Provider, payout.PayoutID))
+		}
+		if existing.IdempotencyKey != "" && existing.IdempotencyKey != payout.IdempotencyKey {
+			store.Delete(types.PayoutIdempotencyKey(existing.IdempotencyKey))
+		}
+	}
 
 	bz, err := json.Marshal(&payout)
 	if err != nil {

@@ -46,6 +46,11 @@ func TestFiatConversionStateMachineHappyPath(t *testing.T) {
 	require.True(t, record.State.IsTerminal())
 	require.NotEmpty(t, record.IdempotencyKey)
 	require.GreaterOrEqual(t, len(record.TransitionHistory), 7)
+	require.GreaterOrEqual(t, len(record.AuditTrail), 7)
+	lastAudit := record.AuditTrail[len(record.AuditTrail)-1]
+	require.Equal(t, "state_transition", lastAudit.Action)
+	require.Equal(t, string(FiatConversionStatePayoutSubmitted), lastAudit.Metadata["from"])
+	require.Equal(t, string(FiatConversionStatePayoutCompleted), lastAudit.Metadata["to"])
 }
 
 func TestFiatConversionStateMachineRejectsInvalidTransition(t *testing.T) {
