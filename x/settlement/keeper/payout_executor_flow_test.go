@@ -18,11 +18,13 @@ import (
 )
 
 type pendingOffRampBridge struct {
-	quote   offramp.Quote
-	result  offramp.PayoutResult
-	status  offramp.PayoutResult
-	getErr  error
-	initErr error
+	quote       offramp.Quote
+	result      offramp.PayoutResult
+	status      offramp.PayoutResult
+	getErr      error
+	initErr     error
+	initCalls   int
+	statusCalls int
 }
 
 func (p *pendingOffRampBridge) GetQuote(ctx context.Context, req offramp.QuoteRequest) (offramp.Quote, error) {
@@ -34,6 +36,7 @@ func (p *pendingOffRampBridge) GetQuote(ctx context.Context, req offramp.QuoteRe
 }
 
 func (p *pendingOffRampBridge) InitiatePayout(ctx context.Context, quote offramp.Quote, cryptoTxRef string, destination string, metadata map[string]string) (offramp.PayoutResult, error) {
+	p.initCalls++
 	if p.initErr != nil {
 		return offramp.PayoutResult{}, p.initErr
 	}
@@ -42,6 +45,7 @@ func (p *pendingOffRampBridge) InitiatePayout(ctx context.Context, quote offramp
 }
 
 func (p *pendingOffRampBridge) GetStatus(ctx context.Context, payoutID string) (offramp.PayoutResult, error) {
+	p.statusCalls++
 	return p.status, p.getErr
 }
 
@@ -488,4 +492,107 @@ func (s *KeeperTestSuite) TestFiatConversionRetryDoesNotReexecuteSwap() {
 	require.True(t, found)
 	require.Equal(t, types.PayoutStateCompleted, finalPayout.State)
 	require.GreaterOrEqual(t, bridge.statusRequestCount, 1)
+}
+
+func (s *KeeperTestSuite) TestProcessInFlightFiatConversionsRecoveryLoop() {
+	t := s.T()
+
+	swapQuote := dex.SwapQuote{
+		ID: "quote-recovery-loop",
+		Route: dex.SwapRoute{
+			Hops: []dex.SwapHop{
+				{AmountOut: sdkmath.NewInt(900)},
+			},
+		},
+		ExpiresAt: s.ctx.BlockTime().Add(5 * time.Minute),
+	}
+	swapExec := &mockSwapExecutor{
+		quote: swapQuote,
+		result: dex.SwapResult{
+			QuoteID:      swapQuote.ID,
+			TxHash:       "swap-recovery-loop",
+			InputAmount:  sdkmath.NewInt(1000),
+			OutputAmount: sdkmath.NewInt(900),
+			ExecutedAt:   s.ctx.BlockTime(),
+		},
+	}
+
+	s.configureFiatConversion(t, swapExec)
+
+	bridge := &pendingOffRampBridge{
+		quote: offramp.Quote{
+			ID:         "off-quote-recovery-loop",
+			FiatAmount: sdkmath.LegacyNewDec(100),
+			CreatedAt:  s.ctx.BlockTime(),
+			ExpiresAt:  s.ctx.BlockTime().Add(5 * time.Minute),
+		},
+		result: offramp.PayoutResult{
+			ID:           "off-payout-recovery-loop",
+			Status:       offramp.StatusProcessing,
+			Provider:     "mock",
+			FiatAmount:   sdkmath.LegacyNewDec(100),
+			CryptoAmount: sdkmath.NewInt(900),
+			Reference:    "ref-recovery-loop",
+			InitiatedAt:  s.ctx.BlockTime(),
+		},
+		status: offramp.PayoutResult{
+			ID:         "off-payout-recovery-loop",
+			Status:     offramp.StatusCompleted,
+			Provider:   "mock",
+			FiatAmount: sdkmath.LegacyNewDec(100),
+			Reference:  "ref-recovery-loop",
+		},
+	}
+	s.keeper.SetOffRampBridge(bridge)
+
+	settlement := s.buildSettlement(t, "payout-recovery-loop")
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, settlement))
+
+	request := types.FiatConversionRequest{
+		InvoiceID:         "inv-recovery-loop",
+		SettlementID:      settlement.SettlementID,
+		Provider:          settlement.Provider,
+		Customer:          settlement.Customer,
+		RequestedBy:       settlement.Provider,
+		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+		FiatCurrency:      "USD",
+		PaymentMethod:     "bank_transfer",
+		DestinationHash:   types.HashDestination("acct-token"),
+		SlippageTolerance: 0.01,
+		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+	}
+	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.NoError(t, err)
+
+	initialPayout, err := s.keeper.ExecutePayout(s.ctx, "inv-recovery-loop", settlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateProcessing, initialPayout.State)
+
+	initialConversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-recovery-loop")
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStatePayoutSubmitted, initialConversion.State)
+	require.Equal(t, 1, bridge.initCalls)
+
+	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	restarted.SetDexSwapExecutor(swapExec)
+	restarted.SetOffRampBridge(bridge)
+
+	require.NoError(t, restarted.ProcessInFlightFiatConversions(s.ctx))
+
+	recoveredConversion, found := restarted.GetFiatConversion(s.ctx, initialConversion.ConversionID)
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStatePayoutCompleted, recoveredConversion.State)
+
+	recoveredPayout, found := restarted.GetPayout(s.ctx, initialPayout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateCompleted, recoveredPayout.State)
+
+	require.NoError(t, restarted.ProcessInFlightFiatConversions(s.ctx))
+	postDuplicate, found := restarted.GetPayout(s.ctx, initialPayout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateCompleted, postDuplicate.State)
+	require.Equal(t, 1, bridge.initCalls, "recovery loop must not resubmit offramp payout")
+	require.GreaterOrEqual(t, bridge.statusCalls, 1)
 }

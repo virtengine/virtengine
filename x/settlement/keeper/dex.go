@@ -438,6 +438,72 @@ func (k Keeper) ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*
 	return &conversion, nil
 }
 
+// ProcessInFlightFiatConversions resumes persisted non-terminal conversion flows.
+// This is safe to run repeatedly: each side-effect boundary is guarded by persisted references.
+func (k Keeper) ProcessInFlightFiatConversions(ctx sdk.Context) error {
+	inFlightStates := []types.FiatConversionState{
+		types.FiatConversionStateCreated,
+		types.FiatConversionStateSwapPending,
+		types.FiatConversionStateSwapSubmitted,
+		types.FiatConversionStateSwapSettled,
+		types.FiatConversionStateOffRampPending,
+		types.FiatConversionStatePayoutPending,
+		types.FiatConversionStatePayoutSubmitted,
+	}
+
+	seen := make(map[string]struct{})
+	for _, state := range inFlightStates {
+		k.WithFiatConversionsByState(ctx, state, func(record types.FiatConversionRecord) bool {
+			if _, exists := seen[record.ConversionID]; exists {
+				return false
+			}
+			seen[record.ConversionID] = struct{}{}
+
+			if record.State.IsTerminal() {
+				return false
+			}
+
+			if record.PayoutID == "" {
+				k.Logger(ctx).Error("skipping in-flight fiat conversion without payout reference",
+					"conversion_id", record.ConversionID,
+					"state", record.State,
+				)
+				return false
+			}
+
+			payout, found := k.GetPayout(ctx, record.PayoutID)
+			if !found {
+				k.Logger(ctx).Error("skipping in-flight fiat conversion with missing payout",
+					"conversion_id", record.ConversionID,
+					"payout_id", record.PayoutID,
+					"state", record.State,
+				)
+				return false
+			}
+
+			var err error
+			switch record.State {
+			case types.FiatConversionStatePayoutSubmitted:
+				_, err = k.ReconcileFiatConversion(ctx, record.ConversionID)
+			default:
+				err = k.executeFiatConversion(ctx, &payout, &record)
+			}
+
+			if err != nil {
+				k.Logger(ctx).Error("failed to resume in-flight fiat conversion",
+					"conversion_id", record.ConversionID,
+					"state", record.State,
+					"error", err,
+				)
+			}
+
+			return false
+		})
+	}
+
+	return nil
+}
+
 // createConversionFromPreference builds a conversion request from preferences.
 func (k Keeper) createConversionFromPreference(ctx sdk.Context, settlement types.SettlementRecord, invoiceID string, pref types.FiatPayoutPreference) (*types.FiatConversionRecord, error) {
 	if !pref.Enabled {
