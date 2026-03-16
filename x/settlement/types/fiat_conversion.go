@@ -14,23 +14,115 @@ import (
 type FiatConversionState string
 
 const (
-	FiatConversionStateRequested      FiatConversionState = "requested"
-	FiatConversionStateSwapping       FiatConversionState = "swapping"
-	FiatConversionStateOffRampPending FiatConversionState = "off_ramp_pending"
-	FiatConversionStateCompleted      FiatConversionState = "completed"
-	FiatConversionStateFailed         FiatConversionState = "failed"
-	FiatConversionStateCancelled      FiatConversionState = "cancelled"
+	FiatConversionStateCreated         FiatConversionState = "created"
+	FiatConversionStateSwapPending     FiatConversionState = "swap_pending"
+	FiatConversionStateSwapSubmitted   FiatConversionState = "swap_submitted"
+	FiatConversionStateSwapSettled     FiatConversionState = "swap_settled"
+	FiatConversionStateOffRampPending  FiatConversionState = "offramp_pending"
+	FiatConversionStatePayoutPending   FiatConversionState = "payout_pending"
+	FiatConversionStatePayoutSubmitted FiatConversionState = "payout_submitted"
+	FiatConversionStatePayoutCompleted FiatConversionState = "payout_completed"
+	FiatConversionStateFailed          FiatConversionState = "failed"
+	FiatConversionStateCancelled       FiatConversionState = "cancelled"
+
+	// Legacy aliases retained for compatibility with existing data and tests.
+	FiatConversionStateRequested FiatConversionState = FiatConversionStateCreated
+	FiatConversionStateSwapping  FiatConversionState = FiatConversionStateSwapPending
+	FiatConversionStateCompleted FiatConversionState = FiatConversionStatePayoutCompleted
 )
+
+var fiatConversionTransitions = map[FiatConversionState]map[FiatConversionState]struct{}{
+	FiatConversionStateCreated: {
+		FiatConversionStateSwapPending: {},
+		FiatConversionStateFailed:      {},
+		FiatConversionStateCancelled:   {},
+	},
+	FiatConversionStateSwapPending: {
+		FiatConversionStateSwapSubmitted: {},
+		FiatConversionStateFailed:        {},
+		FiatConversionStateCancelled:     {},
+	},
+	FiatConversionStateSwapSubmitted: {
+		FiatConversionStateSwapSettled: {},
+		FiatConversionStateFailed:      {},
+		FiatConversionStateCancelled:   {},
+	},
+	FiatConversionStateSwapSettled: {
+		FiatConversionStateOffRampPending: {},
+		FiatConversionStateFailed:         {},
+		FiatConversionStateCancelled:      {},
+	},
+	FiatConversionStateOffRampPending: {
+		FiatConversionStatePayoutPending: {},
+		FiatConversionStateFailed:        {},
+		FiatConversionStateCancelled:     {},
+	},
+	FiatConversionStatePayoutPending: {
+		FiatConversionStatePayoutSubmitted: {},
+		FiatConversionStateFailed:          {},
+		FiatConversionStateCancelled:       {},
+	},
+	FiatConversionStatePayoutSubmitted: {
+		FiatConversionStatePayoutCompleted: {},
+		FiatConversionStateFailed:          {},
+		FiatConversionStateCancelled:       {},
+	},
+	FiatConversionStateFailed: {
+		FiatConversionStateSwapPending:   {},
+		FiatConversionStatePayoutPending: {},
+		FiatConversionStateCancelled:     {},
+	},
+}
+
+func normalizeFiatConversionState(state FiatConversionState) FiatConversionState {
+	switch state {
+	case "requested":
+		return FiatConversionStateCreated
+	case "swapping":
+		return FiatConversionStateSwapPending
+	case "off_ramp_pending":
+		return FiatConversionStateOffRampPending
+	case "completed":
+		return FiatConversionStatePayoutCompleted
+	default:
+		return state
+	}
+}
 
 // IsValid returns true when the state is recognized.
 func (s FiatConversionState) IsValid() bool {
-	switch s {
-	case FiatConversionStateRequested, FiatConversionStateSwapping, FiatConversionStateOffRampPending,
-		FiatConversionStateCompleted, FiatConversionStateFailed, FiatConversionStateCancelled:
+	switch normalizeFiatConversionState(s) {
+	case FiatConversionStateCreated, FiatConversionStateSwapPending, FiatConversionStateSwapSubmitted,
+		FiatConversionStateSwapSettled, FiatConversionStateOffRampPending, FiatConversionStatePayoutPending,
+		FiatConversionStatePayoutSubmitted, FiatConversionStatePayoutCompleted, FiatConversionStateFailed,
+		FiatConversionStateCancelled:
 		return true
-	default:
+	}
+	return false
+}
+
+// IsTerminal returns true when no further transitions are allowed.
+func (s FiatConversionState) IsTerminal() bool {
+	switch normalizeFiatConversionState(s) {
+	case FiatConversionStatePayoutCompleted, FiatConversionStateFailed, FiatConversionStateCancelled:
+		return true
+	}
+	return false
+}
+
+// CanTransitionTo returns true when a state transition is legal.
+func (s FiatConversionState) CanTransitionTo(target FiatConversionState) bool {
+	current := normalizeFiatConversionState(s)
+	next := normalizeFiatConversionState(target)
+	if current == next {
+		return true
+	}
+	allowed, ok := fiatConversionTransitions[current]
+	if !ok {
 		return false
 	}
+	_, exists := allowed[next]
+	return exists
 }
 
 // TokenSpec captures token metadata for swaps.
@@ -99,51 +191,69 @@ type FiatConversionAuditEntry struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
+// FiatConversionStateTransition records a state transition for durable observability.
+type FiatConversionStateTransition struct {
+	From      FiatConversionState `json:"from"`
+	To        FiatConversionState `json:"to"`
+	Event     string              `json:"event"`
+	Reason    string              `json:"reason,omitempty"`
+	Timestamp int64               `json:"timestamp"`
+	Metadata  map[string]string   `json:"metadata,omitempty"`
+}
+
 // FiatConversionRecord stores conversion details.
 type FiatConversionRecord struct {
-	ConversionID        string                      `json:"conversion_id"`
-	InvoiceID           string                      `json:"invoice_id,omitempty"`
-	SettlementID        string                      `json:"settlement_id,omitempty"`
-	PayoutID            string                      `json:"payout_id,omitempty"`
-	EscrowID            string                      `json:"escrow_id,omitempty"`
-	OrderID             string                      `json:"order_id,omitempty"`
-	LeaseID             string                      `json:"lease_id,omitempty"`
-	Provider            string                      `json:"provider"`
-	Customer            string                      `json:"customer"`
-	RequestedBy         string                      `json:"requested_by"`
-	RequestedAt         time.Time                   `json:"requested_at"`
-	UpdatedAt           time.Time                   `json:"updated_at"`
-	State               FiatConversionState         `json:"state"`
-	CryptoToken         TokenSpec                   `json:"crypto_token"`
-	StableToken         TokenSpec                   `json:"stable_token"`
-	CryptoAmount        sdk.Coin                    `json:"crypto_amount"`
-	StableAmount        sdk.Coin                    `json:"stable_amount"`
-	FiatCurrency        string                      `json:"fiat_currency"`
-	FiatAmount          string                      `json:"fiat_amount"`
-	PaymentMethod       string                      `json:"payment_method,omitempty"`
-	DestinationRef      string                      `json:"destination_ref,omitempty"`
-	DestinationHash     string                      `json:"destination_hash"`
-	DestinationRegion   string                      `json:"destination_region,omitempty"`
-	SlippageTolerance   float64                     `json:"slippage_tolerance"`
-	DexAdapter          string                      `json:"dex_adapter,omitempty"`
-	SwapQuoteID         string                      `json:"swap_quote_id,omitempty"`
-	SwapTxHash          string                      `json:"swap_tx_hash,omitempty"`
-	SwapStatus          string                      `json:"swap_status,omitempty"`
-	OffRampProvider     string                      `json:"off_ramp_provider,omitempty"`
-	OffRampQuoteID      string                      `json:"off_ramp_quote_id,omitempty"`
-	OffRampID           string                      `json:"off_ramp_id,omitempty"`
-	OffRampStatus       string                      `json:"off_ramp_status,omitempty"`
-	OffRampReference    string                      `json:"off_ramp_reference,omitempty"`
-	ComplianceStatus    string                      `json:"compliance_status,omitempty"`
-	ComplianceRiskScore int32                       `json:"compliance_risk_score,omitempty"`
-	ComplianceCheckedAt int64                       `json:"compliance_checked_at,omitempty"`
-	FailureReason       string                      `json:"failure_reason,omitempty"`
-	AuditTrail          []FiatConversionAuditEntry  `json:"audit_trail,omitempty"`
-	EncryptedPayload    *EncryptedSettlementPayload `json:"encrypted_payload,omitempty"`
+	ConversionID        string                          `json:"conversion_id"`
+	InvoiceID           string                          `json:"invoice_id,omitempty"`
+	SettlementID        string                          `json:"settlement_id,omitempty"`
+	PayoutID            string                          `json:"payout_id,omitempty"`
+	EscrowID            string                          `json:"escrow_id,omitempty"`
+	OrderID             string                          `json:"order_id,omitempty"`
+	LeaseID             string                          `json:"lease_id,omitempty"`
+	Provider            string                          `json:"provider"`
+	Customer            string                          `json:"customer"`
+	RequestedBy         string                          `json:"requested_by"`
+	RequestedAt         time.Time                       `json:"requested_at"`
+	UpdatedAt           time.Time                       `json:"updated_at"`
+	State               FiatConversionState             `json:"state"`
+	CryptoToken         TokenSpec                       `json:"crypto_token"`
+	StableToken         TokenSpec                       `json:"stable_token"`
+	CryptoAmount        sdk.Coin                        `json:"crypto_amount"`
+	StableAmount        sdk.Coin                        `json:"stable_amount"`
+	FiatCurrency        string                          `json:"fiat_currency"`
+	FiatAmount          string                          `json:"fiat_amount"`
+	IdempotencyKey      string                          `json:"idempotency_key"`
+	PaymentMethod       string                          `json:"payment_method,omitempty"`
+	DestinationRef      string                          `json:"destination_ref,omitempty"`
+	DestinationHash     string                          `json:"destination_hash"`
+	DestinationRegion   string                          `json:"destination_region,omitempty"`
+	SlippageTolerance   float64                         `json:"slippage_tolerance"`
+	SwapAttempts        uint32                          `json:"swap_attempts"`
+	OffRampAttempts     uint32                          `json:"off_ramp_attempts"`
+	PayoutAttempts      uint32                          `json:"payout_attempts"`
+	DexAdapter          string                          `json:"dex_adapter,omitempty"`
+	SwapQuoteID         string                          `json:"swap_quote_id,omitempty"`
+	SwapTxHash          string                          `json:"swap_tx_hash,omitempty"`
+	SwapStatus          string                          `json:"swap_status,omitempty"`
+	OffRampProvider     string                          `json:"off_ramp_provider,omitempty"`
+	OffRampQuoteID      string                          `json:"off_ramp_quote_id,omitempty"`
+	OffRampID           string                          `json:"off_ramp_id,omitempty"`
+	OffRampStatus       string                          `json:"off_ramp_status,omitempty"`
+	OffRampReference    string                          `json:"off_ramp_reference,omitempty"`
+	ComplianceStatus    string                          `json:"compliance_status,omitempty"`
+	ComplianceRiskScore int32                           `json:"compliance_risk_score,omitempty"`
+	ComplianceCheckedAt int64                           `json:"compliance_checked_at,omitempty"`
+	FailureReason       string                          `json:"failure_reason,omitempty"`
+	LastErrorAt         int64                           `json:"last_error_at,omitempty"`
+	LastError           string                          `json:"last_error,omitempty"`
+	AuditTrail          []FiatConversionAuditEntry      `json:"audit_trail,omitempty"`
+	TransitionHistory   []FiatConversionStateTransition `json:"transition_history,omitempty"`
+	EncryptedPayload    *EncryptedSettlementPayload     `json:"encrypted_payload,omitempty"`
 }
 
 // Validate validates the conversion record.
 func (r *FiatConversionRecord) Validate() error {
+	r.State = normalizeFiatConversionState(r.State)
 	if r.ConversionID == "" {
 		return ErrInvalidSettlement.Wrap("conversion_id cannot be empty")
 	}
@@ -155,6 +265,9 @@ func (r *FiatConversionRecord) Validate() error {
 	}
 	if !r.State.IsValid() {
 		return ErrInvalidSettlement.Wrapf("invalid conversion state: %s", r.State)
+	}
+	if r.IdempotencyKey == "" {
+		r.IdempotencyKey = r.DefaultIdempotencyKey()
 	}
 	if !r.CryptoAmount.IsValid() || !r.CryptoAmount.IsPositive() {
 		return ErrInvalidAmount.Wrap("crypto_amount must be positive")
@@ -220,12 +333,13 @@ func NewFiatConversionRecord(id string, request FiatConversionRequest, payout sd
 		RequestedBy:       request.RequestedBy,
 		RequestedAt:       now,
 		UpdatedAt:         now,
-		State:             FiatConversionStateRequested,
+		State:             FiatConversionStateCreated,
 		CryptoToken:       request.CryptoToken,
 		StableToken:       request.StableToken,
 		CryptoAmount:      payout,
 		StableAmount:      sdk.NewCoin(request.StableToken.Denom, sdkmath.ZeroInt()),
 		FiatCurrency:      request.FiatCurrency,
+		IdempotencyKey:    defaultFiatConversionIdempotencyKey(request.InvoiceID, request.SettlementID, request.PayoutID, request.Provider),
 		PaymentMethod:     request.PaymentMethod,
 		DestinationRef:    encryptedRef,
 		DestinationHash:   destinationHash,
@@ -234,8 +348,18 @@ func NewFiatConversionRecord(id string, request FiatConversionRequest, payout sd
 		DexAdapter:        request.PreferredDEX,
 		OffRampProvider:   request.PreferredOffRamp,
 		AuditTrail:        []FiatConversionAuditEntry{},
+		TransitionHistory: []FiatConversionStateTransition{},
 		EncryptedPayload:  request.EncryptedPayload,
 	}
+}
+
+func defaultFiatConversionIdempotencyKey(invoiceID, settlementID, payoutID, provider string) string {
+	return fmt.Sprintf("fiatconv:%s:%s:%s:%s", invoiceID, settlementID, payoutID, provider)
+}
+
+// DefaultIdempotencyKey computes the canonical idempotency key.
+func (r *FiatConversionRecord) DefaultIdempotencyKey() string {
+	return defaultFiatConversionIdempotencyKey(r.InvoiceID, r.SettlementID, r.PayoutID, r.Provider)
 }
 
 // AddAuditEntry appends an audit entry.
@@ -250,36 +374,126 @@ func (r *FiatConversionRecord) AddAuditEntry(action, actor, reason string, metad
 	r.UpdatedAt = ts
 }
 
+// TransitionTo enforces legal state transitions and records transition history.
+func (r *FiatConversionRecord) TransitionTo(next FiatConversionState, event string, reason string, metadata map[string]string, ts time.Time) error {
+	current := normalizeFiatConversionState(r.State)
+	target := normalizeFiatConversionState(next)
+	if !current.CanTransitionTo(target) {
+		return ErrInvalidStateTransition.Wrapf("invalid fiat conversion transition: %s -> %s", current, target)
+	}
+	if current == target {
+		r.UpdatedAt = ts
+		return nil
+	}
+
+	r.State = target
+	r.UpdatedAt = ts
+	r.TransitionHistory = append(r.TransitionHistory, FiatConversionStateTransition{
+		From:      current,
+		To:        target,
+		Event:     event,
+		Reason:    reason,
+		Timestamp: ts.Unix(),
+		Metadata:  metadata,
+	})
+
+	switch target {
+	case FiatConversionStateFailed:
+		r.FailureReason = reason
+		r.LastError = reason
+		r.LastErrorAt = ts.Unix()
+	case FiatConversionStatePayoutCompleted:
+		r.FailureReason = ""
+		r.LastError = ""
+		r.LastErrorAt = 0
+	}
+
+	return nil
+}
+
 // MarkSwapping transitions to swapping state.
 func (r *FiatConversionRecord) MarkSwapping(ts time.Time) error {
-	if !r.State.IsValid() {
-		return ErrInvalidSettlement.Wrap("invalid conversion state")
+	return r.MarkSwapPending(ts)
+}
+
+// MarkSwapPending transitions to swap_pending.
+func (r *FiatConversionRecord) MarkSwapPending(ts time.Time) error {
+	r.SwapAttempts++
+	return r.TransitionTo(FiatConversionStateSwapPending, "swap_pending", "", nil, ts)
+}
+
+// MarkSwapSubmitted transitions to swap_submitted.
+func (r *FiatConversionRecord) MarkSwapSubmitted(quoteID string, ts time.Time) error {
+	if quoteID != "" {
+		r.SwapQuoteID = quoteID
 	}
-	r.State = FiatConversionStateSwapping
-	r.UpdatedAt = ts
-	return nil
+	r.SwapStatus = "submitted"
+	return r.TransitionTo(FiatConversionStateSwapSubmitted, "swap_submitted", "", map[string]string{
+		"swap_quote_id": quoteID,
+	}, ts)
+}
+
+// MarkSwapSettled transitions to swap_settled.
+func (r *FiatConversionRecord) MarkSwapSettled(txHash string, stableAmount sdk.Coin, ts time.Time) error {
+	if txHash != "" {
+		r.SwapTxHash = txHash
+	}
+	if stableAmount.IsValid() && !stableAmount.Amount.IsNil() {
+		r.StableAmount = stableAmount
+	}
+	r.SwapStatus = "settled"
+	return r.TransitionTo(FiatConversionStateSwapSettled, "swap_settled", "", map[string]string{
+		"swap_tx_hash": txHash,
+	}, ts)
 }
 
 // MarkOffRampPending transitions to off-ramp pending.
 func (r *FiatConversionRecord) MarkOffRampPending(ts time.Time) error {
-	r.State = FiatConversionStateOffRampPending
-	r.UpdatedAt = ts
-	return nil
+	return r.TransitionTo(FiatConversionStateOffRampPending, "offramp_pending", "", nil, ts)
+}
+
+// MarkPayoutPending transitions to payout_pending.
+func (r *FiatConversionRecord) MarkPayoutPending(ts time.Time) error {
+	r.OffRampAttempts++
+	return r.TransitionTo(FiatConversionStatePayoutPending, "payout_pending", "", nil, ts)
+}
+
+// MarkPayoutSubmitted transitions to payout_submitted.
+func (r *FiatConversionRecord) MarkPayoutSubmitted(offRampID string, offRampStatus string, reference string, ts time.Time) error {
+	r.PayoutAttempts++
+	if offRampID != "" {
+		r.OffRampID = offRampID
+	}
+	if offRampStatus != "" {
+		r.OffRampStatus = offRampStatus
+	}
+	if reference != "" {
+		r.OffRampReference = reference
+	}
+	return r.TransitionTo(FiatConversionStatePayoutSubmitted, "payout_submitted", "", map[string]string{
+		"offramp_id": offRampID,
+		"status":     offRampStatus,
+	}, ts)
 }
 
 // MarkCompleted transitions to completed.
 func (r *FiatConversionRecord) MarkCompleted(ts time.Time) error {
-	r.State = FiatConversionStateCompleted
-	r.UpdatedAt = ts
-	return nil
+	return r.MarkPayoutCompleted(ts)
+}
+
+// MarkPayoutCompleted transitions to payout_completed.
+func (r *FiatConversionRecord) MarkPayoutCompleted(ts time.Time) error {
+	return r.TransitionTo(FiatConversionStatePayoutCompleted, "payout_completed", "", nil, ts)
 }
 
 // MarkFailed transitions to failed.
 func (r *FiatConversionRecord) MarkFailed(reason string, ts time.Time) error {
-	r.State = FiatConversionStateFailed
-	r.FailureReason = reason
-	r.UpdatedAt = ts
-	return nil
+	return r.TransitionTo(FiatConversionStateFailed, "failed", reason, nil, ts)
+}
+
+// MarkCancelled transitions to cancelled.
+func (r *FiatConversionRecord) MarkCancelled(reason string, ts time.Time) error {
+	return r.TransitionTo(FiatConversionStateCancelled, "cancelled", reason, nil, ts)
 }
 
 // ValidatePreference validates payout preference.

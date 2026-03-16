@@ -3,6 +3,7 @@ package keeper_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -45,6 +46,38 @@ func (p *pendingOffRampBridge) GetStatus(ctx context.Context, payoutID string) (
 }
 
 func (p *pendingOffRampBridge) Cancel(ctx context.Context, payoutID string) error {
+	return nil
+}
+
+type retryableOffRampBridge struct {
+	quote              offramp.Quote
+	firstInitErr       error
+	pendingResult      offramp.PayoutResult
+	completedStatus    offramp.PayoutResult
+	invokeCount        int
+	statusRequestCount int
+}
+
+func (b *retryableOffRampBridge) GetQuote(ctx context.Context, req offramp.QuoteRequest) (offramp.Quote, error) {
+	b.quote.Request = req
+	return b.quote, nil
+}
+
+func (b *retryableOffRampBridge) InitiatePayout(ctx context.Context, quote offramp.Quote, cryptoTxRef string, destination string, metadata map[string]string) (offramp.PayoutResult, error) {
+	b.invokeCount++
+	b.pendingResult.QuoteID = quote.ID
+	if b.invokeCount == 1 && b.firstInitErr != nil {
+		return offramp.PayoutResult{}, b.firstInitErr
+	}
+	return b.pendingResult, nil
+}
+
+func (b *retryableOffRampBridge) GetStatus(ctx context.Context, payoutID string) (offramp.PayoutResult, error) {
+	b.statusRequestCount++
+	return b.completedStatus, nil
+}
+
+func (b *retryableOffRampBridge) Cancel(ctx context.Context, payoutID string) error {
 	return nil
 }
 
@@ -331,7 +364,7 @@ func (s *KeeperTestSuite) TestReconcilePayoutAfterRestart() {
 
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-reconcile")
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateOffRampPending, conversion.State)
+	require.Equal(t, types.FiatConversionStatePayoutSubmitted, conversion.State)
 	require.Equal(t, types.PayoutStateProcessing, payout.State)
 
 	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
@@ -345,4 +378,114 @@ func (s *KeeperTestSuite) TestReconcilePayoutAfterRestart() {
 	updated, found := restarted.GetPayout(s.ctx, payout.PayoutID)
 	require.True(t, found)
 	require.Equal(t, types.PayoutStateCompleted, updated.State)
+
+	// Duplicate webhook/poll events must be idempotent and must not regress state.
+	reconciledAgain, err := restarted.ReconcileFiatConversion(s.ctx, conversion.ConversionID)
+	require.NoError(t, err)
+	require.Equal(t, types.FiatConversionStateCompleted, reconciledAgain.State)
+
+	updatedAgain, found := restarted.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateCompleted, updatedAgain.State)
+}
+
+func (s *KeeperTestSuite) TestFiatConversionRetryDoesNotReexecuteSwap() {
+	t := s.T()
+
+	swapQuote := dex.SwapQuote{
+		ID: "quote-retry-no-dup-swap",
+		Route: dex.SwapRoute{
+			Hops: []dex.SwapHop{
+				{AmountOut: sdkmath.NewInt(900)},
+			},
+		},
+		ExpiresAt: s.ctx.BlockTime().Add(5 * time.Minute),
+	}
+	swapExec := &mockSwapExecutor{
+		quote: swapQuote,
+		result: dex.SwapResult{
+			QuoteID:      swapQuote.ID,
+			TxHash:       "swap-no-dup",
+			InputAmount:  sdkmath.NewInt(1000),
+			OutputAmount: sdkmath.NewInt(900),
+			ExecutedAt:   s.ctx.BlockTime(),
+		},
+	}
+	s.configureFiatConversion(t, swapExec)
+
+	bridge := &retryableOffRampBridge{
+		quote: offramp.Quote{
+			ID:         "off-quote-retry",
+			FiatAmount: sdkmath.LegacyNewDec(100),
+			CreatedAt:  s.ctx.BlockTime(),
+			ExpiresAt:  s.ctx.BlockTime().Add(5 * time.Minute),
+		},
+		firstInitErr: errors.New("temporary partner timeout"),
+		pendingResult: offramp.PayoutResult{
+			ID:           "off-payout-retry",
+			Status:       offramp.StatusProcessing,
+			Provider:     "mock",
+			FiatAmount:   sdkmath.LegacyNewDec(100),
+			CryptoAmount: sdkmath.NewInt(900),
+			Reference:    "ref-retry",
+			InitiatedAt:  s.ctx.BlockTime(),
+		},
+		completedStatus: offramp.PayoutResult{
+			ID:         "off-payout-retry",
+			Status:     offramp.StatusCompleted,
+			Provider:   "mock",
+			FiatAmount: sdkmath.LegacyNewDec(100),
+			Reference:  "ref-retry",
+		},
+	}
+	s.keeper.SetOffRampBridge(bridge)
+
+	settlement := s.buildSettlement(t, "payout-retry-no-dup-swap")
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, settlement))
+
+	request := types.FiatConversionRequest{
+		InvoiceID:         "inv-retry-no-dup-swap",
+		SettlementID:      settlement.SettlementID,
+		Provider:          settlement.Provider,
+		Customer:          settlement.Customer,
+		RequestedBy:       settlement.Provider,
+		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+		FiatCurrency:      "USD",
+		PaymentMethod:     "bank_transfer",
+		DestinationHash:   types.HashDestination("acct-token"),
+		SlippageTolerance: 0.01,
+		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+	}
+	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.NoError(t, err)
+
+	firstAttempt, err := s.keeper.ExecutePayout(s.ctx, "inv-retry-no-dup-swap", settlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStateFailed, firstAttempt.State)
+	require.Equal(t, 1, swapExec.execCalls)
+	require.Equal(t, 1, bridge.invokeCount)
+
+	require.NoError(t, s.keeper.RetryFailedPayouts(s.ctx))
+
+	secondAttempt, found := s.keeper.GetPayout(s.ctx, firstAttempt.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateProcessing, secondAttempt.State)
+	require.Equal(t, 1, swapExec.execCalls, "swap must not be executed again once tx hash is recorded")
+	require.Equal(t, 2, bridge.invokeCount, "off-ramp init should be retried safely")
+
+	conv, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-retry-no-dup-swap")
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStatePayoutSubmitted, conv.State)
+	require.Equal(t, "swap-no-dup", conv.SwapTxHash)
+
+	reconciled, err := s.keeper.ReconcileFiatConversion(s.ctx, conv.ConversionID)
+	require.NoError(t, err)
+	require.Equal(t, types.FiatConversionStateCompleted, reconciled.State)
+
+	finalPayout, found := s.keeper.GetPayout(s.ctx, secondAttempt.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateCompleted, finalPayout.State)
+	require.GreaterOrEqual(t, bridge.statusRequestCount, 1)
 }

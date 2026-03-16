@@ -17,13 +17,16 @@ import (
 )
 
 type mockSwapExecutor struct {
-	quote    dex.SwapQuote
-	result   dex.SwapResult
-	quoteErr error
-	execErr  error
+	quote      dex.SwapQuote
+	result     dex.SwapResult
+	quoteErr   error
+	execErr    error
+	quoteCalls int
+	execCalls  int
 }
 
 func (m *mockSwapExecutor) GetQuote(ctx context.Context, request dex.SwapRequest) (dex.SwapQuote, error) {
+	m.quoteCalls++
 	if m.quoteErr != nil {
 		return dex.SwapQuote{}, m.quoteErr
 	}
@@ -31,6 +34,7 @@ func (m *mockSwapExecutor) GetQuote(ctx context.Context, request dex.SwapRequest
 }
 
 func (m *mockSwapExecutor) ExecuteSwap(ctx context.Context, quote dex.SwapQuote, signedTx []byte) (dex.SwapResult, error) {
+	m.execCalls++
 	if m.execErr != nil {
 		return dex.SwapResult{}, m.execErr
 	}
