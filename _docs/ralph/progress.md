@@ -166,7 +166,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 | --- | --- | --- | --- | --- | --- |
 | x/veid | 70,048 | 42,775 | Complete | Claims 1-3, 12 | ML scorer defaults to stub; needs `mlruntime` build tag for real TF |
 | x/market | 21,486 | 6,521 | Complete | Claims 1, 8, 11 | Query TODO stringers, pagination indexes |
-| x/hpc | 20,474 | 5,655 | Complete | Claims 9, 13, 14 | Node-level reward distro not implemented, weighted distro TODO |
+| x/hpc | 20,474 | 5,655 | Complete | Claims 9, 13, 14 | Node-level proximity-weighted rewards implemented; SLURM automation and placement hardening remain |
 | x/escrow | 18,754 | 5,798 | Complete | Claim 1 (billing) | None critical — mature module |
 | x/mfa | 14,213 | 6,467 | Complete | Claims 1, 5 | None critical |
 | x/settlement | 13,907 | 4,592 | Complete | Claims 1, 8 (billing) | Reward distribution uses placeholder recipient |
@@ -245,7 +245,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 | 10 | System combining 2+ of: ID, Cloud, HPC | **80%** | All three exist but integration untested |
 | 11 | Method for cloud computing via blockchain | **70%** | Order→bid→lease flow exists; on-chain settlement incomplete |
 | 12 | Method for decentralized identification | **90%** | VEID module is most complete |
-| 13 | Decentralized supercomputer | **65%** | HPC module exists; node rewards/SLURM automation incomplete |
+| 13 | Decentralized supercomputer | **72%** | Node-level settlement rewards implemented; SLURM automation remains incomplete |
 | 14 | Mini supercomputer clustering | **50%** | Topology-aware scheduling exists; placement engine incomplete |
 
 ---
@@ -265,7 +265,7 @@ All remote branches are stale (10+ days behind main) and must be recreated from 
 ### High Priority (P1 — Required for completeness)
 
 4. **Resources module minimal** — 1.7k LOC, 241 test LOC, no capacity reservation
-5. **HPC node-level rewards not implemented** — settlement.go:585 TODO
+5. **HPC SLURM automation and placement hardening remain incomplete** — node-level rewards landed in `x/hpc/keeper/settlement.go` (PR #772)
 6. **Oracle has no external data ingestion** — Price feeds defined but nothing pushes data in
 7. **Fraud/review not integrated with escrow** — Dispute lifecycle exists but doesn't hold/release escrow
 8. **End-to-end marketplace flow untested** — Individual modules work but no integration proof
@@ -335,4 +335,3 @@ Phase 2 (P1 parallel): 81A, 81B, 81C — HPC rewards, oracle/BME, fraud/enclave
 Phase 3 (P1 parallel): 82A, 82B — IBC bridging, roles/audit/governance
 
 **83A is complete.** Agents now resolve to workspace repos via `resolveAgentRepoRoot()`. Chain tasks 80A-82B can proceed. The 83B/83C remaining gaps (per-repo branch config, periodic sync, ensureGitAncestor, temp writable roots) are hardening items that can be addressed in parallel with chain work.
-
