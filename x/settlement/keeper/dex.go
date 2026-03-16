@@ -166,8 +166,25 @@ func (k Keeper) SetFiatConversion(ctx sdk.Context, conversion types.FiatConversi
 	store := ctx.KVStore(k.skey)
 
 	existing, found := k.GetFiatConversion(ctx, conversion.ConversionID)
-	if found && existing.State != conversion.State {
-		k.updateFiatConversionState(ctx, conversion, existing.State)
+	if found {
+		if existing.State != conversion.State {
+			k.updateFiatConversionState(ctx, conversion, existing.State)
+		}
+		if existing.InvoiceID != "" && existing.InvoiceID != conversion.InvoiceID {
+			store.Delete(types.FiatConversionByInvoiceKey(existing.InvoiceID))
+		}
+		if existing.SettlementID != "" && existing.SettlementID != conversion.SettlementID {
+			store.Delete(types.FiatConversionBySettlementKey(existing.SettlementID))
+		}
+		if existing.PayoutID != "" && existing.PayoutID != conversion.PayoutID {
+			store.Delete(types.FiatConversionByPayoutKey(existing.PayoutID))
+		}
+		if existing.Provider != "" && existing.Provider != conversion.Provider {
+			store.Delete(types.FiatConversionByProviderKey(existing.Provider, existing.ConversionID))
+		}
+		if existing.IdempotencyKey != "" && existing.IdempotencyKey != conversion.IdempotencyKey {
+			store.Delete(types.FiatConversionIdempotencyKey(existing.IdempotencyKey))
+		}
 	}
 
 	if conversion.InvoiceID != "" {
@@ -179,8 +196,11 @@ func (k Keeper) SetFiatConversion(ctx sdk.Context, conversion types.FiatConversi
 	if conversion.PayoutID != "" {
 		store.Set(types.FiatConversionByPayoutKey(conversion.PayoutID), []byte(conversion.ConversionID))
 	}
-	store.Set(types.FiatConversionByProviderKey(conversion.Provider, conversion.ConversionID), []byte{})
+	if conversion.Provider != "" {
+		store.Set(types.FiatConversionByProviderKey(conversion.Provider, conversion.ConversionID), []byte{})
+	}
 	store.Set(types.FiatConversionByStateKey(conversion.State, conversion.ConversionID), []byte{})
+	store.Set(types.FiatConversionIdempotencyKey(conversion.IdempotencyKey), []byte(conversion.ConversionID))
 
 	bz, err := json.Marshal(&conversion)
 	if err != nil {
@@ -231,6 +251,20 @@ func (k Keeper) GetFiatConversionByPayout(ctx sdk.Context, payoutID string) (typ
 	if bz == nil {
 		return types.FiatConversionRecord{}, false
 	}
+	return k.GetFiatConversion(ctx, string(bz))
+}
+
+func (k Keeper) getFiatConversionByIdempotencyKey(ctx sdk.Context, idempotencyKey string) (types.FiatConversionRecord, bool) {
+	if idempotencyKey == "" {
+		return types.FiatConversionRecord{}, false
+	}
+
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.FiatConversionIdempotencyKey(idempotencyKey))
+	if bz == nil {
+		return types.FiatConversionRecord{}, false
+	}
+
 	return k.GetFiatConversion(ctx, string(bz))
 }
 
@@ -307,6 +341,11 @@ func (k Keeper) RequestFiatConversion(ctx sdk.Context, request types.FiatConvers
 		return nil, types.ErrFiatConversionNotAllowed.Wrap("fiat conversion disabled")
 	}
 
+	idempotencyKey := fmt.Sprintf("fiatconv:%s:%s:%s:%s", request.InvoiceID, request.SettlementID, request.PayoutID, request.Provider)
+	if existing, found := k.getFiatConversionByIdempotencyKey(ctx, idempotencyKey); found {
+		return &existing, nil
+	}
+
 	if request.InvoiceID != "" {
 		if existing, found := k.GetFiatConversionByInvoice(ctx, request.InvoiceID); found {
 			return &existing, nil
@@ -335,6 +374,7 @@ func (k Keeper) RequestFiatConversion(ctx sdk.Context, request types.FiatConvers
 	seq := k.incrementFiatConversionSequence(ctx)
 	conversionID := generateIDWithTimestamp("conv", seq, ctx.BlockTime().Unix())
 	conversion := types.NewFiatConversionRecord(conversionID, request, request.CryptoAmount, ctx.BlockTime())
+	conversion.IdempotencyKey = idempotencyKey
 	conversion.ComplianceStatus = complianceStatus
 	conversion.ComplianceRiskScore = complianceRisk
 	conversion.ComplianceCheckedAt = ctx.BlockTime().Unix()
