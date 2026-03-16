@@ -82,6 +82,7 @@ type IKeeper interface {
 	SetFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error
 	WithFiatConversions(ctx sdk.Context, fn func(types.FiatConversionRecord) bool)
 	WithFiatConversionsByState(ctx sdk.Context, state types.FiatConversionState, fn func(types.FiatConversionRecord) bool)
+	ProcessInFlightFiatConversions(ctx sdk.Context) error
 	WithFiatPayoutPreferences(ctx sdk.Context, fn func(types.FiatPayoutPreference) bool)
 	SetFiatPayoutPreference(ctx sdk.Context, pref types.FiatPayoutPreference) error
 	GetFiatPayoutPreference(ctx sdk.Context, provider string) (types.FiatPayoutPreference, bool)

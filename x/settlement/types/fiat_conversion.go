@@ -396,6 +396,21 @@ func (r *FiatConversionRecord) TransitionTo(next FiatConversionState, event stri
 		Timestamp: ts.Unix(),
 		Metadata:  metadata,
 	})
+	auditMeta := map[string]string{
+		"from":  string(current),
+		"to":    string(target),
+		"event": event,
+	}
+	for key, value := range metadata {
+		auditMeta[key] = value
+	}
+	r.AuditTrail = append(r.AuditTrail, FiatConversionAuditEntry{
+		Action:    "state_transition",
+		Actor:     "system",
+		Reason:    reason,
+		Timestamp: ts.Unix(),
+		Metadata:  auditMeta,
+	})
 
 	switch target {
 	case FiatConversionStateFailed:

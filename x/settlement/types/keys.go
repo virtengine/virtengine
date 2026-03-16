@@ -140,6 +140,10 @@ var (
 	// PrefixMigrationAudit stores migration audit entries
 	// Key: PrefixMigrationAudit | record_type | record_id -> MigrationAuditEntry
 	PrefixMigrationAudit = []byte{0x20}
+
+	// PrefixFiatConversionIdempotency stores fiat conversion idempotency references
+	// Key: PrefixFiatConversionIdempotency | idempotency_key -> conversion_id
+	PrefixFiatConversionIdempotency = []byte{0x30}
 )
 
 // ParamsKey returns the store key for module parameters
@@ -341,6 +345,14 @@ func FiatConversionByStatePrefixKey(state FiatConversionState) []byte {
 // FiatConversionSequenceKey returns the store key for conversion sequence
 func FiatConversionSequenceKey() []byte {
 	return PrefixFiatConversionSequence
+}
+
+// FiatConversionIdempotencyKey returns the store key for fiat conversion idempotency lookup.
+func FiatConversionIdempotencyKey(idempotencyKey string) []byte {
+	key := make([]byte, 0, len(PrefixFiatConversionIdempotency)+len(idempotencyKey))
+	key = append(key, PrefixFiatConversionIdempotency...)
+	key = append(key, []byte(idempotencyKey)...)
+	return key
 }
 
 // FiatPayoutPreferenceKey returns the store key for provider payout preferences
