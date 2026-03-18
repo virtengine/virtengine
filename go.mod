@@ -47,7 +47,7 @@ require (
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/regen-network/cosmos-proto v0.3.1
 	github.com/rs/zerolog v1.34.0
-	github.com/russellhaering/goxmldsig v1.5.0
+	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/sideshow/apns2 v0.25.0
 	github.com/spf13/cast v1.10.0
