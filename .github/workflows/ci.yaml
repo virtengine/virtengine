@@ -43,10 +43,10 @@ on:
       - develop
     # Exclude PRs from ve/* branches (agent worktrees) — these use pre-push quality gates
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '_docs/**'
-      - '.github/AGENTS.md'
+      - "**.md"
+      - "docs/**"
+      - "_docs/**"
+      - ".github/AGENTS.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -254,6 +254,8 @@ jobs:
       - name: Check coverage threshold
         id: coverage
         if: steps.detect.outputs.run == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           if [ ! -f coverage.out ]; then
             echo "No coverage file generated"

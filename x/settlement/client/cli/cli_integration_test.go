@@ -1,7 +1,6 @@
 package cli_test
 
 import (
-	"bytes"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
+	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	clitestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
@@ -163,13 +163,14 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	s.Require().NoError(err)
 }
 
-func (s *settlementCLITestSuite) execTxCmd(cctx sdkclient.Context, cmd *cobra.Command, args []string) (*bytes.Buffer, error) {
+func (s *settlementCLITestSuite) execTxCmd(cctx sdkclient.Context, cmd *cobra.Command, args []string) (sdktestutil.BufferWriter, error) {
 	s.T().Helper()
 
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		out, err := clitestutil.ExecTestCLICmd(cctx, cmd, args)
 		if err == nil {
+			s.Require().NoError(s.Network().WaitForNextBlock())
 			s.ValidateTx(out.Bytes())
 			return out, nil
 		}
