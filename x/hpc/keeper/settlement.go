@@ -6,7 +6,6 @@ package keeper
 import (
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 	"time"
 
@@ -594,8 +593,11 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 		}
 	}
 
+	rewardID := fmt.Sprintf("hpc-reward-%s-settlement", jobID)
+
 	// Create reward record
 	rewardRecord := &types.HPCRewardRecord{
+		RewardID:               rewardID,
 		JobID:                  jobID,
 		ClusterID:              job.ClusterID,
 		Source:                 types.HPCRewardSourceJobCompletion,
@@ -615,7 +617,12 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 				"nodes_used":         fmt.Sprintf("%d", record.UsageMetrics.NodesUsed),
 			},
 		},
-		IssuedAt: ctx.BlockTime(),
+		IssuedAt:    ctx.BlockTime(),
+		BlockHeight: ctx.BlockHeight(),
+	}
+
+	if err := rewardRecord.Validate(); err != nil {
+		return nil, err
 	}
 
 	// Store reward record using existing method
@@ -631,38 +638,22 @@ func (k Keeper) buildSettlementNodeRewards(ctx sdk.Context, job *types.HPCJob, r
 		return nil
 	}
 
-	activeNodes := k.activeNodesForReward(ctx, job.ClusterID)
-	if len(activeNodes) == 0 {
+	selectedNodes := k.activeNodesForReward(ctx, job.ClusterID, int(job.Resources.Nodes), int(record.UsageMetrics.NodesUsed))
+	if len(selectedNodes) == 0 {
 		return nil
 	}
-
-	desiredNodes := int(record.UsageMetrics.NodesUsed)
-	if desiredNodes <= 0 {
-		desiredNodes = int(job.Resources.Nodes)
-	}
-	if desiredNodes <= 0 || desiredNodes > len(activeNodes) {
-		desiredNodes = len(activeNodes)
-	}
-	selectedNodes := activeNodes[:desiredNodes]
 
 	return k.calculateNodeRewards(record.ProviderReward, selectedNodes)
 }
 
-func (k Keeper) activeNodesForReward(ctx sdk.Context, clusterID string) []types.NodeMetadata {
+func (k Keeper) activeNodesForReward(ctx sdk.Context, clusterID string, requestedNodes, usedNodes int) []types.NodeMetadata {
 	nodes := k.GetNodesByCluster(ctx, clusterID)
-	activeNodes := make([]types.NodeMetadata, 0, len(nodes))
-	for _, node := range nodes {
-		if node.Active {
-			activeNodes = append(activeNodes, node)
-		}
+	desiredNodes := usedNodes
+	if desiredNodes <= 0 {
+		desiredNodes = requestedNodes
 	}
-	sort.Slice(activeNodes, func(i, j int) bool {
-		if activeNodes[i].AvgLatencyMs == activeNodes[j].AvgLatencyMs {
-			return activeNodes[i].NodeID < activeNodes[j].NodeID
-		}
-		return activeNodes[i].AvgLatencyMs < activeNodes[j].AvgLatencyMs
-	})
-	return activeNodes
+	selectedNodes, _ := selectBestNodeSubset(nodes, desiredNodes)
+	return selectedNodes
 }
 
 // calculateNodeRewards calculates deterministic rewards per node weighted by proximity.

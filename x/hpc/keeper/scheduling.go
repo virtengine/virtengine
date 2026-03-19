@@ -324,17 +324,8 @@ func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offerin
 		// Calculate average latency for this cluster
 		nodes := k.GetNodesByCluster(ctx, cluster.ClusterID)
 		if len(nodes) > 0 {
-			var totalLatency int64
-			activeNodes := 0
-			for _, node := range nodes {
-				if node.Active {
-					totalLatency += node.AvgLatencyMs
-					activeNodes++
-				}
-			}
-			if activeNodes > 0 {
-				candidate.AvgLatencyMs = totalLatency / int64(activeNodes)
-			}
+			_, proximityLatency := selectBestNodeSubset(nodes, int(job.Resources.Nodes))
+			candidate.AvgLatencyMs = proximityLatency
 		}
 
 		// Backfill evaluation
@@ -759,6 +750,130 @@ func calculatePartitionScore(priority int32) int64 {
 		priority = 1000
 	}
 	return int64(priority) * FixedPointScale / 1000
+}
+
+func selectBestNodeSubset(nodes []types.NodeMetadata, desired int) ([]types.NodeMetadata, int64) {
+	activeNodes := make([]types.NodeMetadata, 0, len(nodes))
+	for _, node := range nodes {
+		if node.Active {
+			activeNodes = append(activeNodes, node)
+		}
+	}
+	sort.Slice(activeNodes, func(i, j int) bool {
+		return activeNodes[i].NodeID < activeNodes[j].NodeID
+	})
+
+	if len(activeNodes) == 0 {
+		return nil, 0
+	}
+	if desired <= 0 || desired >= len(activeNodes) {
+		chosen := append([]types.NodeMetadata(nil), activeNodes...)
+		return chosen, nodeGroupLatency(chosen)
+	}
+
+	var best []types.NodeMetadata
+	bestLatency := int64(math.MaxInt64)
+	bestNodeAvg := int64(math.MaxInt64)
+
+	var visit func(start int, current []types.NodeMetadata)
+	visit = func(start int, current []types.NodeMetadata) {
+		remaining := desired - len(current)
+		if remaining == 0 {
+			candidate := append([]types.NodeMetadata(nil), current...)
+			latency := nodeGroupLatency(candidate)
+			nodeAvg := averageNodeLatency(candidate)
+			if latency < bestLatency || (latency == bestLatency && (nodeAvg < bestNodeAvg || (nodeAvg == bestNodeAvg && nodeSubsetKey(candidate) < nodeSubsetKey(best)))) {
+				best = candidate
+				bestLatency = latency
+				bestNodeAvg = nodeAvg
+			}
+			return
+		}
+
+		for i := start; i <= len(activeNodes)-remaining; i++ {
+			visit(i+1, append(current, activeNodes[i]))
+		}
+	}
+
+	visit(0, nil)
+	if len(best) == 0 {
+		chosen := append([]types.NodeMetadata(nil), activeNodes[:desired]...)
+		return chosen, nodeGroupLatency(chosen)
+	}
+	return best, bestLatency
+}
+
+func nodeGroupLatency(nodes []types.NodeMetadata) int64 {
+	if len(nodes) == 0 {
+		return 0
+	}
+	if len(nodes) == 1 {
+		return nodes[0].AvgLatencyMs
+	}
+
+	var total int64
+	var pairs int64
+	for i := 0; i < len(nodes); i++ {
+		for j := i + 1; j < len(nodes); j++ {
+			total += latencyBetweenNodes(nodes[i], nodes[j])
+			pairs++
+		}
+	}
+	if pairs == 0 {
+		return averageNodeLatency(nodes)
+	}
+	return total / pairs
+}
+
+func latencyBetweenNodes(a, b types.NodeMetadata) int64 {
+	var total int64
+	var count int64
+	for _, measurement := range a.LatencyMeasurements {
+		if measurement.TargetNodeID == b.NodeID {
+			total += measurement.LatencyMs
+			count++
+		}
+	}
+	for _, measurement := range b.LatencyMeasurements {
+		if measurement.TargetNodeID == a.NodeID {
+			total += measurement.LatencyMs
+			count++
+		}
+	}
+	if count > 0 {
+		return total / count
+	}
+
+	if a.AvgLatencyMs == 0 {
+		return b.AvgLatencyMs
+	}
+	if b.AvgLatencyMs == 0 {
+		return a.AvgLatencyMs
+	}
+	return (a.AvgLatencyMs + b.AvgLatencyMs) / 2
+}
+
+func averageNodeLatency(nodes []types.NodeMetadata) int64 {
+	if len(nodes) == 0 {
+		return 0
+	}
+	var total int64
+	for _, node := range nodes {
+		total += node.AvgLatencyMs
+	}
+	return total / int64(len(nodes))
+}
+
+func nodeSubsetKey(nodes []types.NodeMetadata) string {
+	if len(nodes) == 0 {
+		return ""
+	}
+	ids := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		ids = append(ids, node.NodeID)
+	}
+	sort.Strings(ids)
+	return strings.Join(ids, ",")
 }
 
 func calculateFairShareScore(usage tenantUsage, quota tenantQuota) int64 {

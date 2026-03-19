@@ -443,6 +443,105 @@ func TestScheduleJobPriorityOrdering(t *testing.T) {
 	require.Equal(t, "cluster-a", decision.CandidateClusters[0].ClusterID)
 }
 
+func TestScheduleJobPrefersBestProximityNodeGroup(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{41}, 20)).String()
+	customerAddr := sdk.AccAddress(bytes.Repeat([]byte{42}, 20)).String()
+
+	clusterA := types.HPCCluster{
+		ClusterID:       "cluster-fragmented",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-fragmented",
+		State:           types.ClusterStateActive,
+		TotalNodes:      3,
+		AvailableNodes:  3,
+		Region:          "us-east-1",
+	}
+	clusterB := types.HPCCluster{
+		ClusterID:       "cluster-cohesive",
+		ProviderAddress: providerAddr,
+		Name:            "cluster-cohesive",
+		State:           types.ClusterStateActive,
+		TotalNodes:      2,
+		AvailableNodes:  2,
+		Region:          "us-east-1",
+	}
+
+	mustSetCluster(t, ctx, k, clusterA)
+	mustSetCluster(t, ctx, k, clusterB)
+
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:              "frag-a",
+		ClusterID:           clusterA.ClusterID,
+		ProviderAddress:     providerAddr,
+		Region:              "us-east-1",
+		AvgLatencyMs:        5,
+		LatencyMeasurements: []types.LatencyMeasurement{{TargetNodeID: "frag-b", LatencyMs: 90}, {TargetNodeID: "frag-c", LatencyMs: 90}},
+		Active:              true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:              "frag-b",
+		ClusterID:           clusterA.ClusterID,
+		ProviderAddress:     providerAddr,
+		Region:              "us-east-1",
+		AvgLatencyMs:        5,
+		LatencyMeasurements: []types.LatencyMeasurement{{TargetNodeID: "frag-a", LatencyMs: 90}, {TargetNodeID: "frag-c", LatencyMs: 90}},
+		Active:              true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:              "frag-c",
+		ClusterID:           clusterA.ClusterID,
+		ProviderAddress:     providerAddr,
+		Region:              "us-east-1",
+		AvgLatencyMs:        5,
+		LatencyMeasurements: []types.LatencyMeasurement{{TargetNodeID: "frag-a", LatencyMs: 90}, {TargetNodeID: "frag-b", LatencyMs: 90}},
+		Active:              true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:              "cohesive-a",
+		ClusterID:           clusterB.ClusterID,
+		ProviderAddress:     providerAddr,
+		Region:              "us-east-1",
+		AvgLatencyMs:        20,
+		LatencyMeasurements: []types.LatencyMeasurement{{TargetNodeID: "cohesive-b", LatencyMs: 5}},
+		Active:              true,
+	})
+	mustSetNode(t, ctx, k, types.NodeMetadata{
+		NodeID:              "cohesive-b",
+		ClusterID:           clusterB.ClusterID,
+		ProviderAddress:     providerAddr,
+		Region:              "us-east-1",
+		AvgLatencyMs:        20,
+		LatencyMeasurements: []types.LatencyMeasurement{{TargetNodeID: "cohesive-a", LatencyMs: 5}},
+		Active:              true,
+	})
+
+	offering := types.HPCOffering{
+		OfferingID:        "offering-proximity-best-group",
+		ClusterID:         clusterA.ClusterID,
+		ProviderAddress:   providerAddr,
+		Name:              "standard",
+		MaxRuntimeSeconds: 3600,
+		Active:            true,
+	}
+	mustSetOffering(t, ctx, k, offering)
+
+	job := types.HPCJob{
+		JobID:           "job-best-proximity-group",
+		OfferingID:      offering.OfferingID,
+		CustomerAddress: customerAddr,
+		Resources: types.JobResources{
+			Nodes: 2,
+		},
+	}
+
+	decision, err := k.ScheduleJob(ctx, &job)
+	require.NoError(t, err)
+	require.Equal(t, clusterB.ClusterID, decision.SelectedClusterID)
+	require.GreaterOrEqual(t, len(decision.CandidateClusters), 2)
+	require.Equal(t, clusterB.ClusterID, decision.CandidateClusters[0].ClusterID)
+}
+
 // TestScheduleJobResourceAllocation ensures resource requests route to eligible clusters.
 func TestScheduleJobResourceAllocation(t *testing.T) {
 	ctx, k, _ := setupHPCKeeper(t)
