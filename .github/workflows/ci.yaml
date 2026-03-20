@@ -646,27 +646,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect integration-relevant changes
+        id: detect
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || -z "${{ github.base_ref }}" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^(tests/integration/|tests/e2e/|app/|cmd/virtengine/|x/[^/]+/(keeper/|module\.go|genesis\.go|types/)|proto/|scripts/localnet\.sh|scripts/init-chain\.sh|go\.mod|go\.sum|go\.work|go\.work\.sum)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Go
+        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Docker Buildx
+        if: steps.detect.outputs.run == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Sync dependencies
+        if: steps.detect.outputs.run == 'true'
         run: |
           go mod tidy
           go mod vendor
 
       - name: Download build artifact
+        if: steps.detect.outputs.run == 'true'
         uses: actions/download-artifact@v4
         with:
           name: virtengine-linux-amd64
           path: dist
 
       - name: Extract binary
+        if: steps.detect.outputs.run == 'true'
         run: |
           cd dist
           tar -xzvf virtengine-*-linux-amd64.tar.gz
@@ -674,6 +696,7 @@ jobs:
           sudo mv virtengine /usr/local/bin/
 
       - name: Start localnet
+        if: steps.detect.outputs.run == 'true'
         run: |
           chmod +x scripts/localnet.sh scripts/init-chain.sh
           # Initialize and start chain in background
@@ -692,6 +715,7 @@ jobs:
 
       - name: Run integration tests
         id: integration-tests
+        if: steps.detect.outputs.run == 'true'
         run: |
           # INFRA-003: Integration tests are required gates
           go test -v -tags="e2e.integration" -timeout ${{ env.GO_TEST_TIMEOUT_INTEGRATION }} \
@@ -719,20 +743,24 @@ jobs:
           fi
 
       - name: Collect logs on failure
-        if: failure()
+        if: failure() && steps.detect.outputs.run == 'true'
         run: |
           docker-compose logs > docker-compose-logs.txt 2>&1 || true
 
       - name: Upload logs on failure
-        if: failure()
+        if: failure() && steps.detect.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: integration-test-logs
           path: docker-compose-logs.txt
           retention-days: 7
 
+      - name: Skip notice
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No integration-relevant files changed, skipping job steps"
+
       - name: Stop localnet
-        if: always()
+        if: always() && steps.detect.outputs.run == 'true'
         run: |
           ./scripts/localnet.sh stop || true
 

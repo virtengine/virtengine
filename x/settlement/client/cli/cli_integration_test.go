@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
-	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	clitestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
@@ -54,13 +53,13 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	escrowDispute := s.createEscrow(cctx, "order-cli-dispute", txFlags)
 	escrowIssueRefund := s.createEscrow(cctx, "order-cli-issue-refund", txFlags)
 
-	_, err := s.execTxCmd(cctx, settlementcli.CmdActivateEscrow(),
+	err := s.execTxCmd(cctx, settlementcli.CmdActivateEscrow(),
 		append([]string{escrowUsage, "lease-1", fromAddr}, txFlags...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
-	_, err = s.execTxCmd(cctx, settlementcli.CmdActivateEscrow(),
+	err = s.execTxCmd(cctx, settlementcli.CmdActivateEscrow(),
 		append([]string{escrowDispute, "lease-2", fromAddr}, txFlags...),
 	)
 	s.Require().NoError(err)
@@ -70,45 +69,45 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	start := now.Add(-time.Hour).Unix()
 	end := now.Unix()
 	recordArgs := cli.TestFlags().Append(txFlags).WithFlag("signature", "abcd")
-	_, err = s.execTxCmd(cctx, settlementcli.CmdRecordUsage(),
+	err = s.execTxCmd(cctx, settlementcli.CmdRecordUsage(),
 		append([]string{"order-cli-usage", "lease-1", "10", "compute", formatInt64(start), formatInt64(end), "1.25uve"}, recordArgs...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
-	_, err = s.execTxCmd(cctx, settlementcli.CmdSettleOrder(),
+	err = s.execTxCmd(cctx, settlementcli.CmdSettleOrder(),
 		append([]string{"order-cli-usage"}, txFlags...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
-	_, err = s.execTxCmd(cctx, settlementcli.CmdRefundEscrow(),
+	err = s.execTxCmd(cctx, settlementcli.CmdRefundEscrow(),
 		append([]string{escrowRefund, "customer refund"}, txFlags...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
-	_, err = s.execTxCmd(cctx, settlementcli.CmdOpenDispute(),
+	err = s.execTxCmd(cctx, settlementcli.CmdOpenDispute(),
 		append([]string{escrowDispute, "billing dispute"}, txFlags...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
 	resolveArgs := cli.TestFlags().Append(txFlags).WithFlag("action", "release").WithFlag("reason", "resolved")
-	_, err = s.execTxCmd(cctx, settlementcli.CmdResolveDispute(),
+	err = s.execTxCmd(cctx, settlementcli.CmdResolveDispute(),
 		append([]string{escrowDispute}, resolveArgs...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
 	issueRefundArgs := cli.TestFlags().Append(txFlags).WithFlag("reason", "support refund")
-	_, err = s.execTxCmd(cctx, settlementcli.CmdIssueRefund(),
+	err = s.execTxCmd(cctx, settlementcli.CmdIssueRefund(),
 		append([]string{escrowIssueRefund}, issueRefundArgs...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
-	_, err = s.execTxCmd(cctx, settlementcli.CmdReleaseEscrow(),
+	err = s.execTxCmd(cctx, settlementcli.CmdReleaseEscrow(),
 		append([]string{escrowUsage, "manual release"}, txFlags...),
 	)
 	s.Require().NoError(err)
@@ -163,7 +162,7 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	s.Require().NoError(err)
 }
 
-func (s *settlementCLITestSuite) execTxCmd(cctx sdkclient.Context, cmd *cobra.Command, args []string) (sdktestutil.BufferWriter, error) {
+func (s *settlementCLITestSuite) execTxCmd(cctx sdkclient.Context, cmd *cobra.Command, args []string) error {
 	s.T().Helper()
 
 	var lastErr error
@@ -172,24 +171,24 @@ func (s *settlementCLITestSuite) execTxCmd(cctx sdkclient.Context, cmd *cobra.Co
 		if err == nil {
 			s.Require().NoError(s.Network().WaitForNextBlock())
 			s.ValidateTx(out.Bytes())
-			return out, nil
+			return nil
 		}
 		if !strings.Contains(err.Error(), "account sequence mismatch") {
-			return nil, err
+			return err
 		}
 		lastErr = err
 		s.T().Logf("retrying after sequence mismatch (attempt %d/3): %v", attempt+1, err)
 		s.Require().NoError(s.Network().WaitForNextBlock())
 	}
 
-	return nil, lastErr
+	return lastErr
 }
 
 func (s *settlementCLITestSuite) createEscrow(cctx sdkclient.Context, orderID string, txFlags cli.FlagsSet) string {
 	s.T().Helper()
 
 	args := append([]string{orderID, "1000uve", "3600"}, txFlags...)
-	out, err := s.execTxCmd(cctx, settlementcli.CmdCreateEscrow(), args)
+	err := s.execTxCmd(cctx, settlementcli.CmdCreateEscrow(), args)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -201,7 +200,6 @@ func (s *settlementCLITestSuite) createEscrow(cctx sdkclient.Context, orderID st
 	s.Require().NoError(cctx.Codec.UnmarshalJSON(resp.Bytes(), &outResp))
 	s.Require().NotEmpty(outResp.Escrows)
 
-	_ = out
 	return outResp.Escrows[0].EscrowId
 }
 
