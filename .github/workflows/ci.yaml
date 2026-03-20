@@ -904,7 +904,7 @@ jobs:
 
       - name: Scan virtengine image
         if: steps.detect.outputs.run == 'true'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: virtengine:ci
           format: table
@@ -929,7 +929,7 @@ jobs:
 
       - name: Scan test-runner image
         if: steps.detect.outputs.run == 'true'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: virtengine-test:ci
           format: table
@@ -943,7 +943,7 @@ jobs:
 
       - name: Scan veid-pipeline image
         if: ${{ steps.detect.outputs.run == 'true' && hashFiles('ml/models/**') != '' }}
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: veid-pipeline:ci
           format: table
