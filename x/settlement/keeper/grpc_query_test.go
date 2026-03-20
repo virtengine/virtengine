@@ -227,7 +227,27 @@ func seedSettlementData(t *testing.T, suite *grpcTestSuite) seededData {
 		DestinationHash:   types.HashDestination("acct-123"),
 		DestinationRegion: "US",
 		SlippageTolerance: 0.01,
+		IdempotencyKey:    "fiatconv:invoice-1:settlement-1:payout-1:provider",
+		SwapAttempts:      1,
+		OffRampAttempts:   1,
+		PayoutAttempts:    2,
+		LastErrorAt:       now.Add(-time.Minute).Unix(),
+		LastError:         "provider timeout",
 		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+		TransitionHistory: []types.FiatConversionStateTransition{{
+			From:      types.FiatConversionStateCreated,
+			To:        types.FiatConversionStateSwapPending,
+			Event:     "swap_pending",
+			Timestamp: now.Add(-2 * time.Minute).Unix(),
+			Metadata:  map[string]string{"attempt": "1"},
+		}, {
+			From:      types.FiatConversionStateSwapPending,
+			To:        types.FiatConversionStateFailed,
+			Event:     "failed",
+			Reason:    "provider timeout",
+			Timestamp: now.Add(-time.Minute).Unix(),
+			Metadata:  map[string]string{"retryable": "true"},
+		}},
 		AuditTrail: []types.FiatConversionAuditEntry{{
 			Action:    "requested",
 			Actor:     provider.String(),
@@ -362,11 +382,20 @@ func TestGRPCSettlementQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conversionResp.Conversion)
 	require.Equal(t, data.conversion.ConversionID, conversionResp.Conversion.ConversionId)
+	require.Equal(t, data.conversion.IdempotencyKey, conversionResp.Conversion.IdempotencyKey)
+	require.Equal(t, data.conversion.SwapAttempts, conversionResp.Conversion.SwapAttempts)
+	require.Equal(t, data.conversion.OffRampAttempts, conversionResp.Conversion.OffRampAttempts)
+	require.Equal(t, data.conversion.PayoutAttempts, conversionResp.Conversion.PayoutAttempts)
+	require.Equal(t, data.conversion.LastError, conversionResp.Conversion.LastError)
+	require.Len(t, conversionResp.Conversion.TransitionHistory, len(data.conversion.TransitionHistory))
+	require.Equal(t, string(data.conversion.TransitionHistory[0].From), conversionResp.Conversion.TransitionHistory[0].From)
+	require.Equal(t, string(data.conversion.TransitionHistory[1].To), conversionResp.Conversion.TransitionHistory[1].To)
 
 	conversionsByProviderResp, err := suite.queryClient.FiatConversionsByProvider(ctx, &settlementv1.QueryFiatConversionsByProviderRequest{Provider: data.provider.String()})
 	require.NoError(t, err)
 	require.Len(t, conversionsByProviderResp.Conversions, 1)
 	require.Equal(t, data.conversion.ConversionID, conversionsByProviderResp.Conversions[0].ConversionId)
+	require.Len(t, conversionsByProviderResp.Conversions[0].TransitionHistory, len(data.conversion.TransitionHistory))
 
 	preferenceResp, err := suite.queryClient.FiatPayoutPreference(ctx, &settlementv1.QueryFiatPayoutPreferenceRequest{Provider: data.provider.String()})
 	require.NoError(t, err)
