@@ -21,12 +21,38 @@ type mockExternalPriceProvider struct {
 	requestCount int
 }
 
+type mockNamedExternalPriceProvider struct {
+	price           pricefeed.PriceData
+	err             error
+	lastSource      string
+	lastBase        string
+	lastQuote       string
+	requestCount    int
+	aggregatedCalls int
+}
+
 func (m *mockExternalPriceProvider) GetPrice(ctx context.Context, baseAsset, quoteAsset string) (pricefeed.AggregatedPrice, error) {
 	m.lastBase = baseAsset
 	m.lastQuote = quoteAsset
 	m.requestCount++
 	if m.err != nil {
 		return pricefeed.AggregatedPrice{}, m.err
+	}
+	return m.price, nil
+}
+
+func (m *mockNamedExternalPriceProvider) GetPrice(ctx context.Context, baseAsset, quoteAsset string) (pricefeed.AggregatedPrice, error) {
+	m.aggregatedCalls++
+	return pricefeed.AggregatedPrice{}, errors.New("unexpected aggregated lookup")
+}
+
+func (m *mockNamedExternalPriceProvider) GetPriceFromSource(ctx context.Context, source, baseAsset, quoteAsset string) (pricefeed.PriceData, error) {
+	m.lastSource = source
+	m.lastBase = baseAsset
+	m.lastQuote = quoteAsset
+	m.requestCount++
+	if m.err != nil {
+		return pricefeed.PriceData{}, m.err
 	}
 	return m.price, nil
 }
@@ -70,6 +96,29 @@ func TestExternalOraclePriceFeedFallsBackToSourceType(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, string(types.OracleSourceTypeChainlinkIBC), price.Source)
 	require.False(t, price.Timestamp.IsZero())
+}
+
+func TestExternalOraclePriceFeedUsesNamedSourceLookupWhenConfigured(t *testing.T) {
+	now := time.Date(2026, 3, 15, 12, 45, 0, 0, time.UTC)
+	provider := &mockNamedExternalPriceProvider{
+		price: pricefeed.PriceData{
+			Price:     sdkmath.LegacyMustNewDecFromStr("1.07"),
+			Timestamp: now,
+			Source:    "chainlink-primary",
+		},
+	}
+	feed := NewExternalOracleSourcePriceFeed(provider, types.OracleSourceTypeChainlinkIBC, "chainlink-primary")
+
+	price, err := feed.GetPrice(context.Background(), "VRT", "USD")
+	require.NoError(t, err)
+	require.Equal(t, "chainlink-primary", provider.lastSource)
+	require.Equal(t, "uve", provider.lastBase)
+	require.Equal(t, "usd", provider.lastQuote)
+	require.Equal(t, 1, provider.requestCount)
+	require.Equal(t, 0, provider.aggregatedCalls)
+	require.True(t, price.Rate.Equal(sdkmath.LegacyMustNewDecFromStr("1.07")))
+	require.Equal(t, "chainlink-primary", price.Source)
+	require.Equal(t, now, price.Timestamp)
 }
 
 func TestExternalOraclePriceFeedPropagatesProviderErrors(t *testing.T) {

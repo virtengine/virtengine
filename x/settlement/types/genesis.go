@@ -254,7 +254,7 @@ func DefaultParams() Params {
 			{ID: "manual", Type: OracleSourceTypeManual, Enabled: true, Priority: 100},
 		},
 		OracleStalenessThresholdSeconds: 300,
-		OracleMinSources:                3,
+		OracleMinSources:                2,
 		OracleManualPrices:              []ManualPriceOverride{},
 		OracleDeviationThresholdBps:     500,
 		OracleDeviationWindowSeconds:    60,

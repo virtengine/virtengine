@@ -161,6 +161,26 @@ func (s *KeeperTestSuite) oracleFallbackChain() {
 	require.True(t, price.Rate.GT(sdkmath.LegacyZeroDec()))
 }
 
+func (s *KeeperTestSuite) oracleDuplicateExternalSourceDoesNotCountTwice() {
+	t := s.T()
+	now := s.ctx.BlockTime()
+
+	s.keeper.SetPriceFeed(types.OracleSourceTypeBandIBC, mockPriceFeed{
+		prices: map[string]types.Price{pairKey("VRT", "USD"): priceFor("USD", "1.02", now, "coingecko-primary")},
+	})
+	s.keeper.SetPriceFeed(types.OracleSourceTypeChainlinkIBC, mockPriceFeed{
+		prices: map[string]types.Price{pairKey("VRT", "USD"): priceFor("USD", "1.02", now, "coingecko-primary")},
+	})
+
+	s.setOracleParams([]types.OracleSourceConfig{
+		{ID: "band", Type: types.OracleSourceTypeBandIBC, Enabled: true, Priority: 2},
+		{ID: "chainlink", Type: types.OracleSourceTypeChainlinkIBC, Enabled: true, Priority: 3},
+	}, 2, 300)
+
+	_, err := s.keeper.AggregatePrice(s.ctx, types.CurrencyPair{Base: "VRT", Quote: "USD"})
+	require.ErrorIs(t, err, types.ErrOracleInsufficientSources)
+}
+
 func (s *KeeperTestSuite) oracleManualOverride() {
 	t := s.T()
 	now := s.ctx.BlockTime()
@@ -247,6 +267,13 @@ func TestOracleFallbackChain(t *testing.T) {
 	suite.SetT(t)
 	suite.SetupTest()
 	suite.oracleFallbackChain()
+}
+
+func TestOracleDuplicateExternalSourceDoesNotCountTwice(t *testing.T) {
+	suite := new(KeeperTestSuite)
+	suite.SetT(t)
+	suite.SetupTest()
+	suite.oracleDuplicateExternalSourceDoesNotCountTwice()
 }
 
 func TestOracleManualOverride(t *testing.T) {

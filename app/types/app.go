@@ -705,11 +705,11 @@ func configureSettlementExternalPriceFeeds(keeper *settlementkeeper.Keeper) {
 
 	keeper.SetPriceFeed(
 		settlementtypes.OracleSourceTypeBandIBC,
-		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeBandIBC),
+		settlementkeeper.NewExternalOracleSourcePriceFeed(aggregator, settlementtypes.OracleSourceTypeBandIBC, "coingecko-primary"),
 	)
 	keeper.SetPriceFeed(
 		settlementtypes.OracleSourceTypeChainlinkIBC,
-		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeChainlinkIBC),
+		settlementkeeper.NewExternalOracleSourcePriceFeed(aggregator, settlementtypes.OracleSourceTypeChainlinkIBC, "chainlink-primary"),
 	)
 }
 

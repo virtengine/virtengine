@@ -3,6 +3,7 @@ package keeper
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -94,6 +95,7 @@ func (k Keeper) aggregatePair(
 	minSources int,
 ) (types.Price, error) {
 	valid := make([]sourcePrice, 0, len(sources))
+	seenSources := make(map[string]struct{}, len(sources))
 	staleRejected := false
 	for _, source := range sources {
 		price, err := source.feed.GetPrice(ctx, pair.Base, pair.Quote)
@@ -113,6 +115,11 @@ func (k Keeper) aggregatePair(
 		if price.Source == "" {
 			price.Source = source.config.ID
 		}
+		sourceKey := canonicalOracleSourceKey(price.Source, source.config.ID)
+		if _, exists := seenSources[sourceKey]; exists {
+			continue
+		}
+		seenSources[sourceKey] = struct{}{}
 		valid = append(valid, sourcePrice{
 			price:      price,
 			priority:   source.config.Priority,
@@ -265,4 +272,11 @@ func timestampToUint64(ts time.Time) uint64 {
 		return 0
 	}
 	return uint64(unixNano)
+}
+
+func canonicalOracleSourceKey(source string, fallback string) string {
+	if normalized := strings.ToLower(strings.TrimSpace(source)); normalized != "" {
+		return normalized
+	}
+	return strings.ToLower(strings.TrimSpace(fallback))
 }
