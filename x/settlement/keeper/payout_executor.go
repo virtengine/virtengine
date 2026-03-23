@@ -341,7 +341,7 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 	if hasConversion {
 		if len(payout.NetAmount) != 1 {
 			err := types.ErrInvalidAmount.Wrap("fiat conversion requires single denom payout")
-			_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = payout.MarkFailedWithRetryability(err.Error(), false, ctx.BlockTime())
 			_ = k.SetPayout(ctx, *payout)
 			k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
 				types.PayoutStatePending, types.PayoutStateFailed,
@@ -368,9 +368,11 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 		}
 
 		if err := k.executeFiatConversion(ctx, payout, &conversion); err != nil {
-			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
+			if conversion.State != types.FiatConversionStateFailed {
+				_ = conversion.MarkFailedWithRetryability(err.Error(), false, ctx.BlockTime())
+			}
 			_ = k.SetFiatConversion(ctx, conversion)
-			_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = payout.MarkFailedWithRetryability(err.Error(), conversion.CanRetry(), ctx.BlockTime())
 			_ = k.SetPayout(ctx, *payout)
 			k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
 				types.PayoutStateProcessing, types.PayoutStateFailed,
@@ -391,7 +393,7 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 	// Execute the payout immediately (crypto path)
 	if err := k.executePayoutTransfer(ctx, payout); err != nil {
 		// Mark as failed
-		_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+		_ = payout.MarkFailedWithRetryability(err.Error(), false, ctx.BlockTime())
 		_ = k.SetPayout(ctx, *payout)
 		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
 			types.PayoutStatePending, types.PayoutStateFailed,
