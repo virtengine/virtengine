@@ -53,12 +53,13 @@ type reconcilingMockSubmitterClient struct {
 	reconcileCalls     int
 	estimateCalls      int
 	txs                [][]byte
+	sequences          []uint64
 	reconciledTxHashes []string
 }
 
-func newReconcilingMockSubmitterClient(gas uint64, broadcasts []broadcastResult, reconciliations []txReconciliation) *reconcilingMockSubmitterClient {
+func newReconcilingMockSubmitterClient(broadcasts []broadcastResult, reconciliations []txReconciliation) *reconcilingMockSubmitterClient {
 	return &reconcilingMockSubmitterClient{
-		gasLimit:        gas,
+		gasLimit:        100000,
 		broadcasts:      append([]broadcastResult(nil), broadcasts...),
 		reconciliations: append([]txReconciliation(nil), reconciliations...),
 	}
@@ -112,6 +113,10 @@ func (m *reconcilingMockSubmitterClient) BroadcastTx(_ context.Context, tx []byt
 	defer m.mu.Unlock()
 	m.broadcastCalls++
 	m.txs = append(m.txs, tx)
+	var env txEnvelope
+	if err := json.Unmarshal(tx, &env); err == nil {
+		m.sequences = append(m.sequences, env.Sequence)
+	}
 	if len(m.broadcasts) == 0 {
 		return "tx-hash-mock", nil
 	}
@@ -137,6 +142,12 @@ func (m *reconcilingMockSubmitterClient) Calls() (int, int, int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.broadcastCalls, m.estimateCalls, m.reconcileCalls
+}
+
+func (m *reconcilingMockSubmitterClient) Sequences() []uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]uint64(nil), m.sequences...)
 }
 
 func (m *mockSubmitterClient) Calls() (int, int) {
@@ -289,14 +300,33 @@ func TestChainSubmitterBuildsRealSDKTxWhenNotLegacy(t *testing.T) {
 }
 
 func TestChainSubmitterRetryOnBroadcastFailure(t *testing.T) {
-	mockClient := newMockSubmitterClient(100000, errors.New("network"), ErrSequenceMismatch)
+	mockClient := newReconcilingMockSubmitterClient(
+		[]broadcastResult{{
+			err: errors.New("network"),
+		}, {
+			err: ErrSequenceMismatch,
+		}},
+		[]txReconciliation{{}, {}},
+	)
 	submitter := newSubmitterWithClient(t, mockClient, func(cfg *ChainSubmitterConfig) {
 		cfg.RetryAttempts = 3
+		cfg.MaxAttempts = 4
 		cfg.Sequence = 10
 	})
 
-	err := submitter.submitSingleReport(context.Background(), newTestReport())
+	report := newTestReport()
+	item, existed, err := submitter.enqueueMessage(queueItemKindUsage, reportToUsageMsg(report))
 	require.NoError(t, err)
+	require.False(t, existed)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	require.Equal(t, queueItemStatusRetryableFailed, submitter.queueState.Items[item.IdempotencyKey].Status)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	require.Equal(t, queueItemStatusRetryableFailed, submitter.queueState.Items[item.IdempotencyKey].Status)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	require.Equal(t, queueItemStatusBroadcasted, submitter.queueState.Items[item.IdempotencyKey].Status)
 
 	seqs := mockClient.Sequences()
 	require.Len(t, seqs, 3)
@@ -520,7 +550,6 @@ func TestChainSubmitterHashErrorDoesNotMarkBroadcasted(t *testing.T) {
 
 func TestChainSubmitterAmbiguousHashReconcilesBeforeRetry(t *testing.T) {
 	mockClient := newReconcilingMockSubmitterClient(
-		100000,
 		[]broadcastResult{{
 			hash: "ambiguous-hash",
 			err:  &ambiguousBroadcastError{Message: "timeout", TxHash: "ambiguous-hash"},
@@ -581,6 +610,39 @@ func TestChainSubmitterPersistsFailedHashWithoutRebroadcast(t *testing.T) {
 	assert.Equal(t, 1, broadcastCalls)
 }
 
+func TestChainSubmitterPersistsDeterministicHashBeforeAmbiguousRetry(t *testing.T) {
+	mockClient := newReconcilingMockSubmitterClient(
+		[]broadcastResult{{
+			err: errors.New("timeout"),
+		}},
+		[]txReconciliation{{
+			Found:   true,
+			Success: true,
+		}},
+	)
+	submitter := newSubmitterWithClient(t, mockClient, func(cfg *ChainSubmitterConfig) {
+		cfg.RetryBackoff = 0
+		cfg.MaxAttempts = 3
+	})
+	report := newTestReport()
+	item, existed, err := submitter.enqueueMessage(queueItemKindUsage, reportToUsageMsg(report))
+	require.NoError(t, err)
+	require.False(t, existed)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	stored := submitter.queueState.Items[item.IdempotencyKey]
+	require.Equal(t, queueItemStatusRetryableFailed, stored.Status)
+	require.NotEmpty(t, stored.BroadcastTxHash)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	stored = submitter.queueState.Items[item.IdempotencyKey]
+	require.Equal(t, queueItemStatusBroadcasted, stored.Status)
+
+	broadcastCalls, _, reconcileCalls := mockClient.Calls()
+	assert.Equal(t, 1, broadcastCalls)
+	assert.Equal(t, 1, reconcileCalls)
+}
+
 func TestChainSubmitterSkipsRebroadcastWhenHashAlreadyPersisted(t *testing.T) {
 	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
 	cfg := DefaultChainSubmitterConfig()
@@ -604,7 +666,7 @@ func TestChainSubmitterSkipsRebroadcastWhenHashAlreadyPersisted(t *testing.T) {
 	submitter1.queueState.Items[item.IdempotencyKey].UpdatedAt = time.Now().UTC()
 	require.NoError(t, submitter1.queueStore.Save(submitter1.queueState))
 
-	mockClient := newReconcilingMockSubmitterClient(100000, nil, []txReconciliation{{
+	mockClient := newReconcilingMockSubmitterClient(nil, []txReconciliation{{
 		Found:   true,
 		Success: true,
 	}})
@@ -620,6 +682,42 @@ func TestChainSubmitterSkipsRebroadcastWhenHashAlreadyPersisted(t *testing.T) {
 	require.NotNil(t, stored)
 	assert.Equal(t, queueItemStatusBroadcasted, stored.Status)
 	assert.Equal(t, "tx-hash-known", stored.BroadcastTxHash)
+}
+
+func TestChainSubmitterRestartRecoversClaimedBroadcastingItem(t *testing.T) {
+	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
+	cfg := DefaultChainSubmitterConfig()
+	cfg.Enabled = true
+	cfg.ProviderAddress = chainSubmitterTestProviderAddress
+	cfg.ChainID = chainSubmitterTestChainID
+	cfg.CometRPC = ""
+	cfg.QueueStatePath = queuePath
+	cfg.ClaimTTL = time.Hour
+	cfg.ChainClient = newMockSubmitterClient(100000)
+
+	submitter1, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	require.NoError(t, err)
+	report := newTestReport()
+	item, existed, err := submitter1.enqueueMessage(queueItemKindUsage, reportToUsageMsg(report))
+	require.NoError(t, err)
+	require.False(t, existed)
+
+	stored := submitter1.queueState.Items[item.IdempotencyKey]
+	stored.Status = queueItemStatusBroadcasting
+	stored.ClaimedBy = "chain-submitter-crashed"
+	stored.ClaimExpiresAt = time.Now().UTC().Add(time.Hour)
+	stored.UpdatedAt = time.Now().UTC()
+	require.NoError(t, submitter1.queueStore.Save(submitter1.queueState))
+
+	mockClient := newMockSubmitterClient(100000)
+	cfg.ChainClient = mockClient
+	submitter2, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	require.NoError(t, err)
+
+	require.NoError(t, submitter2.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	broadcastCalls, _ := mockClient.Calls()
+	assert.Equal(t, 1, broadcastCalls)
+	assert.Equal(t, queueItemStatusBroadcasted, submitter2.queueState.Items[item.IdempotencyKey].Status)
 }
 
 func mustMarshal(t *testing.T, v interface{}) []byte {

@@ -254,6 +254,11 @@ func NewChainUsageSubmitter(
 	if err != nil {
 		return nil, err
 	}
+	if recoverQueueStateForRestart(state, time.Now().UTC()) {
+		if err := store.Save(state); err != nil {
+			return nil, err
+		}
+	}
 	submitter.queueStore = store
 	submitter.queueState = state
 	if !submitter.useLegacyEnvelope {
@@ -494,34 +499,38 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 // signAndBroadcast signs and broadcasts a single message.
 //
 //nolint:unparam // ctx kept for future context deadline handling
-func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg interface{}) (string, error) {
+func (s *ChainUsageSubmitterImpl) prepareSignedTx(ctx context.Context, msg interface{}) ([]byte, string, error) {
 	if s.keyManager == nil {
-		return "", errors.New("key manager not configured")
+		return nil, "", errors.New("key manager not configured")
 	}
 
 	if s.chainClient == nil {
-		return "", errors.New("chain client not configured")
+		return nil, "", errors.New("chain client not configured")
 	}
 
 	txBytes, err := s.buildSignedTx(msg, s.cfg.GasLimit)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	gasLimit, err := s.chainClient.EstimateGas(ctx, txBytes)
 	if err != nil {
-		return "", fmt.Errorf("estimate gas: %w", err)
+		return nil, "", fmt.Errorf("estimate gas: %w", err)
 	}
 	if gasLimit > 0 && gasLimit != s.cfg.GasLimit {
 		txBytes, err = s.buildSignedTx(msg, gasLimit)
 		if err != nil {
-			return "", err
+			return nil, "", err
 		}
 	} else {
 		txBytes, err = s.withGasLimit(txBytes, gasLimit)
 		if err != nil {
-			return "", err
+			return nil, "", err
 		}
 	}
+	return txBytes, txHashFromBytes(txBytes), nil
+}
+
+func (s *ChainUsageSubmitterImpl) broadcastPreparedTx(ctx context.Context, txBytes []byte) (string, error) {
 	txHash, err := s.chainClient.BroadcastTx(ctx, txBytes)
 	if err != nil {
 		if errors.Is(err, ErrSequenceMismatch) {
@@ -915,6 +924,13 @@ func (s *ChainUsageSubmitterImpl) withGasLimit(txBytes []byte, gasLimit uint64) 
 	}
 	tx.GasLimit = gasLimit
 	return json.Marshal(tx)
+}
+
+func txHashFromBytes(txBytes []byte) string {
+	if len(txBytes) == 0 {
+		return ""
+	}
+	return strings.ToUpper(hex.EncodeToString(tmtypes.Tx(txBytes).Hash()))
 }
 
 func (s *ChainUsageSubmitterImpl) incrementSequence() {

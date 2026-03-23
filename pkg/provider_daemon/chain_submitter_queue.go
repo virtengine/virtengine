@@ -106,6 +106,31 @@ func (s *txSubmissionQueueStore) Save(state *txSubmissionQueueState) error {
 	return nil
 }
 
+func recoverQueueStateForRestart(state *txSubmissionQueueState, now time.Time) bool {
+	if state == nil || len(state.Items) == 0 {
+		return false
+	}
+	changed := false
+	for _, item := range state.Items {
+		if item == nil || item.Status != queueItemStatusBroadcasting {
+			continue
+		}
+		item.ClaimedBy = ""
+		item.ClaimExpiresAt = time.Time{}
+		if item.BroadcastTxHash != "" || item.AttemptCount > 0 || !item.LastAttemptAt.IsZero() {
+			item.Status = queueItemStatusRetryableFailed
+		} else {
+			item.Status = queueItemStatusPending
+		}
+		if item.NextAttemptAt.After(now) {
+			item.NextAttemptAt = now
+		}
+		item.UpdatedAt = now
+		changed = true
+	}
+	return changed
+}
+
 func (s *ChainUsageSubmitterImpl) enqueueMessage(kind queueItemKind, msg interface{}) (*txSubmissionQueueItem, bool, error) {
 	payload, err := json.Marshal(msg)
 	if err != nil {
@@ -226,15 +251,41 @@ func (s *ChainUsageSubmitterImpl) processQueueItem(ctx context.Context, idempote
 			return s.markQueueFailed(idempotencyKey, err)
 		}
 
-		txHash, broadcastErr := s.signAndBroadcast(ctx, msg)
-		decisionErr := s.resolveQueueAttempt(idempotencyKey, txHash, broadcastErr)
+		txBytes, localTxHash, prepareErr := s.prepareSignedTx(ctx, msg)
+		if prepareErr != nil {
+			decisionErr := s.resolveQueueAttempt(idempotencyKey, "", prepareErr)
+			if decisionErr != nil {
+				return decisionErr
+			}
+			if !inline {
+				return nil
+			}
+			retryNow, sleepAttempt := s.shouldRetryInline(idempotencyKey)
+			if !retryNow {
+				return prepareErr
+			}
+			if err := s.sleepBackoff(ctx, sleepAttempt); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.persistQueueBroadcastHash(idempotencyKey, localTxHash); err != nil {
+			return err
+		}
+
+		broadcastTxHash, broadcastErr := s.broadcastPreparedTx(ctx, txBytes)
+		resolvedTxHash := broadcastTxHash
+		if resolvedTxHash == "" {
+			resolvedTxHash = localTxHash
+		}
+		decisionErr := s.resolveQueueAttempt(idempotencyKey, resolvedTxHash, broadcastErr)
 		if decisionErr != nil {
 			return decisionErr
 		}
 		if broadcastErr == nil {
 			return nil
 		}
-		if txHash != "" || isAmbiguousBroadcastError(broadcastErr) {
+		if broadcastTxHash != "" || isAmbiguousBroadcastError(broadcastErr) {
 			return nil
 		}
 		if !inline {
@@ -281,6 +332,29 @@ func (s *ChainUsageSubmitterImpl) claimQueueItem(idempotencyKey string) (*txSubm
 	}
 	cloned := *item
 	return &cloned, nil
+}
+
+func (s *ChainUsageSubmitterImpl) persistQueueBroadcastHash(idempotencyKey string, txHash string) error {
+	if txHash == "" {
+		return nil
+	}
+	now := time.Now().UTC()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.queueState.Items[idempotencyKey]
+	if !ok {
+		return nil
+	}
+	if item.BroadcastTxHash == txHash {
+		return nil
+	}
+	item.BroadcastTxHash = txHash
+	item.UpdatedAt = now
+	if err := s.queueStore.Save(s.queueState); err != nil {
+		return err
+	}
+	log.Printf("[chain-submitter] queue prepared_broadcast id=%s key=%s tx_hash=%s", item.ID, item.IdempotencyKey, item.BroadcastTxHash)
+	return nil
 }
 
 func decodeQueueMessage(item *txSubmissionQueueItem) (interface{}, error) {
