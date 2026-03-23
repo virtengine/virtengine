@@ -141,6 +141,16 @@ type ChainSubmitterClient interface {
 	BroadcastTx(ctx context.Context, tx []byte) (string, error)
 }
 
+type txReconciliation struct {
+	Found   bool
+	Success bool
+	Err     error
+}
+
+type txReconciler interface {
+	ReconcileTx(ctx context.Context, txHash string) (txReconciliation, error)
+}
+
 // ChainUsageSubmitterImpl implements ChainUsageSubmitter.
 type ChainUsageSubmitterImpl struct {
 	mu sync.RWMutex
@@ -523,35 +533,6 @@ func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg inte
 	return txHash, nil
 }
 
-func (s *ChainUsageSubmitterImpl) signAndBroadcastWithRetry(ctx context.Context, msg interface{}) (string, error) {
-	attempts := s.cfg.MaxAttempts
-	if attempts <= 0 {
-		attempts = 1
-	}
-	var lastErr error
-	var txHash string
-	for attempt := 0; attempt < attempts; attempt++ {
-		hash, err := s.signAndBroadcast(ctx, msg)
-		if hash != "" {
-			txHash = hash
-		}
-		if err == nil {
-			return txHash, nil
-		}
-		lastErr = err
-		if !isRetryableBroadcastError(err) {
-			return txHash, err
-		}
-		if attempt < attempts-1 {
-			if err := s.sleepBackoff(ctx, attempt); err != nil {
-				return txHash, err
-			}
-			continue
-		}
-	}
-	return txHash, lastErr
-}
-
 func isRetryableBroadcastError(err error) bool {
 	if err == nil {
 		return false
@@ -563,6 +544,10 @@ func isRetryableBroadcastError(err error) bool {
 		return false
 	}
 	if errors.Is(err, ErrSequenceMismatch) {
+		return true
+	}
+	var ambiguous *ambiguousBroadcastError
+	if errors.As(err, &ambiguous) {
 		return true
 	}
 	var classified *classifiedBroadcastError
@@ -579,6 +564,11 @@ func isRetryableBroadcastError(err error) bool {
 		return true
 	}
 	return true
+}
+
+func isAmbiguousBroadcastError(err error) bool {
+	var ambiguous *ambiguousBroadcastError
+	return errors.As(err, &ambiguous)
 }
 
 func classifyBroadcastError(logMsg string) error {
@@ -609,17 +599,13 @@ func (e *classifiedBroadcastError) Error() string {
 	return e.Message
 }
 
-// signAndBroadcastBatch signs and broadcasts multiple messages.
-func (s *ChainUsageSubmitterImpl) signAndBroadcastBatch(ctx context.Context, msgs []*MsgRecordUsageWrapper) error {
-	if len(msgs) == 0 {
-		return nil
-	}
+type ambiguousBroadcastError struct {
+	Message string
+	TxHash  string
+}
 
-	batchMsg := &batchUsageMsgs{
-		Msgs: msgs,
-	}
-	_, err := s.signAndBroadcastWithRetry(ctx, batchMsg)
-	return err
+func (e *ambiguousBroadcastError) Error() string {
+	return e.Message
 }
 
 type batchUsageMsgs struct {
@@ -654,13 +640,18 @@ func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string
 	localHash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
 	res, err := c.rpc.BroadcastTxSync(ctx, tx)
 	if err != nil {
-		reconciledHash, reconcileErr := c.reconcileBroadcastError(ctx, localHash)
-		if reconcileErr == nil {
-			return reconciledHash, nil
+		reconciliation, reconcileErr := c.reconcileTx(ctx, localHash)
+		if reconcileErr == nil && reconciliation.Found {
+			if reconciliation.Success {
+				return localHash, nil
+			}
+			if reconciliation.Err != nil {
+				return localHash, reconciliation.Err
+			}
 		}
-		return "", &classifiedBroadcastError{
-			Message:   fmt.Sprintf("broadcast tx: %v", err),
-			Retryable: true,
+		return localHash, &ambiguousBroadcastError{
+			Message: fmt.Sprintf("broadcast tx: %v", err),
+			TxHash:  localHash,
 		}
 	}
 	txHash := strings.ToUpper(hex.EncodeToString(res.Hash))
@@ -677,25 +668,39 @@ func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string
 	return txHash, nil
 }
 
-func (c *rpcSubmitterClient) reconcileBroadcastError(ctx context.Context, txHash string) (string, error) {
+func (c *rpcSubmitterClient) ReconcileTx(ctx context.Context, txHash string) (txReconciliation, error) {
+	return c.reconcileTx(ctx, txHash)
+}
+
+func (c *rpcSubmitterClient) reconcileTx(ctx context.Context, txHash string) (txReconciliation, error) {
 	if c.rpc == nil || txHash == "" {
-		return "", fmt.Errorf("rpc reconciliation unavailable")
+		return txReconciliation{}, fmt.Errorf("rpc reconciliation unavailable")
 	}
 	hashBytes, err := hex.DecodeString(strings.ToLower(txHash))
 	if err != nil {
-		return "", fmt.Errorf("decode tx hash: %w", err)
+		return txReconciliation{}, fmt.Errorf("decode tx hash: %w", err)
 	}
 
 	qctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	txRes, err := c.rpc.Tx(qctx, hashBytes, false)
-	if err != nil || txRes == nil {
-		return "", fmt.Errorf("tx reconciliation failed: %w", err)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			return txReconciliation{}, nil
+		}
+		return txReconciliation{}, fmt.Errorf("tx reconciliation failed: %w", err)
+	}
+	if txRes == nil {
+		return txReconciliation{}, nil
 	}
 	if txRes.TxResult.Code != 0 {
-		return txHash, classifyBroadcastError(txRes.TxResult.Log)
+		resultErr := classifyBroadcastError(txRes.TxResult.Log)
+		if resultErr == nil {
+			resultErr = fmt.Errorf("tx reconciliation rejected with code=%d", txRes.TxResult.Code)
+		}
+		return txReconciliation{Found: true, Success: false, Err: resultErr}, nil
 	}
-	return txHash, nil
+	return txReconciliation{Found: true, Success: true}, nil
 }
 
 func defaultUsageReportValidator(report *ChainUsageReport) error {

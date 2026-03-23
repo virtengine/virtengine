@@ -214,6 +214,13 @@ func (s *ChainUsageSubmitterImpl) processQueueItem(ctx context.Context, idempote
 		if item == nil {
 			return nil
 		}
+		reconciled, err := s.reconcileQueueItem(ctx, item)
+		if err != nil {
+			return err
+		}
+		if reconciled {
+			return nil
+		}
 		msg, err := decodeQueueMessage(item)
 		if err != nil {
 			return s.markQueueFailed(idempotencyKey, err)
@@ -227,7 +234,7 @@ func (s *ChainUsageSubmitterImpl) processQueueItem(ctx context.Context, idempote
 		if broadcastErr == nil {
 			return nil
 		}
-		if txHash != "" {
+		if txHash != "" || isAmbiguousBroadcastError(broadcastErr) {
 			return nil
 		}
 		if !inline {
@@ -257,7 +264,7 @@ func (s *ChainUsageSubmitterImpl) claimQueueItem(idempotencyKey string) (*txSubm
 	case queueItemStatusFailed:
 		return nil, fmt.Errorf("queue item %s reached terminal failure", item.ID)
 	case queueItemStatusBroadcasting:
-		if item.ClaimedBy != s.workerID && item.ClaimExpiresAt.After(now) {
+		if item.ClaimExpiresAt.After(now) {
 			return nil, nil
 		}
 	}
@@ -307,7 +314,7 @@ func (s *ChainUsageSubmitterImpl) resolveQueueAttempt(idempotencyKey string, txH
 	if txHash != "" {
 		item.BroadcastTxHash = txHash
 	}
-	if broadcastErr == nil || txHash != "" {
+	if broadcastErr == nil {
 		item.Status = queueItemStatusBroadcasted
 		item.LastError = ""
 		item.ClaimedBy = ""
@@ -330,7 +337,7 @@ func (s *ChainUsageSubmitterImpl) resolveQueueAttempt(idempotencyKey string, txH
 		if err := s.queueStore.Save(s.queueState); err != nil {
 			return err
 		}
-		log.Printf("[chain-submitter] queue terminal_failure id=%s key=%s attempts=%d err=%s", item.ID, item.IdempotencyKey, item.AttemptCount, item.LastError)
+		log.Printf("[chain-submitter] queue terminal_failure id=%s key=%s attempts=%d err=%s tx_hash=%s", item.ID, item.IdempotencyKey, item.AttemptCount, item.LastError, item.BroadcastTxHash)
 		return broadcastErr
 	}
 
@@ -342,7 +349,56 @@ func (s *ChainUsageSubmitterImpl) resolveQueueAttempt(idempotencyKey string, txH
 	if err := s.queueStore.Save(s.queueState); err != nil {
 		return err
 	}
-	log.Printf("[chain-submitter] queue retry_scheduled id=%s key=%s attempt=%d next=%s err=%s", item.ID, item.IdempotencyKey, item.AttemptCount, item.NextAttemptAt.Format(time.RFC3339), item.LastError)
+	log.Printf("[chain-submitter] queue retry_scheduled id=%s key=%s attempt=%d next=%s err=%s tx_hash=%s", item.ID, item.IdempotencyKey, item.AttemptCount, item.NextAttemptAt.Format(time.RFC3339), item.LastError, item.BroadcastTxHash)
+	return nil
+}
+
+func (s *ChainUsageSubmitterImpl) reconcileQueueItem(ctx context.Context, item *txSubmissionQueueItem) (bool, error) {
+	if item == nil || item.BroadcastTxHash == "" {
+		return false, nil
+	}
+	reconciler, ok := s.chainClient.(txReconciler)
+	if !ok {
+		return false, nil
+	}
+	reconciliation, err := reconciler.ReconcileTx(ctx, item.BroadcastTxHash)
+	if err != nil {
+		log.Printf("[chain-submitter] queue reconcile_failed id=%s key=%s tx_hash=%s err=%v", item.ID, item.IdempotencyKey, item.BroadcastTxHash, err)
+		return false, nil
+	}
+	if !reconciliation.Found {
+		return false, nil
+	}
+	if reconciliation.Success {
+		return true, s.markQueueBroadcasted(item.IdempotencyKey, item.BroadcastTxHash)
+	}
+	cause := reconciliation.Err
+	if cause == nil {
+		cause = fmt.Errorf("transaction %s failed reconciliation", item.BroadcastTxHash)
+	}
+	return true, s.markQueueFailed(item.IdempotencyKey, cause)
+}
+
+func (s *ChainUsageSubmitterImpl) markQueueBroadcasted(idempotencyKey string, txHash string) error {
+	now := time.Now().UTC()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.queueState.Items[idempotencyKey]
+	if !ok {
+		return nil
+	}
+	if txHash != "" {
+		item.BroadcastTxHash = txHash
+	}
+	item.Status = queueItemStatusBroadcasted
+	item.LastError = ""
+	item.ClaimedBy = ""
+	item.ClaimExpiresAt = time.Time{}
+	item.UpdatedAt = now
+	if err := s.queueStore.Save(s.queueState); err != nil {
+		return err
+	}
+	log.Printf("[chain-submitter] queue reconciled_success id=%s key=%s tx_hash=%s attempts=%d", item.ID, item.IdempotencyKey, item.BroadcastTxHash, item.AttemptCount)
 	return nil
 }
 
