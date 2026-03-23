@@ -318,8 +318,35 @@ func toProtoFiatConversionRecord(record types.FiatConversionRecord) settlementv1
 		ComplianceRiskScore: record.ComplianceRiskScore,
 		ComplianceCheckedAt: record.ComplianceCheckedAt,
 		FailureReason:       record.FailureReason,
+		IdempotencyKey:      record.IdempotencyKey,
+		SwapAttempts:        record.SwapAttempts,
+		OffRampAttempts:     record.OffRampAttempts,
+		PayoutAttempts:      record.PayoutAttempts,
+		LastErrorAt:         record.LastErrorAt,
+		LastError:           record.LastError,
+		TransitionHistory:   toProtoFiatConversionStateTransitions(record.TransitionHistory),
 		AuditTrail:          toProtoFiatConversionAuditEntries(record.AuditTrail),
 	}
+}
+
+func toProtoFiatConversionStateTransitions(entries []types.FiatConversionStateTransition) []settlementv1.FiatConversionStateTransition {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	resp := make([]settlementv1.FiatConversionStateTransition, 0, len(entries))
+	for _, entry := range entries {
+		resp = append(resp, settlementv1.FiatConversionStateTransition{
+			From:      string(entry.From),
+			To:        string(entry.To),
+			Event:     entry.Event,
+			Reason:    entry.Reason,
+			Timestamp: entry.Timestamp,
+			Metadata:  entry.Metadata,
+		})
+	}
+
+	return resp
 }
 
 func toProtoFiatConversionAuditEntries(entries []types.FiatConversionAuditEntry) []settlementv1.FiatConversionAuditEntry {

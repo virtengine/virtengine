@@ -329,6 +329,16 @@ message FiatConversionAuditEntry {
   map<string, string> metadata = 5;
 }
 
+// FiatConversionStateTransition records a durable payout state transition.
+message FiatConversionStateTransition {
+  string from = 1;
+  string to = 2;
+  string event = 3;
+  string reason = 4;
+  int64 timestamp = 5;
+  map<string, string> metadata = 6;
+}
+
 // FiatConversionRecord stores conversion details.
 message FiatConversionRecord {
   string conversion_id = 1;
@@ -369,6 +379,13 @@ message FiatConversionRecord {
   int64 compliance_checked_at = 36;
   string failure_reason = 37;
   repeated FiatConversionAuditEntry audit_trail = 38 [(gogoproto.nullable) = false];
+  string idempotency_key = 39;
+  uint32 swap_attempts = 40;
+  uint32 off_ramp_attempts = 41;
+  uint32 payout_attempts = 42;
+  int64 last_error_at = 43;
+  string last_error = 44;
+  repeated FiatConversionStateTransition transition_history = 45 [(gogoproto.nullable) = false];
 }
 
 // QueryEscrowRequest is the request for querying an escrow by ID.

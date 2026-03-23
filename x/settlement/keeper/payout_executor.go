@@ -88,6 +88,24 @@ func (k Keeper) SetPayout(ctx sdk.Context, payout types.PayoutRecord) error {
 	}
 
 	store := ctx.KVStore(k.skey)
+	existing, found := k.GetPayout(ctx, payout.PayoutID)
+	if found {
+		if existing.State != payout.State {
+			k.updatePayoutState(ctx, payout, existing.State)
+		}
+		if existing.InvoiceID != "" && existing.InvoiceID != payout.InvoiceID {
+			store.Delete(types.PayoutByInvoiceKey(existing.InvoiceID))
+		}
+		if existing.SettlementID != "" && existing.SettlementID != payout.SettlementID {
+			store.Delete(types.PayoutBySettlementKey(existing.SettlementID))
+		}
+		if existing.Provider != "" && existing.Provider != payout.Provider {
+			store.Delete(types.PayoutByProviderKey(existing.Provider, payout.PayoutID))
+		}
+		if existing.IdempotencyKey != "" && existing.IdempotencyKey != payout.IdempotencyKey {
+			store.Delete(types.PayoutIdempotencyKey(existing.IdempotencyKey))
+		}
+	}
 
 	bz, err := json.Marshal(&payout)
 	if err != nil {
@@ -483,6 +501,14 @@ func (k Keeper) ExecutePayoutByID(ctx sdk.Context, payoutID string) error {
 		return types.ErrPayoutHeld.Wrap("payout is on hold")
 	}
 
+	if payout.FiatConversionID != "" {
+		conversion, found := k.GetFiatConversion(ctx, payout.FiatConversionID)
+		if !found {
+			return types.ErrFiatConversionNotFound.Wrapf("conversion %s not found for payout %s", payout.FiatConversionID, payout.PayoutID)
+		}
+		return k.executeFiatConversion(ctx, &payout, &conversion)
+	}
+
 	return k.executePayoutTransfer(ctx, &payout)
 }
 
@@ -707,13 +733,12 @@ func (k Keeper) RetryFailedPayouts(ctx sdk.Context) error {
 			continue // Max retries exceeded
 		}
 
-		// Reset to pending for retry
+		// Reset to pending for retry and keep state index monotonic.
 		payout.State = types.PayoutStatePending
+		k.updatePayoutState(ctx, payout, types.PayoutStateFailed)
 		if err := k.SetPayout(ctx, payout); err != nil {
 			continue
 		}
-
-		k.updatePayoutState(ctx, payout, types.PayoutStateFailed)
 
 		if err := k.ExecutePayoutByID(ctx, payout.PayoutID); err != nil {
 			k.Logger(ctx).Error("failed to retry payout",

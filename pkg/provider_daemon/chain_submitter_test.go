@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +13,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
+	"github.com/virtengine/virtengine/x/settlement"
 )
 
 type mockSubmitterClient struct {
@@ -39,7 +43,7 @@ func (m *mockSubmitterClient) EstimateGas(_ context.Context, tx []byte) (uint64,
 	return m.gasLimit, nil
 }
 
-func (m *mockSubmitterClient) BroadcastTx(_ context.Context, tx []byte) error {
+func (m *mockSubmitterClient) BroadcastTx(_ context.Context, tx []byte) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.broadcastCalls++
@@ -51,9 +55,9 @@ func (m *mockSubmitterClient) BroadcastTx(_ context.Context, tx []byte) error {
 	if len(m.broadcastErrs) > 0 {
 		err := m.broadcastErrs[0]
 		m.broadcastErrs = m.broadcastErrs[1:]
-		return err
+		return "", err
 	}
-	return nil
+	return "tx-hash-mock", nil
 }
 
 func (m *mockSubmitterClient) Calls() (int, int) {
@@ -105,6 +109,20 @@ func newTestReport() *ChainUsageReport {
 	}
 }
 
+func reportToUsageMsg(report *ChainUsageReport) *MsgRecordUsageWrapper {
+	return &MsgRecordUsageWrapper{
+		Sender:      "provider-1",
+		OrderID:     report.OrderID,
+		LeaseID:     report.LeaseID,
+		UsageUnits:  report.UsageUnits,
+		UsageType:   report.UsageType,
+		PeriodStart: report.PeriodStart.Unix(),
+		PeriodEnd:   report.PeriodEnd.Unix(),
+		UnitPrice:   report.UnitPrice,
+		Signature:   report.Signature,
+	}
+}
+
 func newSubmitterWithClient(t *testing.T, client ChainSubmitterClient, cfgOverrides func(*ChainSubmitterConfig)) *ChainUsageSubmitterImpl {
 	t.Helper()
 	cfg := DefaultChainSubmitterConfig()
@@ -114,6 +132,7 @@ func newSubmitterWithClient(t *testing.T, client ChainSubmitterClient, cfgOverri
 	cfg.ChainClient = client
 	cfg.CometRPC = ""
 	cfg.RetryBackoff = 0
+	cfg.QueueStatePath = filepath.Join(t.TempDir(), "queue-state.json")
 	if cfgOverrides != nil {
 		cfgOverrides(&cfg)
 	}
@@ -158,24 +177,36 @@ func TestChainSubmitterSignsAndBroadcasts(t *testing.T) {
 	assert.Equal(t, "virtengine-test", env.ChainID)
 }
 
-func TestChainSubmitterBatchingSingleTx(t *testing.T) {
+func TestChainSubmitterBatchQueuesPerReport(t *testing.T) {
 	mockClient := newMockSubmitterClient(100000)
 	submitter := newSubmitterWithClient(t, mockClient, nil)
 
 	reports := []*ChainUsageReport{newTestReport(), newTestReport()}
+	reports[1].LeaseID = "lease-2"
 	err := submitter.submitBatch(context.Background(), reports)
 	require.NoError(t, err)
 
 	broadcastCalls, _ := mockClient.Calls()
-	assert.Equal(t, 1, broadcastCalls)
+	assert.Equal(t, 2, broadcastCalls)
+	assert.Equal(t, 2, len(submitter.queueState.Items))
+}
 
-	var env txEnvelope
-	require.NoError(t, json.Unmarshal(mockClient.LastTx(), &env))
-	var batch struct {
-		Msgs []MsgRecordUsageWrapper `json:"msgs"`
-	}
-	require.NoError(t, json.Unmarshal(env.Msg, &batch))
-	assert.Len(t, batch.Msgs, 2)
+func TestChainSubmitterBuildsRealSDKTxWhenNotLegacy(t *testing.T) {
+	submitter := newSubmitterWithClient(t, newMockSubmitterClient(100000), nil)
+	submitter.useLegacyEnvelope = false
+	submitter.encCfg = sdkutil.MakeEncodingConfig(settlement.AppModuleBasic{})
+
+	bz, err := submitter.buildSignedTx(reportToUsageMsg(newTestReport()), 150000)
+	require.NoError(t, err)
+
+	tx, err := submitter.encCfg.TxConfig.TxDecoder()(bz)
+	require.NoError(t, err)
+	msgs := tx.GetMsgs()
+	require.Len(t, msgs, 1)
+	usageMsg, ok := msgs[0].(*settlementv1.MsgRecordUsage)
+	require.True(t, ok)
+	assert.Equal(t, "order-1", usageMsg.OrderId)
+	assert.Equal(t, uint64(10), usageMsg.UsageUnits)
 }
 
 func TestChainSubmitterRetryOnBroadcastFailure(t *testing.T) {
@@ -285,4 +316,94 @@ func TestSignatureVerifierAndHash(t *testing.T) {
 
 	hash := UsageReportHashHex(report)
 	assert.NotEmpty(t, hash)
+}
+
+func TestChainSubmitterQueuePersistenceAcrossRestart(t *testing.T) {
+	report := newTestReport()
+	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
+	cfg := DefaultChainSubmitterConfig()
+	cfg.Enabled = true
+	cfg.ProviderAddress = "provider-1"
+	cfg.ChainID = "virtengine-test"
+	cfg.CometRPC = ""
+	cfg.QueueStatePath = queuePath
+	cfg.ChainClient = newMockSubmitterClient(100000)
+
+	submitter1, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	require.NoError(t, err)
+	item, existed, err := submitter1.enqueueMessage(queueItemKindUsage, reportToUsageMsg(report))
+	require.NoError(t, err)
+	require.False(t, existed)
+
+	mockClient := newMockSubmitterClient(100000)
+	cfg.ChainClient = mockClient
+	submitter2, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	require.NoError(t, err)
+	require.NoError(t, submitter2.processQueueItem(context.Background(), item.IdempotencyKey, false))
+
+	broadcastCalls, _ := mockClient.Calls()
+	assert.Equal(t, 1, broadcastCalls)
+	require.Contains(t, submitter2.queueState.Items, item.IdempotencyKey)
+	assert.Equal(t, queueItemStatusBroadcasted, submitter2.queueState.Items[item.IdempotencyKey].Status)
+	assert.NotEmpty(t, submitter2.queueState.Items[item.IdempotencyKey].BroadcastTxHash)
+}
+
+func TestChainSubmitterDuplicateDeliveryProtection(t *testing.T) {
+	mockClient := newMockSubmitterClient(100000)
+	submitter := newSubmitterWithClient(t, mockClient, func(cfg *ChainSubmitterConfig) {
+		cfg.EnableIdempotency = true
+	})
+	report := newTestReport()
+	require.NoError(t, submitter.submitSingleReport(context.Background(), report))
+	err := submitter.submitSingleReport(context.Background(), report)
+	require.ErrorIs(t, err, ErrDuplicateReport)
+	broadcastCalls, _ := mockClient.Calls()
+	assert.Equal(t, 1, broadcastCalls)
+}
+
+func TestChainSubmitterTerminalNonRetryableFailure(t *testing.T) {
+	mockClient := newMockSubmitterClient(100000, &classifiedBroadcastError{
+		Message:   "insufficient funds",
+		Retryable: false,
+	})
+	submitter := newSubmitterWithClient(t, mockClient, func(cfg *ChainSubmitterConfig) {
+		cfg.RetryBackoff = 0
+		cfg.MaxAttempts = 4
+	})
+	report := newTestReport()
+	err := submitter.submitSingleReport(context.Background(), report)
+	require.Error(t, err)
+
+	key := submitter.computeIdempotencyKey(queueItemKindUsage, mustMarshal(t, reportToUsageMsg(report)))
+	item, ok := submitter.queueState.Items[key]
+	require.True(t, ok)
+	assert.Equal(t, queueItemStatusFailed, item.Status)
+	assert.Equal(t, 1, item.AttemptCount)
+}
+
+func TestChainSubmitterRetryableFailureSchedulesRetry(t *testing.T) {
+	mockClient := newMockSubmitterClient(100000, errors.New("timeout"), nil)
+	submitter := newSubmitterWithClient(t, mockClient, func(cfg *ChainSubmitterConfig) {
+		cfg.RetryBackoff = 0
+		cfg.MaxAttempts = 3
+	})
+	report := newTestReport()
+	item, existed, err := submitter.enqueueMessage(queueItemKindUsage, reportToUsageMsg(report))
+	require.NoError(t, err)
+	require.False(t, existed)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	stored := submitter.queueState.Items[item.IdempotencyKey]
+	require.Equal(t, queueItemStatusRetryableFailed, stored.Status)
+
+	require.NoError(t, submitter.processQueueItem(context.Background(), item.IdempotencyKey, false))
+	stored = submitter.queueState.Items[item.IdempotencyKey]
+	require.Equal(t, queueItemStatusBroadcasted, stored.Status)
+}
+
+func mustMarshal(t *testing.T, v interface{}) []byte {
+	t.Helper()
+	out, err := json.Marshal(v)
+	require.NoError(t, err)
+	return out
 }

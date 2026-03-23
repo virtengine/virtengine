@@ -580,12 +580,7 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 		return nil, types.ErrJobNotFound
 	}
 
-	// Get scheduling decision for node information
-	// Currently clusters don't track individual node IDs, so provider gets full reward
-	// TODO: Implement node-level reward distribution when node tracking is added
-	var nodeRewards []types.HPCRewardRecipient
-
-	// If no node-level breakdown, provider gets full reward
+	nodeRewards := k.buildSettlementNodeRewards(ctx, &job, record)
 	if len(nodeRewards) == 0 {
 		nodeRewards = []types.HPCRewardRecipient{
 			{
@@ -598,8 +593,11 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 		}
 	}
 
+	rewardID := fmt.Sprintf("hpc-reward-%s-settlement", jobID)
+
 	// Create reward record
 	rewardRecord := &types.HPCRewardRecord{
+		RewardID:               rewardID,
 		JobID:                  jobID,
 		ClusterID:              job.ClusterID,
 		Source:                 types.HPCRewardSourceJobCompletion,
@@ -619,7 +617,12 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 				"nodes_used":         fmt.Sprintf("%d", record.UsageMetrics.NodesUsed),
 			},
 		},
-		IssuedAt: ctx.BlockTime(),
+		IssuedAt:    ctx.BlockTime(),
+		BlockHeight: ctx.BlockHeight(),
+	}
+
+	if err := rewardRecord.Validate(); err != nil {
+		return nil, err
 	}
 
 	// Store reward record using existing method
@@ -630,45 +633,88 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 	return rewardRecord, nil
 }
 
-// calculateNodeRewards calculates rewards for each node based on contribution
-//
-//nolint:unused // reserved for future per-node reward distribution
-func (k Keeper) calculateNodeRewards(ctx sdk.Context, totalReward sdk.Coins, nodeIDs []string) []types.HPCRewardRecipient {
-	if len(nodeIDs) == 0 {
+func (k Keeper) buildSettlementNodeRewards(ctx sdk.Context, job *types.HPCJob, record *types.HPCAccountingRecord) []types.HPCRewardRecipient {
+	if record == nil || record.ProviderReward.IsZero() {
 		return nil
 	}
 
-	recipients := make([]types.HPCRewardRecipient, 0, len(nodeIDs))
+	selectedNodes := k.activeNodesForReward(ctx, job.ClusterID, int(job.Resources.Nodes), int(record.UsageMetrics.NodesUsed))
+	if len(selectedNodes) == 0 {
+		return nil
+	}
 
-	// For now, distribute equally among nodes
-	// TODO: Implement weighted distribution based on actual node contribution
-	nodeCount := int64(len(nodeIDs))
+	return k.calculateNodeRewards(record.ProviderReward, selectedNodes)
+}
 
-	for _, nodeID := range nodeIDs {
-		// Get node metadata for owner address
-		node, exists := k.GetNodeMetadata(ctx, nodeID)
-		if !exists {
+func (k Keeper) activeNodesForReward(ctx sdk.Context, clusterID string, requestedNodes, usedNodes int) []types.NodeMetadata {
+	nodes := k.GetNodesByCluster(ctx, clusterID)
+	desiredNodes := usedNodes
+	if desiredNodes <= 0 {
+		desiredNodes = requestedNodes
+	}
+	selectedNodes, _ := selectBestNodeSubset(nodes, desiredNodes)
+	return selectedNodes
+}
+
+// calculateNodeRewards calculates deterministic rewards per node weighted by proximity.
+func (k Keeper) calculateNodeRewards(totalReward sdk.Coins, nodes []types.NodeMetadata) []types.HPCRewardRecipient {
+	if len(nodes) == 0 || totalReward.IsZero() {
+		return nil
+	}
+
+	maxLatency := int64(0)
+	for _, node := range nodes {
+		if node.AvgLatencyMs > maxLatency {
+			maxLatency = node.AvgLatencyMs
+		}
+	}
+
+	scores := make([]int64, len(nodes))
+	totalScore := int64(0)
+	for i, node := range nodes {
+		// Lower latency nodes get a slightly higher score while preserving non-zero share.
+		score := maxLatency - node.AvgLatencyMs + 1
+		if score < 1 {
+			score = 1
+		}
+		scores[i] = score
+		totalScore += score
+	}
+	if totalScore <= 0 {
+		return nil
+	}
+
+	recipients := make([]types.HPCRewardRecipient, 0, len(nodes))
+	for i, node := range nodes {
+		nodeReward := sdk.NewCoins()
+		for _, coin := range totalReward {
+			denomScoreTotal := sdkmath.NewInt(0)
+			for idx := range nodes {
+				share := coin.Amount.MulRaw(scores[idx]).QuoRaw(totalScore)
+				if idx == len(nodes)-1 {
+					remainder := coin.Amount.Sub(denomScoreTotal)
+					if remainder.IsPositive() {
+						share = remainder
+					}
+				}
+				if idx == i && share.IsPositive() {
+					nodeReward = nodeReward.Add(sdk.NewCoin(coin.Denom, share))
+				}
+				denomScoreTotal = denomScoreTotal.Add(share)
+			}
+		}
+		if nodeReward.IsZero() {
 			continue
 		}
 
-		// Calculate share
-		nodeReward := sdk.NewCoins()
-		for _, coin := range totalReward {
-			share := coin.Amount.Quo(sdkmath.NewInt(nodeCount))
-			if share.IsPositive() {
-				nodeReward = nodeReward.Add(sdk.NewCoin(coin.Denom, share))
-			}
-		}
-
-		weight := fmt.Sprintf("%.6f", 1.0/float64(nodeCount))
-
+		weightScaled := scores[i] * FixedPointScale / totalScore
 		recipients = append(recipients, types.HPCRewardRecipient{
 			Address:            node.ProviderAddress,
 			Amount:             nodeReward,
 			RecipientType:      "node_operator",
-			NodeID:             nodeID,
-			ContributionWeight: weight,
-			Reason:             "Node contribution to job execution",
+			NodeID:             node.NodeID,
+			ContributionWeight: fmt.Sprintf("%d", weightScaled),
+			Reason:             "Node contribution weighted by proximity",
 		})
 	}
 

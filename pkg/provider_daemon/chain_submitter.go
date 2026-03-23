@@ -10,15 +10,23 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	tmtypes "github.com/cometbft/cometbft/types"
+	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
+	cosmosed25519 "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
+	"github.com/virtengine/virtengine/x/settlement"
 )
 
 // ChainSubmitterConfig configures the chain usage submitter.
@@ -50,11 +58,26 @@ type ChainSubmitterConfig struct {
 	// RetryBackoff is the backoff between retries.
 	RetryBackoff time.Duration
 
+	// MaxRetryBackoff caps retry delay growth.
+	MaxRetryBackoff time.Duration
+
+	// MaxAttempts caps queue processing attempts.
+	MaxAttempts int
+
 	// BatchSize is the max number of records per batch.
 	BatchSize int
 
 	// BatchInterval is the interval for batching.
 	BatchInterval time.Duration
+
+	// QueueStatePath stores durable queue state.
+	QueueStatePath string
+
+	// WorkerPollInterval controls queue retry polling cadence.
+	WorkerPollInterval time.Duration
+
+	// ClaimTTL is the duration of a queue claim lease.
+	ClaimTTL time.Duration
 
 	// RPCClient is an optional preconfigured RPC client (for tests).
 	RPCClient *rpchttp.HTTP
@@ -78,15 +101,20 @@ type ChainSubmitterConfig struct {
 // DefaultChainSubmitterConfig returns default chain submitter config.
 func DefaultChainSubmitterConfig() ChainSubmitterConfig {
 	return ChainSubmitterConfig{
-		Enabled:           true,
-		GasLimit:          200000,
-		GasPrice:          "0.025uvirt",
-		Timeout:           30 * time.Second,
-		RetryAttempts:     3,
-		RetryBackoff:      time.Second * 2,
-		BatchSize:         10,
-		BatchInterval:     time.Minute,
-		EnableIdempotency: false,
+		Enabled:            true,
+		GasLimit:           200000,
+		GasPrice:           "0.025uvirt",
+		Timeout:            30 * time.Second,
+		RetryAttempts:      3,
+		RetryBackoff:       time.Second * 2,
+		MaxRetryBackoff:    30 * time.Second,
+		MaxAttempts:        4,
+		BatchSize:          10,
+		BatchInterval:      time.Minute,
+		QueueStatePath:     filepath.Join(".cache", "provider_daemon", "chain_submitter_queue.json"),
+		WorkerPollInterval: 2 * time.Second,
+		ClaimTTL:           2 * time.Minute,
+		EnableIdempotency:  false,
 	}
 }
 
@@ -110,7 +138,7 @@ type UsageReportValidator func(report *ChainUsageReport) error
 // ChainSubmitterClient handles gas estimation and broadcast.
 type ChainSubmitterClient interface {
 	EstimateGas(ctx context.Context, tx []byte) (uint64, error)
-	BroadcastTx(ctx context.Context, tx []byte) error
+	BroadcastTx(ctx context.Context, tx []byte) (string, error)
 }
 
 // ChainUsageSubmitterImpl implements ChainUsageSubmitter.
@@ -133,6 +161,14 @@ type ChainUsageSubmitterImpl struct {
 	accountNumber uint64
 
 	reportValidator UsageReportValidator
+
+	queueStore *txSubmissionQueueStore
+	queueState *txSubmissionQueueState
+	workerID   string
+	encCfg     sdkutil.EncodingConfig
+
+	// useLegacyEnvelope keeps the old JSON envelope path for injected test clients.
+	useLegacyEnvelope bool
 
 	// submissionQueue contains records queued for submission.
 	submissionQueue chan *ChainUsageReport
@@ -160,25 +196,58 @@ func NewChainUsageSubmitter(
 	if cfg.CometRPC == "" && cfg.RPCClient == nil && cfg.ChainClient == nil {
 		return nil, errors.New("comet RPC endpoint is required")
 	}
+	if cfg.QueueStatePath == "" {
+		cfg.QueueStatePath = DefaultChainSubmitterConfig().QueueStatePath
+	}
+	if cfg.WorkerPollInterval <= 0 {
+		cfg.WorkerPollInterval = DefaultChainSubmitterConfig().WorkerPollInterval
+	}
+	if cfg.ClaimTTL <= 0 {
+		cfg.ClaimTTL = DefaultChainSubmitterConfig().ClaimTTL
+	}
+	if cfg.MaxRetryBackoff <= 0 {
+		cfg.MaxRetryBackoff = DefaultChainSubmitterConfig().MaxRetryBackoff
+	}
+	if cfg.MaxAttempts <= 0 {
+		cfg.MaxAttempts = cfg.RetryAttempts + 1
+		if cfg.MaxAttempts <= 0 {
+			cfg.MaxAttempts = 1
+		}
+	}
 
 	submitter := &ChainUsageSubmitterImpl{
-		cfg:             cfg,
-		keyManager:      keyManager,
-		rpcClient:       cfg.RPCClient,
-		chainClient:     cfg.ChainClient,
-		metrics:         metrics,
-		pendingBatch:    make([]*ChainUsageReport, 0),
-		submissionQueue: make(chan *ChainUsageReport, 1000),
-		stopChan:        make(chan struct{}),
-		sequence:        cfg.Sequence,
-		accountNumber:   cfg.AccountNumber,
-		reportValidator: cfg.ReportValidator,
+		cfg:               cfg,
+		keyManager:        keyManager,
+		rpcClient:         cfg.RPCClient,
+		chainClient:       cfg.ChainClient,
+		metrics:           metrics,
+		pendingBatch:      make([]*ChainUsageReport, 0),
+		submissionQueue:   make(chan *ChainUsageReport, 1000),
+		stopChan:          make(chan struct{}),
+		sequence:          cfg.Sequence,
+		accountNumber:     cfg.AccountNumber,
+		reportValidator:   cfg.ReportValidator,
+		workerID:          fmt.Sprintf("chain-submitter-%d", time.Now().UnixNano()),
+		useLegacyEnvelope: cfg.ChainClient != nil,
 	}
 	if submitter.reportValidator == nil {
 		submitter.reportValidator = defaultUsageReportValidator
 	}
 	if cfg.EnableIdempotency {
 		submitter.submitted = make(map[string]struct{})
+	}
+	store, err := newTxSubmissionQueueStore(cfg.QueueStatePath)
+	if err != nil {
+		return nil, err
+	}
+	state, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	submitter.queueStore = store
+	submitter.queueState = state
+	if !submitter.useLegacyEnvelope {
+		submitter.encCfg = sdkutil.MakeEncodingConfig(settlement.AppModuleBasic{})
 	}
 	return submitter, nil
 }
@@ -219,8 +288,13 @@ func (s *ChainUsageSubmitterImpl) Start(ctx context.Context) error {
 		defer s.wg.Done()
 		s.batchLoop(ctx)
 	})
+	s.wg.Add(1)
+	verrors.SafeGo("provider-daemon:chain-submitter-retry", func() {
+		defer s.wg.Done()
+		s.retryLoop(ctx)
+	})
 
-	log.Printf("[chain-submitter] started with RPC %s", s.cfg.CometRPC)
+	log.Printf("[chain-submitter] started with RPC %s queue_path=%s", s.cfg.CometRPC, s.cfg.QueueStatePath)
 	return nil
 }
 
@@ -288,8 +362,14 @@ func (s *ChainUsageSubmitterImpl) SubmitSettlementRequest(ctx context.Context, o
 		IsFinal:        isFinal,
 	}
 
-	// Sign and broadcast
-	return s.signAndBroadcast(ctx, msg)
+	item, existed, err := s.enqueueMessage(queueItemKindSettlement, msg)
+	if err != nil {
+		return err
+	}
+	if existed && item.Status == queueItemStatusBroadcasted {
+		return nil
+	}
+	return s.processQueueItem(ctx, item.IdempotencyKey, true)
 }
 
 // submitSingleReport submits a single usage report.
@@ -313,7 +393,17 @@ func (s *ChainUsageSubmitterImpl) submitSingleReport(ctx context.Context, report
 		Signature:   report.Signature,
 	}
 
-	err := s.signAndBroadcast(ctx, msg)
+	item, existed, err := s.enqueueMessage(queueItemKindUsage, msg)
+	if err != nil {
+		return err
+	}
+	if existed {
+		if item.Status == queueItemStatusBroadcasted {
+			return ErrDuplicateReport
+		}
+		return nil
+	}
+	err = s.processQueueItem(ctx, item.IdempotencyKey, true)
 
 	if s.metrics != nil {
 		s.metrics.RecordSubmission(err == nil, time.Since(start))
@@ -339,11 +429,10 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 	}
 
 	start := time.Now()
+	var firstErr error
 
-	// Build batch message
-	msgs := make([]*MsgRecordUsageWrapper, len(reports))
-	for i, report := range reports {
-		msgs[i] = &MsgRecordUsageWrapper{
+	for _, report := range reports {
+		msg := &MsgRecordUsageWrapper{
 			Sender:      s.cfg.ProviderAddress,
 			OrderID:     report.OrderID,
 			LeaseID:     report.LeaseID,
@@ -354,87 +443,145 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 			UnitPrice:   report.UnitPrice,
 			Signature:   report.Signature,
 		}
-	}
 
-	err := s.signAndBroadcastBatch(ctx, msgs)
-
-	if s.metrics != nil {
-		for range reports {
-			s.metrics.RecordSubmission(err == nil, time.Since(start)/time.Duration(len(reports)))
+		item, existed, err := s.enqueueMessage(queueItemKindUsage, msg)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			if s.metrics != nil {
+				s.metrics.RecordSubmission(false, time.Since(start))
+			}
+			continue
 		}
-	}
-
-	if err == nil {
-		log.Printf("[chain-submitter] submitted batch of %d usage reports", len(reports))
-		for _, report := range reports {
+		if existed && item.Status == queueItemStatusBroadcasted {
+			s.markSubmitted(report)
+			if s.metrics != nil {
+				s.metrics.RecordSubmission(true, time.Since(start))
+			}
+			continue
+		}
+		if !existed {
+			err = s.processQueueItem(ctx, item.IdempotencyKey, false)
+		}
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		if err == nil {
 			s.markSubmitted(report)
 		}
+		if s.metrics != nil {
+			s.metrics.RecordSubmission(err == nil, time.Since(start))
+		}
 	}
 
-	return err
+	if firstErr == nil {
+		log.Printf("[chain-submitter] queued batch of %d usage reports", len(reports))
+	}
+	return firstErr
 }
 
 // signAndBroadcast signs and broadcasts a single message.
 //
 //nolint:unparam // ctx kept for future context deadline handling
-func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg interface{}) error {
+func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg interface{}) (string, error) {
 	if s.keyManager == nil {
-		return errors.New("key manager not configured")
+		return "", errors.New("key manager not configured")
 	}
 
 	if s.chainClient == nil {
-		return errors.New("chain client not configured")
+		return "", errors.New("chain client not configured")
 	}
 
-	var lastErr error
-	attempts := s.cfg.RetryAttempts + 1
-	if attempts <= 0 {
-		attempts = 1
+	txBytes, err := s.buildSignedTx(msg, s.cfg.GasLimit)
+	if err != nil {
+		return "", err
 	}
-	for attempt := 0; attempt < attempts; attempt++ {
-		txBytes, err := s.buildSignedTx(msg)
+	gasLimit, err := s.chainClient.EstimateGas(ctx, txBytes)
+	if err != nil {
+		return "", fmt.Errorf("estimate gas: %w", err)
+	}
+	if gasLimit > 0 && gasLimit != s.cfg.GasLimit {
+		txBytes, err = s.buildSignedTx(msg, gasLimit)
 		if err != nil {
-			return err
+			return "", err
 		}
-		gasLimit, err := s.chainClient.EstimateGas(ctx, txBytes)
-		if err != nil {
-			return fmt.Errorf("estimate gas: %w", err)
-		}
+	} else {
 		txBytes, err = s.withGasLimit(txBytes, gasLimit)
 		if err != nil {
-			return err
+			return "", err
 		}
-		if err := s.chainClient.BroadcastTx(ctx, txBytes); err != nil {
-			lastErr = err
-			if errors.Is(err, ErrSequenceMismatch) {
-				s.incrementSequence()
-			}
-			if attempt < attempts-1 {
-				if err := s.sleepBackoff(ctx, attempt); err != nil {
-					return err
-				}
-				continue
-			}
-			return err
-		}
-		s.incrementSequence()
-		return nil
 	}
-	return lastErr
+	txHash, err := s.chainClient.BroadcastTx(ctx, txBytes)
+	if err != nil {
+		if errors.Is(err, ErrSequenceMismatch) {
+			s.incrementSequence()
+		}
+		return txHash, err
+	}
+	s.incrementSequence()
+	return txHash, nil
 }
 
-// signAndBroadcastBatch signs and broadcasts multiple messages.
-func (s *ChainUsageSubmitterImpl) signAndBroadcastBatch(ctx context.Context, msgs []*MsgRecordUsageWrapper) error {
-	if len(msgs) == 0 {
-		return nil
+func isRetryableBroadcastError(err error) bool {
+	if err == nil {
+		return false
 	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, ErrSequenceMismatch) {
+		return true
+	}
+	var classified *classifiedBroadcastError
+	if errors.As(err, &classified) {
+		return classified.Retryable
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "temporarily unavailable") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "reset by peer") ||
+		strings.Contains(msg, "mempool is full") ||
+		strings.Contains(msg, "rate limit") {
+		return true
+	}
+	return true
+}
 
-	batchMsg := struct {
-		Msgs []*MsgRecordUsageWrapper `json:"msgs"`
-	}{
-		Msgs: msgs,
+func classifyBroadcastError(logMsg string) error {
+	msg := strings.ToLower(logMsg)
+	if strings.Contains(msg, "account sequence mismatch") {
+		return ErrSequenceMismatch
 	}
-	return s.signAndBroadcast(ctx, batchMsg)
+	if strings.Contains(msg, "insufficient funds") ||
+		strings.Contains(msg, "signature verification failed") ||
+		strings.Contains(msg, "invalid") ||
+		strings.Contains(msg, "unauthorized") {
+		return &classifiedBroadcastError{Message: logMsg, Retryable: false}
+	}
+	if strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "temporarily unavailable") ||
+		strings.Contains(msg, "mempool is full") {
+		return &classifiedBroadcastError{Message: logMsg, Retryable: true}
+	}
+	return &classifiedBroadcastError{Message: logMsg, Retryable: true}
+}
+
+type classifiedBroadcastError struct {
+	Message   string
+	Retryable bool
+}
+
+func (e *classifiedBroadcastError) Error() string {
+	return e.Message
+}
+
+type batchUsageMsgs struct {
+	Msgs []*MsgRecordUsageWrapper `json:"msgs"`
 }
 
 type txEnvelope struct {
@@ -458,11 +605,55 @@ func (c *rpcSubmitterClient) EstimateGas(_ context.Context, _ []byte) (uint64, e
 	return c.cfg.GasLimit, nil
 }
 
-func (c *rpcSubmitterClient) BroadcastTx(_ context.Context, _ []byte) error {
+func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string, error) {
 	if c.rpc == nil {
-		return errors.New("rpc client not configured")
+		return "", errors.New("rpc client not configured")
 	}
-	return nil
+	localHash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
+	res, err := c.rpc.BroadcastTxSync(ctx, tx)
+	if err != nil {
+		reconciledHash, reconcileErr := c.reconcileBroadcastError(ctx, localHash)
+		if reconcileErr == nil {
+			return reconciledHash, nil
+		}
+		return "", &classifiedBroadcastError{
+			Message:   fmt.Sprintf("broadcast tx: %v", err),
+			Retryable: true,
+		}
+	}
+	txHash := strings.ToUpper(hex.EncodeToString(res.Hash))
+	if txHash == "" {
+		txHash = localHash
+	}
+	if res.Code != 0 {
+		err := classifyBroadcastError(res.Log)
+		if err == nil {
+			err = fmt.Errorf("broadcast rejected with code=%d", res.Code)
+		}
+		return txHash, err
+	}
+	return txHash, nil
+}
+
+func (c *rpcSubmitterClient) reconcileBroadcastError(ctx context.Context, txHash string) (string, error) {
+	if c.rpc == nil || txHash == "" {
+		return "", fmt.Errorf("rpc reconciliation unavailable")
+	}
+	hashBytes, err := hex.DecodeString(strings.ToLower(txHash))
+	if err != nil {
+		return "", fmt.Errorf("decode tx hash: %w", err)
+	}
+
+	qctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	txRes, err := c.rpc.Tx(qctx, hashBytes, false)
+	if err != nil || txRes == nil {
+		return "", fmt.Errorf("tx reconciliation failed: %w", err)
+	}
+	if txRes.TxResult.Code != 0 {
+		return txHash, classifyBroadcastError(txRes.TxResult.Log)
+	}
+	return txHash, nil
 }
 
 func defaultUsageReportValidator(report *ChainUsageReport) error {
@@ -522,7 +713,14 @@ func (s *ChainUsageSubmitterImpl) markSubmitted(report *ChainUsageReport) {
 	s.mu.Unlock()
 }
 
-func (s *ChainUsageSubmitterImpl) buildSignedTx(msg interface{}) ([]byte, error) {
+func (s *ChainUsageSubmitterImpl) buildSignedTx(msg interface{}, gasLimit uint64) ([]byte, error) {
+	if s.useLegacyEnvelope {
+		return s.buildLegacySignedTx(msg, gasLimit)
+	}
+	return s.buildRealSignedTx(msg, gasLimit)
+}
+
+func (s *ChainUsageSubmitterImpl) buildLegacySignedTx(msg interface{}, gasLimit uint64) ([]byte, error) {
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return nil, fmt.Errorf("marshal message: %w", err)
@@ -540,13 +738,127 @@ func (s *ChainUsageSubmitterImpl) buildSignedTx(msg interface{}) ([]byte, error)
 		Signature:     sig.Signature,
 		ChainID:       s.cfg.ChainID,
 		Sequence:      sequence,
-		GasLimit:      s.cfg.GasLimit,
+		GasLimit:      gasLimit,
 		AccountNumber: accountNumber,
 	}
 	return json.Marshal(tx)
 }
 
+func (s *ChainUsageSubmitterImpl) buildRealSignedTx(msg interface{}, gasLimit uint64) ([]byte, error) {
+	sdkMsgs, err := s.toSDKMsgs(msg)
+	if err != nil {
+		return nil, err
+	}
+	txBuilder := s.encCfg.TxConfig.NewTxBuilder()
+	if err := txBuilder.SetMsgs(sdkMsgs...); err != nil {
+		return nil, fmt.Errorf("set tx msgs: %w", err)
+	}
+	if gasLimit == 0 {
+		gasLimit = s.cfg.GasLimit
+	}
+	txBuilder.SetGasLimit(gasLimit)
+
+	s.mu.RLock()
+	sequence := s.sequence
+	accountNumber := s.accountNumber
+	s.mu.RUnlock()
+
+	key, err := s.keyManager.GetActiveKey()
+	if err != nil {
+		return nil, fmt.Errorf("get active key: %w", err)
+	}
+	priv := &cosmosed25519.PrivKey{Key: append([]byte(nil), key.privateKey...)}
+	pub := priv.PubKey()
+	sigData := &signing.SingleSignatureData{SignMode: signing.SignMode_SIGN_MODE_DIRECT}
+	sig := signing.SignatureV2{
+		PubKey:   pub,
+		Data:     sigData,
+		Sequence: sequence,
+	}
+	if err := txBuilder.SetSignatures(sig); err != nil {
+		return nil, fmt.Errorf("set placeholder signature: %w", err)
+	}
+
+	signerData := authsigning.SignerData{
+		ChainID:       s.cfg.ChainID,
+		AccountNumber: accountNumber,
+		Sequence:      sequence,
+	}
+	sigV2, err := clienttx.SignWithPrivKey(
+		context.Background(),
+		signing.SignMode_SIGN_MODE_DIRECT,
+		signerData,
+		txBuilder,
+		priv,
+		s.encCfg.TxConfig,
+		sequence,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("sign tx: %w", err)
+	}
+	if err := txBuilder.SetSignatures(sigV2); err != nil {
+		return nil, fmt.Errorf("set signature: %w", err)
+	}
+
+	txBytes, err := s.encCfg.TxConfig.TxEncoder()(txBuilder.GetTx())
+	if err != nil {
+		return nil, fmt.Errorf("encode tx: %w", err)
+	}
+	return txBytes, nil
+}
+
+func (s *ChainUsageSubmitterImpl) toSDKMsgs(msg interface{}) ([]sdk.Msg, error) {
+	switch m := msg.(type) {
+	case *MsgRecordUsageWrapper:
+		return []sdk.Msg{&settlementv1.MsgRecordUsage{
+			Sender:      m.Sender,
+			OrderId:     m.OrderID,
+			LeaseId:     m.LeaseID,
+			UsageUnits:  m.UsageUnits,
+			UsageType:   m.UsageType,
+			PeriodStart: m.PeriodStart,
+			PeriodEnd:   m.PeriodEnd,
+			UnitPrice:   m.UnitPrice,
+			Signature:   m.Signature,
+		}}, nil
+	case *MsgSettleOrderWrapper:
+		return []sdk.Msg{&settlementv1.MsgSettleOrder{
+			Sender:         m.Sender,
+			OrderId:        m.OrderID,
+			UsageRecordIds: append([]string(nil), m.UsageRecordIDs...),
+			IsFinal:        m.IsFinal,
+		}}, nil
+	case *batchUsageMsgs:
+		out := make([]sdk.Msg, 0, len(m.Msgs))
+		for _, one := range m.Msgs {
+			if one == nil {
+				continue
+			}
+			out = append(out, &settlementv1.MsgRecordUsage{
+				Sender:      one.Sender,
+				OrderId:     one.OrderID,
+				LeaseId:     one.LeaseID,
+				UsageUnits:  one.UsageUnits,
+				UsageType:   one.UsageType,
+				PeriodStart: one.PeriodStart,
+				PeriodEnd:   one.PeriodEnd,
+				UnitPrice:   one.UnitPrice,
+				Signature:   one.Signature,
+			})
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("batch message contains no usage entries")
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported queue message type %T", msg)
+	}
+}
+
 func (s *ChainUsageSubmitterImpl) withGasLimit(txBytes []byte, gasLimit uint64) ([]byte, error) {
+	if !s.useLegacyEnvelope {
+		return txBytes, nil
+	}
 	if gasLimit == 0 {
 		return txBytes, nil
 	}
@@ -565,10 +877,10 @@ func (s *ChainUsageSubmitterImpl) incrementSequence() {
 }
 
 func (s *ChainUsageSubmitterImpl) sleepBackoff(ctx context.Context, attempt int) error {
-	if s.cfg.RetryBackoff <= 0 {
+	delay := s.nextRetryDelay(attempt + 1)
+	if delay <= 0 {
 		return nil
 	}
-	delay := s.cfg.RetryBackoff * time.Duration(attempt+1)
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
