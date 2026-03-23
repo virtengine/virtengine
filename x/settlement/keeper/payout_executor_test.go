@@ -497,3 +497,29 @@ func createTestKeyPair(t *testing.T, name string) (sdk.AccAddress, *ed25519.PubK
 	pubKey := privKey.PubKey().(*ed25519.PubKey)
 	return sdk.AccAddress(pubKey.Address()), pubKey
 }
+
+func TestPayoutMarkProcessingRejectsTerminalFailureRetry(t *testing.T) {
+	now := time.Now().UTC()
+	payout := types.NewPayoutRecord(
+		"payout-123",
+		"invoice-123",
+		"settlement-123",
+		"escrow-123",
+		"order-123",
+		"lease-123",
+		sdk.AccAddress("provider-1").String(),
+		sdk.AccAddress("customer-1").String(),
+		sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		now,
+		1,
+	)
+	payout.State = types.PayoutStateFailed
+	payout.LastError = "compliance rejected"
+	payout.LastErrorRetryable = false
+	err := payout.MarkProcessing(now.Add(time.Minute))
+	require.Error(t, err)
+	require.ErrorContains(t, err, "terminal payout")
+}

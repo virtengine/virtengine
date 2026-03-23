@@ -734,6 +734,9 @@ func (k Keeper) RetryFailedPayouts(ctx sdk.Context) error {
 		if payout.ExecutionAttempts >= maxRetries {
 			continue // Max retries exceeded
 		}
+		if !payout.CanRetry() {
+			continue
+		}
 
 		// Reset to pending for retry and keep state index monotonic.
 		payout.State = types.PayoutStatePending

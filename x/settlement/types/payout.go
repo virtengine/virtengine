@@ -126,6 +126,9 @@ type PayoutRecord struct {
 	// LastError is the last error message if failed
 	LastError string `json:"last_error,omitempty"`
 
+	// LastErrorRetryable indicates whether a failed payout can be retried safely
+	LastErrorRetryable bool `json:"last_error_retryable,omitempty"`
+
 	// TxHash is the on-chain transaction hash when completed
 	TxHash string `json:"tx_hash,omitempty"`
 
@@ -223,6 +226,9 @@ func (p *PayoutRecord) Validate() error {
 
 // MarkProcessing transitions to processing state
 func (p *PayoutRecord) MarkProcessing(blockTime time.Time) error {
+	if p.State == PayoutStateFailed && !p.LastErrorRetryable {
+		return ErrInvalidStateTransition.Wrapf("cannot retry terminal payout in state %s", p.State)
+	}
 	if !p.State.CanTransitionTo(PayoutStateProcessing) {
 		return ErrInvalidStateTransition.Wrapf("cannot transition from %s to processing", p.State)
 	}
@@ -231,6 +237,7 @@ func (p *PayoutRecord) MarkProcessing(blockTime time.Time) error {
 	p.ProcessedAt = &blockTime
 	p.ExecutionAttempts++
 	p.LastAttemptAt = &blockTime
+	p.LastErrorRetryable = false
 	return nil
 }
 
@@ -244,11 +251,17 @@ func (p *PayoutRecord) MarkCompleted(txHash string, blockTime time.Time) error {
 	p.TxHash = txHash
 	p.CompletedAt = &blockTime
 	p.LastError = ""
+	p.LastErrorRetryable = false
 	return nil
 }
 
 // MarkFailed transitions to failed state
 func (p *PayoutRecord) MarkFailed(errorMsg string, blockTime time.Time) error {
+	return p.MarkFailedWithRetryability(errorMsg, true, blockTime)
+}
+
+// MarkFailedWithRetryability transitions to failed with explicit retry semantics.
+func (p *PayoutRecord) MarkFailedWithRetryability(errorMsg string, retryable bool, blockTime time.Time) error {
 	if !p.State.CanTransitionTo(PayoutStateFailed) {
 		return ErrInvalidStateTransition.Wrapf("cannot transition from %s to failed", p.State)
 	}
@@ -256,6 +269,7 @@ func (p *PayoutRecord) MarkFailed(errorMsg string, blockTime time.Time) error {
 	p.State = PayoutStateFailed
 	p.LastError = errorMsg
 	p.LastAttemptAt = &blockTime
+	p.LastErrorRetryable = retryable
 	return nil
 }
 
@@ -291,7 +305,13 @@ func (p *PayoutRecord) Refund(reason string, blockTime time.Time) error {
 
 	p.State = PayoutStateRefunded
 	p.HoldReason = reason
+	p.LastErrorRetryable = false
 	return nil
+}
+
+// CanRetry reports whether a failed payout may be retried safely.
+func (p PayoutRecord) CanRetry() bool {
+	return p.State == PayoutStateFailed && p.LastErrorRetryable
 }
 
 // MarshalJSON implements json.Marshaler
