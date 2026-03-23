@@ -431,7 +431,7 @@ func (k Keeper) ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*
 		}
 	case offramp.StatusFailed:
 		if conversion.State != types.FiatConversionStateFailed {
-			if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+			if err := conversion.MarkFailedWithRetryability("off-ramp failed", false, ctx.BlockTime()); err != nil {
 				return nil, err
 			}
 		}
@@ -457,7 +457,7 @@ func (k Keeper) ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*
 				}
 			} else if conversion.State == types.FiatConversionStateFailed && payout.State != types.PayoutStateFailed {
 				oldState := payout.State
-				if err := payout.MarkFailed("fiat conversion failed", ctx.BlockTime()); err != nil {
+				if err := payout.MarkFailedWithRetryability("fiat conversion failed", conversion.CanRetry(), ctx.BlockTime()); err != nil {
 					return nil, err
 				}
 				k.updatePayoutState(ctx, payout, oldState)
@@ -901,7 +901,7 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 				return err
 			}
 		case offramp.StatusFailed:
-			if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+			if err := conversion.MarkFailedWithRetryability("off-ramp failed", false, ctx.BlockTime()); err != nil {
 				return err
 			}
 		}
@@ -929,7 +929,7 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 					return err
 				}
 			} else if status.Status == offramp.StatusFailed {
-				if err := conversion.MarkFailed("off-ramp failed", ctx.BlockTime()); err != nil {
+				if err := conversion.MarkFailedWithRetryability("off-ramp failed", false, ctx.BlockTime()); err != nil {
 					return err
 				}
 			}
@@ -946,7 +946,7 @@ func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecor
 		}
 	} else if conversion.State == types.FiatConversionStateFailed && payout.State != types.PayoutStateFailed {
 		oldState := payout.State
-		_ = payout.MarkFailed("fiat conversion failed", ctx.BlockTime())
+		_ = payout.MarkFailedWithRetryability("fiat conversion failed", conversion.CanRetry(), ctx.BlockTime())
 		k.updatePayoutState(ctx, *payout, oldState)
 		if err := k.SetPayout(ctx, *payout); err != nil {
 			return err

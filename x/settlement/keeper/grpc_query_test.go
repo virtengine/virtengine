@@ -204,36 +204,37 @@ func seedSettlementData(t *testing.T, suite *grpcTestSuite) seededData {
 	require.NoError(t, suite.keeper.SetPayout(suite.ctx, *payout))
 
 	conversion := types.FiatConversionRecord{
-		ConversionID:      conversionID,
-		InvoiceID:         "invoice-1",
-		SettlementID:      settlementID,
-		PayoutID:          payoutID,
-		EscrowID:          escrowID,
-		OrderID:           orderID,
-		LeaseID:           leaseID,
-		Provider:          provider.String(),
-		Customer:          customer.String(),
-		RequestedBy:       provider.String(),
-		RequestedAt:       now,
-		UpdatedAt:         now,
-		State:             types.FiatConversionStateRequested,
-		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
-		StableToken:       types.TokenSpec{Symbol: "USD", Denom: "uusd", Decimals: 6},
-		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(500)),
-		StableAmount:      sdk.NewCoin("uusd", sdkmath.NewInt(1000)),
-		FiatCurrency:      "USD",
-		FiatAmount:        "100.00",
-		PaymentMethod:     "bank",
-		DestinationHash:   types.HashDestination("acct-123"),
-		DestinationRegion: "US",
-		SlippageTolerance: 0.01,
-		IdempotencyKey:    "fiatconv:invoice-1:settlement-1:payout-1:provider",
-		SwapAttempts:      1,
-		OffRampAttempts:   1,
-		PayoutAttempts:    2,
-		LastErrorAt:       now.Add(-time.Minute).Unix(),
-		LastError:         "provider timeout",
-		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+		ConversionID:       conversionID,
+		InvoiceID:          "invoice-1",
+		SettlementID:       settlementID,
+		PayoutID:           payoutID,
+		EscrowID:           escrowID,
+		OrderID:            orderID,
+		LeaseID:            leaseID,
+		Provider:           provider.String(),
+		Customer:           customer.String(),
+		RequestedBy:        provider.String(),
+		RequestedAt:        now,
+		UpdatedAt:          now,
+		State:              types.FiatConversionStateRequested,
+		CryptoToken:        types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:        types.TokenSpec{Symbol: "USD", Denom: "uusd", Decimals: 6},
+		CryptoAmount:       sdk.NewCoin("uve", sdkmath.NewInt(500)),
+		StableAmount:       sdk.NewCoin("uusd", sdkmath.NewInt(1000)),
+		FiatCurrency:       "USD",
+		FiatAmount:         "100.00",
+		PaymentMethod:      "bank",
+		DestinationHash:    types.HashDestination("acct-123"),
+		DestinationRegion:  "US",
+		SlippageTolerance:  0.01,
+		IdempotencyKey:     "fiatconv:invoice-1:settlement-1:payout-1:provider",
+		SwapAttempts:       1,
+		OffRampAttempts:    1,
+		PayoutAttempts:     2,
+		LastErrorAt:        now.Add(-time.Minute).Unix(),
+		LastError:          "provider timeout",
+		LastErrorRetryable: true,
+		EncryptedPayload:   makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
 		TransitionHistory: []types.FiatConversionStateTransition{{
 			From:      types.FiatConversionStateCreated,
 			To:        types.FiatConversionStateSwapPending,
@@ -368,6 +369,7 @@ func TestGRPCSettlementQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, payoutResp.Payout)
 	require.Equal(t, data.payout.PayoutID, payoutResp.Payout.PayoutId)
+	require.Equal(t, data.payout.LastErrorRetryable, payoutResp.Payout.LastErrorRetryable)
 
 	payoutsByProviderResp, err := suite.queryClient.PayoutsByProvider(ctx, &settlementv1.QueryPayoutsByProviderRequest{Provider: data.provider.String()})
 	require.NoError(t, err)
@@ -387,6 +389,7 @@ func TestGRPCSettlementQueries(t *testing.T) {
 	require.Equal(t, data.conversion.OffRampAttempts, conversionResp.Conversion.OffRampAttempts)
 	require.Equal(t, data.conversion.PayoutAttempts, conversionResp.Conversion.PayoutAttempts)
 	require.Equal(t, data.conversion.LastError, conversionResp.Conversion.LastError)
+	require.Equal(t, data.conversion.LastErrorRetryable, conversionResp.Conversion.LastErrorRetryable)
 	require.Len(t, conversionResp.Conversion.TransitionHistory, len(data.conversion.TransitionHistory))
 	require.Equal(t, string(data.conversion.TransitionHistory[0].From), conversionResp.Conversion.TransitionHistory[0].From)
 	require.Equal(t, string(data.conversion.TransitionHistory[1].To), conversionResp.Conversion.TransitionHistory[1].To)

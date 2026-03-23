@@ -253,6 +253,7 @@ message PayoutRecord {
   int64 processed_at = 24;
   int64 completed_at = 25;
   int64 block_height = 26;
+  bool last_error_retryable = 27;
 }
 
 // Params defines the parameters for the settlement module.
@@ -386,6 +387,7 @@ message FiatConversionRecord {
   int64 last_error_at = 43;
   string last_error = 44;
   repeated FiatConversionStateTransition transition_history = 45 [(gogoproto.nullable) = false];
+  bool last_error_retryable = 46;
 }
 
 // QueryEscrowRequest is the request for querying an escrow by ID.
