@@ -246,6 +246,7 @@ type FiatConversionRecord struct {
 	FailureReason       string                          `json:"failure_reason,omitempty"`
 	LastErrorAt         int64                           `json:"last_error_at,omitempty"`
 	LastError           string                          `json:"last_error,omitempty"`
+	LastErrorRetryable  bool                            `json:"last_error_retryable,omitempty"`
 	AuditTrail          []FiatConversionAuditEntry      `json:"audit_trail,omitempty"`
 	TransitionHistory   []FiatConversionStateTransition `json:"transition_history,omitempty"`
 	EncryptedPayload    *EncryptedSettlementPayload     `json:"encrypted_payload,omitempty"`
@@ -378,6 +379,9 @@ func (r *FiatConversionRecord) AddAuditEntry(action, actor, reason string, metad
 func (r *FiatConversionRecord) TransitionTo(next FiatConversionState, event string, reason string, metadata map[string]string, ts time.Time) error {
 	current := normalizeFiatConversionState(r.State)
 	target := normalizeFiatConversionState(next)
+	if current == FiatConversionStateFailed && target != FiatConversionStateCancelled && !r.LastErrorRetryable {
+		return ErrInvalidStateTransition.Wrapf("invalid fiat conversion transition: %s -> %s", current, target)
+	}
 	if !current.CanTransitionTo(target) {
 		return ErrInvalidStateTransition.Wrapf("invalid fiat conversion transition: %s -> %s", current, target)
 	}
@@ -388,6 +392,9 @@ func (r *FiatConversionRecord) TransitionTo(next FiatConversionState, event stri
 
 	r.State = target
 	r.UpdatedAt = ts
+	if target != FiatConversionStateFailed {
+		r.LastErrorRetryable = false
+	}
 	r.TransitionHistory = append(r.TransitionHistory, FiatConversionStateTransition{
 		From:      current,
 		To:        target,
@@ -421,6 +428,9 @@ func (r *FiatConversionRecord) TransitionTo(next FiatConversionState, event stri
 		r.FailureReason = ""
 		r.LastError = ""
 		r.LastErrorAt = 0
+		r.LastErrorRetryable = false
+	case FiatConversionStateCancelled:
+		r.LastErrorRetryable = false
 	}
 
 	return nil
@@ -503,7 +513,18 @@ func (r *FiatConversionRecord) MarkPayoutCompleted(ts time.Time) error {
 
 // MarkFailed transitions to failed.
 func (r *FiatConversionRecord) MarkFailed(reason string, ts time.Time) error {
-	return r.TransitionTo(FiatConversionStateFailed, "failed", reason, nil, ts)
+	return r.MarkFailedWithRetryability(reason, true, ts)
+}
+
+// MarkFailedWithRetryability transitions to failed with explicit retry semantics.
+func (r *FiatConversionRecord) MarkFailedWithRetryability(reason string, retryable bool, ts time.Time) error {
+	r.LastErrorRetryable = retryable
+	return r.TransitionTo(FiatConversionStateFailed, "failed", reason, map[string]string{"retryable": fmt.Sprintf("%t", retryable)}, ts)
+}
+
+// CanRetry reports whether a failed conversion may be retried safely.
+func (r FiatConversionRecord) CanRetry() bool {
+	return normalizeFiatConversionState(r.State) == FiatConversionStateFailed && r.LastErrorRetryable
 }
 
 // MarkCancelled transitions to cancelled.
