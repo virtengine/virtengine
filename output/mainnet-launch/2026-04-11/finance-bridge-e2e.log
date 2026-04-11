@@ -1,0 +1,46 @@
+=== RUN   TestBridgeRealProviderLifecycleE2E
+=== PAUSE TestBridgeRealProviderLifecycleE2E
+=== RUN   TestBridgeGetQuoteSelectsBestAvailableProvider
+=== PAUSE TestBridgeGetQuoteSelectsBestAvailableProvider
+=== RUN   TestBridgeInitiatePayoutIdempotentByMetadata
+=== PAUSE TestBridgeInitiatePayoutIdempotentByMetadata
+=== RUN   TestBridgeStoresFinanceReconciliationEvidence
+=== PAUSE TestBridgeStoresFinanceReconciliationEvidence
+=== RUN   TestBridgeInitiatePayoutFailsOverOnRetryableError
+=== PAUSE TestBridgeInitiatePayoutFailsOverOnRetryableError
+=== RUN   TestBridgeInitiatePayoutRecoversAmbiguousProviderResult
+=== PAUSE TestBridgeInitiatePayoutRecoversAmbiguousProviderResult
+=== RUN   TestBridgeFindPayoutByMetadataUsesCachedOperation
+=== PAUSE TestBridgeFindPayoutByMetadataUsesCachedOperation
+=== RUN   TestBridgeFindPayoutByMetadataFallsBackToProviderLookup
+=== PAUSE TestBridgeFindPayoutByMetadataFallsBackToProviderLookup
+=== RUN   TestBridgeGetStatusKeepsCachedPayoutOnRefreshFailure
+=== PAUSE TestBridgeGetStatusKeepsCachedPayoutOnRefreshFailure
+=== RUN   TestBridgeGetStatusPublishesCompletionEvidence
+=== PAUSE TestBridgeGetStatusPublishesCompletionEvidence
+=== RUN   TestBridgeCancelMarksPendingPayoutCancelled
+=== PAUSE TestBridgeCancelMarksPendingPayoutCancelled
+=== CONT  TestBridgeRealProviderLifecycleE2E
+--- PASS: TestBridgeRealProviderLifecycleE2E (0.00s)
+=== CONT  TestBridgeInitiatePayoutRecoversAmbiguousProviderResult
+=== CONT  TestBridgeStoresFinanceReconciliationEvidence
+=== CONT  TestBridgeGetQuoteSelectsBestAvailableProvider
+--- PASS: TestBridgeInitiatePayoutRecoversAmbiguousProviderResult (0.00s)
+--- PASS: TestBridgeGetQuoteSelectsBestAvailableProvider (0.00s)
+--- PASS: TestBridgeStoresFinanceReconciliationEvidence (0.00s)
+=== CONT  TestBridgeFindPayoutByMetadataUsesCachedOperation
+--- PASS: TestBridgeFindPayoutByMetadataUsesCachedOperation (0.00s)
+=== CONT  TestBridgeCancelMarksPendingPayoutCancelled
+--- PASS: TestBridgeCancelMarksPendingPayoutCancelled (0.00s)
+=== CONT  TestBridgeGetStatusPublishesCompletionEvidence
+--- PASS: TestBridgeGetStatusPublishesCompletionEvidence (0.00s)
+=== CONT  TestBridgeGetStatusKeepsCachedPayoutOnRefreshFailure
+--- PASS: TestBridgeGetStatusKeepsCachedPayoutOnRefreshFailure (0.00s)
+=== CONT  TestBridgeFindPayoutByMetadataFallsBackToProviderLookup
+--- PASS: TestBridgeFindPayoutByMetadataFallsBackToProviderLookup (0.00s)
+=== CONT  TestBridgeInitiatePayoutFailsOverOnRetryableError
+--- PASS: TestBridgeInitiatePayoutFailsOverOnRetryableError (0.00s)
+=== CONT  TestBridgeInitiatePayoutIdempotentByMetadata
+--- PASS: TestBridgeInitiatePayoutIdempotentByMetadata (0.00s)
+PASS
+ok  	github.com/virtengine/virtengine/pkg/payments/offramp	0.741s

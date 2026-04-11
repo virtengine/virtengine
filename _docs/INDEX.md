@@ -20,6 +20,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/architecture/hybrid-portal-implementation-plan.md`
 - `_docs/architecture/waldur-market-mapping-spec.md`
 - `_docs/adr/ADR-001-portal-architecture.md`
+- `_docs/adr/ADR-004-veid-governed-verifier.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
@@ -41,9 +42,17 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/operations/incident-response.md`
 - `_docs/operations/lifecycle-control.md`
 - `_docs/operations/mainnet-dress-rehearsal-report.md`
+- `_docs/operations/mainnet-backup-restore-drill-report-2026-04-11.md`
+- `_docs/operations/mainnet-finance-reconciliation-report-2026-04-11.md`
 - `_docs/operations/mainnet-go-no-go-decision.md`
+- `_docs/operations/mainnet-launch-evidence-audit-2026-04-10.md`
+- `_docs/operations/mainnet-launch-evidence-audit-2026-04-11.md`
+- `_docs/operations/mainnet-launch-comms-packet-2026-04-11.md`
+- `_docs/operations/mainnet-launch-control-record-2026-04-11.md`
 - `_docs/operations/mainnet-launch-packet.md`
 - `_docs/operations/mainnet-launch-readiness-checklist.md`
+- `_docs/operations/mainnet-provider-hpc-e2e-report-2026-04-11.md`
+- `_docs/operations/mainnet-veid-e2e-report-2026-04-11.md`
 - `_docs/operations/monitoring.md`
 - `_docs/operations/offering-sync-guide.md`
 - `_docs/operations/servicedesk-sync.md`
@@ -87,6 +96,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
 - `_docs/protocols/mobile-capture-sdk.md`
+- `_docs/protocols/veid-registry-and-issuance-policy.md`
 - `_docs/protocols/veid-attestation-schema.md`
 - `_docs/veid-flow-spec.md`
 - `_docs/veid-ml-feature-schema.md`

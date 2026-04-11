@@ -1,0 +1,96 @@
+=== RUN   TestHPCMarketplaceE2E
+    network.go:235: acquiring test network lock
+    network.go:244: created temporary directory: /tmp/TestHPCMarketplaceE2E3492421518/001/chain-iPprpP2834097715
+    network.go:253: preparing test network...
+    network.go:447: starting test network...
+    network.go:452: started test network
+    network_suite.go:86: setting up 8 wallets for test
+=== RUN   TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup
+=== RUN   TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup/ValidateSchedulerBackend
+=== RUN   TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup/ValidateProviderDaemonConfig
+=== RUN   TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup/ValidateWaldurBridgeConfig
+=== RUN   TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings
+=== RUN   TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings/RegisterProvider
+=== RUN   TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings/PublishOfferings
+=== RUN   TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings/SyncOfferingsToChain
+=== RUN   TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation
+=== RUN   TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/CreateTestOrder
+=== RUN   TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/ProviderPlacesBid
+=== RUN   TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/AcceptBidAndCreateAllocation
+=== RUN   TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/ProvisionResources
+=== RUN   TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution
+=== RUN   TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/CreateHPCJob
+=== RUN   TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/VerifyJobQueued
+=== RUN   TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/SimulateJobExecution
+=== RUN   TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/VerifySchedulerExecution
+=== RUN   TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/CompleteJob
+=== RUN   TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting
+=== RUN   TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/CaptureUsageMetrics
+=== RUN   TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/CreateUsageReport
+=== RUN   TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/SubmitUsageReportOnChain
+=== RUN   TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/VerifyUsageRecordIntegrity
+=== RUN   TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement
+=== RUN   TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/GenerateInvoice
+=== RUN   TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/VerifyBillableLineItems
+=== RUN   TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/TriggerSettlement
+=== RUN   TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/VerifyProviderPayout
+=== RUN   TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/VerifyPlatformFee
+=== RUN   TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents
+=== RUN   TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents/VerifyJobStateTransitions
+=== RUN   TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents/VerifyEventEmissions
+=== RUN   TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents/VerifyAccountingStatusTransitions
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios/FailedJobHandling
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios/PartialUsageReporting
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios/TimeoutHandling
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios/CancelledJobHandling
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios/InsufficientResourcesRejection
+=== RUN   TestHPCMarketplaceE2E/TestH_NegativeScenarios/DisputedSettlement
+=== NAME  TestHPCMarketplaceE2E
+    network.go:579: cleaning up test network...
+    network.go:602: finished cleaning up test network
+    network.go:576: released test network lock
+--- PASS: TestHPCMarketplaceE2E (4.47s)
+    --- PASS: TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup/ValidateSchedulerBackend (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup/ValidateProviderDaemonConfig (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestA_StagingEnvironmentSetup/ValidateWaldurBridgeConfig (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings/RegisterProvider (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings/PublishOfferings (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestB_ProviderRegistrationAndOfferings/SyncOfferingsToChain (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/CreateTestOrder (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/ProviderPlacesBid (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/AcceptBidAndCreateAllocation (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestC_OrderCreationAndAllocation/ProvisionResources (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution (0.10s)
+        --- PASS: TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/CreateHPCJob (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/VerifyJobQueued (0.10s)
+        --- PASS: TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/SimulateJobExecution (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/VerifySchedulerExecution (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestD_JobSubmissionAndExecution/CompleteJob (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/CaptureUsageMetrics (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/CreateUsageReport (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/SubmitUsageReportOnChain (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestE_UsageMetricsAndReporting/VerifyUsageRecordIntegrity (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/GenerateInvoice (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/VerifyBillableLineItems (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/TriggerSettlement (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/VerifyProviderPayout (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestF_InvoiceAndSettlement/VerifyPlatformFee (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents/VerifyJobStateTransitions (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents/VerifyEventEmissions (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestG_StateTransitionsAndEvents/VerifyAccountingStatusTransitions (0.00s)
+    --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios/FailedJobHandling (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios/PartialUsageReporting (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios/TimeoutHandling (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios/CancelledJobHandling (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios/InsufficientResourcesRejection (0.00s)
+        --- PASS: TestHPCMarketplaceE2E/TestH_NegativeScenarios/DisputedSettlement (0.00s)
+PASS
+ok  	github.com/virtengine/virtengine/tests/e2e	4.673s

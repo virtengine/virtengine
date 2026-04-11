@@ -1,0 +1,116 @@
+=== RUN   TestFiatConversionPipelineSuccess
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+    dex_offramp_test.go:329: finance-evidence={"provider":"ve1tfwfg8hz5ed7tg345tykp7y3pk2zj8qwf370nz","invoice_id":"fb29e3e83622df6e42575f6e82dc5864","settlement_id":"settle-1700000000-1","payout_id":"payout-1700000000-1","payout_state":"completed","payout_tx_hash":"fiat-conv-1700000000-1","payout_idempotency_key":"payout-fb29e3e83622df6e42575f6e82dc5864-settle-1700000000-1","payout_ledger_entry_types":["completed"],"treasury_balance":"60uve","expected_treasury_balance":"60uve","conversion_id":"conv-1700000000-1","conversion_state":"payout_completed","conversion_idempotency_key":"fiatconv:fb29e3e83622df6e42575f6e82dc5864:settle-1700000000-1::ve1tfwfg8hz5ed7tg345tykp7y3pk2zj8qwf370nz","off_ramp_provider":"mock","off_ramp_quote_id":"mock-quote-001","off_ramp_id":"mock-payout-001","off_ramp_status":"completed","off_ramp_reference":"mock-mock-payout-001","bridge_status":"completed","bridge_reference":"mock-mock-payout-001","bridge_quote_id":"mock-quote-001","conversion_audit_actions":["conversion_requested","payout_linked","state_transition","swap_pending","state_transition","swap_submitted","state_transition","swap_settled","state_transition","state_transition","state_transition","state_transition","offramp_payout_submitted"],"transition_count":7}
+--- PASS: TestFiatConversionPipelineSuccess (0.11s)
+=== RUN   TestFiatConversionReconciliation
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+    dex_offramp_test.go:426: finance-evidence={"provider":"ve1xfxuey8w920yvnn762365uagh4x2fmu8m8wysl","invoice_id":"bc16c941c83c844f8c2cc5cdb3242a0f","settlement_id":"settle-1700000000-1","payout_id":"payout-1700000000-1","payout_state":"completed","payout_tx_hash":"fiat-conv-1700000000-1","payout_idempotency_key":"payout-bc16c941c83c844f8c2cc5cdb3242a0f-settle-1700000000-1","payout_ledger_entry_types":["completed"],"treasury_balance":"60uve","expected_treasury_balance":"60uve","conversion_id":"conv-1700000000-1","conversion_state":"payout_completed","conversion_idempotency_key":"fiatconv:bc16c941c83c844f8c2cc5cdb3242a0f:settle-1700000000-1::ve1xfxuey8w920yvnn762365uagh4x2fmu8m8wysl","off_ramp_provider":"pending-mock","off_ramp_quote_id":"quote-pending","off_ramp_id":"pending-payout","off_ramp_status":"completed","off_ramp_reference":"pending-ref","bridge_status":"completed","bridge_reference":"pending-ref","bridge_quote_id":"quote-pending","conversion_audit_actions":["conversion_requested","payout_linked","state_transition","swap_pending","state_transition","swap_submitted","state_transition","swap_settled","state_transition","state_transition","state_transition","offramp_payout_submitted","offramp_reconciled","state_transition"],"transition_count":7}
+--- PASS: TestFiatConversionReconciliation (0.08s)
+=== RUN   TestFullPipelineTestSuite
+=== RUN   TestFullPipelineTestSuite/TestDisputeResolutionAdjustedPayout
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+=== RUN   TestFullPipelineTestSuite/TestEscrowExpiryAutoSettlement
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+=== RUN   TestFullPipelineTestSuite/TestMultiOrderSettlementBatch
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+=== RUN   TestFullPipelineTestSuite/TestPartialRefund
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+=== RUN   TestFullPipelineTestSuite/TestSettlementEscrowInvariant
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:48:59 INF building constraint builder nbConstraints=2
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+=== RUN   TestFullPipelineTestSuite/TestUsageToInvoiceToPayout
+15:48:59 INF compiling circuit
+15:48:59 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:48:59 INF building constraint builder nbConstraints=1524
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:49:00 INF building constraint builder nbConstraints=2
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:49:00 INF building constraint builder nbConstraints=1524
+--- PASS: TestFullPipelineTestSuite (0.44s)
+    --- PASS: TestFullPipelineTestSuite/TestDisputeResolutionAdjustedPayout (0.10s)
+    --- PASS: TestFullPipelineTestSuite/TestEscrowExpiryAutoSettlement (0.10s)
+    --- PASS: TestFullPipelineTestSuite/TestMultiOrderSettlementBatch (0.06s)
+    --- PASS: TestFullPipelineTestSuite/TestPartialRefund (0.06s)
+    --- PASS: TestFullPipelineTestSuite/TestSettlementEscrowInvariant (0.06s)
+    --- PASS: TestFullPipelineTestSuite/TestUsageToInvoiceToPayout (0.06s)
+=== RUN   TestSettlementPayoutOffRampFlow
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:49:00 INF building constraint builder nbConstraints=1524
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:49:00 INF building constraint builder nbConstraints=2
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:49:00 INF building constraint builder nbConstraints=1524
+--- PASS: TestSettlementPayoutOffRampFlow (0.05s)
+=== RUN   TestDisputeArbitrationRefundFlow
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:49:00 INF building constraint builder nbConstraints=1524
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:49:00 INF building constraint builder nbConstraints=2
+15:49:00 INF compiling circuit
+15:49:00 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:49:00 INF building constraint builder nbConstraints=1524
+--- PASS: TestDisputeArbitrationRefundFlow (0.06s)
+PASS
+ok  	github.com/virtengine/virtengine/tests/integration/settlement	1.059s
