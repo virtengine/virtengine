@@ -79,7 +79,7 @@ func NewChainCallbackSink(ctx context.Context, cfg ChainCallbackSinkConfig) (*Ch
 
 	backend := cfg.KeyringBackend
 	if backend == "" {
-		backend = "test"
+		backend = testLiteral
 	}
 
 	in := strings.NewReader(cfg.KeyringPassphrase + "\n" + cfg.KeyringPassphrase + "\n")

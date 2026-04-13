@@ -20,6 +20,8 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+const testPipelineVersion = "1.2.0"
+
 type stubVerifierRegistryKeeper struct {
 	info  ActiveVerifierInfo
 	found bool
@@ -113,13 +115,13 @@ func TestApplyVerificationResultRecordsIssuanceForActiveVerifier(t *testing.T) {
 	manifest := createIntegrationTestManifest(t)
 	_, err := k.RegisterPipelineVersion(
 		ctx,
-		"1.2.0",
+		testPipelineVersion,
 		"sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		"ghcr.io/virtengine/veid-pipeline:v1.2.0",
 		manifest,
 	)
 	require.NoError(t, err)
-	require.NoError(t, k.ActivatePipelineVersion(ctx, "1.2.0"))
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
 
 	registryKeeper := stubVerifierRegistryKeeper{
 		info: ActiveVerifierInfo{
@@ -143,7 +145,7 @@ func TestApplyVerificationResultRecordsIssuanceForActiveVerifier(t *testing.T) {
 	result := types.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
 	result.Status = types.VerificationResultStatusSuccess
 	result.Score = 91
-	result.ModelVersion = "1.2.0"
+	result.ModelVersion = testPipelineVersion
 	result.InputHash = []byte("input-hash")
 
 	err = k.applyVerificationResult(ctx, addr, request, result)
@@ -153,7 +155,7 @@ func TestApplyVerificationResultRecordsIssuanceForActiveVerifier(t *testing.T) {
 	require.True(t, found)
 	require.Equal(t, uint64(117667), record.mintedUnits)
 	require.Equal(t, "verifier-1", record.verifierID)
-	require.Equal(t, "1.2.0", record.modelVersion)
+	require.Equal(t, testPipelineVersion, record.modelVersion)
 	require.Equal(t, "verifier-1", result.Metadata["active_verifier_id"])
 	require.Equal(t, "117667", result.Metadata["issuance_recorded_units"])
 }
@@ -163,13 +165,13 @@ func TestApplyVerificationResultRejectsMismatchedVerifierVersion(t *testing.T) {
 	manifest := createIntegrationTestManifest(t)
 	_, err := k.RegisterPipelineVersion(
 		ctx,
-		"1.2.0",
+		testPipelineVersion,
 		"sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		"ghcr.io/virtengine/veid-pipeline:v1.2.0",
 		manifest,
 	)
 	require.NoError(t, err)
-	require.NoError(t, k.ActivatePipelineVersion(ctx, "1.2.0"))
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
 
 	k.SetVerifierRegistryKeeper(stubVerifierRegistryKeeper{
 		info: ActiveVerifierInfo{
@@ -207,13 +209,13 @@ func TestApplyVerificationResultRejectsUnauthorizedArtifactState(t *testing.T) {
 	manifest := createIntegrationTestManifest(t)
 	_, err := k.RegisterPipelineVersion(
 		ctx,
-		"1.2.0",
+		testPipelineVersion,
 		"sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		"ghcr.io/virtengine/veid-pipeline:v1.2.0",
 		manifest,
 	)
 	require.NoError(t, err)
-	require.NoError(t, k.ActivatePipelineVersion(ctx, "1.2.0"))
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
 
 	k.SetVerifierRegistryKeeper(stubVerifierRegistryKeeper{
 		info: ActiveVerifierInfo{
@@ -234,7 +236,7 @@ func TestApplyVerificationResultRejectsUnauthorizedArtifactState(t *testing.T) {
 	result := types.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
 	result.Status = types.VerificationResultStatusSuccess
 	result.Score = 92
-	result.ModelVersion = "1.2.0"
+	result.ModelVersion = testPipelineVersion
 	result.InputHash = []byte("input-hash")
 
 	err = k.applyVerificationResult(ctx, addr, request, result)

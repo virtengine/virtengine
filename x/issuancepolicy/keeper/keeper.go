@@ -334,8 +334,8 @@ func (k Keeper) RecordVerifiedProof(ctx sdk.Context, proofID, accountAddr, verif
 
 	counters := k.GetCounters(ctx)
 	params := k.GetParams(ctx)
-	currentDay := uint64(ctx.BlockTime().Unix() / 86400)
-	currentEpoch := uint64(ctx.BlockHeight() / params.EpochLengthBlocks)
+	currentDay := uint64(ctx.BlockTime().Unix() / 86400)                 //nolint:gosec // G115: block time is always non-negative here
+	currentEpoch := uint64(ctx.BlockHeight() / params.EpochLengthBlocks) //nolint:gosec // G115: block height is always non-negative here
 	if counters.DayIndex != currentDay {
 		counters.DayIndex = currentDay
 		counters.MintedToday = 0

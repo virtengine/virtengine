@@ -57,6 +57,11 @@ var (
 	ErrInvalidResponse = errors.New("invalid response from waldur")
 )
 
+const (
+	usersMePath    = "/users/me/"
+	apiUsersMePath = "/api/users/me/"
+)
+
 // Config holds the Waldur client configuration
 type Config struct {
 	// BaseURL is the Waldur API base URL (e.g., "https://waldur.example.com/api")
@@ -415,7 +420,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body []byte
 // HealthCheck verifies the client can connect to Waldur
 func (c *Client) HealthCheck(ctx context.Context) error {
 	return c.doWithRetry(ctx, func() error {
-		respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, "/users/me/", nil)
+		respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, usersMePath, nil)
 		if err != nil {
 			return fmt.Errorf("health check failed: %w", err)
 		}
@@ -431,7 +436,7 @@ func (c *Client) GetCurrentUser(ctx context.Context) (*UserInfo, error) {
 	var user *UserInfo
 
 	err := c.doWithRetry(ctx, func() error {
-		respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, "/users/me/", nil)
+		respBody, statusCode, err := c.doRequest(ctx, http.MethodGet, usersMePath, nil)
 		if err != nil {
 			return err
 		}
@@ -554,7 +559,7 @@ func (c *Client) newAPIClient(baseURL string) (*client.ClientWithResponses, erro
 }
 
 func (c *Client) probeUsersMe(ctx context.Context, baseURL string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinBaseURL(baseURL, "/users/me/"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinBaseURL(baseURL, usersMePath), nil)
 	if err != nil {
 		return 0, err
 	}

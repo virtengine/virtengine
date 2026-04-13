@@ -30,6 +30,8 @@ import (
 	"github.com/virtengine/virtengine/pkg/security"
 )
 
+const testLiteral = "test"
+
 type domainVerificationChainBackend interface {
 	QueryDomainVerificationRecord(context.Context, sdk.AccAddress) (*keeper.DomainVerificationRecord, error)
 	ConfirmDomainVerification(context.Context, sdk.AccAddress, string) error
@@ -108,7 +110,7 @@ func newDomainVerificationTxClient(
 
 	backend := cfg.SignerKeyringBackend
 	if backend == "" {
-		backend = "test"
+		backend = testLiteral
 	}
 
 	in := strings.NewReader(cfg.SignerKeyringPassphrase + "\n" + cfg.SignerKeyringPassphrase + "\n")

@@ -31,7 +31,7 @@ func handleUpsertPolicyProposal(ctx sdk.Context, k Keeper, proposal *types.Upser
 	if err := proposal.ValidateBasic(); err != nil {
 		return err
 	}
-	_, err := NewMsgServerImpl(k).UpsertPolicy(sdk.WrapSDKContext(ctx), &types.MsgUpsertPolicy{
+	_, err := NewMsgServerImpl(k).UpsertPolicy(ctx, &types.MsgUpsertPolicy{
 		Authority: k.GetAuthority(),
 		Policy:    proposal.Policy,
 	})
@@ -45,7 +45,7 @@ func handleSetActivePolicyProposal(ctx sdk.Context, k Keeper, proposal *types.Se
 	if err := proposal.ValidateBasic(); err != nil {
 		return err
 	}
-	_, err := NewMsgServerImpl(k).SetActivePolicy(sdk.WrapSDKContext(ctx), &types.MsgSetActivePolicy{
+	_, err := NewMsgServerImpl(k).SetActivePolicy(ctx, &types.MsgSetActivePolicy{
 		Authority: k.GetAuthority(),
 		PolicyID:  proposal.PolicyID,
 	})
@@ -59,7 +59,7 @@ func handleUpdateParamsProposal(ctx sdk.Context, k Keeper, proposal *types.Updat
 	if err := proposal.ValidateBasic(); err != nil {
 		return err
 	}
-	_, err := NewMsgServerImpl(k).UpdateParams(sdk.WrapSDKContext(ctx), &types.MsgUpdateParams{
+	_, err := NewMsgServerImpl(k).UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: k.GetAuthority(),
 		Params:    proposal.Params,
 	})

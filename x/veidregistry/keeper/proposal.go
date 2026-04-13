@@ -35,9 +35,9 @@ func handleAddVerifierVersionProposal(ctx sdk.Context, k Keeper, proposal *types
 	ms := NewMsgServerImpl(k)
 	proposalID := proposal.Verifier.GovernanceProposalID
 	if proposalID == 0 {
-		proposalID = uint64(ctx.BlockHeight())
+		proposalID = uint64(ctx.BlockHeight()) //nolint:gosec // G115: block height is non-negative
 	}
-	_, err := ms.UpsertVerifierVersion(sdk.WrapSDKContext(ctx), &types.MsgUpsertVerifierVersion{
+	_, err := ms.UpsertVerifierVersion(ctx, &types.MsgUpsertVerifierVersion{
 		Authority: k.GetAuthority(),
 		Verifier: types.VerifierVersion{
 			VerifierID:          proposal.Verifier.VerifierID,
@@ -58,7 +58,7 @@ func handleAddVerifierVersionProposal(ctx sdk.Context, k Keeper, proposal *types
 	if err != nil {
 		return err
 	}
-	_, err = ms.ApproveVerifierVersion(sdk.WrapSDKContext(ctx), &types.MsgApproveVerifierVersion{
+	_, err = ms.ApproveVerifierVersion(ctx, &types.MsgApproveVerifierVersion{
 		Authority:            k.GetAuthority(),
 		VerifierID:           proposal.Verifier.VerifierID,
 		GovernanceProposalID: proposalID,
@@ -85,7 +85,7 @@ func handleUpdateParamsProposal(ctx sdk.Context, k Keeper, proposal *types.Updat
 	if err := proposal.ValidateBasic(); err != nil {
 		return err
 	}
-	_, err := NewMsgServerImpl(k).UpdateParams(sdk.WrapSDKContext(ctx), &types.MsgUpdateParams{
+	_, err := NewMsgServerImpl(k).UpdateParams(ctx, &types.MsgUpdateParams{
 		Authority: k.GetAuthority(),
 		Params:    proposal.Params,
 	})

@@ -20,7 +20,7 @@ import (
 func TestUpgradeRegistryIncludesAllExpectedVersions(t *testing.T) {
 	expected := expectedUpgradeNames()
 
-	var actual []string
+	actual := make([]string, 0, len(utypes.GetUpgradesList()))
 	for name := range utypes.GetUpgradesList() {
 		actual = append(actual, name)
 	}

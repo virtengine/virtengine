@@ -194,9 +194,9 @@ func TestSupportClient_ListIssues_Paginates(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/users/me/":
+		case usersMePath:
 			http.NotFound(w, r)
-		case "/api/users/me/":
+		case apiUsersMePath:
 			w.Header().Set("Content-Type", "application/json")
 			username := "support"
 			uuid := "550e8400-e29b-41d4-a716-446655440094"
@@ -245,9 +245,9 @@ func TestSupportClient_ListIssues_Paginates(t *testing.T) {
 func TestSupportClient_GetIssueByBackendID_DuplicateConflict(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/users/me/":
+		case usersMePath:
 			http.NotFound(w, r)
-		case "/api/users/me/":
+		case apiUsersMePath:
 			w.Header().Set("Content-Type", "application/json")
 			username := "support"
 			uuid := "550e8400-e29b-41d4-a716-446655440095"

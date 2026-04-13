@@ -163,7 +163,11 @@ func executeDaemon(ctx context.Context, config *daemonConfig, out io.Writer) err
 	if err := daemon.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start benchmark daemon: %w", err)
 	}
-	defer daemon.Stop()
+	defer func() {
+		if err := daemon.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to stop benchmark daemon: %v\n", err)
+		}
+	}()
 
 	fmt.Fprintf(out, "Starting benchmark daemon for provider %s (cluster: %s)\n",
 		config.providerAddress, config.clusterID)

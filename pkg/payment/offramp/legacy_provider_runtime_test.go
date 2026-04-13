@@ -16,11 +16,13 @@ import (
 	"github.com/virtengine/virtengine/pkg/payment"
 )
 
+const achSecretKey = "ach_secret"
+
 func TestConfigValidateRequiresBaseURLForDirectACH(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.DefaultProvider = ProviderACH
 	cfg.ACHConfig.Provider = "dwolla"
-	cfg.ACHConfig.SecretKey = "ach_secret"
+	cfg.ACHConfig.SecretKey = achSecretKey
 	cfg.ACHConfig.BaseURL = ""
 
 	if err := cfg.Validate(); err == nil {
@@ -31,7 +33,7 @@ func TestConfigValidateRequiresBaseURLForDirectACH(t *testing.T) {
 func TestNewServiceUsesHTTPAMLClientWhenConfigured(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.DefaultProvider = ProviderACH
-	cfg.ACHConfig.SecretKey = "ach_secret"
+	cfg.ACHConfig.SecretKey = achSecretKey
 	cfg.AMLConfig.Provider = "sumsub"
 	cfg.AMLConfig.APIURL = "https://aml.example.test"
 	cfg.AMLConfig.APIKey = "aml_secret"
@@ -55,7 +57,7 @@ func TestNewServiceUsesHTTPAMLClientWhenConfigured(t *testing.T) {
 func TestNewServiceRejectsPartialAMLProviderConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.DefaultProvider = ProviderACH
-	cfg.ACHConfig.SecretKey = "ach_secret"
+	cfg.ACHConfig.SecretKey = achSecretKey
 	cfg.AMLConfig.Provider = "sumsub"
 	cfg.AMLConfig.APIURL = "https://aml.example.test"
 	cfg.AMLConfig.APIKey = ""
@@ -69,7 +71,7 @@ func TestNewServiceUsesDirectACHProviderWhenConfigured(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.DefaultProvider = ProviderACH
 	cfg.ACHConfig.Provider = "dwolla"
-	cfg.ACHConfig.SecretKey = "ach_secret"
+	cfg.ACHConfig.SecretKey = achSecretKey
 	cfg.ACHConfig.BaseURL = "https://direct-ach.example.test"
 	cfg.AMLConfig.Enabled = false
 
@@ -169,7 +171,7 @@ func TestDirectACHAdapterOperations(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("expected POST /payouts, got %s", r.Method)
 		}
-		if got := r.Header.Get("Authorization"); got != "Bearer ach_secret" {
+		if got := r.Header.Get("Authorization"); got != "Bearer "+achSecretKey {
 			t.Fatalf("unexpected auth header: %s", got)
 		}
 		if got := r.Header.Get("Idempotency-Key"); got != "idem_123" {
@@ -245,7 +247,7 @@ func TestDirectACHAdapterOperations(t *testing.T) {
 	adapter, err := NewDirectACHAdapter(ACHConfig{
 		Provider:        "dwolla",
 		BaseURL:         server.URL,
-		SecretKey:       "ach_secret",
+		SecretKey:       achSecretKey,
 		WebhookSecret:   "whsec_direct",
 		SourceAccountID: "treasury_123",
 	})
@@ -316,7 +318,7 @@ func TestDirectACHAdapterWebhookValidationAndParsing(t *testing.T) {
 	adapter, err := NewDirectACHAdapter(ACHConfig{
 		Provider:      "dwolla",
 		BaseURL:       "https://direct-ach.example.test",
-		SecretKey:     "ach_secret",
+		SecretKey:     achSecretKey,
 		WebhookSecret: "whsec_direct",
 	})
 	if err != nil {
@@ -363,7 +365,7 @@ func TestNewDirectACHAdapterRequiresSecretAndBaseURL(t *testing.T) {
 
 	_, err = NewDirectACHAdapter(ACHConfig{
 		Provider:  "dwolla",
-		SecretKey: "ach_secret",
+		SecretKey: achSecretKey,
 		BaseURL:   "",
 	})
 	if err == nil {
@@ -374,7 +376,7 @@ func TestNewDirectACHAdapterRequiresSecretAndBaseURL(t *testing.T) {
 func TestNewServiceUsesMockAMLClientWithoutProviderConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.DefaultProvider = ProviderACH
-	cfg.ACHConfig.SecretKey = "ach_secret"
+	cfg.ACHConfig.SecretKey = achSecretKey
 	cfg.AMLConfig.Enabled = true
 	cfg.AMLConfig.Provider = ""
 	cfg.AMLConfig.APIURL = ""
@@ -408,7 +410,7 @@ func TestDirectACHAdapterCancelMapsProviderErrors(t *testing.T) {
 	adapter, err := NewDirectACHAdapter(ACHConfig{
 		Provider:  "dwolla",
 		BaseURL:   server.URL,
-		SecretKey: "ach_secret",
+		SecretKey: achSecretKey,
 	})
 	if err != nil {
 		t.Fatalf("NewDirectACHAdapter() error = %v", err)

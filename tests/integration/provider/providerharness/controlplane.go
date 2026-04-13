@@ -631,15 +631,15 @@ func buildVolumes(specs []provider_daemon.K8sVolumeSpec) []corev1.Volume {
 		volume := corev1.Volume{Name: spec.Name}
 		switch {
 		case spec.PVCName != "":
-			volume.VolumeSource.PersistentVolumeClaim = &corev1.PersistentVolumeClaimVolumeSource{
+			volume.PersistentVolumeClaim = &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: spec.PVCName,
 			}
 		case spec.SecretRef != "":
-			volume.VolumeSource.Secret = &corev1.SecretVolumeSource{
+			volume.Secret = &corev1.SecretVolumeSource{
 				SecretName: spec.SecretRef,
 			}
 		default:
-			volume.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
+			volume.EmptyDir = &corev1.EmptyDirVolumeSource{}
 		}
 		volumes = append(volumes, volume)
 	}
@@ -662,17 +662,17 @@ func buildProbe(spec *provider_daemon.K8sProbeSpec) *corev1.Probe {
 		if scheme == "" {
 			scheme = corev1.URISchemeHTTP
 		}
-		probe.ProbeHandler.HTTPGet = &corev1.HTTPGetAction{
+		probe.HTTPGet = &corev1.HTTPGetAction{
 			Path:   spec.HTTPGet.Path,
 			Port:   intstr.FromInt32(spec.HTTPGet.Port),
 			Scheme: scheme,
 		}
 	} else if spec.TCPSocket != nil {
-		probe.ProbeHandler.TCPSocket = &corev1.TCPSocketAction{
+		probe.TCPSocket = &corev1.TCPSocketAction{
 			Port: intstr.FromInt32(spec.TCPSocket.Port),
 		}
 	} else if spec.Exec != nil {
-		probe.ProbeHandler.Exec = &corev1.ExecAction{Command: append([]string(nil), spec.Exec.Command...)}
+		probe.Exec = &corev1.ExecAction{Command: append([]string(nil), spec.Exec.Command...)}
 	}
 	return probe
 }

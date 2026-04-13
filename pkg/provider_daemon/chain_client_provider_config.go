@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -600,19 +601,19 @@ func deriveConfigVersion(
 ) uint64 {
 	var version uint64
 	for _, cluster := range clusters {
-		version = maxUint64(version, uint64(maxInt64(0, cluster.GetBlockHeight())))
+		version = maxUint64(version, safeUint64FromInt64(cluster.GetBlockHeight()))
 	}
 	for _, offering := range offerings {
-		version = maxUint64(version, uint64(maxInt64(0, offering.GetBlockHeight())))
+		version = maxUint64(version, safeUint64FromInt64(offering.GetBlockHeight()))
 	}
 	for _, allocation := range allocations {
-		version = maxUint64(version, uint64(maxInt64(0, allocation.GetBlockHeight())))
+		version = maxUint64(version, safeUint64FromInt64(allocation.GetBlockHeight()))
 	}
 	if version > 0 {
 		return version
 	}
 	if !lastUpdated.IsZero() && lastUpdated.Unix() > 0 {
-		return uint64(lastUpdated.Unix())
+		return uint64(lastUpdated.Unix()) //nolint:gosec // G115: timestamp is guaranteed non-negative here
 	}
 	return 1
 }
@@ -680,11 +681,18 @@ func maxUint64(current, candidate uint64) uint64 {
 	return current
 }
 
-func maxInt64(current, candidate int64) int64 {
-	if candidate > current {
-		return candidate
+func safeUint64FromInt64(value int64) uint64 {
+	if value <= 0 {
+		return 0
 	}
-	return current
+	return uint64(value) //nolint:gosec // G115: value is known non-negative here
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > uint64(math.MaxInt64) {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 func mergeCurrency(current, candidate string) (string, error) {
@@ -732,7 +740,7 @@ func orderRequirementsFromSpec(spec deploymentv1beta4.GroupSpec) (ResourceRequir
 		}
 
 		if cpu := resourceUnit.GetCPU(); cpu != nil {
-			requirements.CPUCores += int64(cpu.GetUnits().Value()) * count
+			requirements.CPUCores += safeInt64FromUint64(cpu.GetUnits().Value()) * count
 		}
 		if memory := resourceUnit.GetMemory(); memory != nil {
 			requirements.MemoryGB += bytesToRoundedGB(memory.GetQuantity().Value()) * count
@@ -741,7 +749,7 @@ func orderRequirementsFromSpec(spec deploymentv1beta4.GroupSpec) (ResourceRequir
 			requirements.StorageGB += bytesToRoundedGB(volume.GetQuantity().Value()) * count
 		}
 		if gpu := resourceUnit.GetGPU(); gpu != nil {
-			gpuUnits := int64(gpu.GetUnits().Value()) * count
+			gpuUnits := safeInt64FromUint64(gpu.GetUnits().Value()) * count
 			requirements.GPUs += gpuUnits
 			if requirements.GPUType == "" {
 				requirements.GPUType = extractGPUType(gpu.GetAttributes())
@@ -820,7 +828,10 @@ func bytesToRoundedGB(bytes uint64) int64 {
 	if bytes == 0 {
 		return 0
 	}
-	return int64((bytes + bytesPerGiB - 1) / bytesPerGiB)
+	if bytes > math.MaxUint64-bytesPerGiB+1 {
+		return math.MaxInt64
+	}
+	return safeInt64FromUint64((bytes + bytesPerGiB - 1) / bytesPerGiB)
 }
 
 func extractRequirementRegion(attributes attrv1.Attributes) string {

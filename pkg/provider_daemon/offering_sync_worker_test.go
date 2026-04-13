@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
@@ -203,9 +204,7 @@ func TestOfferingSyncState(t *testing.T) {
 	t.Run("mark synced", func(t *testing.T) {
 		state.MarkSynced(testOfferingID, "waldur-uuid-1", "checksum123", 1)
 		record := state.GetRecord(testOfferingID)
-		if record == nil {
-			t.Fatal("record should exist")
-		}
+		require.NotNil(t, record)
 		if record.State != SyncStateSynced {
 			t.Errorf("state = %v, want synced", record.State)
 		}

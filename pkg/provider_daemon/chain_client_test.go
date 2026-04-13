@@ -415,7 +415,7 @@ func TestGetProviderConfig_UsesOnChainState(t *testing.T) {
 
 	client := &rpcChainClient{
 		config: RPCChainClientConfig{
-			RequestTimeout: time.Second,
+			RequestTimeout: 5 * time.Second,
 		},
 		hpcQuery: &fakeProviderHPCQueryClient{
 			clustersByProvider: map[string][]hpcv1.HPCCluster{
@@ -477,7 +477,7 @@ func TestGetProviderConfig_RejectsIncompleteActivePricing(t *testing.T) {
 
 	client := &rpcChainClient{
 		config: RPCChainClientConfig{
-			RequestTimeout: time.Second,
+			RequestTimeout: 5 * time.Second,
 		},
 		hpcQuery: &fakeProviderHPCQueryClient{
 			clustersByProvider: map[string][]hpcv1.HPCCluster{
@@ -536,7 +536,7 @@ func TestGetBillingRules_UsesProviderStoreRules(t *testing.T) {
 
 	client := &rpcChainClient{
 		config: RPCChainClientConfig{
-			RequestTimeout: time.Second,
+			RequestTimeout: 5 * time.Second,
 		},
 		storeQuery: &fakeProviderStoreQueryClient{
 			responses: map[string][]byte{
@@ -562,7 +562,7 @@ func TestGetBillingRules_FallsBackToOnChainParamsDefaultDenom(t *testing.T) {
 
 	client := &rpcChainClient{
 		config: RPCChainClientConfig{
-			RequestTimeout: time.Second,
+			RequestTimeout: 5 * time.Second,
 		},
 		storeQuery: &fakeProviderStoreQueryClient{
 			responses: map[string][]byte{
@@ -659,20 +659,20 @@ func TestPlaceBid_PreservesResourcesOffer(t *testing.T) {
 	}()
 	defer server.Stop()
 
-	conn, err := grpc.DialContext(
-		context.Background(),
-		"bufnet",
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return listener.DialContext(ctx)
 		}),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	require.NoError(t, err)
+	conn.Connect()
 	defer conn.Close()
 
 	client := &rpcChainClient{
 		config: RPCChainClientConfig{
-			RequestTimeout: time.Second,
+			RequestTimeout: 5 * time.Second,
 		},
 		grpcConn: conn,
 	}

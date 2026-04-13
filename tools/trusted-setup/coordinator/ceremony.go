@@ -77,10 +77,10 @@ func InitCeremony(state State, circuitName string, minContributors int, beacon s
 	}
 	phase1Hash := transcript.HashBytes(phase1Bytes)
 
-	if err := writeFileAtomic(filepath.Join(state.Phase1Dir(), phase1InitialFile), phase1Bytes, 0o600); err != nil {
+	if err := writeFileAtomic(filepath.Join(state.Phase1Dir(), phase1InitialFile), phase1Bytes); err != nil {
 		return nil, fmt.Errorf("write phase1 initial: %w", err)
 	}
-	if err := writeFileAtomic(filepath.Join(state.Phase2Dir(), "r1cs.bin"), r1csBytes, 0o600); err != nil {
+	if err := writeFileAtomic(filepath.Join(state.Phase2Dir(), "r1cs.bin"), r1csBytes); err != nil {
 		return nil, fmt.Errorf("write r1cs: %w", err)
 	}
 
@@ -143,7 +143,7 @@ func StartPhase2(state State) error {
 	if err != nil {
 		return fmt.Errorf("serialize commons: %w", err)
 	}
-	if err := writeFileAtomic(filepath.Join(state.Phase1Dir(), "commons.bin"), commonsBytes, 0o600); err != nil {
+	if err := writeFileAtomic(filepath.Join(state.Phase1Dir(), "commons.bin"), commonsBytes); err != nil {
 		return fmt.Errorf("write commons: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func StartPhase2(state State) error {
 	} else if !os.IsNotExist(readErr) {
 		return readErr
 	}
-	if err := writeFileAtomic(phase2InitialPath, phase2Bytes, 0o600); err != nil {
+	if err := writeFileAtomic(phase2InitialPath, phase2Bytes); err != nil {
 		return fmt.Errorf("write phase2 initial: %w", err)
 	}
 	tr.Phase2.InitialHash = transcript.HashBytes(phase2Bytes)
@@ -219,7 +219,7 @@ func AcceptPhase1Contribution(state State, payload []byte, meta ContributionMeta
 	index := len(tr.Phase1.Contributions) + 1
 	filename := fmt.Sprintf("contrib-%04d.bin", index)
 	outPath := filepath.Join(state.Phase1Dir(), filename)
-	if err := writeFileAtomic(outPath, payload, 0o600); err != nil {
+	if err := writeFileAtomic(outPath, payload); err != nil {
 		return fmt.Errorf("write contribution: %w", err)
 	}
 	now := state.Now()
@@ -281,7 +281,7 @@ func AcceptPhase2Contribution(state State, payload []byte, meta ContributionMeta
 	index := len(tr.Phase2.Contributions) + 1
 	filename := fmt.Sprintf("contrib-%04d.bin", index)
 	outPath := filepath.Join(state.Phase2Dir(), filename)
-	if err := writeFileAtomic(outPath, payload, 0o600); err != nil {
+	if err := writeFileAtomic(outPath, payload); err != nil {
 		return fmt.Errorf("write contribution: %w", err)
 	}
 	now := state.Now()
@@ -359,10 +359,10 @@ func Finalize(state State, parametersVersion string) (*groth16.ProvingKey, *grot
 	} else if !os.IsNotExist(readErr) {
 		return nil, nil, readErr
 	}
-	if err := writeFileAtomic(provingKeyPath, pkBytes, 0o600); err != nil {
+	if err := writeFileAtomic(provingKeyPath, pkBytes); err != nil {
 		return nil, nil, err
 	}
-	if err := writeFileAtomic(verifyingKeyPath, vkBytes, 0o600); err != nil {
+	if err := writeFileAtomic(verifyingKeyPath, vkBytes); err != nil {
 		return nil, nil, err
 	}
 

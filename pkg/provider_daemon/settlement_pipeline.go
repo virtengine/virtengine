@@ -20,6 +20,12 @@ import (
 	"github.com/virtengine/virtengine/pkg/usage"
 )
 
+const (
+	usageTypeCompute = "compute"
+	usageTypeGPU     = "gpu"
+	usageTypeStorage = "storage"
+)
+
 // SettlementConfig configures the settlement pipeline.
 type SettlementConfig struct {
 	// ProviderAddress is the provider's on-chain address.
@@ -544,7 +550,7 @@ func (p *SettlementPipeline) ProcessUsageToLineItems(record *UsageRecord) ([]*us
 	// Convert Storage usage
 	if record.Metrics.StorageByteSeconds > 0 {
 		storageGBHours := float64(record.Metrics.StorageByteSeconds) / (1024.0 * 1024.0 * 1024.0 * 3600.0)
-		item := p.createLineItem(record, "storage", storageGBHours, "gb-hours", record.PricingInputs.AgreedStorageRate, now)
+		item := p.createLineItem(record, usageTypeStorage, storageGBHours, "gb-hours", record.PricingInputs.AgreedStorageRate, now)
 		if item != nil {
 			items = append(items, item)
 		}
@@ -553,7 +559,7 @@ func (p *SettlementPipeline) ProcessUsageToLineItems(record *UsageRecord) ([]*us
 	// Convert GPU usage
 	if record.Metrics.GPUSeconds > 0 {
 		gpuHours := float64(record.Metrics.GPUSeconds) / 3600.0
-		item := p.createLineItem(record, "gpu", gpuHours, "gpu-hours", record.PricingInputs.AgreedGPURate, now)
+		item := p.createLineItem(record, usageTypeGPU, gpuHours, "gpu-hours", record.PricingInputs.AgreedGPURate, now)
 		if item != nil {
 			items = append(items, item)
 		}
@@ -835,12 +841,12 @@ func (p *SettlementPipeline) buildUsageReports(record *UsageRecord) []*ChainUsag
 
 	storageUnits := usageUnitsFromByteSeconds(record.Metrics.StorageByteSeconds)
 	if storageUnits > 0 {
-		reports = append(reports, p.buildReport(record, "storage", storageUnits, record.PricingInputs.AgreedStorageRate))
+		reports = append(reports, p.buildReport(record, usageTypeStorage, storageUnits, record.PricingInputs.AgreedStorageRate))
 	}
 
 	gpuUnits := usageUnitsFromSeconds(record.Metrics.GPUSeconds)
 	if gpuUnits > 0 {
-		reports = append(reports, p.buildReport(record, "gpu", gpuUnits, record.PricingInputs.AgreedGPURate))
+		reports = append(reports, p.buildReport(record, usageTypeGPU, gpuUnits, record.PricingInputs.AgreedGPURate))
 	}
 
 	networkUnits := usageUnitsFromBytes(record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut)
@@ -953,15 +959,15 @@ func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 func (p *SettlementPipeline) determineUsageType(record *UsageRecord) string {
 	// Return the type with highest usage
 	maxUsage := record.Metrics.CPUMilliSeconds
-	usageType := "compute"
+	usageType := usageTypeCompute
 
 	if record.Metrics.GPUSeconds*1000 > maxUsage {
 		maxUsage = record.Metrics.GPUSeconds * 1000
-		usageType = "gpu"
+		usageType = usageTypeGPU
 	}
 	if record.Metrics.StorageByteSeconds/(1024*1024*1024) > maxUsage {
 		maxUsage = record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024)
-		usageType = "storage"
+		usageType = usageTypeStorage
 	}
 	networkBytes := record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut
 	if networkBytes/(1024*1024) > maxUsage {
@@ -978,11 +984,11 @@ func (p *SettlementPipeline) getPrimaryRate(record *UsageRecord, usageType strin
 	var rateStr string
 
 	switch usageType {
-	case "compute":
+	case usageTypeCompute:
 		rateStr = record.PricingInputs.AgreedCPURate
-	case "gpu":
+	case usageTypeGPU:
 		rateStr = record.PricingInputs.AgreedGPURate
-	case "storage":
+	case usageTypeStorage:
 		rateStr = record.PricingInputs.AgreedStorageRate
 	case "network":
 		rateStr = record.PricingInputs.AgreedNetworkRate

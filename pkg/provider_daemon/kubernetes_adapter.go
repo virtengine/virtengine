@@ -814,7 +814,7 @@ func (ka *KubernetesAdapter) GetStatus(ctx context.Context, workloadID string) (
 		allReady = false
 	}
 
-	message := workload.StatusMessage
+	var message string
 	if len(messages) > 0 {
 		message = strings.Join(messages, "; ")
 	} else {
@@ -834,7 +834,7 @@ func (ka *KubernetesAdapter) GetStatus(ctx context.Context, workloadID string) (
 		}
 	}
 
-	desiredState := workload.State
+	var desiredState WorkloadState
 	switch workload.State {
 	case WorkloadStatePaused, WorkloadStateStopping, WorkloadStateStopped, WorkloadStateTerminated:
 		desiredState = workload.State

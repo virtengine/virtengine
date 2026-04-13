@@ -3,6 +3,7 @@ package providerharness
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 const (
 	defaultSLURMNodeCPUs     int64 = 64
 	defaultSLURMNodeMemoryMB int64 = 256000
+	slurmControlCommand            = "scontrol"
 )
 
 // SLURMExecCall records an ExecInPod call made by the SLURM adapter.
@@ -377,18 +379,18 @@ func (h *SLURMClusterHarness) ExecInPod(
 	}
 
 	switch {
-	case len(command) >= 2 && command[0] == "scontrol" && command[1] == "ping":
+	case len(command) >= 2 && command[0] == slurmControlCommand && command[1] == "ping":
 		return "Slurmctld(primary) at " + podName + " is UP", nil
 	case len(command) >= 5 && command[0] == "sinfo" && command[1] == "-N" && command[2] == "-h" && command[3] == "-o":
 		return h.renderSinfo(namespace, releaseName, command[4]), nil
 	case len(command) >= 5 && command[0] == "sinfo" && command[1] == "-n" && command[3] == "-h" && command[4] == "-o":
 		nodeName := command[2]
 		return h.renderSingleNodeState(namespace, releaseName, nodeName, command[5]), nil
-	case len(command) >= 4 && command[0] == "scontrol" && command[1] == "update":
+	case len(command) >= 4 && command[0] == slurmControlCommand && command[1] == "update":
 		return h.handleScontrolUpdate(namespace, releaseName, command[2:])
-	case len(command) >= 3 && command[0] == "scontrol" && command[1] == "create" && command[2] == "node":
+	case len(command) >= 3 && command[0] == slurmControlCommand && command[1] == "create" && command[2] == "node":
 		return h.handleScontrolCreateNode(namespace, releaseName, command[3:])
-	case len(command) >= 3 && command[0] == "scontrol" && command[1] == "delete":
+	case len(command) >= 3 && command[0] == slurmControlCommand && command[1] == "delete":
 		return h.handleScontrolDeleteNode(namespace, releaseName, command[2:])
 	default:
 		return "", fmt.Errorf("unsupported slurm exec command: %v", command)
@@ -846,16 +848,46 @@ func computeReplicaCount(values map[string]interface{}) int32 {
 func normalizeReplicaValue(value interface{}, fallback int32) int32 {
 	switch typed := value.(type) {
 	case int:
-		return int32(typed)
+		return safeInt32FromInt(typed)
 	case int32:
 		return typed
 	case int64:
-		return int32(typed)
+		return safeInt32FromInt64(typed)
 	case float64:
-		return int32(typed)
+		return safeInt32FromFloat64(typed)
 	default:
 		return fallback
 	}
+}
+
+func safeInt32FromInt(value int) int32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)>>1) {
+		return int32(^uint32(0) >> 1)
+	}
+	return int32(value)
+}
+
+func safeInt32FromInt64(value int64) int32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int64(^uint32(0)>>1) {
+		return int32(^uint32(0) >> 1)
+	}
+	return int32(value)
+}
+
+func safeInt32FromFloat64(value float64) int32 {
+	if math.IsNaN(value) || value <= 0 {
+		return 0
+	}
+	if value > float64(int32(^uint32(0)>>1)) {
+		return int32(^uint32(0) >> 1)
+	}
+	return int32(value)
 }
 
 func componentContainerName(component string) string {

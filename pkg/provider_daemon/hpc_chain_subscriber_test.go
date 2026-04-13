@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -284,9 +285,7 @@ func TestHPCChainSubscriberWithStats_GetStats(t *testing.T) {
 
 	// Get stats before start
 	stats := sub.GetStats()
-	if stats == nil {
-		t.Fatal("GetStats() returned nil")
-	}
+	require.NotNil(t, stats)
 
 	if stats.JobsReceived != 0 {
 		t.Errorf("Expected JobsReceived to be 0, got %d", stats.JobsReceived)

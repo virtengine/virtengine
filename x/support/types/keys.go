@@ -308,7 +308,7 @@ func SupportPurgeQueueByRequestKey(requestID string) []byte {
 // EncodeSupportQueueTime encodes a unix timestamp into sortable bytes.
 func EncodeSupportQueueTime(unix int64) []byte {
 	bz := make([]byte, supportQueueTimeLength)
-	binary.BigEndian.PutUint64(bz, uint64(unix)^(uint64(1)<<63))
+	binary.BigEndian.PutUint64(bz, uint64(unix)^(uint64(1)<<63)) //nolint:gosec // G115: signed timestamps are deliberately biased for sorting
 	return bz
 }
 
@@ -317,7 +317,7 @@ func DecodeSupportQueueTime(bz []byte) (int64, error) {
 	if len(bz) != supportQueueTimeLength {
 		return 0, fmt.Errorf("invalid queue time length: %d", len(bz))
 	}
-	return int64(binary.BigEndian.Uint64(bz) ^ (uint64(1) << 63)), nil
+	return int64(binary.BigEndian.Uint64(bz) ^ (uint64(1) << 63)), nil //nolint:gosec // G115: reverse of EncodeSupportQueueTime biasing
 }
 
 func parseSupportQueueKey(key []byte, prefix []byte) (int64, string, error) {

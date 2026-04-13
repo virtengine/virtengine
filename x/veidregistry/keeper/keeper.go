@@ -205,7 +205,7 @@ func (k Keeper) CountReadyValidators(ctx sdk.Context, verifierID string) (uint32
 		}
 		orgs[orgKey] = struct{}{}
 	}
-	return ready, uint32(len(orgs))
+	return ready, safeUint32FromInt(len(orgs))
 }
 
 func (k Keeper) ListQueuedVerifierVersions(ctx sdk.Context) []types.VerifierVersion {
@@ -237,6 +237,16 @@ func (k Keeper) EligibleVerifierVersions(ctx sdk.Context) []types.VerifierVersio
 	})
 
 	return eligible
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)>>1) {
+		return ^uint32(0)
+	}
+	return uint32(value)
 }
 
 func (k Keeper) ActivateReadyVerifiers(ctx sdk.Context) error {

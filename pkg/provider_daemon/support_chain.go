@@ -114,7 +114,7 @@ func newSupportTxClient(
 
 	backend := cfg.SignerKeyringBackend
 	if backend == "" {
-		backend = "test"
+		backend = testLiteral
 	}
 
 	in := strings.NewReader(cfg.SignerKeyringPassphrase + "\n" + cfg.SignerKeyringPassphrase + "\n")

@@ -7,7 +7,7 @@ import (
 
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 	gogogrpc "github.com/cosmos/gogoproto/grpc"
-	"github.com/golang/protobuf/proto"
+	proto "github.com/golang/protobuf/proto" //nolint:staticcheck // generated gateway compatibility
 	"github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/utilities"
@@ -175,29 +175,17 @@ func registerRolesGatewayRoutes(
 	params func(context.Context, *rolesv1.QueryParamsRequest) (proto.Message, error),
 	hasRole func(context.Context, *rolesv1.QueryHasRoleRequest) (proto.Message, error),
 ) {
-	mux.Handle("GET", patternRolesAccountRoles, rolesGatewayHandler(ctx, mux, func(r *http.Request, pathParams map[string]string) (*rolesv1.QueryAccountRolesRequest, error) {
-		return requestRolesAccountRoles(r, pathParams)
-	}, accountRoles))
+	mux.Handle("GET", patternRolesAccountRoles, rolesGatewayHandler(ctx, mux, requestRolesAccountRoles, accountRoles))
 
-	mux.Handle("GET", patternRolesRoleMembers, rolesGatewayHandler(ctx, mux, func(r *http.Request, pathParams map[string]string) (*rolesv1.QueryRoleMembersRequest, error) {
-		return requestRolesRoleMembers(r, pathParams)
-	}, roleMembers))
+	mux.Handle("GET", patternRolesRoleMembers, rolesGatewayHandler(ctx, mux, requestRolesRoleMembers, roleMembers))
 
-	mux.Handle("GET", patternRolesAccountState, rolesGatewayHandler(ctx, mux, func(r *http.Request, pathParams map[string]string) (*rolesv1.QueryAccountStateRequest, error) {
-		return requestRolesAccountState(r, pathParams)
-	}, accountState))
+	mux.Handle("GET", patternRolesAccountState, rolesGatewayHandler(ctx, mux, requestRolesAccountState, accountState))
 
-	mux.Handle("GET", patternRolesGenesis, rolesGatewayHandler(ctx, mux, func(r *http.Request, pathParams map[string]string) (*rolesv1.QueryGenesisAccountsRequest, error) {
-		return requestRolesGenesisAccounts(r, pathParams)
-	}, genesisAccounts))
+	mux.Handle("GET", patternRolesGenesis, rolesGatewayHandler(ctx, mux, requestRolesGenesisAccounts, genesisAccounts))
 
-	mux.Handle("GET", patternRolesParams, rolesGatewayHandler(ctx, mux, func(r *http.Request, pathParams map[string]string) (*rolesv1.QueryParamsRequest, error) {
-		return &rolesv1.QueryParamsRequest{}, nil
-	}, params))
+	mux.Handle("GET", patternRolesParams, rolesGatewayHandler(ctx, mux, requestRolesParams, params))
 
-	mux.Handle("GET", patternRolesHasRole, rolesGatewayHandler(ctx, mux, func(r *http.Request, pathParams map[string]string) (*rolesv1.QueryHasRoleRequest, error) {
-		return requestRolesHasRole(r, pathParams)
-	}, hasRole))
+	mux.Handle("GET", patternRolesHasRole, rolesGatewayHandler(ctx, mux, requestRolesHasRole, hasRole))
 }
 
 func rolesGatewayHandler[T proto.Message](
@@ -272,6 +260,10 @@ func requestRolesGenesisAccounts(req *http.Request, _ map[string]string) (*roles
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	return protoReq, nil
+}
+
+func requestRolesParams(_ *http.Request, _ map[string]string) (*rolesv1.QueryParamsRequest, error) {
+	return &rolesv1.QueryParamsRequest{}, nil
 }
 
 func requestRolesHasRole(_ *http.Request, pathParams map[string]string) (*rolesv1.QueryHasRoleRequest, error) {

@@ -134,6 +134,12 @@ func getMFAProofProvider(msg sdk.Msg) (mfatypes.MFAProofProvider, bool, error) {
 	}
 
 	switch typed := msg.(type) {
+	case *veidv1.MsgRebindWallet:
+		proof, err := decodeSerializedMFAProof(typed.GetMfaProof())
+		if err != nil {
+			return nil, true, mfatypes.ErrInvalidProof.Wrapf("invalid serialized MFA proof: %v", err)
+		}
+		return newAdaptedMFAProofProvider(proof, typed.GetDeviceFingerprint(), ""), true, nil
 	case interface {
 		GetMfaProof() *mfapb.MFAProof
 		GetDeviceFingerprint() string
@@ -143,12 +149,6 @@ func getMFAProofProvider(msg sdk.Msg) (mfatypes.MFAProofProvider, bool, error) {
 		GetMfaProof() []byte
 		GetDeviceFingerprint() string
 	}:
-		proof, err := decodeSerializedMFAProof(typed.GetMfaProof())
-		if err != nil {
-			return nil, true, mfatypes.ErrInvalidProof.Wrapf("invalid serialized MFA proof: %v", err)
-		}
-		return newAdaptedMFAProofProvider(proof, typed.GetDeviceFingerprint(), ""), true, nil
-	case *veidv1.MsgRebindWallet:
 		proof, err := decodeSerializedMFAProof(typed.GetMfaProof())
 		if err != nil {
 			return nil, true, mfatypes.ErrInvalidProof.Wrapf("invalid serialized MFA proof: %v", err)
@@ -210,7 +210,7 @@ func (d MFAGatingDecorator) resolveSensitiveTxType(ctx sdk.Context, msg sdk.Msg)
 }
 
 func (d MFAGatingDecorator) resolveBankSendSensitiveTxType(ctx sdk.Context, msg sdk.Msg) (mfatypes.SensitiveTransactionType, bool) {
-	amount, _, ok := extractTransactionAmount(msg)
+	amount, ok := extractTransactionAmount(msg)
 	if !ok {
 		return mfatypes.SensitiveTxUnspecified, false
 	}
@@ -256,7 +256,7 @@ func (d MFAGatingDecorator) shouldEnforceValueThreshold(
 		return true
 	}
 
-	amount, _, ok := extractTransactionAmount(msg)
+	amount, ok := extractTransactionAmount(msg)
 	if !ok {
 		return true
 	}
@@ -272,36 +272,36 @@ func (d MFAGatingDecorator) sensitiveTxConfig(ctx sdk.Context, txType mfatypes.S
 	return defaultSensitiveTxConfig(txType)
 }
 
-func extractTransactionAmount(msg sdk.Msg) (sdkmath.Int, string, bool) {
+func extractTransactionAmount(msg sdk.Msg) (sdkmath.Int, bool) {
 	switch m := msg.(type) {
 	case *banktypes.MsgSend:
 		return selectCoinAmount(m.Amount)
 	case *dv1beta3.MsgCreateDeployment:
-		return m.Deposit.Amount, m.Deposit.Denom, true
+		return m.Deposit.Amount, true
 	case *dv1beta4.MsgCreateDeployment:
 		return depositAmount(m.Deposit)
 	default:
-		return sdkmath.Int{}, "", false
+		return sdkmath.Int{}, false
 	}
 }
 
-func depositAmount(deposit depositv1.Deposit) (sdkmath.Int, string, bool) {
-	return deposit.Amount.Amount, deposit.Amount.Denom, true
+func depositAmount(deposit depositv1.Deposit) (sdkmath.Int, bool) {
+	return deposit.Amount.Amount, true
 }
 
-func selectCoinAmount(coins sdk.Coins) (sdkmath.Int, string, bool) {
+func selectCoinAmount(coins sdk.Coins) (sdkmath.Int, bool) {
 	if len(coins) == 0 {
-		return sdkmath.Int{}, "", false
+		return sdkmath.Int{}, false
 	}
 
 	for _, coin := range coins {
 		if coin.Denom == "uve" {
-			return coin.Amount, coin.Denom, true
+			return coin.Amount, true
 		}
 	}
 
 	coin := coins[0]
-	return coin.Amount, coin.Denom, true
+	return coin.Amount, true
 }
 
 func requiredFactorsError(
@@ -419,7 +419,26 @@ func convertProtoMFAProof(proof *mfapb.MFAProof) *mfatypes.MFAProof {
 
 	verifiedFactors := make([]mfatypes.FactorType, len(proof.VerifiedFactors))
 	for i, factor := range proof.VerifiedFactors {
-		verifiedFactors[i] = mfatypes.FactorType(factor)
+		switch factor {
+		case mfapb.FactorTypeUnspecified:
+			verifiedFactors[i] = mfatypes.FactorTypeUnspecified
+		case mfapb.FactorTypeTOTP:
+			verifiedFactors[i] = mfatypes.FactorTypeTOTP
+		case mfapb.FactorTypeFIDO2:
+			verifiedFactors[i] = mfatypes.FactorTypeFIDO2
+		case mfapb.FactorTypeSMS:
+			verifiedFactors[i] = mfatypes.FactorTypeSMS
+		case mfapb.FactorTypeEmail:
+			verifiedFactors[i] = mfatypes.FactorTypeEmail
+		case mfapb.FactorTypeVEID:
+			verifiedFactors[i] = mfatypes.FactorTypeVEID
+		case mfapb.FactorTypeTrustedDevice:
+			verifiedFactors[i] = mfatypes.FactorTypeTrustedDevice
+		case mfapb.FactorTypeHardwareKey:
+			verifiedFactors[i] = mfatypes.FactorTypeHardwareKey
+		default:
+			verifiedFactors[i] = mfatypes.FactorTypeUnspecified
+		}
 	}
 
 	return &mfatypes.MFAProof{

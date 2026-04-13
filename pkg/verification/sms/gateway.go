@@ -463,11 +463,11 @@ func (g *TwilioGateway) GetDeliveryStatus(ctx context.Context, messageID string)
 	switch strings.ToLower(msgResp.Status) {
 	case statusDelivered:
 		result.Status = DeliveryDelivered
-	case "sent", "queued", "accepted":
+	case string(DeliverySent), "queued", "accepted":
 		result.Status = DeliverySent
 	case statusFailed:
 		result.Status = DeliveryFailed
-	case "undelivered":
+	case string(DeliveryUndelivered):
 		result.Status = DeliveryUndelivered
 	default:
 		result.Status = DeliveryPending
@@ -511,13 +511,13 @@ func (g *TwilioGateway) ParseWebhook(ctx context.Context, payload []byte, signat
 	// Parse status
 	status := strings.ToLower(values.Get("MessageStatus"))
 	switch status {
-	case "delivered":
+	case string(DeliveryDelivered):
 		event.EventType = WebhookEventDelivered
-	case "failed":
+	case string(DeliveryFailed):
 		event.EventType = WebhookEventFailed
-	case "undelivered":
+	case string(DeliveryUndelivered):
 		event.EventType = WebhookEventUndelivered
-	case "sent":
+	case string(DeliverySent):
 		event.EventType = WebhookEventSent
 	default:
 		event.EventType = WebhookEventSent
@@ -922,9 +922,9 @@ func (g *VonageGateway) ParseWebhook(ctx context.Context, payload []byte, signat
 	}
 
 	switch strings.ToLower(dlrPayload.Status) {
-	case "delivered":
+	case string(DeliveryDelivered):
 		event.EventType = WebhookEventDelivered
-	case "failed", "rejected", "expired":
+	case string(DeliveryFailed), "rejected", "expired":
 		event.EventType = WebhookEventFailed
 	case "accepted", "buffered":
 		event.EventType = WebhookEventSent

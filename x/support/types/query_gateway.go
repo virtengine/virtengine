@@ -7,10 +7,9 @@ import (
 	"net/http"
 
 	gogogrpc "github.com/cosmos/gogoproto/grpc"
-	"github.com/golang/protobuf/proto"
+	proto "github.com/golang/protobuf/proto" //nolint:staticcheck // generated gateway compatibility
 	"github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-
 	supportv1 "github.com/virtengine/virtengine/sdk/go/node/support/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

@@ -792,11 +792,6 @@ func (p *SNSProvider) ParseWebhook(ctx context.Context, payload []byte, signatur
 		Type    string `json:"Type"`
 		Message string `json:"Message"`
 	}
-	type deliveryStatus struct {
-		MessageID string `json:"messageId"`
-		Status    string `json:"status"`
-		Provider  string `json:"providerResponse"`
-	}
 
 	messageBytes := payload
 	var envelope snsEnvelope

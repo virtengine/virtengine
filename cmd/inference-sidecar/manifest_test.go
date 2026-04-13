@@ -45,13 +45,13 @@ func TestVerifyModelBundleMissingManifest(t *testing.T) {
 }
 
 func TestVerifyModelBundleRejectsStaleManifest(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 
 	payload := mustReadJSON(t, manifestPath)
 	payload["model"].(map[string]any)["runtime_hash"] = stringsOfLength(64, "a")
 	writeJSON(t, manifestPath, payload)
 
-	_, err := verifyModelBundle(modelDir, manifestPath, "v1.0.0", "")
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
 	if err == nil {
 		t.Fatal("expected stale manifest error")
 	}
@@ -66,12 +66,12 @@ func TestVerifyModelBundleRejectsStaleManifest(t *testing.T) {
 }
 
 func TestNewInferenceSidecarServerReportsBadManifestState(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 	writeJSON(t, manifestPath, map[string]any{
 		"schema_version": "veid.release.manifest/v1",
 		"model": map[string]any{
 			"name":         "trust_score",
-			"version":      "v1.0.0",
+			"version":      releaseBundleVersion,
 			"model_dir":    "model",
 			"runtime_hash": "placeholder",
 		},
@@ -117,7 +117,7 @@ func TestNewInferenceSidecarServerReportsBadManifestState(t *testing.T) {
 }
 
 func TestVerifyModelBundleRejectsMissingRequiredArtifactEntry(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 
 	payload := mustReadJSON(t, manifestPath)
 	artifacts := payload["artifacts"].([]any)
@@ -132,7 +132,7 @@ func TestVerifyModelBundleRejectsMissingRequiredArtifactEntry(t *testing.T) {
 	payload["artifacts"] = filtered
 	writeJSON(t, manifestPath, payload)
 
-	_, err := verifyModelBundle(modelDir, manifestPath, "v1.0.0", "")
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
 	if err == nil {
 		t.Fatal("expected bad manifest error")
 	}
@@ -150,7 +150,7 @@ func TestVerifyModelBundleRejectsMissingRequiredArtifactEntry(t *testing.T) {
 }
 
 func TestVerifyModelBundleRejectsArtifactPathTraversal(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 	versionDir := filepath.Dir(manifestPath)
 	escapedArtifactPath := filepath.Join(filepath.Dir(versionDir), "outside.txt")
 	mustWriteFile(t, escapedArtifactPath, []byte("outside-bundle"))
@@ -168,7 +168,7 @@ func TestVerifyModelBundleRejectsArtifactPathTraversal(t *testing.T) {
 	payload["artifacts"] = artifacts
 	writeJSON(t, manifestPath, payload)
 
-	_, err = verifyModelBundle(modelDir, manifestPath, "v1.0.0", "")
+	_, err = verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
 	if err == nil {
 		t.Fatal("expected bad manifest error")
 	}
@@ -230,7 +230,7 @@ func TestNewInferenceSidecarServerReportsMissingManifestState(t *testing.T) {
 }
 
 func TestNewInferenceSidecarServerReportsStaleManifestState(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 
 	payload := mustReadJSON(t, manifestPath)
 	payload["model"].(map[string]any)["runtime_hash"] = stringsOfLength(64, "a")
@@ -265,7 +265,7 @@ func TestNewInferenceSidecarServerReportsStaleManifestState(t *testing.T) {
 }
 
 func TestNewInferenceSidecarServerReportsMissingModelState(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 	if err := os.Remove(filepath.Join(filepath.Dir(manifestPath), "model_frozen.pb")); err != nil {
 		t.Fatalf("remove artifact: %v", err)
 	}
@@ -325,10 +325,12 @@ func TestReadinessHTTPResponseIncludesFailureState(t *testing.T) {
 	}
 }
 
-func createReleaseBundle(t *testing.T, version string) (string, string) {
+const releaseBundleVersion = "v1.0.0"
+
+func createReleaseBundle(t *testing.T) (string, string) {
 	t.Helper()
 
-	versionDir := filepath.Join(t.TempDir(), version)
+	versionDir := filepath.Join(t.TempDir(), releaseBundleVersion)
 	modelDir := filepath.Join(versionDir, "model")
 	varsDir := filepath.Join(modelDir, "variables")
 	for _, dir := range []string{modelDir, varsDir} {
@@ -348,7 +350,7 @@ func createReleaseBundle(t *testing.T, version string) (string, string) {
 	}
 
 	manifestJSON := map[string]any{
-		"model_version": version,
+		"model_version": releaseBundleVersion,
 		"model_hash":    modelHash,
 		"input_signature": map[string]any{
 			"name":  "features",
@@ -364,7 +366,7 @@ func createReleaseBundle(t *testing.T, version string) (string, string) {
 	writeJSON(t, filepath.Join(versionDir, "manifest.json"), manifestJSON)
 
 	exportMetadata := map[string]any{
-		"version":        version,
+		"version":        releaseBundleVersion,
 		"model_hash":     modelHash,
 		"signature_name": "serving_default",
 		"input_signature": map[string]any{
@@ -381,7 +383,7 @@ func createReleaseBundle(t *testing.T, version string) (string, string) {
 	writeJSON(t, filepath.Join(versionDir, "export_metadata.json"), exportMetadata)
 
 	mustWriteFile(t, filepath.Join(versionDir, "MODEL_HASH.txt"), []byte(
-		"SHA256="+modelHash+"\nVERSION="+version+"\n",
+		"SHA256="+modelHash+"\nVERSION="+releaseBundleVersion+"\n",
 	))
 
 	artifacts := []string{
@@ -418,7 +420,7 @@ func createReleaseBundle(t *testing.T, version string) (string, string) {
 		"profile":        "production",
 		"model": map[string]any{
 			"name":              "trust_score",
-			"version":           version,
+			"version":           releaseBundleVersion,
 			"model_dir":         "model",
 			"runtime_hash":      modelHash,
 			"frozen_graph_hash": mustComputeHash(t, filepath.Join(versionDir, "model_frozen.pb")),

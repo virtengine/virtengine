@@ -168,7 +168,7 @@ func copyFile(src, dst string) error {
 
 func contributorIDs(tr *transcript.Transcript) []string {
 	seen := map[string]struct{}{}
-	var contributors []string
+	contributors := make([]string, 0, len(tr.Phase1.Contributions)+len(tr.Phase2.Contributions))
 	for _, record := range append(append([]transcript.ContributionRecord{}, tr.Phase1.Contributions...), tr.Phase2.Contributions...) {
 		if record.ParticipantID == "" {
 			continue

@@ -438,7 +438,7 @@ func (a *ACHAdapter) GetSettlementReport(ctx context.Context, req SettlementRepo
 
 func mapStripeOutboundStatus(status string) PayoutStatus {
 	switch status {
-	case "processing":
+	case string(PayoutStatusProcessing):
 		return PayoutStatusProcessing
 	case "posted":
 		return PayoutStatusSucceeded
@@ -895,9 +895,9 @@ func mapDirectACHStatus(status string) PayoutStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "processing", "submitted", "queued":
 		return PayoutStatusProcessing
-	case "succeeded", "completed", "posted", "settled":
+	case "succeeded", directACHStatusCompleted, "posted", "settled":
 		return PayoutStatusSucceeded
-	case "failed", "rejected":
+	case statusFailed, string(AMLStatusRejected):
 		return PayoutStatusFailed
 	case "canceled", "cancelled":
 		return PayoutStatusCanceled
@@ -909,6 +909,8 @@ func mapDirectACHStatus(status string) PayoutStatus {
 		return PayoutStatusPending
 	}
 }
+
+const directACHStatusCompleted = "completed"
 
 func directACHTimestamp(candidates ...string) time.Time {
 	for _, candidate := range candidates {

@@ -57,11 +57,11 @@ func TestSidecarE2EVerifiedBundleServesTraffic(t *testing.T) {
 	}))
 	t.Cleanup(tfServer.Close)
 
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 	server, err := NewInferenceSidecarServer(
 		inference.InferenceConfig{
 			ModelPath:        modelDir,
-			ModelVersion:     "v1.0.0",
+			ModelVersion:     releaseBundleVersion,
 			Timeout:          2 * time.Second,
 			MaxMemoryMB:      512,
 			Deterministic:    true,
@@ -137,13 +137,13 @@ func TestSidecarE2EVerifiedBundleServesTraffic(t *testing.T) {
 	if resp.Score != 55 {
 		t.Fatalf("expected score 55, got %d", resp.Score)
 	}
-	if resp.ModelVersion != "v1.0.0" || resp.ModelHash == "" {
+	if resp.ModelVersion != releaseBundleVersion || resp.ModelHash == "" {
 		t.Fatalf("expected verified model metadata in response, got version=%q hash=%q", resp.ModelVersion, resp.ModelHash)
 	}
 }
 
 func TestSidecarE2EBadManifestStaysNotReady(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 	payload := mustReadJSON(t, manifestPath)
 	payload["model"].(map[string]any)["runtime_hash"] = "placeholder"
 	writeJSON(t, manifestPath, payload)
@@ -151,7 +151,7 @@ func TestSidecarE2EBadManifestStaysNotReady(t *testing.T) {
 	server, err := NewInferenceSidecarServer(
 		inference.InferenceConfig{
 			ModelPath:        modelDir,
-			ModelVersion:     "v1.0.0",
+			ModelVersion:     releaseBundleVersion,
 			Timeout:          2 * time.Second,
 			MaxMemoryMB:      512,
 			Deterministic:    true,

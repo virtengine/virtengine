@@ -644,13 +644,13 @@ func TestClient_HealthCheck_NegotiatesAPIBaseAndBearerAuth(t *testing.T) {
 }
 
 func TestMarketplaceClient_ListCategories_Paginates(t *testing.T) {
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/users/me/" {
+	serverURL := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == usersMePath {
 			http.NotFound(w, r)
 			return
 		}
-		if r.URL.Path == "/api/users/me/" {
+		if r.URL.Path == apiUsersMePath {
 			w.Header().Set("Content-Type", "application/json")
 			username := "pager"
 			uuid := "550e8400-e29b-41d4-a716-446655440091"
@@ -671,7 +671,7 @@ func TestMarketplaceClient_ListCategories_Paginates(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"count":    2,
 				"next":     nil,
-				"previous": server.URL + "/api/marketplace-categories/?page=1",
+				"previous": serverURL + "/api/marketplace-categories/?page=1",
 				"results": []map[string]any{
 					{"uuid": "cat-2", "title": "GPU", "description": "GPU category"},
 				},
@@ -681,13 +681,14 @@ func TestMarketplaceClient_ListCategories_Paginates(t *testing.T) {
 
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"count":    2,
-			"next":     server.URL + "/api/marketplace-categories/?page=2",
+			"next":     serverURL + "/api/marketplace-categories/?page=2",
 			"previous": nil,
 			"results": []map[string]any{
 				{"uuid": "cat-1", "title": "Compute", "description": "Compute category"},
 			},
 		})
 	}))
+	serverURL = server.URL
 	defer server.Close()
 
 	client, err := NewClient(Config{BaseURL: server.URL, Token: "test-token"})
@@ -709,12 +710,11 @@ func TestMarketplaceClient_ListCategories_Paginates(t *testing.T) {
 }
 
 func TestMarketplaceClient_GetOfferingByBackendID_DuplicateConflict(t *testing.T) {
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/users/me/":
+		case usersMePath:
 			http.NotFound(w, r)
-		case "/api/users/me/":
+		case apiUsersMePath:
 			w.Header().Set("Content-Type", "application/json")
 			username := "dupe"
 			uuid := "550e8400-e29b-41d4-a716-446655440092"
@@ -752,9 +752,9 @@ func TestUsageClient_SubmitBulkUsage_ReturnsPartialError(t *testing.T) {
 	var seen bytes.Buffer
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/users/me/":
+		case usersMePath:
 			http.NotFound(w, r)
-		case "/api/users/me/":
+		case apiUsersMePath:
 			w.Header().Set("Content-Type", "application/json")
 			username := "usage"
 			uuid := "550e8400-e29b-41d4-a716-446655440093"

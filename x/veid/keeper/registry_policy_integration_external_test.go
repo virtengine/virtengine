@@ -24,6 +24,8 @@ import (
 	registrytypes "github.com/virtengine/virtengine/x/veidregistry/types"
 )
 
+const testPipelineVersion = "1.2.0"
+
 func setupRegistryPolicyIntegrationKeepers(t *testing.T) (veidkeeper.Keeper, registrykeeper.Keeper, issuancekeeper.Keeper, sdk.Context) {
 	t.Helper()
 
@@ -76,20 +78,20 @@ func createIntegrationManifest() veidtypes.ModelManifest {
 	models := []veidtypes.ModelInfo{
 		{
 			Name:        "deepface_facenet512",
-			Version:     "1.2.0",
+			Version:     testPipelineVersion,
 			WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			Framework:   "tensorflow",
 			Purpose:     string(veidtypes.ModelPurposeFaceRecognition),
 		},
 		{
 			Name:        "craft_text_detection",
-			Version:     "1.2.0",
+			Version:     testPipelineVersion,
 			WeightsHash: "sha256:b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
 			Framework:   "pytorch",
 			Purpose:     string(veidtypes.ModelPurposeTextDetection),
 		},
 	}
-	return *veidtypes.NewModelManifest("1.2.0", models, time.Now().UTC())
+	return *veidtypes.NewModelManifest(testPipelineVersion, models, time.Now().UTC())
 }
 
 func activateRegistryVerifier(t *testing.T, registryK registrykeeper.Keeper, ctx sdk.Context, weightsHash string) {
@@ -126,13 +128,13 @@ func TestApplyVerificationResultUsesRealRegistryAndPolicyKeepers(t *testing.T) {
 
 	_, err := k.RegisterPipelineVersion(
 		ctx,
-		"1.2.0",
+		testPipelineVersion,
 		"sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		"ghcr.io/virtengine/veid-pipeline:v1.2.0",
 		manifest,
 	)
 	require.NoError(t, err)
-	require.NoError(t, k.ActivatePipelineVersion(ctx, "1.2.0"))
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
 	activateRegistryVerifier(t, registryK, ctx, manifest.ManifestHash)
 
 	require.NoError(t, issuanceK.UpsertPolicy(ctx, issuancetypes.IssuancePolicy{
@@ -155,7 +157,7 @@ func TestApplyVerificationResultUsesRealRegistryAndPolicyKeepers(t *testing.T) {
 	result := veidtypes.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
 	result.Status = veidtypes.VerificationResultStatusSuccess
 	result.Score = 91
-	result.ModelVersion = "1.2.0"
+	result.ModelVersion = testPipelineVersion
 	result.InputHash = []byte("input-hash")
 
 	err = k.ApplyGovernedVerificationResult(ctx, addr, request, result)
@@ -176,13 +178,13 @@ func TestApplyVerificationResultRejectsRealRegistryArtifactMismatch(t *testing.T
 
 	_, err := k.RegisterPipelineVersion(
 		ctx,
-		"1.2.0",
+		testPipelineVersion,
 		"sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		"ghcr.io/virtengine/veid-pipeline:v1.2.0",
 		manifest,
 	)
 	require.NoError(t, err)
-	require.NoError(t, k.ActivatePipelineVersion(ctx, "1.2.0"))
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
 	activateRegistryVerifier(t, registryK, ctx, "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 
 	require.NoError(t, issuanceK.UpsertPolicy(ctx, issuancetypes.IssuancePolicy{
@@ -205,7 +207,7 @@ func TestApplyVerificationResultRejectsRealRegistryArtifactMismatch(t *testing.T
 	result := veidtypes.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
 	result.Status = veidtypes.VerificationResultStatusSuccess
 	result.Score = 90
-	result.ModelVersion = "1.2.0"
+	result.ModelVersion = testPipelineVersion
 	result.InputHash = []byte("input-hash")
 
 	err = k.ApplyGovernedVerificationResult(ctx, addr, request, result)
@@ -222,13 +224,13 @@ func TestApplyVerificationResultRespectsRealPolicyScope(t *testing.T) {
 
 	_, err := k.RegisterPipelineVersion(
 		ctx,
-		"1.2.0",
+		testPipelineVersion,
 		"sha256:1111111111111111111111111111111111111111111111111111111111111111",
 		"ghcr.io/virtengine/veid-pipeline:v1.2.0",
 		manifest,
 	)
 	require.NoError(t, err)
-	require.NoError(t, k.ActivatePipelineVersion(ctx, "1.2.0"))
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
 	activateRegistryVerifier(t, registryK, ctx, manifest.ManifestHash)
 
 	require.NoError(t, issuanceK.UpsertPolicy(ctx, issuancetypes.IssuancePolicy{
@@ -251,7 +253,7 @@ func TestApplyVerificationResultRespectsRealPolicyScope(t *testing.T) {
 	result := veidtypes.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
 	result.Status = veidtypes.VerificationResultStatusSuccess
 	result.Score = 93
-	result.ModelVersion = "1.2.0"
+	result.ModelVersion = testPipelineVersion
 	result.InputHash = []byte("input-hash")
 
 	err = k.ApplyGovernedVerificationResult(ctx, addr, request, result)

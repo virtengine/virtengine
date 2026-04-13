@@ -45,7 +45,7 @@ func ExportPhaseBundle(state State, phase, outDir string) (*bundle.PhaseRequest,
 	}
 	payloadPath := filepath.Join(outDir, phaseBundlePayloadFile)
 	requestPath := filepath.Join(outDir, phaseBundleRequestFile)
-	if err := writeFileAtomic(payloadPath, payload, 0o600); err != nil {
+	if err := writeFileAtomic(payloadPath, payload); err != nil {
 		return nil, err
 	}
 	if err := bundle.WriteJSON(requestPath, request); err != nil {

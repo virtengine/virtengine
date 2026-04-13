@@ -35,17 +35,6 @@ func parseUUIDParam(field, value string) (uuid.UUID, error) {
 	return parsed, nil
 }
 
-func parseUUIDPtr(field, value string) (*uuid.UUID, error) {
-	if strings.TrimSpace(value) == "" {
-		return nil, nil
-	}
-	parsed, err := parseUUIDParam(field, value)
-	if err != nil {
-		return nil, err
-	}
-	return &parsed, nil
-}
-
 func classifyTransportError(err error) error {
 	if err == nil {
 		return nil

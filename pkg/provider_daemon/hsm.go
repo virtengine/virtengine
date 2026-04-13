@@ -764,7 +764,10 @@ func generateP256KeyPair() (publicKey, privateKey []byte, err error) {
 		return nil, nil, err
 	}
 
-	publicKey = elliptic.Marshal(privKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y)
+	publicKey, err = privKey.PublicKey.Bytes()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return cloneBytes(publicKey), cloneBytes(privateKey), nil
 }
@@ -785,7 +788,10 @@ func extractP256PublicKey(privateKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	publicKey := elliptic.Marshal(priv.Curve, priv.PublicKey.X, priv.PublicKey.Y)
+	publicKey, err := priv.PublicKey.Bytes()
+	if err != nil {
+		return nil, err
+	}
 	return cloneBytes(publicKey), nil
 }
 
@@ -817,13 +823,13 @@ func verifyEd25519(publicKey []byte, data []byte, signature []byte) bool {
 }
 
 func verifyP256(publicKey []byte, data []byte, signature []byte) bool {
-	x, y := elliptic.Unmarshal(elliptic.P256(), publicKey)
-	if x == nil || y == nil {
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), publicKey)
+	if err != nil {
 		return false
 	}
 
 	digest := sha256.Sum256(data)
-	return ecdsa.VerifyASN1(&ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, digest[:], signature)
+	return ecdsa.VerifyASN1(pub, digest[:], signature)
 }
 
 func computeFingerprint(publicKey []byte) string {
@@ -884,9 +890,10 @@ func parseP256PrivateKey(privateKey []byte) (*ecdsa.PrivateKey, error) {
 	}
 
 	priv := &ecdsa.PrivateKey{D: d}
-	priv.PublicKey.Curve = curve
-	priv.PublicKey.X, priv.PublicKey.Y = curve.ScalarBaseMult(privateKey)
-	if priv.PublicKey.X == nil || priv.PublicKey.Y == nil {
+	pub := &priv.PublicKey
+	pub.Curve = curve
+	pub.X, pub.Y = curve.ScalarBaseMult(privateKey)
+	if pub.X == nil || pub.Y == nil {
 		return nil, errors.New("invalid P-256 private key")
 	}
 

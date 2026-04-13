@@ -219,13 +219,14 @@ func (s *InMemoryDeviceTokenStore) RecordDeliverySuccess(_ context.Context, user
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.updateRecordByToken(userAddr, token, func(device *DeviceToken) {
+	s.updateRecordByToken(userAddr, token, func(device *DeviceToken) {
 		device.Enabled = true
 		device.DisabledAt = nil
 		device.LastDeliveredAt = cloneTimePtr(&deliveredAt)
 		device.LastSeenAt = deliveredAt.UTC()
 		device.ConsecutiveFailures = 0
 	})
+	return nil
 }
 
 // RecordDeliveryFailure updates failure state for a device token.
@@ -233,7 +234,7 @@ func (s *InMemoryDeviceTokenStore) RecordDeliveryFailure(_ context.Context, user
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.updateRecordByToken(userAddr, token, func(device *DeviceToken) {
+	s.updateRecordByToken(userAddr, token, func(device *DeviceToken) {
 		device.LastFailureAt = cloneTimePtr(&failedAt)
 		device.LastFailureReason = strings.TrimSpace(reason)
 		device.ConsecutiveFailures++
@@ -242,11 +243,12 @@ func (s *InMemoryDeviceTokenStore) RecordDeliveryFailure(_ context.Context, user
 			device.DisabledAt = cloneTimePtr(&failedAt)
 		}
 	})
+	return nil
 }
 
-func (s *InMemoryDeviceTokenStore) updateRecordByToken(userAddr, token string, apply func(device *DeviceToken)) error {
+func (s *InMemoryDeviceTokenStore) updateRecordByToken(userAddr, token string, apply func(device *DeviceToken)) {
 	if userAddr == "" || token == "" {
-		return nil
+		return
 	}
 	hash := sha256.Sum256([]byte(token))
 	target := base64.StdEncoding.EncodeToString(hash[:])
@@ -260,9 +262,8 @@ func (s *InMemoryDeviceTokenStore) updateRecordByToken(userAddr, token string, a
 		record.device = device
 		records[i] = record
 		s.tokens[userAddr] = records
-		return nil
+		return
 	}
-	return nil
 }
 
 func normalizeDeviceToken(device DeviceToken, now time.Time) (DeviceToken, error) {

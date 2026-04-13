@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
 
@@ -91,9 +92,7 @@ func TestOrderRouter_RouteOrderSuccess(t *testing.T) {
 		t.Fatalf("state load error: %v", err)
 	}
 	record := state.Get(req.OrderID)
-	if record == nil {
-		t.Fatalf("record not found")
-	}
+	require.NotNil(t, record)
 	if record.WaldurOrderUUID == "" {
 		t.Fatalf("expected waldur order uuid")
 	}
@@ -133,9 +132,7 @@ func TestOrderRouter_RetryableFailure(t *testing.T) {
 		t.Fatalf("state load error: %v", err)
 	}
 	record := state.Get(req.OrderID)
-	if record == nil {
-		t.Fatalf("record not found")
-	}
+	require.NotNil(t, record)
 	if record.RetryCount == 0 {
 		t.Fatalf("expected retry count > 0")
 	}
@@ -176,9 +173,7 @@ func TestOrderRouter_FatalFailure(t *testing.T) {
 		t.Fatalf("state load error: %v", err)
 	}
 	record := state.Get(req.OrderID)
-	if record == nil {
-		t.Fatalf("record not found")
-	}
+	require.NotNil(t, record)
 	if !record.DeadLettered {
 		t.Fatalf("expected dead letter")
 	}

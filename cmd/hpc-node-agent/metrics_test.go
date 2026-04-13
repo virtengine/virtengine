@@ -9,10 +9,16 @@ import (
 	"time"
 )
 
+const (
+	slurmStateMixed  = "mixed"
+	healthStatusBad  = "degraded"
+	healthStatusGood = "healthy"
+)
+
 func TestCollectCapacityDerivesAllocatedResources(t *testing.T) {
 	t.Parallel()
 
-	totalCores := int32(runtime.NumCPU())
+	totalCores := safeInt32FromInt(runtime.NumCPU())
 	load1 := float64(totalCores)
 	if totalCores > 2 {
 		load1 = float64(totalCores - 2)
@@ -108,10 +114,10 @@ func TestCollectHealthAggregatesBoundedRealMetrics(t *testing.T) {
 	if health.NetworkUtilizationPercent != 20 {
 		t.Fatalf("NetworkUtilizationPercent = %d, want 20", health.NetworkUtilizationPercent)
 	}
-	if health.SLURMState != "mixed" {
+	if health.SLURMState != slurmStateMixed {
 		t.Fatalf("SLURMState = %q, want mixed", health.SLURMState)
 	}
-	if health.Status != "degraded" {
+	if health.Status != healthStatusBad {
 		t.Fatalf("Status = %q, want degraded", health.Status)
 	}
 }
@@ -150,7 +156,7 @@ func TestCollectHealthFailsClosedWithoutPriorSamples(t *testing.T) {
 	if health.NetworkUtilizationPercent != 0 {
 		t.Fatalf("NetworkUtilizationPercent = %d, want 0 on first sample", health.NetworkUtilizationPercent)
 	}
-	if health.Status != "healthy" {
+	if health.Status != healthStatusGood {
 		t.Fatalf("Status = %q, want healthy", health.Status)
 	}
 }
@@ -188,7 +194,7 @@ func TestNormalizeSLURMState(t *testing.T) {
 
 	tests := map[string]string{
 		"ALLOCATED+PLANNED": "allocated",
-		"MIXED":             "mixed",
+		"MIXED":             slurmStateMixed,
 		"DRAINING":          "drain",
 		"DOWN*":             "down",
 		"IDLE":              "idle",

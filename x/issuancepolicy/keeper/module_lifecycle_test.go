@@ -3,7 +3,6 @@ package keeper
 import (
 	"testing"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/x/issuancepolicy/types"
@@ -25,13 +24,13 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 		GovernanceProposalID: 11,
 	}
 
-	_, err := msgServer.UpsertPolicy(sdk.WrapSDKContext(ctx), &types.MsgUpsertPolicy{
+	_, err := msgServer.UpsertPolicy(ctx, &types.MsgUpsertPolicy{
 		Authority: k.GetAuthority(),
 		Policy:    policy,
 	})
 	require.NoError(t, err)
 
-	_, err = msgServer.SetActivePolicy(sdk.WrapSDKContext(ctx), &types.MsgSetActivePolicy{
+	_, err = msgServer.SetActivePolicy(ctx, &types.MsgSetActivePolicy{
 		Authority: k.GetAuthority(),
 		PolicyID:  policy.PolicyID,
 	})
@@ -42,14 +41,14 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 	require.NotNil(t, activeResp.Policy)
 	require.Equal(t, policy.PolicyID, activeResp.Policy.PolicyID)
 
-	_, err = msgServer.PausePolicy(sdk.WrapSDKContext(ctx), &types.MsgPausePolicy{
+	_, err = msgServer.PausePolicy(ctx, &types.MsgPausePolicy{
 		Authority: k.GetAuthority(),
 		PolicyID:  policy.PolicyID,
 	})
 	require.NoError(t, err)
 	require.True(t, k.IsMintingPaused(ctx))
 
-	_, err = msgServer.ResumePolicy(sdk.WrapSDKContext(ctx), &types.MsgResumePolicy{
+	_, err = msgServer.ResumePolicy(ctx, &types.MsgResumePolicy{
 		Authority: k.GetAuthority(),
 		PolicyID:  policy.PolicyID,
 	})
@@ -68,7 +67,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, recordsResp.Records, 1)
 
-	_, err = msgServer.DeprecatePolicy(sdk.WrapSDKContext(ctx), &types.MsgDeprecatePolicy{
+	_, err = msgServer.DeprecatePolicy(ctx, &types.MsgDeprecatePolicy{
 		Authority: k.GetAuthority(),
 		PolicyID:  policy.PolicyID,
 	})

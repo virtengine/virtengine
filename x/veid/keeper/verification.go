@@ -197,7 +197,7 @@ func (k Keeper) GetVerificationHistory(ctx sdk.Context, address sdk.AccAddress, 
 
 	history := make([]types.VerificationEvent, 0)
 	for ; iterator.Valid(); iterator.Next() {
-		if limit > 0 && uint32(len(history)) >= limit {
+		if limit > 0 && safeUint32FromIntBiometric(len(history)) >= limit {
 			break
 		}
 

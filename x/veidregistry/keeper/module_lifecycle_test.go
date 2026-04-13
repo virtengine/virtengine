@@ -3,7 +3,6 @@ package keeper
 import (
 	"testing"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/x/veidregistry/types"
@@ -20,7 +19,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 	msgServer := NewMsgServerImpl(k)
 	queryServer := GRPCQuerier{Keeper: k}
 
-	_, err := msgServer.UpsertVerifierVersion(sdk.WrapSDKContext(ctx), &types.MsgUpsertVerifierVersion{
+	_, err := msgServer.UpsertVerifierVersion(ctx, &types.MsgUpsertVerifierVersion{
 		Authority: k.GetAuthority(),
 		Verifier: types.VerifierVersion{
 			VerifierID:    "verifier-main",
@@ -31,7 +30,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = msgServer.ApproveVerifierVersion(sdk.WrapSDKContext(ctx), &types.MsgApproveVerifierVersion{
+	_, err = msgServer.ApproveVerifierVersion(ctx, &types.MsgApproveVerifierVersion{
 		Authority:            k.GetAuthority(),
 		VerifierID:           "verifier-main",
 		GovernanceProposalID: 9,
@@ -45,7 +44,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 	require.Equal(t, string(types.VerifierStatusApproved), pending.Verifiers[0].Status)
 
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 5)
-	_, err = msgServer.ReportValidatorReadiness(sdk.WrapSDKContext(ctx), &types.MsgReportValidatorReadiness{
+	_, err = msgServer.ReportValidatorReadiness(ctx, &types.MsgReportValidatorReadiness{
 		ValidatorAddress:  "virtvaloper1alpha",
 		VerifierID:        "verifier-main",
 		ConformancePassed: true,
@@ -53,7 +52,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 		Organization:      "org-a",
 	})
 	require.NoError(t, err)
-	_, err = msgServer.ReportValidatorReadiness(sdk.WrapSDKContext(ctx), &types.MsgReportValidatorReadiness{
+	_, err = msgServer.ReportValidatorReadiness(ctx, &types.MsgReportValidatorReadiness{
 		ValidatorAddress:  "virtvaloper1beta",
 		VerifierID:        "verifier-main",
 		ConformancePassed: true,
@@ -78,7 +77,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 	require.True(t, found)
 	require.Equal(t, registryHashA, info.WeightsSHA256)
 
-	_, err = msgServer.UpsertVerifierVersion(sdk.WrapSDKContext(ctx), &types.MsgUpsertVerifierVersion{
+	_, err = msgServer.UpsertVerifierVersion(ctx, &types.MsgUpsertVerifierVersion{
 		Authority: k.GetAuthority(),
 		Verifier: types.VerifierVersion{
 			VerifierID:    "verifier-cancel",
@@ -88,7 +87,7 @@ func TestMsgServerLifecycleAndQueries(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	_, err = msgServer.CancelVerifierVersion(sdk.WrapSDKContext(ctx), &types.MsgCancelVerifierVersion{
+	_, err = msgServer.CancelVerifierVersion(ctx, &types.MsgCancelVerifierVersion{
 		Authority:  k.GetAuthority(),
 		VerifierID: "verifier-cancel",
 	})

@@ -12,6 +12,7 @@ import (
 	// Initialize SDK config (bech32 prefixes) for tests
 	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
 
+	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/pkg/moab_adapter"
 	"github.com/virtengine/virtengine/pkg/ood_adapter"
 	"github.com/virtengine/virtengine/pkg/slurm_adapter"
@@ -77,18 +78,14 @@ func TestNewHPCBackendFactory_SLURM(t *testing.T) {
 
 	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
-	if manager == nil {
-		t.Fatal("Expected manager to be non-nil")
-	}
+	require.NotNil(t, manager)
 
 	if manager.GetSchedulerType() != HPCSchedulerTypeSLURM {
 		t.Errorf("GetSchedulerType() = %v, want %v", manager.GetSchedulerType(), HPCSchedulerTypeSLURM)
 	}
 
 	scheduler := manager.GetScheduler()
-	if scheduler == nil {
-		t.Fatal("Expected scheduler to be non-nil")
-	}
+	require.NotNil(t, scheduler)
 
 	if scheduler.Type() != HPCSchedulerTypeSLURM {
 		t.Errorf("Scheduler.Type() = %v, want %v", scheduler.Type(), HPCSchedulerTypeSLURM)
@@ -101,18 +98,14 @@ func TestNewHPCBackendFactory_MOAB(t *testing.T) {
 
 	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
-	if manager == nil {
-		t.Fatal("Expected manager to be non-nil")
-	}
+	require.NotNil(t, manager)
 
 	if manager.GetSchedulerType() != HPCSchedulerTypeMOAB {
 		t.Errorf("GetSchedulerType() = %v, want %v", manager.GetSchedulerType(), HPCSchedulerTypeMOAB)
 	}
 
 	scheduler := manager.GetScheduler()
-	if scheduler == nil {
-		t.Fatal("Expected scheduler to be non-nil")
-	}
+	require.NotNil(t, scheduler)
 
 	if scheduler.Type() != HPCSchedulerTypeMOAB {
 		t.Errorf("Scheduler.Type() = %v, want %v", scheduler.Type(), HPCSchedulerTypeMOAB)
@@ -125,18 +118,14 @@ func TestNewHPCBackendFactory_OOD(t *testing.T) {
 
 	manager := newTestHPCBackendFactory(t, config, nil, signer)
 
-	if manager == nil {
-		t.Fatal("Expected manager to be non-nil")
-	}
+	require.NotNil(t, manager)
 
 	if manager.GetSchedulerType() != HPCSchedulerTypeOOD {
 		t.Errorf("GetSchedulerType() = %v, want %v", manager.GetSchedulerType(), HPCSchedulerTypeOOD)
 	}
 
 	scheduler := manager.GetScheduler()
-	if scheduler == nil {
-		t.Fatal("Expected scheduler to be non-nil")
-	}
+	require.NotNil(t, scheduler)
 
 	if scheduler.Type() != HPCSchedulerTypeOOD {
 		t.Errorf("Scheduler.Type() = %v, want %v", scheduler.Type(), HPCSchedulerTypeOOD)
@@ -228,9 +217,7 @@ func TestHPCBackendFactory_GetHealth(t *testing.T) {
 
 	// Health check before start
 	health := manager.GetHealth()
-	if health == nil {
-		t.Fatal("GetHealth() returned nil")
-	}
+	require.NotNil(t, health)
 	if health.Running {
 		t.Error("Running should be false before Start()")
 	}
@@ -243,9 +230,7 @@ func TestHPCBackendFactory_GetHealth(t *testing.T) {
 
 	// Health check after start
 	health = manager.GetHealth()
-	if health == nil {
-		t.Fatal("GetHealth() returned nil after start")
-	}
+	require.NotNil(t, health)
 	if !health.Running {
 		t.Error("Running should be true after Start()")
 	}
@@ -334,15 +319,11 @@ func TestHPCBackendFactory_WithCredentialManager(t *testing.T) {
 
 	manager := newTestHPCBackendFactory(t, config, credManager, signer)
 
-	if manager == nil {
-		t.Fatal("Expected manager to be non-nil")
-	}
+	require.NotNil(t, manager)
 
 	// Get health should work with credential manager
 	health := manager.GetHealth()
-	if health == nil {
-		t.Fatal("GetHealth() returned nil")
-	}
+	require.NotNil(t, health)
 
 	// CredentialsValid may be false since no credentials are actually stored
 	// Just verify health is returned
@@ -653,9 +634,7 @@ func TestHPCBackendFactory_FullLifecycle(t *testing.T) {
 		t.Fatalf("SubmitJob() error = %v", err)
 	}
 
-	if schedulerJob == nil {
-		t.Fatal("Scheduler job should not be nil")
-	}
+	require.NotNil(t, schedulerJob)
 
 	// Verify job was submitted
 	if schedulerJob.VirtEngineJobID != job.JobID {
@@ -664,9 +643,7 @@ func TestHPCBackendFactory_FullLifecycle(t *testing.T) {
 
 	// Get health
 	health := manager.GetHealth()
-	if health == nil {
-		t.Fatal("Health should not be nil")
-	}
+	require.NotNil(t, health)
 	if !health.Running {
 		t.Error("Health.Running should be true")
 	}

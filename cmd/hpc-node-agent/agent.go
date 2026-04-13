@@ -20,6 +20,8 @@ import (
 	"github.com/virtengine/virtengine/pkg/security"
 )
 
+const nodeCommandDrain = "drain"
+
 // AgentConfig contains configuration for the node agent
 type AgentConfig struct {
 	NodeID            string
@@ -366,7 +368,7 @@ func (a *Agent) processCommand(cmd NodeCommand) {
 	fmt.Printf("[COMMAND] Received: %s (%s)\n", cmd.Type, cmd.CommandID)
 
 	switch cmd.Type {
-	case "drain":
+	case nodeCommandDrain:
 		fmt.Println("[COMMAND] Initiating node drain...")
 		// In production, this would trigger SLURM drain
 	case "resume":

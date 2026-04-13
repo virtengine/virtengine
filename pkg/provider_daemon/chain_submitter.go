@@ -523,35 +523,6 @@ func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg inte
 	return txHash, nil
 }
 
-func (s *ChainUsageSubmitterImpl) signAndBroadcastWithRetry(ctx context.Context, msg interface{}) (string, error) {
-	attempts := s.cfg.MaxAttempts
-	if attempts <= 0 {
-		attempts = 1
-	}
-	var lastErr error
-	var txHash string
-	for attempt := 0; attempt < attempts; attempt++ {
-		hash, err := s.signAndBroadcast(ctx, msg)
-		if hash != "" {
-			txHash = hash
-		}
-		if err == nil {
-			return txHash, nil
-		}
-		lastErr = err
-		if !isRetryableBroadcastError(err) {
-			return txHash, err
-		}
-		if attempt < attempts-1 {
-			if err := s.sleepBackoff(ctx, attempt); err != nil {
-				return txHash, err
-			}
-			continue
-		}
-	}
-	return txHash, lastErr
-}
-
 func isRetryableBroadcastError(err error) bool {
 	if err == nil {
 		return false
@@ -607,23 +578,6 @@ type classifiedBroadcastError struct {
 
 func (e *classifiedBroadcastError) Error() string {
 	return e.Message
-}
-
-// signAndBroadcastBatch signs and broadcasts multiple messages.
-func (s *ChainUsageSubmitterImpl) signAndBroadcastBatch(ctx context.Context, msgs []*MsgRecordUsageWrapper) error {
-	if len(msgs) == 0 {
-		return nil
-	}
-
-	batchMsg := &batchUsageMsgs{
-		Msgs: msgs,
-	}
-	_, err := s.signAndBroadcastWithRetry(ctx, batchMsg)
-	return err
-}
-
-type batchUsageMsgs struct {
-	Msgs []*MsgRecordUsageWrapper `json:"msgs"`
 }
 
 type txEnvelope struct {
@@ -870,28 +824,6 @@ func (s *ChainUsageSubmitterImpl) toSDKMsgs(msg interface{}) ([]sdk.Msg, error) 
 			UsageRecordIds: append([]string(nil), m.UsageRecordIDs...),
 			IsFinal:        m.IsFinal,
 		}}, nil
-	case *batchUsageMsgs:
-		out := make([]sdk.Msg, 0, len(m.Msgs))
-		for _, one := range m.Msgs {
-			if one == nil {
-				continue
-			}
-			out = append(out, &settlementv1.MsgRecordUsage{
-				Sender:      one.Sender,
-				OrderId:     one.OrderID,
-				LeaseId:     one.LeaseID,
-				UsageUnits:  one.UsageUnits,
-				UsageType:   one.UsageType,
-				PeriodStart: one.PeriodStart,
-				PeriodEnd:   one.PeriodEnd,
-				UnitPrice:   one.UnitPrice,
-				Signature:   one.Signature,
-			})
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("batch message contains no usage entries")
-		}
-		return out, nil
 	default:
 		return nil, fmt.Errorf("unsupported queue message type %T", msg)
 	}

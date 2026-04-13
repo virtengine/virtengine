@@ -68,7 +68,7 @@ func (s State) SaveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(s.ConfigPath(), data, 0o600)
+	return writeFileAtomic(s.ConfigPath(), data)
 }
 
 func (s State) LoadTranscript() ([]byte, error) {
@@ -76,7 +76,7 @@ func (s State) LoadTranscript() ([]byte, error) {
 }
 
 func (s State) SaveTranscript(data []byte) error {
-	return writeFileAtomic(s.TranscriptPath(), data, 0o600)
+	return writeFileAtomic(s.TranscriptPath(), data)
 }
 
 func (s State) Phase1ContributionPaths() ([]string, error) {
@@ -112,7 +112,7 @@ func listContributionFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
-func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
+func writeFileAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		_ = tmp.Close()
 		return err
 	}
-	if err := tmp.Chmod(mode); err != nil {
+	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return err
 	}

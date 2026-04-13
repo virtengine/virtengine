@@ -40,11 +40,11 @@ func TestSidecarIntegration(t *testing.T) {
 	}))
 	t.Cleanup(tfServer.Close)
 
-	modelDir, manifestPath := createReleaseBundle(t, "v1.0.0")
+	modelDir, manifestPath := createReleaseBundle(t)
 
 	config := inference.InferenceConfig{
 		ModelPath:        modelDir,
-		ModelVersion:     "v1.0.0",
+		ModelVersion:     releaseBundleVersion,
 		Timeout:          2 * time.Second,
 		MaxMemoryMB:      512,
 		UseSidecar:       false,

@@ -113,7 +113,7 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 	capacity.MemoryGBTotal = int32(memTotal / (1024 * 1024 * 1024))
 	//nolint:gosec // G115: memory in GB is bounded well under int32 max
 	capacity.MemoryGBAvailable = int32(memAvailable / (1024 * 1024 * 1024))
-	capacity.MemoryGBAllocated = clampInt32(capacity.MemoryGBTotal-capacity.MemoryGBAvailable, 0, capacity.MemoryGBTotal)
+	capacity.MemoryGBAllocated = clampInt32(capacity.MemoryGBTotal-capacity.MemoryGBAvailable, capacity.MemoryGBTotal)
 
 	gpu := m.getGPUSnapshot()
 	capacity.GPUsTotal = gpu.total
@@ -126,7 +126,7 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 	capacity.StorageGBTotal = int32(storageTotal / (1024 * 1024 * 1024))
 	//nolint:gosec // G115: storage in GB is bounded well under int32 max
 	capacity.StorageGBAvailable = int32(storageAvailable / (1024 * 1024 * 1024))
-	capacity.StorageGBAllocated = clampInt32(capacity.StorageGBTotal-capacity.StorageGBAvailable, 0, capacity.StorageGBTotal)
+	capacity.StorageGBAllocated = clampInt32(capacity.StorageGBTotal-capacity.StorageGBAvailable, capacity.StorageGBTotal)
 
 	return capacity, nil
 }
@@ -484,11 +484,11 @@ func (m *MetricsCollector) getGPUSnapshot() gpuSnapshot {
 	return gpuSnapshot{
 		total:          total,
 		available:      available,
-		allocated:      clampInt32(total-available, 0, total),
+		allocated:      clampInt32(total-available, total),
 		gpuType:        gpuType,
-		utilPercent:    clampInt32(totalUtil/total, 0, 100),
-		memUtilPercent: clampInt32(totalMemUtil/total, 0, 100),
-		temperatureC:   clampInt32(totalTemp/total, 0, maxInt32Value),
+		utilPercent:    clampInt32(totalUtil/total, 100),
+		memUtilPercent: clampInt32(totalMemUtil/total, 100),
+		temperatureC:   clampInt32(totalTemp/total, maxInt32Value),
 	}
 }
 
@@ -521,10 +521,10 @@ func parseNvidiaSMILine(line string) (gpuSnapshot, bool) {
 
 	return gpuSnapshot{
 		gpuType:        strings.TrimSpace(parts[0]),
-		utilPercent:    clampInt32(utilPercent, 0, 100),
-		memUtilPercent: clampInt32(memUtilPercent, 0, 100),
-		memoryUsedMiB:  clampInt32(memoryUsedMiB, 0, maxInt32Value),
-		temperatureC:   clampInt32(temperatureC, 0, maxInt32Value),
+		utilPercent:    clampInt32(utilPercent, 100),
+		memUtilPercent: clampInt32(memUtilPercent, 100),
+		memoryUsedMiB:  clampInt32(memoryUsedMiB, maxInt32Value),
+		temperatureC:   clampInt32(temperatureC, maxInt32Value),
 	}, true
 }
 
@@ -575,10 +575,7 @@ func (m *MetricsCollector) getDiskIOUtilization(now time.Time) int32 {
 		return 0
 	}
 
-	busyMillis, err := parseDiskBusyMillis(data)
-	if err != nil {
-		return 0
-	}
+	busyMillis := parseDiskBusyMillis(data)
 
 	m.sampleMu.Lock()
 	defer m.sampleMu.Unlock()
@@ -725,7 +722,7 @@ func isTrackedNetworkInterface(name string) bool {
 	}
 }
 
-func parseDiskBusyMillis(data []byte) (uint64, error) {
+func parseDiskBusyMillis(data []byte) uint64 {
 	var totalBusy uint64
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
@@ -744,7 +741,7 @@ func parseDiskBusyMillis(data []byte) (uint64, error) {
 		totalBusy += busyMillis
 	}
 
-	return totalBusy, nil
+	return totalBusy
 }
 
 func isTrackedBlockDevice(name string) bool {
@@ -797,7 +794,7 @@ func normalizeSLURMState(raw string) string {
 	case normalized == "":
 		return osUnknown
 	case strings.Contains(normalized, "DRAIN"):
-		return "drain"
+		return nodeCommandDrain
 	case strings.Contains(normalized, "DOWN"),
 		strings.Contains(normalized, "FAIL"),
 		strings.Contains(normalized, "NOT_RESPONDING"),
@@ -837,7 +834,7 @@ func determineHealthStatus(health *NodeHealth, cpuCores int) string {
 	switch health.SLURMState {
 	case "down":
 		return "offline"
-	case "drain":
+	case nodeCommandDrain:
 		return "draining"
 	}
 
@@ -872,7 +869,7 @@ func availableCoresFromLoad(totalCores int32, load1 float64) (int32, int32) {
 		return 0, 0
 	}
 
-	allocated := clampInt32(int32(math.Round(load1)), 0, totalCores)
+	allocated := clampInt32(safeInt32FromFloat64Round(load1), totalCores)
 	return totalCores - allocated, allocated
 }
 
@@ -930,14 +927,34 @@ func clampPercentFloat64(v float64) int32 {
 	return int32(math.Round(v))
 }
 
-func clampInt32(v int32, min int32, max int32) int32 {
-	if v < min {
-		return min
+func clampInt32(v int32, max int32) int32 {
+	if v < 0 {
+		return 0
 	}
 	if v > max {
 		return max
 	}
 	return v
+}
+
+func safeInt32FromInt(value int) int32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(maxInt32Value) {
+		return maxInt32Value
+	}
+	return int32(value)
+}
+
+func safeInt32FromFloat64Round(value float64) int32 {
+	if math.IsNaN(value) || value <= 0 {
+		return 0
+	}
+	if value >= float64(maxInt32Value) {
+		return maxInt32Value
+	}
+	return int32(math.Round(value))
 }
 
 func maxInt32(values ...int32) int32 {

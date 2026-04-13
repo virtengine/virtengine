@@ -18,6 +18,8 @@ import (
 	"github.com/virtengine/virtengine/x/settlement"
 )
 
+const testSubmitterProviderAddress = "provider-1"
+
 type mockSubmitterClient struct {
 	mu             sync.Mutex
 	gasLimit       uint64
@@ -90,7 +92,7 @@ func newTestKeyManager(t *testing.T) *KeyManager {
 	})
 	require.NoError(t, err)
 	require.NoError(t, km.Unlock(""))
-	_, err = km.GenerateKey("provider-1")
+	_, err = km.GenerateKey(testSubmitterProviderAddress)
 	require.NoError(t, err)
 	return km
 }
@@ -111,7 +113,7 @@ func newTestReport() *ChainUsageReport {
 
 func reportToUsageMsg(report *ChainUsageReport) *MsgRecordUsageWrapper {
 	return &MsgRecordUsageWrapper{
-		Sender:      "provider-1",
+		Sender:      testSubmitterProviderAddress,
 		OrderID:     report.OrderID,
 		LeaseID:     report.LeaseID,
 		UsageUnits:  report.UsageUnits,
@@ -127,7 +129,7 @@ func newSubmitterWithClient(t *testing.T, client ChainSubmitterClient, cfgOverri
 	t.Helper()
 	cfg := DefaultChainSubmitterConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider-1"
+	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.ChainID = "virtengine-test"
 	cfg.ChainClient = client
 	cfg.CometRPC = ""
@@ -150,7 +152,7 @@ func TestChainSubmitterInitialization(t *testing.T) {
 	require.Error(t, err)
 
 	mockClient := newMockSubmitterClient(0)
-	cfg.ProviderAddress = "provider-1"
+	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.CometRPC = ""
 	cfg.ChainClient = mockClient
 	submitter, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
@@ -294,7 +296,7 @@ func TestChainSubmitterConcurrentSubmissionSafety(t *testing.T) {
 func TestTransactionBuilderBuildUsageReportTx(t *testing.T) {
 	km := newTestKeyManager(t)
 	builder := NewTransactionBuilder(ChainSubmitterConfig{
-		ProviderAddress: "provider-1",
+		ProviderAddress: testSubmitterProviderAddress,
 	}, km)
 	report := newTestReport()
 	txBytes, err := builder.BuildUsageReportTx(report, SigningData{ChainID: "virtengine-test", Sequence: 3})
@@ -309,8 +311,8 @@ func TestSignatureVerifierAndHash(t *testing.T) {
 	report := newTestReport()
 	report.Signature = []byte("sig")
 
-	verifier.AddTrustedProvider("provider-1", []byte("pub"))
-	ok, err := verifier.VerifyUsageReport(report, "provider-1")
+	verifier.AddTrustedProvider(testSubmitterProviderAddress, []byte("pub"))
+	ok, err := verifier.VerifyUsageReport(report, testSubmitterProviderAddress)
 	require.NoError(t, err)
 	assert.True(t, ok)
 
@@ -323,7 +325,7 @@ func TestChainSubmitterQueuePersistenceAcrossRestart(t *testing.T) {
 	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
 	cfg := DefaultChainSubmitterConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider-1"
+	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.ChainID = "virtengine-test"
 	cfg.CometRPC = ""
 	cfg.QueueStatePath = queuePath
