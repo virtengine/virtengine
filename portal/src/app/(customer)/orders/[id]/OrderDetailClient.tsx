@@ -92,7 +92,8 @@ export default function OrderDetailClient() {
       if (!order?.providerId) {
         return {
           success: false,
-          message: 'Provider details are unavailable for this order, so support cannot be submitted.',
+          message:
+            'Provider details are unavailable for this order, so support cannot be submitted.',
         };
       }
 

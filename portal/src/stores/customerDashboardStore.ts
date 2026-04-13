@@ -341,10 +341,7 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
           withdrawnAmount: coerceNumber(withdrawn?.amount ?? record.withdrawn_amount, 0),
         };
       });
-      const escrowTotals = escrowAccounts.reduce(
-        (sum, record) => sum + record.balance,
-        0
-      );
+      const escrowTotals = escrowAccounts.reduce((sum, record) => sum + record.balance, 0);
 
       const providerSpend = allocations.reduce((acc, allocation) => {
         acc.set(

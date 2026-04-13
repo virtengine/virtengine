@@ -104,7 +104,16 @@ export default function ProviderOrdersPage() {
 
       <div className="mb-6 flex gap-2">
         {(
-          ['all', 'ok', 'pending', 'creating', 'updating', 'terminated', 'erred', 'terminating'] as const
+          [
+            'all',
+            'ok',
+            'pending',
+            'creating',
+            'updating',
+            'terminated',
+            'erred',
+            'terminating',
+          ] as const
         ).map((status) => (
           <button
             key={status}
@@ -173,7 +182,9 @@ export default function ProviderOrdersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <span className="font-medium">{formatToken(order.revenue, order.currency)}</span>
+                    <span className="font-medium">
+                      {formatToken(order.revenue, order.currency)}
+                    </span>
                   </td>
                   <td className="px-4 py-4">
                     <Link

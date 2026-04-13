@@ -298,26 +298,26 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
         );
         return acc;
       }, new Map<string, number>());
-      const revenueTotal = allocations.reduce((sum, allocation) => sum + allocation.monthlyRevenue, 0);
-      const payoutTotal = payouts.reduce((sum, payout) => sum + payout.amount, 0);
-      const payoutHistory = payouts.reduce(
-        (acc, payout) => {
-          const createdAt = new Date(payout.createdAt);
-          const period = createdAt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-          const existing = acc.get(period) ?? {
-            period,
-            revenue: 0,
-            orders: 0,
-            stamp: createdAt.getTime(),
-          };
-          existing.revenue += payout.amount;
-          existing.orders += 1;
-          existing.stamp = Math.max(existing.stamp, createdAt.getTime());
-          acc.set(period, existing);
-          return acc;
-        },
-        new Map<string, { period: string; revenue: number; orders: number; stamp: number }>()
+      const revenueTotal = allocations.reduce(
+        (sum, allocation) => sum + allocation.monthlyRevenue,
+        0
       );
+      const payoutTotal = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+      const payoutHistory = payouts.reduce((acc, payout) => {
+        const createdAt = new Date(payout.createdAt);
+        const period = createdAt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        const existing = acc.get(period) ?? {
+          period,
+          revenue: 0,
+          orders: 0,
+          stamp: createdAt.getTime(),
+        };
+        existing.revenue += payout.amount;
+        existing.orders += 1;
+        existing.stamp = Math.max(existing.stamp, createdAt.getTime());
+        acc.set(period, existing);
+        return acc;
+      }, new Map<string, { period: string; revenue: number; orders: number; stamp: number }>());
       const revenue: RevenueSummaryData = {
         currentMonth: revenueTotal,
         previousMonth: 0,
@@ -405,7 +405,8 @@ export const useProviderStore = create<ProviderStore>()((set) => ({
           nextSyncAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
           errorCount: 0,
           pendingOfferings: offerings.filter((offering) => offering.status === 'pending').length,
-          pendingAllocations: allocations.filter((allocation) => allocation.status === 'pending').length,
+          pendingAllocations: allocations.filter((allocation) => allocation.status === 'pending')
+            .length,
           waldur: {
             name: 'Waldur',
             status: settlementsResult.items.length > 0 ? 'degraded' : 'offline',

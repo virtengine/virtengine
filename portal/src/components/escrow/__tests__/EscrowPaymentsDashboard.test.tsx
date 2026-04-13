@@ -73,7 +73,8 @@ vi.mock('@/hooks/usePriceConversion', () => ({
 }));
 
 vi.mock('@/stores/customerDashboardStore', () => ({
-  useCustomerDashboardStore: (selector: (state: typeof mockState) => unknown) => selector(mockState),
+  useCustomerDashboardStore: (selector: (state: typeof mockState) => unknown) =>
+    selector(mockState),
 }));
 
 beforeAll(() => {

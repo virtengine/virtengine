@@ -29,7 +29,9 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
         <div>
           <p className="text-sm text-muted-foreground">{t('Current period')}</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{formatToken(billing.currentPeriodCost, 'UVE')}</span>
+            <span className="text-2xl font-bold">
+              {formatToken(billing.currentPeriodCost, 'UVE')}
+            </span>
             <Badge variant={changeIsPositive ? 'destructive' : 'success'} size="sm">
               {changeIsPositive ? '+' : ''}
               {billing.changePercent.toFixed(1)}%
@@ -41,7 +43,9 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
         {billing.outstandingBalance > 0 && (
           <div className="flex items-center justify-between rounded-md bg-warning/10 px-3 py-2">
             <span className="text-sm font-medium">{t('Outstanding')}</span>
-            <span className="text-sm font-semibold">{formatToken(billing.outstandingBalance, 'UVE')}</span>
+            <span className="text-sm font-semibold">
+              {formatToken(billing.outstandingBalance, 'UVE')}
+            </span>
           </div>
         )}
 

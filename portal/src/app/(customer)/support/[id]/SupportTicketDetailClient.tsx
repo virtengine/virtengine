@@ -59,7 +59,8 @@ const formatSyncLabel = (status: SupportSyncStatus) => {
 export default function SupportTicketDetailClient() {
   const params = useParams<{ id: string }>();
   const ticketId = decodeURIComponent(params.id);
-  const { tickets, addResponse, updateStatus, fetchSupportData, isLoading, error } = useSupportStore();
+  const { tickets, addResponse, updateStatus, fetchSupportData, isLoading, error } =
+    useSupportStore();
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const wallet = useWallet();
@@ -292,7 +293,9 @@ export default function SupportTicketDetailClient() {
                 )}
                 <p>
                   Content ref{' '}
-                  {ticket.chain.contentRef ? ticket.chain.contentRef : 'unavailable from support API'}
+                  {ticket.chain.contentRef
+                    ? ticket.chain.contentRef
+                    : 'unavailable from support API'}
                 </p>
               </div>
             </CardContent>

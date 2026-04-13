@@ -38,8 +38,8 @@ export default async function OrganizationDetailPage({
       <div className="rounded-lg border border-border bg-card p-6">
         <h2 className="text-lg font-semibold">Live organization data unavailable</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Membership, billing, and organization settings for this route are not exposed by the
-          live portal APIs configured for this deployment. This page intentionally avoids synthetic
+          Membership, billing, and organization settings for this route are not exposed by the live
+          portal APIs configured for this deployment. This page intentionally avoids synthetic
           member lists or spend totals.
         </p>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">

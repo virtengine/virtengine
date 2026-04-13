@@ -102,7 +102,8 @@ const parseProviderName = (raw: Record<string, unknown>, fallback: string) => {
       if (value) return value;
     }
   }
-  const info = raw.info && typeof raw.info === 'object' ? (raw.info as Record<string, unknown>) : undefined;
+  const info =
+    raw.info && typeof raw.info === 'object' ? (raw.info as Record<string, unknown>) : undefined;
   return coerceString(info?.name, '') || fallback;
 };
 
@@ -173,14 +174,18 @@ const buildTimeline = (
   };
 
   return {
-    events: events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    events: events.sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    ),
     currentStatus: status,
     estimatedCompletion: status === 'deploying' ? updatedAt.toISOString() : undefined,
     progressPercent: progressMap[status],
   };
 };
 
-const metricHistory = (timestamp: string, value: number): UsageDataPoint[] => [{ timestamp, value }];
+const metricHistory = (timestamp: string, value: number): UsageDataPoint[] => [
+  { timestamp, value },
+];
 
 const buildUsageMetric = (
   resourceType: ResourceUsageMetric['resourceType'],
@@ -307,7 +312,9 @@ const buildUsage = (
 const buildAccess = (
   orderId: string,
   status: OrderStatus,
-  deploymentStatus: { services?: Array<{ name?: string; ports?: Array<{ port?: number; protocol?: string }> }> } | null,
+  deploymentStatus: {
+    services?: Array<{ name?: string; ports?: Array<{ port?: number; protocol?: string }> }>;
+  } | null,
   providerEndpoint?: string
 ): ResourceAccessInfo => {
   const isProvisioned = status === 'running' || status === 'paused';
@@ -316,7 +323,9 @@ const buildAccess = (
   const endpoints = services.flatMap((service) =>
     (service.ports ?? []).map((port) => ({
       name: coerceString(service.name, 'Service'),
-      url: providerEndpoint ? `${providerEndpoint}:${coerceNumber(port.port, 0)}` : `${coerceNumber(port.port, 0)}`,
+      url: providerEndpoint
+        ? `${providerEndpoint}:${coerceNumber(port.port, 0)}`
+        : `${coerceNumber(port.port, 0)}`,
       method: 'TCP',
       description: `${coerceString(port.protocol, 'tcp').toUpperCase()} port ${coerceNumber(port.port, 0)}`,
     }))
@@ -385,8 +394,12 @@ const fetchOrderDetail = async (orderId: string, ownerAddress: string): Promise<
   const daemonClient = providerAddress ? client.getClient(providerAddress) : null;
   const providerRecord = providerAddress ? client.getProvider(providerAddress) : undefined;
 
-  let metrics: Awaited<ReturnType<NonNullable<typeof daemonClient>['getDeploymentMetrics']>> | null = null;
-  let deploymentStatus: Awaited<ReturnType<NonNullable<typeof daemonClient>['getDeploymentStatus']>> | null = null;
+  let metrics: Awaited<
+    ReturnType<NonNullable<typeof daemonClient>['getDeploymentMetrics']>
+  > | null = null;
+  let deploymentStatus: Awaited<
+    ReturnType<NonNullable<typeof daemonClient>['getDeploymentStatus']>
+  > | null = null;
   if (daemonClient && leaseId) {
     try {
       metrics = await daemonClient.getDeploymentMetrics(leaseId);
@@ -402,7 +415,11 @@ const fetchOrderDetail = async (orderId: string, ownerAddress: string): Promise<
 
   const createdAt = toDate(order.created_at ?? order.createdAt);
   const updatedAt = toDate(
-    matchingLease?.updated_at ?? matchingLease?.updatedAt ?? order.updated_at ?? order.updatedAt ?? createdAt
+    matchingLease?.updated_at ??
+      matchingLease?.updatedAt ??
+      order.updated_at ??
+      order.updatedAt ??
+      createdAt
   );
   const resources =
     matchingLease?.resources && typeof matchingLease.resources === 'object'
@@ -420,7 +437,9 @@ const fetchOrderDetail = async (orderId: string, ownerAddress: string): Promise<
         : undefined;
     return sum + coerceNumber(balance?.amount ?? record.amount, 0);
   }, 0);
-  const status = parseOrderStatus(matchingLease?.state ?? matchingLease?.status ?? order.state ?? order.status);
+  const status = parseOrderStatus(
+    matchingLease?.state ?? matchingLease?.status ?? order.state ?? order.status
+  );
 
   return {
     id: orderId,
@@ -428,7 +447,10 @@ const fetchOrderDetail = async (orderId: string, ownerAddress: string): Promise<
     providerName,
     providerAddress,
     offeringName: coerceString(
-      matchingLease?.offering_name ?? matchingLease?.offeringName ?? order.offering_name ?? order.offeringName,
+      matchingLease?.offering_name ??
+        matchingLease?.offeringName ??
+        order.offering_name ??
+        order.offeringName,
       leaseId ? `Lease ${leaseId}` : 'Deployment'
     ),
     resourceType: coerceString(order.resource_type ?? order.resourceType, 'Compute'),

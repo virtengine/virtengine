@@ -309,7 +309,8 @@ const normalizeSupportProvider = (
         coerceString((attr as Record<string, unknown>).key, '').toLowerCase() === key
     ) as Record<string, unknown> | undefined;
 
-  const info = raw.info && typeof raw.info === 'object' ? (raw.info as Record<string, unknown>) : {};
+  const info =
+    raw.info && typeof raw.info === 'object' ? (raw.info as Record<string, unknown>) : {};
   const address = coerceString(raw.owner ?? raw.address ?? raw.provider_address, '');
   const name =
     coerceString(info.name, '') ||
@@ -388,7 +389,11 @@ const buildSyncEvent = (
 
 const normalizeResponse = (
   raw: Record<string, unknown>,
-  fallbackStatuses: { chain: SupportSyncStatus; provider: SupportSyncStatus; waldur: SupportSyncStatus }
+  fallbackStatuses: {
+    chain: SupportSyncStatus;
+    provider: SupportSyncStatus;
+    waldur: SupportSyncStatus;
+  }
 ): SupportResponse => {
   const deliveryRaw =
     raw.delivery && typeof raw.delivery === 'object'
@@ -420,7 +425,9 @@ const normalizeResponse = (
 
 const extractTicketItems = (payload: unknown): Record<string, unknown>[] => {
   if (Array.isArray(payload)) {
-    return payload.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
+    return payload.filter((item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === 'object')
+    );
   }
 
   if (!payload || typeof payload !== 'object') return [];
@@ -429,10 +436,13 @@ const extractTicketItems = (payload: unknown): Record<string, unknown>[] => {
     (record.tickets as unknown[]) ??
     ((record.data as Record<string, unknown> | undefined)?.tickets as unknown[]) ??
     ((record.result as Record<string, unknown> | undefined)?.tickets as unknown[]) ??
-    ((record.items as unknown[]) ?? []);
+    (record.items as unknown[]) ??
+    [];
 
   return Array.isArray(nested)
-    ? nested.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    ? nested.filter((item): item is Record<string, unknown> =>
+        Boolean(item && typeof item === 'object')
+      )
     : [];
 };
 
@@ -499,12 +509,16 @@ const normalizeSupportTicket = (
       ? (syncRaw.waldur as Record<string, unknown>)
       : {};
 
-  const inferredChainStatus = chainRaw.txHash || chainRaw.blockHeight ? 'confirmed' : 'not_configured';
+  const inferredChainStatus =
+    chainRaw.txHash || chainRaw.blockHeight ? 'confirmed' : 'not_configured';
   const inferredProviderStatus = externalRefRaw ? 'synced' : 'not_configured';
   const inferredWaldurStatus =
     provider.serviceDesk === 'waldur' && externalRefRaw ? 'synced' : 'not_configured';
 
-  const chainStatus = normalizeSyncStatus(chainSyncRaw.status ?? raw.chain_status, inferredChainStatus);
+  const chainStatus = normalizeSyncStatus(
+    chainSyncRaw.status ?? raw.chain_status,
+    inferredChainStatus
+  );
   const providerStatus = normalizeSyncStatus(
     providerSyncRaw.status ?? raw.provider_status,
     inferredProviderStatus
@@ -514,12 +528,19 @@ const normalizeSupportTicket = (
     inferredWaldurStatus
   );
 
-  const responsesRaw =
-    (Array.isArray(raw.responses) ? raw.responses : []) as Array<Record<string, unknown>>;
+  const responsesRaw = (Array.isArray(raw.responses) ? raw.responses : []) as Array<
+    Record<string, unknown>
+  >;
   const responses = responsesRaw
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+    .filter((entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === 'object')
+    )
     .map((entry) =>
-      normalizeResponse(entry, { chain: chainStatus, provider: providerStatus, waldur: waldurStatus })
+      normalizeResponse(entry, {
+        chain: chainStatus,
+        provider: providerStatus,
+        waldur: waldurStatus,
+      })
     )
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
@@ -589,13 +610,16 @@ const normalizeSupportTicket = (
         : undefined,
     provider,
     chain: {
-      ticketId: coerceString(chainRaw.ticketId ?? chainRaw.ticket_id, '') || coerceString(raw.id, ''),
+      ticketId:
+        coerceString(chainRaw.ticketId ?? chainRaw.ticket_id, '') || coerceString(raw.id, ''),
       providerAddress: provider.address,
       customerAddress: coerceString(
         chainRaw.customerAddress ?? chainRaw.customer_address ?? raw.submitter ?? raw.created_by,
         currentAddress ?? ''
       ),
-      allocationId: coerceString(chainRaw.allocationId ?? chainRaw.allocation_id ?? raw.deployment_id, '') || undefined,
+      allocationId:
+        coerceString(chainRaw.allocationId ?? chainRaw.allocation_id ?? raw.deployment_id, '') ||
+        undefined,
       contentRef: coerceString(chainRaw.contentRef ?? chainRaw.content_ref, ''),
       txHash: coerceString(chainRaw.txHash ?? chainRaw.tx_hash, '') || undefined,
       blockHeight: Number.isFinite(Number(chainRaw.blockHeight ?? chainRaw.block_height))
@@ -604,9 +628,13 @@ const normalizeSupportTicket = (
       confirmations: Number.isFinite(Number(chainRaw.confirmations))
         ? Number(chainRaw.confirmations)
         : undefined,
-      responseDeadline: chainRaw.responseDeadline || chainRaw.response_deadline
-        ? toDate(chainRaw.responseDeadline ?? chainRaw.response_deadline)
-        : new Date(createdAt.getTime() + getSlaTargetHours(normalizeSupportPriority(raw.priority)) * 3600 * 1000),
+      responseDeadline:
+        chainRaw.responseDeadline || chainRaw.response_deadline
+          ? toDate(chainRaw.responseDeadline ?? chainRaw.response_deadline)
+          : new Date(
+              createdAt.getTime() +
+                getSlaTargetHours(normalizeSupportPriority(raw.priority)) * 3600 * 1000
+            ),
     },
     sync: {
       chain: buildSyncRecord(
@@ -643,9 +671,10 @@ const normalizeSupportTicket = (
           status: coerceString(externalRefRaw.status, '')
             ? normalizeSupportStatus(externalRefRaw.status)
             : undefined,
-          lastSyncedAt: externalRefRaw.lastSyncedAt || externalRefRaw.last_synced_at
-            ? toDate(externalRefRaw.lastSyncedAt ?? externalRefRaw.last_synced_at)
-            : undefined,
+          lastSyncedAt:
+            externalRefRaw.lastSyncedAt || externalRefRaw.last_synced_at
+              ? toDate(externalRefRaw.lastSyncedAt ?? externalRefRaw.last_synced_at)
+              : undefined,
         }
       : undefined,
     responses,
@@ -686,7 +715,10 @@ export const useSupportStore = create<SupportStore>()((set, get) => ({
         daemonProviderList.map((provider) => [provider.address, provider])
       );
       const providers = providerPayload.items.map((record) =>
-        normalizeSupportProvider(record, daemonByAddress.get(coerceString(record.owner ?? record.address, '')))
+        normalizeSupportProvider(
+          record,
+          daemonByAddress.get(coerceString(record.owner ?? record.address, ''))
+        )
       );
       const providersByAddress = new Map(providers.map((provider) => [provider.address, provider]));
 
@@ -710,7 +742,9 @@ export const useSupportStore = create<SupportStore>()((set, get) => ({
 
       set({
         tickets,
-        providers: Array.from(providersByAddress.values()).sort((a, b) => a.name.localeCompare(b.name)),
+        providers: Array.from(providersByAddress.values()).sort((a, b) =>
+          a.name.localeCompare(b.name)
+        ),
         isLoading: false,
         error: null,
         currentAddress: address ?? get().currentAddress,
@@ -725,7 +759,9 @@ export const useSupportStore = create<SupportStore>()((set, get) => ({
 
   createTicket: async (payload) => {
     const { providers, currentAddress } = get();
-    const provider = providers.find((entry) => entry.id === payload.providerId || entry.address === payload.providerId);
+    const provider = providers.find(
+      (entry) => entry.id === payload.providerId || entry.address === payload.providerId
+    );
     if (!provider) {
       throw new Error('Select a valid provider before submitting a support ticket.');
     }
@@ -746,7 +782,7 @@ export const useSupportStore = create<SupportStore>()((set, get) => ({
     const resultRecord =
       response && typeof response === 'object'
         ? (((response as Record<string, unknown>).ticket as Record<string, unknown> | undefined) ??
-            (response as Record<string, unknown>))
+          (response as Record<string, unknown>))
         : undefined;
 
     await get().fetchSupportData(currentAddress);
@@ -762,7 +798,9 @@ export const useSupportStore = create<SupportStore>()((set, get) => ({
         : undefined;
 
     if (!created) {
-      throw new Error('Support ticket was submitted but could not be reconciled from the portal API response.');
+      throw new Error(
+        'Support ticket was submitted but could not be reconciled from the portal API response.'
+      );
     }
 
     return created;
@@ -786,7 +824,10 @@ export const useSupportStore = create<SupportStore>()((set, get) => ({
   updateStatus: async (ticketId, status) => {
     const { currentAddress } = get();
     await requestPortalApi('POST', [STATUS_PATHS(ticketId)[0]], { status }).catch(async (error) => {
-      if (error instanceof ApiError && (error.status === 404 || error.status === 405 || error.status === 501)) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || error.status === 405 || error.status === 501)
+      ) {
         await requestPortalApi('PATCH', [STATUS_PATHS(ticketId)[1]], { status });
         return;
       }

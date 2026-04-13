@@ -45,43 +45,43 @@ export function PayoutHistory({ payouts }: PayoutHistoryProps) {
             No live payout or withdrawal records are available for this account yet.
           </div>
         ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Provider</TableHead>
-              <TableHead>Method</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Transaction</TableHead>
-              <TableHead className="text-right">Date</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {payouts.map((payout) => (
-              <TableRow key={payout.id}>
-                <TableCell className="font-medium">{payout.provider}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{payout.method}</TableCell>
-                <TableCell className="text-right font-medium">
-                  {formatToken(payout.amount, payout.currency)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_VARIANT[payout.status]} size="sm" dot>
-                    {payout.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {payout.txHash ?? '—'}
-                </TableCell>
-                <TableCell className="text-right text-sm text-muted-foreground">
-                  {formatDate(payout.completedAt ?? payout.requestedAt, {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </TableCell>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Provider</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Transaction</TableHead>
+                <TableHead className="text-right">Date</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {payouts.map((payout) => (
+                <TableRow key={payout.id}>
+                  <TableCell className="font-medium">{payout.provider}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{payout.method}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatToken(payout.amount, payout.currency)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_VARIANT[payout.status]} size="sm" dot>
+                      {payout.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {payout.txHash ?? '—'}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {formatDate(payout.completedAt ?? payout.requestedAt, {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </CardContent>
     </Card>

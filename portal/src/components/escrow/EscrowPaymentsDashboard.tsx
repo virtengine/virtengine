@@ -51,7 +51,10 @@ export function EscrowPaymentsDashboard() {
   );
 
   const escrowAccount = useMemo<EscrowAccount>(() => {
-    const pendingSettlement = escrowPayments.reduce((sum, payment) => sum + payment.balanceAmount, 0);
+    const pendingSettlement = escrowPayments.reduce(
+      (sum, payment) => sum + payment.balanceAmount,
+      0
+    );
     const latestUpdate = escrowAccounts
       .map((entry) => entry.settledAt)
       .filter((value): value is string => Boolean(value))
@@ -185,7 +188,8 @@ export function EscrowPaymentsDashboard() {
         <div>
           <h1 className="text-2xl font-bold">Escrow &amp; Payments</h1>
           <p className="text-sm text-muted-foreground">
-            Track live escrow balances, derived usage settlements, and withdrawal state in one place.
+            Track live escrow balances, derived usage settlements, and withdrawal state in one
+            place.
           </p>
         </div>
         <div className="text-xs text-muted-foreground">{pricingFeedLabel}</div>
@@ -235,7 +239,8 @@ export function EscrowPaymentsDashboard() {
             <div className="rounded-lg bg-background p-3">
               <p className="text-xs uppercase text-muted-foreground">Top-up mode</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Recurring deposits are not exposed by the live portal APIs. Use signed wallet deposits for each escrow refill.
+                Recurring deposits are not exposed by the live portal APIs. Use signed wallet
+                deposits for each escrow refill.
               </p>
             </div>
           </div>
@@ -267,7 +272,9 @@ export function EscrowPaymentsDashboard() {
       />
 
       {isLoading && !error && (
-        <div className="text-sm text-muted-foreground">Refreshing live escrow and billing state…</div>
+        <div className="text-sm text-muted-foreground">
+          Refreshing live escrow and billing state…
+        </div>
       )}
     </div>
   );

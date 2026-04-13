@@ -127,7 +127,8 @@ const categoryFilterOptions: { value: SupportCategory | 'all'; label: string }[]
 ];
 
 export default function SupportPage() {
-  const { tickets, createTicket, providers, fetchSupportData, isLoading, error } = useSupportStore();
+  const { tickets, createTicket, providers, fetchSupportData, isLoading, error } =
+    useSupportStore();
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '');
@@ -368,7 +369,9 @@ export default function SupportPage() {
             <Button
               className="w-full"
               onClick={() => void handleSubmit()}
-              disabled={!account?.address || !subject || !description || !providerId || isSubmitting}
+              disabled={
+                !account?.address || !subject || !description || !providerId || isSubmitting
+              }
             >
               {isSubmitting ? 'Submitting ticket…' : 'Submit ticket'}
             </Button>
@@ -463,7 +466,9 @@ export default function SupportPage() {
               {isLoading && <p className="text-sm text-muted-foreground">Loading support data…</p>}
               {filteredTickets.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  {isLoading ? 'Waiting for support data…' : 'No tickets match the current filters.'}
+                  {isLoading
+                    ? 'Waiting for support data…'
+                    : 'No tickets match the current filters.'}
                 </p>
               )}
               {filteredTickets.map((ticket) => {
