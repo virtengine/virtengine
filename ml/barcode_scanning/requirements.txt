@@ -12,4 +12,4 @@ numpy>=1.26.0
 pytesseract>=0.3.10
 
 # Pillow for image handling
-Pillow>=10.0.0
+Pillow>=12.2.0
