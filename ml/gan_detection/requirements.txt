@@ -6,7 +6,7 @@ numpy>=1.26.0
 Pillow>=12.2.0
 
 # Testing dependencies
-pytest>=7.0.0
+pytest>=9.0.3
 pytest-cov>=4.0.0
 
 # Note: This module intentionally avoids heavy deep learning frameworks

@@ -19,7 +19,7 @@ mtcnn==0.1.1
 retina-face==0.0.13
 
 # Testing
-pytest==7.4.0
+pytest==9.0.3
 pytest-cov==4.1.0
 pytest-xdist==3.3.1
 pytest-mock==3.11.1

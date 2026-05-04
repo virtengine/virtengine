@@ -12,5 +12,5 @@ pytesseract>=0.3.10
 PyYAML>=6.0
 
 # For testing
-pytest>=7.0.0
+pytest>=9.0.3
 pytest-cov>=4.0.0

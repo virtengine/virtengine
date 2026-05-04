@@ -10,7 +10,7 @@ numpy==1.24.3
 scipy==1.11.1
 
 # Testing
-pytest==7.4.0
+pytest==9.0.3
 pytest-cov==4.1.0
 pytest-xdist==3.3.1
 
