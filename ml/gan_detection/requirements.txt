@@ -3,7 +3,7 @@
 
 # Core dependencies (versions from requirements-deterministic.txt)
 numpy>=1.26.0
-Pillow>=10.0.0
+Pillow>=12.2.0
 
 # Testing dependencies
 pytest>=7.0.0
