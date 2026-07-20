@@ -1,9 +1,9 @@
 # VirtEngine Protocol Completion Continuation Plan
 
-**Assessment date:** 2026-07-20  
-**Planning horizon:** protocol-completion beta to production-ready release candidate  
-**Status:** Evidence-corrected final execution draft  
-**Task count:** Exactly 20 ordered implementation tasks  
+**Assessment date:** 2026-07-20
+**Planning horizon:** protocol-completion beta to production-ready release candidate
+**Status:** Evidence-corrected final execution draft
+**Task count:** Exactly 20 ordered implementation tasks
 **Primary specification baseline:** `_docs/architecture.md`, `_docs/veid-flow-spec.md`, `_docs/protocols/`, `_docs/settlement-usage-rewards.md`, and the module behavior encoded under `x/`
 
 ## 1. Purpose
@@ -260,9 +260,9 @@ flowchart TD
 
 ## Task 1 — 84A: Eliminate Consensus Nondeterminism and Enforce Deterministic ABCI++ Admission
 
-**Priority:** P0  
-**Backlog reference:** `ae5f621e`  
-**Dependencies:** None  
+**Priority:** P0
+**Backlog reference:** `ae5f621e`
+**Dependencies:** None
 **Blocks:** 86A, 84B, 84C, 85A, 85D, 87D, 88A
 
 ### Outcome
@@ -333,9 +333,9 @@ Replace unconditional proposal acceptance with a deterministic, bounded proposal
 
 ## Task 2 — 86A: Establish Reproducible Dependency Metadata, Protobuf Gateways, Descriptors, OpenAPI, and Module Generation
 
-**Priority:** P0  
-**Backlog reference:** `2342f080`  
-**Dependencies:** 84A  
+**Priority:** P0
+**Backlog reference:** `2342f080`
+**Dependencies:** 84A
 **Blocks:** 84B, 84C, 85A, 85D, 86B, 86C, 86D, 87A, 87B, 88A, 88B
 
 ### Outcome
@@ -408,9 +408,9 @@ Fourteen `sdk/go/node/**/gateway_stub.go` files register no routes, including `s
 
 ## Task 3 — 84B: Cryptographically Authenticate Metering and Make Settlement Replay-Safe
 
-**Priority:** P0  
-**Backlog reference:** `bf829386`  
-**Dependencies:** 84A, 86A  
+**Priority:** P0
+**Backlog reference:** `bf829386`
+**Dependencies:** 84A, 86A
 **Blocks:** 84D, 87B, 87C, 88A, 88C
 
 ### Outcome
@@ -477,9 +477,9 @@ The settlement message server confirms that the transaction sender matches an es
 
 ## Task 4 — 84C: Decide the Canonical Market Lifecycle and Unify Reservations Across Marketplace, HPC, Resources, and Staking
 
-**Priority:** P0  
-**Backlog reference:** `adf2a2b0`  
-**Dependencies:** 84A, 86A  
+**Priority:** P0
+**Backlog reference:** `adf2a2b0`
+**Dependencies:** 84A, 86A
 **Blocks:** 84D, 86C, 87C, 88A, 88C
 
 ### Outcome
@@ -552,9 +552,9 @@ Select exactly one mutable order/bid/lease lifecycle owner through an evidence-b
 
 ## Task 5 — 84D: Converge Fraud, HPC, Billing, Escrow Disputes, and Review Effects
 
-**Priority:** P0  
-**Backlog reference:** `e3b24971`  
-**Dependencies:** 84B, 84C  
+**Priority:** P0
+**Backlog reference:** `e3b24971`
+**Dependencies:** 84B, 84C
 **Blocks:** 85B, 86C, 87B, 87C, 88A
 
 ### Outcome
@@ -622,9 +622,9 @@ Settlement implements escrow disputes and payout holds, including `OnDisputeOpen
 
 ## Task 6 — 85A: Route Every Provider Chain Mutation Through the Durable Signed Broadcaster
 
-**Priority:** P0  
-**Backlog reference:** `3a7676fb`  
-**Dependencies:** 84A, 86A  
+**Priority:** P0
+**Backlog reference:** `3a7676fb`
+**Dependencies:** 84A, 86A
 **Blocks:** 85B, 85C, 86C, 87C, 87D
 
 ### Outcome
@@ -688,9 +688,9 @@ The durable settlement broadcaster in `pkg/provider_daemon/chain_submitter.go` i
 
 ## Task 7 — 85B: Deliver Verifiable DEX Routing and a Compliant Fiat Off-Ramp
 
-**Priority:** P0  
-**Backlog reference:** `0be12a90`  
-**Dependencies:** 84D, 85A  
+**Priority:** P0
+**Backlog reference:** `0be12a90`
+**Dependencies:** 84D, 85A
 **Blocks:** 87B, 88D
 
 ### Outcome
@@ -765,9 +765,9 @@ Deliver production-capable, fail-closed DEX quoting/execution and at least one c
 
 ## Task 8 — 85C: Converge Production Deployment Rendering and Prevent Validator Double-Signing or Provider HA State Loss
 
-**Priority:** P0  
-**Backlog reference:** `0a0198a5`  
-**Dependencies:** 85A  
+**Priority:** P0
+**Backlog reference:** `0a0198a5`
+**Dependencies:** 85A
 **Blocks:** 85D, 87C, 88C, 88D
 
 ### Outcome
@@ -841,9 +841,9 @@ The canonical production assets are under `deploy/kubernetes`: the production ov
 
 ## Task 9 — 85D: Authenticate Every VEID Evidence Path and Require Attested, Pinned, Real Production Inference
 
-**Priority:** P0  
-**Backlog reference:** `85b280f0`  
-**Dependencies:** 84A, 86A, 85C  
+**Priority:** P0
+**Backlog reference:** `85b280f0`
+**Dependencies:** 84A, 86A, 85C
 **Blocks:** 86D, 87A, 87D, 88A, 88B, 88D
 
 ### Outcome
@@ -933,9 +933,9 @@ Ensure every production VEID status, score contribution, and credential decision
 
 ## Task 10 — 86B: Secure Wallet Sessions and Enforce OpenAPI/TypeScript SDK Contract Parity
 
-**Priority:** P1  
-**Backlog reference:** `130bd306`  
-**Dependencies:** 86A  
+**Priority:** P1
+**Backlog reference:** `130bd306`
+**Dependencies:** 86A
 **Blocks:** 86C, 86D, 88B, 88D
 
 ### Outcome
@@ -1000,9 +1000,9 @@ The TypeScript SDK contains generated and manually composed surfaces, while the 
 
 ## Task 11 — 86C: Replace Portal Cloud, HPC, Provider, and Billing Simulations With Real Workflows
 
-**Priority:** P1  
-**Backlog reference:** `033397d0`  
-**Dependencies:** 84C, 84D, 85A, 86A, 86B  
+**Priority:** P1
+**Backlog reference:** `033397d0`
+**Dependencies:** 84C, 84D, 85A, 86A, 86B
 **Blocks:** 88B, 88D
 
 ### Outcome
@@ -1074,9 +1074,9 @@ Make the portal's cloud and HPC experiences query real state, sign orders/jobs/d
 
 ## Task 12 — 86D: Deliver Native and Browser VEID Reference Clients End to End
 
-**Priority:** P1  
-**Backlog reference:** `ebbc4416`  
-**Dependencies:** 85D, 86A, 86B  
+**Priority:** P1
+**Backlog reference:** `ebbc4416`
+**Dependencies:** 85D, 86A, 86B
 **Blocks:** 88B, 88D
 
 ### Outcome
@@ -1145,9 +1145,9 @@ The native uploader returns success without transport (`mobile/veid-capture-app/
 
 ## Task 13 — 87A: Verify SGX, SEV-SNP, and Nitro Trust Chains Deterministically
 
-**Priority:** P1  
-**Backlog reference:** `4b98814a`  
-**Dependencies:** 85D, 86A  
+**Priority:** P1
+**Backlog reference:** `4b98814a`
+**Dependencies:** 85D, 86A
 **Blocks:** 87D, 88A, 88C, 88D
 
 ### Outcome
@@ -1217,9 +1217,9 @@ Replace structural measurement checks with complete, deterministic attestation v
 
 ## Task 14 — 87B: Make Cross-Chain Settlement Custody, Acknowledgments, and Timeouts Production-Safe
 
-**Priority:** P1  
-**Backlog reference:** `6ffc9dfb`  
-**Dependencies:** 84B, 84D, 85B, 86A  
+**Priority:** P1
+**Backlog reference:** `6ffc9dfb`
+**Dependencies:** 84B, 84D, 85B, 86A
 **Blocks:** 87D, 88A, 88D
 
 ### Outcome
@@ -1283,9 +1283,9 @@ Settlement IBC has packet handling and pending state, but its relayer hooks defa
 
 ## Task 15 — 87C: Make Waldur and Independent-Meter Reconciliation Durable and Corrective
 
-**Priority:** P1  
-**Backlog reference:** `7bc3b9be`  
-**Dependencies:** 84B, 84C, 84D, 85A, 85C  
+**Priority:** P1
+**Backlog reference:** `7bc3b9be`
+**Dependencies:** 84B, 84C, 84D, 85A, 85C
 **Blocks:** 87D, 88D
 
 ### Outcome
@@ -1350,9 +1350,9 @@ Turn reconciliation into a durable, evidence-aware control that distinguishes ve
 
 ## Task 16 — 87D: Repair Observability Topology and Wire Production Metrics, SLIs, Traces, Alerts, and Executable Telemetry Conformance
 
-**Priority:** P1  
-**Backlog reference:** `feb25a56`  
-**Dependencies:** 84A, 85A, 85D, 87A, 87B, 87C  
+**Priority:** P1
+**Backlog reference:** `feb25a56`
+**Dependencies:** 84A, 85A, 85D, 87A, 87B, 87C
 **Blocks:** 88B, 88C, 88D
 
 ### Outcome
@@ -1424,9 +1424,9 @@ The repository contains Prometheus/Grafana/Loki/Tempo assets and extensive SLO d
 
 ## Task 17 — 88A: Add Schema-Aware Consensus Migrations and Multi-Version Upgrade Rehearsal
 
-**Priority:** P1  
-**Backlog reference:** `dc2d3be0`  
-**Dependencies:** 84A, 84B, 84C, 84D, 85D, 86A, 87A, 87B  
+**Priority:** P1
+**Backlog reference:** `dc2d3be0`
+**Dependencies:** 84A, 84B, 84C, 84D, 85D, 86A, 87A, 87B
 **Blocks:** 88B, 88D
 
 ### Outcome
@@ -1490,9 +1490,9 @@ The repository contains software upgrade handlers and release upgrade tests, but
 
 ## Task 18 — 88B: Make Required CI Gates Fail Closed and Prove Real Process-Boundary Workflows
 
-**Priority:** P1  
-**Backlog reference:** `8993d413`  
-**Dependencies:** 85D, 86A, 86B, 86C, 86D, 87D, 88A  
+**Priority:** P1
+**Backlog reference:** `8993d413`
+**Dependencies:** 85D, 86A, 86B, 86C, 86D, 87D, 88A
 **Blocks:** 88D
 
 ### Outcome
@@ -1557,9 +1557,9 @@ The repository has many workflows and good policy infrastructure, but breadth is
 
 ## Task 19 — 88C: Converge and Harden the Canonical SLURM Chart for Tenancy, Capacity, Secrets, HA, and Signed Accounting
 
-**Priority:** P1  
-**Backlog reference:** `ac883773`  
-**Dependencies:** 84B, 84C, 85C, 87A, 87D  
+**Priority:** P1
+**Backlog reference:** `ac883773`
+**Dependencies:** 84B, 84C, 85C, 87A, 87D
 **Blocks:** 88D
 
 ### Outcome
@@ -1632,9 +1632,9 @@ Materially different charts exist under `deploy/slurm/slurm-cluster` and `_build
 
 ## Task 20 — 88D: Preserve Historical Decisions and Bind Superseding Mainnet Status, Provenance, Rollout, and Rollback Evidence
 
-**Priority:** P1  
-**Backlog reference:** `0a5c9309`  
-**Dependencies:** 85B, 85C, 85D, 86B, 86C, 86D, 87A, 87B, 87C, 87D, 88A, 88B, 88C  
+**Priority:** P1
+**Backlog reference:** `0a5c9309`
+**Dependencies:** 85B, 85C, 85D, 86B, 86C, 86D, 87A, 87B, 87C, 87D, 88A, 88B, 88C
 **Blocks:** Production-complete declaration
 
 ### Outcome
