@@ -4,6 +4,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 
 ## Core References
 - `_docs/architecture.md`
+- `_docs/protocol-completion-continuation-plan.md`
 - `_docs/api-gateway.md`
 - `_docs/developer-guide.md`
 - `_docs/development-environment.md`
